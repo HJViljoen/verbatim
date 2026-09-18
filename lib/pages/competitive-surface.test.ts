@@ -378,9 +378,17 @@ describe('CO5 · the floor, said in words', () => {
 })
 
 describe('the sections that are not built', () => {
-  it('names CO3, CO4, CO6 and CO7, each with an owner and no invented date', () => {
+  // TWO ROWS, NOT FOUR, SINCE BLOCK D WAVE 2. CO3 and CO7 came out in the
+  // commit that mounted their tiles — a readiness row saying "Head to head —
+  // not built yet" underneath a head-to-head table is the page contradicting
+  // itself, and a row leaving before or after its tile arrives is the same
+  // contradiction in the other direction. CO4 stays because the CLAIMS half is
+  // still withheld by M8's policy (`entity = 'client'`) while the posts half
+  // draws; CO6 stays because nothing loads the months a finding identity was
+  // seen in, which is the one input `recurrenceOf` cannot be given a label for.
+  it('names CO4 and CO6, each with an owner and no invented date', () => {
     const rows = competitiveUnlockRows()
-    expect(rows.map((r) => r.section)).toEqual(['CO3', 'CO4', 'CO6', 'CO7'])
+    expect(rows.map((r) => r.section)).toEqual(['CO4', 'CO6'])
     for (const r of rows) {
       expect(r.owner).toBeTruthy()
       expect(r.line).not.toMatch(/\bby \d/)

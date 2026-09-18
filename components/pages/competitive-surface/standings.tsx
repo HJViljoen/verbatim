@@ -1,16 +1,17 @@
 import Link from 'next/link'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockCalendar } from '@/components/blocks/calendar'
+import { CalendarLine } from '@/components/charts/calendar-line'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
-import type { CalendarRule, CalendarSeries } from '@/lib/charts/calendar'
-import { fmtInt, fmtPct } from '@/lib/format'
+import { chartId, type CalendarRule, type CalendarSeries } from '@/lib/charts/calendar'
+import { fmtInt, fmtPct, monthName } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { NOT_OBSERVED, standingText, type StandingRow, type StandingShare } from '@/lib/reading/standings'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import { HORIZON_LABEL } from '@/lib/reading/horizon'
 import { horizonHref } from '@/lib/shell/bar'
-import { changeNote, mixLine, type CompetitiveSurfaceData, type StandingsSeries } from '@/lib/pages/competitive-surface'
+import { changeNote, mixLine, type CompetitiveSurfaceData, type StandingsBlock, type StandingsSeries } from '@/lib/pages/competitive-surface'
 
 // CO2 · Standings over the months (design §3 CO2).
 //
@@ -29,13 +30,22 @@ import { changeNote, mixLine, type CompetitiveSurfaceData, type StandingsSeries 
 // change — Össur logged ten changes in September, and ten rules on one bar is
 // a chart nobody can read.
 //
-// THE CHARTS NEED MORE THAN ONE MONTH, AND THE DEFAULT HORIZON IS ONE. So on
-// the view every reader opens first, a block titled "Standings over the months"
-// is a one-row-per-brand table reading "1 of 1", where the approved artboard is
-// "two small line charts side by side … Jun to Sep". That is the horizon
-// default meeting this block rather than a defect in either, and until it is
-// decided the block says so and hands the reader the address that draws the
-// line, instead of a title promising months over a table of one.
+// THE CHARTS ARE DRAWN ON ONE MONTH TOO (Block D wave 2). They used to be
+// gated on `s.months.length > 1`, so on the view every reader opens first — the
+// default horizon is one month — a block titled "Standings over the months"
+// printed a sentence where the artboard draws two charts. `calendarGeometry`
+// centres a single-month axis (`n <= 1`) and each brand draws as one dated
+// point with its end label, which is a LEVEL and claims nothing about
+// direction. The sentence stays, under the charts rather than instead of them,
+// because a reader still needs to know why there is no line and where the line
+// is.
+//
+// ATTENTION FIRST, AND ONE LEGEND UNDER BOTH. The artboard puts the comments
+// share on the left and gives the pair a single legend; the build had the
+// videos share first and a legend under each chart, which is the same identity
+// printed twice. `CalendarLine` takes `legend`, so the app and print arms call
+// it directly with the legend off and draw one beneath; the email arm keeps
+// `BlockCalendar`, which is where the PNG-or-table fallback lives.
 //
 // BOTH CHANGES ARE PRINTED, AND NEITHER CELL IS EVER BLANK. There was one
 // change column, unlabelled as to which of the two shares it was (the content
@@ -50,6 +60,18 @@ const COLOR: Record<StandingRow['role'], string> = {
   client: 'var(--you)',
   rival: 'var(--comp)',
   category: 'var(--cat)',
+}
+
+/** "share of the tracked set · Jun 2026 to Sep 2026 · both denominators
+ *  printed" — the artboard's meta, over the axis this block was actually given
+ *  rather than over the four months the mock happens to draw. */
+export function metaLine(s: StandingsBlock): string {
+  const span = s.months.length > 0
+    ? s.months.length === 1
+      ? monthName(s.months[0])
+      : `${monthName(s.months[0])} to ${monthName(s.months[s.months.length - 1])}`
+    : null
+  return ['share of the tracked set', span, 'both denominators printed'].filter((x): x is string => x != null).join(' · ')
 }
 
 /** One change cell: the banded verdict, or the reason there is none. */
@@ -79,6 +101,86 @@ function Share({ share, mode }: { share: StandingShare | null; mode: RenderMode 
   return mode === 'email'
     ? <span style={{ fontFamily: FONT.mono, fontSize: 12, color: EMAIL.ink }}>{body}</span>
     : <span className="font-mono text-[12px] tabular-nums">{body}</span>
+}
+
+/**
+ * One of the pair, with its own label above and NO legend of its own.
+ *
+ * ITS SCALE IS ITS OWN, AND THAT IS THE ONE PLACE THIS DIVERGES FROM THE
+ * ARTBOARD. The mock's legend says "both charts on the same 0\u201345% scale", and
+ * the shared-scale note below is printed only once that is true, which it is
+ * not: `CalendarLine` derives its scale from the series it is handed
+ * (`valueScale`, zero-based, 12% headroom) and takes no scale from a caller,
+ * and `components/charts/*` belongs to another package in this wave — a change
+ * there is a prop added by its owner, not by a porter. It is also the reading
+ * mock-gap argued for: on a real tenant `industry-other` runs at 86\u201393% of the
+ * corpus, so a fixed 0\u201345% axis would flatten every brand line into the bottom
+ * tenth of the plot and clip the category off the top of both charts.
+ */
+function ChartPane({
+  label, axis, series, rules, chartKey,
+}: {
+  label: string
+  axis: readonly string[]
+  series: readonly CalendarSeries[]
+  rules: readonly CalendarRule[]
+  chartKey: string
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-muted-foreground">{label}</span>
+      <CalendarLine
+        axis={axis}
+        series={series}
+        rules={rules}
+        legend={false}
+        format={(v) => fmtPct(v)}
+        label={label}
+        id={chartId([chartKey, ...series.map((x) => x.label), axis[0], axis[axis.length - 1]])}
+      />
+    </div>
+  )
+}
+
+/**
+ * ONE legend under BOTH charts (the artboard's own device), with each series
+ * annotated by the months it was actually read in.
+ *
+ * "Poler \u00b7 Sep only" in the mock is the same fact as a series whose earlier
+ * points are hollow, and the build had the data and printed it nowhere. A
+ * series read in every month on the axis carries no annotation \u2014 an annotation
+ * on every row is noise, and the one that matters is the row that is short.
+ *
+ * AND THE SCALE NOTE IS THE TRUE ONE. The mock's "both charts on the same
+ * 0\u201345% scale" is printed only where it is true; here each chart is scaled to
+ * its own highest month, and a reader comparing the two by eye has to be told
+ * that before they do it.
+ */
+function SharedLegend({ series, axis }: { series: readonly StandingsSeries[]; axis: readonly string[] }) {
+  if (series.length === 0) return null
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <div className="flex flex-wrap gap-x-3 gap-y-1">
+        {series.map((x) => {
+          const read = x.points.filter((p) => p.content != null || p.attention != null).length
+          return (
+            <span key={x.audience} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <span className="size-2 shrink-0 rounded-full" style={{ background: COLOR[x.role] }} aria-hidden />
+              {x.label}
+              {read < axis.length ? (
+                <span data-copy="level" className="font-mono tabular-nums">
+                  <span data-copy="figure">{fmtInt(read)} of {fmtInt(axis.length)}</span> months
+                </span>
+              ) : null}
+            </span>
+          )
+        })}
+      </div>
+      <p className="m-0 font-mono text-[10px] text-muted-foreground">
+        Each chart is scaled to its own highest month, so the two are read separately and never against each other.
+      </p>
+    </div>
+  )
 }
 
 /** One chart's worth of series, in the axis's order. A month a brand was not
@@ -166,7 +268,22 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
         title={competitiveStandings.title}
         question={competitiveStandings.question}
         mode={mode}
-        meta="no rank is printed"
+        // THE ARTBOARD'S META, WITH THE MONTHS IT IS ACTUALLY DRAWN OVER.
+        // "no rank is printed" was the whole meta and the mock carries it in
+        // the FOOTER definition line; what the mock puts here is what the
+        // shares are of and over what span, which is the thing a reader needs
+        // before they read a single row.
+        meta={metaLine(s)}
+        // A REAL FOOTER, AT LAST. `BlockFrame` has had the slot since WP10 and
+        // not one Competitive block passed one, so "Open the record →" lived
+        // only in the page bar's soundness band and the definition line was
+        // split across a meta and two body paragraphs.
+        footer={
+          mode === 'app'
+            ? <Link href="/dashboard/settings?detail=record" className="hover:underline">Open the record →</Link>
+            : 'Open the record.'
+        }
+        footerNote="no rank is printed"
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         {s.behind ? (
@@ -177,40 +294,62 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
             {s.behind}
           </p>
         ) : null}
+        {s.series.length > 0 ? (
+          email ? (
+            <div>
+              <BlockCalendar
+                blockKey={`${competitiveStandings.key}.attention`}
+                axis={s.months}
+                series={seriesFor(s.series, s.months, 'attention')}
+                rules={rules}
+                mode={mode}
+                ctx={ctx}
+                format={(v) => fmtPct(v)}
+                label="Share of the month’s comments, by brand"
+              />
+              <BlockCalendar
+                blockKey={`${competitiveStandings.key}.content`}
+                axis={s.months}
+                series={seriesFor(s.series, s.months, 'content')}
+                rules={rules}
+                mode={mode}
+                ctx={ctx}
+                format={(v) => fmtPct(v)}
+                label="Share of the month’s videos, by brand"
+              />
+            </div>
+          ) : (
+            <div className="flex min-w-0 flex-col gap-2">
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                <ChartPane
+                  label="Share of the month’s comments, by brand"
+                  axis={s.months}
+                  series={seriesFor(s.series, s.months, 'attention')}
+                  rules={rules}
+                  chartKey={`${competitiveStandings.key}.attention`}
+                />
+                <ChartPane
+                  label="Share of the month’s videos, by brand"
+                  axis={s.months}
+                  series={seriesFor(s.series, s.months, 'content')}
+                  rules={rules}
+                  chartKey={`${competitiveStandings.key}.content`}
+                />
+              </div>
+              <SharedLegend series={s.series} axis={s.months} />
+            </div>
+          )
+        ) : null}
         {s.rows.length > 0 && s.months.length <= 1 ? (
           <p
             className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'}
             style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}
           >
-            A line needs more than one month, and this reading is one.{' '}
+            A line needs more than one month, and this reading is one — each brand is drawn as its single dated point.{' '}
             {mode === 'app'
               ? <Link href={`${ctx.appUrl}${horizonHref('/dashboard/competitive', ctx.params ?? {}, 'last_3')}`} className="hover:underline">Open {HORIZON_LABEL.last_3} →</Link>
               : <>Open {HORIZON_LABEL.last_3} to draw it.</>}
           </p>
-        ) : null}
-        {s.series.length > 0 && s.months.length > 1 ? (
-          <div className={email ? undefined : 'grid grid-cols-1 gap-3 lg:grid-cols-2'}>
-            <BlockCalendar
-              blockKey={`${competitiveStandings.key}.content`}
-              axis={s.months}
-              series={seriesFor(s.series, s.months, 'content')}
-              rules={rules}
-              mode={mode}
-              ctx={ctx}
-              format={(v) => fmtPct(v)}
-              label="Share of the month’s videos, by brand"
-            />
-            <BlockCalendar
-              blockKey={`${competitiveStandings.key}.attention`}
-              axis={s.months}
-              series={seriesFor(s.series, s.months, 'attention')}
-              rules={rules}
-              mode={mode}
-              ctx={ctx}
-              format={(v) => fmtPct(v)}
-              label="Share of the month’s comments, by brand"
-            />
-          </div>
         ) : null}
 
         {s.rows.length > 0 ? (

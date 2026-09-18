@@ -6,7 +6,7 @@ import {
   type CompetitiveSurfaceData,
 } from '@/lib/pages/competitive-surface'
 import { methodFixture, methodRefusedFixture } from '@/lib/test/method-fixture'
-import { rivalOwnClaims, type OwnPostInput } from '@/lib/reading/own-posts'
+import { claimEcho, rivalOwnClaims, type OwnPostInput } from '@/lib/reading/own-posts'
 import { buildHeadToHead, buildPlaybook, type PlaybookVideo } from '@/lib/pages/playbook'
 
 // Competitive's block fixtures (Phase 1 WP14).
@@ -461,5 +461,77 @@ export function unreadMonthsFixture(): CompetitiveSurfaceData {
       { month: MONTH, audience: 'competitor:Ottobock', audienceLabel: 'Ottobock', videos: [], claims: [], membership: [], echoes: [], handles: {} },
     ]),
     saidAbout: buildSaidAbout([{ name: 'Ottobock' }], () => 0),
+  }
+}
+
+/**
+ * The arm where a rival's own claims and what is said about them ARE readable.
+ *
+ * WHY IT EXISTS, AND WHY IT IS NOT A LIE. Four of the five states above carry
+ * `RIVAL_CLAIMS_WITHHELD` and an empty `saidAbout`, because M8's policy is
+ * `entity = 'client'` and a tenant session may not select a rival's claim rows
+ * — which is the honest state of the app page today and is the one wave 2
+ * reviews it in. But `CompetitiveSurfaceData.ownClaims` / `.saidAbout` are the
+ * shape a SERVICE-ROLE surface hands the same blocks (a document, a share
+ * render — `lib/pages/competitive-surface.ts:buildSaidAbout` takes a
+ * `claimsFor` for exactly that), and with no populated arm anywhere the claim
+ * row, the echo legend, the quote ref and the `pass_a_brand_claim` marker
+ * would be four pieces of markup nothing on the repo ever renders.
+ *
+ * THE WORDS ARE THE SHAPE PASS A WRITES, digits included — "for over 30 years",
+ * "3R80" — because that is the trade `pass_a_brand_claim`'s policy row is about
+ * and a fixture that avoided digits would prove nothing about it.
+ */
+export function claimsReadFixture(): CompetitiveSurfaceData {
+  const base = competitiveFixture()
+  const audience = 'competitor:Ottobock'
+  const post = (id: string, day: number, comments: number, hook: string | null, format: string | null) => ({
+    id, upload_date: `2026-09-${String(day).padStart(2, '0')}`, comments_count: comments,
+    hook_style: hook, classified_type: format, platform: 'youtube',
+  })
+  const input: OwnPostInput = {
+    month: MONTH,
+    audience,
+    audienceLabel: 'Ottobock',
+    videos: [
+      post('o1', 3, 61, 'demonstration', 'educational'),
+      post('o2', 8, 22, 'personal-story', 'testimonial'),
+      post('o3', 15, 9, 'demonstration', 'educational'),
+      post('o4', 19, 4, null, null),
+      post('o5', 26, 1, null, null),
+    ],
+    claims: [
+      { id: 'k1', source_video_id: 'o1', entity: 'competitor', claim: 'Every knee is tested for over 30 years of walking', quote: 'We test every knee for the equivalent of thirty years of walking.' },
+      { id: 'k2', source_video_id: 'o2', entity: 'competitor', claim: 'The 3R80 is built for everyday life, not the clinic', quote: 'This is built for your day, not for a gait lab.' },
+      { id: 'k3', source_video_id: 'o3', entity: 'competitor', claim: 'Fitting takes one appointment', quote: 'One appointment and you walk out on it.' },
+    ],
+    membership: [],
+    // ONE PER RETURNED ROW, IN THE RETURNED ROWS' ORDER — the three states the
+    // legend has to draw at once: carried, pushed back, and counted-and-silent.
+    echoes: [
+      claimEcho({ audience, audienceLabel: 'Ottobock', reading: { k: 31, n: 42 }, stance: 'echoes' }),
+      claimEcho({ audience, audienceLabel: 'Ottobock', reading: { k: 9, n: 42 }, stance: 'contradicts' }),
+      claimEcho({ audience, audienceLabel: 'Ottobock', reading: { k: 0, n: 42 }, stance: 'silent' }),
+    ],
+    handles: { youtube: '@ottobock', tiktok: '@ottobock', instagram: '@ottobock' },
+  }
+  return {
+    ...base,
+    ownClaims: [
+      ...rivalOwnClaims([input]),
+      ...base.ownClaims.filter((c) => c.audience !== audience),
+    ],
+    saidAbout: buildSaidAbout(
+      [{ name: 'Ottobock' }, { name: 'Rareform' }],
+      (a) => (a === 'competitor:Ottobock' ? 42 : 0),
+      (a) =>
+        a === 'competitor:Ottobock'
+          ? [
+              { claim: 'The knee is quiet enough to wear in an office', quote: 'Honestly you cannot hear it in a meeting room.', videoId: 'v1', id: 'k9' },
+              { claim: 'The knee is quiet enough to wear in an office', quote: 'Nobody in the office has ever noticed it.', videoId: 'v2', id: 'k10' },
+              { claim: 'Service turnaround is slow outside Europe', quote: 'Mine took eleven weeks to come back from service.', videoId: 'v3', id: 'k11' },
+            ]
+          : [],
+    ),
   }
 }

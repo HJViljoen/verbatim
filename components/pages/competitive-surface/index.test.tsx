@@ -3,18 +3,22 @@ import { describe, it, expect } from 'vitest'
 import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, directionRe } from '@/lib/test/copy-contract'
-import { render, renderText } from '@/lib/test/render'
-import { COMPETITIVE_BLOCKS } from './index'
+import { markupText as markupOf, render, renderText } from '@/lib/test/render'
+import { COMPETITIVE_BLOCKS, COMPETITIVE_TILES } from './index'
+import { H2H_NO_RIVAL, competitiveHeadToHead } from './head-to-head'
+import { OWN_CLAIMS_OWNER, competitiveOwnClaims, trackedLine } from './own-claims'
+import { competitiveSaidAbout } from './said-about'
+import { PLAYBOOK_NO_READING, competitivePlaybook } from './playbook'
 import { competitiveRivals } from './rivals'
 import { competitiveStandings } from './standings'
 import { competitiveQuestions } from './questions'
 import { competitiveUnlockRows } from '@/lib/pages/competitive-surface'
 import { competitiveUnlocks } from './unlocks'
-import { competitiveFixture, oneMonthFixture, quietRivalFixture, unreadMonthsFixture, unreadRivalFixture } from './fixture'
+import { claimsReadFixture, competitiveFixture, oneMonthFixture, quietRivalFixture, unreadMonthsFixture, unreadRivalFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
-const STATES = [competitiveFixture(), unreadRivalFixture(), quietRivalFixture(), unreadMonthsFixture(), oneMonthFixture()]
+const STATES = [competitiveFixture(), unreadRivalFixture(), quietRivalFixture(), unreadMonthsFixture(), oneMonthFixture(), claimsReadFixture()]
 
 describe('Competitive · every block, every mode, every state', () => {
   it('keeps the copy contract', () => {
@@ -232,12 +236,20 @@ describe('CO5 · what the category asks', () => {
 })
 
 describe('the sections that are not built', () => {
-  it('names CO3, CO4, CO6 and CO7 with their owners', () => {
+  // WAVE 2 MOUNTED CO3 AND CO7, SO THEIR ROWS CAME OUT IN THE SAME COMMIT.
+  // The rule is wave 1's and it runs both ways: a readiness row is printed
+  // while its tile is missing and removed the moment the tile draws, because
+  // a page saying "Head to head — not built yet" underneath a head-to-head
+  // table is the page contradicting itself. CO4's row stays because the CLAIMS
+  // half is still withheld (M8's policy is `entity = 'client'`), and CO6's
+  // stays because nothing loads a finding identity for `recurrenceOf` to key
+  // on.
+  it('names the two sections still missing, and no longer the two that landed', () => {
     const text = renderText(competitiveUnlocks.render(competitiveFixture(), 'app', ctx))
-    expect(text).toContain('Head to head, then and now')
     expect(text).toContain('What they say about themselves')
     expect(text).toContain('Findings, with recurrence')
-    expect(text).toContain('How the category makes content')
+    expect(text).not.toContain('Head to head, then and now')
+    expect(text).not.toContain('How the category makes content')
     expect(text).toContain('Verbatim engineering')
   })
 
@@ -250,7 +262,7 @@ describe('the sections that are not built', () => {
     // accounts ARE configured, which is every tracked rival on both tenants.
     const rows = competitiveFixture().unlocks.rows
     expect(rows.filter((r) => r.state === 'not tracked')).toEqual([])
-    expect(rows.map((r) => r.section)).toEqual(['CO3', 'CO4', 'CO6', 'CO7'])
+    expect(rows.map((r) => r.section)).toEqual(['CO4', 'CO6'])
     const text = renderText(competitiveUnlocks.render(competitiveFixture(), 'app', ctx))
     expect(text).not.toContain('— not tracked')
     expect(text).toContain('— not built yet')
@@ -263,11 +275,10 @@ describe('the sections that are not built', () => {
   })
 })
 
-describe('CO3 and CO7 · the data wave 2 binds (Block D, D6)', () => {
-  // WAVE 1 IS THE DATA, WAVE 2 IS THE TILE. Nothing on this page renders the
-  // head-to-head or the playbook yet, which is why the CO3 and CO7 unlock rows
-  // are still printed above — so what is asserted here is the FIXTURE: the
-  // shape a port binds, in the two states it will be reviewed in.
+describe('CO3 and CO7 · the data the tiles bind (Block D, D6)', () => {
+  // WAVE 1 IS THE DATA, WAVE 2 IS THE TILE. These assertions are the FIXTURE's
+  // — the shape the two tiles bind, in the states they are reviewed in — and
+  // the render assertions for the tiles themselves are below.
 
   it('carries a head-to-head and both playbook matrices on the surface reading', () => {
     const data = competitiveFixture()
@@ -329,5 +340,225 @@ describe('CO3 and CO7 · the data wave 2 binds (Block D, D6)', () => {
       ...data.headToHead!.measures.flatMap((m) => [m.label, m.basisLine, m.verdictWhy ?? '', m.why ?? '']),
     ].join(' ')
     expect(directionRe().test(words)).toBe(false)
+  })
+})
+
+// ---- the four tiles wave 2 mounted -------------------------------------------
+
+describe('CO3 · head to head, then and now', () => {
+  it('carries an "of N" on every level, per side, never one shared', () => {
+    // The artboard prints one `n 84 · 142` beside the measure and then two bare
+    // percentages under it — but 84 is YOUR denominator and 142 is theirs, and
+    // a level without its own denominator is the score this product does not
+    // show (D10). Both sides' September videos-about figures are shares of the
+    // same 449 read this month, so both cells say so.
+    const text = renderText(competitiveHeadToHead.render(competitiveFixture(), 'app', ctx))
+    expect(text).toContain('4.2%')
+    expect(text).toContain('9.4%')
+    expect(text.match(/of 449/g)?.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('names the clock on every row, because two of the five are not the month', () => {
+    const text = renderText(competitiveHeadToHead.render(competitiveFixture(), 'app', ctx))
+    expect(text).toContain('videos and comments dated in September')
+    expect(text).toContain('videos published in September')
+  })
+
+  it('prints no magnitude on a rate, a median or a count — and says why (D2, D3)', () => {
+    const text = renderText(competitiveHeadToHead.render(competitiveFixture(), 'app', ctx))
+    expect(text).toContain('Comments per video is a rate')
+    expect(text).toContain('Engagement is a median of per-video rates')
+    expect(text).toContain('Posts published is a count with no denominator')
+    // The mock prints "+2", "+0.2 pt" and "▼ 2" on exactly those three rows.
+    expect(text).not.toMatch(/[▲▼]\s*(2|0\.2)\b/)
+  })
+
+  it('declines a banded row for the reason it actually has, not the floor by default', () => {
+    // Össur's September positive share is 5 of 5 judged, under the floor of 10,
+    // so THIS row's refusal is the floor — and the sentence says so rather than
+    // saying "no previous month" about a month that was read.
+    const text = renderText(competitiveHeadToHead.render(competitiveFixture(), 'app', ctx))
+    expect(text).toContain('Under 10 videos on a side, so no comparison is drawn.')
+  })
+
+  it('says there is nothing to put beside you when no rival is selected', () => {
+    const data = competitiveFixture({ headToHead: null })
+    expect(competitiveHeadToHead.emptyState(data)).toBe(H2H_NO_RIVAL)
+    expect(renderText(competitiveHeadToHead.render(data, 'app', ctx))).toContain('No rival is selected')
+  })
+
+  it('puts the Reddit exclusion in the footer note and its reason in the open', () => {
+    const text = renderText(competitiveHeadToHead.render(competitiveFixture(), 'app', ctx))
+    expect(text).toContain('Reddit excluded from the engagement rows')
+    expect(text).toContain('capped at 40 a thread')
+  })
+})
+
+describe('CO4 · what they say about themselves', () => {
+  it('draws three distinct absences and not one of them is a zero', () => {
+    const text = renderText(competitiveOwnClaims.render(competitiveFixture(), 'app', ctx))
+    // configured and silent …
+    expect(text).toContain('No post was published in this period')
+    // … no account configured at all, with the owner and NO date (D14) …
+    expect(text).toContain('No account is configured for this rival')
+    expect(text).toContain(OWN_CLAIMS_OWNER)
+    expect(text).not.toMatch(/by \d+ Oct/)
+    // … and a census that WAS read, whose claims half is withheld by policy.
+    expect(text).toContain('5 posts')
+    expect(text).toContain('What they claim in them is read from their own transcripts')
+  })
+
+  it('marks a replayed claim as stored, naming the call that wrote it', () => {
+    const markup = render(competitiveOwnClaims.render(claimsReadFixture(), 'app', ctx))
+    expect(markup).toContain('data-slot="pass_a_brand_claim"')
+    // A brand's own figure inside its own claim — the case `pass_a_brand_claim`
+    // exists to exempt at render and to hand `allowTokens` at write time.
+    expect(markupOf(markup)).toContain('for over 30 years')
+  })
+
+  it('counts the echo with its own denominator, and says why when there is none', () => {
+    const text = renderText(competitiveOwnClaims.render(claimsReadFixture(), 'app', ctx))
+    expect(text).toContain('Echoed 31 of 42 videos')
+    expect(text).toContain('Pushed back 9 of 42 videos')
+    // A counted zero is a reading and reads as one — never as "not tracked".
+    expect(text).toContain('Not talked about 0 of 42 videos')
+  })
+
+  it('counts the watched rivals off the censuses beside it, never a second read', () => {
+    expect(trackedLine(competitiveFixture().ownClaims)).toBe('2 of 3 tracked')
+  })
+})
+
+describe('CO5 · said about them, by others', () => {
+  it('names the silence per rival rather than leaving the block out', () => {
+    const text = renderText(competitiveSaidAbout.render(competitiveFixture(), 'app', ctx))
+    expect(text).toContain('Nothing was said about Ottobock in what we read this month.')
+  })
+
+  it('keeps each numerator over its own audience’s denominator (D5)', () => {
+    // The artboard puts "71 of 1,388" on a Freitag row — a Freitag-specific
+    // count over the whole category — two blocks below giving Freitag its own
+    // denominator of 142. Ottobock's rows are of Ottobock's 42.
+    const text = renderText(competitiveSaidAbout.render(claimsReadFixture(), 'app', ctx))
+    expect(text).toContain('of 42')
+    expect(text).toContain('of each brand’s own videos')
+  })
+
+  it('carries every quote as a ref and never as stored words', () => {
+    const refs = competitiveSaidAbout.quotes!(claimsReadFixture())
+    expect(refs.length).toBeGreaterThan(0)
+    for (const ref of refs) expect(ref.startsWith('k:')).toBe(true)
+  })
+})
+
+describe('CO7 · how the category makes content', () => {
+  it('prints the classified n beside the published one, per column (D6)', () => {
+    const text = renderText(competitivePlaybook.render(competitiveFixture(), 'app', ctx))
+    // The legend, per side …
+    expect(text).toContain('687 of 757')
+    expect(text).toContain('84 of 109')
+    expect(text).toContain('124 of 145')
+    // … and the coverage line under the tables, naming both again in words.
+    expect(text).toContain('687 of The category’s 757')
+    // Never the mock's "read from all 1,388 category videos".
+    expect(text).not.toContain('read from all')
+  })
+
+  it('says 0 of N where a side was read and had none, and a sentence where it was not', () => {
+    const read = renderText(competitivePlaybook.render(competitiveFixture(), 'app', ctx))
+    expect(read).toMatch(/0 of 84|0 of 124/)
+    expect(read).not.toContain('none of')
+    const unread = renderText(competitivePlaybook.render(unreadRivalFixture(), 'app', ctx))
+    expect(unread).toContain('published nothing we read in September')
+  })
+
+  it('orders the median column by the median, never by the count', () => {
+    const p = competitiveFixture().playbook!
+    const medians = p.engagement.map((r) => r.engagement.median ?? 0)
+    expect([...medians].sort((a, b) => b - a)).toEqual(medians)
+    expect(renderText(competitivePlaybook.render(competitiveFixture(), 'app', ctx))).toContain('Reddit excluded')
+  })
+
+  it('states the published clock in its meta, not the page’s month', () => {
+    expect(render(competitivePlaybook.render(competitiveFixture(), 'app', ctx))).toContain('videos published in September')
+  })
+
+  it('refuses rather than drawing an empty matrix', () => {
+    expect(competitivePlaybook.emptyState(unreadMonthsFixture())).toBe(PLAYBOOK_NO_READING)
+  })
+})
+
+describe('the page, as the artboard composes it', () => {
+  it('draws the rival selection inline, not as a card with an eyebrow', () => {
+    const markup = render(competitiveRivals.render(competitiveFixture(), 'app', ctx))
+    expect(markup).toContain('Rival')
+    // No block frame: no uppercase eyebrow heading, no block question.
+    expect(markup).not.toContain('<h2')
+    expect(markup).not.toContain('Which rival is this page about?')
+    // Print keeps the frame, because it has no page bar to sit under.
+    expect(render(competitiveRivals.render(competitiveFixture(), 'print', ctx))).toContain('<h2')
+  })
+
+  it('gives the standings a meta that says what the shares are of, and a real footer', () => {
+    const text = renderText(competitiveStandings.render(competitiveFixture(), 'app', ctx))
+    // The axis this block was GIVEN, not the four months the artboard happens
+    // to draw — `last_3` at 18 Sep is Jul, Aug, Sep.
+    expect(text).toContain('share of the tracked set · Jul 2026 to Sep 2026 · both denominators printed')
+    expect(text).toContain('Open the record →')
+    expect(text).toContain('no rank is printed')
+  })
+
+  it('draws the charts on a one-month horizon too, with the attention share first', () => {
+    const markup = render(competitiveStandings.render(oneMonthFixture(), 'app', ctx))
+    expect(markup).toContain('<svg')
+    const comments = markup.indexOf('Share of the month’s comments')
+    const videos = markup.indexOf('Share of the month’s videos')
+    expect(comments).toBeGreaterThan(-1)
+    expect(comments).toBeLessThan(videos)
+    expect(markupOf(markup)).toContain('A line needs more than one month')
+  })
+
+  it('draws ONE legend under both charts, and says the scale is not shared', () => {
+    const text = renderText(competitiveStandings.render(competitiveFixture(), 'app', ctx))
+    // ONE legend: the note under it is printed once, and each chart's own
+    // title appears once — two legends would have duplicated both.
+    expect(text.match(/Each chart is scaled to its own highest month/g)?.length).toBe(1)
+    expect(text.match(/Share of the month’s comments, by brand/g)?.length).toBe(1)
+    expect(text.match(/Share of the month’s videos, by brand/g)?.length).toBe(1)
+  })
+
+  it('annotates a series read in fewer months than the axis, and only that one', () => {
+    // The artboard's "Poler · Sep only": the build had the data (a series whose
+    // earlier points are hollow) and printed it nowhere.
+    const base = competitiveFixture()
+    const thin = {
+      ...base,
+      standings: {
+        ...base.standings,
+        series: base.standings.series.map((x) =>
+          x.audience === 'competitor:Ottobock'
+            ? { ...x, points: x.points.map((p, i) => (i === 0 ? { ...p, content: null, attention: null } : p)) }
+            : x,
+        ),
+      },
+    }
+    const text = renderText(competitiveStandings.render(thin, 'app', ctx))
+    expect(text).toContain('2 of 3 months')
+    expect(text.match(/of 3 months/g)?.length).toBe(1)
+  })
+
+  it('renders the host video a question was asked under', () => {
+    const markup = render(competitiveQuestions.render(competitiveFixture(), 'app', ctx))
+    expect(markup).toContain('https://www.tiktok.com/@x/video/1')
+    expect(markupOf(markup)).toContain('under the video →')
+  })
+
+  it('spans the artboard’s grid, and every tile is exportable', () => {
+    // 12 · 7+5 · 3+4+5 · 12 — read off the artboard's own `grid-column: span N`.
+    expect(COMPETITIVE_TILES.map((b) => b.key)).toEqual([
+      'competitive.months', 'competitive.h2h', 'competitive.ownclaims',
+      'competitive.saidabout', 'competitive.questions', 'competitive.unlocks',
+      'competitive.playbook',
+    ])
   })
 })

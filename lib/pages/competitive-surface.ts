@@ -535,27 +535,28 @@ export function competitiveUnlockRows(ownClaims: readonly OwnPostCensus[] = []):
           line: 'What each rival published this month is above. What they CLAIM in it is read from their own transcripts and is not printed here — putting a rival’s words on this page is a decision to take, not a gap to fill.',
           owner: 'Verbatim engineering',
         }
+  // CO3 AND CO7 CAME OUT IN THE COMMIT THAT MOUNTED THEM (Block D wave 2,
+  // E-competitive; wave 1's standing instruction). Both now draw on the page
+  // above this tile — the head-to-head's five measures with an n on every row
+  // and a band only where a proportion earned one, and the format and hook
+  // matrix with each column's classified n printed beside its published one —
+  // so a readiness row saying either is "not built yet" would contradict the
+  // tile a reader has just scrolled past. A row is removed when its tile
+  // mounts, never before and never in a separate change.
+  //
+  // CO6 STAYS, AND ITS LINE IS WHY. `recurrenceOf` (lib/reading/head-to-head.ts)
+  // is built and takes a `theme_registry.id` plus the months that identity was
+  // seen in; nothing loads those months for this page, and keying recurrence on
+  // a LABEL instead would mark nine findings in ten as new every month, which
+  // is a measurement of our own naming. That is the finding identity this row
+  // has always named.
   return [
-    {
-      section: 'CO3',
-      state: 'not built yet' as const,
-      title: 'Head to head, then and now',
-      line: 'You against the selected rival, one row per measure — videos about, comments per video, engagement per video, positive share, own posts published — now, last month and the change, with an n on every row.',
-      owner: 'Verbatim engineering',
-    },
     co4,
     {
       section: 'CO6',
       state: 'not built yet' as const,
       title: 'Findings, with recurrence',
       line: 'Cross-brand findings with “seen in 4 of the last 6 months”, which needs a finding identity that survives an update.',
-      owner: 'Verbatim engineering',
-    },
-    {
-      section: 'CO7',
-      state: 'not built yet' as const,
-      title: 'How the category makes content',
-      line: 'Formats and hooks side by side for the category, for you and for each rival, with “read from n of m videos” on every row and Reddit named as absent from all of them.',
       owner: 'Verbatim engineering',
     },
   ]
