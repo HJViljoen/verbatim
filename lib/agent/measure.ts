@@ -5,6 +5,7 @@ import { fmtInt, longMonth } from '../format'
 import { capLine, monthStartIso } from '../ask/quota'
 import { proseFigures } from '../prose/figures'
 import { scrubProse, type ProseScrub } from '../prose/scrub'
+import { rows as readRows } from '../pages/read'
 import { audienceLabel } from '../readiness/types'
 import { clearsFloor, monthChange, type Direction } from '../reading/bands'
 import { isReadable, pointsByMonth, type MonthPoint, type MonthSeries } from '../reading/series'
@@ -450,18 +451,30 @@ interface AskRow {
  * IT IS NOT `silentQuestions`. That is a thread-scoped list of questions the
  * corpus was silent on, printed on an export slide; this is the WORKSPACE's
  * month, and the two would disagree the first time a reader compared them.
+ *
+ * A FAILED READ IS NULL, NEVER ZERO. PostgREST returns its error rather than
+ * throwing, so `data ?? []` turns a broken query into "0 of 40 questions asked
+ * this month. Every one was answered from the conversation." over a workspace
+ * that asked forty and was declined five times — a count that failed to read
+ * is not a count (app/dashboard/settings/reports/page.tsx says it in those
+ * words; `lib/pages/read.ts` exists for it). Null is a page that says nothing
+ * about the month, which is the truth.
  */
-export async function loadNotAnswered(scope: Scope, now: Date = new Date()): Promise<NotAnswered> {
+export async function loadNotAnswered(scope: Scope, now: Date = new Date()): Promise<NotAnswered | null> {
   const supabase = scope.supabase as SupabaseClient
   const from = monthStartIso(now)
-  const { data } = await supabase
+  const res = await supabase
     .from('agent_messages')
     .select('role, content, outcome, result, created_at')
     .eq('client_id', scope.clientId)
     .gte('created_at', from)
     .order('created_at', { ascending: true })
-  const rows = (data ?? []) as AskRow[]
-  return notAnsweredFrom(rows, from)
+  // `rows()` says the failure in the server log with the read's own name on
+  // it — the only place a failure can surface in this codebase — and the null
+  // below is what stops the page printing a zero it does not have.
+  const list = readRows<AskRow>(res as { data: unknown; error: { message: string } | null }, 'agent.notAnswered')
+  if (res.error) return null
+  return notAnsweredFrom(list, from)
 }
 
 /** The pure half, so the pairing rule is arguable in a test. */

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../rivals'
 import type { MonthPoint, MonthSeries } from '../reading/series'
@@ -9,6 +9,7 @@ import {
   NOT_ANSWERED_HREF,
   TOO_FEW,
   answerFallback,
+  loadNotAnswered,
   measureAnswer,
   notAnsweredFrom,
   scrubAnswer,
@@ -278,5 +279,45 @@ describe('notAnsweredFrom', () => {
     )
     expect(n.asked).toBe(1)
     expect(n.declined).toEqual([])
+  })
+})
+
+describe('loadNotAnswered', () => {
+  /** The chain `loadNotAnswered` walks, ending in the result it is handed. */
+  const scopeOf = (res: { data: unknown; error: { message: string } | null }) => {
+    const q: Record<string, unknown> = {}
+    q.select = () => q
+    q.eq = () => q
+    q.gte = () => q
+    q.order = () => Promise.resolve(res)
+    return { supabase: { from: () => q }, clientId: 'c1' } as unknown as Parameters<typeof loadNotAnswered>[0]
+  }
+
+  it('counts the month it read', async () => {
+    const at = '2026-09-02T09:00:00.000Z'
+    const n = await loadNotAnswered(
+      scopeOf({
+        data: [
+          { role: 'user', content: 'q', outcome: null, result: null, created_at: at },
+          { role: 'agent', content: 'a', outcome: 'silent', result: {}, created_at: at },
+        ],
+        error: null,
+      }),
+      new Date('2026-09-18T00:00:00.000Z'),
+    )
+    expect(n?.asked).toBe(1)
+    expect(n?.declined).toHaveLength(1)
+  })
+
+  it('is null when the read failed — a count that did not read is not a zero', async () => {
+    const said = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const n = await loadNotAnswered(
+      scopeOf({ data: null, error: { message: 'schema cache' } }),
+      new Date('2026-09-18T00:00:00.000Z'),
+    )
+    expect(n).toBeNull()
+    // And it says so where a failure can surface at all.
+    expect(said).toHaveBeenCalled()
+    said.mockRestore()
   })
 })
