@@ -3,7 +3,7 @@ import { readingHandle } from '@/lib/reading/read'
 import { canAsk } from '@/lib/agent/access'
 import { askBasisLine, loadAskBasis, nothingSearchable } from '@/lib/agent/basis'
 import { loadNotAnswered } from '@/lib/agent/measure'
-import { loadPlanChecks } from '@/lib/ask/plan-cards'
+import { loadPlanChecks, type PlanCheckCard } from '@/lib/ask/plan-cards'
 import { askDraws, askPlanChip, askRecordHref, askRecordLines, loadAskHistory } from '@/lib/pages/agent-thread'
 import { AgentComposer } from '@/components/agent-composer'
 import { AskBoxTile } from '@/components/pages/agent/ask-box'
@@ -40,13 +40,21 @@ export default async function AgentPage({
   const ask = sp.ask?.slice(0, 300)
   const scope = { supabase, clientId, reading: readingHandle(clientId), params: sp }
 
+  // THE PLAN CARDS ARE READ ONCE. `loadPlanChecks` is four capped reads by its
+  // own docstring and this page needs them twice — for the ask box's chip and
+  // for the history tile's crossings. Started here and handed to
+  // `loadAskHistory`, they join its own `Promise.all` rather than serialising
+  // behind it, so one wave answers both (AGENTS.md: one query in flight, and
+  // never a second identical one beside it).
+  const plansP = loadPlanChecks(scope).catch(() => [] as PlanCheckCard[])
+
   const [canSend, basis, history, plans, notAnswered, deliveredRes] = await Promise.all([
     // Computed server-side and passed down — never a client-side check.
     canAsk(role, userId),
     // What a question asked from this box will be answered against (AS3).
     loadAskBasis(supabase, clientId),
-    loadAskHistory(scope).catch(() => null),
-    loadPlanChecks(scope).catch(() => []),
+    loadAskHistory(scope, plansP).catch(() => null),
+    plansP,
     loadNotAnswered(scope).catch(() => null),
     supabase.from('pipeline_runs').select('id', { count: 'exact', head: true }).eq('client_id', clientId),
   ])

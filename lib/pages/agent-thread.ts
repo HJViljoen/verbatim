@@ -460,7 +460,23 @@ export function askPlanChip(cards: readonly PlanCheckCard[]): AskPlanChip | null
  * The plan crossings come off the same shared loader the chip uses, so a
  * thread's flag and the chip above it cannot disagree about what moved.
  */
-export async function loadAskHistory(scope: Scope, limit = 50): Promise<AskHistory> {
+export async function loadAskHistory(
+  scope: Scope,
+  /**
+   * The plan cards, HANDED IN — never loaded here.
+   *
+   * `loadPlanChecks` is "FOUR READS, CAPPED" by its own docstring, and every
+   * caller of this function also needs the cards for the ask box's chip. When
+   * this loaded its own, Ask paid eight reads where four would do, twice per
+   * render, on both routes — the read shape AGENTS.md legislates against, on a
+   * page whose own loader docstring was written against the 16 September
+   * outage. A PROMISE is accepted as well as an array so the caller can hand in
+   * the one it already has in flight: it joins the `Promise.all` below rather
+   * than serialising behind it, so the fix costs no round trip.
+   */
+  cardsIn: readonly PlanCheckCard[] | Promise<readonly PlanCheckCard[]>,
+  limit = 50,
+): Promise<AskHistory> {
   const supabase = scope.supabase as SupabaseClient
   const { clientId } = scope
   const [listRes, oldestRes, cards] = await Promise.all([
@@ -477,7 +493,7 @@ export async function loadAskHistory(scope: Scope, limit = 50): Promise<AskHisto
       .order('created_at', { ascending: true })
       .limit(1)
       .maybeSingle(),
-    loadPlanChecks(scope).catch(() => [] as PlanCheckCard[]),
+    cardsIn,
   ])
   const list = readRows<{ id: string; title: string | null; created_at: string; plan_check_id: string | null }>(
     listRes,
@@ -560,7 +576,10 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
   // a missing chip rather than a missing page — the chip is an affordance.
   const plansP = loadPlanChecks(scope).catch(() => [] as PlanCheckCard[])
   const notAnsweredP = loadNotAnswered(scope).catch(() => null)
-  const historyP = loadAskHistory(scope).catch(() => null)
+  // ONE WAVE OF PLAN READS, not two. `plansP` is already in flight for the
+  // chip; the history's crossings read the same cards rather than starting a
+  // second identical wave beside it.
+  const historyP = loadAskHistory(scope, plansP).catch(() => null)
 
   const storedRegistryIds = [
     ...new Set(
