@@ -83,13 +83,39 @@ export function monthlyRivalsEmail(data: OverviewData, ctx: BlockContext): React
   )
 }
 
-/** One brand: the dot, the name, the attention level with its count, and the
- *  banded verdict; then the content side on its own line, with ITS verdict. */
+/**
+ * One brand, in the artboard's own row: the dot, the name, the SHARE BAR, the
+ * attention level with its count, and the banded verdict — then the content
+ * side on its own full-width line beneath, with ITS verdict beside the words
+ * that name it.
+ *
+ * THE BAR IS THE SECTION'S ONE GRAPHIC AND IT WAS MISSING (the fix pass,
+ * review finding [High]). `crop-mid-artboard.png` draws dot · name · bar ·
+ * share · verdict; the build drew everything but the bar, so an artefact whose
+ * argument is that a rival's share can be compared BY EYE compared by reading
+ * six mono percentages. It is a `td` with a track colour and an inner cell at
+ * the share's own width, which is the only bar an email can draw.
+ *
+ * AND IT IS DRAWN AGAINST THE WHOLE, NOT AGAINST THE LARGEST ROW. The artboard
+ * normalises: 39% fills the track and every other row is a fraction of that,
+ * which makes the leader's bar say 100% of something. Ours fills the share's
+ * own percentage of the track, so the bar and the figure beside it say the
+ * same thing (deviation 24).
+ *
+ * THE CONTENT LINE MOVED UNDER THE ROW (review finding [High]). Beside the
+ * name it was a 264px box holding ~310px of words, so it wrapped and its badge
+ * landed at the left margin — the exact ambiguity the comment there claimed to
+ * have fixed, one chip top-right and one bottom-left with nothing saying which
+ * share either belonged to. On its own line the badge sits immediately after
+ * the words "content share 78% · 780 of 1,000" that name it, which is the
+ * artboard's own arrangement (its second line ends "· −2").
+ */
 function Row({ row, recorded }: { row: RivalRow; recorded: boolean }) {
   const colour = row.role === 'client' ? EMAIL.green : row.role === 'category' ? EMAIL.cat : EMAIL.comp
   const why = row.attentionVerdict?.state === 'refused' && row.attentionVerdict.refusedReason
     ? REFUSAL_WHY[row.attentionVerdict.refusedReason]
     : null
+  const pct = row.attention?.pct ?? null
   return (
     <table width="100%" {...presentation} style={{ ...T, borderTop: `1px solid ${EMAIL.hairline}` }}>
       <tbody>
@@ -103,18 +129,25 @@ function Row({ row, recorded }: { row: RivalRow; recorded: boolean }) {
               {row.role === 'client' ? <span style={{ fontWeight: 400, color: EMAIL.muted }}> (you)</span> : null}
               {row.retiredAt ? <span style={{ fontWeight: 400, color: EMAIL.muted }}> · tracked until {shortDate(row.retiredAt)}</span> : null}
             </div>
-            {/* THE CONTENT SIDE AND ITS OWN VERDICT ON ONE LINE. Stacked, the
-                badge sat at the left margin where the attention badge sits at
-                the right, and a reader had no way to tell which share either
-                belonged to. */}
-            <div style={{ marginTop: 5 }}>
-              <span style={{ fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.faint }}>
-                content share <Share share={row.content} recorded={recorded} />
-              </span>
-              {row.contentVerdict ? <span style={{ marginLeft: 6 }}><BlockMovement verdict={row.contentVerdict} unit="pts" mode="email" /></span> : null}
-            </div>
           </td>
-          <td width={112} align="right" style={{ width: 112, padding: '9px 10px 9px 0', verticalAlign: 'top' }}>
+          {/* THE BAR. A percentage width inside a fixed-height track, which is
+              the one bar shape every mail client draws the same way. It is
+              hidden where there is no share to draw rather than drawn empty:
+              an empty track beside "not observed" reads as a zero. */}
+          {pct != null ? (
+            <td width="17%" style={{ width: '17%', padding: '13px 10px 9px 0', verticalAlign: 'top' }}>
+              <table width="100%" {...presentation} style={{ ...T, background: EMAIL.inner, borderRadius: 8 }}>
+                <tbody>
+                  <tr>
+                    <td style={{ height: 8, lineHeight: '8px', fontSize: 0 }}>
+                      <span style={{ display: 'block', height: 8, width: `${Math.max(2, Math.min(100, pct))}%`, borderRadius: 8, background: colour, fontSize: 0, lineHeight: 0 }} />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </td>
+          ) : null}
+          <td align="right" style={{ padding: '9px 10px 9px 0', verticalAlign: 'top' }}>
             {row.attention == null || row.attention.pct == null ? (
               <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>{recorded ? NOT_OBSERVED : NOT_RECORDED}</span>
             ) : (
@@ -126,12 +159,28 @@ function Row({ row, recorded }: { row: RivalRow; recorded: boolean }) {
               />
             )}
           </td>
-          <td width={124} align="right" style={{ width: 124, padding: '9px 0', verticalAlign: 'top' }}>
+          {/* AND THE COLUMNS ARE NOT FIXED PIXELS ANY MORE (review finding
+              [Critical]). Chrome takes a `width:112px` on an auto-layout cell
+              as a MINIMUM for its column, so 8 + 112 + 124 of fixed lead held
+              every rivals row — and so the whole artefact — at a 296px floor
+              on a phone. The columns now take their content's width, and the
+              artboard's proportions at 640 come from the bar, which is the
+              only sized thing in the row. */}
+          <td align="right" style={{ padding: '9px 0', verticalAlign: 'top' }}>
             <BlockMovement verdict={row.attentionVerdict} unit="pts" mode="email" />
             {/* THE REASON, IN THE OPEN. "Comparison refused" alone tells a
                 reader something is wrong without telling them what, and the
                 app's tooltip reaches neither an inbox nor a sheet of paper. */}
-            {why ? <div style={{ fontFamily: FONT.sans, fontSize: 10.5, lineHeight: '1.4', color: EMAIL.faint, marginTop: 3 }}>{why}</div> : null}
+            {why ? <div style={{ fontFamily: FONT.sans, fontSize: 10.5, lineHeight: '1.4', color: EMAIL.muted, marginTop: 3 }}>{why}</div> : null}
+          </td>
+        </tr>
+        <tr>
+          <td />
+          <td colSpan={pct != null ? 4 : 3} style={{ padding: '0 0 9px', verticalAlign: 'top' }}>
+            <span style={{ fontFamily: FONT.mono, fontSize: 10.5, lineHeight: '1.6', color: EMAIL.muted }}>
+              content share <Share share={row.content} recorded={recorded} />
+            </span>
+            {row.contentVerdict ? <span style={{ marginLeft: 6, display: 'inline-block' }}><BlockMovement verdict={row.contentVerdict} unit="pts" mode="email" /></span> : null}
           </td>
         </tr>
       </tbody>

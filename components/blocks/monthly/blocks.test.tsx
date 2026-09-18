@@ -469,6 +469,25 @@ describe('the five sections that are Overview’s', () => {
     expect(text).not.toMatch(/narrowed/i)
   })
 
+  // THE SECTION'S ONE GRAPHIC (review finding [High]). The artboard's rival row
+  // is dot · name · BAR · share · verdict; the build drew every part but the
+  // bar, so the one section whose argument is that shares can be compared by
+  // eye compared them by reading. The bar is the share's own percentage of the
+  // track — never normalised to the leading row, which would draw the leader
+  // as all of something.
+  it('draws each rival’s attention share as a bar at its own width', () => {
+    const data = monthlyFixture()
+    const markup = render(MONTHLY_BLOCKS['monthly.rivals'].render(data, 'email', ctx))
+    let drawn = 0
+    for (const row of data.overview.rivals.rows) {
+      const pct = row.attention?.pct
+      if (pct == null) continue
+      drawn += 1
+      expect(markup).toContain(`width:${Math.max(2, Math.min(100, pct))}%`)
+    }
+    expect(drawn).toBeGreaterThan(0)
+  })
+
   it('merge into one figure table with no key printed two ways', () => {
     const data = monthlyFixture()
     const merged = mergeFigures(ALL_MONTHLY_BLOCKS.map((b) => blockAnswers(b, data).figures))
