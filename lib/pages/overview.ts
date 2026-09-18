@@ -181,6 +181,18 @@ export interface Mover {
   isNew: boolean
 }
 
+/** A theme the register has marked dormant, with the last month it was heard
+ *  in on this page's own axis. The same three facts `GoneQuiet`
+ *  (lib/pages/voice-surface.ts) carries; declared here because voice-surface
+ *  imports this module and not the other way round. */
+export interface QuietTheme {
+  id: string
+  label: string
+  /** The month it was last read in, on this page's axis. Null where the axis
+   *  does not reach back to it. */
+  lastHeard: string | null
+}
+
 export interface MoodBlock {
   shares: MoodShare[]
   judged: number
@@ -197,6 +209,34 @@ export interface AttentionBlock {
    *  reading to this one, whether or not it carried one. */
   axis: string[]
   panel: AttentionPanel | null
+  /**
+   * How many accounts the frozen panel holds.
+   *
+   * `AttentionPanel.account_count` has been built since the panel shipped and
+   * rendered nowhere (the caption says "a fixed panel, frozen {date}" and stops).
+   * It is the denominator of the whole line in the only sense a reader can use:
+   * 41,200 comments is a number about a set, and a set with no size is not a
+   * measurement. Null where no panel is frozen.
+   */
+  accountCount: number | null
+  /**
+   * The latest banded step, or the refusal.
+   *
+   * WRITTEN AT LAST, HAVING BEEN `null` SINCE IT WAS DECLARED. `verdicts()`
+   * has declared this field since WP11 and `buildCategory` hard-coded it null,
+   * so Overview counted one comparison fewer than it drew and no attention
+   * movement has ever been printed anywhere. It is the CATEGORY's own row out
+   * of `buildStandings` — the same computation the rivals table's rows come
+   * from, taken from the same call — so the two can never disagree about
+   * whether the panel moved. The band is drawn on panel VIDEOS, not on the
+   * comment count, for the reason lib/reading/standings.ts gives at length:
+   * comments are not independent draws.
+   *
+   * The mock's "−18% since June" and "▼ 9,100 comments" are neither of these
+   * and cannot be built: a raw comment delta has no denominator, so no band
+   * can be drawn over it, and June to September crosses the 3 September
+   * re-freeze, which is precisely the refusal this verdict carries instead.
+   */
   verdict: Verdict | null
 }
 
@@ -217,6 +257,21 @@ export interface CategoryBlock {
   moodNote: string | null
   attention: AttentionBlock | null
   attentionNote: string | null
+  /**
+   * Themes that have stopped being said — a FLAG, never a direction.
+   *
+   * `gone_quiet` is one of the two `READER_FLAGS` (lib/calibration.ts) and it
+   * is the registry's own dormancy rule, already fired by the pipeline, not a
+   * reading of this month: a theme with no rows at all is silence we never
+   * heard, and a dormant entry that carried a reading on this axis is silence
+   * we did. Voice prints it and the monthly movers print it; Overview has
+   * never had a field for it. It carries no verdict and earns no direction
+   * word — "fading" is a claim about a series, "gone quiet" is a fact about
+   * the register.
+   */
+  quiet: QuietTheme[]
+  /** Said instead of the flags when the register could not be read. */
+  quietNote: string | null
 }
 
 export interface RivalRow {
@@ -250,6 +305,18 @@ export interface RivalsBlock {
   /** Videos of the client's own that also name a tracked rival. */
   dualMention: number | null
   caveat: string
+  /**
+   * One composed sentence over the rows' attention verdicts, or null.
+   *
+   * THE BANDED WORD ALONE. The mock writes "Freitag took 3 points of attention
+   * this month, the only rival that moved clearly. Patagonia slipped 2 and
+   * stayed inside its band." — `slipped` is a direction word nothing earned
+   * (`directionWordsFor('competitive.deltas')` is false), and "the only rival
+   * that moved clearly" is a superlative over a set, which IS countable and is
+   * kept. So the lead says how many rivals' attention moved and names them,
+   * and says nothing about which way.
+   */
+  lead: string | null
 }
 
 export interface MoveRow {
@@ -792,6 +859,50 @@ export const OWN_POSTS_UNREADABLE = '— not tracked · their own posts are not 
  *  front of. The absence is still named; only the owner is dropped. */
 export const OWN_POSTS_UNREADABLE_OUTSIDE = '— not tracked · their own posts are not readable yet'
 
+/**
+ * The rivals lead — one composed sentence over the rows' attention verdicts.
+ *
+ * WHAT IT MAY SAY, AND WHAT IT MAY NOT. The mock writes "Freitag took 3 points
+ * of attention this month, the only rival that moved clearly. Patagonia slipped
+ * 2 and stayed inside its band." Three claims, and only two of them are
+ * earnable:
+ *
+ *   · "the only rival that moved clearly" is a COUNT over the rows whose
+ *     verdict answered, which is arithmetic over verdicts this block already
+ *     drew, and it is kept;
+ *   · "took 3 points" is a magnitude, and a magnitude is printed by the badge
+ *     beside the row with its band — never a second time in prose, where it
+ *     would arrive without one (mock-gap §6 D2);
+ *   · "slipped" is a direction word. `directionWordsFor('competitive.deltas')`
+ *     is false and only `directionWord` over three consecutive readings may
+ *     fill one at all. It is refused.
+ *
+ * So: how many rivals' attention moved, and which. Null where no rival's
+ * attention was compared at all, because "no rival moved" and "nobody was
+ * compared" are different sentences and the standings already say the second.
+ *
+ * Pure.
+ */
+export function rivalsLead(rows: readonly RivalRow[]): string | null {
+  const rivals = rows.filter((r) => r.role === 'rival' && r.attentionVerdict != null)
+  if (rivals.length === 0) return null
+  const answered = rivals.filter((r) => isAnswer((r.attentionVerdict as Verdict).state))
+  if (answered.length === 0) {
+    return `No rival\u2019s attention could be compared with the month before against its band; the ${rivals.length === 1 ? 'one row' : `${rivals.length} rows`} below say why.`
+  }
+  const moved = answered.filter((r) => (r.attentionVerdict as Verdict).state === 'moved')
+  if (moved.length === 0) {
+    return `No rival\u2019s share of attention moved beyond its band this month, of ${answered.length} compared.`
+  }
+  const names = moved.map((r) => r.label)
+  const who = names.length === 1
+    ? names[0]
+    : names.length === 2
+      ? `${names[0]} and ${names[1]}`
+      : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+  return `${who} ${names.length === 1 ? 'is the one rival' : `are the ${names.length} rivals`} whose share of attention moved beyond its band this month, of ${answered.length} compared \u2014 the change and the band are on each row.`
+}
+
 /** The precedence caveat OV4 carries (§7, bucket precedence). */
 export const RIVALS_CAVEAT =
   'A video that names both you and a rival counts in your audience only; the count of those is in the record.'
@@ -1062,7 +1173,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
       })
     : []
 
-  const [themeSet, kindRows, statsRows, subjectMonths, subjectRows, moveRows, panel, lastMonthSoFar, flags, subjectsAtLastMonth] =
+  const [themeSet, kindRows, statsRows, subjectMonths, subjectRows, moveRows, panel, lastMonthSoFar, flags, subjectsAtLastMonth, dormant] =
     await Promise.all([
       loadMonthSeries(reading.client, clientId, {
         from: readAxis[0],
@@ -1086,6 +1197,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
       readAtThisPointLastMonth(reading, month, readingAt),
       loadFlags(supabase, clientId, month),
       readSubjectsAtThisPointLastMonth(reading, month, readingAt),
+      loadDormantThemes(reading.client, clientId),
     ])
 
   // ── OV0 · the page bar and the still-filling line ──────────────────────
@@ -1171,6 +1283,26 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     thin: suppress,
   })
 
+  // ── OV4 · rivals ───────────────────────────────────────────────────────
+  //
+  // BUILT BEFORE OV3, AND THAT ORDER IS LOAD-BEARING. The category's own
+  // attention verdict is the CATEGORY ROW of the same `buildStandings` call
+  // this block is built from (`role: 'category'`). Computing it a second time
+  // inside `buildCategory` would put two answers to one question on one page,
+  // which is the defect `lib/reading/standings.ts` exists to prevent; taking
+  // it from here means they cannot disagree. Neither block reads the other's
+  // output for anything else.
+  const dual = history.denominators.find((d) => d.month === month && d.audience === CLIENT_AUDIENCE) ?? null
+  const rivalsBlock = buildRivals({
+    rivals,
+    statsRows,
+    month,
+    prevMonth,
+    brand,
+    series: themeSet.series,
+    dualMention: (dual as { dual_mention?: number } | null)?.dual_mention ?? null,
+  })
+
   // ── OV3 · what the category is saying ─────────────────────────────────
   const category = buildCategory({
     audience: INDUSTRY_AUDIENCE,
@@ -1183,19 +1315,9 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     panel,
     perAudience: audienceMonthVideos(history.denominators),
     recordFrom: started.from,
+    attentionVerdict: rivalsBlock.rows.find((r) => r.role === 'category')?.attentionVerdict ?? null,
+    dormant,
     thin: suppress,
-  })
-
-  // ── OV4 · rivals ───────────────────────────────────────────────────────
-  const dual = history.denominators.find((d) => d.month === month && d.audience === CLIENT_AUDIENCE) ?? null
-  const rivalsBlock = buildRivals({
-    rivals,
-    statsRows,
-    month,
-    prevMonth,
-    brand,
-    series: themeSet.series,
-    dualMention: (dual as { dual_mention?: number } | null)?.dual_mention ?? null,
   })
 
   // ── OV5 · your moves ───────────────────────────────────────────────────
@@ -1450,6 +1572,45 @@ async function loadMoves(supabase: SupabaseClient, clientId: string): Promise<Mo
   } catch (error) {
     if (isMissingSubjects(error)) return null
     throw error
+  }
+}
+
+/**
+ * The register's dormant entries — the gone-quiet flag's source.
+ *
+ * DORMANCY IS THE REGISTER'S, NOT THIS MONTH'S. The pipeline's own rule marks
+ * an entry dormant over the updates that produced theme observations; nothing
+ * here re-decides it, and nothing here treats "no row this month" as quiet —
+ * a theme with no rows at all is silence we never heard.
+ *
+ * READ WITHOUT AN ID BOUND, ON PURPOSE, AND IT IS THE CHEAP HALF OF THE READ.
+ * The predicate is `status = 'dormant'`, which is a small slice of a register
+ * Sealand carries 1,927 entries in, and it does not depend on the theme series
+ * — so it joins the same parallel wave rather than adding a serial hop after
+ * it. `buildCategory` then keeps only the entries this page's own axis ever
+ * drew. The two columns are named out; `embedding` lives on this table and is
+ * never selected (AGENTS.md).
+ *
+ * Null — never [] — where the register cannot be read, so the block can say
+ * "not recorded" instead of "nothing has gone quiet".
+ */
+async function loadDormantThemes(
+  client: SupabaseClient,
+  clientId: string,
+): Promise<{ id: string; label: string }[] | null> {
+  try {
+    const rows = await selectAll<{ id: string; canonical_label: string | null }>(() =>
+      client
+        .from('theme_registry')
+        .select('id, canonical_label')
+        .eq('client_id', clientId)
+        .eq('status', 'dormant')
+        .order('id', { ascending: true }),
+    )
+    return rows.map((r) => ({ id: r.id, label: r.canonical_label ?? r.id }))
+  } catch (error) {
+    console.error(`[pages] overview.dormant: ${(error as { message?: string })?.message ?? String(error)}`)
+    return null
   }
 }
 
@@ -1821,6 +1982,13 @@ interface CategoryInput {
   /** The first month of this tenant's readable record (`sinceStart`). "First
    *  heard this month" may be said only when the drawn axis reaches it. */
   recordFrom: string | null
+  /** The category's own attention verdict, off the SAME `buildStandings` call
+   *  the rivals table is built from — never a second computation. Null where
+   *  the panel could not be compared at all. */
+  attentionVerdict: Verdict | null
+  /** Registry entries the pipeline's dormancy rule has marked quiet, or null
+   *  where the register could not be read. */
+  dormant: readonly { id: string; label: string }[] | null
   thin: boolean
 }
 
@@ -1976,9 +2144,39 @@ export function buildCategory(input: CategoryInput): CategoryBlock {
         months: panelMonths,
         axis: monthAxis(panelMonths[0].month, input.month),
         panel: input.panel,
-        verdict: null,
+        accountCount: input.panel?.account_count ?? null,
+        verdict: input.attentionVerdict,
       }
     }
+  }
+
+  // (e) gone quiet — a FLAG off the register, not a reading of this month
+  //
+  // ONLY THE ONES THIS PAGE EVER DREW. The register's dormant set is the whole
+  // tenant's and reaches back years; a theme that never carried a reading on
+  // the axis in front of the reader is silence they never heard, and printing
+  // it would be Overview reporting the churn of the clustering as a finding.
+  // The rule Voice already applies, applied to Overview's own axis.
+  let quiet: QuietTheme[] = []
+  let quietNote: string | null = null
+  if (input.dormant == null) {
+    quietNote = 'Which themes have stopped being said is not recorded for this workspace yet.'
+  } else {
+    const dormantById = new Map(input.dormant.map((d) => [d.id, d.label]))
+    quiet = audienceSeries
+      .filter((s) => dormantById.has(s.objectId as string))
+      .map((s) => {
+        const last = [...s.points].reverse().find((p) => p.k != null && p.k > 0) ?? null
+        return {
+          id: s.objectId as string,
+          label: dormantById.get(s.objectId as string) ?? s.objectLabel ?? (s.objectId as string),
+          lastHeard: last?.month ?? null,
+        }
+      })
+      .filter((q) => q.lastHeard != null)
+      .sort((a, b) => (b.lastHeard ?? '').localeCompare(a.lastHeard ?? ''))
+      .slice(0, QUIET_SHOWN)
+    if (quiet.length === 0) quietNote = 'Nothing this page has drawn has stopped being said.'
   }
 
   return {
@@ -1996,8 +2194,14 @@ export function buildCategory(input: CategoryInput): CategoryBlock {
     moodNote,
     attention,
     attentionNote,
+    quiet,
+    quietNote,
   }
 }
+
+/** How many gone-quiet flags OV3 carries. Three, the same count the block's
+ *  other lines print, because the line is a flag row and not a list. */
+export const QUIET_SHOWN = 3
 
 interface RivalsInput {
   rivals: readonly { name: string; retiredAt: string | null }[]
@@ -2066,6 +2270,10 @@ export function buildRivals(input: RivalsInput): RivalsBlock {
         'How much attention each brand drew is not recorded month by month for this workspace yet — what is printed here is what was raised under their content.',
       dualMention: input.dualMention,
       caveat,
+      // No panel was read, so no verdict was drawn and there is nothing to
+      // lead with. `rivalsLead` returns null over these rows anyway; it is
+      // written out so the two arms are visibly the same shape.
+      lead: null,
     }
   }
 
@@ -2096,27 +2304,29 @@ export function buildRivals(input: RivalsInput): RivalsBlock {
     prevPanelId: input.prevMonth ? panelIdOf(input.prevMonth) : null,
   })
 
+  const rows: RivalRow[] = standings.map((s) => ({
+    audience: s.audience,
+    label: s.label,
+    role: s.role,
+    observed: s.observed,
+    attention: s.attention,
+    content: s.content,
+    attentionVerdict: s.attentionVerdict,
+    contentVerdict: s.contentVerdict,
+    // Their own posts are read through `video_claims`, which no tenant may
+    // select until M8 adds the policy (WP16), so this is null on every row
+    // today and the block says why. It is a field for a CLAIM; the absence
+    // is the block's to word (OWN_POSTS_UNREADABLE), and it is printed on
+    // rivals only — your own brand and the category are not rivals with
+    // posts of their own to read, and "— not tracked" against them said
+    // nothing about anything.
+    ownPosts: null,
+    raisedMost: raisedMost(s.audience),
+    retiredAt: retiredBy.get(s.audience) ?? null,
+  }))
+
   return {
-    rows: standings.map((s) => ({
-      audience: s.audience,
-      label: s.label,
-      role: s.role,
-      observed: s.observed,
-      attention: s.attention,
-      content: s.content,
-      attentionVerdict: s.attentionVerdict,
-      contentVerdict: s.contentVerdict,
-      // Their own posts are read through `video_claims`, which no tenant may
-      // select until M8 adds the policy (WP16), so this is null on every row
-      // today and the block says why. It is a field for a CLAIM; the absence
-      // is the block's to word (OWN_POSTS_UNREADABLE), and it is printed on
-      // rivals only — your own brand and the category are not rivals with
-      // posts of their own to read, and "— not tracked" against them said
-      // nothing about anything.
-      ownPosts: null,
-      raisedMost: raisedMost(s.audience),
-      retiredAt: retiredBy.get(s.audience) ?? null,
-    })),
+    rows,
     recorded: true,
     // NO SUMMARY SENTENCE. This arm used to print "Nothing was not observed on
     // this month's panel" when every row was unobserved — which says the
@@ -2126,5 +2336,6 @@ export function buildRivals(input: RivalsInput): RivalsBlock {
     standingsNote: null,
     dualMention: input.dualMention,
     caveat,
+    lead: rivalsLead(rows),
   }
 }

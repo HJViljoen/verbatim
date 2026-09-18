@@ -22,9 +22,11 @@ import {
   moveLine,
   MOVES_EMPTY,
   recordWindow,
+  rivalsLead,
   splitMovers,
   subjectsNote,
   type Mover,
+  type RivalRow,
   type StoredKindRow,
   type StoredStatsRow,
   type SubjectRow,
@@ -523,7 +525,7 @@ describe('buildCategory', () => {
   it('says what is not recorded rather than printing zeros, when M5 is absent', () => {
     const c = buildCategory({
       audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
-      series, recordFrom: AXIS[0], kindRows: null, statsRows: null, panel: null, perAudience, thin: false,
+      series, recordFrom: AXIS[0], kindRows: null, statsRows: null, panel: null, perAudience, attentionVerdict: null, dormant: [], thin: false,
     })
     expect(c.kinds).toEqual([])
     expect(c.kindsNote).toContain('not recorded month by month')
@@ -536,7 +538,7 @@ describe('buildCategory', () => {
   it('reads the movers off the month series and earns a direction word', () => {
     const c = buildCategory({
       audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
-      series, recordFrom: AXIS[0], kindRows: null, statsRows: null, panel: null, perAudience, thin: false,
+      series, recordFrom: AXIS[0], kindRows: null, statsRows: null, panel: null, perAudience, attentionVerdict: null, dormant: [], thin: false,
     })
     expect(c.growing.map((m) => m.label)).toEqual(['Will it survive a wet commute'])
     expect(c.growing[0].direction).toBe('growing')
@@ -551,7 +553,7 @@ describe('buildCategory', () => {
     ]
     const c = buildCategory({
       audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
-      series, recordFrom: AXIS[0], kindRows, statsRows: null, panel: null, perAudience, thin: false,
+      series, recordFrom: AXIS[0], kindRows, statsRows: null, panel: null, perAudience, attentionVerdict: null, dormant: [], thin: false,
     })
     expect(c.kinds.map((k) => k.kind)).toContain('question')
     expect(c.kinds.find((k) => k.kind === 'question')?.pct).toBe(33.9)
@@ -562,7 +564,7 @@ describe('buildCategory', () => {
   it('suppresses every comparison in a thin month and says so', () => {
     const c = buildCategory({
       audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
-      series, recordFrom: AXIS[0], kindRows: null, statsRows: null, panel: null, perAudience, thin: true,
+      series, recordFrom: AXIS[0], kindRows: null, statsRows: null, panel: null, perAudience, attentionVerdict: null, dormant: [], thin: true,
     })
     expect(c.growing).toEqual([])
     expect(c.fading).toEqual([])
@@ -588,7 +590,7 @@ describe('buildCategory', () => {
       series, recordFrom: AXIS[0],
       kindRows: null,
       statsRows: [panelRow('2026-07-01', 50300), panelRow('2026-08-01', null), panelRow('2026-09-01', 41200)],
-      panel: null, perAudience, thin: false,
+      panel: null, perAudience, attentionVerdict: null, dormant: [], thin: false,
     })
     expect(c.attention?.months.map((m) => m.month)).toEqual(['2026-07-01', '2026-09-01'])
     expect(c.attention?.axis).toEqual(AXIS)
@@ -601,7 +603,7 @@ describe('buildCategory', () => {
     ]
     const c = buildCategory({
       audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
-      series, recordFrom: AXIS[0], kindRows: null, statsRows, panel: null, perAudience, thin: false,
+      series, recordFrom: AXIS[0], kindRows: null, statsRows, panel: null, perAudience, attentionVerdict: null, dormant: [], thin: false,
     })
     expect(c.mood?.judged).toBe(1112)
     expect(c.mood?.shares.find((s) => s.mood === 'negative')?.pct).toBe(18)
@@ -609,6 +611,62 @@ describe('buildCategory', () => {
     // No panel: attention is null and says why, and is NOT read as zero.
     expect(c.attention).toBeNull()
     expect(c.attentionNote).toContain('No panel has been frozen')
+  })
+
+  it('carries the panel’s size and the verdict the standings drew, never a second computation', () => {
+    const statsRows: StoredStatsRow[] = [
+      { month: '2026-08-01', audience: INDUSTRY_AUDIENCE, judged: 0, positive: 0, negative: 0, neutral: 0, mixed: 0, judged_framing: 0, panel_videos: 880, attention_comments: 46000, panel_platform_mix: {}, panel_id: 'p1' },
+      { month: '2026-09-01', audience: INDUSTRY_AUDIENCE, judged: 0, positive: 0, negative: 0, neutral: 0, mixed: 0, judged_framing: 0, panel_videos: 850, attention_comments: 41200, panel_platform_mix: {}, panel_id: 'p2' },
+    ]
+    const panel = { id: 'p2', client_id: 'c', frozen_at: '2026-09-03T00:00:00.000Z', cutoff: '2026-06-01', accounts: [], account_count: 214, reason: 'tracking_change' as const }
+    const refusal: Verdict = {
+      objectKind: 'audience', objectId: INDUSTRY_AUDIENCE, objectLabel: 'The category', audience: INDUSTRY_AUDIENCE,
+      window: { kind: 'month', from: '2026-09-01', to: '2026-10-01' },
+      value: { k: 41200, n: 41200 }, changePts: null, bandPts: null,
+      state: 'refused', refusedReason: 'tracking_change', flags: [],
+    }
+    const c = buildCategory({
+      audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
+      series, recordFrom: AXIS[0], kindRows: null, statsRows, panel, perAudience, attentionVerdict: refusal, dormant: [], thin: false,
+    })
+    expect(c.attention?.accountCount).toBe(214)
+    // Handed in, not recomputed: the block and the standings table print one
+    // answer about one panel.
+    expect(c.attention?.verdict).toBe(refusal)
+  })
+
+  it('flags only the dormant themes this page’s own axis ever drew', () => {
+    const c = buildCategory({
+      audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
+      series, recordFrom: AXIS[0], kindRows: null, statsRows: null, panel: null, perAudience,
+      attentionVerdict: null,
+      // 't1' IS drawn on this axis; 'tX' is dormant in the register and was
+      // never read here, which is silence this page never heard.
+      dormant: [{ id: 't1', label: 'Will it survive a wet commute' }, { id: 'tX', label: 'Something from 2022' }],
+      thin: false,
+    })
+    expect(c.quiet.map((q) => q.id)).toEqual(['t1'])
+    expect(c.quiet[0].lastHeard).toBe('2026-09-01')
+    expect(c.quietNote).toBeNull()
+  })
+
+  it('tells an unreadable register from a register with nothing dormant in it', () => {
+    const unreadable = buildCategory({
+      audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
+      series, recordFrom: AXIS[0], kindRows: null, statsRows: null, panel: null, perAudience,
+      attentionVerdict: null, dormant: null, thin: false,
+    })
+    expect(unreadable.quiet).toEqual([])
+    expect(unreadable.quietNote).toContain('not recorded for this workspace yet')
+
+    const nothing = buildCategory({
+      audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
+      series, recordFrom: AXIS[0], kindRows: null, statsRows: null, panel: null, perAudience,
+      attentionVerdict: null, dormant: [], thin: false,
+    })
+    expect(nothing.quietNote).toBe('Nothing this page has drawn has stopped being said.')
+    // The flag is never a direction claim, so neither sentence may carry one.
+    expect(nothing.quietNote).not.toMatch(/fading|falling|declin/i)
   })
 })
 
@@ -677,5 +735,65 @@ describe('buildRivals', () => {
       statsRows: null, month: '2026-09-01', prevMonth: null, brand: 'Sealand', series, dualMention: null,
     })
     expect(b.rows.find((r) => r.label === 'Poler')?.retiredAt).toBe('2026-09-09')
+  })
+
+  it('leads with nothing while the panel is not recorded, because nobody was compared', () => {
+    const b = buildRivals({
+      rivals: [{ name: 'Freitag', retiredAt: null }],
+      statsRows: null, month: '2026-09-01', prevMonth: '2026-08-01', brand: 'Sealand', series, dualMention: null,
+    })
+    expect(b.lead).toBeNull()
+  })
+})
+
+describe('rivalsLead', () => {
+  const row = (label: string, v: Verdict | null): RivalRow => ({
+    audience: rivalKey(label),
+    label,
+    role: 'rival',
+    observed: true,
+    attention: null,
+    content: null,
+    attentionVerdict: v,
+    contentVerdict: null,
+    ownPosts: null,
+    raisedMost: null,
+    retiredAt: null,
+  })
+  const v = (state: Verdict['state'], over: Partial<Verdict> = {}): Verdict => ({
+    objectKind: 'rival', objectId: 'x', objectLabel: 'x', audience: 'x',
+    window: { kind: 'month', from: '2026-09-01', to: '2026-10-01' },
+    value: { k: 1, n: 2 }, changePts: 3, bandPts: 1.8, state, flags: [], ...over,
+  })
+
+  it('is null where no rival was compared at all', () => {
+    expect(rivalsLead([])).toBeNull()
+    expect(rivalsLead([row('Freitag', null)])).toBeNull()
+  })
+
+  it('counts the rivals that moved and names them — no magnitude, no direction', () => {
+    const lead = rivalsLead([row('Freitag', v('moved')), row('Patagonia', v('no_clear_change'))]) as string
+    expect(lead).toContain('Freitag is the one rival whose share of attention moved beyond its band')
+    expect(lead).toContain('of 2 compared')
+    // The mock's "took 3 points" and "slipped 2" are both refused: a magnitude
+    // is printed by the badge with its band, and `slipped` is a direction word
+    // no reader's flag earns.
+    expect(lead).not.toMatch(/\d+ points|slipped|gained|fell/)
+  })
+
+  it('says so when nothing moved, and counts what was compared', () => {
+    expect(rivalsLead([row('Freitag', v('no_clear_change')), row('Poler', v('no_clear_change'))]))
+      .toBe('No rival’s share of attention moved beyond its band this month, of 2 compared.')
+  })
+
+  it('tells "nothing moved" from "nothing could be compared"', () => {
+    const lead = rivalsLead([row('Freitag', v('too_little_data')), row('Poler', v('refused', { refusedReason: 'tracking_change' }))]) as string
+    expect(lead).toContain('could be compared')
+    expect(lead).not.toContain('moved beyond its band this month, of')
+  })
+
+  it('joins several names without an Oxford list of one', () => {
+    const lead = rivalsLead([row('Freitag', v('moved')), row('Poler', v('moved')), row('Topo', v('moved'))]) as string
+    expect(lead).toContain('Freitag, Poler and Topo are the 3 rivals')
   })
 })

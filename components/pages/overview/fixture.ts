@@ -2,8 +2,8 @@ import { INTERPRETATION_LABEL } from '@/lib/prose/interpret'
 import { horizonWindow } from '@/lib/reading/horizon'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '@/lib/rivals'
 import type { Verdict } from '@/lib/reading/verdicts'
-import type { OverviewData } from '@/lib/pages/overview'
-import { MOVES_MASTHEAD, MOVES_EMPTY, MOVES_UNLOCK, RIVALS_CAVEAT, fillingLine, readingsCounter } from '@/lib/pages/overview'
+import type { OverviewData, RivalRow } from '@/lib/pages/overview'
+import { MOVES_MASTHEAD, MOVES_EMPTY, MOVES_UNLOCK, RIVALS_CAVEAT, fillingLine, readingsCounter, rivalsLead } from '@/lib/pages/overview'
 import { methodFixture, methodRefusedFixture } from '@/lib/test/method-fixture'
 
 // The Overview's block fixtures (Phase 1 WP11).
@@ -33,6 +33,39 @@ export const verdict = (over: Partial<Verdict> = {}): Verdict => ({
   flags: [],
   ...over,
 })
+
+const RIVAL_ROWS: RivalRow[] = [
+  {
+    audience: rivalKey('Freitag'),
+    label: 'Freitag',
+    role: 'rival',
+    observed: true,
+    attention: { k: 6200, n: 41200, pct: 15 },
+    content: { k: 150, n: 1000, pct: 15 },
+    // BOTH VERDICTS, as `buildStandings` returns them: one object, one
+    // audience, two populations. Anything keyed by the object alone
+    // keeps one of them and files it under the other's denominator, and
+    // a fixture carrying only one cannot show that.
+    attentionVerdict: verdict({ objectKind: 'rival', objectId: rivalKey('Freitag'), objectLabel: 'Freitag', changePts: 3, bandPts: 1.8, value: { k: 6200, n: 41200 }, countedOver: { measure: 'comments', population: 'the panel’s comments this month' } }),
+    contentVerdict: verdict({ objectKind: 'rival', objectId: rivalKey('Freitag'), objectLabel: 'Freitag', changePts: 0.6, bandPts: 1.8, state: 'no_clear_change', value: { k: 150, n: 1000 }, countedOver: { measure: 'videos', population: 'the panel’s videos this month' } }),
+    ownPosts: null,
+    raisedMost: { label: 'Does the tarp smell', k: 41, n: 142, pct: 28.9 },
+    retiredAt: null,
+  },
+  {
+    audience: CLIENT_AUDIENCE,
+    label: 'Sealand',
+    role: 'client',
+    observed: true,
+    attention: { k: 2400, n: 41200, pct: 6 },
+    content: { k: 70, n: 1000, pct: 7 },
+    attentionVerdict: verdict({ objectKind: 'audience', objectId: CLIENT_AUDIENCE, objectLabel: 'Sealand', state: 'no_clear_change', changePts: 1, bandPts: 1.8, value: { k: 2400, n: 41200 }, countedOver: { measure: 'comments', population: 'the panel’s comments this month' } }),
+    contentVerdict: null,
+    ownPosts: null,
+    raisedMost: null,
+    retiredAt: null,
+  },
+]
 
 export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData {
   const window = horizonWindow('this_month', NOW, '2026-06-01')
@@ -203,49 +236,46 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
           frozen_at: '2026-09-03T00:00:00.000Z',
           cutoff: '2026-04-01',
           accounts: [],
+          account_count: 214,
           reason: 'tracking_change',
         } as unknown as NonNullable<OverviewData['category']['attention']>['panel'],
-        verdict: null,
+        accountCount: 214,
+        // THE REFUSAL, NOT THE MOCK'S "\u221218% since June". The panel
+        // re-froze on 3 September, so the two months either side of it were
+        // read over two different sets of accounts — `tracking_change` is the
+        // reason `buildStandings` gives, and it is the honest answer in place
+        // of a delta over a raw comment count that has no denominator to band.
+        verdict: verdict({
+          objectKind: 'audience',
+          objectId: INDUSTRY_AUDIENCE,
+          objectLabel: 'The category',
+          audience: INDUSTRY_AUDIENCE,
+          value: { k: 41200, n: 61300 },
+          baseline: { k: 46000, n: 66800 },
+          countedOver: { measure: 'comments', population: 'the panel\u2019s comments this month' },
+          changePts: null,
+          bandPts: null,
+          state: 'refused',
+          refusedReason: 'tracking_change',
+        }),
       },
       attentionNote: null,
+      quiet: [
+        { id: 't9', label: 'Whether the tarp smells', lastHeard: '2026-06-01' },
+      ],
+      quietNote: null,
     },
     rivals: {
-      rows: [
-        {
-          audience: rivalKey('Freitag'),
-          label: 'Freitag',
-          role: 'rival',
-          observed: true,
-          attention: { k: 6200, n: 41200, pct: 15 },
-          content: { k: 150, n: 1000, pct: 15 },
-          // BOTH VERDICTS, as `buildStandings` returns them: one object, one
-          // audience, two populations. Anything keyed by the object alone
-          // keeps one of them and files it under the other's denominator, and
-          // a fixture carrying only one cannot show that.
-          attentionVerdict: verdict({ objectKind: 'rival', objectId: rivalKey('Freitag'), objectLabel: 'Freitag', changePts: 3, bandPts: 1.8, value: { k: 6200, n: 41200 }, countedOver: { measure: 'comments', population: 'the panel’s comments this month' } }),
-          contentVerdict: verdict({ objectKind: 'rival', objectId: rivalKey('Freitag'), objectLabel: 'Freitag', changePts: 0.6, bandPts: 1.8, state: 'no_clear_change', value: { k: 150, n: 1000 }, countedOver: { measure: 'videos', population: 'the panel’s videos this month' } }),
-          ownPosts: null,
-          raisedMost: { label: 'Does the tarp smell', k: 41, n: 142, pct: 28.9 },
-          retiredAt: null,
-        },
-        {
-          audience: CLIENT_AUDIENCE,
-          label: 'Sealand',
-          role: 'client',
-          observed: true,
-          attention: { k: 2400, n: 41200, pct: 6 },
-          content: { k: 70, n: 1000, pct: 7 },
-          attentionVerdict: verdict({ objectKind: 'audience', objectId: CLIENT_AUDIENCE, objectLabel: 'Sealand', state: 'no_clear_change', changePts: 1, bandPts: 1.8, value: { k: 2400, n: 41200 }, countedOver: { measure: 'comments', population: 'the panel’s comments this month' } }),
-          contentVerdict: null,
-          ownPosts: null,
-          raisedMost: null,
-          retiredAt: null,
-        },
-      ],
+      rows: RIVAL_ROWS,
       recorded: true,
       standingsNote: null,
       dualMention: 41,
       caveat: RIVALS_CAVEAT,
+      // Composed by `rivalsLead` over the rows above: the COUNT of rivals whose
+      // attention moved beyond its band, and their names. No magnitude — the
+      // badge on the row carries that with its band — and no direction word,
+      // which is what the mock's "slipped 2" would have been.
+      lead: rivalsLead(RIVAL_ROWS),
     },
     // NOTHING HAS BEEN SENT ABOUT THIS MONTH, which is the state of every
     // workspace until M9 is applied and a schedule has actually delivered. The
@@ -320,6 +350,10 @@ export function refusedFixture(): OverviewData {
       moodNote: 'How the month was received is not recorded month by month for this workspace yet.',
       attention: null,
       attentionNote: 'No panel has been frozen for this workspace yet, so attention is not read.',
+      // The register itself could not be read, which is not the same as
+      // nothing having gone quiet.
+      quiet: [],
+      quietNote: 'Which themes have stopped being said is not recorded for this workspace yet.',
     },
     rivals: {
       ...base.rivals,
@@ -331,6 +365,9 @@ export function refusedFixture(): OverviewData {
         attentionVerdict: null,
         contentVerdict: null,
       })),
+      // No verdict was drawn, so there is nothing to lead with — and "no rival
+      // moved" is not what happened here; nobody was compared.
+      lead: null,
       recorded: false,
       standingsNote:
         'How much attention each brand drew is not recorded month by month for this workspace yet — what is printed here is what was raised under their content.',
