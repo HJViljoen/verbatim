@@ -8,6 +8,12 @@ import { audiencePhrase } from '@/lib/reading/afterwards'
 import type { CardCount, MoveCandidate } from '@/lib/reading/moves'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { MarketSurfaceData } from '@/lib/pages/market-surface'
+// The claim row's cut and its no-wording sentence are Overview's, imported
+// rather than re-declared: the card is ONE `MoveCandidate` composed in
+// Overview's loader and drawn by both surfaces, so the two pages must cut the
+// same sentence in the same place and say the same thing when a claim has no
+// transcribed words.
+import { CARD_CLAIM_UNQUOTED, claimText } from '@/components/pages/overview/moves'
 
 // MK3 · This month's card — the artboard's pre-filled card (Block D wave 2).
 //
@@ -185,12 +191,22 @@ export const marketCard: Block<MarketSurfaceData> = {
             email ? (
               <div style={{ marginTop: 6 }}>
                 <div style={{ fontFamily: FONT.sans, fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em', color: EMAIL.ink2 }}>Claims you made</div>
-                {claims.map((c) => (
-                  <div key={c.claim} style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink, marginTop: 2 }}>
+                {claims.map((c, i) => (
+                  <div key={c.quote?.ref ?? `claim-${i}`} style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink, marginTop: 2 }}>
                     {/* THE CLIENT'S OWN WORDS, so a quote node: several real
                         claims carry a digit ("Made from 100% recycled sails")
-                        and rule (a) may not police a quotation. */}
-                    <span data-copy="quote">“{c.claim}”</span>{' '}
+                        and rule (a) may not police a quotation. The words are
+                        `CardClaim.quote` — what was actually said, carried as
+                        `k:<video_claims.id>` — never `video_claims.claim`,
+                        which is the model's paraphrase and which E-main took
+                        off this row in the same wave (code review C1/I6). A
+                        row with no transcribed wording keeps its count and
+                        says the wording is not on record. */}
+                    {c.quote && c.quote.text.trim() ? (
+                      <span data-copy="quote">“{claimText(c.quote.text)}”</span>
+                    ) : (
+                      <span style={{ color: EMAIL.muted }}>{CARD_CLAIM_UNQUOTED}</span>
+                    )}{' '}
                     <span data-copy="level" style={{ fontFamily: FONT.mono, color: EMAIL.muted }}>{fmtInt(c.posts.k)} of {fmtInt(c.posts.n)} posts</span>
                   </div>
                 ))}
@@ -203,8 +219,8 @@ export const marketCard: Block<MarketSurfaceData> = {
             ) : (
               <TileBlock className="flex min-w-0 flex-col gap-2">
                 <span className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">Claims you made</span>
-                {claims.map((c) => (
-                  <span key={c.claim} className="flex items-baseline justify-between gap-3">
+                {claims.map((c, i) => (
+                  <span key={c.quote?.ref ?? `claim-${i}`} className="flex items-baseline justify-between gap-3">
                     {/* TWO CLAIMS SHARING THEIR FIRST FORTY-FIVE CHARACTERS
                         PRINTED AS THE SAME ROW. `truncate` is one line and the
                         card is five columns wide, so Sealand's two longest
@@ -218,7 +234,11 @@ export const marketCard: Block<MarketSurfaceData> = {
                         ("…gear that is good for people" against "…gear that
                         benefits people"), so at two lines they still printed
                         as one row twice. */}
-                    <span data-copy="quote" title={c.claim} className="line-clamp-3 min-w-0 text-[12.5px]">“{c.claim}”</span>
+                    {c.quote && c.quote.text.trim() ? (
+                      <span data-copy="quote" title={c.quote.text} className="line-clamp-3 min-w-0 text-[12.5px]">“{claimText(c.quote.text)}”</span>
+                    ) : (
+                      <span className="line-clamp-3 min-w-0 text-[12.5px] text-secondary-foreground">{CARD_CLAIM_UNQUOTED}</span>
+                    )}
                     <span data-copy="level" className="shrink-0 whitespace-nowrap font-mono text-[11.5px] tabular-nums text-secondary-foreground">
                       {fmtInt(c.posts.k)} of {fmtInt(c.posts.n)} posts
                     </span>

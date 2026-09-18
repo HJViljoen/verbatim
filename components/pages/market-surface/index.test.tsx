@@ -664,6 +664,22 @@ describe('MK3 · this month\u2019s card', () => {
     expect(email).toContain('23 of 85')
   })
 
+  it('prints the speaker\u2019s own words on a claim row, never the model\u2019s paraphrase', () => {
+    // MERGE, BLOCK D WAVE 2. This block was written against `CardClaim.claim`
+    // \u2014 `video_claims.claim`, the model's paraphrase \u2014 inside quotation
+    // marks. E-main took that field off the row in the same wave (code review
+    // C1 / I6): the paraphrase was a model-written string taking the `quote`
+    // exemption, and it reached `report_snapshots.data` as a bare string with
+    // no ref behind it. The card prints `CardClaim.quote` now, cut by the same
+    // `claimText` Overview uses, so the two surfaces cut one sentence in one
+    // place.
+    for (const mode of ['app', 'print', 'email'] as const) {
+      const text = renderText(marketCard.render(marketFixture(), mode, ctx))
+      expect(text).toContain('We get things wrong, and we say so')
+      expect(text).not.toContain('Sealand acknowledges ongoing challenges and setbacks')
+    }
+  })
+
   it('prints the two movement rows as verdicts, with no magnitude beside a refusal', () => {
     const markup = render(marketCard.render(marketFixture(), 'app', ctx))
     // D2: a verdict carries the change and the band together or neither.
