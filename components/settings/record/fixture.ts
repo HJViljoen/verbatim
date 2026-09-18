@@ -180,7 +180,7 @@ export function changeLogFixture(): ChangeLogView {
 }
 
 export function changeMetaFixture(): string {
-  return changeLogMeta(changeLogFixture(), { since: '2026-04-06', now: '2026-09-28T09:00:00.000Z' })
+  return changeLogMeta(changeLogFixture(), { now: '2026-09-28T09:00:00.000Z' })
 }
 
 export function rejectRowsFixture(): RejectRow[] {

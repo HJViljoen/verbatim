@@ -149,16 +149,23 @@ describe('the monthly readings strip', () => {
 describe('the change log’s header meta and its coverage clause', () => {
   const log = () => readChangeLog({ rows: changeRowsFixture(), viewerUserId: 'u1' })
 
-  it('counts recorded rows only, and this month on the wall clock', () => {
-    expect(changeLogMeta(log(), { since: '2026-04-06', now: '2026-09-28T09:00:00.000Z' }))
+  it('counts recorded rows only, and dates them from the day the record began', () => {
+    // "Since" is `firstLoggedAt`, not the first update: the fixture's oldest
+    // RECORDED change is 6 Apr and its reconstructed one is 2 Mar, and on a
+    // tenant that predates the log — the reason changeLogBoundary exists —
+    // anchoring to the first update claims a record we did not keep (code
+    // review finding 5).
+    expect(changeLogMeta(log(), { now: '2026-09-28T09:00:00.000Z' }))
       .toBe('4 changes since 6 Apr · 1 this month')
+    const late = readChangeLog({ rows: changeRowsFixture().filter((c) => c.changed_at >= '2026-08-01'), viewerUserId: 'u1' })
+    expect(changeLogMeta(late, { now: '2026-09-28T09:00:00.000Z' })).toBe('3 changes since 11 Aug · 1 this month')
     // The reconstructed row is never summed with the record.
     expect(log().recorded).toHaveLength(4)
     expect(log().prehistory).toHaveLength(1)
   })
 
   it('drops the "this month" half rather than printing a zero', () => {
-    expect(changeLogMeta(log(), { since: '2026-04-06', now: '2026-10-05T09:00:00.000Z' }))
+    expect(changeLogMeta(log(), { now: '2026-10-05T09:00:00.000Z' }))
       .toBe('4 changes since 6 Apr')
   })
 
@@ -166,6 +173,18 @@ describe('the change log’s header meta and its coverage clause', () => {
     expect(changeNote(log(), { from: '2026-09-01', to: '2026-09-28' })).toBe('Poler added as a rival, 3 Sep')
     expect(changeNote(log(), { from: '2026-08-01', to: '2026-08-31' })).toBe('the newest Six subjects named, 19 Aug')
     expect(changeNote(log(), { from: '2026-07-01', to: '2026-07-31' })).toBeNull()
+  })
+
+  it('says "the newest" where the count beside it holds rows this clause cannot name', () => {
+    // `ChangeRecord.inWindow` counts reconstructed rows too, so a window with
+    // one logged and one reconstructed change printed "2 — Poler added as a
+    // rival, 3 Sep", naming one of two (code review finding 4).
+    expect(changeNote(log(), { from: '2026-09-01', to: '2026-09-28' }, { counted: 2 }))
+      .toBe('the newest Poler added as a rival, 3 Sep')
+    expect(changeNote(log(), { from: '2026-09-01', to: '2026-09-28' }, { counted: 1 }))
+      .toBe('Poler added as a rival, 3 Sep')
+    // Nothing recorded inside the window is still nothing to name.
+    expect(changeNote(log(), { from: '2026-07-01', to: '2026-07-31' }, { counted: 1 })).toBeNull()
   })
 })
 

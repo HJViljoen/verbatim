@@ -102,7 +102,12 @@ export default async function SettingsRecordPage() {
   const floor = readings.belowFloor[0] ?? null
   const rows = recordRows(inputs.coverage, {
     trailingMedian: readings.trailingMedian,
-    changeNote: inputs.changes.available ? changeNote(log, { from: window.from, to: window.to }) : null,
+    // The clause is handed the COUNT it will sit beside, because the two do
+    // not filter the same rows: the count includes reconstructed entries and
+    // the clause names recorded ones (code review finding 4).
+    changeNote: inputs.changes.available
+      ? changeNote(log, { from: window.from, to: window.to }, { counted: inputs.coverage.changes.inWindow })
+      : null,
     belowFloor: floor
       // `more` is off the TOTAL, not off the truncated list (code review
       // finding 2): the grid's BELOW THE FLOOR basis repeats this number.
@@ -154,7 +159,7 @@ export default async function SettingsRecordPage() {
         <ChangeLogBlock
           log={log}
           rows={CHANGE_LOG_ROWS}
-          meta={changeLogMeta(log, { since: delivery.since, now: nowIso })}
+          meta={changeLogMeta(log, { now: nowIso })}
           boundary={changeLogBoundary(log.firstLoggedAt)}
           showing={showingLine(CHANGE_LOG_ROWS, log.recorded.length)}
           now={nowIso}
