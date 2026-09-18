@@ -167,6 +167,11 @@ export const marketCard: Block<MarketSurfaceData> = {
                     <span data-copy="level" style={{ fontFamily: FONT.mono, color: EMAIL.muted }}>{fmtInt(c.posts.k)} of {fmtInt(c.posts.n)} posts</span>
                   </div>
                 ))}
+                {moreClaims > 0 ? (
+                  <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted, marginTop: 2 }}>
+                    {fmtInt(moreClaims)} more {moreClaims === 1 ? 'claim was' : 'claims were'} made on these posts.
+                  </div>
+                ) : null}
               </div>
             ) : (
               <TileBlock className="flex min-w-0 flex-col gap-2">
