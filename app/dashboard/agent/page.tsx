@@ -94,14 +94,15 @@ export default async function AgentPage({
         }
         tiles={
           <>
-            <EarlierQuestionsTile history={history} row={ASK_TILE_ROW} />
+            <EarlierQuestionsTile history={history} col={4} row={ASK_TILE_ROW} />
             <DrawsTile
               draws={askDraws(basis, delivered)}
               recordHref={askRecordHref()}
               asAt={basis.lastEmbeddedAt ? shortDate(basis.lastEmbeddedAt) : null}
+              col={4}
               row={ASK_TILE_ROW}
             />
-            <NotAnsweredTile notAnswered={notAnswered} row={ASK_TILE_ROW} />
+            <NotAnsweredTile notAnswered={notAnswered} col={4} row={ASK_TILE_ROW} />
           </>
         }
       />

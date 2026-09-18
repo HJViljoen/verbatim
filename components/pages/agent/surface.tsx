@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { PageBar, PageFrame, TileColumns } from '@/components/shell/page-grid'
+import { PageBar, PageFrame } from '@/components/shell/page-grid'
 import { HowSound } from '@/components/shell/how-sound'
 import { HowToRead } from '@/components/how-to-read'
 import { ExportMenu } from '@/components/export-menu'
@@ -156,7 +156,11 @@ export function AskIndexColumns({ box, tiles }: { box: ReactNode; tiles: ReactNo
   return (
     <div className="flex min-w-0 flex-col gap-4">
       {box}
-      <TileColumns of={3}>{tiles}</TileColumns>
+      {/* The page's own twelve columns, three tiles of four — NOT
+          `TileColumns`, whose children are plain cells inside one tile and
+          which would fight a `Tile`'s own `xl:col-span-*`. Under `xl` they
+          stack, the breakpoint the whole product collapses at. */}
+      <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-12">{tiles}</div>
     </div>
   )
 }

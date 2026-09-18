@@ -30,10 +30,10 @@ export const TRACKED_HREF = '/dashboard/settings'
  * whole reading layer exists to stop. The rows carry what is recorded: the
  * question, when it was answered, and the one flag that is a fact.
  */
-export function EarlierQuestionsTile({ history, row = 2 }: { history: AskHistory | null; row?: number }) {
+export function EarlierQuestionsTile({ history, col = 12, row = 2 }: { history: AskHistory | null; col?: number; row?: number }) {
   return (
     <Tile
-      col={12}
+      col={col}
       row={row}
       eyebrow="Earlier questions"
       meta={history ? `${fmtInt(history.thisMonth)} this month` : undefined}
@@ -96,18 +96,21 @@ export function EarlierQuestionsTile({ history, row = 2 }: { history: AskHistory
  * month, the video count, the language mix and the tracking changes live.
  */
 export function DrawsTile({
-  draws, recordHref, asAt, row = 2,
+  draws, recordHref, asAt, col = 12, row = 2,
 }: {
   draws: readonly AskDrawRow[]
   recordHref: string | null
   /** The artboard's "as at 28 Sep" — when the index these facts describe was
    *  last written. Null leaves the slot empty rather than dating it today. */
   asAt?: string | null
+  /** 12 in the rail (its own column); 4 on the index, where the three tiles
+   *  share one twelve-column row — see `AskIndexColumns`. */
+  col?: number
   row?: number
 }) {
   return (
     <Tile
-      col={12}
+      col={col}
       row={row}
       eyebrow="What an answer draws on"
       // The artboard's "as at 28 Sep". Both neighbours use their meta slot and
@@ -145,10 +148,10 @@ export function DrawsTile({
  * the money is spent). The meta says "asked this month" rather than naming a
  * month, so it cannot be read as a reading of September.
  */
-export function NotAnsweredTile({ notAnswered, row = 2 }: { notAnswered: NotAnswered | null; row?: number }) {
+export function NotAnsweredTile({ notAnswered, col = 12, row = 2 }: { notAnswered: NotAnswered | null; col?: number; row?: number }) {
   return (
     <Tile
-      col={12}
+      col={col}
       row={row}
       eyebrow="Not answered this month"
       // The neighbours' meta reads "3 this month"; this one printed a bare "2"
