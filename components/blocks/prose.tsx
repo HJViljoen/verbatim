@@ -46,6 +46,20 @@ export function TokenProse({
    * sentences must print at hero scale and none of them does; this is the
    * knob for the sentences that reach the reader through `TokenProse` rather
    * than through a `Tile`.
+   *
+   * AND `hero` SETS MODEL PROSE IN THE SERIF, WHICH IS A PRODUCT-WIDE RULE
+   * THIS PROP BENDS — said here because nothing said it anywhere (the fix
+   * pass, E-monthly review [Medium]). `design-system/verbatim/MASTER.md`
+   * §Typography reads "Serif: IBM Plex Serif — verbatim quotes only; quotes
+   * are speech", and on the MonthlyReport artboard the hero sentence, the
+   * headline and the advice title are all serif, two sections above six
+   * quotes in the same face. The artboard is the spec and the wave is porting
+   * it, so the prop keeps the artboard's face — but the rule it bends is a
+   * matter of the product's identity, not of one artefact, and it belongs to
+   * whoever merges this wave alongside `BlockFrame`'s `accent`: either
+   * MASTER.md gains "and the one hero sentence a surface is about", or this
+   * arm goes back to the sans and the artboards lose their lead. Nothing
+   * outside `size="hero"` is affected; `body` is the sans it always was.
    */
   size?: 'body' | 'hero'
 }) {
