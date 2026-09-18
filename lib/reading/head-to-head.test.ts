@@ -156,6 +156,35 @@ describe('headToHead · the five measures', () => {
     expect(sentiment.you!.value).toEqual({ k: 2, n: 4 })
   })
 
+  it('says the previous month is missing when it is, instead of blaming the floor', () => {
+    // 840 and 1,420 videos a side and no August row: "Under 10 videos on a
+    // side" is a false statement about our own bookkeeping, printed beside a
+    // figure that is fine.
+    const wide = (s: HeadToHeadSide): HeadToHeadSide => ({
+      ...s,
+      month: s.audience === 'client' ? { videos: 840, comments: 9000 } : { videos: 1420, comments: 14000 },
+      previous: null,
+      sentiment: { positive: 400, judged: 700 },
+      sentimentPrev: undefined,
+    })
+    const r = h2h({ you: wide(SEALAND), them: wide(FREITAG), readThisMonth: 4000, readPreviousMonth: 0 })
+    for (const key of ['videos', 'sentiment'] as const) {
+      const m = r.measures.find((x) => x.key === key)!
+      expect(m.you!.prev).toBeUndefined()
+      expect(m.verdict).toBeNull()
+      expect(m.verdictWhy).toBe('Aug 2026 has not been read on this measure, so this month has nothing to be compared with.')
+      expect(m.verdictWhy).not.toContain(String(FACE_OFF_FLOOR))
+    }
+  })
+
+  it('says nothing about a verdict where the side itself is absent — `why` says that', () => {
+    const r = h2h({ you: side({ audience: 'client', label: 'Sealand' }) })
+    const videos = r.measures.find((m) => m.key === 'videos')!
+    expect(videos.you).toBeNull()
+    expect(videos.verdictWhy).toBeNull()
+    expect(videos.why).toContain('Sealand')
+  })
+
   it('leaves an unobserved side null with a sentence, never a zero', () => {
     const r = h2h({ them: side({ audience: 'competitor:Rareform', label: 'Rareform' }) })
     const videos = r.measures.find((m) => m.key === 'videos')!

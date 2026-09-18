@@ -144,6 +144,28 @@ const COUNT_NOT_A_SHARE =
 const floorWhy = (floor: number): string =>
   `Under ${fmtInt(floor)} videos on a side, so no comparison is drawn.`
 
+const noPreviousWhy = (previousMonth: string): string =>
+  `${monthName(previousMonth)} has not been read on this measure, so this month has nothing to be compared with.`
+
+/**
+ * WHY A BANDED ROW DREW NO BAND, AND IT IS NOT ALWAYS THE FLOOR.
+ *
+ * `verdictFor` returns null on two conditions and they are different facts: the
+ * side has no previous month at all, or one of the two months is under the
+ * floor. Printing the floor sentence for both put "Under 10 videos on a side,
+ * so no comparison is drawn." beside sides carrying 840 and 1,420 videos — a
+ * false statement about our own bookkeeping printed beside a figure, which is
+ * the class of claim `refused` / `REFUSAL_WHY` exists to keep honest.
+ *
+ * Null where the side itself is absent: `why` already says that, and a row that
+ * says two things about one absence says neither.
+ */
+function whyNoVerdict(level: FaceOffSide | null, floor: number, previousMonth: string): string | null {
+  if (level === null) return null
+  if (!level.prev) return noPreviousWhy(previousMonth)
+  return floorWhy(floor)
+}
+
 /**
  * The five measures, each grounded or dropped — never fabricated.
  *
@@ -235,7 +257,7 @@ function videosMeasure(input: HeadToHeadInput, month: string, floor: number, bas
     them,
     verdict,
     rivalVerdict,
-    verdictWhy: verdict === null && you !== null ? floorWhy(floor) : null,
+    verdictWhy: verdict === null ? whyNoVerdict(you, floor, input.previousMonth) : null,
     why: sideWhy(input, you, them),
   }
 }
@@ -345,7 +367,7 @@ function sentimentMeasure(input: HeadToHeadInput, month: string, floor: number, 
     them,
     verdict,
     rivalVerdict,
-    verdictWhy: verdict === null && you !== null ? floorWhy(floor) : null,
+    verdictWhy: verdict === null ? whyNoVerdict(you, floor, input.previousMonth) : null,
     why: sideWhy(input, you, them),
   }
 }
