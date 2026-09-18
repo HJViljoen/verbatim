@@ -1891,12 +1891,15 @@ export const runPipeline = inngest.createFunction(
     //    citedEvidenceIds for the four classes it protects, the two it
     //    deliberately does not, and why each is resolved the way it is.
     //
-    //    ITS FAILURE SURFACE GREW WITH THAT, AND THE FAILURE IS QUIET. The step
-    //    now does seven table reads before it deletes anything, and any one of
-    //    them throwing — a schema-cache miss, a malformed stored id, a
-    //    PostgREST hiccup — takes it here. Non-fatal and uncounted is still the
-    //    right trade (fail-closed costs storage; the alternative costs
-    //    evidence, which is unrecoverable), but the shape of the failure is
+    //    ITS FAILURE SURFACE GREW WITH THAT, AND THE FAILURE IS QUIET. The
+    //    cited-set walk alone is EIGHT table reads — recommendations, both
+    //    insight tables, both plan-check tables, agent_messages,
+    //    report_snapshots, insight_evidence — on top of the videos and rows
+    //    reads the step always did, and every one of them happens before the
+    //    first delete. Any one throwing — a schema-cache miss, a malformed
+    //    stored id, a PostgREST hiccup — takes it here. Non-fatal and uncounted
+    //    is still the right trade (fail-closed costs storage; the alternative
+    //    costs evidence, which is unrecoverable), but the shape of the failure is
     //    "prunes nothing, on this run and every later one, until someone reads
     //    the log". Deliberately not noteError'd — the keyword-discovery
     //    precedent: a record kept alongside the report must not make a clean
