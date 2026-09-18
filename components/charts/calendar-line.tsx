@@ -2,8 +2,9 @@ import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { shortDate, monthName } from '@/lib/format'
 import {
-  axisLabels, calendarGeometry, chartId, collapseRules, columnTitle, lastReading, legendMonths,
-  legendStates, lineSegments, monthColumns, spanOf, spreadLabels, STATE_LABEL, valueScale,
+  axisLabels, calendarGeometry, chartId, collapseRules, columnTitle, lastReading, legendEveryMonth,
+  legendMonths, legendStates, lineSegments, monthColumns, spanOf, spreadLabels, STATE_LABEL,
+  undrawnNote, valueScale,
   type CalendarBand, type CalendarPoint, type CalendarRule, type CalendarSeries,
 } from '@/lib/charts/calendar'
 
@@ -173,20 +174,32 @@ export function CalendarLine({
     <div className={cn('flex min-w-0 flex-col gap-2', className)}>
       {showLegend && (
         <div className="flex flex-wrap gap-x-4 gap-y-1">
-          {series.map((s) => (
-            <span key={s.label} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              <span className="size-2 rounded-full" style={{ background: s.color }} aria-hidden />
-              {s.labelSlot ? <span data-copy="subject" data-slot={s.labelSlot}>{s.legendLabel ?? s.label}</span> : (s.legendLabel ?? s.label)}
-              {s.excludes ? <span className="text-[10.5px]">— {s.excludes}</span> : null}
-            </span>
-          ))}
+          {series.map((s) => {
+            // A KEY THAT PROMISES A LINE THE CHART DOES NOT DRAW IS THE WRONG
+            // WAY ROUND. At 100% floor coverage the ink appears only as gutter
+            // rings, so the key says so rather than leaving a reader to decide
+            // whether a flat row of hollow marks on the 0% rule is the series.
+            const undrawn = undrawnNote(s)
+            return (
+              <span key={s.label} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <span className={cn('size-2 rounded-full', undrawn && 'bg-tile')} style={undrawn ? { boxShadow: `inset 0 0 0 1.5px ${s.color}` } : { background: s.color }} aria-hidden />
+                {s.labelSlot ? <span data-copy="subject" data-slot={s.labelSlot}>{s.legendLabel ?? s.label}</span> : (s.legendLabel ?? s.label)}
+                {s.excludes ? <span className="text-[10.5px]">— {s.excludes}</span> : null}
+                {undrawn ? <span className="text-[10.5px]">— {undrawn}</span> : null}
+              </span>
+            )
+          })}
           {states.map((state) => {
             const months = legendMonths(series, state)
+            // Named while the list is short; "every month" where the token
+            // marks the whole axis, which is the case a reader most needs told
+            // and the one a cap at two months left silent.
+            const every = months.length === 0 && legendEveryMonth(series, state, axis)
             return (
               <span key={state} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                 <LegendToken state={state} color={tokenColor} />
                 {STATE_LABEL[state]}
-                {months.length > 0 ? ` (${months.map(shortMonth).join(', ')})` : ''}
+                {months.length > 0 ? ` (${months.map(shortMonth).join(', ')})` : every ? ' (every month)' : ''}
               </span>
             )
           })}

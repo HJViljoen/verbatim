@@ -142,7 +142,7 @@ describe('SU1 · the subjects list', () => {
   // 2.2's 24px target size fails twice over at that size.
   it('gives the rail’s controls a real target and a focus ring', () => {
     const markup = render(subjectsList.render(subjectsFixture(), 'app', ctx))
-    const buttons = [...markup.matchAll(/<button[^>]*>(?:(?!<\/button>).)*?(Rename|Stop)</gs)].map((m) => m[0])
+    const buttons = [...markup.matchAll(/<button[^>]*>(?:Rename|Stop)</g)].map((m) => m[0])
     expect(buttons.length).toBe(6) // three rows, two controls each
     for (const b of buttons) {
       expect(b).toContain('min-h-6')
@@ -610,6 +610,15 @@ describe('the mock’s own shape, where the data allows it', () => {
     // The end label keeps the SHORT name and its denominator — the one part of
     // an end label that may not be lost to the gutter's clip.
     expect(markup).toContain('of 142')
+  })
+
+  // THE STATE THE PAYING TENANT IS IN. Sealand carries 84 videos against a
+  // 100-video floor, so the client's own series never reaches the plot on any
+  // subject — six hollow rings on the 0% rule under a key promising a line.
+  it('says in the key that your own ink draws no line, and which months', () => {
+    const text = renderText(subjectsLine.render(subjectsFixture(), 'app', ctx))
+    expect(text).toContain('no line: every month is below the floor')
+    expect(text).toContain('below the floor (every month)')
   })
 
   it('draws the gap bracket only where the band earned a magnitude (D1)', () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  axisLabels, calendarGeometry, chartId, collapseRules, columnTitle, hoverTitle, lastReading, legendStates,
+  axisLabels, calendarGeometry, chartId, collapseRules, columnTitle, hoverTitle, lastReading,
+  legendEveryMonth, legendMonths, legendStates, undrawnNote,
   lineSegments, monthColumns, niceMid, spanOf, spreadLabels, stateNote, valueScale,
   type CalendarPoint, type CalendarSeries,
 } from './calendar'
@@ -325,6 +326,42 @@ describe('legendStates', () => {
 
   it('is empty when every month is an ordinary reading', () => {
     expect(legendStates([{ label: 'You', color: 'a', points: [p('2026-05-01', 3)] }])).toEqual([])
+  })
+})
+
+describe('a series that never reaches the plot', () => {
+  const axis = ['2026-04-01', '2026-05-01', '2026-06-01']
+  const allBelow: CalendarSeries = {
+    label: 'Sealand', color: 'var(--you)',
+    points: axis.map((m) => p(m, null, 'below_floor')),
+  }
+
+  // The token is right one month at a time; the COMPOSITION at 100% coverage
+  // is not. Six hollow rings on the 0% rule read as a flat series plotted at
+  // zero, under a key promising a line.
+  it('says in the key that this ink draws no line, and why', () => {
+    expect(undrawnNote(allBelow)).toBe('no line: every month is below the floor')
+  })
+
+  it('says nothing about a line with a hole in it — a hole is still a line', () => {
+    expect(undrawnNote({ ...allBelow, points: [p(axis[0], null, 'below_floor'), p(axis[1], 3), p(axis[2], null, 'below_floor')] })).toBeNull()
+  })
+
+  it('names the reason it actually has when the months disagree', () => {
+    expect(undrawnNote({ ...allBelow, points: [p(axis[0], null, 'below_floor'), p(axis[1], null, 'hollow'), p(axis[2], null, 'below_floor')] }))
+      .toBe('no line: no month could be read')
+  })
+
+  // `legendMonths` caps naming at two months, so the one case a reader most
+  // needs told — the token marks EVERY month — was the case it went silent on.
+  it('answers "every month" where naming them would be a list', () => {
+    expect(legendMonths([allBelow], 'below_floor')).toEqual([])
+    expect(legendEveryMonth([allBelow], 'below_floor', axis)).toBe(true)
+  })
+
+  it('does not claim every month where one of them was read', () => {
+    const some = { ...allBelow, points: [p(axis[0], null, 'below_floor'), p(axis[1], 3), p(axis[2], null, 'below_floor')] }
+    expect(legendEveryMonth([some], 'below_floor', axis)).toBe(false)
   })
 })
 
