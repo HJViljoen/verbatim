@@ -8,6 +8,7 @@ import {
   CARD_NO_POSTS,
   HOOK_UNCLASSIFIED,
   MOVE_NO_CLIENT_SERIES,
+  MOVE_NO_TARGET_SERIES,
   MOVE_TOO_YOUNG,
   readMove,
   type MoveCandidateInput,
@@ -279,6 +280,18 @@ describe('readMove — the one movement claim a move earns', () => {
     expect(r.unread).toBe(MOVE_NO_CLIENT_SERIES)
     // The untouched side is still read — it is the control.
     expect(r.control).toHaveLength(1)
+  })
+
+  it('a move on a piece of advice names nothing to count, and says so', () => {
+    const r = reading({
+      move: { id: 'mv8', title: 'Lead with repairability', kind: 'advice', declared_at: '2026-08-12', subject_id: null, registry_ids: null, lineage_id: 'l1' },
+      targetLabel: null,
+      series: [],
+    })
+    expect(r.verdict).toBeNull()
+    expect(r.control).toEqual([])
+    expect(r.months).toEqual([])
+    expect(r.unread).toBe(MOVE_NO_TARGET_SERIES)
   })
 
   it('names a theme move by its themes and an advice move as advice', () => {

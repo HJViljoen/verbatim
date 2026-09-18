@@ -4,6 +4,7 @@ import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
+import { MOVES_UNLOCK } from '@/lib/pages/overview'
 import { overviewMoves } from './moves'
 import { overviewRecord } from './record'
 import { overviewFixture, refusedFixture } from './fixture'
@@ -26,12 +27,21 @@ describe('OV5 · your moves', () => {
     expect(text).toContain('first scoring lands with the October reading')
   })
 
-  it('names the unlock on the block rather than leaving it to be wondered about', () => {
+  // BLOCK D · D2 CHANGED THIS SENTENCE AND THE REASON IS THE PACKAGE. The
+  // block used to print "Scoring, and the pre-filled monthly card, are not
+  // built yet. They will land on Market." Both are built now — the card counts
+  // this month's own posts and every move carries the one banded comparison it
+  // earns — so the old string would be a copy claim the code contradicts,
+  // which is the defect AGENTS.md names ("a page once claimed 'no email is
+  // sent' while Resend sent"). It still names NO MONTH, for the old reason.
+  it('names what the block does rather than a delivery date it cannot know', () => {
     const text = renderText(overviewMoves.render(overviewFixture(), 'app', ctx))
-    expect(text).toContain('Scoring, and the pre-filled monthly card, are not built yet. They will land on Market.')
-    // AND NAMES NO MONTH. A delivery date computed from the calendar is a
-    // promise to a paying client that is recomputed every month.
+    expect(text).toContain(MOVES_UNLOCK)
+    expect(text).toContain('read from the month after it was dated')
+    expect(text).not.toMatch(/not built yet/)
     expect(text).not.toMatch(/bottom section/)
+    // No month, no quarter, no promised date.
+    expect(MOVES_UNLOCK).not.toMatch(/January|February|March|April|May|June|July|August|September|October|November|December|quarter/)
   })
 
   it('carries the masthead that stops every line reading as a causal claim', () => {

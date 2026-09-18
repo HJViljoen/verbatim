@@ -5,6 +5,7 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { ADVICE_REQUESTED_GONE } from '@/lib/pages/market-surface'
+import { MOVES_UNLOCK } from '@/lib/pages/overview'
 import { MARKET_BLOCKS } from './index'
 import { marketConclusions } from './conclusions'
 import { marketAdvice } from './advice'
@@ -189,7 +190,10 @@ describe('MK4 · declared moves', () => {
 
   it('names the unlock without naming a month for it', () => {
     const text = renderText(marketMoves.render(marketFixture(), 'app', ctx))
-    expect(text).toContain('Scoring, and the pre-filled monthly card, are not built yet. They will land on Market.')
+    // Changed by Block D · D2: the card and the scoring are built, so the
+    // block's unlock says what it does instead of what it does not.
+    expect(text).toContain(MOVES_UNLOCK)
+    expect(text).not.toMatch(/not built yet/)
     expect(text).not.toMatch(/bottom section/)
   })
 })

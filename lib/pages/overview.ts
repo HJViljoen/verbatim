@@ -32,6 +32,14 @@ import { kindShares, redditRead, kindChange, type KindShare, type RedditRead } f
 import { freezeBoundary, freezeStateFor, isMissingMonthlyReading, isMissingMonthTable } from '../reading/monthly'
 import { monthStartOf, nextMonth, prevMonth as previousMonthOf } from '../reading/month-key'
 import { moodChange, moodShares, framingShare, type MoodShare } from '../reading/mood'
+import {
+  actedTally,
+  buildMoveCandidate,
+  readMove,
+  type MoveCandidate,
+  type MoveReading,
+  type MoveSeries,
+} from '../reading/moves'
 import { loadMonthSeries, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
 import { countRefused, howSoundLine, loadRecordInputs, monthRecordWindow, recordLines, refusals, type RecordInputs } from '../reading/record'
 import {
@@ -46,6 +54,7 @@ import { buildStandings, type StandingRow } from '../reading/standings'
 import type { MonthStatus } from '../reading/types'
 import { isAnswer, type FigureTable, type Verdict } from '../reading/verdicts'
 import { isMissingSubjects, MOVE_PROMISE, RPC_WINDOW_SUBJECT_READINGS, TABLE_MOVES, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
+import { chunk, UUID_IN_CHUNK } from '../chunk'
 import { selectAll } from '../supabase-admin'
 import { row, rows } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
@@ -267,6 +276,23 @@ export interface MovesBlock {
   /** The one sentence when there is nothing dated, or M4 is not applied. */
   empty: string | null
   recorded: boolean
+  /**
+   * This month's card, pre-filled from the client's own posts (Block D · D2).
+   *
+   * A PROPOSAL AND NEVER A MEASUREMENT: every row is a count of something the
+   * client did, over one denominator — the posts they published this month.
+   * Null where the month's own posts could not be read at all. It does NOT go
+   * null when `moves` is unapplied: five of its six rows read on production
+   * today, and the card says what it cannot yet be confirmed as instead of
+   * disappearing.
+   */
+  card: MoveCandidate | null
+  /** One reading per active move — the one movement claim a move earns. Empty
+   *  where nothing is dated, or where no move's target carries a series. */
+  readings: MoveReading[]
+  /** The whole advice ledger's ratio, never a quarter (mock-gap D12). Null
+   *  where `recommendations` could not be read here. */
+  acted: { decided: number; of: number; line: string } | null
 }
 
 export interface LedgerRow {
@@ -753,8 +779,63 @@ export const MOVES_EMPTY =
 // bottom section, which says "Not on this page yet". Those four now say plainly
 // that the thing is not built; this one keeps the page name, which is the part
 // a reader can act on.
+// BLOCK D · D2 REWROTE THIS, AND THE REWRITE IS THE POINT. The sentence above
+// said "Scoring, and the pre-filled monthly card, are not built yet. They will
+// land on Market." Both are built as of this package: the card counts what you
+// published this month and every move carries the one banded comparison it
+// earns. A copy claim about behaviour must match the code (AGENTS.md — a page
+// once said "no email is sent" while Resend sent), so the sentence now says
+// what the block DOES rather than what it does not.
+//
+// WHAT IT STILL DOES NOT SAY IS A DATE. The reason the old one named no month
+// stands: nothing in the product knows when the confirm button ships, and a
+// delivery date computed from the calendar is a promise to a paying client,
+// recomputed monthly, wrong the first time it is read.
 export const MOVES_UNLOCK =
-  'Scoring, and the pre-filled monthly card, are not built yet. They will land on Market.'
+  'A move is read from the month after it was dated, so its first comparison lands one reading later — and it is read beside the audiences you did not touch, never against them.'
+
+/**
+ * OV5, composed (Block D · D2).
+ *
+ * PURE, AND EXTRACTED FOR THAT REASON. The block used to be an object literal
+ * in the middle of a 200-line loader; it now carries a card, a reading per move
+ * and the ledger's ratio, and three of its four sentences depend on which of
+ * those came back null. That is a rule, and a rule with four inputs belongs
+ * where a test can reach it.
+ *
+ * THE THREE ABSENCES ARE THREE DIFFERENT SENTENCES and the block must not
+ * collapse them: `moves` unapplied here is not "nothing dated yet", and neither
+ * of those is "your posts could not be read". Each says its own.
+ */
+export interface BuildMovesInput {
+  /** Null — never [] — when `moves` (M4) is not applied here. */
+  moves: readonly Move[] | null
+  card: MoveCandidate | null
+  readings: readonly MoveReading[]
+  acted: { decided: number; of: number; line: string } | null
+}
+
+export function buildMoves(input: BuildMovesInput): MovesBlock {
+  const rows: MoveRow[] = (input.moves ?? [])
+    .filter((m) => m.status === 'active')
+    .map((m) => ({ id: m.id, title: m.title, kind: m.kind, declaredAt: m.declared_at, line: moveLine(m) }))
+  const empty =
+    input.moves == null
+      ? 'What you are doing about it is not recorded for this workspace yet.'
+      : rows.length === 0
+        ? MOVES_EMPTY
+        : null
+  return {
+    rows,
+    unlock: MOVES_UNLOCK,
+    masthead: MOVES_MASTHEAD,
+    empty,
+    recorded: input.moves != null,
+    card: input.card,
+    readings: [...input.readings],
+    acted: input.acted,
+  }
+}
 
 /** The masthead OV5 and Market both carry, code-written — and the same
  *  sentence Track this carries where a move is DECLARED, so it is stated once,
@@ -1032,6 +1113,14 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
   const sentAhead = loadSentFigures(reading.client, { clientId, month })
   sentAhead.catch(() => {})
 
+  // THIS MONTH'S CARD, ON THE SAME TERMS (Block D · D2). Its three reads depend
+  // on the tenant and the month and on nothing below — the posts are dated by
+  // `upload_date`, so the month is all they need — and the subject match is two
+  // small reads that would otherwise sit at the very bottom behind everything
+  // the page does. Started here, taken at OV5.
+  const cardAhead = loadCardInputs(supabase, clientId, month)
+  cardAhead.catch(() => {})
+
   // ── wave 3: the readings ───────────────────────────────────────────────
   const themedRunId = await themedRunAhead
   const rivalAudiences = rivals.map((r) => rivalKey(r.name))
@@ -1187,25 +1276,36 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     dualMention: (dual as { dual_mention?: number } | null)?.dual_mention ?? null,
   })
 
-  // ── OV5 · your moves ───────────────────────────────────────────────────
-  const moves: MovesBlock = {
-    rows: (moveRows ?? []).filter((m) => m.status === 'active').map((m) => ({
-      id: m.id,
-      title: m.title,
-      kind: m.kind,
-      declaredAt: m.declared_at,
-      line: moveLine(m),
-    })),
-    unlock: MOVES_UNLOCK,
-    masthead: MOVES_MASTHEAD,
-    empty: null,
-    recorded: moveRows != null,
-  }
-  moves.empty = moveRows == null
-    ? 'What you are doing about it is not recorded for this workspace yet.'
-    : moves.rows.length === 0
-      ? MOVES_EMPTY
-      : null
+  // ── OV5 · your moves, the card, and what a move did (Block D · D2) ─────
+  //
+  // THE CARD'S OWN READS WENT OUT WITH THE MONTH (`cardAhead`); the readings
+  // are issued here because they depend on the moves, which arrive with wave 3
+  // — and on a tenant with `moves` unapplied or nothing dated, which is both
+  // live tenants today, `loadMoveReadings` makes no request at all.
+  const [extras, ledger] = await Promise.all([
+    loadMovesExtras({
+      supabase,
+      reading,
+      clientId,
+      month,
+      audiences,
+      moves: moveRows,
+      subjectNames: new Map((subjectRows ?? []).filter((x) => x.status === 'active').map((x) => [x.id, x.name])),
+      themeLabels: new Map(themeSet.series.flatMap((line) => (line.objectId && line.objectLabel ? [[line.objectId, line.objectLabel] as const] : []))),
+      cardInputs: cardAhead,
+      // OV2 HAS ALREADY BANDED BOTH SIDES OF EVERY SUBJECT. The card prints
+      // that row's two verdicts rather than asking the database again — one
+      // answer per page, and the page's own band suppression on a thin month
+      // travels with it.
+      movementFor: (subjectId) => {
+        const row = subjects.rows.find((r) => r.id === subjectId) ?? null
+        return { yours: row?.you.verdict ?? null, category: row?.category.verdict ?? null }
+      },
+    }),
+    ledgerAhead,
+  ])
+
+  const moves = buildMoves({ moves: moveRows, card: extras.card, readings: extras.readings, acted: ledger.acted })
 
   // ── OV1 · the one sentence ─────────────────────────────────────────────
   const sentenceVerdicts = [
@@ -1230,7 +1330,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     figures: head.figures,
     anomaly,
     interpretation,
-    ledger: await ledgerAhead,
+    ledger: ledger.top,
     voices: voices.voices,
     voicesFrom: voices.from,
     verdicts: sentenceVerdicts,
@@ -1423,6 +1523,395 @@ async function loadSubjects(supabase: SupabaseClient, clientId: string): Promise
   }
 }
 
+// ---- OV5's own reads (Block D · D2) ------------------------------------------
+
+/** One of the client's own posts, as the card counts it. */
+export type ClientPost = {
+  id: string
+  upload_date: string | null
+  comments_count: number
+  hook_style: string | null
+  classified_type: string | null
+}
+
+/**
+ * The client's own posts in one month, dated by the POST.
+ *
+ * `upload_date` and not a comment's month: a card about what YOU did is dated
+ * by the day you published, which is your own clock, and `basis` prints that in
+ * the reader's words on every row. This is the one figure on a Phase 1 surface
+ * that is deliberately not comment-dated, and AGENTS.md names exactly this
+ * case — "where a figure is genuinely a property of a video … it is dated by
+ * `videos.upload_date` and the basis is printed beside it".
+ *
+ * Five columns, never `*`: `videos` carries transcripts and OCR text.
+ */
+async function loadOwnPosts(supabase: SupabaseClient, clientId: string, month: string): Promise<ClientPost[] | null> {
+  try {
+    return await selectAll<ClientPost>(() =>
+      supabase
+        .from('videos')
+        .select('id, upload_date, comments_count, hook_style, classified_type')
+        .eq('client_id', clientId)
+        .eq('is_client', true)
+        .gte('upload_date', monthStartOf(month))
+        .lt('upload_date', nextMonth(month))
+        .order('id', { ascending: true }),
+    )
+  } catch (error) {
+    console.error(`[pages] overview.ownPosts: ${(error as { message?: string })?.message ?? String(error)}`)
+    return null
+  }
+}
+
+/**
+ * The claims the client made on those posts.
+ *
+ * `entity = 'client'` at the database, not in the filter downstream: the same
+ * table holds a rival's claims off a rival's transcript, and a tenant's own
+ * SELECT policy (M8) admits only its own anyway. The id filter alone would not
+ * be the boundary if the policy were ever widened.
+ */
+async function loadOwnClaims(
+  supabase: SupabaseClient,
+  clientId: string,
+  videoIds: readonly string[],
+): Promise<{ source_video_id: string; claim: string; entity: string }[]> {
+  if (videoIds.length === 0) return []
+  try {
+    const pages = await Promise.all(
+      chunk([...videoIds], UUID_IN_CHUNK).map((ids) =>
+        selectAll<{ source_video_id: string; claim: string; entity: string }>(() =>
+          supabase
+            .from('video_claims')
+            .select('source_video_id, claim, entity')
+            .eq('client_id', clientId)
+            .eq('entity', 'client')
+            .in('source_video_id', ids)
+            .order('source_video_id', { ascending: true }),
+        ),
+      ),
+    )
+    return pages.flat()
+  } catch (error) {
+    // The claims row is one line of the card and the card has five others, so a
+    // failed read costs the line — said out loud, because a bare catch makes an
+    // RLS refusal, a missing policy and "you claimed nothing" one value.
+    console.error(`[pages] overview.ownClaims: ${(error as { message?: string })?.message ?? String(error)}`)
+    return []
+  }
+}
+
+/**
+ * Which subjects the client's own posts matched.
+ *
+ * TWO SMALL READS AND NEITHER TOUCHES A VECTOR. `audience_insights_current` is
+ * `select ai.*` over the corpus's largest table, so the column list here is two
+ * columns and is not negotiable — `embedding` is a 1536-float vector and
+ * selecting it in bulk is the read that took the instance down on 2026-09-16.
+ * Both reads are bounded by the month's own posts (17 on Sealand in September,
+ * 109 on Össur), so this is tens to low hundreds of rows either way.
+ *
+ * Null — never {} — when `subject_memberships` (M4) is not applied here.
+ */
+async function loadOwnSubjectMatches(
+  supabase: SupabaseClient,
+  clientId: string,
+  videoIds: readonly string[],
+): Promise<Map<string, string[]> | null> {
+  if (videoIds.length === 0) return new Map()
+  let insights: { id: string; source_video_id: string }[]
+  try {
+    const pages = await Promise.all(
+      chunk([...videoIds], UUID_IN_CHUNK).map((ids) =>
+        selectAll<{ id: string; source_video_id: string }>(() =>
+          supabase
+            .from('audience_insights_current')
+            .select('id, source_video_id')
+            .eq('client_id', clientId)
+            .in('source_video_id', ids)
+            .order('id', { ascending: true }),
+        ),
+      ),
+    )
+    insights = pages.flat()
+  } catch (error) {
+    console.error(`[pages] overview.ownInsights: ${(error as { message?: string })?.message ?? String(error)}`)
+    return null
+  }
+  if (insights.length === 0) return new Map()
+  const videoOf = new Map(insights.map((i) => [i.id, i.source_video_id]))
+  try {
+    const pages = await Promise.all(
+      chunk([...videoOf.keys()], UUID_IN_CHUNK).map((ids) =>
+        selectAll<{ subject_id: string; audience_insight_id: string }>(() =>
+          supabase
+            .from('subject_memberships')
+            .select('subject_id, audience_insight_id')
+            .eq('client_id', clientId)
+            .eq('member', true)
+            .in('audience_insight_id', ids)
+            .order('subject_id', { ascending: true })
+            .order('audience_insight_id', { ascending: true }),
+        ),
+      ),
+    )
+    const bySubject = new Map<string, Set<string>>()
+    for (const row of pages.flat()) {
+      const video = videoOf.get(row.audience_insight_id)
+      if (!video) continue
+      const set = bySubject.get(row.subject_id) ?? new Set<string>()
+      set.add(video)
+      bySubject.set(row.subject_id, set)
+    }
+    return new Map([...bySubject].map(([id, set]) => [id, [...set]]))
+  } catch (error) {
+    if (isMissingSubjects(error)) return null
+    throw error
+  }
+}
+
+/** What the card is built from: the month's own posts, the claims on them, and
+ *  which subjects they matched. `videos` null is "we could not read your
+ *  posts"; `matches` null is "M4 is not applied here". Two different absences,
+ *  and the card says which. */
+export interface CardInputs {
+  videos: ClientPost[] | null
+  claims: { source_video_id: string; claim: string; entity: string }[]
+  matches: Map<string, string[]> | null
+}
+
+/** The card's three reads, issued together. The claims and the memberships are
+ *  both keyed by the posts, so they wait on that one read and on nothing else. */
+async function loadCardInputs(supabase: SupabaseClient, clientId: string, month: string): Promise<CardInputs> {
+  const videos = await loadOwnPosts(supabase, clientId, month)
+  if (!videos) return { videos: null, claims: [], matches: null }
+  const ids = videos.map((v) => v.id)
+  const [claims, matches] = await Promise.all([
+    loadOwnClaims(supabase, clientId, ids),
+    loadOwnSubjectMatches(supabase, clientId, ids),
+  ])
+  return { videos, claims, matches }
+}
+
+/**
+ * The months behind every active move, one read per target kind.
+ *
+ * WIDER THAN THE PAGE'S AXIS, ON PURPOSE. A move declared in August is read
+ * against the last complete month BEFORE August, and the default horizon draws
+ * September alone. So the window starts at the month before the oldest
+ * declaration and the reading reaches back past what the page draws — the same
+ * thing `readAxis` does for the month-on-month badge, one move further.
+ *
+ * IT COSTS NOTHING WHERE NOTHING IS DATED. Both live tenants have `moves`
+ * unapplied today, so `moves` is null, there are no active rows and neither
+ * call is made.
+ */
+async function loadMoveReadings(
+  reading: ReadingHandle,
+  supabase: SupabaseClient,
+  moves: readonly Move[],
+  input: { month: string; audiences?: readonly string[]; subjectNames: Map<string, string>; themeLabels: Map<string, string> },
+): Promise<MoveReading[]> {
+  const active = moves.filter((m) => m.status === 'active')
+  if (active.length === 0) return []
+  // THE TRACKED RIVALS ARE READ HERE AND ONLY HERE, for a caller that does not
+  // already hold them. Overview does (it shapes its whole axis by them) and
+  // passes them; Market does not, and a rivals read on every Market load for a
+  // control line that exists only once a move is dated is a read a page pays
+  // for nothing. This line is past the `active.length === 0` guard, so a
+  // workspace with nothing dated never reaches it.
+  const audiences =
+    input.audiences ??
+    [CLIENT_AUDIENCE, ...(await loadTrackedRivals(supabase, reading.clientId)).map((r) => rivalKey(r.name)), INDUSTRY_AUDIENCE]
+  const declared = active.map((m) => monthStartOf(m.declared_at.slice(0, 10))).sort()
+  const from = previousMonthOf(declared[0])
+  const to = monthStartOf(input.month)
+  const subjectIds = [...new Set(active.flatMap((m) => (m.subject_id ? [m.subject_id] : [])))]
+  const registryIds = [...new Set(active.flatMap((m) => m.registry_ids ?? []))]
+
+  const [subjectSet, themeSet] = await Promise.all([
+    subjectIds.length > 0
+      ? loadMonthSeries(reading.client, reading.clientId, { from, to, audiences, objectKind: 'subject', objectIds: subjectIds }).catch(
+          (error: unknown) => {
+            if (isMissingSubjects(error) || isMissingMonthlyReading(error) || isMissingMonthTable(error)) return null
+            throw error
+          },
+        )
+      : Promise.resolve(null),
+    registryIds.length > 0
+      ? loadMonthSeries(reading.client, reading.clientId, { from, to, audiences, objectKind: 'theme', objectIds: registryIds }).catch(
+          (error: unknown) => {
+            if (isMissingMonthlyReading(error) || isMissingMonthTable(error)) return null
+            throw error
+          },
+        )
+      : Promise.resolve(null),
+  ])
+
+  const seriesFor = (objectId: string, kind: 'subject' | 'theme'): MoveSeries[] => {
+    const set = kind === 'subject' ? subjectSet : themeSet
+    if (!set) return []
+    return set.series
+      .filter((line) => line.objectId === objectId)
+      .map((line) => ({
+        audience: line.audience,
+        label: line.audience === CLIENT_AUDIENCE ? 'You' : audienceLabel(line.audience),
+        touched: line.audience === CLIENT_AUDIENCE,
+        // A SUBJECT HAS NO CLUSTERING TO BE LIKE-FOR-LIKE ABOUT and a theme
+        // does — lib/reading/read.ts states the rule where the numerator table
+        // is chosen, and the verdict has to carry the difference or every
+        // subject comparison earns a `clustering_unknown` it did not.
+        noClustering: kind === 'subject',
+        ...(kind === 'theme'
+          ? { regimeByMonth: Object.fromEntries(line.points.map((pt) => [pt.month, pt.clusteringKey ?? null])) }
+          : {}),
+        points: line.points.map((pt) => ({ month: pt.month, k: pt.k, n: pt.videos, pct: pt.pct })),
+      }))
+  }
+
+  return active.map((move) => {
+    const target = move.kind === 'subject' ? move.subject_id : move.kind === 'theme' ? move.registry_ids?.[0] ?? null : null
+    const label =
+      move.kind === 'subject' && move.subject_id
+        ? input.subjectNames.get(move.subject_id) ?? null
+        : move.kind === 'theme' && (move.registry_ids?.length ?? 0) === 1 && move.registry_ids
+          ? input.themeLabels.get(move.registry_ids[0]) ?? null
+          : null
+    return readMove({
+      move: {
+        id: move.id,
+        title: move.title,
+        kind: move.kind,
+        declared_at: move.declared_at,
+        subject_id: move.subject_id,
+        registry_ids: move.registry_ids,
+        lineage_id: move.lineage_id,
+      },
+      targetLabel: label,
+      series: target && move.kind !== 'advice' ? seriesFor(target, move.kind) : [],
+      window: { kind: 'since', from, to: nextMonth(to) },
+    })
+  })
+}
+
+/**
+ * OV5's two new halves, for whichever surface is drawing them.
+ *
+ * ONE COMPOSITION, TWO PAGES. Overview and Market both carry this month's card
+ * and both list the moves; the mock draws them differently and the DATA is the
+ * same data, so it is built once here. A second composition on Market is how
+ * two pages come to count one month two ways.
+ *
+ * WHERE THE CARD'S PAIRED MOVEMENT COMES FROM IS THE CALLER'S TO SAY. Overview
+ * has already banded every subject's client side and category side for OV2, and
+ * asking the database again would be a second answer to a question the page has
+ * answered — so it passes `movementFor` and the helper spends no read. Market
+ * builds no verdicts at all, so it passes none and the helper bands the matched
+ * subject's own two months with `monthChange`, the same function OV2 used. The
+ * one place the two can differ is a month Overview SUPPRESSES bands on (thin,
+ * or under a third elapsed), which is a page rule and not a band rule.
+ */
+export interface MovesExtras {
+  card: MoveCandidate | null
+  readings: MoveReading[]
+}
+
+export async function loadMovesExtras(input: {
+  supabase: SupabaseClient
+  reading: ReadingHandle
+  clientId: string
+  month: string
+  /** The audiences a control line is drawn for. Omitted, the helper reads the
+   *  tracked rivals itself — and only where a move is actually dated. */
+  audiences?: readonly string[]
+  /** Null — never [] — where `moves` (M4) is not applied here. */
+  moves: readonly Move[] | null
+  /** Active subjects only: a proposed subject measures nothing. */
+  subjectNames: Map<string, string>
+  themeLabels: Map<string, string>
+  /** The card's inputs, where the caller has already started them. */
+  cardInputs?: Promise<CardInputs>
+  movementFor?: (subjectId: string) => { yours: Verdict | null; category: Verdict | null }
+}): Promise<MovesExtras> {
+  const [posts, readings] = await Promise.all([
+    input.cardInputs ?? loadCardInputs(input.supabase, input.clientId, input.month),
+    input.moves
+      ? loadMoveReadings(input.reading, input.supabase, input.moves, {
+          month: input.month,
+          audiences: input.audiences,
+          subjectNames: input.subjectNames,
+          themeLabels: input.themeLabels,
+        })
+      : Promise.resolve([] as MoveReading[]),
+  ])
+  if (!posts.videos) return { card: null, readings }
+
+  const membership = posts.matches
+    ? [...posts.matches.entries()]
+        .filter(([id]) => input.subjectNames.has(id))
+        .map(([id, videoIds]) => ({ subjectId: id, label: input.subjectNames.get(id) ?? id, videoIds }))
+    : []
+  const top = [...membership].sort((a, b) => b.videoIds.length - a.videoIds.length || a.subjectId.localeCompare(b.subjectId))[0] ?? null
+  const movement = top
+    ? input.movementFor
+      ? input.movementFor(top.subjectId)
+      : await bandMatchedSubject(input.reading, top, input.month)
+    : { yours: null, category: null }
+
+  return {
+    card: buildMoveCandidate({
+      month: input.month,
+      clientVideos: posts.videos,
+      claims: posts.claims,
+      membership,
+      yours: movement.yours,
+      category: movement.category,
+      declarable: input.moves != null,
+    }),
+    readings,
+  }
+}
+
+/** The matched subject's client side and category side, this month against
+ *  last — for a caller that holds no verdicts of its own. Two months, two
+ *  audiences, one `loadMonthSeries`; and nothing at all when no subject
+ *  matched, which is every workspace until M4 is applied. */
+async function bandMatchedSubject(
+  reading: ReadingHandle,
+  subject: { subjectId: string; label: string },
+  month: string,
+): Promise<{ yours: Verdict | null; category: Verdict | null }> {
+  const prev = previousMonthOf(monthStartOf(month))
+  try {
+    const set = await loadMonthSeries(reading.client, reading.clientId, {
+      from: prev,
+      to: monthStartOf(month),
+      audiences: [CLIENT_AUDIENCE, INDUSTRY_AUDIENCE],
+      objectKind: 'subject',
+      objectIds: [subject.subjectId],
+    })
+    const sideOf = (audience: string): Verdict | null => {
+      const line = set.series.find((l) => l.audience === audience && l.objectId === subject.subjectId)
+      const curr = line?.points.find((pt) => pt.month === monthStartOf(month))
+      const before = line?.points.find((pt) => pt.month === prev)
+      if (!curr || !before || curr.videos == null || before.videos == null) return null
+      return monthChange({
+        object: { kind: 'subject', id: subject.subjectId, label: subject.label },
+        audience,
+        // A subject's months carry no clustering fingerprint and are
+        // comparable across a re-grouping — see lib/reading/read.ts.
+        curr: { month: curr.month, videos: curr.videos, k: curr.k, audience, regime: 'n/a' },
+        prev: { month: before.month, videos: before.videos, k: before.k, audience, regime: 'n/a' },
+      })
+    }
+    return { yours: sideOf(CLIENT_AUDIENCE), category: sideOf(INDUSTRY_AUDIENCE) }
+  } catch (error) {
+    if (isMissingSubjects(error) || isMissingMonthlyReading(error) || isMissingMonthTable(error)) return { yours: null, category: null }
+    throw error
+  }
+}
+
 /** The moves this tenant has dated. Null — never [] — before M4 is applied. */
 async function loadMoves(supabase: SupabaseClient, clientId: string): Promise<Move[] | null> {
   try {
@@ -1440,8 +1929,26 @@ async function loadMoves(supabase: SupabaseClient, clientId: string): Promise<Mo
   }
 }
 
-/** The top row of Market's ledger, with its age and the decision on it. */
-async function loadLedger(supabase: SupabaseClient, clientId: string): Promise<LedgerRow | null> {
+/**
+ * The top row of Market's ledger, with its age and the decision on it — and,
+ * off the SAME two reads, the whole ledger's ratio for OV5.
+ *
+ * ONE READ, TWO ANSWERS. "You have acted on 1 of 64" needs every identity and
+ * every decision, which is exactly what this function already holds and threw
+ * away after picking one row. A second loader for the tally would be two reads
+ * of two tables for a fraction whose numerator the first one already has — and
+ * two places for Overview and Market to disagree about what "acted" means.
+ *
+ * THE KEY IS THE LINEAGE, NEVER THE ROW ID. Pass D-b deletes and reinserts
+ * every recommendation each update, so `id` counts copies and `lineage_id`
+ * counts advice; `coalesce(lineage_id, id)` is `lineageKey`'s own rule
+ * (lib/pages/market-surface.ts), restated because this loader reads neither
+ * `created_at` nor `type` and cannot call `buildAdviceRows`.
+ */
+async function loadLedger(
+  supabase: SupabaseClient,
+  clientId: string,
+): Promise<{ top: LedgerRow | null; acted: { decided: number; of: number; line: string } | null }> {
   const [recRows, decisionRes] = await Promise.all([
     // THROUGH selectAll, like every other list read: a bare `.select()` caps
     // at 1000 rows silently (AGENTS.md). 56 and 65 rows on production today,
@@ -1473,13 +1980,24 @@ async function loadLedger(supabase: SupabaseClient, clientId: string): Promise<L
         .limit(200),
     ).catch(() => [] as RecDecision[]),
   ])
+  // THE TALLY FIRST, because it survives a ledger with no top row: a tenant
+  // whose every recommendation has been decided still has a ratio to print.
+  const byLineage = new Map<string, boolean>()
+  for (const r of recRows) {
+    const key = r.lineage_id ?? r.id
+    const inherited = inheritedStatus(key, decisionRes)
+    const acted = recStatus(inherited ?? r.status) !== 'new'
+    byLineage.set(key, (byLineage.get(key) ?? false) || acted)
+  }
+  const acted = actedTally([...byLineage.values()].filter(Boolean).length, byLineage.size)
+
   const rec = topRecommendation(recRows)
-  if (!rec) return null
+  if (!rec) return { top: null, acted }
   const decided = rec.lineage_id
     ? [...decisionRes].filter((d) => d.lineage_id === rec.lineage_id).sort((a, b) => (a.decided_at < b.decided_at ? 1 : -1))[0] ?? null
     : null
   const inherited = rec.lineage_id ? inheritedStatus(rec.lineage_id, decisionRes) : null
-  return {
+  const top: LedgerRow = {
     id: rec.id,
     title: rec.title,
     // NO AGE, AND THAT IS THE HONEST ANSWER TODAY. "First raised N months ago"
@@ -1496,6 +2014,7 @@ async function loadLedger(supabase: SupabaseClient, clientId: string): Promise<L
     decidedAt: decided?.decided_at ?? null,
     href: '/dashboard/market',
   }
+  return { top, acted }
 }
 
 /** The flags that fired this month, largest first. Empty before M7 lands. */

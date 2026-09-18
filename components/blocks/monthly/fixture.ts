@@ -167,6 +167,13 @@ export function formingMonthlyFixture(over: Partial<MonthlyData> = {}): MonthlyD
       masthead: base.overview.moves.masthead,
       empty: 'What you are doing about it is not recorded for this workspace yet.',
       recorded: false,
+      // A WORKSPACE STILL FORMING HAS NO CARD EITHER: the posts read, but this
+      // fixture is the one where nothing about the client has been recorded,
+      // and a card drawn here would be the only figure on a section whose whole
+      // point is that there is nothing to confirm yet.
+      card: null,
+      readings: [],
+      acted: null,
     },
   })
   overview.sentence = {

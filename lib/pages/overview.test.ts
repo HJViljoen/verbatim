@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest'
 
 import { buildSeries, type DenominatorPoint, type NumeratorPoint } from '../reading/series'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '../rivals'
-import type { Subject } from '../subjects/types'
+import type { Move, Subject } from '../subjects/types'
+import { actedTally } from '../reading/moves'
+import { cardFixture, moveReadingFixture } from '../../components/pages/overview/fixture'
 import {
   buildCategory,
   buildRivals,
@@ -20,7 +22,9 @@ import {
   monthlyLineLabel,
   readingsCounter,
   moveLine,
+  buildMoves,
   MOVES_EMPTY,
+  MOVES_UNLOCK,
   recordWindow,
   splitMovers,
   subjectsNote,
@@ -677,5 +681,60 @@ describe('buildRivals', () => {
       statsRows: null, month: '2026-09-01', prevMonth: null, brand: 'Sealand', series, dualMention: null,
     })
     expect(b.rows.find((r) => r.label === 'Poler')?.retiredAt).toBe('2026-09-09')
+  })
+})
+
+describe('buildMoves — OV5, with the card and the readings (Block D · D2)', () => {
+  const move = (over: Partial<Move> = {}): Move => ({
+    id: 'mv1',
+    client_id: 'c1',
+    kind: 'subject',
+    subject_id: 's1',
+    registry_ids: null,
+    lineage_id: null,
+    title: 'Push repairability',
+    note: null,
+    direction: 'up',
+    declared_at: '2026-08-12',
+    declared_by: null,
+    status: 'active',
+    ...over,
+  })
+
+  it('lists the active moves and carries the card, the readings and the ledger ratio', () => {
+    const card = cardFixture()
+    const readings = [moveReadingFixture()]
+    const b = buildMoves({ moves: [move(), move({ id: 'mv2', status: 'done' })], card, readings, acted: actedTally(1, 64) })
+    expect(b.rows.map((r) => r.id)).toEqual(['mv1'])
+    expect(b.recorded).toBe(true)
+    expect(b.empty).toBeNull()
+    expect(b.card).toBe(card)
+    expect(b.readings).toHaveLength(1)
+    expect(b.acted?.line).toContain('1 of 64')
+    // The ledger's ratio is the whole ledger and never a quarter (D12).
+    expect(b.acted?.line).not.toMatch(/quarter/i)
+  })
+
+  it('tells "nothing dated" and "not recorded here" apart, and keeps the card in both', () => {
+    const card = cardFixture()
+    const nothing = buildMoves({ moves: [], card, readings: [], acted: null })
+    expect(nothing.recorded).toBe(true)
+    expect(nothing.empty).toBe(MOVES_EMPTY)
+    expect(nothing.card).toBe(card)
+
+    const unapplied = buildMoves({ moves: null, card, readings: [], acted: null })
+    expect(unapplied.recorded).toBe(false)
+    expect(unapplied.empty).toContain('not recorded for this workspace yet')
+    // THE CARD SURVIVES M4 BEING UNAPPLIED, which is the state of both live
+    // tenants: the posts, the floor, the claims and the hooks come off tables
+    // that ARE applied, and only the confirming is held.
+    expect(unapplied.card).toBe(card)
+  })
+
+  it('carries the unlock and the masthead, and the unlock names no month', () => {
+    const b = buildMoves({ moves: [], card: null, readings: [], acted: null })
+    expect(b.unlock).toBe(MOVES_UNLOCK)
+    expect(b.masthead).toContain('We never claim you caused it')
+    expect(b.unlock).not.toMatch(/not built yet/)
   })
 })

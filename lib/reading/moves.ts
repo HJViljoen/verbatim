@@ -362,6 +362,11 @@ const countWord = (n: number): string =>
 /** Said when the client side has no month on one or other side of the line. */
 export const MOVE_TOO_YOUNG = 'One monthly reading so far — the first comparison lands with the month after this one.'
 export const MOVE_NO_CLIENT_SERIES = 'Your own side carries no reading for this move yet.'
+/** A move on a piece of advice names no countable object — a recommendation is
+ *  not a thing the corpus can be counted for — so there is no series to read
+ *  until the advice is expressed as a subject or some themes. */
+export const MOVE_NO_TARGET_SERIES =
+  'This one is on a piece of advice, which names nothing the conversation can be counted for, so there is no line to read yet.'
 
 /**
  * What a move did — the one movement claim a move earns.
@@ -402,7 +407,13 @@ export function readMove(input: MoveReadingInput): MoveReading {
     if (verdict.bandPts != null) figures.band_pts = { value: verdict.bandPts, unit: 'pts', label: 'the band' }
   }
 
-  const unread = verdict ? null : touched ? MOVE_TOO_YOUNG : MOVE_NO_CLIENT_SERIES
+  const unread = verdict
+    ? null
+    : input.series.length === 0
+      ? MOVE_NO_TARGET_SERIES
+      : touched
+        ? MOVE_TOO_YOUNG
+        : MOVE_NO_CLIENT_SERIES
 
   return {
     moveId: input.move.id,

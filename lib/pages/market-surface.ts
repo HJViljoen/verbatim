@@ -14,7 +14,8 @@ import type { MonthStatus } from '../reading/types'
 import type { Scope } from '../renderables/types'
 import { selectAll } from '../supabase-admin'
 import { isMissingSubjects, TABLE_MOVES, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
-import { MOVES_MASTHEAD, MOVES_UNLOCK, firstScoringMonth, longMonth, recordWindow } from './overview'
+import { MOVES_MASTHEAD, MOVES_UNLOCK, firstScoringMonth, loadMovesExtras, longMonth, recordWindow } from './overview'
+import type { MoveCandidate, MoveReading } from '../reading/moves'
 import { row } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
@@ -167,6 +168,13 @@ export interface MovesBlock {
   empty: string | null
   /** False when `moves` (M4) is not applied here. */
   recorded: boolean
+  /** This month's card, pre-filled from the client's own posts — the same
+   *  shape Overview's OV5 carries, built by the same function so the two
+   *  surfaces cannot count one month two ways (Block D · D2). */
+  card: MoveCandidate | null
+  /** One reading per active move: the one banded movement claim a move earns,
+   *  with the untouched audiences beside it as a control. */
+  readings: MoveReading[]
 }
 
 export interface ClaimRow {
@@ -741,12 +749,29 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
     const on = moveTargetLabel(m, m.subject_id ? subjectById.get(m.subject_id) ?? null : null, themeLabels.get((m.registry_ids ?? [])[0] ?? '') ?? null)
     return { id: m.id, title: m.title, kind: m.kind, on, declaredAt: m.declared_at, line: moveLedgerLine(m, on) }
   })
+  // THE CARD AND THE READINGS ARE COMPOSED ONCE, IN OVERVIEW'S LOADER (Block D
+  // · D2). Market draws them differently — a card tile and a chart per move
+  // where OV5 has a card and a row — and the DATA is the same data, so a second
+  // composition here would be a second way to count one month. This surface
+  // holds no verdicts of its own, so it passes no `movementFor` and the helper
+  // bands the matched subject's own two months with `monthChange`.
+  const extras = await loadMovesExtras({
+    supabase,
+    reading,
+    clientId,
+    month,
+    moves,
+    subjectNames: new Map((subjects ?? []).filter((x) => x.status === 'active').map((x) => [x.id, x.name])),
+    themeLabels,
+  })
   const movesBlock: MovesBlock = {
     rows: moveRows,
     masthead: MOVES_MASTHEAD,
     unlock: MOVES_UNLOCK,
     recorded: moves != null,
     empty: moves == null ? MOVES_UNRECORDED : moveRows.length === 0 ? MOVES_EMPTY_MK4 : null,
+    card: extras.card,
+    readings: extras.readings,
   }
 
   // ── MK5 · how a move is made ───────────────────────────────────────────
