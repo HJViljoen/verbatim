@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { Fragment, type ReactNode } from 'react'
 import Link from 'next/link'
 import type { Block, QuoteRef, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
@@ -9,6 +9,7 @@ import { fmtInt, fmtPct, monthName } from '@/lib/format'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { Mover } from '@/lib/pages/overview'
 import type { MonthlyData, MoverRow } from '@/lib/pages/monthly'
+import { TRAIL_SEPARATOR } from '@/lib/reports/monthly'
 import { presentation, T } from './email-table'
 
 /**
@@ -247,9 +248,7 @@ function Row({ row, mode }: { row: MoverRow; mode: RenderMode }) {
           <BlockMovement verdict={row.verdict} unit="pts" mode={mode} />
         </div>
         <div style={{ fontFamily: FONT.mono, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 }}>{level}</div>
-        {row.trail ? (
-          <div data-copy="level" style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.faint, marginTop: 2 }}>{row.trail}</div>
-        ) : null}
+        {row.trail ? <Trail trail={row.trail} mode={mode} /> : null}
       </div>
     )
   }
@@ -270,10 +269,39 @@ function Row({ row, mode }: { row: MoverRow; mode: RenderMode }) {
         <Sparkline values={row.spark} width={72} height={24} animate={false} />
         <span className="font-mono text-[11.5px] tabular-nums text-muted-foreground">{level}</span>
       </span>
-      {row.trail ? (
-        <span data-copy="level" className="font-mono text-[10.5px] tabular-nums text-muted-foreground">{row.trail}</span>
-      ) : null}
+      {row.trail ? <Trail trail={row.trail} mode={mode} /> : null}
     </div>
+  )
+}
+
+/**
+ * The six-month trail, point by point (the fix pass, review finding
+ * [High]/[Minor]).
+ *
+ * A POINT NEVER BREAKS IN HALF. Set as one string in a 254px column the line
+ * wrapped to four, and the wrap fell between "9.4% of" and "1,388": a share on
+ * one line and what it is a share of on the next. Every point carrying its
+ * denominator is the rule this line exists to keep, and a line break between
+ * them is that separation by other means. Each point is its own unbreakable
+ * box and the ARROWS are where the line may break, so a narrow column gets two
+ * short lines of whole readings instead of four ragged ones.
+ *
+ * THE MARKER STAYS ON THE WHOLE LINE, not on each point: rule (b) reads a
+ * level node's whole text, and "Jul —" alone is a month with no reading rather
+ * than a level missing its evidence.
+ */
+function Trail({ trail, mode }: { trail: string; mode: RenderMode }) {
+  const points = trail.split(TRAIL_SEPARATOR)
+  const parts = points.map((point, i) => (
+    <Fragment key={point + i}>
+      {i > 0 ? TRAIL_SEPARATOR : null}
+      <span style={{ whiteSpace: 'nowrap' }}>{point}</span>
+    </Fragment>
+  ))
+  return mode === 'email' ? (
+    <div data-copy="level" style={{ fontFamily: FONT.mono, fontSize: 11, lineHeight: '1.5', color: EMAIL.faint, marginTop: 2 }}>{parts}</div>
+  ) : (
+    <span data-copy="level" className="font-mono text-[10.5px] tabular-nums text-muted-foreground">{parts}</span>
   )
 }
 

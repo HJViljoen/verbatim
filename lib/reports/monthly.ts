@@ -376,10 +376,26 @@ export interface TrailPoint {
  * readable, where "Aug 6.8% → Sep 9.4%" would silently re-date the whole
  * series. A trail with NO readable month at all is empty rather than a row of
  * dashes, so a row with nothing to say prints no line.
+ *
+ * AND THE POINTS ARE AVAILABLE ONE BY ONE (`trailPoints`, the fix pass, review
+ * finding [High]/[Minor]). Rendered as one string in a 254px column the line
+ * wrapped to four, and one of the wraps fell between "9.4% of" and "1,388" —
+ * a share parted from what it is a share of, which is the rule the "of N" on
+ * every point exists to keep, broken by other means. A renderer that holds the
+ * points can set each one unbreakable and let the line break BETWEEN months.
+ * `seriesTrail` is that array joined, so the two can never say different
+ * things.
  */
 export function seriesTrail(months: readonly string[], values: readonly (TrailPoint | null)[]): string {
+  return trailPoints(months, values).join(TRAIL_SEPARATOR)
+}
+
+/** What a trail is made of, before it is a sentence: "Aug 6.8% of 402" per
+ *  readable month, "Jul —" for a month under the floor, and nothing at all
+ *  where no month was readable. */
+export function trailPoints(months: readonly string[], values: readonly (TrailPoint | null)[]): string[] {
   const n = Math.min(months.length, values.length)
-  if (n === 0) return ''
+  if (n === 0) return []
   const parts: string[] = []
   let readable = 0
   for (let i = 0; i < n; i += 1) {
@@ -387,8 +403,12 @@ export function seriesTrail(months: readonly string[], values: readonly (TrailPo
     if (v) readable += 1
     parts.push(`${shortMonth(months[i])} ${v == null ? '—' : `${fmtPct(v.pct)} of ${fmtInt(v.n)}`}`)
   }
-  return readable === 0 ? '' : parts.join(' → ')
+  return readable === 0 ? [] : parts
 }
+
+/** The one arrow between two points, so a renderer that splits the line and a
+ *  caller that reads it whole cannot disagree about where a point ends. */
+export const TRAIL_SEPARATOR = ' → '
 
 /** "Jul" from "2026-07". `monthName` in lib/format.ts is the same three-letter
  *  form with the year on it; a trail of six months does not repeat the year six

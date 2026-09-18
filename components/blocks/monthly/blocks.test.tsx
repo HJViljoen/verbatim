@@ -170,11 +170,27 @@ describe('MR3 · what moved', () => {
 
   // THE TRAIL IS SIX LEVELS AND IT CARRIED NO MARKER, so rule (b) — which is
   // checked on marked nodes alone — never saw six bare percentages a row, ten
-  // rows a side, on a sent artefact.
+  // rows a side, on a sent artefact. The marker is on the LINE and not on each
+  // point: rule (b) reads a level node's whole text, and "Jul —" alone is a
+  // month with no reading rather than a level missing its evidence.
   it('marks the trail as the levels it is, in every mode', () => {
     for (const mode of MODES) {
       const markup = render(block.render(monthlyFixture(), mode, ctx))
-      expect(markup).toMatch(/data-copy="level"[^>]*>\s*Apr 3\.1% of 1,204/)
+      expect(markup).toMatch(/data-copy="level"[^>]*>(<span[^>]*>)?\s*Apr 3\.1% of 1,204/)
+    }
+  })
+
+  // AND A POINT IS UNBREAKABLE (the fix pass, review finding [High]/[Minor]).
+  // Set as one string in a 254px column the line wrapped to four, and one wrap
+  // fell between "9.4% of" and "1,388" — a share on one line and what it is a
+  // share of on the next, which is the denominator rule broken by other means.
+  // The arrows are where the line may break.
+  it('never breaks a point of the trail in half', () => {
+    for (const mode of MODES) {
+      const markup = render(block.render(monthlyFixture(), mode, ctx))
+      for (const point of ['Apr 3.1% of 1,204', 'Sep 9.4% of 1,388', 'Apr —']) {
+        expect(markup).toContain(`<span style="white-space:nowrap">${point}</span>`)
+      }
     }
   })
 
