@@ -37,13 +37,25 @@ import { cn } from '@/lib/utils'
  * chrome rather than content and lives here.
  */
 export function BlockFrame({
-  title, question, mode = 'app', footer, meta, children, className,
+  title, question, mode = 'app', footer, footerNote, meta, children, className,
 }: {
   title: string
   question?: string
   mode?: RenderMode
-  /** The line along the bottom: a link deeper on the left, a quiet note right. */
+  /** The line along the bottom, LEFT: a link deeper. */
   footer?: ReactNode
+  /** The line along the bottom, RIGHT: the artboard's quiet mono note — the
+   *  basis, the window, the population ("all-time", "of 1,388 videos").
+   *
+   *  A SEPARATE SLOT BECAUSE IT IS A SEPARATE THING (Block D wave 1, P0
+   *  item 1). `components/shell/tile.tsx` has had this pair since the
+   *  redesign; BlockFrame, which is what every Phase 1 block draws itself in,
+   *  had one node and a comment claiming it held both. So a block with a basis
+   *  to state had two choices: drop it, or put it in the body where it reads
+   *  as a finding. Six of Main's footer notes alone do one or the other today
+   *  (mock-gap §5). The mono face is the point: a footer note is metadata, and
+   *  the eye should skip it until it wants it. */
+  footerNote?: ReactNode
   /** The top-right note — "September 2026 · still filling". */
   meta?: ReactNode
   children: ReactNode
@@ -67,9 +79,21 @@ export function BlockFrame({
             </td>
           </tr>
           <tr><td>{children}</td></tr>
-          {footer ? (
+          {footer || footerNote ? (
             <tr>
-              <td style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink2, paddingTop: 8, borderTop: `1px solid ${EMAIL.hairline}` }}>{footer}</td>
+              <td style={{ paddingTop: 8, borderTop: `1px solid ${EMAIL.hairline}` }}>
+                {/* The footer's two halves, as a table row — the email arm
+                    cannot put two things at opposite ends of a line any other
+                    way (no flex, Outlook lays out with Word). */}
+                <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} border={0} style={{ borderCollapse: 'collapse', borderSpacing: 0 }}>
+                  <tbody>
+                    <tr>
+                      <td style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink2 }}>{footer}</td>
+                      {footerNote ? <td align="right" style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted }}>{footerNote}</td> : null}
+                    </tr>
+                  </tbody>
+                </table>
+              </td>
             </tr>
           ) : null}
         </tbody>
@@ -77,22 +101,80 @@ export function BlockFrame({
     )
   }
 
+  // PAPER IS DENSER THAN THE SCREEN, NOT BIGGER (P0 item 1). The print arm
+  // used to set the block's title LARGER than the app's — 12px against
+  // 10.5px — on a slide that is already zoomed to .902 and whose own section
+  // heading is 15px above it. Two headings, the inner one bigger, and the
+  // seventeen artboards' printed blocks run at 11px / 11.5px. The deck's own
+  // green-ruled eyebrow (components/print/document-deck.tsx `Eyebrow`) is the
+  // "block heading on paper" the mock's §5 draws; this is the heading INSIDE
+  // such a block, and it gets out of its way.
   const big = mode === 'print'
   return (
     <section className={cn('flex min-w-0 flex-col gap-2.5', className)}>
       <header className="flex items-baseline justify-between gap-2">
-        <h2 className={cn('m-0 font-semibold uppercase tracking-[0.06em] text-secondary-foreground', big ? 'text-[12px]' : 'text-[10.5px]')}>{title}</h2>
+        <h2 className={cn('m-0 font-semibold uppercase tracking-[0.06em] text-secondary-foreground', big ? 'text-[11px]' : 'text-[10.5px]')}>{title}</h2>
         {meta ? <span className="flex-none whitespace-nowrap font-mono text-[11px] text-muted-foreground">{meta}</span> : null}
       </header>
-      {question ? <p className="m-0 text-[12.5px] text-muted-foreground">{question}</p> : null}
+      {question ? <p className={cn('m-0 text-muted-foreground', big ? 'text-[11.5px]' : 'text-[12.5px]')}>{question}</p> : null}
       {children}
-      {footer ? (
+      {footer || footerNote ? (
         <footer className="mt-auto flex items-center justify-between gap-2 border-t border-border/70 pt-2 text-[12px] font-medium text-foreground">
-          {footer}
+          <span className="min-w-0">{footer}</span>
+          {footerNote ? <span className="shrink-0 font-mono text-[11px] font-normal text-muted-foreground">{footerNote}</span> : null}
         </footer>
       ) : null}
     </section>
   )
+}
+
+/**
+ * A figure over its denominator, stacked — the artboards' table cell.
+ *
+ * WHY A PRIMITIVE AND NOT A `<td>` EACH BLOCK WRITES. Rule (b) of the copy
+ * contract is that a level prints its "of N", and the way it has been broken
+ * every time is by putting the two in separate cells and then letting a column
+ * fall off a narrow layout. The artboards answer that by stacking them: the
+ * figure on top in mono 13/600 at `line-height:1`, the evidence under it in
+ * mono 10.5 muted, one pixel apart. Measured across the seventeen artboards,
+ * thirty of the stacked cells sit left in their column and none is set
+ * flex-end, so `align` defaults to left and a numeric column asks for right.
+ *
+ * It stamps its own `data-copy` — `figure` on the value, `level` on the pair —
+ * exactly as BlockStat does, so a block using it keeps the contract by
+ * construction. `of` is optional and omitting it is a DELIBERATE statement:
+ * this count is not a share of anything (a number of rivals tracked, a number
+ * of months read), so there is no denominator to hide. A share that leaves it
+ * off is the score this product does not show, and the block's own render test
+ * is what catches that.
+ */
+export function FigureCell({
+  value, of, align = 'left', mode = 'app',
+}: {
+  value: ReactNode
+  /** "of 142". Omitted ONLY for a count that is not a share of anything. */
+  of?: ReactNode
+  align?: 'left' | 'right'
+  mode?: RenderMode
+}) {
+  const right = align === 'right'
+  if (mode === 'email') {
+    return (
+      <div style={{ textAlign: right ? 'right' : 'left' }}>
+        <div data-copy="figure" style={{ fontFamily: FONT.mono, fontSize: 13, fontWeight: 600, lineHeight: '1', color: EMAIL.ink }}>{value}</div>
+        {of ? <div data-copy="level" style={{ fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.muted, marginTop: 2 }}>{of}</div> : null}
+      </div>
+    )
+  }
+  const cell = (
+    <span className={cn('flex min-w-0 flex-col gap-px', right && 'items-end text-right')}>
+      <span data-copy="figure" className="font-mono text-[13px] font-semibold leading-none tabular-nums">{value}</span>
+      {of ? <span className="font-mono text-[10.5px] tabular-nums text-muted-foreground">{of}</span> : null}
+    </span>
+  )
+  // The "of N" carries the level, so the PAIR is the level node: rule (b)
+  // reads a level node's whole text and would fail on a bare denominator.
+  return of ? <span data-copy="level" className={cn('flex min-w-0', right && 'justify-end')}>{cell}</span> : cell
 }
 
 /**
