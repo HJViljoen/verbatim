@@ -4,7 +4,7 @@ import { inngest } from '@/inngest/client'
 import { createAdminClient, selectAll } from '@/lib/supabase-admin'
 import { planGatherSearches, searchStepId, searchOne, gatePlatform, scrapeCommentsBatch, transcribeBatch, planTranscribeBatches, resolveGatherWindow, inWindow, loadGatherConfig, type SearchResult } from '@/lib/gather/gather'
 import { runPassA, passALane, passAPromptVersion } from '@/lib/pipeline/pass-a'
-import { decideAnalysis, emptyReasonTally, staleInsightIds, type SelectReason } from '@/lib/pipeline/pass-a-plan'
+import { decideAnalysis, emptyReasonTally, protectedKeptIds, staleInsightIds, type SelectReason } from '@/lib/pipeline/pass-a-plan'
 import { parseRef } from '@/lib/renderables/quotes-freeze'
 import { loadGroupedInsights, runStepA2Bucket, type StepA2BucketResult } from '@/lib/pipeline/step-a2'
 import { runPassB } from '@/lib/pipeline/pass-b'
@@ -2426,11 +2426,11 @@ async function pruneStaleAnalysis(clientId: string): Promise<{ insights: number;
     const protectedIds = table === 'audience_insights' ? cited.insights : cited.languageSamples
     const stale = staleInsightIds(videos, rows, protectedIds)
     // What protection actually cost, counted against this tenant's own rows
-    // rather than against the size of the cited set: an id cited by a
-    // recommendation may name a row that is current anyway, or one this
-    // tenant no longer has at all.
-    const wouldHaveTaken = staleInsightIds(videos, rows)
-    const kept = wouldHaveTaken.length - stale.length
+    // rather than against the size of the cited set (protectedKeptIds, same
+    // file as the rule, where its tests are): an id cited by a recommendation
+    // may name a row that is current anyway, or one this tenant no longer has
+    // at all. It walks the protected rows alone, not the table a second time.
+    const kept = protectedKeptIds(videos, rows, protectedIds).length
     // Chunk 200, not 500: ~500 uuids in an `in.()` filter overflows the
     // PostgREST URL cap ("fetch failed" — the lesson behind every other chunked
     // .in() in this repo). A first prune on a real tenant is thousands of rows.

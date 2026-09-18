@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { decideAnalysis, growthThreshold, staleInsightIds, type VideoAnalysisState } from './pass-a-plan'
+import { decideAnalysis, growthThreshold, protectedKeptIds, staleInsightIds, type VideoAnalysisState } from './pass-a-plan'
 
 // Incremental Pass A invariants worth locking (2026-08-17):
 //  - flag off ⇒ today's behaviour exactly (every eligible video re-read)
@@ -269,5 +269,47 @@ describe('staleInsightIds', () => {
     it('protecting everything returns nothing at all', () => {
       expect(staleInsightIds(videos, rows, new Set(rows.map((r) => r.id)))).toEqual([])
     })
+  })
+})
+
+// What the protection COST, which the operator log prints and which is a
+// different question from how many ids the citation walk found: a cited id can
+// name a row that is current anyway, or one this tenant no longer has.
+describe('protectedKeptIds', () => {
+  const videos = [
+    { id: 'v1', analyzed_run_id: 'run-2' },
+    { id: 'v2', analyzed_run_id: null },
+  ]
+  const rows = [
+    { id: 'a', run_id: 'run-2', source_video_id: 'v1' }, // current
+    { id: 'b', run_id: 'run-1', source_video_id: 'v1' }, // superseded by run-2
+    { id: 'c', run_id: 'run-1', source_video_id: 'v2' }, // video has no pointer
+    { id: 'd', run_id: null, source_video_id: 'v1' },    // its run was deleted
+  ]
+
+  it('counts only the protected rows that would otherwise have been deleted', () => {
+    expect(protectedKeptIds(videos, rows, new Set(['b', 'd']))).toEqual(['b', 'd'])
+  })
+
+  it('does not count a protected row that is current anyway', () => {
+    expect(protectedKeptIds(videos, rows, new Set(['a', 'b']))).toEqual(['b'])
+  })
+
+  it('ignores a protected id this tenant has no row for', () => {
+    expect(protectedKeptIds(videos, rows, new Set(['not-a-row']))).toEqual([])
+  })
+
+  it('is empty for the omitted and empty-set calls', () => {
+    expect(protectedKeptIds(videos, rows)).toEqual([])
+    expect(protectedKeptIds(videos, rows, new Set())).toEqual([])
+  })
+
+  // The identity the operator log used to compute by subtraction, pinned so the
+  // cheaper form cannot drift from it.
+  it('equals the difference between the unprotected and protected selections', () => {
+    const protectedIds = new Set(['b', 'c'])
+    const withOut = staleInsightIds(videos, rows).length
+    const withIn = staleInsightIds(videos, rows, protectedIds).length
+    expect(protectedKeptIds(videos, rows, protectedIds)).toHaveLength(withOut - withIn)
   })
 })

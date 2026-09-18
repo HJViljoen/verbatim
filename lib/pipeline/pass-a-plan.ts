@@ -158,6 +158,28 @@ export function staleInsightIds(
   return stale
 }
 
+/** What the protected set actually SAVED on this tenant, as ids: the protected
+ *  rows that the rule above would otherwise have returned as stale.
+ *
+ *  Counted against this tenant's own rows and never against the size of the
+ *  cited set, because those are different questions — a cited id may name a row
+ *  that is current anyway, or one this tenant no longer has at all, and neither
+ *  was saved by anything.
+ *
+ *  It is the same rule applied to the protected rows ALONE. The difference of
+ *  two full passes (`staleInsightIds(videos, rows).length - staleInsightIds(
+ *  videos, rows, protectedIds).length`) gives the same number, but it re-walks
+ *  every row of the table to produce a log figure and reads at a glance like a
+ *  correctness guard, which it is not. */
+export function protectedKeptIds(
+  videos: { id: string; analyzed_run_id: string | null }[],
+  rows: { id: string; run_id: string | null; source_video_id: string | null }[],
+  protectedIds?: ReadonlySet<string>,
+): string[] {
+  if (!protectedIds?.size) return []
+  return staleInsightIds(videos, rows.filter((r) => protectedIds.has(r.id)))
+}
+
 /** Tally helper for the plan-pass-a step result. */
 export function emptyReasonTally(): Record<SelectReason, number> {
   return { flag_off: 0, forced: 0, new: 0, grew: 0, transcript: 0, translated: 0, ocr: 0, lane: 0, version: 0, unchanged: 0 }
