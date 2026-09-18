@@ -107,8 +107,12 @@ export function TermsSection({ terms, dates, datesNote, review, canEdit, onAdd, 
           <ul className="flex flex-wrap gap-2">
             {terms[b.key].map((t) => (
               <li key={t}>
-                <span className="inline-flex items-center gap-2 whitespace-nowrap rounded-[4px] bg-inner py-[7px] pl-2.5 pr-2 text-[12px] font-medium">
-                  {t}
+                {/* The chip does not force a page to scroll. The term and its
+                    date each hold their own line, and at a width that cannot
+                    take both the date wraps under the term rather than the
+                    whole chip pushing past the pane. */}
+                <span className="inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-0.5 rounded-[4px] bg-inner py-[7px] pl-2.5 pr-2 text-[12px] font-medium">
+                  <span className="whitespace-nowrap">{t}</span>
                   {/* WHERE THE LOG HOLDS NOTHING AT ALL, THE CHIPS SAY NOTHING.
                       The sentence under them ("We have not written down when a
                       term was added yet") already says it once; per chip it is
@@ -116,7 +120,7 @@ export function TermsSection({ terms, dates, datesNote, review, canEdit, onAdd, 
                       dated, an undated one keeps its own sentence, because
                       there the absence is about that term. */}
                   {logged && (
-                    <span className="font-mono text-[10.5px] font-normal text-muted-foreground">
+                    <span className="font-mono text-[10.5px] font-normal leading-[1.3] text-muted-foreground">
                       {dates[t.trim().toLowerCase()] ?? 'in the set before we kept a record'}
                     </span>
                   )}
@@ -214,9 +218,9 @@ export function ReviewStrip({ term, canEdit, onDrop }: { term: TermSummary; canE
       {/* The note first, the control at the strip's own right edge, so the row
           scans as sentence-then-action the way the artboard's does (design
           M7). Nothing here is a "Keep it": see the constant below. */}
-      <span className="flex shrink-0 items-center gap-3">
-        <MonoNote>{REVIEW_KEEP_NOTE}</MonoNote>
-        <button type="button" onClick={onDrop} disabled={!canEdit} className={CONTROL}>Remove it</button>
+      <span className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-3">
+        <MonoNote className="min-w-0">{REVIEW_KEEP_NOTE}</MonoNote>
+        <button type="button" onClick={onDrop} disabled={!canEdit} className={cn(CONTROL, 'shrink-0')}>Remove it</button>
       </span>
     </div>
   )

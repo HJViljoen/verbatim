@@ -31,10 +31,16 @@ import { CommunityAction, CommunityAdd } from './community-controls'
 // never a `0`. A zero is a measurement; a dash is "nothing came back", which is
 // what a community with no stored posts actually tells you.
 
-const COLS = '188px 84px 212px 92px 104px 72px 84px minmax(104px,1fr)'
-/** Derived, never declared: the eight tracks and their seven gaps come to
- *  1,024px, and a hand-typed 980 left the "Stop watching" column hanging 44px
- *  past the end of every row rule at the page's real content width. */
+// EIGHT COLUMNS INSIDE 912px, WHICH IS THE PANE THE PAGE ACTUALLY HAS (design
+// B1/B2: 1440 − 224 app sidebar − 48 <main> padding − 224 settings rail − 32
+// gap). The tracks came to 1,024 with their gaps, so the section scrolled
+// sideways on a 1440 desktop where the artboard — which draws five columns,
+// not eight — does not scroll at all. Every column is trimmed and the STATE
+// column, the one holding a sentence, takes the slack: 884 of floor, so the
+// table fits the pane and the sentence gets whatever is left.
+const COLS = '172px 80px minmax(140px,1fr) 84px 92px 60px 72px 100px'
+/** Derived, never declared: `GridTable` can no longer be handed a minimum its
+ *  own columns overflow. */
 const COLS_MIN = gridIntrinsic(COLS)
 // Community, Found and State hold words; the five after them hold figures and
 // a control. The head reads the way its column does (design H1).

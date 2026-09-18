@@ -198,15 +198,19 @@ describe('the communities section', () => {
     expect(head.slice(head.lastIndexOf('<span', head.indexOf('>Kept<')), head.indexOf('>Kept<'))).toContain('text-right')
   })
 
-  it('declares a minimum no narrower than its own columns', () => {
+  it('fits the pane the page actually has, and declares that as its minimum', () => {
     // C5/B2: the row rule is painted on the row element, which takes the
-    // wrapper's width; the cells keep their tracks. A minimum short of the
-    // tracks is the last column hanging past every rule, which at the page's
-    // real content width (≈912px) is exactly what it did.
+    // wrapper's width, while the cells keep their tracks — so a minimum short
+    // of the tracks hangs the last column past every rule. It declared 980
+    // over 1,024 of columns, and 1,024 did not fit the 912px pane either
+    // (1440 − 224 app sidebar − 48 <main> padding − 224 rail − 32 gap), so the
+    // section scrolled sideways where the artboard does not.
     expect(gridIntrinsic('188px 84px 212px 92px 104px 72px 84px minmax(104px,1fr)')).toBe(1024)
     const markup = render(section)
-    expect(markup).toContain('min-width:1024px')
-    expect(markup).not.toContain('min-width:980px')
+    const declared = /min-width:(\d+)px/.exec(markup)
+    expect(declared).not.toBeNull()
+    expect(Number(declared![1])).toBe(884)
+    expect(Number(declared![1])).toBeLessThanOrEqual(912)
   })
 
   it('keeps a community’s control after its own click, and retires the message with the row', () => {
