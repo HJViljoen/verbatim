@@ -2286,9 +2286,23 @@ async function citedEvidenceIds(
   admin: ReturnType<typeof createAdminClient>,
   clientId: string,
 ): Promise<{ insights: Set<string>; languageSamples: Set<string>; from: Record<string, number> }> {
-  const insights = new Set<string>()
+  // COUNTED ONE WAY, AND THIS IS WHICH: each class gets its OWN set, counted on
+  // its own, and the protected set is their union at the end. The classes
+  // OVERLAP heavily — one insight is routinely cited by a recommendation and by
+  // a plan check — so the per-class figures do not add up to the union and the
+  // log line says so. The first shape of this function counted FIRST
+  // ATTRIBUTION instead ("new to the set when this class reached it"), which is
+  // order-dependent and reads as a class total: on the two measured tenants
+  // 5,445 + 1,750 + 6 first-attribution ids stood against a distinct union of
+  // 6,107, so ~1,094 ids would have changed class if these blocks were
+  // reordered. Repo rule, verbatim: count them one way and say which.
+  const cls = {
+    recommendations: new Set<string>(),
+    planChecks: new Set<string>(),
+    savedAnswers: new Set<string>(),
+    snapshots: new Set<string>(),
+  }
   const languageSamples = new Set<string>()
-  const from: Record<string, number> = { recommendations: 0, planChecks: 0, savedAnswers: 0, snapshots: 0 }
 
   // 1. Recommendations → market/competitive insights → audience insights.
   const recs = await selectAll<{ id: string; based_on: { insight_ids?: string[] } | null }>(() =>
@@ -2305,7 +2319,7 @@ async function citedEvidenceIds(
       if (error) throw new Error(`cited ${table}: ${error.message}`)
       for (const row of (data ?? []) as { evidence: { supporting_theme_ids?: string[] } | null }[]) {
         for (const id of row.evidence?.supporting_theme_ids ?? []) {
-          if (typeof id === 'string' && id && !insights.has(id)) { insights.add(id); from.recommendations++ }
+          if (typeof id === 'string' && id) cls.recommendations.add(id)
         }
       }
     }
@@ -2321,7 +2335,7 @@ async function citedEvidenceIds(
       for (const claim of row.claims as { insightIds?: unknown }[]) {
         if (!claim || !Array.isArray(claim.insightIds)) continue
         for (const id of claim.insightIds) {
-          if (typeof id === 'string' && id && !insights.has(id)) { insights.add(id); from.planChecks++ }
+          if (typeof id === 'string' && id) cls.planChecks.add(id)
         }
       }
     }
@@ -2339,7 +2353,7 @@ async function citedEvidenceIds(
     for (const point of grounded as { insightIds?: unknown }[]) {
       if (!point || !Array.isArray(point.insightIds)) continue
       for (const id of point.insightIds) {
-        if (typeof id === 'string' && id && !insights.has(id)) { insights.add(id); from.savedAnswers++ }
+        if (typeof id === 'string' && id) cls.savedAnswers.add(id)
       }
     }
   }
@@ -2354,7 +2368,7 @@ async function citedEvidenceIds(
       const parsed = typeof ref === 'string' ? parseRef(ref) : null
       if (!parsed) continue
       if (parsed.kind === 'e') evidenceRowIds.add(parsed.id)
-      else if (parsed.kind === 'p' && !languageSamples.has(parsed.id)) { languageSamples.add(parsed.id); from.snapshots++ }
+      else if (parsed.kind === 'p') languageSamples.add(parsed.id)
     }
   }
   for (const part of chunk([...evidenceRowIds], 200)) {
@@ -2362,10 +2376,24 @@ async function citedEvidenceIds(
     if (error) throw new Error(`cited insight_evidence: ${error.message}`)
     for (const row of (data ?? []) as { audience_insight_id: string | null }[]) {
       const id = row.audience_insight_id
-      if (id && !insights.has(id)) { insights.add(id); from.snapshots++ }
+      if (id) cls.snapshots.add(id)
     }
   }
 
+  // The union is what protects; the class sizes are what the operator reads.
+  // `snapshots` and `snapshotSamples` are kept apart because they count rows in
+  // two different tables — one figure spanning both would be meaningless.
+  const insights = new Set<string>([
+    ...cls.recommendations, ...cls.planChecks, ...cls.savedAnswers, ...cls.snapshots,
+  ])
+  const from: Record<string, number> = {
+    recommendations: cls.recommendations.size,
+    planChecks: cls.planChecks.size,
+    savedAnswers: cls.savedAnswers.size,
+    snapshots: cls.snapshots.size,
+    snapshotSamples: languageSamples.size,
+    insights: insights.size,
+  }
   return { insights, languageSamples, from }
 }
 
@@ -2407,8 +2435,10 @@ async function pruneStaleAnalysis(clientId: string): Promise<{ insights: number;
   console.log(
     `[prune-stale-analysis] deleted ${out.insights} insight(s) · ${out.languageSamples} language sample(s); ` +
     `kept ${out.keptInsights} + ${out.keptSamples} superseded row(s) because something still cites them ` +
-    `(recommendations ${cited.from.recommendations} · plan checks ${cited.from.planChecks} · ` +
-    `saved answers ${cited.from.savedAnswers} · snapshots ${cited.from.snapshots} cited id(s))`,
+    `(cited ids PER CLASS, and the classes overlap: recommendations ${cited.from.recommendations} · ` +
+    `plan checks ${cited.from.planChecks} · saved answers ${cited.from.savedAnswers} · ` +
+    `snapshots ${cited.from.snapshots}; distinct union ${cited.from.insights} insight id(s) ` +
+    `+ ${cited.from.snapshotSamples} language sample id(s))`,
   )
   return out
 }
