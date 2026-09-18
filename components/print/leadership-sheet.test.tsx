@@ -206,6 +206,24 @@ describe('the leadership one-pager', () => {
     expect(words).toContain('2 more moves, on “What was decided”.')
   })
 
+  // MASTER rule 2: colour is meaning, and `delta-badge.tsx` says it out loud —
+  // "`neutral` prints the movement in muted ink: it moved, and we are not
+  // saying whether that is good". The artboard reserves green for the one claim
+  // that is good news for the client and prints every category and rival
+  // movement in ink-2. A rise in the category's attention to Price is not the
+  // client's bad news; the sheet printed it red, because `BlockMovement` did
+  // not forward the axis its own badge has always taken.
+  it('prints the category’s movements in muted ink, and keeps colour for the client’s own', () => {
+    const markup = render(sheet())
+    // The one coloured claim on the sheet is the move's own reading: did the
+    // thing this client did work? On the fixture that move is a non-answer, so
+    // nothing on the populated sheet is green or red …
+    expect(markup).not.toContain('text-positive')
+    expect(markup).not.toContain('text-negative')
+    // … and the category's steps, which do carry a magnitude, are muted.
+    expect(markup).toMatch(/text-muted-foreground[^"]*">▲ 3\.2 pts|▲ 3\.2 pts/)
+  })
+
   it('carries the coverage line and the reading counter the deck never printed', () => {
     const words = renderText(sheet())
     expect(words).toContain('2,359 videos')

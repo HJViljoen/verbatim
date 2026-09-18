@@ -390,7 +390,8 @@ function AttentionCard({ attention, note }: { attention: AttentionBlock | null; 
       <Hero value={fmtInt(latest.comments)} unit="comments" />
       <div className="flex items-baseline justify-between gap-2">
         <span className="min-w-0 text-[12.5px] leading-[1.35] text-foreground">Attention across the panel</span>
-        <span className="shrink-0"><BlockMovement verdict={attention.verdict} unit="pts" /></span>
+        {/* NEUTRAL: this is the CATEGORY's step, not the client's news. */}
+        <span className="shrink-0"><BlockMovement verdict={attention.verdict} unit="pts" good="neutral" /></span>
       </div>
       <p data-copy="level" className={TRAIL}>
         {size != null ? `a fixed panel of ${fmtInt(size)} accounts` : 'a fixed panel'}
@@ -430,7 +431,9 @@ function SubjectCard({ row, categoryLabel }: { row: SubjectRow | null; categoryL
       <Hero value={fmtPct(row.category.pct, 0)} unit="of category videos" />
       <div className="flex items-baseline justify-between gap-2">
         <span className="min-w-0 truncate text-[12.5px] leading-[1.35] text-foreground">{row.label}</span>
-        <span className="shrink-0"><BlockMovement verdict={row.category.verdict} unit="pts" /></span>
+        {/* NEUTRAL: the category's attention to a subject rising is not the
+            client's bad news, nor its good news. */}
+        <span className="shrink-0"><BlockMovement verdict={row.category.verdict} unit="pts" good="neutral" /></span>
       </div>
       {row.direction ? <span className="flex"><Chip><DirectionWord direction={row.direction} /></Chip></span> : null}
       <p data-copy="level" className={TRAIL}>
@@ -547,7 +550,7 @@ function SubjectsTable({ data }: { data: OverviewData }) {
               <Cell side={r.rival} />
               <Cell side={r.category} />
               <span className="flex min-w-0 flex-wrap items-center gap-1.5">
-                <BlockMovement verdict={r.category.verdict} unit="pts" />
+                <BlockMovement verdict={r.category.verdict} unit="pts" good="neutral" />
                 <DirectionWord direction={r.direction} />
               </span>
             </div>
@@ -635,7 +638,7 @@ function MoveCard({ reading }: { reading: MoveReading }) {
           {reading.control.slice(0, 1).map((v) => (
             <span key={v.audience} className="flex items-baseline gap-1.5">
               <span>{audienceInLabel(v.audience)}, untouched:</span>
-              <BlockMovement verdict={v} unit="pts" />
+              <BlockMovement verdict={v} unit="pts" good="neutral" />
             </span>
           ))}
         </p>
