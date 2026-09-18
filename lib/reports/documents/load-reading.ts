@@ -79,7 +79,15 @@ const LOADERS: Record<BriefSurface, SurfaceLoader> = {
 }
 
 /**
- * The figures a DOCUMENT may print that no page block declares (package D7).
+ * The figures a BRIEF'S SLIDES may print that no page block declares
+ * (package D7).
+ *
+ * NOT `documentFigures`, WHICH IS TWENTY LINES AWAY IN THIS DIRECTORY.
+ * `compose.ts` exports `documentFigures(signals, answers): FigureTable` — the
+ * MODEL's figure-key table, the `[[key]]`s a written sentence may name. This
+ * is slide DATA. Given how carefully the two `FigureTable`s are kept apart
+ * (AGENTS.md), two things called "document figures" in one directory is an
+ * invitation, so this one says whose figures it is and what they are for.
  *
  * WHY THEY HANG OFF THE RESULT AND NOT OFF `BriefReading`. `BriefReading` is
  * what a snapshot freezes and what the method page is composed from — the
@@ -89,7 +97,7 @@ const LOADERS: Record<BriefSurface, SurfaceLoader> = {
  * want them pays nothing and a reader of `BriefReading` is not handed a shape
  * whose basis is different from everything beside it.
  */
-export interface BriefDocumentFigures {
+export interface BriefSlideFigures {
   /** `sales.p7.cannottell` — the refusals this reading declined, printed. */
   cannotTell: CannotTell
   /** `sales.p5.figure`. Null where nothing named both. */
@@ -122,8 +130,8 @@ export interface BriefReadingResult {
   map: readonly BriefEntry[]
   /** The borrowed blocks, resolved against what was actually read. */
   sections: DocBriefSection[]
-  /** What the documents may print beyond the blocks (package D7). */
-  documentFigures: BriefDocumentFigures
+  /** What this brief's slides may print beyond the blocks (package D7). */
+  slideFigures: BriefSlideFigures
 }
 
 export async function loadBriefReading(scope: Scope, options: BriefReadingOptions): Promise<BriefReadingResult> {
@@ -174,7 +182,7 @@ export async function loadBriefReading(scope: Scope, options: BriefReadingOption
       missing,
       map,
       sections,
-      documentFigures: { cannotTell: cannotTell([]), switching: null, crosscheck: null, scripted: [], line: null, untracked },
+      slideFigures: { cannotTell: cannotTell([]), switching: null, crosscheck: null, scripted: [], line: null, untracked },
     }
   }
 
@@ -216,13 +224,13 @@ export async function loadBriefReading(scope: Scope, options: BriefReadingOption
   // these is built from what was ALREADY read above, except the switching
   // pool, which is one bounded read of the tenant's own videos. Nothing here
   // can fail the brief: each arm answers with the honest absence.
-  const documentFigures = await documentFiguresFor(scope, {
+  const slideFigures = await briefSlideFigures(scope, {
     reading,
     overview,
     readingAt,
     untracked,
   })
-  return { reading, surfaces, missing, map, sections, documentFigures }
+  return { reading, surfaces, missing, map, sections, slideFigures }
 }
 
 // ── the document-only figures ──────────────────────────────────────────────
@@ -320,10 +328,10 @@ export function chartLead(
   return { months: lead.sparkMonths, label: `${lead.label} · ${categoryLabel}`, points: lead.spark }
 }
 
-export async function documentFiguresFor(
+export async function briefSlideFigures(
   scope: Scope,
   a: { reading: BriefReading; overview: OverviewData; readingAt: string; untracked: UntrackedNote[] },
-): Promise<BriefDocumentFigures> {
+): Promise<BriefSlideFigures> {
   const pool = await loadSwitchingPool(scope, a.reading.window)
   const switching = pool
     ? switchingFigure({
