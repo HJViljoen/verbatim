@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
-import { fmtInt, fmtPct, monthName } from '@/lib/format'
+import { fmtInt, fmtPct, fullDate, monthName } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { AudienceOption, VoiceSurfaceData } from '@/lib/pages/voice-surface'
@@ -66,9 +66,14 @@ function AudiencePill({ option, mode }: { option: AudienceOption; mode: RenderMo
   // D14: a "since" date on this pill would be a start date, and the product
   // holds no such thing. What it holds is the day the rival left the tracked
   // set, which is what the pill says instead.
+  // IN THE PAGE'S OWN DATE FORMAT. This printed `retiredAt.slice(0, 10)` —
+  // "tracked to 2026-09-09" — on a page that says "Sep 2026", "14 Sep" and
+  // "first heard July 2026" everywhere else, and whose own theme block carries
+  // a comment condemning exactly that pattern. The year is kept: a retired
+  // rival's last day can be years before the month being read.
   const retired = option.retiredAt ? (
     <span className={mode === 'email' ? undefined : 'font-mono text-[10px] text-muted-foreground'} style={mode === 'email' ? { color: EMAIL.muted } : undefined}>
-      tracked to {option.retiredAt.slice(0, 10)}
+      tracked to {fullDate(option.retiredAt)}
     </span>
   ) : null
 
@@ -94,7 +99,10 @@ function AudiencePill({ option, mode }: { option: AudienceOption; mode: RenderMo
             : 'font-medium text-secondary-foreground ring-border hover:bg-inner'
       }`}
     >
-      {label} {count}{retired ? <> {retired}</> : null}
+      {/* TWO STATES, NOT A RUN-ON. "Poler not observed tracked to 9 Sep 2026"
+          reads as one clause and is two facts: nothing was read for this rival
+          this month, and it left the tracked set on that day. */}
+      {label} {count}{retired ? <> · {retired}</> : null}
     </Link>
   )
 }

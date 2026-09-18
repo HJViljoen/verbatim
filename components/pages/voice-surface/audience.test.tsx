@@ -70,8 +70,12 @@ describe('voiceAudience', () => {
   it('names a rival that left the tracked set by the day it left — never a start date', () => {
     // D14: both "since" dates in the mock are earliest EVIDENCE, not start
     // dates, and this one is a retirement. The pill says what the record holds.
-    expect(draw()).toContain('tracked to 2026-09-09')
+    expect(draw()).toContain('not observed · tracked to 9 Sep 2026')
     expect(draw()).not.toContain('since 3 Sep')
+    // And in the page's own date format, not in raw ISO: this pill said
+    // "tracked to 2026-09-09" on a page that says "Sep 2026" and "14 Sep"
+    // everywhere else.
+    expect(draw()).not.toContain('2026-09-09')
   })
 
   it('offers no "All" audience, because no row holds one', () => {
