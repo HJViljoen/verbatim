@@ -269,6 +269,31 @@ describe('sales.p6 — the “Say this” sheet', () => {
   it('is absent where no objection cleared the floor', () => {
     expect(sheetNamed(deck(salesBriefUnreadFixture()), 'Answers you can use')).toBe('')
   })
+
+  // THE CARD HOLDS WHAT IT HOLDS. One card in a three-column grid was stretched
+  // to the full slide with its footnote pinned to the foot, so the sheet was an
+  // L with a 900 × 700 hole: a 350px void inside the card and the explanation
+  // bottom-anchored beside it.
+  it('does not stretch one card down a whole slide', () => {
+    expect(sheet()).toContain('grid-cols-3 items-start')
+    expect(sheet()).not.toContain('mt-auto border-t border-border pt-2.5')
+  })
+
+  // `line.because` IS UNREACHABLE FROM THE LOADER TODAY — `load-reading.ts`
+  // passes `because: []` on every call, because no reason for an objection has
+  // been measured and none is claimed. The branch is the one the docstring
+  // argues hardest about, so it is rendered here rather than left untested
+  // against the day a build passes one in.
+  it('draws a measured reason under “Because”, each with its own n', () => {
+    const base = salesBriefFixture()
+    const scripted = base.slideFigures!.scripted.map((l) => ({
+      ...l,
+      because: [{ label: 'Price talk in the category', value: { k: 34, n: 205 } }],
+    }))
+    const w = words(sheet(salesBriefFixture({ slideFigures: { ...base.slideFigures!, scripted } })))
+    expect(w).toContain('Because')
+    expect(w).toContain('Price talk in the category — 34 of 205 videos')
+  })
 })
 
 describe('the sales brief’s order is the artboard’s', () => {

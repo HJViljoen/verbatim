@@ -1183,7 +1183,13 @@ function ScriptedPage({ data }: { data: DocumentSnapshotData }) {
     </>
   )
   return (
-    <div className="grid h-full min-h-0 grid-cols-3 items-stretch gap-x-5">
+    // `items-start`, NOT `items-stretch`. One card in a three-column grid was
+    // stretched to the full slide and its footnote pinned to the foot by
+    // `mt-auto`, so the sheet drew an L with a 900 × 700 hole in the middle of
+    // it: a 350px void inside the card, and the explanation bottom-anchored in
+    // the two columns beside it. The mock's three cards are the same height
+    // because they hold the same amount; a card holds what it holds.
+    <div className="grid h-full min-h-0 grid-cols-3 items-start gap-x-5">
       {lines.slice(0, 3).map((line, i) => (
         <div key={i} className={`${CARD} flex min-h-0 flex-col gap-3 px-[22px] py-5`}>
           <div className="flex flex-col gap-1">
@@ -1206,7 +1212,7 @@ function ScriptedPage({ data }: { data: DocumentSnapshotData }) {
               <QuoteBlock quote={line.quote} mode="print" />
             </div>
           )}
-          <p className="mt-auto border-t border-border pt-2.5 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">
+          <p className="border-t border-border pt-2.5 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">
             {line.objection.source === 'kind'
               ? 'Counted as a kind of thing said, over the whole month — not as a theme of the register.'
               : 'Counted as a theme of the register.'}
@@ -1214,7 +1220,7 @@ function ScriptedPage({ data }: { data: DocumentSnapshotData }) {
         </div>
       ))}
       {lines.length < 3 && (
-        <div className="flex min-h-0 flex-col justify-end gap-2 self-stretch" style={{ gridColumn: `span ${3 - Math.min(lines.length, 3)}` }}>
+        <div className="flex min-h-0 flex-col gap-2 self-start" style={{ gridColumn: `span ${3 - Math.min(lines.length, 3)}` }}>
           <Eyebrow>Why there is one of these</Eyebrow>
           <p className={BODY_SM}>
             An objection is counted as a kind of thing said, and the register that names themes carries no kind. So this sheet has one row per month rather than one per objection, and it will have more the day a theme can be an objection.
