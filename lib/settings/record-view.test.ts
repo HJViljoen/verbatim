@@ -107,6 +107,19 @@ describe('the monthly readings strip', () => {
     expect(strip().floor).toBe(100)
   })
 
+  it('counts every month under the floor, not just the ones it lists', () => {
+    // Four are under it (April 22, January 44, February 51, March 60) and the
+    // strip carries three, so a remainder counted off the truncated list said
+    // "2 other months" over a workspace with three (code review finding 2).
+    const s = strip()
+    expect(s.belowFloor).toHaveLength(3)
+    expect(s.belowFloorTotal).toBe(4)
+    // Three of the four are setup months, which will never fill up — so the
+    // strip can stop saying "has not filled up" about all four.
+    expect(s.belowFloorBackRead).toBe(3)
+    expect(s.belowFloor[0].backRead).toBe(false)
+  })
+
   it('prints the months line the artboard draws, with the current month still filling', () => {
     expect(monthsLine(strip().months)).toBe('July 4 updates · August 5 updates · September 4 so far')
   })

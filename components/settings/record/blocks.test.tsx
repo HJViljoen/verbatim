@@ -133,6 +133,10 @@ describe('the delivery block', () => {
     expect(text).toContain('read at setup')
     expect(text).toContain('under the floor')
     expect(text).toContain('has not filled up')
+    // The remainder is the TOTAL less the one named, not the truncated list's
+    // (code review finding 2), and the months that will never fill up say so.
+    expect(text).toContain('and 3 other months are under it too')
+    expect(text).toContain('3 were read at setup and will not fill up any further')
   })
 
   it('says the reading is not recorded rather than counting zero readings', () => {

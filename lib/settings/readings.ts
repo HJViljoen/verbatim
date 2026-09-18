@@ -66,6 +66,11 @@ export interface FloorMonth {
   /** The audience in the reader's words. */
   who: string
   videos: number
+  /** Was this month written after it had already closed? A back-read month
+   *  under the floor is not a month that has not filled up yet — it is as full
+   *  as it will ever be, and the copy beside it must not say otherwise (code
+   *  review finding 2, second order). */
+  backRead: boolean
 }
 
 export interface ReadingsRecord {
@@ -81,8 +86,15 @@ export interface ReadingsRecord {
   backRead: string[]
   /** "April, May and June" — null where none was. */
   backReadLabel: string | null
-  /** Months under the floor, thinnest first. */
+  /** Months under the floor, thinnest first — TRUNCATED to `floorRows`. Count
+   *  the remainder off `belowFloorTotal`, never off this array's length: both
+   *  readers used to do the second and the page under-stated the remainder by
+   *  every month past the third (code review finding 2). */
   belowFloor: FloorMonth[]
+  /** How many months are under the floor in all. */
+  belowFloorTotal: number
+  /** How many of THOSE were read at setup, and so will not fill up further. */
+  belowFloorBackRead: number
   /** The floor itself, printed rather than implied. */
   floor: number
   /** The pooled trailing median of the gathered era, Overview's own measure. */
@@ -103,7 +115,8 @@ export interface ReadingsInput {
   /** How many months the strip names. Three is the artboard's. */
   show?: number
   /** How many below-floor months the strip carries. The component names the
-   *  remainder rather than dropping it. */
+   *  remainder off `belowFloorTotal` rather than dropping it — which it could
+   *  not do while the only count left was the truncated array's own length. */
   floorRows?: number
 }
 
@@ -171,6 +184,7 @@ export function readingsRecord(input: ReadingsInput): ReadingsRecord {
   const setup = [...backRead].filter((m) => !live.has(m)).sort()
 
   const floor = SHARE_BAND.minN ?? 0
+  const setupMonths = new Set(setup)
   const belowFloor: FloorMonth[] = [...own.entries()]
     .filter(([, videos]) => videos < floor)
     .map(([m, videos]) => ({
@@ -179,6 +193,7 @@ export function readingsRecord(input: ReadingsInput): ReadingsRecord {
       audience: OWN_AUDIENCE,
       who: audienceLabel(OWN_AUDIENCE),
       videos,
+      backRead: setupMonths.has(m),
     }))
     .sort((a, b) => a.videos - b.videos || a.month.localeCompare(b.month))
 
@@ -190,6 +205,8 @@ export function readingsRecord(input: ReadingsInput): ReadingsRecord {
     backRead: setup,
     backReadLabel: listMonths(setup),
     belowFloor: belowFloor.slice(0, floorRows),
+    belowFloorTotal: belowFloor.length,
+    belowFloorBackRead: belowFloor.filter((m) => m.backRead).length,
     floor,
     trailingMedian,
     monthVideos: pooled.get(month) ?? null,

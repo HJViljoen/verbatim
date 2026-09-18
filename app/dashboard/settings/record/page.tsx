@@ -104,7 +104,9 @@ export default async function SettingsRecordPage() {
     trailingMedian: readings.trailingMedian,
     changeNote: inputs.changes.available ? changeNote(log, { from: window.from, to: window.to }) : null,
     belowFloor: floor
-      ? { label: floor.label, who: floor.who, videos: floor.videos, floor: readings.floor, more: readings.belowFloor.length - 1 }
+      // `more` is off the TOTAL, not off the truncated list (code review
+      // finding 2): the grid's BELOW THE FLOOR basis repeats this number.
+      ? { label: floor.label, who: floor.who, videos: floor.videos, floor: readings.floor, more: readings.belowFloorTotal - 1 }
       : null,
   })
 

@@ -131,10 +131,20 @@ export function DeliveryBlock({
                   {fmtInt(readings.floor)}
                 </span>{' '}
                 a banded reading needs
-                {readings.belowFloor.length > 1
-                  ? `, and ${fmtInt(readings.belowFloor.length - 1)} other ${readings.belowFloor.length === 2 ? 'month is' : 'months are'} under it too`
+                {/* THE REMAINDER IS COUNTED OFF THE TOTAL, NEVER OFF THE LIST.
+                    `readings.belowFloor` is truncated to three, so counting it
+                    here said "2 other months" over a workspace with four under
+                    the floor (code review finding 2). */}
+                {readings.belowFloorTotal > 1
+                  ? `, and ${fmtInt(readings.belowFloorTotal - 1)} other ${readings.belowFloorTotal === 2 ? 'month is' : 'months are'} under it too`
                   : ''}
                 . A month under the floor is one that has not filled up, not one that went wrong.
+                {/* Except a month read at setup, which is as full as it will
+                    ever be — so the thin-month sentence is not left standing
+                    over months it is not true of. */}
+                {readings.belowFloorBackRead > 0
+                  ? ` Of those, ${fmtInt(readings.belowFloorBackRead)} ${readings.belowFloorBackRead === 1 ? 'was' : 'were'} read at setup and will not fill up any further.`
+                  : ''}
               </p>
             ) : null}
           </div>
