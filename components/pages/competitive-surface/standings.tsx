@@ -308,10 +308,24 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
     const topContent = topOf((r) => r.content)
     const topAttention = topOf((r) => r.attention)
 
+    // THE APRON'S SENTENCES ARE ABOUT THE TABLE, SO TWO OF THEM WAIT FOR IT.
+    // With no month read the tile printed the honest refusal ("No month has
+    // been read for this workspace yet…") and then three sentences about a
+    // table nobody could see — "the videos on the left, the comments we kept on
+    // the right" and "the count of those is beside this table." The two that
+    // name the table are gated on there being one; the tracking rules, the
+    // caveat and the attention-index unlock are true whether or not a row was
+    // read and stay.
+    const hasTable = s.rows.length > 0
+    // THE ARTBOARD'S APRON IS MONO 10, NOT FOUR SANS PARAGRAPHS. These were
+    // 11.5px sans, full width — the tile's largest block of text, sitting above
+    // a footer that says less. Same words, the register the mock gives a note.
+    const apron = email ? undefined : 'm-0 font-mono text-[10px] leading-[1.45] text-muted-foreground'
     const notes = (
       <div className={email ? undefined : 'flex min-w-0 flex-col gap-1'}>
+        {hasTable ? (
         <p
-          className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'}
+          className={apron}
           style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 6 } : undefined}
         >
           {s.denominatorLine}
@@ -323,8 +337,10 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
             <> {latest.label}: <span data-copy="figure">{fmtInt(latest.videos)}</span> videos ({mixLine(latest.platformMix)}) and <span data-copy="figure">{fmtInt(latest.comments)}</span> comments.</>
           ) : null}
         </p>
+        ) : null}
+        {hasTable ? (
         <p
-          className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'}
+          className={apron}
           style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 } : undefined}
         >
           {s.precedence}
@@ -337,9 +353,10 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
             ? <> <span data-copy="figure">{fmtInt(s.dualMention)}</span> did this month.</>
             : <> None did this month.</>}
         </p>
+        ) : null}
         {s.caveat ? (
           <p
-            className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'}
+            className={apron}
             style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 } : undefined}
           >
             {s.caveat}
@@ -347,14 +364,14 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
         ) : null}
         {s.rules.length > 0 ? (
           <p
-            className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'}
+            className={apron}
             style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 } : undefined}
           >
             {s.rules.map((r) => r.text).join(' ')}
           </p>
         ) : null}
         <p
-          className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'}
+          className={apron}
           style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 } : undefined}
         >
           {s.unlock}

@@ -207,6 +207,22 @@ describe('CO2 · the standings', () => {
     expect(text).toContain('what the platforms themselves report on a frozen panel')
   })
 
+  it('does not explain a table that is not there', () => {
+    // With no month read the tile printed the honest refusal and then three
+    // sentences about a table nobody can see: "the videos on the left, the
+    // comments we kept on the right" and "the count of those is beside this
+    // table." The notes that name the table wait for one.
+    const text = renderText(competitiveStandings.render(unreadMonthsFixture(), 'app', ctx))
+    expect(text).not.toContain('the comments we kept on the right')
+    expect(text).not.toContain('beside this table')
+    // The ones that are true with or without a row stay.
+    expect(text).toContain('The attention index')
+    // And the surface reading still prints both.
+    const read = renderText(competitiveStandings.render(competitiveFixture(), 'app', ctx))
+    expect(read).toContain('the comments we kept on the right')
+    expect(read).toContain('beside this table')
+  })
+
   it('refuses in words when no month has been read', () => {
     expect(competitiveStandings.emptyState(unreadMonthsFixture())).toContain('no standings to draw')
     const text = renderText(competitiveStandings.render(unreadMonthsFixture(), 'app', ctx))
