@@ -338,11 +338,12 @@ export interface SubjectsData {
    * "Say vs hear" — how many of your claims the audience echoed, pushed back
    * on, or never took up.
    *
-   * THE SAME NUMBERS MARKET PRINTS, FROM THE SAME COMPUTATION. `claimCounts`
-   * over `run_summary.say_vs_hear`, exactly as `lib/pages/market.ts` does it;
-   * the mock puts the tile on Subjects as well and two tiles of one product
-   * counting one ledger twice is how two pages come to disagree. Null where no
-   * update has resolved a claim yet.
+   * THE SAME NUMBERS MARKET PRINTS, FROM THE SAME COMPUTATION AND THE SAME
+   * RUN. `claimCounts` over `run_summary.say_vs_hear` for this tenant's latest
+   * completed update, exactly as `lib/pages/market.ts` does it; the mock puts
+   * the tile on Subjects as well and two tiles of one product counting one
+   * ledger twice is how two pages come to disagree. Null where THAT update
+   * resolved no claim — which is when Market's tile is empty too.
    */
   sayHear: ClaimCounts | null
   record: SubjectsRecordBlock
@@ -968,17 +969,28 @@ export async function loadOwnPosts(
   return ownCensusWithClaims(input, claims.length > 0)
 }
 
-/** The say-vs-hear ledger as counts, off the newest update that resolved one.
+/** The say-vs-hear ledger as counts, off THE RUN MARKET READS.
+ *
  *  `ledgerRows` with no cap, then `claimCounts` — Market's own two lines, so
- *  the two tiles cannot disagree (lib/pages/market.ts). */
-async function loadSayHear(supabase: SupabaseClient, clientId: string): Promise<{ counts: ClaimCounts | null; entries: SayVsHearEntry[] }> {
+ *  the two tiles cannot disagree (lib/pages/market.ts). That promise is about
+ *  the ROW SELECTION as much as the computation, and this read used to break
+ *  it: it took the newest summary that HAD a `say_vs_hear`, ordered by
+ *  `run_date`, so on a tenant whose newest update produced no ledger the two
+ *  pages read different runs and printed different counts. `run_date` is a
+ *  weak key for "newest" besides — it is the wall clock at persist, and one
+ *  run has carried two of them (AGENTS.md).
+ *
+ *  So the run is the page's own latest completed update, which is the run
+ *  `loadMarket` picks by the same status filter and the same ordering. When
+ *  that run resolved no claim both pages say so, which is the honest pair of
+ *  answers; a page that reaches back for an older ledger is printing a reading
+ *  of an update the heading above it does not name. */
+async function loadSayHear(supabase: SupabaseClient, clientId: string, runId: string): Promise<{ counts: ClaimCounts | null; entries: SayVsHearEntry[] }> {
   const res = await supabase
     .from('run_summary')
     .select('say_vs_hear')
     .eq('client_id', clientId)
-    .not('say_vs_hear', 'is', null)
-    .order('run_date', { ascending: false })
-    .limit(1)
+    .eq('run_id', runId)
     .maybeSingle()
   const entries = ((res.data as { say_vs_hear: SayVsHearEntry[] | null } | null)?.say_vs_hear ?? []) as SayVsHearEntry[]
   if (entries.length === 0) return { counts: null, entries: [] }
@@ -1119,6 +1131,10 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     updatesByMonth[m] = (updatesByMonth[m] ?? 0) + 1
   }
   const firstRunMonth = monthStartOf(runsRaw[0].started_at)
+  // `runsRaw` is the completed/partial updates in started_at order, which is
+  // `loadMarket`'s own filter read the other way round — so its last row is the
+  // run Market calls "latest", and the claims ledger below reads that one.
+  const latestRunId = runsRaw[runsRaw.length - 1].id
 
   // The whole denominator history decides the axis — `sinceStart` is what
   // "since we started" means (decision M) and the horizon is computed from it.
@@ -1171,7 +1187,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   // the selected subject and neither is on anything's critical path, so they
   // overlap the two reads that are.
   const ownPostsAhead = loadOwnPosts(supabase, clientId, month, active)
-  const sayHearAhead = loadSayHear(supabase, clientId)
+  const sayHearAhead = loadSayHear(supabase, clientId, latestRunId)
   ownPostsAhead.catch(() => {})
   sayHearAhead.catch(() => {})
 
