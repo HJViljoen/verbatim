@@ -415,6 +415,7 @@ function clausesOf(sentence: string): string[] {
  */
 export const PROSE_SLOTS = [
   'pass_a_audience_insight',
+  'pass_a_brand_claim',
   'pass_b_theme',
   'pass_c_finding',
   'pass_d_a_insight',
@@ -478,9 +479,34 @@ export type ProsePolicy = 'none' | 'digits' | 'direction' | 'both'
  * the contract working, not a leak. The FIGURE in that line is the defect —
  * it is interpolated rather than tokenised — so the digit rule is what this
  * slot needs, and item 40's explainer is built on tokens from the start.
+ *
+ * WHY A BRAND CLAIM IS `digits`, AND THE ONE THING THAT MAKES IT SURVIVABLE
+ * (Phase 1 Block D wave 2, E-competitive). `pass_a_brand_claim` is
+ * `video_claims.claim` — what a brand says about itself in its own video,
+ * summarised by the SAME Pass A v4 call that writes `pass_a_audience_insight`
+ * into the same response (lib/pipeline/pass-a.ts, one insert after the other).
+ * One call, one adjudication: a second policy for the second half of one
+ * response would be this table disagreeing with itself.
+ *
+ * The risk the row carries, written down rather than discovered later: a brand
+ * claim is FULL of the brand's own figures — "made from used truck tarps for
+ * 30 years", "guaranteed for 61 years", "Allpa 32L" — and under `digits` each
+ * of those sentences is dropped unless the run passes the token. That is
+ * exactly what `allowTokens` is for and exactly how the sibling slot already
+ * survives its product names (3R80, C-Leg 4), so a write-time caller wires
+ * this slot the way it wires that one, from the run's own inputs, or it will
+ * delete correct copy. Nothing calls `scrubProse` on this slot today.
+ *
+ * What the row DOES drive today is the render side, and that is the reason it
+ * exists: `data-copy="stored"` is exempt from rule (a) always and from rule
+ * (c) exactly when the slot's policy is `none` or `digits`
+ * (lib/test/copy-contract.ts). Competitive's CO4 and CO5 replay these words on
+ * a page, and an unknown slot there fails the contract rather than exempting
+ * anything — which is the whole point of naming the exemption.
  */
 export const PROSE_POLICY: Record<ProseSlot, ProsePolicy> = {
   pass_a_audience_insight: 'digits',
+  pass_a_brand_claim: 'digits',
   pass_b_theme: 'none',
   pass_c_finding: 'digits',
   pass_d_a_insight: 'digits',
