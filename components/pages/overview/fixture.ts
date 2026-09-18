@@ -2,6 +2,7 @@ import { INTERPRETATION_LABEL } from '@/lib/prose/interpret'
 import { horizonWindow } from '@/lib/reading/horizon'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '@/lib/rivals'
 import type { Verdict } from '@/lib/reading/verdicts'
+import { gapBetween, type Gap, type GapSide } from '@/lib/reading/gap'
 import type { OverviewData } from '@/lib/pages/overview'
 import { MOVES_MASTHEAD, MOVES_EMPTY, MOVES_UNLOCK, RIVALS_CAVEAT, fillingLine, readingsCounter } from '@/lib/pages/overview'
 
@@ -32,6 +33,38 @@ export const verdict = (over: Partial<Verdict> = {}): Verdict => ({
   flags: [],
   ...over,
 })
+
+/**
+ * The two-audience gap the mock puts at the top of OV2 (D1), built by
+ * `gapBetween` from the row's own numbers rather than typed, so the fixture is
+ * the reading and not a picture of one.
+ *
+ * AND IT READS "too few to compare", WHICH IS THE POINT. The mock's headline
+ * is "gap 13 points"; on its own numbers your audience carries 84 videos
+ * against a 100-video floor, so the product refuses the difference — the same
+ * refusal the mock prints one cell away in its own change column. The two
+ * levels, both denominators, the band and the earlier month all still print.
+ * The gap clears over a quarter, which is where `quarterlyFixture` carries it.
+ */
+const gapSide = (audience: string, label: string, k: number, n: number, pct: number | null): GapSide => ({
+  audience, label, value: { k, n }, pct, observed: true,
+})
+
+const subjectGap = (id: string, label: string, you: [number, number, number], them: [number, number, number], base: { you: [number, number, number]; them: [number, number, number] }): Gap =>
+  gapBetween({
+    objectKind: 'subject',
+    objectId: id,
+    objectLabel: label,
+    a: gapSide(CLIENT_AUDIENCE, 'you', you[0], you[1], you[2]),
+    b: gapSide(rivalKey('Freitag'), 'Freitag', them[0], them[1], them[2]),
+    window: { kind: 'month', from: REAL_MONTH, to: '2026-10-01' },
+    basis: {
+      a: gapSide(CLIENT_AUDIENCE, 'you', base.you[0], base.you[1], base.you[2]),
+      b: gapSide(rivalKey('Freitag'), 'Freitag', base.them[0], base.them[1], base.them[2]),
+      window: { kind: 'month', from: '2026-08-01', to: REAL_MONTH },
+    },
+    regime: 'n/a',
+  })
 
 export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData {
   const window = horizonWindow('this_month', NOW, '2026-06-01')
@@ -150,6 +183,10 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
       rivalLabel: 'Freitag',
       categoryLabel: 'The category',
       note: 'Your side reads "too few to compare" on 84 videos — the category column carries the month.',
+      gaps: {
+        s1: subjectGap('s1', 'Durability', [26, 84, 31], [62, 142, 43.7], { you: [23, 84, 27.4], them: [60, 140, 42.9] }),
+        s2: subjectGap('s2', 'Price', [20, 84, 23.8], [58, 142, 40.8], { you: [22, 84, 26.2], them: [57, 140, 40.7] }),
+      },
     },
     category: {
       audience: INDUSTRY_AUDIENCE,
@@ -307,6 +344,8 @@ export function refusedFixture(): OverviewData {
       rivalLabel: 'Freitag',
       categoryLabel: 'The category',
       note: null,
+      // M4 is not applied here, so neither side of a gap was ever read.
+      gaps: {},
     },
     category: {
       ...base.category,
