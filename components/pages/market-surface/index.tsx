@@ -65,7 +65,13 @@ import { marketUnlocks } from './unlocks'
 // tripwire: the day those keys resolve, the test fails and says to re-mount it.
 //
 // THE METHOD FOOTNOTE IS THE PAGE'S LAST LINE (`MarketSurfaceData.method`,
-// `methodLines`), in mono at the artboard's 9.5px. It states what the reading
+// `methodLines`), in mono at the system's smallest step (10.5px) rather than
+// the artboard's 9.5. MASTER's density tokens stop at 10.5 (eyebrow) / 11
+// (meta) / 13 (body), and six lines of the page's most load-bearing
+// qualifications — the translation coverage, the Reddit cap, the privacy line
+// — were set below the floor the rest of the product keeps. The artboard's
+// 9.5px is the one place its type ramp goes under the system's, and a
+// qualification nobody can read qualifies nothing. It states what the reading
 // stands on — who it was prepared for, what was read, on which basis, the
 // Reddit cap and the privacy line. It does NOT carry a refusal count: the
 // artboard's "comparisons refused: 2" is the record's figure, printed in the
@@ -181,7 +187,7 @@ export function MarketSurfacePage({
       <PageGrid>{MOVES.map(tile)}</PageGrid>
 
       {data.method ? (
-        <p className="m-0 flex flex-col gap-0.5 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
+        <p className="m-0 flex flex-col gap-0.5 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">
           {data.method.lines.map((line) => <span key={line}>{line}</span>)}
         </p>
       ) : null}

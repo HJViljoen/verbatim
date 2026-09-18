@@ -61,7 +61,11 @@ function Count({ count, mode, hero = false }: { count: CardCount; mode: RenderMo
         <span data-copy={share ? 'level' : 'figure'} style={{ fontFamily: FONT.mono, color: EMAIL.ink }}>
           {fmtInt(k)}{share ? ` of ${fmtInt(n)}` : ''}
         </span>{' '}
-        {count.label} · {count.basis}
+        {/* ONE OF THE TWO, AS THE APP ARM DOES. `label` and `basis` are the
+            same words on the lead count — "17 posts published · posts
+            published in September" — and the hero prints the basis because
+            that is where the month is named. */}
+        {hero ? count.basis : count.label}
       </div>
     )
   }
@@ -142,7 +146,14 @@ export const marketCard: Block<MarketSurfaceData> = {
         </BlockFrame>
       )
     }
-    const hooks = card.hooks.filter((h) => h.value.k > 0)
+    // THE BIGGEST BUCKET FIRST, EXCEPT THE ONE THAT IS NOT A HOOK. "not
+    // classified" is the largest on most months and led the row, so the line
+    // opened by saying what we could not read.
+    const unread = (label: string) => /not classified|unclassified|unknown/i.test(label)
+    const hooks = card.hooks
+      .filter((h) => h.value.k > 0)
+      .slice()
+      .sort((a, b) => (unread(a.label) ? 1 : 0) - (unread(b.label) ? 1 : 0) || b.value.k - a.value.k)
     // THE ARTBOARD SHOWS TWO CLAIMS AND SEALAND PUBLISHED NINE, several of them
     // 200-character sentences. The card is a tile, not a list: the top few by
     // posts carried (`claimRows` is already sorted that way), and the rest are
@@ -226,13 +237,26 @@ export const marketCard: Block<MarketSurfaceData> = {
                   split is the product's own taxonomy (`hook_style`), never the
                   artboard's "on-screen text / spoken", which is how WE read a
                   video and not where its hook was. */}
-              <span
-                data-copy="level"
-                className={email ? undefined : 'min-w-0 text-right font-mono text-[11.5px] leading-[1.35] tabular-nums text-secondary-foreground'}
-                style={email ? { fontFamily: FONT.mono, fontSize: 11.5, color: EMAIL.ink2 } : undefined}
-              >
-                of {fmtInt(posts)} posts: {hooks.map((h) => `${h.label} ${fmtInt(h.value.k)}`).join(' · ')}
-              </span>
+              {email ? (
+                <span data-copy="level" style={{ fontFamily: FONT.mono, fontSize: 11.5, color: EMAIL.ink2 }}>
+                  of {fmtInt(posts)} posts: {hooks.map((h) => `${h.label} ${fmtInt(h.value.k)}`).join(' · ')}
+                </span>
+              ) : (
+                // ONE LEVEL NODE, WRAPPING IN WHOLE BUCKETS. Run as a single
+                // right-aligned string it broke wherever the line ran out —
+                // "a / bold claim 1" — and led with the largest bucket, which
+                // is "not classified": the one bucket that says nothing about
+                // a hook. The denominator stays at the head of the line, which
+                // is what makes the whole node a level; each bucket is its own
+                // unbreakable span, and the unclassified one goes last.
+                <span
+                  data-copy="level"
+                  className="flex min-w-0 flex-wrap justify-end gap-x-2 gap-y-0.5 text-right font-mono text-[11.5px] leading-[1.35] tabular-nums text-secondary-foreground"
+                >
+                  <span className="whitespace-nowrap">of {fmtInt(posts)} posts:</span>
+                  {hooks.map((h) => <span key={h.label} className="whitespace-nowrap">{h.label} {fmtInt(h.value.k)}</span>)}
+                </span>
+              )}
             </div>
           ) : null}
 

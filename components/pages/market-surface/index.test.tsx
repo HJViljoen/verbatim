@@ -531,6 +531,22 @@ describe('MK3 · this month\u2019s card', () => {
     expect(text).toMatch(/Counted over posts/)
   })
 
+  it('leads the hooks row with a hook, and prints the label or the basis but not both', () => {
+    // The row read "Hooks  of 17 posts: not classified 12 · a personal story 3
+    // · a / bold claim 1" — the largest bucket first is the one that says
+    // nothing about a hook, and a single right-aligned string broke wherever
+    // the line ran out. The denominator stays at the head, which is what makes
+    // the whole node a level.
+    const text = renderText(marketCard.render(marketFixture(), 'app', ctx))
+    expect(text).toMatch(/of 17 posts: a personal story 3/)
+    expect(text).toMatch(/not classified 12$|not classified 12 /)
+    // The email arm printed "17 posts published · posts published in
+    // September" — the label and the basis, which are the same words.
+    const email = renderText(marketCard.render(marketFixture(), 'email', ctx))
+    expect(email).toContain('posts published in September')
+    expect(email).not.toContain('posts published · posts published')
+  })
+
   it('names the press rather than drawing a button nobody can press', () => {
     const text = renderText(marketCard.render(marketFixture(), 'app', ctx))
     expect(text).not.toContain('Yes, count this as a move')
@@ -584,6 +600,13 @@ describe('MK6 · plans re-checked', () => {
     const text = renderText(marketPlans.render(marketFixture(), 'app', ctx))
     expect(text).toContain('not out of one month')
     expect(text).toContain('nothing here is held')
+  })
+
+  it('says how many plans have been checked when it is drawing one of several', () => {
+    const base = marketFixture()
+    const two = { ...base, plans: [base.plans[0], { ...base.plans[0], planId: 'pc-2' }] }
+    expect(renderText(marketPlans.render(two, 'app', ctx))).toContain('newest of 2 checked')
+    expect(renderText(marketPlans.render(base, 'app', ctx))).not.toContain('newest of')
   })
 
   it('names its own absence for a workspace with no plan', () => {

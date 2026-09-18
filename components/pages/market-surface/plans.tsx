@@ -121,7 +121,14 @@ export const marketPlans: Block<MarketSurfaceData> = {
         title={marketPlans.title}
         question={marketPlans.question}
         mode={mode}
-        meta={`uploaded ${shortDate(card.uploadedOn)}`}
+        // THE CARD IS ONE OF A LIST AND SAYS SO. `loadPlanChecks` returns every
+        // plan a workspace has uploaded, newest first, and this block draws the
+        // first — on a page where every other count names its population, a
+        // workspace with three briefs saw one card with nothing naming the
+        // other two.
+        meta={data.plans.length > 1
+          ? `uploaded ${shortDate(card.uploadedOn)} · newest of ${fmtInt(data.plans.length)} checked`
+          : `uploaded ${shortDate(card.uploadedOn)}`}
         footer={email
           ? <a href={href} style={{ color: EMAIL.ink }}>See the claim-by-claim verdicts →</a>
           : <Link href={href} className="hover:underline">See the claim-by-claim verdicts →</Link>}
