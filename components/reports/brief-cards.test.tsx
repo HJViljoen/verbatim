@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
-import { BRIEFS_META, BRIEF_CARDS, LEADERSHIP_LINE, briefMonthChip, briefReader, briefStamp, cadenceWord, cardSending, deliveryLine, latestBriefLine, type BriefCard } from '@/lib/reports/briefs'
+import { BRIEFS_META, BRIEF_CARDS, LEADERSHIP_LINE, STALE_PDF_LINE, briefMonthChip, briefReader, briefStamp, cadenceWord, cardSending, deliveryLine, latestBriefLine, type BriefCard } from '@/lib/reports/briefs'
 import { BriefCards } from './brief-cards'
 
 const card = (over: Partial<BriefCard> = {}): BriefCard => ({
@@ -179,7 +179,7 @@ describe('the card', () => {
   it('draws three actions and no wrapping cluster', () => {
     const html = render(<BriefCards cards={[card()]} />)
     expect(html).toContain('>Open</a>')
-    expect(html).toContain('In the Studio')
+    expect(html).toContain('>Studio</a>')
     expect(html).not.toContain('Share link')
     expect(html).not.toContain('flex-wrap items-center gap-x-3 gap-y-1')
   })
@@ -192,8 +192,9 @@ describe('the card', () => {
     const fresh = renderText(<BriefCards cards={[card()]} />)
     expect(fresh).toContain('PDF · 240 KB')
     const stale = renderText(<BriefCards cards={[card({ pdf: { id: 'a1', bytes: 240_000, stale: true } })]} />)
-    expect(stale).toContain('PDF · rebuilt on download')
+    expect(stale).toContain(STALE_PDF_LINE)
     expect(stale).not.toContain('240 KB')
+    expect(fresh).not.toContain(STALE_PDF_LINE)
   })
 
   // The figure rows are the archive detail pane's own markup, lifted onto the

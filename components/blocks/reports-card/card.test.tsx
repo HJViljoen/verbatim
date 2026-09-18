@@ -66,8 +66,10 @@ describe('the quarterly card', () => {
     const text = renderText(<QuarterlyCardTile card={quarterlyCardFixture()} />)
     expect(text).toContain('9 monthly readings stand behind it')
     expect(text).not.toContain('Six readings stand behind it')
-    // and the count it states is the count its own meta states
-    expect(text.match(/9 monthly readings/g)?.length).toBeGreaterThanOrEqual(2)
+    // said ONCE, where it stands for something — never a second count the
+    // first has to agree with
+    expect(text.match(/monthly reading/g)?.length).toBe(1)
+    expect(text).toContain('Q3 2026 · Jul–Sep')
   })
 
   // A card that has cleared the gate does not footer with the gate: "needs six

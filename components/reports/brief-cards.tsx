@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { FigureCell } from '@/components/blocks/frame'
 import { Tile, TileBlock } from '@/components/shell/tile'
 import { PageGrid } from '@/components/shell/page-grid'
-import { LEADERSHIP_LINE, deliveryLine, latestBriefLine, type BriefCard } from '@/lib/reports/briefs'
+import { LEADERSHIP_LINE, STALE_PDF_LINE, deliveryLine, latestBriefLine, type BriefCard } from '@/lib/reports/briefs'
 import { STUDIO_HREF } from '@/lib/studio-visibility'
 import { fmtBytes } from '@/lib/reports/files'
 
@@ -99,6 +99,9 @@ export function BriefCards({
                   "nobody receives this yet". It stays, in mono, above the
                   figures. */}
               <p className="m-0 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">{deliveryLine(c)}</p>
+              {c.pdf?.stale && (
+                <p className="m-0 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">{STALE_PDF_LINE}</p>
+              )}
             </div>
 
             {c.figures.length > 0 ? (
@@ -148,7 +151,10 @@ export function BriefCards({
  * a different file from the one whose bytes we hold, and a render that counts
  * against `EXPORT_DAILY_LIMIT` and can answer 429. Printing "812 KB" beside a
  * link that will not hand back 812 KB is the quietest wrong number on the
- * card, so the clause the detail pane already uses takes its place.
+ * card. The action drops the size, and the CARD says what will happen —
+ * `staleLine`, in the body's mono voice, because the sentence the detail pane
+ * uses ("· rebuilt on download") is longer than the footer's one row will
+ * hold and truncating it is how the warning would be lost.
  */
 function BriefActions({ card, studio, basePath }: { card: BriefCard; studio: boolean; basePath: string }) {
   const link = 'whitespace-nowrap text-[12px] font-medium underline underline-offset-2'
@@ -159,12 +165,12 @@ function BriefActions({ card, studio, basePath }: { card: BriefCard; studio: boo
       )}
       {card.pdf && (
         <a href={`/api/artifacts/${card.pdf.id}`} className={link}>
-          PDF · {card.pdf.stale ? 'rebuilt on download' : fmtBytes(card.pdf.bytes)}
+          PDF{card.pdf.stale ? '' : ` · ${fmtBytes(card.pdf.bytes)}`}
         </a>
       )}
       {studio && (
         <Link href={card.reportId ? `${STUDIO_HREF}?item=${card.reportId}` : `${STUDIO_HREF}/new`} className={link}>
-          {card.reportId ? (card.latest ? 'In the Studio' : 'Build it in the Studio') : 'Set it up in the Studio'}
+          {card.latest ? 'Studio' : card.reportId ? 'Build it in the Studio' : 'Set it up in the Studio'}
         </Link>
       )}
     </span>

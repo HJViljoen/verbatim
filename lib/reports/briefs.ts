@@ -262,3 +262,17 @@ export function briefStamp(stamp: ReadingStamp | null): string | null {
  * it belongs, because three cards can be three months old.
  */
 export const BRIEFS_META = 'Built when you ask — no cadence rebuilds these yet'
+
+/**
+ * What a cleared PDF will do when you ask for it (Block D wave 2 fix pass).
+ *
+ * `artifacts.stale` means the file is no longer in storage and
+ * `/api/artifacts/[id]` re-renders it on the way out — a DIFFERENT file from
+ * the one whose bytes were stored, and a render that counts against
+ * `EXPORT_DAILY_LIMIT` and can answer 429. The detail pane says this as a
+ * clause on the download link ("· rebuilt on download"); a card footer is one
+ * row wide and the clause would be truncated there, which is how a warning
+ * gets lost. So the card's action drops the size it cannot stand behind and
+ * the card's body says the sentence.
+ */
+export const STALE_PDF_LINE = 'The stored PDF was cleared; downloading it builds the same file again.'

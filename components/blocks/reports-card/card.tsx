@@ -70,7 +70,12 @@ export function QuarterlyCardTile({
       col={col}
       row={row}
       eyebrow="The quarterly review"
-      meta={`${card.quarter.label} · ${monthSpan(card.quarter.from, card.quarter.to)} · ${readingWord(card.readings)}`}
+      // THE QUARTER AND ITS MONTHS, and not the reading count with them: the
+      // pill under this header states the count where it is what stands behind
+      // the card, and the footnote states it where the gate bites, so a third
+      // printing bought nothing and left the eyebrow no air (it truncated to
+      // "THE …" on a phone).
+      meta={`${card.quarter.label} · ${monthSpan(card.quarter.from, card.quarter.to)}`}
       distribute="between"
       className="xl:min-h-[248px]"
       footer={<Link href={card.href} className="underline underline-offset-2">See what it will cover</Link>}
@@ -83,7 +88,7 @@ export function QuarterlyCardTile({
       // teaches a reader to stop reading the footnote.
       footerNote={drawn && !unlocked ? card.gate : undefined}
     >
-      <div className="flex items-center gap-2.5">
+      <div className="flex flex-col items-start gap-1.5 sm:flex-row sm:items-center sm:gap-2.5">
         <span
           className={`inline-block flex-none whitespace-nowrap rounded-full px-2 py-0.5 text-[12px] font-medium ${
             drawn && unlocked ? 'bg-inner text-secondary-foreground' : 'bg-warning/15 text-warning'
