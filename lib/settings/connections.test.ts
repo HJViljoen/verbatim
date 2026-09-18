@@ -147,6 +147,7 @@ describe('every configuration write on this page carries an actor', () => {
   const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
   const actions = source('../../app/dashboard/settings/actions.ts')
   const rivals = source('../../app/dashboard/settings/rivals-actions.ts')
+  const rivalsSection = source('../../components/settings/tracking/rivals.tsx')
 
   it('has no bare UPDATE on tracking_configs anywhere in the actions', () => {
     // Every write to the table is the callback `updateWithActor` hands its
@@ -175,6 +176,23 @@ describe('every configuration write on this page carries an actor', () => {
   it('renames a rival through the one logged RPC, never a hand UPDATE', () => {
     expect(rivals).toContain('renameRival(')
     expect(rivals).not.toMatch(/\.from\('competitors'\)\s*\n?\s*\.update\(/)
+  })
+
+  it('lets a workspace with no rival save its terms', () => {
+    // C1: one save row means the rivals schema now gates the TERMS too. A
+    // floor of one rival there refused a save whose first half had already
+    // been written — and the rivals section itself presents "no rival is
+    // named" as a legal state.
+    expect(actions).not.toContain('add at least one competitor')
+    expect(actions).toContain("competitor_names: z.array(z.string()).max(15")
+  })
+
+  it('tells an empty rival list apart from a POST that carried none', () => {
+    // The marker, not the absence: without it a cached page or a hand-made
+    // POST would erase a tracked list nobody touched.
+    expect(actions).toContain('RIVALS_PRESENT')
+    expect(actions).toContain('...(posted ? { competitor_names: parsed.data.competitor_names } : {})')
+    expect(rivalsSection).toContain('name={RIVALS_PRESENT}')
   })
 
   it('keeps the one save row on the two existing write paths', () => {

@@ -28,3 +28,20 @@ export const DAYS = [
 ] as const
 
 export type Platform = (typeof PLATFORMS)[number]
+
+/**
+ * The marker the rivals table posts beside its names: "this POST carried the
+ * rival list, and what it carried is the whole of it".
+ *
+ * Now that the table IS the list, ZERO rivals is a state a reader reaches by
+ * taking the last one off, and the section's own empty state presents it as
+ * legal — so the save may not refuse it. But "zero names" and "this form had no
+ * rivals section" arrive as the same absent field, and reading the second as
+ * the first would let a cached page or a hand-made POST erase a tracked list
+ * nobody touched. The marker tells them apart: present, the list is written as
+ * posted; absent, `competitor_names` is not written at all.
+ *
+ * Here rather than in `actions.ts` because a 'use server' module may export
+ * nothing but async functions.
+ */
+export const RIVALS_PRESENT = 'competitor_names_present'

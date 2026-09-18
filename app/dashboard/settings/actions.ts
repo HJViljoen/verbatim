@@ -12,7 +12,7 @@ import type { SubredditEntry } from '@/lib/gather/types'
 import { subredditKey, subredditLabel } from '@/lib/gather/subreddits'
 import { ensureRivals } from '@/lib/rivals'
 import { takeSuggestionSlot } from '@/lib/keywords/suggest-guard'
-import { PERIODS, DAYS } from './constants'
+import { PERIODS, DAYS, RIVALS_PRESENT } from './constants'
 
 export interface SettingsFormState {
   ok: boolean
@@ -31,7 +31,8 @@ const csv = (v: FormDataEntryValue | null) =>
   String(v ?? '').split(',').map((x) => x.trim()).filter(Boolean)
 
 /**
- * The tracked rival list, however the form spelled it.
+ * The tracked rival list, however the form spelled it — or null where the POST
+ * did not carry one at all (see `RIVALS_PRESENT`).
  *
  * The rivals table posts ONE HIDDEN INPUT PER NAME (the artboard's table is the
  * list, and a name carrying a comma has to survive the round trip); the old
@@ -42,8 +43,10 @@ const csv = (v: FormDataEntryValue | null) =>
  * and two rows reading "Freitag" and "freitag" would each claim the other's
  * months.
  */
-const trackedNames = (formData: FormData): string[] => {
-  const all = formData.getAll('competitor_names').flatMap((v) => csv(v))
+const trackedNames = (formData: FormData): string[] | null => {
+  const raw = formData.getAll('competitor_names')
+  if (raw.length === 0) return formData.get(RIVALS_PRESENT) != null ? [] : null
+  const all = raw.flatMap((v) => csv(v))
   const seen = new Set<string>()
   return all.filter((n) => {
     const key = n.toLowerCase()
@@ -59,8 +62,17 @@ const trackedNames = (formData: FormData): string[] => {
 // even though the row-level UPDATE policy would allow the write.
 // Caps mirror the tracking_configs CHECK constraints (T0-2) so the limit
 // arrives as a sentence rather than as a raw Postgres constraint name.
+//
+// NO FLOOR ON THE RIVAL LIST, AS OF THE ARTBOARD PORT. `min(1)` was written
+// when the rivals box was its own form with its own button: the only thing it
+// could block was a rival edit. The page now has ONE save, so the same rule
+// refused a save whose terms half had already been written — a reader who took
+// the last rival off and changed a term saw "Invalid competitor_names: add at
+// least one competitor" over a save that had half landed, and pressing Save
+// again repeated it. A workspace with no rival is a real state (it is what
+// every tenant starts as), and the ceiling is the one that bounds cost.
 const schema = z.object({
-  competitor_names: z.array(z.string()).min(1, 'add at least one competitor').max(15, 'track at most 15 competitors'),
+  competitor_names: z.array(z.string()).max(15, 'track at most 15 competitors'),
   report_period: z.enum(PERIODS),
   report_day: z.enum(DAYS),
 })
@@ -93,8 +105,14 @@ export async function updateTrackingConfig(
   // among them.
   const isPaused = current?.report_period === 'paused'
 
+  // The rival list as posted, or the stored one where the POST carried none.
+  // A list nobody sent is not an empty list, and the difference decides both
+  // what is validated and whether the column is written at all.
+  const posted = trackedNames(formData)
+  const stored = (current?.competitor_names ?? []) as string[]
+
   const parsed = schema.safeParse({
-    competitor_names: trackedNames(formData),
+    competitor_names: posted ?? stored,
     report_period: isPaused ? 'weekly' : formData.get('report_period'),
     report_day: formData.get('report_day'),
   })
@@ -113,8 +131,9 @@ export async function updateTrackingConfig(
   const { error } = await updateWithActor(
     (payload) => supabase.from('tracking_configs').update(payload).eq('client_id', clientId),
     {
-      ...parsed.data,
-      ...(isPaused ? { report_period: 'paused' } : {}),
+      report_period: isPaused ? 'paused' : parsed.data.report_period,
+      report_day: parsed.data.report_day,
+      ...(posted ? { competitor_names: parsed.data.competitor_names } : {}),
       updated_at: new Date().toISOString(),
     },
     actorStamp(session, 'settings'),

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { X } from 'lucide-react'
+import { RIVALS_PRESENT } from '@/app/dashboard/settings/constants'
 import { RivalRename } from '@/app/dashboard/settings/rival-rename'
 import { CONTROL, Dot, Figure, FIELD, GridRow, GridTable, MonoNote, Section, SectionHead } from '@/components/settings/chrome'
 import { monthName, platformLabel, shortDate } from '@/lib/format'
@@ -66,6 +67,11 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
   return (
     <Section>
       <SectionHead title="Rivals" meta={rivalsMeta(rows)} rule={RIVAL_BREAK_RULE} />
+
+      {/* "This POST carried the rival list." Outside the table on purpose: the
+          state that most needs it is the empty one, where there is no table and
+          no hidden input, and an absent list must not read as an erased one. */}
+      <input type="hidden" name={RIVALS_PRESENT} value="1" />
 
       {rows.length === 0 && added.length === 0 ? (
         <p className="text-[12.5px] text-muted-foreground">No rival is named. Naming one is how the category gets a shape.</p>
