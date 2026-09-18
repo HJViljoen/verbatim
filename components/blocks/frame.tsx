@@ -137,11 +137,18 @@ export function BlockFrame({
  * fall off a narrow layout. The artboards answer that by stacking them: the
  * figure on top in mono 13/600 at `line-height:1`, the evidence under it in
  * mono 10.5 muted, one pixel apart. Counted across the seventeen artboards on
- * 2026-09-18: of the 101 cells printing an "N of M", 79 sit left in their
- * column and 22 are set `text-align:right` (all of them on Competitive's
- * standings). So `align` defaults to LEFT and a numeric column asks for right
- * — which is the opposite of what the density note in mock-gap/Main.md
- * implies, and the count is here so the next reader does not have to redo it.
+ * 2026-09-18, and recounted 2026-09-18 after the review disputed where the
+ * right-aligned ones are: taking a cell to be a text node that is ONLY the
+ * denominator ("of 1,388", "3 of 475", "6 of 14 videos"), 146 of them are
+ * drawn, 124 sit left in their column and 22 are set `text-align:right`. The
+ * 22 are on TWO artboards, not one — 13 of them the head-to-head table on the
+ * Marketing brief and 9 on Competitive's standings — and every other artboard
+ * is left throughout. So `align` defaults to LEFT and a numeric column asks
+ * for right, and a port of either of those two tables asks for it explicitly.
+ * That is the opposite of what the density note in mock-gap/Main.md implies,
+ * and on Main specifically the note is simply wrong: Main draws 20 such cells
+ * and right-aligns none. The count is here so the next reader does not have to
+ * redo it — and, if they do, the measure above is the one to redo.
  *
  * It stamps its own `data-copy` — `figure` on the value, `level` on the pair —
  * exactly as BlockStat does, so a block using it keeps the contract by
