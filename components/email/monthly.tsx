@@ -5,8 +5,8 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 import { longMonth } from '@/lib/format'
 import { PRIVACY_LINE } from '@/lib/reading/method'
 import {
+  MONTHLY_CANVAS_GUTTER,
   MONTHLY_CARD_WIDTH,
-  MONTHLY_EMAIL_WIDTH,
   monthlyContext,
   monthlyEyebrow,
   monthlyRuleFor,
@@ -71,8 +71,12 @@ export function MonthlyEmail({ data, shareUrl, appUrl, attached, ctx, preheader 
             <tr>
               {/* THE FRAME IS 640 AND THE CARD IS 600 (E-monthly). The canvas
                   gutter is the artboard's 20px, not 12, and the card inside it
-                  carries the artboard's own 30px of side padding. */}
-              <td align="center" style={{ padding: '20px 20px 24px', maxWidth: MONTHLY_EMAIL_WIDTH }}>
+                  carries the artboard's own 30px of side padding — so the card
+                  is the only width that binds, and 600 + 20 + 20 is the 640.
+                  The cell carried a `max-width:640` too, which does nothing:
+                  max-width is not honoured on a table cell in CSS 2.1 and
+                  Outlook lays out with Word. */}
+              <td align="center" style={{ padding: `${MONTHLY_CANVAS_GUTTER}px ${MONTHLY_CANVAS_GUTTER}px 24px` }}>
                 <table width="100%" {...presentation} style={{ borderCollapse: 'separate', maxWidth: MONTHLY_CARD_WIDTH, background: EMAIL.card, borderRadius: 6, border: `1px solid ${EMAIL.border}` }}>
                   <tbody>
                     <tr>

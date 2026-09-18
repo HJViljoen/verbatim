@@ -76,8 +76,19 @@ export const MONTHLY_EMAIL_WIDTH = 640
  * it 24/12, so every line of copy ran about 40px longer than the artboard's and
  * the canvas gutter all but disappeared. The frame keeps its name and its value
  * because the artefact's geometry is still 640 overall.
+ *
+ * AND THE CARD IS THE ONLY WIDTH THAT BINDS (the fix pass, review finding
+ * [Minor]). `MONTHLY_EMAIL_WIDTH` was also set as a `max-width` on the
+ * centring `<td>`, where max-width is not honoured on a table cell in CSS 2.1
+ * and is ignored outright by Outlook's Word renderer — a declaration with no
+ * effect, asserted by a test that read the string back. The card's 600 plus
+ * the canvas gutter IS the 640, `MONTHLY_CANVAS_GUTTER` says how, and the test
+ * asserts that arithmetic instead of a dead style.
  */
 export const MONTHLY_CARD_WIDTH = 600
+
+/** The artboard's canvas padding, each side: 600 + 20 + 20 = 640. */
+export const MONTHLY_CANVAS_GUTTER = 20
 
 /**
  * How many movers each side of section 3 prints.
@@ -281,12 +292,34 @@ export function monthRange(month: string, status: MonthlyStatus, daysIn: number 
   const reached = status === 'frozen' || daysIn == null ? last : Math.min(Math.max(daysIn, 1), last)
   // `shortDate` gives "18 Sep"; the year is said once, at the end of the range,
   // because both ends are inside one month by construction.
-  const tail = shortDate(`${month.slice(0, 8)}${String(reached).padStart(2, '0')}T00:00:00.000Z`)
-  return `1–${tail} ${month.slice(0, 4)}`
+  //
+  // AND THE MONTH KEY IS NORMALISED FIRST (the fix pass, review finding
+  // [Minor]). The day was spliced in at `month.slice(0, 8)`, which is correct
+  // only for `YYYY-MM-DD`: `BarBlock.month` is that today (`monthStartOf`), so
+  // this was not a live defect — but handed a `YYYY-MM` it built
+  // "2026-0918T00:00:00.000Z", an Invalid Date, and printed "NaN undefined"
+  // into the masthead. `longMonth` three files away guards the same input
+  // class on purpose and says why; so does this.
+  const key = monthKey(month)
+  if (key == null) return month
+  const tail = shortDate(`${key.slice(0, 8)}${String(reached).padStart(2, '0')}T00:00:00.000Z`)
+  return `1–${tail} ${key.slice(0, 4)}`
+}
+
+/** `YYYY-MM-01` from any month key this product holds, or null where the
+ *  string is not a date at all. An UNPARSEABLE month gives the caller its own
+ *  string back, never "NaN undefined" — `longMonth`'s rule, for the same
+ *  reason: the gap a reader cannot see is the one nobody can debug. */
+function monthKey(month: string): string | null {
+  const d = new Date(month.length === 7 ? `${month}-01` : month)
+  if (Number.isNaN(d.getTime())) return null
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-01`
 }
 
 function daysInMonth(month: string): number {
-  const d = new Date(month)
+  const key = monthKey(month)
+  const d = new Date(key ?? month)
+  if (Number.isNaN(d.getTime())) return 31
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate()
 }
 

@@ -5,12 +5,14 @@ import { markupText, render } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import {
   MONTHLY_BLOCK_KEYS,
+  MONTHLY_CANVAS_GUTTER,
   MONTHLY_CARD_WIDTH,
   MONTHLY_EMAIL_WIDTH,
   MONTHLY_RULE,
   MONTHLY_RULE_FROZEN,
   monthlyContext,
   monthlyEyebrow,
+  monthRange,
   monthlyPeriod,
 } from '@/lib/reports/monthly'
 import type { MonthlySnapshotData } from '@/lib/reports/monthly-build'
@@ -61,11 +63,19 @@ describe('the monthly email', () => {
   // element is 640 with 20px of canvas padding, so the white card is 600 —
   // which the design system states in so many words (§4, "600px card"). The
   // card carried 640 and every line of copy ran ~40px long.
+  // AND THE 640 IS ARITHMETIC, NOT A DEAD DECLARATION (the fix pass, review
+  // finding [Minor]). The frame's width was also written as a `max-width` on
+  // the centring `<td>`, where it has no effect — max-width is not honoured on
+  // a table cell in CSS 2.1 and Outlook lays out with Word — and this test
+  // asserted that string, so it read as pinning a frame that nothing pinned.
+  // The card's 600 is the only width that binds; the gutter makes it 640.
   it('is a 600 card inside the mock’s 640 frame', () => {
     expect(MONTHLY_EMAIL_WIDTH).toBe(640)
     expect(MONTHLY_CARD_WIDTH).toBe(600)
-    expect(body(snapshot())).toContain('max-width:640px')
+    expect(MONTHLY_CARD_WIDTH + 2 * MONTHLY_CANVAS_GUTTER).toBe(MONTHLY_EMAIL_WIDTH)
     expect(body(snapshot())).toContain('max-width:600px')
+    expect(body(snapshot())).toContain(`padding:${MONTHLY_CANVAS_GUTTER}px ${MONTHLY_CANVAS_GUTTER}px 24px`)
+    expect(body(snapshot())).not.toContain('max-width:640px')
   })
 
   it('heads the masthead with the product and the reading, not the tenant', () => {
@@ -87,6 +97,23 @@ describe('the monthly email', () => {
     // THE RANGE IS THE MONTH'S OWN DAYS, never the run window: a period is
     // dated by the comment.
     expect(text).toContain('1–18 Sep 2026')
+  })
+
+  // AND THE RANGE SURVIVES A MONTH KEY OF ANOTHER SHAPE (the fix pass, review
+  // finding [Minor]). The day was spliced in at `slice(0, 8)`, which is right
+  // only for `YYYY-MM-DD`; `BarBlock.month` is that today, so this was never a
+  // live defect — but a `YYYY-MM` built an Invalid Date and printed "NaN
+  // undefined" into the masthead, and an unparseable one did the same.
+  it('prints a month range from any month key, and never “NaN”', () => {
+    const bar = { month: '2026-09-01', status: 'filling' as const, daysIn: 18, updates: 3, updateDates: [] }
+    expect(monthlyContext(bar)).toContain('1–18 Sep 2026')
+    expect(monthlyContext({ ...bar, month: '2026-09' })).toContain('1–18 Sep 2026')
+    expect(monthRange('2026-02', 'frozen', null)).toBe('1–28 Feb 2026')
+    expect(monthRange('2024-02', 'frozen', null)).toBe('1–29 Feb 2024')
+    // Not a date at all: the caller gets its own string back, as `longMonth`
+    // hands back its own — a gap a reader cannot see is the one nobody can
+    // debug.
+    expect(monthRange('not-a-month', 'filling', 4)).toBe('not-a-month')
   })
 
   it('names the month on the button, so twelve of these are not twelve of one', () => {
