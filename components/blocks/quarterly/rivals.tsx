@@ -129,19 +129,22 @@ function MonthCells({ months, values, newest, newestLabel, share, recorded, mode
   }
   return (
     <span className="flex min-w-0 flex-col gap-[1px]">
-      <span className="flex gap-2">
+      {/* WRAPS INSIDE ITS OWN CELL. Three mono percentages do not shrink, so
+          on a narrow track the row simply painted over the column beside it —
+          "86.4%comparison refused". A cell that needs two lines takes two. */}
+      <span className="flex min-w-0 flex-wrap gap-x-1.5">
         {cells.map((v, i) => (
           <span
             key={i}
             data-copy="figure"
-            className={`font-mono text-[11.5px] tabular-nums ${i === cells.length - 1 ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}
+            className={`font-mono text-[11px] leading-[1.3] tabular-nums ${i === cells.length - 1 ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}
           >
             {text(v)}
           </span>
         ))}
       </span>
       {share && share.pct != null ? (
-        <span data-copy="figure" className="whitespace-nowrap font-mono text-[9.5px] leading-[1.3] text-muted-foreground">
+        <span data-copy="figure" className="whitespace-nowrap font-mono text-[9.5px] leading-[1.2] text-muted-foreground">
           {fmtInt(share.k)} of {fmtInt(share.n)}
         </span>
       ) : null}

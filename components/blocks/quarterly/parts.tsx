@@ -136,7 +136,11 @@ export function Line({ label, figure, badge, note, mode = 'app' }: {
   return (
     <div className="flex flex-col border-t border-border/70 py-[2px]">
       <div className="flex min-w-0 items-baseline justify-between gap-2 text-[12px] leading-[1.3]">
-        <span className="min-w-0 flex-1 truncate">{label}</span>
+        {/* WRAPS, NEVER TRUNCATES. `truncate` printed "Q…" for "Questions" the
+            moment page 4's kind mix went into a narrow column — and a label
+            cut to one letter is worse than a label on two lines, on a sheet
+            whose whole problem is that a reader cannot hover anything. */}
+        <span className="min-w-0 flex-1">{label}</span>
         {figure ? <span className="flex-none">{figure}</span> : null}
         {badge ? <span className="flex-none">{badge}</span> : null}
       </div>
