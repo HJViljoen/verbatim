@@ -2,7 +2,7 @@
 import type { BlockContext } from '@/lib/blocks/types'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { WEEKLY_EMAIL_WIDTH, periodNounFor, weeklyDateLine, weeklyEyebrow, weeklyFooterLines, weeklyHeadline, weeklyLinks, weeklyRuleFor } from '@/lib/reports/weekly'
-import type { WeeklySnapshotData } from '@/lib/reports/weekly-build'
+import { staleWeeklySnapshot, type WeeklySnapshotData } from '@/lib/reports/weekly-build'
 import { weeklyBlocksFor } from '@/components/blocks/weekly'
 import { Button, Hairline, text } from './primitives'
 
@@ -40,6 +40,12 @@ export interface WeeklyEmailProps {
 const presentation = { role: 'presentation', cellPadding: 0, cellSpacing: 0, border: 0 } as const
 
 export function WeeklyEmail({ data, shareUrl, appUrl, attached, ctx, preheader }: WeeklyEmailProps) {
+  // A ROW AN OLDER BUILD WROTE IS A SENTENCE, NOT A STACK TRACE. `data.reading`
+  // changed incompatibly in block D wave 2 and every line below dereferences
+  // the new fields (`WEEKLY_SNAPSHOT_VERSION`), so this is asked before any of
+  // them.
+  const stale = staleWeeklySnapshot(data)
+  if (stale) return <StaleWeekly title={data.title} line={stale} />
   const blocks = weeklyBlocksFor(data.keys)
   // THE MASTHEAD IS THE ARTBOARD'S (block D wave 2): the artefact and the
   // update's date in the eyebrow, the window and the update behind it on the
@@ -164,6 +170,43 @@ export function WeeklyEmail({ data, shareUrl, appUrl, attached, ctx, preheader }
                         <div style={{ ...text.small, fontSize: 11, marginTop: 10, color: EMAIL.muted }}>
                           {attached ? 'The PDF is attached. ' : ''}You are receiving this because you are on {data.company}’s update list; an owner or admin changes it in Verbatim, in Settings.
                         </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </body>
+    </html>
+  )
+}
+
+/** The whole document, when the stored reading is one this build cannot draw.
+ *  The same shell, so a client who opens it sees a Verbatim email rather than
+ *  an empty page. */
+function StaleWeekly({ title, line }: { title: string; line: string }) {
+  return (
+    <html lang="en">
+      <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="color-scheme" content="light" />
+        <title>{title}</title>
+      </head>
+      <body style={{ margin: 0, padding: 0, background: EMAIL.canvas, fontFamily: FONT.sans, color: EMAIL.ink }}>
+        <table width="100%" {...presentation} style={{ borderCollapse: 'collapse', background: EMAIL.canvas }}>
+          <tbody>
+            <tr>
+              <td align="center" style={{ padding: '24px 12px' }}>
+                <table width="100%" {...presentation} style={{ borderCollapse: 'separate', maxWidth: WEEKLY_EMAIL_WIDTH, background: EMAIL.card, borderRadius: 6, border: `1px solid ${EMAIL.border}` }}>
+                  <tbody>
+                    <tr>
+                      <td style={{ padding: '24px 28px' }}>
+                        <div style={text.eyebrow}>Verbatim · weekly</div>
+                        <div style={{ fontFamily: FONT.serif, fontSize: 23, fontWeight: 500, lineHeight: '1.24', color: EMAIL.ink, marginTop: 9 }}>{title}</div>
+                        <div style={{ ...text.small, marginTop: 10 }}>{line}</div>
                       </td>
                     </tr>
                   </tbody>

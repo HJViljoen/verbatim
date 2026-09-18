@@ -4,7 +4,7 @@ import { EMAIL } from '@/lib/email/theme'
 import { markupText, render } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { WEEKLY_BLOCK_KEYS, WEEKLY_EMAIL_WIDTH, WEEKLY_RULE, weeklySubject } from '@/lib/reports/weekly'
-import { isWeeklyData, type WeeklySnapshotData } from '@/lib/reports/weekly-build'
+import { WEEKLY_SNAPSHOT_VERSION, isWeeklyData, staleWeeklySnapshot, type WeeklySnapshotData } from '@/lib/reports/weekly-build'
 import { formingFixture, quietFixture, thinFixture, weeklyFixture } from '@/components/blocks/weekly/fixture'
 import { WeeklyEmail } from './weekly'
 
@@ -12,7 +12,7 @@ const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
 
 function snapshot(reading = weeklyFixture(), over: Partial<WeeklySnapshotData> = {}): WeeklySnapshotData {
   return {
-    version: 1,
+    version: WEEKLY_SNAPSHOT_VERSION,
     kind: 'weekly',
     company: 'Sealand',
     title: 'Sealand · your update',
@@ -140,6 +140,12 @@ describe('the weekly email', () => {
     expect(text).not.toContain('Your subjects →')
   })
 
+  it('prints a sentence, not a stack trace, for a row an older build wrote', () => {
+    const text = words(snapshot(weeklyFixture(), { version: 1 }))
+    expect(text).toContain('built by an older version of Verbatim')
+    expect(text).not.toContain('For sales')
+  })
+
   it('honours an arrangement that names fewer sections', () => {
     const text = words(snapshot(weeklyFixture(), { keys: ['weekly.week', 'weekly.coverage'] }))
     expect(text).toContain('The week in one sentence')
@@ -152,5 +158,19 @@ describe('isWeeklyData', () => {
     expect(isWeeklyData(snapshot())).toBe(true)
     expect(isWeeklyData({ version: 1, sections: [] })).toBe(false)
     expect(isWeeklyData(null)).toBe(false)
+  })
+
+  // Block D wave 2 changed `data.reading` incompatibly — `update` is new and
+  // required, `sales` became `ForSalesData`, `content` and `incoming` gained
+  // required fields — and every renderer dereferences them. A stale row gets a
+  // sentence, not a TypeError three components in.
+  it('tells a readable weekly artefact from one an older build wrote', () => {
+    expect(staleWeeklySnapshot(snapshot())).toBeNull()
+    expect(staleWeeklySnapshot(snapshot(weeklyFixture(), { version: 1 })))
+      .toContain('built by an older version')
+    // Still a weekly artefact: which question is being asked matters, because
+    // the arranged-report path reads `data.sections` and would throw on a
+    // weekly row of any version.
+    expect(isWeeklyData(snapshot(weeklyFixture(), { version: 1 }))).toBe(true)
   })
 })

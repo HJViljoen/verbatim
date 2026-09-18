@@ -30,8 +30,39 @@ import { WEEKLY_BLOCK_KEYS, weeklyPeriod, weeklySubject, type WeeklyBlockKey } f
  * field.
  */
 
+/**
+ * The stored shape's version.
+ *
+ * TWO, AND THE BUMP IS THE POINT. Block D wave 2 changed `data.reading`
+ * incompatibly — `update` is new and required, `sales` went from a flat quote
+ * list to `ForSalesData` (and then gained `objectionsTotal`), `content` gained
+ * `surfaced` / `surfacedCounts` and `runnerUp`, `incoming` gained
+ * `newThemesTotal` — and every reader of a stored snapshot now dereferences
+ * those. A row written before this branch would throw a TypeError at
+ * `/r/<token>` and on the "email as sent" re-render, and `version: 1` asserted
+ * a compatibility that no longer held.
+ *
+ * THE BLAST RADIUS IS PROVABLY ZERO IN PRODUCTION: `lib/reports/weekly-build.ts`
+ * does not exist on `main`, so no `report_snapshots` row of kind `weekly` has
+ * ever been written by a deployed build. What the bump protects is a Phase 1
+ * database on somebody's machine, where a v1 row can exist — and there it now
+ * meets `staleWeeklySnapshot`'s sentence at the top of the render instead of a
+ * stack trace three components in.
+ *
+ * `isWeeklyData` deliberately still matches on `kind` alone: the branches that
+ * ask it (lib/reports/viewer.ts, app/r/[token]) fall through to the arranged-
+ * report path, which reads `data.sections` and would throw on a weekly row of
+ * ANY version. Telling a weekly artefact from a report is one question and
+ * telling a readable one from a stale one is another.
+ */
+export const WEEKLY_SNAPSHOT_VERSION = 2
+
 export interface WeeklySnapshotData {
-  version: 1
+  /** `number`, not the literal: the callers that narrow with `isWeeklyData`
+   *  hold a `ReportSnapshotData` (whose `version` is the literal 1), and a
+   *  second literal here collapses that intersection to `never` at every one
+   *  of them. `staleWeeklySnapshot` is what actually checks the value. */
+  version: number
   /** What tells a weekly artefact from an arranged report or a document. */
   kind: 'weekly'
   company: string
@@ -55,6 +86,21 @@ export interface WeeklySnapshotData {
 
 export function isWeeklyData(data: unknown): data is WeeklySnapshotData {
   return Boolean(data) && typeof data === 'object' && (data as { kind?: unknown }).kind === 'weekly'
+}
+
+/**
+ * The one line to print instead of a weekly artefact this build cannot draw,
+ * or null when it can.
+ *
+ * WHAT IT IS FOR is above, on `WEEKLY_SNAPSHOT_VERSION`. The three renderers
+ * of a stored weekly reading — the email, the share page and the deck — ask
+ * this first, so an older row is a sentence a reader can act on rather than a
+ * TypeError inside a server component.
+ */
+export function staleWeeklySnapshot(data: WeeklySnapshotData): string | null {
+  return data.version === WEEKLY_SNAPSHOT_VERSION
+    ? null
+    : 'This update was built by an older version of Verbatim and cannot be redrawn here. The next scheduled update will be readable.'
 }
 
 export class WeeklyEmptyError extends Error {}
@@ -95,7 +141,7 @@ export async function snapshotWeekly(args: {
   const keys: WeeklyBlockKey[] = known.length > 0 ? known : [...WEEKLY_BLOCK_KEYS]
   const company = args.company || reading.brand
   const data: WeeklySnapshotData = {
-    version: 1,
+    version: WEEKLY_SNAPSHOT_VERSION,
     kind: 'weekly',
     company,
     title: `${company} · your update`,

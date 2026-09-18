@@ -2,7 +2,7 @@ import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { fullDate } from '@/lib/format'
 import { periodNounFor, weeklyDateLine, weeklyHeadline, weeklyRuleFor } from '@/lib/reports/weekly'
-import type { WeeklySnapshotData } from '@/lib/reports/weekly-build'
+import { staleWeeklySnapshot, type WeeklySnapshotData } from '@/lib/reports/weekly-build'
 import { weeklyBlocksFor } from '@/components/blocks/weekly'
 import { LinkGuard } from './link-guard'
 
@@ -16,6 +16,17 @@ import { LinkGuard } from './link-guard'
 
 export function WeeklyShareShell({ data, appUrl }: { data: WeeklySnapshotData; appUrl: string }) {
   const ctx = blockContext(appUrl, EMAIL)
+  // Asked before anything dereferences `data.reading`, whose shape changed
+  // incompatibly in block D wave 2 (`WEEKLY_SNAPSHOT_VERSION`).
+  const stale = staleWeeklySnapshot(data)
+  if (stale) {
+    return (
+      <div className="mx-auto flex w-full max-w-[880px] flex-col gap-3 px-4 py-8 md:px-6">
+        <h1 className="m-0 font-serif text-[30px] font-medium leading-[1.15]">{data.title}</h1>
+        <p className="m-0 text-[13.5px] leading-[1.6] text-muted-foreground">{stale}</p>
+      </div>
+    )
+  }
   return (
     <LinkGuard appUrl={appUrl}>
       <div className="mx-auto flex w-full max-w-[880px] flex-col gap-8 px-4 py-8 md:px-6">
