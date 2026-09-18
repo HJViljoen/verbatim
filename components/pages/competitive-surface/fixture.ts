@@ -5,8 +5,9 @@ import {
   buildSaidAbout, competitiveUnlockRows, questionsEmpty,
   type CompetitiveSurfaceData,
 } from '@/lib/pages/competitive-surface'
-import { methodFixture, methodRefusedFixture } from '@/lib/test/method-fixture'
-import { rivalOwnClaims, type OwnPostInput } from '@/lib/reading/own-posts'
+import { methodRecordFixture } from '@/lib/test/method-fixture'
+import { methodLines } from '@/lib/reading/method'
+import { claimEcho, rivalOwnClaims, type OwnPostInput } from '@/lib/reading/own-posts'
 import { buildHeadToHead, buildPlaybook, type PlaybookVideo } from '@/lib/pages/playbook'
 
 // Competitive's block fixtures (Phase 1 WP14).
@@ -22,6 +23,41 @@ import { buildHeadToHead, buildPlaybook, type PlaybookVideo } from '@/lib/pages/
 
 const NOW = '2026-09-18T09:00:00.000Z'
 const MONTH = '2026-09-01'
+
+/**
+ * THE FOOTNOTE IS THIS PAGE'S TENANT, AND ITS OWN CORPUS.
+ *
+ * `methodFixture()` is shaped like Sealand's and is the right shared default
+ * for the pages that use it; on THIS page every populated state's foot read
+ * "Prepared for Sealand with Verbatim · 2,359 videos read in this window" under
+ * a bar, a standings table, a head-to-head and a playbook that all say Össur
+ * and 449. The fixtures are wave 2's review surface, so a footnote that
+ * contradicts the page above it is a defect in the thing being reviewed.
+ *
+ * The coverage rows below sum to the SAME 449 the standings' September
+ * denominator does (19 client · 42 Ottobock · 388 the rest), because
+ * `methodLines` derives its "read in this window" from exactly that sum. The
+ * composer is the real one, so the fixture can still never print a sentence
+ * `methodLines` would not.
+ */
+const OSSUR_COVERAGE = [
+  { audience: 'client', videos: 19, comments: 151, platformMix: { tiktok: 9, youtube: 6, instagram: 4 }, dualMention: 6, excludedUndated: 0 },
+  { audience: 'competitor:Ottobock', videos: 42, comments: 645, platformMix: { tiktok: 21, youtube: 13, instagram: 8 }, dualMention: 0, excludedUndated: 1 },
+  { audience: 'industry-other', videos: 388, comments: 10_534, platformMix: { tiktok: 195, youtube: 116, instagram: 77 }, dualMention: 0, excludedUndated: 12 },
+]
+
+const ossurMethod = () =>
+  methodLines(methodRecordFixture({ coverage: OSSUR_COVERAGE }), { brand: 'Össur' })
+
+/** The degraded footnote, same tenant: no month-by-month coverage on record. */
+const ossurMethodRefused = () =>
+  methodLines(
+    methodRecordFixture({
+      coverage: null,
+      language: { analysed: 2_359, unknown: 2_359, english: 0, notEnglish: 0, basis: 'video_speech' },
+    }),
+    { brand: 'Össur' },
+  )
 
 const den = (month: string, audience: string, videos: number, comments: number, dual = 0) => ({
   month,
@@ -335,7 +371,7 @@ export function competitiveFixture(over: Partial<CompetitiveSurfaceData> = {}): 
       lines: ['2 updates delivered in this month.'],
       href: '/dashboard/settings',
     },
-    method: methodFixture(),
+    method: ossurMethod(),
     ...over,
   }
 }
@@ -432,7 +468,7 @@ export function unreadMonthsFixture(): CompetitiveSurfaceData {
   const base = competitiveFixture()
   return {
     ...base,
-    method: methodRefusedFixture(),
+    method: ossurMethodRefused(),
     // FIVE OF SEVEN OVERVIEW BLOCKS STILL SAY "not recorded" UNTIL M1–M9 ARE
     // APPLIED, and wave 2 is reviewed in that state — so the degraded arm is
     // part of the handover, not an afterthought. Nothing read means nothing to
@@ -461,5 +497,82 @@ export function unreadMonthsFixture(): CompetitiveSurfaceData {
       { month: MONTH, audience: 'competitor:Ottobock', audienceLabel: 'Ottobock', videos: [], claims: [], membership: [], echoes: [], handles: {} },
     ]),
     saidAbout: buildSaidAbout([{ name: 'Ottobock' }], () => 0),
+  }
+}
+
+/**
+ * The arm where a rival's own claims and what is said about them ARE readable.
+ *
+ * WHY IT EXISTS, AND WHY IT IS NOT A LIE. Four of the five states above carry
+ * `RIVAL_CLAIMS_WITHHELD` and an empty `saidAbout`, because M8's policy is
+ * `entity = 'client'` and a tenant session may not select a rival's claim rows
+ * — which is the honest state of the app page today and is the one wave 2
+ * reviews it in. But `CompetitiveSurfaceData.ownClaims` / `.saidAbout` are the
+ * shape a SERVICE-ROLE surface hands the same blocks (a document, a share
+ * render — `lib/pages/competitive-surface.ts:buildSaidAbout` takes a
+ * `claimsFor` for exactly that), and with no populated arm anywhere the claim
+ * row, the echo legend, the quote ref and the `pass_a_brand_claim` marker
+ * would be four pieces of markup nothing on the repo ever renders.
+ *
+ * THE WORDS ARE THE SHAPE PASS A WRITES, digits included — "for over 30 years",
+ * "3R80" — because that is the trade `pass_a_brand_claim`'s policy row is about
+ * and a fixture that avoided digits would prove nothing about it.
+ */
+export function claimsReadFixture(): CompetitiveSurfaceData {
+  const base = competitiveFixture()
+  const audience = 'competitor:Ottobock'
+  const post = (id: string, day: number, comments: number, hook: string | null, format: string | null) => ({
+    id, upload_date: `2026-09-${String(day).padStart(2, '0')}`, comments_count: comments,
+    hook_style: hook, classified_type: format, platform: 'youtube',
+  })
+  const input: OwnPostInput = {
+    month: MONTH,
+    audience,
+    audienceLabel: 'Ottobock',
+    videos: [
+      post('o1', 3, 61, 'demonstration', 'educational'),
+      post('o2', 8, 22, 'personal-story', 'testimonial'),
+      post('o3', 15, 9, 'demonstration', 'educational'),
+      post('o4', 19, 4, null, null),
+      post('o5', 26, 1, null, null),
+    ],
+    claims: [
+      { id: 'k1', source_video_id: 'o1', entity: 'competitor', claim: 'Every knee is tested for over 30 years of walking', quote: 'We test every knee for the equivalent of thirty years of walking.' },
+      { id: 'k2', source_video_id: 'o2', entity: 'competitor', claim: 'The 3R80 is built for everyday life, not the clinic', quote: 'This is built for your day, not for a gait lab.' },
+      { id: 'k3', source_video_id: 'o3', entity: 'competitor', claim: 'Fitting takes one appointment', quote: 'One appointment and you walk out on it.' },
+    ],
+    membership: [],
+    // ONE PER RETURNED ROW, IN THE RETURNED ROWS' ORDER — the three states the
+    // legend has to draw at once: carried, pushed back, and counted-and-silent.
+    echoes: [
+      claimEcho({ audience, audienceLabel: 'Ottobock', reading: { k: 31, n: 42 }, stance: 'echoes' }),
+      claimEcho({ audience, audienceLabel: 'Ottobock', reading: { k: 9, n: 42 }, stance: 'contradicts' }),
+      claimEcho({ audience, audienceLabel: 'Ottobock', reading: { k: 0, n: 42 }, stance: 'silent' }),
+    ],
+    handles: { youtube: '@ottobock', tiktok: '@ottobock', instagram: '@ottobock' },
+  }
+  const ownClaims = [
+    ...rivalOwnClaims([input]),
+    ...base.ownClaims.filter((c) => c.audience !== audience),
+  ]
+  return {
+    ...base,
+    ownClaims,
+    // THE READINESS ROWS ARE RECOMPUTED OVER THIS ARM'S OWN CENSUSES. They were
+    // inherited from the base fixture, so this state printed six of Ottobock's
+    // claims in the second tile and "is not printed here" in the fifth.
+    unlocks: { rows: competitiveUnlockRows(ownClaims) },
+    saidAbout: buildSaidAbout(
+      [{ name: 'Ottobock' }, { name: 'Rareform' }],
+      (a) => (a === 'competitor:Ottobock' ? 42 : 0),
+      (a) =>
+        a === 'competitor:Ottobock'
+          ? [
+              { claim: 'The knee is quiet enough to wear in an office', quote: 'Honestly you cannot hear it in a meeting room.', videoId: 'v1', id: 'k9' },
+              { claim: 'The knee is quiet enough to wear in an office', quote: 'Nobody in the office has ever noticed it.', videoId: 'v2', id: 'k10' },
+              { claim: 'Service turnaround is slow outside Europe', quote: 'Mine took eleven weeks to come back from service.', videoId: 'v3', id: 'k11' },
+            ]
+          : [],
+    ),
   }
 }

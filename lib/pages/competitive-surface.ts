@@ -515,12 +515,23 @@ export const QUESTIONS_SUBJECTS_NOTE =
  * digital director's. Where the accounts ARE configured, the inputs are not
  * what is missing — what is missing is the verbatim claims half, which is read
  * from the rival's own transcripts and is not printed from a tenant session,
- * and that is engineering's row to answer, not the client's to fix.
+ * and that is engineering's row to answer, not the client's to fix. And where
+ * the claims ARE in hand the row goes entirely: the tile has just printed them.
  */
 export function competitiveUnlockRows(ownClaims: readonly OwnPostCensus[] = []): CompetitiveUnlockRow[] {
   const watched = ownClaims.filter((c) => c.unread !== OWN_POSTS_NO_ACCOUNTS).length
-  const co4: CompetitiveUnlockRow =
-    watched === 0
+  // AND IT IS KEYED ON WHAT PRINTED, NOT ON WHAT IS CONFIGURED. Where a census
+  // carries claims, CO4's tile prints a rival's own sentences verbatim — and
+  // the readiness row five tiles below said, on the same screen, that they are
+  // "not printed here". Accounts being configured is not the same fact as
+  // claims having been read: the claims-read arm has both, and the app page
+  // today has the first without the second. A page may not claim a behaviour
+  // the code has just disproved, and that rule does not stop at the tile that
+  // disproved it.
+  const printed = ownClaims.some((c) => c.claims.length > 0)
+  const co4: CompetitiveUnlockRow | null = printed
+    ? null
+    : watched === 0
       ? {
           section: 'CO4',
           state: 'not tracked' as const,
@@ -535,27 +546,28 @@ export function competitiveUnlockRows(ownClaims: readonly OwnPostCensus[] = []):
           line: 'What each rival published this month is above. What they CLAIM in it is read from their own transcripts and is not printed here — putting a rival’s words on this page is a decision to take, not a gap to fill.',
           owner: 'Verbatim engineering',
         }
+  // CO3 AND CO7 CAME OUT IN THE COMMIT THAT MOUNTED THEM (Block D wave 2,
+  // E-competitive; wave 1's standing instruction). Both now draw on the page
+  // above this tile — the head-to-head's five measures with an n on every row
+  // and a band only where a proportion earned one, and the format and hook
+  // matrix with each column's classified n printed beside its published one —
+  // so a readiness row saying either is "not built yet" would contradict the
+  // tile a reader has just scrolled past. A row is removed when its tile
+  // mounts, never before and never in a separate change.
+  //
+  // CO6 STAYS, AND ITS LINE IS WHY. `recurrenceOf` (lib/reading/head-to-head.ts)
+  // is built and takes a `theme_registry.id` plus the months that identity was
+  // seen in; nothing loads those months for this page, and keying recurrence on
+  // a LABEL instead would mark nine findings in ten as new every month, which
+  // is a measurement of our own naming. That is the finding identity this row
+  // has always named.
   return [
-    {
-      section: 'CO3',
-      state: 'not built yet' as const,
-      title: 'Head to head, then and now',
-      line: 'You against the selected rival, one row per measure — videos about, comments per video, engagement per video, positive share, own posts published — now, last month and the change, with an n on every row.',
-      owner: 'Verbatim engineering',
-    },
-    co4,
+    ...(co4 ? [co4] : []),
     {
       section: 'CO6',
       state: 'not built yet' as const,
       title: 'Findings, with recurrence',
       line: 'Cross-brand findings with “seen in 4 of the last 6 months”, which needs a finding identity that survives an update.',
-      owner: 'Verbatim engineering',
-    },
-    {
-      section: 'CO7',
-      state: 'not built yet' as const,
-      title: 'How the category makes content',
-      line: 'Formats and hooks side by side for the category, for you and for each rival, with “read from n of m videos” on every row and Reddit named as absent from all of them.',
       owner: 'Verbatim engineering',
     },
   ]
@@ -881,28 +893,57 @@ export async function loadRivalOwnPosts(
   return rivalOwnClaims(inputs)
 }
 
+/** Nobody read them, and the page says which silence that is. */
+export const SAID_ABOUT_WITHHELD = (label: string): string =>
+  `What others say about ${label} is read from those videos’ own transcripts, which are not open to this page — so this is not a silence we measured.`
+
+/** Claims in hand and no month row to be a share of. */
+export const SAID_ABOUT_NO_DENOMINATOR = (label: string): string =>
+  `No month has been read for ${label}, so what was said about them has nothing to be a share of.`
+
 /**
  * CO5, as the honest absence it is today.
  *
  * `saidAbout` is a claims reading and the claims are `video_claims` rows in a
  * rival's bucket — which M8 does not open to a tenant session and deliberately
- * will not: they are whole sentences out of a third party's transcript. So
- * every row comes back with its `empty` sentence, and the block exists and says
- * why, which is more than the page does today: mock-gap records that "Said
- * about them, by others" is not even named in `competitiveUnlockRows()`.
+ * will not: they are whole sentences out of a third party's transcript.
  *
- * The function itself is the real one, over an empty list, rather than a
- * hand-built shape — so the day a service-role surface feeds it rows, this
- * page's shape is already the one they arrive in.
+ * SO THE APP PAGE PASSES NO READER AT ALL, AND THAT IS THE POINT. `claimsFor`
+ * used to DEFAULT to `() => []`, so the caller that had no way to read claims
+ * and the caller that read them and found none handed `saidAbout` the same
+ * argument — and every rival on every real page load printed "Nothing was said
+ * about Ottobock in what we read this month." Nothing was read. A null reader
+ * is now a distinct third state with its own sentence, which is the rule CO4
+ * has kept since it landed (`RIVAL_CLAIMS_WITHHELD`) and the rule this block's
+ * own header states: "we read them and heard nothing" and "we did not look"
+ * are two answers and a block that prints neither is making the reader guess
+ * which.
+ *
+ * The function itself is the real one rather than a hand-built shape — so the
+ * day a service-role surface feeds it rows, this page's shape is already the
+ * one they arrive in.
  */
 export function buildSaidAbout(
   rivals: readonly { name: string }[],
   denominatorFor: (audience: string) => number,
-  claimsFor: (audience: string) => readonly { claim: string; quote: string; videoId: string }[] = () => [],
+  claimsFor: ((audience: string) => readonly { claim: string; quote: string; videoId: string }[]) | null = null,
 ): SaidAbout[] {
   return rivals.map((r) => {
     const audience = rivalKey(r.name)
-    return saidAbout({ audience, label: r.name, claims: claimsFor(audience), of: denominatorFor(audience) })
+    // NO READER IS NOT AN EMPTY READER. `saidAbout` over an empty list returns
+    // `SAID_ABOUT_EMPTY` — "Nothing was said about Ottobock in what we read
+    // this month." — which is a measurement, and on the app page nothing was
+    // measured. So the absence of a reader is answered before the reading runs.
+    if (!claimsFor) return { audience, label: r.name, rows: [], empty: SAID_ABOUT_WITHHELD(r.name) }
+    const of = denominatorFor(audience)
+    const group = saidAbout({ audience, label: r.name, claims: claimsFor(audience), of })
+    // A SHARE OF NOTHING IS NOT A SHARE. `of` is a sum over `month_denominators`
+    // rows that may not exist for this audience-month; with claims in hand and
+    // no row, every line would read "3 of 0".
+    if (group.rows.length > 0 && of <= 0) {
+      return { audience, label: r.name, rows: [], empty: SAID_ABOUT_NO_DENOMINATOR(r.name) }
+    }
+    return group
   })
 }
 

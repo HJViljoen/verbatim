@@ -191,6 +191,11 @@ describe('the policy table — every prose slot is listed with its policy', () =
   // are written down; a new call adds itself here or it does not ship.
   const EXPECTED: Record<string, string> = {
     pass_a_audience_insight: 'digits',
+    // The other half of the same Pass A v4 response — `video_claims.claim`,
+    // in EITHER voice: what a brand says about itself (CO4) and what everybody
+    // else says about it (CO5). One call over one column, so one policy; the
+    // copy contract reads this row for both.
+    pass_a_brand_claim: 'digits',
     pass_b_theme: 'none',
     pass_c_finding: 'digits',
     pass_d_a_insight: 'digits',

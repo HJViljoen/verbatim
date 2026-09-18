@@ -45,7 +45,14 @@ export const competitiveUnlocks: Block<CompetitiveSurfaceData> = {
   render(data, mode = 'app') {
     const email = mode === 'email'
     return (
-      <BlockFrame title={competitiveUnlocks.title} question={competitiveUnlocks.question} mode={mode}>
+      <BlockFrame
+        title={competitiveUnlocks.title}
+        question={competitiveUnlocks.question}
+        mode={mode}
+        // The block fills its tile so its footer lands on the floor — see
+        // head-to-head.tsx for why `distribute="between"` could not.
+        className={mode === 'app' ? 'h-full' : undefined}
+      >
         <div className={email ? undefined : 'flex min-w-0 flex-col gap-2'}>
           {data.unlocks.rows.map((row) =>
             email ? (

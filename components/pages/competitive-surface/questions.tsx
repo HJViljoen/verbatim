@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockQuote } from '@/components/blocks/quote'
@@ -51,10 +52,21 @@ function Question({ row, mode }: { row: QuestionRow; mode: RenderMode }) {
     )
   }
 
+  // THE HOST VIDEO, AT LAST. `QuestionRow.videoHref` has been loaded and never
+  // rendered since WP14, so the artboard's "under a Topo Designs video" had
+  // nowhere to point and a reader could read a question without being able to
+  // go and see where it was asked. External, so a plain anchor — `next/link`
+  // is for the app's own addresses.
+  const where = cite && row.videoHref
+    ? <a href={row.videoHref} target="_blank" rel="noreferrer" className="text-[11px] text-muted-foreground hover:underline">{cite} · under the video →</a>
+    : cite
+      ? <span className="text-[11px] text-muted-foreground">{cite}</span>
+      : null
+
   return (
     <div className="flex min-w-0 flex-col gap-1 border-t border-border/70 pt-2">
       <p data-copy="stored" data-slot="pass_a_audience_insight" className="m-0 text-[12.5px]">{row.text}</p>
-      {cite ? <span className="text-[11px] text-muted-foreground">{cite}</span> : null}
+      {where}
       {row.quotes.map((q) => <BlockQuote key={q.ref} quote={q} mode={mode} />)}
     </div>
   )
@@ -74,9 +86,26 @@ export const competitiveQuestions: Block<CompetitiveSurfaceData> = {
     return (
       <BlockFrame
         title={competitiveQuestions.title}
+        // The block fills its tile so its footer lands on the floor — see
+        // head-to-head.tsx for why `distribute="between"` could not.
+        className={mode === 'app' ? 'h-full' : undefined}
         question={competitiveQuestions.question}
         mode={mode}
-        meta={q.rival ?? undefined}
+        // NO META HERE EITHER (a four-column tile, the same wrap): it was the
+        // rival's name alone, and the footer note under the same card already
+        // reads "of the videos about Ottobock" — the name with what it is the
+        // population OF, which is the half that was missing.
+        // A REAL FOOTER (the artboard's, and the first one this block has had):
+        // the link deeper on the left and the population on the right. What
+        // the rows are OF has been the block's summary sentence and never its
+        // footnote, so a reader scanning the tile's edges saw no denominator
+        // at all.
+        footer={
+          mode === 'app'
+            ? <Link href="/dashboard/voice" className="hover:underline">Hear these voices →</Link>
+            : 'Hear these voices.'
+        }
+        footerNote={q.rival ? `of the videos about ${q.rival}` : undefined}
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         {q.videos > 0 ? (

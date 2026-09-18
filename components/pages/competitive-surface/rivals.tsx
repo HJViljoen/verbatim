@@ -68,6 +68,26 @@ export const competitiveRivals: Block<CompetitiveSurfaceData> = {
     const email = mode === 'email'
     const empty = competitiveRivals.emptyState(data)
 
+    // THE APP ARM IS NOT A CARD (Block D wave 2, the artboard's CO1). The
+    // selection is a CONTROL for the page, and the mock draws it as a labelled
+    // pill row sitting directly under the soundness band, outside any tile. It
+    // was a full-width card with an uppercase eyebrow, a block question and a
+    // mono meta naming the selected rival — the chrome of a finding around a
+    // radio group. Print and email keep the frame, because neither has a page
+    // bar to sit under and a bare row there would have no heading at all.
+    if (mode === 'app') {
+      return (
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1.5">
+          <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground">Rival</span>
+          {empty ? <span className="text-[12px] text-muted-foreground">{empty}</span> : null}
+          {r.options.map((o) => <Option key={o.audience} option={o} mode={mode} />)}
+          {!r.identityRecorded && r.options.length > 0 ? (
+            <span className="min-w-0 text-[11.5px] text-muted-foreground">{UNRECORDED}</span>
+          ) : null}
+        </div>
+      )
+    }
+
     return (
       <BlockFrame
         title={competitiveRivals.title}

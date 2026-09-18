@@ -74,9 +74,13 @@ describe('buildPlaybook · CO7', () => {
       [9, 14],
       [13, 13],
     ])
+    // EACH SENTENCE NAMES ITS KEY, AND THE TWO KEYS DO NOT SHARE A
+    // DENOMINATOR. `FormatReading.of` counts the videos carrying a value for
+    // THIS key, so one line under both tables overstated the hook table's.
     expect(p.coverageLine).toBe(
-      'Read from 60 of The category’s 72 · 9 of Össur’s 14 · 13 of Ottobock’s 13 videos published in September.',
+      'Read from 60 of The category’s 72 · 9 of Össur’s 14 · 13 of Ottobock’s 13 videos published in September, for their format.',
     )
+    expect(p.hookCoverageLine).toContain('for their hook.')
   })
 
   it('leaves a column’s missing format null, and says the column WAS read', () => {
@@ -396,5 +400,62 @@ describe('the figure tables a document may name', () => {
     expect(f['h2h_you_posts_k'].value).toBe(9)
     expect(f['h2h_you_posts']).toBeUndefined()
     expect(f['h2h_you_posts_n']).toBeUndefined()
+  })
+})
+
+describe('the invariant the narrowed previous-month read rests on', () => {
+  // `loadPlaybookVideos` reads the CURRENT month whole and the PREVIOUS month
+  // narrowed to `is_client OR is_competitor`, because nothing uses the previous
+  // month's CATEGORY rows: `buildHeadToHead`'s `sideOf` is called for `client`
+  // and for the selected rival only, and `readIn(previousMonth)` comes off
+  // `month_denominators`. Measured on 2026-09-18, those discarded rows were 82%
+  // of Össur's previous month and 83% of Sealand's.
+  //
+  // That is an ASSUMPTION ABOUT PURE CODE, so it is pinned here rather than
+  // left in the loader's comment. The day the head-to-head starts reading the
+  // category's previous month — a category share of last month, say — this
+  // fails, which is the moment the loader has to widen again.
+
+  const august = (n: number, over: Partial<PlaybookVideo> = {}): PlaybookVideo[] =>
+    Array.from({ length: n }, (_, i) =>
+      vid({ id: `aug-cat-${i}`, upload_date: '2026-08-12', classified_type: 'story', engagement_rate: 2.7, sentiment: 'positive', sentiment_source: 'audience', ...over }),
+    )
+
+  const base: PlaybookVideo[] = [
+    ...Array.from({ length: 20 }, (_, i) => vid({ id: `c-sep-${i}`, is_client: true, classified_type: 'story', engagement_rate: 2.4, sentiment: 'positive', sentiment_source: 'audience' })),
+    ...Array.from({ length: 14 }, (_, i) => vid({ id: `c-aug-${i}`, upload_date: '2026-08-12', is_client: true, classified_type: 'story', engagement_rate: 2.7, sentiment: 'positive', sentiment_source: 'audience' })),
+    ...Array.from({ length: 30 }, (_, i) => vid({ id: `r-sep-${i}`, is_competitor: true, competitor_name: 'Ottobock', classified_type: 'story', engagement_rate: 3.1, sentiment: 'positive', sentiment_source: 'audience' })),
+    ...Array.from({ length: 22 }, (_, i) => vid({ id: `r-aug-${i}`, upload_date: '2026-08-12', is_competitor: true, competitor_name: 'Ottobock', classified_type: 'story', engagement_rate: 2.9, sentiment: 'neutral', sentiment_source: 'audience' })),
+    ...Array.from({ length: 40 }, (_, i) => vid({ id: `x-sep-${i}`, classified_type: 'story', engagement_rate: 3.4 })),
+  ]
+  const denominators = [
+    { month: '2026-08-01', audience: 'client', videos: 14, comments: 180 },
+    { month: '2026-08-01', audience: 'competitor:Ottobock', videos: 22, comments: 400 },
+    { month: '2026-08-01', audience: 'industry-other', videos: 300, comments: 5_000 },
+    { month: '2026-09-01', audience: 'client', videos: 20, comments: 240 },
+    { month: '2026-09-01', audience: 'competitor:Ottobock', videos: 30, comments: 520 },
+    { month: '2026-09-01', audience: 'industry-other', videos: 40, comments: 900 },
+  ]
+  const args = { month: '2026-09-01', brand: 'Össur', rival: 'Ottobock', denominators }
+
+  it('reads the same head to head with and without the previous month’s category rows', () => {
+    const narrow = buildHeadToHead({ ...args, videos: base })
+    const whole = buildHeadToHead({ ...args, videos: [...base, ...august(300)] })
+    expect(JSON.stringify(narrow)).toBe(JSON.stringify(whole))
+  })
+
+  it('reads the same playbook either way — it is scoped to the month in hand', () => {
+    const narrow = buildPlaybook({ month: '2026-09-01', brand: 'Össur', rival: 'Ottobock', videos: base })
+    const whole = buildPlaybook({ month: '2026-09-01', brand: 'Össur', rival: 'Ottobock', videos: [...base, ...august(300)] })
+    expect(JSON.stringify(narrow)).toBe(JSON.stringify(whole))
+  })
+
+  it('DOES change when a branded previous-month row is dropped — so the narrowing keeps those', () => {
+    // The other half of the claim: the rows the read still fetches are rows the
+    // answer depends on. Without it the test above would pass on a loader that
+    // dropped the previous month entirely.
+    const withoutRival = base.filter((v) => !v.id.startsWith('r-aug-'))
+    expect(JSON.stringify(buildHeadToHead({ ...args, videos: withoutRival })))
+      .not.toBe(JSON.stringify(buildHeadToHead({ ...args, videos: base })))
   })
 })
