@@ -12,11 +12,11 @@ import { gapBasisLine, gapLine } from '@/lib/reading/gap'
 import { marketFixture } from '@/components/pages/market-surface/fixture'
 import { competitiveFixture } from '@/components/pages/competitive-surface/fixture'
 import { QUARTERLY_BLOCKS, quarterlyBlocksFor } from './index'
-import { afterQuarterFixture, closedFixture, formingFixture, quarterlyFixture, subjectLeadFixture, thinMonthFixture } from './fixture'
+import { afterQuarterFixture, closedFixture, formingFixture, quarterlyFixture, subjectLeadFixture, thinMonthFixture, thinQuarterFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
-const STATES = [quarterlyFixture(), formingFixture(), closedFixture(), afterQuarterFixture(), thinMonthFixture()]
+const STATES = [quarterlyFixture(), formingFixture(), closedFixture(), afterQuarterFixture(), thinMonthFixture(), thinQuarterFixture()]
 
 describe('the eight pages', () => {
   it('render in all three modes on every state and keep the copy contract', () => {
@@ -597,6 +597,7 @@ describe('the quotes a page declares (qr.p3.quote, qr.p4.quote)', () => {
 describe('the artboard port (Block D wave 2)', () => {
   const data = quarterlyFixture()
   const forming = formingFixture()
+  const thinQuarter = thinQuarterFixture()
   const text = (key: keyof typeof QUARTERLY_BLOCKS, d = data) => renderText(QUARTERLY_BLOCKS[key].render(d, 'print', ctx))
 
   it('qr.p1.stats · the cover carries the quarter gap, the panel and a banded quarter step', () => {
@@ -631,6 +632,34 @@ describe('the artboard port (Block D wave 2)', () => {
     // The confidence dots are aria-hidden; the WORD and its sentence remain.
     expect(t).toContain('reasonable')
     expect(render(QUARTERLY_BLOCKS['quarterly.read'].render(data, 'print', ctx))).toContain('aria-hidden')
+  })
+
+  it('qr.p2.headline · the headline is ONE sentence, never the whole slot', () => {
+    // `Interpretation.sentences` is one element per MODEL sentence and one
+    // per composed CLAUSE GROUP where the code wrote it — and the quarterly
+    // fallback's first element is two sentences. Cutting on elements set the
+    // entire argument at 22px on every state this branch can render.
+    for (const state of STATES) {
+      const markup = render(QUARTERLY_BLOCKS['quarterly.read'].render(state, 'app', ctx))
+      const headline = markup.match(/text-\[22px\][^>]*>([\s\S]*?)<\/div>/)
+      if (!headline) continue
+      const words = headline[1].replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+      expect(words.replace(/\.$/, '')).not.toContain('. ')
+    }
+  })
+
+  it('qr.p2.whatitmeans · the card renders where the slot runs to three sentences', () => {
+    // The guard is right — below three, splitting the last sentence out
+    // leaves the headline with no body — but no state exercised the arm it
+    // guards, so the element the brief listed as MISSING shipped nowhere.
+    // `thinQuarterFixture()` reaches it the way production does: small
+    // window reads, `quarterChange` answering `too_little_data`, and the
+    // fallback composing its thin-comparison sentence as well as its opener.
+    const t = text('quarterly.read', thinQuarter)
+    expect(t).toContain('What it means')
+    expect(t).toContain('carried too few videos to compare, so they are printed as levels only')
+    // And the card does NOT appear where the slot is two sentences long.
+    expect(text('quarterly.read')).not.toContain('What it means')
   })
 
   it('qr.p2.standingadvice · a pruned grounding says so rather than printing a zero', () => {

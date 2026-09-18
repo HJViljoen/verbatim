@@ -4,6 +4,7 @@ import { BlockQuotes } from '@/components/blocks/quote'
 import { TokenProse } from '@/components/blocks/prose'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fullDate } from '@/lib/format'
+import { splitSentences } from '@/lib/prose/scrub'
 import { hasQuote } from '@/lib/renderables/quotes-freeze'
 import type { QuarterlyData, ReadPage } from '@/lib/pages/quarterly'
 import { QUARTER_PAGE_QUESTION, QUARTER_PAGE_TITLE, quarterLabel } from '@/lib/reports/quarterly'
@@ -48,9 +49,24 @@ import { Bullet, Card, Chip, Column, Columns, Dots, Eyebrow, Level, Note, Row, S
 // through `interpretation.note`, which is also where the fallback declares
 // itself.
 
-/** The interpretation, cut the way the artboard lays it out. */
+/**
+ * The interpretation, cut the way the artboard lays it out.
+ *
+ * IT SPLITS SENTENCES, NOT ARRAY ELEMENTS. `Interpretation.sentences` is one
+ * MODEL sentence per element where a model wrote it (`splitSentences` in
+ * `composeInterpretation`) and one composed CLAUSE GROUP per element where the
+ * code did — and the quarterly fallback's first element is two sentences:
+ * "Durability cleared the band this quarter. Everything else on this page is a
+ * level, not a change." Cutting on elements therefore set the whole argument
+ * at 22px on every state this branch can render, which is not a headline; it
+ * is the slot in a larger face. Splitting first makes the headline one
+ * sentence wherever the words came from.
+ */
 function argument(i: ReadPage['interpretation']): { headline: string | null; body: string[]; means: string | null } {
-  const s = i.sentences
+  const s = i.sentences.flatMap((sentence) => {
+    const parts = splitSentences(sentence)
+    return parts.length > 0 ? parts : [sentence]
+  })
   if (s.length === 0) return { headline: null, body: [], means: null }
   if (s.length < 3) return { headline: s[0], body: s.slice(1), means: null }
   return { headline: s[0], body: s.slice(1, -1), means: s[s.length - 1] }

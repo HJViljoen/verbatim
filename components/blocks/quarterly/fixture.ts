@@ -360,6 +360,42 @@ export function thinMonthFixture(): QuarterlyData {
 }
 
 /**
+ * A QUARTER WHOSE COMPARISONS MOSTLY COULD NOT BE DRAWN — the state that makes
+ * the interpretation run past one sentence.
+ *
+ * WHY IT EXISTS. `qr.p2.whatitmeans` is the artboard's "What it means" card,
+ * and `argument()` splits it off only where the slot wrote three sentences or
+ * more. Every state above runs to exactly two, so the card rendered on none of
+ * them and nothing would have failed if it were deleted — one of the thirteen
+ * elements the brief listed as MISSING was, on all the evidence this branch
+ * could produce, unshipped. This is not a hand-typed interpretation: the
+ * window reads are small, `quarterChange` answers `too_little_data` /
+ * `baseline_forming` over them, and `composeInterpretation`'s fallback then
+ * composes its thin-comparison sentence as well as its opener — which is the
+ * arm the card was written for, reached the way production reaches it.
+ */
+export function thinQuarterFixture(): QuarterlyData {
+  const overview = overviewFixture()
+  return composeQuarterly({
+    overview: { ...overview, bar: { ...overview.bar, readings: 8 } },
+    market: marketFixture(),
+    competitive: competitiveFixture(),
+    quarter: QUARTER,
+    prior: PRIOR,
+    readingAt: NOW,
+    thisQuarter: windowRead(46, 320),
+    lastQuarter: windowRead(41, 288),
+    subjectsNow: subjectWindow(46, 0.22),
+    subjectsBefore: subjectWindow(41, 0.18),
+    checks: checksRan,
+    record: record(13),
+    quiet: QUIET,
+    searchPlan: SEARCH_PLAN,
+    changeLog: CHANGE_LOG,
+  })
+}
+
+/**
  * A frozen quarterly artefact, over one of the readings above.
  *
  * Built the way `snapshotQuarterly` builds one — the same title, period,
