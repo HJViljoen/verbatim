@@ -6,6 +6,7 @@ import { competitivePage } from './competitive'
 import { marketPage } from './market'
 import { contentPage } from './content'
 import { agentPage } from './agent'
+import { overviewPage } from './overview/page'
 
 // The catalogue of renderables (plan D1): every page module, keyed. A tile is
 // addressed as `<page>.<tile>` — the export route, the render page and, later,
@@ -17,6 +18,11 @@ import { agentPage } from './agent'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const PAGES: Partial<Record<PageKey, PageModule<any>>> = {
+  // `overview` has been a PageKey since WP9 with no module behind it, which is
+  // why the page bar could not carry the artboard's Export control: the route
+  // answers "That page cannot be exported yet" for an unregistered key. Block D
+  // wave 2 registers it (components/pages/overview/page.tsx).
+  overview: overviewPage,
   dashboard: dashboardPage,
   voice: voicePage,
   profile: profilePage,

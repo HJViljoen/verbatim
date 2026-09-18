@@ -1529,7 +1529,17 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     refusals: refusals(pageVerdicts),
   }
   const record: RecordBlock = {
-    line: howSoundLine(recordInputs),
+    // THE RAMP LEADS (Block D wave 2, `main.bar.soundness`). The artboard's
+    // band opens "How sound is this: your 3rd monthly reading · 4 updates · …"
+    // and `howSoundLine` opens with the update count, because where a tenant IS
+    // in the ramp was printed on the OV0 tile instead — the one fact a reader
+    // meeting this page for the third time needs before any figure in it.
+    //
+    // COMPOSED HERE AND NOT IN `howSoundLine`, which is `lib/reading/record.ts`
+    // and belongs to the record package: `RecordInputs` carries no reading
+    // count, so leading with the counter there would mean widening a shared
+    // input shape from a page port. The page holds both halves already.
+    line: `${readingsCounter(readingsSoFar)} · ${howSoundLine(recordInputs)}`,
     lines: recordLines(recordInputs),
     href: '/dashboard/settings',
     freezesOn: freezesOn(month),

@@ -95,7 +95,7 @@ export function StudioNavItem() {
   return <NavRow item={STUDIO_ITEM} active={false} />
 }
 
-export function AppSidebar({ header, ops, studio }: { header?: React.ReactNode; ops?: React.ReactNode; studio?: React.ReactNode }) {
+export function AppSidebar({ header, ops, studio, tenant }: { header?: React.ReactNode; ops?: React.ReactNode; studio?: React.ReactNode; tenant?: React.ReactNode }) {
   const pathname = usePathname()
   // Ask is one of the nine, unconditionally (Phase 1 WP21, decision B). It
   // rode AGENT_ENABLED while sending was platform-admin only, on the argument
@@ -165,6 +165,14 @@ export function AppSidebar({ header, ops, studio }: { header?: React.ReactNode; 
       </SidebarContent>
 
       <SidebarFooter className="px-2 pb-3">
+        {/* WHOSE WORKSPACE, AND WHO YOU ARE IN IT (Block D wave 2,
+            `main.shell.sidebar.tenant`). The artboard draws it above Logout and
+            the footer held Logout alone, so a reader with two workspaces —
+            every platform admin, and every agency seat when Teams lands — had
+            nothing on the page telling them which one they were reading. A
+            slot, not a read: this component is "use client" and resolving the
+            session is async (the same reason `header` and `ops` are slots). */}
+        {tenant}
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton onClick={handleLogout} className={ITEM_CLASS}>

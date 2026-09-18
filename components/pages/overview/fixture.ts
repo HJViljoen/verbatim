@@ -555,7 +555,9 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
       acted: actedTally(1, 64),
     },
     record: {
-      line: '3 updates · 2,359 videos (TikTok 38% · YouTube 29% · Instagram 21% · Reddit 12%) · 27% of what was said on camera was not in English · 1 tracking change',
+      // AS `loadOverview` COMPOSES IT (Block D wave 2, `main.bar.soundness`):
+      // the ramp counter leads, then `howSoundLine`'s own sentence.
+      line: `${readingsCounter(3)} · 3 updates · 2,359 videos (TikTok 38% · YouTube 29% · Instagram 21% · Reddit 12%) · 27% of what was said on camera was not in English · 1 tracking change`,
       lines: [
         // AS `recordLines` COMPOSES IT. The fixture held the raw ISO form this
         // line used to produce, so the one artefact render that would have

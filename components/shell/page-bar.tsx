@@ -40,11 +40,18 @@ export interface PageBarProps {
   updates?: { update: string; previous?: string | null } | null
   /** WP7's composed record: the one line for the pill, the lines behind it. */
   record?: { line: string; lines: string[] } | null
+  /** The window the horizon pills are showing, in the artboard's own words —
+   *  "4 updates · 1 Sep → 28 Sep". Printed at the end of the pill row, mono,
+   *  because it is the RANGE the selected pill resolves to and a pill named
+   *  "This month" says nothing about which days are in it (Block D wave 2,
+   *  `main.bar.horizon.range`). Composed by the page, which is the only thing
+   *  that holds both the run count and the window. */
+  range?: ReactNode
   /** Export and anything else the page puts at the right-hand end. */
   children?: ReactNode
 }
 
-export function SurfacePageBar({ nav, params = {}, context = null, updates = null, record = null, children }: PageBarProps) {
+export function SurfacePageBar({ nav, params = {}, context = null, updates = null, record = null, range = null, children }: PageBarProps) {
   const s = surface(nav)
   const horizon = parseHorizon(params.horizon)
   const line = s.bar === 'week'
@@ -56,9 +63,19 @@ export function SurfacePageBar({ nav, params = {}, context = null, updates = nul
   return (
     <div className="flex shrink-0 flex-col gap-1.5">
       <PageBar title={s.label} context={line ?? undefined} subtitle={s.question ?? undefined}>
-        {hasHorizon(s) && <HorizonControl basePath={s.href} params={params} current={horizon} />}
         {children}
       </PageBar>
+      {hasHorizon(s) && (
+        <div className="flex flex-wrap items-center gap-2">
+          <HorizonControl basePath={s.href} params={params} current={horizon} />
+          {/* THE RANGE BESIDE THE PILLS, NOT INSIDE THEM. The artboard puts the
+              horizon on its own row under the question with the window's own
+              dates at the end of it; the control used to sit at the right-hand
+              end of the TITLE row, beside Export, where four pills and two
+              controls competed for one line. */}
+          {range ? <span className="font-mono text-[11px] whitespace-nowrap text-muted-foreground">{range}</span> : null}
+        </div>
+      )}
       {/* Under the bar, not in it (the mock's band): the basis is a sentence a
           reader reads, not a control they operate, and the right-hand end of
           the title row is where the controls are. */}

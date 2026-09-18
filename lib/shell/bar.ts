@@ -1,4 +1,4 @@
-import { fullDate, monthName, shortDate } from '../format'
+import { longMonth, shortDate } from '../format'
 import { DEFAULT_HORIZON, HORIZONS, HORIZON_LABEL, HORIZON_PARAM, type Horizon } from '../reading/horizon'
 import type { MonthStatus } from '../reading/types'
 
@@ -40,13 +40,33 @@ export interface ContextLineInput {
   sent?: string | null
 }
 
-/** "Össur · Sep 2026 · still filling · reading as at 15 Sep 2026" */
+/**
+ * "Sealand · September 2026 · still filling · as at 28 Sep"
+ *
+ * THE ARTBOARD'S TWO WORDS (Block D wave 2, `main.bar.context`). The line used
+ * to read "Össur · Sep 2026 · still filling · reading as at 15 Sep 2026", and
+ * the mock writes the month LONG and the stamp SHORT. Both changes are the
+ * same judgement about where the weight goes: the month is what the reading is
+ * OF and carries the sentence, the instant it was taken is a stamp the eye
+ * should be able to skip. "reading as at" was also saying "reading" twice — the
+ * band under it opens "How sound is this" and the bar's own question is "What
+ * is this month's reading?".
+ *
+ * THE YEAR STAYS OFF THE STAMP AND ON THE MONTH, which is the mock's shape and
+ * not an omission: "September 2026" dates the reading, and a stamp inside a
+ * month that has already been named does not need the year again.
+ */
 export function contextLine(input: ContextLineInput): string {
-  const parts = [input.brand, monthName(input.month)]
+  // `longMonth` is the month's own name with no year ("September"), because the
+  // sentence it was written for already has one. Here the year IS the claim —
+  // "September" alone on a page opened in January dates nothing — so it is
+  // appended from the month key itself rather than through a second formatter.
+  const year = input.month.slice(0, 4)
+  const parts = [input.brand, `${longMonth(input.month)} ${year}`]
   // A frozen month says nothing about filling: it is finished, and a clause
   // saying so on every past month would be noise on every page.
   if (input.status === 'filling') parts.push('still filling')
-  parts.push(`reading as at ${fullDate(input.readingAt)}`)
+  parts.push(`as at ${shortDate(input.readingAt)}`)
   if (input.sent) parts.push(input.sent)
   return parts.join(' · ')
 }

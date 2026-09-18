@@ -5,20 +5,25 @@ import { directionHits } from '../calibration'
 describe('contextLine', () => {
   it('names the brand, the month, that it is still filling, and when it was read', () => {
     expect(contextLine({ brand: 'Össur', month: '2026-09-01', status: 'filling', readingAt: '2026-09-15T18:00:00Z' }))
-      .toBe('Össur · Sep 2026 · still filling · reading as at 15 Sep 2026')
+      .toBe('Össur · September 2026 · still filling · as at 15 Sep')
   })
 
   it('says nothing about filling once the month is frozen', () => {
     expect(contextLine({ brand: 'Sealand', month: '2026-08-01', status: 'frozen', readingAt: '2026-10-02T06:00:00Z' }))
-      .toBe('Sealand · Aug 2026 · reading as at 2 Oct 2026')
+      // BLOCK D WAVE 2, `main.bar.context`: the artboard writes the month LONG
+      // and the stamp SHORT, and drops "reading" (the question above the bar
+      // and the band below it both already say it).
+      .toBe('Sealand · August 2026 · as at 2 Oct')
   })
 
   it('separates the month read from the moment read', () => {
     // The two dates are the point: a month that is still filling reads
     // differently on Monday and on Friday.
     const line = contextLine({ brand: 'Össur', month: '2026-09-01', status: 'filling', readingAt: '2026-09-01T00:00:00Z' })
-    expect(line).toContain('Sep 2026')
-    expect(line).toContain('1 Sep 2026')
+    expect(line).toContain('September 2026')
+    // The stamp keeps the DAY, which is the half that separates the two dates;
+    // it loses the year, which the month beside it has already settled.
+    expect(line).toContain('as at 1 Sep')
   })
 
   it('prints no direction word', () => {

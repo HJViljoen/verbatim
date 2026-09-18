@@ -20,7 +20,7 @@ describe('SurfacePageBar', () => {
 
   it('carries the month context on a reading surface', () => {
     expect(renderText(<SurfacePageBar nav="overview" context={CONTEXT} />))
-      .toContain('Össur · Sep 2026 · still filling · reading as at 15 Sep 2026')
+      .toContain('Össur · September 2026 · still filling · as at 15 Sep')
   })
 
   it('dates This week by its updates and offers no horizon', () => {

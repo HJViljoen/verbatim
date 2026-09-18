@@ -5,6 +5,7 @@ import { AccessBannerLoader } from "@/components/access-banner-loader"
 import { OpsNavLoader } from "@/components/ops/ops-nav-loader"
 import { StudioNavLoader } from "@/components/studio-nav-loader"
 import { SidebarWordmark, WorkspaceSwitcherLoader } from "@/components/workspace-switcher-loader"
+import { SidebarTenantLoader } from "@/components/sidebar-tenant-loader"
 
 // Deliberately synchronous: no session, no DB. This layout wraps every
 // dashboard route, and an async layout sits ABOVE each route's loading.tsx
@@ -35,6 +36,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         studio={
           <Suspense fallback={null}>
             <StudioNavLoader />
+          </Suspense>
+        }
+        tenant={
+          <Suspense fallback={null}>
+            <SidebarTenantLoader />
           </Suspense>
         }
       />
