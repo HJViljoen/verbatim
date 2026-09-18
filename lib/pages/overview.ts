@@ -15,10 +15,13 @@ import type { Quote, Scope } from '../renderables/types'
 import {
   CLIENT_AUDIENCE,
   INDUSTRY_AUDIENCE,
+  audienceOf,
   loadTrackedRivals,
   rivalKey,
 } from '../rivals'
 import { audienceLabel } from '../readiness/types'
+import { groundingFor, type Grounding } from '../reading/afterwards'
+import { fetchInsightsByIds } from '../quotes'
 import {
   isMissingKindMoodAttention,
   attentionRowsOf,
@@ -382,6 +385,29 @@ export interface MovesBlock {
 export interface LedgerRow {
   id: string
   title: string
+  /**
+   * How many updates have carried this advice (`main.sentence.rec.provenance`).
+   *
+   * D9: THE FIGURE IS RUN-INDEXED AND SAYS SO. A count of updates is the run
+   * clock's own bookkeeping and is never a period key — so it is printed as
+   * "repeated across 3 updates", with the word "update" in it, and never folded
+   * into a month. Counted over distinct `run_id` inside the lineage, exactly as
+   * `AdviceRow.timesMade` counts it on Market, so the two pages cannot disagree
+   * about how often a thing has been said.
+   */
+  timesMade: number
+  /**
+   * What the advice rests on: distinct videos behind the evidence it cited, or
+   * the statement that the evidence is gone.
+   *
+   * NULL MEANS "NOTHING WAS RECORDED", which is a third state and not a zero:
+   * a row that wrote down no evidence ids at all has nothing to count. A row
+   * that DID record them and whose evidence has since been pruned reads as
+   * pruned (`Grounding.pruned`), which is what every live Sealand row does —
+   * `prune-stale-analysis` removes the `audience_insights` those rows cite. The
+   * cell must never print "0 videos behind it" for either.
+   */
+  grounding: Grounding | null
   /** Months since the recommendation was first made; null until lineage has
    *  two runs behind it. */
   monthsOld: number | null
@@ -408,10 +434,37 @@ export interface AnomalyLine {
   href: string
 }
 
+/**
+ * The on-screen text cap.
+ *
+ * `videos.ocr_text` is a whole frame's worth of words — a title card, a price,
+ * a hashtag stack — and the artboard's line is one clause under a quote
+ * ("1 bag. 3 years. 0 regrets"). Longer than this and it stops being context
+ * for the quote and becomes a second body of text beside it, so it is cut with
+ * an ellipsis rather than wrapped to four lines.
+ */
+export const ON_SCREEN_MAX = 90
+
 export interface Voice {
   quote: Quote
   /** Platform · date · where it was said. */
   cite: string
+  /**
+   * What the video said ON SCREEN, where the OCR pass read any
+   * (`main.sentence.voice2`).
+   *
+   * A SECOND VOICE ON ONE VIDEO, AND A DIFFERENT SPEAKER. The quote is a
+   * commenter's words; this is the brand's or the creator's, burnt into the
+   * frame — which is exactly why the artboard prints them together: "it's the
+   * only one that never leaked" under "1 bag. 3 years. 0 regrets" is the
+   * audience answering the claim. `loadVoices` read `comments` and `videos`
+   * and never asked for `ocr_text`, so the line had no field at all.
+   *
+   * Null where the OCR pass has not run, found no image, or read nothing — and
+   * null, not an empty string, so the render draws nothing rather than an
+   * empty label.
+   */
+  onScreen: string | null
   /** Where to go and read it. Null where the video carries no public URL —
    *  the cite is then printed without a link rather than with a dead one. */
   href: string | null
@@ -1086,6 +1139,11 @@ interface RecRow {
   /** Which copy of a lineage is the current one — `buildAdviceRows`'s sort key,
    *  read here so the two surfaces count "acted" by one rule. */
   created_at?: string | null
+  /** The update that wrote this copy. Pass D-b deletes and reinserts the whole
+   *  table each update, so the number of DISTINCT runs inside one lineage is
+   *  how many updates have carried the advice — `AdviceRow.timesMade`'s rule,
+   *  read here so Overview and Market count it the same way. */
+  run_id?: string | null
 }
 
 interface AnomalyFlagRow {
@@ -1217,7 +1275,12 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
   const themedRunAhead = fetchRunningRunIds(supabase, clientId, 'overview').then((ids) =>
     fetchThemedRunId(supabase, clientId, ids, 'overview'),
   )
-  const ledgerAhead = loadLedger(supabase, clientId)
+  // `readingAt`, NOT THE READING'S MONTH: both figures the ledger dates — how
+  // long the advice has been on record and the month the grounding is STATED in
+  // — are taken at the instant the page was built, which is what
+  // `GroundingInput.month` documents itself as. The month key is resolved after
+  // the axis, and this read starts before it.
+  const ledgerAhead = loadLedger(supabase, clientId, readingAt)
   themedRunAhead.catch(() => {})
   ledgerAhead.catch(() => {})
 
@@ -2259,9 +2322,90 @@ export function ledgerTally(
   return actedTally(decided, newestOf.size)
 }
 
+/**
+ * How many whole months ago a lineage was FIRST written down, or null.
+ *
+ * THE OLD ANSWER WAS A HARD NULL AND IT WAS RIGHT FOR THE WRONG REASON. Pass
+ * D-b deletes and reinserts every recommendation each update, so the newest
+ * copy's `created_at` is the newest update's date and dating the advice from it
+ * would date it from its newest copy. What survives an update is the LINEAGE,
+ * and where a lineage holds more than one copy the OLDEST copy's date is real
+ * evidence that the advice existed then — the same date `AdviceRow.firstMade`
+ * prints on Market. A lineage with one copy has no history behind it and gets
+ * null, exactly as before, so the age is never invented out of a backfill.
+ *
+ * D14: THIS IS EARLIEST EVIDENCE, NOT A START DATE. The advice may well have
+ * been made before the oldest copy we still hold; this is the earliest we can
+ * show, and the render's wording says "first on record".
+ */
+export function monthsOnRecord(group: readonly RecRow[], now: string): number | null {
+  if (group.length < 2) return null
+  const dates = group.map((r) => r.created_at ?? '').filter(Boolean).sort()
+  const first = dates[0]
+  if (!first) return null
+  const a = new Date(`${first.slice(0, 10)}T00:00:00.000Z`)
+  const b = new Date(`${now.slice(0, 10)}T00:00:00.000Z`)
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return null
+  const months = (b.getUTCFullYear() - a.getUTCFullYear()) * 12 + (b.getUTCMonth() - a.getUTCMonth())
+  return months > 0 ? months : null
+}
+
+/**
+ * The videos behind one piece of advice, resolved through the two hops the
+ * evidence actually takes (`main.sentence.rec.provenance`).
+ *
+ * `recommendations.based_on.insight_ids` names MARKET INSIGHTS; a market
+ * insight's `evidence.supporting_theme_ids` names `audience_insights`; and an
+ * audience insight names the video it was read from. Market walks the same two
+ * hops for its whole ledger (lib/pages/market-surface.ts); this walks them for
+ * the ONE row Overview prints, which is two bounded id-set reads and no scan.
+ *
+ * ID-SET LOOKUPS STAY ON THE BASE TABLE, deliberately (AGENTS.md): resolving by
+ * `audience_insight_id` must still answer while an in-flight run has superseded
+ * a row but not yet pruned it. `fetchInsightsByIds` is that read and never
+ * touches `embedding`.
+ */
+async function loadGrounding(
+  supabase: SupabaseClient,
+  clientId: string,
+  rec: RecRow,
+  statedAt: string,
+): Promise<Grounding | null> {
+  const cited = [...new Set(rec.based_on?.insight_ids ?? [])]
+  if (cited.length === 0) return null
+  try {
+    const miRes = await supabase.from('market_insights').select('id, evidence').eq('client_id', clientId).in('id', cited)
+    const insights = rows<{ id: string; evidence: { supporting_theme_ids?: string[] } | null }>(miRes, 'overview.ledgerInsights')
+    const audienceIds = [...new Set(insights.flatMap((mi) => mi.evidence?.supporting_theme_ids ?? []))]
+    const audienceRows = audienceIds.length > 0
+      ? await fetchInsightsByIds<{ id: string; theme: string | null; source_video_id: string | null }>(
+          supabase, audienceIds, 'id, theme, source_video_id',
+        )
+      : []
+    return groundingFor({
+      basedOn: audienceRows.map((a) => a.id),
+      videoByInsight: new Map(audienceRows.map((a) => [a.id, a.source_video_id])),
+      themeIds: audienceRows.map((a) => a.theme).filter((t): t is string => Boolean(t)),
+      audience: INDUSTRY_AUDIENCE,
+      month: statedAt,
+      // WHAT THE ROW RECORDED, before anything resolved. Without it a row whose
+      // market insights are themselves gone reads as "nothing was recorded"
+      // rather than as pruned — and on this tenant that is every row.
+      cited: cited.length,
+    })
+  } catch (error) {
+    // A failed read is not an absent evidence chain. Say so in the log and
+    // print nothing, rather than printing the pruned sentence about a network
+    // error.
+    console.error(`[pages] overview.grounding: ${(error as { message?: string })?.message ?? String(error)}`)
+    return null
+  }
+}
+
 async function loadLedger(
   supabase: SupabaseClient,
   clientId: string,
+  statedAt: string,
 ): Promise<{ top: LedgerRow | null; acted: { decided: number; of: number; line: string } | null }> {
   const [recRows, decisionRes] = await Promise.all([
     // THROUGH selectAll, like every other list read: a bare `.select()` caps
@@ -2277,7 +2421,7 @@ async function loadLedger(
         // `lineage_id` is the only thing about it that survives. Ordering is
         // `topRecommendation`'s — priority, then how well grounded — so Overview
         // and Market name the same top row.
-        .select('id, title, lineage_id, status, priority, based_on, created_at')
+        .select('id, title, lineage_id, status, priority, based_on, created_at, run_id')
         .eq('client_id', clientId)
         .order('id', { ascending: true }),
     ).catch((error: unknown) => {
@@ -2304,18 +2448,19 @@ async function loadLedger(
     ? [...decisionRes].filter((d) => d.lineage_id === rec.lineage_id).sort((a, b) => (a.decided_at < b.decided_at ? 1 : -1))[0] ?? null
     : null
   const inherited = rec.lineage_id ? inheritedStatus(rec.lineage_id, decisionRes) : null
+  // THE LINEAGE, NOT THE ROW. Everything the provenance line states is a fact
+  // about the run of copies one lineage holds — how long it has been on record
+  // and how many updates have carried it — and a single copy states neither.
+  const lineage = rec.lineage_id ? recRows.filter((r) => r.lineage_id === rec.lineage_id) : [rec]
   const top: LedgerRow = {
     id: rec.id,
     title: rec.title,
-    // NO AGE, AND THAT IS THE HONEST ANSWER TODAY. "First raised N months ago"
-    // needs a lineage with history behind it; every stored row was written by
-    // the newest update and `lineage_id` was backfilled to the row's own id in
-    // 20260915093000, so dating one from what is stored would date it from its
-    // newest copy. The earliest DECISION is a real date and a different claim
-    // (when you first acted, not when we first said it), so it is printed as
-    // itself below and never as an age. Market's ledger (WP14) is where the
-    // age arrives, once two updates have carried one lineage.
-    monthsOld: null,
+    // FIRST ON RECORD, and only where a lineage has more than one copy behind
+    // it — see `monthsOnRecord` for why a single copy's date is the newest
+    // update's and not the advice's.
+    monthsOld: monthsOnRecord(lineage, statedAt),
+    timesMade: new Set(lineage.map((r) => r.run_id ?? r.id)).size,
+    grounding: await loadGrounding(supabase, clientId, rec, statedAt),
     status: recStatus(inherited ?? rec.status),
     statusLabel: REC_STATUS_LABEL[recStatus(inherited ?? rec.status)],
     decidedAt: decided?.decided_at ?? null,
@@ -2398,6 +2543,29 @@ async function buildAnomaly(supabase: SupabaseClient, flag: AnomalyFlagRow): Pro
 }
 
 /** Two voices from the videos behind the sentence (design §3 OV1). */
+/**
+ * "under your own video" · "under Freitag's video" · "under a category video".
+ *
+ * The audience is read LIVE off the video's own entity tags, which is today's
+ * answer and the right one: a re-tag since the run moves the video, and a cite
+ * that still named the old owner would be a claim about our bookkeeping
+ * (lib/rivals.ts `audienceOf` says the same thing about `themes.bucket`).
+ */
+export function citeWhere(v: { is_client?: boolean | null; is_competitor?: boolean | null; competitor_name?: string | null }): string {
+  const audience = audienceOf(v)
+  if (audience === CLIENT_AUDIENCE) return 'under your own video'
+  if (audience === INDUSTRY_AUDIENCE) return 'under a category video'
+  return `under ${audienceLabel(audience)}\u2019s video`
+}
+
+/** The on-screen line, trimmed to one clause — or null, which is what a video
+ *  the OCR pass has not read, could not read, or read nothing from all give. */
+export function onScreenText(text: string | null | undefined): string | null {
+  const t = (text ?? '').replace(/\s+/g, ' ').trim()
+  if (!t) return null
+  return t.length <= ON_SCREEN_MAX ? t : `${t.slice(0, ON_SCREEN_MAX - 1).trimEnd()}\u2026`
+}
+
 async function loadVoices(
   supabase: SupabaseClient,
   clientId: string,
@@ -2461,21 +2629,55 @@ async function loadVoices(
   // comment, TikTok and Instagram have no public per-comment URL and land on
   // the post. A video with no stored URL gets no link rather than a dead one.
   const nativeIds = [...new Set([...meta.values()].map((m) => m.video_id).filter((v): v is string => Boolean(v)))]
-  const urlByKey = new Map<string, string>()
+  type VideoMeta = {
+    platform: string | null
+    video_id: string | null
+    video_url: string | null
+    ocr_text?: string | null
+    is_client?: boolean | null
+    is_competitor?: boolean | null
+    competitor_name?: string | null
+  }
+  const videoByKey = new Map<string, VideoMeta>()
   if (nativeIds.length > 0) {
-    const res = await supabase.from('videos').select('platform, video_id, video_url').eq('client_id', clientId).in('video_id', nativeIds)
-    for (const v of rows<{ platform: string | null; video_id: string | null; video_url: string | null }>(res, 'overview.voiceVideos')) {
-      if (v.video_url && v.video_id) urlByKey.set(`${v.platform}::${v.video_id}`, v.video_url)
+    // WHOSE VIDEO IT WAS, AND WHAT THE VIDEO ITSELF SAID (Block D wave 2,
+    // `main.sentence.voice1` / `.voice2`). The cite tail used to end with the
+    // constant "under a video we read" on every quote on the page, which tells
+    // a reader nothing they did not already know — the artboard's tail names
+    // the AUDIENCE ("under a category video"), which is the fact that makes a
+    // quote evidence for the claim above it. Both come off the same row this
+    // query was already fetching for the link, so the tail and the on-screen
+    // line cost no extra round trip.
+    //
+    // AND IT DEGRADES WHERE THE OCR MIGRATION IS NOT APPLIED.
+    // `20260912100000_ocr_text.sql` adds `ocr_text`; on a database without it
+    // PostgREST fails the whole select, which would have cost the LINK as well
+    // as the line. So the narrow select is the fallback and the quote simply
+    // has no on-screen text — the same shape as a video the OCR pass never
+    // read.
+    const columns = 'platform, video_id, video_url, ocr_text, is_client, is_competitor, competitor_name'
+    let videoRows: VideoMeta[]
+    try {
+      videoRows = rows<VideoMeta>(
+        await supabase.from('videos').select(columns).eq('client_id', clientId).in('video_id', nativeIds),
+        'overview.voiceVideos',
+      )
+    } catch {
+      videoRows = rows<VideoMeta>(
+        await supabase.from('videos').select('platform, video_id, video_url').eq('client_id', clientId).in('video_id', nativeIds),
+        'overview.voiceVideos',
+      )
     }
+    for (const v of videoRows) if (v.video_id) videoByKey.set(`${v.platform}::${v.video_id}`, v)
   }
   const voices = shown.map((c) => {
     const m = c.commentId ? meta.get(c.commentId) : undefined
+    const v = m?.platform && m.video_id ? videoByKey.get(`${m.platform}::${m.video_id}`) ?? null : null
     const cite = [
       m?.platform ? m.platform : null,
       m?.comment_date ? shortDate(m.comment_date) : null,
-      'under a video we read',
+      v ? citeWhere(v) : 'under a video we read',
     ].filter(Boolean).join(' · ')
-    const url = m?.platform && m.video_id ? urlByKey.get(`${m.platform}::${m.video_id}`) ?? null : null
     return {
       quote: {
         ref: quoteRef.evidence(c.evidenceId),
@@ -2483,7 +2685,8 @@ async function loadVoices(
         ...(c.lang != null ? { lang: c.lang, english: c.english ?? null } : {}),
       },
       cite,
-      href: citationLink(m?.platform ?? null, url, m?.comment_id ?? null).href,
+      onScreen: onScreenText(v?.ocr_text ?? null),
+      href: citationLink(m?.platform ?? null, v?.video_url ?? null, m?.comment_id ?? null).href,
     }
   })
   return { voices, from: pool.length }

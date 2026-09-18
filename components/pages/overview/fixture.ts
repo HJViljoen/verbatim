@@ -12,6 +12,7 @@ import {
   type MoveCandidate,
   type MoveReading,
 } from '@/lib/reading/moves'
+import { groundingFor } from '@/lib/reading/afterwards'
 import { methodFixture, methodRefusedFixture } from '@/lib/test/method-fixture'
 
 // The Overview's block fixtures (Phase 1 WP11).
@@ -437,14 +438,33 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
         id: 'r1',
         title: 'Lead with repairability, not recycling, in the next campaign',
         monthsOld: 3,
+        // D9: run-indexed, and the render says "updates" rather than folding
+        // it into a month.
+        timesMade: 3,
+        // THE GROUNDED ARM. `refusedFixture` carries the PRUNED one, which is
+        // what all twelve of Sealand's live ledger rows actually are — the
+        // insights they cite have been removed since they were written, so the
+        // cell must say so rather than print "0 videos behind it".
+        grounding: groundingFor({
+          basedOn: ['ai-1', 'ai-2', 'ai-3'],
+          videoByInsight: new Map([['ai-1', 'v1'], ['ai-2', 'v2'], ['ai-3', 'v2']]),
+          themeIds: ['durability', 'repair'],
+          audience: INDUSTRY_AUDIENCE,
+          month: REAL_MONTH,
+          cited: 3,
+        }),
         status: 'in_progress',
         statusLabel: 'Working on it',
         decidedAt: '2026-09-02',
         href: '/dashboard/market',
       },
+      // THE ARTBOARD'S TWO VOICES, with the tail `loadVoices` now composes:
+      // platform · date · WHOSE video it was. The second carries the video's
+      // own on-screen text, which is the artboard's second line and a second
+      // speaker — the brand's words under the audience's.
       voices: [
-        { quote: { ref: 'e:1', text: 'Three winters on the bike and the seams are still perfect.', lang: 'en', english: null }, cite: 'tiktok · 14 Sep · under a video we read', href: 'https://www.tiktok.com/@x/video/1' },
-        { quote: { ref: 'e:2', text: 'Dit het twee winters gehou.', lang: 'af', english: 'It held through two winters.' }, cite: 'tiktok · 11 Sep · under a video we read', href: null },
+        { quote: { ref: 'e:1', text: 'Three winters on the bike and the seams are still perfect.', lang: 'en', english: null }, cite: 'tiktok · 14 Sep · under a category video', onScreen: null, href: 'https://www.tiktok.com/@x/video/1' },
+        { quote: { ref: 'e:2', text: 'Dit het twee winters gehou.', lang: 'af', english: 'It held through two winters.' }, cite: 'tiktok · 11 Sep · under your own video', onScreen: '1 bag. 3 years. 0 regrets', href: null },
       ],
       voicesFrom: 37,
       verdicts: [lead],
@@ -668,6 +688,40 @@ export function refusedFixture(): OverviewData {
       acted: actedTally(1, 64),
     },
     method: methodRefusedFixture(),
+  }
+}
+
+/**
+ * The month with the ledger row PRUNED — the state every live Sealand
+ * recommendation is in (`main.sentence.rec.provenance`).
+ *
+ * All twelve rows the ledger draws were first made on 28 June, every one cites
+ * `audience_insights` ids, and `prune-stale-analysis` has since removed every
+ * one of them — so the chain resolves to zero videos. The cell must read as an
+ * absence and never as "0 videos behind it", which is a claim about the
+ * evidence where the truth is that a later update replaced it.
+ */
+export function prunedLedgerFixture(): OverviewData {
+  const base = overviewFixture()
+  const ledger = base.sentence.ledger!
+  return {
+    ...base,
+    sentence: {
+      ...base.sentence,
+      ledger: {
+        ...ledger,
+        monthsOld: null,
+        timesMade: 1,
+        grounding: groundingFor({
+          basedOn: [],
+          videoByInsight: new Map(),
+          themeIds: [],
+          audience: INDUSTRY_AUDIENCE,
+          month: REAL_MONTH,
+          cited: 4,
+        }),
+      },
+    },
   }
 }
 
