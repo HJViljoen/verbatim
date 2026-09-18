@@ -17,14 +17,17 @@ import type { CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
 // on one fixed grid, and that is what this draws. What changes is what goes in
 // three of the seven columns, and every change is a rule:
 //
-//   · THE "of N" IS PER SIDE, NOT SHARED (D10). The mock puts one `n 84 · 142`
-//     beside the measure label and then prints two bare percentages under it —
-//     but "84" is your denominator and "142" is theirs, and a level printed
-//     without its own denominator is the score this product does not show. So
-//     each side's now-figure is a `FigureCell` carrying its own "of N", and the
-//     measure label keeps the CLOCK instead (`basisLine`) — which is the other
-//     thing the mock's shared `n` was hiding, because two of these five rows
-//     are dated by the comment and three by the video's upload.
+//   · THE "of N" IS PER SIDE, NOT SHARED (D10), AND IT IS ON BOTH MONTHS. The
+//     mock puts one `n 84 · 142` beside the measure label and then prints two
+//     bare percentages under it — but "84" is your denominator and "142" is
+//     theirs, and a level printed without its own denominator is the score this
+//     product does not show. So each side's now-figure is a `FigureCell`
+//     carrying its own "of N" — and so is its THEN figure, which shipped bare
+//     until the review caught it: last month's share is a level too, and
+//     `prev.value` was in hand the whole time. The measure label keeps the
+//     CLOCK instead (`basisLine`) — which is the other thing the mock's shared
+//     `n` was hiding, because two of these five rows are dated by the comment
+//     and three by the video's upload.
 //
 //   · THREE ROWS CARRY NO BADGE, ON PURPOSE (D3). `proportionDelta` is a
 //     two-PROPORTION band. Videos-about and positive share are k of n and are
@@ -54,17 +57,42 @@ import type { CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
 // which is wider than the mock's "+0.2 pt" and the mock never has to draw one.
 // A `Tile` is `overflow-hidden`, so a column too narrow does not scroll — it
 // clips the answer off the page.
-const GRID = 'grid grid-cols-[minmax(150px,1fr)_68px_50px_112px_68px_50px_112px] items-center'
+const GRID = 'grid grid-cols-[minmax(140px,1fr)_68px_64px_112px_68px_64px_112px] items-center'
 
 const HEAD = 'font-mono text-[10px] uppercase tracking-[0.06em] text-muted-foreground'
 
-/** One side's "then" — mono 11.5 muted, the mock's second column exactly. */
+/** One side's "then" — mono 11.5 muted, the mock's second column, WITH ITS OWN
+ *  DENOMINATOR.
+ *
+ *  IT PRINTED A BARE PERCENTAGE, TWO COLUMNS FROM A HEADER ARGUING AGAINST
+ *  EXACTLY THAT. `prev` carries `value` — `shareSide` and `sentimentSide` both
+ *  compute it — and the cell threw it away and rendered `prev.text` alone
+ *  inside a `figure` marker, so "8.1%" reached the page as the score this
+ *  product does not show and rule (b), which reads LEVEL nodes, could not see
+ *  it. Same rule as `Now`: `n === 0` is the measure that is not a share of
+ *  anything, and only there is the denominator dropped. */
 function Then({ level, mode }: { level: FaceOffSide | null; mode: RenderMode }) {
-  const text = level?.prev?.text ?? null
-  if (text === null) return mode === 'email' ? <span /> : <span aria-hidden />
-  return mode === 'email'
-    ? <span style={{ fontFamily: FONT.mono, fontSize: 11.5, color: EMAIL.muted }}>{text}</span>
-    : <span data-copy="figure" className="font-mono text-[11.5px] tabular-nums text-muted-foreground">{text}</span>
+  const prev = level?.prev ?? null
+  if (!prev) return mode === 'email' ? <span /> : <span aria-hidden />
+  const of = prev.value.n > 0 ? `of ${fmtInt(prev.value.n)}` : null
+  if (mode === 'email') {
+    return (
+      <span style={{ fontFamily: FONT.mono, fontSize: 11.5, color: EMAIL.muted }}>
+        {of ? (
+          <span data-copy="level">
+            <span data-copy="figure">{prev.text}</span> {of}
+          </span>
+        ) : <span data-copy="figure">{prev.text}</span>}
+      </span>
+    )
+  }
+  const cell = (
+    <span className="flex min-w-0 flex-col gap-px font-mono text-[11.5px] tabular-nums text-muted-foreground">
+      <span data-copy="figure" className="leading-none">{prev.text}</span>
+      {of ? <span className="text-[10px] leading-none">{of}</span> : null}
+    </span>
+  )
+  return of ? <span data-copy="level" className="flex min-w-0">{cell}</span> : cell
 }
 
 /** One side's "now" — the figure over what it is of.
@@ -207,7 +235,7 @@ export const competitiveHeadToHead: Block<CompetitiveSurfaceData> = {
               </div>
             ) : (
               <div className="-mx-1 overflow-x-auto px-1">
-                <div className="min-w-[610px]">
+                <div className="min-w-[638px]">
                   <div className={`${GRID} border-b border-border/70`}>
                     <span className={`${HEAD} pb-1.5`}>Measure</span>
                     <SideHead label={data.brand} color="var(--you)" mode={mode} />

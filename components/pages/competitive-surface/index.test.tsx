@@ -360,6 +360,23 @@ describe('CO3 and CO7 · the data the tiles bind (Block D, D6)', () => {
 // ---- the four tiles wave 2 mounted -------------------------------------------
 
 describe('CO3 · head to head, then and now', () => {
+  it('carries an "of N" on last month\u2019s figure too, not just this month\u2019s', () => {
+    // `prev.text` was rendered alone inside a `figure` marker, so "8.1%" and
+    // "76%" reached the page as bare scores two columns from a header arguing
+    // for per-side denominators. Rule (b) reads LEVEL nodes and could not see
+    // it; `prev.value` was in hand the whole time.
+    const h = competitiveFixture().headToHead!
+    const share = h.measures.find((m) => m.key === 'videos')!
+    const prev = share.you!.prev!
+    const text = renderText(competitiveHeadToHead.render(competitiveFixture(), 'app', ctx))
+    expect(text).toContain(`${prev.text} of `)
+    for (const mode of MODES) {
+      const markup = render(competitiveHeadToHead.render(competitiveFixture(), mode, ctx))
+      // Every "then" that is a share carries its denominator inside a level.
+      expect(markup).toContain('data-copy="level"')
+    }
+  })
+
   it('carries an "of N" on every level, per side, never one shared', () => {
     // The artboard prints one `n 84 · 142` beside the measure and then two bare
     // percentages under it — but 84 is YOUR denominator and 142 is theirs, and
