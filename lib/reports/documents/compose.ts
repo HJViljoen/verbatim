@@ -4,7 +4,7 @@ import { readsAsHeroQuote } from '../../quotes'
 import type { Quote, Slide } from '../../renderables/types'
 import type { FigureTable } from '../types'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../../rivals'
-import { CLUSTERING_CAVEAT, briefStamp, denominatorLine, platformLine, type BriefReading } from './reading'
+import { CLUSTERING_CAVEAT, briefStamp, commentsRead, denominatorLine, platformLine, type BriefReading } from './reading'
 import { SECTION_SLIDE_PREFIX, type DocBriefSection, type DocLayoutEntry, type DocumentReading } from './types'
 import type { BriefEntry } from './sections'
 import { missingSentence, missingSummary, pageKindsOf } from './sections'
@@ -97,7 +97,7 @@ export function documentFigures(s: Signals, answers: ResearchAnswer[]): FigureTa
     const of = (audience: string) => r.denominators.find((d) => d.audience === audience) ?? null
     const category = of(INDUSTRY_AUDIENCE)
     const client = of(CLIENT_AUDIENCE)
-    const comments = r.denominators.reduce((n, d) => n + d.comments, 0)
+    const comments = commentsRead(r.denominators)
     f.reading_month = { label: 'the month this reading is of', value: r.monthLabel, kind: 'name' }
     f.conversations = { label: `comments read in ${r.monthLabel}`, value: fmtCount(comments), kind: 'count' }
     if (category) f.videos = { label: `videos read for the category in ${r.monthLabel}`, value: fmtCount(category.videos), kind: 'count' }
@@ -445,6 +445,21 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
       return [{ id: 'language', kind: 'language' as const, title: PAGE_TITLE.language, blocks: [{ id: 'language.care', field: 'care' as const, text: '', items: care }] }]
     },
 
+    // ── the two counted sheets (E-sales, sales.p5 / sales.p6) ────────────
+    // NO BLOCK, AND THAT IS THE DESIGN. Every line on these two sheets is a
+    // count the reading already made and froze onto `slideFigures`; the deck
+    // draws them from there. A page with no blocks writes nothing, is asked of
+    // no model and costs no tokens — and a sheet whose material is missing
+    // drops out rather than printing an empty one, the same rule the say-hear
+    // and asked builders follow.
+    switching: () => (s.slideFigures?.switching
+      ? [{ id: 'switching', kind: 'switching' as const, title: PAGE_TITLE.switching, blocks: [] }]
+      : []),
+
+    scripted: () => (s.slideFigures?.scripted.length
+      ? [{ id: 'scripted', kind: 'scripted' as const, title: PAGE_TITLE.scripted, blocks: [] }]
+      : []),
+
     method: () => {
       blocksW.push({ blockId: 'method.method', basedOn: [] })
       return [{ id: 'method', kind: 'method' as const, title: PAGE_TITLE.method, blocks: [{ id: 'method.method', field: 'method' as const, text: '', items: methodItems(s, a.period, thin, s.updatesCount, printedKinds, a.settings.brief) }] }]
@@ -490,6 +505,13 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
     ...(s.reading ? { reading: documentReading(s.reading) } : {}),
     ...(s.missing?.length ? { missing: s.missing.map((m) => ({ ...m, sections: [...m.sections] })) } : {}),
     ...(s.sections?.length ? { sections: s.sections.map((x) => ({ ...x })), surfaces: s.surfaces ?? {}, layout } : {}),
+    // THE BRIEF'S OWN SLIDE FIGURES, FROZEN (E-sales). Wave 1 computed all six
+    // and handed them to nobody. They are stored rather than re-read because a
+    // share link renders from the snapshot alone, and because a count of one
+    // month must read the same in March as it did in September. The one QUOTE
+    // in them rides `freezeQuotes` / `resolveQuotes` structurally, exactly as a
+    // finding's pull quote does — nothing here stores a commenter's words.
+    ...(s.slideFigures ? { slideFigures: s.slideFigures } : {}),
     pages,
     // What the skeleton above was composed from, so it can be composed again
     // (WP7d): the eval and any rebuild read these, not the picker.
@@ -506,6 +528,9 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
       sources: sourcesOf(s),
       heldBack: s.heldBackPhrases,
       thin,
+      // The denominator behind "Findings". Computed since the composer
+      // existed, kept in the workings, never shown to a reader.
+      dropped: dropped.length,
     },
     notSureYet,
     generatedAt: new Date().toISOString(),
@@ -540,6 +565,14 @@ export function documentReading(r: BriefReading): DocumentReading {
     denominators: r.denominators.map((d) => ({ ...d })),
     platformMix: { ...r.platformMix },
     crossesClustering: r.crossesClustering,
+    // THE FOOTNOTE AND THE DELIVERY LINE, FROZEN (E-sales, `sales.p7`). Both
+    // were composed on every reading and consumed only by `methodItems`, as
+    // prose inside one paragraph. The method SHEET prints them as what they
+    // are — a footnote under the numbers card, and the record of how many
+    // updates there have been — and a stored artefact has to keep them.
+    method: r.method,
+    delivery: r.delivery,
+    confidence: r.confidence,
   }
 }
 
@@ -613,8 +646,12 @@ export function methodItems(s: Signals, period: string, thin: boolean, updatesCo
     //   · the read-depth and language shares are ALL-TIME, and say so;
     //   · the caveat is this month's, about the client's own side.
     r?.delivery ? `${r.delivery}${r.counter ? ` — ${r.counter}.` : '.'}` : '',
-    r?.method ? `${r.method.basis} ${r.method.language ?? ''}`.trim() : '',
-    r?.method ? `${r.method.redditCap} ${r.method.privacy}` : '',
+    // THE OTHER FIVE MOVED TO THE CARD (E-sales). `methodLines`' read-depth,
+    // language, Reddit and privacy sentences are the artboard's FOOTNOTE — the
+    // mono rule under the numbers card, which is where a reader looks for the
+    // fine print — and the deck prints them there off `reading.method`. Two
+    // renderings of one sentence on one sheet is the drift `lib/reading/method.ts`
+    // was written to end, so the paragraph arm goes rather than both staying.
     r?.hollow ?? '',
   ].filter(Boolean)
 }

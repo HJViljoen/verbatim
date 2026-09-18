@@ -1,21 +1,25 @@
 import { Fragment, type ReactNode } from 'react'
-import { QuoteBlock } from '@/components/quote-block'
+import { MACHINE_TRANSLATION_STAMP, QuoteBlock } from '@/components/quote-block'
 import { BlockSlot } from './block-slot'
-import { DeckFooter } from '@/components/print/report-deck'
 import { Slide } from '@/components/print/slide'
 import { Sparkline } from '@/components/charts/sparkline'
-import { CountBadge, MovementBadge } from '@/components/delta-badge'
+import { CountBadge, MOVEMENT_WORDS, MovementBadge } from '@/components/delta-badge'
+import { monthName, shortDate } from '@/lib/format'
+import { platformShareLine } from '@/lib/reading/method'
+import { MOVE_PROMISE } from '@/lib/subjects/types'
+import type { Verdict } from '@/lib/reading/verdicts'
 import type { Good } from '@/components/charts/stat'
 import type { DeltaVerdict } from '@/lib/report-bands'
 import type { ShareSide } from '@/lib/report-delta'
 import { substituteFigures } from '@/lib/reports/cover'
 import { documentSlides, sectionOfSlide } from '@/lib/reports/documents/compose'
+import { briefStampShort, commentsRead } from '@/lib/reports/documents/reading'
 import { blocksFor } from '@/lib/reports/documents/load-reading'
 import type { BriefSurface } from '@/lib/reports/documents/sections'
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { appBaseUrl } from '@/lib/site'
-import { findingHeadlines, overviewTiles, slugOf } from '@/lib/reports/documents/overview'
+import { coverCarriesSummary, findingCards, overviewTiles, slugOf } from '@/lib/reports/documents/overview'
 import { shownTrajectory, type DocBlock, type DocBriefSection, type DocLens, type DocPage, type DocumentSnapshotData } from '@/lib/reports/documents/types'
 import type { FigureTable } from '@/lib/reports/types'
 
@@ -59,20 +63,34 @@ const CARD = 'rounded-lg border border-border bg-tile'
 const BODY = 'text-[13px] leading-[1.5] text-foreground'
 const BODY_SM = 'text-[12.5px] leading-[1.45] text-foreground'
 
-export function Figured({ text, figures }: { text: string; figures: FigureTable }) {
+/**
+ * A caller's sentence with its `[[key]]` figures substituted (D13).
+ *
+ * THE FACE IS THE CALLER'S, AND IT IS MONO BY DEFAULT. Plex Mono is the
+ * product's identity for a count and it is right wherever the number is the
+ * element — a tile's value, a card's figure, a headline's count. Inside
+ * RUNNING PROSE at 16px it is not: Plex Mono sets a comma in a full advance,
+ * so "1,388" reads as three tokens in the middle of a sentence ("across 1 ,
+ * 388 category videos" on the cover, measured against the artboard, which sets
+ * the same figure in Plex Sans in its paragraph and in Plex Mono on its tile —
+ * SalesBrief.dc.html:27 against :42). `sans` keeps `tabular-nums`, so the
+ * digits still align; only the face moves.
+ */
+export function Figured({ text, figures, face = 'mono' }: { text: string; figures: FigureTable; face?: 'mono' | 'sans' }) {
+  const cls = face === 'sans' ? 'tabular-nums text-foreground' : 'font-mono tabular-nums text-foreground'
   return (
     <>
       {substituteFigures(text, figures).map((p, i) =>
-        'text' in p ? <Fragment key={i}>{p.text}</Fragment> : <span key={i} className="font-mono tabular-nums text-foreground">{p.figure}</span>,
+        'text' in p ? <Fragment key={i}>{p.text}</Fragment> : <span key={i} className={cls}>{p.figure}</span>,
       )}
     </>
   )
 }
 
-function Paragraphs({ text, figures, className }: { text: string; figures: FigureTable; className: string }) {
+function Paragraphs({ text, figures, className, face }: { text: string; figures: FigureTable; className: string; face?: 'mono' | 'sans' }) {
   return (
     <>
-      {text.split(/\n\n+/).filter(Boolean).map((p, i) => <p key={i} className={className}><Figured text={p} figures={figures} /></p>)}
+      {text.split(/\n\n+/).filter(Boolean).map((p, i) => <p key={i} className={className}><Figured text={p} figures={figures} face={face} /></p>)}
     </>
   )
 }
@@ -104,11 +122,25 @@ function Paragraphs({ text, figures, className }: { text: string; figures: Figur
  * fixed templates calls this today. It is the seam D-brief (P13–P17) binds
  * when the quarterly's and the leadership one-pager's charts land.
  */
-export function DeckSpark({ values, months, color = 'var(--primary)' }: {
+export function DeckSpark({ values, months, color = 'var(--primary)', width = 104, height = 22, className, unit }: {
   values: (number | null)[]
   /** The months these points are, in order — the printed page's only axis. */
   months: string[]
   color?: string
+  /** The drawn size. 104 × 22 is a sparkline inside a row of text; a chart
+   *  that IS the element gets the artboard's size, which is about 300 × 120 in
+   *  the 5fr pane (Block D wave 2, `sales.p2.chart`). Optional, so nothing
+   *  that already draws one moves. */
+  width?: number
+  height?: number
+  /** Passed through to the SVG. `w-full` lets a chart that IS the element fill
+   *  its card instead of leaving a dead gutter down the right of it — the
+   *  `viewBox` keeps the drawn geometry, so the shape does not change. */
+  className?: string
+  /** The points' unit (`MonthLineSeries.unit`), so the axis can carry the
+   *  magnitude a printed line has no hover to ask for. Absent prints the
+   *  months alone, which is what every caller did before. */
+  unit?: 'pct'
 }) {
   // The months that carried a reading, in order. A slot with no reading is not
   // a month this line can name.
@@ -133,15 +165,26 @@ export function DeckSpark({ values, months, color = 'var(--primary)' }: {
     return <p className="font-mono text-[10.5px] text-muted-foreground">the months and the readings do not line up</p>
   }
   return (
-    <span className="flex flex-col gap-1">
-      <Sparkline values={values} color={color} width={104} height={22} animate={false} endDot />
-      <span className="flex justify-between font-mono text-[9.5px] text-muted-foreground">
-        <span>{months[0]}</span>
-        <span>{months[months.length - 1]}</span>
+    <span className={`flex flex-col gap-1 ${className ?? ''}`}>
+      <Sparkline values={values} color={color} width={width} height={height} animate={false} endDot className={className} />
+      {/* BOTH ENDS, WITH THEIR VALUE WHERE THERE IS ONE. A printed line has no
+          hover and a shape with two month names under it and no magnitude
+          anywhere is decoration — the artboard labels both endpoints
+          ("Price 27%", "Durability 22%"). The value is printed only for a
+          slot that carries a reading, because an end month with a gap in it
+          is not a point on this line. */}
+      <span className="flex justify-between gap-2 font-mono text-[9.5px] text-muted-foreground">
+        <span>{months[0]}{endLabel(values[0], unit)}</span>
+        <span>{months[months.length - 1]}{endLabel(values[values.length - 1], unit)}</span>
       </span>
     </span>
   )
 }
+
+/** An axis end's value, where the slot carries one and the caller named the
+ *  unit. One decimal, which is what every share in this product prints. */
+const endLabel = (v: number | null | undefined, unit?: 'pct'): string =>
+  v == null || !unit ? '' : ` ${Math.round(v * 10) / 10}%`
 
 /** An eyebrow: mono, uppercase, with a short rule in the accent. */
 function Eyebrow({ children, className = '' }: { children: ReactNode; className?: string }) {
@@ -172,36 +215,202 @@ function audiencePills(audiences: string, company: string) {
   })
 }
 
-function DocumentCover({ data, pages }: { data: DocumentSnapshotData; pages: number }) {
-  // A BORROWED BLOCK IS A SECTION TOO (WP19). Counting only written page KINDS
-  // read "0 sections · 6 pages" on a brief composed entirely from the section
-  // map — the count is what the cover is for, and it was about half the
-  // document.
-  const sections = new Set(data.pages.map((p) => p.kind)).size + (data.sections?.length ?? 0)
+/**
+ * The cover (`sales.p1.*`, ported from the artboard).
+ *
+ * WHAT MOVED, AND WHY. The artboard's cover is not a title card: it is the
+ * brief's first working page — a vertical rule and a 58px title on the left
+ * over the summary and a numbered table of contents, three stat tiles down the
+ * right, and the same hairline footer every other sheet carries. The build
+ * drew a centred title, two mono lines and nothing else, and put the summary
+ * and the contents on slide 2.
+ *
+ * THE CONTENTS ARE THE DECK'S OWN PAGINATION, not a second list. `documentSlides`
+ * already decides what every sheet is and in what order; the cover is sheet 1,
+ * so slide `i` is page `i + 2`. The build's "Findings in this brief" indexed
+ * findings rather than pages, which is a different list of a different length
+ * from the document it sits in front of — and it stays, on the overview sheet,
+ * because a finding list is worth having. This one indexes the document.
+ *
+ * ONE MONO SUB-LINE. The mock reads "September 2026 · Sealand · as at 28 Sep ·
+ * 7 pages" and the build printed two lines — a section/page count, then the
+ * full stamp. The stamp's freeze boundary ("still filling until 30 October")
+ * is not dropped: it rides the FOOTER, on this sheet and on every other, which
+ * is where the mock puts it too.
+ *
+ * AND THE SUMMARY ONLY WHERE ITS ARTBOARD ASKS (see `coverCarriesSummary`).
+ */
+/**
+ * The footer every sheet of a brief carries, the cover included.
+ *
+ * NOT `DeckFooter` (components/print/report-deck.tsx), and the difference is
+ * the stamp. A REPORT's footer is "Created by X with Verbatim · 18 Sep 2026" —
+ * the day it was made, which is all an arranged report has. A BRIEF is a
+ * reading of a month, and the artboard puts that month, the instant it was
+ * read and the freeze boundary on every single sheet, because a reader of a
+ * PDF has no masthead to scroll back to. So the brief prints its reading's own
+ * stamp where the report prints a render date, and falls back to the date on a
+ * brief that has no reading — in the artboard's SHORT form (`briefStampShort`),
+ * because the long one is sixty characters and printing it on all eleven
+ * sheets put it three times on the method sheet alone.
+ */
+/** The footer's stamp: the artboard's short form where there is a reading, and
+ *  nothing (so the render date stands) where there is not. */
+const footerStamp = (data: DocumentSnapshotData): string | null =>
+  data.reading ? briefStampShort(data.reading) : null
+
+function BriefFooter({ company, date, stamp }: { company: string; date: string; stamp: string | null }) {
+  return (
+    <p className="truncate font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
+      <span className="text-secondary-foreground">Created by {company} with Verbatim</span>
+      <span aria-hidden> · </span>
+      <span>{stamp ?? date}</span>
+    </p>
+  )
+}
+
+function DocumentCover({ data, pages, contents, date }: {
+  data: DocumentSnapshotData
+  pages: number
+  contents: { page: number; title: string }[]
+  date: string
+}) {
+  const tiles = overviewTiles(data)
+  // THE BLOCK, NOT JUST ITS TEXT: the Studio edits a brief through `BlockSlot`,
+  // which keys on the block's stored id, so moving the paragraph to the cover
+  // must move the edit handle with it or the summary silently stops being
+  // editable on the one brief that prints it here.
+  const summary = coverCarriesSummary(data)
+    ? data.pages.find((p) => p.kind === 'in_short')?.blocks.find((b) => b.field === 'summary') ?? null
+    : null
+  const summaryText = summary?.text ?? ''
+  const stamp = data.reading ? `${data.reading.monthLabel} · ${data.company} · as at ${shortDate(data.reading.readingAt)}` : data.period
   return (
     <section className="vb-slide">
       <div className="vb-slide-body">
-        <div className="flex h-full flex-col justify-center gap-8 px-[6%]">
-          <span className="inline-block h-[3px] w-14 rounded-full bg-primary" aria-hidden />
-          <h1 className="max-w-[16ch] text-[58px] font-semibold leading-[1.05] tracking-[-0.025em] text-foreground [text-wrap:balance]">{data.title}</h1>
-          <p className="font-mono text-[13px] text-muted-foreground">
-            {sections} {sections === 1 ? 'section' : 'sections'} · {pages} {pages === 1 ? 'page' : 'pages'}
-          </p>
-          {/* The month on the cover, where a reader meets the document. */}
-          {data.reading && <p className="font-mono text-[13px] text-secondary-foreground">{data.reading.stamp}</p>}
+        <div className="grid h-full min-h-0 grid-cols-[7fr_5fr] items-center gap-x-12">
+          <div className="flex flex-col gap-[18px]">
+            <div className="flex flex-col gap-3.5">
+              {/* VERTICAL, 3 × 48. The build drew it lying down. */}
+              <span className="inline-block h-12 w-[3px] rounded-full bg-primary" aria-hidden />
+              <h1 className="max-w-[16ch] text-[58px] font-semibold leading-[1.05] tracking-[-0.025em] text-foreground [text-wrap:balance]">{data.title}</h1>
+              <p className="font-mono text-[13px] text-muted-foreground">
+                {stamp} · {pages} {pages === 1 ? 'page' : 'pages'}
+              </p>
+            </div>
+            {summary && summaryText && (
+              <BlockSlot block={summary} textClass="max-w-[66ch] text-[16px] leading-[1.5] text-foreground">
+                <Paragraphs text={summaryText} figures={data.figures} face="sans" className="max-w-[66ch] text-[16px] leading-[1.5] text-foreground" />
+              </BlockSlot>
+            )}
+            {contents.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <Eyebrow>In this brief</Eyebrow>
+                <ol className="flex flex-col gap-[5px]">
+                  {contents.map((c) => (
+                    <li key={c.page} className="flex text-[14.5px] font-medium leading-[1.35] text-foreground">
+                      <span className="w-6 shrink-0 font-mono text-[13px] font-normal tabular-nums text-primary">{c.page}</span>
+                      <span>{c.title}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+          </div>
+          <div className="flex flex-col gap-4">
+            {tiles.map((t, i) => <StatTile key={i} value={t.value} label={t.label} verdict={t.verdict} note={t.note} level={t.level} />)}
+          </div>
         </div>
       </div>
+      {/* THE COVER CARRIES THE FOOTER TOO. The mock numbers it 1 / 7; the build
+          printed no footer at all, so the first sheet of a paid PDF was the one
+          sheet with no page number and no "Created by". */}
+      <footer className="flex shrink-0 items-baseline justify-between gap-4 border-t border-border/70 pt-1.5">
+        <div className="min-w-0 flex-1"><BriefFooter company={data.company} date={date} stamp={footerStamp(data)} /></div>
+        <span className="shrink-0 font-mono text-[9.5px] text-muted-foreground">1 / {pages}</span>
+      </footer>
     </section>
   )
 }
 
 // ── overview ───────────────────────────────────────────────────────────────
 
-function StatTile({ value, label }: { value: string; label: string }) {
+/**
+ * The badge over a figure this brief measured (`sales.p1.stats`, `sales.p5`).
+ *
+ * A VERDICT WITH NO BASELINE IS A LEVEL, NOT A THIN COMPARISON, and this seam
+ * is the one that knows the difference. `bandVerdict` with no `baseline`
+ * returns `too_little_data` with a null change (lib/reading/verdicts.ts) —
+ * deliberately, because it is "what this is running at" and never "flat" —
+ * and `MOVEMENT_WORDS` renders that token as "too few to compare". On the
+ * switching pool that is a sentence that refutes itself on the page:
+ * `switchingFigure` builds a verdict ONLY when the pool cleared both floors,
+ * so a cover tile reading "120 videos … too few to compare" tells a paying
+ * reader their sample is too small when it is not, beside the number that
+ * shows it is not (figures.ts warns against exactly this sentence).
+ *
+ * The reason the comparison was not drawn is that there is no PRIOR pool, and
+ * the closed vocabulary already has that word: `baseline_forming`, "not enough
+ * months yet", the state whose own docstring says it resolves on the calendar.
+ * So no fifth refusal word is invented and no badge is suppressed — the state
+ * is corrected where the baseline is known to be absent, and the badge stays
+ * the one component allowed to write the claim.
+ *
+ * `refused` and `no_clear_change` are untouched: a refusal is about our
+ * bookkeeping and a cleared band is an answer, and neither becomes this.
+ */
+function ClaimBadge({ verdict, unit }: { verdict?: Verdict | null; unit?: string }) {
+  if (!verdict) return null
+  const shown: Verdict =
+    !verdict.baseline && verdict.state === 'too_little_data'
+      ? { ...verdict, state: 'baseline_forming' }
+      : verdict
+  return <MovementBadge verdict={shown} unit={unit} />
+}
+
+/**
+ * A cover tile: the figure, what it is of, and — where the reading earned one
+ * — the claim about it (`sales.p1.stats`).
+ *
+ * THE BADGE ROW IS THE ARTBOARD'S THIRD LINE AND IT IS NOT A THIRD SENTENCE.
+ * The mock writes "▼ 3 pts · fading, 3rd month" by hand; here the magnitude
+ * and the band come from `MovementBadge` (which prints points only when the
+ * state is `moved`, D2) and the direction word does not come at all, because
+ * only `directionWord` may fill one and no reader on this artefact has its
+ * flag true (D5). Which non-answer it is comes from `ClaimBadge`, and where a
+ * floor bit it is the FIGURE's own words that say which one and how many it
+ * had — which the mock's bare "too few to compare" does not.
+ *
+ * THE PAIR IS THE LEVEL. The number is code's figure and the label carries the
+ * "of N", so the two together are what rule (b) reads — a tile whose label
+ * names no population is a score, which this product does not print.
+ */
+function StatTile({ value, label, verdict, note, level = false }: {
+  value: string
+  label: string
+  verdict?: Verdict | null
+  note?: string | null
+  /** Whether the pair is a level — the CALLER's answer (`OverviewTile.level`),
+   *  because the caller is the side that built the label and knows whether it
+   *  names a population. It was a regex over the rendered label until
+   *  2026-09-18, which is the node-declares-itself discipline inverted. */
+  level?: boolean
+}) {
+  const body = (
+    <>
+      <p data-copy="figure" className="font-mono text-[38px] font-medium leading-none tracking-[-0.02em] tabular-nums text-foreground">{value}</p>
+      <p className="mt-2 text-[12.5px] leading-[1.35] text-muted-foreground">{label}</p>
+    </>
+  )
   return (
     <div className={`${CARD} px-5 py-4`}>
-      <p className="font-mono text-[38px] font-medium leading-none tracking-[-0.02em] tabular-nums text-foreground">{value}</p>
-      <p className="mt-2 text-[12.5px] leading-[1.35] text-muted-foreground">{label}</p>
+      {level ? <div data-copy="level">{body}</div> : body}
+      {(verdict || note) && (
+        <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          {verdict ? <ClaimBadge verdict={verdict} unit="pts" /> : null}
+          {note ? <span className="text-[11.5px] leading-[1.35] text-muted-foreground">{note}</span> : null}
+        </div>
+      )}
     </div>
   )
 }
@@ -213,25 +422,50 @@ function OverviewPage({ page, data }: { page: DocPage; data: DocumentSnapshotDat
   // lib/reports/documents/overview.ts — the email reads the same functions, so
   // the paper and the email cannot drift. (The not-settled list stays local:
   // it is the page's own block, and the email does not carry it.)
-  const findings = findingHeadlines(data)
+  const findings = findingCards(data)
+  // The sheet each finding is on, so the list points at the argument rather
+  // than restating it. The deck's own pagination: slide `i` is page `i + 2`.
+  const slides = documentSlides(data)
+  const pageOf = (id: string) => slides.findIndex((x) => x.keys[0] === id) + 2
   const notSureBlock = page.blocks.find((b) => b.field === 'not_sure')
   const notSure = notSureBlock?.items ?? []
   const tiles = overviewTiles(data)
+  // ONE SUMMARY PER DOCUMENT. The sales brief's artboard puts it on the cover,
+  // under the 58px title; the marketing brief's puts it here. The predicate is
+  // stated once, in `overview.ts`, and read by both, so neither sheet can come
+  // to draw it twice or drop it between them.
+  const onCover = coverCarriesSummary(data)
   return (
     <div className="grid h-full min-h-0 grid-cols-[7fr_5fr] gap-x-12">
       <div className="flex min-h-0 flex-col gap-6">
-        <div className="flex flex-col gap-3">
-          <Eyebrow>In short</Eyebrow>
-          {summary?.text && <BlockSlot block={summary} textClass="max-w-[66ch] text-[17px] leading-[1.55] text-foreground"><Paragraphs text={summary.text} figures={f} className="max-w-[66ch] text-[17px] leading-[1.55] text-foreground" /></BlockSlot>}
-        </div>
+        {!onCover && (
+          <div className="flex flex-col gap-3">
+            <Eyebrow>In short</Eyebrow>
+            {summary?.text && <BlockSlot block={summary} textClass="max-w-[66ch] text-[17px] leading-[1.55] text-foreground"><Paragraphs text={summary.text} figures={f} className="max-w-[66ch] text-[17px] leading-[1.55] text-foreground" /></BlockSlot>}
+          </div>
+        )}
         {findings.length > 0 && (
           <div className="flex flex-col gap-2.5">
             <Eyebrow>Findings in this brief</Eyebrow>
-            <ol className="flex flex-col gap-2">
-              {findings.map((h, i) => (
-                <li key={i} className="flex items-baseline gap-4 text-[16px] leading-[1.4] text-foreground">
+            <ol className="flex flex-col gap-3.5">
+              {findings.map((c, i) => (
+                <li key={c.id} className="flex items-baseline gap-4">
                   <span className="w-6 shrink-0 font-mono text-[13px] tabular-nums text-primary">{i + 1}</span>
-                  <span className="font-medium"><Figured text={h} figures={f} /></span>
+                  <div className="flex min-w-0 flex-col gap-1.5">
+                    <span className="text-[16px] font-medium leading-[1.4] text-foreground"><Figured text={c.headline} figures={f} /></span>
+                    {/* THE EVIDENCE TRAVELS WITH THE HEADLINE. Every count here
+                        is the finding page's own meta, already printed on its
+                        sheet — the list indexes the argument rather than
+                        restating it, and a sheet that was 85% white space on a
+                        one-finding brief carries what it is a list OF. */}
+                    <p className="font-mono text-[11px] leading-[1.4] text-muted-foreground">
+                      page <span className="tabular-nums text-foreground">{pageOf(c.id)}</span>
+                      {' · '}<span className="tabular-nums text-foreground">{fmtCount(c.conversations)}</span> conversations
+                      {' · '}<span className="tabular-nums text-foreground">{c.strands}</span> {c.strands === 1 ? 'strand' : 'strands'} of the research
+                      {' · '}confidence {c.sure}
+                    </p>
+                    <span className="flex flex-wrap gap-1.5">{audiencePills(c.audiences, data.company)}</span>
+                  </div>
                 </li>
               ))}
             </ol>
@@ -239,7 +473,12 @@ function OverviewPage({ page, data }: { page: DocPage; data: DocumentSnapshotDat
         )}
       </div>
       <div className="flex min-h-0 flex-col gap-4">
-        <div className="flex flex-col gap-3">{tiles.map((t, i) => <StatTile key={i} value={t.value} label={t.label} />)}</div>
+        {/* THE TILES BELONG TO WHICHEVER SHEET CARRIES THE SUMMARY. They are
+            the same three numbers either way, and a brief that printed them on
+            the cover AND here would be a document stating one measurement
+            twice, three sheets apart, with nothing saying they are the same
+            one. */}
+        {!onCover && <div className="flex flex-col gap-3">{tiles.map((t, i) => <StatTile key={i} value={t.value} label={t.label} verdict={t.verdict} note={t.note} level={t.level} />)}</div>}
         {notSure.length > 0 && (
           <div className="rounded-lg bg-inner px-5 py-4">
             <Eyebrow className="mb-2">Not settled this update</Eyebrow>
@@ -257,8 +496,42 @@ function OverviewPage({ page, data }: { page: DocPage; data: DocumentSnapshotDat
 
 // ── finding ────────────────────────────────────────────────────────────────
 
+/**
+ * Three dots, filled to the confidence word.
+ *
+ * TWO VOCABULARIES, ONE LADDER. A finding's word is `solid | reasonable |
+ * thin` (calibrated from conversations and strands); a READING's is
+ * `reasonable | partly | not yet` (`confidenceOf`, off the verdicts). They are
+ * two answers to two questions and neither is being renamed — but they sit on
+ * ONE sheet count in one document, so a word may not fill two different
+ * numbers of dots depending on which question asked it.
+ *
+ * THE LADDER IS THIS TABLE AND EVERY WORD HAS ITS OWN RUNG. `solid` is three
+ * and only a finding can earn it; `reasonable` is two in both vocabularies
+ * because it is one word meaning one thing, and a reading is CAPPED there by
+ * construction (`confidenceOf`: a quarter whose own side is still forming is
+ * never better than "partly", however solid the category side is, so no
+ * reading ever claims `solid`); `partly` and `thin` are one; and `not yet` is
+ * ZERO, which is what "nothing cleared a band on either side, so there is no
+ * reading to be confident about" actually says. Until 2026-09-18 the body was
+ * `solid ? 3 : reasonable ? 2 : 1`, so `partly` and `not yet` drew the same
+ * one dot and a three-state word rendered as two — while the docstring above
+ * claimed the dots knew both vocabularies.
+ *
+ * An unrecognised word fills one rather than three, which is the safe way for
+ * it to be wrong, and the WORD is printed beside the dots at both call sites,
+ * so the dots never carry the claim alone.
+ */
+const CONFIDENCE_DOTS: Record<string, number> = {
+  solid: 3,
+  reasonable: 2,
+  partly: 1,
+  thin: 1,
+  'not yet': 0,
+}
+
 function ConfidenceDots({ sure }: { sure: string }) {
-  const n = sure === 'solid' ? 3 : sure === 'reasonable' ? 2 : 1
+  const n = CONFIDENCE_DOTS[sure.toLowerCase()] ?? 1
   return (
     <span className="inline-flex items-center gap-1.5 align-middle">
       {[0, 1, 2].map((i) => <span key={i} className={`inline-block h-[9px] w-[9px] rounded-full ${i < n ? 'bg-primary' : 'bg-neutral-seg'}`} />)}
@@ -784,41 +1057,431 @@ function LanguagePage({ page }: { page: DocPage }) {
   )
 }
 
-// ── method ─────────────────────────────────────────────────────────────────
+// ── who is moving, and which way (sales.p5) ────────────────────────────────
 
-function MethodPage({ page, data }: { page: DocPage; data: DocumentSnapshotData }) {
-  const items = page.blocks.find((b) => b.field === 'method')?.items ?? []
-  const m = data.method
-  const rows: [string, string][] = [
-    ['Period', m.period],
-    ['Conversations', fmtCount(m.conversations)],
-    ['Videos', `${fmtCount(m.videos)} · ${fmtCount(m.clientVideos)} ${data.company} · ${fmtCount(m.competitorVideos)} competitor`],
-    ['Sources', m.sources.map((s) => PLATFORM[s] ?? s).join(', ') || 'public video platforms'],
-    ['Held back', `${fmtCount(m.heldBack)} phrases in other languages`],
-    ['Findings', `${data.pages.filter((p) => p.kind === 'finding').length}${m.thin ? ' (thin update)' : ''}`],
-  ]
+/** "375 of 1,388 category videos" — the figure and the population it is a
+ *  share of, as one level node, under the artboard's dotted rule.
+ *
+ *  THE PAIR IS THE LEVEL, which is `FigureCell`'s rule applied to a sentence
+ *  rather than to a cell: a bare "375" is a figure and "375 of 1,388 category
+ *  videos" is a measurement, and rule (b) reads the whole node. The dotted
+ *  underline is the artboard's own device for "this number has a denominator
+ *  under it". */
+function Counted({ k, n, of }: { k: number | string; n: number | string; of: string }) {
+  return (
+    <span data-copy="level" className="text-foreground underline decoration-muted-foreground decoration-dotted decoration-1 underline-offset-[3px]">
+      <span className="font-mono tabular-nums">{k}</span> of <span className="font-mono tabular-nums">{n}</span> {of}
+    </span>
+  )
+}
+
+/**
+ * The switching sheet (`sales.p5`).
+ *
+ * WHAT THE ARTBOARD DRAWS AND WHAT IS ACTUALLY HELD. The mock's sheet is "12
+ * videos · 7 toward Sealand · 5 away", a two-segment bar, a reconciliation
+ * sentence, and two quotes labelled Toward and Away with a counted line under
+ * each. Four of those five are `switchingFigure` and `crosscheckLine`,
+ * verbatim. The fifth is not: NOTHING IN THE PRODUCT LABELS A QUOTE WITH A
+ * LEAN. The lean is `videos.sentiment` on the video, a quote belongs to a
+ * comment under it, and inventing the join would be a direction claim about a
+ * customer's words that nobody measured. So the sheet prints the split, the
+ * bar, the pool and the refusal — and says, once, that it cannot label a
+ * voice.
+ *
+ * AND THE BASIS IS ON THE FACE OF IT (D9). This is the one figure in the
+ * package that is not comment-dated: a video that names both is a property of
+ * the VIDEO, so it is dated by `upload_date` — a third clock — and
+ * `SwitchingFigure.basis` is the sentence that says so, printed beside the
+ * number rather than in the method page.
+ */
+function SwitchingPage({ data }: { data: DocumentSnapshotData }) {
+  const f = data.slideFigures?.switching ?? null
+  if (!f) return null
+  const pct = (k: number) => (f.pool > 0 ? (k / f.pool) * 100 : 0)
   return (
     <div className="grid h-full min-h-0 grid-cols-[7fr_5fr] gap-x-12">
-      <div className="flex flex-col gap-4">
-        <Eyebrow>How this brief was made</Eyebrow>
-        {items.map((it, i) => <p key={i} className={`max-w-[66ch] ${BODY}`}>{it}</p>)}
+      <div className="flex min-h-0 flex-col gap-4">
+        <div className="flex items-end gap-6">
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <span className="flex items-baseline gap-2">
+              <span data-copy="figure" className="font-mono text-[38px] font-medium leading-none tracking-[-0.02em] tabular-nums text-foreground">{fmtCount(f.pool)}</span>
+              <span className="text-[12px] font-medium text-muted-foreground">{f.pool === 1 ? 'video' : 'videos'}</span>
+            </span>
+            {/* A COUNT, AND NO "of N" (D8). The artboard prints "12 of 1,388
+                category videos", which is a numerator over somebody else's
+                denominator twice over: the pool is the tenant's OWN videos,
+                and it is dated by `upload_date` while the category's month is
+                dated by the comment. There is no honest denominator for it, so
+                it is printed as the count it is and the population is named in
+                words. The SPLIT below has one — the pool itself — and carries
+                it. */}
+            <p className="text-[12.5px] text-muted-foreground">of {data.company}&rsquo;s own videos this month, and each of them also named a tracked rival</p>
+          </div>
+          {/* The badge, and nothing beside it. The mock writes "no earlier
+              figure for this one"; the closed vocabulary's own word for that
+              state is `baseline_forming`, "not enough months yet", and
+              `ClaimBadge` is what picks it — the pool cleared both floors, so
+              "too few to compare" would be a sentence the number beside it
+              refutes. */}
+          <span className="ml-auto shrink-0"><ClaimBadge verdict={f.verdict} unit="pts" /></span>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <div className="flex h-[10px] w-full shrink-0 gap-0.5 overflow-hidden rounded-full bg-neutral-seg">
+            <span className="block h-full rounded-l-full bg-primary" style={{ width: `${pct(f.toward.k)}%` }} />
+            <span className="block h-full rounded-r-full bg-negative" style={{ width: `${pct(f.away.k)}%` }} />
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+            {/* THE LEGEND IS NOT A DOTTED FIGURE. The artboard's dotted rule
+                marks a number whose denominator is spelled out beside it; in a
+                legend the "of 12" IS the sentence, and underlining it twice
+                reads as two devices for one idea. It is still a level node, so
+                rule (b) reads it. */}
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-primary" aria-hidden />
+              <span data-copy="level">Toward {data.company} <span className="font-mono tabular-nums text-foreground">{fmtCount(f.toward.k)}</span> of <span className="font-mono tabular-nums text-foreground">{fmtCount(f.pool)}</span></span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-negative" aria-hidden />
+              <span data-copy="level">Away from {data.company} <span className="font-mono tabular-nums text-foreground">{fmtCount(f.away.k)}</span> of <span className="font-mono tabular-nums text-foreground">{fmtCount(f.pool)}</span></span>
+            </span>
+          </div>
+          {f.unread && <p className="text-[12.5px] leading-[1.45] text-muted-foreground">{f.unread}</p>}
+        </div>
+
+        {/* THE BASIS SITS AT THE FOOT, where the artboard's confidence rail
+            does (P0 item 2's `distribute="between"`, applied to a sheet). The
+            column packs to the top and this block takes the slack, rather than
+            the whole column spreading and opening a hole between the figure
+            and its own bar. */}
+        <div className="mt-auto flex flex-col gap-2 border-t border-border/70 pt-3">
+          {/* THE BASIS, BESIDE THE NUMBER. A third clock on a month-stamped
+              sheet, and a reader who is not told will read it as the month's. */}
+          <p className="text-[12.5px] leading-[1.45] text-muted-foreground">Counted over {f.audienceLabel}, {f.basis}.</p>
+          {/* The one thing the artboard asks for that nothing measured. */}
+          <p className="text-[12.5px] leading-[1.45] text-muted-foreground">
+            Which way a video leaned is read from what was stored about the video, not from any one comment under it, so no quote on this sheet is labelled toward or away.
+          </p>
+        </div>
       </div>
-      <div className={`${CARD} self-start px-6 py-5`}>
-        <Eyebrow className="mb-3">This brief in numbers</Eyebrow>
-        <dl className="grid grid-cols-[130px_1fr] gap-x-4 gap-y-2.5">
-          {rows.map(([k, v]) => (
-            <Fragment key={k}>
-              <dt className="pt-[3px] font-mono text-[11px] uppercase tracking-[0.06em] text-muted-foreground">{k}</dt>
-              <dd className="text-[14.5px] leading-[1.4] text-foreground">{v}</dd>
-            </Fragment>
-          ))}
-        </dl>
+
+      <div className={`${CARD} flex min-h-0 flex-col gap-3.5 px-6 py-5`}>
+        <Eyebrow>How to read these</Eyebrow>
+        <p className="font-mono text-[12px] leading-[1.5] text-muted-foreground">
+          <span className="text-foreground">{fmtCount(f.toward.k)}</span> toward · <span className="text-foreground">{fmtCount(f.away.k)}</span> away · <span className="text-foreground">{fmtCount(f.neither.k)}</span> neither · <span className="text-foreground">{fmtCount(f.pool)}</span> in all
+        </p>
+        {data.slideFigures?.crosscheck && (
+          <p className={BODY_SM}>{data.slideFigures.crosscheck}</p>
+        )}
+        <div className="mt-auto flex flex-col gap-1.5 border-t border-border pt-3">
+          <Eyebrow>Measured on</Eyebrow>
+          {/* `measurement_changed` rides this figure by construction
+              (figures.ts): `videos.sentiment` is the one production column two
+              writers have written with two meanings. */}
+          <p className="text-[12.5px] leading-[1.45] text-muted-foreground">
+            What was stored about each video. That column has been written by two different readings of tone, so the split is a lead rather than a rule.
+          </p>
+        </div>
       </div>
     </div>
   )
 }
 
+// ── answers you can use (sales.p6) ─────────────────────────────────────────
+
+/**
+ * The "Say this" sheet (`sales.p6`).
+ *
+ * THE ONE PLACE THE MOCK ASKS FOR PROSE THE PRODUCT DOES NOT WRITE. Its card
+ * is objection → a scripted sentence → a "Because" list. The objection and
+ * every figure under it are counted and printed; the SENTENCE is a model's and
+ * there is no drafted one on any workspace, so the row prints its counts and
+ * no script rather than a sentence this code invented. `ScriptedLine.say` is
+ * already scrubbed under `document_write` where a draft exists, so a digit the
+ * model typed has already cost its sentence before it reaches here.
+ *
+ * "BECAUSE" AND "ALSO RUNNING" ARE TWO LISTS BECAUSE THEY ARE TWO CLAIMS.
+ * Because is causal and the product refuses causal claims it has not measured;
+ * the three biggest subjects of a category month are not reasons for a KIND's
+ * share — different denominators, no measured relation, and the same three
+ * would sit under every objection whatever it was. They are printed as what
+ * they are.
+ *
+ * ONE ROW, AND IT SAYS WHY. `theme_registry` carries no kind column, so the
+ * only place an objection is counted on this corpus is the aggregate kind
+ * share: one row, with no registry identity, rather than several the reading
+ * cannot substantiate.
+ */
+function ScriptedPage({ data }: { data: DocumentSnapshotData }) {
+  const lines = data.slideFigures?.scripted ?? []
+  if (lines.length === 0) return null
+  const list = (label: string, rows: { label: string; value: { k: number; n: number } }[]) => (
+    <>
+      <p className="font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">{label}</p>
+      <ul className="flex flex-col gap-[7px]">
+        {rows.map((b, i) => (
+          <li key={i} className="flex gap-2.5 text-[13px] leading-[1.45] text-foreground">
+            <span className="mt-[7px] inline-block h-[6px] w-[6px] shrink-0 rounded-full bg-primary" aria-hidden />
+            <span>{b.label} — <Counted k={fmtCount(b.value.k)} n={fmtCount(b.value.n)} of="videos" /></span>
+          </li>
+        ))}
+      </ul>
+    </>
+  )
+  return (
+    // `items-start`, NOT `items-stretch`. One card in a three-column grid was
+    // stretched to the full slide and its footnote pinned to the foot by
+    // `mt-auto`, so the sheet drew an L with a 900 × 700 hole in the middle of
+    // it: a 350px void inside the card, and the explanation bottom-anchored in
+    // the two columns beside it. The mock's three cards are the same height
+    // because they hold the same amount; a card holds what it holds.
+    <div className="grid h-full min-h-0 grid-cols-3 items-start gap-x-5">
+      {lines.slice(0, 3).map((line, i) => (
+        <div key={i} className={`${CARD} flex min-h-0 flex-col gap-3 px-[22px] py-5`}>
+          <div className="flex flex-col gap-1">
+            <h2 className="text-[15.5px] font-semibold text-foreground">{line.objection.label}</h2>
+            <p className="text-[12.5px] text-muted-foreground">
+              <Counted k={fmtCount(line.objection.value.k)} n={fmtCount(line.objection.value.n)} of="videos" />
+            </p>
+          </div>
+          <p className="font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">Say this</p>
+          {line.say
+            ? <blockquote className="m-0 rounded-md bg-inner px-3.5 py-3 font-serif text-[14px] italic leading-[1.5] text-secondary-foreground">{line.say}</blockquote>
+            : <p className={BODY_SM}>No sentence has been written for this one yet. The counts under it are the reading; the line to say is not something this brief will make up.</p>}
+          {line.because.length > 0 && list('Because', line.because)}
+          {line.alsoRunning.length > 0 && list('Also running this month', line.alsoRunning)}
+          {line.quote?.text && (
+            <div className="mt-1">
+              {/* A SIBLING NODE WITH ITS OWN REF, never a span inside scrubbed
+                  prose: rule (c) may not police a commenter's words, and a
+                  number inside a quotation is still refused. */}
+              <QuoteBlock quote={line.quote} mode="print" />
+            </div>
+          )}
+          <p className="border-t border-border pt-2.5 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">
+            {line.objection.source === 'kind'
+              ? 'Counted as a kind of thing said, over the whole month — not as a theme of the register.'
+              : 'Counted as a theme of the register.'}
+          </p>
+        </div>
+      ))}
+      {lines.length < 3 && (
+        <div className="flex min-h-0 flex-col gap-2 self-start" style={{ gridColumn: `span ${3 - Math.min(lines.length, 3)}` }}>
+          <Eyebrow>Why there is one of these</Eyebrow>
+          <p className={BODY_SM}>
+            An objection is counted as a kind of thing said, and the register that names themes carries no kind. So this sheet has one row per month rather than one per objection, and it will have more the day a theme can be an objection.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── method ─────────────────────────────────────────────────────────────────
+
+/**
+ * The numbers card (`sales.p7.numbers`).
+ *
+ * The card's ANATOMY was already the artboard's — a 130px mono gutter, six
+ * rows, hairline above the footnote. Every row's CONTENT differed, and three
+ * of the six were wrong rather than merely thin:
+ *
+ *  · "Videos: 1,388 · 84 Sealand · 356 competitor" SUMMED the rivals, which
+ *    double-counts a video naming two of them — `compose.ts` warns about
+ *    exactly this in `AUDIENCE_SUMMED_VIDEO_FIGURES`, and then the method card
+ *    printed the sum anyway. The row is now one audience per entry, off the
+ *    reading's own denominators, which is what the artboard draws too (D8).
+ *  · "Sources: TikTok, YouTube, Instagram, Reddit" was a NAME LIST. A share of
+ *    a corpus that is 90% one platform is a statement about that platform, so
+ *    the row is the mix as shares (`platformShareLine`).
+ *  · "Findings: 1" had no denominator. The count of findings BELOW THE BAR was
+ *    computed on every build and kept in the workings; without it the row says
+ *    nothing about how selective the reading was.
+ *
+ * AND THE LABEL FOLLOWS THE UNIT. The artboard's own row reads `Conversations`
+ * over "2,359 videos analysed", which is the label and the unit disagreeing
+ * (D10). Comments are comments (`lib/calibration.ts` GLOSSARY) and the row
+ * says so.
+ */
+function NumbersCard({ data }: { data: DocumentSnapshotData }) {
+  const m = data.method
+  const r = data.reading ?? null
+  const comments = r ? commentsRead(r.denominators) : m.conversations
+  const refusals = data.slideFigures?.cannotTell.refusals ?? []
+  const findings = data.pages.filter((p) => p.kind === 'finding').length
+  const dropped = m.dropped ?? null
+  const mix = r ? platformShareLine(r.platformMix) : ''
+  const rows: [string, ReactNode][] = [
+    ['Period', r ? r.stamp : m.period],
+    [r ? 'Comments' : 'Conversations', `${fmtCount(comments)} read${r ? ` in ${r.monthLabel}` : ''}`],
+    [
+      'Videos',
+      r && r.denominators.length > 0
+        // NEVER SUMMED: one entry per audience, named.
+        ? r.denominators.map((d) => `${fmtCount(d.videos)} ${d.label}`).join(' · ')
+        : `${fmtCount(m.videos)} · ${fmtCount(m.clientVideos)} ${data.company} · ${fmtCount(m.competitorVideos)} competitor`,
+    ],
+    ['Sources', mix || m.sources.map((x) => PLATFORM[x] ?? x).join(', ') || 'public video platforms'],
+    [
+      'Held back',
+      [
+        refusals.length > 0
+          ? `${fmtCount(refusals.length)} ${refusals.length === 1 ? 'comparison' : 'comparisons'} not drawn`
+          : '',
+        m.heldBack > 0 ? `${fmtCount(m.heldBack)} phrases in other languages read for the counts, not quoted` : '',
+      ].filter(Boolean).join(' · ') || 'Nothing was held back.',
+    ],
+    [
+      'Findings',
+      // "NOT CARRIED", NOT "BELOW THE BAR". The denominator is the real
+      // improvement on a bare "1" and it stays; the REASON is not one reason.
+      // `DocumentWorkings.dropped` is seeded with the structural check's own
+      // rejections and then collects three different events — "no headline
+      // survived scrub", "rests on no grounded point" and "too thin: N
+      // conversations" (compose.ts). Only the last is a bar, so "3 below the
+      // bar" states a reason that is true of at most one of the three. The
+      // count says the same thing about how selective the reading was, and
+      // claims nothing about why.
+      dropped != null
+        ? `${fmtCount(findings)} of ${fmtCount(findings + dropped)} written · ${fmtCount(dropped)} not carried${m.thin ? ' · thin update' : ''}`
+        : `${fmtCount(findings)}${m.thin ? ' (thin update)' : ''}`,
+    ],
+  ]
+  return (
+    <div className={`${CARD} self-start px-6 py-5`}>
+      <Eyebrow className="mb-3">This brief in numbers</Eyebrow>
+      <dl className="grid grid-cols-[130px_1fr] gap-x-4 gap-y-2.5">
+        {rows.map(([k, v]) => (
+          <Fragment key={k}>
+            <dt className="pt-[3px] font-mono text-[11px] uppercase tracking-[0.06em] text-muted-foreground">{k}</dt>
+            <dd className="text-[14px] leading-[1.4] text-foreground">{v}</dd>
+          </Fragment>
+        ))}
+      </dl>
+      {/* `sales.p7.footnote` — five sentences the product has composed on every
+          reading since wave 1 and no document has ever printed. Two of them are
+          on a different clock from the sheet they sit on, and `basis` is the
+          clause that says which (D15). */}
+      {data.reading?.method && (
+        <p className="mt-4 border-t border-border pt-3 font-mono text-[10.5px] leading-[1.5] text-muted-foreground">
+          {[data.reading.method.basis, data.reading.method.language, data.reading.method.redditCap, data.reading.method.privacy]
+            .filter(Boolean)
+            .join(' ')}
+        </p>
+      )}
+    </div>
+  )
+}
+
+/**
+ * What this brief cannot tell you (`sales.p7.cannottell`).
+ *
+ * THE CHEAPEST ELEMENT IN THE PACKAGE AND THE ONE THAT MATTERS MOST. The
+ * refusals are the product's own honesty machinery: computed on every brief's
+ * reading, and thrown away at the door until wave 1 gave them a shape and wave
+ * 2 a sheet. Every string here is the RECORD's own — `refusedSentence` and
+ * `REFUSAL_WHY` — so a brief and Settings › The record cannot come to say
+ * different things about one refusal.
+ *
+ * THE CAUSATION LINE IS THE PRODUCT'S OWN PROMISE, not a sentence written for
+ * this card: `MOVE_PROMISE` is what the moves list prints over itself, and the
+ * artboard asks for it here in the same words.
+ */
+function CannotTell({ data }: { data: DocumentSnapshotData }) {
+  const c = data.slideFigures?.cannotTell ?? null
+  return (
+    <div className="mt-auto flex flex-col gap-1.5 rounded-lg bg-inner px-[18px] py-3.5">
+      <p className="font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">What this brief cannot tell you</p>
+      <p className="text-[12.5px] leading-[1.4] text-secondary-foreground">{MOVE_PROMISE}</p>
+      {/* `refusedSentence`, WHICH ALREADY NAMES EVERY REASON AND COUNTS THEM.
+          `CannotTell.items` is one line per refusal and on a page with two
+          refusals of two reasons it restates the summary twice; the summary is
+          the one that carries the count, so it is the one that prints. Both
+          are built from `REFUSAL_WHY`, so neither can say anything the record
+          does not. */}
+      {c && <p className="text-[12.5px] leading-[1.4] text-secondary-foreground">{c.line}</p>}
+      {!c && <p className="text-[12.5px] leading-[1.4] text-secondary-foreground">Which comparisons this reading refused is not recorded for this brief.</p>}
+    </div>
+  )
+}
+
+function MethodPage({ page, data }: { page: DocPage; data: DocumentSnapshotData }) {
+  const items = page.blocks.find((b) => b.field === 'method')?.items ?? []
+  return (
+    <div className="grid h-full min-h-0 grid-cols-[7fr_5fr] gap-x-12">
+      <div className="flex min-h-0 flex-col gap-3">
+        <Eyebrow>How this brief was made</Eyebrow>
+        {items.map((it, i) => <p key={i} className={`max-w-[66ch] ${BODY}`}>{it}</p>)}
+        {/* THE BAND RULE, IN THE READER'S OWN WORDS. The artboard prints it and
+            the product never has: the vocabulary lives in `MOVEMENT_WORDS` and
+            is stamped on badges a reader is never told the rule for. The words
+            are that table's, so the sentence and the badge cannot drift. */}
+        <p className={`max-w-[66ch] ${BODY}`}>
+          Every figure prints how many it came from. A change is called only when it clears its band; below that it reads
+          {' '}<em className="font-semibold not-italic">{MOVEMENT_WORDS.no_clear_change}</em>, and where the audience is too small it reads
+          {' '}<em className="font-semibold not-italic">{MOVEMENT_WORDS.too_little_data}</em>.
+        </p>
+        {/* HOW A QUOTE IS PRINTED, which is the other half of the privacy
+            rule and is true of this deck by construction: `QuoteBlock` prints
+            the original first and the machine rendering under it, stamped. The
+            artboard asks for the sentence; the product only ever printed the
+            half about identification. */}
+        <p className={`max-w-[66ch] ${BODY}`}>
+          Quotes carry the platform, the date and where they were found. The words are printed as they were written, with an English rendering underneath — marked as a {MACHINE_TRANSLATION_STAMP} — where they were not in English.
+        </p>
+        <CannotTell data={data} />
+      </div>
+      <NumbersCard data={data} />
+    </div>
+  )
+}
+
 // ── deck ───────────────────────────────────────────────────────────────────
+
+/**
+ * The serif line under a sheet's title, for the sheets that have no section
+ * map entry to carry one.
+ *
+ * A BORROWED SECTION HAS `framing`, and the artboard draws one on every sheet
+ * that is not the cover. These two are page kinds, so the line lives here —
+ * the same slot (`Slide.note`), the same 12.5px serif italic, the artboard's
+ * own words. The other page kinds keep no note, because each already opens
+ * with its own lead paragraph.
+ */
+/**
+ * The sheet's PLACE in the brief, for the page kinds (`sales.p2.header`).
+ *
+ * `BriefBlockSection.context` gave the four borrowed sheets the artboard's own
+ * two-word slot — "Objections", "Selling points", "Rivals" — and every PAGE
+ * kind went on through `chrome`, which is `${title} · ${short}` beside an
+ * `<h1>` of the same title. Five of the nine numbered sheets therefore read
+ * "Who is moving, and which way · September 2026" next to "Who is moving, and
+ * which way", which is the exact fault the comment on `chrome` claims to have
+ * fixed. The artboard's own words are used where it has them (`Switching
+ * signals`, `Grounded answers`, `Method`); the kinds this brief does not carry
+ * take the same shape, because the map is shared with three other briefs.
+ *
+ * Absent falls back to the page's title, which is what every kind did before.
+ */
+const PAGE_CONTEXT: Partial<Record<DocPage['kind'], string>> = {
+  in_short: 'In short',
+  finding: 'Findings',
+  competitor: 'Rivals',
+  personas: 'Buyers',
+  standing: 'Standing',
+  say_hear: 'Say and hear',
+  asked: 'Questions',
+  language: 'Language',
+  switching: 'Switching signals',
+  scripted: 'Grounded answers',
+  method: 'Method',
+}
+
+const PAGE_NOTE: Partial<Record<DocPage['kind'], string>> = {
+  switching: 'The videos that name both you and a rival, and which way each of them leaned — a small number, printed as it stands.',
+  scripted: 'The sentence to say is a writer\u2019s; every figure under it is counted.',
+}
 
 /** The lens the document was written under. Older snapshots (before
  *  2026-09-02) carry none: they are all Sales briefs. */
@@ -836,6 +1499,8 @@ function PageBody({ page, data }: { page: DocPage; data: DocumentSnapshotData })
     case 'say_hear': return <SayHearPage page={page} figures={figures} company={data.company} />
     case 'asked': return <AskedPage page={page} />
     case 'language': return <LanguagePage page={page} />
+    case 'switching': return <SwitchingPage data={data} />
+    case 'scripted': return <ScriptedPage data={data} />
     case 'method': return <MethodPage page={page} data={data} />
     default: return null
   }
@@ -851,7 +1516,134 @@ function PageBody({ page, data }: { page: DocPage; data: DocumentSnapshotData })
  * prints its one line instead: the block's own empty state, or the
  * missing-input sentence naming the input and who closes it.
  */
-function SectionBody({ section, data }: { section: DocBriefSection; data: DocumentSnapshotData }) {
+/**
+ * The right-hand pane of a borrowed sheet (`sales.p2` … `sales.p5`).
+ *
+ * WHY A BORROWED SECTION GETS ONE AT ALL. Every artboard sheet is 7fr/5fr and
+ * the build drew borrowed sections full-bleed, single column, at about half the
+ * density — so the mock's chart, its conclusion and its confidence rail had
+ * nowhere to go, and the confidence dots existed only inside a finding page's
+ * right card. The sheet says which pane it wants, in the section map, and the
+ * map is the artboard read into data.
+ *
+ * `chart` is `slideFigures.line` — ONE SIDE, and only where three readings
+ * stand behind it (D3: a chart is a direction claim too, and two points are
+ * not a direction). Below that `monthLine` has already named the months
+ * instead, in `monthlyLineLabel`'s own words, and the pane prints that.
+ *
+ * `confidence` is the reading's own, `confidenceOf` off the verdicts the
+ * brief's blocks drew — not a finding's `sure` word, which is calibrated from
+ * conversations and strands and belongs to one argument.
+ */
+function SectionPane({ section, data, why }: {
+  section: DocBriefSection
+  data: DocumentSnapshotData
+  /** Does this sheet print the SENTENCE behind the confidence word?
+   *
+   *  THE WORD IS PER SHEET AND THE SENTENCE IS PER DOCUMENT. `confidence.why`
+   *  is one reading's account of itself — "9 of 12 comparisons on these pages
+   *  were answered against their band" — and it appeared verbatim on three
+   *  consecutive sheets. The dots and the word stay on every pane, because
+   *  that is the artboard's own device and a reader meets each sheet on its
+   *  own; the sentence prints on the first pane of the deck, and the method
+   *  sheet carries the full account. */
+  why: boolean
+}) {
+  const line = data.slideFigures?.line ?? null
+  const confidence = data.reading?.confidence ?? null
+  const rail = confidence && (
+    <div className="flex flex-col gap-1.5 border-t border-border pt-3">
+      <p className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+        Confidence <ConfidenceDots sure={confidence.word} /> <span className="normal-case tracking-normal text-foreground">{confidence.word}</span>
+      </p>
+      {why && <p className="text-[12.5px] leading-[1.45] text-muted-foreground">{confidence.why}</p>}
+    </div>
+  )
+  // THE CARD HUGS ITS CONTENT (`self-start`). It used to stretch to the full
+  // slide with the rail pinned to the foot by `mt-auto`, so a pane with two
+  // lines in it drew a 700px empty box with a confidence rail at the bottom —
+  // on five of eleven sheets. The artboard's right cards run the full height
+  // because they are FULL; a card that is not full and pretends to be reads as
+  // a failed render on a paid PDF, which is how both live workspaces would
+  // have received it.
+  const card = `${CARD} flex min-h-0 flex-col gap-4 self-start px-6 py-5`
+  if (section.pane === 'chart') {
+    const drawn = Boolean(line && line.series.length > 0)
+    return (
+      <div className={card}>
+        {/* THE EYEBROW DOES NOT PROMISE A LINE THERE IS NOT. Below three
+            readings nothing is drawn (D3) and the card was still headed "THE
+            LINE BEHIND THESE" over four words — which is the state every
+            workspace without `month_kind_readings` is in today. */}
+        <Eyebrow>{drawn ? 'The line behind these' : 'The months behind these'}</Eyebrow>
+        {drawn ? (
+          <div className="flex flex-col gap-2.5">
+            {line!.series.map((serie) => (
+              <div key={serie.label} className="flex flex-col gap-1.5">
+                <DeckSpark values={serie.points} months={line!.months.map(monthLabel)} width={300} height={120} className="w-full" unit={serie.unit} />
+                <p className="text-[11px] leading-[1.35] text-muted-foreground">{serie.label}</p>
+              </div>
+            ))}
+            {/* ONE SIDE, AND THE SHEET SAYS SO. The artboard draws two theme
+                series against each other; the tenant's own side carries no
+                month series on a subject row, which is a schema limitation and
+                not a missing render. */}
+            <p className="text-[11px] leading-[1.35] text-muted-foreground">
+              One side. Your own audience carries no month-by-month series on a subject, so there is nothing to draw against this.
+            </p>
+          </div>
+        ) : (
+          // BOTH HALVES. `label` is which months read ("Aug → Sep only") and
+          // `empty` is why that is not a line; the pane printed the first and
+          // dropped the second, so the card said four words and explained
+          // none of them.
+          <div className="flex flex-col gap-1.5">
+            <p className="font-mono text-[12px] text-foreground">{line?.label ?? 'no month reads'}</p>
+            <p className={BODY_SM}>{line?.empty ?? 'No month series stands behind this sheet yet.'}</p>
+          </div>
+        )}
+        {rail}
+      </div>
+    )
+  }
+  // THE DENOMINATORS ARE THE FALLBACK, NOT THE BODY. They are the same three
+  // counts on every sheet and the method card prints them in full; a pane with
+  // its own lead prints the lead instead, so no two panes in the deck are the
+  // same card.
+  const untracked = (data.slideFigures?.untracked ?? []).filter((n) => n.sections.includes(section.title))
+  return (
+    <div className={card}>
+      <Eyebrow>{section.paneTitle ?? 'What this rests on'}</Eyebrow>
+      {section.paneLead
+        ? <p className={BODY_SM}>{section.paneLead}</p>
+        : data.reading && (
+          <p className="font-mono text-[12px] leading-[1.5] text-muted-foreground">
+            {data.reading.denominators.map((d) => (
+              <Fragment key={d.audience}>
+                <span className="text-foreground">{fmtCount(d.videos)}</span> {d.label}{' · '}
+              </Fragment>
+            ))}
+            <span className="text-foreground">{fmtCount(commentsRead(data.reading.denominators))}</span> comments read
+          </p>
+        )}
+      {/* `sales.p4.untracked` — what is NOT tracked, beside the section rather
+          than in place of it, naming the ROLE and no date (D14). Composed by
+          `untrackedNotes` on every brief since wave 1 and printed by nothing. */}
+      {untracked.map((n) => <p key={n.id} className={BODY_SM}>{n.line}</p>)}
+      {rail}
+    </div>
+  )
+}
+
+/** "2026-09-01" → "Sep 2026". The axis a printed line has instead of a hover.
+ *
+ *  `monthName`, NOT `toLocaleDateString`. ICU data differs between the Node
+ *  server and the browser (lib/format.ts says so at length: en-GB renders
+ *  September as "Sept"), and a month name that differs between the two is an
+ *  SSR mismatch on a page that is also printed by a headless browser. */
+const monthLabel = monthName
+
+function SectionBody({ section, data, why }: { section: DocBriefSection; data: DocumentSnapshotData; why: boolean }) {
   const surface = (data.surfaces ?? {})[section.surface]
   const block = blocksFor(section.surface as BriefSurface)?.find((b) => b.key === section.block)
   const body = section.empty != null || !block || surface == null
@@ -862,10 +1654,22 @@ function SectionBody({ section, data }: { section: DocBriefSection; data: Docume
     // exist (measured: two violations on Össur's marketing brief).
     ? <p className="m-0 text-[13px] leading-[1.5] text-muted-foreground">{section.empty ?? 'This section could not be read for this month.'}</p>
     : block.render(surface as never, 'print', blockContext(appBaseUrl(), EMAIL))
-  return (
-    <div className="flex flex-col gap-3">
-      {section.framing && <p className="m-0 text-[12.5px] leading-[1.45] text-muted-foreground">{section.framing}</p>}
+  // THE FRAMING IS THE SLIDE'S NOTE NOW, not a paragraph inside the body: the
+  // artboard draws it as a serif italic line under the title, which is exactly
+  // what `Slide.note` already prints, and `DocumentDeck` passes it there. What
+  // opens the column instead is the green-ruled eyebrow every artboard sheet
+  // has and no borrowed section had.
+  const left = (
+    <div className="flex min-h-0 flex-col gap-3">
+      {section.eyebrow && <Eyebrow>{section.eyebrow}</Eyebrow>}
       {body}
+    </div>
+  )
+  if (!section.pane) return left
+  return (
+    <div className="grid h-full min-h-0 grid-cols-[7fr_5fr] items-start gap-x-12">
+      {left}
+      <SectionPane section={section} data={data} why={why} />
     </div>
   )
 }
@@ -873,20 +1677,45 @@ function SectionBody({ section, data }: { section: DocBriefSection; data: Docume
 export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: DocumentSnapshotData; date?: string }) {
   const slides = documentSlides(data)
   const pages = slides.length + 1
-  // WP19: the stamp rides every sheet, the way the weekly deck's rule does —
-  // a reader of a PDF has no masthead to scroll back to, and a brief whose
-  // numbers are a month's has to name the month on the page they are read on.
-  const stamp = data.reading?.stamp ?? data.period
-  const chrome = (title: string) => ({ context: `${title} · ${stamp}`, footer: <DeckFooter company={data.company} date={date} /> })
+  // THE HEADER NAMES THE SHEET'S PLACE; THE FOOTER CARRIES THE STAMP. The
+  // artboard's header reads "Objections · September 2026" — two words and a
+  // month in a 10.5px mono slot that has to fit on one line beside a title.
+  // The deck put the whole 60-character reading stamp there, on every sheet,
+  // beside a title it repeated, and the stamp then appeared nowhere else. It
+  // now rides `BriefFooter` on every sheet including the cover, which is where
+  // the artboard puts it.
+  const short = data.reading?.monthLabel ?? data.period
+  // The first sheet in the deck that carries a pane — the one that prints the
+  // sentence behind the confidence word. See `SectionPane`'s `why`.
+  const firstPane = slides.map((x) => sectionOfSlide(data, x.keys[0])).find((x) => x?.pane)?.id ?? null
+  // WP19: the stamp rides every sheet, the way the weekly deck's rule does — a
+  // reader of a PDF has no masthead to scroll back to. In the artboard's SHORT
+  // form (`briefStampShort`), because the long one is sixty characters and the
+  // method sheet printed it three times on one sheet; the freeze date it drops
+  // is on the method card's PERIOD row, in full.
+  const footer = <BriefFooter company={data.company} date={date} stamp={footerStamp(data)} />
+  const chrome = (page: DocPage) => ({ context: `${PAGE_CONTEXT[page.kind] ?? page.title} · ${short}`, footer })
   return (
     <>
-      <DocumentCover data={data} pages={pages} />
+      <DocumentCover data={data} pages={pages} date={date} contents={slides.map((s, i) => ({ page: i + 2, title: s.title }))} />
       {slides.map((s, i) => {
         const section = sectionOfSlide(data, s.keys[0])
         if (section) {
+          // "Objections · September 2026", not the title repeated beside itself
+          // under a 60-character stamp in a 10.5px mono slot. The stamp rides
+          // the footer of every sheet.
+          const context = `${section.context ?? section.title} · ${short}`
           return (
-            <Slide key={section.id} title={section.title} chrome={chrome(section.title)} page={i + 2} pages={pages} layout="single">
-              <SectionBody section={section} data={data} />
+            <Slide
+              key={section.id}
+              title={section.title}
+              chrome={{ context, footer }}
+              page={i + 2}
+              pages={pages}
+              layout="single"
+              note={section.framing}
+            >
+              <SectionBody section={section} data={data} why={section.id === firstPane} />
             </Slide>
           )
         }
@@ -894,7 +1723,7 @@ export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: Docum
         if (!page) return null
         const title = page.kind === 'finding' ? `Finding ${page.meta?.n ?? ''}` : page.kind === 'competitor' ? 'Competitor' : page.title
         return (
-          <Slide key={page.id} title={title} chrome={chrome(page.title)} page={i + 2} pages={pages} layout="single">
+          <Slide key={page.id} title={title} chrome={chrome(page)} page={i + 2} pages={pages} layout="single" note={PAGE_NOTE[page.kind] ?? null}>
             <PageBody page={page} data={data} />
           </Slide>
         )

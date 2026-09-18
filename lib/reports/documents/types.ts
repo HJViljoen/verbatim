@@ -1,8 +1,11 @@
 import { DOCUMENT_BRIEF_MAX, directionWordsFor } from '../../config'
+import type { MethodLines } from '../../reading/method'
 import type { MonthStatus } from '../../reading/types'
 import type { Quote } from '../../renderables/types'
 import type { RunDelta } from '../../report-delta'
 import type { Audience, FigureTable } from '../types'
+import type { CannotTell, MonthLine, ScriptedLine, SwitchingFigure } from './figures'
+import type { UntrackedNote } from './sections'
 
 /**
  * Document reports (2026-08-31): a report WRITTEN by the Consumer Intelligence
@@ -94,7 +97,16 @@ export function documentSettings(raw: Partial<DocumentSettings> | null | undefin
 
 // ── the document ──────────────────────────────────────────────────────────
 
-export type DocPageKind = 'in_short' | 'finding' | 'competitor' | 'standing' | 'say_hear' | 'asked' | 'personas' | 'language' | 'method'
+export type DocPageKind =
+  | 'in_short' | 'finding' | 'competitor' | 'standing' | 'say_hear' | 'asked' | 'personas' | 'language' | 'method'
+  // Block D wave 2 (E-sales): two sheets drawn ENTIRELY from `slideFigures`
+  // and carrying no model block at all — `sales.p5` and `sales.p6` of the
+  // artboard. They are page kinds rather than borrowed block sections because
+  // no surface draws either one: wave 1 counted them for the brief and for
+  // nothing else. The writer is never asked for them (`writerSchema`'s switch
+  // has no arm for a kind with no field), which is the point: a sheet whose
+  // every line is counted cannot be written.
+  | 'switching' | 'scripted'
 
 /** Every field a block may carry; the skeleton says which page has which. */
 export type DocField =
@@ -196,6 +208,37 @@ export interface DocumentReading {
   /** True where the window crosses a recorded clustering boundary — the label
    *  decision L requires travels with it. */
   crossesClustering: boolean
+  /**
+   * How sound this reading is, in a calibrated word and a sentence
+   * (`sales.p2.confidence` … `p5.confidence`).
+   *
+   * READ OFF THE VERDICTS THE BRIEF'S BLOCKS ACTUALLY DREW — `confidenceOf`,
+   * the quarterly's own function, so one artefact cannot come to word this
+   * differently from another. It is NOT the finding pages' `sure` word, which
+   * is calibrated from conversations and strands and belongs to one argument:
+   * a borrowed section has no argument and no strands, and what a reader wants
+   * to know about a sheet of counted rows is how many of its comparisons were
+   * answered against a band. Absent on a brief built before wave 2.
+   */
+  confidence?: { word: string; why: string } | null
+  /**
+   * The method footnote, frozen (`sales.p7.footnote`, D15).
+   *
+   * Read depth, the translated and on-screen-text shares, the Reddit cap and
+   * the privacy sentence — every one already composed by `methodLines` on
+   * every brief's reading since wave 1, and every one thrown away at the door.
+   * Two of the five are NOT about the month this brief reads (read depth is
+   * all-time by construction; the language share is about what was said on
+   * camera), and `MethodLines.basis` is the clause that says so. Frozen rather
+   * than recomposed because the artefact must say in March what it said in
+   * September. Absent on every brief built before wave 2.
+   */
+  method?: MethodLines | null
+  /** "23 updates since 6 Apr 2026 · longest gap 35 days · last on 27 Sep 2026"
+   *  — `deliveryRecord().line`, the sentence Settings › The record prints. The
+   *  one figure a run's own clock is the honest index for, and the artboard
+   *  puts it in the method sheet's footer. */
+  delivery?: string | null
 }
 
 /** One input a brief needed and the workspace has not recorded, frozen so the
@@ -234,6 +277,54 @@ export interface DocBriefSection {
   title: string
   framing: string
   empty: string | null
+  /** The sheet's place in the brief, top right — "Objections · September 2026"
+   *  rather than the title repeated beside itself (E-sales, `sales.p2.header`). */
+  context?: string
+  /** The green-ruled eyebrow over the section's body: what the order of the
+   *  rows is. */
+  eyebrow?: string
+  /** What the right-hand pane carries: the month line, or the confidence dots
+   *  with their caveat. Absent keeps the full-bleed single column. */
+  pane?: 'chart' | 'confidence'
+  /** The pane's own eyebrow and opening line, so no two panes in a deck are
+   *  the same card (`BriefBlockSection.paneTitle` / `.paneLead`). A pane with
+   *  no lead prints the reading's denominators, as every pane did before. */
+  paneTitle?: string
+  paneLead?: string
+}
+
+/**
+ * The figures a BRIEF'S OWN SLIDES print, frozen onto the snapshot (Block D
+ * wave 2, package E-sales).
+ *
+ * WHY IT IS ON THE SNAPSHOT AND NOT RE-READ AT RENDER. "Exports and reports
+ * freeze numbers, never words": every count here is a reading of one month and
+ * has to say the same thing in March that it said in September, and a share
+ * link renders from the snapshot alone and may never touch a tenant table. The
+ * QUOTE inside a scripted line is not exempt from that — it is a `Quote` like
+ * any other, so `freezeQuotes` empties its text structurally on the way in and
+ * `resolveQuotes` puts the words back at render, exactly as it does for a
+ * finding's pull quote.
+ *
+ * Wave 1 (`figures.ts`, `load-reading.ts`) computed all six of these and handed
+ * them to nobody; this is the field that carries them to the deck. Absent on
+ * every brief built before wave 2, which is why every reader is
+ * optional-chained: a brief with no slide figures is a fact about when it was
+ * built, not a zero.
+ */
+export interface DocumentSlideFigures {
+  /** `sales.p7.cannottell` — the comparisons this reading refused. */
+  cannotTell: CannotTell
+  /** `sales.p5.figure`. Null where nothing named both. */
+  switching: SwitchingFigure | null
+  /** `sales.p5.crosscheck`. Null where there is no objection to square it against. */
+  crosscheck: string | null
+  /** `sales.p6.rows`. Empty where no objection cleared the floor. */
+  scripted: ScriptedLine[]
+  /** `sales.p2.chart`. Null where the month axis could not be read. */
+  line: MonthLine | null
+  /** `sales.p4.untracked` — what is not tracked, and whose job it is, by role. */
+  untracked: UntrackedNote[]
 }
 
 /** The brief's order: written pages and borrowed blocks, interleaved. */
@@ -254,6 +345,17 @@ export interface DocumentMethod {
   heldBack: number
   /** The update was partial or below the conversation floor. */
   thin: boolean
+  /**
+   * Findings the composer wrote and did not print — below the conversation
+   * floor, resting on no grounded point, or scrubbed to nothing.
+   *
+   * The count was computed on every build (`dropped.push(…)`) and lived only
+   * in the workings, which no reader of the document ever sees. "4 concluded ·
+   * 5 below the bar" is the artboard's row and it is the honest one: a
+   * findings count with no denominator says nothing about how selective the
+   * reading was. Absent on a brief built before wave 2.
+   */
+  dropped?: number
 }
 
 /** report_snapshots.data for a document build (kind stays 'report'). */
@@ -283,6 +385,9 @@ export interface DocumentSnapshotData {
   /** Written pages and borrowed blocks in one order (WP19). Absent on a brief
    *  built before the section maps, which paginates off `pages` as it did. */
   layout?: DocLayoutEntry[]
+  /** What this brief's own slides may print beyond the blocks (E-sales).
+   *  Absent on every brief built before wave 2. */
+  slideFigures?: DocumentSlideFigures | null
   pages: DocPage[]
   /** What this document was COMPOSED FROM (WP7d, 2026-09-12), frozen beside
    *  the template key so a later reader (the structural eval, a rebuild, a

@@ -1,4 +1,4 @@
-import { fmtInt, fullDate, longMonth, platformLabel } from '../../format'
+import { fmtInt, fullDate, longMonth, platformLabel, shortDate } from '../../format'
 import { blockAnswers, mergeFigures } from '../../blocks/types'
 import type { Block } from '../../blocks/types'
 import { freezeBoundary } from '../../reading/monthly'
@@ -120,6 +120,17 @@ export interface BriefReading {
    * the client's own side is not hollow.
    */
   hollow: string | null
+  /**
+   * How sound this reading is, in the quarterly's own calibrated word and its
+   * sentence (`confidenceOf`, lib/pages/quarterly.ts).
+   *
+   * OFF THE VERDICTS THIS BRIEF'S OWN BLOCKS DREW, which is the only honest
+   * basis for a sheet of counted rows: how many of its comparisons were
+   * answered against a band. It is deliberately NOT the finding pages' `sure`
+   * word — that one is calibrated from conversations and strands and belongs
+   * to one argument, and a borrowed section has neither.
+   */
+  confidence: { word: string; why: string }
 }
 
 /** What a brief says about its own window, on every page, in the design's
@@ -135,6 +146,32 @@ export function briefStamp(r: Pick<BriefReading, 'month' | 'monthStatus' | 'read
   return parts.join(' · ')
 }
 
+/**
+ * The same stamp in the artboard's FOOTER form — "September 2026 · as at 28
+ * Sep · still filling".
+ *
+ * ONE SHEET CANNOT SAY ONE THING THREE TIMES. `briefStamp` is sixty
+ * characters, and the deck printed it whole in the footer of all eleven
+ * sheets; on the method sheet that string then appeared three times over —
+ * the footer, the PERIOD row of the numbers card, and the end of the first
+ * method paragraph. The artboard's footer is the short form and its method
+ * card is the long one, which is the same rule `lib/reading/method.ts` exists
+ * to hold: a sentence is rendered once, where it is the point.
+ *
+ * It is the SAME reading, read off the same three fields as `briefStamp` and
+ * sitting beside it, so the two forms cannot come to name different months or
+ * disagree about whether one is still filling. What the short form drops is
+ * the freeze DATE, which the method card still prints in full — a footer says
+ * which month you are reading, not when it will stop moving.
+ */
+export function briefStampShort(r: Pick<BriefReading, 'month' | 'monthStatus' | 'readingAt'>): string {
+  return [
+    monthAndYear(r.month),
+    `as at ${shortDate(r.readingAt)}`,
+    r.monthStatus === 'filling' ? 'still filling' : 'frozen',
+  ].join(' · ')
+}
+
 /** "September 2026". `longMonth` is the product's month name and carries no
  *  year, which is right on a page a reader opened today and wrong on a
  *  document they will open in March — a brief is read long after it is
@@ -145,12 +182,26 @@ export function monthAndYear(month: string): string {
   return /^\d{4}$/.test(year) && name !== month.slice(0, 10) ? `${name} ${year}` : name
 }
 
+/**
+ * The comments a reading read, across its audiences — the ONE place this sum
+ * is taken.
+ *
+ * It was taken in four: the composer freezing `figures.conversations`, this
+ * line, the method card and the confidence rail. They agreed, because all four
+ * walked the same frozen array — and that is exactly the shape the repo's
+ * "ONE conversion" rule is about (`proseFigures`, verbatim): three hand-rolled
+ * ones is how "2,359", "2,395" and "2.4k" reach one document. It is a `reduce`
+ * and it is four lines long; being cheap is not a reason to have four of it.
+ */
+export const commentsRead = (denominators: readonly BriefDenominator[]): number =>
+  denominators.reduce((n, d) => n + d.comments, 0)
+
 /** "388 videos in the category · 158 of your own · 1,406 comments" — the
  *  denominator every figure on the brief is a share of, printed once. */
 export function denominatorLine(denominators: readonly BriefDenominator[]): string {
   if (denominators.length === 0) return 'No denominator recorded for this month.'
   const videos = denominators.map((d) => `${fmtInt(d.videos)} ${d.videos === 1 ? 'video' : 'videos'} in ${d.label}`)
-  const comments = denominators.reduce((n, d) => n + d.comments, 0)
+  const comments = commentsRead(denominators)
   return `${videos.join(' · ')} · ${fmtInt(comments)} ${comments === 1 ? 'comment' : 'comments'} read.`
 }
 

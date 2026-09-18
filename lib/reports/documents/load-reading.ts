@@ -7,6 +7,7 @@ import { MARKET_BLOCKS } from '../../../components/pages/market-surface'
 import { COMPETITIVE_BLOCKS } from '../../../components/pages/competitive-surface'
 import { audienceInLabel, loadOverview, type OverviewData } from '../../pages/overview'
 import { loadSubjectsPage } from '../../pages/subjects'
+import { confidenceOf } from '../../pages/quarterly'
 import { loadVoiceSurface } from '../../pages/voice-surface'
 import { loadMarketSurface } from '../../pages/market-surface'
 import { loadCompetitiveSurface } from '../../pages/competitive-surface'
@@ -29,17 +30,13 @@ import {
   monthLine,
   scriptedLines,
   switchingFigure,
-  type CannotTell,
-  type MonthLine,
-  type ScriptedLine,
-  type SwitchingFigure,
   type SwitchingVideo,
 } from './figures'
 import { monthlyLineLabel } from '../../pages/overview'
 import { CLIENT_AUDIENCE } from '../../rivals'
 import { selectAll } from '../../supabase-admin'
 import { fold } from '../../gather/util'
-import type { DocBriefSection, DocumentRole } from './types'
+import type { DocBriefSection, DocumentRole, DocumentSlideFigures } from './types'
 
 /**
  * The I/O half of a brief's reading (Phase 1 WP19).
@@ -100,22 +97,13 @@ const LOADERS: Record<BriefSurface, SurfaceLoader> = {
  * are not month readings at all. Keeping them here means a build that does not
  * want them pays nothing and a reader of `BriefReading` is not handed a shape
  * whose basis is different from everything beside it.
+ *
+ * ONE SHAPE, AND THE SNAPSHOT OWNS IT (wave 2, E-sales). The six fields are
+ * `DocumentSlideFigures` in `./types` — the module that declares what a brief
+ * FREEZES — and this is the loader's name for it. Two interfaces with the same
+ * six fields is how a field gets added to the loader and not to the artefact.
  */
-export interface BriefSlideFigures {
-  /** `sales.p7.cannottell` — the refusals this reading declined, printed. */
-  cannotTell: CannotTell
-  /** `sales.p5.figure`. Null where nothing named both. */
-  switching: SwitchingFigure | null
-  /** `sales.p5.crosscheck`. Null where there is no objection to square it
-   *  against. */
-  crosscheck: string | null
-  /** `sales.p6.rows`. Empty where no objection cleared the floor. */
-  scripted: ScriptedLine[]
-  /** `sales.p2.chart`. Null where the month axis could not be read. */
-  line: MonthLine | null
-  /** `sales.p4.untracked` — what is not tracked, and whose job it is, by role. */
-  untracked: UntrackedNote[]
-}
+export type BriefSlideFigures = DocumentSlideFigures
 
 export interface BriefReadingOptions {
   role: DocumentRole
@@ -248,6 +236,14 @@ export async function loadBriefReading(scope: Scope, options: BriefReadingOption
     // that carries the month.
     counter: overview.bar.counter,
     hollow: overview.subjects.note,
+    // `confidenceOf` AND NOT A SECOND RULE FOR THE SAME QUESTION. The quarterly
+    // already answers "how sure are we" off a list of verdicts, in words a
+    // reader of this workspace has met; a brief that invented its own would be
+    // two artefacts calibrating one thing two ways. `unlocked` is true here
+    // because that flag is the quarterly's own question — whether a
+    // quarter-on-quarter comparison has its six monthly readings — and a
+    // month's brief is not asking it.
+    confidence: confidenceOf(merged.verdicts, true),
   }
 
   // WHAT THE DOCUMENTS MAY PRINT BEYOND THE BLOCKS (package D7). Every one of
@@ -429,7 +425,7 @@ export async function briefSlideFigures(
   // answer to D3, applied to a document.
   const lead = chartLead(a.overview.subjects.rows, a.overview.category.label)
   const line = lead
-    ? monthLine({ months: lead.months, labelFor: monthlyLineLabel, series: [{ label: lead.label, points: lead.points }] })
+    ? monthLine({ months: lead.months, labelFor: monthlyLineLabel, series: [{ label: lead.label, points: lead.points, unit: 'pct' }] })
     : null
 
   return {
@@ -469,7 +465,16 @@ export function briefSections(
         : block
           ? block.emptyState(data as never)
           : 'This section names a block this build does not know how to draw.'
-    return { id: s.id, block: s.block, surface: s.surface, title: s.title, framing: s.framing, empty }
+    return {
+      id: s.id, block: s.block, surface: s.surface, title: s.title, framing: s.framing, empty,
+      // The sheet's own layout, frozen with it: a stored artefact renders the
+      // sheet it was built as, not the sheet today's map would build.
+      ...(s.context ? { context: s.context } : {}),
+      ...(s.eyebrow ? { eyebrow: s.eyebrow } : {}),
+      ...(s.pane ? { pane: s.pane } : {}),
+      ...(s.paneTitle ? { paneTitle: s.paneTitle } : {}),
+      ...(s.paneLead ? { paneLead: s.paneLead } : {}),
+    }
   })
 }
 

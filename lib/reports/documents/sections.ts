@@ -71,6 +71,61 @@ export interface BriefBlockSection {
   title: string
   /** One line of framing, the operator's voice, printed under the title. */
   framing: string
+  /**
+   * The short deck meta, top right (`sales.p2.header`).
+   *
+   * The artboard reads "Objections · September 2026" where the deck printed
+   * "{the whole section title} · {the whole reading stamp}" — the title
+   * repeated beside itself, and a 60-character stamp in a 10.5px mono slot that
+   * has to fit on one line. The stamp is not lost: it rides the FOOTER of every
+   * sheet, which is where the artboard puts it. This is the sheet's PLACE in
+   * the brief, in one or two words. Absent leaves the title, as before.
+   */
+  context?: string
+  /**
+   * The green-ruled eyebrow over the section's own body (`sales.p2.header`).
+   *
+   * Every artboard sheet opens its left column with one — "Most heard first",
+   * "How to use these" — and `Eyebrow` exists in the deck and was used on
+   * written pages only, so a borrowed section opened with four stacked
+   * heading-ish lines and no rule. It says what the ORDER of the rows is, which
+   * is the one thing a list of counted rows will not tell a reader itself.
+   */
+  eyebrow?: string
+  /**
+   * What the right-hand pane of this sheet carries.
+   *
+   * The artboards are 7fr/5fr on every sheet and the build drew borrowed
+   * sections full-bleed, single column, at about half the density. `'chart'`
+   * is the month line (`sales.p2.chart`); `'confidence'` is the dots, the word
+   * and the caveat, which existed only inside a finding page's right card.
+   * Absent keeps the full-bleed single column, which is right for a block that
+   * already lays out its own columns.
+   */
+  pane?: 'chart' | 'confidence'
+  /**
+   * The right card's own eyebrow and its opening line (`sales.p3.howtouse`).
+   *
+   * WHY A PANE NEEDS ITS OWN WORDS. The first pass gave `confidence` one body
+   * — the reading's denominators, then the dots — so three sheets running
+   * carried an identical card: "WHAT THIS RESTS ON · 1,388 the category · …"
+   * verbatim on p3 and p4, and the same confidence sentence on p2, p3 and p4.
+   * A panel that says the same thing three sheets running reads as chrome and
+   * a reader stops looking at it, which is the opposite of what a confidence
+   * rail is for. The artboard's right cards differ sheet by sheet — "HOW TO
+   * USE THESE" over a lead and its practice items on p3, the rival material on
+   * p4 — and this is that, as far as the reading honestly reaches.
+   *
+   * `paneLead` IS THE OPERATOR'S VOICE, like `framing`: how to read the rows
+   * this sheet carries, written once here. It is not a model's and it names no
+   * figure — the artboard's own lead ("Lead with the thing that is rising…")
+   * is a sentence about one tenant's month and a direction claim besides, and
+   * nothing composes one. A pane with a lead prints it; a pane without one
+   * prints the reading's denominators, which is what every pane printed
+   * before.
+   */
+  paneTitle?: string
+  paneLead?: string
   /** What has to be recorded for this section to hold anything. */
   needs: readonly ReadinessId[]
   /**
@@ -167,23 +222,52 @@ export const LEADERSHIP_MAP: readonly BriefEntry[] = [
 ]
 
 // ── Sales — the customers' words, by subject and by rival ──────────────────
+//
+// THE ARTBOARD'S ORDER AND THE ARTBOARD'S NAMES (Block D wave 2, E-sales).
+// `artboards/SalesBrief.dc.html` is seven sheets: cover · what they are
+// pushing back on · what sells, in their words · what they complain about with
+// each rival · who is moving, and which way · answers you can use · method.
+// The ids do not move — a section id names a slide inside a built brief and an
+// edit in `report_edits` — but the ORDER and the TITLES are the reader's, and
+// they were neither the mock's order nor its words.
+//
+// AND THE BUILD KEEPS WHAT THE MOCK HAS NOT GOT. The overview sheet, the
+// finding pages and the language page have no counterpart on the artboard and
+// are not dropped for it: a finding is the argument this brief is written to
+// make, and "Not settled this update" is the product saying what it could not
+// answer. A blind port would have deleted all three.
 
 export const SALES_MAP: readonly BriefEntry[] = [
   page('in_short'),
   page('finding'),
   block({
-    id: 'sl.voices', block: 'subjects.voices', surface: 'subjects',
-    title: 'In their words, by subject', framing: 'What customers actually said about each subject this month.',
+    id: 'sl.unanswered', block: 'subjects.unanswered', surface: 'subjects',
+    title: 'What they are pushing back on', framing: 'The questions the conversation puts and does not settle.',
+    context: 'Objections', eyebrow: 'Most heard first', pane: 'chart',
     needs: ['subject-set'],
   }),
   block({
-    id: 'sl.unanswered', block: 'subjects.unanswered', surface: 'subjects',
-    title: 'What they asked and nobody answered', framing: 'The questions the conversation puts and does not settle.',
+    id: 'sl.voices', block: 'subjects.voices', surface: 'subjects',
+    title: 'What sells, in their words', framing: 'What customers actually said about each subject this month — say it back, in their words.',
+    context: 'Selling points', eyebrow: 'In their own words', pane: 'confidence',
+    paneTitle: 'How to use these',
+    paneLead: 'Say these back in the customer\u2019s own words rather than in ours. Every phrase carries the count it was heard in and the population that count is of, so the one with the most behind it is the one to open with — and a phrase with a thin count is a lead to test, not a line to build on.',
     needs: ['subject-set'],
   }),
   block({
     id: 'sl.rivals', block: 'competitive.rivals', surface: 'competitive',
-    title: 'By rival', framing: 'What is said about each rival, in the same month, with its denominator.',
+    // THE ARTBOARD'S TITLE, AND AN EMPTY STATE THAT TELLS THE TRUTH UNDER IT.
+    // `competitive.rivals.figures()` returns `{}` and `rivalOwnClaims` is
+    // unbound — both inside `components/pages/competitive-surface/`, which
+    // E-competitive owns — so the sheet draws the rival selector, the reading
+    // behind each rival and the untracked note, and no complaint. A client
+    // reading a paid document met a heading promising per-rival complaints and
+    // a page delivering a picker; the title is the mock's and stays, and the
+    // framing and the pane now say what is actually on the sheet.
+    title: 'What they complain about with each rival', framing: 'Who is being talked about this month, and how much of the reading rests on each.',
+    context: 'Rivals', eyebrow: 'Who is being talked about', pane: 'confidence',
+    paneTitle: 'What is on this sheet',
+    paneLead: 'Who is being talked about, and how much of the month was read of each. What is said about a rival is not yet counted rival by rival, so this sheet does not carry the complaints its title names.',
     needs: ['months-of-history'],
     // `sales.p4.untracked` — the mock's readiness line. NOT a `needs`: this
     // block reads the category corpus either way, and refusing it would drop a
@@ -193,8 +277,18 @@ export const SALES_MAP: readonly BriefEntry[] = [
   block({
     id: 'sl.questions', block: 'competitive.questions', surface: 'competitive',
     title: 'What buyers compare', framing: 'The comparisons buyers make out loud, and who they name.',
+    context: 'Comparisons', eyebrow: 'Asked under their content',
+    // THE ONE SHEET WITH NO RIGHT COLUMN AT ALL. `sl.questions` carried no
+    // `pane`, so it was the single-column sheet in an otherwise 7fr/5fr deck
+    // and the only one with no confidence rail — the deck's rhythm broken once
+    // for no stated reason.
+    pane: 'confidence',
+    paneTitle: 'How to read these',
+    paneLead: 'These are comparisons the audience put, counted in the videos we read — not comparisons we drew. A pairing appearing here says it was asked about, and says nothing about which side the asker settled on.',
     needs: [],
   }),
+  page('switching'),
+  page('scripted'),
   page('language'),
   page('method'),
 ]
@@ -271,9 +365,26 @@ export interface MissingInput {
   ownerRole: 'client' | 'ops' | 'engineering'
   /** The act that changes it — `ReadinessRow.unlocks`. */
   unlocks: string
-  /** The sections that went without it, by title. */
+  /** The sections that went without it, by title — the caller's match key. */
   sections: string[]
+  /** The same sections by SHORT name (`labelOf`), which is what the sentence
+   *  splices; a title is a heading and reads as a clause inside one. */
+  labels: string[]
 }
+
+/**
+ * The SHORT name of a section, for a sentence that splices one into itself.
+ *
+ * A section's `title` is written to be read as a heading — "What they complain
+ * about with each rival" — and both `missingSentence` and `untrackedSentence`
+ * splice it into running prose as if it were a short noun phrase. It was one
+ * ("By rival") until the map took the artboard's own titles, and the sentence
+ * then read "What they complain about with each rival is read without it",
+ * which is not a sentence. `context` is already exactly this word — the
+ * artboard's two-word slot, "Rivals" — so the label is that where a section
+ * has one, and the title where it has not.
+ */
+const labelOf = (section: BriefBlockSection): string => section.context ?? section.title
 
 /** A readiness row as this module needs it — the four fields, so a test needs
  *  no fixture of thirteen. */
@@ -306,8 +417,8 @@ export function missingInputs(
       const row = byId.get(need)
       if (!row || row.status !== 'missing') continue
       const held = out.get(need)
-      if (held) held.sections.push(section.title)
-      else out.set(need, { id: need, input: row.input, owner: row.owner, ownerRole: row.ownerRole, unlocks: row.unlocks, sections: [section.title] })
+      if (held) { held.sections.push(section.title); held.labels.push(labelOf(section)) }
+      else out.set(need, { id: need, input: row.input, owner: row.owner, ownerRole: row.ownerRole, unlocks: row.unlocks, sections: [section.title], labels: [labelOf(section)] })
     }
   }
   return [...out.values()]
@@ -332,7 +443,11 @@ export function missingSentence(m: MissingInput): string {
   // already opens with its own article ("the rival accounts we read"), so the
   // obvious wording reads "we have no the rival accounts we read". The verb
   // carries the sentence instead, and the input is quoted as the row it is.
-  const head = `${m.sections.join(' and ')} could not be filled. We have not recorded ${m.input}.`
+  // THE SHORT NAME, AND NAMED AS A SECTION. See `labelOf`: a map title is
+  // written to be read as a heading ("What they complain about with each
+  // rival") and this sentence splices it into running prose.
+  const names = m.labels.length > 0 ? m.labels : m.sections
+  const head = `The ${names.join(' and ')} ${names.length === 1 ? 'section' : 'sections'} could not be filled. We have not recorded ${m.input}.`
   // `unlocks` IS AN INSTRUCTION TO WHOEVER OWNS THE ROW, and only the CLIENT
   // can act on theirs. Every other row's act is our own operator copy and must
   // not be printed as if the reader could do it: `subject-set` reads "Phase 1
@@ -386,8 +501,11 @@ export interface UntrackedNote {
   /** Who closes it, by ROLE — never a person, and never a date. */
   owner: string
   ownerRole: 'client' | 'ops' | 'engineering'
-  /** The sections it is noted on, by title. */
+  /** The sections it is noted on, by title — the deck matches on this. */
   sections: string[]
+  /** The same sections by SHORT name (`labelOf`), which is what the sentence
+   *  splices. */
+  labels: string[]
   /** The line itself, already composed. */
   line: string
 }
@@ -416,6 +534,7 @@ export function untrackedNotes(
       const held = out.get(note)
       if (held) {
         held.sections.push(section.title)
+        held.labels.push(labelOf(section))
         held.line = untrackedSentence(held)
         continue
       }
@@ -425,6 +544,7 @@ export function untrackedNotes(
         owner: row.owner,
         ownerRole: row.ownerRole,
         sections: [section.title],
+        labels: [labelOf(section)],
         line: '',
       }
       built.line = untrackedSentence(built)
@@ -445,8 +565,12 @@ export function untrackedNotes(
  * mock's line is actually for: a reader has to know whether this is theirs to
  * fix or ours.
  */
-export function untrackedSentence(note: Pick<UntrackedNote, 'input' | 'ownerRole' | 'sections'>): string {
-  const where = note.sections.length > 0 ? ` ${note.sections.join(' and ')} ${note.sections.length === 1 ? 'is' : 'are'} read without it.` : ''
+export function untrackedSentence(note: Pick<UntrackedNote, 'input' | 'ownerRole' | 'sections' | 'labels'>): string {
+  // THE SHORT NAME, NOT THE HEADING. See `labelOf`: the map took the
+  // artboard's own titles in this wave and "What they complain about with each
+  // rival is read without it" stopped being a sentence the day it did.
+  const names = note.labels?.length ? note.labels : note.sections
+  const where = names.length > 0 ? ` The ${names.join(' and ')} ${names.length === 1 ? 'section is' : 'sections are'} read without it.` : ''
   const whose =
     note.ownerRole === 'client'
       ? 'Yours to name in Settings.'
