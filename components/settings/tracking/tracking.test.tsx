@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { CadenceSection, FREEZE_NOTE, SLOT_NOTE } from './cadence'
 import { CommunitiesSection } from './communities'
+import { rowMessage } from './community-controls'
 import { PlatformsSection } from './platforms'
 import { RivalsSection, RENAME_UNAVAILABLE } from './rivals'
 import { RIVAL_REMOVED_PENDING } from '@/lib/settings/rivals-view'
@@ -132,6 +133,18 @@ describe('the communities section', () => {
     expect(words).toContain('Stop watching')
     expect(words).toContain('Watch this community')
     expect(words).toContain('capped at 40 per thread')
+  })
+
+  it('keeps a community’s control after its own click, and retires the message with the row', () => {
+    // C4/M1: the control used to be REPLACED by the status message, which
+    // useActionState then kept forever — a failed write left an error and no
+    // retry, a successful one left "Saved…" where the row's newly correct
+    // "Watch it" belonged. The message is a sibling now, and it is spent the
+    // moment the row changes direction.
+    expect(rowMessage('stop', null, '')).toBe('')
+    expect(rowMessage('stop', 'stop', 'Could not save that.')).toBe('Could not save that.')
+    expect(rowMessage('add', 'stop', 'Saved. Your next update stops reading that community')).toBe('')
+    expect(words).toContain('Stop watching')
   })
 
   it('keeps the copy contract', () => {

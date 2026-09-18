@@ -26,29 +26,62 @@ import { cn } from '@/lib/utils'
 const idle: SettingsFormState = { ok: false, message: '' }
 
 /** The per-row control: stop watching, or start on a row the search dragged
- *  in and nobody put on the list. */
+ *  in and nobody put on the list.
+ *
+ *  THE CONTROL SURVIVES ITS OWN CLICK. It used to return the status message
+ *  INSTEAD of the button, and `useActionState` keeps its last result forever —
+ *  the action's `revalidatePath` re-renders the row but does not remount this
+ *  component, so a failed write left the reader an error and no way to retry,
+ *  and a successful one left "Saved…" sitting where the row's newly correct
+ *  "Watch it" belonged until a full reload. The message is now a sibling of
+ *  the button, and it retires by itself: `firedFor` remembers which way the row
+ *  pointed when the click went out, so when the server comes back with the row
+ *  flipped, the message about the old state goes with it. */
 export function CommunityAction({ name, op, canEdit }: { name: string; op: 'add' | 'stop'; canEdit: boolean }) {
   const [state, dispatch, pending] = useActionState(updateCommunity, idle)
-
-  if (state.message) {
-    return <span className={cn('text-[11.5px]', state.ok ? 'text-muted-foreground' : 'text-negative')} role="status">{state.message}</span>
-  }
+  const [firedFor, setFiredFor] = useState<'add' | 'stop' | null>(null)
+  const message = rowMessage(op, firedFor, state.message)
 
   return (
-    <button
-      type="button"
-      disabled={!canEdit || pending}
-      onClick={() => {
-        const data = new FormData()
-        data.set('op', op)
-        data.set('name', name)
-        dispatch(data)
-      }}
-      className="rounded-[3px] text-[12px] font-medium text-foreground transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
-    >
-      {pending ? 'Saving…' : op === 'stop' ? 'Stop watching' : 'Watch it'}
-    </button>
+    <span className="flex flex-col items-end gap-0.5">
+      <button
+        type="button"
+        disabled={!canEdit || pending}
+        onClick={() => {
+          setFiredFor(op)
+          const data = new FormData()
+          data.set('op', op)
+          data.set('name', name)
+          dispatch(data)
+        }}
+        className="rounded-[3px] text-[12px] font-medium text-foreground transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {pending ? 'Saving…' : op === 'stop' ? 'Stop watching' : 'Watch it'}
+      </button>
+      {message && (
+        <span
+          className={cn('text-right text-[11px] leading-[1.3]', state.ok ? 'text-muted-foreground' : 'text-negative')}
+          role={state.ok ? 'status' : 'alert'}
+        >
+          {message}
+        </span>
+      )}
+    </span>
   )
+}
+
+/**
+ * Which message a row still has to show.
+ *
+ * `useActionState` keeps its last result for the life of the component and the
+ * action's `revalidatePath` does not remount it, so the only thing that says a
+ * result is spent is the ROW changing direction: a click sent while the row
+ * said "Stop watching" is answered by a row that says "Watch it". Pure, so the
+ * rule is tested rather than inferred from a screenshot.
+ */
+export function rowMessage(op: 'add' | 'stop', firedFor: 'add' | 'stop' | null, message: string): string {
+  if (firedFor !== null && firedFor !== op) return ''
+  return message
 }
 
 /** The add row under the table. */
@@ -88,7 +121,12 @@ export function CommunityAdd({ canEdit, note }: { canEdit: boolean; note: string
         <MonoNote className="max-w-[420px]">{note}</MonoNote>
       </div>
       {state.message && (
-        <span className={cn('text-[11.5px]', state.ok ? 'text-muted-foreground' : 'text-negative')} role="status">{state.message}</span>
+        <span
+          className={cn('text-[11.5px]', state.ok ? 'text-muted-foreground' : 'text-negative')}
+          role={state.ok ? 'status' : 'alert'}
+        >
+          {state.message}
+        </span>
       )}
     </div>
   )
