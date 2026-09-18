@@ -223,15 +223,57 @@ describe('the method sheet', () => {
   // inches from a basis paragraph stating the month's own denominators.
   it('is the reading’s numbers, not the update’s', () => {
     const rows = Object.fromEntries(methodRows(marketingDeckFixture()))
-    expect(rows.Conversations).toBe('11,840 comments read in September 2026')
+    expect(rows.Comments).toBe('11,840 read in September 2026')
     expect(rows.Videos).toContain('1,388 in the category')
     expect(rows.Videos).not.toContain('2,359')
+  })
+
+  // COMMENTS, not "Conversations" (fix pass). lib/calibration.ts fixes a
+  // conversation as one video and the comments it sparked, and this card
+  // defines the unit as a video two rows below — so the old label contradicted
+  // its own table. The quarterly's identical card was fixed for this reason
+  // and pinned; this is the same assertion.
+  it('calls a comment count comments, on the sheet that defines the unit', () => {
+    const rows = methodRows(marketingDeckFixture())
+    expect(rows.map(([k]) => k)).not.toContain('Conversations')
+    expect(Object.fromEntries(rows)['The unit']).toContain('analysed comment')
+  })
+
+  // THE PERIOD ENDS WHEN THE MONTH ENDS. `readingAt` is the instant we looked:
+  // a September month re-read in December printed "1 Sep 2026 → 2 Dec 2026" on
+  // the sheet whose job is to state the basis.
+  it('prints the month’s own period, never the instant it was read', () => {
+    const rows = Object.fromEntries(methodRows(marketingDeckFixture()))
+    expect(rows.Period).toBe('1 Sep – 30 Sep 2026 · still filling')
+    const late = marketingDeckFixture()
+    const frozen = Object.fromEntries(methodRows({
+      ...late,
+      reading: { ...late.reading!, monthStatus: 'frozen', readingAt: '2026-12-02T09:00:00.000Z' },
+    }))
+    expect(frozen.Period).toBe('1 Sep – 30 Sep 2026')
+    expect(frozen.Period).not.toContain('Dec')
+  })
+
+  // ONE BASIS FOR THE WHOLE CARD. Each row guarded independently, so a reading
+  // whose denominators had not been written printed the MONTH's period and
+  // platform mix beside the UPDATE's comment and video counts — the defect this
+  // card was rewritten to close, one branch over.
+  it('does not mix the month and the update when the denominators are empty', () => {
+    const data = marketingDeckFixture()
+    const rows = Object.fromEntries(methodRows({
+      ...data,
+      reading: { ...data.reading!, denominators: [] },
+    }))
+    expect(rows.Period).toBe(data.period)
+    expect(rows.Comments).toBe('9,120')
+    expect(rows.Videos).toContain('2,359')
+    expect(rows.Sources).toBe('TikTok, YouTube, Instagram, Reddit')
   })
 
   it('prints eight rows, with the unit and the language share', () => {
     const rows = methodRows(marketingDeckFixture())
     expect(rows.map(([k]) => k)).toEqual([
-      'Period', 'Conversations', 'Videos', 'Sources', 'Held back', 'Findings', 'The unit', 'Languages',
+      'Period', 'Comments', 'Videos', 'Sources', 'Held back', 'Findings', 'The unit', 'Languages',
     ])
     expect(Object.fromEntries(rows)['The unit']).toBe('a video with at least one analysed comment')
   })
@@ -262,7 +304,7 @@ describe('the method sheet', () => {
   // the basis paragraph beside them says which basis this brief used.
   it('falls back to the update’s own numbers where there is no reading', () => {
     const rows = Object.fromEntries(methodRows(marketingDeckFixture({ reading: null })))
-    expect(rows.Conversations).toBe('9,120')
+    expect(rows.Comments).toBe('9,120')
     expect(rows.Videos).toContain('2,359')
     expect(rows['Held back']).toBe('14 phrases in other languages')
   })

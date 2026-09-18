@@ -7,7 +7,8 @@ import { Sparkline } from '@/components/charts/sparkline'
 import { CountBadge, MovementBadge } from '@/components/delta-badge'
 import { FigureCell } from '@/components/blocks/frame'
 import { gapLine, sidePct, type Gap } from '@/lib/reading/gap'
-import { fullDate, round1 } from '@/lib/format'
+import { fullDate, round1, shortDate } from '@/lib/format'
+import { nextMonth } from '@/lib/reading/month-key'
 import { platformShareLine } from '@/lib/reading/method'
 import { MOVE_PROMISE } from '@/lib/subjects/types'
 import { MOVES_EMPTY } from '@/lib/pages/overview'
@@ -890,9 +891,23 @@ function LanguagePage({ page }: { page: DocPage }) {
  * is computed anywhere in the product, and a median invented at render would
  * be a figure with no basis on the sheet that explains the basis.
  */
+/** The last day of a month, as a date — `2026-09-01` → `2026-09-30`. The
+ *  period a month reading covers ends here; `readingAt` is when we looked. */
+function monthLastDay(month: string): string {
+  return new Date(new Date(`${nextMonth(month)}T00:00:00.000Z`).getTime() - 86_400_000).toISOString()
+}
+
 export function methodRows(data: DocumentSnapshotData): [string, string][] {
   const m = data.method
-  const r = data.reading ?? null
+  // THE BASIS IS DECIDED ONCE, FOR THE WHOLE CARD (fix pass). Every row used to
+  // guard independently — `Period` on `r`, `Conversations` on `r && comments`,
+  // `Videos` on `r && category`, `Sources` on a non-empty mix — so a reading
+  // whose denominators had not been written (the state AGENTS.md says every
+  // reader has to survive) printed the MONTH's period and platform mix beside
+  // the UPDATE's comment and video counts. That is the same two-measurements-
+  // of-one-quantity defect this card was rewritten to close, one branch over.
+  // A reading with no denominators is not a reading for this card's purposes.
+  const r = data.reading && data.reading.denominators.length > 0 ? data.reading : null
   const category = r?.denominators.find((d) => d.audience === 'industry-other') ?? r?.denominators[0] ?? null
   const comments = r ? r.denominators.reduce((n, d) => n + d.comments, 0) : 0
   const refused =
@@ -901,8 +916,20 @@ export function methodRows(data: DocumentSnapshotData): [string, string][] {
   const findings = data.pages.filter((p) => p.kind === 'finding').length
   const below = m.findingsBelow ?? 0
   const rows: [string, string][] = [
-    ['Period', r ? `${fullDate(r.month)} → ${fullDate(r.readingAt)}${r.monthStatus === 'filling' ? ' · still filling' : ''}` : m.period],
-    ['Conversations', r && comments > 0 ? `${fmtCount(comments)} comments read in ${r.monthLabel}` : fmtCount(m.conversations)],
+    // THE PERIOD ENDS WHEN THE MONTH ENDS, NOT WHEN WE LOOKED. This printed
+    // `month start → readingAt`, and `readingAt` is the instant we read: a
+    // September month re-read on 2 December printed "Period 1 Sep 2026 → 2 Dec
+    // 2026" on the one sheet whose job is to state the basis. The quarterly's
+    // identical row already prints "1 Jul – 30 Sep 2026" with "still filling"
+    // as a separate note, and the reading instant is on every sheet's stamp.
+    ['Period', r ? `${shortDate(r.month)} – ${fullDate(monthLastDay(r.month))}${r.monthStatus === 'filling' ? ' · still filling' : ''}` : m.period],
+    // COMMENTS, NEVER "CONVERSATIONS" (lib/calibration.ts GLOSSARY: a
+    // conversation is one video and the comments it sparked, and comments are
+    // always counted separately as comments). Two rows below, this card defines
+    // the unit as "a video with at least one analysed comment" — so the old
+    // label contradicted its own table. The quarterly was fixed for this reason
+    // and its fix is pinned (lib/pages/quarterly.test.ts).
+    ['Comments', r ? `${fmtCount(comments)} read in ${r.monthLabel}` : fmtCount(m.conversations)],
     [
       'Videos',
       r && category
