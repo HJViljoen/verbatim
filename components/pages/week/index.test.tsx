@@ -556,6 +556,23 @@ describe('WK §5 · notable rival posts', () => {
     expect(text).toContain('Rareform')
   })
 
+  it('puts the post in the rival’s own row, as one table', () => {
+    // Design review F13. The rival's name took a row of its own with the pick
+    // sentence beside it and the posts fell onto rows underneath, leaving a
+    // ~35px hole between a rival and its first post — three rivals reading as
+    // three loose groups rather than as three rows of one table. The artboard
+    // puts the post in the rival's row.
+    const markup = render(weekRivalPosts.render(weekFixture(), 'app', ctx))
+    const rows = markup.split('xl:grid-cols-[170px_minmax(0,1fr)_88px]')
+    // The first grid row after the header carries BOTH the rival's name and a
+    // post, which is the whole finding.
+    const first = rows[2] ?? ''
+    expect(first).toContain('Ottobock')
+    expect(first).toContain('YouTube')
+    // The pick rule is still printed, under the posts it picked.
+    expect(markupText(markup)).toContain('the most commented on in these days')
+  })
+
   it('states the by/about distinction, and why a zero is a zero', () => {
     // Össur has never captured a post of Ottobock's in six months of
     // gathering, handle configured or not: "0 posts of their own" would read

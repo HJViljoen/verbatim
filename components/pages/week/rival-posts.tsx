@@ -143,41 +143,65 @@ function RivalRow({ rival, mode }: { rival: RivalPosts; mode: 'app' | 'print' | 
 
   return (
     <div className="border-t border-border/70 py-2">
-      <div className="grid grid-cols-1 items-start gap-1 xl:grid-cols-[170px_minmax(0,1fr)_88px] xl:gap-4">
-        <span className="flex min-w-0 flex-col gap-0.5">
-          <span className="flex items-center gap-1.5 text-[12.5px] font-medium">
-            <span className="size-1.5 shrink-0 rounded-full" style={{ background: 'var(--comp)' }} aria-hidden />
-            {rival.label}
-          </span>
-          <span className="font-mono text-[10.5px] leading-[1.35] text-muted-foreground">{seen}</span>
-        </span>
-        <span className="flex min-w-0 flex-col gap-1">
-          {rule ? <span className="font-mono text-[11px] text-muted-foreground">{rule}</span> : (
+      {/* ONE TABLE, NOT THREE LOOSE GROUPS (design review F13). The rival's
+          name used to take a row of its own with the pick sentence beside it
+          and the posts on rows underneath, which left a ~35px hole between a
+          rival and its first post and made three rivals read as three stacked
+          cards rather than as three rows of one table. The artboard puts the
+          post in the rival's row, so the first post sits beside the name and
+          the rest continue under it — the rival cell empty, the hairline
+          between rivals still doing the grouping. */}
+      {(rival.posts.length > 0 ? rival.posts : [null]).map((post, i) => (
+        <div
+          key={post ? `${post.platform}:${post.href ?? i}` : 'none'}
+          className={`grid grid-cols-1 items-start gap-1 xl:grid-cols-[170px_minmax(0,1fr)_88px] xl:gap-4${i > 0 ? ' pt-1.5' : ''}`}
+        >
+          {i === 0 ? (
+            <span className="flex min-w-0 flex-col gap-0.5">
+              <span className="flex items-center gap-1.5 text-[12.5px] font-medium">
+                <span className="size-1.5 shrink-0 rounded-full" style={{ background: 'var(--comp)' }} aria-hidden />
+                {rival.label}
+              </span>
+              <span className="font-mono text-[10.5px] leading-[1.35] text-muted-foreground">{seen}</span>
+            </span>
+          ) : <span className="hidden xl:block" />}
+          {post ? (
+            <span className="flex min-w-0 items-center gap-1.5 text-[12px]">
+              <PlatformIcon platform={post.platform} className="shrink-0 text-secondary-foreground" />
+              <span className="min-w-0 truncate"><PostWords post={post} /></span>
+            </span>
+          ) : (
             <span className="text-[11.5px] text-muted-foreground">
               No post of theirs was read in the days this update covered.
             </span>
           )}
-        </span>
-        <span className="xl:justify-self-end" />
-      </div>
-      {rival.posts.map((post, i) => (
-        <div key={`${post.platform}:${post.href ?? i}`} className="grid grid-cols-1 items-center gap-1 pt-1.5 xl:grid-cols-[170px_minmax(0,1fr)_88px] xl:gap-4">
-          <span />
-          <span className="flex min-w-0 items-center gap-1.5 text-[12px]">
-            <PlatformIcon platform={post.platform} className="shrink-0 text-secondary-foreground" />
-            <span className="min-w-0 truncate"><PostWords post={post} /></span>
-          </span>
-          <span className="xl:justify-self-end">
-            {/* NO "of N", DELIBERATELY. A count of the comments under one post
-                is not a share of anything on this page — not of the update's
-                videos, which are a different unit, and not of the rival's week,
-                which nothing counted. `FigureCell`'s own contract is that
-                omitting the denominator is a statement; the days they were
-                counted in are in the block's meta. */}
-            <FigureCell value={fmtInt(post.comments)} align="right" mode={mode} />
-          </span>
+          {post ? (
+            // THE COLUMN'S NAME TRAVELS WITH THE NUMBER BELOW `xl` (design
+            // review F10), where the header row is hidden and the cell would
+            // otherwise be a bare count at the end of a stacked row.
+            <span className="flex items-baseline gap-1.5 xl:block xl:justify-self-end">
+              <span className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground xl:hidden">Comments</span>
+              {/* NO "of N", DELIBERATELY. A count of the comments under one post
+                  is not a share of anything on this page — not of the update's
+                  videos, which are a different unit, and not of the rival's
+                  week, which nothing counted. `FigureCell`'s own contract is
+                  that omitting the denominator is a statement; the days they
+                  were counted in are in the block's meta. */}
+              <FigureCell value={fmtInt(post.comments)} align="right" mode={mode} />
+            </span>
+          ) : <span />}
         </div>
       ))}
+      {/* THE RULE THAT PICKED THEM, UNDER THE POSTS IT PICKED. It is about the
+          set and not about any one row, so it sits at the foot of the rival's
+          rows rather than beside its name, where it used to push the first post
+          a row down. */}
+      {rule ? (
+        <div className="grid grid-cols-1 gap-1 xl:grid-cols-[170px_minmax(0,1fr)_88px] xl:gap-4">
+          <span className="hidden xl:block" />
+          <span className="font-mono text-[10.5px] leading-[1.35] text-muted-foreground xl:col-span-2">{rule}</span>
+        </div>
+      ) : null}
     </div>
   )
 }
