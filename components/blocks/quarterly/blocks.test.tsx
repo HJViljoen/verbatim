@@ -440,8 +440,14 @@ describe('what each page owes the reader', () => {
     expect(data.subjects.rows[0].youQuarter).not.toBeNull()
     expect(data.subjects.rows[0].youQuarter?.audience).toBe(CLIENT_AUDIENCE)
     expect(data.subjects.rows[0].categoryQuarter).not.toBeNull()
-    // Each badge says whose side it is, in the row body's own order.
-    expect(text).toMatch(/Durability you .* the category /)
+    // THE ROW IS THE ARTBOARD'S FIVE COLUMNS NOW, NOT ONE SENTENCE. The build
+    // stacked all four figures into "you 31% 26 of 84 · the category 22% 305 of
+    // 1,388" and labelled each badge with its side because nothing else could
+    // tell them apart; the port puts each figure in its own column under its own
+    // header, which is what the labels were standing in for. So the assertion
+    // moves from the sentence to the header row and the cells beneath it.
+    expect(text).toContain('Subject You, September The category, September')
+    expect(text).toContain('Durability 31% 26 of 84 22% 305 of 1,388')
     expect(data.subjects.quarterNote).toBeNull()
   })
 
