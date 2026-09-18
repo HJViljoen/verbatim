@@ -7,6 +7,7 @@ import type { WindowReading } from '../reading/read'
 import type { SubjectWindowReading } from '../subjects/types'
 import { previousQuarter, quarterFor } from '../reports/quarterly'
 import { INDUSTRY_AUDIENCE } from '../rivals'
+import { formingCardFixture, quarterlyCardFixture, unreadCardFixture } from '../../components/blocks/reports-card/fixture'
 
 const QUARTER = quarterFor(2026, 3)
 const PRIOR = previousQuarter(QUARTER)
@@ -159,5 +160,30 @@ describe('the gathered era', () => {
 describe('monthsBetween', () => {
   it('walks the quarter inclusively', () => {
     expect(monthsBetween(QUARTER.from, QUARTER.to)).toEqual(['2026-07-01', '2026-08-01', '2026-09-01'])
+  })
+})
+
+describe('the wave-2 fixtures', () => {
+  it('give wave 2 all three states, each built by the real builder', () => {
+    const full = quarterlyCardFixture()
+    expect(full.rows).toHaveLength(3)
+    expect(full.note).toBeNull()
+
+    const forming = formingCardFixture()
+    expect(forming.rows.every((r) => r.verdict.state === 'baseline_forming')).toBe(true)
+    // Both halves of the mock's caveat, measured rather than written.
+    expect(forming.note).toContain('read back at setup')
+    expect(forming.note).toContain('under 100 videos')
+
+    const unread = unreadCardFixture()
+    expect(unread.rows).toHaveLength(0)
+    expect(unread.note).toContain('not recorded')
+  })
+
+  it('promises no date in any state', () => {
+    for (const card of [quarterlyCardFixture(), formingCardFixture(), unreadCardFixture()]) {
+      expect(card.ready).toBeNull()
+      expect([card.gate, card.note].filter(Boolean).join(' ')).not.toMatch(/\bready\b/i)
+    }
   })
 })
