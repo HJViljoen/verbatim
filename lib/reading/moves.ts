@@ -87,13 +87,15 @@ export interface MoveCandidate {
    * subject rows are a share of, and not the same number as `posts`.
    *
    * MEASURED, AND THE REASON THIS FIELD EXISTS. A subject match comes off
-   * `audience_insights`, which only exist for a post Pass A analysed; Sealand
-   * published 17 posts in September and none of them had been analysed on
-   * 2026-09-18, and across all time 28 of its 90 own posts carry any analysis
-   * at all. Denominating the subject rows on every post published would have
-   * printed "0 of 17 matched Durability" about a month in which 17 posts were
-   * never read — a statement about our gather cadence wearing the client's
-   * noun. The share is of what was read, and `subjectsBasis` says so.
+   * `audience_insights`, which only exist for a post Pass A analysed; of the
+   * 17 posts Sealand published in September, 5 carried any analysis on
+   * 2026-09-18, and across all time 28 of its 90 own posts do. Denominating
+   * the subject rows on every post published would print "1 of 17 matched
+   * Durability" about a month in which twelve posts were never read — a
+   * statement about our gather cadence wearing the client's noun. The share is
+   * of what was read, and `subjectsBasis` says so. (The figures are a reading
+   * of one day and they move; the RULE does not, and the rule is what this
+   * field is.)
    */
   readPosts: CardCount
   /** The population the subject rows are a share of, in the reader's words. */

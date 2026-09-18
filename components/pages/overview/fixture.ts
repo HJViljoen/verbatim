@@ -43,12 +43,18 @@ export const verdict = (over: Partial<Verdict> = {}): Verdict => ({
 /**
  * This month's card, at Sealand's own September shape.
  *
- * MEASURED, NOT INVENTED. Seventeen posts published in September and eight over
- * the comment floor are what the tenant actually holds (read 2026-09-18), and
- * so is the hook split — twelve of the seventeen carry no `hook_style` at all,
- * which is why `not classified` is the largest row rather than a rounding
- * footnote. A fixture that hid that would have wave 2 design a row the data
- * cannot fill.
+ * MEASURED, NOT INVENTED (re-read against production 2026-09-18). Seventeen
+ * posts published in September, eight over the comment floor, five carrying any
+ * analysis at all, and twelve of the seventeen with no `hook_style` — which is
+ * why `not classified` is the largest hook row rather than a rounding footnote.
+ *
+ * AND THE CLAIMS ARE THE REAL ONES, VERBATIM. The mock imagines slogans
+ * ("Built to last a decade" · 3 posts); what the tenant holds is nine claim
+ * rows on four posts, nine of them DISTINCT — no repeat anywhere — between 93
+ * and 197 characters each, several to a post. Two of those posts and five of
+ * those claims are below, at their real lengths. A fixture of short repeated
+ * slogans would have wave 2 design a list the data cannot fill: this row needs
+ * a cap and a de-duplication pass, not a tally.
  */
 export function cardFixture(): MoveCandidate {
   const post = (i: number, comments: number, hook: string | null) => ({
@@ -79,23 +85,52 @@ export function cardFixture(): MoveCandidate {
       post(16, 0, null),
       post(17, 0, null),
     ],
+    // Five of Sealand's nine September claims, verbatim off `video_claims`,
+    // on the two posts that carry them. Note the third and fourth rows: two
+    // claims that differ by three words ("benefits people" against "good for
+    // people") and are two distinct rows, on two distinct posts.
     claims: [
-      { source_video_id: 'p1', claim: 'Sealand refurbishes or recycles old gear to give it a new life.', entity: 'client' },
-      { source_video_id: 'p4', claim: 'Sealand refurbishes or recycles old gear to give it a new life.', entity: 'client' },
-      { source_video_id: 'p2', claim: 'Sealand is an award-winning B Corp certified brand.', entity: 'client' },
-      { source_video_id: 'p6', claim: 'Sealand is an award-winning B Corp certified brand.', entity: 'client' },
-      { source_video_id: 'p9', claim: 'Sealand is an award-winning B Corp certified brand.', entity: 'client' },
+      {
+        source_video_id: 'p1',
+        claim:
+          'Sealand positions its products as acts of defiance against an industry characterized by overconsumption, fast fashion, and waste, emphasizing responsible production and great design as inseparable.',
+        entity: 'client',
+      },
+      {
+        source_video_id: 'p4',
+        claim:
+          'Sealand products represent a small act of defiance against an industry that treats materials and resources as disposable waste, promoting great design and responsible production.',
+        entity: 'client',
+      },
+      {
+        source_video_id: 'p4',
+        claim:
+          'Sealand is an award-winning B Corp certified brand committed to proving that business can be a force for good by producing great gear that is good for people and the planet.',
+        entity: 'client',
+      },
+      {
+        source_video_id: 'p1',
+        claim:
+          'Sealand is an award-winning B Corp certified brand committed to proving that business can be a force for good by producing great gear that benefits people and the planet.',
+        entity: 'client',
+      },
+      {
+        source_video_id: 'p1',
+        claim:
+          'Sealand acknowledges ongoing challenges and setbacks but commits to continuous improvement year over year, with a roadmap for the next decade.',
+        entity: 'client',
+      },
     ],
     membership: [
       { subjectId: 's1', label: 'Durability', videoIds: ['p1', 'p4', 'p6'] },
       { subjectId: 's2', label: 'Recycled materials', videoIds: ['p1', 'p2'] },
     ],
-    // SEVENTEEN PUBLISHED, SIX READ. A subject match only exists for a post
-    // Pass A analysed, and on Sealand 62 of 90 own posts carry no analysis at
-    // all (measured 2026-09-18) — so the card's subject rows say "3 of 6" and
-    // name their population, rather than reading "3 of 17" about eleven posts
-    // nobody read.
-    readPosts: 6,
+    // SEVENTEEN PUBLISHED, FIVE READ — the tenant's own September figure, not
+    // a rounded one. A subject match only exists for a post Pass A analysed,
+    // and on Sealand 62 of 90 own posts carry no analysis at all (measured
+    // 2026-09-18) — so the card's subject rows say "3 of 5" and name their
+    // population, rather than reading "3 of 17" about twelve posts nobody read.
+    readPosts: 5,
     yours: verdict({
       objectKind: 'subject',
       objectId: 's1',
