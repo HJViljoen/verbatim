@@ -353,10 +353,25 @@ describe('SU2 · the kind mix', () => {
   // is banded and carries its own k and n, so each is honest to print; they do
   // not sum and nothing adds them.
   it('prints a banded verdict per kind on the category, and names the month it is against', () => {
-    const text = renderText(subjectsKinds.render(subjectsFixture(), 'app', ctx))
+    const data = subjectsFixture()
+    const text = renderText(subjectsKinds.render(data, 'app', ctx))
     expect(text).toContain('Category — no brand, since Aug:')
     expect(text).toContain('band')
-    expect(blockAnswers(subjectsKinds, subjectsFixture()).verdicts.length).toBeGreaterThan(0)
+    const verdicts = blockAnswers(subjectsKinds, data).verdicts
+    expect(verdicts.length).toBeGreaterThan(0)
+    // THE MONTH IS THE VERDICTS' OWN. It was re-derived off `pane.series[0]`,
+    // a different derivation from the one that built the bands beside it.
+    for (const v of verdicts) expect(v.basis?.from).toBe('2026-08-01')
+    // AND ONLY THE STRIP THE BLOCK DRAWS. `verdicts()` returned every side's,
+    // including two audiences whose movement this block never prints.
+    const everySide = data.selected!.sides.flatMap((x) => Object.values(x.kindVerdicts)).filter(Boolean)
+    expect(verdicts.length).toBeLessThan(everySide.length)
+  })
+
+  // Every rail row prints a banded badge, so the block has to declare them.
+  it('declares the rail’s badges as the verdicts they are', () => {
+    const data = subjectsFixture()
+    expect(blockAnswers(subjectsList, data).verdicts.length).toBe(data.list.rows.length)
   })
 
   it('says the kind mix is not recorded when M5 has not landed', () => {

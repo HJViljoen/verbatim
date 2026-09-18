@@ -332,7 +332,8 @@ export const subjectsPage: PageModule<SubjectsData> = {
     return loadSubjectsPage(scope)
   },
   slides(data): Slide[] {
-    // TWO SLIDES, IN THE PAGE'S OWN ORDER. The set and what you published are
+    // THREE SLIDES WITH A SUBJECT, ONE WITHOUT, IN THE PAGE'S OWN ORDER. The
+    // set and what you published are
     // about the workspace; everything after the rule is about the one subject
     // the export was taken of, and a subject that is not selected takes no
     // slide about itself.

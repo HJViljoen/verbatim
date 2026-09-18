@@ -78,14 +78,32 @@ function Audience({ side, brand, mode, max }: { side: SubjectSide; brand: string
   )
 }
 
-/** The mock's movement strip: one banded verdict per kind, on one audience. */
-function KindMovement({ side, brand, prevMonth, mode }: { side: SubjectSide; brand: string; prevMonth: string; mode: RenderMode }) {
+/**
+ * The mock's movement strip: one banded verdict per kind, on one audience.
+ *
+ * THE MONTH COMES OFF THE VERDICT, NOT OFF THE SERIES (fix pass). "since Aug"
+ * was re-derived as the last month on `pane.series[0]` before `data.month`,
+ * while the verdicts beside it were built by `buildSides` against
+ * `previousMonthOf(month)`. The two agree on the fixture and are not guaranteed
+ * to agree on a series with a gap — and a movement claim whose month label
+ * comes from a different derivation than its band is precisely the class of bug
+ * AGENTS.md's window rule exists for. Every `Verdict` carries its own
+ * `basis.from`; that is the month it was measured against and the month the
+ * strip names.
+ */
+function KindMovement({ side, brand, mode }: { side: SubjectSide; brand: string; mode: RenderMode }) {
   const email = mode === 'email'
   const rows = side.kinds
     .filter((k) => side.kindVerdicts[k.kind] != null)
     .sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind))
     .slice(0, 4)
   if (rows.length === 0) return null
+  // ONE MONTH FOR THE STRIP, and it has to be one: four verdicts measured
+  // against two different months under one "since …" is two claims wearing one
+  // label, so the strip draws only while its verdicts agree.
+  const froms = new Set(rows.map((k) => side.kindVerdicts[k.kind]?.basis?.from).filter(Boolean) as string[])
+  if (froms.size !== 1) return null
+  const prevMonth = [...froms][0]
 
   const body = (
     <>
@@ -144,7 +162,6 @@ export const subjectsKinds: Block<SubjectsData> = {
     // handful of videos.
     const category = withKinds.find((s) => s.kind === 'category') ?? withKinds[0] ?? null
     const reddit = category?.reddit ?? null
-    const prevMonth = pane.series[0]?.points.map((p) => p.month).filter((m) => m < data.month).slice(-1)[0] ?? null
 
     return (
       <BlockFrame
@@ -167,7 +184,7 @@ export const subjectsKinds: Block<SubjectsData> = {
         ) : undefined}
       >
         {withKinds.map((s) => <Audience key={s.audience} side={s} brand={data.brand} mode={mode} max={trackMax} />)}
-        {category && prevMonth ? <KindMovement side={category} brand={data.brand} prevMonth={prevMonth} mode={mode} /> : null}
+        {category ? <KindMovement side={category} brand={data.brand} mode={mode} /> : null}
         {/* THE OVERLAP, WITH THE SHARES IT IS ABOUT. The footer note states
             Reddit's share; this states why the kinds it pools do not sum, and
             it belongs beside the bars rather than in the mono slot a reader
@@ -184,9 +201,15 @@ export const subjectsKinds: Block<SubjectsData> = {
     )
   },
 
+  // WHAT THIS BLOCK PRINTS, AND ONLY THAT. `verdicts()` is where a reviewer, a
+  // prompt and a test read a block's movement claims off it, and this returned
+  // EVERY side's kind verdicts — including the two audiences whose movement
+  // strip the block never draws. The strip is the category's (or the first side
+  // that has kinds), and so is this.
   verdicts(data) {
-    const sides = data.selected?.sides ?? []
-    return sides.flatMap((s) => Object.values(s.kindVerdicts)).filter((v) => v != null)
+    const withKinds = (data.selected?.sides ?? []).filter((s) => s.kinds.length > 0)
+    const drawn = withKinds.find((s) => s.kind === 'category') ?? withKinds[0] ?? null
+    return drawn ? Object.values(drawn.kindVerdicts).filter((v) => v != null) : []
   },
 
   emptyState(data) {

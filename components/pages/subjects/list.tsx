@@ -4,6 +4,7 @@ import { AddSubjectFooter, SubjectEditor } from '@/components/subjects/subject-e
 import { MOVEMENT_WORDS } from '@/components/delta-badge'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, fmtPct, fullDate, shortDate } from '@/lib/format'
+import type { Verdict } from '@/lib/reading/verdicts'
 import { originLine, SUBJECTS_UNREADABLE_WHY, type SubjectsData } from '@/lib/pages/subjects'
 
 // SU1 · The subjects, and editing them (design §3 SU1; the mock's first rail
@@ -138,6 +139,15 @@ export const subjectsList: Block<SubjectsData> = {
         </div>
       </BlockFrame>
     )
+  },
+
+  // EVERY RAIL ROW PRINTS A BADGE, SO THE BLOCK DECLARES ONE. The badge is a
+  // real `Verdict` — `monthChange` on the same points `buildSides` uses — and
+  // `blockAnswers(subjectsList, data).verdicts` was empty, which is where a
+  // reviewer, a prompt and a test read a block's movement claims from
+  // (lib/blocks/types.ts).
+  verdicts(data): Verdict[] {
+    return data.list.rows.map((r) => r.verdict).filter((v): v is Verdict => v != null)
   },
 
   emptyState(data) {
