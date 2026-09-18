@@ -4,6 +4,7 @@ import { isAudienceSentiment } from '../competitive-tiles'
 import { fmtInt, longMonth } from '../format'
 import { EXCLUDED_NOTE, ENGAGEMENT_EXCLUDED, belowMedian, formatMatrix, formatReading, type FormatMatrix, type FormatRow, type FormatVideo } from '../reading/formats'
 import { headToHead, type HeadToHead, type HeadToHeadSide } from '../reading/head-to-head'
+import type { FigureTable } from '../reading/verdicts'
 import { monthStartOf, nextMonth, prevMonth } from '../reading/month-key'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, audienceOf, rivalKey } from '../rivals'
 import { selectAll } from '../supabase-admin'
@@ -307,4 +308,61 @@ export async function loadPlaybookVideos(
       .lt('upload_date', to)
       .order('upload_date', { ascending: true }),
   )
+}
+
+// ---- what a document may NAME ---------------------------------------------------
+//
+// A model explains, code rates (design item 9): prose written about this
+// reading is handed figure KEYS and never the numbers, and the surface
+// substitutes the value at render, so a model cannot round, drift or invent
+// one. These are the two tables the content and marketing briefs draw from —
+// the crossing to PRINTED figures happens once, in `proseFigures`, and never
+// here.
+//
+// THE TOKENS ARE PREFIXED because key collisions across the three block
+// registries are zero and must stay zero: `lib/reports/documents/reading.ts`
+// merges every block's table into one and the LAST writer of a token wins, so
+// two surfaces publishing `median_engagement` with two meanings would be a
+// silent wrong number on a document rather than a failure.
+
+export function playbookFigures(playbook: PlaybookBlock | null): FigureTable {
+  if (!playbook) return {}
+  const out: FigureTable = {}
+  for (const side of playbook.formats.sides) {
+    const key = side.audience === CLIENT_AUDIENCE ? 'own' : side.audience === INDUSTRY_AUDIENCE ? 'category' : 'rival'
+    out[`playbook_${key}_classified`] = { value: side.of, unit: 'videos', label: `${side.label}’s classified videos` }
+    out[`playbook_${key}_published`] = { value: side.published, unit: 'videos', label: `${side.label}’s published videos` }
+    if (side.median.value !== null) {
+      out[`playbook_${key}_median`] = { value: side.median.value, unit: 'pct', label: `${side.label}’s median engagement` }
+      out[`playbook_${key}_median_n`] = { value: side.median.n, unit: 'videos', label: `videos ${side.label}’s median was read off` }
+    }
+  }
+  const best = playbook.engagement[0]
+  if (best?.engagement.median != null) {
+    out['playbook_best_format_engagement'] = { value: best.engagement.median, unit: 'pct', label: `median engagement of ${best.label}` }
+    out['playbook_best_format_n'] = { value: best.engagement.n, unit: 'videos', label: `videos ${best.label}’s median was read off` }
+  }
+  return out
+}
+
+export function headToHeadFigures(h2h: HeadToHead | null): FigureTable {
+  if (!h2h) return {}
+  const out: FigureTable = {}
+  for (const m of h2h.measures) {
+    for (const [who, level] of [['you', m.you], ['rival', m.them]] as const) {
+      if (!level) continue
+      // A COUNT WITH NO DENOMINATOR PUBLISHES THE COUNT AND NOTHING ELSE
+      // (`n === 0`), and a measure whose figure is not k/n publishes its
+      // numerator as the videos it was read off — never a percentage the token
+      // does not hold.
+      if (level.pct !== null) {
+        out[`h2h_${who}_${m.key}`] = { value: level.pct, unit: 'pct', label: `${m.label}, ${who === 'you' ? 'your side' : h2h.rivalLabel}` }
+      }
+      out[`h2h_${who}_${m.key}_k`] = { value: level.value.k, unit: 'videos', label: `${m.label} — the count behind it` }
+      if (level.value.n > 0) {
+        out[`h2h_${who}_${m.key}_n`] = { value: level.value.n, unit: 'videos', label: `${m.label} — what it is of` }
+      }
+    }
+  }
+  return out
 }

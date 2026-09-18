@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest'
 
 import { directionRe } from '../test/copy-contract'
-import { buildHeadToHead, buildPlaybook, coverageLine, ownSides, type PlaybookVideo } from './playbook'
+import {
+  buildHeadToHead, buildPlaybook, coverageLine, headToHeadFigures, ownSides, playbookFigures,
+  type PlaybookVideo,
+} from './playbook'
 
 // CO3 and CO7's two builders, over the rows the loader reads.
 //
@@ -230,5 +233,39 @@ describe('ownSides · week.worked.yourhooks', () => {
       ],
     })
     expect(sides.formats.sides[0].of).toBe(4)
+  })
+})
+
+describe('the figure tables a document may name', () => {
+  it('publishes each side’s classified n, published n and median, prefixed', () => {
+    const f = playbookFigures(playbook())
+    expect(f['playbook_category_classified']).toEqual({ value: 60, unit: 'videos', label: 'The category’s classified videos' })
+    expect(f['playbook_own_published']).toEqual({ value: 14, unit: 'videos', label: 'Össur’s published videos' })
+    expect(f['playbook_rival_median'].unit).toBe('pct')
+    // Every token is prefixed, because reading.ts merges the registries into
+    // one table and the last writer of a token wins.
+    expect(Object.keys(f).every((k) => k.startsWith('playbook_'))).toBe(true)
+  })
+
+  it('publishes nothing at all where the reading is refused', () => {
+    expect(playbookFigures(null)).toEqual({})
+    expect(headToHeadFigures(null)).toEqual({})
+  })
+
+  it('publishes a percentage only where the measure is one, and always the count', () => {
+    const DEN = [
+      { month: '2026-08-01', audience: 'client', videos: 20, comments: 237 },
+      { month: '2026-09-01', audience: 'client', videos: 19, comments: 151 },
+      { month: '2026-09-01', audience: 'competitor:Ottobock', videos: 42, comments: 645 },
+    ]
+    const f = headToHeadFigures(
+      buildHeadToHead({ month: '2026-09-01', brand: 'Össur', rival: 'Ottobock', videos: VIDEOS, denominators: DEN }),
+    )
+    expect(f['h2h_you_videos'].unit).toBe('pct')
+    // Own posts is a count with no denominator: the count is published and no
+    // percentage and no "of N" are, because the token would not hold one.
+    expect(f['h2h_you_posts_k'].value).toBe(9)
+    expect(f['h2h_you_posts']).toBeUndefined()
+    expect(f['h2h_you_posts_n']).toBeUndefined()
   })
 })
