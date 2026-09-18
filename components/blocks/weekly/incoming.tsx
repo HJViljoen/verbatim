@@ -4,6 +4,7 @@ import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockQuote } from '@/components/blocks/quote'
 import { EMAIL, FONT } from '@/lib/email/theme'
+import { text } from '@/components/email/primitives'
 import { fmtInt, platformLabel, shortDate } from '@/lib/format'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import type { WeeklyData } from '@/lib/pages/weekly'
@@ -24,6 +25,85 @@ import { weeklyPeriod } from '@/lib/reports/weekly'
 // NO SHARE IS DRAWN OVER IT. There is no percentage in this block and there
 // cannot be: a share over one update's ~117 videos clears no floor the product
 // has, and drawing one would be the run-indexed reading in a new costume.
+
+/**
+ * The artboard's stat row: a mono 21/600 number in a 74px column, a 14px label
+ * beside it, a mono sub-line under, and a hairline between rows
+ * (`weekly.s3.counts`).
+ *
+ * THE EMAIL HAD NO BIG-NUMBER TIER AT ALL. `components/email/primitives.tsx`
+ * `text.figure` (mono 22/600) has been defined since Stage 3 and no element of
+ * this artefact used it, so §3's four counts collapsed into one 12.5px clause
+ * and a reader looking for "how much came in" read a sentence.
+ *
+ * NO "of N" ON THESE, AND THAT IS THE STATEMENT. Every number here is a count
+ * of OUR COVERAGE, not a share of anything — an update gathered what it
+ * gathered — so there is no denominator being hidden (`FigureCell`'s own rule
+ * for an omitted `of`). What each count contributes TO is the sub-line's job,
+ * and the first row states it: the month these videos fall into.
+ */
+function StatRow({
+  value, label, note, last = false, mode,
+}: {
+  value: string
+  label: string
+  note?: ReactNode
+  last?: boolean
+  mode: RenderMode
+}) {
+  if (mode === 'email') {
+    return (
+      <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} border={0} style={{ borderCollapse: 'collapse', borderSpacing: 0, borderBottom: last ? undefined : `1px solid ${EMAIL.hairline}` }}>
+        <tbody>
+          <tr>
+            <td width={74} style={{ width: 74, padding: '9px 14px 9px 0', verticalAlign: 'top' }}>
+              <span data-copy="figure" style={{ ...text.figure, fontSize: 21 }}>{value}</span>
+            </td>
+            <td style={{ padding: '9px 0', verticalAlign: 'top' }}>
+              <div style={{ fontFamily: FONT.sans, fontSize: 14, color: EMAIL.ink2 }}>{label}</div>
+              {note ? <div style={{ fontFamily: FONT.mono, fontSize: 11, lineHeight: 1.4, color: EMAIL.faint, marginTop: 3 }}>{note}</div> : null}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    )
+  }
+  return (
+    <div className={`flex min-h-[44px] items-baseline gap-3.5 py-2 ${last ? '' : 'border-b border-border/70'}`}>
+      <span data-copy="figure" className="w-[74px] flex-none font-mono text-[21px] font-semibold leading-none tracking-[-0.02em] tabular-nums">{value}</span>
+      <span className="min-w-0">
+        <span className="block text-[14px] text-secondary-foreground">{label}</span>
+        {note ? <span className="mt-0.5 block font-mono text-[11px] leading-snug text-muted-foreground">{note}</span> : null}
+      </span>
+    </div>
+  )
+}
+
+/** The artboard's tinted inner block with its pill — the one row in §3 a
+ *  reader is meant to stop at. Two nesting levels, never a third. */
+function NewBlock({ mode, children }: { mode: RenderMode; children: ReactNode }) {
+  const pill = mode === 'email'
+    ? <span style={{ display: 'inline-block', fontFamily: FONT.sans, fontSize: 10, fontWeight: 500, padding: '2px 7px', borderRadius: 10, whiteSpace: 'nowrap', background: EMAIL.mixed, color: EMAIL.ink }}>New</span>
+    : <span className="inline-block flex-none rounded-full bg-mixed px-[7px] py-[2px] text-[10px] font-medium leading-normal">New</span>
+  if (mode === 'email') {
+    return (
+      <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} border={0} style={{ borderCollapse: 'collapse', borderSpacing: 0, background: EMAIL.inner, borderRadius: 6, marginTop: 8 }}>
+        <tbody>
+          <tr>
+            <td width={44} style={{ width: 44, padding: '12px 0 12px 14px', verticalAlign: 'top' }}>{pill}</td>
+            <td style={{ padding: '12px 14px 12px 10px', fontFamily: FONT.sans, fontSize: 13.5, lineHeight: 1.5, color: EMAIL.ink2 }}>{children}</td>
+          </tr>
+        </tbody>
+      </table>
+    )
+  }
+  return (
+    <div className="mt-2 flex items-start gap-2.5 rounded-md bg-inner px-3.5 py-3">
+      <span className="mt-[2px]">{pill}</span>
+      <span className="min-w-0 text-[13.5px] leading-relaxed text-secondary-foreground">{children}</span>
+    </div>
+  )
+}
 
 function Line({ mode, children }: { mode: RenderMode; children: ReactNode }) {
   return mode === 'email'
@@ -68,28 +148,63 @@ export const weeklyIncoming: Block<WeeklyData> = {
 
     return frame(
       <div>
-        <Line mode={mode}>
-          <span data-copy="figure">{fmtInt(i.gathered)}</span> videos gathered
-          {i.analysed != null ? <> · <span data-copy="figure">{fmtInt(i.analysed)}</span> analysed</> : ' · how many were analysed is not recorded for this update'}
-          {/* NOT "into N this month". The two counts are different units and a
-              comma between them reads as a subset: an update gathers by when we
-              LOOKED, and the month counts by when people WROTE, so Össur's 618
-              gathered sit beside a month of 449 and neither is inside the
-              other. The clause says which is which. */}
-          {i.monthVideos != null ? <> · the month so far holds <span data-copy="figure">{fmtInt(i.monthVideos)}</span> videos, dated by when people wrote</> : null}
-          {mix ? <div style={mode === 'email' ? { fontFamily: FONT.mono, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 } : undefined} className={mode === 'email' ? undefined : 'mt-0.5 font-mono text-[11.5px] text-muted-foreground'}>{mix}</div> : null}
-        </Line>
+        {/* THE FOUR STAT ROWS (weekly.s3.counts). The mock's fourth is
+            "2,960 comments"; this artefact holds no comment count for the
+            window — `CameInBlock.windowComments` is This week's and comes off
+            M3's `window_denominators` — and a number nobody counted is not
+            printed. What is counted is printed, at the tier the mock gives it.
 
-        {i.newThemes.length > 0 ? (
-          i.newThemes.map((t) => (
-            <Line key={t.label} mode={mode}>
-              {/* The theme's own name — `pass_b_theme`, never scrubbed. */}
-              <strong data-copy="subject" data-slot="pass_b_theme">{t.label}</strong> — heard for the first time in this update, in <span data-copy="figure">{fmtInt(t.videos)}</span> {t.videos === 1 ? 'video' : 'videos'}
-            </Line>
-          ))
-        ) : (
-          <Note mode={mode}>{i.newThemesNote}</Note>
-        )}
+            NOT "into N this month". The two counts are different units and a
+            comma between them reads as a subset: an update gathers by when we
+            LOOKED, and the month counts by when people WROTE, so Össur's 618
+            gathered sit beside a month of 449 and neither is inside the
+            other. The sub-line says which is which. */}
+        <StatRow
+          mode={mode}
+          value={fmtInt(i.gathered)}
+          label={i.gathered === 1 ? 'video gathered' : 'videos gathered'}
+          note={i.monthVideos != null ? `the month so far holds ${fmtInt(i.monthVideos)} videos, dated by when people wrote` : null}
+        />
+        <StatRow
+          mode={mode}
+          value={i.analysed != null ? fmtInt(i.analysed) : '—'}
+          label={i.analysed != null ? 'analysed' : 'how many were analysed is not recorded for this update'}
+        />
+        <StatRow
+          mode={mode}
+          value={fmtInt(i.newThemes.length)}
+          label={i.newThemes.length === 1 ? 'theme heard for the first time' : 'themes heard for the first time'}
+          note={i.newThemes.length === 0 ? i.newThemesNote : null}
+        />
+        {/* NULL IS NOT ZERO. `quotesTotal` is null where subjects are not
+            recorded — there is nothing for a comment to be new ON — and the
+            row then carries the reason rather than a count of nothing. */}
+        <StatRow
+          mode={mode}
+          last
+          value={i.quotesTotal != null ? fmtInt(i.quotesTotal) : '—'}
+          label={i.quotesTotal === 1 ? 'new comment on your subjects' : 'new comments on your subjects'}
+          note={i.quotesTotal == null ? i.quotesNote : null}
+        />
+        {mix ? (
+          <div
+            style={mode === 'email' ? { fontFamily: FONT.mono, fontSize: 11.5, color: EMAIL.muted, marginTop: 8 } : undefined}
+            className={mode === 'email' ? undefined : 'mt-2 font-mono text-[11.5px] text-muted-foreground'}
+          >
+            {mix}
+          </div>
+        ) : null}
+
+        {i.newThemes.map((t) => (
+          <NewBlock key={t.label} mode={mode}>
+            {/* The theme's own name — `pass_b_theme`, never scrubbed. */}
+            <strong data-copy="subject" data-slot="pass_b_theme">{t.label}</strong> — heard for the first time in this update, in <span data-copy="figure">{fmtInt(t.videos)}</span> {t.videos === 1 ? 'video' : 'videos'}.
+            {/* NOT the mock's "26 of 1,388 category videos · first heard
+                September": that denominator is a MONTH figure attached to a
+                count of THIS UPDATE, which is two units in one sentence. The
+                update's own count is what this loader measured. */}
+          </NewBlock>
+        ))}
 
         {i.rivalPosts.length > 0 ? (
           i.rivalPosts.map((p) => (

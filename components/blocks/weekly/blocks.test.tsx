@@ -243,6 +243,39 @@ describe('WR3 · what came in this week', () => {
     expect(text).toContain('the month so far holds 2,359 videos, dated by when people wrote')
   })
 
+  // THE ARTBOARD'S BIG-NUMBER TIER (weekly.s3.counts). `text.figure` had been
+  // defined since Stage 3 and used by nothing on this artefact, so four counts
+  // collapsed into one 12.5px clause.
+  it('prints the four counts as stat rows, at the artboard’s scale', () => {
+    const markup = render(block.render(weeklyFixture(), 'app', ctx))
+    expect(markup).toContain('text-[21px]')
+    const text = markupText(markup)
+    expect(text).toContain('1 theme heard for the first time')
+    expect(text).toContain('41 new comments on your subjects')
+    // The mock's fourth stat is "2,960 comments" this week. No field on this
+    // artefact holds one, and a number nobody counted is not printed — the
+    // stat tier carries four counts that were measured, not three and a guess.
+    expect(text).not.toMatch(/comments this week/)
+    expect(render(block.render(weeklyFixture(), 'email', ctx))).toContain('font-size:21px')
+  })
+
+  it('carries the reason instead of a count where nobody counted', () => {
+    const text = renderText(block.render(formingFixture(), 'app', ctx))
+    expect(text).toContain('Quotes are counted against your subjects once subjects are recorded')
+    expect(text).not.toContain('0 new comments on your subjects')
+  })
+
+  it('draws the new theme in the artboard’s pilled inner block', () => {
+    for (const mode of MODES) {
+      const text = renderText(block.render(weeklyFixture(), mode, ctx))
+      expect(text, mode).toContain('New')
+      expect(text, mode).toContain('Zips failing after a year — heard for the first time in this update, in 12 videos.')
+      // Not the mock's "26 of 1,388 category videos": a month denominator on a
+      // count of one update is two units in one sentence.
+      expect(text, mode).not.toContain('category videos')
+    }
+  })
+
   it('draws no share over one update', () => {
     for (const mode of MODES) {
       expect(renderText(block.render(weeklyFixture(), mode, ctx))).not.toMatch(/\d+(\.\d+)?%/)
