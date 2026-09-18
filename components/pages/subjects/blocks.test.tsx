@@ -488,6 +488,15 @@ describe('SU5 · say vs hear', () => {
     expect(text).not.toContain('Sep ·')
   })
 
+  it('answers its OWN question when the ledger is unreadable, not the census’s', () => {
+    const data = refusedFixture()
+    const text = renderText(subjectsSayHear.render(data, 'app', ctx))
+    // The own-posts sentence belongs to the tile above; this one is about the
+    // ledger it could not read.
+    expect(text).not.toContain('These are the posts you published')
+    expect(text).toContain('there is no ledger to report')
+  })
+
   it('names the half it cannot read rather than drawing it as nothing', () => {
     expect(subjectsSayHear.emptyState(refusedFixture())).toContain('not readable')
   })
@@ -617,6 +626,20 @@ describe('the Subjects blocks, read from outside the workspace', () => {
     expect(app).toContain('Verbatim engineering')
     expect(print).toContain('What your posts claim is not readable yet')
     expect(print).not.toContain('Verbatim engineering')
+  })
+
+  // THE SAME RULE ON THE TWO NEW RAIL TILES. `refusedFixture` is production's
+  // state today, so this is the sentence a PDF and a `/r/<token>` page of the
+  // page as it stands would actually carry.
+  it('strip the readiness owner from the two rail tiles too', () => {
+    const data = refusedFixture()
+    for (const block of [subjectsOwnPosts, subjectsSayHear]) {
+      const app = renderText(block.render(data, 'app', ctx))
+      const paper = renderText(block.render(data, 'print', ctx))
+      expect(app, block.key).toContain('Verbatim engineering')
+      expect(paper, block.key).toContain('not readable on this page yet')
+      expect(paper, block.key).not.toContain('Verbatim engineering')
+    }
   })
 
   it('draw no in-app affordance on paper', () => {

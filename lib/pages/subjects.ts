@@ -149,6 +149,26 @@ export const UNANSWERED_CLAIMS_UNREADABLE =
 export const UNANSWERED_CLAIMS_UNREADABLE_OUTSIDE =
   'We match these against what your posts are about. What your posts claim is not readable yet.'
 
+/**
+ * What SU5 says when it cannot read the claims ledger at all.
+ *
+ * ITS OWN SENTENCE, NOT THE CENSUS'S (fix pass). Say vs hear answers "what did
+ * we claim, and did anyone take it up?" and printed
+ * `OwnPostCensus.claimsNote` — "These are the posts you published…" — which is
+ * the answer to a different question, on a tile that is not about posts, and
+ * printed a second time by Your own posts one tile above. The unreadable half
+ * is the same half; the sentence is this block's.
+ */
+export const SAY_HEAR_CLAIMS_UNREADABLE =
+  'What your posts claim is not readable on this page yet, so there is no ledger to report — Verbatim engineering.'
+
+/** The same, without the readiness owner, for a reader outside the workspace —
+ *  a PDF and its `/r/<token>` page. `Verbatim engineering` is an internal
+ *  OWNER: it is a direction where a reader can open Settings › Readiness, and
+ *  a leaked ticket where they cannot. */
+export const SAY_HEAR_CLAIMS_UNREADABLE_OUTSIDE =
+  'What your posts claim is not readable on this page yet, so there is no ledger to report.'
+
 /** Reddit's own caveat wherever a question count leans on it (design §3 SU3). */
 export const REDDIT_THREAD_CAP =
   'Reddit threads are the densest source of questions and are counted; we read up to 40 comments on each.'

@@ -4,7 +4,7 @@ import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth } from '@/lib/format'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import type { OwnPostCensus } from '@/lib/reading/own-posts'
+import { OWN_CLAIMS_UNREADABLE, OWN_CLAIMS_UNREADABLE_OUTSIDE, type OwnPostCensus } from '@/lib/reading/own-posts'
 import type { SubjectsData } from '@/lib/pages/subjects'
 
 // The mock's second rail tile — "Your own posts" (`subjects.ownposts.*`, three
@@ -151,7 +151,16 @@ export const subjectsOwnPosts: Block<SubjectsData> = {
           </Group>
         ) : null}
 
-        {c.claimsNote ? <BlockEmpty mode={mode}>{c.claimsNote}</BlockEmpty> : null}
+        {/* THE SAME HALF, WITHOUT OUR OWN OWNER OUTSIDE THE APP. `Verbatim
+            engineering` is a readiness owner; on paper and on a share page
+            there is no Settings › Readiness to open and it reads as a leaked
+            ticket. `OWN_CLAIMS_UNREADABLE_OUTSIDE` has existed since wave 1
+            and nothing referenced it. */}
+        {c.claimsNote ? (
+          <BlockEmpty mode={mode}>
+            {mode === 'print' && c.claimsNote === OWN_CLAIMS_UNREADABLE ? OWN_CLAIMS_UNREADABLE_OUTSIDE : c.claimsNote}
+          </BlockEmpty>
+        ) : null}
       </BlockFrame>
     )
   },

@@ -6,7 +6,7 @@ import { fmtInt } from '@/lib/format'
 import { claimCountsLine } from '@/lib/market-tiles'
 import type { OwnClaimRow } from '@/lib/reading/own-posts'
 
-import { SAY_HEAR_SHOWN, type SubjectsData } from '@/lib/pages/subjects'
+import { SAY_HEAR_CLAIMS_UNREADABLE, SAY_HEAR_CLAIMS_UNREADABLE_OUTSIDE, SAY_HEAR_SHOWN, type SubjectsData } from '@/lib/pages/subjects'
 
 // The mock's third rail tile — "Say vs hear" (`subjects.sayhear.rows`, which
 // mock-gap found built on Market and nowhere near this page).
@@ -67,9 +67,17 @@ export const subjectsSayHear: Block<SubjectsData> = {
     const rows = (data.ownPosts?.claims ?? []).slice(0, SAY_HEAR_SHOWN)
 
     if (empty) {
+      // OUR OWN OWNER IS NOT A CLIENT'S BUSINESS OUTSIDE THE APP. `Verbatim
+      // engineering` is a readiness owner — a direction where a reader can
+      // open Settings › Readiness, an internal label where they cannot — and
+      // this page exports, so `print` is a PDF and a `/r/<token>` page. The
+      // precedent is one tile over (`unanswered.tsx`).
+      const said = mode === 'print' && empty === SAY_HEAR_CLAIMS_UNREADABLE
+        ? SAY_HEAR_CLAIMS_UNREADABLE_OUTSIDE
+        : empty
       return (
         <BlockFrame title={subjectsSayHear.title} question={subjectsSayHear.question} mode={mode} footer={footer}>
-          <BlockEmpty mode={mode}>{empty}</BlockEmpty>
+          <BlockEmpty mode={mode}>{said}</BlockEmpty>
         </BlockFrame>
       )
     }
@@ -111,7 +119,11 @@ export const subjectsSayHear: Block<SubjectsData> = {
 
   emptyState(data) {
     const c = data.ownPosts
-    if (c?.claimsNote) return c.claimsNote
+    // THE BLOCK'S OWN SENTENCE, not the census's. `claimsNote` answers "what
+    // did you publish"; this tile asks what you CLAIMED and whether anyone
+    // took it up, and Your own posts is already printing that other sentence
+    // one tile above.
+    if (c?.claimsNote) return SAY_HEAR_CLAIMS_UNREADABLE
     if ((c?.claims.length ?? 0) === 0) {
       return data.sayHear
         ? 'Your latest update resolved no claim to a line we can quote back to you.'
