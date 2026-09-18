@@ -70,13 +70,9 @@ export default async function AgentThreadPage({
   const rail = (
     <>
       <EarlierQuestionsTile history={data.history} row={ASK_TILE_ROW} />
-      {/* No delivered count in the footer note here: the thread loader reads
-          the count once, into the Updates row of `draws`, and a second copy in
-          the footer would be a second chance to disagree with it. */}
       <DrawsTile
         draws={data.draws}
         recordHref={data.record?.href ?? askRecordHref(id)}
-        delivered={null}
         asAt={data.basis.lastEmbeddedAt ? shortDate(data.basis.lastEmbeddedAt) : null}
         row={ASK_TILE_ROW}
       />

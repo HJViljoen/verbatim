@@ -83,19 +83,23 @@ export function EarlierQuestionsTile({ history, row = 2 }: { history: AskHistory
 /**
  * "What an answer draws on".
  *
- * FOUR ROWS, NOT THE MOCK'S FIVE — `askDraws` says which and why. The footer is
- * the record: `lib/nav.ts:hasRecord` admits Ask (D-record, wave 1) precisely so
+ * FOUR ROWS, NOT THE MOCK'S FIVE — `askDraws` says which and why.
+ *
+ * NO DELIVERED COUNT IN THE FOOTER. It was a second printing of the Updates
+ * row's own figure, passed on the index and null on a thread — so a reader
+ * moving between the two routes watched the tile lose a fact it had not lost.
+ * The count is stated once, in the row whose term names it, and the tile reads
+ * the same on both routes.
+ *
+ * The footer is the record: `lib/nav.ts:hasRecord` admits Ask (D-record, wave 1) precisely so
  * the drawer can be opened from here, and the drawer is where updates-this-
  * month, the video count, the language mix and the tracking changes live.
  */
 export function DrawsTile({
-  draws, recordHref, delivered, asAt, row = 2,
+  draws, recordHref, asAt, row = 2,
 }: {
   draws: readonly AskDrawRow[]
   recordHref: string | null
-  /** The footer note — the same count the Updates row prints, in the artboard's
-   *  own position. Null prints no note rather than a zero. */
-  delivered: number | null
   /** The artboard's "as at 28 Sep" — when the index these facts describe was
    *  last written. Null leaves the slot empty rather than dating it today. */
   asAt?: string | null
@@ -111,7 +115,6 @@ export function DrawsTile({
       // meta names WHEN rather than inventing a second one.
       meta={asAt ?? undefined}
       footer={recordHref ? <Link href={recordHref} className="hover:underline">The record →</Link> : undefined}
-      footerNote={delivered != null ? `${fmtInt(delivered)} ${delivered === 1 ? 'update' : 'updates'} delivered` : undefined}
       distribute="between"
     >
       <dl className="m-0 grid grid-cols-[84px_1fr] gap-x-3 gap-y-2.5">

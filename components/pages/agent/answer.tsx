@@ -70,9 +70,16 @@ function Marks({ f }: { f: FindingMeasure }) {
           non-answer arm prints the word alone and never a magnitude beside it,
           which is what `MovementBadge` already enforces. */}
       <BlockMovement verdict={f.verdict} unit="pts" />
-      <DirectionWord direction={f.direction} />
-      <span className="font-mono text-[11px] text-muted-foreground">
-        in {f.audienceLabel.toLowerCase()} · <span data-copy="figure">{longMonth(f.verdict?.window.from ?? '')}</span>
+      {/* THE WORD AND ITS SCOPE WRAP TOGETHER. At 1024 the row wrapped between
+          them and "growing over 3 readings" landed on one line with "in the
+          category · September" on the next — a direction word separated from
+          the audience and the month it is a direction IN, which is the one
+          thing that makes it checkable. */}
+      <span className="inline-flex items-center gap-2">
+        <DirectionWord direction={f.direction} />
+        <span className="font-mono text-[11px] text-muted-foreground">
+          in {f.audienceLabel.toLowerCase()} · <span data-copy="figure">{longMonth(f.verdict?.window.from ?? '')}</span>
+        </span>
       </span>
     </div>
   )

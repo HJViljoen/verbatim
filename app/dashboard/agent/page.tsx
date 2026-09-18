@@ -98,7 +98,6 @@ export default async function AgentPage({
             <DrawsTile
               draws={askDraws(basis, delivered)}
               recordHref={askRecordHref()}
-              delivered={delivered}
               asAt={basis.lastEmbeddedAt ? shortDate(basis.lastEmbeddedAt) : null}
               row={ASK_TILE_ROW}
             />

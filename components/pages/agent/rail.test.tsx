@@ -80,17 +80,17 @@ describe('earlier questions', () => {
 })
 
 describe('what an answer draws on', () => {
-  const tile = (d: ReturnType<typeof agentFixture>, delivered: number | null) => (
-    <DrawsTile draws={d.draws} recordHref={d.record!.href} delivered={delivered} asAt={d.basis.lastEmbeddedAt ? '15 Sep' : null} />
+  const tile = (d: ReturnType<typeof agentFixture>) => (
+    <DrawsTile draws={d.draws} recordHref={d.record!.href} asAt={d.basis.lastEmbeddedAt ? '15 Sep' : null} />
   )
 
   it('keeps the copy contract in both states', () => {
-    assertCopyContract(tile(measured, 23))
-    assertCopyContract(tile(refused, null))
+    assertCopyContract(tile(measured))
+    assertCopyContract(tile(refused))
   })
 
   it('names the months behind the readings count', () => {
-    const text = renderText(tile(measured, 23))
+    const text = renderText(tile(measured))
     expect(text).toContain('3 monthly · Jul, Aug, Sep')
     expect(text).toContain('2,872 of 2,872 findings')
     expect(text).toContain('as at 15 Sep')
@@ -100,14 +100,18 @@ describe('what an answer draws on', () => {
     // Four rows, not the mock's five: updates-this-month, videos, languages and
     // tracking changes need `loadRecordInputs`' eight tenant-wide reads on every
     // page load. `hasRecord` admits Ask so the drawer can be opened from here.
-    const markup = render(tile(measured, 23))
+    const markup = render(tile(measured))
     expect(markup).toContain('detail=record')
-    expect(renderText(tile(measured, 23))).toContain('The record →')
-    expect(renderText(tile(measured, 23))).toContain('23 updates delivered')
+    expect(renderText(tile(measured))).toContain('The record →')
+    // Stated ONCE, in the Updates row whose term names it — not again as a
+    // footer note that is present on one route and absent on the other.
+    const text = renderText(tile(measured))
+    expect(text).toContain('23 delivered')
+    expect(text).not.toContain('23 updates delivered')
   })
 
   it('says what is not recorded rather than printing a zero', () => {
-    const text = renderText(tile(refused, null))
+    const text = renderText(tile(refused))
     expect(text).toContain('not recorded for this workspace yet')
     expect(text).not.toContain('0 monthly')
   })
