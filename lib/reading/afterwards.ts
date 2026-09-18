@@ -2,7 +2,7 @@ import { fmtInt, monthName } from '../format'
 import { distinctVideos } from '../market-tiles'
 import { monthChange } from './bands'
 import { monthStartOf } from './monthly'
-import type { Counted, RefusedReason, Verdict } from './verdicts'
+import type { Counted, ObjectKind, RefusedReason, Verdict } from './verdicts'
 
 // The two columns the advice ledger has never had: what a piece of advice was
 // GROUNDED IN, and what the conversation did AFTERWARDS (Phase 1 Block D, D4).
@@ -70,9 +70,16 @@ export interface Grounding {
   /** Distinct videos behind the advice. */
   videos: number
   themes: number
-  /** The audience this advice is ABOUT — carried so the afterwards reading
-   *  beside it reads the same bucket. Deliberately NOT in `line`; see
-   *  `groundingFor`. */
+  /**
+   * The bucket this grounding is STATED IN — the caller's, echoed back so the
+   * afterwards reading beside it is taken in the same one and the two columns
+   * cannot drift apart.
+   *
+   * NOT "the audience this advice is about", which is what this said and is a
+   * claim the field cannot support: the cited insights are not scoped to one
+   * audience, and the ledger passes one constant (`LEDGER_AUDIENCE`) for every
+   * row. Deliberately NOT in `line` for the same reason; see `groundingFor`.
+   */
   audience: string
   /**
    * True where the advice cited evidence and NONE of it is still on record.
@@ -217,6 +224,11 @@ export interface AfterwardsInput {
   /** The stable identities the advice is about — `theme_registry` ids, a
    *  subject id. Never a label. */
   targetIds: readonly string[]
+  /** What kind of identity those are. Defaults to 'theme' because the ledger
+   *  reads themes today, but `targetIds` documents a subject id as an accepted
+   *  identity and a verdict keyed 'theme' over a subject id files the reading
+   *  under the wrong kind — the object is what a record is keyed on. */
+  objectKind?: ObjectKind
   /**
    * One point per calendar month, any order; `k` of `n` distinct videos.
    *
@@ -330,7 +342,11 @@ export function afterwardsFor(input: AfterwardsInput): Afterwards {
       months,
       line:
         `${have === 0 ? 'No month' : have === 1 ? 'One month' : `${fmtInt(have)} months`} has been read in ${where} since you decided this, ` +
-        `and we compare from ${fmtInt(minReadings)}. ${monthName(decidedMonth)} itself is in neither side — you decided partway through it.`,
+        `and we compare from ${fmtInt(minReadings)}. ${monthName(decidedMonth)} itself is in neither side — ` +
+        // A decision dated the 1st was not made partway through anything. The
+        // month is still left out of both sides, and the reason is the same
+        // one either way: the decision falls inside it.
+        `${input.decidedAt.slice(8, 10) === '01' ? 'your decision falls at the start of it' : 'you decided partway through it'}.`,
     }
   }
   if (before.length === 0) {
@@ -356,7 +372,7 @@ export function afterwardsFor(input: AfterwardsInput): Afterwards {
   // `[monthStart, nextMonth)`.
   const verdict = monthChange({
     object: {
-      kind: 'theme',
+      kind: input.objectKind ?? 'theme',
       id: input.targetIds[0],
       label: input.objectLabel ?? input.targetIds[0],
     },

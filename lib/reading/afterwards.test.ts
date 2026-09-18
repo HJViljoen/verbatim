@@ -311,3 +311,23 @@ describe('afterwardsFor — which silence a cell prints', () => {
     expect(a.state).toBe('no_target')
   })
 })
+
+describe('afterwardsFor — the small true things', () => {
+  it('does not say you decided partway through a month you decided on the 1st of', () => {
+    const first = afterwardsFor({ decidedAt: '2026-08-01T09:00:00.000Z', targetIds: ['reg-1'], series: SERIES, audience: 'client' })
+    expect(first.state).toBe('too_soon')
+    expect(first.line).not.toContain('partway through')
+    expect(first.line).toContain('at the start of it')
+    const mid = afterwardsFor({ decidedAt: '2026-08-14', targetIds: ['reg-1'], series: SERIES, audience: 'client' })
+    expect(mid.line).toContain('partway through it')
+  })
+
+  it('keys the verdict on the kind of identity it was given', () => {
+    const theme = afterwardsFor({ decidedAt: '2026-07-04', targetIds: ['reg-1'], series: SERIES, audience: 'client' })
+    expect(theme.verdict?.objectKind).toBe('theme')
+    const subject = afterwardsFor({
+      decidedAt: '2026-07-04', targetIds: ['sub-1'], series: SERIES, audience: 'client', objectKind: 'subject',
+    })
+    expect(subject.verdict?.objectKind).toBe('subject')
+  })
+})
