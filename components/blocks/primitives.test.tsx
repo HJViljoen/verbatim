@@ -49,6 +49,25 @@ describe('BlockFrame', () => {
     }
   })
 
+  // THE DEFAULT HEADER, BYTE FOR BYTE (the fix pass, E-monthly review
+  // [Important]). `accent` was added for the MonthlyReport artboard and the
+  // note told the merge lead it was "off by default, so every existing caller
+  // renders byte-identically" — true of the email arm and false of the other
+  // two, because the three flex classes sat outside the branch. Nothing pinned
+  // this markup, so ~17 surfaces changed behaviour (a flex title, and `min-w-0`
+  // letting it shrink past its own min-content instead of pushing `meta` out)
+  // with a green suite. Now a regression here is a failure here.
+  it('leaves the app and print header untouched when accent is omitted', () => {
+    expect(render(<BlockFrame mode="app" title="Rivals"><span>x</span></BlockFrame>))
+      .toContain('<h2 class="m-0 font-semibold uppercase tracking-[0.06em] text-secondary-foreground text-[10.5px]">Rivals</h2>')
+    expect(render(<BlockFrame mode="print" title="Rivals"><span>x</span></BlockFrame>))
+      .toContain('<h2 class="m-0 font-semibold uppercase tracking-[0.06em] text-secondary-foreground text-[11px]">Rivals</h2>')
+    // And with it on, the mark and the mono title the artboards head with.
+    const accented = render(<BlockFrame mode="app" title="Rivals" accent><span>x</span></BlockFrame>)
+    expect(accented).toContain('font-mono text-[11px] uppercase tracking-[0.08em]')
+    expect(accented).toContain('bg-positive')
+  })
+
   it('renders an email-safe frame', () => {
     assertEmailSafe(render(<BlockFrame mode="email" title="Rivals"><span>x</span></BlockFrame>))
   })

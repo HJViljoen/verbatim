@@ -150,10 +150,19 @@ export function BlockFrame({
   return (
     <section className={cn('flex min-w-0 flex-col gap-2.5', className)}>
       <header className="flex items-baseline justify-between gap-2">
+        {/* AND `accent` IS ADDITIVE ON THE SCREEN TOO (the fix pass, review
+            finding [Important]). The flex classes were outside the branch, so
+            an omitted `accent` still turned the title into a flex container
+            and — through `min-w-0` — newly let it shrink below its own
+            min-content inside this `items-baseline` header, where it used to
+            push `meta` out. Two behaviour changes on ~17 surfaces that nobody
+            asked for, and no test pinned the default's markup, which is why
+            the suite was green. They live inside the branch now, and the test
+            below pins the default header byte for byte. */}
         <h2 className={cn(
-          'm-0 flex min-w-0 items-center gap-2',
+          'm-0',
           accent
-            ? 'font-mono text-[11px] uppercase tracking-[0.08em] text-secondary-foreground'
+            ? 'flex min-w-0 items-center gap-2 font-mono text-[11px] uppercase tracking-[0.08em] text-secondary-foreground'
             : cn('font-semibold uppercase tracking-[0.06em] text-secondary-foreground', big ? 'text-[11px]' : 'text-[10.5px]'),
         )}>
           {accent ? <span aria-hidden className="inline-block h-[2px] w-4 flex-none rounded-full bg-positive" /> : null}
