@@ -12,6 +12,7 @@ import {
 } from './quarterly'
 import type { Mover } from './overview'
 import { READER_FLAGS } from '../calibration'
+import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../rivals'
 import { quarterlyFixture, formingFixture, subjectLeadFixture, thinMonthFixture } from '../../components/blocks/quarterly/fixture'
 
 const verdict = (over: Partial<Verdict> = {}): Verdict => ({
@@ -393,10 +394,20 @@ describe('what the quarterly pages now carry (package D7)', () => {
     const row = q.subjects.rows[0]
     expect(row).toHaveProperty('rival')
     expect(row.spark.length).toBe(row.sparkMonths.length)
-    // A LEVEL, never a difference. Nothing on the page subtracts the rival's
-    // share from yours: two proportions on two different denominators have no
-    // band (deviation D1).
-    expect(Object.keys(row)).not.toContain('gap')
+    // THE RIVAL COLUMN IS A LEVEL, and the gap beside it is NOT of the rival.
+    // This assertion read `not.toContain('gap')` when D7 was written, on the
+    // rule that two proportions on two denominators have no band. D1 built the
+    // band the rule said did not exist — an unpooled 2×SE floored at 2 points,
+    // the same one the product has used since 2026-08-18 — and `qr.p3.gapline`
+    // is in D1's own element list, so the field is authorised and the rule it
+    // was refused under is gone. What survives of the old assertion is the part
+    // that is still true: the gap is drawn between YOU and THE CATEGORY, off
+    // the two quarter columns the table already prints, and nothing on this
+    // page subtracts the RIVAL's share from yours.
+    const gap = q.subjects.rows.find((r) => r.gap)?.gap
+    expect(gap?.a.audience).toBe(CLIENT_AUDIENCE)
+    expect(gap?.b.audience).toBe(INDUSTRY_AUDIENCE)
+    expect(gap?.bandPts).toBeGreaterThan(0)
   })
 
   it('page 3 draws its line only where the side has the readings, and names no direction', () => {
