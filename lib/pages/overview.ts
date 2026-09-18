@@ -55,7 +55,7 @@ import { buildStandings, type StandingRow } from '../reading/standings'
 import type { MonthStatus } from '../reading/types'
 import { isAnswer, type FigureTable, type Verdict } from '../reading/verdicts'
 import { isMissingSubjects, MOVE_PROMISE, RPC_WINDOW_SUBJECT_READINGS, TABLE_MOVES, TABLE_SUBJECT_MEMBERSHIPS, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
-import { chunk, UUID_IN_CHUNK } from '../chunk'
+import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import { selectAll } from '../supabase-admin'
 import { row, rows } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
@@ -1586,17 +1586,19 @@ async function loadOwnClaims(
 ): Promise<{ source_video_id: string; claim: string; entity: string }[]> {
   if (videoIds.length === 0) return []
   try {
-    const pages = await Promise.all(
-      chunk([...videoIds], UUID_IN_CHUNK).map((ids) =>
-        selectAll<{ source_video_id: string; claim: string; entity: string }>(() =>
-          supabase
-            .from('video_claims')
-            .select('source_video_id, claim, entity')
-            .eq('client_id', clientId)
-            .eq('entity', 'client')
-            .in('source_video_id', ids)
-            .order('source_video_id', { ascending: true }),
-        ),
+    // THROUGH `mapWithLimit`, like every other chunked read here. The id set is
+    // one month of the client's own posts, so this is one chunk today — the
+    // ceiling is the convention (lib/chunk.ts `READ_CONCURRENCY`) and the
+    // convention is what keeps a read bounded when the corpus is not.
+    const pages = await mapWithLimit(chunk([...videoIds], UUID_IN_CHUNK), READ_CONCURRENCY, (ids) =>
+      selectAll<{ source_video_id: string; claim: string; entity: string }>(() =>
+        supabase
+          .from('video_claims')
+          .select('source_video_id, claim, entity')
+          .eq('client_id', clientId)
+          .eq('entity', 'client')
+          .in('source_video_id', ids)
+          .order('source_video_id', { ascending: true }),
       ),
     )
     return pages.flat()
@@ -1633,16 +1635,14 @@ async function loadOwnSubjectMatches(
   if (videoIds.length === 0) return { matches: new Map(), failed: false }
   let insights: { id: string; source_video_id: string }[]
   try {
-    const pages = await Promise.all(
-      chunk([...videoIds], UUID_IN_CHUNK).map((ids) =>
-        selectAll<{ id: string; source_video_id: string }>(() =>
-          supabase
-            .from('audience_insights_current')
-            .select('id, source_video_id')
-            .eq('client_id', clientId)
-            .in('source_video_id', ids)
-            .order('id', { ascending: true }),
-        ),
+    const pages = await mapWithLimit(chunk([...videoIds], UUID_IN_CHUNK), READ_CONCURRENCY, (ids) =>
+      selectAll<{ id: string; source_video_id: string }>(() =>
+        supabase
+          .from('audience_insights_current')
+          .select('id, source_video_id')
+          .eq('client_id', clientId)
+          .in('source_video_id', ids)
+          .order('id', { ascending: true }),
       ),
     )
     insights = pages.flat()
@@ -1653,18 +1653,19 @@ async function loadOwnSubjectMatches(
   if (insights.length === 0) return { matches: new Map(), failed: false }
   const videoOf = new Map(insights.map((i) => [i.id, i.source_video_id]))
   try {
-    const pages = await Promise.all(
-      chunk([...videoOf.keys()], UUID_IN_CHUNK).map((ids) =>
-        selectAll<{ subject_id: string; audience_insight_id: string }>(() =>
-          supabase
-            .from(TABLE_SUBJECT_MEMBERSHIPS)
-            .select('subject_id, audience_insight_id')
-            .eq('client_id', clientId)
-            .eq('member', true)
-            .in('audience_insight_id', ids)
-            .order('subject_id', { ascending: true })
-            .order('audience_insight_id', { ascending: true }),
-        ),
+    // AND THIS ONE IS NOT BOUNDED BY THE POST COUNT — it chunks INSIGHT ids,
+    // which a month of posts can carry many of, so the ceiling is doing real
+    // work here rather than describing one chunk.
+    const pages = await mapWithLimit(chunk([...videoOf.keys()], UUID_IN_CHUNK), READ_CONCURRENCY, (ids) =>
+      selectAll<{ subject_id: string; audience_insight_id: string }>(() =>
+        supabase
+          .from(TABLE_SUBJECT_MEMBERSHIPS)
+          .select('subject_id, audience_insight_id')
+          .eq('client_id', clientId)
+          .eq('member', true)
+          .in('audience_insight_id', ids)
+          .order('subject_id', { ascending: true })
+          .order('audience_insight_id', { ascending: true }),
       ),
     )
     const bySubject = new Map<string, Set<string>>()
