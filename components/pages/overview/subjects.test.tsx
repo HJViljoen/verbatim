@@ -4,9 +4,9 @@ import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
-import { gapLine, type Gap } from '@/lib/reading/gap'
+import { gapBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
 import { overviewSubjects } from './subjects'
-import { overviewFixture, refusedFixture } from './fixture'
+import { overviewFixture, refusedFixture, renamedRivalFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -113,6 +113,24 @@ describe('the two-audience gap OV2 carries', () => {
       expect(gap.a.value, row.id).toEqual({ k: row.you.k, n: row.you.n })
       expect(gap.b.pct, row.id).toBe(row.rival?.pct ?? null)
       expect(gap.b.value, row.id).toEqual({ k: row.rival?.k, n: row.rival?.n })
+    }
+  })
+
+  it('refuses the difference across a rename, and keeps both levels', () => {
+    const s = renamedRivalFixture().subjects
+    const gap = s.gaps.s1 as Gap
+    expect(gap.state).toBe('refused')
+    expect(gap.refusedReason).toBe('rename')
+    expect(gap.gapPts).toBeNull()
+    const line = gapLine(gap)
+    expect(line).toBe('you 31% of 84 · Freitag 44% of 142 · comparison refused')
+    // And the refusal travels to the earlier month rather than printing beside it.
+    expect(gapBasisLine(gap)).toBe('comparison refused in August')
+  })
+
+  it('renders the refused state in all three modes and keeps the copy contract', () => {
+    for (const mode of MODES) {
+      assertCopyContract(render(overviewSubjects.render(renamedRivalFixture(), mode, ctx)))
     }
   })
 

@@ -11,7 +11,8 @@ import { subjectsLine } from './line'
 import { subjectsKinds } from './kinds'
 import { subjectsVoices } from './voices'
 import { subjectsUnanswered } from './unanswered'
-import { candidatesFixture, refusedFixture, subjectsFixture } from './fixture'
+import { gapBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
+import { candidatesFixture, refusedFixture, retiredRivalFixture, subjectsFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -407,5 +408,34 @@ describe('the Subjects blocks, read from outside the workspace', () => {
     expect(render(subjectsUnanswered.render(data, 'print', ctx))).not.toContain('Open the content brief')
     expect(render(subjectsVoices.render(data, 'print', ctx))).not.toContain('Hear these voices in Voice')
     expect(render(subjectsVoices.render(data, 'app', ctx))).toContain('Hear these voices in Voice')
+  })
+})
+
+// ---- D1 · the pane's gap, and its fourth state --------------------------------
+
+describe('SU2 · the two-audience gap the pane carries', () => {
+  it('reads the mock’s own month as too few to compare, with both levels intact', () => {
+    const gap = subjectsFixture().selected!.gap as Gap
+    expect(gap.state).toBe('too_little_data')
+    expect(gapLine(gap)).toBe('You 31% of 84 · Freitag 43.7% of 142 · too few to compare')
+  })
+
+  it('refuses the difference outright once the rival is retired — the tracked set moved', () => {
+    const gap = retiredRivalFixture().selected!.gap as Gap
+    expect(gap.state).toBe('refused')
+    expect(gap.refusedReason).toBe('tracking_change')
+    expect(gap.gapPts).toBeNull()
+    // The levels survive; only the difference is withheld, on this month and
+    // on the earlier one.
+    expect(gapLine(gap)).toBe('You 31% of 84 · Freitag 43.7% of 142 · comparison refused')
+    expect(gapBasisLine(gap)).toBe('comparison refused in August')
+  })
+
+  it('renders every block on the retired-rival reading and keeps the copy contract', () => {
+    for (const block of SUBJECT_BLOCKS) {
+      for (const mode of MODES) {
+        assertCopyContract(render(block.render(retiredRivalFixture(), mode, ctx)))
+      }
+    }
   })
 })

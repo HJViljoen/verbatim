@@ -412,3 +412,24 @@ export function refusedFixture(): OverviewData {
     },
   }
 }
+
+/**
+ * The same month, with the lead rival RENAMED inside it — the fourth state of
+ * the gapline (D1), and the one `refusedFixture()` cannot carry, because there
+ * the subjects block is `not_recorded` and has no rows for a gap to be keyed
+ * by.
+ *
+ * A rival's months are keyed on the NAME (`month_theme_readings.audience` is
+ * free text from Settings), so a difference drawn across a rename is a fact
+ * about our spelling. The two levels and both denominators still print; only
+ * the difference is withheld, as "comparison refused" — and the refusal
+ * travels to the earlier month too, because "19 points in August" printed
+ * beside a refused September is the refusal made decorative.
+ */
+export function renamedRivalFixture(): OverviewData {
+  const base = overviewFixture()
+  return {
+    ...base,
+    subjects: { ...base.subjects, gaps: gapsFor(base.subjects.rows, 'rename') },
+  }
+}
