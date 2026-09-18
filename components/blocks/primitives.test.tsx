@@ -72,6 +72,16 @@ describe('BlockFrame', () => {
     }
   })
 
+  // The truncation is a PROP, not a default. It landed as a default and clipped
+  // every footer link in the product — 56 call sites — for one page's 240px
+  // rail. A block that has the whole tile's width wraps, as it always has.
+  it('wraps the footer link unless the block asks for one line', () => {
+    const wrapped = render(<BlockFrame title="Rivals" footer="Open the content brief →" footerNote="all-time"><p>body</p></BlockFrame>)
+    const clipped = render(<BlockFrame title="Rivals" footer="Open the content brief →" footerNote="all-time" truncateFooter><p>body</p></BlockFrame>)
+    expect(wrapped).not.toContain('truncate')
+    expect(clipped).toContain('truncate')
+  })
+
   it('draws the footer for a note with no link, rather than dropping it', () => {
     for (const mode of MODES) {
       expect(markupText(render(<BlockFrame mode={mode} title="Rivals" footerNote="all-time"><p>body</p></BlockFrame>))).toContain('all-time')

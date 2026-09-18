@@ -149,6 +149,7 @@ export const subjectsKinds: Block<SubjectsData> = {
         // unlabelled one-month kind mix sat among twelve-month furniture.
         meta={`${monthName(data.month).split(' ')[0]} · every video in the audience`}
         footer={footer}
+        truncateFooter
         // THE REDDIT READ INTO THE FOOTER NOTE, where the mock puts it — a
         // basis, in the mono face a reader skips until they want it. It was a
         // body paragraph of raw counts, which reads as one of the block's

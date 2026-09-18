@@ -101,6 +101,10 @@ export const subjectsUnanswered: Block<SubjectsData> = {
         // them to state the gate's number in.
         meta={mode === 'app' ? `${period[0].toUpperCase()}${period.slice(1)}` : unansweredMeta(u.questionVideos, u.yourPosts)}
         footer={footer}
+        // ONE LINE, CLIPPED RATHER THAN WRAPPED. This tile is the narrow half of
+        // the mock's 1.35:1 pair and its footer note is long; without it "Open
+        // the content brief →" sets one word per line.
+        truncateFooter
         // The mock's "9 posts". The gate's own 214 is not dropped — it is the
         // denominator under every row, which is where a reader needs it.
         // `figure`, NOT `level`: a count of your own posts is not a share of

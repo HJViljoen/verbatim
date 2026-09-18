@@ -81,6 +81,7 @@ export const subjectsSayHear: Block<SubjectsData> = {
         mode={mode}
         meta="your claims"
         footer={footer}
+        truncateFooter
         footerNote="latest update"
       >
         {rows.map((r) => <ClaimRow key={r.id} row={r} mode={mode} />)}

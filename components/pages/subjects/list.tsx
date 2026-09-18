@@ -61,6 +61,7 @@ export const subjectsList: Block<SubjectsData> = {
           mode={mode}
           meta={l.notRecorded ? undefined : l.setLine}
           footer={l.notRecorded ? undefined : <AddSubjectFooter canEdit={l.canEdit} activeCount={active} />}
+          truncateFooter
           footerNote={l.notRecorded ? undefined : stamp}
         >
           <SubjectEditor

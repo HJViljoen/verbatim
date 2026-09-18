@@ -91,6 +91,7 @@ export const subjectsOwnPosts: Block<SubjectsData> = {
         mode={mode}
         meta={longMonth(c.month)}
         footer={footer}
+        truncateFooter
         // "n = 9" — the mock's own footer note, and the denominator every
         // figure in this tile is a share of.
         footerNote={`n = ${fmtInt(c.published.k)}`}

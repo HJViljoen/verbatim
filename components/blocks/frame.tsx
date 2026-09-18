@@ -37,7 +37,8 @@ import { cn } from '@/lib/utils'
  * chrome rather than content and lives here.
  */
 export function BlockFrame({
-  title, question, mode = 'app', footer, footerNote, meta, heading = false, lead, actions, children, className,
+  title, question, mode = 'app', footer, footerNote, meta, heading = false, lead, actions,
+  truncateFooter = false, children, className,
 }: {
   title: string
   question?: string
@@ -64,6 +65,19 @@ export function BlockFrame({
   actions?: ReactNode
   /** The line along the bottom, LEFT: a link deeper. */
   footer?: ReactNode
+  /**
+   * Keep that link on ONE LINE, clipping it rather than wrapping it.
+   *
+   * OPT-IN, AND IT HAS TO BE (fix pass). This landed as a change to the
+   * DEFAULT, which silently clipped the footer link of all 56 `footer={…}`
+   * call sites across Overview, Voice, Market, Competitive, Week and the
+   * documents — to solve a problem that is one page's: on a 240px rail, with a
+   * basis in the note beside it, "Open the content brief →" set one word per
+   * line. The wave's rule is that a package needing a change to a P0 primitive
+   * adds an optional prop and never edits a default; and a footer that has the
+   * whole tile's width is better off wrapping than clipped.
+   */
+  truncateFooter?: boolean
   /** The line along the bottom, RIGHT: the artboard's quiet mono note — the
    *  basis, the window, the population ("all-time", "of 1,388 videos").
    *
@@ -153,12 +167,11 @@ export function BlockFrame({
       {children}
       {footer || footerNote ? (
         <footer className="mt-auto flex items-center justify-between gap-2 border-t border-border/70 pt-2 text-[12px] font-medium text-foreground">
-          {/* TRUNCATE, AS `Tile`'s OWN FOOTER HAS SINCE THE REDESIGN. The note
-              on the right is `shrink-0`, so with `min-w-0` alone the link on
-              the left broke onto four lines the moment a block had a long
-              basis to state — "Open the content brief →" set one word per
-              line. A footer link is one line or it is not a footer link. */}
-          <span className="min-w-0 truncate">{footer}</span>
+          {/* The note on the right is `shrink-0`, so a narrow tile pushes the
+              link on the left onto several lines. A block that would rather
+              clip than wrap asks for it — `truncateFooter` — and every block
+              that has not asked keeps the wrap it has always had. */}
+          <span className={cn('min-w-0', truncateFooter && 'truncate')}>{footer}</span>
           {footerNote ? <span className="shrink-0 font-mono text-[11px] font-normal text-muted-foreground">{footerNote}</span> : null}
         </footer>
       ) : null}
