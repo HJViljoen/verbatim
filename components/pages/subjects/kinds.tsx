@@ -1,6 +1,5 @@
-import Link from 'next/link'
-
 import type { Block, RenderMode } from '@/lib/blocks/types'
+import { openLink } from '@/components/blocks/open-link'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockRanked } from '@/components/blocks/bars'
 import { BlockMovement } from '@/components/blocks/movement'
@@ -116,10 +115,10 @@ export const subjectsKinds: Block<SubjectsData> = {
     const pane = data.selected
     const empty = subjectsKinds.emptyState(data)
     const email = mode === 'email'
-    const href = `${ctx.appUrl}/dashboard/voice`
-    const footer = email
-      ? <a href={href} style={{ color: EMAIL.ink }}>Open Voice →</a>
-      : <Link href={href} className="hover:underline">Open Voice →</Link>
+    // `openLink`, not a hand-rolled pair: print draws no in-app control, which
+    // matters now that this page exports (a PDF and a share page have no
+    // session to open Voice with).
+    const footer = openLink(mode, `${ctx.appUrl}/dashboard/voice`, 'Open Voice →')
 
     if (!pane || empty) {
       return (

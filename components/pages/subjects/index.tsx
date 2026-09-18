@@ -4,6 +4,7 @@ import { blockContext } from '@/lib/blocks/types'
 import type { GlossaryKey } from '@/lib/calibration'
 import { fullDate } from '@/lib/format'
 import { EMAIL } from '@/lib/email/theme'
+import { appBaseUrl } from '@/lib/site'
 import { ExportMenu, ExportScope } from '@/components/export-menu'
 import { HowToRead } from '@/components/how-to-read'
 import { PageFrame, PageGrid } from '@/components/shell/page-grid'
@@ -108,6 +109,23 @@ export function layoutFor(data: SubjectsData): { block: Block<SubjectsData>; col
  *  instead of reloading the application to reach its own next page. */
 export function subjectsContext(params: Record<string, string | undefined> = {}): BlockContext {
   return blockContext('', EMAIL, params)
+}
+
+/**
+ * The context an EXPORT renders in — absolute, from `appBaseUrl()`.
+ *
+ * A RELATIVE LINK IS NOT A LINK ONCE IT LEAVES THE APP (fix pass). The page
+ * module bound `subjectsContext()` for every mode, so a PDF, a scheduled email
+ * and a `/r/<token>` share page all printed "the 26 videos behind your figure
+ * →" pointing at `/dashboard/videos?subject=…` — relative to wherever the
+ * reader happens to be. The render route already binds the right value for the
+ * other block spine (`blockContext(appBaseUrl(), EMAIL)`, app/render/
+ * [snapshotId]/page.tsx); this binds the same one here, and the app arm keeps
+ * its relative links because on the app they are what makes `next/link`
+ * navigate instead of reloading.
+ */
+function subjectsExportContext(): BlockContext {
+  return blockContext(appBaseUrl(), EMAIL)
 }
 
 /** One tile, at the mock's height, spreading its content (MASTER rule 8). */
@@ -257,8 +275,8 @@ const renderables: Record<string, Renderable<SubjectsData>> = Object.fromEntries
     {
       key: block.key,
       title: block.title,
-      render: (data: SubjectsData, mode) => block.render(data, mode, subjectsContext()),
-      email: (data: SubjectsData) => block.render(data, 'email', subjectsContext()),
+      render: (data: SubjectsData, mode) => block.render(data, mode, subjectsExportContext()),
+      email: (data: SubjectsData) => block.render(data, 'email', subjectsExportContext()),
     } satisfies Renderable<SubjectsData>,
   ]),
 )

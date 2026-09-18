@@ -1,6 +1,5 @@
-import Link from 'next/link'
-
 import type { Block } from '@/lib/blocks/types'
+import { openLink } from '@/components/blocks/open-link'
 import { BlockCalendar } from '@/components/blocks/calendar'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { calendarBandsFor, calendarRulesFor, seriesToCalendar } from '@/lib/charts/from-series'
@@ -66,10 +65,12 @@ export const subjectsLine: Block<SubjectsData> = {
       })
       .filter((s): s is CalendarSeries => s != null)
 
-    const href = `${ctx.appUrl}/dashboard/subjects`
-    const footer = mode === 'email'
-      ? <a href={href} style={{ color: EMAIL.ink }}>Compare another subject →</a>
-      : <Link href={href} className="hover:underline">Compare another subject →</Link>
+    // THROUGH `openLink`, LIKE EVERY OTHER BLOCK ON THE PAGE. A hand-rolled
+    // pair prints the app's own control on PAPER too — and this page is a
+    // registered `PageModule`, so its print arm reaches a PDF and a
+    // `/r/<token>` page, where "Compare another subject →" resolves to a login
+    // wall. `openLink` draws nothing for print, which is the answer.
+    const footer = openLink(mode, `${ctx.appUrl}/dashboard/subjects`, 'Compare another subject →')
 
     // The mock's axis meta: the months the axis actually spans, named, rather
     // than a count of them — "Apr → Sep 2026" tells a reader which six.

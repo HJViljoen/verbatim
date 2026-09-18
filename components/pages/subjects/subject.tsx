@@ -161,15 +161,23 @@ export const subjectsSubject: Block<SubjectsData> = {
       : null
     const lead = pane.gap ? `${pane.name} — ${gapLine(pane.gap)}${basis ? `; ${basis}` : ''}.` : null
 
-    const behind = pane.behind
-      ? mode === 'print'
-        ? null
+    // THE LINK, IN THE RIGHT MARKUP FOR EACH READER. Print draws none — a PDF
+    // and a `/r/<token>` page have no session to open a filtered catalogue
+    // with. The email arm is a plain inline-styled `<a>`, not a `next/link`
+    // carrying Tailwind classes into an Outlook table; the app keeps the
+    // dotted rule that says "this figure has rows behind it".
+    const behindLabel = (
+      <>the <span data-copy="figure">{fmtInt(pane.behind?.videos ?? 0)}</span> videos behind your figure →</>
+    )
+    const behind = !pane.behind || mode === 'print'
+      ? null
+      : email
+        ? <a href={`${ctx.appUrl}${pane.behind.href}`} style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink }}>{behindLabel}</a>
         : (
           <Link href={`${ctx.appUrl}${pane.behind.href}`} className="font-medium text-foreground decoration-dotted underline-offset-[3px] [text-decoration-line:underline] hover:decoration-solid">
-            the <span data-copy="figure">{fmtInt(pane.behind.videos)}</span> videos behind your figure →
+            {behindLabel}
           </Link>
         )
-      : null
 
     return (
       <BlockFrame

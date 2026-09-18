@@ -624,6 +624,21 @@ describe('the Subjects blocks, read from outside the workspace', () => {
     expect(render(subjectsUnanswered.render(data, 'print', ctx))).not.toContain('Open the content brief')
     expect(render(subjectsVoices.render(data, 'print', ctx))).not.toContain('Hear these voices in Voice')
     expect(render(subjectsVoices.render(data, 'app', ctx))).toContain('Hear these voices in Voice')
+    // The chart's and the kind mix's footers were hand-rolled `email ? a :
+    // Link` pairs, so PRINT got the app's control. This page exports now, so
+    // print is a PDF and a `/r/<token>` page.
+    expect(render(subjectsLine.render(data, 'print', ctx))).not.toContain('Compare another subject')
+    expect(render(subjectsKinds.render(data, 'print', ctx))).not.toContain('Open Voice')
+    expect(render(subjectsSubject.render(data, 'print', ctx))).not.toContain('videos behind your figure')
+  })
+
+  // A LINK IN AN EXPORT IS ABSOLUTE OR IT IS NOT A LINK. The page module used
+  // to bind `blockContext('')` for every mode, so an email and a share page
+  // printed `/dashboard/...` — relative to wherever the reader happened to be.
+  it('send an email reader to an absolute address, in email-safe markup', () => {
+    const markup = render(subjectsSubject.render(subjectsFixture(), 'email', ctx))
+    expect(markup).toContain('https://app.verbatimintel.com/dashboard/videos?subject=s1')
+    expect(markup).not.toContain('class=')
   })
 })
 
