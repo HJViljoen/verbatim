@@ -715,10 +715,21 @@ describe('WK §7 · for sales', () => {
     expect(text).not.toContain('toward Sealand')
   })
 
-  it('puts the week of the window in the footer’s own slot', () => {
-    const text = renderText(weekSales.render(weekFixture(), 'app', ctx))
+  it('puts the window’s own days in the footer’s slot, and calls no month a week', () => {
     // The same two dates §4's meta prints, off the run's own frozen window.
-    expect(text).toContain('week of 6 Sep – 13 Sep')
+    expect(renderText(weekSales.render(weekFixture(), 'app', ctx))).toContain('6 Sep – 13 Sep')
+    // AND THE THIN ARM, WHICH IS THE ONE THE NOUN BROKE (code review C2).
+    // Sealand's newest update covers 11 Aug – 10 Sep; the footer read "week of
+    // 11 Aug – 10 Sep" until the fix pass — thirty days called a week, on the
+    // page whose whole argument is that a week is not a period. Pinned on both
+    // arms, because pinning the seven-day one alone is why it passed.
+    const thin = renderText(weekSales.render(thinFixture(), 'app', ctx))
+    expect(thin).toContain('11 Aug – 10 Sep')
+    for (const fixture of FIXTURES) {
+      for (const mode of MODES) {
+        expect(renderText(weekSales.render(fixture(), mode, ctx))).not.toContain('week of')
+      }
+    }
   })
 })
 

@@ -171,12 +171,22 @@ export function forSalesBlock<D>(key: string, pick: (data: D) => ForSalesData): 
   return block
 }
 
-/** "21–27 Sep" — the days the section's counts are of, in the footer's own
- *  slot. Null where the update carries no window, because a footer naming days
- *  nobody read is worse than a footer with nothing in it. */
+/**
+ * "21 – 27 Sep" — the days the section's counts are of, in the footer's own
+ * slot. Null where the update carries no window, because a footer naming days
+ * nobody read is worse than a footer with nothing in it.
+ *
+ * NO NOUN, AND THAT IS THE POINT (code review C2). This read "week of 21 –
+ * 27 Sep" until the wave-2 fix pass, and Sealand's newest update covers 11 Aug
+ * – 10 Sep: thirty days called a week, in the footer of the one page whose
+ * whole argument is that a week is not a period (AGENTS.md: "Sealand's newest
+ * update covers thirty days, not seven"). The dates alone are the honest form,
+ * and they are the same two dates This week's §4 meta and §5 meta print — the
+ * page's own `windowDays` writes them exactly this way.
+ */
 function windowNote(window: { from: string; to: string } | null): string | undefined {
   if (!window) return undefined
-  return `week of ${shortDate(window.from)} – ${shortDate(window.to)}`
+  return `${shortDate(window.from)} – ${shortDate(window.to)}`
 }
 
 /**
