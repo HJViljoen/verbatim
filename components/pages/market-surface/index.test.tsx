@@ -226,6 +226,20 @@ describe('MK2 · the ledger', () => {
     expect(text).toContain('3 videos')   // grounded in, counted
   })
 
+  it('does not print two different "New"s one column apart', () => {
+    // The artboard's chip in Repeated is the word "New", and Your decision
+    // prints "New" for an undecided row — two words spelled the same, one
+    // column apart, meaning "raised this month" and "you have not decided".
+    // The chip is the one that moves, and its basis (and its clock) is printed
+    // under the table rather than left in a title.
+    const text = renderText(marketAdvice.render(marketFixture(), 'app', ctx))
+    expect(text).toContain('First time')
+    expect(text).toContain('First time marks a row first raised by an update inside this month')
+    expect(text).toContain('the update’s clock, not the comment’s')
+    // "New" survives exactly where the status column puts it.
+    expect((text.match(/\bNew\b/g) ?? [])).toHaveLength(1)
+  })
+
   it('counts the repeats in UPDATES, with the word updates on them', () => {
     // D9: `timesMade` counts updates, and the column printed calendar months
     // with nothing saying so. Production's only repeat came back three days

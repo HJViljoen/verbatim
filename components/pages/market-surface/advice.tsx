@@ -10,7 +10,7 @@ import { fmtInt, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import {
-  ADVICE_UNRECORDED, GROUNDED_CORPUS_LINE, adviceAnchor, ageInMonths, madeInMonth,
+  ADVICE_UNRECORDED, GROUNDED_CORPUS_LINE, LEDGER_FIRST_TIME_LINE, adviceAnchor, ageInMonths, madeInMonth,
   marketSurfaceHref, repeatCell,
   type AdviceRow, type MarketSurfaceData,
 } from '@/lib/pages/market-surface'
@@ -111,15 +111,17 @@ function StatusCell({ row, mode }: { row: AdviceRow; mode: RenderMode }) {
 }
 
 /** The repeat cell: updates on top, months only where there is more than one
- *  (D9 — `timesMade` counts UPDATES and the word says so). "New" is the
- *  artboard's chip, on a row first raised in the reading's own month. */
+ *  (D9 — `timesMade` counts UPDATES and the word says so). The artboard's chip
+ *  sits on a row first raised in the reading's own month — and it says "First
+ *  time", never "New", because the cell one column to its right prints "New"
+ *  for a row nobody has decided on (`LEDGER_FIRST_TIME_LINE`). */
 function RepeatCell({ row, isNew, mode }: { row: AdviceRow; isNew: boolean; mode: RenderMode }) {
   const { updates, months } = repeatCell(row)
   if (mode === 'email') {
-    return <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>{isNew ? 'New' : updates}</span>
+    return <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>{isNew ? 'First time' : updates}</span>
   }
   if (isNew) {
-    return <span className="inline-block rounded-full bg-warning/15 px-2 py-0.5 text-[11.5px] font-semibold text-warning">New</span>
+    return <span className="inline-block whitespace-nowrap rounded-full bg-warning/15 px-2 py-0.5 text-[11.5px] font-semibold text-warning">First time</span>
   }
   return (
     <span className="flex min-w-0 flex-col gap-px">
@@ -230,6 +232,9 @@ export const marketAdvice: Block<MarketSurfaceData> = {
     // sentence is printed only while no row on the page has a reading in it —
     // which is production today, and is the honest naming of that absence.
     const anyReading = a.rows.some((r) => r.afterwards.state === 'reading')
+    // The chip's basis, printed where a reader meets it rather than left in a
+    // `title` no keyboard and no touch reaches.
+    const anyFirstTime = a.rows.some((r) => r.firstMade.slice(0, 7) === data.month.slice(0, 7))
 
     const notes = (
       <div className={email ? undefined : 'flex min-w-0 flex-col gap-0.5'}>
@@ -246,6 +251,7 @@ export const marketAdvice: Block<MarketSurfaceData> = {
           style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 } : undefined}
         >
           {GROUNDED_CORPUS_LINE} {a.repeatLine}
+          {anyFirstTime ? ` ${LEDGER_FIRST_TIME_LINE}` : ''}
           {!a.recorded ? ` ${ADVICE_UNRECORDED}` : ''}
           {!anyReading ? ` ${a.unlock}` : ''}
         </p>

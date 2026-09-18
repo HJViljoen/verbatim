@@ -99,6 +99,27 @@ export const CONCLUSIONS_CORPUS_LINE =
 export const CONCLUSIONS_NEW_LINE =
   'New means no earlier month in which the theme behind it was mentioned, in your audience or in the category — a fact about our record, not a direction.'
 
+/**
+ * What the "First time" chip in the Repeated column means, said once under the
+ * table.
+ *
+ * TWO "NEW"S ONE COLUMN APART IS ONE WORD TOO MANY. The artboard's chip in the
+ * Repeated column is the word "New", and the cell beside it — Your decision —
+ * prints "New" for a row nobody has decided on (119 of 121 rows in
+ * production). Rendered, row 3 read "… Sep · New · New · not recorded": two
+ * words spelled the same, meaning "raised this month" and "you have not
+ * decided". `REC_STATUS_LABEL` is the one the brief pins, so the chip is the
+ * one that moves.
+ *
+ * AND IT NAMES ITS CLOCK. The chip compares `AdviceRow.firstMade` — a
+ * recommendation's creation date, the UPDATE's clock — against the page's
+ * comment-dated month, which is the one place on this page the two clocks meet.
+ * A basis a reader can only reach with a mouse is not a stated basis, so it is
+ * printed under the table rather than left in a `title`.
+ */
+export const LEDGER_FIRST_TIME_LINE =
+  'First time marks a row first raised by an update inside this month — the ledger’s own dates are the update’s clock, not the comment’s.'
+
 /** What the ledger's "Grounded in" column counts, said once under the table
  *  because every row's cell is counted the same way (D8, and the same shape as
  *  `CONCLUSIONS_CORPUS_LINE` two blocks above it). */
