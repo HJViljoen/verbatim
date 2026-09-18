@@ -159,26 +159,40 @@ export function BlockFrame({
  * is what catches that.
  */
 export function FigureCell({
-  value, of, align = 'left', mode = 'app',
+  value, of, align = 'left', mode = 'app', size = 'md',
 }: {
   value: ReactNode
   /** "of 142". Omitted ONLY for a count that is not a share of anything. */
   of?: ReactNode
   align?: 'left' | 'right'
   mode?: RenderMode
+  /**
+   * How loud the figure is (Block D wave 2, E-monthly — ADDITIVE, and the
+   * default is untouched).
+   *
+   * `md` (13px) is what every existing caller gets and is the artboards' size
+   * in a dense table. `lg` is 17px at `-.02em`, which is what the MonthlyReport
+   * artboard sets on the three columns of section 2: six subjects × three
+   * sides is the one table on that artefact where the figure is meant to be
+   * read before the label, and at 13px it reads as metadata. The "of N" does
+   * NOT grow with it — the denominator is evidence rather than headline, and
+   * the artboard keeps it at 10.5 in both sizes.
+   */
+  size?: 'md' | 'lg'
 }) {
   const right = align === 'right'
+  const big = size === 'lg'
   if (mode === 'email') {
     return (
       <div style={{ textAlign: right ? 'right' : 'left' }}>
-        <div data-copy="figure" style={{ fontFamily: FONT.mono, fontSize: 13, fontWeight: 600, lineHeight: '1', color: EMAIL.ink }}>{value}</div>
-        {of ? <div data-copy="level" style={{ fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.muted, marginTop: 2 }}>{of}</div> : null}
+        <div data-copy="figure" style={{ fontFamily: FONT.mono, fontSize: big ? 17 : 13, fontWeight: 600, lineHeight: '1', letterSpacing: big ? '-.02em' : undefined, color: EMAIL.ink }}>{value}</div>
+        {of ? <div data-copy="level" style={{ fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.muted, marginTop: big ? 3 : 2 }}>{of}</div> : null}
       </div>
     )
   }
   const cell = (
     <span className={cn('flex min-w-0 flex-col gap-px', right && 'items-end text-right')}>
-      <span data-copy="figure" className="font-mono text-[13px] font-semibold leading-none tabular-nums">{value}</span>
+      <span data-copy="figure" className={cn('font-mono font-semibold leading-none tabular-nums', big ? 'text-[17px] tracking-[-0.02em]' : 'text-[13px]')}>{value}</span>
       {of ? <span className="font-mono text-[10.5px] tabular-nums text-muted-foreground">{of}</span> : null}
     </span>
   )

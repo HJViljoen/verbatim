@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { Block } from '@/lib/blocks/types'
 import type { OverviewData } from '@/lib/pages/overview'
 import type { MonthlyData } from '@/lib/pages/monthly'
@@ -45,13 +46,39 @@ export function fromOverview(
   key: string,
   block: Block<OverviewData>,
   project: (data: OverviewData) => OverviewData = (d) => d,
+  /**
+   * THE EMAIL ARM, WHERE THE ARTEFACT HAS TO DRAW IT ITSELF (Block D wave 2,
+   * E-monthly).
+   *
+   * A page's email arm and an artefact's email arm are not the same job, and
+   * on three of these five sections they had drifted apart badly enough to be
+   * the package's largest single gap. Overview's own email arm stacks each
+   * subject and each rival into two or three full-width lines, because on the
+   * PAGE the email arm is a courtesy: the table it is a fallback for is three
+   * feet away. On this artefact the email IS the artefact — six subjects × four
+   * aligned columns is the whole argument of section 2, and stacked lines
+   * lose the alignment that makes six subjects comparable at a glance.
+   *
+   * WHAT IT IS NOT IS A SECOND READING. The override takes the SAME projected
+   * `OverviewData`, prints the same fields, the same verdicts and the same
+   * words; `figures`, `verdicts`, `quotes` and `emptyState` still come from the
+   * page's block, untouched, so the record cannot disagree with the render. It
+   * changes markup and nothing else — which is exactly what `project` is for
+   * words, one rung down.
+   *
+   * AND IT IS OPTIONAL. Sections with nothing to gain by it (the record) keep
+   * the page's arm and inherit every improvement the page makes to it.
+   */
+  email?: (data: OverviewData, ctx: Parameters<Block<OverviewData>['render']>[2], monthly: MonthlyData) => ReactNode,
 ): Block<MonthlyData> {
   return {
     key,
     title: block.title,
     ...(block.question ? { question: block.question } : {}),
     render(data, mode, ctx) {
-      return block.render(project(data.overview), mode, ctx)
+      const projected = project(data.overview)
+      if (mode === 'email' && email) return email(projected, ctx, data)
+      return block.render(projected, mode, ctx)
     },
     figures(data) {
       return block.figures?.(data.overview) ?? {}
