@@ -341,7 +341,11 @@ describe('qr.p6.plan \u2014 the re-checked plan on the quarterly review (D4)', (
     expect(plan?.claims.map((c) => c.verdictLabel)).toEqual(['Contradicted', 'Supported', 'Untested'])
     // Every count carries its denominator and names what it is counted over.
     expect(plan?.claims[0].value).toEqual({ k: 41, n: 2359 })
-    expect(plan?.basis).toContain('not over one month')
+    // The basis names the population AND the retrieval bound that makes the
+    // share a floor — a claim's count is drawn from the themes closest to it,
+    // not swept over the corpus.
+    expect(plan?.basis).toContain('not out of one month')
+    expect(plan?.basis).toContain('floor')
     // The move is dated and counted in READINGS, never held for N updates.
     expect(plan?.moved[0].on).toMatch(/moved \d+ \w+ \u00b7 \d+ reading/)
     expect(plan?.moved[0].on).not.toMatch(/update/i)
