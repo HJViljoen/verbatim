@@ -29,17 +29,13 @@ import {
   monthLine,
   scriptedLines,
   switchingFigure,
-  type CannotTell,
-  type MonthLine,
-  type ScriptedLine,
-  type SwitchingFigure,
   type SwitchingVideo,
 } from './figures'
 import { monthlyLineLabel } from '../../pages/overview'
 import { CLIENT_AUDIENCE } from '../../rivals'
 import { selectAll } from '../../supabase-admin'
 import { fold } from '../../gather/util'
-import type { DocBriefSection, DocumentRole } from './types'
+import type { DocBriefSection, DocumentRole, DocumentSlideFigures } from './types'
 
 /**
  * The I/O half of a brief's reading (Phase 1 WP19).
@@ -100,22 +96,13 @@ const LOADERS: Record<BriefSurface, SurfaceLoader> = {
  * are not month readings at all. Keeping them here means a build that does not
  * want them pays nothing and a reader of `BriefReading` is not handed a shape
  * whose basis is different from everything beside it.
+ *
+ * ONE SHAPE, AND THE SNAPSHOT OWNS IT (wave 2, E-sales). The six fields are
+ * `DocumentSlideFigures` in `./types` — the module that declares what a brief
+ * FREEZES — and this is the loader's name for it. Two interfaces with the same
+ * six fields is how a field gets added to the loader and not to the artefact.
  */
-export interface BriefSlideFigures {
-  /** `sales.p7.cannottell` — the refusals this reading declined, printed. */
-  cannotTell: CannotTell
-  /** `sales.p5.figure`. Null where nothing named both. */
-  switching: SwitchingFigure | null
-  /** `sales.p5.crosscheck`. Null where there is no objection to square it
-   *  against. */
-  crosscheck: string | null
-  /** `sales.p6.rows`. Empty where no objection cleared the floor. */
-  scripted: ScriptedLine[]
-  /** `sales.p2.chart`. Null where the month axis could not be read. */
-  line: MonthLine | null
-  /** `sales.p4.untracked` — what is not tracked, and whose job it is, by role. */
-  untracked: UntrackedNote[]
-}
+export type BriefSlideFigures = DocumentSlideFigures
 
 export interface BriefReadingOptions {
   role: DocumentRole

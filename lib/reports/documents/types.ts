@@ -3,6 +3,8 @@ import type { MonthStatus } from '../../reading/types'
 import type { Quote } from '../../renderables/types'
 import type { RunDelta } from '../../report-delta'
 import type { Audience, FigureTable } from '../types'
+import type { CannotTell, MonthLine, ScriptedLine, SwitchingFigure } from './figures'
+import type { UntrackedNote } from './sections'
 
 /**
  * Document reports (2026-08-31): a report WRITTEN by the Consumer Intelligence
@@ -236,6 +238,40 @@ export interface DocBriefSection {
   empty: string | null
 }
 
+/**
+ * The figures a BRIEF'S OWN SLIDES print, frozen onto the snapshot (Block D
+ * wave 2, package E-sales).
+ *
+ * WHY IT IS ON THE SNAPSHOT AND NOT RE-READ AT RENDER. "Exports and reports
+ * freeze numbers, never words": every count here is a reading of one month and
+ * has to say the same thing in March that it said in September, and a share
+ * link renders from the snapshot alone and may never touch a tenant table. The
+ * QUOTE inside a scripted line is not exempt from that — it is a `Quote` like
+ * any other, so `freezeQuotes` empties its text structurally on the way in and
+ * `resolveQuotes` puts the words back at render, exactly as it does for a
+ * finding's pull quote.
+ *
+ * Wave 1 (`figures.ts`, `load-reading.ts`) computed all six of these and handed
+ * them to nobody; this is the field that carries them to the deck. Absent on
+ * every brief built before wave 2, which is why every reader is
+ * optional-chained: a brief with no slide figures is a fact about when it was
+ * built, not a zero.
+ */
+export interface DocumentSlideFigures {
+  /** `sales.p7.cannottell` — the comparisons this reading refused. */
+  cannotTell: CannotTell
+  /** `sales.p5.figure`. Null where nothing named both. */
+  switching: SwitchingFigure | null
+  /** `sales.p5.crosscheck`. Null where there is no objection to square it against. */
+  crosscheck: string | null
+  /** `sales.p6.rows`. Empty where no objection cleared the floor. */
+  scripted: ScriptedLine[]
+  /** `sales.p2.chart`. Null where the month axis could not be read. */
+  line: MonthLine | null
+  /** `sales.p4.untracked` — what is not tracked, and whose job it is, by role. */
+  untracked: UntrackedNote[]
+}
+
 /** The brief's order: written pages and borrowed blocks, interleaved. */
 export type DocLayoutEntry = { kind: 'page'; id: string } | { kind: 'section'; id: string }
 
@@ -283,6 +319,9 @@ export interface DocumentSnapshotData {
   /** Written pages and borrowed blocks in one order (WP19). Absent on a brief
    *  built before the section maps, which paginates off `pages` as it did. */
   layout?: DocLayoutEntry[]
+  /** What this brief's own slides may print beyond the blocks (E-sales).
+   *  Absent on every brief built before wave 2. */
+  slideFigures?: DocumentSlideFigures | null
   pages: DocPage[]
   /** What this document was COMPOSED FROM (WP7d, 2026-09-12), frozen beside
    *  the template key so a later reader (the structural eval, a rebuild, a

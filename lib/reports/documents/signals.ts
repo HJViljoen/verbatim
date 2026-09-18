@@ -11,7 +11,7 @@ import { quoteRef } from '../../renderables/quotes-freeze'
 import type { Quote } from '../../renderables/types'
 import { competitorThemes, mergeAcrossBuckets, trajectoryWord, type MergeThemeRow, type MergedConcern } from './merge'
 import { DEFAULT_DOCUMENT_ROLE, isDocumentRole, type DocBriefSection, type DocumentRole, type DocumentSettings } from './types'
-import { loadBriefReading } from './load-reading'
+import { loadBriefReading, type BriefSlideFigures } from './load-reading'
 import type { BriefReading } from './reading'
 import type { BriefEntry, BriefSurface, MissingInput } from './sections'
 import { readingHandle } from '../../reading/read'
@@ -105,6 +105,15 @@ export interface Signals {
   sections: DocBriefSection[]
   /** What this brief needed and the workspace has not recorded. */
   missing: MissingInput[]
+  /**
+   * What this brief's OWN slides may print beyond the borrowed blocks
+   * (wave 1's `figures.ts`, carried to the artefact by wave 2).
+   *
+   * Null on a brief whose reading could not be loaded at all — the same
+   * degrade every other number here takes, and the deck draws the sheets it
+   * has material for rather than an empty pair.
+   */
+  slideFigures: BriefSlideFigures | null
   competitiveInsights: { id: string; category: string; competitor_name: string | null; title: string; finding: string; impact_level: string }[]
 }
 
@@ -317,6 +326,7 @@ export async function loadSignals(
     map: brief?.map ?? [],
     sections: brief?.sections ?? [],
     missing: brief?.missing ?? [],
+    slideFigures: brief?.slideFigures ?? null,
   }
 }
 

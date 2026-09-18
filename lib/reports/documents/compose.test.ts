@@ -3,11 +3,12 @@ import { composeDocument, documentFigures, documentSlides, heardLine, pickQuote,
 import { buildWriterPrompts, deltaInWords, figureKeyFor, writerPageKinds, writerSchema, type WriterOutput } from './write'
 import { CONTENT_BRIEF, CUSTOM_BRIEF, LEADERSHIP_BRIEF, MARKET_BRIEF, SALES_BRIEF, resolveTemplate, type DocumentTemplate } from './templates'
 import { overviewTiles } from './overview'
-import { MARKETING_MAP } from './sections'
+import { MARKETING_MAP, SALES_MAP } from './sections'
 import { DEFAULT_DOCUMENT_SETTINGS } from './types'
 import { freezeQuotes } from '../../renderables/quotes-freeze'
 import type { Signals } from './signals'
 import type { ResearchAnswer, ResearchQuote } from './research'
+import { briefFiguresFixture } from '../../../components/blocks/brief-figures/fixture'
 
 const point = (id: string, n: number, text: string, quotes: { ref: string; text: string; commentId: string | null }[] = []): ResearchAnswer['grounded'][number] => ({
   id, text, insightIds: [`i-${id}`], themeLabels: ['Insurance blocks needed care'], conversationCount: n, questionId: 'stops',
@@ -594,5 +595,47 @@ describe('the competitor page keeps the two voices apart', () => {
     const d = compose(signals, written)
     const method = d.pages.find((p) => p.kind === 'method')!.blocks[0].items!
     expect(method.join(' ')).toContain('videos other people posted about it for what others say')
+  })
+})
+
+// ── the brief's own slide figures, frozen (Block D wave 2, E-sales) ────────
+// Wave 1 computed all six and handed them to nobody. The artefact has to carry
+// them, because a share link renders from the snapshot alone.
+describe('a brief freezes its own slide figures', () => {
+  const withFigures = { ...signals, map: SALES_MAP, slideFigures: briefFiguresFixture() } as unknown as Signals
+  const compose = (s: Signals) => composeDocument({
+    template: SALES_BRIEF, settings: DEFAULT_DOCUMENT_SETTINGS, reportId: 'rep', title: 'Sales brief', period: 'p',
+    signals: s, answers, written, figures: documentFigures(s, answers), model: 'm', promptVersion: 'v', costUsd: 0, timings: {},
+  }).data
+
+  it('carries the six fields onto the snapshot', () => {
+    const f = compose(withFigures).slideFigures!
+    expect(f.switching?.pool).toBe(120)
+    expect(f.cannotTell.items.length).toBeGreaterThan(0)
+    expect(f.scripted).toHaveLength(1)
+    expect(f.line?.series).toHaveLength(1)
+    expect(f.untracked).toHaveLength(1)
+    expect(f.crosscheck).toContain('Two populations, two denominators')
+  })
+
+  // A brief built before wave 2 has no field at all, and a reader of the
+  // snapshot must be able to tell that from "nothing was measured".
+  it('is absent, not empty, where the reading could not be loaded', () => {
+    expect(compose({ ...signals, slideFigures: null } as unknown as Signals).slideFigures).toBeUndefined()
+  })
+
+  // The one quote in them is a commenter's words and is stored like any
+  // other: a ref, and no text.
+  it('stores the scripted line’s quote as a ref and no words', () => {
+    const quoted = {
+      ...withFigures,
+      slideFigures: {
+        ...briefFiguresFixture(),
+        scripted: briefFiguresFixture().scripted.map((l) => ({ ...l, quote: { ref: 'c:zzz', text: 'the zip went after 14 months' } })),
+      },
+    } as unknown as Signals
+    const frozen = freezeQuotes(compose(quoted))
+    expect(JSON.stringify(frozen.data)).not.toContain('the zip went after 14 months')
+    expect(frozen.refs).toContain('c:zzz')
   })
 })

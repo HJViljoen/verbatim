@@ -490,6 +490,13 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
     ...(s.reading ? { reading: documentReading(s.reading) } : {}),
     ...(s.missing?.length ? { missing: s.missing.map((m) => ({ ...m, sections: [...m.sections] })) } : {}),
     ...(s.sections?.length ? { sections: s.sections.map((x) => ({ ...x })), surfaces: s.surfaces ?? {}, layout } : {}),
+    // THE BRIEF'S OWN SLIDE FIGURES, FROZEN (E-sales). Wave 1 computed all six
+    // and handed them to nobody. They are stored rather than re-read because a
+    // share link renders from the snapshot alone, and because a count of one
+    // month must read the same in March as it did in September. The one QUOTE
+    // in them rides `freezeQuotes` / `resolveQuotes` structurally, exactly as a
+    // finding's pull quote does — nothing here stores a commenter's words.
+    ...(s.slideFigures ? { slideFigures: s.slideFigures } : {}),
     pages,
     // What the skeleton above was composed from, so it can be composed again
     // (WP7d): the eval and any rebuild read these, not the picker.
