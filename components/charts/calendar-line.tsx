@@ -2,8 +2,9 @@ import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { shortDate, monthName } from '@/lib/format'
 import {
-  axisLabels, calendarGeometry, chartId, collapseRules, columnTitle, lastReading, legendStates,
-  lineSegments, monthColumns, spanOf, spreadLabels, STATE_LABEL, valueScale,
+  axisLabels, calendarGeometry, chartId, collapseRules, columnTitle, lastReading, legendEveryMonth,
+  legendMonths, legendStates, lineSegments, monthColumns, spanOf, spreadLabels, STATE_LABEL,
+  undrawnNote, valueScale,
   type CalendarBand, type CalendarPoint, type CalendarRule, type CalendarSeries,
 } from '@/lib/charts/calendar'
 
@@ -82,7 +83,7 @@ export function CalendarLine({
   axis, series, rules = [], bands = [], format = (v) => `${v}`,
   width = 880, height = 210, padL = 56, padR = 180,
   zeroBase = true, legend = true, maxLabels = 12,
-  caption, label, id, className,
+  annotate = null, caption, label, id, className,
 }: {
   /** Every month to draw, ascending — `monthAxis(from, to)`. */
   axis: readonly string[]
@@ -100,6 +101,19 @@ export function CalendarLine({
    *  explain. Identity is never colour-alone (MASTER.md). */
   legend?: boolean
   maxLabels?: number
+  /**
+   * A bracket between two series at the newest month, with a word for the
+   * distance — the artboard's "gap 13 pts" (Block D wave 2, D1).
+   *
+   * THE CALLER DECIDES WHETHER THERE IS ONE, AND NOTHING HERE COMPUTES IT. A
+   * difference between two lines is a banded reading with its own floors
+   * (`lib/reading/gap.ts`), and a chart that subtracted two plotted values
+   * would draw a number the product refuses to print one tile above. So this
+   * takes a LABEL and two series names, and a caller with nothing the band
+   * would let it say passes nothing — which on today's corpus is the normal
+   * case, because your own audience is under the 100-video floor.
+   */
+  annotate?: { from: string; to: string; label: string } | null
   /** The line under the chart, in the caller's words — a `MonthLabel.text`
    *  from lib/reading/series.ts, never a sentence invented here. */
   caption?: ReactNode
@@ -160,19 +174,35 @@ export function CalendarLine({
     <div className={cn('flex min-w-0 flex-col gap-2', className)}>
       {showLegend && (
         <div className="flex flex-wrap gap-x-4 gap-y-1">
-          {series.map((s) => (
-            <span key={s.label} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              <span className="size-2 rounded-full" style={{ background: s.color }} aria-hidden />
-              {s.labelSlot ? <span data-copy="subject" data-slot={s.labelSlot}>{s.label}</span> : s.label}
-              {s.excludes ? <span className="text-[10.5px]">— {s.excludes}</span> : null}
-            </span>
-          ))}
-          {states.map((state) => (
-            <span key={state} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              <LegendToken state={state} color={tokenColor} />
-              {STATE_LABEL[state]}
-            </span>
-          ))}
+          {series.map((s) => {
+            // A KEY THAT PROMISES A LINE THE CHART DOES NOT DRAW IS THE WRONG
+            // WAY ROUND. At 100% floor coverage the ink appears only as gutter
+            // rings, so the key says so rather than leaving a reader to decide
+            // whether a flat row of hollow marks on the 0% rule is the series.
+            const undrawn = undrawnNote(s)
+            return (
+              <span key={s.label} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <span className={cn('size-2 rounded-full', undrawn && 'bg-tile')} style={undrawn ? { boxShadow: `inset 0 0 0 1.5px ${s.color}` } : { background: s.color }} aria-hidden />
+                {s.labelSlot ? <span data-copy="subject" data-slot={s.labelSlot}>{s.legendLabel ?? s.label}</span> : (s.legendLabel ?? s.label)}
+                {s.excludes ? <span className="text-[10.5px]">— {s.excludes}</span> : null}
+                {undrawn ? <span className="text-[10.5px]">— {undrawn}</span> : null}
+              </span>
+            )
+          })}
+          {states.map((state) => {
+            const months = legendMonths(series, state)
+            // Named while the list is short; "every month" where the token
+            // marks the whole axis, which is the case a reader most needs told
+            // and the one a cap at two months left silent.
+            const every = months.length === 0 && legendEveryMonth(series, state, axis)
+            return (
+              <span key={state} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <LegendToken state={state} color={tokenColor} />
+                {STATE_LABEL[state]}
+                {months.length > 0 ? ` (${months.map(shortMonth).join(', ')})` : every ? ' (every month)' : ''}
+              </span>
+            )
+          })}
         </div>
       )}
 
@@ -254,6 +284,32 @@ export function CalendarLine({
             labelY={labelYs[i]}
           />
         ))}
+
+        {/* The bracket between two lines at the newest month, where the caller
+            has a banded difference it is allowed to name. Dashed and grey —
+            axis furniture, not a series (the same token a dated rule uses). */}
+        {(() => {
+          if (!annotate) return null
+          const iFrom = series.findIndex((s) => s.label === annotate.from)
+          const iTo = series.findIndex((s) => s.label === annotate.to)
+          if (iFrom < 0 || iTo < 0) return null
+          const a = lastReading(series[iFrom].points)
+          const b = lastReading(series[iTo].points)
+          if (a?.value == null || b?.value == null || a.month !== b.month) return null
+          const x = g.x(a.month)
+          if (x == null) return null
+          const y1 = scale.y(Math.max(a.value, b.value))
+          const y2 = scale.y(Math.min(a.value, b.value))
+          if (y2 - y1 < 14) return null
+          return (
+            <g>
+              <line x1={x} y1={y1 + 4} x2={x} y2={y2 - 4} stroke="var(--cat)" strokeWidth={1} strokeDasharray="3 3" />
+              <text data-copy="figure" x={x - 10} y={(y1 + y2) / 2 + 3} textAnchor="end" fontSize={10} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">
+                {annotate.label}
+              </text>
+            </g>
+          )
+        })()}
 
         {/* Month labels, thinned so a 68-month axis is still readable. */}
         {months.map((m, i) =>
@@ -368,7 +424,7 @@ function SeriesMarks({
         return (
           <g key={`m${i}`}>
             {p.state === 'filling' && (
-              <FillingBar x={x} value={p.value} atLastMonth={p.atLastMonth ?? null} y={y} baseline={g.baseline} slot={g.slot} color={series.color} format={format} padR={padR} />
+              <FillingBar x={x} value={p.value} atLastMonth={p.atLastMonth ?? null} y={y} baseline={g.baseline} slot={g.slot} format={format} padR={padR} />
             )}
             <circle cx={x} cy={y(p.value)} r={isEnd ? 3.4 : 2.2} fill={series.color} stroke="var(--tile)" strokeWidth={isEnd ? 1.5 : 1} />
           </g>
@@ -394,9 +450,20 @@ function SeriesMarks({
  * The bar is the affordance item 6 asks for and §3.9 forbids ("no filled
  * areas"); it is part of the amendment. It is the ONE filled shape on the
  * chart and it means one thing: this number is not finished.
+ *
+ * AND IT IS AXIS FURNITURE, NOT A SERIES (fix pass). It was painted in the
+ * entity's own colour, so on a chart where a rival held the only visible point
+ * the newest month rendered as a solid peach column running the full plot
+ * height — the loudest coloured shape on the page, encoding "incomplete" and
+ * reading as the rival's ink. Two series filling in the same month drew two
+ * overlapping colours for one fact. It takes the neutral token every other
+ * piece of furniture on this chart takes (the dated rules, the midline), so
+ * the coloured inks on the plot belong to the data alone.
  */
+const FILLING_INK = 'var(--muted-foreground)'
+
 function FillingBar({
-  x, value, atLastMonth, y, baseline, slot, color, format, padR,
+  x, value, atLastMonth, y, baseline, slot, format, padR,
 }: {
   x: number
   value: number
@@ -404,7 +471,6 @@ function FillingBar({
   y: (v: number) => number
   baseline: number
   slot: number
-  color: string
   format: (v: number) => string
   padR: number
 }) {
@@ -412,7 +478,7 @@ function FillingBar({
   const top = y(value)
   return (
     <g>
-      <rect x={x - w / 2} y={top} width={w} height={Math.max(0, baseline - top)} fill={color} opacity={0.14}>
+      <rect x={x - w / 2} y={top} width={w} height={Math.max(0, baseline - top)} fill={FILLING_INK} opacity={0.1}>
         <title>Still filling — this month is still taking comments</title>
       </rect>
       {atLastMonth != null && (
@@ -447,15 +513,19 @@ function FillingBar({
  *  ringed in grey beside it is a different mark.
  *
  *  The filling swatch is the one place the legend cannot be literal: the chart's
- *  bar is the entity colour at `opacity .14` over 150px of plot, and .14 over an
- *  8px swatch is nothing at all. It is drawn at .3, which is the same colour at
- *  the smallest opacity that survives the size. */
+ *  bar is `FILLING_INK` at `opacity .1` over 150px of plot, and .1 over an 8px
+ *  swatch is nothing at all. It is the same ink at the smallest opacity that
+ *  survives the size. It does NOT take the entity colour, because the bar it
+ *  keys does not either — the still-filling month is furniture. */
 function LegendToken({ state, color }: { state: 'below_floor' | 'below_numerator' | 'filling' | 'read' | 'hollow'; color: string }) {
   if (state === 'below_floor') {
     return <span className="size-2 rounded-full bg-tile" style={{ boxShadow: `inset 0 0 0 1.5px ${color}` }} aria-hidden />
   }
   if (state === 'below_numerator') {
     return <span className="size-2 bg-tile" style={{ boxShadow: `inset 0 0 0 1.5px ${color}` }} aria-hidden />
+  }
+  if (state === 'filling') {
+    return <span className="h-2 w-2.5 rounded-[1px]" style={{ background: FILLING_INK, opacity: 0.35 }} aria-hidden />
   }
   return <span className="h-2 w-2.5 rounded-[1px]" style={{ background: color, opacity: 0.3 }} aria-hidden />
 }

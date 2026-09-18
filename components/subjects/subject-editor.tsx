@@ -13,8 +13,10 @@ import {
   retireSubjectAction,
   type SubjectFormState,
 } from '@/lib/actions/subjects'
+import { MovementBadge } from '@/components/delta-badge'
 import { fmtInt, fmtPct, fullDate } from '@/lib/format'
-import { SUPERSEDE_RULE } from '@/lib/pages/subjects'
+import { SUBJECTS_UNREADABLE_WHY, SUPERSEDE_RULE } from '@/lib/pages/subjects'
+import type { Verdict } from '@/lib/reading/verdicts'
 import { SUBJECT_WRITE_REFUSED, SUBJECTS_MAX, SUBJECTS_MIN } from '@/lib/subjects/types'
 
 /**
@@ -54,6 +56,8 @@ export interface SubjectEditorRow {
   level?: { pct: number | null; k: number; n: number } | null
   /** Why no level is shown. */
   note?: string | null
+  /** The banded change on your own side, printed as the row's badge. */
+  verdict?: Verdict | null
   selected?: boolean
   href?: string
 }
@@ -84,17 +88,49 @@ export interface SubjectEditorProps {
    * is now a missing button rather than an offered write.
    */
   canEdit?: boolean
+  /**
+   * The rail's chrome moved into the tile (wave 2, the mock's rail tile).
+   *
+   * `false` drops the two lines the TILE now draws — the "6 named" set line,
+   * which is the block's header-right meta, and the "Add a subject →" control,
+   * which is the block's footer. The editor keeps everything a control needs to
+   * work: the sheets, the pending state and the sentence a failed write says.
+   * Settings has no tile around it and keeps both, which is why this is a prop
+   * and not a variant.
+   */
+  chrome?: boolean
 }
 
+// The mock's rail row: 4px radius, 4px/10px padding, one pixel between its
+// lines, and a 2px green mark down the left of the selected one. Dense — six
+// subjects fit a 380px tile beside the rule and the footer.
 const cls = {
-  row: 'flex flex-col gap-0.5 rounded-[4px] px-2.5 py-2 text-left transition-colors',
+  row: 'relative flex flex-col gap-px rounded-[4px] px-2.5 py-1 text-left transition-colors',
   name: 'text-[12.5px] font-medium text-foreground',
-  meta: 'font-mono text-[10.5px] text-muted-foreground',
+  meta: 'font-mono text-[10.5px] tabular-nums text-muted-foreground',
 }
 
-export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'rail', canEdit = false }: SubjectEditorProps) {
+/**
+ * A control on a rail row: a REAL TARGET, and it can be reached by keyboard.
+ *
+ * The row's controls were set to 10.5px, then to 10px at `gap-x-1`, which
+ * bought two lines of rail density and left "Stop" — the one state this
+ * product cannot undo — as a roughly 28 x 13px hit area 4px from Rename, with
+ * no focus treatment of its own. WCAG 2.2's 24px target size fails twice over
+ * at that size. The text stays small, because the rail is 240px and six rows
+ * have to fit; the TARGET is padded out to 24px high and the padding is pulled
+ * back out of the line with a negative margin, so the row costs no extra
+ * height for it.
+ */
+const CONTROL = 'inline-flex min-h-6 items-center rounded-[3px] px-1 -my-1 font-sans underline-offset-2 ' +
+  'transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ' +
+  'disabled:cursor-not-allowed disabled:opacity-50'
+
+export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'rail', canEdit = false, chrome = true }: SubjectEditorProps) {
   const [adding, setAdding] = useState(false)
   const [renaming, setRenaming] = useState<SubjectEditorRow | null>(null)
+  /** Which row has been asked to stop, and has not answered yet. */
+  const [stopping, setStopping] = useState<string | null>(null)
   const [said, setSaid] = useState<{ ok: boolean; message: string } | null>(null)
   const [pending, start] = useTransition()
 
@@ -112,6 +148,11 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
     return (
       <div className="flex flex-col gap-2">
         <p className="m-0 text-[12px] text-muted-foreground">{notRecorded}</p>
+        {/* THE MISSING BUTTON, EXPLAINED. The tile drops "Add a subject →" in
+            this state because a write would fail, and an absent control with
+            no sentence beside it reads as "you have not named any" — which is
+            the opposite of what happened. */}
+        <p className="m-0 text-[11.5px] text-muted-foreground">{SUBJECTS_UNREADABLE_WHY}</p>
         <p className="m-0 text-[11px] text-muted-foreground">{SUPERSEDE_RULE}</p>
       </div>
     )
@@ -119,12 +160,15 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
 
   return (
     <div className="flex min-h-0 flex-col gap-2">
-      <p className="m-0 font-mono text-[11px] text-muted-foreground">{setLine}</p>
+      {chrome ? <p className="m-0 font-mono text-[11px] text-muted-foreground">{setLine}</p> : null}
 
       <ul className="m-0 flex list-none flex-col gap-0.5 p-0">
         {rows.map((r) => (
           <li key={r.id}>
             <div className={`${cls.row} ${r.selected ? 'bg-inner' : 'hover:bg-inner/60'}`}>
+              {r.selected ? (
+                <span aria-hidden className="absolute inset-y-[5px] left-0 w-0.5 rounded-full bg-primary" />
+              ) : null}
               <span className="flex items-baseline justify-between gap-2">
                 {r.href ? (
                   <Link href={r.href} className={`${cls.name} underline-offset-2 hover:underline`}>{r.name}</Link>
@@ -132,15 +176,30 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
                   <span className={cls.name}>{r.name}</span>
                 )}
                 {r.level && r.level.pct != null ? (
-                  <span data-copy="figure" className="font-mono text-[12px] tabular-nums text-foreground">
+                  <span data-copy="figure" className="shrink-0 font-mono text-[12px] font-semibold tabular-nums text-foreground">
                     {fmtPct(r.level.pct)}
                   </span>
                 ) : null}
               </span>
 
               {r.level && r.level.pct != null ? (
-                <span data-copy="level" className={cls.meta}>
-                  of your videos · {fmtInt(r.level.k)} of {fmtInt(r.level.n)} videos
+                // THE COUNT AND THE BADGE ON ONE LINE, the mock's "26 of 84 ·
+                // too few to compare". The row used to lead with "of your
+                // videos" and carry no comparison at all — a level with no
+                // statement about whether it moved, on the one tile a reader
+                // scans six of.
+                <span className="flex items-baseline gap-1.5">
+                  <span data-copy="level" className={cls.meta}>
+                    {fmtInt(r.level.k)} of {fmtInt(r.level.n)}
+                  </span>
+                  {r.verdict ? (
+                    <>
+                      <span aria-hidden className={cls.meta}>·</span>
+                      <span data-copy="verdict" className="min-w-0 truncate">
+                        <MovementBadge verdict={r.verdict} unit="pts" />
+                      </span>
+                    </>
+                  ) : null}
                 </span>
               ) : (
                 // A PROPOSED ROW SAYS WHERE IT CAME FROM, not that it is not
@@ -166,7 +225,11 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
                 <span className="text-[11.5px] text-muted-foreground">{r.description}</span>
               ) : null}
 
-              <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10.5px] text-muted-foreground">
+              {/* THE DATE AND THE CONTROLS ON ONE LINE. A 240px rail carries
+                  six of these; at `gap-x-2` with 12.5px separators the line
+                  wrapped and every row cost three lines instead of two, which
+                  is two subjects' worth of tile. */}
+              <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] text-muted-foreground">
                 <span className="font-mono">named {fullDate(r.namedAt)}</span>
                 {variant === 'settings' ? <span>· {r.because}</span> : null}
                 {r.status === 'retired' ? (
@@ -188,7 +251,7 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
                         type="button"
                         disabled={pending}
                         onClick={() => run(() => confirmSubjectAction(r.id))}
-                        className="font-sans font-medium text-foreground underline-offset-2 hover:underline disabled:opacity-50"
+                        className={`${CONTROL} font-medium text-foreground`}
                       >
                         Confirm
                       </button>
@@ -196,13 +259,41 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
                   </>
                 ) : null}
                 {canEdit && r.status !== 'retired' ? (
+                  stopping === r.id ? (
+                    // STOPPING IS THE ONE THING THIS PRODUCT CANNOT UNDO, and
+                    // it fired on a single click of a 13px-high word 4px from
+                    // Rename — which opens a sheet. It asks now. Two controls
+                    // in the row rather than a dialog: the row is the object,
+                    // and a modal over a 240px rail hides the set the reader is
+                    // deciding about.
+                    <>
+                      <span className="font-sans">Stop counting this subject?</span>
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() => { setStopping(null); run(() => retireSubjectAction(r.id)) }}
+                        className={`${CONTROL} font-medium text-negative`}
+                      >
+                        Yes, stop
+                      </button>
+                      <span aria-hidden>·</span>
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() => setStopping(null)}
+                        className={`${CONTROL} text-muted-foreground hover:text-foreground`}
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
                   <>
                     <span aria-hidden>·</span>
                     <button
                       type="button"
                       disabled={pending}
                       onClick={() => setRenaming(r)}
-                      className="font-sans text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:opacity-50"
+                      className={`${CONTROL} text-muted-foreground hover:text-foreground`}
                     >
                       Rename
                     </button>
@@ -210,12 +301,13 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
                     <button
                       type="button"
                       disabled={pending}
-                      onClick={() => run(() => retireSubjectAction(r.id))}
-                      className="font-sans text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:opacity-50"
+                      onClick={() => setStopping(r.id)}
+                      className={`${CONTROL} text-muted-foreground hover:text-foreground`}
                     >
                       Stop
                     </button>
                   </>
+                  )
                 ) : null}
               </span>
             </div>
@@ -231,7 +323,12 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
         </p>
       ) : null}
 
-      {canEdit ? (
+      {/* THE REFUSAL STAYS IN THE BODY WHATEVER THE CHROME DOES. A reader who
+          may not change the set needs the sentence, not the absence of a
+          button; only the AFFORDANCE moves to the tile's footer. */}
+      {canEdit ? null : <p className="m-0 text-[11px] text-muted-foreground">{SUBJECT_WRITE_REFUSED}</p>}
+
+      {chrome && canEdit ? (
         <button
           type="button"
           onClick={() => setAdding(true)}
@@ -241,16 +338,16 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
         >
           Add a subject →
         </button>
-      ) : (
-        <p className="m-0 text-[11px] text-muted-foreground">{SUBJECT_WRITE_REFUSED}</p>
-      )}
+      ) : null}
 
-      <SubjectSheet
-        open={adding}
-        onOpenChange={setAdding}
-        title="Add a subject"
-        description={`Name it the way a buyer would say it. ${SUPERSEDE_RULE} Between ${SUBJECTS_MIN} and ${SUBJECTS_MAX} subjects is the set this reads well at.`}
-      />
+      {chrome ? (
+        <SubjectSheet
+          open={adding}
+          onOpenChange={setAdding}
+          title="Add a subject"
+          description={`Name it the way a buyer would say it. ${SUPERSEDE_RULE} Between ${SUBJECTS_MIN} and ${SUBJECTS_MAX} subjects is the set this reads well at.`}
+        />
+      ) : null}
       <SubjectSheet
         open={renaming != null}
         onOpenChange={(v) => setRenaming(v ? renaming : null)}
@@ -325,5 +422,40 @@ function SubjectSheet({
         </form>
       </SheetContent>
     </Sheet>
+  )
+}
+
+/**
+ * "Add a subject →", on the tile's FOOTER rail (the mock's rail tile).
+ *
+ * A SECOND MOUNTING OF ONE CONTROL, NOT A SECOND CONTROL. `BlockFrame`'s footer
+ * is a sibling of the block's body, so the trigger cannot be lifted out of
+ * `SubjectEditor`'s tree and still be inside it; this is the trigger and the
+ * sheet, and the sheet is the same component the editor opens. The ceiling and
+ * the permission are the caller's — both are read from the same list the rail
+ * is drawn from, so a tile cannot offer a write the rows below it refuse.
+ */
+export function AddSubjectFooter({ canEdit, activeCount }: { canEdit: boolean; activeCount: number }) {
+  const [adding, setAdding] = useState(false)
+  if (!canEdit) return null
+  const atCeiling = activeCount >= SUBJECTS_MAX
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setAdding(true)}
+        disabled={atCeiling}
+        title={atCeiling ? `You are already tracking ${SUBJECTS_MAX}. Stop one before you add another.` : undefined}
+        className="text-[12px] font-medium text-foreground underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline"
+      >
+        Add a subject →
+      </button>
+      <SubjectSheet
+        open={adding}
+        onOpenChange={setAdding}
+        title="Add a subject"
+        description={`Name it the way a buyer would say it. ${SUPERSEDE_RULE} Between ${SUBJECTS_MIN} and ${SUBJECTS_MAX} subjects is the set this reads well at.`}
+      />
+    </>
   )
 }

@@ -27,6 +27,9 @@ export interface ToCalendarOptions {
   /** What the reader is shown. Defaults to the series' object label, then its
    *  newest audience key. */
   label?: string
+  /** What the LEGEND shows, where it says more than the end label has room for
+   *  — see `CalendarSeries.legendLabel`. */
+  legendLabel?: string
   /** `share` plots k as a percentage of the audience's videos; `videos` and
    *  `comments` plot the audience's own counts. */
   measure?: Measure
@@ -128,6 +131,7 @@ export function seriesToCalendar(series: MonthSeries, opts: ToCalendarOptions): 
     label: opts.label ?? series.objectLabel ?? audienceLabel(series.audience),
     color: opts.color,
     points,
+    ...(opts.legendLabel ? { legendLabel: opts.legendLabel } : {}),
     ...(opts.excludes ? { excludes: opts.excludes } : {}),
     ...(opts.endNote ? { endNote: opts.endNote } : end?.n != null ? { endNote: `of ${end.n.toLocaleString('en-US')}` } : {}),
   }

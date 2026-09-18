@@ -153,7 +153,18 @@ describe('CalendarLine', () => {
     const markup = render(CalendarLine({ axis: AXIS, series: [you] }))
     // The mock rings the below-floor token in the entity's own colour.
     expect(markup).toContain('inset 0 0 0 1.5px var(--you)')
-    expect(markup).toContain('background:var(--you);opacity:0.3')
+  })
+
+  // THE STILL-FILLING MONTH IS FURNITURE, NOT A SERIES. It was painted in the
+  // entity's colour, so on a chart where a rival held the only visible point
+  // the newest month was a solid peach column the full height of the plot —
+  // the loudest coloured shape on the page, encoding "incomplete". Two series
+  // filling in one month drew two overlapping colours for one fact.
+  it('paints the still-filling month in the neutral token, never in the entity’s ink', () => {
+    const markup = render(CalendarLine({ axis: AXIS, series: [you] }))
+    expect(markup).toContain('fill="var(--muted-foreground)" opacity="0.1"')
+    expect(markup).not.toContain('fill="var(--you)" opacity')
+    expect(markup).toContain('background:var(--muted-foreground);opacity:0.35')
   })
 
   it('draws no legend for one ordinary series with nothing to explain', () => {

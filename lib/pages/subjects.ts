@@ -1,9 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { chunk, mapWithLimit, READ_CONCURRENCY } from '../chunk'
-import { fmtInt, monthName, shortDate } from '../format'
+import { fmtInt, fmtPct, longMonth, monthName, shortDate } from '../format'
 import { cleanQuote, fetchQuoteCitationsByAudience, readsAsHeroQuote, type QuoteCitation } from '../quotes'
 import { citationLink } from '../evidence-cite'
+import type { EvidenceSource } from '../pipeline/pass-a'
 import { quoteRef } from '../renderables/quotes-freeze'
 import type { Quote, Scope } from '../renderables/types'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, loadTrackedRivals, rivalKey, type TrackedRival } from '../rivals'
@@ -103,6 +104,12 @@ export const VOICES_POOL_INSIGHTS = 400
 export const VOICES_POOL_CITATIONS = 400
 
 /** Rows SU3 lists. The mock draws three. */
+/** Claims the rail's say-vs-hear tile lists — the mock's three, and the most a
+ *  240px rail can carry without the tile becoming the page. The tally under
+ *  them is the WHOLE ledger (`claimCounts`), so a reader can always see how
+ *  many were not shown. */
+export const SAY_HEAR_SHOWN = 3
+
 export const UNANSWERED_SHOWN = 3
 
 /** SU3's gate (design §3 SU3): fewer question videos than this on the subject
@@ -142,9 +149,43 @@ export const UNANSWERED_CLAIMS_UNREADABLE =
 export const UNANSWERED_CLAIMS_UNREADABLE_OUTSIDE =
   'We match these against what your posts are about. What your posts claim is not readable yet.'
 
+/**
+ * What SU5 says when it cannot read the claims ledger at all.
+ *
+ * ITS OWN SENTENCE, NOT THE CENSUS'S (fix pass). Say vs hear answers "what did
+ * we claim, and did anyone take it up?" and printed
+ * `OwnPostCensus.claimsNote` — "These are the posts you published…" — which is
+ * the answer to a different question, on a tile that is not about posts, and
+ * printed a second time by Your own posts one tile above. The unreadable half
+ * is the same half; the sentence is this block's.
+ */
+export const SAY_HEAR_CLAIMS_UNREADABLE =
+  'What your posts claim is not readable on this page yet, so there is no ledger to report — Verbatim engineering.'
+
+/** The same, without the readiness owner, for a reader outside the workspace —
+ *  a PDF and its `/r/<token>` page. `Verbatim engineering` is an internal
+ *  OWNER: it is a direction where a reader can open Settings › Readiness, and
+ *  a leaked ticket where they cannot. */
+export const SAY_HEAR_CLAIMS_UNREADABLE_OUTSIDE =
+  'What your posts claim is not readable on this page yet, so there is no ledger to report.'
+
 /** Reddit's own caveat wherever a question count leans on it (design §3 SU3). */
 export const REDDIT_THREAD_CAP =
   'Reddit threads are the densest source of questions and are counted; we read up to 40 comments on each.'
+
+/**
+ * Why the set cannot be ADDED TO while it cannot be READ.
+ *
+ * "Your subjects are not recorded for this workspace yet" is the product's
+ * shared sentence for this state (Overview, the weekly and the monthly report
+ * all print it) and it reads, on its own, as *you have not named any* — while
+ * the tile that prints it removes the only control that would fix that. It is
+ * not the client's inaction: the set cannot be read here, so a write from here
+ * would fail. The tile says so where the button would have been, rather than
+ * leaving an absence to be read as a task.
+ */
+export const SUBJECTS_UNREADABLE_WHY =
+  'Nothing has been lost. We cannot read the set from this page yet, so it cannot be added to or changed here.'
 
 /** SU1's sentence. The whole identity model in twelve words, printed where the
  *  editing happens rather than inside a help page nobody opens. */
@@ -218,6 +259,20 @@ export interface SubjectRail {
   level: { k: number; n: number; pct: number | null } | null
   /** Why no share is shown, in the reader's words. */
   note: string | null
+  /**
+   * The banded month-on-month change of YOUR side of this subject — the badge
+   * the mock prints on every rail row ("26 of 84 · too few to compare").
+   *
+   * THE SAME COMPARISON `buildSides` MAKES FOR THE SELECTED SUBJECT, on the
+   * same series, under the same thin-month gate, so the rail and the pane can
+   * never disagree about a subject a reader is looking at in both. On the
+   * paying tenant's own audience it reads `too_little_data` on every row — 84
+   * videos against a 100-video floor — which is the mock's own word for all
+   * six of its rows, arrived at by measurement rather than by typing it out.
+   * Null where nothing was read, where the subject is still calibrating, or
+   * where the month is too thin to band anything on this page.
+   */
+  verdict: Verdict | null
   selected: boolean
   href: string
 }
@@ -249,6 +304,38 @@ export interface SubjectVoice {
   href: string | null
   /** Which side of the conversation it came from, for the reader. */
   from: string
+  /** The platform, as stored (`tiktok`), for the cite's glyph. Null where the
+   *  comment behind the quote could not be dated or placed. */
+  platform: string | null
+  /**
+   * WHERE THE WORDS WERE (WP7a/b's `insight_evidence.source`, carried through
+   * for the first time).
+   *
+   * `comment` is somebody typing under a video; `video` is a creator SAYING it
+   * on camera, and `video_text` is words printed on the frame. Those are three
+   * different kinds of evidence and the mock flags the second — "Said on
+   * camera" — because a creator's sentence in a transcript is not a customer's
+   * comment and a reader who cannot tell them apart is reading the wrong thing.
+   * The column has been scored since WP7 and only `onCameraBonus` read it.
+   */
+  source: EvidenceSource
+  /**
+   * Words printed on the same video's frame, where this quote was spoken and
+   * that video also carries on-screen text. The mock's own pairing: what they
+   * said, and what the video said at the same time.
+   *
+   * A `Quote` WITH ITS OWN REF, NEVER A BARE STRING (fix pass). This page is a
+   * `PageModule`, so `/api/export` → `createSnapshot` → `freezeQuotes` runs
+   * over this data; `freezeQuotes` recognises a quote STRUCTURALLY
+   * (`{ ref: 'e:…', text }`, lib/renderables/quotes-freeze.ts) and walks a bare
+   * string straight past. Carried as a string these words froze into
+   * `report_snapshots.data` AS WORDS and their evidence id never reached
+   * `evidence_ids`, so an erasure could not find them and a `/r/<token>` page
+   * re-served them out of the stored copy. AGENTS.md is categorical: exports
+   * and reports freeze numbers, never words — and a `video_text` row is a
+   * third party's frame exactly as an `e:` comment excerpt is.
+   */
+  onScreen: Quote | null
 }
 
 export interface UnansweredRow {
@@ -270,7 +357,7 @@ export interface UnansweredBlock {
   questionVideos: number
   /** Your own posts in the drawn window. */
   yourPosts: number
-  lead: string | null
+  lead: UnansweredLead | null
   basis: string
   /** What half of your posts this matched on, while the other half is
    *  unreadable. Null the day M8 lands and the claims can be read. */
@@ -313,6 +400,9 @@ export interface SubjectPane {
    * by `gapDirection` alone and no reader's flag is true.
    */
   gap: Gap | null
+  /** The category's last three monthly levels, dated — the mock's own
+   *  right-hand footer note on the hero. Null under three readings. */
+  trail: string | null
   /** The sentence above the axis about which lines carry an n. */
   axisNote: string | null
   /** Said where the numerator table is not applied here. */
@@ -535,17 +625,45 @@ export function answeredBy(label: string, haystack: readonly string[]): boolean 
  * simply not true. A verbatim question belongs to 31b's evidence freeze, not
  * to a label.
  */
+/**
+ * The lead, IN ITS PARTS.
+ *
+ * ONE OF THESE WORDS IS A MODEL'S AND THE REST ARE CODE'S (fix pass). The
+ * sentence was composed here and printed inside a single `data-copy="figure"`
+ * node, which marks the model's value as code's: `label` is the CLUSTERING's
+ * summary, written by Pass B, and the copy contract's own instruction is that
+ * a block marks the model's value, not the row it sits in. The block prints the
+ * label in a `subject` node naming the `pass_b_theme` slot, the count in a
+ * `figure` node, and leaves the sentence it composed itself unmarked — where
+ * rule (c) still sweeps it, which is the point.
+ */
+export interface UnansweredLead {
+  /** Pass B's own label for the group — a model's words, replayed. */
+  label: string
+  /** Videos that asked it. */
+  videos: number
+  /** What your own posts did about it, in the reader's own period. */
+  posts: string
+}
+
 export function unansweredLead(
   rows: readonly UnansweredRow[],
   yourPosts: number,
   period: string,
-): string | null {
+): UnansweredLead | null {
   const top = rows.find((r) => !r.answered)
   if (!top) return null
   const posts = yourPosts > 0
     ? `none of your ${fmtInt(yourPosts)} post${yourPosts === 1 ? '' : 's'} ${period} touched it`
     : `you published nothing ${period}`
-  return `Questions grouped as “${top.label}” came up in ${fmtInt(top.videos)} of the videos we have read — ${posts}.`
+  return { label: top.label, videos: top.videos, posts }
+}
+
+/** The same sentence as one string, for a caller with no JSX to mark up. */
+export function unansweredLeadText(lead: UnansweredLead | null): string | null {
+  return lead
+    ? `Questions grouped as “${lead.label}” came up in ${fmtInt(lead.videos)} of the videos we have read — ${lead.posts}.`
+    : null
 }
 
 /**
@@ -572,10 +690,84 @@ export function unansweredMeta(questionVideos: number, yourPosts: number): strin
   return `${asked} · ${fmtInt(yourPosts)} post${yourPosts === 1 ? '' : 's'} of yours`
 }
 
+/**
+ * A side's eyebrow, qualified — "You — Sealand", "Freitag — rival",
+ * "Category — no brand" (the mock's own three).
+ *
+ * WHY IT IS NOT `SubjectSide.label`. The label is the word the side is CALLED
+ * in a sentence, and `gapLine` builds a sentence out of two of them ("You 31%
+ * of 84 · Freitag 43.7% of 142"). Folding the qualifier into the label would
+ * put "Freitag — rival 43.7% of 142" in that sentence and "The category — no
+ * brand" in every chart hover. The qualifier belongs to the COLUMN HEADING,
+ * which is the one place a reader needs telling which of the three kinds of
+ * audience they are looking at, so it is composed where that heading is drawn.
+ *
+ * A retired rival keeps the label's own "— stopped" and takes no second dash.
+ */
+export function sideEyebrow(side: Pick<SubjectSide, 'kind' | 'label'>, brand: string): string {
+  if (side.kind === 'you') return brand ? `You — ${brand}` : 'You'
+  if (side.kind === 'category') return 'Category — no brand'
+  return side.label.includes(' — ') ? side.label : `${side.label} — rival`
+}
+
+/** What the figure beside it is a share OF, in the reader's words — the mock's
+ *  "of your videos" / "of their videos" / "of category videos". Three columns
+ *  of percentages with no unit read as three shares of one denominator, and
+ *  they are three shares of three. */
+export function sideCaption(side: Pick<SubjectSide, 'kind'>): string {
+  if (side.kind === 'you') return 'of your videos'
+  if (side.kind === 'category') return 'of category videos'
+  return 'of their videos'
+}
+
+/** A side's name on the chart's legend — the audience first, its kind after,
+ *  as the mock keys its lines ("Sealand — you"). */
+export function sideLegend(side: Pick<SubjectSide, 'kind' | 'label'>, brand: string): string {
+  if (side.kind === 'you') return brand ? `${brand} — you` : 'You'
+  return sideEyebrow(side, brand)
+}
+
+/**
+ * The hero's right-hand note: one side's last three months as LEVELS, dated —
+ * "Jul 17 → Aug 19 → Sep 22 in the category".
+ *
+ * THREE LEVELS ARE NOT A DIRECTION. The arrow is the calendar's, not a claim:
+ * each figure carries its own month and the sentence names the audience it is
+ * a share of. A reader can see the series without the product saying which way
+ * it is going, which is exactly what `directionWord` exists to gate and what
+ * this note is careful not to pre-empt. Null under three readings — two dots
+ * and an arrow IS a direction claim.
+ */
+export function trailLine(series: MonthSeries | null, label: string): string | null {
+  if (!series) return null
+  const read = series.points.filter((p) => p.pct != null).slice(-3)
+  if (read.length < 3) return null
+  // ONE DECIMAL, BECAUSE THE FIGURE ABOVE IT HAS ONE. Rounded to the integer
+  // the newest step read "Sep 25%" under a stat printing 24.5% — the same
+  // number, twice, disagreeing with itself on one tile.
+  const steps = read.map((p) => `${monthName(p.month).split(' ')[0]} ${fmtPct(p.pct as number)}`)
+  return `${steps.join(' → ')} in ${label.toLowerCase()}`
+}
+
 /** The words above the axis about which lines carry an n (design §3 SU2's
  *  gate, and the mock's own sentence). ONE sentence for a run of lines, never
  *  one per line. */
-export function axisNote(sides: readonly SubjectSide[], floorN: number): string | null {
+export function axisNote(
+  sides: readonly SubjectSide[],
+  floorN: number,
+  /**
+   * The drawn series, so the note can name a line that STARTS LATE — the
+   * artboard's "Patagonia is read from August".
+   *
+   * A LINE THAT BEGINS HALFWAY IS NOT A LINE THAT FELL TO ZERO, and the axis
+   * cannot say which without being told. A rival added to a tenant that
+   * already has history is read from the month they were added; drawn beside a
+   * line that runs the whole axis, the short one reads as a collapse. Optional,
+   * because a caller with no series still gets the floor sentence it always
+   * got.
+   */
+  series: readonly MonthSeries[] = [],
+): string | null {
   const hollow = sides.filter((s) => s.observed && (s.n ?? 0) < floorN)
   const names = (of: readonly SubjectSide[]) => of.map((s) => s.label).join(' and ')
   const parts: string[] = []
@@ -593,6 +785,38 @@ export function axisNote(sides: readonly SubjectSide[], floorN: number): string 
   const notTracked = sides.filter((s) => s.silence === 'not_tracked')
   if (noReading.length > 0) parts.push(`${names(noReading)} — no reading yet on this subject.`)
   if (notTracked.length > 0) parts.push(`${names(notTracked)} — not tracked.`)
+
+  // A LINE THAT STARTS LATE SAYS WHEN. The axis's own first month is the
+  // yardstick: a series whose first reading is later than everyone else's is
+  // read from that month, and the sentence names it so the short line is not
+  // read as a fall.
+  const firstRead = (s: MonthSeries): string | null =>
+    s.points.find((p) => p.pct != null)?.month ?? null
+  const read = series
+    .map((s) => ({ s, from: firstRead(s) }))
+    .filter((x): x is { s: MonthSeries; from: string } => x.from != null)
+  const earliest = read.map((x) => x.from).sort()[0] ?? null
+  // THE AXIS'S OWN FIRST MONTH, AS WELL AS THE EARLIEST LINE. Comparing the
+  // lines against each other names a line that starts later than its
+  // neighbours and names NOTHING on an axis where every line starts late —
+  // which is the state a whole tenant is in for its first months, and exactly
+  // when a short line most reads as a collapse. So: a line later than its
+  // neighbours is named as before, and where none is but they ALL begin after
+  // the axis does, every one of them is.
+  const axisFirst = series.flatMap((s) => s.points.map((p) => p.month)).sort()[0] ?? null
+  if (earliest) {
+    const later = read.filter((x) => x.from > earliest)
+    const drawn = later.length > 0
+      ? later
+      : axisFirst && earliest > axisFirst
+        ? read
+        : []
+    const late = drawn.map(({ s, from }) => {
+      const side = sides.find((x) => x.audience === s.audience)
+      return `${side?.label ?? s.objectLabel ?? s.audience} is read from ${longMonth(from)}`
+    })
+    if (late.length > 0) parts.push(`${late.join('; ')}.`)
+  }
   return parts.length > 0 ? parts.join(' ') : null
 }
 
@@ -1258,8 +1482,19 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   const rail: SubjectRail[] = [...active, ...proposed].slice(0, RAIL_MAX).map((s) => {
     const calibration = subjectCalibration(s)
     const own = seriesFor(s.id, CLIENT_AUDIENCE)
-    const point = own ? pointsByMonth(own).get(month) ?? null : null
+    const byMonth = own ? pointsByMonth(own) : new Map()
+    const point = byMonth.get(month) ?? null
+    const before = byMonth.get(prevMonth) ?? null
     const read = s.status === 'active' && point != null && point.k != null && point.videos != null
+    const railPoint = (m: string, p: { k: number | null } | null): SeriesPoint => ({
+      month: m,
+      videos: perAudience.get(`${m}|${CLIENT_AUDIENCE}`) ?? null,
+      k: p?.k ?? null,
+      audience: CLIENT_AUDIENCE,
+      // A subject's membership is not a clustering artefact — buildSides'
+      // own line, for the same reason.
+      regime: 'n/a',
+    })
     return {
       id: s.id,
       name: s.name,
@@ -1272,6 +1507,14 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
         ? { k: point!.k!, n: point!.videos!, pct: pctOf(point!.k, point!.videos) }
         : null,
       note: railNote(calibration, read, s.status),
+      verdict: thin || !read || calibration !== 'ready'
+        ? null
+        : monthChange({
+            object: { kind: 'subject', id: s.id, label: s.name },
+            audience: CLIENT_AUDIENCE,
+            curr: railPoint(month, point),
+            prev: railPoint(prevMonth, before),
+          }),
       selected: s.id === selectedId,
       href: s.status === 'active' ? `/dashboard/subjects?item=${encodeURIComponent(s.id)}` : '',
     }
@@ -1373,7 +1616,11 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
         ? { videos: own.k, href: `/dashboard/videos?subject=${encodeURIComponent(subject.id)}` }
         : null,
       gap,
-      axisNote: axisNote(sides, FLOOR_N),
+      trail: trailLine(
+        seriesFor(subject.id, INDUSTRY_AUDIENCE),
+        audienceLabel(INDUSTRY_AUDIENCE),
+      ),
+      axisNote: axisNote(sides, FLOOR_N, series),
       notRecorded: subjectSet?.numeratorSubstrate === 'missing'
         ? 'This subject has no monthly reading recorded for this workspace yet.'
         : null,
@@ -1493,6 +1740,11 @@ export function paneGap(input: PaneGapInput): Gap | null {
  *  superseded — research/bands-horizon-direction.md:882 pins minN = 100.) */
 const FLOOR_N = SHARE_BAND.minN
 
+/** The competitor bucket's two inks, in tracked order — `--comp` then its
+ *  lighter step. Declared in app/globals.css beside the other data hues, so a
+ *  theme change moves both. */
+const RIVAL_INKS = ['var(--comp)', 'var(--comp-2)'] as const
+
 function previousMonthOf(month: string): string {
   const d = new Date(`${monthStartOf(month)}T00:00:00.000Z`)
   d.setUTCMonth(d.getUTCMonth() - 1)
@@ -1527,11 +1779,19 @@ export function buildSides(input: SidesInput): SubjectSide[] {
   const { subject, month, prevMonth, axis, perAudience, thin } = input
   const sides: { audience: string; label: string; kind: SubjectSide['kind']; color: string }[] = [
     { audience: CLIENT_AUDIENCE, label: 'You', kind: 'you', color: 'var(--you)' },
-    ...input.rivals.map((r) => ({
+    // A SECOND RIVAL IS NOT THE FIRST ONE'S COLOUR. Every rival used to be
+    // painted `var(--comp)`, so a tenant tracking two drew two
+    // indistinguishable orange lines on one chart and the legend was the only
+    // way to tell them apart — which is identity by legend, not by ink. The
+    // ramp is lightness inside the one competitor bucket (the chart rule,
+    // `--chart-1..5`), so a rival still reads as a rival; past the ramp they
+    // share the last step, because five distinguishable oranges is the most
+    // this palette has and a sixth invented hue would leave the bucket.
+    ...input.rivals.map((r, i) => ({
       audience: rivalKey(r.name),
       label: r.retiredAt ? `${r.name} — stopped` : r.name,
       kind: 'rival' as const,
-      color: 'var(--comp)',
+      color: RIVAL_INKS[Math.min(i, RIVAL_INKS.length - 1)],
     })),
     { audience: INDUSTRY_AUDIENCE, label: audienceLabel(INDUSTRY_AUDIENCE), kind: 'category', color: 'var(--cat)' },
   ]
@@ -1808,13 +2068,51 @@ async function loadVoicesMany(
       order.filter((a) => byAudience.has(a)).map((a) => ({ audience: a, items: byAudience.get(a) ?? [] })),
     )
 
+    // ON-SCREEN TEXT, BY VIDEO. `video_text` evidence is words printed on the
+    // cover frame; where one of the six is a creator SPEAKING and that same
+    // video also carries on-screen text, the two belong together — the mock
+    // prints them as a pair. Built from the citations already read, so the
+    // pairing costs no statement.
+    //
+    // AND IT CARRIES ITS OWN EVIDENCE ID. The frame's words are a third
+    // party's, so they travel the way every other quote on this page travels —
+    // as a ref the snapshot freezes and the render resolves. The id is one
+    // field away on the citation that supplied the words; it was being dropped.
+    const onScreenByVideo = new Map<string, Quote>()
+    for (const c of considered) {
+      if (c.source === 'video_text' && c.videoId && !onScreenByVideo.has(c.videoId)) {
+        onScreenByVideo.set(c.videoId, {
+          ref: quoteRef.evidence(c.evidenceId),
+          text: c.quote,
+          ...(c.lang != null ? { lang: c.lang, english: c.english ?? null } : {}),
+        } as Quote)
+      }
+    }
+
     const voices = shown.map((c) => {
       const m = c.commentId ? meta.get(c.commentId) : undefined
       const key = m?.platform && m.video_id ? `${m.platform}::${m.video_id}` : null
       const from = voiceFrom(audienceOf(c))
-      const cite = [m?.platform ?? null, m?.comment_date ? shortDate(m.comment_date) : null, from]
+      const source = c.source ?? 'comment'
+      // WHERE, IN THE RIGHT WORDS FOR THE KIND OF EVIDENCE IT IS. "under a
+      // category video" is true of a COMMENT; a creator's own sentence was not
+      // written under anything, and the cite said it was.
+      const where = source === 'comment'
+        ? from
+        : source === 'video'
+          ? `creator video, transcript${from.startsWith('under a post of yours') ? ' · yours' : ''}`
+          : 'on-screen text'
+      // THE PLATFORM IS NOT IN THE WORDS (fix pass). It is carried by the
+      // glyph the block draws in front of this line, so leading the cite with
+      // `m.platform` printed it twice — once as a mark and once as a raw
+      // column value, a proper noun lower-cased on a client page ("⟨glyph⟩
+      // tiktok · 14 Sep"). The `platform` field below is what the glyph reads;
+      // the email arm, which has no glyph, prints `platformLabel(platform)` in
+      // front of this string itself.
+      const cite = [m?.comment_date ? shortDate(m.comment_date) : null, where]
         .filter(Boolean).join(' · ')
       const url = key ? urlByKey.get(key) ?? null : null
+      const videoId = c.videoId ?? m?.video_id ?? null
       return {
         quote: {
           ref: quoteRef.evidence(c.evidenceId),
@@ -1824,6 +2122,9 @@ async function loadVoicesMany(
         cite,
         href: citationLink(m?.platform ?? null, url, m?.comment_id ?? null).href,
         from,
+        platform: m?.platform ?? null,
+        source,
+        onScreen: source === 'video' && videoId ? onScreenByVideo.get(videoId) ?? null : null,
       }
     })
     out.set(p.key, { voices, from: considered.length, sampled: p.sampled, readable: p.considered.length })

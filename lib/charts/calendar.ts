@@ -72,6 +72,19 @@ export interface CalendarSeries {
    * with that slot. Omitted means code's words.
    */
   labelSlot?: string
+  /**
+   * The LEGEND's own wording for this series, where it differs from the label.
+   *
+   * THE END LABEL AND THE KEY ARE TWO DIFFERENT JOBS. The end label sits inside
+   * the plot's right-hand gutter beside the value and its denominator, and it
+   * is read alongside three others at 11px — it wants the shortest true name.
+   * The key is read once, away from the data, and is where a reader learns that
+   * one of these lines is theirs and one is a rival ("Freitag — rival"). Putting
+   * the qualified name in both ran the end labels off the 180px gutter and
+   * clipped the denominator, which is the one thing on that label that may not
+   * be lost. Omitted means the two are the same string.
+   */
+  legendLabel?: string
   /** CSS colour or literal hex — the entity's, never the rank's. */
   color: string
   /** One entry per axis month, in axis order. A caller that hands a shorter
@@ -503,6 +516,77 @@ export function legendStates(series: readonly CalendarSeries[]): CalendarPointSt
   const present = new Set<CalendarPointState>()
   for (const s of series) for (const p of s.points) present.add(p.state)
   return wanted.filter((state) => present.has(state))
+}
+
+/**
+ * The months a gutter token actually marks, per state — "(Apr)".
+ *
+ * WHY THE LEGEND NAMES THEM. "below the floor" in a key tells a reader that
+ * SOME month on this axis could not be read and leaves them to find it; the
+ * artboard writes "below the floor (Apr)" and the reader knows before they
+ * look. Named only while the list is short — past two months the key becomes a
+ * list of months instead of a key, and the axis's own hollow marks are then the
+ * better answer.
+ */
+export function legendMonths(
+  series: readonly CalendarSeries[],
+  state: CalendarPointState,
+  max = 2,
+): readonly string[] {
+  const months = new Set<string>()
+  for (const s of series) for (const p of s.points) if (p.state === state) months.add(p.month)
+  const sorted = [...months].sort()
+  return sorted.length > 0 && sorted.length <= max ? sorted : []
+}
+
+/**
+ * When a token marks EVERY month the axis draws.
+ *
+ * `legendMonths` names them while the list is short and goes silent past two,
+ * on the reasoning that a list of months is not a key. That leaves the one case
+ * where the reader most needs the sentence unsaid: a client whose own audience
+ * is under the floor in all six drawn months gets six hollow rings on the 0%
+ * rule, a key promising a line, and nothing that says which months the rings
+ * are. "every month" is not a list — it is the whole answer in two words.
+ */
+export function legendEveryMonth(
+  series: readonly CalendarSeries[],
+  state: CalendarPointState,
+  axis: readonly string[],
+): boolean {
+  if (axis.length === 0) return false
+  const months = new Set<string>()
+  for (const s of series) for (const p of s.points) if (p.state === state) months.add(p.month)
+  return axis.every((m) => months.has(m))
+}
+
+/**
+ * A series that never reaches the plot, and what the key says instead.
+ *
+ * WHY THE KEY HAS TO SAY IT. The gutter tokens are spec-correct one month at a
+ * time; at 100% coverage the COMPOSITION is not. Sealand carries 84 videos
+ * against `SHARE_BAND.minN` 100, so every month of the client's own audience is
+ * `below_floor` and the green series renders as evenly spaced hollow rings
+ * tangent to the 0% baseline — which reads as a flat series plotted at zero —
+ * while the key above still promises "● Sealand — you" as a line. The key is
+ * where a reader looks to find out what an ink means, so that is where the
+ * chart says this ink draws no line at all.
+ *
+ * Null for any series with at least one plotted point: a line with a hole in it
+ * is still a line, and its holes are the gutter tokens' own business.
+ */
+export function undrawnNote(series: CalendarSeries): string | null {
+  const points = series.points
+  if (points.length === 0) return null
+  if (points.some((p) => p.value != null)) return null
+  const states = new Set(points.map((p) => p.state))
+  if (states.size === 1) {
+    const only = [...states][0]
+    if (only === 'below_floor') return 'no line: every month is below the floor'
+    if (only === 'below_numerator') return 'no line: too few to read in every month'
+    if (only === 'hollow') return 'no line: no videos in any month'
+  }
+  return 'no line: no month could be read'
 }
 
 /** The gutter token's word, for the legend. */

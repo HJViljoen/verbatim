@@ -1,4 +1,6 @@
-import { buildSeries, type DenominatorPoint, type NumeratorPoint } from '@/lib/reading/series'
+import { buildSeries, type DenominatorPoint, type NumeratorPoint, type SeriesChange } from '@/lib/reading/series'
+import { nextMonth } from '@/lib/reading/monthly'
+import { monthChange } from '@/lib/reading/bands'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '@/lib/rivals'
 import { kindShares, redditRead } from '@/lib/reading/kinds'
 import {
@@ -11,11 +13,13 @@ import {
   REDDIT_THREAD_CAP,
   unansweredLead,
   periodPhrase,
+  trailLine,
   buildSides,
   gapSideOf,
   paneGap,
   type StoredKindRow,
   type SubjectsData,
+  type SubjectVoice,
 } from '@/lib/pages/subjects'
 import type { RefusedReason } from '@/lib/reading/verdicts'
 import { claimEcho, ownCensusWithClaims, type OwnPostInput } from '@/lib/reading/own-posts'
@@ -39,6 +43,9 @@ const AXIS = ['2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01', '2026-08-0
 
 const RIVAL = 'competitor:Freitag'
 
+/** The day the tracked rival was stopped, in the retired-rival arm. */
+const RIVAL_STOPPED = '2026-08-12'
+
 const subject = (over: Partial<Subject> = {}): Subject => ({
   id: 's1', client_id: 'c1', name: 'Durability', description: 'Whether the bag lasts',
   origin: 'category_theme', source_ref: null, named_at: '2026-08-19', status: 'active',
@@ -48,7 +55,18 @@ const subject = (over: Partial<Subject> = {}): Subject => ({
   ...over,
 })
 
-function sidesAndSeries() {
+/**
+ * @param retiredAt  The day the tracked rival was STOPPED, where the fixture is
+ *   the retired-rival arm. It is not decoration: `buildSides` takes the rival's
+ *   `retiredAt`, which is what labels the side "Freitag — stopped" and what
+ *   makes the gap `refused: 'tracking_change'` — and the stop is a change to
+ *   what this workspace tracks, so the rival's own series carries it as a dated
+ *   `tracking_change` and the chart draws the rule. Passing only a refusal
+ *   reason (which is what this fixture used to do) produces a pane that is
+ *   pixel-identical to the live one but for one sentence, and proves nothing
+ *   about how the page behaves when a rival was actually stopped.
+ */
+function sidesAndSeries(retiredAt: string | null = null) {
   const denominators: DenominatorPoint[] = []
   const per = new Map<string, number>()
   const add = (month: string, audience: string, videos: number) => {
@@ -73,26 +91,51 @@ function sidesAndSeries() {
   const readings = (audience: string, k: (m: string) => number): NumeratorPoint[] =>
     AXIS.map((m) => ({ month: m, audience, videos: k(m), comments: k(m) * 3, run_id: 'r1' }))
 
+  // The stop, as the reading layer carries it: one logged change over the month
+  // it happened in, on the audience it happened to.
+  const stopped: SeriesChange[] = retiredAt
+    ? [{
+        changed_at: retiredAt,
+        surface: 'settings.rivals',
+        note: 'Freitag was stopped as a tracked rival from this month, so a comparison across it is partly a change in what we track.',
+        months: `[${retiredAt.slice(0, 8)}01,${nextMonth(retiredAt.slice(0, 8) + '01')})`,
+      }]
+    : []
+
   const seriesFor = (subjectId: string, audience: string) => {
     const k = audience === INDUSTRY_AUDIENCE ? (m: string) => catK[m]
       : audience === CLIENT_AUDIENCE ? () => 26
         : () => 62
-    return buildSeries({ axis: AXIS, audience, denominators, readings: readings(audience, k), objectId: subjectId, objectLabel: 'Durability' })
+    return buildSeries({
+      axis: AXIS, audience, denominators, readings: readings(audience, k),
+      objectId: subjectId, objectLabel: 'Durability',
+      ...(audience === RIVAL ? { changes: stopped } : {}),
+    })
   }
 
-  const kindRows: StoredKindRow[] = [CLIENT_AUDIENCE, RIVAL, INDUSTRY_AUDIENCE].flatMap((audience): StoredKindRow[] => {
-    const n = per.get(`${MONTH}|${audience}`) ?? 0
-    return [
-      { month: MONTH, audience, kind: 'question', videos: Math.round(n * 0.34), comments: 0, platform_mix: { reddit: Math.round(n * 0.13), tiktok: Math.round(n * 0.21) } },
-      { month: MONTH, audience, kind: 'praise', videos: Math.round(n * 0.28), comments: 0, platform_mix: null },
-      { month: MONTH, audience, kind: 'objection', videos: Math.round(n * 0.19), comments: 0, platform_mix: { reddit: Math.round(n * 0.04) } },
-    ]
-  })
+  // TWO MONTHS, NOT ONE. August exists so the per-kind verdicts are REAL — a
+  // fixture with one month makes `kindChange` return null for every kind, and
+  // the block's movement strip is then a branch nothing renders. August's
+  // shares are a little different from September's, so one kind clears its
+  // band on the category (1,388 videos) and none does on your own 84.
+  const kindRows: StoredKindRow[] = [CLIENT_AUDIENCE, RIVAL, INDUSTRY_AUDIENCE].flatMap((audience): StoredKindRow[] =>
+    [
+      { month: '2026-08-01', shares: { question: 0.31, praise: 0.32, objection: 0.19 } },
+      { month: MONTH, shares: { question: 0.34, praise: 0.28, objection: 0.19 } },
+    ].flatMap(({ month, shares }): StoredKindRow[] => {
+      const n = per.get(`${month}|${audience}`) ?? 0
+      return [
+        { month, audience, kind: 'question', videos: Math.round(n * shares.question), comments: 0, platform_mix: { reddit: Math.round(n * 0.13), tiktok: Math.round(n * 0.21) } },
+        { month, audience, kind: 'praise', videos: Math.round(n * shares.praise), comments: 0, platform_mix: null },
+        { month, audience, kind: 'objection', videos: Math.round(n * shares.objection), comments: 0, platform_mix: { reddit: Math.round(n * 0.04) } },
+      ]
+    }),
+  )
 
   const sides = buildSides({
     subject: subject(),
-    rivals: [{ name: 'Freitag', retiredAt: null }],
-    leadRival: { name: 'Freitag', retiredAt: null },
+    rivals: [{ name: 'Freitag', retiredAt }],
+    leadRival: { name: 'Freitag', retiredAt },
     month: MONTH,
     prevMonth: '2026-08-01',
     axis: AXIS,
@@ -189,6 +232,79 @@ function ownPostsInput(): OwnPostInput {
   }
 }
 
+/** A rail row's own banded change, through the real `monthChange` — 84 videos
+ *  a side, so every row reads "too few to compare" exactly as the mock does. */
+function railVerdict(id: string, label: string, k: number) {
+  const point = (month: string, at: number) => ({ month, videos: 84, k: at, audience: CLIENT_AUDIENCE, regime: 'n/a' as const })
+  return monthChange({
+    object: { kind: 'subject' as const, id, label },
+    audience: CLIENT_AUDIENCE,
+    curr: point(MONTH, k),
+    prev: point('2026-08-01', k - 3),
+  })
+}
+
+/** Six voices on Durability, across the audiences — the mock's own set. */
+const VOICES: SubjectVoice[] = [
+  {
+    quote: { ref: 'e:1', text: 'Three winters on the bike and the seams are still perfect. The zip, less so.' },
+    cite: '14 Sep · under a category video',
+    href: 'https://www.tiktok.com/@maker/video/7312345678901234567',
+    from: 'under a category video',
+    platform: 'tiktok',
+    source: 'comment',
+    onScreen: null,
+  },
+  {
+    quote: { ref: 'e:6', text: "I've had this bag through two Cape Town winters and it's the only one that never leaked" },
+    cite: '11 Sep · creator video, transcript',
+    href: null,
+    from: 'under a category video',
+    platform: 'tiktok',
+    source: 'video',
+    // THE FRAME HAS ITS OWN EVIDENCE ROW, so it carries its own ref: `e:9` is
+    // the `video_text` row on the same video as `e:6`. A bare string here is
+    // what let a snapshot store a third party's words.
+    onScreen: { ref: 'e:9', text: '1 bag. 3 years. 0 regrets' },
+  },
+  {
+    quote: { ref: 'e:8', text: "If the strap buckle breaks in two months I'm not paying R4,000 again" },
+    cite: '24 Sep · under a post of yours',
+    href: null,
+    from: 'under a post of yours',
+    platform: 'tiktok',
+    source: 'comment',
+    onScreen: null,
+  },
+  {
+    quote: { ref: 'e:2', text: 'Nach 14 Monaten ist der Reißverschluss hin', lang: 'de', english: 'After 14 months the zip is done' },
+    cite: '22 Sep · under a Freitag video',
+    href: null,
+    from: 'under a Freitag video',
+    platform: 'youtube',
+    source: 'comment',
+    onScreen: null,
+  },
+  {
+    quote: { ref: 'e:3', text: 'Does it fit a 16 inch MacBook or am I dreaming' },
+    cite: '21 Sep · under a category video',
+    href: null,
+    from: 'under a category video',
+    platform: 'youtube',
+    source: 'comment',
+    onScreen: null,
+  },
+  {
+    quote: { ref: 'e:7', text: "Die sak hou vir ewig, maar die prys is 'n grap", lang: 'af', english: 'The bag lasts forever, but the price is a joke' },
+    cite: '7 Sep · under a post of yours',
+    href: null,
+    from: 'under a post of yours',
+    platform: 'instagram',
+    source: 'comment',
+    onScreen: null,
+  },
+]
+
 export function subjectsFixture(over: Partial<SubjectsData> = {}): SubjectsData {
   const { sides, series } = sidesAndSeries()
   const gap = paneGapFor(sides)
@@ -222,6 +338,9 @@ export function subjectsFixture(over: Partial<SubjectsData> = {}): SubjectsData 
         calibration: 'ready' as const,
         level: { k: r.k, n: 84, pct: r.pct },
         note: null,
+        // 84 videos against a 100-video floor: the mock's own "too few to
+        // compare" on every rail row, measured rather than typed.
+        verdict: railVerdict(r.id, r.name, r.k),
         selected: i === 0,
         href: `/dashboard/subjects?item=${r.id}`,
       })),
@@ -242,20 +361,13 @@ export function subjectsFixture(over: Partial<SubjectsData> = {}): SubjectsData 
       of: 3,
       sides,
       series,
-      voices: [
-        {
-          quote: { ref: 'e:1', text: 'Three winters on the bike and the seams are still perfect. The zip, less so.' },
-          cite: 'tiktok · 14 Sep · under a category video',
-          href: 'https://www.tiktok.com/@maker/video/7312345678901234567',
-          from: 'under a category video',
-        },
-        {
-          quote: { ref: 'e:2', text: 'Nach 14 Monaten ist der Reißverschluss hin', lang: 'de', english: 'After 14 months the zip is done' },
-          cite: 'youtube · 22 Sep · under a Freitag video',
-          href: null,
-          from: 'under a Freitag video',
-        },
-      ],
+      // THE MOCK'S SIX, AND ALL FOUR KINDS OF EVIDENCE. Two of them are the
+      // ones this fixture has always carried; the other four are what a
+      // three-across grid actually has to lay out, and they are the states a
+      // port has to get right: a creator speaking on camera with the video's
+      // own on-screen text beside it, two machine translations, a quote under
+      // your OWN post, and one under a rival's.
+      voices: VOICES,
       voicesFrom: 41,
       voicesSampled: false,
       unanswered: {
@@ -271,7 +383,8 @@ export function subjectsFixture(over: Partial<SubjectsData> = {}): SubjectsData 
       move: null,
       behind: { videos: 26, href: '/dashboard/videos?subject=s1' },
       gap,
-      axisNote: axisNote(sides, 100),
+      trail: trailLine(series.find((x) => x.audience === INDUSTRY_AUDIENCE) ?? null, 'The category'),
+      axisNote: axisNote(sides, 100, series),
       notRecorded: null,
     },
     ownPosts: ownCensusWithClaims(ownPostsInput(), true),
@@ -326,8 +439,8 @@ export function candidatesFixture(over: Partial<SubjectsData> = {}): SubjectsDat
       // A proposed subject IS in the list — that is where its Confirm control
       // lives — and it carries no level, because nothing has counted it.
       rows: [
-        { id: 'p1', name: 'Durability', description: null, origin: 'category_theme' as const, namedAt: '2026-08-19', status: 'proposed' as const, calibration: 'calibrating' as const, level: null, note: railNote('calibrating', false, 'proposed'), selected: false, href: '' },
-        { id: 'p2', name: 'Recycled materials', description: null, origin: 'own_claims' as const, namedAt: '2026-08-19', status: 'proposed' as const, calibration: 'calibrating' as const, level: null, note: railNote('calibrating', false, 'proposed'), selected: false, href: '' },
+        { id: 'p1', name: 'Durability', description: null, origin: 'category_theme' as const, namedAt: '2026-08-19', status: 'proposed' as const, calibration: 'calibrating' as const, level: null, note: railNote('calibrating', false, 'proposed'), verdict: null, selected: false, href: '' },
+        { id: 'p2', name: 'Recycled materials', description: null, origin: 'own_claims' as const, namedAt: '2026-08-19', status: 'proposed' as const, calibration: 'calibrating' as const, level: null, note: railNote('calibrating', false, 'proposed'), verdict: null, selected: false, href: '' },
       ],
       proposed: [
         { id: 'p1', name: 'Durability', because: 'the category raised it in the videos we read' },
@@ -367,9 +480,17 @@ export function fixtureKindShares() {
  */
 export function retiredRivalFixture(): SubjectsData {
   const base = subjectsFixture()
-  const { sides } = sidesAndSeries()
+  const { sides, series } = sidesAndSeries(RIVAL_STOPPED)
   return {
     ...base,
-    selected: base.selected ? { ...base.selected, gap: paneGapFor(sides, 'tracking_change') } : null,
+    selected: base.selected
+      ? {
+          ...base.selected,
+          sides,
+          series,
+          gap: paneGapFor(sides, 'tracking_change'),
+          axisNote: axisNote(sides, 100, series),
+        }
+      : null,
   }
 }

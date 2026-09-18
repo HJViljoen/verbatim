@@ -37,13 +37,47 @@ import { cn } from '@/lib/utils'
  * chrome rather than content and lives here.
  */
 export function BlockFrame({
-  title, question, mode = 'app', footer, footerNote, meta, children, className,
+  title, question, mode = 'app', footer, footerNote, meta, heading = false, lead, actions,
+  truncateFooter = false, children, className,
 }: {
   title: string
   question?: string
   mode?: RenderMode
+  /**
+   * Set the title as the block's own HEADING rather than as the tile eyebrow —
+   * sans 20px/600 at `-0.01em`, in sentence case (Block D wave 2, additive).
+   *
+   * ONE BLOCK ON A PAGE MAY BE THE PAGE'S SUBJECT, and on the artboards that
+   * block prints its name at heading scale while every other tile prints a
+   * 10.5px uppercase eyebrow. Subjects' detail pane is the first: it is named
+   * for the thing the whole page is about, and at eyebrow scale "DURABILITY"
+   * read as one more tile label instead of as the answer to the rail the reader
+   * just clicked. Default false, so every existing caller is unchanged.
+   */
+  heading?: boolean
+  /** The block's one sentence, under the heading — serif 17px/500 at
+   *  `1.35`/`-0.005em`, the mock's §1 hero lead. Drawn only with `heading`,
+   *  which is why the two are tested together. */
+  lead?: ReactNode
+  /** Controls at the header's right-hand end — the app's buttons. A caller
+   *  passing these on a print or email arm is passing a picture of a button,
+   *  so it is the caller that branches, not this. */
+  actions?: ReactNode
   /** The line along the bottom, LEFT: a link deeper. */
   footer?: ReactNode
+  /**
+   * Keep that link on ONE LINE, clipping it rather than wrapping it.
+   *
+   * OPT-IN, AND IT HAS TO BE (fix pass). This landed as a change to the
+   * DEFAULT, which silently clipped the footer link of all 56 `footer={…}`
+   * call sites across Overview, Voice, Market, Competitive, Week and the
+   * documents — to solve a problem that is one page's: on a 240px rail, with a
+   * basis in the note beside it, "Open the content brief →" set one word per
+   * line. The wave's rule is that a package needing a change to a P0 primitive
+   * adds an optional prop and never edits a default; and a footer that has the
+   * whole tile's width is better off wrapping than clipped.
+   */
+  truncateFooter?: boolean
   /** The line along the bottom, RIGHT: the artboard's quiet mono note — the
    *  basis, the window, the population ("all-time", "of 1,388 videos").
    *
@@ -112,15 +146,36 @@ export function BlockFrame({
   const big = mode === 'print'
   return (
     <section className={cn('flex min-w-0 flex-col gap-2.5', className)}>
-      <header className="flex items-baseline justify-between gap-2">
-        <h2 className={cn('m-0 font-semibold uppercase tracking-[0.06em] text-secondary-foreground', big ? 'text-[11px]' : 'text-[10.5px]')}>{title}</h2>
-        {meta ? <span className="flex-none whitespace-nowrap font-mono text-[11px] text-muted-foreground">{meta}</span> : null}
+      <header className={cn('flex gap-2', heading ? 'items-center justify-between gap-4' : 'items-baseline justify-between')}>
+        {heading ? (
+          <span className="flex min-w-0 items-baseline gap-2.5">
+            <h2 className="m-0 whitespace-nowrap text-[20px] font-semibold tracking-[-0.01em] text-foreground">{title}</h2>
+            {meta ? <span className="flex-none whitespace-nowrap font-mono text-[11px] text-muted-foreground">{meta}</span> : null}
+          </span>
+        ) : (
+          <>
+            <h2 className={cn('m-0 font-semibold uppercase tracking-[0.06em] text-secondary-foreground', big ? 'text-[11px]' : 'text-[10.5px]')}>{title}</h2>
+            {meta ? <span className="flex-none whitespace-nowrap font-mono text-[11px] text-muted-foreground">{meta}</span> : null}
+          </>
+        )}
+        {actions ? <span className="flex flex-none items-center gap-2">{actions}</span> : null}
       </header>
       {question ? <p className={cn('m-0 text-muted-foreground', big ? 'text-[11.5px]' : 'text-[12.5px]')}>{question}</p> : null}
+      {heading && lead ? (
+        <p className="m-0 font-serif text-[17px] font-medium leading-[1.35] tracking-[-0.005em] text-foreground [text-wrap:pretty]">{lead}</p>
+      ) : null}
       {children}
       {footer || footerNote ? (
-        <footer className="mt-auto flex items-center justify-between gap-2 border-t border-border/70 pt-2 text-[12px] font-medium text-foreground">
-          <span className="min-w-0">{footer}</span>
+        <footer className="mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-border/70 pt-2 text-[12px] font-medium text-foreground">
+          {/* IT WRAPS RATHER THAN CRUSHES. The note on the right is
+              `shrink-0`, so where the two halves do not fit on one line the
+              LINK took the whole squeeze and set one word per line — measured
+              at 1024 on the voices tile, whose note is a full sentence. With
+              `flex-wrap` the note drops to its own line instead, and a footer
+              that already fits is unchanged. A block that would rather clip
+              than wrap its link asks for that — `truncateFooter` — and every
+              block that has not asked keeps the wrap it has always had. */}
+          <span className={cn('min-w-0', truncateFooter && 'truncate')}>{footer}</span>
           {footerNote ? <span className="shrink-0 font-mono text-[11px] font-normal text-muted-foreground">{footerNote}</span> : null}
         </footer>
       ) : null}

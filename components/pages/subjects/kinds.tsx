@@ -1,12 +1,12 @@
-import Link from 'next/link'
-
 import type { Block, RenderMode } from '@/lib/blocks/types'
+import { openLink } from '@/components/blocks/open-link'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockRanked } from '@/components/blocks/bars'
+import { BlockMovement } from '@/components/blocks/movement'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, fmtPct, monthName } from '@/lib/format'
 import { KIND_ORDER } from '@/lib/reading/kinds'
-import type { SubjectSide, SubjectsData } from '@/lib/pages/subjects'
+import { sideEyebrow, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
 
 // SU2 · the kinds of thing said, per audience (design §3 SU2, the mock's (b)).
 //
@@ -22,24 +22,35 @@ import type { SubjectSide, SubjectsData } from '@/lib/pages/subjects'
 // per-kind distinct video counts run to 175% of one month's denominator on
 // Össur's category and 228% on Sealand's — so this is a set of independent
 // shares of one denominator and never a pie (decision T, lib/reading/kinds.ts).
+// That is the one place this block keeps its own shape against the artboard
+// (D4): the mock draws three segmented proportion bars with an "Other kinds"
+// remainder, which is a figure the data cannot produce. The mock's ROW layout
+// is kept — one audience, its denominator on the right, its kinds under it —
+// and each kind carries its own "of N" where a segment would have been.
+//
+// WHAT WAS MISSING UNTIL NOW is the mock's movement line ("Category, since
+// August: questions ▲ 3 pts · praise ▼ 4 pts …"). `kindChange` has existed
+// since WP3, Overview and Voice both call it, and this block drew the same rows
+// and printed no change at all — mock-gap called it the cheapest real gap on
+// the page. The verdicts are banded and each carries its own k and n, so they
+// are honest to print; they do NOT sum and nothing here adds them.
 
-function Audience({ side, mode }: { side: SubjectSide; mode: RenderMode }) {
+function Audience({ side, brand, mode, max }: { side: SubjectSide; brand: string; mode: RenderMode; max: number }) {
   const email = mode === 'email'
   const shown = side.kinds
     .filter((k) => k.pct != null && k.pct > 0)
     .sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind))
     .slice(0, 5)
   if (shown.length === 0) return null
-  const max = Math.max(...shown.map((k) => k.pct ?? 0), 1)
 
   return (
-    <div className={email ? undefined : 'flex min-w-0 flex-col gap-1.5'} style={email ? { paddingTop: 8 } : undefined}>
+    <div className={email ? undefined : 'flex min-w-0 flex-col gap-1'} style={email ? { paddingTop: 8 } : undefined}>
       <span
-        className={email ? undefined : 'flex items-baseline justify-between gap-2 text-[11px] font-medium text-secondary-foreground'}
+        className={email ? undefined : 'flex items-baseline justify-between gap-2 text-[12.5px] font-medium text-foreground'}
         style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted, display: 'block' } : undefined}
       >
-        {side.label}{' '}
-        <span data-copy="level" className={email ? undefined : 'font-mono text-[10.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.mono, color: EMAIL.faint } : undefined}>
+        {sideEyebrow(side, brand)}{' '}
+        <span data-copy="level" className={email ? undefined : 'shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground decoration-dotted underline-offset-[3px] [text-decoration-line:underline]'} style={email ? { fontFamily: FONT.mono, color: EMAIL.faint } : undefined}>
           of {fmtInt(side.n ?? 0)} videos
         </span>
       </span>
@@ -67,6 +78,51 @@ function Audience({ side, mode }: { side: SubjectSide; mode: RenderMode }) {
   )
 }
 
+/**
+ * The mock's movement strip: one banded verdict per kind, on one audience.
+ *
+ * THE MONTH COMES OFF THE VERDICT, NOT OFF THE SERIES (fix pass). "since Aug"
+ * was re-derived as the last month on `pane.series[0]` before `data.month`,
+ * while the verdicts beside it were built by `buildSides` against
+ * `previousMonthOf(month)`. The two agree on the fixture and are not guaranteed
+ * to agree on a series with a gap — and a movement claim whose month label
+ * comes from a different derivation than its band is precisely the class of bug
+ * AGENTS.md's window rule exists for. Every `Verdict` carries its own
+ * `basis.from`; that is the month it was measured against and the month the
+ * strip names.
+ */
+function KindMovement({ side, brand, mode }: { side: SubjectSide; brand: string; mode: RenderMode }) {
+  const email = mode === 'email'
+  const rows = side.kinds
+    .filter((k) => side.kindVerdicts[k.kind] != null)
+    .sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind))
+    .slice(0, 4)
+  if (rows.length === 0) return null
+  // ONE MONTH FOR THE STRIP, and it has to be one: four verdicts measured
+  // against two different months under one "since …" is two claims wearing one
+  // label, so the strip draws only while its verdicts agree.
+  const froms = new Set(rows.map((k) => side.kindVerdicts[k.kind]?.basis?.from).filter(Boolean) as string[])
+  if (froms.size !== 1) return null
+  const prevMonth = [...froms][0]
+
+  const body = (
+    <>
+      <span className={email ? undefined : 'text-[11px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}>
+        {sideEyebrow(side, brand)}, since {monthName(prevMonth).split(' ')[0]}:
+      </span>
+      {rows.map((k) => (
+        <span key={k.kind} className={email ? undefined : 'flex items-center gap-1.5 text-[12px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted, marginRight: 10 } : undefined}>
+          {k.label.toLowerCase()} <BlockMovement verdict={side.kindVerdicts[k.kind]} unit="pts" mode={mode} />
+        </span>
+      ))}
+    </>
+  )
+  if (email) return <div style={{ paddingTop: 8 }}>{body}</div>
+  return (
+    <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 rounded-[4px] bg-inner px-3 py-2">{body}</div>
+  )
+}
+
 export const subjectsKinds: Block<SubjectsData> = {
   key: 'subjects.kinds',
   title: 'Kind of thing said',
@@ -76,10 +132,10 @@ export const subjectsKinds: Block<SubjectsData> = {
     const pane = data.selected
     const empty = subjectsKinds.emptyState(data)
     const email = mode === 'email'
-    const href = `${ctx.appUrl}/dashboard/voice`
-    const footer = email
-      ? <a href={href} style={{ color: EMAIL.ink }}>Open Voice →</a>
-      : <Link href={href} className="hover:underline">Open Voice →</Link>
+    // `openLink`, not a hand-rolled pair: print draws no in-app control, which
+    // matters now that this page exports (a PDF and a share page have no
+    // session to open Voice with).
+    const footer = openLink(mode, `${ctx.appUrl}/dashboard/voice`, 'Open Voice →')
 
     if (!pane || empty) {
       return (
@@ -90,11 +146,22 @@ export const subjectsKinds: Block<SubjectsData> = {
     }
 
     const withKinds = pane.sides.filter((s) => s.kinds.length > 0)
+    // ONE SCALE ACROSS THE TILE (fix pass). Each audience was normalised to its
+    // OWN leader, and three audiences stacked in one column at one x-offset on
+    // one track width is a layout that exists to be read DOWNWARD. It looked
+    // right only because the three maxima happened to be 34.5 / 33.8 / 34; the
+    // first tenant whose own audience runs at 60% against a rival's 25% would
+    // get two identical full-width bars. The bars are shares of three different
+    // denominators — which is why each row carries its own "of N" — but their
+    // LENGTHS are now comparable, which is the one thing a stacked bar chart
+    // promises.
+    const trackMax = Math.max(...withKinds.flatMap((s) => s.kinds.map((k) => k.pct ?? 0)), 1)
     // THE CATEGORY'S Reddit share, not the first side's. Reddit is where the
     // questions are and the category is where Reddit is; naming your own
     // audience's figure here would answer a question nobody asked about a
     // handful of videos.
-    const reddit = (withKinds.find((s) => s.kind === 'category') ?? withKinds[0])?.reddit ?? null
+    const category = withKinds.find((s) => s.kind === 'category') ?? withKinds[0] ?? null
+    const reddit = category?.reddit ?? null
 
     return (
       <BlockFrame
@@ -107,19 +174,42 @@ export const subjectsKinds: Block<SubjectsData> = {
         // unlabelled one-month kind mix sat among twelve-month furniture.
         meta={`${monthName(data.month).split(' ')[0]} · every video in the audience`}
         footer={footer}
+        truncateFooter
+        // THE REDDIT READ INTO THE FOOTER NOTE, where the mock puts it — a
+        // basis, in the mono face a reader skips until they want it. It was a
+        // body paragraph of raw counts, which reads as one of the block's
+        // findings rather than as a caveat about where they came from.
+        footerNote={reddit && reddit.pct != null ? (
+          <span data-copy="level">Reddit · {fmtInt(reddit.reddit)} of {fmtInt(reddit.videos)} question videos</span>
+        ) : undefined}
       >
-        {withKinds.map((s) => <Audience key={s.audience} side={s} mode={mode} />)}
-        {reddit && reddit.pct != null ? (
+        {withKinds.map((s) => <Audience key={s.audience} side={s} brand={data.brand} mode={mode} max={trackMax} />)}
+        {category ? <KindMovement side={category} brand={data.brand} mode={mode} /> : null}
+        {/* THE OVERLAP, WITH THE SHARES IT IS ABOUT. The footer note states
+            Reddit's share; this states why the kinds it pools do not sum, and
+            it belongs beside the bars rather than in the mono slot a reader
+            skips. */}
+        {reddit && !reddit.exact ? (
           <p
             className={email ? undefined : 'm-0 text-[11px] text-muted-foreground'}
             style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted, paddingTop: 6 } : undefined}
           >
-            Reddit carried <span data-copy="figure">{fmtInt(reddit.reddit)} of {fmtInt(reddit.videos)}</span> of the
-            question-and-objection videos{reddit.exact ? '' : ' (a video carrying both is counted in each)'}.
+            A video carrying both a question and an objection is counted in each.
           </p>
         ) : null}
       </BlockFrame>
     )
+  },
+
+  // WHAT THIS BLOCK PRINTS, AND ONLY THAT. `verdicts()` is where a reviewer, a
+  // prompt and a test read a block's movement claims off it, and this returned
+  // EVERY side's kind verdicts — including the two audiences whose movement
+  // strip the block never draws. The strip is the category's (or the first side
+  // that has kinds), and so is this.
+  verdicts(data) {
+    const withKinds = (data.selected?.sides ?? []).filter((s) => s.kinds.length > 0)
+    const drawn = withKinds.find((s) => s.kind === 'category') ?? withKinds[0] ?? null
+    return drawn ? Object.values(drawn.kindVerdicts).filter((v) => v != null) : []
   },
 
   emptyState(data) {
@@ -139,3 +229,4 @@ export const subjectsKinds: Block<SubjectsData> = {
     return null
   },
 }
+

@@ -16,6 +16,7 @@ import {
   sideFigures,
   sideWhose,
   unansweredLead,
+  unansweredLeadText,
   unansweredMeta,
   voiceFrom,
   voicesAcross,
@@ -26,7 +27,7 @@ import {
   type SubjectPane,
   type SubjectSide,
 } from './subjects'
-import { buildSeries, type DenominatorPoint, type NumeratorPoint } from '../reading/series'
+import { buildSeries, type DenominatorPoint, type MonthPoint, type MonthSeries, type NumeratorPoint } from '../reading/series'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '../rivals'
 import { gapLine, type GapSide } from '../reading/gap'
 import type { Subject } from '../subjects/types'
@@ -168,11 +169,14 @@ describe('unansweredLead', () => {
     // Measured on production: a large group of Össur question insights sits
     // under a theme the model called "Praise for prosthetic look". "The
     // category asked ‘Praise for prosthetic look’" is not true of anything.
-    expect(unansweredLead([row], 9, 'in Sep')).toContain('Questions grouped as')
+    expect(unansweredLeadText(unansweredLead([row], 9, 'in Sep'))).toContain('Questions grouped as')
   })
 
   it('says the count and the period, and no share', () => {
-    const line = unansweredLead([row], 9, 'in Sep')!
+    // ONE OF THESE WORDS IS A MODEL'S. `unansweredLead` returns the parts so
+    // the block can mark Pass B's label as the model value it is;
+    // `unansweredLeadText` is the same sentence for a caller with no markup.
+    const line = unansweredLeadText(unansweredLead([row], 9, 'in Sep'))!
     expect(line).toBe('Questions grouped as “Will it survive a wet commute” came up in 130 of the videos we have read — none of your 9 posts in Sep touched it.')
     expect(line).not.toContain('%')
   })
@@ -181,12 +185,12 @@ describe('unansweredLead', () => {
     // The count is over the WHOLE horizon; "none of your 900 September posts"
     // was the sentence on Last 12 months, beside a meta line that said "in
     // this window" about the same number.
-    expect(unansweredLead([row], 900, 'in the last 12 months'))
+    expect(unansweredLeadText(unansweredLead([row], 900, 'in the last 12 months')))
       .toContain('none of your 900 posts in the last 12 months touched it')
   })
 
   it('says you published nothing rather than "none of your 0 posts"', () => {
-    expect(unansweredLead([row], 0, 'in Sep')).toContain('you published nothing in Sep')
+    expect(unansweredLeadText(unansweredLead([row], 0, 'in Sep'))).toContain('you published nothing in Sep')
   })
 
   it('has nothing to say when every question is answered', () => {
@@ -273,6 +277,63 @@ describe('axisNote', () => {
 
   it('is silent when every line carries its n', () => {
     expect(axisNote([side({ n: 1388, k: 305 })], 100)).toBeNull()
+  })
+
+  // A LINE THAT BEGINS HALFWAY IS NOT A LINE THAT FELL TO ZERO.
+  describe('the line that starts late', () => {
+    const MONTHS = ['2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01']
+    const line = (audience: string, label: string, from: string): MonthSeries => ({
+      audience,
+      names: [audience],
+      objectId: 's1',
+      objectLabel: label,
+      points: MONTHS.map((month) => ({
+        month,
+        state: (month < from ? 'hollow' : 'frozen') as MonthPoint['state'],
+        videos: month < from ? null : 1388,
+        comments: null,
+        k: month < from ? null : 300,
+        pct: month < from ? null : 21,
+        labels: [],
+        runId: null,
+        readAt: null,
+      } as unknown as MonthPoint)),
+      notes: [],
+      firstReadable: from,
+      substrate: 'seeded' as const,
+    })
+
+    it('names the line that starts after its neighbours', () => {
+      const note = axisNote(
+        [side({ n: 1388, k: 305 }), side({ label: 'Patagonia', kind: 'rival', audience: 'competitor:Patagonia', n: 1388, k: 300 })],
+        100,
+        [line(CLIENT_AUDIENCE, 'You', '2026-06-01'), line('competitor:Patagonia', 'Patagonia', '2026-08-01')],
+      )!
+      expect(note).toContain('Patagonia is read from August')
+      expect(note).not.toContain('You is read from')
+    })
+
+    // THE HOLE THE RELATIVE YARDSTICK LEFT. Comparing the lines against each
+    // other names nothing when they ALL begin after the axis does — which is
+    // the state a whole tenant is in for its first months, and exactly when a
+    // short line most reads as a collapse.
+    it('names every line where they all start after the axis does', () => {
+      const note = axisNote(
+        [side({ n: 1388, k: 305 }), side({ label: 'Patagonia', kind: 'rival', audience: 'competitor:Patagonia', n: 1388, k: 300 })],
+        100,
+        [line(CLIENT_AUDIENCE, 'You', '2026-08-01'), line('competitor:Patagonia', 'Patagonia', '2026-08-01')],
+      )!
+      expect(note).toContain('You is read from August')
+      expect(note).toContain('Patagonia is read from August')
+    })
+
+    it('says nothing where every line runs the whole axis', () => {
+      expect(axisNote(
+        [side({ n: 1388, k: 305 })],
+        100,
+        [line(CLIENT_AUDIENCE, 'You', '2026-06-01')],
+      )).toBeNull()
+    })
   })
 })
 
