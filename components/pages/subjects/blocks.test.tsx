@@ -13,6 +13,7 @@ import { subjectsLine } from './line'
 import { subjectsKinds } from './kinds'
 import { subjectsVoices } from './voices'
 import { subjectsUnanswered } from './unanswered'
+import { freezeQuotes } from '@/lib/renderables/quotes-freeze'
 import { gapBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
 import { candidatesFixture, refusedFixture, retiredRivalFixture, subjectsFixture } from './fixture'
 
@@ -324,8 +325,30 @@ describe('SU2 · the voices', () => {
     expect(renderText(subjectsVoices.render(subjectsFixture(), 'app', ctx))).toContain('youtube · 22 Sep · under a Freitag video')
   })
 
+  // BOTH REFS PER VOICE, the paired frame included. `subjects` is a registered
+  // `PageModule`, so /api/export → createSnapshot → freezeQuotes runs over this
+  // data: a ref declared here reaches `report_snapshots.evidence_ids`, the
+  // column an erasure searches, and words that are NOT behind a ref freeze into
+  // `data` as words.
   it('declares its refs so a snapshot can freeze ids and resolve words at render', () => {
-    expect(blockAnswers(subjectsVoices, subjectsFixture()).quotes).toEqual(['e:1', 'e:6', 'e:8', 'e:2', 'e:3', 'e:7'])
+    expect(blockAnswers(subjectsVoices, subjectsFixture()).quotes)
+      .toEqual(['e:1', 'e:6', 'e:9', 'e:8', 'e:2', 'e:3', 'e:7'])
+  })
+
+  it('freezes the paired on-screen frame as a ref, never as words', () => {
+    const { data: frozen, refs } = freezeQuotes(subjectsFixture())
+    expect(refs).toContain('e:9')
+    expect(JSON.stringify(frozen)).not.toContain('1 bag. 3 years. 0 regrets')
+  })
+
+  it('says a frame whose evidence row is gone is counted, not quotable', () => {
+    const data = subjectsFixture()
+    const voice = data.selected!.voices.find((v) => v.onScreen)!
+    const erased = {
+      ...data,
+      selected: { ...data.selected!, voices: [{ ...voice, onScreen: { ref: 'e:9', text: '' } }] },
+    }
+    expect(renderText(subjectsVoices.render(erased, 'app', ctx))).toContain('this frame has since been removed')
   })
 
   it('says a quote whose words are gone is counted, not quotable', () => {

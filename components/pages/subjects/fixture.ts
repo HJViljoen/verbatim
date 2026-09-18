@@ -232,7 +232,10 @@ const VOICES: SubjectVoice[] = [
     from: 'under a category video',
     platform: 'tiktok',
     source: 'video',
-    onScreen: '1 bag. 3 years. 0 regrets',
+    // THE FRAME HAS ITS OWN EVIDENCE ROW, so it carries its own ref: `e:9` is
+    // the `video_text` row on the same video as `e:6`. A bare string here is
+    // what let a snapshot store a third party's words.
+    onScreen: { ref: 'e:9', text: '1 bag. 3 years. 0 regrets' },
   },
   {
     quote: { ref: 'e:8', text: "If the strap buckle breaks in two months I'm not paying R4,000 again" },

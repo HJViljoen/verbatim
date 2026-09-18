@@ -285,10 +285,23 @@ export interface SubjectVoice {
    * The column has been scored since WP7 and only `onCameraBonus` read it.
    */
   source: EvidenceSource
-  /** Words printed on the same video's frame, where this quote was spoken and
-   *  that video also carries on-screen text. The mock's own pairing: what they
-   *  said, and what the video said at the same time. */
-  onScreen: string | null
+  /**
+   * Words printed on the same video's frame, where this quote was spoken and
+   * that video also carries on-screen text. The mock's own pairing: what they
+   * said, and what the video said at the same time.
+   *
+   * A `Quote` WITH ITS OWN REF, NEVER A BARE STRING (fix pass). This page is a
+   * `PageModule`, so `/api/export` → `createSnapshot` → `freezeQuotes` runs
+   * over this data; `freezeQuotes` recognises a quote STRUCTURALLY
+   * (`{ ref: 'e:…', text }`, lib/renderables/quotes-freeze.ts) and walks a bare
+   * string straight past. Carried as a string these words froze into
+   * `report_snapshots.data` AS WORDS and their evidence id never reached
+   * `evidence_ids`, so an erasure could not find them and a `/r/<token>` page
+   * re-served them out of the stored copy. AGENTS.md is categorical: exports
+   * and reports freeze numbers, never words — and a `video_text` row is a
+   * third party's frame exactly as an `e:` comment excerpt is.
+   */
+  onScreen: Quote | null
 }
 
 export interface UnansweredRow {
@@ -1984,10 +1997,19 @@ async function loadVoicesMany(
     // video also carries on-screen text, the two belong together — the mock
     // prints them as a pair. Built from the citations already read, so the
     // pairing costs no statement.
-    const onScreenByVideo = new Map<string, string>()
+    //
+    // AND IT CARRIES ITS OWN EVIDENCE ID. The frame's words are a third
+    // party's, so they travel the way every other quote on this page travels —
+    // as a ref the snapshot freezes and the render resolves. The id is one
+    // field away on the citation that supplied the words; it was being dropped.
+    const onScreenByVideo = new Map<string, Quote>()
     for (const c of considered) {
       if (c.source === 'video_text' && c.videoId && !onScreenByVideo.has(c.videoId)) {
-        onScreenByVideo.set(c.videoId, c.quote)
+        onScreenByVideo.set(c.videoId, {
+          ref: quoteRef.evidence(c.evidenceId),
+          text: c.quote,
+          ...(c.lang != null ? { lang: c.lang, english: c.english ?? null } : {}),
+        } as Quote)
       }
     }
 

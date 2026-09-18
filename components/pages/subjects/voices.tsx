@@ -38,6 +38,10 @@ import { voicesMeta, VOICES_SHOWN, type SubjectsData, type SubjectVoice } from '
 // together, which is the mock's own pairing: what they said, and what the video
 // said at the same time.
 
+/** What a frame whose evidence row no longer resolves says. The speaker's own
+ *  words have `BlockQuote`'s sentence; this is the frame's. */
+const FRAME_GONE = 'counted, not quotable — this frame has since been removed'
+
 const SOURCE_FLAG: Record<string, string | null> = {
   comment: null,
   video: 'Said on camera',
@@ -67,8 +71,19 @@ function Voice({ voice, mode }: { voice: SubjectVoice; mode: RenderMode }) {
         // A SIBLING NODE WITH ITS OWN MARKER, never a span inside the quote.
         // The frame's words are the video's, not the speaker's, and rule (c)
         // may not police either of them.
+        //
+        // AND IT IS A QUOTE WITH ITS OWN REF (fix pass), so `freezeQuotes`
+        // empties it like every other quote on this page and the words come
+        // back at render. Which is also why the unresolved arm exists: a frame
+        // whose evidence row is gone says so, instead of printing an empty
+        // pair of quotation marks.
         <span className="ml-3.5 rounded-[4px] bg-inner px-2.5 py-1.5 text-[12px] text-muted-foreground">
-          On-screen text on the same video: <span data-copy="quote" className="text-secondary-foreground">“{voice.onScreen}”</span>
+          On-screen text on the same video:{' '}
+          {voice.onScreen.text.trim() ? (
+            <span data-copy="quote" className="text-secondary-foreground">“{voice.onScreen.text}”</span>
+          ) : (
+            <span className="font-mono text-[10.5px]">{FRAME_GONE}</span>
+          )}
         </span>
       ) : null}
     </div>
@@ -132,8 +147,14 @@ export const subjectsVoices: Block<SubjectsData> = {
     )
   },
 
+  // BOTH REFS PER VOICE. `quotes()` is what `report_snapshots.evidence_ids`
+  // is built from — the column erase-commenter searches — so a paired frame
+  // that is rendered here has to be declared here too, or the one thing the
+  // ref spine exists for cannot reach it.
   quotes(data): QuoteRef[] {
-    return (data.selected?.voices ?? []).map((v) => v.quote.ref).filter((r): r is string => Boolean(r))
+    return (data.selected?.voices ?? [])
+      .flatMap((v) => [v.quote.ref, v.onScreen?.ref ?? null])
+      .filter((r): r is string => Boolean(r))
   },
 
   emptyState(data) {
