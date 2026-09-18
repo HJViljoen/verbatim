@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '@/lib/rivals'
 import { fmtPct } from '@/lib/format'
+import { proseFigures } from '@/lib/prose/figures'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
@@ -213,6 +214,25 @@ describe('content.record — the mock’s page 5', () => {
     expect(refused).toContain('The month-by-month reading has not been recorded for this workspace yet.')
     expect(refused).toContain(BRIEF_UNIT)
     expect(refused).not.toContain('monthly reading · the quarter view')
+  })
+
+  // A BLOCK DOES NOT READ ITS OWN PROSE, AND WHAT IT PUBLISHES PRINTS THE SAME
+  // (code review 4). The instrument figure was recovered by regex from a
+  // rendered sentence and declared a count, so the token substituted into brief
+  // prose read "2" while the card beside it read "2.37".
+  it('publishes only figures that print exactly what the slide prints', () => {
+    const answers = blockAnswers(contentRecord, data)
+    const printed = proseFigures(answers.figures)
+    expect(Object.keys(printed).length).toBeGreaterThan(0)
+    for (const [key, figure] of Object.entries(printed)) {
+      expect(key.startsWith('content_')).toBe(true)
+      expect(text).toContain(figure.value)
+    }
+    // The rate is carried on the slide and drawn on the card; it is not a
+    // citable token, because none of the four measured units prints it.
+    expect(data.record.themesPerVideo).not.toBeNull()
+    expect(text).toContain(String(data.record.themesPerVideo))
+    expect(Object.keys(answers.figures)).not.toContain('content_themes_per_video')
   })
 
   it('has one honest line when the record could not be read at all', () => {

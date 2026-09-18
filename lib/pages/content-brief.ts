@@ -109,6 +109,17 @@ export interface RecordSlide {
   counter: string | null
   /** The mock's numbers card, minus the six rows the deck already prints. */
   numbers: NumberRow[]
+  /**
+   * The two raw figures the slide draws, carried rather than parsed back out of
+   * the sentences it renders (code review 4).
+   *
+   * `figures()` used to recover the instrument by regex from a rendered English
+   * sentence — `find('Themes per video')!.value.match(/^[\d.]+/)` — so a
+   * re-wording of `instrumentRow` would have turned the published figure into 0
+   * with no test failing. A block does not read its own prose.
+   */
+  videosRead: number | null
+  themesPerVideo: number | null
   /** The Reddit clause, printed once under the card. */
   reddit: string
   /** The labels caveat — a fixed rule assigns a format and a hook, never a
@@ -252,6 +263,8 @@ export function buildRecordSlide(input: {
     delivery: input.delivery,
     counter: input.readings == null ? null : readingsCounter(input.readings),
     numbers: numberRows(input.record),
+    videosRead: input.record?.coverage?.length ? totalVideos(input.record.coverage) : null,
+    themesPerVideo: input.record?.instrument.themesPerVideo ?? null,
     reddit: REDDIT_CAP_LINE,
     labels: LABEL_RULE,
     empty: input.record != null || input.delivery != null

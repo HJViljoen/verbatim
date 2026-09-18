@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import type { Block, RenderMode } from '@/lib/blocks/types'
+import { fmtInt } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import type { ContentBriefData, NumberRow } from '@/lib/pages/content-brief'
@@ -140,17 +141,39 @@ export const contentRecord: Block<ContentBriefData> = {
     )
   },
 
+  /**
+   * THE FIGURES A MODEL MAY NAME, PREFIXED. Key collisions across the three
+   * block registries are zero and must stay zero (AGENTS.md).
+   *
+   * ONE FIGURE, AND IT ROUND-TRIPS. `content_themes_per_video` used to be
+   * published here, recovered by regex from a rendered sentence and declared
+   * `unit: 'videos'` — which sends it through `proseFigures`' count arm, so a
+   * `[[content_themes_per_video]]` substituted into brief prose printed "2"
+   * while the numbers card two inches away printed "2.37 themes per analysed
+   * video" (code review 4). That is the split the two `FigureTable`s and the
+   * single `proseFigures` crossing exist to prevent.
+   *
+   * It is not published at all rather than published wrong: the measured units
+   * are `videos · comments · pts · pct` and a RATE is none of them, so there is
+   * no way to declare it that prints what the card prints. Adding a unit is a
+   * change to `lib/reading/verdicts.ts` and to every consumer that switches on
+   * one (`lib/reports/sent-figures.ts`, `lib/reports/monthly.ts`), which is a
+   * bigger change than this block may make. The card still prints the number;
+   * only the citable token is gone.
+   *
+   * What IS published is the one figure whose printed form is exactly the
+   * card's: the videos this reading covered, a count through `fmtInt` on both
+   * sides — and `index.test.tsx` asserts that round trip for every key.
+   */
   figures(data): FigureTable {
     const out: FigureTable = {}
     const r = data.record
-    const rows = r.numbers
-    const find = (label: string) => rows.find((x) => x.label === label)
-    // THE FIGURES A MODEL MAY NAME, PREFIXED. Key collisions across the three
-    // block registries are zero and must stay zero (AGENTS.md), and the record
-    // publishes shapes other surfaces also count.
-    if (find('Themes per video')) {
-      const n = Number((find('Themes per video')!.value.match(/^[\d.]+/) ?? ['0'])[0])
-      if (Number.isFinite(n) && n > 0) out.content_themes_per_video = { value: n, unit: 'videos', label: `${n} themes per analysed video` }
+    if (r.videosRead != null) {
+      out.content_record_videos = {
+        value: r.videosRead,
+        unit: 'videos',
+        label: `${fmtInt(r.videosRead)} videos carried conversation in this reading`,
+      }
     }
     return out
   },
