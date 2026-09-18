@@ -5,6 +5,7 @@ import {
   actedLine, moveLedgerLine, repeatLine, unlockRows, waysOfMoving,
 } from '@/lib/pages/market-surface'
 import { MOVES_MASTHEAD, MOVES_UNLOCK } from '@/lib/pages/overview'
+import { cardFixture, moveReadingFixture } from '@/components/pages/overview/fixture'
 
 // Market's block fixtures (Phase 1 WP14).
 //
@@ -121,6 +122,11 @@ export function marketFixture(over: Partial<MarketSurfaceData> = {}): MarketSurf
       unlock: MOVES_UNLOCK,
       recorded: true,
       empty: null,
+      // THE SAME CARD AND THE SAME READING AS OVERVIEW'S, from Overview's own
+      // fixture, because both pages are handed them by one composition
+      // (`loadMovesExtras`). Two fixtures would be two shapes for one month.
+      card: cardFixture(),
+      readings: [moveReadingFixture()],
     },
     ways: {
       ways: waysOfMoving(acceptable),
@@ -150,7 +156,7 @@ export function unrecordedFixture(): MarketSurfaceData {
   const base = marketFixture()
   return {
     ...base,
-    moves: { rows: [], masthead: MOVES_MASTHEAD, unlock: MOVES_UNLOCK, recorded: false, empty: MOVES_UNRECORDED },
+    moves: { rows: [], masthead: MOVES_MASTHEAD, unlock: MOVES_UNLOCK, recorded: false, empty: MOVES_UNRECORDED, card: cardFixture(), readings: [] },
     ways: { ...base.ways, ways: waysOfMoving(null), acceptable: null, claims: [], claimsLine: 'Nothing you have said in your own posts has been read against the conversation this update.' },
   }
 }
@@ -174,7 +180,7 @@ export function firstUpdateFixture(): MarketSurfaceData {
   return {
     ...base,
     advice: { rows: [], highlight: null, requestedLine: null, total: 0, acted: 0, actedLine: actedLine(0, 0), repeatLine: repeatLine([]), recorded: true, unlock: ADVICE_UNLOCK, empty: ADVICE_EMPTY },
-    moves: { rows: [], masthead: MOVES_MASTHEAD, unlock: MOVES_UNLOCK, recorded: true, empty: MOVES_EMPTY_MK4 },
+    moves: { rows: [], masthead: MOVES_MASTHEAD, unlock: MOVES_UNLOCK, recorded: true, empty: MOVES_EMPTY_MK4, card: cardFixture(), readings: [] },
     ways: { ...base.ways, ways: waysOfMoving(null), acceptable: null },
   }
 }

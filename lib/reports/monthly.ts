@@ -101,8 +101,8 @@ export const monthlyRuleFor = (status: MonthlyStatus): string =>
 /**
  * What section 5 says about scoring, ON THE ARTEFACT.
  *
- * OV5's own sentence is "Scoring, and the pre-filled monthly card, are not
- * built yet. They will land on Market." That was argued for an in-app surface,
+ * OV5's own sentence names a page a reader can click. That was argued for an
+ * in-app surface,
  * where Market is a page the reader can click and the sentence answers "why is
  * this column empty here and not there?". Mailed to a client's staff it is
  * build status about an unshipped feature and a page name they have no account
@@ -115,8 +115,15 @@ export const monthlyRuleFor = (status: MonthlyStatus): string =>
  * named reading. So the artefact says that, and says nothing about what is or
  * is not built.
  */
+// AND IT CHANGED WITH THE PAGE (Block D · D2). "Nothing here is scored yet"
+// was true when nothing scored a move; every move now carries the one banded
+// comparison it earns, so the sentence would be a copy claim the code
+// contradicts. What a client still needs from it is the same thing — WHY a
+// move that was dated this month has no comparison — and that answer has not
+// changed: a move is read from the month after it was dated. Said without
+// build status and without a page name, which is this artefact's own rule.
 export const MONTHLY_MOVES_UNLOCK =
-  'Nothing here is scored yet. Each move carries the reading its first score lands with.'
+  'A move is read from the month after it was dated, and beside the audiences it did not touch. Each one carries the reading its first comparison lands with.'
 
 /** And the artefact's own words for a workspace that has dated nothing. OV5's
  *  say "Press Track this on a subject or a theme", which is a control on a page

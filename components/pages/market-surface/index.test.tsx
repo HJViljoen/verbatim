@@ -5,6 +5,7 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { ADVICE_REQUESTED_GONE } from '@/lib/pages/market-surface'
+import { MOVES_UNLOCK } from '@/lib/pages/overview'
 import { MARKET_BLOCKS } from './index'
 import { marketConclusions } from './conclusions'
 import { marketAdvice } from './advice'
@@ -189,7 +190,10 @@ describe('MK4 · declared moves', () => {
 
   it('names the unlock without naming a month for it', () => {
     const text = renderText(marketMoves.render(marketFixture(), 'app', ctx))
-    expect(text).toContain('Scoring, and the pre-filled monthly card, are not built yet. They will land on Market.')
+    // Changed by Block D · D2: the card and the scoring are built, so the
+    // block's unlock says what it does instead of what it does not.
+    expect(text).toContain(MOVES_UNLOCK)
+    expect(text).not.toMatch(/not built yet/)
     expect(text).not.toMatch(/bottom section/)
   })
 })
@@ -227,7 +231,10 @@ describe('MK5 · how a move is made', () => {
 describe('the sections that are not built', () => {
   it('names MK3 and MK6 with an owner and no invented date', () => {
     const text = renderText(marketUnlocks.render(marketFixture(), 'app', ctx))
-    expect(text).toContain('This month’s card')
+    // THE CARD IS BUILT; THE PRESS IS NOT — so the row that is listed here as
+    // missing names the confirming, not the card (Phase 1 D2 fix pass).
+    expect(text).toContain('Confirming this month’s card')
+    expect(text).toContain('The card is read above')
     expect(text).toContain('Plans re-checked')
     expect(text).toContain('Verbatim engineering')
     expect(text).not.toMatch(/by \d{1,2} \w+/)

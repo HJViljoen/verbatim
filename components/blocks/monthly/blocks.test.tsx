@@ -390,11 +390,11 @@ describe('the five sections that are Overview’s', () => {
     }
   })
 
-  // OV5's own unlock is "Scoring, and the pre-filled monthly card, are not built
-  // yet. They will land on Market." — build status about an unshipped feature,
-  // and a page name, in an email to a client's staff. The artefact answers the
-  // question a reader actually has (why is there no score?) and says nothing
-  // about what is built.
+  // OV5's own unlock names a page ("Market") and a control ("Press Track
+  // this"), neither of which an email to a client's staff can act on. The
+  // artefact answers the question a reader actually has — why is there no
+  // comparison on a move dated this month — and says nothing about what is or
+  // is not built.
   it('say nothing about what is not built yet, in any mode', () => {
     for (const data of STATES) {
       for (const mode of MODES) {

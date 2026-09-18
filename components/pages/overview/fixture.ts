@@ -4,6 +4,13 @@ import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '@/lib/rivals'
 import type { Verdict } from '@/lib/reading/verdicts'
 import type { OverviewData } from '@/lib/pages/overview'
 import { MOVES_MASTHEAD, MOVES_EMPTY, MOVES_UNLOCK, RIVALS_CAVEAT, fillingLine, readingsCounter } from '@/lib/pages/overview'
+import {
+  actedTally,
+  buildMoveCandidate,
+  readMove,
+  type MoveCandidate,
+  type MoveReading,
+} from '@/lib/reading/moves'
 
 // The Overview's block fixtures (Phase 1 WP11).
 //
@@ -32,6 +39,156 @@ export const verdict = (over: Partial<Verdict> = {}): Verdict => ({
   flags: [],
   ...over,
 })
+
+/**
+ * This month's card, at Sealand's own September shape.
+ *
+ * MEASURED, NOT INVENTED (re-read against production 2026-09-18). Seventeen
+ * posts published in September, eight over the comment floor, five carrying any
+ * analysis at all, and twelve of the seventeen with no `hook_style` — which is
+ * why `not classified` is the largest hook row rather than a rounding footnote.
+ *
+ * AND THE CLAIMS ARE THE REAL ONES, VERBATIM. The mock imagines slogans
+ * ("Built to last a decade" · 3 posts); what the tenant holds is nine claim
+ * rows on four posts, nine of them DISTINCT — no repeat anywhere — between 93
+ * and 197 characters each, several to a post. Two of those posts and five of
+ * those claims are below, at their real lengths. A fixture of short repeated
+ * slogans would have wave 2 design a list the data cannot fill: this row needs
+ * a cap and a de-duplication pass, not a tally.
+ */
+export function cardFixture(): MoveCandidate {
+  const post = (i: number, comments: number, hook: string | null) => ({
+    id: `p${i}`,
+    upload_date: `2026-09-${String((i % 27) + 1).padStart(2, '0')}`,
+    comments_count: comments,
+    hook_style: hook,
+    classified_type: 'promotional',
+  })
+  return buildMoveCandidate({
+    month: REAL_MONTH,
+    clientVideos: [
+      post(1, 64, 'personal-story'),
+      post(2, 31, null),
+      post(3, 22, null),
+      post(4, 14, 'bold-claim'),
+      post(5, 11, null),
+      post(6, 9, 'question'),
+      post(7, 7, null),
+      post(8, 5, null),
+      post(9, 4, 'personal-story'),
+      post(10, 3, null),
+      post(11, 2, null),
+      post(12, 2, 'personal-story'),
+      post(13, 1, null),
+      post(14, 1, null),
+      post(15, 0, null),
+      post(16, 0, null),
+      post(17, 0, null),
+    ],
+    // Five of Sealand's nine September claims, verbatim off `video_claims`,
+    // on the two posts that carry them. Note the third and fourth rows: two
+    // claims that differ by three words ("benefits people" against "good for
+    // people") and are two distinct rows, on two distinct posts.
+    claims: [
+      {
+        source_video_id: 'p1',
+        claim:
+          'Sealand positions its products as acts of defiance against an industry characterized by overconsumption, fast fashion, and waste, emphasizing responsible production and great design as inseparable.',
+        entity: 'client',
+      },
+      {
+        source_video_id: 'p4',
+        claim:
+          'Sealand products represent a small act of defiance against an industry that treats materials and resources as disposable waste, promoting great design and responsible production.',
+        entity: 'client',
+      },
+      {
+        source_video_id: 'p4',
+        claim:
+          'Sealand is an award-winning B Corp certified brand committed to proving that business can be a force for good by producing great gear that is good for people and the planet.',
+        entity: 'client',
+      },
+      {
+        source_video_id: 'p1',
+        claim:
+          'Sealand is an award-winning B Corp certified brand committed to proving that business can be a force for good by producing great gear that benefits people and the planet.',
+        entity: 'client',
+      },
+      {
+        source_video_id: 'p1',
+        claim:
+          'Sealand acknowledges ongoing challenges and setbacks but commits to continuous improvement year over year, with a roadmap for the next decade.',
+        entity: 'client',
+      },
+    ],
+    membership: [
+      { subjectId: 's1', label: 'Durability', videoIds: ['p1', 'p4', 'p6'] },
+      { subjectId: 's2', label: 'Recycled materials', videoIds: ['p1', 'p2'] },
+    ],
+    // SEVENTEEN PUBLISHED, FIVE READ — the tenant's own September figure, not
+    // a rounded one. A subject match only exists for a post Pass A analysed,
+    // and on Sealand 62 of 90 own posts carry no analysis at all (measured
+    // 2026-09-18) — so the card's subject rows say "3 of 5" and name their
+    // population, rather than reading "3 of 17" about twelve posts nobody read.
+    readPosts: 5,
+    yours: verdict({
+      objectKind: 'subject',
+      objectId: 's1',
+      objectLabel: 'Durability',
+      audience: CLIENT_AUDIENCE,
+      value: { k: 26, n: 84 },
+      baseline: { k: 23, n: 85 },
+      changePts: null,
+      bandPts: null,
+      state: 'too_little_data',
+    }),
+    category: verdict({
+      objectKind: 'subject',
+      objectId: 's1',
+      objectLabel: 'Durability',
+      value: { k: 305, n: 1388 },
+      baseline: { k: 264, n: 1388 },
+      changePts: 3,
+      bandPts: 1.9,
+      state: 'moved',
+    }),
+  })
+}
+
+/** One move, read: declared in August, so July is the last clean month before
+ *  it and September the latest after it. August is drawn and not compared. */
+export function moveReadingFixture(): MoveReading {
+  const line = (audience: string, label: string, touched: boolean, ks: [number, number][]) => ({
+    audience,
+    label,
+    touched,
+    noClustering: true,
+    points: ks.map(([k, n], i) => ({
+      month: ['2026-07-01', '2026-08-01', REAL_MONTH][i],
+      k,
+      n,
+      pct: Math.round((k / n) * 1000) / 10,
+    })),
+  })
+  return readMove({
+    move: {
+      id: 'mv-1',
+      title: 'Push repairability',
+      kind: 'subject',
+      declared_at: '2026-08-12',
+      subject_id: 's3',
+      registry_ids: null,
+      lineage_id: null,
+    },
+    targetLabel: 'Repair & warranty',
+    series: [
+      line(CLIENT_AUDIENCE, 'You', true, [[6, 82], [8, 83], [10, 84]]),
+      line(INDUSTRY_AUDIENCE, 'The category', false, [[118, 1290], [131, 1340], [153, 1388]]),
+      line(rivalKey('Freitag'), 'Freitag', false, [[36, 138], [39, 140], [41, 142]]),
+    ],
+    window: { kind: 'since', from: '2026-07-01', to: '2026-10-01' },
+  })
+}
 
 export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData {
   const window = horizonWindow('this_month', NOW, '2026-06-01')
@@ -258,6 +415,9 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
       masthead: MOVES_MASTHEAD,
       empty: null,
       recorded: true,
+      card: cardFixture(),
+      readings: [moveReadingFixture()],
+      acted: actedTally(1, 64),
     },
     record: {
       line: '3 updates · 2,359 videos (TikTok 38% · YouTube 29% · Instagram 21% · Reddit 12%) · 27% of what was said on camera was not in English · 1 tracking change',
@@ -333,11 +493,32 @@ export function refusedFixture(): OverviewData {
       standingsNote:
         'How much attention each brand drew is not recorded month by month for this workspace yet — what is printed here is what was raised under their content.',
     },
+    // PRODUCTION TODAY, AND THE CARD IS THE PART THAT STILL READS. `moves` is
+    // unapplied on both live tenants, so nothing is dated and nothing matched a
+    // subject — and the posts, the floor, the claims and the hook split come
+    // off `videos` and `video_claims`, which ARE applied. The card is drawn,
+    // the subjects row is empty, and `unread` says what cannot be confirmed
+    // yet rather than the card disappearing.
     moves: {
       ...base.moves,
       rows: [],
       empty: MOVES_EMPTY,
       recorded: true,
+      card: buildMoveCandidate({
+        month: REAL_MONTH,
+        clientVideos: [
+          { id: 'p1', upload_date: '2026-09-02', comments_count: 64, hook_style: 'personal-story', classified_type: 'promotional' },
+          { id: 'p2', upload_date: '2026-09-09', comments_count: 3, hook_style: null, classified_type: null },
+        ],
+        claims: [],
+        membership: [],
+        readPosts: 0,
+        yours: null,
+        category: null,
+        declarable: false,
+      }),
+      readings: [],
+      acted: actedTally(1, 64),
     },
   }
 }

@@ -2,7 +2,10 @@ import { describe, it, expect } from 'vitest'
 
 import { buildSeries, type DenominatorPoint, type NumeratorPoint } from '../reading/series'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '../rivals'
-import type { Subject } from '../subjects/types'
+import type { Move, Subject } from '../subjects/types'
+import { actedTally } from '../reading/moves'
+import { cardFixture, moveReadingFixture } from '../../components/pages/overview/fixture'
+import { buildAdviceRows } from './market-surface'
 import {
   buildCategory,
   buildRivals,
@@ -20,7 +23,9 @@ import {
   monthlyLineLabel,
   readingsCounter,
   moveLine,
+  buildMoves,
   MOVES_EMPTY,
+  MOVES_UNLOCK,
   recordWindow,
   splitMovers,
   subjectsNote,
@@ -28,6 +33,7 @@ import {
   type StoredKindRow,
   type StoredStatsRow,
   type SubjectRow,
+  ledgerTally,
 } from './overview'
 import type { Verdict } from '../reading/verdicts'
 import { proseFigures } from '../prose/figures'
@@ -677,5 +683,108 @@ describe('buildRivals', () => {
       statsRows: null, month: '2026-09-01', prevMonth: null, brand: 'Sealand', series, dualMention: null,
     })
     expect(b.rows.find((r) => r.label === 'Poler')?.retiredAt).toBe('2026-09-09')
+  })
+})
+
+describe('buildMoves — OV5, with the card and the readings (Block D · D2)', () => {
+  const move = (over: Partial<Move> = {}): Move => ({
+    id: 'mv1',
+    client_id: 'c1',
+    kind: 'subject',
+    subject_id: 's1',
+    registry_ids: null,
+    lineage_id: null,
+    title: 'Push repairability',
+    note: null,
+    direction: 'up',
+    declared_at: '2026-08-12',
+    declared_by: null,
+    status: 'active',
+    ...over,
+  })
+
+  it('lists the active moves and carries the card, the readings and the ledger ratio', () => {
+    const card = cardFixture()
+    const readings = [moveReadingFixture()]
+    const b = buildMoves({ moves: [move(), move({ id: 'mv2', status: 'done' })], card, readings, acted: actedTally(1, 64) })
+    expect(b.rows.map((r) => r.id)).toEqual(['mv1'])
+    expect(b.recorded).toBe(true)
+    expect(b.empty).toBeNull()
+    expect(b.card).toBe(card)
+    expect(b.readings).toHaveLength(1)
+    expect(b.acted?.line).toContain('1 of 64')
+    // The ledger's ratio is the whole ledger and never a quarter (D12).
+    expect(b.acted?.line).not.toMatch(/quarter/i)
+  })
+
+  it('tells "nothing dated" and "not recorded here" apart, and keeps the card in both', () => {
+    const card = cardFixture()
+    const nothing = buildMoves({ moves: [], card, readings: [], acted: null })
+    expect(nothing.recorded).toBe(true)
+    expect(nothing.empty).toBe(MOVES_EMPTY)
+    expect(nothing.card).toBe(card)
+
+    const unapplied = buildMoves({ moves: null, card, readings: [], acted: null })
+    expect(unapplied.recorded).toBe(false)
+    expect(unapplied.empty).toContain('not recorded for this workspace yet')
+    // THE CARD SURVIVES M4 BEING UNAPPLIED, which is the state of both live
+    // tenants: the posts, the floor, the claims and the hooks come off tables
+    // that ARE applied, and only the confirming is held.
+    expect(unapplied.card).toBe(card)
+  })
+
+  it('carries the unlock and the masthead, and the unlock names no month', () => {
+    const b = buildMoves({ moves: [], card: null, readings: [], acted: null })
+    expect(b.unlock).toBe(MOVES_UNLOCK)
+    expect(b.masthead).toContain('We never claim you caused it')
+    expect(b.unlock).not.toMatch(/not built yet/)
+  })
+})
+
+describe('ledgerTally — one "acted" rule for two surfaces', () => {
+  const rec = (over: Partial<Parameters<typeof ledgerTally>[0][number]> = {}) => ({
+    id: 'r1',
+    title: 'Lead with repairability',
+    lineage_id: 'L1',
+    status: 'new',
+    priority: 'high',
+    based_on: null,
+    created_at: '2026-09-13T00:00:00.000Z',
+    ...over,
+  })
+
+  it('takes the newest copy of a lineage, never any copy that ever moved', () => {
+    // One lineage, two copies: the OLDER one was marked done and the newest
+    // update rewrote it as new. Overview used to OR across the copies and call
+    // it acted; Market takes the newest copy and calls it new.
+    const rows = [
+      rec({ id: 'old', status: 'acted_on', created_at: '2026-09-10T00:00:00.000Z' }),
+      rec({ id: 'new', status: 'new', created_at: '2026-09-13T00:00:00.000Z' }),
+    ]
+    expect(ledgerTally(rows, []).decided).toBe(0)
+    expect(ledgerTally(rows, []).of).toBe(1)
+    // And that is the answer Market prints off the same rows.
+    const market = buildAdviceRows(
+      rows.map((r) => ({ id: r.id, title: r.title, lineage_id: r.lineage_id, status: r.status, type: 'content', created_at: r.created_at, run_id: r.id })),
+      [],
+    )
+    expect(market.filter((r) => r.status !== 'new')).toHaveLength(0)
+  })
+
+  it('a decision on the lineage is inherited over the newest copy', () => {
+    const rows = [rec({ id: 'a' }), rec({ id: 'b', lineage_id: 'L2' })]
+    const tally = ledgerTally(rows, [
+      { id: 'd1', lineage_id: 'L1', status: 'acted_on', decided_at: '2026-09-14T00:00:00.000Z' },
+    ])
+    expect(tally.decided).toBe(1)
+    expect(tally.of).toBe(2)
+    expect(tally.line).toContain('1 of 2')
+    expect(tally.line).not.toMatch(/quarter/i)
+  })
+
+  it('counts lineages and not copies, and falls back to the row id', () => {
+    const rows = [rec({ id: 'a', lineage_id: null }), rec({ id: 'b', lineage_id: null })]
+    expect(ledgerTally(rows, []).of).toBe(2)
+    expect(ledgerTally([rec({ id: 'a' }), rec({ id: 'b' })], []).of).toBe(1)
   })
 })
