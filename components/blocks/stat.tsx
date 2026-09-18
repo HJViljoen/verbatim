@@ -29,7 +29,7 @@ import { EMAIL, FONT } from '@/lib/email/theme'
  *     broken before.
  */
 export function BlockStat({
-  value, unit, level, base, aside, mode = 'app', size = 'md',
+  value, unit, level, base, wrapBase = false, aside, mode = 'app', size = 'md',
 }: {
   value: ReactNode
   unit?: string
@@ -41,8 +41,27 @@ export function BlockStat({
    *  passes `<span data-copy="subject">`. Rule (b) reads the level node's whole
    *  text, marked descendants included, so the "of N" is still enforced. */
   level?: { word: ReactNode; of: string }
-  /** What the figure is measured against, in words ("since last update"). */
+  /** What the figure is measured against, in words ("since last update").
+   *
+   *  ONE LINE, CLIPPED, unless the caller says otherwise — see `wrapBase`. */
   base?: ReactNode
+  /**
+   *  Let `base` WRAP instead of being clipped to one line (Block D wave 2,
+   *  code review C5).
+   *
+   *  `base` renders inside `truncate`, which is right for the short bases this
+   *  stat was written for ("since last update") and wrong for a base that
+   *  carries a denominator. This week's switching stat states "someone said
+   *  they were moving between brands — of 205 videos this update · 1 below" in
+   *  a 378px column: the string needs 447px, so the rendered sentence ended
+   *  "— of 205 …" and the reader lost the very basis the block's own comment
+   *  defends printing. A number without its basis is a measurement nobody
+   *  made, and a clip is a silent way to make one.
+   *
+   *  Opt-in rather than the default because every other caller's tile height
+   *  was set against a one-line base; a caller whose base carries an "of N"
+   *  asks for the wrap. */
+  wrapBase?: boolean
   /** Something on the same line — a sparkline, a badge. Screen and paper only;
    *  an email drops it, because an email cannot lay two things side by side
    *  without another table and it is never worth one. */
@@ -72,7 +91,9 @@ export function BlockStat({
       {level ? (
         <span data-copy="level" className="text-[12px] text-secondary-foreground">{level.word} · {level.of}</span>
       ) : null}
-      {base ? <span className="truncate text-[11.5px] text-muted-foreground">{base}</span> : null}
+      {base ? (
+        <span className={wrapBase ? 'text-[11.5px] text-muted-foreground [text-wrap:pretty]' : 'truncate text-[11.5px] text-muted-foreground'}>{base}</span>
+      ) : null}
     </div>
   )
 }

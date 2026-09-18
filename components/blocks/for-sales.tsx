@@ -89,6 +89,14 @@ export function forSalesBlock<D>(key: string, pick: (data: D) => ForSalesData): 
                   size="sm"
                   value={fmtInt(d.switchingTotal)}
                   unit={d.switchingTotal === 1 ? 'comment' : 'comments'}
+                  // AND IT WRAPS RATHER THAN CLIPPING (code review C5). `base`
+                  // renders inside `truncate`, and this base carries the
+                  // denominator the comment above defends printing: in the
+                  // right half of the artboard's two columns the string needs
+                  // 447px of 378, so a reader saw "— of 205 …" and the basis
+                  // was cut off the page. A denominator clipped away is the
+                  // measurement nobody made, arrived at by layout.
+                  wrapBase
                   base={`someone said they were moving between brands — ${of}${
                     d.switchingTotal > d.switching.length ? ` · ${fmtInt(d.switching.length)} below` : ''
                   }`}
@@ -128,9 +136,9 @@ export function forSalesBlock<D>(key: string, pick: (data: D) => ForSalesData): 
           footer={email
             ? <a href={href} style={{ color: EMAIL.ink }}>{d.brief.label}</a>
             : <Link href={href} className="hover:underline">{d.brief.label}</Link>}
-          // THE MOCK'S "WEEK OF 21–27 SEP", in the slot it draws it in. The
-          // days are the run's own frozen window, so this note and §4's meta
-          // are the same two dates.
+          // THE MOCK'S "WEEK OF 21–27 SEP", in the slot it draws it in — with
+          // the noun refused (see `windowNote`). The days are the run's own
+          // frozen window, so this note and §4's meta are the same two dates.
           footerNote={windowNote(d.window)}
         >
           {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
