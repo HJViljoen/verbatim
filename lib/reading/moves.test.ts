@@ -8,6 +8,7 @@ import {
   CARD_NO_POSTS,
   HOOK_UNCLASSIFIED,
   MOVE_NO_CLIENT_SERIES,
+  MOVE_NO_MONTHS_RECORDED,
   MOVE_NO_TARGET_SERIES,
   MOVE_TOO_YOUNG,
   moveChartNote,
@@ -321,6 +322,26 @@ describe('readMove — the one movement claim a move earns', () => {
     expect(r.control).toEqual([])
     expect(r.months).toEqual([])
     expect(r.unread).toBe(MOVE_NO_TARGET_SERIES)
+  })
+
+  it('a subject or theme move with no months is never told it is advice', () => {
+    // The state every subject move is in where `moves` (M4) is applied and the
+    // month tables are not — which is the ordering production passes through.
+    const subject = reading({ series: [] })
+    expect(subject.verdict).toBeNull()
+    expect(subject.unread).toBe(MOVE_NO_MONTHS_RECORDED)
+    expect(subject.unread).not.toBe(MOVE_NO_TARGET_SERIES)
+    // A subject move filed with a null target is the same absence, not advice.
+    const untargeted = reading({
+      move: { id: 'mv9', title: 'Push repairability', kind: 'subject', declared_at: '2026-08-12', subject_id: null, registry_ids: null, lineage_id: null },
+      series: [],
+    })
+    expect(untargeted.unread).toBe(MOVE_NO_MONTHS_RECORDED)
+    const themed = reading({
+      move: { id: 'mv10', title: 'Answer the wet-commute question', kind: 'theme', declared_at: '2026-08-12', subject_id: null, registry_ids: ['t1'], lineage_id: null },
+      series: [],
+    })
+    expect(themed.unread).toBe(MOVE_NO_MONTHS_RECORDED)
   })
 
   it('names a theme move by its themes and an advice move as advice', () => {

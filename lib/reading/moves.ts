@@ -422,6 +422,22 @@ export const MOVE_NO_CLIENT_SERIES = 'Your own side carries no reading for this 
  *  until the advice is expressed as a subject or some themes. */
 export const MOVE_NO_TARGET_SERIES =
   'This one is on a piece of advice, which names nothing the conversation can be counted for, so there is no line to read yet.'
+/**
+ * Said when a move DOES name a subject or some themes and no month came back
+ * for them — which is a different fact from `MOVE_NO_TARGET_SERIES` and must
+ * not borrow its sentence.
+ *
+ * An empty series on a subject or theme move means the monthly reading holds
+ * nothing for that object here: `month_subject_readings` /
+ * `month_theme_readings` unapplied or unseeded, a subject move filed with a
+ * null `subject_id`, or a target the seed never reached. Telling that reader
+ * "this one is on a piece of advice" is a false statement about their own move
+ * in their own words — and it is the state EVERY subject move is in on a
+ * tenant where `moves` (M4) is applied and the month tables are not, which is
+ * the ordering production passes through.
+ */
+export const MOVE_NO_MONTHS_RECORDED =
+  'The months behind this one are not recorded for this workspace yet, so there is no line to read.'
 
 /**
  * What a move did — the one movement claim a move earns.
@@ -462,10 +478,17 @@ export function readMove(input: MoveReadingInput): MoveReading {
     if (verdict.bandPts != null) figures.band_pts = { value: verdict.bandPts, unit: 'pts', label: 'the band' }
   }
 
+  // WHICH ABSENCE IT IS, BY THE MOVE'S OWN KIND. An empty series is two
+  // different facts and only one of them is about advice: a move on advice
+  // names nothing countable, and a move on a subject or some themes names
+  // something the monthly reading has no rows for. The kind is what tells them
+  // apart — never the emptiness.
   const unread = verdict
     ? null
     : input.series.length === 0
-      ? MOVE_NO_TARGET_SERIES
+      ? input.move.kind === 'advice'
+        ? MOVE_NO_TARGET_SERIES
+        : MOVE_NO_MONTHS_RECORDED
       : touched
         ? MOVE_TOO_YOUNG
         : MOVE_NO_CLIENT_SERIES
