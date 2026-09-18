@@ -248,7 +248,7 @@ export const forSales: Block<{ sales: ForSalesData }> = {
             // citations whose audience is `competitor:*` — drawn from the same
             // pool as the row above, not beside it — so two adjacent counts
             // over one n invited a reader to add them together.
-            of={denominatorOf(s.videos, 'videos · objections counted under that rival’s content, never under yours, and already inside the objections above')}
+            of={denominatorOf(s.videos, 'videos under that rival’s content, never under yours — and inside the count above')}
             denominated={s.videos != null}
             last={s.switchingTotal == null}
           />

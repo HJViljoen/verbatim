@@ -489,13 +489,13 @@ describe('WR4 · for sales', () => {
   // n invited a reader to add them.
   it('says the rival row is inside the objections above, not beside them', () => {
     expect(renderText(block.render(weeklyFixture(), 'app', ctx)))
-      .toContain('already inside the objections above')
+      .toContain('and inside the count above')
   })
 
   it('counts the rival’s complaints under the rival’s own content', () => {
     const text = renderText(block.render(weeklyFixture(), 'app', ctx))
     expect(text).toContain('They complain about Freitag')
-    expect(text).toContain('counted under that rival’s content, never under yours')
+    expect(text).toContain('under that rival’s content, never under yours')
   })
 
   // D14: the mock says "both toward Sealand · 7 toward, 5 away", and nothing
