@@ -412,6 +412,18 @@ describe('CO3 · head to head, then and now', () => {
     expect(text).toContain('Under 10 videos on a side, so no comparison is drawn.')
   })
 
+  it('gives an empty column a sentence, never five blank cells', () => {
+    // `FaceOffMeasure.why` was computed on all five measures and rendered
+    // nowhere: a tracked rival nothing of whose content was read got an empty
+    // column and no reason anywhere in the block, which reads as a measured
+    // nothing. Deduplicated, because five measures share one absence.
+    const text = renderText(competitiveHeadToHead.render(unreadRivalFixture(), 'app', ctx))
+    expect(text).toContain('Nothing was read for Rareform in Sep 2026')
+    expect(text.match(/Nothing was read for Rareform/g)?.length).toBe(1)
+    // And a state where both sides ARE read prints no such sentence.
+    expect(renderText(competitiveHeadToHead.render(competitiveFixture(), 'app', ctx))).not.toContain('Nothing was read for')
+  })
+
   it('says there is nothing to put beside you when no rival is selected', () => {
     const data = competitiveFixture({ headToHead: null })
     expect(competitiveHeadToHead.emptyState(data)).toBe(H2H_NO_RIVAL)

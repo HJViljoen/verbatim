@@ -168,6 +168,26 @@ function SideHead({ label, color, mode }: { label: string; color: string; mode: 
   )
 }
 
+/** Every distinct reason a COLUMN is empty, in the order the rows appear.
+ *
+ *  `FaceOffMeasure.why` — "Nothing was read for Rareform in September." — was
+ *  computed on all five measures and rendered nowhere, so a tracked rival
+ *  nothing of whose content was read got five blank cells and no sentence, and
+ *  an empty column reads as a measured nothing. The block's own header says a
+ *  side that is absent is not a side that is zero and names `why` as the thing
+ *  that says which; it now prints, beside the verdict reasons, on the same
+ *  deduplicated rule (the five measures share one sentence per absent side). */
+export function sideReasons(h2h: HeadToHead): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const m of h2h.measures) {
+    if (!m.why || seen.has(m.why)) continue
+    seen.add(m.why)
+    out.push(m.why)
+  }
+  return out
+}
+
 /** Every distinct reason a row drew no band, in the order the rows appear.
  *  Three of the five share one shape of reason and each states its own; a
  *  deduplicated list is what keeps five sentences from becoming five lines
@@ -245,6 +265,10 @@ export const competitiveHeadToHead: Block<CompetitiveSurfaceData> = {
                 </div>
               </div>
             )}
+            {/* AN EMPTY COLUMN IS NOT A MEASURED ZERO, AND IT SAYS SO FIRST. */}
+            {sideReasons(h).map((why) => (
+              <p key={why} className={note} style={noteStyle}>{why}</p>
+            ))}
             {/* THE REASONS, IN THE OPEN. Three rows are a rate, a median and a
                 count and no band may be drawn over any of them; the mock prints
                 a green number on all three instead. */}
