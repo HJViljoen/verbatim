@@ -143,6 +143,22 @@ describe('the leadership one-pager', () => {
     expect(words).not.toContain('9,100')
   })
 
+  // Rule (b) reads a `level` node's whole text for an "of N", so a month trail
+  // inside the level node satisfied it LEXICALLY while printing three readings
+  // over three different denominators under the one that belongs to September.
+  // The trails are their own nodes now, and the attention months carry the
+  // count of videos each was read over — the one thing that makes two comment
+  // counts comparable at all.
+  it('does not hang three months off one month’s denominator', () => {
+    const markup = render(sheet())
+    const words = markupText(markup)
+    expect(words).toContain('Jul 50,300 on 900 videos · Aug 46,000 on 880 videos')
+    expect(words).toContain('earlier · Jul 28% · Aug 28%')
+    // The panel's size is the size at the CURRENT freeze, so the level node it
+    // stands in holds this month's reading and nothing else.
+    expect(markup).not.toMatch(/a fixed panel of 214 accounts[^<]*Jul/)
+  })
+
   // mock-gap §6 D12. The product refuses the quarter framing deliberately:
   // the decisions were not dated inside the quarter, so the ratio is the whole
   // ledger's and `actedTally` is the one sentence for it.

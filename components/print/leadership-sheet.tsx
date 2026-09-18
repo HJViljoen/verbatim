@@ -228,14 +228,27 @@ function MonthLine({ spark, months, width = 200, height = 44, color = 'var(--cat
  */
 const axisMonth = (month: string): string => monthName(month).split(' ')[0]
 
-/** The months a series actually read, oldest first — "Jul 34% · Aug 30% · Sep 27%". */
+/**
+ * The months BEFORE this one, oldest first — "earlier · Jul 34% · Aug 30%".
+ *
+ * IT IS NOT PART OF THE LEVEL AND IS NOT PRINTED INSIDE THE LEVEL NODE. Rule
+ * (b) reads a `level` node's whole text for an "of N", so "26 of 84 category
+ * videos · Jul 34% · Aug 30% · Sep 27%" satisfied it LEXICALLY while printing
+ * three readings over three different denominators under the one that belongs
+ * to September. Three months are three measurements; the trail is a sibling
+ * node saying which months it is about, and this month's level stands on its
+ * own count.
+ *
+ * The latest month is dropped from it, because the latest month is the card's
+ * hero — the trail is what the hero is not.
+ */
 function trailOf(spark: readonly (number | null)[], months: readonly string[]): string | null {
   if (spark.length !== months.length) return null
   const read = months
     .map((m, i) => ({ month: m, pct: spark[i] }))
     .filter((p): p is { month: string; pct: number } => p.pct != null)
   if (read.length < 3) return null
-  return read.slice(-3).map((p) => `${axisMonth(p.month)} ${fmtPct(p.pct, 0)}`).join(' · ')
+  return `earlier · ${read.slice(-3, -1).map((p) => `${axisMonth(p.month)} ${fmtPct(p.pct, 0)}`).join(' · ')}`
 }
 
 // ── which rows the three figure cards are about ────────────────────────────
@@ -378,7 +391,12 @@ function AttentionCard({ attention, note }: { attention: AttentionBlock | null; 
   }
   const size = attention.accountCount
   const frozen = attention.panel?.frozen_at ? shortDate(attention.panel.frozen_at) : null
-  const levels = attention.months.slice(-3).map((m) => `${axisMonth(m.month)} ${fmtInt(m.comments)}`).join(' · ')
+  // Each earlier month over ITS OWN count of videos read, which is the one
+  // thing that makes two comment counts comparable at all. The latest month is
+  // the card's hero and is not repeated here.
+  const levels = attention.months.slice(-3, -1)
+    .map((m) => `${axisMonth(m.month)} ${fmtInt(m.comments)} on ${fmtInt(m.videos)} videos`)
+    .join(' · ')
   return (
     <div className={`${CARD} flex flex-col justify-between gap-1.5`}>
       {/* THE VERDICT SITS WITH THE CAPTION, NOT AGAINST THE UNIT. Immediately
@@ -396,8 +414,12 @@ function AttentionCard({ attention, note }: { attention: AttentionBlock | null; 
       <p data-copy="level" className={TRAIL}>
         {size != null ? `a fixed panel of ${fmtInt(size)} accounts` : 'a fixed panel'}
         {frozen ? ` · re-frozen ${frozen}` : ''}
-        {levels ? ` · ${levels}` : ''}
       </p>
+      {/* THE EARLIER MONTHS ARE THEIR OWN NODE. Inside the level node above,
+          "Jul 50,300 · Aug 46,000" sat under "a fixed panel of 214 accounts" —
+          and the panel is the size it is at the CURRENT freeze, which is the
+          one denominator those two months do not have. */}
+      {levels ? <p className={TRAIL}>{levels}</p> : null}
     </div>
   )
 }
