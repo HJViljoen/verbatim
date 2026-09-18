@@ -108,11 +108,38 @@ export interface RivalPost {
 export interface ForContentBlock {
   worthAReply: { ref: string; text: string; lang?: string | null; english?: string | null; context: string; intentLabel: string; href: string | null }[]
   worthAReplyNote: string | null
+  /**
+   * How many comments this update's inbox holds in all, and of what kinds —
+   * the mock's "Worth a reply this week · 12 · questions 7 · complaints 3 ·
+   * wanting to buy 2" (`weekly.s5.reply`).
+   *
+   * THE TOTAL IS THE INBOX'S OWN, TAKEN BEFORE THE CAP. `worthAReply` above is
+   * the three SHOWN, and counting that array would print `WORTH_A_REPLY` as a
+   * measurement — the same mistake `switchingTotal` exists to stop one section
+   * up. Null where the Content loader could not be read at all.
+   *
+   * The mock's second sub-line, "8 answered last week · 4 ignored", is not
+   * here and cannot be: nothing in this product records whether a comment was
+   * answered (mock-gap §6 D14).
+   */
+  worthAReplyTotal: number | null
+  worthAReplyCounts: { label: string; count: number }[]
   rising: Mover[]
   risingNote: string | null
   /** `label` is the READER'S word for the format, through `workedLabel` — never
    *  the stored slug. `of` is the n the median was read against. */
   format: { label: string; multiple: number; videos: number; of: number } | null
+  /**
+   * The runner-up in the same family as `format`, so the block can print the
+   * mock's head-to-head with an n on EACH side rather than one figure alone
+   * (`weekly.s5.format`).
+   *
+   * THE SAME FAMILY, NEVER A MIXED PAIR. `format` is the best FORMAT where the
+   * update has one and the best HOOK otherwise; a runner-up taken from the
+   * other list would put a hook beside a format under a heading that says one
+   * outperformed the other.
+   */
+  runnerUp: { label: string; multiple: number; videos: number } | null
   weekHref: string
   briefHref: string
 }
@@ -857,16 +884,23 @@ function buildContent(
     return {
       worthAReply: [],
       worthAReplyNote: 'Nothing is waiting for a reply from this update.',
+      worthAReplyTotal: null,
+      worthAReplyCounts: [],
       rising,
       risingNote,
       format: null,
+      runnerUp: null,
       weekHref,
       briefHref,
     }
   }
   const c = content as Exclude<Awaited<ReturnType<typeof loadContent>>, { empty: true }>
   const top: ContentInboxRow[] = c.inbox.rows.slice(0, WORTH_A_REPLY)
-  const format = c.works.formats[0] ?? c.works.hooks[0] ?? null
+  // THE FAMILY IS CHOSEN ONCE and the runner-up comes out of it, so the
+  // head-to-head never puts a hook beside a format.
+  const family = c.works.formats.length > 0 ? c.works.formats : c.works.hooks
+  const format = family[0] ?? null
+  const runner = family[1] ?? null
   return {
     worthAReply: top.map((r) => ({
       ref: r.ref,
@@ -880,6 +914,10 @@ function buildContent(
     // inbox's own sentence, so the artefact keeps the same shape every week
     // rather than dropping the section.
     worthAReplyNote: top.length > 0 ? null : 'Nothing is waiting for a reply from this update.',
+    worthAReplyTotal: c.inbox.total,
+    worthAReplyCounts: c.inbox.counts
+      .filter((i) => i.count > 0)
+      .map((i) => ({ label: (INTENT_LABEL[i.intent] ?? 'Worth a reply').toLowerCase(), count: i.count })),
     rising,
     risingNote,
     // THROUGH `workedLabel`, WHICH EXISTS FOR THIS. Its docblock says why the
@@ -894,6 +932,7 @@ function buildContent(
     // would have been emailed "trend-riding — 4.5× the median…"; workedLabel
     // renders it "Riding what is current".
     format: format ? { label: workedLabel(format.k), multiple: format.multiple, videos: format.count, of: c.works.rated } : null,
+    runnerUp: runner ? { label: workedLabel(runner.k), multiple: runner.multiple, videos: runner.count } : null,
     weekHref,
     briefHref,
   }

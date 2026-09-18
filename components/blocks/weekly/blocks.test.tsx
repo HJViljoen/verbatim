@@ -409,7 +409,28 @@ describe('WR5 · for content', () => {
     // THE LABEL IS THE READER'S WORD AND THE MULTIPLE PRINTS ITS n. The block
     // printed the stored slug (`promotional`, and one day `trend-riding`) and a
     // multiple over an unstated population.
-    expect(text).toContain('Talking head — 2.4× the median video’s engagement, over 31 of 402 videos in this update')
+    expect(text).toContain('Talking head outperformed Commute POV')
+  })
+
+  // THE ARTBOARD'S COUNTED ROWS (block D wave 2). Three quote rails and no
+  // count anywhere left a content person unable to tell three from thirty.
+  it('counts the reply queue and splits it by intent, never the shown three', () => {
+    for (const mode of MODES) {
+      const text = renderText(block.render(weeklyFixture(), mode, ctx))
+      expect(text, mode).toContain('Worth a reply this week')
+      expect(text, mode).toContain('question 7 · objection 3 · buying signal 2')
+      expect(text, mode).toContain('1 below in full')
+      // D14: nothing records whether a comment was answered.
+      expect(text, mode).not.toMatch(/answered|ignored/i)
+    }
+  })
+
+  // The mock's head-to-head, with an n on EACH side, and D9's label: the
+  // median is this UPDATE'S, not the month's.
+  it('prints the format head-to-head with an n on each side', () => {
+    const text = renderText(block.render(weeklyFixture(), 'app', ctx))
+    expect(text).toContain('Commute POV 1.8× over 24 of 402 videos')
+    expect(text).toContain('against this update’s median video · 31 of 402 videos carry it')
   })
 
   it('keeps the inbox’s empty state verbatim rather than dropping the section', () => {

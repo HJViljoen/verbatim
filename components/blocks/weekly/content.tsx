@@ -6,6 +6,7 @@ import { BlockQuote } from '@/components/blocks/quote'
 import { BlockMovement } from '@/components/blocks/movement'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, fmtPct } from '@/lib/format'
+import { inPeriod } from '@/lib/reports/weekly'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { WeeklyData } from '@/lib/pages/weekly'
 
@@ -34,6 +35,56 @@ function Rail({ mode, children }: { mode: RenderMode; children: ReactNode }) {
     : <div className="border-t border-border/70 py-1.5">{children}</div>
 }
 
+/**
+ * The artboard's counted row: a title, a mono 16/600 figure at the right end,
+ * and a mono sub-line under it (`weekly.s5.reply`, `weekly.s5.format`).
+ *
+ * The same anatomy WR4 draws, at the same scale — three counted rows in a row
+ * are what §4 and §5 are, and a reader crossing from one to the other should
+ * not have to learn a second shape.
+ */
+function CountedRow({ title, value, note, mode, children }: {
+  title: ReactNode
+  value: string
+  note?: ReactNode
+  mode: RenderMode
+  children?: ReactNode
+}) {
+  const figure = mode === 'email'
+    ? <span style={{ fontFamily: FONT.mono, fontSize: 16, fontWeight: 600, color: EMAIL.ink }}>{value}</span>
+    : <span className="font-mono text-[16px] font-semibold tabular-nums">{value}</span>
+  if (mode === 'email') {
+    return (
+      <div style={{ borderTop: `1px solid ${EMAIL.hairline}`, padding: '11px 0' }}>
+        <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} border={0} style={{ borderCollapse: 'collapse', borderSpacing: 0 }}>
+          <tbody>
+            <tr>
+              <td style={{ fontFamily: FONT.sans, fontSize: 14, color: EMAIL.ink }}>{title}</td>
+              <td align="right" style={{ whiteSpace: 'nowrap', paddingLeft: 14 }}>{figure}</td>
+            </tr>
+          </tbody>
+        </table>
+        {note ? <div style={{ fontFamily: FONT.mono, fontSize: 11, lineHeight: 1.5, color: EMAIL.faint, marginTop: 5 }}>{note}</div> : null}
+        {children}
+      </div>
+    )
+  }
+  return (
+    <div className="flex min-h-[44px] flex-col gap-1.5 border-t border-border/70 py-2.5">
+      <div className="flex items-baseline justify-between gap-3.5">
+        <span className="min-w-0 text-[14px]">{title}</span>
+        <span className="flex-none">{figure}</span>
+      </div>
+      {note ? <span className="font-mono text-[11px] leading-relaxed text-muted-foreground">{note}</span> : null}
+      {children}
+    </div>
+  )
+}
+
+/** "1.8× over 24 of 402" — a multiple with the n it was read over, on either
+ *  side of the head-to-head. */
+const multipleOf = (m: number): string => `${(Math.round(m * 10) / 10).toFixed(1)}×`
+
 function Eyebrow({ mode, children }: { mode: RenderMode; children: ReactNode }) {
   return mode === 'email'
     ? <div style={{ fontFamily: FONT.mono, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.5px', color: EMAIL.faint }}>{children}</div>
@@ -53,6 +104,8 @@ export const weeklyContent: Block<WeeklyData> = {
 
   render(data, mode = 'app', ctx) {
     const c = data.content
+    // The window's own word — Sealand's is thirty days long (`periodNounFor`).
+    const noun = data.section1.check.noun
     // ABSOLUTE IN EVERY MODE (lib/blocks/types.ts, BlockContext.appUrl): print
     // goes into a PDF and the share page is read outside the app, so a relative
     // href is a dead link there. The app passes appUrl '' and keeps the
@@ -75,10 +128,31 @@ export const weeklyContent: Block<WeeklyData> = {
 
     return frame(
       <div>
-        {c.worthAReply.length > 0
-          ? c.worthAReply.map((q, i) => (
-              <Rail key={`${q.ref}:${i}`} mode={mode}>
-                <Eyebrow mode={mode}>Worth a reply · {q.intentLabel}</Eyebrow>
+        {/* ONE COUNTED ROW, THEN THE WORDS (weekly.s5.reply). The mock counts
+            the queue and splits it by intent; the artefact printed three quote
+            rails and no count, so a content person could not tell three from
+            thirty. The count is the inbox's OWN total, taken before
+            `WORTH_A_REPLY` capped what is shown — counting the shown array
+            would print the cap as a measurement. */}
+        {c.worthAReplyTotal != null ? (
+          <CountedRow
+            mode={mode}
+            title={`Worth a reply ${inPeriod(noun)}`}
+            value={fmtInt(c.worthAReplyTotal)}
+            note={
+              <>
+                {c.worthAReplyCounts.length > 0
+                  ? c.worthAReplyCounts.map((i) => `${i.label} ${fmtInt(i.count)}`).join(' · ')
+                  : 'grouped by what the comment was'}
+                {c.worthAReply.length > 0 && c.worthAReplyTotal > c.worthAReply.length
+                  ? ` · ${fmtInt(c.worthAReply.length)} below in full`
+                  : ''}
+              </>
+            }
+          >
+            {c.worthAReply.map((q, i) => (
+              <div key={`${q.ref}:${i}`} style={mode === 'email' ? { marginTop: 6 } : undefined} className={mode === 'email' ? undefined : 'mt-1.5'}>
+                <Eyebrow mode={mode}>{q.intentLabel}</Eyebrow>
                 <BlockQuote
                   quote={q}
                   mode={mode}
@@ -88,9 +162,12 @@ export const weeklyContent: Block<WeeklyData> = {
                       : <a href={q.href} className="hover:underline">{q.context} →</a>
                     : q.context}
                 />
-              </Rail>
-            ))
-          : <Note mode={mode}>{c.worthAReplyNote}</Note>}
+              </div>
+            ))}
+          </CountedRow>
+        ) : (
+          <Note mode={mode}>{c.worthAReplyNote}</Note>
+        )}
 
         {c.rising.length > 0 ? (
           <Rail mode={mode}>
@@ -116,28 +193,23 @@ export const weeklyContent: Block<WeeklyData> = {
         )}
 
         {c.format ? (
-          <Rail mode={mode}>
-            <Eyebrow mode={mode}>What worked</Eyebrow>
-            <div
-              style={mode === 'email' ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, marginTop: 3 } : undefined}
-              className={mode === 'email' ? undefined : 'mt-0.5 text-[12.5px]'}
-            >
-              {/* "IN THIS UPDATE" IS NOT DECORATION. Unlike everything above
-                  it, this figure is run-indexed: the Content loader filters
-                  videos to the latest run (`.eq('run_id', videoRunId)`) before
-                  it measures against the median. Under a masthead reading
-                  "Every number below is this month so far, against the three
-                  months before it", an unlabelled "4.5× over 113 videos" reads
-                  as the month's. WR3 goes to trouble to label its update-scoped
-                  counts; this line owed the reader the same clause, and its own
-                  empty state was already saying it. */}
-              {/* AND THE MULTIPLE PRINTS ITS DENOMINATOR. "over 113 videos"
-                  was a multiple against a median over an unstated population;
-                  This week's equivalent reads "· 46 of 609 videos". `of` is the
-                  n the median was taken over. */}
-              {c.format.label} — <span data-copy="figure">{(Math.round(c.format.multiple * 10) / 10).toFixed(1)}×</span> the median video’s engagement, over <span data-copy="figure">{fmtInt(c.format.videos)} of {fmtInt(c.format.of)}</span> {c.format.of === 1 ? 'video' : 'videos'} in this update
-            </div>
-          </Rail>
+          <CountedRow
+            mode={mode}
+            title={c.runnerUp ? <>{c.format.label} outperformed {c.runnerUp.label}</> : <>{c.format.label}</>}
+            value={multipleOf(c.format.multiple)}
+            note={
+              <>
+                {c.runnerUp ? <>{c.runnerUp.label} <span data-copy="level">{multipleOf(c.runnerUp.multiple)} over {fmtInt(c.runnerUp.videos)} of {fmtInt(c.format.of)} videos</span> · </> : null}
+                {/* D9: the median is THIS UPDATE'S, and the clause is not
+                    decoration. Unlike everything above it in this block the
+                    figure is run-indexed — the Content loader filters videos to
+                    the latest run before it measures — so under a masthead
+                    reading "every number below is this month so far" an
+                    unlabelled multiple reads as the month's. */}
+                against this update’s median video · <span data-copy="level">{fmtInt(c.format.videos)} of {fmtInt(c.format.of)} videos</span> carry it
+              </>
+            }
+          />
         ) : (
           <Note mode={mode}>No format carried enough videos this update to be worth naming.</Note>
         )}
