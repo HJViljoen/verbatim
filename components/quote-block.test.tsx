@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { render, renderText } from '@/lib/test/render'
+import { render, renderText, decodeEntities } from '@/lib/test/render'
 import { QuoteBlock, translationNote, translationLabel, languageName, MACHINE_TRANSLATION_STAMP, type QuoteMode } from './quote-block'
 import { Quotes } from './quotes'
 import { Verbatim } from './shell/master-list'
 import { Quote as EmailQuote } from './email/primitives'
 import type { Quote } from '@/lib/renderables/types'
+import { EMAIL, FONT } from '@/lib/email/theme'
 
 // Item 8's promise, asserted as markup: the original leads, the English sits
 // under it, and the stamp says who did the translating. In all three modes,
@@ -99,6 +100,59 @@ describe('the email arm is an email', () => {
       expect(html).toContain('<blockquote')
       expect(html).toContain('class=')
     }
+  })
+})
+
+// P0 item 5. The email arm carried a warm-grey palette and literal Georgia
+// from the cream identity MASTER rule 3 retired, so every quote in every email
+// was a different grey, in a different face, from the mail around it — and no
+// drift guard could see it, because the hexes were written out rather than
+// looked up. This is the guard.
+describe('the email arm is painted from lib/email/theme', () => {
+  const html = render(<QuoteBlock quote={es} mode="email" cite="@a_creator · YouTube" />)
+
+  it('carries no colour that is not a theme constant', () => {
+    for (const dead of ['#e5e2dc', '#1c1b19', '#55524c', '#8a867e']) expect(html.toLowerCase()).not.toContain(dead)
+    expect(html).toContain(EMAIL.border)
+    expect(html).toContain(EMAIL.ink)
+    expect(html).toContain(EMAIL.muted)
+    expect(html).toContain(EMAIL.faint)
+  })
+
+  it('sets the speech in the theme serif and the metadata in the theme mono', () => {
+    // React escapes the stacks' own apostrophes into the style attribute.
+    const styles = decodeEntities(html)
+    expect(styles).toContain(FONT.serif)
+    expect(styles).toContain(FONT.mono)
+    expect(styles).not.toContain('ui-monospace')
+    // Georgia survives only as the theme serif's own web-safe fallback.
+    expect(styles).not.toContain('Georgia, "Times New Roman", serif')
+  })
+})
+
+// The in-app treatment the artboards draw (P0 item 5): a green-tinted rule,
+// the words leaning, ink at 85%. The face stays serif — the mock's §3.15 asks
+// for sans here and contradicts its own §1, MASTER.md and DESIGN.md, all three
+// of which say a quote is speech and speech is the voice face.
+describe('the in-app arm', () => {
+  const html = render(<QuoteBlock quote={es} mode="app" />)
+
+  it('rules the quote in the green tint, not in chrome grey', () => {
+    expect(html).toContain('border-primary/30')
+    expect(html).not.toContain('border-border')
+  })
+
+  it('leans the words, in the voice face, at the artboards\' size', () => {
+    expect(html).toContain('font-serif')
+    expect(html).toContain('italic')
+    expect(html).toContain('text-[14px]')
+    expect(html).toContain('leading-[1.375]')
+  })
+
+  it('leaves paper alone — a printed quote sits in a tinted block, not on a rule', () => {
+    const paper = render(<QuoteBlock quote={es} mode="print" />)
+    expect(paper).toContain('bg-inner')
+    expect(paper).not.toContain('border-primary/30')
   })
 })
 
