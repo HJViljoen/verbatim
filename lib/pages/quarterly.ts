@@ -17,7 +17,7 @@ import {
 } from '../reading/record'
 import { loadWindowReading, readingClient, type WindowReading } from '../reading/read'
 import { isAnswer, type FigureTable as ReadingFigures, type Verdict } from '../reading/verdicts'
-import { gapBetween, type Gap, type GapSide } from '../reading/gap'
+import { gapBetween, inheritRefusal, type Gap, type GapSide } from '../reading/gap'
 import { proseFigures } from '../prose/figures'
 import type { MonthStatus } from '../reading/types'
 import { composeInterpretation, type Interpretation } from '../prose/interpret'
@@ -1178,7 +1178,11 @@ function buildSubjects(a: {
     // A refusal on EITHER column refuses the difference: if the product will
     // not say whether one side moved, it will not say how far apart they are
     // either, because both refusals are about the same break in the record.
-    const refused = you.state === 'refused' ? you.refusedReason : category.state === 'refused' ? category.refusedReason : undefined
+    // A refused column that recorded no reason draws NO gap rather than a
+    // difference beside it (`inheritRefusal`, lib/reading/gap.ts).
+    const inherited = inheritRefusal([you, category])
+    if (inherited.refused && !inherited.reason) return null
+    const refused = inherited.reason ?? undefined
     return gapBetween({
       objectKind: 'subject',
       objectId: row.id,

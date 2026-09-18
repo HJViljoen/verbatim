@@ -297,6 +297,38 @@ export function gapBetween(input: GapInput): Gap {
   }
 }
 
+export interface InheritedRefusal {
+  /** A reading on one side refused, so the difference must not be stated. */
+  refused: boolean
+  /** Why, where a refusing reading recorded it. NULL means a side refused and
+   *  none of them said why — a caller that gets this draws no gap at all
+   *  rather than a difference beside a refused column. */
+  reason: RefusedReason | null
+}
+
+/**
+ * The refusal a gap inherits from the readings it is drawn between.
+ *
+ * IT ASKS EVERY SIDE, WHICH IS THE WHOLE POINT. The first cut wrote this as a
+ * chain — "is `you` refused? then its reason : is the category refused? then
+ * its reason" — and a refused `you` with no reason recorded yielded
+ * `undefined` and never reached the second question, so the gap was drawn
+ * beside a column the page had already refused to read. A check that can be
+ * satisfied by the failure it is checking for is worse than no check: it reads
+ * as if it were doing something.
+ *
+ * If the product will not say whether one side moved, it will not say how far
+ * apart the two are either — both refusals are about the same break in the
+ * record.
+ */
+export function inheritRefusal(
+  sides: readonly { state: string; refusedReason?: RefusedReason }[],
+): InheritedRefusal {
+  const refusing = sides.filter((s) => s.state === 'refused')
+  if (refusing.length === 0) return { refused: false, reason: null }
+  return { refused: true, reason: refusing.map((s) => s.refusedReason).find((r) => r != null) ?? null }
+}
+
 /** A side as a level: the share and the denominator it is a share of, or the
  *  silence in the page's own words. Every level prints its "of N". */
 function levelOf(side: GapSide): string {

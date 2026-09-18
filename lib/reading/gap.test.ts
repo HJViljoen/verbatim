@@ -7,6 +7,7 @@ import {
   gapDirection,
   gapFigures,
   gapLine,
+  inheritRefusal,
   sidePct,
   type GapReading,
   type GapSide,
@@ -462,5 +463,30 @@ describe('the basis names its year only when it is not the reading’s own', () 
       },
     })
     expect(gapBasisLine(inYear)).toMatch(/^19 points apart in June \(band /)
+  })
+})
+
+describe('inheritRefusal — the refusal a gap takes from the readings beside it', () => {
+  const answered = { state: 'moved' as const }
+  const refused = (reason?: 'rename' | 'tracking_change') => ({ state: 'refused' as const, refusedReason: reason })
+
+  it('draws the gap where neither side refused', () => {
+    expect(inheritRefusal([answered, answered])).toEqual({ refused: false, reason: null })
+  })
+
+  it('asks EVERY side, not only the first — a refused first side with no reason hid the second', () => {
+    expect(inheritRefusal([refused(), refused('tracking_change')])).toEqual({
+      refused: true,
+      reason: 'tracking_change',
+    })
+  })
+
+  it('refuses on either side alone', () => {
+    expect(inheritRefusal([answered, refused('rename')]).reason).toBe('rename')
+    expect(inheritRefusal([refused('rename'), answered]).reason).toBe('rename')
+  })
+
+  it('says a side refused even where none of them said why, so the caller can draw nothing', () => {
+    expect(inheritRefusal([refused(), answered])).toEqual({ refused: true, reason: null })
   })
 })
