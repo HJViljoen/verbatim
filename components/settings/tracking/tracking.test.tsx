@@ -12,7 +12,7 @@ import type { TermSummary } from '@/lib/keywords/value'
 import { platformRows, platformShareBasis } from '@/lib/settings/connections'
 import type { CommunityRow } from '@/lib/settings/communities'
 import type { RivalRow } from '@/lib/settings/rivals-view'
-import { saveState } from '@/lib/settings/save-state'
+import { saveState, type LastChange } from '@/lib/settings/save-state'
 
 // The render tier for Settings › Tracking (Block D wave 2, E-settings). One
 // static render per section, asserted on what it PRINTS — which is where every
@@ -142,7 +142,10 @@ describe('the rivals section', () => {
   const rows = [
     rival({
       name: 'Freitag', noAccounts: false, captured: 28, read: 0,
-      identity: { id: 'r1', client_id: 'c', slug: 'freitag', name: 'Freitag', first_seen_at: '2026-04-06', retired_at: null, superseded_by: null },
+      identity: {
+        id: 'r1', client_id: 'c', slug: 'freitag', name: 'Freitag', first_seen_at: '2026-04-06',
+        retired_at: null, superseded_by: null, created_at: '2026-04-06T00:00:00Z', created_by: null,
+      },
       trackedSince: '2026-04-06',
       perPlatform: [{ platform: 'tiktok', handle: 'freitag', captured: 28, read: 0 }],
       ownPosts: { value: { k: 11, n: 11 }, basis: 'posts published in September 2026', month: '2026-09-01' },
@@ -271,7 +274,10 @@ describe('the cadence section', () => {
 })
 
 describe('the save state', () => {
-  const change = { changed_at: '2026-09-03T14:02:00Z', source: 'logged', affects_audiences: ['competitor:Poler'], affects_months: '[2026-09-01,2026-10-01)' }
+  const change: LastChange = {
+    changed_at: '2026-09-03T14:02:00Z', source: 'logged',
+    affects_audiences: ['competitor:Poler'], affects_months: '[2026-09-01,2026-10-01)',
+  }
 
   it('renders the absence where M1 has not been applied', () => {
     const words = renderText(<LastSaveStrip state={saveState({ lastChange: change, affectsRecorded: false })} note="Poler was added." />)
