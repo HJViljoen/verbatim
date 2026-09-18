@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { OVERVIEW_BLOCKS } from '../../../components/pages/overview'
 import { MARKET_BLOCKS } from '../../../components/pages/market-surface'
 import { marketWays } from '../../../components/pages/market-surface/ways'
-import { CONTENT_MAP, sectionsOf } from './sections'
+import { CONTENT_MAP, sectionsOf, surfacesOf, briefMap } from './sections'
 
 // The content brief's own map (Block D wave 2, E-content). `sections.test.ts`
 // asserts the four maps as a set; this file asserts the one map this package
@@ -42,3 +42,22 @@ describe('ct.ways — the wrong block key', () => {
   })
 })
 
+describe('the content map', () => {
+  it('borrows every surface its sections name, and no other', () => {
+    expect(surfacesOf(briefMap('content_brief'))).toEqual(['overview', 'subjects', 'market', 'content'])
+  })
+
+  it('names the two content-brief blocks this package builds', () => {
+    const blocks = sectionsOf(CONTENT_MAP).map((s) => s.block)
+    expect(blocks).toContain('content.make')
+    expect(blocks).toContain('content.playbook')
+    expect(blocks).toContain('content.record')
+  })
+
+  it('the make block is borrowed from the MARKET surface it is a reading of', () => {
+    // `content.make` draws the recommendation ledger in the mock's card
+    // anatomy. Its data is `MarketSurfaceData`, which the brief already loads
+    // for `ct.advice`, so the section costs no second read.
+    expect(section('ct.make')!.surface).toBe('market')
+  })
+})

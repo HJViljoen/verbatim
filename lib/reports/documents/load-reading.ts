@@ -5,11 +5,13 @@ import { SUBJECT_BLOCKS } from '../../../components/pages/subjects'
 import { VOICE_BLOCKS } from '../../../components/pages/voice-surface'
 import { MARKET_BLOCKS } from '../../../components/pages/market-surface'
 import { COMPETITIVE_BLOCKS } from '../../../components/pages/competitive-surface'
+import { CONTENT_BRIEF_BLOCKS, contentMake } from '../../../components/blocks/content-brief'
 import { audienceInLabel, loadOverview, type OverviewData } from '../../pages/overview'
 import { loadSubjectsPage } from '../../pages/subjects'
 import { loadVoiceSurface } from '../../pages/voice-surface'
 import { loadMarketSurface } from '../../pages/market-surface'
 import { loadCompetitiveSurface } from '../../pages/competitive-surface'
+import { loadContentBrief } from '../../pages/content-brief'
 import { computeReadiness } from '../../readiness/compute'
 import { loadReadiness } from '../../readiness/load'
 import { OWNER_LABEL } from '../../readiness/types'
@@ -66,8 +68,15 @@ const BLOCKS: Record<BriefSurface, readonly Block<never>[]> = {
   overview: OVERVIEW_BLOCKS as readonly Block<never>[],
   subjects: SUBJECT_BLOCKS as readonly Block<never>[],
   voice: VOICE_BLOCKS as readonly Block<never>[],
-  market: MARKET_BLOCKS as readonly Block<never>[],
+  // `content.make` IS A BRIEF'S BLOCK OVER A PAGE'S DATA (Block D wave 2,
+  // E-content). It renders `MarketSurfaceData` — the ledger this brief already
+  // loads for `ct.advice` — in the content artboard's card anatomy, so it is
+  // reachable here and NOT in `MARKET_BLOCKS`: adding it there would mount a
+  // tile on the Market page, which no design asks for, and building a second
+  // surface for it would load the ledger twice.
+  market: [...MARKET_BLOCKS, contentMake] as readonly Block<never>[],
   competitive: COMPETITIVE_BLOCKS as readonly Block<never>[],
+  content: CONTENT_BRIEF_BLOCKS as readonly Block<never>[],
 }
 
 export const blocksFor = (surface: BriefSurface): readonly Block<never>[] => BLOCKS[surface]
@@ -80,6 +89,7 @@ const LOADERS: Record<BriefSurface, SurfaceLoader> = {
   voice: loadVoiceSurface as SurfaceLoader,
   market: loadMarketSurface as SurfaceLoader,
   competitive: loadCompetitiveSurface as SurfaceLoader,
+  content: loadContentBrief as SurfaceLoader,
 }
 
 /**

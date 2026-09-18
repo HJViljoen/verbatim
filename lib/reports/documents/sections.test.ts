@@ -5,6 +5,7 @@ import { SUBJECT_BLOCKS } from '../../../components/pages/subjects'
 import { VOICE_BLOCKS } from '../../../components/pages/voice-surface'
 import { MARKET_BLOCKS } from '../../../components/pages/market-surface'
 import { COMPETITIVE_BLOCKS } from '../../../components/pages/competitive-surface'
+import { CONTENT_BRIEF_BLOCKS, contentMake } from '../../../components/blocks/content-brief'
 import { OWNER_LABEL } from '../../readiness/types'
 import { DOCUMENT_ROLES } from './types'
 import {
@@ -21,12 +22,23 @@ import {
   type ReadinessLike,
 } from './sections'
 
+// MIRRORS `BLOCKS` IN `load-reading.ts`, WHICH IS THE ONE TABLE. Imported by
+// hand rather than from there because that module imports five page loaders,
+// each of which reaches Supabase at module scope, and this tier is pure. Two
+// entries are not a page's block array and say why:
+//   · `content` is the content brief's own surface (Block D wave 2, E-content):
+//     its two blocks are the brief's, not a page's, because the formats table
+//     is CO7 (unmounted) and the record slide is a Settings drawer.
+//   · `contentMake` renders `MarketSurfaceData` in the content artboard's card
+//     anatomy and is reachable on the MARKET surface without being in
+//     `MARKET_BLOCKS` — adding it there would mount a tile on the Market page.
 const KEYS: Record<string, readonly { key: string }[]> = {
   overview: OVERVIEW_BLOCKS,
   subjects: SUBJECT_BLOCKS,
   voice: VOICE_BLOCKS,
-  market: MARKET_BLOCKS,
+  market: [...MARKET_BLOCKS, contentMake],
   competitive: COMPETITIVE_BLOCKS,
+  content: CONTENT_BRIEF_BLOCKS,
 }
 
 const READINESS: ReadinessLike[] = [
@@ -67,9 +79,10 @@ describe('the four section maps', () => {
 
   it('surfacesOf names only the surfaces a map borrows from', () => {
     expect(surfacesOf(briefMap('leadership_brief'))).toEqual(['overview', 'competitive'])
-    // The content brief gained `overview` with the `ct.ways` block-key fix:
-    // the section draws `overview.category`, the block its own words describe.
-    expect(surfacesOf(briefMap('content_brief'))).toEqual(['overview', 'subjects', 'market'])
+    // The content brief gained `overview` (the `ct.ways` block-key fix: it
+    // draws `overview.category`, the block its own words describe) and
+    // `content` (its own two slides) in Block D wave 2.
+    expect(surfacesOf(briefMap('content_brief'))).toEqual(['overview', 'subjects', 'market', 'content'])
     expect(surfacesOf(briefMap('market_brief'))).toEqual(['overview'])
   })
 
