@@ -113,6 +113,23 @@ describe('the weekly email', () => {
     }
   })
 
+  it('prints one link per section at the foot, with no duplicate destination', () => {
+    const text = words(snapshot())
+    // Six sections, four surfaces: §1, §3 and §5 all open This week.
+    expect(text).toContain('Unusual this week →')
+    expect(text).toContain('Your subjects →')
+    expect(text).toContain('For sales →')
+    expect(text).toContain('The record →')
+    expect(text).not.toContain('What came in →')
+    expect(text).not.toContain('For content →')
+  })
+
+  it('names no link for a section the arrangement dropped', () => {
+    const text = words(snapshot(weeklyFixture(), { keys: ['weekly.week', 'weekly.coverage'] }))
+    expect(text).toContain('Unusual this week →')
+    expect(text).not.toContain('Your subjects →')
+  })
+
   it('honours an arrangement that names fewer sections', () => {
     const text = words(snapshot(weeklyFixture(), { keys: ['weekly.week', 'weekly.coverage'] }))
     expect(text).toContain('The week in one sentence')

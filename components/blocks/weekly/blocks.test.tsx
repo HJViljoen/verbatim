@@ -448,6 +448,20 @@ describe('WR6 · coverage', () => {
     expect(text).toContain('comparisons were refused')
   })
 
+  // THE ARTBOARD'S §6 (block D wave 2): the update's own videos lead the line,
+  // "the record →" sits in the header opposite the label, and the Reddit cap —
+  // the one `methodLines` line no reading surface has ever printed — is here.
+  it('leads with this update’s videos, on the clock they are on', () => {
+    for (const mode of MODES) {
+      expect(renderText(block.render(weeklyFixture(), mode, ctx))).toContain('271 videos gathered this week ·')
+    }
+  })
+
+  it('prints the Reddit cap, which no reading surface printed before', () => {
+    expect(renderText(block.render(weeklyFixture(), 'app', ctx)))
+      .toContain('Reddit comments are capped at')
+  })
+
   it('prints the rule that keeps the artefact honest', () => {
     expect(renderText(block.render(weeklyFixture(), 'app', ctx))).toContain(WEEKLY_RULE)
   })

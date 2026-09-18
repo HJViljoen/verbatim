@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-head-element, @next/next/no-page-custom-font -- an email document, not a page */
 import type { BlockContext } from '@/lib/blocks/types'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { WEEKLY_EMAIL_WIDTH, periodNounFor, weeklyDateLine, weeklyEyebrow, weeklyFooterLines, weeklyRuleFor } from '@/lib/reports/weekly'
+import { WEEKLY_EMAIL_WIDTH, periodNounFor, weeklyDateLine, weeklyEyebrow, weeklyFooterLines, weeklyLinks, weeklyRuleFor } from '@/lib/reports/weekly'
 import type { WeeklySnapshotData } from '@/lib/reports/weekly-build'
 import { weeklyBlocksFor } from '@/components/blocks/weekly'
 import { Button, Hairline, text } from './primitives'
@@ -46,6 +46,15 @@ export function WeeklyEmail({ data, shareUrl, appUrl, attached, ctx, preheader }
   // left of the date row, the TENANT at its right end. The reading date moves
   // to the footer, where the mock keeps every stamp — one mono block of
   // provenance instead of a date halfway up the page.
+  const links = weeklyLinks({
+    noun: data.reading.section1.check.noun,
+    keys: data.keys,
+    flagHref: data.reading.section1.check.flags[0]?.href ?? null,
+    weekHref: data.reading.content.weekHref,
+    subjectsHref: '/dashboard/subjects',
+    briefHref: data.reading.sales.brief.href,
+    recordHref: data.reading.coverage.href,
+  })
   const footer = weeklyFooterLines({
     company: data.company,
     updateDate: data.reading.update.date,
@@ -96,6 +105,26 @@ export function WeeklyEmail({ data, shareUrl, appUrl, attached, ctx, preheader }
                     </tr>
                     <tr>
                       <td style={{ padding: '18px 28px 24px' }}>
+                        {/* ONE LINK PER SECTION, at the foot, in the mock's
+                            two-column grid — and no duplicate destination:
+                            §1, §3 and §5 all open This week, so the list is
+                            deduped and names only the sections this
+                            arrangement drew (`weeklyLinks`). */}
+                        {links.length > 0 ? (
+                          <table width="100%" {...presentation} style={{ borderCollapse: 'collapse', tableLayout: 'fixed', marginBottom: 6 }}>
+                            <tbody>
+                              {Array.from({ length: Math.ceil(links.length / 2) }, (_, r) => (
+                                <tr key={r}>
+                                  {[links[r * 2], links[r * 2 + 1]].map((l, i) => (
+                                    <td key={i} width="50%" style={{ padding: '6px 8px 6px 0', verticalAlign: 'top' }}>
+                                      {l ? <a href={`${appUrl}${l.href}`} style={{ fontFamily: FONT.sans, fontSize: 13, fontWeight: 600, color: EMAIL.link, textDecoration: 'none' }}>{l.label} →</a> : null}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        ) : null}
                         <Hairline />
                         <div style={{ marginTop: 8 }}>
                           {shareUrl ? <span style={{ marginRight: 8 }}><Button href={shareUrl} primary>Open the full report</Button></span> : null}

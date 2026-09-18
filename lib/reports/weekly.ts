@@ -542,6 +542,50 @@ export function weeklyDateLine(period: string, previous: string | null): string 
 }
 
 /**
+ * One link per section, at the foot of the artefact (`weekly.s6.links`).
+ *
+ * THE MOCK LISTS SIX AND THIS PRODUCT HAS FOUR SURFACES BEHIND THEM. §1, §3
+ * and §5 all open This week, and printing one destination three times under
+ * three names teaches a reader there are three places to go. So the list is
+ * DEDUPED BY HREF and the label that survives is the first section that
+ * pointed there.
+ *
+ * IT NAMES ONLY THE SECTIONS THIS ARTEFACT DREW. A stored arrangement may name
+ * fewer (`WeeklySnapshotData.keys`), and a link to a section the reader never
+ * saw is a promise about a report that was not sent.
+ *
+ * DOCUMENT CHROME, NOT WR6's. The mock draws it inside §6, immediately above
+ * the buttons — which are the document's — and it is a map OF the artefact, so
+ * it is composed where the arrangement is known and rendered by the document.
+ */
+export function weeklyLinks(input: {
+  noun: PeriodNoun
+  keys: readonly string[]
+  /** Where the flag's own "see the week" points, when there is a flag. */
+  flagHref: string | null
+  weekHref: string
+  subjectsHref: string
+  briefHref: string
+  recordHref: string
+}): { key: WeeklyBlockKey; label: string; href: string }[] {
+  const wanted: { key: WeeklyBlockKey; label: string; href: string }[] = [
+    { key: 'weekly.week', label: `Unusual ${inPeriod(input.noun)}`, href: input.flagHref ?? input.weekHref },
+    { key: 'weekly.subjects', label: 'Your subjects', href: input.subjectsHref },
+    { key: 'weekly.incoming', label: 'What came in', href: input.weekHref },
+    { key: 'weekly.sales', label: 'For sales', href: input.briefHref },
+    { key: 'weekly.content', label: 'For content', href: input.weekHref },
+    { key: 'weekly.coverage', label: 'The record', href: input.recordHref },
+  ]
+  const seen = new Set<string>()
+  return wanted.filter((l) => {
+    if (!input.keys.includes(l.key)) return false
+    if (seen.has(l.href)) return false
+    seen.add(l.href)
+    return true
+  })
+}
+
+/**
  * The three mono lines at the foot (`weekly.footer`).
  *
  * WHAT THE MOCK ASKS FOR, MINUS ONE CLAUSE. Prepared-by · the update's date ·
