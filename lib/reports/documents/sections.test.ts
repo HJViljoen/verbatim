@@ -10,6 +10,7 @@ import { OWNER_LABEL } from '../../readiness/types'
 import { DOCUMENT_ROLES } from './types'
 import {
   BRIEF_MAPS,
+  BRIEF_SURFACES,
   briefMap,
   missingInputs,
   missingSentence,
@@ -62,6 +63,31 @@ describe('the four section maps', () => {
         expect(blocks.map((b) => b.key), `${role} · ${s.id}`).toContain(s.block)
       }
     }
+  })
+
+  // THE MIRROR IS CHECKED AGAINST THE SURFACE LIST IT MIRRORS (E-content code
+  // review 8). `KEYS` is a hand-written copy of `BLOCKS` in `load-reading.ts`,
+  // for the reason above it; nothing forced the two to name the same surfaces,
+  // so a surface added there and forgotten here would simply not be asserted.
+  it('the mirrored block table names every brief surface and no other', () => {
+    expect(Object.keys(KEYS).sort()).toEqual([...BRIEF_SURFACES].sort())
+  })
+
+  // `content.make` IS REACHABLE ON THE MARKET SURFACE WITHOUT BEING A MARKET
+  // PAGE BLOCK, and `blockReading` runs every block of a loaded surface — so
+  // the day a second map borrows any market block, it would inherit this
+  // block's figures, verdicts and quote refs into its own `BriefReading`, and
+  // `confidenceOf` / `countRefused` / the cover prompt would all argue from
+  // them. Contained today by the fact that only CONTENT_MAP names the market
+  // surface at all; that containment is asserted here rather than left to luck.
+  it('content.make is drawn by the content map and by no other', () => {
+    for (const role of DOCUMENT_ROLES) {
+      const blocks = sectionsOf(briefMap(role)).map((s) => s.block)
+      if (role === 'content_brief') expect(blocks).toContain('content.make')
+      else expect(blocks, `${role} borrows content.make`).not.toContain('content.make')
+    }
+    const borrowsMarket = DOCUMENT_ROLES.filter((role) => surfacesOf(briefMap(role)).includes('market'))
+    expect(borrowsMarket).toEqual(['content_brief'])
   })
 
   it('a section id is unique across every map — it names a slide and an edit', () => {

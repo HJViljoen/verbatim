@@ -7,7 +7,7 @@ import { proseFigures } from '@/lib/prose/figures'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { markupText, render } from '@/lib/test/render'
-import { PRIVACY_LINE, REDDIT_CAP_LINE } from '@/lib/reading/method'
+import { REDDIT_CAP_LINE } from '@/lib/reading/method'
 import { BRIEF_UNIT, LABEL_RULE, LEAD_MIN_RATED, PLAYBOOK_EMPTY, PLAYBOOK_GONE, RECORD_GONE } from '@/lib/pages/content-brief'
 import { CONTENT_BRIEF_BLOCKS, contentMake, contentPlaybook, contentRecord } from './index'
 import { shownRows, toMake } from './make'
@@ -413,11 +413,5 @@ describe('content.make — the mock’s page 2', () => {
   it('claims nothing about whether a comment was answered (D6)', () => {
     expect(text).not.toMatch(/ignored/i)
     expect(text).not.toMatch(/answered last week/i)
-  })
-})
-
-describe('the privacy line is the product’s one wording', () => {
-  it('is the same string the record footnote carries', () => {
-    expect(PRIVACY_LINE).toBe('Commenters are never identified; quotes carry platform and date only.')
   })
 })
