@@ -133,8 +133,13 @@ describe('voiceTheme', () => {
     expect(text).toContain('share of the category videos, axis to 15%')
   })
 
-  it('captions the monthly line with each month\u2019s own reading', () => {
-    expect(draw()).toContain('share of the category videos · Jul 5.9% · Aug 6.8% · Sep 9.4%')
+  it('captions the monthly line with each month\u2019s own reading AND its own n', () => {
+    // The bare form — "Aug 6.8%" — is the one deviation 6 of this port refuses
+    // on the mover rows and on the big figure: the three months have three
+    // denominators, which is the whole reason the change between two of them
+    // is banded. The chart's hover `<title>` is not an answer; it is mouse-only
+    // and absent from print and from the PDF.
+    expect(draw()).toContain('share of the category videos · Jul 5.9% of 1,200 · Aug 6.8% of 1,200 · Sep 9.4% of 1,388')
   })
 
   it('shortens only the CHART\u2019s copy of a long name, never the block\u2019s', () => {

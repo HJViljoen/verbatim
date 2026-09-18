@@ -163,11 +163,14 @@ function themeSeries(t: ThemeBlock): CalendarSeries | null {
     // The model's words, so the chart marks them (see CalendarSeries.labelSlot).
     labelSlot: 'pass_b_theme',
     color: 'var(--cat)',
-    // NO END NOTE. `of 1,388` after the end label is fifty more units of a
-    // string already too long for the room, and this block prints that
-    // denominator five other times — in the header meta, the prevalence level,
-    // the big figure's base line, the caption under this chart and the footer
-    // note. The chart's own accessible rows carry it per month.
+    // NO END NOTE, AND THE CAPTION CARRIES EVERY MONTH'S INSTEAD. `of 1,388`
+    // after the end label is fifty more units of a string already too long for
+    // the room — but the claim that stood here, that "the chart's own
+    // accessible rows carry it per month", was not true of anything a reader
+    // can read: the only per-month `of N` is `columnTitle`'s hover `<title>`,
+    // which is mouse-only and absent from print and from a PDF. September's
+    // denominator is printed five times on this block and July's was printed
+    // nowhere. `seriesCaption` is where all three of them go.
     points: points.map((p) => ({
       month: p.month,
       value: p.pct,
@@ -182,14 +185,27 @@ function themeSeries(t: ThemeBlock): CalendarSeries | null {
   }
 }
 
-/** "Jul 5.9% · Aug 6.8% · Sep 9.4%" — the artboard's caption under the line.
+/** "Jul 5.9% of 1,200 · Aug 6.8% of 1,200 · Sep 9.4% of 1,388" — the
+ *  artboard's caption under the line, with the denominators the artboard
+ *  leaves off.
  *
  *  EVERY POINT KEEPS ITS MONTH, and a month with no reading says so rather
- *  than being skipped, which would close a gap the chart above draws open. */
+ *  than being skipped, which would close a gap the chart above draws open.
+ *
+ *  AND EVERY POINT KEEPS ITS OWN n. The mock's caption is three bare shares;
+ *  deviation 6 of this port refuses exactly that form on the mover rows and on
+ *  the big figure, for the reason the chart itself exists to show — the three
+ *  months have different denominators, which is the whole reason the change
+ *  between two of them is banded. A caption is not the place the rule stops
+ *  applying. */
 function seriesCaption(t: ThemeBlock): string | null {
   const points = t.points.filter((p) => t.axis.includes(p.month))
   if (points.length < 2) return null
-  const parts = points.map((p) => `${monthName(p.month).slice(0, 3)} ${p.pct == null ? 'not read' : fmtPct(p.pct)}`)
+  const parts = points.map((p) => {
+    const month = monthName(p.month).slice(0, 3)
+    if (p.pct == null) return `${month} not read`
+    return p.videos == null ? `${month} ${fmtPct(p.pct)}` : `${month} ${fmtPct(p.pct)} of ${fmtInt(p.videos)}`
+  })
   return `share of ${t.audienceLabel.toLowerCase()} videos · ${parts.join(' · ')}`
 }
 
