@@ -295,9 +295,13 @@ describe('sales.p7 — the method sheet', () => {
   })
 
   // The dropped count was computed on every build and kept in the workings,
-  // where no reader of the document ever sees it.
-  it('gives the findings row its denominator', () => {
-    expect(words(sheet())).toContain('1 of 4 written · 3 below the bar')
+  // where no reader of the document ever sees it. It is a COUNT and not a
+  // reason: `dropped` collects three different events and only one of them is
+  // a bar (compose.ts), so "3 below the bar" claimed of three what was true of
+  // at most one.
+  it('gives the findings row its denominator, and no reason it cannot support', () => {
+    expect(words(sheet())).toContain('1 of 4 written · 3 not carried')
+    expect(words(sheet())).not.toContain('below the bar')
   })
 
   // D10: the artboard's own row reads "Conversations" over "videos analysed".

@@ -1273,8 +1273,17 @@ function NumbersCard({ data }: { data: DocumentSnapshotData }) {
     ],
     [
       'Findings',
+      // "NOT CARRIED", NOT "BELOW THE BAR". The denominator is the real
+      // improvement on a bare "1" and it stays; the REASON is not one reason.
+      // `DocumentWorkings.dropped` is seeded with the structural check's own
+      // rejections and then collects three different events — "no headline
+      // survived scrub", "rests on no grounded point" and "too thin: N
+      // conversations" (compose.ts). Only the last is a bar, so "3 below the
+      // bar" states a reason that is true of at most one of the three. The
+      // count says the same thing about how selective the reading was, and
+      // claims nothing about why.
       dropped != null
-        ? `${fmtCount(findings)} of ${fmtCount(findings + dropped)} written · ${fmtCount(dropped)} below the bar${m.thin ? ' · thin update' : ''}`
+        ? `${fmtCount(findings)} of ${fmtCount(findings + dropped)} written · ${fmtCount(dropped)} not carried${m.thin ? ' · thin update' : ''}`
         : `${fmtCount(findings)}${m.thin ? ' (thin update)' : ''}`,
     ],
   ]
