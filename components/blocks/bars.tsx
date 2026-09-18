@@ -124,7 +124,12 @@ export function BlockReach({
 }) {
   const top = Math.max(max, pct, rule ?? 0)
   if (top <= 0) return null
-  const width = Math.max(1, Math.min(100, (pct / top) * 100))
+  // A READING OF NOTHING PAINTS NOTHING. The floor kept a sliver visible for a
+  // reading too small to draw — which is right for a measurement that exists
+  // and wrong for one that is zero: a visible stripe where the number is 0.0%
+  // is the bar claiming something was measured. `pct === 0` is reachable; the
+  // caller guards only on the reading being present.
+  const width = pct <= 0 ? 0 : Math.max(1, Math.min(100, (pct / top) * 100))
   const at = rule == null ? null : Math.max(0, Math.min(100, (rule / top) * 100))
   const scale = `${axisLabel}, axis to ${fmtPct(top, 0)}`
 
