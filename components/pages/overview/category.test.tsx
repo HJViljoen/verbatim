@@ -4,7 +4,7 @@ import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
-import { overviewCategory, panelRule } from './category'
+import { categoryMeta, overviewCategory, panelNote, panelRule } from './category'
 import { overviewFixture, refusedFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
@@ -101,7 +101,7 @@ describe('OV3 · what the category is saying', () => {
     for (const f of Object.values(figures)) {
       expect(['videos', 'comments', 'pts', 'pct']).toContain(f.unit)
     }
-    expect(renderText(overviewCategory.render(overviewFixture(), 'app', ctx))).toContain('214 accounts in the panel')
+    expect(renderText(overviewCategory.render(overviewFixture(), 'app', ctx))).toContain('a fixed panel of 214 accounts')
   })
 
   it('carries the attention verdict — declared since WP11, and null in the loader until now', () => {
@@ -122,8 +122,13 @@ describe('OV3 · what the category is saying', () => {
   })
 
   it('names the panel’s size, which is the only denominator a comment count has', () => {
+    // BLOCK D WAVE 2 (`main.category.attention.note`, D7): the artboard's line
+    // carries five facts and the build printed one. The two levels print with
+    // no magnitude across them — the panel re-froze between the two months, so
+    // the mock's "−18% since June" compares two populations.
     const text = renderText(overviewCategory.render(overviewFixture(), 'app', ctx))
-    expect(text).toContain('214 accounts in the panel')
+    expect(text).toContain('a fixed panel of 214 accounts · first seen before 1 Apr · 50,300 → 41,200 comments · panel frozen 3 Sep')
+    expect(text).not.toContain('18% since June')
   })
 
   it('draws the axis rule where the panel re-froze, and nowhere else', () => {
@@ -182,5 +187,57 @@ describe('the quotes this block declares (mkt.p3.quote)', () => {
 
   it('claims none on a workspace whose month could not be read', () => {
     expect(blockAnswers(overviewCategory, refusedFixture()).quotes).toEqual([])
+  })
+})
+
+// ---- Block D wave 2 · the artboard's §3 ------------------------------------
+
+describe('OV3, ported to the artboard', () => {
+  it('lays the four lines out in the artboard’s three columns', () => {
+    // mock-gap §Visual fidelity: the mood-beside-attention arrangement and the
+    // kind-rows-beside-more control all collapsed into one stacked column.
+    const markup = render(overviewCategory.render(overviewFixture(), 'app', ctx))
+    expect(markup).toContain('xl:grid-cols-3')
+  })
+
+  it('gives every kind row its own "of N" and draws no partition', () => {
+    // D4/D10: kinds overlap (175%–228% of one denominator), so each row is an
+    // independent share and there is no remainder slice to draw.
+    const text = renderText(overviewCategory.render(overviewFixture(), 'app', ctx))
+    expect(text).toContain('Questions 33.9% 470 of 1,388')
+    expect(text).toContain('Praise 28% 389 of 1,388')
+    expect(text).not.toContain('Other kinds')
+  })
+
+  it('heads the two mover arms with a band, never with a direction word', () => {
+    const markup = render(overviewCategory.render(overviewFixture(), 'app', ctx))
+    const text = renderText(overviewCategory.render(overviewFixture(), 'app', ctx))
+    expect(text).toContain('Cleared their band · a larger share than last month')
+    expect(text).toContain('Cleared their band · a smaller share than last month')
+    // The mock's own headings would have failed rule (c) outright.
+    expect(copyViolations(markup).filter((v) => v.rule === 'direction-word')).toEqual([])
+  })
+
+  it('states the basis in the header as well as the denominator', () => {
+    const c = overviewFixture().category
+    expect(categoryMeta(c)).toBe('1,388 category videos this month · Sep 2026 against Aug 2026')
+    expect(categoryMeta({ ...c, denominator: null })).toBeUndefined()
+  })
+
+  it('drops a panel clause that has no field behind it rather than inventing one', () => {
+    const a = overviewFixture().category.attention!
+    expect(panelNote({ ...a, accountCount: null, panel: null })).toBe('50,300 → 41,200 comments')
+    expect(panelNote(null)).toBeNull()
+  })
+
+  it('offers the one click down as a link to where one click down actually is', () => {
+    const markup = render(overviewCategory.render(overviewFixture(), 'app', ctx))
+    expect(markup).toContain('/dashboard/voice?type=question')
+    expect(markup).toContain('more — one click down →')
+  })
+
+  it('puts "nothing else moved" in the footer note', () => {
+    const markup = render(overviewCategory.render(overviewFixture(), 'app', ctx))
+    expect(markup).toContain('font-normal text-muted-foreground">Nothing else moved clearly this month.')
   })
 })
