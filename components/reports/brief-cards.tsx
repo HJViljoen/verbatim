@@ -52,16 +52,29 @@ export function BriefCards({
 }) {
   return (
     <>
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">The role briefs</h2>
-        {meta && <span className="font-mono text-[11px] text-muted-foreground">{meta}</span>}
+      {/* THE SECTION'S OWN HEAD, AND THE FOURTH BRIEF'S LINE IS PART OF IT.
+          `LEADERSHIP_LINE` sat under the card row as the only full-bleed
+          paragraph on the page — a caption that had lost its tile, breaking
+          the rhythm between two grids. It belongs where a reader asks the
+          question ("why are there three?"), which is beside the heading. */}
+      <div className="flex flex-col gap-0.5">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <h2 className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">The role briefs</h2>
+          {meta && <span className="font-mono text-[11px] text-muted-foreground">{meta}</span>}
+        </div>
+        <p className="m-0 max-w-[92ch] text-[11.5px] leading-[1.45] text-muted-foreground">{LEADERSHIP_LINE}</p>
       </div>
 
       {/* The artboard's cards are `min-height:248px` and GROW; `PageGrid`'s
           116px row unit is a fixed track, and a fixed track clips under the
           tile's `overflow-hidden`. `auto-rows-min` is the artboard's own rule,
           and the tiles keep the 248px floor. */}
-      <PageGrid className="xl:auto-rows-min">
+      {/* A STEP BETWEEN 1280 AND ONE COLUMN. `PageGrid` is `xl:grid-cols-12`,
+          so at 1024 the three cards went full width and each figure row became
+          label-left / value-right across ~950px of nothing. The artboard's
+          density is the three-up card; two-up from `md` keeps it until the
+          page's own twelve columns take over. */}
+      <PageGrid className="md:grid-cols-2 xl:auto-rows-min">
         {cards.map((c) => (
           <Tile
             key={c.role}
@@ -108,38 +121,50 @@ export function BriefCards({
           </Tile>
         ))}
       </PageGrid>
-
-      <p className="m-0 text-[11.5px] leading-[1.45] text-muted-foreground">{LEADERSHIP_LINE}</p>
     </>
   )
 }
 
 /**
- * The footer's left half — the artboard's `PDF` and `Share link`, and neither
- * of them drawn where there is nothing behind it.
+ * The footer's left half — the artboard's actions, and none of them drawn
+ * where there is nothing behind it.
  *
- * The mock draws both on every card. A card with no build has no PDF to
- * download and no snapshot to share, and a link that opens nothing is the
- * same defect as the window control this component already lost.
+ * The mock draws PDF and Share link on every card. A card with no build has no
+ * PDF to download and no snapshot to share, and a link that opens nothing is
+ * the same defect as the window control this component already lost.
+ *
+ * ONE ROW, BECAUSE THE FOOTER IS ONE ROW. `Tile`'s footer is a single
+ * `items-center` line with the note on its right; four wrapping actions took
+ * it to two rows at every width and left the reading stamp floating at the
+ * midpoint between them, aligned to neither. So the cluster does not wrap —
+ * and the way to make three fit is to drop the fourth rather than to shrink
+ * them. `Share link` is the one that goes: it navigated to the archive row for
+ * this very snapshot, which is now visible on the same screen (the three lists
+ * are drawn at once), and the archive's own footer says where a share link is
+ * made. Open reaches the artefact; the Studio rebuilds it.
+ *
+ * AND A STALE PDF DOES NOT STATE A SIZE. `artifacts.stale` means the file was
+ * cleared from storage and `/api/artifacts/[id]` re-renders it on the way out:
+ * a different file from the one whose bytes we hold, and a render that counts
+ * against `EXPORT_DAILY_LIMIT` and can answer 429. Printing "812 KB" beside a
+ * link that will not hand back 812 KB is the quietest wrong number on the
+ * card, so the clause the detail pane already uses takes its place.
  */
 function BriefActions({ card, studio, basePath }: { card: BriefCard; studio: boolean; basePath: string }) {
-  const link = 'text-[12px] font-medium underline underline-offset-2'
+  const link = 'whitespace-nowrap text-[12px] font-medium underline underline-offset-2'
   return (
-    <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+    <span className="flex min-w-0 flex-nowrap items-center gap-x-3 overflow-hidden">
       {card.latest && (
         <Link href={`${basePath}?view=${card.latest.snapshotId}`} scroll={false} className={link}>Open</Link>
       )}
       {card.pdf && (
         <a href={`/api/artifacts/${card.pdf.id}`} className={link}>
-          PDF · {fmtBytes(card.pdf.bytes)}
+          PDF · {card.pdf.stale ? 'rebuilt on download' : fmtBytes(card.pdf.bytes)}
         </a>
-      )}
-      {card.latest && (
-        <Link href={`${basePath}?group=built&item=${card.latest.snapshotId}`} scroll={false} className={link}>Share link</Link>
       )}
       {studio && (
         <Link href={card.reportId ? `${STUDIO_HREF}?item=${card.reportId}` : `${STUDIO_HREF}/new`} className={link}>
-          {card.reportId ? 'Build it in the Studio' : 'Set it up in the Studio'}
+          {card.reportId ? (card.latest ? 'In the Studio' : 'Build it in the Studio') : 'Set it up in the Studio'}
         </Link>
       )}
     </span>

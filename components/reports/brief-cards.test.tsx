@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { render } from '@/lib/test/render'
+import { render, renderText } from '@/lib/test/render'
+import { assertCopyContract } from '@/lib/test/copy-contract'
 import { BRIEFS_META, BRIEF_CARDS, LEADERSHIP_LINE, briefMonthChip, briefReader, briefStamp, cadenceWord, cardSending, deliveryLine, latestBriefLine, type BriefCard } from '@/lib/reports/briefs'
 import { BriefCards } from './brief-cards'
 
@@ -161,6 +162,38 @@ describe('the card', () => {
     const html = render(<BriefCards cards={[card({ latest: null, figures: [], pdf: null })]} />)
     expect(html).not.toContain('/api/artifacts/')
     expect(html).not.toContain('Share link')
+  })
+
+  // THE CONTRACT, ON THE CARD'S OWN WORDS. Its two siblings assert it and this
+  // tier did not — and the card prints `sentFigures` labels, which come out of
+  // a stored snapshot and are exactly the class of string that changes under
+  // the product without anyone editing this file.
+  it('keeps the copy contract, populated and empty', () => {
+    assertCopyContract(<BriefCards cards={[card(), card({ role: 'content_brief', latest: null, figures: [], pdf: null, monthChip: null, stamp: null })]} meta={BRIEFS_META} />)
+  })
+
+  // THE FOOTER IS ONE ROW. Four actions wrapped it to two at every width and
+  // left the stamp floating between them. Three fit; `Share link` is the one
+  // dropped, because the archive row it navigated to is on the same screen now
+  // and the archive's own footer says where a share link is made.
+  it('draws three actions and no wrapping cluster', () => {
+    const html = render(<BriefCards cards={[card()]} />)
+    expect(html).toContain('>Open</a>')
+    expect(html).toContain('In the Studio')
+    expect(html).not.toContain('Share link')
+    expect(html).not.toContain('flex-wrap items-center gap-x-3 gap-y-1')
+  })
+
+  // A STALE FILE'S SIZE IS NOT THE SIZE YOU GET. `/api/artifacts/[id]`
+  // re-renders a cleared artifact on the way out — a different file, and a
+  // render that counts against the export limit — so the card states the
+  // clause the detail pane states, not the bytes it no longer holds.
+  it('says a stale PDF is rebuilt rather than stating its old size', () => {
+    const fresh = renderText(<BriefCards cards={[card()]} />)
+    expect(fresh).toContain('PDF · 240 KB')
+    const stale = renderText(<BriefCards cards={[card({ pdf: { id: 'a1', bytes: 240_000, stale: true } })]} />)
+    expect(stale).toContain('PDF · rebuilt on download')
+    expect(stale).not.toContain('240 KB')
   })
 
   // The figure rows are the archive detail pane's own markup, lifted onto the
