@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest'
 
 import { render, markupText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
-import { documentCoverSheet, documentSlides } from '@/lib/reports/documents/compose'
+import { documentCoverSheet, documentSheetCount, documentSlides } from '@/lib/reports/documents/compose'
 import { documentViewerPages } from '@/lib/reports/viewer'
 import { leadGap, leadVerdict, overviewTiles } from '@/lib/reports/documents/overview'
+import { DocumentShareShell } from '@/components/share/document-share-shell'
 import { DocumentDeck, GapCard, methodRows, CALIBRATION_NOTE } from './document-deck'
 import { marketingDeckFixture, refusedDeckFixture } from './fixture'
 
@@ -63,6 +64,21 @@ describe('the sheets', () => {
     expect(html).not.toContain('text-[58px]')
     expect(html).toContain('Marketing brief')
     expect(html).toContain('1 / 9')
+  })
+
+  // THE CLIENT-FACING HEADER SAYS WHAT THE DECK UNDER IT SAYS (fix pass).
+  // `/r/<token>` counted `pages.length + 1` — the written pages plus a cover —
+  // and printed "4 pages" about forty pixels above footers reading "1 / 9".
+  // Every surface that states this number reads `documentSheetCount`.
+  it('counts the same sheets on the share link, the viewer and the deck', () => {
+    const data = marketingDeckFixture()
+    const n = documentSheetCount(data)
+    expect(n).toBe(9)
+    expect(documentViewerPages(data)).toBe(n)
+    const shared = markupText(render(<DocumentShareShell data={data} appUrl="https://app.example.com" />))
+    expect(shared).toContain(`${n} pages`)
+    expect(shared).not.toContain('4 pages')
+    expect(shared).toContain(`1 / ${n}`)
   })
 
   // A sheet of two blocks where both refuse is still a sheet: five of the

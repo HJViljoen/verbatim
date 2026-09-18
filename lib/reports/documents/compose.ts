@@ -695,6 +695,22 @@ export function documentCoverSheet(data: DocumentSnapshotData): boolean {
   return !data.layout?.length
 }
 
+/**
+ * HOW MANY SHEETS A BRIEF PRINTS, computed ONCE for every surface that states
+ * it (fix pass, package E-marketing).
+ *
+ * Three surfaces print this number — the deck's own stamp and its footers
+ * (`DocumentDeck`), the viewer and the Studio bar (`documentViewerPages`), and
+ * the share link's header (`DocumentShareShell`) — and each carried its own
+ * arithmetic. This diff moved two of them onto the deck's rule and left
+ * `/r/<token>` on `pages.length + 1`, so the one CLIENT-FACING surface printed
+ * "4 pages" about forty pixels above a deck whose own footers read "1 / 9".
+ * The count is one function now, and a fourth caller adds no fourth answer.
+ */
+export function documentSheetCount(data: DocumentSnapshotData): number {
+  return documentSlides(data).length + (documentCoverSheet(data) ? 1 : 0)
+}
+
 /** The section a slide key names, or null where it names a written page. */
 export function sectionOfSlide(data: DocumentSnapshotData, key: string): DocBriefSection | null {
   if (!key.startsWith(SECTION_SLIDE_PREFIX)) return null

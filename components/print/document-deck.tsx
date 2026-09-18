@@ -14,7 +14,7 @@ import type { Good } from '@/components/charts/stat'
 import type { DeltaVerdict } from '@/lib/report-bands'
 import type { ShareSide } from '@/lib/report-delta'
 import { substituteFigures } from '@/lib/reports/cover'
-import { documentCoverSheet, documentSlides, sectionOfSlide } from '@/lib/reports/documents/compose'
+import { documentCoverSheet, documentSheetCount, documentSlides, sectionOfSlide } from '@/lib/reports/documents/compose'
 import { blocksFor } from '@/lib/reports/documents/load-reading'
 import type { BriefSurface } from '@/lib/reports/documents/sections'
 import { blockContext } from '@/lib/blocks/types'
@@ -1133,7 +1133,9 @@ export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: Docum
   // brief composed from a section map folds its cover onto that first sheet;
   // a stored artefact built before the maps keeps the cover it printed.
   const cover = documentCoverSheet(data)
-  const pages = slides.length + (cover ? 1 : 0)
+  // ONE FUNCTION, and every surface that states this number reads it: the deck,
+  // the viewer/Studio bar and the share link's header (fix pass).
+  const pages = documentSheetCount(data)
   // WP19: the stamp rides every sheet, the way the weekly deck's rule does —
   // a reader of a PDF has no masthead to scroll back to, and a brief whose
   // numbers are a month's has to name the month on the page they are read on.
