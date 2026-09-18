@@ -176,3 +176,32 @@ export function citationWhere(
     .filter(Boolean)
     .join(' · ')
 }
+
+/**
+ * What a citation's link OPENS, in the reader's words.
+ *
+ * THE ARTBOARD SAYS "the video →" AND "the thread →" AND IT IS RIGHT. The build
+ * branched on `commentLevel` alone — "the comment →" or "the post →" — so a
+ * TikTok video and a Reddit thread read identically and the destination was
+ * indistinguishable, which is the one thing a provenance link has to say.
+ * `commentLevel` decides whether we hold the comment's own address; the
+ * PLATFORM decides what the reader lands on. Anything we do not recognise
+ * keeps the old, weaker words rather than guessing at a noun.
+ *
+ * One helper, so the screen's finding, the deck's appendix and a share link
+ * name one destination.
+ */
+export function citationDestination(
+  meta: { platform?: string | null; commentLevel?: boolean } | null | undefined,
+): string {
+  switch (meta?.platform) {
+    case 'reddit':
+      return meta.commentLevel ? 'the thread' : 'the post'
+    case 'youtube':
+    case 'tiktok':
+    case 'instagram':
+      return 'the video'
+    default:
+      return meta?.commentLevel ? 'the comment' : 'the post'
+  }
+}

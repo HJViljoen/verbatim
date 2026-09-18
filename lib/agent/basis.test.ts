@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { askBasisLine, nothingSearchable, readableMonthCount, type AskBasis } from './basis'
+import { askBasisLine, nothingSearchable, readableMonthCount, readableMonths, type AskBasis } from './basis'
 
 const base: AskBasis = {
   updateAt: '2026-09-13T04:06:38.483Z',
@@ -133,5 +133,38 @@ describe('readableMonthCount', () => {
       row('2026-08-01', 'competitor:Ottobock', 900),
       row('2026-08-01', 'industry-other', 628),
     ])).toBe(1)
+  })
+})
+
+describe('readableMonths — the months the count IS', () => {
+  const row = (month: string, audience: string, videos: number | null) => ({ month, audience, videos })
+
+  it('names them once each, in calendar order, whatever order they arrive in', () => {
+    // The draws tile prints "3 monthly · Jul, Aug, Sep" and the chart beside it
+    // draws the same three. The LIST is the primitive and the count reads off
+    // it precisely so the two cannot disagree.
+    expect(readableMonths([
+      row('2026-09-01', 'industry-other', 388),
+      row('2026-07-01', 'client', 620),
+      row('2026-09-01', 'client', 402),
+      row('2026-08-01', 'industry-other', 628),
+    ])).toEqual(['2026-07-01', '2026-08-01', '2026-09-01'])
+  })
+
+  it('keeps exactly the months the count counts', () => {
+    const rows = [
+      row('2026-06-01', 'industry-other', 20),
+      row('2026-07-01', 'competitor:Freitag', 900),
+      row('2026-08-01', 'industry-other', null),
+      row('2026-09-01', 'client', 620),
+    ]
+    // Under the floor, a rival's, and an unread month all drop; the count and
+    // the list are the same answer.
+    expect(readableMonths(rows)).toEqual(['2026-09-01'])
+    expect(readableMonthCount(rows)).toBe(readableMonths(rows).length)
+  })
+
+  it('is empty rather than absent where nothing clears', () => {
+    expect(readableMonths([])).toEqual([])
   })
 })

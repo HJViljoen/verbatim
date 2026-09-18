@@ -50,6 +50,17 @@ export interface AskBasis {
    *  none do. The count is the same audiences the block reads, so the sentence
    *  and the block under it cannot disagree. */
   monthlyReadings: number | null
+  /**
+   * The same months, named, ascending (`YYYY-MM-01`) — what "3 monthly
+   * readings" actually are, for the tile that names them.
+   *
+   * OPTIONAL, and absent is not empty: a caller that never read the months (or
+   * a stored basis written before this field existed) has nothing to name, and
+   * the tile prints the count alone rather than an empty list that reads as
+   * "no months". `monthlyReadings` stays the count every existing caller
+   * reads.
+   */
+  readingMonths?: string[]
   /** Findings a question can reach, and findings there are. NULL is a failed
    *  read, never a zero: they are two independent round trips and the heavier
    *  of them — the one carrying the `embedding is not null` filter over the
@@ -76,7 +87,7 @@ export interface AskBasis {
  */
 export function askBasisLine(
   basis: AskBasis,
-  opts: { asked?: boolean; verb?: 'Answered' | 'Checked' } = {},
+  opts: { asked?: boolean; verb?: 'Answered' | 'Checked'; short?: boolean } = {},
 ): string {
   if (!basis.updateAt) {
     return 'Nothing has been read for this workspace yet, so there is nothing to answer from.'
@@ -84,6 +95,18 @@ export function askBasisLine(
   const lead = opts.asked
     ? `${opts.verb ?? 'Answered'} against the update of ${shortDate(basis.updateAt)}`
     : `Answers are given against the update of ${shortDate(basis.updateAt)}`
+
+  // SHORT IS THE LEAD ALONE, and it exists for the page BAR (E-ask fix pass).
+  // The four facts printed in the bar's context slot, again in the answer
+  // footer (this same function) and again as the draws tile's four rows — three
+  // times above the fold, with the record band making "the record →" twice and
+  // the delivered count twice. It also made the bar's context the longest
+  // string on the page, so `truncate` ate the indexed fact at 1440 and both
+  // states at 1024: a line whose whole job is to state what an answer is
+  // measured against, ellipsized, with no title and no hover. The bar states
+  // the ONE fact that is about this page (which update), and the other three
+  // stay where a reader can read them whole.
+  if (opts.short) return lead
 
   const months =
     basis.monthlyReadings == null
@@ -162,12 +185,28 @@ export interface MonthRow {
  * loader.
  */
 export function readableMonthCount(rows: readonly MonthRow[]): number {
-  return new Set(
-    rows
-      .filter((m) => !isRivalAudience(m.audience))
-      .filter((m) => (m.videos ?? 0) >= SHARE_BAND.minN)
-      .map((m) => m.month),
-  ).size
+  return readableMonths(rows).length
+}
+
+/**
+ * The same months, NAMED and in calendar order (Block D wave 2, E-ask).
+ *
+ * `readableMonthCount` gave the count alone, and the mock's "What an answer
+ * draws on" tile prints the months themselves — "3 monthly · Jul, Aug, Sep".
+ * That is a sentence a reader can check against the chart beside it where a
+ * bare 3 is not, and the two have to be the same three months or the tile
+ * argues with itself. So the LIST is the primitive and the count reads off it:
+ * they cannot disagree, whatever a later filter does to either.
+ */
+export function readableMonths(rows: readonly MonthRow[]): string[] {
+  return [
+    ...new Set(
+      rows
+        .filter((m) => !isRivalAudience(m.audience))
+        .filter((m) => (m.videos ?? 0) >= SHARE_BAND.minN)
+        .map((m) => m.month),
+    ),
+  ].sort()
 }
 
 /**
@@ -246,6 +285,10 @@ export async function loadIndexFacts(
 
   return {
     monthlyReadings: monthRows ? readableMonthCount(monthRows) : null,
+    // Named as well as counted, off the SAME rows and the same filter — the
+    // draws tile prints "3 monthly · Jul, Aug, Sep" and the count above it has
+    // to be the length of that list.
+    ...(monthRows ? { readingMonths: readableMonths(monthRows) } : {}),
     // TWO ROUND TRIPS, TWO ANSWERS. Either can fail on its own — they are
     // separate requests inside one `Promise.all` — so neither may borrow the
     // other's success. Null is "we did not get to read this", and the sentence

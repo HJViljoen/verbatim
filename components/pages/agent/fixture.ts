@@ -1,6 +1,13 @@
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '@/lib/rivals'
 import { measureAnswer, type AnswerMeasure } from '@/lib/agent/measure'
-import { askRecordHref, askRecordLines, type AgentThreadData } from '@/lib/pages/agent-thread'
+import {
+  askDraws,
+  askHistory,
+  askRecordHref,
+  askRecordLines,
+  type AgentThreadData,
+  type AskPlanChip,
+} from '@/lib/pages/agent-thread'
 import { askBasisLine, type AskBasis } from '@/lib/agent/basis'
 import { NOT_ANSWERED_HREF, DECLINED_WHY } from '@/lib/agent/measure'
 import { surface } from '@/lib/nav'
@@ -28,10 +35,18 @@ import type { Verdict } from '@/lib/reading/verdicts'
 const MONTH = '2026-09-01'
 const LABEL = 'Will it survive a wet commute'
 const REGISTRY_ID = 'reg-wet-commute'
+/** The mock's second finding — a subject that held. Its months are real and
+ *  flat, so `directionWord` earns nothing and the badge is the non-answer: the
+ *  arm wave 2 has to be able to draw beside the one that moved. */
+const LABEL_2 = 'Recycled materials'
+const REGISTRY_ID_2 = 'reg-recycled'
 
 const BASIS: AskBasis = {
   updateAt: '2026-09-27T04:00:00.000Z',
   monthlyReadings: 3,
+  // The months the count IS — `readableMonths` off the same rows, so the draws
+  // tile's "3 monthly · Jul, Aug, Sep" and the chart above it name one set.
+  readingMonths: ['2026-07-01', '2026-08-01', MONTH],
   embedded: 2872,
   total: 2872,
   lastEmbeddedAt: '2026-09-15T07:31:49.323Z',
@@ -76,12 +91,12 @@ function monthPoint(month: string, k: number | null, videos: number | null, audi
   }
 }
 
-function series(audience: string, rows: [string, number, number][]): MonthSeries {
+function series(audience: string, rows: [string, number, number][], objectId = REGISTRY_ID, objectLabel = LABEL): MonthSeries {
   return {
     audience,
     names: [audience],
-    objectId: REGISTRY_ID,
-    objectLabel: LABEL,
+    objectId,
+    objectLabel,
     points: rows.map(([month, k, n]) => monthPoint(month, k, n, audience)),
     notes: [],
     firstReadable: rows[0][0],
@@ -105,11 +120,38 @@ const OWN = series(CLIENT_AUDIENCE, [
   [MONTH, 26, 84],
 ])
 
+/** Finding 2's category side: 13.9% → 14.0%, which no band in this product can
+ *  call a move. */
+const CATEGORY_2 = series(
+  INDUSTRY_AUDIENCE,
+  [
+    ['2026-07-01', 193, 1400],
+    ['2026-08-01', 203, 1455],
+    [MONTH, 194, 1388],
+  ],
+  REGISTRY_ID_2,
+  LABEL_2,
+)
+
+const OWN_2 = series(
+  CLIENT_AUDIENCE,
+  [
+    ['2026-07-01', 34, 79],
+    ['2026-08-01', 40, 91],
+    [MONTH, 39, 84],
+  ],
+  REGISTRY_ID_2,
+  LABEL_2,
+)
+
 export function askMeasure(over: Partial<AnswerMeasure> = {}): AnswerMeasure {
   return {
     ...measureAnswer({
-      findings: [{ findingId: '0:G1', registryIds: [REGISTRY_ID] }],
-      series: [CATEGORY, OWN],
+      findings: [
+        { findingId: '0:G1', registryIds: [REGISTRY_ID] },
+        { findingId: '0:G2', registryIds: [REGISTRY_ID_2] },
+      ],
+      series: [CATEGORY, OWN, CATEGORY_2, OWN_2],
       month: MONTH,
       // The one reader whose flag is true (`agent.movement`). The fixture pins
       // the TRUE branch; `lib/agent/measure.test.ts` holds both.
@@ -125,7 +167,7 @@ export function askMeasure(over: Partial<AnswerMeasure> = {}): AnswerMeasure {
  *  the two can never disagree. */
 export const askVerdict = (): Verdict => askMeasure().findings[0].verdict as Verdict
 
-function turn(answerText: string, groundedText: string): AgentThreadData['turns'][number] {
+function turn(answerText: string, groundedText: string, secondText?: string): AgentThreadData['turns'][number] {
   return {
     question: 'Should our summer campaign lead with recycled materials or durability?',
     askedAt: '2026-09-28T08:00:00.000Z',
@@ -146,7 +188,7 @@ function turn(answerText: string, groundedText: string): AgentThreadData['turns'
           id: 'G1',
           text: groundedText,
           insightIds: ['i1', 'i2'],
-          themeRefs: [{ themeId: 't1', registryId: 'reg-wet-commute', label: LABEL }],
+          themeRefs: [{ themeId: 't1', registryId: REGISTRY_ID, label: LABEL }],
           voices: 'category',
           conversationCount: 130,
           quotes: [
@@ -156,6 +198,23 @@ function turn(answerText: string, groundedText: string): AgentThreadData['turns'
               commentId: 'c1',
               videoId: null,
               n: 1,
+            },
+          ],
+        },
+        {
+          id: 'G2',
+          text: secondText ?? 'Recycled materials is the subject your own audience raises most, and the category has not changed its mind about it.',
+          insightIds: ['i3'],
+          themeRefs: [{ themeId: 't2', registryId: REGISTRY_ID_2, label: LABEL_2 }],
+          voices: 'category',
+          conversationCount: 194,
+          quotes: [
+            {
+              ref: 'c:c2',
+              text: 'I want to believe the recycled sails thing but has anyone actually checked?',
+              commentId: 'c2',
+              videoId: null,
+              n: 2,
             },
           ],
         },
@@ -174,6 +233,15 @@ const CITATIONS: AgentThreadData['citations'] = [
     href: 'https://www.tiktok.com/@x/video/1',
     commentLevel: true,
   },
+  {
+    n: 2,
+    ref: 'c:c2',
+    text: 'I want to believe the recycled sails thing but has anyone actually checked?',
+    platform: 'reddit',
+    date: '2026-09-09',
+    href: 'https://www.reddit.com/r/onebag/comments/2',
+    commentLevel: true,
+  },
 ]
 
 const METHOD: AgentThreadData['method'] = {
@@ -181,8 +249,37 @@ const METHOD: AgentThreadData['method'] = {
   period: 'Asked Mon 28 Sep',
   platforms: ['tiktok'],
   videos: null,
-  comments: 1,
+  comments: 2,
   note: 'Every quoted voice is a real comment, listed in the appendix.',
+}
+
+/**
+ * The rail's earlier questions. The middle row is the plan thread whose claim
+ * CROSSED between supported and contradicted — the one movement that lights the
+ * flag (`AskHistoryRow.claimCrossed`). The other two carry no figures, because
+ * nothing stores a per-thread figure: `agent_messages.result` holds a count per
+ * grounded point and nothing that summarises a row, and re-deriving one from a
+ * stored answer's prose at read time is the re-derivation the reading layer
+ * exists to stop (mock-gap Ask, deviation 8).
+ */
+const HISTORY_ROWS = [
+  { threadId: 'th-1', title: 'Should our summer campaign lead with recycled materials or durability?', askedAt: '2026-09-28T08:00:00.000Z' },
+  { threadId: 'th-2', title: 'Did the recycled-sails claim land after the August posts?', askedAt: '2026-09-13T09:00:00.000Z', claimCrossed: true },
+  { threadId: 'th-3', title: 'Is price fading, or just quieter?', askedAt: '2026-09-06T09:00:00.000Z' },
+  { threadId: 'th-4', title: 'What do people complain about with Freitag?', askedAt: '2026-08-20T09:00:00.000Z' },
+]
+
+/** The chip, built by the same pure function the loader uses, off the shape the
+ *  shared plan loader hands back. */
+const PLAN_CHIP: AskPlanChip = {
+  planId: 'pc-1',
+  title: 'Summer 2026/27 campaign brief.pdf',
+  uploadedOn: '2026-08-20T10:00:00.000Z',
+  claims: 9,
+  summary: { supported: 6, contradicted: 1, untested: 2 },
+  crossed: 1,
+  moved: true,
+  href: '/dashboard/agent/th-2',
 }
 
 /** A measured answer: months seeded, a verdict earned, a direction word the one
@@ -200,7 +297,17 @@ export function agentFixture(over: Partial<AgentThreadData> = {}): AgentThreadDa
     turns: [
       turn(
         'Durability — it is the question underneath the category, and it is asked rather than praised.',
-        `The wet-commute question is growing, and no tracked brand answers it on camera.`,
+        // NO DIRECTION WORD IN THE PROSE, and that is a rendering decision the
+        // fixture has to hold. `scrubAnswer` LICENSES a direction sentence that
+        // names the object whose verdict earned one (`dropUnverdictedDirection`),
+        // so a model sentence reading "Will it survive a wet commute is growing"
+        // survives the scrub — and the copy contract's rule (c) refuses a
+        // direction word outside a `verdict` node whoever wrote it. The surface
+        // resolves that the way D5 asks: the word is printed by the product, in
+        // its own verdict node, from `directionWord`. The seam between the two
+        // rules is written up in the status note; the fixture pins the shape the
+        // page actually renders.
+        'The wet-commute question is the one no tracked brand answers on camera.',
       ),
     ],
     citations: CITATIONS,
@@ -219,8 +326,12 @@ export function agentFixture(over: Partial<AgentThreadData> = {}): AgentThreadDa
       line: '3 of 40 questions asked this month. 2 of them could not be answered from the conversation.',
       href: NOT_ANSWERED_HREF,
     },
-    planChip: { planId: 'pc-1', title: 'Summer 2026/27 campaign brief', moved: true },
-    bar: { question: surface('ask').question ?? '', context: askBasisLine(BASIS) },
+    planChip: PLAN_CHIP,
+    // EXCLUDING th-1, which IS this thread: the rail lists where else to go,
+    // not where you are (`askHistory`'s `exclude`).
+    history: askHistory(HISTORY_ROWS, new Date('2026-09-28T08:00:00.000Z'), 3, 'th-1'),
+    draws: askDraws(BASIS, 23),
+    bar: { question: surface('ask').question ?? '', context: askBasisLine(BASIS, { short: true }) },
     record: { lines: askRecordLines(BASIS, 23), href: askRecordHref('th-1') },
     method: METHOD,
     ...over,
@@ -257,9 +368,62 @@ export function refusedFixture(over: Partial<AgentThreadData> = {}): AgentThread
       href: NOT_ANSWERED_HREF,
     },
     planChip: null,
-    bar: { question: surface('ask').question ?? '', context: askBasisLine(EMPTY_BASIS) },
+    // ONE QUESTION AND NO PLAN, AND THE ONE QUESTION IS THIS ONE. A fresh
+    // workspace's rail on a thread page: the only thread held is the one being
+    // read, so the rows are empty while the month count is 1 — which is why the
+    // empty line says "nothing ELSE has been asked" (`EarlierQuestionsTile`).
+    history: askHistory(HISTORY_ROWS.slice(0, 1), new Date('2026-09-28T08:00:00.000Z'), 3, 'th-1'),
+    draws: askDraws(EMPTY_BASIS, null),
+    bar: { question: surface('ask').question ?? '', context: askBasisLine(EMPTY_BASIS, { short: true }) },
     record: { lines: askRecordLines(EMPTY_BASIS, null), href: askRecordHref('th-1') },
     ...over,
   }
 }
 
+
+/**
+ * A thread with a FOLLOW-UP on it — the state the footer used to get wrong.
+ *
+ * Turn 1 rests on ONE grounded point, and it is the second theme
+ * (`REGISTRY_ID_2`, k = 194), so any figure this turn prints that reads 130 is
+ * turn 0's. `answerFindings` keys findings by turn (`findingKey`), so the
+ * measurement carries `1:G2` as well as turn 0's two: one measurement per
+ * thread, indexed by turn, which is exactly the shape a renderer has to resolve
+ * rather than index into.
+ */
+export function followUpFixture(over: Partial<AgentThreadData> = {}): AgentThreadData {
+  const base = agentFixture()
+  const followUp = turn(
+    'Recycled materials is what your own audience raises; the category has not moved on it.',
+    'The recycled-sails claim is asked about rather than repeated back.',
+  )
+  return {
+    ...base,
+    turns: [
+      base.turns[0],
+      {
+        ...followUp,
+        question: 'And what about the recycled sails on their own?',
+        askedAt: '2026-09-28T09:10:00.000Z',
+        answer: followUp.answer
+          ? { ...followUp.answer, grounded: followUp.answer.grounded.filter((g) => g.id === 'G2') }
+          : null,
+      },
+    ],
+    measure: askMeasure({
+      ...measureAnswer({
+        findings: [
+          { findingId: '0:G1', registryIds: [REGISTRY_ID] },
+          { findingId: '0:G2', registryIds: [REGISTRY_ID_2] },
+          { findingId: '1:G2', registryIds: [REGISTRY_ID_2] },
+        ],
+        series: [CATEGORY, OWN, CATEGORY_2, OWN_2],
+        month: MONTH,
+        directionWords: true,
+        ownAudience: CLIENT_AUDIENCE,
+        hasJudgement: true,
+      }),
+    }),
+    ...over,
+  }
+}

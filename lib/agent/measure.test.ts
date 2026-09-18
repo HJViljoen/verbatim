@@ -457,3 +457,62 @@ describe('loadNotAnswered', () => {
     said.mockRestore()
   })
 })
+
+describe('FindingMeasure.chart and .own — the two fields wave 2 draws', () => {
+  it('draws the axis up to the month being measured, and no further', () => {
+    // A thread answered in June and opened in September must not carry
+    // September's months behind June's prose. The axis is trimmed to the month
+    // the answer was measured against, which is the same rule the direction
+    // word is trimmed by.
+    const m = measureAnswer({
+      findings,
+      series: [climbing()],
+      month: '2026-08-01',
+      directionWords: true,
+    })
+    expect(m.findings[0].chart.axis).toEqual(['2026-07-01', '2026-08-01'])
+    expect(m.findings[0].chart.line.points.map((p) => p.value)).toEqual([15, 19])
+  })
+
+  it('carries a month it could not read as a SLOT with no value, never a zero', () => {
+    const holed = climbing({
+      points: [
+        point('2026-07-01', 210, 1400),
+        point('2026-08-01', null, null),
+        point(MONTH, 320, 1388),
+      ],
+    })
+    const m = measureAnswer({ findings, series: [holed], month: MONTH, directionWords: true })
+    const chart = m.findings[0].chart
+    // The month keeps its x. Dropping it would join July straight to September
+    // and misdate everything after the gap (`monthAxis`' own warning).
+    expect(chart.axis).toEqual(['2026-07-01', '2026-08-01', MONTH])
+    expect(chart.line.points[1].value).toBeNull()
+  })
+
+  it('reports the client’s own side as a counted pair and says it is thin', () => {
+    const m = measureAnswer({
+      findings,
+      series: [climbing(), ownSide()],
+      month: MONTH,
+      directionWords: true,
+      ownAudience: CLIENT_AUDIENCE,
+    })
+    const own = m.findings[0].own
+    // 26 of 84 videos: real, and far under the hundred-video floor — which is
+    // why it is a caveat and never a second line on the chart.
+    expect(own).toEqual({ value: { k: 26, n: 84 }, thin: true })
+    expect(m.findings[0].chart.line.label).not.toContain('your')
+  })
+
+  it('leaves the own side absent where the client has no reading, not zero', () => {
+    const m = measureAnswer({
+      findings,
+      series: [climbing()],
+      month: MONTH,
+      directionWords: true,
+      ownAudience: CLIENT_AUDIENCE,
+    })
+    expect(m.findings[0].own).toBeUndefined()
+  })
+})

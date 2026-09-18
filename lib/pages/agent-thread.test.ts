@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { freezeQuotes, resolveQuotes } from '../renderables/quotes-freeze'
 import { agentFixture, refusedFixture } from '../../components/pages/agent/fixture'
 import type { AskBasis } from '../agent/basis'
-import { agentThreadSlides, answerFindings, askRecordHref, askRecordLines, documentPages, findingKey, type AgentThreadData } from './agent-thread'
+import type { PlanCheckCard } from '../ask/plan-cards'
+import {
+  agentThreadSlides, answerFindings, askDraws, askHistory, askPlanChip, askRecordHref, askRecordLines,
+  claimsCrossed, documentPages, findingKey, type AgentThreadData,
+} from './agent-thread'
 
 const base: AgentThreadData = {
   threadId: 't1', kind: 'question', title: 'Why do people hesitate before buying a liner?', brand: 'Sealand', createdAt: '2026-08-22T10:00:00Z',
@@ -23,6 +27,8 @@ const base: AgentThreadData = {
   measure: null,
   notAnswered: null,
   planChip: null,
+  history: null,
+  draws: [],
   bar: { question: 'What does the conversation say about this?', context: 'x' },
   record: null,
   method: { company: 'Sealand', period: 'Asked Sat 22 Aug', platforms: ['youtube', 'tiktok'], videos: null, comments: 2, note: 'x' },
@@ -60,12 +66,17 @@ describe('agent thread data', () => {
 
   it('names a finding by the registry id it rests on, and never by a label', () => {
     const measured = agentFixture()
-    expect(answerFindings(measured.turns)).toEqual([{ findingId: '0:G1', registryIds: ['reg-wet-commute'] }])
+    // TWO grounded points since wave 2 extended the fixture: the one that moved
+    // and the one that held (components/pages/agent/fixture.ts).
+    expect(answerFindings(measured.turns)).toEqual([
+      { findingId: '0:G1', registryIds: ['reg-wet-commute'] },
+      { findingId: '0:G2', registryIds: ['reg-recycled'] },
+    ])
     // A point written before its themes were registered measures nothing rather
     // than being joined by a label that churns ~88% run to run.
     const unregistered = agentFixture()
     unregistered.turns[0].answer!.grounded[0].themeRefs = [{ themeId: 't1', registryId: null, label: 'Durability' }]
-    expect(answerFindings(unregistered.turns)).toEqual([{ findingId: '0:G1', registryIds: [] }])
+    expect(answerFindings(unregistered.turns)[0]).toEqual({ findingId: '0:G1', registryIds: [] })
   })
 
   it('keys a follow-up\u2019s findings by its own turn, so turn 2\u2019s G1 is not turn 1\u2019s', () => {
@@ -75,7 +86,7 @@ describe('agent thread data', () => {
     const d = agentFixture()
     const second = JSON.parse(JSON.stringify(d.turns[0])) as AgentThreadData['turns'][number]
     second.answer!.grounded[0].themeRefs = [{ themeId: 't2', registryId: 'reg-zip', label: 'The zip' }]
-    expect(answerFindings([d.turns[0], second])).toEqual([
+    expect(answerFindings([d.turns[0], second]).filter((f) => f.findingId.endsWith(':G1'))).toEqual([
       { findingId: '0:G1', registryIds: ['reg-wet-commute'] },
       { findingId: '1:G1', registryIds: ['reg-zip'] },
     ])
@@ -150,8 +161,156 @@ describe('the Ask fixtures', () => {
   it('freezes and resolves a measured thread without losing the measurement', () => {
     const d = agentFixture()
     const { data: frozen, refs } = freezeQuotes(d)
-    expect(refs).toEqual(['c:c1'])
-    const thawed = resolveQuotes(frozen, new Map([['c:c1', d.citations[0].text]]))
+    expect(refs).toEqual(['c:c1', 'c:c2'])
+    const thawed = resolveQuotes(frozen, new Map(d.citations.map((c) => [c.ref, c.text])))
     expect(thawed).toEqual(d)
+  })
+})
+
+// ── Block D wave 2 (E-ask): what the rail and the chip say ──────────────────
+
+describe('what an answer draws on', () => {
+  const basis: AskBasis = {
+    updateAt: '2026-09-27T04:00:00.000Z',
+    monthlyReadings: 3,
+    readingMonths: ['2026-07-01', '2026-08-01', '2026-09-01'],
+    embedded: 2872,
+    total: 2872,
+    lastEmbeddedAt: '2026-09-15T07:31:49.323Z',
+  }
+
+  it('names the months it counted, so the count and the chart agree', () => {
+    expect(askDraws(basis, 23)).toEqual([
+      { term: 'Readings', value: '3 monthly · Jul, Aug, Sep' },
+      { term: 'Updates', value: '23 delivered' },
+      { term: 'Searchable', value: '2,872 of 2,872 findings' },
+      { term: 'Indexed', value: 'as at 15 Sep' },
+    ])
+  })
+
+  it('counts the months it names', () => {
+    // The two halves of the Readings row come off one list (lib/agent/basis.ts
+    // readableMonths), so a filter applied to one applies to both.
+    const row = askDraws(basis, 23)[0]
+    expect(row.value.startsWith(`${basis.readingMonths!.length} monthly`)).toBe(true)
+  })
+
+  it('says what is not recorded rather than printing a zero for it', () => {
+    const empty: AskBasis = { updateAt: null, monthlyReadings: null, embedded: null, total: null, lastEmbeddedAt: null }
+    expect(askDraws(empty, null).map((r) => r.value)).toEqual([
+      'not recorded for this workspace yet',
+      'not recorded here',
+      'not recorded',
+      'when they were indexed is not recorded',
+    ])
+  })
+
+  it('prints the count alone where nobody read the months', () => {
+    // A stored basis written before `readingMonths` existed. Absent is not
+    // empty: the row names no months rather than naming none.
+    const { readingMonths: _drop, ...noMonths } = basis
+    expect(askDraws(noMonths, 4)[0].value).toBe('3 monthly')
+  })
+
+  it('distinguishes none delivered from not recorded', () => {
+    expect(askDraws(basis, 0)[1].value).toBe('none delivered yet')
+    expect(askDraws({ ...basis, monthlyReadings: 0 }, 1)[0].value).toBe('no month yet carries enough videos to compare on')
+    expect(askDraws({ ...basis, total: 0, embedded: 0 }, 1)[2].value).toBe('nothing to search yet')
+  })
+})
+
+describe('earlier questions', () => {
+  const rows = [
+    { threadId: 'a', title: 'Newest', askedAt: '2026-09-28T08:00:00.000Z' },
+    { threadId: 'b', title: 'Middle', askedAt: '2026-09-13T09:00:00.000Z', claimCrossed: true },
+    { threadId: 'c', title: 'Older', askedAt: '2026-09-06T09:00:00.000Z' },
+    { threadId: 'd', title: 'Last month', askedAt: '2026-08-20T09:00:00.000Z' },
+  ]
+  const now = new Date('2026-09-28T12:00:00.000Z')
+
+  it('draws the newest three and counts the whole wall-clock month', () => {
+    const h = askHistory(rows, now)
+    expect(h.rows.map((r) => r.threadId)).toEqual(['a', 'b', 'c'])
+    // Three in September; August's row is counted by neither.
+    expect(h.thisMonth).toBe(3)
+  })
+
+  it('dates the footer by the earliest question it holds, never by a start date', () => {
+    // D14: both "since" dates in this product are earliest EVIDENCE.
+    expect(askHistory(rows, now).earliest).toBe('2026-08-20T09:00:00.000Z')
+    expect(askHistory([], now).earliest).toBeNull()
+  })
+
+  it('flags only the row whose plan claim crossed', () => {
+    expect(askHistory(rows, now).rows.map((r) => r.claimCrossed)).toEqual([false, true, false])
+  })
+
+  it('keeps "we did not read that plan" apart from "nothing crossed"', () => {
+    // `loadPlanChecks` is capped at PLAN_CARDS_SHOWN while the row list is the
+    // newest fifty threads, so a thread hanging off an older plan has no
+    // answer here. Rendered as `false` it would read identically to a plan
+    // whose claims genuinely held.
+    const mixed = [
+      { threadId: 'a', title: 'read, held', askedAt: '2026-09-20T09:00:00.000Z', claimCrossed: false },
+      { threadId: 'b', title: 'not read', askedAt: '2026-09-19T09:00:00.000Z', claimCrossed: null },
+      // Omitted, not null: no plan behind it, so there is nothing to cross.
+      { threadId: 'c', title: 'no plan at all', askedAt: '2026-09-18T09:00:00.000Z' },
+    ]
+    expect(askHistory(mixed, now).rows.map((r) => r.claimCrossed)).toEqual([false, null, false])
+  })
+})
+
+describe('what lights the "claim moved" flag', () => {
+  const crossing = { from: 'Supported', to: 'Contradicted' }
+  const toUntested = { from: 'Supported', to: 'Untested' }
+  const fromUntested = { from: 'Untested', to: 'Contradicted' }
+
+  it('counts a crossing between supported and contradicted, in both directions', () => {
+    expect(claimsCrossed([crossing])).toBe(1)
+    expect(claimsCrossed([{ from: 'Contradicted', to: 'Supported' }])).toBe(1)
+  })
+
+  it('does not count a move to or from untested', () => {
+    // 2–4 of ~15 claims flip weekly on both tenants and most of those flips are
+    // the retrieval finding (or not finding) a quotable comment — not the
+    // conversation changing its mind. A chip that lights every update is
+    // furniture; see AskHistoryRow.claimCrossed.
+    expect(claimsCrossed([toUntested, fromUntested])).toBe(0)
+  })
+
+  it('does not count a verdict that did not move', () => {
+    expect(claimsCrossed([{ from: 'Supported', to: 'Supported' }])).toBe(0)
+    expect(claimsCrossed([])).toBe(0)
+  })
+})
+
+describe('the ask box’s plan chip', () => {
+  const card = {
+    planId: 'pc-1',
+    title: 'Summer 2026/27 campaign brief.pdf',
+    uploadedOn: '2026-08-20T10:00:00.000Z',
+    checkedOn: '2026-09-27',
+    claims: [{ claim: 'a' }, { claim: 'b' }],
+    summary: { supported: 1, contradicted: 1, untested: 0 },
+    moved: [{ claim: 'a', from: 'Supported', to: 'Contradicted', on: 'moved 27 Sep' }],
+    basis: '', floorLine: '', caveat: '', notice: null, href: '/dashboard/agent/th-2', empty: null,
+  } as unknown as PlanCheckCard
+
+  it('takes the newest card the SHARED loader returns, so Ask and Market name one plan', () => {
+    const chip = askPlanChip([card])!
+    expect(chip.planId).toBe('pc-1')
+    expect(chip.claims).toBe(2)
+    expect(chip.summary).toEqual({ supported: 1, contradicted: 1, untested: 0 })
+  })
+
+  it('lights only on a crossing', () => {
+    expect(askPlanChip([card])!.moved).toBe(true)
+    const held = { ...card, moved: [{ claim: 'a', from: 'Supported', to: 'Untested', on: 'x' }] } as PlanCheckCard
+    expect(askPlanChip([held])!.moved).toBe(false)
+    expect(askPlanChip([held])!.crossed).toBe(0)
+  })
+
+  it('is absent where no plan has been checked', () => {
+    expect(askPlanChip([])).toBeNull()
   })
 })

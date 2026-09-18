@@ -5,10 +5,12 @@ import { quoteRef } from '../renderables/quotes-freeze'
 import type { Quote, Scope, Slide } from '../renderables/types'
 import { resolveCitations, type CitationMeta } from '../evidence-cite'
 import { AGENT_MOVEMENT_MONTHS, ASK_THEMES_PER_CLAIM, directionWordsFor } from '../config'
-import { fmtInt, weekdayDate } from '../format'
+import { fmtInt, monthName, shortDate, weekdayDate } from '../format'
 import { row, rows as readRows } from './read'
 import { isMissingColumnError } from '../supabase-admin'
 import type { ClaimResult, Judgement, AskSummary } from '../ask/types'
+import { loadPlanChecks, PLAN_VERDICT_LABEL, type PlanCheckCard } from '../ask/plan-cards'
+import { monthStartIso } from '../ask/quota'
 import { JUDGEMENT_HEADING, NEAREST_HEADING, type AgentAnswer } from '../agent/types'
 import { askBasisLine, loadIndexFacts, type AskBasis } from '../agent/basis'
 import {
@@ -102,6 +104,36 @@ export interface DocumentCheck {
   anchored: string[]
 }
 
+/**
+ * The attached-plan chip, above the ask box (`ask.plan.chip`).
+ *
+ * READ THROUGH THE SHARED LOADER, not through a second query of its own
+ * (Block D wave 2, E-ask). Ask used to run its own `plan_checks` /
+ * `plan_check_evaluations` pair here while `lib/ask/plan-cards.ts` ran another
+ * for Market's card, and the two could disagree about which plan is "the"
+ * plan and about what its verdicts are — Ask's read `plan_checks.claims`, the
+ * column written once at upload and never written back, where the card reads
+ * the newest re-evaluation (`currentReading`, and on production Össur's C1 has
+ * moved four times since its upload). One loader, one answer.
+ *
+ * `moved` keeps its name and changes its RULE: see `AskHistoryRow.claimCrossed`.
+ */
+export interface AskPlanChip {
+  planId: string
+  title: string
+  uploadedOn: string
+  /** How many claims the plan holds, and how they read on the newest
+   *  re-reading. */
+  claims: number
+  summary: AskSummary
+  /** Claims that crossed between supported and contradicted on the newest
+   *  re-reading — what lights the flag. */
+  crossed: number
+  /** `crossed > 0`. Kept as a boolean because the chip is a yes/no. */
+  moved: boolean
+  href: string
+}
+
 export interface AgentThreadData {
   threadId: string
   kind: 'question' | 'document'
@@ -134,11 +166,12 @@ export interface AgentThreadData {
   /** The wall-clock month's questions, its refusals and the workspace budget.
    *  Null only where the read failed. */
   notAnswered: NotAnswered | null
-  /** The workspace's most recently checked plan, for the ask box's chip.
-   *  `moved` is whether its newest re-evaluation moved a claim's verdict
-   *  (`plan_check_evaluations.moved`), which the pipeline has written since
-   *  2026-08-23 and nothing has ever read. */
-  planChip: { planId: string; title: string; moved: boolean } | null
+  /** The workspace's most recently checked plan, for the ask box's chip. */
+  planChip: AskPlanChip | null
+  /** The rail's "Earlier questions" tile. Null where the read failed. */
+  history: AskHistory | null
+  /** The rail's "What an answer draws on" `<dl>`. */
+  draws: AskDrawRow[]
   /**
    * What the page bar prints. Ask's bar is `title` (lib/nav.ts) because nothing
    * on this surface is a reading of a month, so `context` is the ASK BASIS —
@@ -242,6 +275,274 @@ export function askRecordLines(basis: AskBasis, delivered: number | null): strin
   return lines
 }
 
+// ── "What an answer draws on" — the rail's <dl> (Block D wave 2, E-ask) ──────
+
+/** One row of the draws tile: the mono term and the fact beside it. */
+export interface AskDrawRow {
+  /** The `<dt>` — one word, the mock's own. */
+  term: string
+  /** The `<dd>`. Code's sentence, always; a row with nothing to say says so. */
+  value: string
+}
+
+/**
+ * The four facts Ask holds about what stands behind an answer.
+ *
+ * THE MOCK DRAWS FIVE ROWS AND THIS PRINTS FOUR, and the missing three are a
+ * stated deviation rather than an oversight. Updates-this-month with its dates,
+ * videos-analysed with its trailing median, the language mix and the
+ * tracking-change count all live on `lib/reading/record.ts:loadRecordInputs` —
+ * eight tenant-wide reads, on a page whose own loader already pays three
+ * uncached counts per render (`lib/agent/basis.ts:loadIndexFacts` says so in
+ * its own docstring, and the 16 September outage is what the docstring is
+ * about). So the tile prints what this page ALREADY read, and "The record →"
+ * in its footer is where the rest is: the record drawer is the surface those
+ * facts belong to, and `lib/nav.ts:hasRecord` admits Ask precisely so it can
+ * be opened from here.
+ *
+ * `Updates` is the ALL-TIME delivered count, not the mock's four-this-month,
+ * and the row says "delivered" rather than "this month" so the two cannot be
+ * read as each other. Pure, so the sentences are argued in a test.
+ */
+export function askDraws(basis: AskBasis, delivered: number | null): AskDrawRow[] {
+  const months = basis.readingMonths ?? []
+  const named = months.length ? ` · ${months.map((m) => monthName(m).split(' ')[0]).join(', ')}` : ''
+  return [
+    {
+      term: 'Readings',
+      value:
+        basis.monthlyReadings == null
+          ? 'not recorded for this workspace yet'
+          : basis.monthlyReadings === 0
+            ? 'no month yet carries enough videos to compare on'
+            : `${fmtInt(basis.monthlyReadings)} monthly${named}`,
+    },
+    {
+      term: 'Updates',
+      value:
+        delivered == null
+          ? 'not recorded here'
+          : delivered === 0
+            ? 'none delivered yet'
+            : `${fmtInt(delivered)} delivered`,
+    },
+    {
+      term: 'Searchable',
+      value:
+        basis.total == null || basis.embedded == null
+          ? 'not recorded'
+          : basis.total === 0
+            ? 'nothing to search yet'
+            : `${fmtInt(basis.embedded)} of ${fmtInt(basis.total)} findings`,
+    },
+    {
+      term: 'Indexed',
+      value: basis.lastEmbeddedAt ? `as at ${shortDate(basis.lastEmbeddedAt)}` : 'when they were indexed is not recorded',
+    },
+  ]
+}
+
+// ── "Earlier questions" — the rail's history tile ────────────────────────────
+
+/** One earlier thread, as the rail prints it. */
+export interface AskHistoryRow {
+  threadId: string
+  /** The thread's title — `ask_extract_title`, a model slot. */
+  title: string
+  askedAt: string
+  /**
+   * A claim of the plan behind this thread CROSSED between supported and
+   * contradicted on its newest re-reading.
+   *
+   * WHAT MAKES THE CHIP FIRE, DECIDED HERE (the brief asks for the decision and
+   * for it to be stated). Not "any movement": 2–4 of about 15 claims flip
+   * verdict weekly on both tenants, and most of those flips are to or from
+   * UNTESTED — which means the retrieval did or did not surface a quotable
+   * comment this update, not that the conversation changed its mind. A chip
+   * that lights on every update is furniture. A claim that crosses between
+   * supported and contradicted is the one movement that is a change of answer,
+   * and on production 2026-09-18 that is rare enough to be worth a flag: of the
+   * eight stored re-evaluations, Össur's C1 went contradicts → silent →
+   * contradicts → silent and crossed ZERO times.
+   *
+   * THREE VALUES, NOT TWO. `false` means the plan behind this thread WAS
+   * re-read and none of its claims crossed; NULL means we did not read that
+   * plan. `loadPlanChecks` is capped at `PLAN_CARDS_SHOWN` and the row list is
+   * the newest fifty threads, so a thread hanging off the third-newest plan has
+   * no answer here — and rendering it as `false` would answer a question we did
+   * not ask. Everywhere else on this surface absent and zero are kept apart
+   * (`askDraws` prints "not recorded", `readingsMeta` prints "not recorded
+   * here"); this field is no different. A thread with no plan at all is `false`
+   * — there is nothing to cross, and that IS an answer.
+   */
+  claimCrossed: boolean | null
+}
+
+export interface AskHistory {
+  rows: AskHistoryRow[]
+  /** Questions asked in the WALL-CLOCK month — the same clock the Ask budget is
+   *  on (`lib/ask/quota.ts`), and deliberately not the comment's: a question is
+   *  dated by the day it was asked. */
+  thisMonth: number
+  /**
+   * The oldest question this workspace holds, or null.
+   *
+   * EARLIEST EVIDENCE, NEVER A START DATE (D14). We do not know when a
+   * workspace started asking; we know the oldest row we still hold, and the
+   * word in the footer says exactly that.
+   */
+  earliest: string | null
+  href: string
+}
+
+/** Where "All questions →" goes. */
+export const ASK_INDEX_HREF = '/dashboard/agent'
+
+/**
+ * The history tile, from rows the loader fetched. Pure.
+ *
+ * `shown` caps the rail at the mock's three; `thisMonth` counts every row in
+ * the wall-clock month whether or not it is drawn, because the meta is a count
+ * of the month and not a count of the tile.
+ *
+ * `exclude` is THE THREAD THE READER IS ON. "Earlier questions" listed the open
+ * thread as its first row, linking to itself, 300px from the same question
+ * rendered at 15px in the answer tile beside it. The row is still COUNTED —
+ * `thisMonth` is a count of the month and the reader did ask this one — it is
+ * only not drawn as somewhere else to go.
+ */
+export function askHistory(
+  rows: readonly { threadId: string; title: string; askedAt: string; claimCrossed?: boolean | null }[],
+  now: Date = new Date(),
+  shown = 3,
+  exclude?: string | null,
+): AskHistory {
+  const ordered = [...rows].sort((a, b) => b.askedAt.localeCompare(a.askedAt))
+  const month = monthStartIso(now)
+  const drawn = exclude ? ordered.filter((r) => r.threadId !== exclude) : ordered
+  return {
+    rows: drawn.slice(0, shown).map((r) => ({
+      threadId: r.threadId,
+      title: r.title,
+      askedAt: r.askedAt,
+      // An EXPLICIT null survives as null — "we did not re-read that plan".
+      // Omitted is `false`: a caller that says nothing is a thread with no plan
+      // behind it, which has nothing to cross.
+      claimCrossed: r.claimCrossed === null ? null : r.claimCrossed === true,
+    })),
+    thisMonth: ordered.filter((r) => r.askedAt >= month).length,
+    // The oldest row we HOLD, off the rows handed in. The loader reads the
+    // oldest separately, because the rail's own list is capped and the oldest
+    // of fifty is not the oldest of five hundred.
+    earliest: ordered.length ? ordered[ordered.length - 1].askedAt : null,
+    href: ASK_INDEX_HREF,
+  }
+}
+
+/**
+ * Did a plan's claims cross between supported and contradicted?
+ *
+ * Reads `PlanCheckCard.moved`, whose `from`/`to` are already the reader's words
+ * (`PLAN_VERDICT_LABEL`). Untested on either side is not a crossing — see
+ * `AskHistoryRow.claimCrossed` for why that is the line.
+ */
+export function claimsCrossed(moved: readonly { from: string; to: string }[]): number {
+  const sides = new Set([PLAN_VERDICT_LABEL.echoes, PLAN_VERDICT_LABEL.contradicts])
+  return moved.filter((m) => sides.has(m.from) && sides.has(m.to) && m.from !== m.to).length
+}
+
+/** The newest checked plan as the ask box's chip, from the shared loader's
+ *  cards. Null with no plan, which is most workspaces. Pure. */
+export function askPlanChip(cards: readonly PlanCheckCard[]): AskPlanChip | null {
+  const card = cards[0]
+  if (!card) return null
+  const crossed = claimsCrossed(card.moved)
+  return {
+    planId: card.planId,
+    title: card.title,
+    uploadedOn: card.uploadedOn,
+    claims: card.claims.length,
+    summary: card.summary,
+    crossed,
+    moved: crossed > 0,
+    href: card.href,
+  }
+}
+
+/**
+ * The history tile's rows, and the oldest question we hold.
+ *
+ * TWO READS, BOTH TINY, and the second is why this is not a slice of the first:
+ * the list is capped, and the oldest of the last fifty threads is not the
+ * oldest thread. D14 is about exactly that — "since 6 Apr" has to be the
+ * earliest EVIDENCE, and a date derived from a capped page is a date about our
+ * paging.
+ *
+ * The plan crossings come off the same shared loader the chip uses, so a
+ * thread's flag and the chip above it cannot disagree about what moved.
+ */
+export async function loadAskHistory(
+  scope: Scope,
+  /**
+   * The plan cards, HANDED IN — never loaded here.
+   *
+   * `loadPlanChecks` is "FOUR READS, CAPPED" by its own docstring, and every
+   * caller of this function also needs the cards for the ask box's chip. When
+   * this loaded its own, Ask paid eight reads where four would do, twice per
+   * render, on both routes — the read shape AGENTS.md legislates against, on a
+   * page whose own loader docstring was written against the 16 September
+   * outage. A PROMISE is accepted as well as an array so the caller can hand in
+   * the one it already has in flight: it joins the `Promise.all` below rather
+   * than serialising behind it, so the fix costs no round trip.
+   */
+  cardsIn: readonly PlanCheckCard[] | Promise<readonly PlanCheckCard[]>,
+  limit = 50,
+): Promise<AskHistory> {
+  // The thread the reader is ON, off the same param the loader reads. Not
+  // drawn in the rail; still counted in the month (`askHistory`).
+  const openThread = (scope.params as AgentParams | undefined)?.thread ?? null
+  const supabase = scope.supabase as SupabaseClient
+  const { clientId } = scope
+  const [listRes, oldestRes, cards] = await Promise.all([
+    supabase
+      .from('agent_threads')
+      .select('id, title, created_at, plan_check_id')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false })
+      .limit(limit),
+    supabase
+      .from('agent_threads')
+      .select('created_at')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+    cardsIn,
+  ])
+  const list = readRows<{ id: string; title: string | null; created_at: string; plan_check_id: string | null }>(
+    listRes,
+    'askHistory.threads',
+  )
+  const crossedByPlan = new Map(cards.map((c) => [c.planId, claimsCrossed(c.moved) > 0]))
+  const history = askHistory(
+    list.map((t) => ({
+      threadId: t.id,
+      title: t.title ?? 'A question you asked',
+      askedAt: t.created_at,
+      // A thread with NO plan has nothing to cross — that is `false`, an
+      // answer. A thread whose plan is not among the cards we read has no
+      // answer at all, and says so with null rather than with a `false` that
+      // reads as "its claims held" (`AskHistoryRow.claimCrossed`).
+      claimCrossed: !t.plan_check_id ? false : crossedByPlan.get(t.plan_check_id) ?? null,
+    })),
+    new Date(),
+    3,
+    openThread,
+  )
+  const oldest = row<{ created_at: string }>(oldestRes, 'askHistory.oldest')
+  return { ...history, earliest: oldest?.created_at ?? history.earliest }
+}
+
 /** `n` months before `month`, as a month start. */
 function monthsBack(month: string, n: number): string {
   let m = monthStartOf(month)
@@ -299,27 +600,17 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
     .from('pipeline_runs')
     .select('id', { count: 'exact', head: true })
     .eq('client_id', clientId)
-  const planP = supabase
-    .from('plan_checks')
-    .select('id, title, source_filename')
-    .eq('client_id', clientId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  // The workspace's newest re-evaluation, BESIDE the plan read rather than
-  // after it. `ask-reevaluate` writes a row per plan per run, so on a tenant
-  // with one plan — every tenant today — the newest row in the workspace IS the
-  // newest row for the newest plan, and the round trip is saved. Where it is
-  // not (several plans written in one batch), the chip asks for its own plan's
-  // row below: correct first, parallel where it can be.
-  const newestEvalP = supabase
-    .from('plan_check_evaluations')
-    .select('plan_check_id, moved')
-    .eq('client_id', clientId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  // THE PLAN COMES THROUGH THE SHARED LOADER (E-ask; see `AskPlanChip`). This
+  // was two hand-rolled reads that could disagree with Market's card about
+  // which plan is the plan and about how its claims read; it is now the one
+  // loader both surfaces call, capped at `PLAN_CARDS_SHOWN`, and a failure is
+  // a missing chip rather than a missing page — the chip is an affordance.
+  const plansP = loadPlanChecks(scope).catch(() => [] as PlanCheckCard[])
   const notAnsweredP = loadNotAnswered(scope).catch(() => null)
+  // ONE WAVE OF PLAN READS, not two. `plansP` is already in flight for the
+  // chip; the history's crossings read the same cards rather than starting a
+  // second identical wave beside it.
+  const historyP = loadAskHistory(scope, plansP).catch(() => null)
 
   const storedRegistryIds = [
     ...new Set(
@@ -524,32 +815,7 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
     }
   })
 
-  const plan = row<{ id: string; title: string | null; source_filename: string | null }>(await planP, 'agentThread.plan')
-  const newestEval = row<{ plan_check_id: string; moved: unknown }>(await newestEvalP, 'agentThread.planEval')
-  let planChip: AgentThreadData['planChip'] = null
-  if (plan) {
-    // `plan_check_evaluations.moved` is written by the pipeline's
-    // `ask-reevaluate` step and has never been read by anything (grep, 2026-09).
-    // A failed read is `false` rather than a thrown page: the chip is an
-    // affordance, and a plan whose re-check we cannot see is still a plan.
-    let moved: unknown = newestEval?.plan_check_id === plan.id ? newestEval.moved : undefined
-    if (moved === undefined) {
-      const own = await supabase
-        .from('plan_check_evaluations')
-        .select('moved')
-        .eq('plan_check_id', plan.id)
-        .eq('client_id', clientId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      moved = row<{ moved: unknown }>(own, 'agentThread.planEval.own')?.moved
-    }
-    planChip = {
-      planId: plan.id,
-      title: plan.title ?? plan.source_filename ?? 'A plan you checked',
-      moved: Array.isArray(moved) && moved.length > 0,
-    }
-  }
+  const planChip = askPlanChip(await plansP)
 
   const deliveredRes = (await deliveredP) as { count: number | null; error: unknown }
   const delivered = deliveredRes.error ? null : deliveredRes.count ?? null
@@ -572,7 +838,9 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
     measure: measure.findings.length || measure.caveats.length ? measure : null,
     notAnswered: await notAnsweredP,
     planChip,
-    bar: { question: surface('ask').question ?? '', context: askBasisLine(basis) },
+    history: await historyP,
+    draws: askDraws(basis, delivered),
+    bar: { question: surface('ask').question ?? '', context: askBasisLine(basis, { short: true }) },
     record: { lines: askRecordLines(basis, delivered), href: askRecordHref(id) },
     method: {
       company: brand,

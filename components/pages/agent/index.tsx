@@ -2,11 +2,13 @@ import type { ReactNode } from 'react'
 import { weekdayDate } from '@/lib/format'
 import type { Verdict } from '@/lib/ask/types'
 import {
-  agentThreadSlides, loadAgentThread, documentPages, CITATIONS_PER_SLIDE, GROUNDED_PER_SLIDE,
+  agentThreadSlides, loadAgentThread, documentPages, findingKey, CITATIONS_PER_SLIDE, GROUNDED_PER_SLIDE,
   type AgentThreadData, type ThreadAnswer, type Turn,
 } from '@/lib/pages/agent-thread'
+import { fmtInt } from '@/lib/format'
 import type { PageModule, Renderable } from '@/lib/renderables/types'
-import { JUDGEMENT_HEADING, NEAREST_HEADING, citationWhere, saidHeading } from '@/lib/agent/types'
+import type { AnswerMeasure, FindingMeasure } from '@/lib/agent/measure'
+import { JUDGEMENT_HEADING, NEAREST_HEADING, citationDestination, citationWhere, saidHeading } from '@/lib/agent/types'
 import { askBasisLine } from '@/lib/agent/basis'
 
 // The agent thread on paper (Reports & Exports T11, 2026-08-29). Question
@@ -16,9 +18,18 @@ import { askBasisLine } from '@/lib/agent/basis'
 // data spoke to. Document mode: the client's own brief with the verdicts in
 // the margin, then claim by claim, then the agent's reading.
 //
-// The three registers keep their words (components/agent-answer.tsx): what
-// the customers said · not what you asked, but close · what I'd take from
-// that. A reader must never mistake the third for the first.
+// The three registers keep their words: what the customers said · not what you
+// asked, but close · what I'd take from that. A reader must never mistake the
+// third for the first.
+//
+// EVERY FIGURE ON THIS DECK IS THE SCREEN'S FIGURE (E-ask fix pass). Each
+// grounded point printed `conversationCount` — a retrieval count with no
+// denominator, in the noun AGENTS.md reserves for the legacy pages — while the
+// screen beside it printed the month table's k with its n. The route that
+// mounts Export says in its own header that what leaves as a PDF is what is on
+// screen, so the level comes off `AnswerMeasure`, resolved BY TURN through
+// `findingKey`, and a point nothing measured says so rather than printing a
+// count instead.
 
 type D = AgentThreadData
 
@@ -46,7 +57,42 @@ function Question({ t, first, d }: { t: Turn; first: boolean; d: D }) {
   )
 }
 
-function AnswerBody({ a, from, to }: { a: ThreadAnswer; from: number; to: number }) {
+/**
+ * A finding's level ON PAPER — the same counted pair the screen prints.
+ *
+ * WHAT THIS REPLACED, AND WHY IT HAD TO. This slide printed
+ * `GroundedPoint.conversationCount` as "130 conversations": a bare retrieval
+ * count with no denominator, in the one noun AGENTS.md reserves for the legacy
+ * pages that still compute it, and the exact figure `AnswerFooter`'s own
+ * docstring says must never be used. The route that mounts Export states in its
+ * header that "what leaves as a PDF is what is on screen" — and the screen
+ * prints the month table's k with its n. A deck that disagrees with the screen
+ * about one answer is worse than a deck with no figure on it.
+ */
+function Level({ f }: { f: FindingMeasure | null }) {
+  if (!f) {
+    // Absent, not zero — the screen's own sentence for the same state.
+    return <span className="shrink-0 font-mono text-[10px] text-muted-foreground">no month reading behind this</span>
+  }
+  return (
+    <span data-copy="level" className="shrink-0 font-mono text-[10.5px] text-foreground tabular-nums">
+      {fmtInt(f.value.k)} of {fmtInt(f.value.n)} videos
+    </span>
+  )
+}
+
+/** This TURN's measurement for one grounded point, by the key the loader wrote
+ *  — never `findings[0]`, which is turn 0's on every turn. */
+const levelFor = (measure: AnswerMeasure | null, turnIndex: number, id: string): FindingMeasure | null =>
+  measure?.findings.find((x) => x.findingId === findingKey(turnIndex, id)) ?? null
+
+function AnswerBody({ a, from, to, measure, turnIndex }: {
+  a: ThreadAnswer
+  from: number
+  to: number
+  measure: AnswerMeasure | null
+  turnIndex: number
+}) {
   const points = a.grounded.slice(from, to)
   return (
     <div className="space-y-4">
@@ -70,7 +116,7 @@ function AnswerBody({ a, from, to }: { a: ThreadAnswer; from: number; to: number
               <div key={p.id} className="space-y-2 rounded-lg bg-inner p-3">
                 <div className="flex items-baseline justify-between gap-3">
                   <p className="min-w-0 flex-1 text-[13px] leading-snug"><span className="mr-2 font-mono text-[10.5px] font-semibold text-muted-foreground">{from + i + 1}</span>{p.text}</p>
-                  <span className="shrink-0 font-mono text-[10.5px] text-muted-foreground">{p.conversationCount} {p.conversationCount === 1 ? 'conversation' : 'conversations'}</span>
+                  <Level f={levelFor(measure, turnIndex, p.id)} />
                 </div>
                 {p.quotes.map((q) => (
                   <blockquote key={q.n} className="border-l-2 border-border pl-2.5 font-serif text-[12.5px] leading-[1.45] text-foreground">“{q.text}”<Sup n={q.n} /></blockquote>
@@ -93,9 +139,11 @@ function MoreBody({ a }: { a: ThreadAnswer }) {
         <section className="space-y-3">
           <h3 className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">{NEAREST_HEADING}</h3>
           {a.nearest.map((n, i) => (
-            <div key={i} className="flex items-baseline justify-between gap-3 rounded-lg border border-dashed border-border/60 p-3">
+            // NO FIGURE ON A NEAREST POINT. It is not a finding, nothing
+            // measured it, and the count that used to sit here was the same
+            // denominator-less retrieval figure. The screen prints none either.
+            <div key={i} className="rounded-lg border border-dashed border-border/60 p-3">
               <p className="min-w-0 flex-1 text-[13px] leading-snug text-foreground/90">{n.text}</p>
-              <span className="shrink-0 font-mono text-[10.5px] text-muted-foreground">{n.conversationCount} {n.conversationCount === 1 ? 'conversation' : 'conversations'}</span>
             </div>
           ))}
         </section>
@@ -134,7 +182,7 @@ function Citations({ d, from, to }: { d: D; from: number; to: number }) {
                   appendix printed the stored `2026-08-30` while the answer on
                   screen said "30 Aug" for the same numbered quote. */}
               {citationWhere(c) || 'source on file'}
-              {c.href && <> · <a href={c.href} className="underline decoration-dotted underline-offset-2">{c.commentLevel ? 'the comment' : 'the post'}</a></>}
+              {c.href && <> · <a href={c.href} className="underline decoration-dotted underline-offset-2">{citationDestination(c)}</a></>}
             </p>
           </div>
         </div>
@@ -233,7 +281,10 @@ function ClaimsPage({ d, page }: { d: D; page: number }) {
               <div className="space-y-2 border-l-2 border-border pl-2.5">
                 {quotes.map((q, k) => <blockquote key={k} className="font-serif text-[12px] leading-[1.45]">“{q.text}”</blockquote>)}
                 {c.theySay && <p className="text-[12px] leading-snug text-foreground/85">{c.theySay}</p>}
-                <p className="text-[10.5px] text-muted-foreground">{c.conversationCount} {c.conversationCount === 1 ? 'conversation' : 'conversations'}{c.themeRefs?.length ? ` · ${c.themeRefs.map((t) => t.label).filter(Boolean).join(' · ')}` : ''}</p>
+                {/* The theme names alone. The count that stood here was the
+                    same denominator-less retrieval figure, and the document
+                    screen (`AgentDocumentSplit`) prints none. */}
+                {c.themeRefs?.length ? <p className="text-[10.5px] text-muted-foreground">{c.themeRefs.map((t) => t.label).filter(Boolean).join(' · ')}</p> : null}
               </div>
             )}
           </div>
@@ -268,7 +319,7 @@ function AnswerCard({ d, turn }: { d: D; turn: number }) {
   return (
     <div data-tile="" style={{ '--vb-span': 8 } as React.CSSProperties} className="space-y-4 rounded-lg bg-tile p-6">
       <Question t={t} first={turn === 0} d={d} />
-      {t.answer ? <AnswerBody a={t.answer} from={0} to={t.answer.grounded.length} /> : <p className="text-[13px]">{t.prose}</p>}
+      {t.answer ? <AnswerBody a={t.answer} from={0} to={t.answer.grounded.length} measure={d.measure} turnIndex={turn} /> : <p className="text-[13px]">{t.prose}</p>}
       {t.answer && t.answer.judgement.length > 0 && <MoreBody a={{ ...t.answer, nearest: [] }} />}
       <p className="border-t border-border/70 pt-2 font-mono text-[9.5px] text-muted-foreground">Prepared by {d.brand} · with Verbatim · quoted voices are real comments, on file</p>
     </div>
@@ -289,7 +340,7 @@ function resolve(key: string): Renderable<D> | undefined {
       return (
         <div className="min-h-0 overflow-hidden">
           {p === 0 && <Question t={t} first={i === 0} d={d} />}
-          {t.answer ? <AnswerBody a={t.answer} from={p * GROUNDED_PER_SLIDE} to={p * GROUNDED_PER_SLIDE + GROUNDED_PER_SLIDE} /> : <p className="text-[13px]">{t.prose ?? 'That question did not get an answer — something went wrong on our side rather than in the data.'}</p>}
+          {t.answer ? <AnswerBody a={t.answer} from={p * GROUNDED_PER_SLIDE} to={p * GROUNDED_PER_SLIDE + GROUNDED_PER_SLIDE} measure={d.measure} turnIndex={i} /> : <p className="text-[13px]">{t.prose ?? 'That question did not get an answer — something went wrong on our side rather than in the data.'}</p>}
         </div>
       )
     })

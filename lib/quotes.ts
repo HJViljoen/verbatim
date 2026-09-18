@@ -850,7 +850,7 @@ export async function fetchLiveBucketsByAudience(
     c.from('videos').select('id, is_client, is_competitor, competitor_name').in('id', chunk).order('id'),
   )
   // A short read here is not cosmetic. This map decides whether the agent may
-  // say "your customers" (lib/agent/enforce.ts → components/agent-answer.tsx),
+  // say "your customers" (lib/agent/enforce.ts → components/pages/agent/*),
   // and an empty one silently reverts that decision to the stale stored bucket
   // — the exact failure this gate was built to end. It must never be the first
   // anyone hears of it.
