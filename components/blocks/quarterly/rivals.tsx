@@ -70,6 +70,12 @@ const TEMPLATE = 'minmax(0,150fr) minmax(0,160fr) minmax(0,160fr) minmax(0,120fr
 /** How many month cells the artboard draws per share. */
 const MONTH_CELLS = 4
 
+/** "A, B or C" — the record's own labels, joined. */
+function listLabels(labels: readonly string[]): string {
+  if (labels.length <= 1) return labels[0] ?? ''
+  return `${labels.slice(0, -1).join(', ')} or ${labels[labels.length - 1]}`
+}
+
 /** The words a cell says where there is no reading at all — never a zero, and
  *  never four em dashes, which say neither of the two things that can be true. */
 function Absent({ recorded, mode }: { recorded: boolean; mode: RenderMode }): ReactNode {
@@ -145,7 +151,7 @@ function MonthCells({ months, values, newest, newestLabel, share, recorded, mode
 
 /** One head-to-head measure: your side and theirs, each with its own "of N",
  *  and the badge only where the measure is a proportion. */
-function FaceOff({ m, mode }: { m: FaceOffMeasure; mode: RenderMode }) {
+function FaceOff({ m, basis, mode }: { m: FaceOffMeasure; basis: string | null; mode: RenderMode }) {
   const email = mode === 'email'
   // WHAT k AND n COUNT IS THE MEASURE'S, NOT THE LOOP'S. Comments per video is
   // 151 COMMENTS over 19 VIDEOS, and a cell that prints "151 of 19" has told the
@@ -168,12 +174,19 @@ function FaceOff({ m, mode }: { m: FaceOffMeasure; mode: RenderMode }) {
   // of these cost 749px on a slide body of 561; laid out they cost about 280.
   return (
     <div
-      className={email ? undefined : 'grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)] items-start gap-x-2 border-b border-border/70 py-[3px]'}
+      className={email ? undefined : 'grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)] items-start gap-x-2 border-b border-border/70 py-[2px]'}
       style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '4px 0', borderTop: `1px solid ${EMAIL.hairline}` } : undefined}
     >
       <span className={email ? undefined : 'flex min-w-0 flex-col'}>
         <span className={email ? undefined : 'text-[11.5px] font-medium leading-[1.3]'}>{m.label}</span>
-        <span className={email ? undefined : 'font-mono text-[9.5px] leading-[1.35] text-muted-foreground'}>{m.basisLine}</span>
+        {/* THE CLOCK IS PRINTED WHERE IT CHANGES. Five measures carry two
+            distinct basis lines between them, and one of them was printed
+            three times running — four repeated lines of a 421px column, on
+            the page that lost rows off its bottom. Every row is still ON a
+            stated clock: the line above it is the one it is read on, which is
+            how a dated table is read, and it is the rule this block already
+            follows for why a band was not drawn. */}
+        {basis ? <span className={email ? undefined : 'font-mono text-[9.5px] leading-[1.35] text-muted-foreground'}>{basis}</span> : null}
         {/* WHY A ROW DREW NO BAND IS SAID ONCE, UNDER THE TABLE, AND NOT
             FOUR TIMES INSIDE IT. Three of the five measures never can carry one
             — a rate, a median and a count are not proportions — and the three
@@ -222,6 +235,7 @@ export const quarterlyRivals: Block<QuarterlyData> = {
     if (empty) return frame(<BlockEmpty mode={mode}>{empty}</BlockEmpty>)
 
     const months = (r.standings?.months ?? []).slice(-MONTH_CELLS)
+    const silent = r.saidAbout.filter((s) => s.empty).map((s) => s.label)
     const seriesFor = (audience: string, key: 'attention' | 'content'): (number | null)[] => {
       const points = r.standings?.series.find((s) => s.audience === audience)?.points ?? []
       const byMonth = new Map(points.map((p) => [p.month, p[key]]))
@@ -300,9 +314,13 @@ export const quarterlyRivals: Block<QuarterlyData> = {
             ]}
           />
         ))}
-        <div className={email ? undefined : 'mt-2 flex flex-col gap-1'}>
+        <div className={email ? undefined : 'mt-1 flex flex-col gap-[2px]'}>
+          {/* WHAT THE CELLS ARE. The clause that used to close this sentence —
+              "both shares are of the month's tracked set" — is `r.caveat`'s
+              own subject, said more precisely two lines down, and one sheet
+              does not need it twice. */}
           {months.length > 0 ? (
-            <Note mode={mode}>The newest month is the bold column, and the counts under each cell are that month’s ({newestLabel}); both shares are of the month’s tracked set.</Note>
+            <Note mode={mode}>The newest month is the bold column, and the counts under each cell are that month’s ({newestLabel}).</Note>
           ) : null}
           {/* `qr.p5.standings.note` · the two denominators as figures, and the
               per-month tracking rules with their dates. Both were carried on
@@ -319,17 +337,36 @@ export const quarterlyRivals: Block<QuarterlyData> = {
           {r.monthNote ? <Note mode={mode}>{r.monthNote}</Note> : null}
           {r.standingsNote ? <Note mode={mode}>{r.standingsNote}</Note> : null}
           {r.rivalsNote ? <Note mode={mode}>{r.rivalsNote}</Note> : null}
-          {r.standings ? <Note mode={mode}>{r.standings.precedence}</Note> : null}
-          {r.standings?.caveat ? <Note mode={mode}>{r.standings.caveat}</Note> : null}
+          {/* THE PRECEDENCE RULE ONCE, WITH ITS COUNT WHERE THERE IS ONE.
+              `standings.precedence` states the rule and points at the count
+              ("the count of those is beside this table"); the sentence under
+              it states the count AND the rule again ("each is counted once,
+              in one audience"). Five lines of a 421px column for one rule,
+              and the fifth was the row this table lost off the sheet. Where
+              the count exists it is the sentence that carries both; where it
+              does not, the rule still prints on its own. */}
           {r.dualMention != null ? (
             <Note mode={mode}>
               <span data-copy="figure">{fmtInt(r.dualMention)}</span> of your own videos also named a tracked rival;
               each is counted once, in one audience.
             </Note>
+          ) : r.standings ? (
+            <Note mode={mode}>{r.standings.precedence}</Note>
           ) : null}
+          {r.standings?.caveat ? <Note mode={mode}>{r.standings.caveat}</Note> : null}
+          {/* THE CORPUS CAVEAT, UNDER THE TABLE IT IS ABOUT. `r.caveat` reads
+              "…the videos on the left, the comments we kept on the right",
+              which names THESE two columns — and it was printed at the foot
+              of the questions column three columns away, where "left" and
+              "right" name nothing and where it was the row that column lost
+              off the bottom of the sheet. It is the sentence this block's own
+              header calls the one the page must say once, because a share of
+              what we looked for read as a share of the category is the worst
+              misreading this product can produce; it says it here. */}
+          {r.caveat ? <Note mode={mode}>{r.caveat}</Note> : null}
         </div>
 
-        <div className={email ? undefined : 'mt-2 flex flex-col gap-1'}>
+        <div className={email ? undefined : 'mt-1 flex flex-col gap-[2px]'}>
           <Eyebrow mode={mode}>Said about them, by others</Eyebrow>
           {r.rows.filter((row) => row.raisedMost).map((row) => (
             <Row key={`raised-${row.audience}`} mode={mode} label={row.label}>
@@ -341,18 +378,25 @@ export const quarterlyRivals: Block<QuarterlyData> = {
               />
             </Row>
           ))}
-          {r.saidAbout.map((s) => (
+          {r.saidAbout.filter((s) => !s.empty).map((s) => (
             <div key={s.audience}>
-              {s.empty ? (
-                <Note mode={mode}>{s.empty}</Note>
-              ) : (
-                <BlockQuotes
-                  mode={mode}
-                  quotes={s.rows.filter((row) => row.quote).map((row) => ({ quote: row.quote, cite: `${s.label} · ${fmtInt(row.value.k)} of ${fmtInt(row.value.n)} videos` }))}
-                />
-              )}
+              <BlockQuotes
+                mode={mode}
+                quotes={s.rows.filter((row) => row.quote).map((row) => ({ quote: row.quote, cite: `${s.label} · ${fmtInt(row.value.k)} of ${fmtInt(row.value.n)} videos` }))}
+              />
             </div>
           ))}
+          {/* ONE SENTENCE FOR THE SILENCES, NOT ONE PER BRAND. `SAID_ABOUT_EMPTY`
+              is a single template and three rivals produced three lines of it
+              differing only in the name — "Nothing was said about Ottobock in
+              what we read this month." three times, 50px of a 419px column,
+              and the third of them was clipped off the sheet. The words are
+              the record's own; only the list is joined. */}
+          {silent.length > 0 ? (
+            <Note mode={mode}>
+              Nothing was said about {listLabels(silent)} in what we read this month.
+            </Note>
+          ) : null}
           {r.saidAbout.length === 0 && !r.rows.some((row) => row.raisedMost) ? (
             <Note mode={mode}>What is said about a tracked rival is not readable on this workspace’s own session.</Note>
           ) : null}
@@ -361,7 +405,7 @@ export const quarterlyRivals: Block<QuarterlyData> = {
     )
 
     const h2h = (
-      <Column mode={mode} gap={10}>
+      <Column mode={mode} gap={6}>
         <div className={email ? undefined : 'flex flex-col gap-1'}>
           <Eyebrow mode={mode}>Head to head, then and now</Eyebrow>
           {r.headToHead ? (
@@ -375,7 +419,14 @@ export const quarterlyRivals: Block<QuarterlyData> = {
                 <span className={email ? undefined : 'text-[10px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground'}>You</span>
                 <span className={email ? undefined : 'text-[10px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground'}>{r.headToHead.rivalLabel}</span>
               </div>
-              {r.headToHead.measures.map((m) => <FaceOff key={m.key} m={m} mode={mode} />)}
+              {r.headToHead.measures.map((m, i) => (
+                <FaceOff
+                  key={m.key}
+                  m={m}
+                  basis={i === 0 || m.basisLine !== r.headToHead!.measures[i - 1].basisLine ? m.basisLine : null}
+                  mode={mode}
+                />
+              ))}
               {/* ONE LINE PER DISTINCT REASON A BAND WAS NOT DRAWN, over the
                   measures that actually carry that reason — composed from the
                   rows rather than typed, so a measure that gains a band drops
@@ -396,7 +447,7 @@ export const quarterlyRivals: Block<QuarterlyData> = {
     )
 
     const theirs = (
-      <Column mode={mode} gap={10}>
+      <Column mode={mode} gap={6}>
         <div className={email ? undefined : 'flex flex-col gap-1'}>
           <Eyebrow mode={mode}>What they say on their own posts</Eyebrow>
           {r.ownPosts.length > 0 ? (
@@ -455,13 +506,12 @@ export const quarterlyRivals: Block<QuarterlyData> = {
             </Row>
           ))}
           <Note mode={mode}>{r.questionsLine}</Note>
-          <Note mode={mode}>{r.caveat}</Note>
         </div>
       </Column>
     )
 
     return frame(
-      <Columns weights={[5, 4, 3]} gap={28} mode={mode}>
+      <Columns weights={[3.9, 5.6, 3]} gap={24} mode={mode}>
         {standings}
         {h2h}
         {theirs}

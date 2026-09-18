@@ -318,7 +318,7 @@ export const quarterlyMoves: Block<QuarterlyData> = {
         >
           {m.rule}
         </p>
-        <Columns weights={[4, 4, 4]} gap={28} mode={mode}>
+        <Columns weights={[6, 6, 11]} gap={24} mode={mode}>
           {moves}
           {ledger}
           {claims}

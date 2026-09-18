@@ -564,6 +564,20 @@ export function moveTail(move: { title: string; on: string; line: string }): str
   return tail.length > 0 ? tail.join(' · ') : move.line
 }
 
+/**
+ * How many rows page 8's left column has room for, measured.
+ *
+ * A SHEET IS A FIXED BOX AND NEITHER LIST IS BOUNDED. One wait is produced per
+ * subject whose quarter column could not be drawn, per move with no reading
+ * and per dormant theme, and one item per comparison that was drawn and did
+ * not clear — so a workspace whose quarter mostly could not be read fills this
+ * page twice over, and `overflow: hidden` took the surplus in silence. Both
+ * numbers were measured at 1440 and 1024 against the slide's own 167mm box on
+ * every fixture state. The budget is shared because the column is.
+ */
+const ITEMS_SHOWN = 3
+const ROWS_SHOWN = 5 
+
 export interface UnsettledWait {
   /** The open question, as a heading. */
   title: string
@@ -599,6 +613,22 @@ export interface UnsettledPage {
    * one of them is code's own vocabulary.
    */
   waiting: UnsettledWait[]
+  /**
+   * How many waits did NOT fit on the page, and where they are named.
+   *
+   * A SHEET IS A FIXED BOX AND THE LIST IS NOT BOUNDED. A workspace whose
+   * quarter comparisons mostly could not be drawn produces one wait per
+   * subject, per unread move and per dormant theme, and page 8 is 297 × 167mm
+   * with `overflow: hidden` — so the list ran off the bottom in silence, which
+   * is the one failure mode this whole artefact is arranged to avoid. The page
+   * shows what fits and SAYS how many it did not show; every one of them is
+   * named on the page that measured it (the subjects table, the moves page,
+   * the category's dormant flags), so nothing is only here.
+   */
+  waitingMore: number
+  /** How many unsettled items did not fit. Same rule as `waitingMore`: each is
+   *  a comparison the page before it printed a badge for. */
+  itemsMore: number
   heldBack: string[]
   /** When the first quarter-on-quarter verdict lands, in the reader's words —
    *  with the month it settles in, where that can be counted. */
@@ -2473,10 +2503,18 @@ function buildUnsettled(a: {
     : !a.subjectsRead
       ? 'Your subjects were not compared across this quarter — they are not counted as one window for this workspace yet, so no subject comparison was attempted.'
       : null
+  const allItems = unsettledItems(a.verdicts, { side: audienceSideIn(a.overview) })
+  // WHAT FITS, AND THE COUNT OF WHAT DOES NOT. The two lists share one column
+  // of one fixed box, so they share a budget: the unsettled items are the
+  // page's subject and are taken first, and the waits take what is left.
+  const items = allItems.slice(0, ITEMS_SHOWN)
+  const shown = Math.max(2, ROWS_SHOWN - items.length)
   return {
-    items: unsettledItems(a.verdicts, { side: audienceSideIn(a.overview) }),
+    items,
+    itemsMore: Math.max(0, allItems.length - items.length),
     notAsked,
-    waiting,
+    waiting: waiting.slice(0, shown),
+    waitingMore: Math.max(0, waiting.length - shown),
     heldBack,
     settles: quarterUnlocked(a.readings)
       ? 'Every comparison this quarter could answer is on the pages before this one.'

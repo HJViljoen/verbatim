@@ -97,6 +97,12 @@ export const quarterlyUnsettled: Block<QuarterlyData> = {
         ) : u.notAsked ? null : (
           <Note mode={mode}>Every comparison this quarter asked for was drawn.</Note>
         )}
+        {u.itemsMore > 0 ? (
+          <Note mode={mode}>
+            <span data-copy="figure">{u.itemsMore}</span> more were drawn and did not clear their band; each carries its
+            badge on the page that measured it.
+          </Note>
+        ) : null}
 
         {/* `qr.p8.waiting` · THE ARTBOARD'S SHAPE: a headline and a badge per
             wait, so a reader scans named open questions rather than three
@@ -118,8 +124,29 @@ export const quarterlyUnsettled: Block<QuarterlyData> = {
                 {w.line ?? w.title}
               </Row>
             ))}
+            {/* THE COUNT OF WHAT DID NOT FIT. A sheet is a fixed box and this
+                list is not bounded, so it ran off the bottom in silence on a
+                workspace whose comparisons mostly could not be drawn — the one
+                failure mode this artefact is arranged to avoid. */}
+            {u.waitingMore > 0 ? (
+              <Note mode={mode}>
+                <span data-copy="figure">{u.waitingMore}</span> more are waiting on a reading; each is named on the page
+                that measured it.
+              </Note>
+            ) : null}
           </div>
         ) : null}
+
+{/* WHEN THIS SETTLES, ON THE LEFT. The artboard stacks this under "Held
+            back" in the right column; measured, that column stood 465px tall
+            against a 422px grid while this one sat at 255 and left a third of
+            the sheet blank, and the last page lost its own privacy line off
+            the bottom. The section moves, the sheet keeps every row, and the
+            two columns are within 60px of each other. */}
+          <div className={email ? undefined : 'flex flex-col gap-1'}>
+            <Eyebrow mode={mode}>When this settles</Eyebrow>
+            <Note mode={mode}>{u.settles}</Note>
+          </div>
       </Column>
     )
 
@@ -169,37 +196,40 @@ export const quarterlyUnsettled: Block<QuarterlyData> = {
           )}
         </Card>
 
-        <div className={email ? undefined : 'flex flex-col gap-1'}>
-          <Eyebrow mode={mode}>When this settles</Eyebrow>
-          <Note mode={mode}>{u.settles}</Note>
-          {/* `qr.p8.changelog` · the dated log. Page 7 prints the COUNT of
-              changes inside the window; this is what those changes were. */}
-          {m.changeLog ? (
-            <>
-              {m.changeLog.rows.map((row, n) => (
-                <Row key={row.id ?? n} mode={mode}>
-                  <span className={email ? undefined : 'font-mono text-[10.5px] text-muted-foreground'}>{fullDate(row.on)}</span>{' '}
-                  {row.what} — {row.said}
-                  {/* WHO, AS A ROLE. `ClientChange.who` is `actorWords`'
-                      output, which is what identity resolved to and never a
-                      name a browser claimed (lib/config-log.ts). */}
-                  <Note mode={mode}>{row.who}{row.breaks ? ` · ${row.breaks}` : ''}</Note>
-                </Row>
-              ))}
-              {m.changeLog.showing ? <Note mode={mode}>{m.changeLog.showing}</Note> : null}
-              {m.changeLog.affectsRecorded ? null : (
-                <Note mode={mode}>What each change broke is not recorded for this workspace, so only the change is listed.</Note>
-              )}
-              {m.changeLog.rows.length === 0 ? (
-                <Note mode={mode}>Nothing that was logged changed what we track inside this quarter.</Note>
-              ) : null}
-            </>
-          ) : (
-            <Note mode={mode}>
-              The change log could not be read for this workspace, which is not the same as nothing having changed.
-            </Note>
-          )}
-        </div>
+        {/* THE DATED LOG, BESIDE THE RECORD IT BELONGS TO. It sat under "When
+            this settles" on the left; measured, that column ran to 531px
+            against a 409px grid on a workspace whose comparisons mostly could
+            not be drawn, while this one sat at 318. The log is a record fact,
+            like the gate share above it, and the sentence about when the
+            quarter settles stands on its own on the left. */}
+            {/* `qr.p8.changelog` · the dated log. Page 7 prints the COUNT of
+                changes inside the window; this is what those changes were. */}
+            {m.changeLog ? (
+              <>
+                {m.changeLog.rows.map((row, n) => (
+                  <Row key={row.id ?? n} mode={mode}>
+                    <span className={email ? undefined : 'font-mono text-[10.5px] text-muted-foreground'}>{fullDate(row.on)}</span>{' '}
+                    {row.what} — {row.said}
+                    {/* WHO, AS A ROLE. `ClientChange.who` is `actorWords`'
+                        output, which is what identity resolved to and never a
+                        name a browser claimed (lib/config-log.ts). */}
+                    <Note mode={mode}>{row.who}{row.breaks ? ` · ${row.breaks}` : ''}</Note>
+                  </Row>
+                ))}
+                {m.changeLog.showing ? <Note mode={mode}>{m.changeLog.showing}</Note> : null}
+                {m.changeLog.affectsRecorded ? null : (
+                  <Note mode={mode}>What each change broke is not recorded for this workspace, so only the change is listed.</Note>
+                )}
+                {m.changeLog.rows.length === 0 ? (
+                  <Note mode={mode}>Nothing that was logged changed what we track inside this quarter.</Note>
+                ) : null}
+              </>
+            ) : (
+              <Note mode={mode}>
+                The change log could not be read for this workspace, which is not the same as nothing having changed.
+              </Note>
+            )}
+
       </Column>
     )
 

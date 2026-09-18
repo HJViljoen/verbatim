@@ -29,7 +29,7 @@ export function Note({ children, mode = 'app', tone = 'muted' }: { children: Rea
       </div>
     )
   }
-  return <p className={`m-0 mt-0.5 text-[10.5px] leading-[1.45] ${tone === 'body' ? 'text-secondary-foreground' : 'text-muted-foreground'}`}>{children}</p>
+  return <p className={`m-0 mt-px text-[10px] leading-[1.38] ${tone === 'body' ? 'text-secondary-foreground' : 'text-muted-foreground'}`}>{children}</p>
 }
 
 /** A measured number, with what it is out of beside it. The "of N" is REQUIRED
@@ -93,7 +93,7 @@ export function Row({ label, children, aside, mode = 'app' }: { label?: ReactNod
     )
   }
   return (
-    <div className="border-t border-border/70 py-1 text-[12px] leading-[1.35]">
+    <div className="border-t border-border/70 py-[3px] text-[12px] leading-[1.35]">
       {label ? <span className="font-medium">{label}</span> : null}
       <div>{children}</div>
       {aside ? <div className="flex flex-wrap items-center gap-1.5">{aside}</div> : null}
@@ -134,7 +134,7 @@ export function Line({ label, figure, badge, note, mode = 'app' }: {
     )
   }
   return (
-    <div className="flex flex-col border-t border-border/70 py-[3px]">
+    <div className="flex flex-col border-t border-border/70 py-[2px]">
       <div className="flex min-w-0 items-baseline justify-between gap-2 text-[12px] leading-[1.3]">
         <span className="min-w-0 flex-1 truncate">{label}</span>
         {figure ? <span className="flex-none">{figure}</span> : null}
@@ -299,7 +299,7 @@ export function TableRow({ template, cells, mode = 'app' }: { template: string; 
   }
   return (
     <div
-      className="grid grid-cols-1 items-start gap-x-2 gap-y-1 border-b border-border/70 py-[5px] lg:gap-y-0 lg:[grid-template-columns:var(--qr-tab)]"
+      className="grid grid-cols-1 items-start gap-x-2 gap-y-1 border-b border-border/70 py-[3px] lg:gap-y-0 lg:[grid-template-columns:var(--qr-tab)]"
       style={{ ['--qr-tab' as string]: template }}
     >
       {cells.map((c, i) => (

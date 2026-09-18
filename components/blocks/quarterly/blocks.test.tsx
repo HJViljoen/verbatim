@@ -928,6 +928,23 @@ describe('the artboard port (Block D wave 2)', () => {
     }
   })
 
+  it('qr.p8 · neither list is unbounded, and the page says what it did not show', () => {
+    // A sheet is a fixed 297 × 167mm box with `overflow: hidden`. One wait is
+    // produced per subject whose quarter column could not be drawn, per unread
+    // move and per dormant theme, and one item per comparison that did not
+    // clear — so a workspace whose quarter mostly could not be read overran the
+    // page in silence, which is the one failure this artefact is arranged to
+    // avoid. Both lists are bounded and the page prints the count it held back.
+    const t = text('quarterly.unsettled', thinQuarter)
+    expect(thinQuarter.unsettled.items.length).toBeLessThanOrEqual(3)
+    expect(thinQuarter.unsettled.itemsMore).toBeGreaterThan(0)
+    expect(t).toContain('more were drawn and did not clear their band')
+    // And on a state with nothing held back, no remainder sentence appears.
+    expect(data.unsettled.itemsMore).toBe(0)
+    expect(data.unsettled.waitingMore).toBe(0)
+    expect(text('quarterly.unsettled')).not.toContain('more are waiting on a reading')
+  })
+
   it('qr.p8.heldback · the gate’s share, and why no sample is drawn', () => {
     const t = text('quarterly.unsettled')
     expect(t).toContain('of what the search plan gathered')

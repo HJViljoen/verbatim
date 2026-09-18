@@ -284,8 +284,7 @@ export const quarterlyCategory: Block<QuarterlyData> = {
       </Column>
     )
 
-    const aside = (
-      <Column mode={mode} gap={10}>
+    const kindMix = (
         <div className={email ? undefined : 'flex flex-col gap-2'}>
           <Eyebrow mode={mode}>Kind of thing said</Eyebrow>
           {c.kinds.length > 0 ? (
@@ -319,44 +318,9 @@ export const quarterlyCategory: Block<QuarterlyData> = {
             <Note mode={mode}>{c.kindsNote ?? 'What kind of thing was said is not recorded for this workspace yet.'}</Note>
           )}
         </div>
+    )
 
-        <div className={email ? undefined : 'flex flex-col gap-2'}>
-          <Eyebrow mode={mode}>Attention, month by month</Eyebrow>
-          {panel.length > 0 ? (
-            <Card mode={mode}>
-              <BlockCalendar
-                blockKey={`${quarterlyCategory.key}.attention`}
-                axis={c.attention?.axis ?? []}
-                series={panel}
-                rules={panelRule(c)}
-                mode={mode}
-                height={92}
-                width={330}
-                padL={40}
-                // THE GUTTER IS OFF (see `ChartEndings`): at 96px it cut
-                // "The category 41,200" to "The category 41,2" on the one
-                // output this artefact has.
-                padR={16}
-                endLabels={false}
-                format={(v) => fmtInt(v)}
-                label="comments under the panel's videos, month by month"
-              />
-              <ChartEndings series={panel} format={(v) => fmtInt(v)} mode={mode} />
-              <div className={email ? undefined : 'flex flex-wrap items-center gap-2'}>
-                <BlockMovement verdict={c.attention?.verdict ?? null} unit="pts" mode={mode} />
-                <Note mode={mode}>
-                  {c.attention?.accountCount != null
-                    ? <>Comments under a fixed panel of <span data-copy="figure">{fmtInt(c.attention.accountCount)}</span> accounts;</>
-                    : 'Comments under a fixed panel of accounts;'}
-                  {' '}the rule marks where it was re-frozen.
-                </Note>
-              </div>
-            </Card>
-          ) : (
-            <Note mode={mode}>{c.attentionNote ?? 'No panel has been frozen for this workspace yet, so attention is not read.'}</Note>
-          )}
-        </div>
-
+    const moodBlock = (
         <div className={email ? undefined : 'flex flex-col gap-2'}>
           <Eyebrow mode={mode}>Mood</Eyebrow>
           {c.mood ? (
@@ -387,6 +351,67 @@ export const quarterlyCategory: Block<QuarterlyData> = {
             </>
           ) : (
             <Note mode={mode}>{c.moodNote ?? 'The mood of the category is not recorded for this workspace yet.'}</Note>
+          )}
+        </div>
+    )
+
+    // TWO NARROW SECTIONS SIDE BY SIDE, AND THE CHART UNDER THEM.
+    //
+    // WHY, AND IT IS MEASURED. This is the deck's most over-set sheet. At the
+    // artboard's 7fr/5fr the aside stacked three sections and stood 611px tall
+    // against a 428px grid, while the movers beside it sat at 436 and left the
+    // bottom of a 589px column blank. Stacked is not the only way to read
+    // three independent sections: the kind mix and the mood are both short
+    // label-and-figure lists and read beside each other, and the chart — the
+    // tall one — keeps the width it needs underneath them.
+    //
+    // AND THE CHART IS CAPPED. `CalendarLine` scales its viewBox uniformly to
+    // its container, so a WIDER column draws a TALLER chart: this same chart
+    // is 84px at 300 and 164px at 589. Capping it is what lets the aside take
+    // width without the chart eating what the rows need.
+    const aside = (
+      <Column mode={mode} gap={10}>
+        <Columns weights={[1, 1]} gap={18} mode={mode}>
+          {kindMix}
+          {moodBlock}
+        </Columns>
+        <div className={email ? undefined : 'flex flex-col gap-2'}>
+          <Eyebrow mode={mode}>Attention, month by month</Eyebrow>
+          {panel.length > 0 ? (
+            <Card mode={mode}>
+              {/* CAPPED, so a wider column does not draw a taller chart. */}
+              <div className={email ? undefined : 'w-full max-w-[300px]'}>
+              <BlockCalendar
+                blockKey={`${quarterlyCategory.key}.attention`}
+                axis={c.attention?.axis ?? []}
+                series={panel}
+                rules={panelRule(c)}
+                mode={mode}
+                height={92}
+                width={330}
+                padL={40}
+                // THE GUTTER IS OFF (see `ChartEndings`): at 96px it cut
+                // "The category 41,200" to "The category 41,2" on the one
+                // output this artefact has.
+                padR={16}
+                endLabels={false}
+                format={(v) => fmtInt(v)}
+                label="comments under the panel's videos, month by month"
+              />
+              </div>
+              <ChartEndings series={panel} format={(v) => fmtInt(v)} mode={mode} />
+              <div className={email ? undefined : 'flex flex-wrap items-center gap-2'}>
+                <BlockMovement verdict={c.attention?.verdict ?? null} unit="pts" mode={mode} />
+                <Note mode={mode}>
+                  {c.attention?.accountCount != null
+                    ? <>Comments under a fixed panel of <span data-copy="figure">{fmtInt(c.attention.accountCount)}</span> accounts;</>
+                    : 'Comments under a fixed panel of accounts;'}
+                  {' '}the rule marks where it was re-frozen.
+                </Note>
+              </div>
+            </Card>
+          ) : (
+            <Note mode={mode}>{c.attentionNote ?? 'No panel has been frozen for this workspace yet, so attention is not read.'}</Note>
           )}
         </div>
       </Column>

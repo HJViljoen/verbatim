@@ -60,14 +60,14 @@ export const quarterlyMethod: Block<QuarterlyData> = {
     )
 
     const left = (
-      <Column mode={mode} gap={8}>
+      <Column mode={mode} gap={6}>
         <Eyebrow mode={mode}>How this review was made</Eyebrow>
         <Note mode={mode} tone="body">{m.line}</Note>
         {m.lines.map((line, n) => (
           <Note key={n} mode={mode}>{line}</Note>
         ))}
 
-        <div className={email ? undefined : 'mt-2 flex flex-col gap-1'}>
+        <div className={email ? undefined : 'mt-1.5 flex flex-col gap-[3px]'}>
           <Eyebrow mode={mode}>The unusual-week check</Eyebrow>
           {m.flagsNote ? (
             <Note mode={mode}>{m.flagsNote}</Note>
@@ -127,7 +127,7 @@ export const quarterlyMethod: Block<QuarterlyData> = {
     )
 
     return frame(
-      <Columns weights={[7, 5]} mode={mode}>
+      <Columns weights={[2, 1]} mode={mode}>
         {left}
         {right}
       </Columns>,
