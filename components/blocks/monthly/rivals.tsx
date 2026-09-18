@@ -8,7 +8,7 @@ import { fmtInt, shortDate } from '@/lib/format'
 import { REFUSAL_WHY } from '@/lib/reading/record'
 import { NOT_OBSERVED, NOT_RECORDED, standingText, type StandingShare } from '@/lib/reading/standings'
 import { isRivalAudience } from '@/lib/rivals'
-import { OWN_POSTS_UNREADABLE, type OverviewData, type RivalRow } from '@/lib/pages/overview'
+import { OWN_POSTS_UNREADABLE_OUTSIDE, type OverviewData, type RivalRow } from '@/lib/pages/overview'
 import { presentation, T } from './email-table'
 
 /**
@@ -201,11 +201,21 @@ function Share({ share, recorded }: { share: StandingShare | null; recorded: boo
  * What the tracked rivals said on their own posts — the artboard's shaded
  * inner panel.
  *
- * ONE CELL PER RIVAL, AND THE ABSENCE IS NAMED. `video_claims` is service-role
- * only until M8 (WP16), so every cell reads the block's own words for a side we
- * cannot read, which name who fixes it rather than implying the rival said
- * nothing. When `rivalOwnClaims` (wave 1) starts filling `RivalRow.ownPosts`
- * the same cell carries the claims — no second shape to build.
+ * THE ABSENCE IS NAMED ONCE, NOT ONCE PER RIVAL (the fix pass, review finding
+ * [Minor]). `video_claims` is service-role only until M8 (WP16), so on a
+ * workspace tracking six rivals the panel printed one identical sentence six
+ * times — 100% absence, said six ways, in a shaded box. Where NO rival can be
+ * read the panel says so once and lists whose posts those are; where some can
+ * be, each row carries its own claim and the unread ones keep the sentence on
+ * their own line.
+ *
+ * AND IT IS THE OUTSIDE WORDING. `OWN_POSTS_UNREADABLE` ends "· Verbatim
+ * engineering", which is a READINESS OWNER — right on a page where a tenant
+ * can open Settings › Readiness and look, and an internal label in a mailbox
+ * that may belong to anyone on a client's update list. The `_OUTSIDE` variant
+ * exists for exactly that reader; this branch is the first time the string
+ * would have left the app at all (Overview's email arm renders `OwnPosts` for
+ * no mode).
  *
  * THE ECHO / PUSH-BACK COUNTS THE ARTBOARD PRINTS ("echoed it in 31 videos and
  * pushed back in 9") ARE NOT HERE, because say-vs-hear is Market's reading
@@ -214,16 +224,21 @@ function Share({ share, recorded }: { share: StandingShare | null; recorded: boo
 function OwnPostsPanel({ rows }: { rows: readonly RivalRow[] }) {
   const rivals = rows.filter((r) => isRivalAudience(r.audience))
   if (rivals.length === 0) return null
+  const readable = rivals.filter((r) => r.ownPosts != null)
   return (
     <div style={{ background: EMAIL.inner, borderRadius: 6, padding: '16px 18px', marginTop: 12 }}>
       <div style={{ fontFamily: FONT.sans, fontSize: 12, fontWeight: 600, letterSpacing: '.6px', textTransform: 'uppercase', color: EMAIL.muted }}>
         What the tracked rivals said on their own posts
       </div>
-      {rivals.map((row) => (
+      {readable.length === 0 ? (
+        <div style={{ fontFamily: FONT.sans, fontSize: 12.5, lineHeight: '1.5', color: EMAIL.muted, marginTop: 8 }}>
+          {rivals.map((r) => r.label).join(', ')} {OWN_POSTS_UNREADABLE_OUTSIDE}
+        </div>
+      ) : rivals.map((row) => (
         <div key={row.audience} style={{ marginTop: 10 }}>
           <div style={{ fontFamily: FONT.sans, fontSize: 14, fontWeight: 600, color: EMAIL.ink }}>{row.label}</div>
           <div style={{ fontFamily: FONT.sans, fontSize: 12.5, lineHeight: '1.5', color: EMAIL.muted, marginTop: 2 }}>
-            {row.ownPosts ?? OWN_POSTS_UNREADABLE}
+            {row.ownPosts ?? OWN_POSTS_UNREADABLE_OUTSIDE}
           </div>
         </div>
       ))}
@@ -241,10 +256,17 @@ function OwnPostsPanel({ rows }: { rows: readonly RivalRow[] }) {
  * denominator, and denominators do not compare. So the panel prints every
  * rival's own, each with its k-of-n, under a heading that claims only what the
  * field holds.
+ *
+ * AND A ROW WITH NOTHING RAISED IS PRINTED, NOT DROPPED (the fix pass, review
+ * finding [Minor]). Filtering `raisedMost != null` made a rival vanish from a
+ * panel that carries no count, so a reader could not tell whether the rival
+ * was quiet or absent from the reading — a silent drop on the artefact that is
+ * read unaccompanied. The page prints an explicit "—" for that row
+ * (`components/pages/overview/rivals.tsx` `Raised`) and so does this.
  */
 function AskedPanel({ rows }: { rows: readonly RivalRow[] }) {
-  const asked = rows.filter((r) => r.raisedMost != null)
-  if (asked.length === 0) return null
+  const asked = rows.filter((r) => isRivalAudience(r.audience) || r.raisedMost != null)
+  if (asked.length === 0 || asked.every((r) => r.raisedMost == null)) return null
   return (
     <div style={{ borderLeft: `3px solid ${EMAIL.border}`, paddingLeft: 16, marginTop: 14 }}>
       <div style={{ fontFamily: FONT.sans, fontSize: 12, fontWeight: 600, letterSpacing: '.6px', textTransform: 'uppercase', color: EMAIL.muted }}>
@@ -252,15 +274,23 @@ function AskedPanel({ rows }: { rows: readonly RivalRow[] }) {
       </div>
       {asked.map((row) => (
         <div key={row.audience} style={{ marginTop: 8 }}>
+          {row.raisedMost == null ? (
+            <div style={{ fontFamily: FONT.sans, fontSize: 12.5, lineHeight: '1.5', color: EMAIL.muted }}>
+              {row.label} — nothing was raised under their content this month.
+            </div>
+          ) : (
           <div style={{ fontFamily: FONT.serif, fontSize: 16, lineHeight: '1.45', color: EMAIL.ink }}>
             {/* A THEME LABEL IS A MODEL'S WORDS READ BACK OUT OF A COLUMN —
                 the `subject` kind, `pass_b_theme`, the exemption VO2 and OV3
                 already claim for the same string. */}
-            <span data-copy="subject" data-slot="pass_b_theme">{row.raisedMost?.label}</span>
+            <span data-copy="subject" data-slot="pass_b_theme">{row.raisedMost.label}</span>
           </div>
-          <div style={{ fontFamily: FONT.mono, fontSize: 11, lineHeight: '1.5', color: EMAIL.muted, marginTop: 2 }}>
-            <span data-copy="level">{fmtInt(row.raisedMost?.k ?? 0)} of {fmtInt(row.raisedMost?.n ?? 0)}</span> · under {row.label}’s content
-          </div>
+          )}
+          {row.raisedMost != null ? (
+            <div style={{ fontFamily: FONT.mono, fontSize: 11, lineHeight: '1.5', color: EMAIL.muted, marginTop: 2 }}>
+              <span data-copy="level">{fmtInt(row.raisedMost.k)} of {fmtInt(row.raisedMost.n)}</span> · under {row.label}’s content
+            </div>
+          ) : null}
         </div>
       ))}
     </div>

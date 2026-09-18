@@ -10,7 +10,7 @@ import { MONTHLY_BLOCK_KEYS, MONTHLY_MOVES_UNLOCK } from '@/lib/reports/monthly'
 import { MOVEMENT_WORDS } from '@/components/delta-badge'
 import { REFUSAL_WHY } from '@/lib/reading/record'
 import { gapLine, type Gap } from '@/lib/reading/gap'
-import { OWN_POSTS_UNREADABLE } from '@/lib/pages/overview'
+import { OWN_POSTS_UNREADABLE_OUTSIDE } from '@/lib/pages/overview'
 import { MOVERS_UNREAD_NOTE } from '@/lib/pages/monthly'
 import { ALL_MONTHLY_BLOCKS, MONTHLY_BLOCKS, monthlyBlocksFor } from './index'
 import { formingMonthlyFixture, monthlyFixture, refusedMonthlyFixture } from './fixture'
@@ -478,7 +478,40 @@ describe('the five sections that are Overview’s', () => {
     const text = renderText(MONTHLY_BLOCKS['monthly.rivals'].render(data, 'email', ctx))
     expect(text).toContain('Sealand (you)')
     expect(text).toContain('What the tracked rivals said on their own posts')
-    expect(text).toContain(OWN_POSTS_UNREADABLE)
+    // THE OUTSIDE WORDING, AND SAID ONCE (the fix pass, review finding
+    // [Minor]). The panel printed one identical sentence per rival — 100%
+    // absence said six times on a six-rival workspace — and the sentence it
+    // printed ended "· Verbatim engineering", a READINESS OWNER meant for a
+    // reader who can open Settings › Readiness. An update list is not that
+    // reader, and this branch is the first time the string would leave the app
+    // at all.
+    expect(text).toContain(OWN_POSTS_UNREADABLE_OUTSIDE)
+    expect(text).not.toContain('Verbatim engineering')
+    expect(text.split(OWN_POSTS_UNREADABLE_OUTSIDE).length - 1).toBe(1)
+  })
+
+  // A RIVAL WITH NOTHING RAISED IS PRINTED, NOT DROPPED (the fix pass, review
+  // finding [Minor]). The panel carries no count, so a filtered-out row was a
+  // silent disappearance on the artefact that is read unaccompanied; the page
+  // prints an explicit "—" for the same row.
+  it('says a rival raised nothing rather than dropping it from the panel', () => {
+    const data = monthlyFixture()
+    const rivals = data.overview.rivals
+    const quiet = {
+      ...data,
+      overview: {
+        ...data.overview,
+        rivals: {
+          ...rivals,
+          rows: [
+            ...rivals.rows,
+            { ...rivals.rows.find((r) => r.role === 'rival')!, audience: 'competitor:Cotopaxi', label: 'Cotopaxi', raisedMost: null },
+          ],
+        },
+      },
+    }
+    const text = renderText(MONTHLY_BLOCKS['monthly.rivals'].render(quiet, 'email', ctx))
+    expect(text).toContain('Cotopaxi — nothing was raised under their content this month.')
   })
 
   it('prints both sides of a subject as a column, each with its own "of N"', () => {
