@@ -68,12 +68,32 @@ const COLUMNS: Record<2 | 3, string> = {
   3: 'xl:grid-cols-3 xl:[&>*:not(:nth-child(3n+1))]:border-l',
 }
 
-export function TileColumns({ of, children, className }: { of: 2 | 3; children: ReactNode; className?: string }) {
+/**
+ * The same grid with NO rule — for columns the artboards set side by side with
+ * nothing between them (Block D wave 2, E-voice).
+ *
+ * NOT EVERY COLUMN PAIR IS A COMPARISON. The rule above is right where the two
+ * columns are two readings of one axis — Voice's growing beside fading, which
+ * is exactly what the artboard rules. It is wrong where the columns are a LIST
+ * flowing across the page: the artboard sets six quotes in three columns and
+ * three persona cards abreast, and draws no rule between either, because a
+ * column of one list is not the other column's opposite. A tinted card would
+ * additionally wear a hairline against its own edge. So the divider is a prop,
+ * ruled by default, and a caller that only means "lay these out" says so.
+ */
+const BARE: Record<2 | 3, string> = {
+  2: 'xl:grid-cols-2',
+  3: 'xl:grid-cols-3',
+}
+
+export function TileColumns({ of, rule = true, children, className }: { of: 2 | 3; rule?: boolean; children: ReactNode; className?: string }) {
   return (
     <div
       className={cn(
-        'grid min-w-0 grid-cols-1 gap-4 divide-y divide-border/70 xl:divide-y-0 xl:[&>*]:border-border/70',
-        COLUMNS[of],
+        'grid min-w-0 grid-cols-1 gap-4',
+        rule
+          ? cn('divide-y divide-border/70 xl:divide-y-0 xl:[&>*]:border-border/70', COLUMNS[of])
+          : BARE[of],
         className,
       )}
     >

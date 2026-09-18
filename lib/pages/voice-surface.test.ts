@@ -6,6 +6,7 @@ import {
   PERSONA_VIDEO_FLOOR,
   THIN_AUDIENCE_VIDEOS,
   audienceFigures,
+  audiencePillLabel,
   audienceThin,
   castMasthead,
   DEEP_LINK_EMPTY,
@@ -13,6 +14,7 @@ import {
   flatMovers,
   heardLine,
   largestRead,
+  moversCoda,
   moversNote,
   newMovers,
   onCameraReach,
@@ -20,12 +22,15 @@ import {
   openRefusal,
   pickAudience,
   platformShares,
+  quoteCite,
+  reachAxisMax,
   repliesNote,
   searchRegistry,
   voiceSurfaceHref,
   type AudienceBlock,
   type CastBlock,
 } from './voice-surface'
+import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '../rivals'
 import type { Mover } from './overview'
 import type { Verdict } from '../reading/verdicts'
 
@@ -463,7 +468,8 @@ describe('castMasthead', () => {
     state: 'ready', personas: [], selected: null, population: 3129,
     overlapNote: 'A video can carry more than one group, so these counts overlap and do not add up to a whole.',
     profileDate: '2026-09-13', stale: false,
-    floorNote: `A group is named only where at least ${PERSONA_VIDEO_FLOOR} videos carry it · current state, not a trend.`,
+    floorNote: `A group is named only where at least ${PERSONA_VIDEO_FLOOR} videos carry it.`,
+    stateNote: 'this month as it stands, never compared with another month',
     empty: null,
     ...over,
   })
@@ -478,5 +484,94 @@ describe('castMasthead', () => {
 
   it('says nothing where no profile has ever been written', () => {
     expect(castMasthead(cast({ profileDate: null }))).toBeNull()
+  })
+})
+
+// ---- the artboard port's own pure halves (Block D wave 2, E-voice) ---------
+
+describe('audiencePillLabel', () => {
+  it('shortens the two labels that are code’s own words', () => {
+    expect(audiencePillLabel(CLIENT_AUDIENCE, 'Your own brand')).toBe('Yours')
+    expect(audiencePillLabel(INDUSTRY_AUDIENCE, 'The category')).toBe('Category')
+  })
+
+  it('never touches a rival’s name, which is the client’s own string', () => {
+    expect(audiencePillLabel(rivalKey('Topo Designs'), 'Topo Designs')).toBe('Topo Designs')
+    expect(audiencePillLabel(rivalKey('Yours Truly Bags'), 'Yours Truly Bags')).toBe('Yours Truly Bags')
+  })
+})
+
+describe('reachAxisMax', () => {
+  it('leaves headroom above the largest reading and steps, so the axis does not jitter', () => {
+    expect(reachAxisMax([9.4, 6.8])).toBe(15)
+    expect(reachAxisMax([9.6, 6.8])).toBe(15)
+  })
+
+  it('never draws a reading past the end of its own bar', () => {
+    for (const v of [0.4, 3, 12, 33, 49, 70, 99.9]) {
+      expect(reachAxisMax([v])).toBeGreaterThanOrEqual(v)
+      expect(reachAxisMax([v])).toBeLessThanOrEqual(100)
+    }
+  })
+
+  it('is zero where there is nothing to draw, so the bar renders nothing', () => {
+    expect(reachAxisMax([])).toBe(0)
+    expect(reachAxisMax([null, undefined, 0])).toBe(0)
+  })
+})
+
+describe('quoteCite', () => {
+  const video = { platform: 'tiktok', upload_date: '2026-09-14', kind: 'a category video' }
+
+  it('says platform · date · where, which is what the artboard asks for', () => {
+    expect(quoteCite({ video, source: 'comment' })).toBe('TikTok · 14 Sep · under a category video')
+  })
+
+  it('moves the COLUMN to the end, because it is a different claim from where the video was posted', () => {
+    // "said on camera" and "on-screen text" say these words were spoken or
+    // written ON the video rather than typed under it. The old phrase named
+    // the column and nothing else, so six quotes carried three words between
+    // them.
+    expect(quoteCite({ video, source: 'transcript' })).toBe('TikTok · 14 Sep · a category video, transcript')
+    expect(quoteCite({ video, source: 'ocr' })).toBe('TikTok · 14 Sep · a category video, on-screen text')
+  })
+
+  it('keeps the rival’s own post as the kind, as the loader reads it', () => {
+    expect(quoteCite({ video: { ...video, kind: 'a Cotopaxi post' }, source: 'comment' }))
+      .toBe('TikTok · 14 Sep · under a Cotopaxi post')
+  })
+
+  it('falls back to the old phrase when the video is gone, and never invents a platform', () => {
+    // `audience_insights` rows are superseded and pruned by later runs. A
+    // quote whose video did not resolve must still say honestly where it was
+    // read rather than claim a platform nobody can check.
+    expect(quoteCite({ video: null, source: 'comment' })).toBe('in the comments')
+    expect(quoteCite({ video: null, source: 'transcript' })).toBe('said on camera')
+    expect(quoteCite({ video: null, source: 'ocr' })).toBe('on-screen text')
+    expect(quoteCite({ video: null, source: null })).toBe('in the comments')
+  })
+
+  it('drops a fact it does not have rather than printing a gap for it', () => {
+    expect(quoteCite({ video: { ...video, upload_date: null }, source: 'comment' }))
+      .toBe('TikTok · under a category video')
+    expect(quoteCite({ video: { ...video, platform: null }, source: 'comment' }))
+      .toBe('14 Sep · under a category video')
+    expect(quoteCite({ video: { platform: null, upload_date: null, kind: 'a category video' }, source: 'comment' }))
+      .toBe('under a category video')
+  })
+})
+
+describe('moversCoda', () => {
+  it('closes a complete list', () => {
+    expect(moversCoda({ growing: 2, fading: 1, shown: 6, any: true })).toBe('Nothing else moved clearly this month.')
+  })
+
+  it('says nothing when an arm was cut — the rows below the cut moved too', () => {
+    expect(moversCoda({ growing: 9, fading: 1, shown: 6, any: true })).toBeNull()
+    expect(moversCoda({ growing: 1, fading: 9, shown: 6, any: true })).toBeNull()
+  })
+
+  it('leaves an empty list to the block’s own empty state', () => {
+    expect(moversCoda({ growing: 0, fading: 0, shown: 6, any: false })).toBeNull()
   })
 })

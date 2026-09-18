@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
-import { EMAIL } from '@/lib/email/theme'
+import { EMAIL, tokenHex } from '@/lib/email/theme'
+import { platformColour } from '@/components/profile-stats'
 import { copyNodes, copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { voiceCast } from './cast'
@@ -51,12 +52,38 @@ describe('voiceCast', () => {
     expect(text).not.toContain("comments' worth")
   })
 
+  it('paints the platform bar and its dots in a colour that exists', () => {
+    // `var(--platform-tiktok)` is defined nowhere in the repo, so every
+    // segment and every legend dot painted transparent: the artboard's
+    // four-segment bar rendered as three mono percentages floating in a card.
+    // `platformColour` is the product's one platform palette.
+    const markup = render(voiceCast.render(voiceFixture(), 'app', ctx))
+    expect(markup).not.toContain('var(--platform-')
+    expect(markup).toContain(platformColour('tiktok'))
+    expect(markup).toContain(platformColour('youtube'))
+    // And the email arm resolves them to hex rather than painting four dots
+    // the same muted grey.
+    const email = render(voiceCast.render(voiceFixture(), 'email', ctx))
+    expect(email).toContain(tokenHex(platformColour('tiktok')))
+    expect(tokenHex(platformColour('tiktok'))).not.toBe(tokenHex(platformColour('youtube')))
+  })
+
   it('says the groups overlap instead of taking a remainder from them', () => {
     expect(draw()).toContain('A video can carry more than one group, so these counts overlap and do not add up to a whole.')
   })
 
-  it('says the group floor on the block rather than implying it', () => {
-    expect(draw()).toContain('A group is named only where at least 3 videos carry it · this month as it stands, never compared with another month')
+  it('says the group floor on the block rather than implying it, and what the block is a reading OF', () => {
+    // PORTED (wave 2): the artboard's footer has two ends. The floor is about
+    // which groups are named; the state is about the whole block, and is the
+    // page's one exception to the comment clock. The mock's words for it —
+    // "current state, not a trend" — cannot be printed: "trend" is on the
+    // product's own direction list.
+    expect(draw()).toContain('A group is named only where at least 3 videos carry it.')
+    expect(draw()).toContain('this month as it stands, never compared with another month')
+  })
+
+  it('sets the groups as three cards abreast, the way the artboard does', () => {
+    expect(render(voiceCast.render(voiceFixture(), 'app', ctx))).toContain('xl:grid-cols-3')
   })
 
   it('dates the cast by the update that wrote it — this block is the one exception on the page', () => {
@@ -75,7 +102,9 @@ describe('voiceCast', () => {
 
   it('keeps the crowd figure — decoration the owner chose, once per group', () => {
     const markup = render(voiceCast.render(voiceFixture(), 'app', ctx))
-    expect(markup.match(/<svg/g)).toHaveLength(1)
+    // ONE per group, and one FIGURE per group: never the artboard's ten-icon
+    // array with four filled, which is a share drawn as a picture.
+    expect(markup.match(/<svg/g)).toHaveLength(voiceFixture().cast.personas.length)
   })
 
   it('does not rebuild "how the mix has moved", here or anywhere (cut #79)', () => {
@@ -116,7 +145,7 @@ describe('voiceCast', () => {
   })
 
   it('hands its voices up as refs', () => {
-    expect(blockAnswers(voiceCast, voiceFixture()).quotes).toEqual(['e:9'])
+    expect(blockAnswers(voiceCast, voiceFixture()).quotes).toEqual(['e:9', 'e:10', 'e:11'])
   })
 
   it('keeps its key, which is a stored contract', () => {

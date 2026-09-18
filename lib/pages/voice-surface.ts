@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { prevalenceTier, type PrevalenceTier } from '../calibration'
 import { fmtInt, platformLabel, shortDate, weekdayDate } from '../format'
-import { cleanQuote, readTranslations, readingOf } from '../quotes'
+import { cleanQuote, fetchInsightsByIds, readTranslations, readingOf } from '../quotes'
 import { quoteRef } from '../renderables/quotes-freeze'
 import type { Quote, Scope } from '../renderables/types'
 import { normalisePersona, type Persona } from '../profile-tiles'
@@ -309,8 +309,26 @@ export interface ThemeBlock {
    *  saying which it was. The sentence says it now, and stands beside the
    *  reach note rather than in the line about months. */
   onCamera: string | null
+  /** The two halves of that sentence as NUMBERS, so the artboard's second stat
+   *  can be drawn (Block D wave 2). `said` is `themes.video_evidence_count`,
+   *  `of` is `themes.evidence_count` — the quotes behind the theme, over every
+   *  month the run read, which is why the figure prints its own basis under it
+   *  and never under this month's heading (D15). Null together. */
+  onCameraSaid: number | null
+  onCameraOf: number | null
   quotes: Quote[]
   quoteCites: string[]
+  /** The platform each quote's video was posted on, for the artboard's glyph
+   *  before the platform's name. Parallel to `quotes`; null where the video
+   *  did not resolve — the cite says "in the comments" there and there is no
+   *  platform to mark. The WORD stays in `quoteCites`: a glyph is a second
+   *  rendering of a fact, never the only one. */
+  quotePlatforms: (string | null)[]
+  /** The on-screen text of the video a quote was written under, nested with
+   *  that quote and no other (the artboard's "On-screen text on the same
+   *  video"). One entry per quote, null where the video carries none or did not
+   *  resolve. Parallel to `quotes`, exactly as `quoteCites` is. */
+  quoteOnScreen: (string | null)[]
   /** How many quotes the theme has behind it at all — `themes.evidence_count`,
    *  the same n the on-camera line divides. Null where the run carries no theme
    *  row for this registry entry. The block prints "2 of 182 voices" with it,
@@ -392,6 +410,12 @@ export interface CastBlock {
   profileDate: string | null
   stale: boolean
   floorNote: string
+  /** The other half of the artboard's footer: what this whole block is a
+   *  reading OF. It is the page's one exception to the comment clock, and the
+   *  mock's words for it ("current state, not a trend") cannot be printed — a
+   *  trend is a direction claim and "trend" is on the product's own direction
+   *  list, so the note says the thing itself instead. */
+  stateNote: string
   empty: string | null
 }
 
@@ -477,6 +501,112 @@ export function pickAudience(asked: string | undefined, available: readonly stri
  *  either way — hiding it is the one thing the design refuses. */
 export const audienceThin = (videos: number | null): boolean =>
   videos == null || videos < THIN_AUDIENCE_VIDEOS
+
+/**
+ * The SWITCH's word for an audience, which is not a sentence's word for it.
+ *
+ * `audienceLabel` (lib/readiness/types.ts) names an audience in prose — "Your
+ * own brand", "The category" — and every line on this page that says the
+ * audience in a sentence keeps it. A pill is not a sentence: the artboard's
+ * switch reads "Yours · Freitag · Patagonia · Category", four words in a row
+ * where a reader is choosing, and "Your own brand" beside "The category" turns
+ * a control into a paragraph.
+ *
+ * Two labels for one thing is a risk, and it is taken deliberately and in one
+ * place: this is the only function that shortens them, and it shortens only
+ * the two that are code's own words. A rival's name is never touched — that
+ * string is the client's (`tracking_configs.competitor_names`), and shortening
+ * it would rename a brand.
+ */
+export function audiencePillLabel(audience: string, label: string): string {
+  if (audience === CLIENT_AUDIENCE) return 'Yours'
+  if (audience === INDUSTRY_AUDIENCE) return 'Category'
+  return label
+}
+
+/**
+ * The top of the reach bar's axis, and it is printed beside the bar.
+ *
+ * A single reading drawn on a bar needs a maximum, and there are two honest
+ * ways to pick one: 100 (a true share, which draws a 9.4% theme as a sliver
+ * nobody can compare with the rule beside it) or a stated headroom. The
+ * artboard takes the second and does not state it — 9.4% drawn at 62.7% of the
+ * bar reads as two thirds of something. So this rounds the largest reading on
+ * the bar UP to the next clean step and `BlockReach` prints the answer: the bar
+ * exaggerates by a factor the reader can see.
+ *
+ * Never below the readings it has to hold, never above 100, and stepped so the
+ * axis does not jitter month to month: a theme at 9.4% and the same theme at
+ * 9.6% both draw against 15.
+ */
+export function reachAxisMax(values: readonly (number | null | undefined)[]): number {
+  const seen = values.filter((v): v is number => v != null && Number.isFinite(v) && v > 0)
+  if (seen.length === 0) return 0
+  const top = Math.max(...seen)
+  const steps = [1, 2, 5, 10, 15, 20, 25, 30, 40, 50, 60, 75, 100]
+  return steps.find((s) => s >= top * 1.5) ?? 100
+}
+
+/**
+ * "Nothing else moved clearly this month." — a CODA, and only where it is true.
+ *
+ * The mock prints this line at the foot of a POPULATED list; the build only
+ * ever printed it as the whole block's empty state. It is a real statement with
+ * a real precondition: every row that cleared its band is on the page. With an
+ * arm truncated to six of fourteen, "nothing else moved" is false — the eight
+ * below the cut moved, and the reader is being told the opposite of what the
+ * expander offers them one line to the right. So the coda prints when no banded
+ * arm was cut, and says nothing when one was.
+ */
+export function moversCoda(input: {
+  growing: number
+  fading: number
+  shown: number
+  /** Whether anything at all is on the list. Nothing at all is the block's own
+   *  empty state, which says it in its own words. */
+  any: boolean
+}): string | null {
+  if (!input.any) return null
+  if (input.growing > input.shown || input.fading > input.shown) return null
+  return 'Nothing else moved clearly this month.'
+}
+
+/**
+ * "TikTok · 14 Sep · under a category video, transcript" — where one quote came
+ * from.
+ *
+ * THREE FACTS, AND EACH IS PRESENT OR ABSENT ON ITS OWN. The build folded this
+ * to one of three phrases — "said on camera" · "on-screen text" · "in the
+ * comments" — which names the COLUMN the words came out of and nothing about
+ * where they were said, so six quotes on one page carried three words between
+ * them. The artboard wants platform · date · where, and the product holds all
+ * three on the video the insight was drawn from.
+ *
+ * The column is not dropped, it moves to the end: "creator video, transcript"
+ * and "on-screen text" say that these words were SPOKEN or WRITTEN ON the
+ * video rather than typed under it, which is a different claim from where the
+ * video was posted, and the one thing the old phrase got right.
+ *
+ * A video that did not resolve keeps the old phrase. That is not a fallback
+ * for tidiness: `audience_insights` rows are superseded and pruned by later
+ * runs, and a quote whose video is gone must still say honestly that it was
+ * read in the comments rather than claim a platform nobody can check.
+ */
+export function quoteCite(input: {
+  video: { platform: string | null; upload_date: string | null; kind: string } | null
+  source: string | null
+}): string {
+  const column = input.source === 'transcript' ? 'transcript' : input.source === 'ocr' ? 'on-screen text' : null
+  if (!input.video) {
+    return column === 'transcript' ? 'said on camera' : column === 'on-screen text' ? 'on-screen text' : 'in the comments'
+  }
+  const where = column ? `${input.video.kind}, ${column}` : `under ${input.video.kind}`
+  return [
+    input.video.platform ? platformLabel(input.video.platform) : null,
+    input.video.upload_date ? shortDate(input.video.upload_date) : null,
+    where,
+  ].filter(Boolean).join(' · ')
+}
 
 /** The platform mix of one month, largest first, with a share each. */
 export function platformShares(
@@ -1352,8 +1482,8 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
     axis, points: [],
     tone: null,
     toneNote: null,
-    onCamera: null,
-    quotes: [], quoteCites: [], quotesOf: null,
+    onCamera: null, onCameraSaid: null, onCameraOf: null,
+    quotes: [], quoteCites: [], quotePlatforms: [], quoteOnScreen: [], quotesOf: null,
     spoken: null, onScreen: null,
     withheld: 0,
     conclusionHref: '/dashboard/market',
@@ -1421,9 +1551,13 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
   // per-run row id that must never be a cross-run key (AGENTS.md).
   let quotes: Quote[] = []
   let quoteCites: string[] = []
+  let quotePlatforms: (string | null)[] = []
+  let quoteOnScreen: (string | null)[] = []
   let quotesOf: number | null = null
   let withheld = 0
   let onCamera: string | null = null
+  let onCameraSaid: number | null = null
+  let onCameraOf: number | null = null
   let spoken: SpokenLine | null = null
   let onScreen: SpokenLine | null = null
   let description = input.registry?.description ?? null
@@ -1442,38 +1576,54 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
     if (themeRow) {
       description = description ?? themeRow.description
       onCamera = onCameraScope(themeRow.video_evidence_count, themeRow.evidence_count)
+      // Both, or neither: the figure is unreadable without the population it
+      // was counted over, and that population is the run's whole evidence for
+      // the theme rather than this month's videos.
+      if (onCamera != null && themeRow.video_evidence_count != null && themeRow.evidence_count > 0) {
+        onCameraSaid = themeRow.video_evidence_count
+        onCameraOf = themeRow.evidence_count
+      }
       quotesOf = themeRow.evidence_count
       const insightIds = (themeRow.supporting_insight_ids ?? []).slice(0, EVIDENCE_PER_THEME)
       const videoIds = (themeRow.supporting_video_ids ?? []).slice(0, 4)
-      const [evidenceRes, videoRes] = await Promise.all([
+      // A QUOTE'S PROVENANCE IS THE VIDEO IT WAS WRITTEN UNDER, and reaching it
+      // costs one more round trip (Block D wave 2, E-voice). `insight_evidence`
+      // holds the words and `audience_insights.source_video_id` holds the
+      // video; without the second read the only thing a cite could say was
+      // which COLUMN the words came out of — "in the comments", the same three
+      // words under every quote on the page. The artboard prints "TikTok ·
+      // 14 Sep · under a category video", and every part of that is a fact the
+      // product holds. The videos read is merged with the theme's own
+      // supporting videos so this is one query and not two.
+      const [evidenceRes, insightRows] = await Promise.all([
         insightIds.length
           ? input.supabase.from('insight_evidence')
               .select('id, audience_insight_id, quote, relevance_rank, redacted, comment_id, source')
               .in('audience_insight_id', insightIds)
               .order('relevance_rank', { ascending: true }).order('id')
           : Promise.resolve({ data: null, error: null }),
-        videoIds.length
-          ? input.supabase.from('videos')
-              .select('id, platform, video_id, video_url, transcript, transcript_status, ocr_text, ocr_status, upload_date, is_client, competitor_name')
-              .in('id', videoIds)
-          : Promise.resolve({ data: null, error: null }),
+        insightIds.length
+          // The BASE table, never `audience_insights_current`: these ids were
+          // stored by the run this page is displaying, and must still resolve
+          // while a newer run has superseded those videos' rows but not yet
+          // pruned them (the rule fetchInsightsByIds' own header states).
+          ? fetchInsightsByIds<{ id: string; source_video_id: string | null }>(input.supabase, insightIds, 'id, source_video_id')
+          : Promise.resolve([] as { id: string; source_video_id: string | null }[]),
       ])
       const evidence = readRows<EvidenceRow>(evidenceRes, 'voice.themeEvidence')
-      const readings = await readTranslations(input.supabase, evidence.map((e) => e.quote ?? ''))
-      const seen = new Set<string>()
-      const cites: string[] = []
-      const out: Quote[] = []
-      for (const ev of evidence) {
-        if (ev.redacted || !ev.quote) { withheld++; continue }
-        const text = cleanQuote(ev.quote)
-        if (!text || seen.has(text.toLowerCase()) || out.length >= THEME_QUOTES) continue
-        seen.add(text.toLowerCase())
-        out.push({ ref: quoteRef.evidence(ev.id), text, ...readingOf(readings, text) })
-        cites.push(ev.source === 'transcript' ? 'said on camera' : ev.source === 'ocr' ? 'on-screen text' : 'in the comments')
-      }
-      quotes = out
-      quoteCites = cites
-
+      const videoOfInsight = new Map(insightRows.map((r) => [r.id, r.source_video_id]))
+      const quoteVideoIds = evidence
+        .map((e) => videoOfInsight.get(e.audience_insight_id) ?? null)
+        .filter((v): v is string => Boolean(v))
+      const wantedVideos = [...new Set([...videoIds, ...quoteVideoIds])].slice(0, EVIDENCE_PER_THEME)
+      const [videoRes, readings] = await Promise.all([
+        wantedVideos.length
+          ? input.supabase.from('videos')
+              .select('id, platform, video_id, video_url, transcript, transcript_status, ocr_text, ocr_status, upload_date, is_client, competitor_name')
+              .in('id', wantedVideos)
+          : Promise.resolve({ data: null, error: null }),
+        readTranslations(input.supabase, evidence.map((e) => e.quote ?? '')),
+      ])
       const videos = readRows<{
         id: string; platform: string; video_id: string; video_url: string | null
         transcript: string | null; transcript_status: string | null
@@ -1482,7 +1632,50 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
       }>(videoRes, 'voice.themeVideos')
       const kindOf = (v: { is_client: boolean | null; competitor_name: string | null }): string =>
         v.is_client ? 'your own post' : v.competitor_name ? `a ${v.competitor_name} post` : 'a category video'
-      const withTranscript = videos.find((v) => (v.transcript ?? '').trim().length > 0)
+      const videoById = new Map(videos.map((v) => [v.id, v]))
+
+      const seen = new Set<string>()
+      const cites: string[] = []
+      const platforms: (string | null)[] = []
+      const nested: (string | null)[] = []
+      const out: Quote[] = []
+      /** The videos a quote was drawn out of the TRANSCRIPT of — the other
+       *  half of the said-once rule below. */
+      const quotedTranscript = new Set<string>()
+      for (const ev of evidence) {
+        if (ev.redacted || !ev.quote) { withheld++; continue }
+        const text = cleanQuote(ev.quote)
+        if (!text || seen.has(text.toLowerCase()) || out.length >= THEME_QUOTES) continue
+        seen.add(text.toLowerCase())
+        out.push({ ref: quoteRef.evidence(ev.id), text, ...readingOf(readings, text) })
+        const video = videoById.get(videoOfInsight.get(ev.audience_insight_id) ?? '') ?? null
+        if (video && ev.source === 'transcript') quotedTranscript.add(video.id)
+        cites.push(quoteCite({ video: video ? { ...video, kind: kindOf(video) } : null, source: ev.source }))
+        platforms.push(video?.platform ?? null)
+        // The mock nests the video's own on-screen text under the quote taken
+        // from that video. Only that quote: the same words under a quote from
+        // a different video would be a caption about someone else's post.
+        const ocr = video && ev.source !== 'ocr' ? (video.ocr_text ?? '').trim() : ''
+        nested.push(ocr ? firstSentences(ocr) : null)
+      }
+      quotes = out
+      quoteCites = cites
+      quotePlatforms = platforms
+      quoteOnScreen = nested
+      // THE BLOCK-LEVEL LINES STAY ON THE THEME'S OWN SUPPORTING VIDEOS. The
+      // videos read above is now a superset — it carries the quotes' videos
+      // too — and searching all of it would silently change which video the
+      // "said on camera" line comes from.
+      const supporting = videos.filter((v) => videoIds.includes(v.id))
+      // SAID ONCE — AND THE RULE HAS TWO HALVES, NOT ONE. A quote whose
+      // `source` is `transcript` IS an extract of the transcript this line
+      // renders the head of, so a video already quoted that way prints the
+      // same utterance twice, ninety pixels apart, in two transcriptions —
+      // which is exactly what the on-screen rule below refuses for OCR. The
+      // fix is not to drop the line: another supporting video's speech is a
+      // second piece of evidence and worth printing, so the search skips the
+      // videos already quoted and only falls silent when every one of them is.
+      const withTranscript = supporting.find((v) => (v.transcript ?? '').trim().length > 0 && !quotedTranscript.has(v.id))
       if (withTranscript) {
         spoken = {
           text: firstSentences(withTranscript.transcript as string),
@@ -1490,8 +1683,11 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
             .filter(Boolean).join(' · '),
           href: withTranscript.video_url,
         }
+        // And the belt to that brace: a quote whose own video did not resolve
+        // cannot be matched by id, so the words are compared too.
+        if (out.some((q) => q.text === spoken?.text)) spoken = null
       }
-      const withOcr = videos.find((v) => (v.ocr_text ?? '').trim().length > 0)
+      const withOcr = supporting.find((v) => (v.ocr_text ?? '').trim().length > 0)
       if (withOcr) {
         onScreen = {
           text: firstSentences(withOcr.ocr_text as string),
@@ -1499,6 +1695,12 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
             .filter(Boolean).join(' · '),
           href: withOcr.video_url,
         }
+        // SAID ONCE, the OCR half. Where the same on-screen text is already
+        // nested under the quote from that video, the block-level line would
+        // print it twice — once attached to the video it belongs to and once
+        // loose at the foot of the block, reading as a second piece of
+        // evidence. The transcript half is above.
+        if (quoteOnScreen.some((t) => t === onScreen?.text)) onScreen = null
       }
     }
   }
@@ -1567,8 +1769,12 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
     tone,
     toneNote,
     onCamera,
+    onCameraSaid,
+    onCameraOf,
     quotes,
     quoteCites,
+    quotePlatforms,
+    quoteOnScreen,
     spoken,
     onScreen,
     quotesOf,
@@ -1617,12 +1823,17 @@ interface CastInput {
  * call, as the page's one piece of decoration.
  */
 async function buildCast(input: CastInput): Promise<CastBlock> {
-  const floorNote = `A group is named only where at least ${fmtInt(PERSONA_VIDEO_FLOOR)} videos carry it · this month as it stands, never compared with another month.`
+  // TWO HALVES, BECAUSE THE ARTBOARD'S FOOTER HAS TWO ENDS (Block D wave 2).
+  // The floor is a fact about which groups are named; the state is a fact about
+  // what the whole block is a reading of, and it belongs in the mono note at
+  // the right-hand end rather than trailing a sentence about the floor.
+  const floorNote = `A group is named only where at least ${fmtInt(PERSONA_VIDEO_FLOOR)} videos carry it.`
+  const stateNote = 'this month as it stands, never compared with another month'
   const overlapNote = 'A video can carry more than one group, so these counts overlap and do not add up to a whole.'
   if (!input.profile) {
     return {
       state: 'not_run', personas: [], selected: null, population: null,
-      overlapNote, profileDate: null, stale: false, floorNote,
+      overlapNote, profileDate: null, stale: false, floorNote, stateNote,
       empty: 'Reading who is talking is not switched on for this workspace yet.',
     }
   }
@@ -1633,7 +1844,7 @@ async function buildCast(input: CastInput): Promise<CastBlock> {
     return {
       state: 'no_personas', personas: [], selected: null,
       population: input.profile.insight_population ?? null,
-      overlapNote, profileDate: input.profile.run_date, stale: false, floorNote,
+      overlapNote, profileDate: input.profile.run_date, stale: false, floorNote, stateNote,
       empty: 'Too little conversation in this update to describe who is talking.',
     }
   }
@@ -1687,6 +1898,7 @@ async function buildCast(input: CastInput): Promise<CastBlock> {
     profileDate: input.profile.run_date,
     stale: Boolean(input.newestRunId) && input.profile.run_id !== input.newestRunId,
     floorNote,
+    stateNote,
     empty: null,
   }
 }

@@ -65,6 +65,16 @@ const TOKEN_HEX: Record<string, string> = {
   'bg-mixed': EMAIL.mixed,
   'bg-warning': EMAIL.mixed,
   'bg-neutral-seg': EMAIL.neutralSeg,
+  // The chart ramp as TOKENS, not only as the `bg-` classes below it. A caller
+  // that hands a chart a `var(--chart-1)` (the platform palette,
+  // components/profile-stats.tsx `platformColour`) resolved to the muted grey
+  // in the email arm, which paints every segment of a proportion bar the same
+  // colour — a legend of four dots that are one dot.
+  'var(--chart-1)': EMAIL.ink,
+  'var(--chart-2)': EMAIL.green,
+  'var(--chart-3)': EMAIL.muted,
+  'var(--chart-4)': EMAIL.cat,
+  'var(--chart-5)': EMAIL.neutralSeg,
   'bg-chart-1': EMAIL.ink,
   'bg-chart-2': EMAIL.green,
   'bg-chart-3': EMAIL.muted,

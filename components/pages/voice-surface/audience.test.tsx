@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { blockContext, blockAnswers, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { copyViolations } from '@/lib/test/copy-contract'
-import { renderText } from '@/lib/test/render'
+import { render, renderText } from '@/lib/test/render'
 import { voiceAudience } from './audience'
 import { refusedVoiceFixture, voiceFixture } from './fixture'
 
@@ -15,6 +15,40 @@ const ctx = blockContext('', EMAIL, {})
 const draw = (data = voiceFixture(), mode: RenderMode = 'app') => renderText(voiceAudience.render(data, mode, ctx))
 
 describe('voiceAudience', () => {
+  it('agrees with itself: the selected pill and the row it selects carry one count', () => {
+    // The refused fixture overrode the audience's counts and left the options
+    // as the category month's, so the pill read "Category 1,388" beside a row
+    // reading "388 videos in this audience".
+    const text = draw(refusedVoiceFixture())
+    expect(text).toContain('Category 388')
+    expect(text).toContain('388 videos in this audience · Sep 2026')
+    expect(text).not.toContain('1,388')
+  })
+
+  it('says "too thin to compare" in words, not only on a tooltip', () => {
+    // The mark is the pill's weight, which is the mock's; the words were on
+    // `title` alone, which reaches neither a keyboard nor a touch screen — so
+    // for a thin audience nobody has selected, the fact that decides what the
+    // page below may claim was mouse-only.
+    const markup = render(voiceAudience.render(voiceFixture(), 'app', ctx))
+    expect(markup).toContain('<span class="sr-only"> · too thin to compare</span>')
+  })
+
+  it('states the population once, and keeps its question off the bar', () => {
+    // The right-hand basis column exists because each row is a share of a
+    // different denominator — and two of them were not: the platform mix
+    // divides the same population the audience row names, and every kind pill
+    // carries its own "of N" inside it. The identical string printed three
+    // times down one bar is how a reader learns to stop reading the column.
+    const text = draw()
+    expect(text.split('1,388 videos in this audience · Sep 2026')).toHaveLength(2)
+    expect(text).not.toContain('share of 1,388 videos in this audience')
+    // The question stays the block's declared contract — the print and email
+    // spines read it — and off the artboard's 105px filter bar.
+    expect(voiceAudience.question).toContain('Whose conversation is this')
+    expect(text).not.toContain('Whose conversation is this')
+  })
+
   it('renders in all three modes and keeps the copy contract', () => {
     for (const data of [voiceFixture(), refusedVoiceFixture()]) {
       for (const mode of MODES) {
@@ -24,9 +58,29 @@ describe('voiceAudience', () => {
   })
 
   it('shows a thin audience WITH its count and marks it — never hides it', () => {
+    // PORTED (wave 2): the pill wears the SWITCH's short label and marks thin
+    // by weight, the way the artboard does; the words "too thin to compare"
+    // move to the pill's title and to the row's note, where they are about the
+    // audience actually being read.
     const text = draw()
-    expect(text).toContain('Your own brand 3')
-    expect(text).toContain('too thin to compare')
+    expect(text).toContain('Yours 3')
+    expect(render(voiceAudience.render(voiceFixture(), 'app', ctx))).toContain('title="too thin to compare"')
+  })
+
+  it('says so in words when the audience being READ is the thin one', () => {
+    const data = voiceFixture()
+    const thin = { ...data, audience: { ...data.audience, thin: true, videos: 27 } }
+    expect(draw(thin)).toContain('27 videos in this audience · Sep 2026 · too thin to compare')
+    // Not on the ROW's note when the audience being read is not thin. The
+    // pills of the thin audiences carry the words themselves, for a reader
+    // with no mouse (see the sr-only test below).
+    expect(draw()).not.toContain('videos in this audience · Sep 2026 · too thin to compare')
+  })
+
+  it('keeps the audience its PROSE name in an email, where there is no switch', () => {
+    // `audiencePillLabel` shortens a control's words, not the product's: the
+    // email arm is a list of sentences and keeps "Your own brand".
+    expect(draw(voiceFixture(), 'email')).toContain('Your own brand 3')
   })
 
   it('says "not observed" for an audience with no row rather than 0', () => {
@@ -35,8 +89,24 @@ describe('voiceAudience', () => {
     expect(text).not.toMatch(/Poler\s+0\b/)
   })
 
-  it('names a rival that was tracked and stopped, with the date', () => {
-    expect(draw()).toContain('was tracked, stopped 2026-09-09')
+  it('names a rival that left the tracked set by the day it left — never a start date', () => {
+    // D14: both "since" dates in the mock are earliest EVIDENCE, not start
+    // dates, and this one is a retirement. The pill says what the record holds.
+    expect(draw()).toContain('not observed · tracked to 9 Sep 2026')
+    expect(draw()).not.toContain('since 3 Sep')
+    // And in the page's own date format, not in raw ISO: this pill said
+    // "tracked to 2026-09-09" on a page that says "Sep 2026" and "14 Sep"
+    // everywhere else.
+    expect(draw()).not.toContain('2026-09-09')
+  })
+
+  it('offers no "All" audience, because no row holds one', () => {
+    // The mock opens the switch with "All". Every figure under this bar is
+    // keyed by audience, and an "All" would be a SUM of denominators — the one
+    // arithmetic AGENTS.md forbids. A pill that selects nothing readable is a
+    // control that does not work, which this block does not print.
+    const text = draw()
+    expect(text).not.toMatch(/Audience\s+All\b/)
   })
 
   it('prints the platform mix largest first, with its share, and omits what the month did not carry', () => {
@@ -50,6 +120,11 @@ describe('voiceAudience', () => {
     const text = draw()
     expect(text).toContain('Asking how it works 34% 472 of 1,388')
     expect(text).toContain('Saying it worked 28% 389 of 1,388')
+    // D4: the mock's bare "questions 34%" beside five others reads as a
+    // partition, and the kinds do not partition anything — so every pill
+    // carries its own count, INSIDE the pill. That is what makes the row's own
+    // repeat of the population unnecessary.
+    expect(text).not.toContain('share of 1,388 videos in this audience · Sep 2026')
   })
 
   it('says what is not recorded instead of a kind ladder when M5 is unapplied', () => {

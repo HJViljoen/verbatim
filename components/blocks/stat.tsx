@@ -29,7 +29,7 @@ import { EMAIL, FONT } from '@/lib/email/theme'
  *     broken before.
  */
 export function BlockStat({
-  value, unit, level, base, aside, mode = 'app', size = 'md',
+  value, unit, level, base, baseWrap = false, aside, mode = 'app', size = 'md',
 }: {
   value: ReactNode
   unit?: string
@@ -43,6 +43,14 @@ export function BlockStat({
   level?: { word: ReactNode; of: string }
   /** What the figure is measured against, in words ("since last update"). */
   base?: ReactNode
+  /** Let the base line WRAP instead of truncating (Block D wave 2, E-voice).
+   *
+   *  The default clips to one line, which is right for "since last update" and
+   *  wrong for a basis: Voice's on-camera figure is counted over the run's
+   *  whole evidence rather than over this month, and D15 says a figure without
+   *  its basis is not printable — so a basis that is cut off mid-word takes the
+   *  figure with it. A caller that is stating a basis says so. */
+  baseWrap?: boolean
   /** Something on the same line — a sparkline, a badge. Screen and paper only;
    *  an email drops it, because an email cannot lay two things side by side
    *  without another table and it is never worth one. */
@@ -72,7 +80,7 @@ export function BlockStat({
       {level ? (
         <span data-copy="level" className="text-[12px] text-secondary-foreground">{level.word} · {level.of}</span>
       ) : null}
-      {base ? <span className="truncate text-[11.5px] text-muted-foreground">{base}</span> : null}
+      {base ? <span className={baseWrap ? 'text-[11.5px] leading-[1.4] text-muted-foreground' : 'truncate text-[11.5px] text-muted-foreground'}>{base}</span> : null}
     </div>
   )
 }

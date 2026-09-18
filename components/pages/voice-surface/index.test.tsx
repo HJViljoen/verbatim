@@ -85,14 +85,59 @@ describe('VoiceSurfacePage', () => {
 
   it('prints everything the blocks hold — the evidence at the bottom of the longest one included', () => {
     const text = renderText(<VoiceSurfacePage data={voiceFixture()} params={{}} />)
-    expect(text).toContain('Track this →')
+    expect(text).toContain('Track this')
     expect(text).toContain('Have we seen this before?')
     expect(text).toContain('A video can carry more than one group')
   })
 
-  it('carries the record band under the bar', () => {
+  it('prints the method footnote, each line on its own clock (D15)', () => {
+    // The one element of this artboard that was MISSING rather than different.
+    // The Reddit cap in particular has never rendered on any reading surface.
     const text = renderText(<VoiceSurfacePage data={voiceFixture()} params={{}} />)
-    expect(text).toContain('4 updates · 2,359 videos')
+    expect(text).toContain('Prepared for Sealand with Verbatim')
+    expect(text).toContain('read in this window')
+    expect(text).toContain('Of everything we have ever read for you, not just this window')
+    expect(text).toContain('of what was said on camera was not in English')
+    expect(text).toContain('Reddit comments are capped at')
+    expect(text).toContain('Commenters are never identified; quotes carry platform and date only.')
+  })
+
+  it('keeps the footnote standing on the lines it can still back when the record is thin', () => {
+    const text = renderText(<VoiceSurfacePage data={refusedVoiceFixture()} params={{}} />)
+    expect(text).toContain('Commenters are never identified')
+    expect(text).not.toContain('of what was said on camera was not in English')
+  })
+
+  it('takes the page bar\u2019s right-hand control from its caller, never from a hook', () => {
+    // `HowToRead` reads useSearchParams; this page also renders under
+    // renderToStaticMarkup and inside Chrome on the print path, where no
+    // router is mounted. The route passes the pill in.
+    const text = renderText(<VoiceSurfacePage data={voiceFixture()} params={{}} controls={<span>How to read this page</span>} />)
+    expect(text).toContain('How to read this page')
+  })
+
+  it('carries the record band under the bar, in the words the footnote uses', () => {
+    // ONE RECORD, TWO RENDERINGS. The band is composed by `howSoundLine` and
+    // the footnote at the foot of the page by `methodLines`, both off one
+    // `RecordInputs` — so the page cannot print "27% not in English" in the
+    // band and "27% of what was said on camera was not in English" under it,
+    // which is what the hand-written fixture did once the footnote was
+    // mounted.
+    const text = renderText(<VoiceSurfacePage data={voiceFixture()} params={{}} />)
+    expect(text).toContain('3 updates · 2,359 videos')
+    expect(text).toContain('27% of what was said on camera was not in English')
+    expect(text).not.toContain('27% not in English')
+    expect(text).not.toContain('27% of the comments read were not in English')
+  })
+
+  it('says which months are drawn and which month the figures read', () => {
+    // The artboard prints the window beside its range pills ("1 Sep →
+    // 28 Sep"); the app's bar has no room beside four horizon pills and the
+    // legend, and the bar is main's file — so the window printed nowhere on
+    // the page at all. Month granularity, because the axis is dated by the
+    // comment.
+    const text = renderText(<VoiceSurfacePage data={voiceFixture()} params={{}} />)
+    expect(text).toContain('Months drawn: Jul 2026 to Sep 2026 · every figure above reads Sep 2026')
   })
 
   it('says the workspace has been read at all before it says anything else', () => {
