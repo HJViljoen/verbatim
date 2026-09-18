@@ -285,7 +285,7 @@ function DocumentCover({ data, pages, contents, date }: {
             )}
           </div>
           <div className="flex flex-col gap-4">
-            {tiles.map((t, i) => <StatTile key={i} value={t.value} label={t.label} verdict={t.verdict} note={t.note} />)}
+            {tiles.map((t, i) => <StatTile key={i} value={t.value} label={t.label} verdict={t.verdict} note={t.note} level={t.level} />)}
           </div>
         </div>
       </div>
@@ -352,11 +352,16 @@ function ClaimBadge({ verdict, unit }: { verdict?: Verdict | null; unit?: string
  * "of N", so the two together are what rule (b) reads — a tile whose label
  * names no population is a score, which this product does not print.
  */
-function StatTile({ value, label, verdict, note }: {
+function StatTile({ value, label, verdict, note, level = false }: {
   value: string
   label: string
   verdict?: Verdict | null
   note?: string | null
+  /** Whether the pair is a level — the CALLER's answer (`OverviewTile.level`),
+   *  because the caller is the side that built the label and knows whether it
+   *  names a population. It was a regex over the rendered label until
+   *  2026-09-18, which is the node-declares-itself discipline inverted. */
+  level?: boolean
 }) {
   const body = (
     <>
@@ -364,7 +369,6 @@ function StatTile({ value, label, verdict, note }: {
       <p className="mt-2 text-[12.5px] leading-[1.35] text-muted-foreground">{label}</p>
     </>
   )
-  const level = /\bof\s[\d]/.test(label)
   return (
     <div className={`${CARD} px-5 py-4`}>
       {level ? <div data-copy="level">{body}</div> : body}
@@ -423,7 +427,7 @@ function OverviewPage({ page, data }: { page: DocPage; data: DocumentSnapshotDat
             the cover AND here would be a document stating one measurement
             twice, three sheets apart, with nothing saying they are the same
             one. */}
-        {!onCover && <div className="flex flex-col gap-3">{tiles.map((t, i) => <StatTile key={i} value={t.value} label={t.label} verdict={t.verdict} note={t.note} />)}</div>}
+        {!onCover && <div className="flex flex-col gap-3">{tiles.map((t, i) => <StatTile key={i} value={t.value} label={t.label} verdict={t.verdict} note={t.note} level={t.level} />)}</div>}
         {notSure.length > 0 && (
           <div className="rounded-lg bg-inner px-5 py-4">
             <Eyebrow className="mb-2">Not settled this update</Eyebrow>

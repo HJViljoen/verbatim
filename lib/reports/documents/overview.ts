@@ -34,6 +34,19 @@ export interface OverviewTile {
    * had. Printed under the badge, never instead of a number that exists.
    */
   note?: string | null
+  /**
+   * Is this tile a LEVEL — a figure over a population it names — rather than
+   * a count or a share the update never counted?
+   *
+   * THE SIDE THAT KNOWS SAYS SO. `StatTile` decided this with
+   * `/\bof\s[\d]/.test(label)`, a regex over rendered copy: the contract's own
+   * `DENOMINATOR_RE` is `\bof\s+[\d]`, so a label with two spaces, or one
+   * phrased "of the 1,388", dropped the `data-copy="level"` marker and the
+   * tile silently stopped being checked — the node-declares-itself discipline
+   * the contract is built on, inverted. The composer below builds each label
+   * and knows which of them is a measurement of a population.
+   */
+  level?: boolean
 }
 
 /** The standing page packs its party names as JSON (a name may carry any
@@ -105,6 +118,8 @@ export function overviewTiles(data: DocumentSnapshotData): OverviewTile[] {
       label: `${switching.pool === 1 ? 'video names' : 'videos name'} a switch between brands · ${fmtInt(switching.toward.k)} of ${fmtInt(switching.pool)} toward you · ${fmtInt(switching.away.k)} of ${fmtInt(switching.pool)} away`,
       verdict: switching.verdict,
       note: switching.unread,
+      // The lean carries its own population, so the pair is a level.
+      level: true,
     },
     // The objection, with the population it is a share of. No badge: a kind's
     // level carries no banded comparison on this corpus, and the artboard's
@@ -112,6 +127,7 @@ export function overviewTiles(data: DocumentSnapshotData): OverviewTile[] {
     objection && objection.value.n > 0 && {
       value: fmtInt(objection.value.k),
       label: `of ${fmtInt(objection.value.n)} videos carry ${objection.label.toLowerCase()}`,
+      level: true,
     },
   ].filter(Boolean).slice(0, 3) as OverviewTile[]
 }

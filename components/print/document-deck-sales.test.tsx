@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { assertCopyContract } from '@/lib/test/copy-contract'
+import { overviewTiles } from '@/lib/reports/documents/overview'
 import { markupText, render } from '@/lib/test/render'
 import { DocumentDeck } from './document-deck'
 import {
@@ -73,6 +74,17 @@ describe('sales.p1 — the cover', () => {
     expect(w).toContain('In this brief')
     expect(w).toContain('2 Overview')
     expect(w).toContain('11 About this brief')
+  })
+
+  // RULE (b) IS DECLARED BY THE SIDE THAT KNOWS. The marker was a regex over
+  // the rendered label (`/\bof\s[\d]/`), narrower than the contract's own
+  // `DENOMINATOR_RE`, so a label with two spaces or "of the 1,388" silently
+  // stopped being checked. `overviewTiles` says which tiles are levels.
+  it('marks the tiles that are levels, from the composer and not from a regex', () => {
+    const tiles = overviewTiles(salesBriefFixture())
+    expect(tiles.filter((t) => t.level)).toHaveLength(2)
+    // Two `data-copy="level"` tiles on the cover, and the contract reads them.
+    expect(cover().split('data-copy="level"').length - 1).toBe(2)
   })
 
   // `sales.p1.stats`: three tiles, not the one a seeded month left.
