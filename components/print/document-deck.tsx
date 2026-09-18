@@ -1041,7 +1041,14 @@ export function GapCard({ gap }: { gap: Gap }) {
         <span className="font-medium">{gap.objectLabel}</span>
         {' — '}
         <span data-copy="level">{gapLine(gap)}</span>
-        {basis && <>{'. '}<span data-copy="level">{basis}</span></>}
+        {/* UNMARKED, and deliberately. `gapLine` is two levels and their
+            banded difference, which is a `level` node; the basis line is a
+            SECOND banded difference at an earlier window and carries no level
+            at all — marking it one asked rule (b) for an "of N" that a
+            refusal ("too few to compare in August") has no business printing.
+            It carries no direction word either, which is what rule (c) polices
+            on unmarked markup. */}
+        {basis && <>{'. '}{basis}</>}
       </p>
       <div className="flex flex-col gap-2">
         {sides.map((side, i) => {
