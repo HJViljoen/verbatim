@@ -88,16 +88,57 @@ export function gapTile(gap: Gap): OverviewTile {
 }
 
 /**
+ * One measurement's identity: the object, the audience it is a proportion of,
+ * what it counts and the window it covers.
+ *
+ * NOT THE OBJECT ALONE. `CountedOver.measure` exists because two readings of
+ * one object are two statements — a rival's cut of the panel's videos and its
+ * cut of the panel's comments are both true and neither is a duplicate of the
+ * other — so the key carries it, exactly as the record does.
+ */
+const measurementKey = (v: Verdict) =>
+  [v.objectKind, v.objectId, v.audience, v.countedOver?.measure ?? 'videos', v.window.from, v.window.to].join('|')
+
+/** What two readings of ONE measurement have to agree on to be the same
+ *  reading: both sides' counts, the change and the band. */
+const readingSignature = (v: Verdict) =>
+  [v.value.k, v.value.n, v.changePts, v.bandPts, v.state].join('|')
+
+/**
  * The verdict a brief leads with: the largest banded MOVE, and only a move.
  *
  * A tile is the most prominent thing on the first sheet, so it states a
  * conclusion or it states nothing — `no_clear_change` and `too_little_data`
  * are real answers on a row of a table and are not a headline. Ties break on
  * the larger n, so the one measured on more videos wins.
+ *
+ * BY MEASUREMENT, AND A DISAGREEMENT IS REFUSED (fix pass). A brief merges the
+ * verdicts of every surface it borrows, and two surfaces can publish a verdict
+ * for the same object over the same window — `overview.subjects` and
+ * `subjects.line` both read a subject's category share. Taking the MAXIMUM
+ * `changePts` across the merged list meant that where two readings of one
+ * measurement differed, the LOUDER one won the most prominent tile on the
+ * brief, over a sheet whose table prints the other. Measured on this package's
+ * own fixture: "▲ 5.5 pts · Durability — 24.5%, 340 of 1,388" one line under a
+ * paragraph reading "22% of its videos".
+ *
+ * On production the two surfaces should agree, and where they do this collapses
+ * them to one reading and changes nothing. Where they do not, the brief cannot
+ * tell which is the month's — so it leads with neither, and the next
+ * measurement takes the tile. A refusal is a real answer; picking the bigger
+ * number is not.
  */
 export function leadVerdict(verdicts: readonly Verdict[] | undefined): Verdict | null {
   const moved = (verdicts ?? []).filter((v) => v.state === 'moved' && v.changePts != null && v.bandPts != null)
-  return [...moved].sort((a, b) => Math.abs(b.changePts!) - Math.abs(a.changePts!) || b.value.n - a.value.n)[0] ?? null
+  const byMeasurement = new Map<string, Verdict[]>()
+  for (const v of moved) {
+    const key = measurementKey(v)
+    byMeasurement.set(key, [...(byMeasurement.get(key) ?? []), v])
+  }
+  const agreed = [...byMeasurement.values()]
+    .filter((group) => new Set(group.map(readingSignature)).size === 1)
+    .map((group) => group[0])
+  return agreed.sort((a, b) => Math.abs(b.changePts!) - Math.abs(a.changePts!) || b.value.n - a.value.n)[0] ?? null
 }
 
 /** "▲ 3.2 pts" and the sentence under it — the levels, the band, and the
