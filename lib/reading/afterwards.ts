@@ -1,0 +1,292 @@
+import { fmtInt, monthName } from '../format'
+import { monthStartOf } from './monthly'
+import { bandVerdict, type Counted, type RefusedReason, type Verdict, type VerdictWindow } from './verdicts'
+
+// The two columns the advice ledger has never had: what a piece of advice was
+// GROUNDED IN, and what the conversation did AFTERWARDS (Phase 1 Block D, D4).
+//
+// WHY THEY ARE HERE AND NOT IN THE LOADER. Both are readings, and a reading
+// that lives inside a page loader is a reading nobody else can check. The
+// ledger prints them; the quarterly review prints the same two for the same
+// rows; a brief will want them next. One file, one rule, one set of tests.
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// WHAT "AFTERWARDS" MAY NOT BE.
+//
+// The mock writes `Afterwards: 9% → 12% since (too few to compare)`. Three
+// things are wrong with that arrow and each one is a rule this file keeps:
+//
+//   1. IT IS A RUN-INDEXED DELTA. Two readings taken at two arbitrary moments
+//      of one cumulative corpus is not two periods — a missed week moves the
+//      number as much as the conversation does. A period is dated by the
+//      COMMENT (AGENTS.md), so both sides come off `month_theme_readings` /
+//      `month_subject_readings` through `loadMonthSeries`, and nothing here
+//      ever recomputes a share by counting videos over a date span.
+//
+//   2. IT SUMS MONTHS. "The months after against the months before" is the
+//      natural phrasing and the wrong arithmetic: denominators do not add
+//      (+38.7% surplus measured over twelve months), so pooling August and
+//      September into one "before" side invents a denominator nobody read. A
+//      window read that spans months is `window_denominators` /
+//      `window_theme_readings`, which this reading does not have and does not
+//      fake. So the comparison is TWO MONTH READINGS — the newest readable
+//      month after the decision against the newest readable month before it —
+//      and the cell names both months so a reader can see exactly which two.
+//
+//   3. IT PRINTS A MAGNITUDE BESIDE A REFUSAL. `(too few to compare)` with an
+//      arrow above it is D2's exact error. Here the band and the change travel
+//      together inside one `Verdict` or neither is printed at all.
+//
+// AND THE CELL IS NEVER BLANK. The mock leaves "—" on three of its five rows.
+// A dash in a column headed "Afterwards" reads as "nothing happened", which is
+// a claim; the four states below each say which kind of silence this is.
+//
+// NO DIRECTION WORD, AND NO STATE WORD EITHER. `Afterwards.line` prints the
+// two readings and the band and stops. The word for the state — "too few to
+// compare", "no clear change" — is the badge vocabulary, which lives in
+// `components/delta-badge.tsx` and `lib/calibration.ts` and is changed in ONE
+// place (D11). A second copy of it in a lib string is how a product ends up
+// with two vocabularies for one thing, which is the defect D11 exists to fix.
+// The `Verdict` carries `state`; the surface renders the word.
+
+/** An audience bucket string, mid-sentence.
+ *
+ *  NOT `readiness/types.ts:audienceLabel`, deliberately, and the two are worth
+ *  keeping apart: that one is a column heading in Title Case ("The category",
+ *  "Your own brand") and reads wrong inside a sentence — "41 videos in The
+ *  category, September". This is the same three buckets as a phrase. */
+export function audiencePhrase(audience: string): string {
+  if (audience === 'client') return 'your audience'
+  if (audience === 'industry-other') return 'the category'
+  if (audience.startsWith('competitor:')) return `${audience.slice('competitor:'.length)}’s audience`
+  return audience
+}
+
+// ── grounded in ───────────────────────────────────────────────────────────────
+
+export interface Grounding {
+  /** Distinct videos behind the advice. */
+  videos: number
+  themes: number
+  /** The audience this advice is ABOUT — carried so the afterwards reading
+   *  beside it reads the same bucket. Deliberately NOT in `line`; see
+   *  `groundingFor`. */
+  audience: string
+  /** The count with the population it is a count of, named. */
+  line: string
+}
+
+export interface GroundingInput {
+  /** The evidence rows the advice follows from: `recommendations.based_on`
+   *  resolved through `market_insights.evidence.supporting_theme_ids` to the
+   *  `audience_insights` ids `videoByInsight` is keyed on. Empty means nothing
+   *  was recorded, which is not the same as zero videos. */
+  basedOn: readonly string[]
+  videoByInsight: Map<string, string | null>
+  /** The theme slugs those insights belong to — what the evidence is ABOUT,
+   *  counted distinctly. */
+  themeIds: readonly string[]
+  audience: string
+  /** Any day in the month this grounding is being STATED in — the date the
+   *  count was taken, not a period it is scoped to. See `groundingFor`. */
+  month: string
+}
+
+/**
+ * What a piece of advice is grounded in, counted.
+ *
+ * THE COUNT IS ALL-TIME AND THE LINE SAYS SO. This is the single thing most
+ * easily got wrong here. The mock prints `412 videos` in a column beside a page
+ * bar reading "September 2026", and the obvious sentence — "412 videos in the
+ * category, September" — is false twice over: `based_on` resolves to
+ * `audience_insights` rows from EVERY update this workspace has ever had, so
+ * the numerator is the whole corpus, and the denominator a reader supplies from
+ * the page bar is one month's. That is mock-gap deviation D8, and it is the
+ * same defect `CONCLUSIONS_CORPUS_LINE` already names two blocks higher on this
+ * very page. So the line names the population it really is a count of, and the
+ * month appears only as the date the count was taken.
+ *
+ * `audience` is carried on the result and kept OUT of the sentence for the same
+ * reason: the cited insights are not scoped to one audience, so "in the
+ * category" would be a population this number is not counted over. It is there
+ * so the afterwards reading beside it reads the same bucket.
+ *
+ * NULL, NOT ZERO, WHEN NOTHING IS RECORDED. One of Össur's 56 recommendations
+ * carries an empty `based_on` (measured 2026-09-18), and "grounded in 0 videos"
+ * is a claim about the evidence where the truth is that we did not write the
+ * evidence down. The ledger prints the absence.
+ *
+ * THE COUNT DEGRADES HONESTLY. `prune-stale-analysis` removes
+ * `audience_insights` rows an update has superseded, and Pass D-a replaces its
+ * own run's `market_insights`, so an id behind an old piece of advice can
+ * resolve to nothing. Measured on production the same day: 211 of 334 stored
+ * refs across both tenants still resolve to a market insight, and every
+ * recommendation that carries any `based_on` at all keeps at least one — so
+ * every ledger row on both tenants can state a grounding today, and a row whose
+ * evidence has been pruned states a smaller one rather than a wrong one. That
+ * is the same degradation `recEvidenceTier` already lives with.
+ */
+export function groundingFor(input: GroundingInput): Grounding | null {
+  const based = [...new Set(input.basedOn)]
+  if (based.length === 0) return null
+
+  const videoIds = new Set<string>()
+  for (const id of based) {
+    const v = input.videoByInsight.get(id)
+    if (v) videoIds.add(v)
+  }
+  const themes = new Set(input.themeIds).size
+  const videos = videoIds.size
+  const line =
+    `${fmtInt(videos)} ${videos === 1 ? 'video' : 'videos'} behind it, ` +
+    `counted over everything we have read for you up to ${monthName(monthStartOf(input.month))} — not over one month.`
+  return { videos, themes, audience: input.audience, line }
+}
+
+// ── afterwards ────────────────────────────────────────────────────────────────
+
+/**
+ * Which kind of answer the cell holds.
+ *
+ * `reading`    two month readings either side of the decision, banded.
+ * `too_soon`   the comparison has not accumulated yet — no decision, or fewer
+ *              than `minReadings` readable months after it, or nothing readable
+ *              before it. The `line` says which.
+ * `no_target`  the advice names no identity we can follow, so there is nothing
+ *              to read at all. Different from `too_soon`: this one never
+ *              resolves on the calendar.
+ * `refused`    the comparison could be drawn and must not be — a rename, a
+ *              tracking change, a re-grouping, an unlogged era.
+ */
+export type AfterwardsState = 'reading' | 'too_soon' | 'no_target' | 'refused'
+
+export interface Afterwards {
+  state: AfterwardsState
+  /** The banded before/after comparison. Null in every state but 'reading'. */
+  verdict: Verdict | null
+  /** The months read after the decision. */
+  months: string[]
+  /** The reader's sentence for the cell — never blank, never a dash. */
+  line: string
+}
+
+export interface AfterwardsInput {
+  decidedAt: string | null
+  /** The stable identities the advice is about — `theme_registry` ids, a
+   *  subject id. Never a label. */
+  targetIds: readonly string[]
+  /** One point per calendar month, any order; `k` of `n` distinct videos. */
+  series: readonly { month: string; k: number; n: number }[]
+  audience: string
+  minReadings?: number
+  /** What a reader is shown for the target. Added beside the pinned fields
+   *  because `Verdict.objectLabel` is required and is not derivable from an
+   *  id — a label is never a key, and an id is never a label. */
+  objectLabel?: string
+  /** Draw no comparison and say why. The loader knows about renames and
+   *  clustering breaks; this function only knows months. Added beside the
+   *  pinned fields so the `refused` state has a producer. */
+  refused?: RefusedReason
+}
+
+/** How many readable months after the decision before a comparison is drawn. */
+export const AFTERWARDS_MIN_READINGS = 2
+
+const REFUSED_LINE: Record<RefusedReason, string> = {
+  unlogged_era: 'We cannot read this one afterwards: part of the stretch either side of your decision is from before we kept a record of what we were tracking.',
+  tracking_change: 'We cannot read this one afterwards: what we were tracking changed between the two months, so the two sides are not the same question.',
+  clustering_changed: 'We cannot read this one afterwards: the two months were grouped differently, so a comparison would be about our grouping rather than about the conversation.',
+  rename: 'We cannot read this one afterwards: the audience either side of your decision was renamed, and the months before the rename stay under the old name.',
+}
+
+/**
+ * What the conversation did after a decision — the ledger's last column.
+ *
+ * TWO MONTH READINGS, NOT A POOL. See the file header, point 2: the newest
+ * readable month strictly AFTER the decision's own month against the newest
+ * readable month strictly BEFORE it.
+ *
+ * THE DECISION'S OWN MONTH IS NEITHER SIDE. A decision made on 2 September
+ * straddles September: the comments dated before it and after it are in one
+ * month row and cannot be separated, so counting September as "after" credits
+ * the advice with conversation that happened before anybody acted. It is left
+ * out of both sides and named in the line.
+ */
+export function afterwardsFor(input: AfterwardsInput): Afterwards {
+  const minReadings = input.minReadings ?? AFTERWARDS_MIN_READINGS
+  const where = audiencePhrase(input.audience)
+
+  if (input.refused) {
+    return { state: 'refused', verdict: null, months: [], line: REFUSED_LINE[input.refused] }
+  }
+  if (input.targetIds.length === 0) {
+    return {
+      state: 'no_target',
+      verdict: null,
+      months: [],
+      line: 'This advice does not name a subject or a theme we follow month by month, so there is nothing to read afterwards.',
+    }
+  }
+  if (!input.decidedAt) {
+    return {
+      state: 'too_soon',
+      verdict: null,
+      months: [],
+      line: 'You have not decided on this one yet. We start reading the month after you do.',
+    }
+  }
+
+  const decidedMonth = monthStartOf(input.decidedAt.slice(0, 10))
+  const readable = [...input.series]
+    .filter((p) => p.n > 0)
+    .sort((a, b) => monthStartOf(a.month).localeCompare(monthStartOf(b.month)))
+    .map((p) => ({ month: monthStartOf(p.month), value: { k: p.k, n: p.n } as Counted }))
+
+  const after = readable.filter((p) => p.month > decidedMonth)
+  const before = readable.filter((p) => p.month < decidedMonth)
+  const months = after.map((p) => p.month)
+
+  if (after.length < minReadings) {
+    const have = after.length
+    return {
+      state: 'too_soon',
+      verdict: null,
+      months,
+      line:
+        `${have === 0 ? 'No month' : have === 1 ? 'One month' : `${fmtInt(have)} months`} has been read in ${where} since you decided this, ` +
+        `and we compare from ${fmtInt(minReadings)}. ${monthName(decidedMonth)} itself is in neither side — you decided partway through it.`,
+    }
+  }
+  if (before.length === 0) {
+    return {
+      state: 'too_soon',
+      verdict: null,
+      months,
+      line: `There is no month in ${where} before you decided this to compare the months since against.`,
+    }
+  }
+
+  const now = after[after.length - 1]
+  const then = before[before.length - 1]
+  const window: VerdictWindow = { kind: 'month', from: now.month, to: now.month }
+  const verdict = bandVerdict({
+    objectKind: 'theme',
+    objectId: input.targetIds[0],
+    objectLabel: input.objectLabel ?? input.targetIds[0],
+    audience: input.audience,
+    window,
+    basis: { from: then.month, to: then.month },
+    value: now.value,
+    baseline: then.value,
+  })
+
+  // THE NUMBERS AND THE BAND, AND NOT A WORD FOR THEM. See the file header's
+  // last paragraph: the state's word is the badge's, changed once, and a
+  // second copy of that vocabulary in this string is the defect D11 fixes.
+  const band = verdict.bandPts == null ? '' : ` · band ${verdict.bandPts.toFixed(1)} points`
+  const line =
+    `${fmtInt(now.value.k)} of ${fmtInt(now.value.n)} videos in ${where} in ${monthName(now.month)}, ` +
+    `against ${fmtInt(then.value.k)} of ${fmtInt(then.value.n)} in ${monthName(then.month)}${band}.`
+
+  return { state: 'reading', verdict, months, line }
+}
