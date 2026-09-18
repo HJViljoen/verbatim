@@ -517,7 +517,7 @@ describe('CO5 · said about them, by others', () => {
 describe('CO7 · how the category makes content', () => {
   it('prints the classified n beside the published one, per column (D6)', () => {
     const text = renderText(competitivePlaybook.render(competitiveFixture(), 'app', ctx))
-    // The legend, per side …
+    // The format legend, per side …
     expect(text).toContain('687 of 757')
     expect(text).toContain('84 of 109')
     expect(text).toContain('124 of 145')
@@ -525,6 +525,21 @@ describe('CO7 · how the category makes content', () => {
     expect(text).toContain('687 of The category’s 757')
     // Never the mock's "read from all 1,388 category videos".
     expect(text).not.toContain('read from all')
+  })
+
+  it('gives the hook table its own legend and its own coverage, never the format’s', () => {
+    // `FormatReading.of` counts the videos carrying a value for THIS key: the
+    // hook reading is 647 · 81 · 118 where the format reading is 687 · 84 ·
+    // 124. ONE legend drawn off `formats.sides` over both tables, and one
+    // coverage line computed from the format readings, claimed 40 more
+    // category videos than the hook table measured.
+    const p = competitiveFixture().playbook!
+    expect(p.formats.sides.map((s) => s.of)).not.toEqual(p.hooks.sides.map((s) => s.of))
+    const text = renderText(competitivePlaybook.render(competitiveFixture(), 'app', ctx))
+    expect(text).toContain('647 of 757')
+    expect(text).toContain('647 of The category’s 757')
+    expect(text).toContain('for their format.')
+    expect(text).toContain('for their hook.')
   })
 
   it('says 0 of N where a side was read and had none, and a sentence where it was not', () => {

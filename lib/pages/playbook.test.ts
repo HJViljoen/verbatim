@@ -74,9 +74,13 @@ describe('buildPlaybook · CO7', () => {
       [9, 14],
       [13, 13],
     ])
+    // EACH SENTENCE NAMES ITS KEY, AND THE TWO KEYS DO NOT SHARE A
+    // DENOMINATOR. `FormatReading.of` counts the videos carrying a value for
+    // THIS key, so one line under both tables overstated the hook table's.
     expect(p.coverageLine).toBe(
-      'Read from 60 of The category’s 72 · 9 of Össur’s 14 · 13 of Ottobock’s 13 videos published in September.',
+      'Read from 60 of The category’s 72 · 9 of Össur’s 14 · 13 of Ottobock’s 13 videos published in September, for their format.',
     )
+    expect(p.hookCoverageLine).toContain('for their hook.')
   })
 
   it('leaves a column’s missing format null, and says the column WAS read', () => {

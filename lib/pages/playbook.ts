@@ -49,9 +49,18 @@ export interface PlaybookBlock {
   basisLine: string
   formats: FormatMatrix
   hooks: FormatMatrix
-  /** "Read from 569 of 1,388 videos published in September." — the classified
-   *  n against the published one, per side, said once under the table. */
+  /** "Read from 569 of 1,388 videos published in September, for their format."
+   *  — the classified n against the published one, per side.
+   *
+   *  ONE PER MATRIX, BECAUSE THE COVERAGE IS PER KEY. `FormatReading.of` counts
+   *  the videos carrying a value for THIS key, so the format reading and the
+   *  hook reading have different denominators — 687 · 84 · 124 against
+   *  647 · 81 · 118 on this page's own fixture. One sentence drawn under both
+   *  tables overstates the hook table's by 40 videos on the category column,
+   *  which is the exact defect (D6) this tile exists to end. */
   coverageLine: string
+  /** The same sentence for the hook matrix, on the hook reading's own `of`. */
+  hookCoverageLine: string
   /** The category's median engagement per format, BEST FIRST — the mock's
    *  fourth column, each with the videos it was measured over.
    *
@@ -137,7 +146,8 @@ export function buildPlaybook(input: {
     basisLine: category.basisLine,
     formats,
     hooks,
-    coverageLine: coverageLine(formatReadings, month),
+    coverageLine: coverageLine(formatReadings, month, 'format'),
+    hookCoverageLine: coverageLine(hookReadings, month, 'hook'),
     engagement: [...category.rows]
       .filter((r) => r.engagement.median !== null)
       .sort(
@@ -163,9 +173,17 @@ export function buildPlaybook(input: {
  * printed here, per column, so the reader can see the difference rather than
  * be told the larger one.
  */
-export function coverageLine(readings: readonly { audienceLabel: string; of: number; published: number }[], month: string): string {
+export function coverageLine(
+  readings: readonly { audienceLabel: string; of: number; published: number }[],
+  month: string,
+  /** Which key this coverage is OF. A sentence that does not say is read as
+   *  covering every table under it, and the two keys do not share a
+   *  denominator. */
+  key?: 'format' | 'hook',
+): string {
   const parts = readings.map((r) => `${fmtInt(r.of)} of ${r.audienceLabel}’s ${fmtInt(r.published)}`)
-  return `Read from ${parts.join(' · ')} videos published in ${longMonth(month)}.`
+  const what = key ? `, for their ${key}` : ''
+  return `Read from ${parts.join(' · ')} videos published in ${longMonth(month)}${what}.`
 }
 
 /**

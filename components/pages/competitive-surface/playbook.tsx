@@ -21,6 +21,15 @@ import type { CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
 // a population the measurement never reached is not a share of what it says it
 // is.
 //
+// AND THE COVERAGE IS PER KEY, NOT PER TILE. The mock draws ONE legend over its
+// three tables and that is what this did, off `formats.sides` — but
+// `FormatReading.of` counts the videos carrying a value for THIS key, so the
+// format reading's denominators were printed over the hook table, whose own are
+// smaller (687 · 84 · 124 against 647 · 81 · 118 on this page's fixture). A
+// coverage claim larger than the measurement it describes is the same defect
+// as the mock's "all 1,388", one level down. Each matrix carries its own legend
+// and its own sentence.
+//
 // "NONE OF 9" BECOMES "0 of 9", AND ONLY WHERE WE LOOKED. A null cell is two
 // different facts and `FormatMatrixSide` says which: where the side's `unread`
 // is null it WAS read and simply has none of that format, so the cell prints
@@ -135,6 +144,7 @@ function Matrix({
             ))}
           </div>
         ))}
+        <Legend sides={matrix.sides} mode={mode} />
       </div>
     )
   }
@@ -165,6 +175,13 @@ function Matrix({
           </div>
         )
       })}
+      {/* THE LEGEND IS THIS MATRIX'S OWN. It was drawn once above all three
+          tables off `formats.sides`, and `FormatReading.of` counts the videos
+          carrying a value for THIS key — so the format reading's denominators
+          (687 · 84 · 124 here) were printed over the hook table, whose own are
+          647 · 81 · 118. A legend that names a bigger population than the
+          table under it is the defect (D6) this tile exists to end. */}
+      <Legend sides={matrix.sides} mode={mode} />
       {/* A COLUMN NEVER READ PRINTS A SENTENCE, NOT A ZERO. */}
       {matrix.sides.filter((s) => s.unread).map((s) => (
         <p key={s.audience} className="m-0 font-mono text-[10px] leading-[1.35] text-muted-foreground">{s.unread}</p>
@@ -276,13 +293,16 @@ export const competitivePlaybook: Block<CompetitiveSurfaceData> = {
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         {p && !p.unread ? (
           <>
-            <Legend sides={p.formats.sides} mode={mode} />
             <div className={email ? undefined : COLUMNS}>
               <Matrix matrix={p.formats} label="Format" mode={mode} />
               <Matrix matrix={p.hooks} label="Hook" mode={mode} />
               <Medians rows={p.engagement} mode={mode} />
             </div>
+            {/* ONE COVERAGE SENTENCE PER KEY. The single line under all three
+                tables was the FORMAT reading's and overstated the hook table's
+                by 40 videos on the category column. */}
             <p className={note} style={noteStyle}>{p.coverageLine}</p>
+            <p className={note} style={noteStyle}>{p.hookCoverageLine}</p>
             {p.formats.conclusion ? <p className={note} style={noteStyle}>{p.formats.conclusion}</p> : null}
             <p className={note} style={noteStyle}>{p.excludedNote}</p>
           </>
