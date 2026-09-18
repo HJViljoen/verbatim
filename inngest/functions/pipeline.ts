@@ -2250,17 +2250,8 @@ async function planPassABatches(clientId: string, runId: string, force: boolean,
  *     Only role='agent' rows carry a `result`; a user's message is the question
  *     they typed.
  *
- *  4. FROZEN SNAPSHOT QUOTES. `report_snapshots.evidence_ids` repeats every ref
- *     in the stored artefact (lib/renderables/quotes-freeze.ts) — SINCE
- *     2026-08-31, and the qualifier is load-bearing. Before that fix
- *     `createSnapshot` froze the workings' quotes and threw their refs away, so
- *     a pre-T11 snapshot's `evidence_ids` carries only what its PAGES cite, and
- *     this protection is exactly as complete as
- *     scripts/backfill-evidence-ids.ts --apply left it. The alternative is
- *     `collectQuoteRefs` over `data` / `workings`, which means selecting every
- *     snapshot's whole jsonb on every run — not worth it for a window that has
- *     been repaired and a write path that has been fixed. Named here so the
- *     dependency is not rediscovered as a bug. Two of the ref
+ *  4. FROZEN SNAPSHOT QUOTES. `report_snapshots.evidence_ids` repeats the refs
+ *     in the stored artefact (lib/renderables/quotes-freeze.ts). Two of the ref
  *     kinds name a row this prune can delete, and both are id-exact:
  *     `e:<insight_evidence.id>`, which cascades from `audience_insights` and so
  *     resolves back through it, and `p:<language_samples.id>`, which IS one of
@@ -2271,6 +2262,16 @@ async function planPassABatches(clientId: string, runId: string, force: boolean,
  *     second defect of the same shape. This is also why `language_samples` is
  *     protected at all: it carries no OTHER citation path, but a stored export
  *     names its rows by id.
+ *
+ *     "REPEATS THE REFS" IS TRUE SINCE 2026-08-31, AND THE DATE IS
+ *     LOAD-BEARING. Before T11 `createSnapshot` froze the workings' quotes and
+ *     threw their refs away, so a pre-T11 snapshot's `evidence_ids` carries only
+ *     what its PAGES cite — this class is therefore exactly as complete as
+ *     scripts/backfill-evidence-ids.ts --apply left it. The write path is fixed,
+ *     so every new snapshot is whole. The alternative, `collectQuoteRefs` over
+ *     `data` / `workings`, means selecting every snapshot's entire jsonb on
+ *     every run and is not worth it for a repaired window. Named here so the
+ *     dependency is not rediscovered as a bug.
  *
  * WHAT IS DELIBERATELY NOT PROTECTED — read this before treating the four above
  * as all of them. Each exclusion is a judgement, and an unrecorded judgement
