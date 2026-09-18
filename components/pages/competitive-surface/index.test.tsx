@@ -776,6 +776,24 @@ describe('the page, as the artboard composes it', () => {
     expect(render(competitiveStandings.render(competitiveFixture(), 'print', ctx)).slice(0, 200)).not.toContain('h-full')
   })
 
+  it('keeps a narrow tile’s title and meta off each other', () => {
+    // `BlockFrame`'s header is `items-baseline justify-between` with the meta
+    // `flex-none`, so in a ~270px card the title wrapped AROUND it: "SAID
+    // ABOUT THEM, in videos about them BY OTHERS", and "WHAT THE CATEGORY ASKS
+    // UNDER THEIR | Ottobock | CONTENT". Both metas were already said better in
+    // the same card's footer note, so they came out rather than the shared
+    // primitive gaining a wrap guard for two callers.
+    const data = competitiveFixture()
+    for (const block of [competitiveSaidAbout, competitiveQuestions]) {
+      const markup = render(block.render(data, 'app', ctx))
+      const header = markup.slice(0, markup.indexOf('</header>'))
+      expect(header).not.toContain('font-mono')
+    }
+    // And what each said is still on the card, in its footer.
+    expect(renderText(competitiveSaidAbout.render(data, 'app', ctx))).toContain('of each brand’s own videos')
+    expect(renderText(competitiveQuestions.render(data, 'app', ctx))).toContain('of the videos about Ottobock')
+  })
+
   it('spans the artboard’s grid, and every tile is exportable', () => {
     // 12 · 7+5 · 3+4+5 · 12 — read off the artboard's own `grid-column: span N`.
     expect(COMPETITIVE_TILES.map((b) => b.key)).toEqual([

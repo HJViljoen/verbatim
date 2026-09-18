@@ -91,7 +91,10 @@ export const competitiveQuestions: Block<CompetitiveSurfaceData> = {
         className={mode === 'app' ? 'h-full' : undefined}
         question={competitiveQuestions.question}
         mode={mode}
-        meta={q.rival ?? undefined}
+        // NO META HERE EITHER (a four-column tile, the same wrap): it was the
+        // rival's name alone, and the footer note under the same card already
+        // reads "of the videos about Ottobock" — the name with what it is the
+        // population OF, which is the half that was missing.
         // A REAL FOOTER (the artboard's, and the first one this block has had):
         // the link deeper on the left and the population on the right. What
         // the rows are OF has been the block's summary sentence and never its

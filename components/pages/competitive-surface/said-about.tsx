@@ -126,7 +126,14 @@ export const competitiveSaidAbout: Block<CompetitiveSurfaceData> = {
         className={mode === 'app' ? 'h-full' : undefined}
         question={competitiveSaidAbout.question}
         mode={mode}
-        meta="in videos about them"
+        // NO META ON A THREE-COLUMN TILE. `BlockFrame`'s header is
+        // `items-baseline justify-between` with the meta `flex-none`, so in a
+        // ~270px card the title wrapped AROUND it and the eyebrow read "SAID
+        // ABOUT THEM, in videos about them BY OTHERS". The artboard keeps a
+        // title and its meta on one line, and the fix here is not a wrap guard
+        // but the fact that this meta was already said better: the footer note
+        // names the population, which is the thing this block most needs
+        // stated, and "in videos about them" was a second, vaguer copy of it.
         footer={
           mode === 'app'
             ? <Link href="/dashboard/voice" className="hover:underline">Hear these voices →</Link>
