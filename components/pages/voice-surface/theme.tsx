@@ -52,6 +52,24 @@ import { heardLine, reachAxisMax } from '@/lib/pages/voice-surface'
 // videos". The chip's SHAPE is ported and its colour is not: the green does
 // four jobs in this product and "a measurement exists" is not one of them.
 
+/** How much of the theme's name the chart's end label can hold — see
+ *  `themeSeries`. Thirty characters of 11px sans is about 186 units, which
+ *  with the reading beside it is what CHART_PAD reserves. Measured against the
+ *  geometry, not chosen. */
+const CHART_LABEL = 30
+
+/** The month line's geometry in this block's right-hand column.
+ *
+ *  `CalendarLine` scales its viewBox uniformly to the box it is given, so the
+ *  intrinsic width is really a TYPE SIZE: at 620 units in the ~560px column
+ *  this block draws at 1440, the chart's 10px axis labels come out near 9px.
+ *  `CHART_PAD` is the room reserved to the right of the last point for the end
+ *  label, which is drawn outside the plot area and which the 180-unit default
+ *  is far too small for — a theme's name is the model's words. */
+const CHART_W = 620
+const CHART_H = 200
+const CHART_PAD = 260
+
 const MOOD_COLOR: Record<string, string> = {
   positive: 'var(--positive)',
   mixed: 'var(--mixed)',
@@ -132,17 +150,24 @@ function themeSeries(t: ThemeBlock): CalendarSeries | null {
   const points = t.points.filter((p) => t.axis.includes(p.month))
   if (points.length === 0) return null
   return {
-    // THE FULL LABEL, since the chart moved into its own column (wave 2). It
-    // was cut to 28 characters because `CalendarLine` draws the series name
-    // outside the plot area and Össur's "Admiration for personal resilience"
-    // ran off a full-width tile; in a half-width column beside the figure
-    // there is room, and a theme's name is the model's words — truncating them
-    // is the product editing them.
-    label: t.label,
+    // THE CHART'S LABEL IS SHORTENED AND THE BLOCK'S IS NOT, and the limit is
+    // the drawing's own geometry rather than a taste: `CalendarLine` draws the
+    // series name at the right-hand end of the line, OUTSIDE the plot area, in
+    // the 180 units `padR` reserves for it. At the 560-unit intrinsic width
+    // this column draws at, 180 units is about thirty characters of 11px sans;
+    // past that the name runs out of the tile, which is what Össur's
+    // "Admiration for personal resilience" did on the production render. The
+    // full label is the heading two lines above and the caption under the
+    // chart names every reading, so this one only has to identify the line.
+    label: t.label.length > CHART_LABEL ? `${t.label.slice(0, CHART_LABEL - 1).trimEnd()}…` : t.label,
     // The model's words, so the chart marks them (see CalendarSeries.labelSlot).
     labelSlot: 'pass_b_theme',
     color: 'var(--cat)',
-    endNote: t.n != null ? `of ${fmtInt(t.n)}` : undefined,
+    // NO END NOTE. `of 1,388` after the end label is fifty more units of a
+    // string already too long for the room, and this block prints that
+    // denominator five other times — in the header meta, the prevalence level,
+    // the big figure's base line, the caption under this chart and the footer
+    // note. The chart's own accessible rows carry it per month.
     points: points.map((p) => ({
       month: p.month,
       value: p.pct,
@@ -212,7 +237,7 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
     const prevPct = baselinePct(t.verdict)
     const prevMonth = baselineMonth(t.verdict)
     const prevLine = prevPct != null && prevMonth && t.verdict?.baseline?.n != null
-      ? `${monthName(prevMonth)} ${fmtPct(prevPct)} of ${fmtInt(t.verdict.baseline.n)}`
+      ? `${monthName(prevMonth).slice(0, 3)} ${fmtPct(prevPct)} of ${fmtInt(t.verdict.baseline.n)}`
       : null
     // The on-camera figure, drawn as the mock's second stat — with its own
     // basis under it, which is the condition D15 puts on printing it at all.
@@ -226,13 +251,17 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
       : null
 
     const stats = (
-      <div className={email ? undefined : 'flex flex-wrap items-end gap-7'}>
+      // SIDE BY SIDE, as the artboard has them, which a flex row will not do:
+      // the on-camera figure's basis is a sentence, so its max-content width
+      // wraps the whole stat onto its own line. A two-column grid gives each
+      // figure half the column and lets the basis wrap inside it.
+      <div className={email ? undefined : 'grid grid-cols-1 items-end gap-x-7 gap-y-3 sm:grid-cols-2'}>
         <BlockStat
           mode={mode}
           size="lg"
           value={t.pct == null ? '—' : fmtPct(t.pct)}
           unit={`of ${t.audienceLabel.toLowerCase()} videos`}
-          base={<>{fmtInt(t.k ?? 0)} of {fmtInt(t.n ?? 0)} videos this month{prevLine ? ` · ${prevLine}` : ''}</>}
+          base={<>{fmtInt(t.k ?? 0)} of {fmtInt(t.n ?? 0)} this month{prevLine ? ` · ${prevLine}` : ''}</>}
         />
         {onCameraStat ? (
           <BlockStat
@@ -246,7 +275,7 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
             // this month's videos, one line above a reach note that divides
             // this month's platform mix. Production printed those two together
             // and they contradicted each other.
-            base={<>of the {fmtInt(t.onCameraOf as number)} quotes behind this theme, counted over the whole update rather than over this month</>}
+            base={<>of the {fmtInt(t.onCameraOf as number)} quotes behind this theme, counted over the whole update, not this month</>}
           />
         ) : null}
       </div>
@@ -358,6 +387,9 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
                       mode={mode}
                       ctx={ctx}
                       format={(v) => fmtPct(v)}
+                      width={CHART_W}
+                      height={CHART_H}
+                      padR={CHART_PAD}
                       label={`${t.label}, share of ${t.audienceLabel.toLowerCase()} videos, by month`}
                     />
                   </Line>

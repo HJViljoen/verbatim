@@ -236,6 +236,43 @@ export function voiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurface
           selected: true,
           href: voiceSurfaceHref(params, { persona: 'commuter' }),
         },
+        // THREE GROUPS, because the block draws three cards abreast and a
+        // fixture with one of them checks a third of the layout. The counts
+        // deliberately do NOT sum to the month's videos: these groups overlap,
+        // which is the fact `overlapNote` states and the reason no share is
+        // printed on a card.
+        {
+          key: 'hiker', name: 'The weekend hiker', oneLiner: 'Walks two days at a time and packs for weather.',
+          videos: 374,
+          wants: 'waterproofing, strap comfort',
+          blockers: 'capacity, airline fit',
+          triggers: 'a wet weekend on the trail',
+          platformMix: [
+            { platform: 'youtube', label: 'YouTube', videos: 165, pct: 44 },
+            { platform: 'tiktok', label: 'TikTok', videos: 112, pct: 30 },
+            { platform: 'instagram', label: 'Instagram', videos: 67, pct: 18 },
+          ],
+          quote: { ref: 'e:10', text: 'I have had this bag through two Cape Town winters and it is the only one that never leaked' },
+          quoteCite: 'one of this group’s own comments',
+          selected: false,
+          href: voiceSurfaceHref(params, { persona: 'hiker' }),
+        },
+        {
+          key: 'sceptic', name: 'The sustainability sceptic', oneLiner: 'Wants the recycled claim checked before believing it.',
+          videos: 263,
+          wants: 'proof of recycled content, repairability',
+          blockers: 'greenwashing doubt',
+          triggers: 'a recycled-materials claim in an ad',
+          platformMix: [
+            { platform: 'reddit', label: 'Reddit', videos: 108, pct: 41 },
+            { platform: 'youtube', label: 'YouTube', videos: 76, pct: 29 },
+            { platform: 'tiktok', label: 'TikTok', videos: 55, pct: 21 },
+          ],
+          quote: { ref: 'e:11', text: 'I want to believe the recycled sails thing but has anyone actually checked?' },
+          quoteCite: 'one of this group’s own comments',
+          selected: false,
+          href: voiceSurfaceHref(params, { persona: 'sceptic' }),
+        },
       ],
       selected: 'commuter',
       population: 3129,

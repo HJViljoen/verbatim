@@ -130,10 +130,16 @@ export function BlockReach({
 
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <div className="relative flex h-2.5 w-full shrink-0 overflow-hidden rounded-full bg-inner">
-        <span className="rounded-full" style={{ width: `${width}%`, background: 'var(--cat)' }} />
+      <div className="relative w-full">
+        <div className="flex h-2.5 w-full shrink-0 overflow-hidden rounded-full bg-inner">
+          <span className="rounded-full" style={{ width: `${width}%`, background: 'var(--cat)' }} />
+        </div>
+        {/* THE RULE IS A SIBLING OF THE BAR, not a child: the bar clips to its
+            own rounded corners, and a rule inside it loses the 3px it stands
+            proud above and below — which is the only thing that makes it read
+            as a rule rather than as a seam in the fill. */}
         {at != null ? (
-          <span className="absolute -top-0.5 -bottom-0.5 w-0.5 bg-muted-foreground" style={{ left: `${at}%` }} aria-hidden />
+          <span className="absolute -top-0.5 -bottom-0.5 w-0.5 bg-foreground" style={{ left: `${at}%` }} aria-hidden />
         ) : null}
       </div>
       <div className="flex items-baseline justify-between gap-2 font-mono text-[10px] tabular-nums text-muted-foreground">

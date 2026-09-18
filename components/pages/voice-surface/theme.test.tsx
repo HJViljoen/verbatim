@@ -49,7 +49,7 @@ describe('voiceTheme', () => {
   it('prints the share with the count it rests on, never a bare percentage', () => {
     const text = draw()
     expect(text).toContain('9.4%')
-    expect(text).toContain('130 of 1,388 videos this month')
+    expect(text).toContain('130 of 1,388 this month')
   })
 
   it('prints the calibrated level only with its denominator', () => {
@@ -119,7 +119,7 @@ describe('voiceTheme', () => {
   it('draws the on-camera count as a figure carrying its own basis (D15)', () => {
     const text = draw()
     expect(text).toContain('17 said it on camera')
-    expect(text).toContain('of the 120 quotes behind this theme, counted over the whole update rather than over this month')
+    expect(text).toContain('of the 120 quotes behind this theme, counted over the whole update, not this month')
     // Once, not twice: the sentence form is for the arm where the numbers are
     // absent.
     expect(text.split('said on camera rather than typed')).toHaveLength(1)
@@ -127,7 +127,7 @@ describe('voiceTheme', () => {
 
   it('prints the month the share moved from, and rules the bar there against a NAMED axis', () => {
     const text = draw()
-    expect(text).toContain('130 of 1,388 videos this month · Aug 2026 6.8% of 1,200')
+    expect(text).toContain('130 of 1,388 this month · Aug 6.8% of 1,200')
     expect(text).toContain('rule at Aug 6.8% · Sep 9.4%')
     // The artboard draws 9.4% at 62.7% of the bar and never says against what.
     expect(text).toContain('share of the category videos, axis to 15%')
@@ -137,12 +137,15 @@ describe('voiceTheme', () => {
     expect(draw()).toContain('share of the category videos · Jul 5.9% · Aug 6.8% · Sep 9.4%')
   })
 
-  it('stops cutting the theme\u2019s name to 28 characters on the chart', () => {
-    // A theme's label is the model's words; truncating them is the product
-    // editing them. The chart sits in its own column now and has the room.
+  it('shortens only the CHART\u2019s copy of a long name, never the block\u2019s', () => {
+    // `CalendarLine` draws the series name outside the plot area, in the 180
+    // units padR reserves; past about thirty characters at this column's width
+    // it runs out of the tile, which is what Össur's theme did on production.
+    // The name itself is the heading two lines above.
     const long = refusedVoiceFixture()
-    expect(draw(long)).toContain('Admiration for personal resilience')
-    expect(draw(long)).not.toContain('Admiration for personal resi…')
+    const text = draw(long)
+    expect(text).toContain('Admiration for personal resilience')
+    expect(text).toContain('Admiration for personal resil…')
   })
 
   it('says nothing about speech when no video carries any', () => {

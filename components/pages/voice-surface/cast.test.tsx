@@ -85,7 +85,9 @@ describe('voiceCast', () => {
 
   it('keeps the crowd figure — decoration the owner chose, once per group', () => {
     const markup = render(voiceCast.render(voiceFixture(), 'app', ctx))
-    expect(markup.match(/<svg/g)).toHaveLength(1)
+    // ONE per group, and one FIGURE per group: never the artboard's ten-icon
+    // array with four filled, which is a share drawn as a picture.
+    expect(markup.match(/<svg/g)).toHaveLength(voiceFixture().cast.personas.length)
   })
 
   it('does not rebuild "how the mix has moved", here or anywhere (cut #79)', () => {
@@ -126,7 +128,7 @@ describe('voiceCast', () => {
   })
 
   it('hands its voices up as refs', () => {
-    expect(blockAnswers(voiceCast, voiceFixture()).quotes).toEqual(['e:9'])
+    expect(blockAnswers(voiceCast, voiceFixture()).quotes).toEqual(['e:9', 'e:10', 'e:11'])
   })
 
   it('keeps its key, which is a stored contract', () => {

@@ -240,7 +240,13 @@ export const voiceMovers: Block<VoiceSurfaceData> = {
                 </div>
               </TileColumns>
             )}
-            <Arm label="Inside the band" rows={arm(m.flat, m.shown)} mode={mode} ctx={ctx} />
+            {/* THE THIRD ARM KEEPS THE COLUMN WIDTH OF THE TWO ABOVE IT. It
+                has no opposite — the artboard has no "inside the band" arm at
+                all — so it is not a second column; run full width, its badges
+                sit a foot away from the counts they belong to. */}
+            <div className={email ? undefined : 'xl:w-1/2 xl:pr-6'}>
+              <Arm label="Inside the band" rows={arm(m.flat, m.shown)} mode={mode} ctx={ctx} />
+            </div>
 
             {/* ONE FLAGS ROW, the mock's, rather than two more arms: neither
                 flag is a reading of this month's change, so neither belongs in

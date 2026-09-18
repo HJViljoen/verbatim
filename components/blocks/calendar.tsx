@@ -37,7 +37,7 @@ import { EMAIL, FONT, tokenHex } from '@/lib/email/theme'
  */
 export function BlockCalendar({
   blockKey, axis, series, rules = [], bands = [], format = (v) => `${v}`,
-  caption, label, mode = 'app', ctx, emailMonths = 6, height,
+  caption, label, mode = 'app', ctx, emailMonths = 6, height, width, padR,
 }: {
   /** The block's own key — what the runner rendered the PNG under. */
   blockKey: string
@@ -53,6 +53,19 @@ export function BlockCalendar({
   ctx?: BlockContext
   emailMonths?: number
   height?: number
+  /** The drawing's INTRINSIC width, which is not its rendered width.
+   *
+   *  `CalendarLine` scales its viewBox uniformly to whatever box it is given
+   *  (`width="100%"`, and it may not stretch — two gutter tokens differ by
+   *  shape alone). So the intrinsic width is the scale factor: the 880 default
+   *  in a half-width column renders 10px axis labels at under 6px. A caller
+   *  that puts the chart in a column says how wide that column is, and the
+   *  type comes out the size it was drawn (Block D wave 2, E-voice). */
+  width?: number
+  /** How much of that width is reserved, on the right, for the end label the
+   *  chart draws OUTSIDE the plot area. The 180-unit default fits a short
+   *  series name; a theme's name is the model's words and is not short. */
+  padR?: number
 }) {
   if (!axis.length || !series.length) return null
 
@@ -67,6 +80,8 @@ export function BlockCalendar({
         caption={caption}
         label={label}
         height={height}
+        width={width}
+        padR={padR}
         // The block key alone is not an identity: it is stripped of its
         // punctuation (so `overview.line` and `overview-line` collide) and WP12
         // draws one calendar per audience under ONE key, which is exactly the
