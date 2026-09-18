@@ -149,6 +149,46 @@ describe('the leadership one-pager', () => {
     expect(words).toContain('305 of 1,388')
   })
 
+  // `.vb-slide-body` is a fixed height with `overflow: hidden`, so a sheet that
+  // does not budget its rows is CUT rather than wrapped — silently, on a
+  // client's PDF, where only the Studio editor's `data-overflow` notices. At
+  // the artboard's own six rows the body overflowed by 86px: row 5 sliced
+  // mid-glyph, row 6 gone, the table caveat gone, and the whole "Our read"
+  // block gone. `ld.subjects`'s framing is "the five to eight subjects this
+  // workspace is read against", so six is not a corner case, and an operator
+  // cannot fix it because the row count is Settings.
+  const eightRows = (): OverviewData => {
+    const base = overviewFixture()
+    const rows = Array.from({ length: 8 }, (_, i) => ({
+      ...base.subjects.rows[i % 2],
+      id: `s${i + 1}`,
+      label: `Subject ${i + 1}`,
+    }))
+    return { ...base, subjects: { ...base.subjects, rows } }
+  }
+
+  it('budgets its subject rows, and says how many it did not show', () => {
+    const words = renderText(sheet(eightRows()))
+    expect(words).toContain('Subject 5')
+    expect(words).not.toContain('Subject 6')
+    // The count it did not show, and the page in the document that shows them
+    // all — the sheet absorbs no section, so "Your subjects" really follows.
+    expect(words).toContain('3 more subjects, on “Your subjects”.')
+    // … and the two things the overflow used to eat are still on the sheet.
+    expect(words).toContain('the category column carries the month')
+    expect(words).toContain('Our read')
+  })
+
+  it('says how many moves it did not show, rather than slicing in silence', () => {
+    const base = overviewFixture()
+    const readings = [0, 1, 2, 3].map((i) => ({ ...base.moves.readings[0], moveId: `m${i}`, title: `Move ${i}` }))
+    const words = renderText(sheet({ ...base, moves: { ...base.moves, readings } }))
+    expect(words).toContain('Move 0')
+    expect(words).toContain('Move 1')
+    expect(words).not.toContain('Move 2')
+    expect(words).toContain('2 more moves, on “What was decided”.')
+  })
+
   it('carries the coverage line and the reading counter the deck never printed', () => {
     const words = renderText(sheet())
     expect(words).toContain('2,359 videos')

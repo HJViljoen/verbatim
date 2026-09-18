@@ -89,6 +89,41 @@ function Eyebrow({ children, meta }: { children: ReactNode; meta?: ReactNode }) 
   )
 }
 
+/**
+ * HOW MANY SUBJECT ROWS AND MOVE CARDS THE SHEET HAS ROOM FOR.
+ *
+ * `.vb-slide-body` is a fixed height with `overflow: hidden` (app/globals.css),
+ * so a sheet that does not budget its own rows does not wrap or scroll — it is
+ * CUT, silently, on a client's PDF. Only the Studio editor notices
+ * (`components/documents/document-editor.tsx` sets `data-overflow`); the build
+ * route and the share link do not, and an operator cannot fix it anyway,
+ * because the row count is a Settings outcome.
+ *
+ * Five, not the artboard's six, because the cell is not the artboard's. The
+ * mock brackets the count beside the share ("31% (26)") on one line; rule (b)
+ * wants the level's own evidence, so `FigureCell` stacks "31%" over "26 of 84"
+ * and each row costs about double. The honest cell buys the table half its
+ * capacity and the budget is what pays for it. `ld.subjects`'s own framing is
+ * "the five to eight subjects this workspace is read against", so six, seven
+ * and eight are ordinary, not corner cases — and what an over-long table does
+ * here is print the count it did not show and name the page that shows them
+ * all, which is the product's convention everywhere else.
+ *
+ * MEASURED, not guessed: eight rows of the Overview fixture rendered through
+ * `lib/render/chromium` at the deck's own zoom, the body box read off the DOM.
+ * See status/E-leadership.md, "Fix pass".
+ */
+export const SHEET_SUBJECT_ROWS = 5
+/** The same budget for the right column's move cards, which are ~90px each. */
+export const SHEET_MOVE_CARDS = 2
+
+/** "3 more subjects, on “Your subjects”." — the count the sheet did not show,
+ *  and where all of them are. The sheet absorbs no section, so the page it
+ *  names is really in the document. */
+function moreLine(over: number, noun: string, page: string): string {
+  return `${fmtInt(over)} more ${noun}${over === 1 ? '' : 's'}, on “${page}”.`
+}
+
 /** A legend dot, the artboard's 7px. */
 function Dot({ tone }: { tone: 'you' | 'comp' | 'cat' }) {
   const bg = tone === 'you' ? 'bg-you' : tone === 'comp' ? 'bg-comp' : 'bg-cat'
@@ -423,9 +458,14 @@ function Cell({ side }: { side: SideReading | null }) {
  * month on this corpus. The mock's stand-alone "flat" badge is refused — it is
  * not in `MOVEMENT_WORDS`, and as a substitute for "no clear change" it is a
  * direction word off one banded comparison.
+ *
+ * AND IT IS CAPPED, BECAUSE THE SHEET HAS A HEIGHT AND `overflow: hidden`.
+ * `SHEET_SUBJECT_ROWS` — see the constant.
  */
 function SubjectsTable({ data }: { data: OverviewData }) {
   const s = data.subjects
+  const shown = s.rows.slice(0, SHEET_SUBJECT_ROWS)
+  const over = s.rows.length - shown.length
   const COLS = 'grid grid-cols-[minmax(0,112px)_82px_120px_138px_minmax(0,1fr)] items-center gap-x-2'
   return (
     <div className="flex min-h-0 shrink-0 flex-col gap-1.5">
@@ -443,8 +483,8 @@ function SubjectsTable({ data }: { data: OverviewData }) {
             <span className="flex min-w-0 items-center gap-1.5"><Dot tone="cat" /><span className="truncate">{shortLabel(s.categoryLabel)}{firstOf(s.rows, (r) => r.category)}</span></span>
             <span>{shortLabel(s.categoryLabel)} change</span>
           </div>
-          {s.rows.map((r, i) => (
-            <div key={r.id} className={`${COLS} py-[3px] text-[12.5px] text-foreground ${i === s.rows.length - 1 ? '' : 'border-b border-border/70'}`}>
+          {shown.map((r, i) => (
+            <div key={r.id} className={`${COLS} py-[2px] text-[12.5px] text-foreground ${i === shown.length - 1 ? '' : 'border-b border-border/70'}`}>
               <span className="min-w-0 truncate">{r.label}</span>
               <Cell side={r.you} />
               <Cell side={r.rival} />
@@ -457,6 +497,7 @@ function SubjectsTable({ data }: { data: OverviewData }) {
           ))}
         </div>
       )}
+      {over > 0 ? <p className={TRAIL}>{moreLine(over, 'subject', 'Your subjects')}</p> : null}
       {/* The artboard sets the caveat 9.5px mono; the app sets it 11.5px sans.
           On a sheet this dense it is a footnote, and the mono face is what says
           so. The words are `SubjectsBlock.note`'s, unchanged. */}
@@ -500,7 +541,8 @@ function firstOf(rows: readonly SubjectRow[], pick: (r: SubjectRow) => SideReadi
  */
 function Moves({ data }: { data: OverviewData }) {
   const m = data.moves
-  const readings = m.readings
+  const shown = m.readings.slice(0, SHEET_MOVE_CARDS)
+  const over = m.readings.length - shown.length
   return (
     <div className="flex shrink-0 flex-col gap-2">
       {/* The artboard's meta is four words ("you acted on 2 of 5 this
@@ -509,11 +551,15 @@ function Moves({ data }: { data: OverviewData }) {
           quarter (D12). The count goes in the eyebrow at the artboard's length
           and the scoping sentence under the cards, so neither is truncated. */}
       <Eyebrow meta={m.acted ? `acted on ${m.acted.decided} of ${m.acted.of}` : undefined}>Your moves</Eyebrow>
-      {readings.length === 0 ? (
+      {shown.length === 0 ? (
         <p className={BODY}>{m.empty ?? m.unlock}</p>
       ) : (
-        readings.slice(0, 2).map((r) => <MoveCard key={r.moveId} reading={r} />)
+        shown.map((r) => <MoveCard key={r.moveId} reading={r} />)
       )}
+      {/* EVERY OTHER OVERFLOW IN THIS PRODUCT PRINTS ONE. A silent `slice` on a
+          one-pager says there were two moves; this says how many there were
+          and where the rest are. */}
+      {over > 0 ? <p className={TRAIL}>{moreLine(over, 'move', 'What was decided')}</p> : null}
       {m.acted ? <p className={TRAIL}>{m.acted.line}</p> : null}
     </div>
   )
@@ -696,12 +742,26 @@ export function LeadershipSheet({
           <AttentionCard attention={overview.category.attention} note={overview.category.attentionNote} />
           <SubjectCard row={subject} categoryLabel={overview.subjects.categoryLabel} />
         </div>
+        {/* THE COLUMNS STACK FROM THE TOP; THEY DO NOT DISTRIBUTE.
+            The artboard's own columns are `justify-content: space-between`, and
+            on the artboard that is invisible: six subject rows and two move
+            cards fill the column, so there is nothing to distribute. With the
+            data this product has today there is a great deal — measured at 354px
+            of dead band in the left column and 281px in the right on the refused
+            reading, which is the state production is in, and 104 / 133px on the
+            reading that read. That put "YOUR SUBJECTS" against the footer under
+            a third of a sheet of nothing, and it is a layout answer, not a
+            Settings one: a column has to hold a column's worth of content at
+            every density it will actually see. Stacked from the top the two are
+            identical wherever the artboard's density is met, and the slack falls
+            at the foot of the column where a reader reads it as the end of the
+            sheet. */}
         <div className="grid min-h-0 flex-1 grid-cols-[7fr_5fr] gap-x-6">
-          <div className="flex min-w-0 flex-col justify-between gap-3">
+          <div className="flex min-w-0 flex-col gap-4">
             <Decide ledger={overview.sentence.ledger} company={data.company} />
             <SubjectsTable data={overview} />
           </div>
-          <div className="flex min-w-0 flex-col justify-between gap-3">
+          <div className="flex min-w-0 flex-col gap-4">
             <Moves data={overview} />
             <OurRead data={overview} />
           </div>
