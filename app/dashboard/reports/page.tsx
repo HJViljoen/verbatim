@@ -423,7 +423,10 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
       label: 'Sent',
       meta: 'to your inbox',
       items: sentItems,
-      total: totals.sent,
+      // WHAT THIS COLUMN HOLDS UNDER THE FILTER, and what its list was drawn
+      // from — two different facts, and the all-time head count is neither.
+      held: sentItems.length,
+      cappedAt: reachOf('sent').cappedAt,
       empty: emptyFor('sent', 'was sent', studio
         ? 'Nothing sent yet. Each report in the Studio sends after the next update; the first lands then.'
         : 'Nothing sent yet. Your updates are set up by Verbatim and send after the next update; the first lands then.'),
@@ -442,7 +445,8 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
         icon: 'file',
         search: b.title,
       })),
-      total: totals.built,
+      held: builds.length,
+      cappedAt: reachOf('built').cappedAt,
       empty: emptyFor('built', 'was built', studio
         ? 'Nothing built by hand yet. Build any template in the Studio and its PDF lands here.'
         : 'Nothing built by hand yet. Ask your Verbatim contact for a report built to order and its PDF lands here.'),
@@ -461,7 +465,8 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
         icon: 'image',
         search: `${e.title} ${e.what}`,
       })),
-      total: totals.exported,
+      held: exports.length,
+      cappedAt: reachOf('exported').cappedAt,
       empty: emptyFor('exported', 'was exported', 'Nothing exported yet. Export any page or tile from its menu; the files collect here.'),
     },
   ]
