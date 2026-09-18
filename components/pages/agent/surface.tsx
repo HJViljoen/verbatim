@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { PageBar, PageFrame } from '@/components/shell/page-grid'
+import { PageBar, PageFrame, TileColumns } from '@/components/shell/page-grid'
 import { HowSound } from '@/components/shell/how-sound'
 import { HowToRead } from '@/components/how-to-read'
 import { ExportMenu } from '@/components/export-menu'
@@ -109,6 +109,54 @@ export function AskColumns({ children, rail }: { children: ReactNode; rail: Reac
     <div className="flex flex-col items-start gap-4 xl:flex-row">
       <div className="flex w-full min-w-0 flex-1 flex-col gap-4">{children}</div>
       <div className="flex w-full flex-col gap-4 xl:w-[320px] xl:flex-none">{rail}</div>
+    </div>
+  )
+}
+
+/**
+ * `Tile.row` ON THIS SURFACE, and why every tile here passes 1.
+ *
+ * `Tile.row` does two things: `xl:row-span-N` on a GRID, and `MIN_H[row]` below
+ * `xl` where the grid is not in play. `AskColumns` composes with flex, so the
+ * span half is inert at desktop — and the floor half still applied, on its own,
+ * at every width under 1280. A history tile at `row={3}` forced 380px against
+ * about 200px of content, and `distribute="between"` then pushed the footer to
+ * the floor: measured at 1024, roughly 150px of white inside the history tile,
+ * 60px in draws, 120px in the ask box. The props did nothing where they were
+ * meant to and damage where they were not.
+ *
+ * One row unit is a floor low enough that no tile here has spare height to
+ * distribute, at any width. `distribute="between"` stays — it is right the day
+ * this surface is composed on a grid, and it costs nothing while the tiles are
+ * their own height. Ask is NOT `PageGrid` and never becomes it (see
+ * `AskColumns`): the left column's answer runs to any height and expressing
+ * that as spans would make the rail's height a function of the answer's.
+ */
+export const ASK_TILE_ROW = 1
+
+/**
+ * The INDEX's composition — the ask box over three tiles, not beside them.
+ *
+ * WHAT THIS FIXES. `/dashboard/agent` is where every reader arrives from the
+ * nav and where every new tenant starts, and composed as `AskColumns` it drew a
+ * 130px ask tile top-left, about 900px of empty white under it and a 1,000px
+ * rail beside it — an L of white space with no focal point, and the page's one
+ * action ghosted at `disabled:opacity-30` over the void. The artboard never
+ * draws this state, so the port inherited no answer for it.
+ *
+ * THE ANSWER IS THE CONTENT, NOT A DECORATION. The rail's three tiles are the
+ * three questions a reader of Ask asks — what else have I asked, what stands
+ * behind an answer, what could this not answer — and on a page with no answer
+ * on it they are the whole page rather than its margin. Same tiles, same order,
+ * same words; `TileColumns` of three under a full-width box. The moment there
+ * IS an answer the thread route composes `AskColumns` and they go back to being
+ * a rail beside it, which is where the artboard puts them.
+ */
+export function AskIndexColumns({ box, tiles }: { box: ReactNode; tiles: ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-4">
+      {box}
+      <TileColumns of={3}>{tiles}</TileColumns>
     </div>
   )
 }

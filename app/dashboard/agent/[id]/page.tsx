@@ -14,7 +14,7 @@ import { AgentComposer } from '@/components/agent-composer'
 import { AnswerTile } from '@/components/pages/agent/answer'
 import { AskBoxTile } from '@/components/pages/agent/ask-box'
 import { DrawsTile, EarlierQuestionsTile, NotAnsweredTile } from '@/components/pages/agent/rail'
-import { AskColumns, AskShell } from '@/components/pages/agent/surface'
+import { ASK_TILE_ROW, AskColumns, AskShell } from '@/components/pages/agent/surface'
 
 // One thread, at its own URL — and, since Block D wave 2, the SAME surface the
 // Ask index is: the page bar, a left column of tiles and the rail beside them.
@@ -69,7 +69,7 @@ export default async function AgentThreadPage({
 
   const rail = (
     <>
-      <EarlierQuestionsTile history={data.history} row={3} />
+      <EarlierQuestionsTile history={data.history} row={ASK_TILE_ROW} />
       {/* No delivered count in the footer note here: the thread loader reads
           the count once, into the Updates row of `draws`, and a second copy in
           the footer would be a second chance to disagree with it. */}
@@ -78,9 +78,9 @@ export default async function AgentThreadPage({
         recordHref={data.record?.href ?? askRecordHref(id)}
         delivered={null}
         asAt={data.basis.lastEmbeddedAt ? shortDate(data.basis.lastEmbeddedAt) : null}
-        row={2}
+        row={ASK_TILE_ROW}
       />
-      <NotAnsweredTile notAnswered={data.notAnswered} row={2} />
+      <NotAnsweredTile notAnswered={data.notAnswered} row={ASK_TILE_ROW} />
     </>
   )
 
@@ -155,7 +155,7 @@ export default async function AgentThreadPage({
           <AskBoxTile
             basis={data.basis}
             plan={data.planChip}
-            row={2}
+            row={ASK_TILE_ROW}
             composer={<AgentComposer canSend={canSend && !blocked} disabledNote={disabledNote} />}
           />
           {/* ONE FOLLOW-UP CONTROL, ON THE LAST ANSWER. Every tile used to get
@@ -172,7 +172,7 @@ export default async function AgentThreadPage({
               measure={data.measure}
               citations={data.citations}
               basis={data.basis}
-              row={6}
+              row={ASK_TILE_ROW}
               composer={
                 i === data.turns.length - 1 ? (
                   <AgentComposer

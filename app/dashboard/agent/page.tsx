@@ -9,7 +9,7 @@ import { askDraws, askPlanChip, askRecordHref, askRecordLines, loadAskHistory } 
 import { AgentComposer } from '@/components/agent-composer'
 import { AskBoxTile } from '@/components/pages/agent/ask-box'
 import { DrawsTile, EarlierQuestionsTile, NotAnsweredTile } from '@/components/pages/agent/rail'
-import { AskColumns, AskShell } from '@/components/pages/agent/surface'
+import { ASK_TILE_ROW, AskIndexColumns, AskShell } from '@/components/pages/agent/surface'
 
 // Ask — "what does the conversation say about this?" (Block D wave 2, E-ask).
 //
@@ -73,34 +73,39 @@ export default async function AgentPage({
 
   return (
     <AskShell context={askBasisLine(basis, { short: true })} record={{ line: recordLines[0], lines: recordLines }} params={sp}>
-      <AskColumns
-        rail={
+      {/* THE BOX OVER THE THREE, not beside them — see `AskIndexColumns`. This
+          page has no answer on it yet, so the tiles that are a rail on a thread
+          are the page itself here; composed as two columns it was a 130px tile
+          over 900px of white with a rail alongside. */}
+      <AskIndexColumns
+        box={
+          <AskBoxTile
+            basis={basis}
+            plan={askPlanChip(plans)}
+            row={ASK_TILE_ROW}
+            composer={
+              <AgentComposer
+                canSend={canSend && !blocked}
+                disabledNote={blocked && canSend ? 'Nothing is searchable yet, so there is nothing to answer from' : undefined}
+                ask={ask}
+              />
+            }
+          />
+        }
+        tiles={
           <>
-            <EarlierQuestionsTile history={history} row={3} />
+            <EarlierQuestionsTile history={history} row={ASK_TILE_ROW} />
             <DrawsTile
               draws={askDraws(basis, delivered)}
               recordHref={askRecordHref()}
               delivered={delivered}
               asAt={basis.lastEmbeddedAt ? shortDate(basis.lastEmbeddedAt) : null}
-              row={2}
+              row={ASK_TILE_ROW}
             />
-            <NotAnsweredTile notAnswered={notAnswered} row={2} />
+            <NotAnsweredTile notAnswered={notAnswered} row={ASK_TILE_ROW} />
           </>
         }
-      >
-        <AskBoxTile
-          basis={basis}
-          plan={askPlanChip(plans)}
-          row={2}
-          composer={
-            <AgentComposer
-              canSend={canSend && !blocked}
-              disabledNote={blocked && canSend ? 'Nothing is searchable yet, so there is nothing to answer from' : undefined}
-              ask={ask}
-            />
-          }
-        />
-      </AskColumns>
+      />
     </AskShell>
   )
 }
