@@ -50,6 +50,17 @@ export interface AskBasis {
    *  none do. The count is the same audiences the block reads, so the sentence
    *  and the block under it cannot disagree. */
   monthlyReadings: number | null
+  /**
+   * The same months, named, ascending (`YYYY-MM-01`) — what "3 monthly
+   * readings" actually are, for the tile that names them.
+   *
+   * OPTIONAL, and absent is not empty: a caller that never read the months (or
+   * a stored basis written before this field existed) has nothing to name, and
+   * the tile prints the count alone rather than an empty list that reads as
+   * "no months". `monthlyReadings` stays the count every existing caller
+   * reads.
+   */
+  readingMonths?: string[]
   /** Findings a question can reach, and findings there are. NULL is a failed
    *  read, never a zero: they are two independent round trips and the heavier
    *  of them — the one carrying the `embedding is not null` filter over the
@@ -162,12 +173,28 @@ export interface MonthRow {
  * loader.
  */
 export function readableMonthCount(rows: readonly MonthRow[]): number {
-  return new Set(
-    rows
-      .filter((m) => !isRivalAudience(m.audience))
-      .filter((m) => (m.videos ?? 0) >= SHARE_BAND.minN)
-      .map((m) => m.month),
-  ).size
+  return readableMonths(rows).length
+}
+
+/**
+ * The same months, NAMED and in calendar order (Block D wave 2, E-ask).
+ *
+ * `readableMonthCount` gave the count alone, and the mock's "What an answer
+ * draws on" tile prints the months themselves — "3 monthly · Jul, Aug, Sep".
+ * That is a sentence a reader can check against the chart beside it where a
+ * bare 3 is not, and the two have to be the same three months or the tile
+ * argues with itself. So the LIST is the primitive and the count reads off it:
+ * they cannot disagree, whatever a later filter does to either.
+ */
+export function readableMonths(rows: readonly MonthRow[]): string[] {
+  return [
+    ...new Set(
+      rows
+        .filter((m) => !isRivalAudience(m.audience))
+        .filter((m) => (m.videos ?? 0) >= SHARE_BAND.minN)
+        .map((m) => m.month),
+    ),
+  ].sort()
 }
 
 /**
@@ -246,6 +273,10 @@ export async function loadIndexFacts(
 
   return {
     monthlyReadings: monthRows ? readableMonthCount(monthRows) : null,
+    // Named as well as counted, off the SAME rows and the same filter — the
+    // draws tile prints "3 monthly · Jul, Aug, Sep" and the count above it has
+    // to be the length of that list.
+    ...(monthRows ? { readingMonths: readableMonths(monthRows) } : {}),
     // TWO ROUND TRIPS, TWO ANSWERS. Either can fail on its own — they are
     // separate requests inside one `Promise.all` — so neither may borrow the
     // other's success. Null is "we did not get to read this", and the sentence
