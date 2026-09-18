@@ -248,7 +248,12 @@ export const subjectsSubject: Block<SubjectsData> = {
   },
 
   emptyState(data) {
-    if (data.list.notRecorded) return data.list.notRecorded
+    // NOT THE RAIL'S SENTENCE. Every other block on this page answers the
+    // unreadable set with `list.notRecorded`, and that is right for a tile the
+    // page DROPS in that state — but this one is drawn, directly beside the
+    // rail that has just said it. The same sentence twice, 90px apart, reads
+    // as a rendering fault rather than as one refusal.
+    if (data.list.notRecorded) return 'Until the set can be read, there is no subject to open in full.'
     if (!data.selected) {
       return data.list.proposed.length > 0
         ? 'Confirm a subject and this is where it is read in full.'

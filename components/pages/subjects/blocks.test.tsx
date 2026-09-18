@@ -612,6 +612,22 @@ describe('the page’s own layout', () => {
     }
   })
 
+  // TWO SOURCES OF TRUTH FOR ONE GEOMETRY. The app arm read `LAYOUT` directly
+  // and ignored `layoutFor`'s columns, so the no-selection arm — the one
+  // production is in — kept the selected reading's rail-and-column frame with
+  // one 216px tile in it. The spans have to add up to whole rows.
+  it('fills whole rows with the four tiles it keeps when nothing is selected', () => {
+    const cols = layoutFor(refusedFixture()).map((l) => l.col)
+    expect(cols.reduce((a, b) => a + b, 0) % 12).toBe(0)
+  })
+
+  it('says something of its own where the rail has already said the set is unreadable', () => {
+    const data = refusedFixture()
+    expect(subjectsSubject.emptyState(data)).not.toBe(data.list.notRecorded)
+    const both = renderText(<>{subjectsList.render(data, 'app', ctx)}{subjectsSubject.render(data, 'app', ctx)}</>)
+    expect(both.split('Your subjects are not recorded for this workspace yet.').length - 1).toBe(1)
+  })
+
   it('never asks the grid for a span it does not have', () => {
     for (const data of [subjectsFixture(), refusedFixture()]) {
       for (const { col, row } of layoutFor(data)) {

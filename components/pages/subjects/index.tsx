@@ -97,11 +97,14 @@ export function layoutFor(data: SubjectsData): { block: Block<SubjectsData>; col
   if (data.selected) {
     return SUBJECT_BLOCKS.map((block) => ({ block, ...(LAYOUT[block.key] ?? { col: 12, row: 2 }) }))
   }
+  // TWO FULL ROWS OF TWELVE, not a ragged L. These spans are what the page
+  // DRAWS in this state (the app arm reads them now), so they have to add up:
+  // 4 + 8 and 6 + 6.
   return [
     { block: subjectsList, col: 4, row: 3 },
     { block: subjectsSubject, col: 8, row: 3 },
-    { block: subjectsOwnPosts, col: 4, row: 3 },
-    { block: subjectsSayHear, col: 4, row: 2 },
+    { block: subjectsOwnPosts, col: 6, row: 3 },
+    { block: subjectsSayHear, col: 6, row: 2 },
   ]
 }
 
@@ -128,21 +131,36 @@ function subjectsExportContext(): BlockContext {
   return blockContext(appBaseUrl(), EMAIL)
 }
 
-/** One tile, at the mock's height, spreading its content (MASTER rule 8). */
-function BlockTile({ block, data, ctx, className }: {
+/**
+ * One tile, at the mock's height, spreading its content (MASTER rule 8).
+ *
+ * THE SPAN COMES FROM `layoutFor`, NOT FROM `LAYOUT` (fix pass). This read
+ * `LAYOUT[block.key]` directly, so the four spans `layoutFor` returns for the
+ * no-selection arm — the arm production is in today — were dead: the page kept
+ * the selected arm's 3 / 9 / 3 / 2 geometry and drew one 216px tile beside a
+ * 1,150px rail with about 930px of white next to it. Two sources of truth for
+ * one geometry, disagreeing on the only arm a real tenant sees.
+ *
+ * `minH` is the mock's own tile height and it belongs to the arm that has
+ * something to fill it with: a 380px minimum under three lines of a refusal is
+ * 250px of blank.
+ */
+function BlockTile({ block, data, ctx, col, row, minH = true, className }: {
   block: Block<SubjectsData>
   data: SubjectsData
   ctx: BlockContext
+  col: number
+  row: number
+  minH?: boolean
   className?: string
 }) {
-  const { col, row } = LAYOUT[block.key] ?? { col: 12, row: 2 }
   return (
     <Tile
       col={col}
       row={row}
       distribute="between"
       exportKey={block.key}
-      className={[MIN_H[block.key] ?? '', className ?? ''].filter(Boolean).join(' ')}
+      className={[minH ? MIN_H[block.key] ?? '' : '', className ?? ''].filter(Boolean).join(' ')}
     >
       {block.render(data, 'app', ctx)}
     </Tile>
@@ -175,9 +193,17 @@ export function SubjectsPage({
   }
 
   const ctx = subjectsContext(params)
-  const drawn = new Set(layoutFor(data).map((l) => l.block.key))
-  const tile = (block: Block<SubjectsData>, className?: string) =>
-    drawn.has(block.key) ? <BlockTile block={block} data={data} ctx={ctx} className={className} /> : null
+  const layout = layoutFor(data)
+  const drawn = new Map(layout.map((l) => [l.block.key, l]))
+  // The rail-and-column composition is the SELECTED reading's; with nothing
+  // selected there is no detail to sit beside, and `layoutFor` has already
+  // said which four tiles survive and how wide each one is.
+  const tile = (block: Block<SubjectsData>, className?: string) => {
+    const at = drawn.get(block.key)
+    return at
+      ? <BlockTile block={block} data={data} ctx={ctx} col={LAYOUT[block.key]?.col ?? at.col} row={LAYOUT[block.key]?.row ?? at.row} className={className} />
+      : null
+  }
 
   return (
     <ExportScope
@@ -196,6 +222,7 @@ export function SubjectsPage({
           <ExportMenu />
         </SurfacePageBar>
 
+        {data.selected ? (
         <div className="flex flex-col gap-4">
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[240px_minmax(0,1fr)] xl:items-start">
             <div className="flex flex-col gap-4">
@@ -224,6 +251,19 @@ export function SubjectsPage({
           </div>
           {tile(subjectsVoices)}
         </div>
+        ) : (
+          // NOTHING SELECTED: the twelve-column grid, at the spans `layoutFor`
+          // returns — two full rows rather than one narrow tile beside a rail
+          // and 930px of white. No minimum height either: the mock's tile
+          // heights are for tiles with a reading in them, and a 380px floor
+          // under three lines of a refusal is blank space that reads as a
+          // rendering fault.
+          <PageGrid>
+            {layout.map(({ block, col, row }) => (
+              <BlockTile key={block.key} block={block} data={data} ctx={ctx} col={col} row={row} minH={false} />
+            ))}
+          </PageGrid>
+        )}
 
         {data.notes.length > 0 ? (
           <p className="m-0 text-[11px] text-muted-foreground">
