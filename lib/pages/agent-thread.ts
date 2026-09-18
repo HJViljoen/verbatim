@@ -364,8 +364,18 @@ export interface AskHistoryRow {
    * and on production 2026-09-18 that is rare enough to be worth a flag: of the
    * eight stored re-evaluations, Össur's C1 went contradicts → silent →
    * contradicts → silent and crossed ZERO times.
+   *
+   * THREE VALUES, NOT TWO. `false` means the plan behind this thread WAS
+   * re-read and none of its claims crossed; NULL means we did not read that
+   * plan. `loadPlanChecks` is capped at `PLAN_CARDS_SHOWN` and the row list is
+   * the newest fifty threads, so a thread hanging off the third-newest plan has
+   * no answer here — and rendering it as `false` would answer a question we did
+   * not ask. Everywhere else on this surface absent and zero are kept apart
+   * (`askDraws` prints "not recorded", `readingsMeta` prints "not recorded
+   * here"); this field is no different. A thread with no plan at all is `false`
+   * — there is nothing to cross, and that IS an answer.
    */
-  claimCrossed: boolean
+  claimCrossed: boolean | null
 }
 
 export interface AskHistory {
@@ -396,7 +406,7 @@ export const ASK_INDEX_HREF = '/dashboard/agent'
  * of the month and not a count of the tile.
  */
 export function askHistory(
-  rows: readonly { threadId: string; title: string; askedAt: string; claimCrossed?: boolean }[],
+  rows: readonly { threadId: string; title: string; askedAt: string; claimCrossed?: boolean | null }[],
   now: Date = new Date(),
   shown = 3,
 ): AskHistory {
@@ -407,7 +417,10 @@ export function askHistory(
       threadId: r.threadId,
       title: r.title,
       askedAt: r.askedAt,
-      claimCrossed: r.claimCrossed === true,
+      // An EXPLICIT null survives as null — "we did not re-read that plan".
+      // Omitted is `false`: a caller that says nothing is a thread with no plan
+      // behind it, which has nothing to cross.
+      claimCrossed: r.claimCrossed === null ? null : r.claimCrossed === true,
     })),
     thisMonth: ordered.filter((r) => r.askedAt >= month).length,
     // The oldest row we HOLD, off the rows handed in. The loader reads the
@@ -505,7 +518,11 @@ export async function loadAskHistory(
       threadId: t.id,
       title: t.title ?? 'A question you asked',
       askedAt: t.created_at,
-      claimCrossed: t.plan_check_id ? crossedByPlan.get(t.plan_check_id) === true : false,
+      // A thread with NO plan has nothing to cross — that is `false`, an
+      // answer. A thread whose plan is not among the cards we read has no
+      // answer at all, and says so with null rather than with a `false` that
+      // reads as "its claims held" (`AskHistoryRow.claimCrossed`).
+      claimCrossed: !t.plan_check_id ? false : crossedByPlan.get(t.plan_check_id) ?? null,
     })),
   )
   const oldest = row<{ created_at: string }>(oldestRes, 'askHistory.oldest')

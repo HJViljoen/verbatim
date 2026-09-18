@@ -244,6 +244,20 @@ describe('earlier questions', () => {
   it('flags only the row whose plan claim crossed', () => {
     expect(askHistory(rows, now).rows.map((r) => r.claimCrossed)).toEqual([false, true, false])
   })
+
+  it('keeps "we did not read that plan" apart from "nothing crossed"', () => {
+    // `loadPlanChecks` is capped at PLAN_CARDS_SHOWN while the row list is the
+    // newest fifty threads, so a thread hanging off an older plan has no
+    // answer here. Rendered as `false` it would read identically to a plan
+    // whose claims genuinely held.
+    const mixed = [
+      { threadId: 'a', title: 'read, held', askedAt: '2026-09-20T09:00:00.000Z', claimCrossed: false },
+      { threadId: 'b', title: 'not read', askedAt: '2026-09-19T09:00:00.000Z', claimCrossed: null },
+      // Omitted, not null: no plan behind it, so there is nothing to cross.
+      { threadId: 'c', title: 'no plan at all', askedAt: '2026-09-18T09:00:00.000Z' },
+    ]
+    expect(askHistory(mixed, now).rows.map((r) => r.claimCrossed)).toEqual([false, null, false])
+  })
 })
 
 describe('what lights the "claim moved" flag', () => {

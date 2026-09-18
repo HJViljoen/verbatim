@@ -64,7 +64,9 @@ export function EarlierQuestionsTile({ history, row = 2 }: { history: AskHistory
                 <span className="font-mono text-[10.5px] text-muted-foreground">
                   answered <span data-copy="figure">{shortDate(r.askedAt)}</span>
                 </span>
-                {r.claimCrossed && <InferencePill>1 claim crossed</InferencePill>}
+                {/* `=== true` on purpose: null is "we did not re-read that plan",
+                    which is not "nothing crossed" (`AskHistoryRow.claimCrossed`). */}
+                {r.claimCrossed === true && <InferencePill>1 claim crossed</InferencePill>}
               </div>
             </li>
           ))}
