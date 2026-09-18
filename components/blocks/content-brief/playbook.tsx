@@ -6,7 +6,7 @@ import { fmtInt, fmtPct } from '@/lib/format'
 import type { FormatMatrix, FormatMatrixSide, FormatRow } from '@/lib/reading/formats'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '@/lib/rivals'
-import type { ContentBriefData } from '@/lib/pages/content-brief'
+import { PLAYBOOK_GONE, type ContentBriefData } from '@/lib/pages/content-brief'
 
 // The content brief's page 3 — "Hooks and formats that worked" (Block D wave 2,
 // package E-content; artboard ContentBrief.dc.html slide 3).
@@ -245,6 +245,11 @@ export const contentPlaybook: Block<ContentBriefData> = {
   render(data, mode = 'app') {
     const slide = data.playbook
     const p = slide.playbook
+    // `emptyState` NAMES THE ABSENCE — a failed read, a month nothing was read
+    // in, or a corpus nothing has classified (see `buildPlaybookSlide`). The
+    // `?? PLAYBOOK_GONE` behind it is the unreachable-by-construction arm: a
+    // slide with no playbook always carries a sentence, and a block that
+    // printed a hole instead would be the defect over again.
     const empty = contentPlaybook.emptyState(data)
     if (empty || !p) {
       return (
@@ -335,5 +340,3 @@ export const contentPlaybook: Block<ContentBriefData> = {
     return data.playbook.empty
   },
 }
-
-const PLAYBOOK_GONE = 'The formats behind this brief could not be read.'

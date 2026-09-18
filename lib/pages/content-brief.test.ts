@@ -6,6 +6,9 @@ import {
   BRIEF_UNIT,
   LABEL_RULE,
   PLAYBOOK_EMPTY,
+  PLAYBOOK_GONE,
+  RECORD_GONE,
+  RECORD_UNREAD,
   QUARTER_NEEDS,
   buildPlaybookSlide,
   buildRecordSlide,
@@ -67,28 +70,37 @@ describe('the record slide', () => {
   const record = methodRecordFixture()
 
   it('carries the Reddit cap and the label rule, which no brief has printed', () => {
-    const slide = buildRecordSlide({ month: MONTH, monthStatus: 'filling', record, delivery: null, readings: 3 })
+    const slide = buildRecordSlide({ month: MONTH, monthStatus: 'filling', record, read: true, delivery: null, readings: 3 })
     expect(slide.reddit).toContain('capped at 40 per thread')
     expect(slide.labels).toBe(LABEL_RULE)
   })
 
   it('prints the reading counter only where the months have been counted', () => {
-    const counted = buildRecordSlide({ month: MONTH, monthStatus: 'filling', record, delivery: null, readings: 3 })
+    const counted = buildRecordSlide({ month: MONTH, monthStatus: 'filling', record, read: true, delivery: null, readings: 3 })
     expect(counted.counter).toBe(`your 3rd monthly reading · the quarter view needs ${QUARTER_NEEDS}`)
     // NULL IS NOT ZERO. "We have not started counting" and "no month has been
     // read" are different sentences, and `readingsCounter(0)` says the second.
-    const uncounted = buildRecordSlide({ month: MONTH, monthStatus: 'filling', record, delivery: null, readings: null })
+    const uncounted = buildRecordSlide({ month: MONTH, monthStatus: 'filling', record, read: true, delivery: null, readings: null })
     expect(uncounted.counter).toBeNull()
   })
 
   it('is empty only when there is neither a record nor a delivery line', () => {
-    expect(buildRecordSlide({ month: MONTH, monthStatus: 'filling', record: null, delivery: null, readings: null }).empty).toContain('has not been read')
-    expect(buildRecordSlide({ month: MONTH, monthStatus: 'filling', record: null, delivery: '2 updates', readings: null }).empty).toBeNull()
-    expect(buildRecordSlide({ month: MONTH, monthStatus: 'filling', record, delivery: null, readings: null }).empty).toBeNull()
+    expect(buildRecordSlide({ month: MONTH, monthStatus: 'filling', record: null, read: true, delivery: null, readings: null }).empty).toBe(RECORD_UNREAD)
+    expect(buildRecordSlide({ month: MONTH, monthStatus: 'filling', record: null, read: true, delivery: '2 updates', readings: null }).empty).toBeNull()
+    expect(buildRecordSlide({ month: MONTH, monthStatus: 'filling', record, read: true, delivery: null, readings: null }).empty).toBeNull()
+  })
+
+  // THE READ THAT THREW SAYS SO (code review 6). `loadRecordInputs` returns a
+  // `RecordInputs` for every workspace and degrades field by field, so a null
+  // one is an exception — and "has not been read for this workspace yet" is a
+  // sentence about our schedule that only an exception could ever produce.
+  it('says the record could not be READ, never that nobody has read it, when the read threw', () => {
+    expect(buildRecordSlide({ month: MONTH, monthStatus: 'filling', record: null, read: false, delivery: null, readings: null }).empty).toBe(RECORD_GONE)
+    expect(RECORD_GONE).not.toBe(RECORD_UNREAD)
   })
 
   it('normalises the month it was handed', () => {
-    const slide = buildRecordSlide({ month: '2026-09-18', monthStatus: 'filling', record, delivery: null, readings: 1 })
+    const slide = buildRecordSlide({ month: '2026-09-18', monthStatus: 'filling', record, read: true, delivery: null, readings: 1 })
     expect(slide.month).toBe('2026-09-01')
     expect(slide.monthLabel).toBe('September')
   })
@@ -119,21 +131,39 @@ describe('the playbook slide', () => {
     { id: 'd', upload_date: '2026-09-09', platform: 'youtube', classified_type: 'demo', hook_style: 'text', engagement_rate: 5.4, is_client: true, is_competitor: false, competitor_name: null, source: 'owned', sentiment: null, sentiment_source: null, analyzed_lane: null },
   ]
 
-  it('says so rather than drawing a hole when nothing was published', () => {
-    const slide = buildPlaybookSlide({ playbook: null, brand: 'Sealand', rival: null })
-    expect(slide.empty).toBe(PLAYBOOK_EMPTY)
-    expect(slide.below).toEqual([])
-  })
+  const slide = (over: { playbook: Parameters<typeof buildPlaybookSlide>[0]['playbook']; read: boolean }) =>
+    buildPlaybookSlide({ ...over, brand: 'Sealand', monthLabel: 'September', rival: null })
 
   it('carries the builder’s own below-median rows rather than recomputing them', () => {
     const playbook = buildPlaybook({ month: MONTH, brand: 'Sealand', rival: null, videos })
-    const slide = buildPlaybookSlide({ playbook, brand: 'Sealand', rival: null })
-    expect(slide.empty).toBeNull()
-    expect(slide.below).toBe(playbook.below)
+    const s = slide({ playbook, read: true })
+    expect(s.empty).toBeNull()
+    expect(s.below).toBe(playbook.below)
   })
 
-  it('is empty where the table would have no rows, not merely where the read failed', () => {
+  // THREE ABSENCES, THREE SENTENCES (design review 1, code review 1). One
+  // constant used to answer all three, so a caught read error and an
+  // unclassified corpus both printed a claim about what the world published.
+  it('says the formats could not be READ when the read threw', () => {
+    const s = slide({ playbook: null, read: false })
+    expect(s.empty).toBe(PLAYBOOK_GONE)
+    expect(s.empty).not.toBe(PLAYBOOK_EMPTY)
+    expect(s.below).toEqual([])
+  })
+
+  it('says nothing published has been READ where the read found nothing — never that nobody published', () => {
     const none = buildPlaybook({ month: MONTH, brand: 'Sealand', rival: null, videos: [] })
-    expect(buildPlaybookSlide({ playbook: none, brand: 'Sealand', rival: null }).empty).toBe(PLAYBOOK_EMPTY)
+    expect(slide({ playbook: none, read: true }).empty).toBe(PLAYBOOK_EMPTY)
+    expect(PLAYBOOK_EMPTY).toContain('has been read for')
+    expect(PLAYBOOK_EMPTY).not.toContain('was published')
+  })
+
+  it('counts what was published where nothing has been classified, rather than calling it nothing', () => {
+    const unclassified = videos.map((v) => ({ ...v, classified_type: null, hook_style: null }))
+    const p = buildPlaybook({ month: MONTH, brand: 'Sealand', rival: null, videos: unclassified })
+    const empty = slide({ playbook: p, read: true }).empty
+    expect(empty).toContain('none of them has been classified yet')
+    expect(empty).toContain('4 videos')
+    expect(empty).not.toBe(PLAYBOOK_EMPTY)
   })
 })

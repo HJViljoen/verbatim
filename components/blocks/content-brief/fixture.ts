@@ -39,10 +39,11 @@ export function contentBriefFixture(over: Partial<ContentBriefData> = {}): Conte
     monthLabel: 'September',
     monthStatus: 'filling',
     readingAt: NOW,
-    playbook: buildPlaybookSlide({ playbook, brand: 'Össur', rival: 'Ottobock' }),
+    playbook: buildPlaybookSlide({ playbook, read: true, brand: 'Össur', monthLabel: 'September', rival: 'Ottobock' }),
     record: buildRecordSlide({
       month: MONTH,
       monthStatus: 'filling',
+      read: true,
       // THE TWO REFUSALS AND THE COUNT AGREE. `comparisonsRefused` is what the
       // card prints and `refusals` is what the record's own sentence names, so
       // a fixture that sets one without the other puts "2 comparisons not
@@ -66,18 +67,26 @@ export function thinContentBriefFixture(): ContentBriefData {
   const own = PLAYBOOK_VIDEOS.filter((v) => !v.is_client)
   const playbook = buildPlaybook({ month: MONTH, brand: 'Össur', rival: null, videos: own })
   return contentBriefFixture({
-    playbook: buildPlaybookSlide({ playbook, brand: 'Össur', rival: null }),
+    playbook: buildPlaybookSlide({ playbook, read: true, brand: 'Össur', monthLabel: 'September', rival: null }),
   })
 }
 
-/** The fresh database: no video read on the published clock, no month tables,
- *  no gate record. Both blocks print their own honest absence. */
+/**
+ * The fresh database: nothing published has been read on the published clock,
+ * no month tables, no gate record. Both blocks print their own honest absence.
+ *
+ * THE READ HAPPENED HERE. `videos` is a base table on a fresh database and
+ * `loadPlaybookVideos` returns an empty array from it rather than throwing, so
+ * this is the "nothing read" arm and not the "could not be read" one — which
+ * is the distinction design review 1 found collapsed.
+ */
 export function refusedContentBriefFixture(): ContentBriefData {
   return contentBriefFixture({
-    playbook: buildPlaybookSlide({ playbook: null, brand: 'Össur', rival: null }),
+    playbook: buildPlaybookSlide({ playbook: buildPlaybook({ month: MONTH, brand: 'Össur', rival: null, videos: [] }), read: true, brand: 'Össur', monthLabel: 'September', rival: null }),
     record: buildRecordSlide({
       month: MONTH,
       monthStatus: 'filling',
+      read: true,
       record: methodRecordFixture({
         coverage: null,
         language: { analysed: 0, unknown: 0, english: 0, notEnglish: 0, basis: 'video_speech' },
@@ -90,11 +99,30 @@ export function refusedContentBriefFixture(): ContentBriefData {
   })
 }
 
-/** Nothing at all — the empty state both blocks compute without rendering. */
+/** Nothing at all, and nothing to say why: every read threw. Both blocks print
+ *  the sentence about OUR reading, never one about the world. */
 export function emptyContentBriefFixture(): ContentBriefData {
   return contentBriefFixture({
-    playbook: buildPlaybookSlide({ playbook: null, brand: 'Össur', rival: null }),
-    record: buildRecordSlide({ month: MONTH, monthStatus: 'filling', record: null, delivery: null, readings: null }),
+    playbook: buildPlaybookSlide({ playbook: null, read: false, brand: 'Össur', monthLabel: 'September', rival: null }),
+    record: buildRecordSlide({ month: MONTH, monthStatus: 'filling', record: null, read: false, delivery: null, readings: null }),
+  })
+}
+
+/**
+ * Videos were published and read, and the classifier has reached none of them
+ * — the state a tenant is in between a gather and its first classifier pass,
+ * and the one that printed "no video was published in this month".
+ */
+export function unclassifiedContentBriefFixture(): ContentBriefData {
+  const unclassified = PLAYBOOK_VIDEOS.map((v) => ({ ...v, classified_type: null, hook_style: null }))
+  return contentBriefFixture({
+    playbook: buildPlaybookSlide({
+      playbook: buildPlaybook({ month: MONTH, brand: 'Össur', rival: 'Ottobock', videos: unclassified }),
+      read: true,
+      brand: 'Össur',
+      monthLabel: 'September',
+      rival: 'Ottobock',
+    }),
   })
 }
 

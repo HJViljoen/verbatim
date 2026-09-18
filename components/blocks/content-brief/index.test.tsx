@@ -5,7 +5,7 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { PRIVACY_LINE, REDDIT_CAP_LINE } from '@/lib/reading/method'
-import { BRIEF_UNIT, LABEL_RULE, PLAYBOOK_EMPTY } from '@/lib/pages/content-brief'
+import { BRIEF_UNIT, LABEL_RULE, PLAYBOOK_EMPTY, PLAYBOOK_GONE, RECORD_GONE } from '@/lib/pages/content-brief'
 import { CONTENT_BRIEF_BLOCKS, contentMake, contentPlaybook, contentRecord } from './index'
 import {
   contentBriefFixture,
@@ -14,6 +14,7 @@ import {
   ledgerWithDismissal,
   refusedContentBriefFixture,
   thinContentBriefFixture,
+  unclassifiedContentBriefFixture,
 } from './fixture'
 
 // The render tier for the content brief's three blocks (Block D wave 2,
@@ -23,7 +24,13 @@ import {
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
-const STATES = [contentBriefFixture(), thinContentBriefFixture(), refusedContentBriefFixture(), emptyContentBriefFixture()]
+const STATES = [
+  contentBriefFixture(),
+  thinContentBriefFixture(),
+  refusedContentBriefFixture(),
+  unclassifiedContentBriefFixture(),
+  emptyContentBriefFixture(),
+]
 const LEDGERS = [ledgerWithDismissal(), emptyLedger()]
 
 describe('the content brief’s own blocks', () => {
@@ -111,9 +118,28 @@ describe('content.playbook — the mock’s page 3', () => {
     expect(answers.verdicts).toEqual([])
   })
 
-  it('says so rather than drawing a hole when nothing was published', () => {
-    expect(blockAnswers(contentPlaybook, emptyContentBriefFixture()).empty).toBe(PLAYBOOK_EMPTY)
-    expect(renderText(render(contentPlaybook.render(emptyContentBriefFixture(), 'print', ctx)))).toContain(PLAYBOOK_EMPTY)
+  // THE THREE ABSENCES, ON THE PAGE (design review 1, code review 1). The
+  // block used to print one sentence for all three, and the one it printed was
+  // a claim about what the category published.
+  it('says the formats could not be read when the read threw', () => {
+    const data = emptyContentBriefFixture()
+    expect(blockAnswers(contentPlaybook, data).empty).toBe(PLAYBOOK_GONE)
+    const text = renderText(render(contentPlaybook.render(data, 'print', ctx)))
+    expect(text).toContain(PLAYBOOK_GONE)
+    expect(text).not.toContain(PLAYBOOK_EMPTY)
+  })
+
+  it('says nothing published has been read where the read found nothing', () => {
+    const data = refusedContentBriefFixture()
+    expect(blockAnswers(contentPlaybook, data).empty).toBe(PLAYBOOK_EMPTY)
+    expect(renderText(render(contentPlaybook.render(data, 'print', ctx)))).toContain(PLAYBOOK_EMPTY)
+  })
+
+  it('counts the published videos where none of them is classified yet', () => {
+    const data = unclassifiedContentBriefFixture()
+    const empty = blockAnswers(contentPlaybook, data).empty ?? ''
+    expect(empty).toContain('none of them has been classified yet')
+    expect(renderText(render(contentPlaybook.render(data, 'print', ctx)))).toContain(empty)
   })
 })
 
@@ -155,7 +181,7 @@ describe('content.record — the mock’s page 5', () => {
   })
 
   it('has one honest line when the record could not be read at all', () => {
-    expect(blockAnswers(contentRecord, emptyContentBriefFixture()).empty).toContain('has not been read')
+    expect(blockAnswers(contentRecord, emptyContentBriefFixture()).empty).toBe(RECORD_GONE)
   })
 })
 

@@ -219,10 +219,25 @@ export function numberRows(r: RecordInputs | null): NumberRow[] {
   return rows
 }
 
+/**
+ * The record's two absences, which used to be one (code review 6 — the same
+ * shape as the playbook's above).
+ *
+ * `record == null && delivery == null` printed "has not been read for this
+ * workspace yet", a sentence about our schedule. But `loadRecordInputs` returns
+ * a `RecordInputs` for every workspace, degrading field by field on a fresh
+ * database — so a null one means the read THREW, and the only true reading of
+ * that sentence was the one it could never have.
+ */
+export const RECORD_GONE = 'The record behind this brief could not be read.'
+export const RECORD_UNREAD = 'The record behind this brief has not been read for this workspace yet.'
+
 export function buildRecordSlide(input: {
   month: string
   monthStatus: MonthStatus
   record: RecordInputs | null
+  /** Did the read happen? FALSE means it threw — see `RECORD_GONE`. */
+  read: boolean
   delivery: string | null
   readings: number | null
 }): RecordSlide {
@@ -239,9 +254,9 @@ export function buildRecordSlide(input: {
     numbers: numberRows(input.record),
     reddit: REDDIT_CAP_LINE,
     labels: LABEL_RULE,
-    empty: input.record == null && input.delivery == null
-      ? 'The record behind this brief has not been read for this workspace yet.'
-      : null,
+    empty: input.record != null || input.delivery != null
+      ? null
+      : input.read ? RECORD_UNREAD : RECORD_GONE,
   }
 }
 
@@ -264,23 +279,69 @@ export interface PlaybookSlide {
   empty: string | null
 }
 
+/**
+ * THREE ABSENCES, THREE SENTENCES — and they used to be one (design review 1,
+ * code review 1).
+ *
+ * `empty` was `drawn ? null : PLAYBOOK_EMPTY`, so a caught read error and a
+ * corpus nobody has classified yet both printed a claim about the WORLD: "no
+ * video was published in this month by you, your rival or the category". A
+ * PostgREST schema-cache miss — AGENTS.md records one taking the app down for
+ * two hours — put that sentence on a client's document. It is the same class as
+ * the `ct.ways` block-key bug this package was told to fix first, and the same
+ * class as the page that claimed "no email is sent" while Resend sent.
+ *
+ * So the slide is told whether the READ happened, separately from what the read
+ * found, and each state says only what it knows:
+ *
+ *   · the read threw            → PLAYBOOK_GONE ("could not be read")
+ *   · read, nothing published   → PLAYBOOK_EMPTY (and it says "has been read
+ *                                 for", never "was published": a month we
+ *                                 gathered nothing in is not a month nobody
+ *                                 posted in)
+ *   · read, published, none classified → the count, and what is missing
+ */
 export const PLAYBOOK_EMPTY =
-  'No video was published in this month by you, your rival or the category, so there is no format to read.'
+  'Nothing published in this month has been read for you, your rival or the category, so there is no format to read.'
+
+export const PLAYBOOK_GONE = 'The formats behind this brief could not be read.'
+
+/** Videos were published and read, and the classifier has reached none of
+ *  them: a share of nothing classified is not zero, it is unmeasured. */
+export function playbookUnclassified(published: number, monthLabel: string): string {
+  return `${fmtInt(published)} ${published === 1 ? 'video' : 'videos'} published in ${monthLabel} have been read and none of them has been classified yet, so no format share can be stated.`
+}
 
 export function buildPlaybookSlide(input: {
   playbook: PlaybookBlock | null
+  /**
+   * Did the read happen? FALSE means `loadPlaybookVideos` threw — not that it
+   * returned nothing. Required rather than defaulted: a default is exactly how
+   * the two states were conflated, and every caller knows which one it is.
+   */
+  read: boolean
   brand: string
+  monthLabel: string
   rival: string | null
 }): PlaybookSlide {
   const p = input.playbook
-  const drawn = p != null && p.formats.keys.length > 0
   return {
     playbook: p,
     below: p ? p.below : [],
     brand: input.brand,
     rival: input.rival,
-    empty: drawn ? null : PLAYBOOK_EMPTY,
+    empty: playbookAbsence(p, input.read, input.monthLabel),
   }
+}
+
+function playbookAbsence(p: PlaybookBlock | null, read: boolean, monthLabel: string): string | null {
+  if (!read) return PLAYBOOK_GONE
+  // A read that happened and built nothing is the same fact as a read that
+  // built a table with no rows; the surface only ever produces the second.
+  if (p == null) return PLAYBOOK_EMPTY
+  if (p.formats.keys.length > 0) return null
+  const published = p.formats.sides.reduce((n, s) => n + s.published, 0)
+  return published === 0 ? PLAYBOOK_EMPTY : playbookUnclassified(published, monthLabel)
 }
 
 // ── the surface ─────────────────────────────────────────────────────────────
@@ -367,11 +428,17 @@ export async function loadContentBrief(scope: Scope): Promise<ContentBriefData |
     monthLabel: longMonth(month),
     monthStatus: freezeStateFor(month, readingAt),
     readingAt,
-    playbook: buildPlaybookSlide({ playbook, brand, rival }),
+    // `read` IS `videos != null`, AND THAT IS THE WHOLE POINT: the catch above
+    // turns a failed read into null, and a null that reached the slide used to
+    // print "no video was published in this month".
+    playbook: buildPlaybookSlide({ playbook, read: videos != null, brand, monthLabel: longMonth(month), rival }),
     record: buildRecordSlide({
       month,
       monthStatus: freezeStateFor(month, readingAt),
       record,
+      // BOTH READS THREW IS THE ONLY WAY TO REACH THE EMPTY ARM, and that is a
+      // fact about this request, not about the workspace.
+      read: record != null || updates != null,
       delivery: updates ? deliveryRecord({ updates: updates.updates, slotsRecorded: updates.slotsRecorded }).line : null,
       readings,
     }),
