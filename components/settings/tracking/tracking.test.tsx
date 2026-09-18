@@ -329,6 +329,26 @@ describe('the cadence section', () => {
   })
 })
 
+describe('the page’s faint text', () => {
+  it('never uses the data-bucket grey as a text colour', () => {
+    // H3/m5: --cat (#9AA1A9) is the CATEGORY SERIES colour and reads 2.61:1 on
+    // white, under DESIGN.md's floor for text. It carried eighteen of this
+    // page's rule sentences, the save strip's honesty line among them.
+    const markup = [
+      render(termsSection),
+      render(<RivalsSection rows={[rival()]} names={['Freitag']} month="2026-09-01" canEdit onAdd={() => null} onRemove={() => {}} />),
+      render(
+        <CommunitiesSection
+          rows={[community()]} hidden={0} hiddenPosts={0}
+          unconfigured={{ posts: 0, fromUnconfigured: 0, pct: 0 }} canEdit keptClosed={false}
+        />,
+      ),
+    ].join('')
+    expect(markup).not.toContain('text-cat')
+    expect(markup).toContain('text-muted-foreground')
+  })
+})
+
 describe('the save state', () => {
   const change: LastChange = {
     changed_at: '2026-09-03T14:02:00Z', source: 'logged',

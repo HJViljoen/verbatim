@@ -42,7 +42,7 @@ export function LastSaveStrip({ state, note }: {
           <span className="font-mono text-[10.5px] leading-[1.4] text-muted-foreground">
             Last save {shortDate(state.lastSavedAt)}{note ? ` — ${note}` : ''}
           </span>
-          <span className="font-mono text-[10.5px] leading-[1.4] text-cat">{breakWords(state)}</span>
+          <span className="font-mono text-[10.5px] leading-[1.4] text-muted-foreground">{breakWords(state)}</span>
         </>
       ) : (
         <span className="font-mono text-[10.5px] leading-[1.4] text-muted-foreground">{NEVER_SAVED}</span>

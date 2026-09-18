@@ -17,8 +17,18 @@ import { cn } from '@/lib/utils'
 // that keeps 44px in one place rather than in nine.
 //
 // Colour comes from tokens only — `bg-positive` / `bg-warning` /
-// `bg-neutral-seg` are the artboard's green, amber and grey dots, and
-// `text-cat` is its faint `#9AA1A9` metadata. No hex reaches a className.
+// `bg-neutral-seg` are the artboard's green, amber and grey dots. No hex
+// reaches a className.
+//
+// AND THE FAINT TEXT IS `--muted-foreground`, NOT `--cat`. The artboard's
+// metadata grey is #9AA1A9, which the system already has a token for — but
+// `--cat` is a DATA-BUCKET colour (the category series), and at 2.61:1 on white
+// it is under DESIGN.md's floor for text. Eighteen rule sentences were being
+// printed in it, including the save strip's "What that save broke was not
+// written down." — the page's honesty lines rendered fainter than the facts
+// they qualify. `--muted-foreground` (#6E7378, 4.6:1) is the faintest text this
+// system has, and three levels of ink (foreground · secondary · muted) is the
+// hierarchy; a fourth that cannot be read is not one.
 
 /** One hairline-ruled section of a settings sub-page. */
 export function Section({ children, className }: { children: ReactNode; className?: string }) {
@@ -41,7 +51,7 @@ export function SectionHead({ title, meta, rule }: { title: ReactNode; meta?: Re
     <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
       <h3 className="shrink-0 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">{title}</h3>
       {meta && <span className="min-w-0 font-mono text-[11px] text-muted-foreground">{meta}</span>}
-      {rule && <span className="ml-auto shrink-0 font-mono text-[10.5px] text-cat">{rule}</span>}
+      {rule && <span className="ml-auto shrink-0 font-mono text-[10.5px] text-muted-foreground">{rule}</span>}
     </header>
   )
 }
@@ -61,7 +71,7 @@ export function LabelRow({
     <div className="grid grid-cols-1 items-start gap-x-6 gap-y-2 md:grid-cols-[172px_minmax(0,1fr)]">
       <div className={cn('flex flex-col gap-px', top === 'control' ? 'md:pt-2.5' : 'md:pt-1.5')}>
         <span className="text-[12.5px] font-medium">{label}</span>
-        {meta && <span className="font-mono text-[10.5px] text-cat">{meta}</span>}
+        {meta && <span className="font-mono text-[10.5px] text-muted-foreground">{meta}</span>}
       </div>
       <div className="min-w-0">{children}</div>
     </div>
@@ -175,13 +185,13 @@ export function Dot({ tone }: { tone: 'good' | 'watch' | 'none' }) {
 /** A 44px figure cell: the count over its unit, right-aligned and tabular. */
 export function Figure({ value, muted = false }: { value: ReactNode; muted?: boolean }) {
   return (
-    <span className={cn('font-mono text-[12px] tabular-nums', muted ? 'text-cat' : 'font-semibold text-foreground')}>{value}</span>
+    <span className={cn('font-mono text-[12px] tabular-nums', muted ? 'text-muted-foreground' : 'font-semibold text-foreground')}>{value}</span>
   )
 }
 
 /** The mono footnote that follows a control row. */
 export function MonoNote({ children, className }: { children: ReactNode; className?: string }) {
-  return <span className={cn('font-mono text-[10.5px] leading-[1.4] text-cat', className)}>{children}</span>
+  return <span className={cn('font-mono text-[10.5px] leading-[1.4] text-muted-foreground', className)}>{children}</span>
 }
 
 /** The artboard's control height and edge, in one place. A control that can be

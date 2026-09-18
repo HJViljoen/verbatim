@@ -111,7 +111,7 @@ export function TermPerformance({ rows, updates, months = [] }: { rows: TermSumm
           </table>
         </EnhancedTable>
       )}
-      {rows.length > 0 && <p className="mt-2 font-mono text-[10.5px] leading-[1.4] text-cat">{TERM_YIELD_BASIS}</p>}
+      {rows.length > 0 && <p className="mt-2 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">{TERM_YIELD_BASIS}</p>}
     </LabelRow>
   )
 }

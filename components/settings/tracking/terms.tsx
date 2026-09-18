@@ -93,7 +93,7 @@ export function TermsSection({ terms, dates, datesNote, review, canEdit, onAdd, 
           meta={
             <>
               {terms[b.key].length} term{terms[b.key].length === 1 ? '' : 's'}
-              <span className="mt-0.5 block font-sans text-[10.5px] leading-[1.35] text-cat">{b.hint}</span>
+              <span className="mt-0.5 block font-sans text-[10.5px] leading-[1.35] text-muted-foreground">{b.hint}</span>
             </>
           }
         >
@@ -109,7 +109,7 @@ export function TermsSection({ terms, dates, datesNote, review, canEdit, onAdd, 
                     onClick={() => { onRemove(b.key, t); setError(null) }}
                     disabled={!canEdit}
                     aria-label={`Remove ${t}`}
-                    className="cursor-pointer rounded-full p-0.5 text-cat transition-colors hover:bg-tile hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
+                    className="cursor-pointer rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-tile hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <X className="size-3" aria-hidden />
                   </button>

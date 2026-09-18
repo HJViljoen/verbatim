@@ -121,7 +121,7 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
                     {dropped ? RIVAL_REMOVED_PENDING : rivalState(r)}
                   </span>
                   {r.perPlatform.length > 0 && (
-                    <span className="mt-0.5 block font-mono text-[10.5px] text-cat">
+                    <span className="mt-0.5 block font-mono text-[10.5px] text-muted-foreground">
                       {r.perPlatform.map((p) => (
                         <span key={p.platform} className="mr-2 inline-block">
                           {/* No `@` on YouTube: it is read by CHANNEL ID and an
@@ -144,7 +144,7 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
                   // and five copies of it down a 132px column is five rows of
                   // three-line text saying one thing. The dash says there is no
                   // census; the note under the table says why, once.
-                  : <span key="o" className="block text-right text-[11.5px] text-cat">— not read</span>,
+                  : <span key="o" className="block text-right text-[11.5px] text-muted-foreground">— not read</span>,
                 dropped && canEdit
                   ? (
                     <span key="r" className="block text-right">
@@ -170,7 +170,7 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
                     type="button"
                     onClick={() => onRemove(name)}
                     aria-label={`Remove ${name}`}
-                    className="cursor-pointer rounded-full p-0.5 text-cat transition-colors hover:bg-inner hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    className="cursor-pointer rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-inner hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   >
                     <X className="size-3" aria-hidden />
                   </button>
@@ -178,8 +178,8 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
                   <input type="hidden" name="competitor_names" value={name} />
                 </span>,
                 <span key="h" className="block text-[12.5px] text-muted-foreground">added here, not yet saved — nothing of theirs is read until it is</span>,
-                <span key="t" className="block text-right font-mono text-[11.5px] text-cat">—</span>,
-                <span key="o" className="block text-right text-[11.5px] text-cat">—</span>,
+                <span key="t" className="block text-right font-mono text-[11.5px] text-muted-foreground">—</span>,
+                <span key="o" className="block text-right text-[11.5px] text-muted-foreground">—</span>,
                 <span key="r" />,
               ]}
             />

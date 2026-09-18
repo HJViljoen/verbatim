@@ -84,7 +84,7 @@ export function SettingsFrame({
               >
                 <span className="min-w-0 flex-1 truncate">{s.label}</span>
                 {count != null && (
-                  <span className={cn('shrink-0 font-mono text-[10.5px] tabular-nums', active === s.key ? 'text-muted-foreground' : 'text-cat')}>{count}</span>
+                  <span className={cn('shrink-0 font-mono text-[10.5px] tabular-nums', active === s.key ? 'text-muted-foreground' : 'text-muted-foreground')}>{count}</span>
                 )}
               </Link>
             )

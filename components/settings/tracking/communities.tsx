@@ -77,7 +77,7 @@ export function CommunitiesSection({
                     {communityWords(r)}
                   </span>
                   {r.probe && (
-                    <span className="block font-mono text-[10.5px] text-cat">
+                    <span className="block font-mono text-[10.5px] text-muted-foreground">
                       sampled {r.probe.at}: {r.probe.kept} of {r.probe.sampled} on topic
                     </span>
                   )}
