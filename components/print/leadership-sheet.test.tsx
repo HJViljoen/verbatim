@@ -6,7 +6,7 @@ import { overviewFixture, refusedFixture } from '@/components/pages/overview/fix
 import type { OverviewData } from '@/lib/pages/overview'
 import type { DocumentSnapshotData } from '@/lib/reports/documents/types'
 import { DocumentDeck } from './document-deck'
-import { LeadershipSheet, SHEET_SECTIONS, leadGap, leadSubject, leadershipSheetData } from './leadership-sheet'
+import { LeadershipSheet, SHEET_SECTIONS, isLeadershipOverview, leadGap, leadSubject, leadershipSheetData } from './leadership-sheet'
 
 // The leadership one-pager (Block D wave 2, E-leadership).
 //
@@ -219,6 +219,45 @@ describe('the sheet inside the deck', () => {
     expect(leadershipSheetData({ ...LEAD, surfaces: undefined })).toBeNull()
     const markup = render(<DocumentDeck data={{ ...LEAD, template: 'market_brief' }} date="18 Sep 2026" />)
     expect(markup).toContain('text-[58px]')
+  })
+
+  // A STORED SNAPSHOT IS DATA, NOT A TYPE. `surfaces` has been frozen into
+  // leadership briefs since 2026-08-30 and `subjects.gaps` / `moves.readings`
+  // landed on 2026-09-18, so every brief built in that nineteen-day window
+  // carries an Overview without them. Without the predicate the sheet's
+  // `Object.values(gaps)` and `readings.length` are a TypeError inside a
+  // server component, which takes down the share link, the viewer, the Studio
+  // preview and the PDF route — not one sheet. Each field is dropped on its
+  // own: a guard that only fires when all of them are missing is a guard that
+  // misses the half-migrated snapshot.
+  const without = (drop: (o: Record<string, unknown>) => void): DocumentSnapshotData => {
+    const overview = JSON.parse(JSON.stringify(overviewFixture())) as Record<string, unknown>
+    drop(overview)
+    return { ...LEAD, surfaces: { overview } }
+  }
+
+  it('refuses a brief frozen before wave 1 rather than throwing inside the deck', () => {
+    const noGaps = without((o) => { delete (o.subjects as Record<string, unknown>).gaps })
+    const noReadings = without((o) => { delete (o.moves as Record<string, unknown>).readings })
+    const noInterpretation = without((o) => { delete (o.sentence as Record<string, unknown>).interpretation })
+    for (const pre of [noGaps, noReadings, noInterpretation]) {
+      expect(leadershipSheetData(pre)).toBeNull()
+    }
+    // … and the deck renders what it always rendered for such a snapshot: the
+    // 58px cover, then the ordinary slides. (`interpretation` is not one of
+    // the wave-1 fields — it is dropped above only to prove the predicate
+    // reads each shape on its own, and no stored brief is missing it.)
+    for (const pre of [noGaps, noReadings]) {
+      expect(render(<DocumentDeck data={pre} date="18 Sep 2026" />)).toContain('text-[58px]')
+    }
+  })
+
+  it('reads a wave-1 Overview, and refuses anything that is not one', () => {
+    expect(isLeadershipOverview(overviewFixture())).toBe(true)
+    expect(isLeadershipOverview(refusedFixture())).toBe(true)
+    for (const junk of [null, undefined, 'overview', 42, [], {}]) {
+      expect(isLeadershipOverview(junk)).toBe(false)
+    }
   })
 
   it('absorbs exactly the four sections the sheet draws', () => {

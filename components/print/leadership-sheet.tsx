@@ -590,19 +590,59 @@ function SheetFooter({ data, company, date }: { data: OverviewData; company: str
   )
 }
 
+const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
+
+/**
+ * Is this frozen Overview one the SHEET can be drawn from?
+ *
+ * A STORED SNAPSHOT IS DATA, NOT A TYPE. `surfaces` is typed
+ * `Record<string, unknown>` (lib/reports/documents/types.ts) precisely because
+ * it is whatever the loader wrote on the day the brief was built, and this
+ * sheet reads fields that did not exist for most of the life of that column:
+ * `subjects.gaps` and `moves.readings` / `moves.acted` landed in Block D
+ * wave 1 on 2026-09-18, while `surfaces` has been frozen into documents since
+ * 2026-08-30. Every leadership brief built in that window has an Overview
+ * WITHOUT them — and a bare cast plus `Object.values(overview.subjects.gaps)`
+ * is a `TypeError` inside a server component, which takes the whole document
+ * down on the share link, the in-app viewer, the Studio preview and the PDF
+ * route rather than degrading one sheet.
+ *
+ * The precedent is `isWeeklyData` (lib/reports/viewer.ts), added for exactly
+ * this failure — "the cast below handed `deckSlides` a snapshot with no
+ * sections and `d.sections.forEach` threw inside a server component" — and
+ * `SectionBody` keeps the same rule per borrowed block. This is that rule for
+ * a PACK of blocks.
+ *
+ * It checks the shapes the sheet DEREFERENCES WITHOUT ASKING, and nothing
+ * else: a missing `attention`, a null `ledger` or an empty `rows` are answers
+ * the sheet already prints in words, and a predicate that demanded them would
+ * refuse a reading that renders perfectly well.
+ */
+export function isLeadershipOverview(value: unknown): value is OverviewData {
+  if (!isObject(value)) return false
+  const subjects = value.subjects
+  if (!isObject(subjects) || !isObject(subjects.gaps) || !Array.isArray(subjects.rows)) return false
+  const moves = value.moves
+  if (!isObject(moves) || !Array.isArray(moves.readings)) return false
+  const sentence = value.sentence
+  if (!isObject(sentence) || !isObject(sentence.interpretation)) return false
+  if (!Array.isArray(sentence.interpretation.sentences)) return false
+  return isObject(value.category) && isObject(value.record) && isObject(value.bar)
+}
+
 /**
  * The frozen Overview a leadership brief's sheet is drawn from, or null.
  *
  * NULL IS A REAL ANSWER AND THE DECK USES IT: a brief built before the section
- * maps carries no `surfaces`, and a workspace whose Overview could not be read
- * carries no `overview` inside them. Either way the deck falls back to the
- * cover and the ordinary slides, which is what a stored artefact must keep
- * rendering as.
+ * maps carries no `surfaces`, a workspace whose Overview could not be read
+ * carries no `overview` inside them, and a brief frozen before wave 1 carries
+ * an Overview this sheet cannot read. All three fall back to the cover and the
+ * ordinary slides, which is what a stored artefact must keep rendering as.
  */
 export function leadershipSheetData(data: DocumentSnapshotData): OverviewData | null {
   if (data.template !== 'leadership_brief' && data.role !== 'leadership_brief') return null
   const overview = (data.surfaces ?? {}).overview
-  return overview ? (overview as OverviewData) : null
+  return isLeadershipOverview(overview) ? overview : null
 }
 
 /** The sections the sheet DRAWS, and which therefore print no slide of their
