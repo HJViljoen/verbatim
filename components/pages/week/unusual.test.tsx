@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest'
 import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
-import { render, renderText } from '@/lib/test/render'
+import { markupText, render, renderText } from '@/lib/test/render'
 import type { WeekData } from '@/lib/pages/week'
 import { weekUnusual } from './unusual'
 import { absentReadingFixture, thinFixture, weekFixture } from './fixture'
@@ -39,8 +39,14 @@ describe('WK1 · unusual this week', () => {
     expect(text).toContain('28')
     expect(text).toContain('Objections · of 205 videos this update covered')
     expect(text).toContain('every audience together')
-    expect(text).toContain('13.7% this update against 3.5% before it')
-    expect(text).toContain('a difference of 10.2 points on a band of 4.9')
+    // THE MOCK'S ONE-LINE CLAIM, IN THE HONEST FORM (Block D wave 2). The
+    // artboard asserts "running at 3.1× its usual rate, mostly under Freitag
+    // content"; a bare multiple carries neither n nor band, and nothing
+    // decomposes a flag by audience. What is printed in that slot is the
+    // banded k-of-n the code can actually write — the object, both levels, the
+    // difference and the band it cleared — inside a verdict node.
+    expect(text).toContain('Objections ran at 13.7% of this update against 3.5% across Jun 2026, Jul 2026, Aug 2026 — a difference of 10.2 points, on a band of 4.9.')
+    expect(text).not.toContain('×')
   })
 
   it('names the months the baseline pooled, and which of them were still filling', () => {
@@ -271,5 +277,67 @@ describe('WK1 · unusual this week', () => {
     expect(markup).toContain('<table')
     expect(markup).not.toContain('class=')
     expect(markup).not.toContain('var(--')
+  })
+})
+
+describe('the thirteen-point chart (Block D wave 2)', () => {
+  it('draws one point per update, zeroes included', () => {
+    const markup = render(weekUnusual.render(weekFixture(), 'app', ctx))
+    const d = weekFixture()
+    expect(d.unusual.series!.points).toHaveLength(13)
+    // A point per update, and the zero deliveries are among them: three of
+    // Össur's thirteen found nothing and are drawn on the floor rather than
+    // dropped out of the line.
+    expect(markup.match(/<circle/g)).toHaveLength(13)
+    expect(markup).toContain('<polyline')
+  })
+
+  it('names its axis as updates and never as weeks', () => {
+    // D6: months do not divide into weeks, and this page prints nothing
+    // computed over a week alone. The axis is our own delivery cadence and the
+    // chart says so under itself.
+    const text = renderText(weekUnusual.render(weekFixture(), 'app', ctx))
+    expect(text).toContain('What each update found')
+    expect(text).toContain('13 updates to 13 Sep')
+    expect(text).toContain('each point is one delivery’s own days, never a month')
+    expect(text).not.toContain('per week')
+    expect(text).not.toContain('a typical week')
+  })
+
+  it('labels the band in videos, beside a block whose other band is in points', () => {
+    // Two unlabelled bands on one block is how 4.9 points gets read as five
+    // videos. This one says "videos"; the flag's says "points".
+    const text = renderText(weekUnusual.render(weekFixture(), 'app', ctx))
+    expect(text).toContain('1–559 videos')
+    expect(text).toContain('3 of them found nothing at all, drawn and left out of the range')
+    expect(text).toContain('on a band of 4.9')
+  })
+
+  it('draws no chart in an email, and keeps the words there', () => {
+    const markup = render(weekUnusual.render(weekFixture(), 'email', ctx))
+    expect(markup).not.toContain('<svg')
+    expect(markup).not.toContain('<polyline')
+    expect(renderText(weekUnusual.render(weekFixture(), 'email', ctx)))
+      .toContain('618 videos this update found')
+  })
+
+  it('draws nothing at all below two points', () => {
+    const d = weekFixture()
+    const one = { ...d, unusual: { ...d.unusual, series: { ...d.unusual.series!, points: d.unusual.series!.points.slice(-1) } } }
+    expect(render(weekUnusual.render(one, 'app', ctx))).not.toContain('<svg')
+  })
+
+  it('shades no band where no band was drawn', () => {
+    // `updateBand` refuses below its minimum, and a shaded guess behind a line
+    // is a claim about what is typical that nothing measured.
+    const d = weekFixture()
+    const short = {
+      ...d,
+      unusual: { ...d.unusual, series: { ...d.unusual.series!, band: null, median: null } },
+    }
+    const markup = render(weekUnusual.render(short, 'app', ctx))
+    expect(markup).toContain('<svg')
+    expect(markup).not.toContain('<rect')
+    expect(markupText(markup)).toContain('too few updates behind it to say what is typical')
   })
 })

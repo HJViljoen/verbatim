@@ -1,5 +1,7 @@
 import type { Block } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
+import { TileColumns } from '@/components/shell/page-grid'
+import { UpdateSeriesChart } from './series-chart'
 import { BlockQuote } from '@/components/blocks/quote'
 import { BlockStat } from '@/components/blocks/stat'
 import { TokenProse } from '@/components/blocks/prose'
@@ -50,17 +52,20 @@ export const weekUnusual: Block<WeekData> = {
   render(data, mode = 'app') {
     const u = data.unusual
     const empty = weekUnusual.emptyState(data)
-
-    return (
-      <BlockFrame
-        title={weekUnusual.title}
-        question={weekUnusual.question}
-        mode={mode}
-        meta={u.setSize != null ? `${fmtInt(u.setSize)} objects watched · ${fmtInt(u.tested ?? 0)} testable` : undefined}
-      >
-        {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
-
+    const email = mode === 'email'
+    // THE LEFT HALF OF THE MOCK'S §1: what each update brought in, drawn and
+    // then said in words. The words are printed in EVERY mode — an email
+    // client is no place for an SVG, and the legend is the half of a chart
+    // that carries the numbers anyway.
+    const left = (
+      <div className={email ? undefined : 'flex min-w-0 flex-col gap-2'}>
+        {!email && u.series && u.series.points.length > 1 ? <UpdateSeriesChart series={u.series} /> : null}
         <Series series={u.series} mode={mode} />
+      </div>
+    )
+    const right = (
+      <div className={email ? undefined : 'flex min-w-0 flex-col gap-2.5'}>
+        {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
 
         {u.state === 'baseline_forming' ? (
           <Line mode={mode}>{baselineFormingLine(u.baseline!, data.month)}</Line>
@@ -92,9 +97,25 @@ export const weekUnusual: Block<WeekData> = {
             {fmtInt(u.flaggedCount)} cleared the band this update; the {fmtInt(u.flags.length)} largest are printed.
           </Line>
         ) : null}
-        {u.state === 'flagged' && u.flaggedCount <= u.flags.length ? (
-          <Line mode={mode}>Nothing else was unusual this update.</Line>
-        ) : null}
+      </div>
+    )
+
+    return (
+      <BlockFrame
+        title={weekUnusual.title}
+        question={weekUnusual.question}
+        mode={mode}
+        meta={headerMeta(u, data.windowVideos)}
+        // THE MOCK'S HAIRLINE FOOTER, with its right-hand note. The left-hand
+        // "See the 38 videos behind this →" has no destination in this product:
+        // a flag's object is a KIND or a THEME, and no route lists the videos
+        // behind one. The evidence a reader can actually open is on the flag's
+        // own quotes, which carry their citation links.
+        footerNote={u.state === 'flagged' && u.flaggedCount <= u.flags.length
+          ? 'nothing else was unusual this update'
+          : undefined}
+      >
+        {email ? <>{left}{right}</> : <TileColumns of={2}>{left}{right}</TileColumns>}
       </BlockFrame>
     )
   },
@@ -146,6 +167,24 @@ export const weekUnusual: Block<WeekData> = {
   },
 }
 
+/**
+ * The header's own line — the mock's "one theme cleared its band · of 312
+ * videos this week".
+ *
+ * BOTH HALVES ARE REAL OR NEITHER IS PRINTED. The count of what cleared comes
+ * off the check's own row; the denominator is the windowed read, which is not
+ * installed on either tenant today, so where it is absent the line states the
+ * count and the SET IT WAS DRAWN FROM instead of a denominator it does not
+ * have. "Objects watched · testable" is kept for every state but `flagged`,
+ * because on a quiet update that pair is the only evidence the check ran at all.
+ */
+function headerMeta(u: WeekData['unusual'], windowVideos: number | null): string | undefined {
+  const watched = u.setSize != null ? `${fmtInt(u.setSize)} objects watched · ${fmtInt(u.tested ?? 0)} testable` : undefined
+  if (u.state !== 'flagged' || u.flaggedCount === 0) return watched
+  const cleared = `${fmtInt(u.flaggedCount)} of ${fmtInt(u.tested ?? u.flaggedCount)} tested cleared its band`
+  return windowVideos != null ? `${cleared} · of ${fmtInt(windowVideos)} videos this update` : cleared
+}
+
 /** One flag, in full: the object, the week, the months behind it, the band,
  *  the n, and the explanation labelled as an interpretation. */
 function Flag({ flag, n, mode, figures }: { flag: UnusualFlag; n: number; mode: 'app' | 'print' | 'email'; figures: FigureTable }) {
@@ -156,6 +195,26 @@ function Flag({ flag, n, mode, figures }: { flag: UnusualFlag; n: number; mode: 
 
   return (
     <div className={email ? undefined : 'flex min-w-0 flex-col gap-2'} style={email ? { marginTop: n > 1 ? 14 : 0 } : undefined}>
+      {/* THE MOCK'S ONE-LINE ASSERTION, IN ITS SLOT AND IN THE HONEST FORM.
+          The artboard reads "“Zips failing after a year” is running at 3.1× its
+          usual rate, mostly under Freitag content." Both halves are refused:
+          a bare multiple is a movement claim with neither n nor band (D3), and
+          nothing decomposes a flag by the audience it sat under, so "mostly
+          under Freitag content" has no field at all. What the code can write is
+          the banded k-of-n — the level, the level behind it, the difference and
+          the band it had to clear — and it is written here, at the mock's size
+          and weight, as the block's lead.
+          SANS, NOT THE ARTBOARD'S SERIF. Serif is speech in this product
+          (P0's ruling, the in-app quote); a claim the code composed is not
+          speech. Recorded as a deviation. */}
+      <span
+        data-copy="verdict"
+        className={email ? undefined : 'text-[15px] font-medium leading-[1.35] tracking-[-0.005em] text-foreground [text-wrap:pretty]'}
+        style={email ? { fontFamily: FONT.sans, fontSize: 14, fontWeight: 600, lineHeight: 1.35, color: EMAIL.ink } : undefined}
+      >
+        {flag.label} ran at {fmtPct(weekPct, 1)} of this update against {fmtPct(basePct, 1)} across {months} — a difference of{' '}
+        {flag.changePts.toFixed(1)} points, on a band of {flag.bandPts.toFixed(1)}.
+      </span>
       <BlockStat
         mode={mode}
         size="lg"
@@ -164,18 +223,6 @@ function Flag({ flag, n, mode, figures }: { flag: UnusualFlag; n: number; mode: 
         level={{ word: flag.label, of: `of ${fmtInt(flag.week.n)} videos this update covered` }}
         base={`${flag.denominator} · against ${fmtPct(basePct, 1)} across ${months}`}
       />
-      {/* THE DIFFERENCE AND THE BAND IT CLEARED, INSIDE A VERDICT NODE. The
-          number is printed as points because that is what the comparison
-          measured; the band is printed beside it because a difference without
-          the width it had to clear is a claim without its evidence. */}
-      <span
-        data-copy="verdict"
-        className={email ? undefined : 'text-[12px] font-medium text-foreground'}
-        style={email ? { fontFamily: FONT.sans, fontSize: 12, fontWeight: 600, color: EMAIL.ink } : undefined}
-      >
-        {fmtPct(weekPct, 1)} this update against {fmtPct(basePct, 1)} before it — a difference of{' '}
-        {flag.changePts.toFixed(1)} points on a band of {flag.bandPts.toFixed(1)}
-      </span>
       {/* THE OTHER CAVEAT ABOUT THE SAME THREE MONTHS. `baseline_filling_months`
           says the baseline is still moving; `baseline_regime` says whether the
           three were read under one grouping at all, and the check reports the
