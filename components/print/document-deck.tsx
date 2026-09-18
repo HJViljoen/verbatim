@@ -919,6 +919,208 @@ function LanguagePage({ page }: { page: DocPage }) {
   )
 }
 
+// ── who is moving, and which way (sales.p5) ────────────────────────────────
+
+/** "375 of 1,388 category videos" — the figure and the population it is a
+ *  share of, as one level node, under the artboard's dotted rule.
+ *
+ *  THE PAIR IS THE LEVEL, which is `FigureCell`'s rule applied to a sentence
+ *  rather than to a cell: a bare "375" is a figure and "375 of 1,388 category
+ *  videos" is a measurement, and rule (b) reads the whole node. The dotted
+ *  underline is the artboard's own device for "this number has a denominator
+ *  under it". */
+function Counted({ k, n, of }: { k: number | string; n: number | string; of: string }) {
+  return (
+    <span data-copy="level" className="text-foreground underline decoration-muted-foreground decoration-dotted decoration-1 underline-offset-[3px]">
+      <span className="font-mono tabular-nums">{k}</span> of <span className="font-mono tabular-nums">{n}</span> {of}
+    </span>
+  )
+}
+
+/**
+ * The switching sheet (`sales.p5`).
+ *
+ * WHAT THE ARTBOARD DRAWS AND WHAT IS ACTUALLY HELD. The mock's sheet is "12
+ * videos · 7 toward Sealand · 5 away", a two-segment bar, a reconciliation
+ * sentence, and two quotes labelled Toward and Away with a counted line under
+ * each. Four of those five are `switchingFigure` and `crosscheckLine`,
+ * verbatim. The fifth is not: NOTHING IN THE PRODUCT LABELS A QUOTE WITH A
+ * LEAN. The lean is `videos.sentiment` on the video, a quote belongs to a
+ * comment under it, and inventing the join would be a direction claim about a
+ * customer's words that nobody measured. So the sheet prints the split, the
+ * bar, the pool and the refusal — and says, once, that it cannot label a
+ * voice.
+ *
+ * AND THE BASIS IS ON THE FACE OF IT (D9). This is the one figure in the
+ * package that is not comment-dated: a video that names both is a property of
+ * the VIDEO, so it is dated by `upload_date` — a third clock — and
+ * `SwitchingFigure.basis` is the sentence that says so, printed beside the
+ * number rather than in the method page.
+ */
+function SwitchingPage({ data }: { data: DocumentSnapshotData }) {
+  const f = data.slideFigures?.switching ?? null
+  if (!f) return null
+  const pct = (k: number) => (f.pool > 0 ? (k / f.pool) * 100 : 0)
+  return (
+    <div className="grid h-full min-h-0 grid-cols-[7fr_5fr] gap-x-12">
+      <div className="flex min-h-0 flex-col gap-4">
+        <div className="flex items-end gap-6">
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <span className="flex items-baseline gap-2">
+              <span data-copy="figure" className="font-mono text-[38px] font-medium leading-none tracking-[-0.02em] tabular-nums text-foreground">{fmtCount(f.pool)}</span>
+              <span className="text-[12px] font-medium text-muted-foreground">{f.pool === 1 ? 'video' : 'videos'}</span>
+            </span>
+            {/* A COUNT, AND NO "of N" (D8). The artboard prints "12 of 1,388
+                category videos", which is a numerator over somebody else's
+                denominator twice over: the pool is the tenant's OWN videos,
+                and it is dated by `upload_date` while the category's month is
+                dated by the comment. There is no honest denominator for it, so
+                it is printed as the count it is and the population is named in
+                words. The SPLIT below has one — the pool itself — and carries
+                it. */}
+            <p className="text-[12.5px] text-muted-foreground">of {data.company}&rsquo;s own videos this month, and each of them also named a tracked rival</p>
+          </div>
+          {/* The badge, and nothing beside it. The mock writes "no earlier
+              figure for this one", which is a fifth refusal word the product's
+              closed vocabulary does not have (`MOVEMENT_WORDS`). */}
+          <span className="ml-auto shrink-0"><MovementBadge verdict={f.verdict} unit="pts" /></span>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <div className="flex h-[10px] w-full shrink-0 gap-0.5 overflow-hidden rounded-full bg-neutral-seg">
+            <span className="block h-full rounded-l-full bg-primary" style={{ width: `${pct(f.toward.k)}%` }} />
+            <span className="block h-full rounded-r-full bg-negative" style={{ width: `${pct(f.away.k)}%` }} />
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-primary" aria-hidden />
+              <span>Toward {data.company} <Counted k={fmtCount(f.toward.k)} n={fmtCount(f.pool)} of="" /></span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-negative" aria-hidden />
+              <span>Away from {data.company} <Counted k={fmtCount(f.away.k)} n={fmtCount(f.pool)} of="" /></span>
+            </span>
+          </div>
+          {f.unread && <p className="text-[12.5px] leading-[1.45] text-muted-foreground">{f.unread}</p>}
+        </div>
+
+        <p className="border-t border-border/70 pt-3 text-[12.5px] leading-[1.45] text-muted-foreground">
+          {/* THE BASIS, BESIDE THE NUMBER. A third clock on a month-stamped
+              sheet, and a reader who is not told will read it as the month's. */}
+          Counted over {f.audienceLabel}, {f.basis}.
+        </p>
+        {/* The one thing the artboard asks for that nothing measured. */}
+        <p className="text-[12.5px] leading-[1.45] text-muted-foreground">
+          Which way a video leaned is read from what was stored about the video, not from any one comment under it, so no quote on this sheet is labelled toward or away.
+        </p>
+      </div>
+
+      <div className={`${CARD} flex min-h-0 flex-col gap-3.5 px-6 py-5`}>
+        <Eyebrow>How to read these</Eyebrow>
+        <p className="font-mono text-[12px] leading-[1.5] text-muted-foreground">
+          <span className="text-foreground">{fmtCount(f.toward.k)}</span> toward · <span className="text-foreground">{fmtCount(f.away.k)}</span> away · <span className="text-foreground">{fmtCount(f.neither.k)}</span> neither · <span className="text-foreground">{fmtCount(f.pool)}</span> in all
+        </p>
+        {data.slideFigures?.crosscheck && (
+          <p className={BODY_SM}>{data.slideFigures.crosscheck}</p>
+        )}
+        <div className="mt-auto flex flex-col gap-1.5 border-t border-border pt-3">
+          <Eyebrow>Measured on</Eyebrow>
+          {/* `measurement_changed` rides this figure by construction
+              (figures.ts): `videos.sentiment` is the one production column two
+              writers have written with two meanings. */}
+          <p className="text-[12.5px] leading-[1.45] text-muted-foreground">
+            What was stored about each video. That column has been written by two different readings of tone, so the split is a lead rather than a rule.
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── answers you can use (sales.p6) ─────────────────────────────────────────
+
+/**
+ * The "Say this" sheet (`sales.p6`).
+ *
+ * THE ONE PLACE THE MOCK ASKS FOR PROSE THE PRODUCT DOES NOT WRITE. Its card
+ * is objection → a scripted sentence → a "Because" list. The objection and
+ * every figure under it are counted and printed; the SENTENCE is a model's and
+ * there is no drafted one on any workspace, so the row prints its counts and
+ * no script rather than a sentence this code invented. `ScriptedLine.say` is
+ * already scrubbed under `document_write` where a draft exists, so a digit the
+ * model typed has already cost its sentence before it reaches here.
+ *
+ * "BECAUSE" AND "ALSO RUNNING" ARE TWO LISTS BECAUSE THEY ARE TWO CLAIMS.
+ * Because is causal and the product refuses causal claims it has not measured;
+ * the three biggest subjects of a category month are not reasons for a KIND's
+ * share — different denominators, no measured relation, and the same three
+ * would sit under every objection whatever it was. They are printed as what
+ * they are.
+ *
+ * ONE ROW, AND IT SAYS WHY. `theme_registry` carries no kind column, so the
+ * only place an objection is counted on this corpus is the aggregate kind
+ * share: one row, with no registry identity, rather than several the reading
+ * cannot substantiate.
+ */
+function ScriptedPage({ data }: { data: DocumentSnapshotData }) {
+  const lines = data.slideFigures?.scripted ?? []
+  if (lines.length === 0) return null
+  const list = (label: string, rows: { label: string; value: { k: number; n: number } }[]) => (
+    <>
+      <p className="font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">{label}</p>
+      <ul className="flex flex-col gap-[7px]">
+        {rows.map((b, i) => (
+          <li key={i} className="flex gap-2.5 text-[13px] leading-[1.45] text-foreground">
+            <span className="mt-[7px] inline-block h-[6px] w-[6px] shrink-0 rounded-full bg-primary" aria-hidden />
+            <span>{b.label} — <Counted k={fmtCount(b.value.k)} n={fmtCount(b.value.n)} of="videos" /></span>
+          </li>
+        ))}
+      </ul>
+    </>
+  )
+  return (
+    <div className="grid h-full min-h-0 grid-cols-3 items-stretch gap-x-5">
+      {lines.slice(0, 3).map((line, i) => (
+        <div key={i} className={`${CARD} flex min-h-0 flex-col gap-3 px-[22px] py-5`}>
+          <div className="flex flex-col gap-1">
+            <h2 className="text-[15.5px] font-semibold text-foreground">{line.objection.label}</h2>
+            <p className="text-[12.5px] text-muted-foreground">
+              <Counted k={fmtCount(line.objection.value.k)} n={fmtCount(line.objection.value.n)} of="videos" />
+            </p>
+          </div>
+          <p className="font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">Say this</p>
+          {line.say
+            ? <blockquote className="m-0 rounded-md bg-inner px-3.5 py-3 font-serif text-[14px] italic leading-[1.5] text-secondary-foreground">{line.say}</blockquote>
+            : <p className={BODY_SM}>No sentence has been written for this one yet. The counts under it are the reading; the line to say is not something this brief will make up.</p>}
+          {line.because.length > 0 && list('Because', line.because)}
+          {line.alsoRunning.length > 0 && list('Also running this month', line.alsoRunning)}
+          {line.quote?.text && (
+            <div className="mt-1">
+              {/* A SIBLING NODE WITH ITS OWN REF, never a span inside scrubbed
+                  prose: rule (c) may not police a commenter's words, and a
+                  number inside a quotation is still refused. */}
+              <QuoteBlock quote={line.quote} mode="print" />
+            </div>
+          )}
+          <p className="mt-auto border-t border-border pt-2.5 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">
+            {line.objection.source === 'kind'
+              ? 'Counted as a kind of thing said, over the whole month — not as a theme of the register.'
+              : 'Counted as a theme of the register.'}
+          </p>
+        </div>
+      ))}
+      {lines.length < 3 && (
+        <div className="flex min-h-0 flex-col justify-end gap-2 self-stretch">
+          <Eyebrow>Why there is one of these</Eyebrow>
+          <p className={BODY_SM}>
+            An objection is counted as a kind of thing said, and the register that names themes carries no kind. So this sheet has one row per month rather than one per objection, and it will have more the day a theme can be an objection.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── method ─────────────────────────────────────────────────────────────────
 
 function MethodPage({ page, data }: { page: DocPage; data: DocumentSnapshotData }) {
@@ -971,6 +1173,8 @@ function PageBody({ page, data }: { page: DocPage; data: DocumentSnapshotData })
     case 'say_hear': return <SayHearPage page={page} figures={figures} company={data.company} />
     case 'asked': return <AskedPage page={page} />
     case 'language': return <LanguagePage page={page} />
+    case 'switching': return <SwitchingPage data={data} />
+    case 'scripted': return <ScriptedPage data={data} />
     case 'method': return <MethodPage page={page} data={data} />
     default: return null
   }

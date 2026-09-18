@@ -167,23 +167,37 @@ export const LEADERSHIP_MAP: readonly BriefEntry[] = [
 ]
 
 // ── Sales — the customers' words, by subject and by rival ──────────────────
+//
+// THE ARTBOARD'S ORDER AND THE ARTBOARD'S NAMES (Block D wave 2, E-sales).
+// `artboards/SalesBrief.dc.html` is seven sheets: cover · what they are
+// pushing back on · what sells, in their words · what they complain about with
+// each rival · who is moving, and which way · answers you can use · method.
+// The ids do not move — a section id names a slide inside a built brief and an
+// edit in `report_edits` — but the ORDER and the TITLES are the reader's, and
+// they were neither the mock's order nor its words.
+//
+// AND THE BUILD KEEPS WHAT THE MOCK HAS NOT GOT. The overview sheet, the
+// finding pages and the language page have no counterpart on the artboard and
+// are not dropped for it: a finding is the argument this brief is written to
+// make, and "Not settled this update" is the product saying what it could not
+// answer. A blind port would have deleted all three.
 
 export const SALES_MAP: readonly BriefEntry[] = [
   page('in_short'),
   page('finding'),
   block({
-    id: 'sl.voices', block: 'subjects.voices', surface: 'subjects',
-    title: 'In their words, by subject', framing: 'What customers actually said about each subject this month.',
+    id: 'sl.unanswered', block: 'subjects.unanswered', surface: 'subjects',
+    title: 'What they are pushing back on', framing: 'The questions the conversation puts and does not settle, most heard first.',
     needs: ['subject-set'],
   }),
   block({
-    id: 'sl.unanswered', block: 'subjects.unanswered', surface: 'subjects',
-    title: 'What they asked and nobody answered', framing: 'The questions the conversation puts and does not settle.',
+    id: 'sl.voices', block: 'subjects.voices', surface: 'subjects',
+    title: 'What sells, in their words', framing: 'What customers actually said about each subject this month — say it back, in their words.',
     needs: ['subject-set'],
   }),
   block({
     id: 'sl.rivals', block: 'competitive.rivals', surface: 'competitive',
-    title: 'By rival', framing: 'What is said about each rival, in the same month, with its denominator.',
+    title: 'What they complain about with each rival', framing: 'What is said about each rival, in the same month, with its denominator.',
     needs: ['months-of-history'],
     // `sales.p4.untracked` — the mock's readiness line. NOT a `needs`: this
     // block reads the category corpus either way, and refusing it would drop a
@@ -195,6 +209,8 @@ export const SALES_MAP: readonly BriefEntry[] = [
     title: 'What buyers compare', framing: 'The comparisons buyers make out loud, and who they name.',
     needs: [],
   }),
+  page('switching'),
+  page('scripted'),
   page('language'),
   page('method'),
 ]

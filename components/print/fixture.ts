@@ -41,7 +41,7 @@ const FINDING: DocPage = {
     {
       id: 'f1.saw', field: 'saw',
       text: 'Price comes up more than anything else, but it almost never comes up alone: it is argued against how long the bag lasts, and the second half of that sentence is the one the category keeps returning to.\n\nThe durability question is asked in the customers’ own words, and it is asked of every brand in the set.',
-      quote: { ref: 'c:q1', text: 'Three winters on the bike and the seams are still perfect. The zip, less so.', platform: 'tiktok', date: '2026-09-14', where: 'under a category video' } as DocPage['blocks'][number]['quote'],
+      quote: { ref: 'c:q1', text: 'Three winters on the bike and the seams are still perfect. The zip, less so.' },
     },
     { id: 'f1.heard', field: 'heard', text: 'Heard across the category and in your own audience.' },
     { id: 'f1.means', field: 'means', text: 'Lead with the thing you can show: a bag that came through the wet, and the repair that follows it.' },
@@ -104,19 +104,45 @@ const LANGUAGE: DocPage = {
 
 const SURFACES = () => ({ subjects: subjectsFixture(), competitive: competitiveFixture() })
 
+/** SALES_MAP's own order, which is the artboard's. The composer builds this
+ *  list; it is written out here so a reorder of the map that this fixture does
+ *  not follow shows up as a failing render test rather than as a sheet in the
+ *  wrong place. */
 const LAYOUT: DocLayoutEntry[] = [
   { kind: 'page', id: 'in_short' },
   { kind: 'page', id: 'f1' },
-  { kind: 'section', id: 'sl.voices' },
   { kind: 'section', id: 'sl.unanswered' },
+  { kind: 'section', id: 'sl.voices' },
   { kind: 'section', id: 'sl.rivals' },
   { kind: 'section', id: 'sl.questions' },
+  { kind: 'page', id: 'switching' },
+  { kind: 'page', id: 'scripted' },
   { kind: 'page', id: 'language' },
   { kind: 'page', id: 'method' },
 ]
 
+const SWITCHING: DocPage = { id: 'switching', kind: 'switching', title: 'Who is moving, and which way', blocks: [] }
+const SCRIPTED: DocPage = { id: 'scripted', kind: 'scripted', title: 'Answers you can use', blocks: [] }
+
+/**
+ * The composer's own rule, reproduced: a page whose only material is missing
+ * DROPS OUT rather than printing an empty sheet (`compose.ts`). The two
+ * counted sheets have no blocks, so their material is the slide figures — and
+ * a fixture that kept them in `pages` while the figures said there was nothing
+ * would be testing a document the build cannot produce.
+ */
+function countedPages(figures: DocumentSnapshotData['slideFigures']): { pages: DocPage[]; layout: DocLayoutEntry[] } {
+  const has = { switching: Boolean(figures?.switching), scripted: Boolean(figures?.scripted.length) }
+  const keep = (id: string) => (id === 'switching' ? has.switching : id === 'scripted' ? has.scripted : true)
+  return {
+    pages: [IN_SHORT, FINDING, SWITCHING, SCRIPTED, LANGUAGE, METHOD].filter((p) => keep(p.id)),
+    layout: LAYOUT.filter((e) => e.kind !== 'page' || keep(e.id)),
+  }
+}
+
 function base(over: Partial<DocumentSnapshotData> = {}): DocumentSnapshotData {
   const surfaces = SURFACES()
+  const counted = countedPages(over.slideFigures === undefined ? briefFiguresFixture() : over.slideFigures)
   return {
     version: 1,
     kind: 'document',
@@ -150,9 +176,9 @@ function base(over: Partial<DocumentSnapshotData> = {}): DocumentSnapshotData {
     },
     sections: briefSections(SALES_MAP, surfaces, []),
     surfaces,
-    layout: LAYOUT,
+    layout: counted.layout,
     slideFigures: briefFiguresFixture(),
-    pages: [IN_SHORT, FINDING, LANGUAGE, METHOD],
+    pages: counted.pages,
     role: 'sales_brief',
     lens: { means: 'What it means for a sale', short: 'for a sale' },
     method: {

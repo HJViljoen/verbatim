@@ -445,6 +445,21 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
       return [{ id: 'language', kind: 'language' as const, title: PAGE_TITLE.language, blocks: [{ id: 'language.care', field: 'care' as const, text: '', items: care }] }]
     },
 
+    // ── the two counted sheets (E-sales, sales.p5 / sales.p6) ────────────
+    // NO BLOCK, AND THAT IS THE DESIGN. Every line on these two sheets is a
+    // count the reading already made and froze onto `slideFigures`; the deck
+    // draws them from there. A page with no blocks writes nothing, is asked of
+    // no model and costs no tokens — and a sheet whose material is missing
+    // drops out rather than printing an empty one, the same rule the say-hear
+    // and asked builders follow.
+    switching: () => (s.slideFigures?.switching
+      ? [{ id: 'switching', kind: 'switching' as const, title: PAGE_TITLE.switching, blocks: [] }]
+      : []),
+
+    scripted: () => (s.slideFigures?.scripted.length
+      ? [{ id: 'scripted', kind: 'scripted' as const, title: PAGE_TITLE.scripted, blocks: [] }]
+      : []),
+
     method: () => {
       blocksW.push({ blockId: 'method.method', basedOn: [] })
       return [{ id: 'method', kind: 'method' as const, title: PAGE_TITLE.method, blocks: [{ id: 'method.method', field: 'method' as const, text: '', items: methodItems(s, a.period, thin, s.updatesCount, printedKinds, a.settings.brief) }] }]

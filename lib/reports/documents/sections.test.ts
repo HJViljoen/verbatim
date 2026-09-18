@@ -121,7 +121,8 @@ describe('missingInputs', () => {
   it('one input needed by two sections is named once, with both', () => {
     const missing = missingInputs(briefMap('sales_brief'), READINESS)
     expect(missing).toHaveLength(1)
-    expect(missing[0].sections).toEqual(['In their words, by subject', 'What they asked and nobody answered'])
+    // The sales map's own order, which is the artboard's (E-sales).
+    expect(missing[0].sections).toEqual(['What they are pushing back on', 'What sells, in their words'])
   })
 })
 
@@ -198,7 +199,7 @@ describe('untrackedNotes — the readiness NOTE rule (sales.p4.untracked)', () =
     // The SAME row is `partial`, so it is deliberately NOT a missing input:
     // the two functions answer two different questions about one row.
     expect(missingInputs(briefMap('sales_brief'), READINESS).map((m) => m.id)).not.toContain('rival-accounts')
-    expect(notes[0].sections).toEqual(['By rival'])
+    expect(notes[0].sections).toEqual(['What they complain about with each rival'])
   })
 
   it('says nothing about an input that exists', () => {

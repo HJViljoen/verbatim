@@ -96,7 +96,16 @@ export function documentSettings(raw: Partial<DocumentSettings> | null | undefin
 
 // ── the document ──────────────────────────────────────────────────────────
 
-export type DocPageKind = 'in_short' | 'finding' | 'competitor' | 'standing' | 'say_hear' | 'asked' | 'personas' | 'language' | 'method'
+export type DocPageKind =
+  | 'in_short' | 'finding' | 'competitor' | 'standing' | 'say_hear' | 'asked' | 'personas' | 'language' | 'method'
+  // Block D wave 2 (E-sales): two sheets drawn ENTIRELY from `slideFigures`
+  // and carrying no model block at all — `sales.p5` and `sales.p6` of the
+  // artboard. They are page kinds rather than borrowed block sections because
+  // no surface draws either one: wave 1 counted them for the brief and for
+  // nothing else. The writer is never asked for them (`writerSchema`'s switch
+  // has no arm for a kind with no field), which is the point: a sheet whose
+  // every line is counted cannot be written.
+  | 'switching' | 'scripted'
 
 /** Every field a block may carry; the skeleton says which page has which. */
 export type DocField =

@@ -493,6 +493,12 @@ export const PAGE_FIELDS: Record<DocPageKind, string[]> = {
   asked: ['asked'],
   personas: ['persona'],
   language: ['care'],
+  // NO FIELDS, AND NOT AN OVERSIGHT (E-sales). Every line on these two sheets
+  // is a count the reading already made; there is nothing for a model to
+  // write, so there is no field for it to write into and no key for it in the
+  // writer schema.
+  switching: [],
+  scripted: [],
   method: ['method'],
 }
 
@@ -506,6 +512,9 @@ export const PAGE_TITLE: Record<DocPageKind, string> = {
   asked: 'What the audience asks',
   personas: 'Who is buying',
   language: 'Language to handle with care',
+  // The artboard's own words for the two counted sheets (E-sales).
+  switching: 'Who is moving, and which way',
+  scripted: 'Answers you can use',
   method: 'About this brief',
 }
 

@@ -19,8 +19,19 @@ import {
 // and where the honest form differs it names the deviation.
 
 const deck = (data = salesBriefFixture()) => render(<DocumentDeck data={data} date="28 Sep 2026" />)
-const sheets = (html: string) => html.split('<section class="vb-slide"').slice(1)
 const words = (html: string) => markupText(html)
+/** The sheets of a rendered deck, in order — one `<section class="vb-slide">`
+ *  each, the opening tag dropped so a sheet starts at its own first word. */
+const sheets = (html: string) =>
+  html.split('<section class="vb-slide"').slice(1).map((x) => x.slice(x.indexOf('>') + 1))
+/** A sheet's own title, from the header (or the cover's 58px h1). Matching on
+ *  body text picks the COVER for half of these, because its table of contents
+ *  names every sheet in the document. */
+const titleOf = (sheet: string) => words(/<h1[^>]*>([\s\S]*?)<\/h1>/.exec(sheet)?.[1] ?? '')
+const sheetNamed = (html: string, title: string) => html_find(sheets(html), title)
+function html_find(all: string[], title: string): string {
+  return all.find((x) => titleOf(x) === title) ?? ''
+}
 
 describe('sales.p1 — the cover', () => {
   const cover = () => sheets(deck())[0]
@@ -35,7 +46,7 @@ describe('sales.p1 — the cover', () => {
   // ONE mono sub-line, in the mock's own order: month · company · short date ·
   // page count. The build printed two lines and neither named the company.
   it('prints one mono sub-line carrying the month, the company and the short date', () => {
-    expect(words(cover())).toContain('September 2026 · Sealand · as at 28 Sep · 9 pages')
+    expect(words(cover())).toContain('September 2026 · Sealand · as at 28 Sep · 11 pages')
   })
 
   // `sales.p1.summary`: on the cover, where the artboard draws it — and its
@@ -61,7 +72,7 @@ describe('sales.p1 — the cover', () => {
     const w = words(cover())
     expect(w).toContain('In this brief')
     expect(w).toContain('2 Overview')
-    expect(w).toContain('9 About this brief')
+    expect(w).toContain('11 About this brief')
   })
 
   // `sales.p1.stats`: three tiles, not the one a seeded month left.
@@ -92,7 +103,7 @@ describe('sales.p1 — the cover', () => {
   it('carries the footer and numbers itself 1 of N', () => {
     const w = words(cover())
     expect(w).toContain('Created by Sealand with Verbatim')
-    expect(w).toContain('1 / 9')
+    expect(w).toContain('1 / 11')
   })
 
   // The stamp rides every sheet including this one, because a reader of a PDF
@@ -116,5 +127,114 @@ describe('sales.p1 — the cover', () => {
     expect(w).toContain('Sales brief')
     expect(w).toContain('2,359 comments read, on 1,388 videos')
     expect(w).not.toContain('name a switch between brands')
+  })
+})
+
+// ── sales.p5 — who is moving, and which way ───────────────────────────────
+
+describe('sales.p5 — the switching sheet', () => {
+  const sheet = (data = salesBriefFixture()) => sheetNamed(deck(data), 'Who is moving, and which way')
+
+  it('prints the pool, the split and the bar', () => {
+    const w = words(sheet())
+    expect(w).toContain('120 videos')
+    expect(w).toContain('Toward Sealand 64 of 120')
+    expect(w).toContain('Away from Sealand 22 of 120')
+    expect(sheet()).toContain('bg-negative')
+  })
+
+  // D8: the artboard prints "12 of 1,388 category videos", which is the
+  // tenant's own numerator over the category's denominator, on two different
+  // clocks. The pool has no honest denominator, so it is a count.
+  it('gives the pool no denominator it does not have', () => {
+    const w = words(sheet())
+    expect(w).toContain('of Sealand’s own videos this month')
+    expect(w).not.toContain('120 of 1,388')
+  })
+
+  // D9: the one figure in the package that is not comment-dated says so
+  // beside itself, not on the method page.
+  it('names the clock the pool is on, on the face of the sheet', () => {
+    expect(words(sheet())).toContain('dated by when each video was posted')
+  })
+
+  // The refusal is the closed vocabulary's word. The mock's "no earlier figure
+  // for this one" is a fifth refusal word that neither `MOVEMENT_WORDS` nor
+  // `RefusedReason` has.
+  it('refuses in the product’s own words', () => {
+    expect(words(sheet())).toContain('too few to compare')
+    expect(words(sheet())).not.toContain('no earlier figure for this one')
+  })
+
+  it('says what nothing measured, rather than labelling a voice', () => {
+    expect(words(sheet())).toContain('no quote on this sheet is labelled toward or away')
+  })
+
+  // The two populations are put beside each other and no arithmetic is drawn
+  // between them — `crosscheckLine`'s whole point.
+  it('carries the crosscheck with both denominators', () => {
+    expect(words(sheet())).toContain('Two populations, two denominators')
+  })
+
+  // `measurement_changed` rides this figure by construction.
+  it('says the tone column has been written twice', () => {
+    expect(words(sheet())).toContain('two different readings of tone')
+  })
+
+  // A sheet whose material is missing is not printed at all — the composer's
+  // own rule, and the deck must not draw a hole either.
+  it('is absent where nothing named both', () => {
+    expect(sheetNamed(deck(salesBriefUnreadFixture()), 'Who is moving, and which way')).toBe('')
+  })
+})
+
+// ── sales.p6 — answers you can use ────────────────────────────────────────
+
+describe('sales.p6 — the “Say this” sheet', () => {
+  const sheet = (data = salesBriefFixture()) => sheetNamed(deck(data), 'Answers you can use')
+
+  it('heads the row with the objection and its denominator', () => {
+    const w = words(sheet())
+    expect(w).toContain('Pushing back')
+    expect(w).toContain('28 of 205 videos')
+  })
+
+  // The one place the mock asks for prose the product does not write. Writing
+  // one needs a paid model call; the row prints its counts and no script.
+  it('prints no sentence it has not been given', () => {
+    expect(words(sheet())).toContain('No sentence has been written for this one yet')
+  })
+
+  // "Because" is a causal claim and the three biggest subjects of a category
+  // month are not reasons for a kind's share. They are printed as what they
+  // are, each with its own n.
+  it('prints counted context under “Also running”, never under “Because”', () => {
+    const w = words(sheet())
+    expect(w).toContain('Also running this month')
+    expect(w).toContain('Durability — 46 of 205 videos')
+    expect(w).not.toContain('Because')
+  })
+
+  // One row, and the sheet says why rather than leaving a reader to wonder
+  // where the other three objections went.
+  it('says why there is one row', () => {
+    expect(words(sheet())).toContain('the register that names themes carries no kind')
+    expect(words(sheet())).toContain('Counted as a kind of thing said')
+  })
+
+  it('is absent where no objection cleared the floor', () => {
+    expect(sheetNamed(deck(salesBriefUnreadFixture()), 'Answers you can use')).toBe('')
+  })
+})
+
+describe('the sales brief’s order is the artboard’s', () => {
+  it('runs cover · pushing back · in their words · rivals · compare · moving · answers · method', () => {
+    const titles = sheets(deck()).map(titleOf)
+    expect(titles).toContain('What they are pushing back on')
+    const at = (t: string) => titles.findIndex((x) => x.startsWith(t))
+    expect(at('What they are pushing back on')).toBeLessThan(at('What sells, in their words'))
+    expect(at('What sells, in their words')).toBeLessThan(at('What they complain about with each rival'))
+    expect(at('Who is moving')).toBeLessThan(at('Answers you can use'))
+    expect(at('Answers you can use')).toBeLessThan(at('About this brief'))
   })
 })
