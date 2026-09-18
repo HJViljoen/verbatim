@@ -61,9 +61,14 @@ const OWN_HOOKS: [string, number][] = [
   ['demonstration', 2], ['shock-value', 2], ['trend-riding', 1],
 ]
 
-const OWN_PUBLISHED: PlaybookVideo[] = (() => {
-  const out: PlaybookVideo[] = Array.from({ length: 109 }, (_, i) => ({
-    id: `ossur-own-${i}`,
+function ownPublished(
+  prefix: string,
+  published: number,
+  formats: readonly [string, number, number][],
+  hooks: readonly [string, number][],
+): PlaybookVideo[] {
+  const out: PlaybookVideo[] = Array.from({ length: published }, (_, i) => ({
+    id: `${prefix}-own-${i}`,
     upload_date: `2026-09-${String((i % 27) + 1).padStart(2, '0')}`,
     platform: i % 4 === 3 ? 'youtube' : 'tiktok',
     classified_type: null,
@@ -78,16 +83,33 @@ const OWN_PUBLISHED: PlaybookVideo[] = (() => {
     analyzed_lane: 'full',
   }))
   let at = 0
-  for (const [key, k, med] of OWN_FORMATS) {
-    for (let i = 0; i < k; i++, at++) {
+  for (const [key, k, med] of formats) {
+    for (let i = 0; i < k && at < out.length; i++, at++) {
       out[at].classified_type = key
       out[at].engagement_rate = med
     }
   }
   let hookAt = 0
-  for (const [key, k] of OWN_HOOKS) for (let i = 0; i < k; i++, hookAt++) out[hookAt].hook_style = key
+  for (const [key, k] of hooks) for (let i = 0; i < k && hookAt < out.length; i++, hookAt++) out[hookAt].hook_style = key
   return out
-})()
+}
+
+const OWN_PUBLISHED: PlaybookVideo[] = ownPublished('ossur', 109, OWN_FORMATS, OWN_HOOKS)
+
+// THE THIN ARM: Sealand published 17 videos of their own in September and five
+// of them carry a format. That is the column wave 2 has to survive — it EXISTS
+// and it is nearly empty — and it is a different shape from the column being
+// absent, which is what the loader's own catch produces (`lib/pages/week.ts`,
+// `loadOwnPublishedVideos` → null → `sides: null`). The five split 3 / 2, which
+// puts one format exactly AT `ENGAGEMENT_MIN_VIDEOS` and one under it: the
+// column carries a median in one cell and none in the other, both with their n,
+// which is the pair wave 2 has to print differently and cannot fake.
+const THIN_PUBLISHED: PlaybookVideo[] = ownPublished(
+  'sealand',
+  17,
+  [['story', 3, 2.1], ['testimonial', 2, 1.4]],
+  [['personal-story', 3], ['bold-claim', 1]],
+)
 
 export function weekFixture(): WeekData {
   const risingVerdict = bandVerdict({
@@ -387,8 +409,9 @@ export function thinFixture(): WeekData {
       excluded: ['Reddit'],
       // Sealand published 17 videos of their own in September and FIVE of them
       // have been classified, which is the degraded arm wave 2 is reviewed in:
-      // the column exists, the cells are thin, and the coverage line says so.
-      sides: null,
+      // the column exists, the cells are thin, and the coverage line says so
+      // ("Read from 5 of Sealand’s 17 videos published in September").
+      sides: ownSides({ month: '2026-09-01', brand: 'Sealand', videos: THIN_PUBLISHED }),
       unread: 'Too few of this update’s videos carry an engagement figure to read a format or a hook against the rest.',
     },
     coverage: {
