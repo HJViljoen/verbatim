@@ -1,4 +1,5 @@
 import { fmtInt, monthName } from '../format'
+import { distinctVideos } from '../market-tiles'
 import { monthChange } from './bands'
 import { monthStartOf } from './monthly'
 import type { Counted, RefusedReason, Verdict } from './verdicts'
@@ -171,13 +172,11 @@ export function groundingFor(input: GroundingInput): Grounding | null {
   if (based.length === 0 && (input.cited ?? 0) > 0) return prunedGrounding(input.audience)
   if (based.length === 0) return null
 
-  const videoIds = new Set<string>()
-  for (const id of based) {
-    const v = input.videoByInsight.get(id)
-    if (v) videoIds.add(v)
-  }
   const themes = new Set(input.themeIds).size
-  const videos = videoIds.size
+  // `distinctVideos` (lib/market-tiles.ts) IS this count and the brief names it
+  // as the helper to use. A hand-rolled second copy has the same semantics
+  // today, which is how two copies stop having the same semantics tomorrow.
+  const videos = distinctVideos(based, input.videoByInsight)
   const pruned = videos === 0
   const line = pruned
     ? PRUNED_LINE
