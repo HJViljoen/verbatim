@@ -240,14 +240,18 @@ describe('gapLine', () => {
     expect(gapLine(thin)).not.toMatch(/\d+(\.\d)? points/)
   })
 
-  it('prints the band beside "level", because the band is the evidence for it', () => {
+  it('prints the band beside "no clear difference", because the band is the evidence for it', () => {
     const level = gapBetween({
       ...durability,
       a: side({ value: { k: 78, n: 252 }, pct: 31 }),
       b: them({ value: { k: 134, n: 426 }, pct: 31.5 }),
       window: SEP,
     })
-    expect(gapLine(level)).toMatch(/· level \(band \d/)
+    expect(gapLine(level)).toMatch(/· no clear difference \(band \d/)
+    // NOT the bare word "level": the two clauses before it ARE levels, and
+    // `GLOSSARY.level` has that word for something else entirely.
+    expect(gapLine(level)).not.toMatch(/· level/)
+    expect(level.state).toBe('level')
   })
 
   it('carries no direction word anywhere in any state — the copy contract’s rule (c)', () => {

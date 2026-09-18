@@ -73,10 +73,22 @@ export type GapState = 'apart' | 'level' | 'too_little_data' | 'refused'
  * rather than imported because `lib/reading` may not depend on `components`,
  * and a reading module that imported a badge to get a string would be the
  * wrong dependency for the sake of five words.
+ *
+ * AND `level` IS A TOKEN, NOT THE WORD PRINTED. "Level" is already one of the
+ * THIRTEEN_WORDS (`GLOSSARY.level`, lib/calibration.ts) and it means something
+ * else there — "what a figure is running at, always printed with its
+ * denominator". `gapLine` prints both senses in one sentence, so a gap that
+ * printed the bare word would read "you 31% of 252 · Freitag 44% of 426 ·
+ * level", where the first two clauses ARE levels and the third is denying a
+ * difference between them. The reader's phrase is "no clear difference",
+ * which is exactly the construction `GLOSSARY.change` already uses for the
+ * same conclusion about one object over time ("no clear change") — one
+ * vocabulary, two objects. The state token stays `level` because that is what
+ * the band concluded and what every caller switches on.
  */
 export const GAP_WORDS: Record<GapState, string> = {
   apart: 'apart',
-  level: 'level',
+  level: 'no clear difference',
   too_little_data: 'too few to compare',
   refused: 'comparison refused',
 }
