@@ -171,7 +171,9 @@ describe('FigureCell', () => {
     }
   })
 
-  it('right-aligns on request and sits left by default — the artboards\' own count', () => {
+  // 79 of the artboards' 101 "N of M" cells sit left; the 22 that are set
+  // text-align:right are Competitive's standings.
+  it('right-aligns on request and sits left by default', () => {
     expect(render(<FigureCell value="31%" of="26 of 84" align="right" />)).toContain('text-right')
     expect(render(<FigureCell value="31%" of="26 of 84" />)).not.toContain('text-right')
     expect(render(<FigureCell mode="email" value="31%" of="26 of 84" align="right" />)).toContain('right')

@@ -136,9 +136,12 @@ export function BlockFrame({
  * every time is by putting the two in separate cells and then letting a column
  * fall off a narrow layout. The artboards answer that by stacking them: the
  * figure on top in mono 13/600 at `line-height:1`, the evidence under it in
- * mono 10.5 muted, one pixel apart. Measured across the seventeen artboards,
- * thirty of the stacked cells sit left in their column and none is set
- * flex-end, so `align` defaults to left and a numeric column asks for right.
+ * mono 10.5 muted, one pixel apart. Counted across the seventeen artboards on
+ * 2026-09-18: of the 101 cells printing an "N of M", 79 sit left in their
+ * column and 22 are set `text-align:right` (all of them on Competitive's
+ * standings). So `align` defaults to LEFT and a numeric column asks for right
+ * — which is the opposite of what the density note in mock-gap/Main.md
+ * implies, and the count is here so the next reader does not have to redo it.
  *
  * It stamps its own `data-copy` — `figure` on the value, `level` on the pair —
  * exactly as BlockStat does, so a block using it keeps the contract by
