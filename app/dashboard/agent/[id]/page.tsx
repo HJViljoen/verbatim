@@ -151,6 +151,12 @@ export default async function AgentThreadPage({
             row={2}
             composer={<AgentComposer canSend={canSend && !blocked} disabledNote={disabledNote} />}
           />
+          {/* ONE FOLLOW-UP CONTROL, ON THE LAST ANSWER. Every tile used to get
+              its own, all with the same threadId, the same placeholder and the
+              same aria-label — a five-turn thread rendered six ask boxes and a
+              screen reader six controls with one name and no way to tell them
+              apart. The artboard draws one follow-up, under the answer, which
+              is also where a reader who has just finished reading is. */}
           {data.turns.map((turn, i) => (
             <AnswerTile
               key={turn.askedAt + i}
@@ -161,12 +167,14 @@ export default async function AgentThreadPage({
               basis={data.basis}
               row={6}
               composer={
-                <AgentComposer
-                  canSend={canSend && !blocked}
-                  disabledNote={disabledNote}
-                  threadId={id}
-                  placeholder="Ask a follow-up in this thread"
-                />
+                i === data.turns.length - 1 ? (
+                  <AgentComposer
+                    canSend={canSend && !blocked}
+                    disabledNote={disabledNote}
+                    threadId={id}
+                    placeholder="Ask a follow-up in this thread"
+                  />
+                ) : undefined
               }
             />
           ))}

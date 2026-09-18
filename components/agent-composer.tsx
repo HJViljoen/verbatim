@@ -35,6 +35,13 @@ import { Loader2, MessageSquare, Paperclip, Search } from 'lucide-react'
 // the state is "not yours", not "not built": every answer on this page is
 // readable by the member looking at the disabled box.
 
+/** The shortest string the endpoint will treat as a question. */
+const MIN_QUESTION = 8
+
+/** What the box says about it — one sentence, in the reader's words, stating
+ *  the rule rather than reporting a failure. */
+const TOO_SHORT = 'A question needs a few more words before we can answer it.'
+
 export function AgentComposer({
   canSend,
   threadId,
@@ -77,7 +84,14 @@ export function AgentComposer({
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
     const q = question.trim()
-    if (q.length < 8) return
+    // THE RULE IS SAID, NOT ENFORCED IN SILENCE. This returned with no message
+    // and no hint, so "zips?" + Enter did nothing and nothing on the page
+    // stated why — the only signal was `disabled:opacity-30` on a button the
+    // reader was not looking at.
+    if (q.length < MIN_QUESTION) {
+      setError(TOO_SHORT)
+      return
+    }
     setBusy(true)
     setError(null)
     try {
@@ -127,13 +141,22 @@ export function AgentComposer({
     }
   }
 
-  const ready = canSend && !busy && question.trim().length >= 8
+  const ready = canSend && !busy && question.trim().length >= MIN_QUESTION
   const live = canSend && !busy
+  // Shown while they are typing, not only when they press Ask — a rule a reader
+  // meets before they hit it is a hint; one they meet afterwards is an error.
+  const tooShort = canSend && question.trim().length > 0 && question.trim().length < MIN_QUESTION
 
   return (
     <div className="flex min-w-0 flex-col gap-2">
       <form onSubmit={onSubmit} className="flex min-w-0 items-center gap-2.5">
-        <div className="flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-[4px] bg-inner px-3.5">
+        {/* THE RING IS ON THE WRAPPER because the input inside it is
+            `focus:outline-none` with a transparent background — the block IS
+            the control as far as the eye is concerned, so that is where focus
+            has to show. Without it a keyboard reader tabbed out of the record
+            band into invisibility and out again into the rail, never once
+            seeing the page's primary control (WCAG 2.4.7). */}
+        <div className="flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-[4px] bg-inner px-3.5 focus-within:ring-2 focus-within:ring-ring">
           {/* The glyph the artboard puts inside the block: a search mark on the
               box, a speech mark on the follow-up — the one thing that
               distinguishes the two controls at a glance. */}
@@ -155,7 +178,10 @@ export function AgentComposer({
             control only a reader who hovers it knows about, and inside a thread
             there was no control at all. */}
         <label
-          className={`inline-flex h-11 shrink-0 cursor-pointer items-center gap-2 rounded-[6px] bg-tile px-3.5 text-[12px] font-medium text-secondary-foreground ring-1 ring-border transition-colors hover:bg-inner ${live ? '' : 'pointer-events-none opacity-40'}`}
+          // The file input inside is a 1x1 `sr-only` element and it is the
+          // thing that takes focus, so the LABEL wears the ring: `has-[…]` is
+          // what lets a visible wrapper answer for an invisible control.
+          className={`inline-flex h-11 shrink-0 cursor-pointer items-center gap-2 rounded-[6px] bg-tile px-3.5 text-[12px] font-medium text-secondary-foreground ring-1 ring-border transition-colors hover:bg-inner has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring ${live ? '' : 'pointer-events-none opacity-40'}`}
         >
           <Paperclip className="size-4" aria-hidden />
           <span>Check a plan</span>
@@ -172,7 +198,7 @@ export function AgentComposer({
         <button
           type="submit"
           disabled={!ready}
-          className="inline-flex h-11 shrink-0 items-center gap-2 rounded-[6px] bg-primary px-5 text-[13px] font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-30"
+          className="inline-flex h-11 shrink-0 items-center gap-2 rounded-[6px] bg-primary px-5 text-[13px] font-semibold text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-30"
         >
           {busy && <Loader2 className="size-4 animate-spin" aria-hidden />}
           Ask
@@ -185,7 +211,14 @@ export function AgentComposer({
         </p>
       )}
 
-      {error && <p className="text-[12px] text-negative">{error}</p>}
+      {/* The rule, where the gate asks for it: next to the field, before the
+          press rather than after it. It replaces itself with a real error the
+          moment there is one. */}
+      {!error && tooShort && (
+        <p className="text-[12px] text-muted-foreground">{TOO_SHORT}</p>
+      )}
+
+      {error && <p className="text-[12px] text-negative" role="alert">{error}</p>}
     </div>
   )
 }
