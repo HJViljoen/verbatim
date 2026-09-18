@@ -461,6 +461,20 @@ export interface MovesPage {
    * draws the chart — a chart is a direction claim too.
    */
   readings: MoveReading[]
+  /**
+   * WHICH SIDE A CONTROL ROW WAS READ ON, in the reader's words, keyed by the
+   * audience the verdict carries.
+   *
+   * A control row is drawn as `objectLabel` and nothing else, so a move's card
+   * printed "Repair & warranty · 153 of 1,388" directly above "Repair &
+   * warranty · 41 of 142" with nothing saying which audience each was. The
+   * control audiences are the whole reason this page may report what happened
+   * after a move without claiming the move caused it; unlabelled they report
+   * nothing a reader can use. `audienceSideIn` already composes exactly these
+   * words and was called by `unsettledItems` alone; the map is built once here
+   * because the block has no `OverviewData` to resolve a key against.
+   */
+  sideOf: Record<string, string>
 }
 
 // WHAT THE METHOD PAGE PRINTS, AND NOTHING ELSE. `changePts`, `bandPts` and
@@ -1935,12 +1949,26 @@ function buildMoves(a: { overview: OverviewData; market: MarketSurfaceData | nul
   const moves = (m?.moves.rows ?? []).filter((r) => inQuarter(r.declaredAt.slice(0, 10)))
   const advice = m?.advice.rows ?? []
   const declared = new Set(moves.map((r) => r.id))
+  const readings = (m?.moves.readings ?? []).filter((r: MoveReading) => declared.has(r.moveId))
+  // THE AUDIENCE BEHIND EVERY CONTROL ROW THIS PAGE WILL DRAW, named. Only
+  // the audiences actually drawn, so an audience this workspace does not name
+  // is absent from the map and the row falls back to its label alone rather
+  // than to an invented side.
+  const side = audienceSideIn(a.overview)
+  const sideOf: Record<string, string> = {}
+  for (const reading of readings) {
+    for (const v of reading.control) {
+      const words = side(v.audience)
+      if (words) sideOf[v.audience] = words
+    }
+  }
   return {
     moves,
+    sideOf,
     // THE READINGS OF THE MOVES THIS PAGE DRAWS, and no others: a reading of a
     // move declared in another quarter is a real reading and is not this
     // page's, and the moves above are already filtered by declared date.
-    readings: (m?.moves.readings ?? []).filter((r: MoveReading) => declared.has(r.moveId)),
+    readings,
     movesNote: m ? (m.moves.recorded ? m.moves.empty : 'Moves are not recorded for this workspace yet.') : 'Moves could not be read for this workspace.',
     advice,
     // NEITHER SIDE OF THIS WAS QUARTER-SCOPED, AND THE DENOMINATOR WAS A

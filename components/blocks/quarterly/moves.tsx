@@ -105,7 +105,7 @@ function unreadTail(move: MoveRow): string {
   return tail.length > 0 ? tail.join(' · ') : move.line
 }
 
-function MoveCard({ move, reading, mode }: { move: MoveRow; reading: MoveReading | null; mode: RenderMode }) {
+function MoveCard({ move, reading, sideOf, mode }: { move: MoveRow; reading: MoveReading | null; sideOf: Record<string, string>; mode: RenderMode }) {
   const email = mode === 'email'
   const series = reading ? moveSeries(reading) : []
   const drawable = reading != null && reading.chartNote == null && series.length > 0
@@ -149,7 +149,12 @@ function MoveCard({ move, reading, mode }: { move: MoveRow; reading: MoveReading
             <Line
               key={`${v.objectKind}:${v.objectId}:${v.audience}`}
               mode={mode}
-              label={v.objectLabel}
+              // THE SIDE IS NAMED. One object is read on several audiences, so
+              // the label alone put "Repair & warranty · 153 of 1,388" above
+              // "Repair & warranty · 41 of 142" with nothing between them. A
+              // side this workspace does not name is absent from `sideOf` and
+              // the row keeps its label rather than inventing one.
+              label={sideOf[v.audience] ? `${v.objectLabel} · ${sideOf[v.audience]}` : v.objectLabel}
               figure={<FigureCell mode={mode} value={fmtInt(v.value.k)} of={`of ${fmtInt(v.value.n)}`} align="right" />}
               badge={<BlockMovement verdict={v} unit="pts" mode={mode} />}
             />
@@ -189,7 +194,7 @@ export const quarterlyMoves: Block<QuarterlyData> = {
     const moves = (
       <Column mode={mode} gap={14}>
         {m.moves.length > 0 ? (
-          m.moves.map((move) => <MoveCard key={move.id} move={move} reading={readingFor(move.id)} mode={mode} />)
+          m.moves.map((move) => <MoveCard key={move.id} move={move} reading={readingFor(move.id)} sideOf={m.sideOf} mode={mode} />)
         ) : (
           <Note mode={mode}>{m.movesNote ?? 'No move was declared this quarter.'}</Note>
         )}

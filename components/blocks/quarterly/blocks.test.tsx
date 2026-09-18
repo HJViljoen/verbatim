@@ -810,8 +810,11 @@ describe('the artboard port (Block D wave 2)', () => {
     const t = text('quarterly.moves')
     expect(t).toContain('Push repairability')
     expect(t).toContain('declared 12 Aug')
-    // The control audiences — what moved on the sides you did not touch.
-    expect(t).toContain('Repair & warranty 153 of 1,388')
+    // The control audiences — what moved on the sides you did not touch, each
+    // with the side it was read on. The label alone put two rows with the same
+    // words and different denominators directly above one another.
+    expect(t).toContain('Repair & warranty · in the category 153 of 1,388')
+    expect(t).toContain('Repair & warranty · under Freitag 41 of 142')
     expect(render(QUARTERLY_BLOCKS['quarterly.moves'].render(data, 'print', ctx))).toContain('<svg')
     // AN UNREAD MOVE'S CARD SAYS ITS TITLE AND SUBJECT ONCE. `move.line` is a
     // whole ledger sentence that opens with both, and the card's eyebrow and
