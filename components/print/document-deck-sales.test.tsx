@@ -327,3 +327,74 @@ describe('sales.p7 — the method sheet', () => {
     expect(w).toContain('is not recorded for this brief')
   })
 })
+
+// ── sales.p2 / p3 / p4 — the borrowed sheets ──────────────────────────────
+
+describe('the borrowed sheets carry the artboard’s chrome', () => {
+  const objections = () => sheetNamed(deck(), 'What they are pushing back on')
+  const rivals = () => sheetNamed(deck(), 'What they complain about with each rival')
+
+  // `sales.p2.header`: the deck printed "{the whole title} · {the whole
+  // stamp}" — the title repeated beside itself, and a 60-character stamp in a
+  // 10.5px mono slot that has to fit on one line.
+  it('names the sheet’s place in the brief, not the title twice', () => {
+    expect(words(objections())).toContain('Objections · September 2026')
+    expect(words(objections())).not.toContain('What they are pushing back on · September 2026 · reading as at')
+  })
+
+  // The framing is the slide's serif note, which is what the artboard draws;
+  // the green-ruled eyebrow says what the ORDER of the rows is, which a list
+  // of counted rows will not tell a reader itself.
+  it('draws the framing as the slide note and a green-ruled eyebrow over the body', () => {
+    expect(objections()).toContain('vb-slide-note')
+    expect(words(objections())).toContain('Most heard first')
+    expect(objections()).toContain('h-[2px] w-4 rounded-full bg-primary')
+  })
+
+  // `sales.p2.chart`: no borrowed sheet had a right-hand pane at all, so the
+  // mock's chart and confidence rail had nowhere to go.
+  it('puts the month line in the right pane, one side, and says why one', () => {
+    const w = words(objections())
+    expect(w).toContain('The line behind these')
+    expect(objections()).toContain('<svg')
+    expect(w).toContain('Jun 2026')
+    expect(w).toContain('Your own audience carries no month-by-month series on a subject')
+  })
+
+  // D3: a chart is a direction claim too, and two points are not a direction.
+  it('names the months instead of drawing them below three readings', () => {
+    const thin = sheetNamed(deck(salesBriefThinFixture()), 'What they are pushing back on')
+    expect(thin).not.toContain('<svg')
+    // `monthlyLineLabel`'s own words for this state, not a fourth phrase for it.
+    expect(words(thin)).toContain('Aug → Sep only')
+  })
+
+  // `sales.p2.confidence` … `p5.confidence`: the dots existed only inside a
+  // finding page's right card.
+  it('carries the confidence dots, the word and the caveat on a borrowed sheet', () => {
+    const w = words(objections())
+    expect(w).toContain('Confidence')
+    expect(w).toContain('reasonable')
+    expect(w).toContain('9 of 12 comparisons on these pages were answered against their band.')
+  })
+
+  // `sales.p4.untracked`: composed by `untrackedNotes` on every brief since
+  // wave 1 and printed by nothing. D14 — the ROLE, and no date.
+  it('says what is not tracked beside the rivals sheet, by role and with no date', () => {
+    const w = words(rivals())
+    expect(w).toContain('Not tracked: the rival accounts we read')
+    expect(w).toContain('Ours to set up.')
+    expect(w).not.toMatch(/\b(by|before|due)\s+\d/i)
+  })
+
+  // …and only beside the section that noted it.
+  it('does not repeat the untracked note on every sheet', () => {
+    expect(words(objections())).not.toContain('Not tracked:')
+  })
+
+  it('keeps the copy contract on every sheet', () => {
+    assertCopyContract(deck())
+    assertCopyContract(deck(salesBriefThinFixture()))
+    assertCopyContract(deck(salesBriefLegacyFixture()))
+  })
+})

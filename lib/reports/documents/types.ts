@@ -209,6 +209,19 @@ export interface DocumentReading {
    *  decision L requires travels with it. */
   crossesClustering: boolean
   /**
+   * How sound this reading is, in a calibrated word and a sentence
+   * (`sales.p2.confidence` … `p5.confidence`).
+   *
+   * READ OFF THE VERDICTS THE BRIEF'S BLOCKS ACTUALLY DREW — `confidenceOf`,
+   * the quarterly's own function, so one artefact cannot come to word this
+   * differently from another. It is NOT the finding pages' `sure` word, which
+   * is calibrated from conversations and strands and belongs to one argument:
+   * a borrowed section has no argument and no strands, and what a reader wants
+   * to know about a sheet of counted rows is how many of its comparisons were
+   * answered against a band. Absent on a brief built before wave 2.
+   */
+  confidence?: { word: string; why: string } | null
+  /**
    * The method footnote, frozen (`sales.p7.footnote`, D15).
    *
    * Read depth, the translated and on-screen-text shares, the Reddit cap and
@@ -264,6 +277,15 @@ export interface DocBriefSection {
   title: string
   framing: string
   empty: string | null
+  /** The sheet's place in the brief, top right — "Objections · September 2026"
+   *  rather than the title repeated beside itself (E-sales, `sales.p2.header`). */
+  context?: string
+  /** The green-ruled eyebrow over the section's body: what the order of the
+   *  rows is. */
+  eyebrow?: string
+  /** What the right-hand pane carries: the month line, or the confidence dots
+   *  with their caveat. Absent keeps the full-bleed single column. */
+  pane?: 'chart' | 'confidence'
 }
 
 /**

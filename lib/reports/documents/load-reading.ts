@@ -7,6 +7,7 @@ import { MARKET_BLOCKS } from '../../../components/pages/market-surface'
 import { COMPETITIVE_BLOCKS } from '../../../components/pages/competitive-surface'
 import { audienceInLabel, loadOverview, type OverviewData } from '../../pages/overview'
 import { loadSubjectsPage } from '../../pages/subjects'
+import { confidenceOf } from '../../pages/quarterly'
 import { loadVoiceSurface } from '../../pages/voice-surface'
 import { loadMarketSurface } from '../../pages/market-surface'
 import { loadCompetitiveSurface } from '../../pages/competitive-surface'
@@ -235,6 +236,14 @@ export async function loadBriefReading(scope: Scope, options: BriefReadingOption
     // that carries the month.
     counter: overview.bar.counter,
     hollow: overview.subjects.note,
+    // `confidenceOf` AND NOT A SECOND RULE FOR THE SAME QUESTION. The quarterly
+    // already answers "how sure are we" off a list of verdicts, in words a
+    // reader of this workspace has met; a brief that invented its own would be
+    // two artefacts calibrating one thing two ways. `unlocked` is true here
+    // because that flag is the quarterly's own question — whether a
+    // quarter-on-quarter comparison has its six monthly readings — and a
+    // month's brief is not asking it.
+    confidence: confidenceOf(merged.verdicts, true),
   }
 
   // WHAT THE DOCUMENTS MAY PRINT BEYOND THE BLOCKS (package D7). Every one of
@@ -456,7 +465,14 @@ export function briefSections(
         : block
           ? block.emptyState(data as never)
           : 'This section names a block this build does not know how to draw.'
-    return { id: s.id, block: s.block, surface: s.surface, title: s.title, framing: s.framing, empty }
+    return {
+      id: s.id, block: s.block, surface: s.surface, title: s.title, framing: s.framing, empty,
+      // The sheet's own layout, frozen with it: a stored artefact renders the
+      // sheet it was built as, not the sheet today's map would build.
+      ...(s.context ? { context: s.context } : {}),
+      ...(s.eyebrow ? { eyebrow: s.eyebrow } : {}),
+      ...(s.pane ? { pane: s.pane } : {}),
+    }
   })
 }
 

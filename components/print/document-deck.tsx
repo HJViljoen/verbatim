@@ -4,7 +4,7 @@ import { BlockSlot } from './block-slot'
 import { Slide } from '@/components/print/slide'
 import { Sparkline } from '@/components/charts/sparkline'
 import { CountBadge, MOVEMENT_WORDS, MovementBadge } from '@/components/delta-badge'
-import { shortDate } from '@/lib/format'
+import { monthName, shortDate } from '@/lib/format'
 import { platformShareLine } from '@/lib/reading/method'
 import { MOVE_PROMISE } from '@/lib/subjects/types'
 import type { Verdict } from '@/lib/reading/verdicts'
@@ -394,6 +394,14 @@ function OverviewPage({ page, data }: { page: DocPage; data: DocumentSnapshotDat
 
 // ── finding ────────────────────────────────────────────────────────────────
 
+/** Three dots, filled to the confidence word.
+ *
+ *  TWO VOCABULARIES, ONE RAIL. A finding's word is `solid | reasonable | thin`
+ *  (calibrated from conversations and strands); a READING's is `reasonable |
+ *  partly | not yet` (`confidenceOf`, off the verdicts). They are two answers
+ *  to two questions and neither is being renamed — the dots just have to know
+ *  both, and an unrecognised word fills one rather than three, which is the
+ *  safe way for it to be wrong. */
 function ConfidenceDots({ sure }: { sure: string }) {
   const n = sure === 'solid' ? 3 : sure === 'reasonable' ? 2 : 1
   return (
@@ -1308,6 +1316,95 @@ function PageBody({ page, data }: { page: DocPage; data: DocumentSnapshotData })
  * prints its one line instead: the block's own empty state, or the
  * missing-input sentence naming the input and who closes it.
  */
+/**
+ * The right-hand pane of a borrowed sheet (`sales.p2` … `sales.p5`).
+ *
+ * WHY A BORROWED SECTION GETS ONE AT ALL. Every artboard sheet is 7fr/5fr and
+ * the build drew borrowed sections full-bleed, single column, at about half the
+ * density — so the mock's chart, its conclusion and its confidence rail had
+ * nowhere to go, and the confidence dots existed only inside a finding page's
+ * right card. The sheet says which pane it wants, in the section map, and the
+ * map is the artboard read into data.
+ *
+ * `chart` is `slideFigures.line` — ONE SIDE, and only where three readings
+ * stand behind it (D3: a chart is a direction claim too, and two points are
+ * not a direction). Below that `monthLine` has already named the months
+ * instead, in `monthlyLineLabel`'s own words, and the pane prints that.
+ *
+ * `confidence` is the reading's own, `confidenceOf` off the verdicts the
+ * brief's blocks drew — not a finding's `sure` word, which is calibrated from
+ * conversations and strands and belongs to one argument.
+ */
+function SectionPane({ section, data }: { section: DocBriefSection; data: DocumentSnapshotData }) {
+  const line = data.slideFigures?.line ?? null
+  const confidence = data.reading?.confidence ?? null
+  const rail = confidence && (
+    <div className="mt-auto flex flex-col gap-1.5 border-t border-border pt-3">
+      <p className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+        Confidence <ConfidenceDots sure={confidence.word} /> <span className="normal-case tracking-normal text-foreground">{confidence.word}</span>
+      </p>
+      <p className="text-[12.5px] leading-[1.45] text-muted-foreground">{confidence.why}</p>
+    </div>
+  )
+  if (section.pane === 'chart') {
+    return (
+      <div className={`${CARD} flex min-h-0 flex-col gap-4 px-6 py-5`}>
+        <Eyebrow>The line behind these</Eyebrow>
+        {line && line.series.length > 0 ? (
+          <div className="flex flex-col gap-2.5">
+            {line.series.map((serie) => (
+              <div key={serie.label} className="flex flex-col gap-1.5">
+                <DeckSpark values={serie.points} months={line.months.map(monthLabel)} />
+                <p className="text-[11px] leading-[1.35] text-muted-foreground">{serie.label}</p>
+              </div>
+            ))}
+            {/* ONE SIDE, AND THE SHEET SAYS SO. The artboard draws two theme
+                series against each other; the tenant's own side carries no
+                month series on a subject row, which is a schema limitation and
+                not a missing render. */}
+            <p className="text-[11px] leading-[1.35] text-muted-foreground">
+              One side. Your own audience carries no month-by-month series on a subject, so there is nothing to draw against this.
+            </p>
+          </div>
+        ) : (
+          <p className={BODY_SM}>{line?.label ?? line?.empty ?? 'No month series stands behind this sheet yet.'}</p>
+        )}
+        {rail}
+      </div>
+    )
+  }
+  return (
+    <div className={`${CARD} flex min-h-0 flex-col gap-4 px-6 py-5`}>
+      <Eyebrow>What this rests on</Eyebrow>
+      {data.reading && (
+        <p className="font-mono text-[12px] leading-[1.5] text-muted-foreground">
+          {data.reading.denominators.map((d) => (
+            <Fragment key={d.audience}>
+              <span className="text-foreground">{fmtCount(d.videos)}</span> {d.label}{' · '}
+            </Fragment>
+          ))}
+          <span className="text-foreground">{fmtCount(data.reading.denominators.reduce((n, d) => n + d.comments, 0))}</span> comments read
+        </p>
+      )}
+      {/* `sales.p4.untracked` — what is NOT tracked, beside the section rather
+          than in place of it, naming the ROLE and no date (D14). Composed by
+          `untrackedNotes` on every brief since wave 1 and printed by nothing. */}
+      {(data.slideFigures?.untracked ?? [])
+        .filter((n) => n.sections.includes(section.title))
+        .map((n) => <p key={n.id} className={BODY_SM}>{n.line}</p>)}
+      {rail}
+    </div>
+  )
+}
+
+/** "2026-09-01" → "Sep 2026". The axis a printed line has instead of a hover.
+ *
+ *  `monthName`, NOT `toLocaleDateString`. ICU data differs between the Node
+ *  server and the browser (lib/format.ts says so at length: en-GB renders
+ *  September as "Sept"), and a month name that differs between the two is an
+ *  SSR mismatch on a page that is also printed by a headless browser. */
+const monthLabel = monthName
+
 function SectionBody({ section, data }: { section: DocBriefSection; data: DocumentSnapshotData }) {
   const surface = (data.surfaces ?? {})[section.surface]
   const block = blocksFor(section.surface as BriefSurface)?.find((b) => b.key === section.block)
@@ -1319,10 +1416,22 @@ function SectionBody({ section, data }: { section: DocBriefSection; data: Docume
     // exist (measured: two violations on Össur's marketing brief).
     ? <p className="m-0 text-[13px] leading-[1.5] text-muted-foreground">{section.empty ?? 'This section could not be read for this month.'}</p>
     : block.render(surface as never, 'print', blockContext(appBaseUrl(), EMAIL))
-  return (
-    <div className="flex flex-col gap-3">
-      {section.framing && <p className="m-0 text-[12.5px] leading-[1.45] text-muted-foreground">{section.framing}</p>}
+  // THE FRAMING IS THE SLIDE'S NOTE NOW, not a paragraph inside the body: the
+  // artboard draws it as a serif italic line under the title, which is exactly
+  // what `Slide.note` already prints, and `DocumentDeck` passes it there. What
+  // opens the column instead is the green-ruled eyebrow every artboard sheet
+  // has and no borrowed section had.
+  const left = (
+    <div className="flex min-h-0 flex-col gap-3">
+      {section.eyebrow && <Eyebrow>{section.eyebrow}</Eyebrow>}
       {body}
+    </div>
+  )
+  if (!section.pane) return left
+  return (
+    <div className="grid h-full min-h-0 grid-cols-[7fr_5fr] gap-x-12">
+      {left}
+      <SectionPane section={section} data={data} />
     </div>
   )
 }
@@ -1341,8 +1450,20 @@ export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: Docum
       {slides.map((s, i) => {
         const section = sectionOfSlide(data, s.keys[0])
         if (section) {
+          // "Objections · September 2026", not the title repeated beside itself
+          // under a 60-character stamp in a 10.5px mono slot. The stamp rides
+          // the footer of every sheet.
+          const context = section.context ? `${section.context} · ${data.reading?.monthLabel ?? data.period}` : `${section.title} · ${stamp}`
           return (
-            <Slide key={section.id} title={section.title} chrome={chrome(section.title)} page={i + 2} pages={pages} layout="single">
+            <Slide
+              key={section.id}
+              title={section.title}
+              chrome={{ context, footer: chrome(section.title).footer }}
+              page={i + 2}
+              pages={pages}
+              layout="single"
+              note={section.framing}
+            >
               <SectionBody section={section} data={data} />
             </Slide>
           )

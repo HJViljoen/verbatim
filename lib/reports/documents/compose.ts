@@ -572,6 +572,7 @@ export function documentReading(r: BriefReading): DocumentReading {
     // updates there have been — and a stored artefact has to keep them.
     method: r.method,
     delivery: r.delivery,
+    confidence: r.confidence,
   }
 }
 

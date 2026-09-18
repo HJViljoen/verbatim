@@ -28,6 +28,9 @@ const reading = (over: Partial<BriefReading> = {}): BriefReading => ({
     { audience: 'competitor:Ottobock', label: 'Ottobock', videos: 41, comments: 63 },
   ],
   platformMix: { tiktok: 161, youtube: 135 },
+  // Off the verdicts, which this fixture has none of: "nothing cleared a band
+  // on either side, so there is no reading to be confident about."
+  confidence: { word: 'not yet', why: 'Nothing this quarter cleared a band on either side, so there is no reading to be confident about.' },
   notes: [],
   crossesClustering: false,
   method: methodFixture('Ossur'),
@@ -217,7 +220,7 @@ describe('documentReading', () => {
       // `delivery` and `method` are wave 2's (E-sales): the method sheet's
       // footnote and the record of how many updates there have been, frozen so
       // the artefact says in March what it said in September.
-      ['crossesClustering', 'delivery', 'denominators', 'method', 'month', 'monthLabel', 'monthStatus', 'platformMix', 'readingAt', 'stamp'],
+      ['confidence', 'crossesClustering', 'delivery', 'denominators', 'method', 'month', 'monthLabel', 'monthStatus', 'platformMix', 'readingAt', 'stamp'],
     )
   })
 })

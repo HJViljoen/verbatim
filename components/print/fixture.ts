@@ -177,6 +177,7 @@ function base(over: Partial<DocumentSnapshotData> = {}): DocumentSnapshotData {
       // Through the real `methodLines`, over a `RecordInputs` shaped like
       // Sealand's — never a hand-typed footnote (`lib/test/method-fixture.ts`).
       method: methodFixture('Sealand'),
+      confidence: { word: 'reasonable', why: '9 of 12 comparisons on these pages were answered against their band.' },
       delivery: '23 updates since 6 Apr 2026 · longest gap 35 days · last on 27 Sep 2026',
     },
     sections: briefSections(SALES_MAP, surfaces, []),

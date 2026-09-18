@@ -71,6 +71,38 @@ export interface BriefBlockSection {
   title: string
   /** One line of framing, the operator's voice, printed under the title. */
   framing: string
+  /**
+   * The short deck meta, top right (`sales.p2.header`).
+   *
+   * The artboard reads "Objections · September 2026" where the deck printed
+   * "{the whole section title} · {the whole reading stamp}" — the title
+   * repeated beside itself, and a 60-character stamp in a 10.5px mono slot that
+   * has to fit on one line. The stamp is not lost: it rides the FOOTER of every
+   * sheet, which is where the artboard puts it. This is the sheet's PLACE in
+   * the brief, in one or two words. Absent leaves the title, as before.
+   */
+  context?: string
+  /**
+   * The green-ruled eyebrow over the section's own body (`sales.p2.header`).
+   *
+   * Every artboard sheet opens its left column with one — "Most heard first",
+   * "How to use these" — and `Eyebrow` exists in the deck and was used on
+   * written pages only, so a borrowed section opened with four stacked
+   * heading-ish lines and no rule. It says what the ORDER of the rows is, which
+   * is the one thing a list of counted rows will not tell a reader itself.
+   */
+  eyebrow?: string
+  /**
+   * What the right-hand pane of this sheet carries.
+   *
+   * The artboards are 7fr/5fr on every sheet and the build drew borrowed
+   * sections full-bleed, single column, at about half the density. `'chart'`
+   * is the month line (`sales.p2.chart`); `'confidence'` is the dots, the word
+   * and the caveat, which existed only inside a finding page's right card.
+   * Absent keeps the full-bleed single column, which is right for a block that
+   * already lays out its own columns.
+   */
+  pane?: 'chart' | 'confidence'
   /** What has to be recorded for this section to hold anything. */
   needs: readonly ReadinessId[]
   /**
@@ -187,17 +219,20 @@ export const SALES_MAP: readonly BriefEntry[] = [
   page('finding'),
   block({
     id: 'sl.unanswered', block: 'subjects.unanswered', surface: 'subjects',
-    title: 'What they are pushing back on', framing: 'The questions the conversation puts and does not settle, most heard first.',
+    title: 'What they are pushing back on', framing: 'The questions the conversation puts and does not settle.',
+    context: 'Objections', eyebrow: 'Most heard first', pane: 'chart',
     needs: ['subject-set'],
   }),
   block({
     id: 'sl.voices', block: 'subjects.voices', surface: 'subjects',
     title: 'What sells, in their words', framing: 'What customers actually said about each subject this month — say it back, in their words.',
+    context: 'Selling points', eyebrow: 'In their own words', pane: 'confidence',
     needs: ['subject-set'],
   }),
   block({
     id: 'sl.rivals', block: 'competitive.rivals', surface: 'competitive',
     title: 'What they complain about with each rival', framing: 'What is said about each rival, in the same month, with its denominator.',
+    context: 'Rivals', eyebrow: 'Who is being talked about', pane: 'confidence',
     needs: ['months-of-history'],
     // `sales.p4.untracked` — the mock's readiness line. NOT a `needs`: this
     // block reads the category corpus either way, and refusing it would drop a
@@ -207,6 +242,7 @@ export const SALES_MAP: readonly BriefEntry[] = [
   block({
     id: 'sl.questions', block: 'competitive.questions', surface: 'competitive',
     title: 'What buyers compare', framing: 'The comparisons buyers make out loud, and who they name.',
+    context: 'Comparisons', eyebrow: 'Asked under their content',
     needs: [],
   }),
   page('switching'),

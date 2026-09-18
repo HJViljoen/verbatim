@@ -120,6 +120,17 @@ export interface BriefReading {
    * the client's own side is not hollow.
    */
   hollow: string | null
+  /**
+   * How sound this reading is, in the quarterly's own calibrated word and its
+   * sentence (`confidenceOf`, lib/pages/quarterly.ts).
+   *
+   * OFF THE VERDICTS THIS BRIEF'S OWN BLOCKS DREW, which is the only honest
+   * basis for a sheet of counted rows: how many of its comparisons were
+   * answered against a band. It is deliberately NOT the finding pages' `sure`
+   * word — that one is calibrated from conversations and strands and belongs
+   * to one argument, and a borrowed section has neither.
+   */
+  confidence: { word: string; why: string }
 }
 
 /** What a brief says about its own window, on every page, in the design's
