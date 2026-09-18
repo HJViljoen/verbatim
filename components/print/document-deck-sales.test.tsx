@@ -551,7 +551,7 @@ describe('the borrowed sheets carry the artboard’s chrome', () => {
     // The denominators are the FALLBACK, not the body: a pane with its own
     // lead prints the lead, and the method card prints the counts in full.
     expect(voices).not.toContain('1,388 the category')
-    expect(words(rivals())).toContain('1,388 the category')
+    expect(words(rivals())).toContain('What is on this sheet')
     // `sl.questions` carried no pane at all — the one single-column sheet in
     // an otherwise 7fr/5fr deck, and the only one with no confidence rail.
     expect(compare).toContain('How to read these')
@@ -563,6 +563,17 @@ describe('the borrowed sheets carry the artboard’s chrome', () => {
   it('does not stretch a pane card past what is in it', () => {
     expect(rivals()).toContain('self-start')
     expect(rivals()).not.toContain('mt-auto flex flex-col gap-1.5 border-t border-border pt-3')
+  })
+
+  // THE SHEET SAYS WHAT IS ON IT. Its title is the artboard's — "What they
+  // complain about with each rival" — and the complaints are not built
+  // (`competitive.rivals.figures()` returns `{}`; E-competitive's file), so a
+  // client met a heading promising per-rival complaints and a page delivering
+  // a picker. The title stays; the empty state tells the truth under it.
+  it('says on the rivals sheet what the rivals sheet does not carry', () => {
+    const w = words(rivals())
+    expect(w).toContain('not yet counted rival by rival')
+    expect(w).toContain('does not carry the complaints its title names')
   })
 
   // `sales.p4.untracked`: composed by `untrackedNotes` on every brief since

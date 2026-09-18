@@ -256,8 +256,18 @@ export const SALES_MAP: readonly BriefEntry[] = [
   }),
   block({
     id: 'sl.rivals', block: 'competitive.rivals', surface: 'competitive',
-    title: 'What they complain about with each rival', framing: 'What is said about each rival, in the same month, with its denominator.',
+    // THE ARTBOARD'S TITLE, AND AN EMPTY STATE THAT TELLS THE TRUTH UNDER IT.
+    // `competitive.rivals.figures()` returns `{}` and `rivalOwnClaims` is
+    // unbound — both inside `components/pages/competitive-surface/`, which
+    // E-competitive owns — so the sheet draws the rival selector, the reading
+    // behind each rival and the untracked note, and no complaint. A client
+    // reading a paid document met a heading promising per-rival complaints and
+    // a page delivering a picker; the title is the mock's and stays, and the
+    // framing and the pane now say what is actually on the sheet.
+    title: 'What they complain about with each rival', framing: 'Who is being talked about this month, and how much of the reading rests on each.',
     context: 'Rivals', eyebrow: 'Who is being talked about', pane: 'confidence',
+    paneTitle: 'What is on this sheet',
+    paneLead: 'Who is being talked about, and how much of the month was read of each. What is said about a rival is not yet counted rival by rival, so this sheet does not carry the complaints its title names.',
     needs: ['months-of-history'],
     // `sales.p4.untracked` — the mock's readiness line. NOT a `needs`: this
     // block reads the category corpus either way, and refusing it would drop a
