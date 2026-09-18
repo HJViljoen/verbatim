@@ -48,8 +48,15 @@ export const overviewSentence: Block<OverviewData> = {
         </div>
       ) : (
         <p className="m-0 rounded-md bg-inner px-2.5 py-1.5 text-[12.5px] text-secondary-foreground">
-          <span className="font-medium text-foreground">Unusual this week:</span> {anomalySentence(s.anomaly)}{' '}
-          <Link href={week} className="underline underline-offset-2">This week →</Link>
+          <span className="font-medium text-foreground">Unusual this week:</span> {anomalySentence(s.anomaly)}
+          {/* NOT ON PAPER (package E-marketing, fix pass). The marketing brief
+              borrows this block onto a landscape sheet, where "This week →" is
+              an instruction to press a control the reader of a PDF has not got
+              — the rule `MONTHLY_MOVES_EMPTY` was written under. The anomaly
+              sentence carries itself; only the link goes. */}
+          {mode === 'print' ? null : (
+            <> <Link href={week} className="underline underline-offset-2">This week →</Link></>
+          )}
         </p>
       )
     ) : null

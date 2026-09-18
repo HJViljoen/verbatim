@@ -6,7 +6,9 @@ import { documentCoverSheet, documentSheetCount, documentSlides } from '@/lib/re
 import { documentViewerPages } from '@/lib/reports/viewer'
 import { leadGap, leadVerdict, overviewTiles } from '@/lib/reports/documents/overview'
 import { DocumentShareShell } from '@/components/share/document-share-shell'
-import { DocumentDeck, GapCard, methodRows, CALIBRATION_NOTE } from './document-deck'
+import { DocumentDeck, GapCard, methodRows, paperEmpty, CALIBRATION_NOTE } from './document-deck'
+import { MOVES_EMPTY } from '@/lib/pages/overview'
+import { MONTHLY_MOVES_EMPTY } from '@/lib/reports/monthly'
 import { marketingDeckFixture, refusedDeckFixture } from './fixture'
 
 // The marketing brief, against its artboard (package E-marketing, wave 2).
@@ -88,6 +90,45 @@ describe('the sheets', () => {
     expect(sheets(data).map((s) => s.title)).toEqual(sheets().map((s) => s.title))
     const html = render(<DocumentDeck data={data} date="28 Sep 2026" />)
     expect(html).toContain('not recorded')
+  })
+})
+
+// THE BORROWED BLOCKS' PRINT ARMS (fix pass). Three controls a reader of a PDF
+// cannot press were printing on the brief: two links out of the deck and one
+// empty state written as an instruction. The rule is the repo's own —
+// `lib/reports/monthly.ts` gave the monthly artefact its own moves wording
+// because the page's "is a control on a page the reader of an email is not
+// looking at" — and a brief is the same reader with less recourse.
+describe('nothing on paper asks the reader to press something', () => {
+  it('prints no link out of the deck, in either state', () => {
+    for (const data of [marketingDeckFixture(), refusedDeckFixture()]) {
+      const html = render(<DocumentDeck data={data} date="28 Sep 2026" />)
+      const text = markupText(html)
+      expect(text).not.toContain('Compare another subject')
+      expect(text).not.toContain('This week →')
+      expect(html).not.toContain('/dashboard/voice')
+      expect(html).not.toContain('/dashboard/week')
+    }
+  })
+
+  // Production today: `overview.moves` is the whole body of the Your-moves
+  // sheet, and its sentence said "Press Track this on a subject or a theme".
+  it('says what the artefact says about a workspace that has dated nothing', () => {
+    const section = { block: 'overview.moves', empty: MOVES_EMPTY }
+    expect(paperEmpty(section)).toBe(MONTHLY_MOVES_EMPTY)
+    expect(paperEmpty(section)).not.toContain('Press Track this')
+    const text = markupText(render(<DocumentDeck data={refusedDeckFixture()} date="28 Sep 2026" />))
+    expect(text).not.toContain('Press Track this')
+  })
+
+  // The missing-input sentence lands in the same field and names an act the
+  // reader's own operator performs; substituting the artefact's wording over it
+  // would throw the answer away.
+  it('leaves a missing-input sentence exactly as it was frozen', () => {
+    const missing = 'We have not recorded your subjects. Your operator names them in Settings.'
+    expect(paperEmpty({ block: 'overview.moves', empty: missing })).toBe(missing)
+    expect(paperEmpty({ block: 'overview.subjects', empty: MOVES_EMPTY })).toBe(MOVES_EMPTY)
+    expect(paperEmpty({ block: 'overview.moves', empty: null })).toBeNull()
   })
 })
 

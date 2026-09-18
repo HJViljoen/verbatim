@@ -48,10 +48,19 @@ export const subjectsLine: Block<SubjectsData> = {
       })
       .filter((s): s is CalendarSeries => s != null)
 
+    // NO CONTROL ON PAPER (package E-marketing, fix pass). This block is
+    // borrowed by the marketing brief, and "Compare another subject →" printed
+    // on a landscape sheet is an instruction to press something a reader of a
+    // PDF cannot press — `lib/reports/monthly.ts` ruled on the same shape when
+    // it gave the monthly artefact its own moves empty state, because the
+    // page's wording "is a control on a page the reader of an email is not
+    // looking at". The screen and the email keep theirs; print gets none.
     const href = `${ctx.appUrl}/dashboard/voice`
-    const footer = mode === 'email'
-      ? <a href={href} style={{ color: EMAIL.ink }}>Compare another subject →</a>
-      : <Link href={href} className="hover:underline">Compare another subject →</Link>
+    const footer = mode === 'print'
+      ? null
+      : mode === 'email'
+        ? <a href={href} style={{ color: EMAIL.ink }}>Compare another subject →</a>
+        : <Link href={href} className="hover:underline">Compare another subject →</Link>
 
     return (
       <BlockFrame

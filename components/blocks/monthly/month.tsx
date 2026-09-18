@@ -70,8 +70,15 @@ export const monthlyMonth: Block<MonthlyData> = {
         </div>
       ) : (
         <p className="m-0 rounded-md bg-inner px-2.5 py-1.5 text-[12.5px] text-secondary-foreground">
-          <span className="font-medium text-foreground">One unusual week:</span> {anomalySentence(s.anomaly)}{' '}
-          <Link href={`${ctx.appUrl}/dashboard/week`} className="underline underline-offset-2">This week →</Link>
+          <span className="font-medium text-foreground">One unusual week:</span> {anomalySentence(s.anomaly)}
+          {/* NOT ON PAPER (package E-marketing, fix pass). The brief borrows
+              this block onto a landscape sheet, where "This week →" is an
+              instruction to press a control the reader of a PDF has not got —
+              the rule `MONTHLY_MOVES_EMPTY` was written under. The sentence
+              carries itself; only the link goes. */}
+          {mode === 'print' ? null : (
+            <> <Link href={`${ctx.appUrl}/dashboard/week`} className="underline underline-offset-2">This week →</Link></>
+          )}
         </p>
       )
     ) : null

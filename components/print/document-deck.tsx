@@ -10,6 +10,8 @@ import { gapLine, sidePct, type Gap } from '@/lib/reading/gap'
 import { fullDate, round1 } from '@/lib/format'
 import { platformShareLine } from '@/lib/reading/method'
 import { MOVE_PROMISE } from '@/lib/subjects/types'
+import { MOVES_EMPTY } from '@/lib/pages/overview'
+import { MONTHLY_MOVES_EMPTY } from '@/lib/reports/monthly'
 import type { Good } from '@/components/charts/stat'
 import type { DeltaVerdict } from '@/lib/report-bands'
 import type { ShareSide } from '@/lib/report-delta'
@@ -998,6 +1000,38 @@ function PageBody({ page, data, title, pages }: { page: DocPage; data: DocumentS
  * prints its one line instead: the block's own empty state, or the
  * missing-input sentence naming the input and who closes it.
  */
+/**
+ * AN EMPTY STATE WRITTEN FOR A SCREEN, SAID ON PAPER (fix pass).
+ *
+ * `overview.moves` says "Nothing dated yet. Press Track this on a subject or a
+ * theme and this block starts scoring it from the following month." — which on
+ * production today is the WHOLE BODY of the brief's Your-moves sheet: an
+ * instruction to press a control, printed on a landscape page, to a reader who
+ * has a PDF. `lib/reports/monthly.ts` ruled on exactly this when it gave the
+ * monthly artefact `MONTHLY_MOVES_EMPTY` — the page's wording "is a control on
+ * a page the reader of an email is not looking at" — and a brief is the same
+ * reader with less recourse, so it takes the artefact's sentence.
+ *
+ * KEYED ON THE BLOCK AND ON THE EXACT STRING, both. The section's `empty` is
+ * also where the MISSING-INPUT sentence lands ("we have not recorded your
+ * subjects, and here is who closes it"), and that one names an act the reader's
+ * own operator performs — substituting the artefact's wording over it would
+ * throw away the answer. Matching the page's own constant means a section
+ * carrying anything else prints what it was given.
+ *
+ * AT RENDER, NOT AT COMPOSE: the string is frozen onto the snapshot, so a brief
+ * already built and already shared stops printing the control the next time it
+ * is opened.
+ */
+const PAPER_EMPTY: { block: string; screen: string; paper: string }[] = [
+  { block: 'overview.moves', screen: MOVES_EMPTY, paper: MONTHLY_MOVES_EMPTY },
+]
+
+export function paperEmpty(section: Pick<DocBriefSection, 'block' | 'empty'>): string | null {
+  if (section.empty == null) return null
+  return PAPER_EMPTY.find((x) => x.block === section.block && x.screen === section.empty)?.paper ?? section.empty
+}
+
 function SectionBody({ section, data, framing = true }: { section: DocBriefSection; data: DocumentSnapshotData; framing?: boolean }) {
   const surface = (data.surfaces ?? {})[section.surface]
   const block = blocksFor(section.surface as BriefSurface)?.find((b) => b.key === section.block)
@@ -1007,7 +1041,7 @@ function SectionBody({ section, data, framing = true }: { section: DocBriefSecti
     // of a column — and the contract's kinds are all about a model's words.
     // Marking it `stored` asked the scanner for a `data-slot` that does not
     // exist (measured: two violations on Össur's marketing brief).
-    ? <p className="m-0 text-[13px] leading-[1.5] text-muted-foreground">{section.empty ?? 'This section could not be read for this month.'}</p>
+    ? <p className="m-0 text-[13px] leading-[1.5] text-muted-foreground">{paperEmpty(section) ?? 'This section could not be read for this month.'}</p>
     : block.render(surface as never, 'print', blockContext(appBaseUrl(), EMAIL))
   return (
     <div className="flex flex-col gap-3">
