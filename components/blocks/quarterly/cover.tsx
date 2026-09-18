@@ -69,7 +69,7 @@ function StatCard({ stat, mode }: { stat: CoverStat; mode: RenderMode }) {
   return (
     <div className="flex min-w-0 flex-col rounded-md border border-border bg-tile px-5 py-4">
       {figure ? (
-        <span data-copy="figure" className="font-mono text-[34px] font-medium leading-none tracking-[-0.02em] tabular-nums">{stat.value}</span>
+        <span data-copy="figure" className="font-mono text-[28px] font-medium leading-none tracking-[-0.02em] tabular-nums">{stat.value}</span>
       ) : (
         <span className="text-[15px] font-semibold leading-tight text-secondary-foreground">{stat.value}</span>
       )}
