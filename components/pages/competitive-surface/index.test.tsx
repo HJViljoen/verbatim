@@ -8,6 +8,7 @@ import { COMPETITIVE_BLOCKS } from './index'
 import { competitiveRivals } from './rivals'
 import { competitiveStandings } from './standings'
 import { competitiveQuestions } from './questions'
+import { competitiveUnlockRows } from '@/lib/pages/competitive-surface'
 import { competitiveUnlocks } from './unlocks'
 import { competitiveFixture, oneMonthFixture, quietRivalFixture, unreadMonthsFixture, unreadRivalFixture } from './fixture'
 
@@ -237,19 +238,27 @@ describe('the sections that are not built', () => {
     expect(text).toContain('What they say about themselves')
     expect(text).toContain('Findings, with recurrence')
     expect(text).toContain('How the category makes content')
-    expect(text).toContain('Your digital director')
+    expect(text).toContain('Verbatim engineering')
   })
 
-  it('says "not tracked" only where the inputs really are not tracked', () => {
+  it('never says a rival is not tracked on a page that has just counted their posts', () => {
     // ST1's "— not tracked" is for a section whose INPUTS are not configured.
-    // That is CO4 alone: head-to-head, findings and category content read the
-    // same inputs CO2 and CO5 have just drawn on the page above, so telling a
-    // client their rivals are not tracked there contradicts the page itself.
+    // Head-to-head, findings and category content read the same inputs CO2 and
+    // CO5 have just drawn above, so telling a client their rivals are not
+    // tracked there contradicts the page itself — and since CO4 started
+    // drawing a census per rival, that is true of CO4 too wherever the
+    // accounts ARE configured, which is every tracked rival on both tenants.
     const rows = competitiveFixture().unlocks.rows
-    expect(rows.filter((r) => r.state === 'not tracked').map((r) => r.section)).toEqual(['CO4'])
-    expect(rows.filter((r) => r.state === 'not built yet').map((r) => r.section)).toEqual(['CO3', 'CO6', 'CO7'])
+    expect(rows.filter((r) => r.state === 'not tracked')).toEqual([])
+    expect(rows.map((r) => r.section)).toEqual(['CO3', 'CO4', 'CO6', 'CO7'])
     const text = renderText(competitiveUnlocks.render(competitiveFixture(), 'app', ctx))
-    expect(text).toContain('— not tracked · Your digital director')
+    expect(text).not.toContain('— not tracked')
     expect(text).toContain('— not built yet')
+  })
+
+  it('keeps the untracked row, and its owner, for a workspace watching nobody', () => {
+    const data = competitiveFixture({ unlocks: { rows: competitiveUnlockRows([]) } })
+    const text = renderText(competitiveUnlocks.render(data, 'app', ctx))
+    expect(text).toContain('— not tracked · Your digital director')
   })
 })

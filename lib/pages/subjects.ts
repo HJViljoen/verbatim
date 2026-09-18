@@ -11,7 +11,16 @@ import { audienceLabel } from '../readiness/types'
 import { SHARE_BAND } from '../report-bands'
 import { directionWord, monthChange, thinMonth, type Direction, type SeriesPoint } from '../reading/bands'
 import { horizonWindow, HORIZON_LABEL, parseHorizon, sinceStart, type Horizon } from '../reading/horizon'
-import { kindShares, redditRead, type KindShare, type RedditRead } from '../reading/kinds'
+import { kindChange, kindShares, redditRead, type KindShare, type RedditRead } from '../reading/kinds'
+import {
+  claimEcho,
+  ownCensusWithClaims,
+  type ClaimEcho,
+  type OwnPostCensus,
+  type OwnPostInput,
+} from '../reading/own-posts'
+import { claimCounts, ledgerRows, type ClaimCounts } from '../market-tiles'
+import type { SayVsHearEntry } from '../pipeline/schemas'
 import { isMissingKindMoodAttention } from '../reading/attention'
 import { freezeStateFor, isMissingMonthTable } from '../reading/monthly'
 import { monthStartOf, nextMonth } from '../reading/month-key'
@@ -179,6 +188,19 @@ export interface SubjectSide {
   /** The audience-wide kind mix this month (the mock's own denominator: every
    *  video in the audience, not the subject's). */
   kinds: KindShare[]
+  /**
+   * Did each of those kinds' shares move, month on month? One banded `Verdict`
+   * per kind in `kinds`, keyed by the kind's enum value, null where no band
+   * could be drawn.
+   *
+   * `kindChange` has existed since WP3 and both Overview and Voice have called
+   * it since; this block drew the same rows and printed no change at all,
+   * which mock-gap calls the cheapest real gap on the page. The verdicts do
+   * NOT sum and nothing here adds them: a kind is an independent share of one
+   * denominator (decision T), so each row carries its own "of N" and its own
+   * band and there is no remainder row.
+   */
+  kindVerdicts: Record<string, Verdict | null>
   reddit: RedditRead | null
 }
 
@@ -313,6 +335,31 @@ export interface SubjectsData {
   notes: MonthLabel[]
   list: SubjectListBlock
   selected: SubjectPane | null
+  /**
+   * "Your own posts", this month — the mock's own tile (`subjects.ownposts.*`).
+   *
+   * DATED BY THE POST, AND THE ONLY FIGURE ON THIS PAGE THAT IS. Everything
+   * else here is comment-dated; a census of what you published is dated by
+   * `videos.upload_date`, which is a real calendar date for a post and is not
+   * the clock the month heading above it means. `OwnPostCensus.basis` carries
+   * that sentence and every surface prints it beside every figure — the same
+   * rule, and the same reason, as `UNANSWERED_BASIS` two tiles down.
+   *
+   * Null where the tenant has no month to count in.
+   */
+  ownPosts: OwnPostCensus | null
+  /**
+   * "Say vs hear" — how many of your claims the audience echoed, pushed back
+   * on, or never took up.
+   *
+   * THE SAME NUMBERS MARKET PRINTS, FROM THE SAME COMPUTATION AND THE SAME
+   * RUN. `claimCounts` over `run_summary.say_vs_hear` for this tenant's latest
+   * completed update, exactly as `lib/pages/market.ts` does it; the mock puts
+   * the tile on Subjects as well and two tiles of one product counting one
+   * ledger twice is how two pages come to disagree. Null where THAT update
+   * resolved no claim — which is when Market's tile is empty too.
+   */
+  sayHear: ClaimCounts | null
   record: SubjectsRecordBlock
   /**
    * The method footnote, composed once for every surface (block D, D9).
@@ -781,6 +828,287 @@ export async function loadMemberInsightIds(
   }
 }
 
+// ---- SU4 · your own posts ------------------------------------------------------
+
+interface OwnPostRow {
+  id: string
+  upload_date: string | null
+  comments_count: number
+  hook_style: string | null
+  classified_type: string | null
+}
+
+interface OwnClaimStored {
+  id: string
+  source_video_id: string
+  claim: string
+}
+
+/** The month's own posts as half-open calendar days — the census's ONLY filter,
+ *  because a post is placed by the day it was published. */
+function monthDays(month: string): { from: string; to: string } {
+  const start = monthStartOf(month)
+  const d = new Date(`${start}T00:00:00.000Z`)
+  const next = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))
+  return { from: start, to: next.toISOString().slice(0, 10) }
+}
+
+/**
+ * What you published this month, and what those posts said.
+ *
+ * FOUR READS, EACH BOUNDED BY THE MONTH'S OWN POSTS. The videos, the claims,
+ * the insights those posts drew and the subject memberships over exactly those
+ * insights. The video read is NOT an index seek on the date, and the docblock
+ * said it was: `videos` carries twelve indexes and none of them is on
+ * `upload_date` (checked 2026-09-18; `videos_client_upload_date_idx` is written
+ * in 20260918094000 and not applied anywhere). The plan takes
+ * `videos_client_id_idx` and filters the month out, which on 3,927 and 4,450
+ * rows a tenant is cheap — an accuracy fix, not a performance one, and after
+ * the 2026-09-16 outage a docblock claiming a read is indexed when it is not is
+ * the wrong thing to leave lying around. Nothing here reads a
+ * cumulative corpus and nothing here touches `audience_insights.embedding` —
+ * the population read goes through `audience_insights_current` and selects
+ * three columns (AGENTS.md).
+ *
+ * WHOSE POST IT IS FOLLOWS `claimEntity`'s RULE, NOT ONE COLUMN. A post read
+ * off your own profile IS yours whatever a caption-only re-tag later decided —
+ * Sealand carries 13 `source = 'owned'` rows with `is_client = false`, two of
+ * them with 18 claims between them (lib/pipeline/claims.ts). So the filter is
+ * `is_client OR source = 'owned'`, which is authorship first and subject
+ * second, exactly as the claims loader resolves it.
+ *
+ * AND THE CLAIMS HALF MAY NOT BE READABLE. `video_claims` carries RLS with no
+ * tenant SELECT policy until M8, so a member's read comes back EMPTY WITH NO
+ * ERROR — an empty half that reads as "you claimed nothing" is the failure
+ * `UNANSWERED_CLAIMS_UNREADABLE` exists to avoid one tile down. The test is
+ * the all-time read, not the month's: a tenant with 106 and 108 stored claims
+ * that reads zero of them has been refused, not answered, and the census says
+ * which half it read (`ownCensusWithClaims`). Even after M8 the verbatim
+ * `quote` column is not granted to `authenticated`, so a claim row arrives
+ * without its words and the census carries no quote for it — withheld by a
+ * policy, not missing.
+ */
+export async function loadOwnPosts(
+  supabase: SupabaseClient,
+  clientId: string,
+  month: string,
+  subjects: readonly Subject[],
+  echoes: readonly ClaimEcho[] = [],
+): Promise<OwnPostCensus> {
+  const days = monthDays(month)
+  const [videos, claims] = await Promise.all([
+    selectAll<OwnPostRow>(() =>
+      supabase
+        .from('videos')
+        .select('id, upload_date, comments_count, hook_style, classified_type')
+        .eq('client_id', clientId)
+        .or('is_client.eq.true,source.eq.owned')
+        .gte('upload_date', days.from)
+        .lt('upload_date', days.to)
+        .order('id', { ascending: true }),
+    ),
+    // NO `quote`. M8 grants `authenticated` a named column list that excludes
+    // it, so asking for it is a permission error on the day M8 lands rather
+    // than a wider read — and the census prints claims without verbatim words
+    // by design (the migration's own comment on the column).
+    //
+    // AND NO `entity` FILTER, for the reason the video half has none either.
+    // `video_claims.entity` froze `videos.is_client` at the run that wrote the
+    // row, and a re-tag since rewrites the video and never the claim — 72 of
+    // Sealand's 376 stored rows disagree with their video today, 18 of them on
+    // Sealand's own posts (lib/pipeline/claims.ts). Filtering on it would drop
+    // a claim sitting on one of THIS MONTH'S own posts because an older run
+    // called that post a competitor's — and because `claims.length > 0` is
+    // also the "was this half readable" test, a tenant whose every row is
+    // stale would be told the claims half was REFUSED rather than empty. The
+    // filter buys nothing either: `ownPostCensus` keeps only claims whose
+    // `source_video_id` is one of the posts the video half already selected by
+    // the LIVE rule, and M8's RLS enforces `entity = 'client'` on the tenant
+    // path regardless.
+    selectAll<OwnClaimStored>(() =>
+      supabase
+        .from('video_claims')
+        .select('id, source_video_id, claim')
+        .eq('client_id', clientId)
+        .order('id', { ascending: true }),
+    ).catch(() => [] as OwnClaimStored[]),
+  ])
+
+  // The subjects these posts matched: insights on exactly these videos, then
+  // the membership rows over exactly those insights. Both directions are
+  // bounded by the month's own posts — 17 on Sealand in September — rather
+  // than by the subject's whole membership, which runs to thousands.
+  const postIds = videos.map((v) => v.id)
+  let membership: OwnPostInput['membership'] = []
+  // How many of the month's own posts have been READ at all. It is what lets
+  // an empty subject list say which of three things happened, and on both
+  // tenants today it is zero — Sealand has no `audience_insights_current` row
+  // on any of its seventeen September posts, so without this the tile would
+  // read "about none of your subjects" when nothing has been analysed.
+  let analysedPosts = 0
+  if (postIds.length > 0 && subjects.length > 0) {
+    const insights = await readByIds<{ id: string; source_video_id: string | null }>(postIds, (part) =>
+      supabase
+        .from('audience_insights_current')
+        .select('id, source_video_id')
+        .eq('client_id', clientId)
+        .in('source_video_id', part)
+        .order('id', { ascending: true }),
+    )
+    const videoOf = new Map(insights.map((i) => [i.id, i.source_video_id]))
+    analysedPosts = new Set(insights.map((i) => i.source_video_id).filter((v): v is string => !!v)).size
+    if (insights.length > 0) {
+      const rows = await readByIds<{ subject_id: string; audience_insight_id: string }>(
+        insights.map((i) => i.id),
+        (part) =>
+          supabase
+            .from(TABLE_SUBJECT_MEMBERSHIPS)
+            .select('subject_id, audience_insight_id')
+            .eq('client_id', clientId)
+            .eq('member', true)
+            .in('audience_insight_id', part)
+            .order('audience_insight_id', { ascending: true }),
+      ).catch((error) => {
+        if (isMissingSubjects(error)) return []
+        throw error
+      })
+      const bySubject = new Map<string, Set<string>>()
+      for (const r of rows) {
+        const vid = videoOf.get(r.audience_insight_id)
+        if (!vid) continue
+        const held = bySubject.get(r.subject_id) ?? new Set<string>()
+        held.add(vid)
+        bySubject.set(r.subject_id, held)
+      }
+      membership = subjects
+        .filter((s) => bySubject.has(s.id))
+        .map((s) => ({ subjectId: s.id, label: s.name, videoIds: [...(bySubject.get(s.id) ?? [])] }))
+    }
+  }
+
+  const input: OwnPostInput = {
+    month,
+    audience: CLIENT_AUDIENCE,
+    audienceLabel: 'You',
+    videos,
+    // `entity` is the census's, not the row's. Every claim that survives the
+    // census's own month filter sits on a post the LIVE rule already called
+    // yours, so the answer to "whose post was this" is the audience this
+    // census counts — never the column a run froze and a re-tag left behind.
+    claims: claims.map((c) => ({ ...c, entity: CLIENT_AUDIENCE, quote: '' })),
+    membership,
+    echoes,
+    subjectScope: { named: subjects.length, analysedPosts },
+  }
+  // `claims.length` is the ALL-TIME read, so "we read nothing at all" is what
+  // marks the half as closed — never the month's own zero, which is a real
+  // reading and has to be allowed to be one.
+  return ownCensusWithClaims(input, claims.length > 0)
+}
+
+/** The say-vs-hear ledger as counts, off THE RUN MARKET READS.
+ *
+ *  `ledgerRows` with no cap, then `claimCounts` — Market's own two lines, so
+ *  the two tiles cannot disagree (lib/pages/market.ts). That promise is about
+ *  the ROW SELECTION as much as the computation, and this read used to break
+ *  it: it took the newest summary that HAD a `say_vs_hear`, ordered by
+ *  `run_date`, so on a tenant whose newest update produced no ledger the two
+ *  pages read different runs and printed different counts. `run_date` is a
+ *  weak key for "newest" besides — it is the wall clock at persist, and one
+ *  run has carried two of them (AGENTS.md).
+ *
+ *  So the run is the page's own latest completed update, which is the run
+ *  `loadMarket` picks by the same status filter and the same ordering. When
+ *  that run resolved no claim both pages say so, which is the honest pair of
+ *  answers; a page that reaches back for an older ledger is printing a reading
+ *  of an update the heading above it does not name. */
+async function loadSayHear(supabase: SupabaseClient, clientId: string, runId: string): Promise<{ counts: ClaimCounts | null; entries: SayVsHearEntry[] }> {
+  const res = await supabase
+    .from('run_summary')
+    .select('say_vs_hear')
+    .eq('client_id', clientId)
+    .eq('run_id', runId)
+    .maybeSingle()
+  const entries = ((res.data as { say_vs_hear: SayVsHearEntry[] | null } | null)?.say_vs_hear ?? []) as SayVsHearEntry[]
+  if (entries.length === 0) return { counts: null, entries: [] }
+  const rows = ledgerRows(entries, Number.MAX_SAFE_INTEGER)
+  return { counts: claimCounts(rows), entries: rows }
+}
+
+/**
+ * One echo per census claim, counted rather than asserted.
+ *
+ * THE CHAIN, AND WHY IT IS GUARDED. A claim's echo is "how many videos in your
+ * own audience carried what this claim rests on, of how many" — which means
+ * `run_summary.say_vs_hear.supporting_theme_ids` (durable audience-insight
+ * ids) → the `theme_registry` entries holding them in the client bucket →
+ * `month_theme_readings` for this month through `loadMonthSeries`. Two reads.
+ * They are skipped entirely when the census has no claims to echo, which is
+ * every tenant today while `video_claims` is closed — so the page pays nothing
+ * for this until the day it has something to say.
+ *
+ * ONE CLAIM'S READING IS ITS STRONGEST THEME, NOT THE SUM OF THEM. Adding the
+ * themes behind a claim double-counts every video that carried two of them,
+ * and a k above its own n is not a proportion. The maximum is the honest
+ * single reading: "the most-carried thing this claim rests on reached k of n".
+ */
+export async function loadClaimEchoes(
+  supabase: SupabaseClient,
+  reading: ReadingHandle,
+  clientId: string,
+  month: string,
+  claims: readonly { claim: string }[],
+  entries: readonly SayVsHearEntry[],
+): Promise<ClaimEcho[]> {
+  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim()
+  const stanceOf = new Map(entries.map((e) => [norm(e.you_say), e]))
+  const matched = claims.map((c) => stanceOf.get(norm(c.claim)) ?? null)
+  const insightIds = [...new Set(matched.flatMap((e) => e?.supporting_theme_ids ?? []))]
+  const none = (): ClaimEcho[] =>
+    claims.map(() => claimEcho({ audience: CLIENT_AUDIENCE, audienceLabel: 'You', reading: null }))
+  if (insightIds.length === 0) return none()
+
+  const registry = await selectAll<{ id: string; member_insight_ids: string[] | null }>(() =>
+    supabase
+      .from('theme_registry')
+      .select('id, member_insight_ids')
+      .eq('client_id', clientId)
+      .eq('bucket', CLIENT_AUDIENCE)
+      .overlaps('member_insight_ids', insightIds)
+      .order('id', { ascending: true }),
+  ).catch(() => [] as { id: string; member_insight_ids: string[] | null }[])
+  if (registry.length === 0) return none()
+
+  const set = await loadMonthSeries(reading.client, clientId, {
+    from: month,
+    to: month,
+    audiences: [CLIENT_AUDIENCE],
+    objectKind: 'theme',
+    objectIds: registry.map((r) => r.id),
+    updatesByMonth: {},
+  })
+  if (set.numeratorSubstrate === 'missing') return none()
+  const readingOf = new Map<string, { k: number | null; videos: number | null }>()
+  for (const s of set.series) {
+    if (!s.objectId) continue
+    const point = pointsByMonth(s).get(monthStartOf(month))
+    if (point) readingOf.set(s.objectId, { k: point.k, videos: point.videos })
+  }
+
+  return claims.map((_, i) => {
+    const entry = matched[i]
+    const ids = new Set(entry?.supporting_theme_ids ?? [])
+    let best: { k: number; n: number } | null = null
+    for (const r of registry) {
+      if (!(r.member_insight_ids ?? []).some((id) => ids.has(id))) continue
+      const point = readingOf.get(r.id)
+      if (!point || point.k == null || point.videos == null) continue
+      if (!best || point.k > best.k) best = { k: point.k, n: point.videos }
+    }
+    return claimEcho({ audience: CLIENT_AUDIENCE, audienceLabel: 'You', reading: best, stance: entry?.audience ?? null })
+  })
+}
+
 // ---- the loader ---------------------------------------------------------------
 
 /**
@@ -840,6 +1168,10 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     updatesByMonth[m] = (updatesByMonth[m] ?? 0) + 1
   }
   const firstRunMonth = monthStartOf(runsRaw[0].started_at)
+  // `runsRaw` is the completed/partial updates in started_at order, which is
+  // `loadMarket`'s own filter read the other way round — so its last row is the
+  // run Market calls "latest", and the claims ledger below reads that one.
+  const latestRunId = runsRaw[runsRaw.length - 1].id
 
   // The whole denominator history decides the axis — `sinceStart` is what
   // "since we started" means (decision M) and the horizon is computed from it.
@@ -887,6 +1219,14 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   // read that depends on them.
   const leadRival = rivals.find((r) => !r.retiredAt) ?? rivals[0] ?? null
   const audiences = [CLIENT_AUDIENCE, ...rivals.map((r) => rivalKey(r.name)), INDUSTRY_AUDIENCE]
+
+  // SU4 AND THE CLAIMS LEDGER RIDE WITH THE MONTH READS. Neither depends on
+  // the selected subject and neither is on anything's critical path, so they
+  // overlap the two reads that are.
+  const ownPostsAhead = loadOwnPosts(supabase, clientId, month, active)
+  const sayHearAhead = loadSayHear(supabase, clientId, latestRunId)
+  ownPostsAhead.catch(() => {})
+  sayHearAhead.catch(() => {})
 
   const [subjectSet, kindRows] = await Promise.all([
     selectedId
@@ -1040,6 +1380,18 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     }
   }
 
+  // ── SU4 · your own posts, and the claims ledger ───────────────────────
+  const census = await ownPostsAhead
+  const sayHear = await sayHearAhead
+  // The echo reads run only where there is a claim to echo — which is nowhere
+  // until `video_claims` opens to a tenant session. See `loadClaimEchoes`.
+  const ownPosts: OwnPostCensus = census.claims.length === 0
+    ? census
+    : await loadClaimEchoes(supabase, reading, clientId, month, census.claims, sayHear.entries).then((echoes) => ({
+        ...census,
+        claims: census.claims.map((c, i) => ({ ...c, echo: echoes[i] ?? c.echo })),
+      }))
+
   // ── the record ────────────────────────────────────────────────────────
   const pageVerdicts = (selected?.sides ?? []).map((s) => s.verdict).filter((v): v is Verdict => v != null)
   const recordInputs: RecordInputs = {
@@ -1059,6 +1411,8 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     notes: subjectNotes(subjectSet?.notes),
     list,
     selected,
+    ownPosts,
+    sayHear: sayHear.counts,
     record: {
       line: howSoundLine(recordInputs),
       lines: recordLines(recordInputs),
@@ -1200,6 +1554,36 @@ export function buildSides(input: SidesInput): SubjectSide[] {
     return { kinds: kindShares(asRows, n), reddit: redditRead(asRows) }
   }
 
+  /**
+   * Did each drawn kind's share move? `buildCategory`'s rule, on this block's
+   * rows (lib/pages/overview.ts) — one comparison per kind, the audience's own
+   * video count as n on both sides, and null wherever either side is missing.
+   *
+   * The thin-month gate suppresses all of them together, exactly as it
+   * suppresses the subject verdicts above: one gate, one answer, so a page
+   * cannot print "too little data" on the line and a band on the kind under it.
+   */
+  const verdictsFor = (audience: string, kinds: readonly KindShare[]): Record<string, Verdict | null> => {
+    const out: Record<string, Verdict | null> = {}
+    if (input.kindRows == null) return out
+    const n = perAudience.get(`${month}|${audience}`) ?? null
+    const prevN = perAudience.get(`${prevMonth}|${audience}`) ?? null
+    const before = input.kindRows.filter((r) => monthStartOf(r.month) === prevMonth && r.audience === audience)
+    for (const k of kinds) {
+      const prev = before.find((r) => r.kind === k.kind)
+      out[k.kind] =
+        thin || n == null || prevN == null || prev == null
+          ? null
+          : kindChange({
+              kind: k.kind,
+              audience,
+              curr: { month, k: k.videos, videos: n },
+              prev: { month: prevMonth, k: prev.videos, videos: prevN },
+            })
+    }
+    return out
+  }
+
   return sides.map((s) => {
     const series = input.seriesFor(subject.id, s.audience)
     const byMonth = series ? pointsByMonth(series) : new Map()
@@ -1245,6 +1629,7 @@ export function buildSides(input: SidesInput): SubjectSide[] {
       direction: thin ? null : directionWord(axis.map(point)),
       previous: before ? { month: prevMonth, pct: pctOf(before.k, before.videos) } : null,
       kinds,
+      kindVerdicts: verdictsFor(s.audience, kinds),
       reddit,
     }
   })

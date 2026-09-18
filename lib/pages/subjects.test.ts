@@ -22,6 +22,7 @@ import {
   voicesMeta,
   UNANSWERED_BASIS,
   VOICES_SHOWN,
+  type StoredKindRow,
   type SubjectPane,
   type SubjectSide,
 } from './subjects'
@@ -237,7 +238,7 @@ describe('axisNote', () => {
   const side = (over: Partial<SubjectSide>): SubjectSide => ({
     audience: CLIENT_AUDIENCE, label: 'You', kind: 'you', color: 'var(--you)',
     k: 26, n: 84, pct: 31, observed: true, silence: null, verdict: null, direction: null,
-    previous: null, kinds: [], reddit: null, ...over,
+    previous: null, kinds: [], kindVerdicts: {}, reddit: null, ...over,
   })
 
   it('names the lines that carry too few videos to compare, in ONE sentence', () => {
@@ -287,7 +288,7 @@ const subject = (over: Partial<Subject> = {}): Subject => ({
   ...over,
 })
 
-function fixtureSides(over: { thin?: boolean; rivalRows?: boolean } = {}): SubjectSide[] {
+function fixtureSides(over: { thin?: boolean; rivalRows?: boolean; kindRows?: StoredKindRow[] | null } = {}): SubjectSide[] {
   const denominators: DenominatorPoint[] = []
   const per = new Map<string, number>()
   const add = (month: string, audience: string, videos: number) => {
@@ -322,11 +323,19 @@ function fixtureSides(over: { thin?: boolean; rivalRows?: boolean } = {}): Subje
     prevMonth: '2026-08-01',
     axis: AXIS,
     perAudience: per,
-    kindRows: null,
+    kindRows: over.kindRows ?? null,
     seriesFor,
     thin: over.thin ?? false,
   })
 }
+
+/** Two months of kinds for one audience, so a kind's share can be compared.
+ *  The category is the only side whose n clears the band's floor, which is the
+ *  real shape on both tenants. */
+const kindRowsFor = (audience: string, sep: Record<string, number>, aug: Record<string, number>): StoredKindRow[] => [
+  ...Object.entries(sep).map(([kind, videos]) => ({ month: '2026-09-01', audience, kind, videos, comments: 0, platform_mix: null })),
+  ...Object.entries(aug).map(([kind, videos]) => ({ month: '2026-08-01', audience, kind, videos, comments: 0, platform_mix: null })),
+]
 
 describe('buildSides', () => {
   it('reads you, each rival and the category as three sides of one subject', () => {
@@ -378,6 +387,46 @@ describe('buildSides', () => {
 
   it('draws no rival side at all when none is tracked', () => {
     expect(fixtureSides({ rivalRows: false }).map((s) => s.kind)).toEqual(['you', 'category'])
+  })
+
+  it('bands every kind it draws, one verdict per kind, with no remainder', () => {
+    const kindRows = kindRowsFor(INDUSTRY_AUDIENCE, { question: 480, praise: 380, objection: 260 }, { question: 380, praise: 390, objection: 255 })
+    const [, , category] = fixtureSides({ kindRows })
+    expect(category.kinds.map((k) => k.kind).sort()).toEqual(['objection', 'praise', 'question'])
+    expect(Object.keys(category.kindVerdicts).sort()).toEqual(['objection', 'praise', 'question'])
+    // 34.6% of 1,388 against 27.4% of 1,388 clears the band; the other two sit
+    // inside it. Each is its own share of one denominator — nothing sums them
+    // and there is no "other kinds" row for the remainder.
+    expect(category.kindVerdicts.question?.state).toBe('moved')
+    expect(category.kindVerdicts.praise?.state).toBe('no_clear_change')
+    expect(category.kindVerdicts.question?.value).toEqual({ k: 480, n: 1388 })
+    expect(category.kindVerdicts.question?.baseline).toEqual({ k: 380, n: 1388 })
+  })
+
+  it('never says a kind moved on a side whose own n cannot carry a band', () => {
+    const kindRows = kindRowsFor(CLIENT_AUDIENCE, { question: 30, praise: 20 }, { question: 12, praise: 21 })
+    const [you] = fixtureSides({ kindRows })
+    expect(you.kindVerdicts.question?.state).toBe('too_little_data')
+  })
+
+  it('carries no kind caveat about a grouping a kind does not have', () => {
+    const kindRows = kindRowsFor(INDUSTRY_AUDIENCE, { question: 480 }, { question: 380 })
+    const [, , category] = fixtureSides({ kindRows })
+    const flags = category.kindVerdicts.question?.flags ?? []
+    expect(flags).not.toContain('clustering_unknown')
+    expect(flags).not.toContain('clustering_changed')
+  })
+
+  it('suppresses every kind verdict on a thin month too', () => {
+    const kindRows = kindRowsFor(INDUSTRY_AUDIENCE, { question: 480 }, { question: 380 })
+    const [, , category] = fixtureSides({ kindRows, thin: true })
+    expect(category.kindVerdicts.question).toBeNull()
+  })
+
+  it('draws no verdict for a kind the previous month never carried', () => {
+    const kindRows = kindRowsFor(INDUSTRY_AUDIENCE, { question: 480, praise: 380 }, { question: 380 })
+    const [, , category] = fixtureSides({ kindRows })
+    expect(category.kindVerdicts.praise).toBeNull()
   })
 })
 

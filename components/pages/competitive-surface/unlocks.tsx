@@ -12,10 +12,20 @@ import type { CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
 // are not configured renders its '— not tracked' state with the name of the
 // person who fixes it."
 //
-// — and that is CO4 alone. Its inputs are a rival's own accounts, which are the
-// client's to name, which is also why its owner is their digital director and
-// not engineering: saying "Verbatim engineering" against it would quietly take
-// a job off the client's desk and put it on a queue.
+// — and CO4 is the only one that can be in that state, because its inputs are a
+// rival's own accounts, which are the client's to name. That is why THAT row's
+// owner is their digital director and not engineering: saying "Verbatim
+// engineering" against it would quietly take a job off the client's desk and
+// put it on a queue.
+//
+// BUT IT IS NOT ALWAYS IN THAT STATE ANY MORE, and the row is read off the
+// censuses CO4 now draws rather than written once here. Where the accounts are
+// configured — every tracked rival on both tenants — the page prints what each
+// rival published this month, and a readiness row saying nobody is watching
+// them would contradict the section above it. There the row says what is
+// actually missing: the verbatim claims half, which is read from the rival's
+// own transcripts and is not printed from a tenant session. That one IS
+// engineering's, so the owner moves with the state.
 //
 // The other three have their inputs — head-to-head, findings and category
 // content read the same ones CO2 and CO5 have just drawn on the page above —

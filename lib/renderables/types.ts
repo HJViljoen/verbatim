@@ -126,7 +126,10 @@ export interface Scope {
 
 /**
  * A quote as it travels through the spine. `ref` says where the words come
- * from — `e:<insight_evidence.id>`, `c:<comments.id>` or `v:<videos.id>` — and
+ * from — `e:<insight_evidence.id>`, `c:<comments.id>`, `v:<videos.id>` or
+ * `k:<video_claims.id>`; the full list, and what each resolves THROUGH, is in
+ * lib/renderables/quotes-freeze.ts, and picking the wrong kind hands back
+ * somebody else's words — and
  * it is the ONLY thing a snapshot keeps: `text` is emptied on freeze and
  * resolved live on render (lib/renderables/quotes-freeze.ts). That is the
  * agent's rule, applied to every export: an erased voice cannot survive

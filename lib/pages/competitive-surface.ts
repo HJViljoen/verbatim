@@ -14,6 +14,16 @@ import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, ty
 import { buildStandings, type StandingRow } from '../reading/standings'
 import type { MonthStatus, PlatformMix } from '../reading/types'
 import type { Verdict } from '../reading/verdicts'
+// D3 · own posts, own claims and what the rivals say. This module's own two
+// fields and one call line; everything counted is in lib/reading/own-posts.ts.
+import {
+  OWN_POSTS_NO_ACCOUNTS,
+  rivalOwnClaims,
+  saidAbout,
+  type OwnPostCensus,
+  type OwnPostInput,
+  type SaidAbout,
+} from '../reading/own-posts'
 import { CLIENT_AUDIENCE, isMissingCompetitors, loadCompetitors, rivalKey, stitchRenames } from '../rivals'
 import type { Quote, Scope } from '../renderables/types'
 import { quoteRef } from '../renderables/quotes-freeze'
@@ -208,6 +218,32 @@ export interface CompetitiveSurfaceData {
   rivals: RivalsBlock
   standings: StandingsBlock
   questions: QuestionsBlock
+  /**
+   * CO4 · what each tracked rival published this month, and what they said in
+   * it — one census per rival, in the tracked order.
+   *
+   * DATED BY THE POST. Every figure on a census is over `videos.upload_date`
+   * and `OwnPostCensus.basis` says so; the rest of this page is comment-dated
+   * and the two must not be read as one clock.
+   *
+   * THREE STATES, NOT TWO. A rival with no account configured has no read at
+   * all (`unread`); a rival with accounts and nothing captured this month is a
+   * real census that came back empty; a rival with posts is a census. And a
+   * rival's CLAIMS are never a tenant's to read — M8's policy is
+   * `entity = 'client'` — so a census carries real post counts beside
+   * `claimsNote` rather than an empty list that reads as "they claimed
+   * nothing".
+   */
+  ownClaims: OwnPostCensus[]
+  /**
+   * CO5 · what is said ABOUT each rival by everybody else.
+   *
+   * Empty on every row today, and the block says why rather than not
+   * existing: the claims are `video_claims` rows in a rival's bucket, which no
+   * tenant session may select. The shape is here so the surface that can read
+   * them — a document built on the service role — binds the same field.
+   */
+  saidAbout: SaidAbout[]
   unlocks: { rows: CompetitiveUnlockRow[] }
   record: { line: string; lines: string[]; href: string }
   /**
@@ -450,15 +486,44 @@ export const QUESTIONS_SUBJECTS_NOTE =
  * it is.
  *
  * All four printed "— not tracked", which is ST1's state for a section whose
- * inputs are not configured. That is true of CO4 alone: a rival's own-post
- * claims may only be read from videos they posted, and their accounts are the
- * client's to name. Head-to-head, findings and category content have their
- * inputs — they are the same ones CO2 and CO5 have just drawn on the page
+ * inputs are not configured. Head-to-head, findings and category content have
+ * their inputs — they are the same ones CO2 and CO5 have just drawn on the page
  * above — and what they are missing is the code. Market's own unlocks say
  * "— not built yet" for that, and two surfaces of one product should not
  * disagree about what a missing section is.
+ *
+ * CO4'S ROW IS NOW READ OFF THE CENSUSES BESIDE IT, and that is the whole point
+ * of the argument. Until this package the section drew nothing, so "their
+ * accounts are not configured" was always true enough to print. It now draws a
+ * census per rival — "Freitag · 10 posts published in September" — and on both
+ * tenants every tracked rival has handles on two or three platforms, so the
+ * page would have printed "nobody is watching Freitag" directly beside ten of
+ * Freitag's posts. A page may not claim a behaviour the code has just
+ * disproved. So: where no rival is tracked, or every tracked rival has no
+ * account configured, the row is unchanged and the job is still the client's
+ * digital director's. Where the accounts ARE configured, the inputs are not
+ * what is missing — what is missing is the verbatim claims half, which is read
+ * from the rival's own transcripts and is not printed from a tenant session,
+ * and that is engineering's row to answer, not the client's to fix.
  */
-export function competitiveUnlockRows(): CompetitiveUnlockRow[] {
+export function competitiveUnlockRows(ownClaims: readonly OwnPostCensus[] = []): CompetitiveUnlockRow[] {
+  const watched = ownClaims.filter((c) => c.unread !== OWN_POSTS_NO_ACCOUNTS).length
+  const co4: CompetitiveUnlockRow =
+    watched === 0
+      ? {
+          section: 'CO4',
+          state: 'not tracked' as const,
+          title: 'What they say about themselves',
+          line: 'The rival’s own-post claims, verbatim, beside what their audience says on the same subject. Their accounts are not configured, and a rival’s claims may only be read from videos they posted themselves.',
+          owner: 'Your digital director',
+        }
+      : {
+          section: 'CO4',
+          state: 'not built yet' as const,
+          title: 'What they say about themselves',
+          line: 'What each rival published this month is above. What they CLAIM in it is read from their own transcripts and is not printed here — putting a rival’s words on this page is a decision to take, not a gap to fill.',
+          owner: 'Verbatim engineering',
+        }
   return [
     {
       section: 'CO3',
@@ -467,13 +532,7 @@ export function competitiveUnlockRows(): CompetitiveUnlockRow[] {
       line: 'You against the selected rival, one row per measure — videos about, comments per video, engagement per video, positive share, own posts published — now, last month and the change, with an n on every row.',
       owner: 'Verbatim engineering',
     },
-    {
-      section: 'CO4',
-      state: 'not tracked' as const,
-      title: 'What they say about themselves',
-      line: 'The rival’s own-post claims, verbatim, beside what their audience says on the same subject. Their accounts are not configured, and a rival’s claims may only be read from videos they posted themselves.',
-      owner: 'Your digital director',
-    },
+    co4,
     {
       section: 'CO6',
       state: 'not built yet' as const,
@@ -561,6 +620,12 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
 
   const denominators = storedDenominators(history, readAxis)
 
+  // CO4 · what each rival published this month. It needs the month and the
+  // tracked list and nothing else, so it starts here and is collected at the
+  // bottom beside the record.
+  const ownClaimsAhead = loadRivalOwnPosts(supabase, clientId, month, rivals.rivals)
+  ownClaimsAhead.catch(() => {})
+
   // The record's reads depend on the month and nothing else; the refusals it
   // also carries are arithmetic over verdicts, added below.
   const recordAhead = loadRecordInputs(reading.client, clientId, recordWindow(month, readingAt), { now: readingAt })
@@ -619,6 +684,10 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
     subjectsNamed,
   })
 
+  // CO4 · the censuses, taken before the return because the readiness row below
+  // is read off them.
+  const ownClaims = await ownClaimsAhead
+
   // ── the record ─────────────────────────────────────────────────────────
   const verdicts = standingsVerdicts({ standings })
   const recordInputs: RecordInputs = {
@@ -642,7 +711,17 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
     },
     standings,
     questions,
-    unlocks: { rows: competitiveUnlockRows() },
+    ownClaims: ownClaims,
+    // CO5 · the denominator is the audience's own videos this month, off the
+    // rows the standings already read — never a second count of the same thing.
+    saidAbout: buildSaidAbout(rivals.rivals, (audience) =>
+      (denominators ?? [])
+        .filter((row2) => monthStartOf(row2.month) === month && row2.audience === audience)
+        .reduce((n, row2) => n + row2.videos, 0),
+    ),
+    // CO4's readiness row is read off the censuses beside it: a page may not
+    // say "their accounts are not configured" above ten of Freitag's posts.
+    unlocks: { rows: competitiveUnlockRows(ownClaims) },
     record: { line: howSoundLine(recordInputs), lines: recordLines(recordInputs), href: '/dashboard/settings' },
     method: methodLines(recordInputs, { brand }),
   }
@@ -685,6 +764,115 @@ async function loadRivals(
   const res = await supabase.from('tracking_configs').select('competitor_names').eq('client_id', clientId).maybeSingle()
   const tc = row<{ competitor_names: string[] | null }>(res, 'competitive-surface.rivals')
   return { rivals: (tc?.competitor_names ?? []).map((name) => ({ name, retiredAt: null })), recorded: false }
+}
+
+// ---- CO4 and CO5 · own posts, own claims, and what is said about them --------
+//
+// THE SECTION NUMBERS HERE ARE THE BRIEF'S: CO4 is what they say on their own
+// posts, CO5 is what is said about them, CO6 is findings with recurrence — and
+// `competitiveUnlockRows` already calls findings CO6, so labelling "said about"
+// CO6 too (as this file did when it landed) puts two different sections behind
+// one number. The questions section further up carries an OLDER "CO5" label
+// that disagrees with the same numbering; it is not this package's to move, and
+// it is named here so the next reader knows which of the two is the outlier.
+
+interface RivalPostRow {
+  id: string
+  competitor_name: string | null
+  upload_date: string | null
+  comments_count: number
+  hook_style: string | null
+  classified_type: string | null
+}
+
+/**
+ * What each tracked rival published in this month, and the accounts we read it
+ * from.
+ *
+ * TWO READS, BOTH SMALL. The month's `competitor_owned` videos (nineteen rows
+ * on Sealand in September) and the handle map. The date is NOT indexed —
+ * `videos` carries twelve indexes and none is on `upload_date` (checked
+ * 2026-09-18); the plan takes `videos_client_id_idx` and filters, which on
+ * ~4,000 rows a tenant is cheap. `source = 'competitor_owned'` is authorship
+ * and not a subject tag: a
+ * post read off a rival's own profile is theirs whatever the caption says,
+ * which is `claimEntity`'s first test (lib/pipeline/claims.ts).
+ *
+ * THE HANDLE MAP IS WHAT MAKES THE ABSENCE HONEST. Without it "no post this
+ * month" and "nobody is watching this brand" are one empty list, and the
+ * rivals panel's whole point is that they are three different states
+ * (lib/settings/rivals-view.ts). `rivalOwnClaims` takes the handles per rival
+ * and words each state itself.
+ */
+export async function loadRivalOwnPosts(
+  supabase: SupabaseClient,
+  clientId: string,
+  month: string,
+  rivals: readonly { name: string }[],
+): Promise<OwnPostCensus[]> {
+  if (rivals.length === 0) return []
+  const start = monthStartOf(month)
+  const d = new Date(`${start}T00:00:00.000Z`)
+  const to = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)).toISOString().slice(0, 10)
+
+  const [posts, handleRes] = await Promise.all([
+    selectAll<RivalPostRow>(() =>
+      supabase
+        .from('videos')
+        .select('id, competitor_name, upload_date, comments_count, hook_style, classified_type')
+        .eq('client_id', clientId)
+        .eq('source', 'competitor_owned')
+        .gte('upload_date', start)
+        .lt('upload_date', to)
+        .order('id', { ascending: true }),
+    ),
+    supabase.from('tracking_configs').select('competitor_handles').eq('client_id', clientId).maybeSingle(),
+  ])
+  const handles =
+    row<{ competitor_handles: Record<string, Record<string, string>> | null }>(handleRes, 'competitive-surface.handles')?.competitor_handles ?? {}
+  const fold = (s: string) => s.toLowerCase().trim()
+  const handlesByName = new Map(Object.entries(handles).map(([name, h]) => [fold(name), h ?? {}]))
+
+  const inputs: OwnPostInput[] = rivals.map((r) => ({
+    month: start,
+    audience: rivalKey(r.name),
+    audienceLabel: r.name,
+    videos: posts.filter((p) => fold(p.competitor_name ?? '') === fold(r.name)),
+    // A rival's claims are not the tenant's to read, at any migration:
+    // `video_claims`' tenant policy is `entity = 'client'` by design (M8's own
+    // comment). `rivalOwnClaims` says so on every census rather than leaving an
+    // empty list to be read as "they claimed nothing".
+    claims: [],
+    membership: [],
+    echoes: [],
+    handles: handlesByName.get(fold(r.name)) ?? {},
+  }))
+  return rivalOwnClaims(inputs)
+}
+
+/**
+ * CO5, as the honest absence it is today.
+ *
+ * `saidAbout` is a claims reading and the claims are `video_claims` rows in a
+ * rival's bucket — which M8 does not open to a tenant session and deliberately
+ * will not: they are whole sentences out of a third party's transcript. So
+ * every row comes back with its `empty` sentence, and the block exists and says
+ * why, which is more than the page does today: mock-gap records that "Said
+ * about them, by others" is not even named in `competitiveUnlockRows()`.
+ *
+ * The function itself is the real one, over an empty list, rather than a
+ * hand-built shape — so the day a service-role surface feeds it rows, this
+ * page's shape is already the one they arrive in.
+ */
+export function buildSaidAbout(
+  rivals: readonly { name: string }[],
+  denominatorFor: (audience: string) => number,
+  claimsFor: (audience: string) => readonly { claim: string; quote: string; videoId: string }[] = () => [],
+): SaidAbout[] {
+  return rivals.map((r) => {
+    const audience = rivalKey(r.name)
+    return saidAbout({ audience, label: r.name, claims: claimsFor(audience), of: denominatorFor(audience) })
+  })
 }
 
 async function loadSubreddits(supabase: SupabaseClient, clientId: string): Promise<string[]> {

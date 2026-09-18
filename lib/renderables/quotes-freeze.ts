@@ -27,9 +27,15 @@ import type { Quote, QuoteResolution } from './types'
  * `p:<language_samples.id>` is a customer PHRASE (Voice's "how your customers
  * talk") — a commenter's words with a comment_id behind them, cascade-deleted
  * on erasure like evidence rows.
+ * `k:<video_claims.id>` is a CLAIM quoted from a post's own transcript — the
+ * speaker's own words, `b:`'s case and not a commenter's, and the reason it
+ * cannot ride on `v:`: a `v:` ref resolves through insight_evidence to a
+ * COMMENTER's excerpt on that video, so freezing a claim under one would empty
+ * the brand's words and hand back a stranger's in their place, attributed to
+ * the brand, inside a stored artefact.
  */
 
-const REF_RE = /^([ecvmp]:.+|h:[a-z_]+:.+|b:[^:]+:\d+)$/
+const REF_RE = /^([ecvmpk]:.+|h:[a-z_]+:.+|b:[^:]+:\d+)$/
 
 export function isQuote(v: unknown): v is Quote {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return false
@@ -45,18 +51,19 @@ export const quoteRef = {
   video: (id: string) => `v:${id}`,
   message: (commentId: string) => `m:${commentId}`,
   phrase: (sampleId: string) => `p:${sampleId}`,
+  claim: (claimId: string) => `k:${claimId}`,
   hero: (table: HeroTable, id: string) => `h:${table}:${id}`,
   brandVoice: (runId: string, index: number) => `b:${runId}:${index}`,
 }
 
 /** Split a ref into its kind, bare id and (for heroes) table. */
-export function parseRef(ref: string): { kind: 'e' | 'c' | 'v' | 'm' | 'p'; id: string } | { kind: 'h'; table: string; id: string } | { kind: 'b'; runId: string; index: number } | null {
+export function parseRef(ref: string): { kind: 'e' | 'c' | 'v' | 'm' | 'p' | 'k'; id: string } | { kind: 'h'; table: string; id: string } | { kind: 'b'; runId: string; index: number } | null {
   const h = /^h:([a-z_]+):(.+)$/.exec(ref)
   if (h) return { kind: 'h', table: h[1], id: h[2] }
   const b = /^b:([^:]+):(\d+)$/.exec(ref)
   if (b) return { kind: 'b', runId: b[1], index: Number(b[2]) }
-  const m = /^([ecvmp]):(.+)$/.exec(ref)
-  return m ? { kind: m[1] as 'e' | 'c' | 'v' | 'm' | 'p', id: m[2] } : null
+  const m = /^([ecvmpk]):(.+)$/.exec(ref)
+  return m ? { kind: m[1] as 'e' | 'c' | 'v' | 'm' | 'p' | 'k', id: m[2] } : null
 }
 
 function walk(node: unknown, fn: (q: Quote) => Quote | null): unknown {

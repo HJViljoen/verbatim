@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest'
 
 import { horizonWindow } from '../reading/horizon'
+import { ownPostCensus } from '../reading/own-posts'
 import { NOT_OBSERVED } from '../reading/standings'
 import {
   ATTENTION_UNLOCK, CORPUS_DENOMINATOR_LINE, QUESTIONS_GROUPING_NOTE,
+  buildSaidAbout,
   buildStandingsBlock, changeNote, citationsInWindow, comparabilityCaveat, competitiveSurfaceHref,
   competitiveUnlockRows, mixLine, questionsEmpty, rivalState, splitKeysCaveat, storedDenominators, trackingRules,
   type StandingsMonthRow,
@@ -386,5 +388,65 @@ describe('the sections that are not built', () => {
     }
     // CO4's owner is the client's, not ours: the accounts are theirs to name.
     expect(rows.find((r) => r.section === 'CO4')?.owner).toBe('Your digital director')
+  })
+
+  it('stops saying a rival is not tracked once the page prints what they published', () => {
+    // The row used to be static, so Competitive would have printed "their
+    // accounts are not configured" directly beside "Freitag · 10 posts
+    // published in September". A page may not claim a behaviour the code on it
+    // has just disproved.
+    const watched = ownPostCensus({
+      month: '2026-09-01',
+      audience: 'competitor:Freitag',
+      audienceLabel: 'Freitag',
+      videos: [{ id: 'f1', upload_date: '2026-09-04', comments_count: 12, hook_style: null, classified_type: null }],
+      claims: [],
+      membership: [],
+      echoes: [],
+      handles: { instagram: 'freitag' },
+    })
+    const co4 = (rows: ReturnType<typeof competitiveUnlockRows>) => rows.find((r) => r.section === 'CO4')!
+    expect(co4(competitiveUnlockRows([watched])).state).toBe('not built yet')
+    expect(co4(competitiveUnlockRows([watched])).line).not.toContain('not configured')
+    expect(co4(competitiveUnlockRows([watched])).owner).toBe('Verbatim engineering')
+
+    // And where nobody IS watched, the row and its owner are unchanged: the
+    // accounts really are the client's to name.
+    const unwatched = ownPostCensus({
+      month: '2026-09-01',
+      audience: 'competitor:Poler',
+      audienceLabel: 'Poler',
+      videos: [],
+      claims: [],
+      membership: [],
+      echoes: [],
+      handles: { instagram: '  ' },
+    })
+    expect(co4(competitiveUnlockRows([unwatched])).state).toBe('not tracked')
+    expect(co4(competitiveUnlockRows([unwatched])).owner).toBe('Your digital director')
+    expect(co4(competitiveUnlockRows()).state).toBe('not tracked')
+  })
+})
+
+describe('buildSaidAbout', () => {
+  it('gives every rival a row and its own denominator', () => {
+    const rows = buildSaidAbout([{ name: 'Ottobock' }, { name: 'Rareform' }], (a) => (a === 'competitor:Ottobock' ? 42 : 0))
+    expect(rows.map((r) => r.audience)).toEqual(['competitor:Ottobock', 'competitor:Rareform'])
+    // Nothing is readable today, so every row is the block's own empty
+    // sentence — a named absence, not a missing block.
+    for (const r of rows) {
+      expect(r.rows).toEqual([])
+      expect(r.empty).toContain('Nothing was said about')
+    }
+  })
+
+  it('counts distinct videos over the audience’s month when the claims arrive', () => {
+    const [row0] = buildSaidAbout([{ name: 'Ottobock' }], () => 42, () => [
+      { claim: 'They repair for free', quote: 'Fixed mine for nothing.', videoId: 'a' },
+      { claim: 'they repair for free', quote: 'Same here.', videoId: 'b' },
+    ])
+    expect(row0.rows).toHaveLength(1)
+    expect(row0.rows[0].value).toEqual({ k: 2, n: 42 })
+    expect(row0.empty).toBeNull()
   })
 })

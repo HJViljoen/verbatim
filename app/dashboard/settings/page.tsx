@@ -64,7 +64,7 @@ export default async function SettingsTrackingPage() {
   const communities = communityRows({ entries: inputs.entries, roi: inputs.roi, gate: inputs.communityKept ?? [] })
   const table = tableRows(communities)
   const unconfigured = unconfiguredShare(communities)
-  const rivals = rivalRows({ names, handles, identities: inputs.rivals, census: inputs.census })
+  const rivals = rivalRows({ names, handles, identities: inputs.rivals, census: inputs.census, month: inputs.censusMonth })
 
   return (
     <SettingsFrame

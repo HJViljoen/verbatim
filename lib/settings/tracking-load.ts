@@ -5,6 +5,7 @@ import { passAMinComments } from '../config'
 import { parseSubreddits } from '../gather/subreddits'
 import type { SubredditEntry } from '../gather/types'
 import { computeSubredditRoi, type SubredditRoiRow } from '../pipeline/subreddit-roi'
+import { monthStartOf } from '../reading/month-key'
 import { loadCompetitors, type Competitor } from '../rivals'
 import { selectAll } from '../supabase-admin'
 import { loadTermPerformance } from '../keywords/performance'
@@ -62,6 +63,9 @@ export interface TrackingPageInputs {
   communityKept: KeptRate[] | null
   rivals: Competitor[]
   census: RivalCensusRow[]
+  /** The month the census's `publishedThisMonth` counts in, as a month start —
+   *  what the rivals table's own-posts column is headed by. */
+  censusMonth: string
 }
 
 /** The term-yield window: a quarter of weekly updates, the same number the
@@ -171,9 +175,19 @@ async function loadCommunityKept(admin: SupabaseClient | null, clientId: string)
   })))
 }
 
-async function loadCensus(client: SupabaseClient, clientId: string): Promise<RivalCensusRow[]> {
-  const rows = await selectAll<{ competitor_name: string | null; platform: string; analyzed_run_id: string | null }>(() =>
-    client.from('videos').select('competitor_name, platform, analyzed_run_id')
+/**
+ * Every post read off a rival's own profile, per rival per platform.
+ *
+ * THREE TALLIES OFF ONE READ. `captured` and `read` are all-time and are the
+ * handle check (rivals-view.ts's own docblock); `publishedThisMonth` is a
+ * PERIOD figure and is dated by `videos.upload_date`, the post's own date —
+ * the one clock an own-post count may be on, and never the run's. Adding
+ * `upload_date` to a select this page already makes is what keeps the rivals
+ * table's new column at zero extra queries.
+ */
+async function loadCensus(client: SupabaseClient, clientId: string, month: string): Promise<RivalCensusRow[]> {
+  const rows = await selectAll<{ competitor_name: string | null; platform: string; analyzed_run_id: string | null; upload_date: string | null }>(() =>
+    client.from('videos').select('competitor_name, platform, analyzed_run_id, upload_date')
       .eq('client_id', clientId).eq('source', 'competitor_owned')
       .order('id', { ascending: false }),
   )
@@ -182,9 +196,12 @@ async function loadCensus(client: SupabaseClient, clientId: string): Promise<Riv
     const name = r.competitor_name ?? ''
     if (!name) continue
     const key = `${name}|${r.platform}`
-    const row = acc.get(key) ?? { competitorName: name, platform: r.platform, captured: 0, read: 0 }
+    const row = acc.get(key) ?? { competitorName: name, platform: r.platform, captured: 0, read: 0, publishedThisMonth: 0 }
     row.captured++
     if (r.analyzed_run_id) row.read++
+    // A post with no upload_date cannot be dated by the post and is not in the
+    // month — under-counting rather than mis-dating.
+    if (r.upload_date && monthStartOf(r.upload_date) === month) row.publishedThisMonth++
     acc.set(key, row)
   }
   return [...acc.values()]
@@ -198,6 +215,10 @@ export async function loadTrackingPage(
    *  about (`gate_verdicts.account_name`), which no tenant session may read. */
   admin: SupabaseClient | null = null,
 ): Promise<TrackingPageInputs> {
+  // WHICH MONTH THE OWN-POSTS COLUMN IS HEADED BY. The calendar month we are
+  // in — a wall-clock answer to "what month is it", which is not the same as
+  // dating a figure by the clock: the figure itself is dated by the post.
+  const censusMonth = monthStartOf(new Date().toISOString())
   const [clientRead, configRead] = await Promise.all([
     client.from('clients').select('company_name, plan').eq('id', clientId).maybeSingle(),
     client.from('tracking_configs').select('*').eq('client_id', clientId).maybeSingle(),
@@ -211,7 +232,7 @@ export async function loadTrackingPage(
     loadRoi(client, clientId),
     loadCommunityKept(admin, clientId),
     loadCompetitors(client, clientId),
-    loadCensus(client, clientId),
+    loadCensus(client, clientId, censusMonth),
   ])
 
   return {
@@ -228,5 +249,6 @@ export async function loadTrackingPage(
     communityKept,
     rivals,
     census,
+    censusMonth,
   }
 }
