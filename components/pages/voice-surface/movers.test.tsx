@@ -70,8 +70,10 @@ describe('voiceMovers', () => {
     const text = draw()
     expect(text).toContain('Gone quiet Festival season packs last heard Jun 2026')
     // ONE flags row, the mock's — not two more arms with their own headings.
+    // A newcomer is a LEVEL with a flag on it and has no banded row to be
+    // drawn in, which is why `MoverRow` has no level-only variant any more.
     expect(text).not.toContain('No longer being said')
-    expect(text).not.toContain('First heard this month ·')
+    expect(text).not.toContain('first heard this month')
   })
 
   it('says "nothing else moved" beside a populated list, and only while it is true', () => {

@@ -69,12 +69,16 @@ function baselineOf(mover: Mover): string | null {
   return `${monthName(from).slice(0, 3)} ${fmtPct((b.k / b.n) * 100)} of ${fmtInt(b.n)}`
 }
 
-function MoverRow({ mover, mode, ctx, level }: {
+// A row of one arm. THERE IS NO LEVEL-ONLY VARIANT ANY MORE: a newcomer has no
+// baseline to be banded against, and it is rendered by `Flag` in the mock's one
+// tinted flags row rather than as a row of a banded arm. The `level` prop that
+// drew it here lost its last caller in the port and stayed behind with a branch
+// nothing could reach and a test asserting the absence of a string nothing
+// printed.
+function MoverRow({ mover, mode, ctx }: {
   mover: Mover
   mode: RenderMode
   ctx: BlockContext
-  /** A level-only row (new): the share is printed, the change is not drawn. */
-  level?: boolean
 }) {
   const href = `${ctx.appUrl}${voiceSurfaceHref((ctx.params ?? {}) as Record<string, string>, { theme: mover.id })}`
   // THE THEME'S OWN NAME IS THE MODEL'S WORDS (`pass_b_theme` policy 'none',
@@ -86,7 +90,7 @@ function MoverRow({ mover, mode, ctx, level }: {
   const baseline = baselineOf(mover)
   const counts = (
     <span data-copy="figure" className={mode === 'email' ? undefined : 'font-mono text-[11px] tabular-nums text-muted-foreground'}>
-      {mover.pct == null ? '—' : fmtPct(mover.pct)} · {fmtInt(mover.k)} of {fmtInt(mover.n)}{!level && baseline ? ` · ${baseline}` : ''}
+      {mover.pct == null ? '—' : fmtPct(mover.pct)} · {fmtInt(mover.k)} of {fmtInt(mover.n)}{baseline ? ` · ${baseline}` : ''}
     </span>
   )
 
@@ -94,9 +98,7 @@ function MoverRow({ mover, mode, ctx, level }: {
     return (
       <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '2px 0' }}>
         {name} {counts}{' '}
-        {level
-          ? <span data-copy="verdict">first heard this month</span>
-          : <><BlockMovement verdict={mover.verdict} unit="pts" mode={mode} /> <DirectionWord direction={mover.direction} mode={mode} /></>}
+        <BlockMovement verdict={mover.verdict} unit="pts" mode={mode} /> <DirectionWord direction={mover.direction} mode={mode} />
       </div>
     )
   }
@@ -105,14 +107,12 @@ function MoverRow({ mover, mode, ctx, level }: {
     <div className="flex min-w-0 flex-col gap-0.5 border-t border-border/70 py-1.5">
       <div className="flex items-baseline gap-2.5">
         {name}
-        {level ? null : <span className="flex-none whitespace-nowrap"><BlockMovement verdict={mover.verdict} unit="pts" mode={mode} /></span>}
+        <span className="flex-none whitespace-nowrap"><BlockMovement verdict={mover.verdict} unit="pts" mode={mode} /></span>
       </div>
       <div className="flex items-center gap-2">
         {counts}
         <span className="ml-auto flex-none">
-          {level ? (
-            <span data-copy="verdict" className="inline-block rounded-full bg-inner px-2 py-0.5 text-[12px] font-medium text-muted-foreground">first heard this month</span>
-          ) : mover.direction ? (
+          {mover.direction ? (
             // The mock's grey pill, carrying the word the product actually
             // earned — three consecutive readings in one clustering regime —
             // and never the mock's ordinal "3rd month" (D5).
@@ -126,12 +126,11 @@ function MoverRow({ mover, mode, ctx, level }: {
 
 /** One arm of the axis, with its count. Absent arms are absent — an arm with a
  *  heading and no rows is furniture. */
-function Arm({ label, rows, mode, ctx, level }: {
+function Arm({ label, rows, mode, ctx }: {
   label: string
   rows: readonly Mover[]
   mode: RenderMode
   ctx: BlockContext
-  level?: boolean
 }) {
   if (rows.length === 0) return null
   if (mode === 'email') {
@@ -140,7 +139,7 @@ function Arm({ label, rows, mode, ctx, level }: {
         <div style={{ fontFamily: FONT.sans, fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: EMAIL.muted }}>
           {label} · {fmtInt(rows.length)}
         </div>
-        {rows.map((m) => <MoverRow key={m.id} mover={m} mode={mode} ctx={ctx} level={level} />)}
+        {rows.map((m) => <MoverRow key={m.id} mover={m} mode={mode} ctx={ctx} />)}
       </div>
     )
   }
@@ -150,7 +149,7 @@ function Arm({ label, rows, mode, ctx, level }: {
         <span className="min-w-0 text-[12px] font-semibold text-foreground">{label}</span>
         <span data-copy="figure" className="flex-none whitespace-nowrap font-mono text-[10.5px] tabular-nums text-muted-foreground">{fmtInt(rows.length)}</span>
       </div>
-      {rows.map((m) => <MoverRow key={m.id} mover={m} mode={mode} ctx={ctx} level={level} />)}
+      {rows.map((m) => <MoverRow key={m.id} mover={m} mode={mode} ctx={ctx} />)}
     </div>
   )
 }
