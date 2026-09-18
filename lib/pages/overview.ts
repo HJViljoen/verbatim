@@ -1669,8 +1669,17 @@ async function loadOwnSubjectMatches(
     }
     return new Map([...bySubject].map(([id, set]) => [id, [...set]]))
   } catch (error) {
-    if (isMissingSubjects(error)) return null
-    throw error
+    // DEGRADE, BUT SAY SO — `loadFlags`'s precedent, and for its reason. The
+    // subject row is one line of a card whose other five stand on their own,
+    // so a failed read costs the line and nothing else; a bare catch would
+    // make an RLS refusal, a network error and "M4 is not applied" one value
+    // with nothing written anywhere. The two are told apart in the log and
+    // answered the same way on the page, because the page has one honest
+    // answer for both: we could not read which subjects your posts matched.
+    if (!isMissingSubjects(error)) {
+      console.error(`[pages] overview.ownMemberships: ${(error as { message?: string })?.message ?? String(error)}`)
+    }
+    return null
   }
 }
 
