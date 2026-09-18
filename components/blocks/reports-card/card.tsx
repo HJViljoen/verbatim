@@ -48,7 +48,7 @@ import { quarterUnlocked } from '@/lib/reports/quarterly'
  * two readings, side by side, with the band between them printed as a word.
  */
 export function QuarterlyCardTile({
-  card, col = 7, row = 3,
+  card, col = 7, row = 2,
 }: {
   card: QuarterlyCard
   col?: number
@@ -218,4 +218,43 @@ export function readingWord(readings: number): string {
 export function pillWord(readings: number, drawn: boolean): string {
   if (!drawn) return 'nothing to compare yet'
   return quarterUnlocked(readings) ? `${readingWord(readings)} stand behind it` : MOVEMENT_WORDS.baseline_forming
+}
+
+
+/**
+ * What stands where the card cannot be built at all (Block D wave 2, package
+ * E-reports).
+ *
+ * `loadQuarterlyCard` answers null for exactly one reason — no subject is
+ * ACTIVE for this workspace (`loadActiveSubjects` filters `status = 'active'`,
+ * and a tenant with no `subjects` table at all reaches the same place through
+ * its own catch) — and the page then rendered nothing, so the surface whose
+ * question is "Which document do I need?" said nothing whatever about the
+ * artefact this package exists to advertise. That is the state BOTH live
+ * workspaces are in today.
+ *
+ * It names the subject and not the migration: what a reader can act on is
+ * naming one, and "the subject tables are not applied" is our bookkeeping, not
+ * theirs. No date, no count, and nothing about a quarter we have not read.
+ */
+export function QuarterlyAbsentTile({ col = 7, row = 2 }: { col?: number; row?: number }) {
+  return (
+    <Tile
+      col={col}
+      row={row}
+      eyebrow="The quarterly review"
+      meta="not yet"
+      distribute="between"
+      className="xl:min-h-[248px]"
+      footer={<Link href="/dashboard/settings" className="underline underline-offset-2">Name a subject in Settings</Link>}
+    >
+      <p className="m-0 text-[12.5px] leading-[1.45] text-foreground">
+        The quarterly review reads the subjects you track, and none is confirmed for this workspace yet — so there is no
+        quarter to set against the one before it.
+      </p>
+      <p className="m-0 text-[12px] text-muted-foreground">
+        Name and confirm a subject and it appears here, with the quarter under review and what stands behind it.
+      </p>
+    </Tile>
+  )
 }

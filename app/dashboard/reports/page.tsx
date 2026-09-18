@@ -19,7 +19,7 @@ import { PRIVACY_LINE } from '@/lib/reading/method'
 import { BriefCards } from '@/components/reports/brief-cards'
 import { ArchiveTile, type ArchiveColumn, type ArchiveItem } from '@/components/reports/archive-lists'
 import { StudioCard } from '@/components/reports/studio-card'
-import { QuarterlyCardTile } from '@/components/blocks/reports-card/card'
+import { QuarterlyAbsentTile, QuarterlyCardTile } from '@/components/blocks/reports-card/card'
 import { ArchiveDateFilter } from '@/components/reports/date-filter'
 import { loadQuarterlyCard } from '@/lib/pages/reports-card'
 import { readingHandle } from '@/lib/reading/read'
@@ -292,13 +292,24 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   })
 
   // ── selection ─────────────────────────────────────────────────────────
-  const sentIds = [...sends.map((s) => s.id), ...legacy.map((l) => l.id)]
-  const sentId = group === 'sent' ? (sp.item && sentIds.includes(sp.item) ? sp.item : sentIds[0] ?? null) : null
+  // AN ID THAT NAMES NOTHING IS NOT AN INVITATION TO OPEN SOMETHING ELSE. A
+  // link into the archive carries `?item=`, and where that row is gone — a
+  // purged snapshot, a share link sent weeks ago, or dates that now exclude it
+  // — falling through to the newest row opened a different document under the
+  // reader's own link, silently. The fallback is for a group opened WITHOUT an
+  // item; a named one either resolves or is said to be missing below.
+  const pick = <T,>(rows: readonly T[], id: (r: T) => string, on: boolean): string | null => {
+    if (!on) return null
+    if (sp.item) return rows.some((r) => id(r) === sp.item) ? sp.item : null
+    return rows[0] ? id(rows[0]) : null
+  }
+  const sentRows = [...sends.map((s) => ({ id: s.id })), ...legacy.map((l) => ({ id: l.id }))]
+  const sentId = pick(sentRows, (r) => r.id, group === 'sent')
   const selectedSend = sentId ? sends.find((s) => s.id === sentId) ?? null : null
   const selectedLegacy = sentId && !selectedSend ? legacy.find((l) => l.id === sentId) ?? null : null
-  const buildId = group === 'built' ? (sp.item && builds.some((b) => b.id === sp.item) ? sp.item : builds[0]?.id ?? null) : null
+  const buildId = pick(builds, (b) => b.id, group === 'built')
   const selectedBuild = buildId ? builds.find((b) => b.id === buildId) ?? null : null
-  const exportId = group === 'exported' ? (sp.item && exports.some((e) => e.id === sp.item) ? sp.item : exports[0]?.id ?? null) : null
+  const exportId = pick(exports, (e) => e.id, group === 'exported')
   const selectedExport = exportId ? exports.find((e) => e.id === exportId) ?? null : null
 
   // Share links for the selected item — read server-side (the token is
@@ -582,6 +593,10 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   )
 
   const selected = selectedSend != null || selectedLegacy != null || selectedBuild != null || selectedExport != null
+  // The reader named an item and it is not here. The master-detail printed
+  // "Select a file." into its third pane; with the pane gone the page drew
+  // nothing at all, so a share link to a deleted snapshot said nothing.
+  const missing = Boolean(sp.item) && !selected
   const presetKey = activePreset(ctx.presets, dates)
   const chosen = ctx.presets.find((x) => x.key === presetKey) ?? null
 
@@ -599,22 +614,36 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
         <Suspense fallback={null}>
           <HowToRead items={['month', 'level', 'change', 'video']} basePath={BASE} />
         </Suspense>
-        {studio && <Link href={STUDIO_HREF}><BarPill primary>Open the Studio</BarPill></Link>}
+        {/* NOT `primary`. The artboard puts EXPORT in this slot and Reports has
+            no page module to export (deviation 1); what stood in its place was
+            the page's loudest element pointing AWAY from every document on it,
+            and since wave 2 the Studio is offered from its own card as well —
+            "Start a report", "Open the catalogue" and one action per brief. A
+            page that asks "Which document do I need?" answers with the
+            documents. */}
+        {studio && <Link href={STUDIO_HREF}><BarPill>Open the Studio</BarPill></Link>}
       </PageBar>
 
       <BriefCards cards={cards} meta={BRIEFS_META} studio={studio} basePath={BASE} />
 
-      {(quarterly || studio) && (
-        // THE ROWS GROW WITH THEIR CONTENT, as the artboard's do: its cards are
-        // `min-height:248px`, not a fixed grid track. `PageGrid`'s 116px row
-        // unit is right for a reading page whose tiles are sized by their
-        // layout; here the honest form of a figure is longer than the mock's
-        // and a fixed track would clip it under `overflow-hidden`.
-        <PageGrid className="xl:auto-rows-min">
-          {quarterly && <QuarterlyCardTile card={quarterly} col={studio ? 7 : 12} row={3} />}
-          {studio && <StudioCard pages={catalogueChips()} col={quarterly ? 5 : 12} row={3} />}
-        </PageGrid>
-      )}
+      {/* THE ROWS GROW WITH THEIR CONTENT, as the artboard's do: its cards are
+          `min-height:248px`, not a fixed grid track. `PageGrid`'s 116px row
+          unit is right for a reading page whose tiles are sized by their
+          layout; here the honest form of a figure is longer than the mock's
+          and a fixed track would clip it under `overflow-hidden`.
+          `row={2}` is the 248px floor the artboard states; at `row={3}` the
+          stacked (sub-xl) minimum was 380px and `distribute="between"` spread
+          two sentences over it.
+          AND THE CARD IS NEVER SIMPLY ABSENT: `loadQuarterlyCard` answers null
+          where no subject is confirmed — the state both live workspaces are in
+          — and a page advertising documents may not go silent about the one it
+          was built to advertise. */}
+      <PageGrid className="xl:auto-rows-min">
+        {quarterly
+          ? <QuarterlyCardTile card={quarterly} col={studio ? 7 : 12} row={2} />
+          : <QuarterlyAbsentTile col={studio ? 7 : 12} row={2} />}
+        {studio && <StudioCard pages={catalogueChips()} col={5} row={2} />}
+      </PageGrid>
 
       <PageGrid className="xl:auto-rows-min">
         <ArchiveTile
@@ -624,7 +653,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
           meta={ctx.delivery?.line ?? null}
           presets={ctx.presets}
           activePresetKey={presetKey}
-          presetHref={(x) => presetPath(BASE, x)}
+          presetHref={(x) => presetPath(BASE, x, sp.group)}
           // A FAILED RUN READ SAYS SO. `ctx.presets` is empty in exactly that
           // case (never four chips reading zero), and silence there would let
           // a reader take an unread record for an empty one.
@@ -641,10 +670,14 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
         />
       </PageGrid>
 
-      {selected && (
+      {(selected || missing) && (
         <PageGrid className="xl:auto-rows-min">
-          <Tile col={12} row={3} className="p-0">
-            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">{detail}</div>
+          <Tile col={12} row={missing ? 1 : 3} className="p-0">
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+              {missing
+                ? <PaneEmpty>That item is not in the archive any more, or the dates you have set exclude it. Pick one from the lists above.</PaneEmpty>
+                : detail}
+            </div>
           </Tile>
         </PageGrid>
       )}
@@ -668,11 +701,13 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   )
 }
 
-/** Where a preset chip points: the archive's own date filter, and nothing
- *  else of the reader's selection — a chip that kept `?item=` would open a
- *  send that the new dates exclude. */
-function presetPath(base: string, p: { from: string | null; to: string | null }): string {
+/** Where a preset chip points: the archive's own date filter, plus the group
+ *  the reader is reading — a chip that kept `?item=` would open a send the new
+ *  dates exclude, which is why `item` is dropped, but dropping `group` with it
+ *  silently reset an open Built item to the Sent list. */
+function presetPath(base: string, p: { from: string | null; to: string | null }, group?: string): string {
   const q = new URLSearchParams()
+  if (group) q.set('group', group)
   if (p.from) q.set('from', p.from)
   if (p.to) q.set('to', p.to)
   const qs = q.toString()

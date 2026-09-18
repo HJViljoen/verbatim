@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { MOVEMENT_WORDS } from '@/components/delta-badge'
-import { QuarterlyCardTile, monthSpan, pillWord, readingWord } from './card'
+import { QuarterlyAbsentTile, QuarterlyCardTile, monthSpan, pillWord, readingWord } from './card'
 import { formingCardFixture, quarterlyCardFixture, unreadCardFixture } from './fixture'
 
 // The render tier for the quarterly card (Block D wave 2, package E-reports).
@@ -114,6 +114,26 @@ describe('the quarterly card', () => {
     const text = renderText(<QuarterlyCardTile card={quarterlyCardFixture()} />)
     expect(text).toContain('the category')
     expect(text).not.toContain('your audience')
+  })
+})
+
+// THE CARD IS NEVER SIMPLY ABSENT. `loadQuarterlyCard` answers null where no
+// subject is confirmed — the state both live workspaces are in today — and the
+// page then said nothing at all about the artefact it exists to advertise.
+describe('the quarterly card’s absence', () => {
+  it('keeps the copy contract and names what a reader can act on', () => {
+    assertCopyContract(<QuarterlyAbsentTile />)
+    const text = renderText(<QuarterlyAbsentTile />)
+    expect(text).toContain('none is confirmed for this workspace yet')
+    expect(text).toContain('Name a subject in Settings')
+  })
+
+  // No date, no count, and nothing about a quarter nobody has read — the same
+  // rule the card itself is built under.
+  it('promises nothing', () => {
+    const text = renderText(<QuarterlyAbsentTile />)
+    expect(text).not.toMatch(/Ready\s+\d/)
+    expect(text).not.toMatch(/\d/)
   })
 })
 

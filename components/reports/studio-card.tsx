@@ -44,7 +44,7 @@ import { STUDIO_HREF } from '@/lib/studio-visibility'
  * copy naming it.
  */
 export function StudioCard({
-  pages, col = 5, row = 3,
+  pages, col = 5, row = 2,
 }: {
   /** `pickableCatalogue().map(p => p.title)` — what a new section may name. */
   pages: readonly string[]
