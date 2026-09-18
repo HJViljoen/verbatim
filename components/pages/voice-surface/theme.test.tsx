@@ -87,10 +87,16 @@ describe('voiceTheme', () => {
     expect(text).toContain('After 14 months the zip is done')
   })
 
-  it('prints the spoken line with its provenance', () => {
+  it('prints the spoken line with its provenance, from a video no quote came out of', () => {
     const text = draw()
     expect(text).toContain('Said on camera')
-    expect(text).toContain('One bag, three years, no regrets.')
+    expect(text).toContain('It kept a laptop dry through a whole winter of commuting.')
+    expect(text).toContain('YouTube · 9 Sep · a category video')
+    // SAID ONCE, the transcript half (lib/pages/voice-surface.ts). Quote 2 is
+    // cited "a category video, transcript" — an extract of the 11 Sep video's
+    // transcript — so this line may not be the head of that same transcript,
+    // printed ninety pixels away in a second transcription.
+    expect(text).not.toContain('One bag, three years, no regrets.')
   })
 
   it('cites a quote by platform, date and where — not by which column it came out of', () => {

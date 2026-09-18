@@ -1631,6 +1631,9 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
       const cites: string[] = []
       const nested: (string | null)[] = []
       const out: Quote[] = []
+      /** The videos a quote was drawn out of the TRANSCRIPT of — the other
+       *  half of the said-once rule below. */
+      const quotedTranscript = new Set<string>()
       for (const ev of evidence) {
         if (ev.redacted || !ev.quote) { withheld++; continue }
         const text = cleanQuote(ev.quote)
@@ -1638,6 +1641,7 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
         seen.add(text.toLowerCase())
         out.push({ ref: quoteRef.evidence(ev.id), text, ...readingOf(readings, text) })
         const video = videoById.get(videoOfInsight.get(ev.audience_insight_id) ?? '') ?? null
+        if (video && ev.source === 'transcript') quotedTranscript.add(video.id)
         cites.push(quoteCite({ video: video ? { ...video, kind: kindOf(video) } : null, source: ev.source }))
         // The mock nests the video's own on-screen text under the quote taken
         // from that video. Only that quote: the same words under a quote from
@@ -1653,7 +1657,15 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
       // too — and searching all of it would silently change which video the
       // "said on camera" line comes from.
       const supporting = videos.filter((v) => videoIds.includes(v.id))
-      const withTranscript = supporting.find((v) => (v.transcript ?? '').trim().length > 0)
+      // SAID ONCE — AND THE RULE HAS TWO HALVES, NOT ONE. A quote whose
+      // `source` is `transcript` IS an extract of the transcript this line
+      // renders the head of, so a video already quoted that way prints the
+      // same utterance twice, ninety pixels apart, in two transcriptions —
+      // which is exactly what the on-screen rule below refuses for OCR. The
+      // fix is not to drop the line: another supporting video's speech is a
+      // second piece of evidence and worth printing, so the search skips the
+      // videos already quoted and only falls silent when every one of them is.
+      const withTranscript = supporting.find((v) => (v.transcript ?? '').trim().length > 0 && !quotedTranscript.has(v.id))
       if (withTranscript) {
         spoken = {
           text: firstSentences(withTranscript.transcript as string),
@@ -1661,6 +1673,9 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
             .filter(Boolean).join(' · '),
           href: withTranscript.video_url,
         }
+        // And the belt to that brace: a quote whose own video did not resolve
+        // cannot be matched by id, so the words are compared too.
+        if (out.some((q) => q.text === spoken?.text)) spoken = null
       }
       const withOcr = supporting.find((v) => (v.ocr_text ?? '').trim().length > 0)
       if (withOcr) {
@@ -1670,10 +1685,11 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
             .filter(Boolean).join(' · '),
           href: withOcr.video_url,
         }
-        // SAID ONCE. Where the same on-screen text is already nested under the
-        // quote from that video, the block-level line would print it twice —
-        // once attached to the video it belongs to and once loose at the foot
-        // of the block, reading as a second piece of evidence.
+        // SAID ONCE, the OCR half. Where the same on-screen text is already
+        // nested under the quote from that video, the block-level line would
+        // print it twice — once attached to the video it belongs to and once
+        // loose at the foot of the block, reading as a second piece of
+        // evidence. The transcript half is above.
         if (quoteOnScreen.some((t) => t === onScreen?.text)) onScreen = null
       }
     }

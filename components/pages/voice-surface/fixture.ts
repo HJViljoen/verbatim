@@ -204,7 +204,13 @@ export function voiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurface
       quoteCites: ['TikTok · 14 Sep · under a category video', 'TikTok · 11 Sep · a category video, transcript', 'in the comments'],
       quoteOnScreen: [null, '1 bag. 3 years. 0 regrets', null],
       quotesOf: 182,
-      spoken: { text: 'One bag, three years, no regrets.', cite: 'TikTok · 11 Sep · a category video', href: 'https://example.test/v' },
+      // A DIFFERENT VIDEO FROM ANY THE QUOTES CAME OUT OF. Quote 2 is cited
+      // "TikTok · 11 Sep · a category video, transcript" — an extract of that
+      // video's transcript — and this line stood under it carrying the same
+      // utterance in a second transcription ("One bag, three years, no
+      // regrets." against the nested "1 bag. 3 years. 0 regrets"), which is
+      // the state the loader's said-once rule now refuses on both halves.
+      spoken: { text: 'It kept a laptop dry through a whole winter of commuting.', cite: 'YouTube · 9 Sep · a category video', href: 'https://example.test/v' },
       // NULL, and that is the ported behaviour: this video's on-screen text is
       // nested under the quote taken FROM that video (`quoteOnScreen`), and the
       // loader drops the loose block-level copy so it is not read as a second
