@@ -35,17 +35,23 @@ export const OVERVIEW_BLOCKS: readonly Block<OverviewData>[] = [
   overviewRecord,
 ]
 
-/** How tall each block's tile is, in the grid's 116px row units. A block that
- *  grows past its box scrolls with the page — the one-screen rule retired in
- *  2026-08 (MASTER rule 7). */
+/**
+ * How tall each block's tile is BELOW `xl`, where the page is one stacked
+ * column and `Tile`'s `MIN_H` gives each tile a floor so the page keeps its
+ * rhythm as it scrolls.
+ *
+ * AT `xl` THE GRID SIZES TO CONTENT AND THESE ARE SPANS, NOT HEIGHTS — see the
+ * `xl:auto-rows-auto` on `PageGrid` below, and why it is there. A number here
+ * is a proportion, not a measurement.
+ */
 const ROWS: Record<string, number> = {
   'overview.bar': 1,
   'overview.sentence': 3,
   'overview.subjects': 3,
   'overview.category': 4,
   'overview.rivals': 3,
-  'overview.moves': 3,
-  'overview.record': 1,
+  'overview.moves': 4,
+  'overview.record': 2,
 }
 
 /**
@@ -158,7 +164,19 @@ export function OverviewPage({
           <HowToRead items={OVERVIEW_LEGEND} basePath="/dashboard" anchor="overview" />
           <ExportMenu />
         </SurfacePageBar>
-        <PageGrid>
+        {/* THE GRID SIZES TO ITS CONTENT ON THIS PAGE, and that is a fix
+            rather than a preference. `PageGrid`'s rows are a fixed 116px track
+            and `Tile` is `overflow-hidden`, so a block taller than its span is
+            CUT OFF — which is what the first side-by-side of this port showed:
+            Moves lost the bottom of its card and the record lost most of its
+            second paragraph. Tuning the spans against the fixture would only
+            move the cliff: the fixture carries two subjects and three rivals
+            where a live tenant carries eight and ten, and the eighth subject
+            row would vanish on production with nothing in a test to see it.
+            Every tile on Overview is `col={12}` and alone in its row, so a
+            content-sized track costs the page nothing and the spans below stay
+            meaningful under `xl`, where `Tile`'s own `min-h` is the floor. */}
+        <PageGrid className="xl:auto-rows-auto">
           {OVERVIEW_BLOCKS.map((block) => (
             <Tile
               key={block.key}
@@ -169,6 +187,18 @@ export function OverviewPage({
               // and it is stable — it names stored PNG artefacts — so it is the
               // block's own key and never a position.
               exportKey={block.key}
+              // THE BLOCK FILLS ITS TILE, WHICH IS WHAT `distribute` IS FOR.
+              // `Tile`'s body is a flex column with `flex-1`; `BlockFrame`'s
+              // own `<section>` is not, so every block sat at the natural
+              // height of its content with the tile's remaining row span as
+              // dead space UNDER its footer — visible on Subjects and Rivals in
+              // the side-by-side, and the reason the artboard's even,
+              // edge-to-edge density did not survive (mock-gap §Visual
+              // fidelity). The selector is here rather than in `BlockFrame`
+              // because the frame is P0's and shared: a block rendered into an
+              // email or a slide has no tile to fill.
+              bodyClassName="[&>section]:min-h-0 [&>section]:flex-1"
+              distribute="between"
             >
               {block.render(data, 'app', ctx)}
             </Tile>

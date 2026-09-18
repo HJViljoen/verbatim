@@ -71,11 +71,17 @@ function MoverRow({ mover, mode }: { mover: Mover; mode: RenderMode }) {
           should improve access". Rule (c) sweeps unmarked markup, so an
           unmarked label fails the contract on whichever theme happens to rank
           — the word is about the thing, not about a reading of it. */}
-      <span data-copy="subject" data-slot="pass_b_theme" className={mode === 'email' ? undefined : 'min-w-0 flex-1 truncate'}>{mover.label}</span>
+      {/* A THEME'S LABEL IS A SENTENCE, NOT A WORD. Sealand's movers run to
+          "Will it survive a wet commute"; at a third of the tile with a figure
+          cell and two badges beside it, `truncate` cut them to one character in
+          the side-by-side. The row wraps instead, which is what the artboard's
+          own 470px column does not have to do and is the honest answer at a
+          third of the width. */}
+      <span data-copy="subject" data-slot="pass_b_theme" className={mode === 'email' ? undefined : 'min-w-[9rem] flex-1 basis-[9rem]'}>{mover.label}</span>
       {/* THE SHARE OVER ITS COUNT, in the artboard's own two-line cell. The
           mock prints "9.4%" and "130" in two separate fixed columns with the
           denominator nowhere; a level without its "of N" is a score (D10). */}
-      <span className={mode === 'email' ? undefined : 'w-[104px] shrink-0'}>
+      <span className={mode === 'email' ? undefined : 'w-[86px] shrink-0'}>
         <FigureCell
           mode={mode}
           value={mover.pct == null ? '—' : fmtPct(mover.pct)}
@@ -93,7 +99,7 @@ function MoverRow({ mover, mode }: { mover: Mover; mode: RenderMode }) {
   )
   return mode === 'email'
     ? <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '2px 0' }}>{body}</div>
-    : <div className="flex items-center gap-2 text-[12.5px]">{body}</div>
+    : <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12.5px]">{body}</div>
 }
 
 /** The attention line's chart: panel comments by month. Not a share — the panel
