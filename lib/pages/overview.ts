@@ -182,6 +182,21 @@ export interface SubjectsBlock {
   /** The line under the table about which column carries the month. */
   note: string | null
   /**
+   * When the subjects were NAMED — the earliest `subjects.named_at` on the
+   * block's own rows (`main.subjects.header`).
+   *
+   * THE HEADER'S DIGIT NEEDED A DATE. The block meta read "6 named", which
+   * tells a reader how many there are and nothing about how long they have
+   * been measured; the artboard reads "six named 19 Aug", and the date is what
+   * makes the count mean something — a subject named last week has no history
+   * and the row below it will say so.
+   *
+   * D14: EARLIEST EVIDENCE, NOT A START DATE. `named_at` is the day the row was
+   * written, which is the earliest we can show that the subject existed; the
+   * meta says "named", which is exactly that claim and no more.
+   */
+  namedAt: string | null
+  /**
    * The two-audience gap per row — you against the lead rival, banded — keyed
    * by `SubjectRow.id` (D1). Null for a row with no rival side, and `{}` where
    * the block is not `ready`.
@@ -2723,7 +2738,7 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
   const categoryLabel = audienceLabel(INDUSTRY_AUDIENCE)
   const rivalLabel = input.leadRival
   if (input.subjects == null || input.months == null) {
-    return { state: 'not_recorded', rows: [], candidates: [], rivalLabel, categoryLabel, note: null, gaps: {} }
+    return { state: 'not_recorded', rows: [], candidates: [], rivalLabel, categoryLabel, note: null, namedAt: null, gaps: {} }
   }
   const active = input.subjects.filter((s) => s.status === 'active')
   const proposed = input.subjects.filter((s) => s.status === 'proposed')
@@ -2745,6 +2760,10 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
       rivalLabel,
       categoryLabel,
       note: candidateLine(candidates),
+      // A PROPOSED SUBJECT MEASURES NOTHING, so it names no date either:
+      // `loadActiveSubjects` filters `status = 'active'` and the meta must not
+      // date a list the page is not reading.
+      namedAt: null,
       gaps: {},
     }
   }
@@ -2877,8 +2896,19 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
     rivalLabel,
     categoryLabel,
     note: subjectsNote(rows),
+    // THE EARLIEST OF THE ACTIVE ROWS. One date for the block, because the meta
+    // is about the block: "six named 19 Aug" says the set has been measured
+    // since then, and the earliest is the only date that is true of all six.
+    namedAt: earliestNamedAt(active),
     gaps,
   }
+}
+
+/** The earliest `named_at` among the subjects the block is reading, or null
+ *  where none of them carries one. */
+export function earliestNamedAt(subjects: readonly { named_at?: string | null }[]): string | null {
+  const dates = subjects.map((s) => s.named_at ?? '').filter(Boolean).sort()
+  return dates[0] ?? null
 }
 
 interface CategoryInput {

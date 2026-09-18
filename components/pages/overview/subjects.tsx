@@ -2,12 +2,14 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { openLink } from '@/components/blocks/open-link'
-import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
+import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
 import { Sparkline } from '@/components/charts/sparkline'
-import { fmtInt, fmtPct } from '@/lib/format'
+import { fmtInt, fmtPct, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { Direction } from '@/lib/reading/bands'
+import { gapBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
+import { TileBlock } from '@/components/shell/tile'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { OverviewData, SideReading, SubjectRow } from '@/lib/pages/overview'
 import { candidateLine, monthlyLineLabel, sentLineFor } from '@/lib/pages/overview'
@@ -48,15 +50,18 @@ function Side({ side, mode = 'app' }: { side: SideReading | null; mode?: RenderM
       ? <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>— not tracked</span>
       : <span className="text-[12px] text-muted-foreground">— not tracked</span>
   }
-  const body = (
-    <>
-      <span data-copy="figure">{fmtPct(side.pct)}</span>{' '}
-      <span data-copy="figure">{fmtInt(side.k ?? 0)} of {fmtInt(side.n ?? 0)}</span>
-    </>
-  )
-  return mode === 'email'
-    ? <span style={{ fontFamily: FONT.mono, fontSize: 12, color: EMAIL.ink }}>{body}</span>
-    : <span className="font-mono text-[12px] tabular-nums">{body}</span>
+  // P0'S CELL, NOT A HAND-ROLLED PAIR (`main.subjects.col.*`). The artboard
+  // stacks the share over its "n of N" — mono 13/600 at `line-height:1` with
+  // the evidence in mono 10.5 muted one pixel under it — where this printed the
+  // two inline on one line, which reads flatter and wider than the artboard and
+  // is exactly how rule (b) has been broken every time a column fell off a
+  // narrow layout. `FigureCell` stamps its own `data-copy`, so the level marker
+  // comes with the primitive rather than with remembering to add it.
+  //
+  // LEFT-ALIGNED, which is the artboard's own answer: Main draws twenty of
+  // these cells and right-aligns none (the count is in
+  // components/blocks/frame.tsx).
+  return <FigureCell mode={mode} value={fmtPct(side.pct)} of={`${fmtInt(side.k ?? 0)} of ${fmtInt(side.n ?? 0)}`} />
 }
 
 /**
@@ -83,6 +88,58 @@ function AtLastMonth({ at, mode = 'app' }: { at: SubjectRow['categoryAtLastMonth
   return mode === 'email'
     ? <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted }}>{body}</div>
     : <span className="block text-[11px] text-muted-foreground">{body}</span>
+}
+
+/**
+ * The gap headline the artboard puts above the table (`main.subjects.gapline`,
+ * D1).
+ *
+ * THE MOCK'S SENTENCE IS "gap to Freitag narrowed to 13 points … from 19 in
+ * June", AND "narrowed" IS NOT BUILT. `gapLine` prints both sides with their
+ * counts, the difference and the band beside the word, so the claim is
+ * checkable; `gapBasisLine` prints the earlier month as its OWN dated, banded
+ * reading under it, so a reader can see the gap was larger and decide for
+ * themselves. The product never says which way it went off two readings.
+ *
+ * AND ON THIS TENANT IT READS "too few to compare", which is the point rather
+ * than a disappointment: your own audience carries 84 videos against a
+ * 100-video floor, so the difference is refused — the same refusal the mock
+ * prints one cell away in its own change column. Both levels and both
+ * denominators still print.
+ *
+ * WHICH ROW. The FIRST row that has a gap at all, which is the block's own
+ * ordering (largest category share first) — the headline is about the subject
+ * the table leads with, never a second ranking computed here.
+ */
+export function leadGap(s: OverviewData['subjects']): Gap | null {
+  for (const row of s.rows) {
+    const gap = s.gaps[row.id]
+    if (gap) return gap
+  }
+  return null
+}
+
+function GapHeadline({ gap, mode }: { gap: Gap; mode: RenderMode }) {
+  const basis = gapBasisLine(gap)
+  const body = (
+    <>
+      <span className={mode === 'email' ? undefined : 'text-[12.5px] font-medium'}>
+        {gap.objectLabel} — <span data-copy="level" className={mode === 'email' ? undefined : 'font-mono tabular-nums'}>{gapLine(gap)}</span>
+      </span>
+      {basis ? (
+        <span
+          className={mode === 'email' ? undefined : 'shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground'}
+          style={mode === 'email' ? { fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted } : undefined}
+        >
+          {basis}
+        </span>
+      ) : null}
+    </>
+  )
+  if (mode === 'email') {
+    return <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, background: EMAIL.inner, padding: '5px 12px', borderRadius: 4 }}>{body}</div>
+  }
+  return <TileBlock className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 py-1.5">{body}</TileBlock>
 }
 
 function Row({ row, mode, appUrl = '', sentLine = null }: { row: SubjectRow; mode: RenderMode; appUrl?: string; sentLine?: string | null }) {
@@ -131,6 +188,21 @@ function Row({ row, mode, appUrl = '', sentLine = null }: { row: SubjectRow; mod
   )
 }
 
+/**
+ * "6 named 19 Aug · share of videos where the subject came up"
+ * (`main.subjects.header`).
+ *
+ * THE DATE IS THE HALF THAT WAS MISSING. "6 named" says how many; the artboard
+ * says how many AND since when, which is what tells a reader whether the rows
+ * under it can carry a comparison at all. Absent where no row carries a
+ * `named_at`, rather than invented.
+ */
+export function subjectsMeta(s: OverviewData['subjects']): string | undefined {
+  if (s.rows.length === 0) return undefined
+  const named = s.namedAt ? `${fmtInt(s.rows.length)} named ${shortDate(s.namedAt)}` : `${fmtInt(s.rows.length)} named`
+  return `${named} · share of videos where the subject came up`
+}
+
 export const overviewSubjects: Block<OverviewData> = {
   key: 'overview.subjects',
   title: 'Your subjects',
@@ -148,8 +220,13 @@ export const overviewSubjects: Block<OverviewData> = {
         title={overviewSubjects.title}
         question={overviewSubjects.question}
         mode={mode}
-        meta={s.rows.length > 0 ? `${fmtInt(s.rows.length)} named · share of videos where the subject came up` : undefined}
+        meta={subjectsMeta(s)}
         footer={footer}
+        // THE CAVEAT BELONGS IN THE FOOTER NOTE (`main.subjects.footer`). It
+        // was a body paragraph under the table, where a sentence about what the
+        // block CANNOT say reads as one of its findings. `BlockFrame`'s
+        // right-hand mono slot is where the artboard puts it.
+        footerNote={s.note}
       >
         {children}
       </BlockFrame>
@@ -173,9 +250,11 @@ export const overviewSubjects: Block<OverviewData> = {
       )
     }
 
+    const gap = leadGap(s)
     if (email) {
       return frame(
         <div>
+          {gap ? <GapHeadline gap={gap} mode={mode} /> : null}
           {s.rows.map((r) => (
             <div key={r.id} style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '4px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
               <strong>{r.label}</strong>
@@ -189,13 +268,13 @@ export const overviewSubjects: Block<OverviewData> = {
               </div>
             </div>
           ))}
-          {s.note ? <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 6 }}>{s.note}</div> : null}
         </div>,
       )
     }
 
     return frame(
       <>
+        {gap ? <GapHeadline gap={gap} mode={mode} /> : null}
         <div className="-mx-1 overflow-x-auto px-1">
           <table className="w-full border-collapse text-left">
             <thead>
@@ -214,7 +293,6 @@ export const overviewSubjects: Block<OverviewData> = {
             </tbody>
           </table>
         </div>
-        {s.note ? <p className="m-0 text-[11.5px] text-muted-foreground">{s.note}</p> : null}
       </>,
     )
   },

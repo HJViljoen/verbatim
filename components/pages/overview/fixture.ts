@@ -476,6 +476,9 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
       rivalLabel: 'Freitag',
       categoryLabel: 'The category',
       note: 'Your side reads "too few to compare" on 84 videos — the category column carries the month.',
+      // The earliest `subjects.named_at` on the rows — the artboard's
+      // "six named 19 Aug".
+      namedAt: '2026-08-19',
       gaps: gapsFor(subjectRows),
     },
     category: {
@@ -625,6 +628,7 @@ export function refusedFixture(): OverviewData {
       rivalLabel: 'Freitag',
       categoryLabel: 'The category',
       note: null,
+      namedAt: null,
       // M4 is not applied here, so neither side of a gap was ever read.
       gaps: {},
     },
