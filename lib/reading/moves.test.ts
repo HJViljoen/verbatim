@@ -14,6 +14,7 @@ import {
   MOVE_TOO_YOUNG,
   moveChartNote,
   readMove,
+  topMatchedSubject,
   type MoveCandidateInput,
   type MoveReadingInput,
   type MoveSeries,
@@ -223,6 +224,20 @@ describe('buildMoveCandidate — the pre-filled card', () => {
     expect(c.posts.value).toEqual({ k: 9, n: 9 })
     expect(c.proposal).toBeNull()
     expect(c.unread).toBe(CARD_NOT_DECLARABLE)
+  })
+
+  it('proposes the same subject the page will band, ties and all', () => {
+    // Two subjects matching the same posts: the card's proposal and
+    // `topMatchedSubject` must name the SAME one, or the paired movement is a
+    // reading of one subject under a proposal naming another.
+    const tied = [
+      { subjectId: 'sB', label: 'Bravery', videoIds: ['v1', 'v2'] },
+      { subjectId: 'sA', label: 'Alacrity', videoIds: ['v3', 'v4'] },
+    ]
+    const c = card({ membership: tied })
+    expect(topMatchedSubject(tied)?.subjectId).toBe('sA')
+    expect(c.proposal?.subjectId).toBe('sA')
+    expect(c.subjects[0].subjectId).toBe('sA')
   })
 
   it('a subject nothing matched never becomes a proposal', () => {

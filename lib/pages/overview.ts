@@ -36,6 +36,7 @@ import {
   actedTally,
   buildMoveCandidate,
   readMove,
+  topMatchedSubject,
   type MoveCandidate,
   type MoveReading,
   type MoveSeries,
@@ -1876,7 +1877,12 @@ export async function loadMovesExtras(input: {
         .filter(([id]) => input.subjectNames.has(id))
         .map(([id, videoIds]) => ({ subjectId: id, label: input.subjectNames.get(id) ?? id, videoIds }))
     : []
-  const top = [...membership].sort((a, b) => b.videoIds.length - a.videoIds.length || a.subjectId.localeCompare(b.subjectId))[0] ?? null
+  // THE SUBJECT THE CARD PROPOSES, by the card's own rule. This picked the
+  // largest membership with a uuid tie-break while `buildMoveCandidate` picked
+  // the largest match with a LABEL tie-break, so on a tie the card's paired
+  // movement could be a reading of one subject while `proposal.subjectId`
+  // named another — with nothing on the card saying so.
+  const top = topMatchedSubject(membership)
   const movement = top
     ? input.movementFor
       ? input.movementFor(top.subjectId)

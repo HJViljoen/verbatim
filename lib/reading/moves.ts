@@ -189,6 +189,24 @@ export const HOOK_UNCLASSIFIED = 'not classified'
 const counted = (k: number, n: number): Counted => ({ k, n })
 
 /**
+ * The subject a month of posts names: the one the most of them matched.
+ *
+ * ONE RULE, BECAUSE TWO SURFACES READ IT. The card proposes this subject and
+ * the page bands this subject's two months beside it, and a second sort with a
+ * different tie-break would let the card's paired movement be a reading of one
+ * subject while the proposal named another — with nothing on the card saying
+ * so. The tie-break is the LABEL, not the id: a uuid tie-break is stable and
+ * arbitrary, and the reader can see the label.
+ *
+ * It takes the posts a subject matched IN THE MONTH — the caller's rows are
+ * already bounded to the month's own posts, which is what makes this the same
+ * ordering `buildMoveCandidate` gives its `subjects` (k desc, then label).
+ */
+export function topMatchedSubject<T extends { label: string; videoIds: readonly string[] }>(rows: readonly T[]): T | null {
+  return [...rows].sort((a, b) => b.videoIds.length - a.videoIds.length || a.label.localeCompare(b.label))[0] ?? null
+}
+
+/**
  * The card, from one month of the client's own posts.
  *
  * EVERY ROW IS k OF n AND THE n IS THE SAME ONE. "9 posts published in
@@ -265,6 +283,10 @@ export function buildMoveCandidate(input: MoveCandidateInput): MoveCandidate {
 
   const declarable = input.declarable ?? true
   const subjectsUnread = input.membershipUnread ? CARD_SUBJECTS_UNREAD : null
+  // `subjects` is sorted by matched posts and then by label — `topMatchedSubject`'s
+  // rule over the counts this function just made — so the head of the list and
+  // that helper are one answer, and the page can band the subject the card
+  // proposes.
   const top = subjects[0] ?? null
   // WHAT THE BUTTON WOULD DECLARE, and why it is a SUBJECT move. `moves` takes
   // exactly one target matching its kind (`moves_one_target`), and the only
