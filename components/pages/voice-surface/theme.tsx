@@ -417,7 +417,15 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
                 ) : null}
                 <Tone t={t} mode={mode} />
               </div>
-              <div className="flex min-w-0 flex-col gap-1">
+              {/* THE DRAWING KEEPS ITS DESIGNED SIZE BELOW THE BREAKPOINT.
+                  `CalendarLine` scales its viewBox uniformly to the box it is
+                  given, and 42% of that width is the pad the end label sits
+                  in — right in this 560px column, and at 1024, where the tile
+                  falls to one column and the chart stretches to ~900px, it is
+                  a 530×230 box with the plot in its left 58%. Capped at the
+                  width it was drawn for, it is the same chart rather than a
+                  mostly-empty box; the caption under it carries every month. */}
+              <div className="flex min-w-0 max-w-[560px] flex-col gap-1 xl:max-w-none">
                 {series ? (
                   <Line label="Month by month" mode={mode}>
                     <BlockCalendar

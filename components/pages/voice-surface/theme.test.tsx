@@ -156,6 +156,14 @@ describe('voiceTheme', () => {
     expect(text.split('said on camera rather than typed')).toHaveLength(1)
   })
 
+  it('keeps the month-by-month drawing at the size it was drawn for below xl', () => {
+    // The chart scales uniformly to its box and 42% of its width is the pad
+    // the end label sits in. Below the breakpoint the tile is one column and
+    // the chart stretched to ~900px — a mostly-empty box with the plot in its
+    // left 58%.
+    expect(render(voiceTheme.render(voiceFixture(), 'app', ctx))).toContain('max-w-[560px]')
+  })
+
   it('draws the reach bar in a fill separable from its own track', () => {
     // `var(--cat)` (#9AA1A9) on the bg-inner track (#F6F7F8) is 2.4:1, under
     // the 3:1 floor for a graphic that carries meaning — on the one bar in
