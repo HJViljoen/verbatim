@@ -66,6 +66,20 @@ export type MonthlyBlockKey = (typeof MONTHLY_BLOCK_KEYS)[number]
 export const MONTHLY_EMAIL_WIDTH = 640
 
 /**
+ * The CARD inside that frame (Block D wave 2, E-monthly).
+ *
+ * TWO NUMBERS, NOT ONE, and the artefact had collapsed them into one. The
+ * artboard's outer element is 640 wide with 20px of canvas padding all round,
+ * so the white card it holds is 600 — which is also what the design system
+ * states in so many words (`spec/design-system.md` §4: "600px card on a
+ * #F6F7F8 canvas"). The built email set `maxWidth: 640` on the CARD and padded
+ * it 24/12, so every line of copy ran about 40px longer than the artboard's and
+ * the canvas gutter all but disappeared. The frame keeps its name and its value
+ * because the artefact's geometry is still 640 overall.
+ */
+export const MONTHLY_CARD_WIDTH = 600
+
+/**
  * How many movers each side of section 3 prints.
  *
  * TEN, against Overview's three and the weekly report's three — the WP's own
@@ -190,6 +204,81 @@ export function monthlyPeriod(month: string, status: MonthlyStatus, readingAt: s
  *  `FREEZE_AFTER_DAYS` moved (the same note OV6 carries). */
 export function freezesOn(month: string): string {
   return freezeBoundary(month)
+}
+
+/**
+ * The masthead's eyebrow — "Verbatim · September · reading as at 18 Sep 2026 ·
+ * still filling until 31 Oct 2026" (Block D wave 2, E-monthly, `monthly.eyebrow`).
+ *
+ * THE PRODUCT'S NAME AND THE READING, which is what the artboard puts in the
+ * eyebrow slot and what the built email put nowhere. The email's eyebrow read
+ * "Sealand · consumer intelligence" — the TENANT and a category noun — and the
+ * three facts of the reading were printed as a mono line below the headline, so
+ * the two had swapped jobs. The artboard puts the tenant on the context row,
+ * right-aligned beside the dates, where a reader looks for "whose is this".
+ *
+ * IT IS `monthlyPeriod` WITH THE PRODUCT IN FRONT, and deliberately not a
+ * second composer: the mock's eyebrow stops at "still filling" and the built
+ * stamp says which day it stops filling ON, which is the fact nobody else on
+ * the artefact carries (the brief: "keep the freeze date"). One composer means
+ * the email, the deck and the share page cannot word one reading three ways.
+ */
+export const MONTHLY_PRODUCT = 'Verbatim'
+
+export function monthlyEyebrow(month: string, status: MonthlyStatus, readingAt: string): string {
+  return `${MONTHLY_PRODUCT} · ${monthlyPeriod(month, status, readingAt)}`
+}
+
+/** What the masthead's context row needs: the month's shape and the updates
+ *  that were delivered into it. `BarBlock`'s own fields, named here so this
+ *  composer stays pure and this module keeps importing no loader. */
+export interface MonthlyContextInput {
+  month: string
+  status: MonthlyStatus
+  /** Days of the month elapsed at the reading, or null on a complete month. */
+  daysIn: number | null
+  updates: number
+  /** Already formatted, as `BarBlock.updateDates` holds them ("6 Sep"). */
+  updateDates: readonly string[]
+}
+
+/**
+ * "1–18 Sep 2026 · 3 updates · 6 Sep, 13 Sep" — the artboard's context row
+ * (`monthly.headline`).
+ *
+ * THE UPDATE DATES ARE LOADED AND WERE PRINTED NOWHERE. `BarBlock.updateDates`
+ * has been on `OverviewData` since WP11 and no surface in the product draws it;
+ * the artefact printed the COUNT alone ("3 updates"), which tells a reader how
+ * often we looked and not when. On an artefact read once a month by somebody
+ * who was not watching, when we looked is the difference between "the month is
+ * thin" and "we stopped gathering on the 13th".
+ *
+ * AND THE RANGE IS THE MONTH'S, NEVER THE RUN'S. A period is dated by the
+ * comment (AGENTS.md), so the left half is day 1 of the month to the day the
+ * reading reached — `daysIn`, the same field OV0's filling line counts — and on
+ * a closed month it is the whole month. It is NOT the run window, which is the
+ * weekly artefact's clock and would date a calendar month by when we gathered.
+ */
+export function monthlyContext(input: MonthlyContextInput): string {
+  const parts = [monthRange(input.month, input.status, input.daysIn)]
+  parts.push(`${fmtInt(input.updates)} ${input.updates === 1 ? 'update' : 'updates'}`)
+  if (input.updateDates.length > 0) parts.push(input.updateDates.join(', '))
+  return parts.join(' · ')
+}
+
+/** "1–18 Sep 2026", or "1–30 Sep 2026" once the month has run out. */
+export function monthRange(month: string, status: MonthlyStatus, daysIn: number | null): string {
+  const last = daysInMonth(month)
+  const reached = status === 'frozen' || daysIn == null ? last : Math.min(Math.max(daysIn, 1), last)
+  // `shortDate` gives "18 Sep"; the year is said once, at the end of the range,
+  // because both ends are inside one month by construction.
+  const tail = shortDate(`${month.slice(0, 8)}${String(reached).padStart(2, '0')}T00:00:00.000Z`)
+  return `1–${tail} ${month.slice(0, 4)}`
+}
+
+function daysInMonth(month: string): number {
+  const d = new Date(month)
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate()
 }
 
 /**
