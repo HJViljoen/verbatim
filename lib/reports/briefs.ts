@@ -1,5 +1,8 @@
+import { shortDate } from '../format'
 import { ARTEFACT_COPY, isBuildable, type Artefact } from '../settings/artefacts'
 import { CADENCE_COPY, type ScheduleCadence } from '../schedules/types'
+import type { ReadingStamp, SentFigure } from './archive'
+import { AUDIENCES, type Audience } from './types'
 import type { DocumentRole } from './documents/types'
 
 /**
@@ -45,6 +48,28 @@ export interface BriefCard {
   /** How many rows the builds list actually searched, where the workspace holds
    *  more (`listCap`); null where it searched everything. */
   poolCappedAt: number | null
+  /** The artboard's tinted role pill, in the product's OWN words (Block D wave
+   *  2). The mock writes "For the sales lead"; `AUDIENCES[].reader` is what the
+   *  cover prompt is actually handed and what the Studio stores, so the pill
+   *  reads "For the people who talk to customers". Null where the brief's
+   *  artefact names no audience. */
+  reader: string | null
+  /** The artboard's mono month chip, top-right — the month the LAST BUILD read,
+   *  with "(still filling)" kept. A bare "September" on a month that is still
+   *  filling lets a reader take a part-month for a month (mock-gap §3.8), and
+   *  the month is the build's, never the calendar's: a brief built on 2 October
+   *  for September says September. */
+  monthChip: string | null
+  /** The artboard's four-row inner block: the figures the last build actually
+   *  froze, keyed by cover slot (`sentFigures`). Empty where there is no build
+   *  or the build stored none. */
+  figures: SentFigure[]
+  /** The PDF the last build produced, for the footer's left-hand action. Null
+   *  where no file was stored — a dead control is not drawn. */
+  pdf: { id: string; bytes: number; stale: boolean } | null
+  /** The artboard's mono footer note, right — when the last one read, short.
+   *  Null where there is no build to stamp. */
+  stamp: string | null
 }
 
 /**
@@ -173,3 +198,81 @@ export function latestBriefLine(
   if (card.poolCappedAt != null) return `Not among the ${card.poolCappedAt} most recent builds we looked at.`
   return NOT_BUILT_YET
 }
+
+/**
+ * Which audience a brief is written for — the artboard's role pill.
+ *
+ * THE MAP IS THE ARTEFACT KEY'S, NOT A GUESS FROM THE ROLE. `brief:marketing`
+ * and the starter template `monthly_marketing_review` both carry the audience
+ * `marketing` (the MARKETING_BRIEF note above), so the join goes one way only:
+ * from the artefact this card IS to the audience its cover is written for.
+ */
+export const BRIEF_AUDIENCE: Readonly<Partial<Record<Artefact, Audience>>> = {
+  'brief:sales': 'sales',
+  'brief:marketing': 'marketing',
+  'brief:content': 'content',
+  'brief:leadership': 'leadership',
+}
+
+/** "the people who talk to customers" — the reader the cover prompt is handed,
+ *  and the words the card's role pill prints. Null where the artefact is not
+ *  one of the four briefs. */
+export function briefReader(artefact: Artefact): string | null {
+  const key = BRIEF_AUDIENCE[artefact]
+  if (!key) return null
+  return AUDIENCES.find((a) => a.key === key)?.reader ?? null
+}
+
+/**
+ * The month chip, from the last build's own stamp.
+ *
+ * Null where the artefact named no month — which is every brief built before
+ * WP19 and every arranged report. A chip that fell back to the calendar month
+ * would say "September" over figures read in August.
+ */
+export function briefMonthChip(stamp: ReadingStamp | null): string | null {
+  if (!stamp?.month) return null
+  return stamp.monthStatus === 'filling' ? `${stamp.month} (still filling)` : stamp.month
+}
+
+/**
+ * "read as at 16 Sep" — the artboard's mono stamp in the card's footer, right.
+ *
+ * SHORT, BECAUSE IT SHARES A LINE WITH THE ACTIONS. `readingLine` is the full
+ * sentence and the archive prints it; a card footer that carried it would
+ * overflow a 389px tile at 1440. The month is already the chip at the top of
+ * the same card, so what is left to say is the DAY and which clock it is on —
+ * and "built" versus "read as at" is that clock. The mock prints a bare
+ * "28 Sep", which says neither.
+ */
+export function briefStamp(stamp: ReadingStamp | null): string | null {
+  if (!stamp) return null
+  return stamp.inferred ? `built ${shortDate(stamp.at)}` : `read as at ${shortDate(stamp.at)}`
+}
+
+/**
+ * The section meta beside "The role briefs" — D14, and it is a correction.
+ *
+ * The artboard writes "rebuilt with every monthly reading · September built 28
+ * Sep". Nothing rebuilds or sends a brief on any cadence:
+ * `BUILDABLE_ARTEFACTS` is `['weekly', 'monthly', 'quarterly']` and there is
+ * no `sendsBrief` branch in `lib/schedules/run.ts`. A copy claim about
+ * behaviour must match the code (AGENTS.md — a page once claimed "no email is
+ * sent" while Resend sent), and the date is on each card's own footer, where
+ * it belongs, because three cards can be three months old.
+ */
+export const BRIEFS_META = 'Built when you ask — no cadence rebuilds these yet'
+
+/**
+ * What a cleared PDF will do when you ask for it (Block D wave 2 fix pass).
+ *
+ * `artifacts.stale` means the file is no longer in storage and
+ * `/api/artifacts/[id]` re-renders it on the way out — a DIFFERENT file from
+ * the one whose bytes were stored, and a render that counts against
+ * `EXPORT_DAILY_LIMIT` and can answer 429. The detail pane says this as a
+ * clause on the download link ("· rebuilt on download"); a card footer is one
+ * row wide and the clause would be truncated there, which is how a warning
+ * gets lost. So the card's action drops the size it cannot stand behind and
+ * the card's body says the sentence.
+ */
+export const STALE_PDF_LINE = 'The stored PDF was cleared; downloading it builds the same file again.'

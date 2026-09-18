@@ -1,9 +1,10 @@
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { getSessionContext } from '@/lib/auth'
-import { PageFrame, PageBar, BarPill } from '@/components/shell/page-grid'
-import { MasterDetail } from '@/components/shell/master-detail'
-import { PaneHeader, PaneBody, RailGroup, RailLink, ListRows, ListRow, PaneEmpty, DetailHeader, DetailSection } from '@/components/shell/master-list'
-import { ListSearch } from '@/components/shell/list-search'
+import { PageFrame, PageBar, PageGrid, BarPill } from '@/components/shell/page-grid'
+import { Tile } from '@/components/shell/tile'
+import { PaneEmpty, DetailHeader, DetailSection } from '@/components/shell/master-list'
+import { HowToRead } from '@/components/how-to-read'
 import { ShareLinks, type ShareLinkView } from '@/components/reports/share-links'
 import { ReportViewer } from '@/components/reports/report-viewer'
 import { loadViewerSnapshot, viewerHref, type ViewerSnapshot } from '@/lib/reports/viewer'
@@ -14,10 +15,21 @@ import type { CoverText } from '@/lib/reports/types'
 import { sendDidNotFinish, sendFailureSentence } from '@/lib/schedules/copy'
 import { exportedRows, exportedLine, type ExportSnapshot } from '@/lib/exports/rows'
 import { rows as readRows } from '@/lib/pages/read'
+import { PRIVACY_LINE } from '@/lib/reading/method'
 import { BriefCards } from '@/components/reports/brief-cards'
+import { ArchiveTile, type ArchiveColumn, type ArchiveItem } from '@/components/reports/archive-lists'
+import { StudioCard } from '@/components/reports/studio-card'
+import { QuarterlyAbsentTile, QuarterlyCardTile } from '@/components/blocks/reports-card/card'
 import { ArchiveDateFilter } from '@/components/reports/date-filter'
+import { loadQuarterlyCard } from '@/lib/pages/reports-card'
+import { readingHandle } from '@/lib/reading/read'
+import { catalogueChips } from '@/lib/reports/catalogue'
+import { UPDATES_UNREAD_LINE, activePreset, loadReportsPageContext, presetLine } from '@/lib/reports/page-context'
+import { fmtBytes } from '@/lib/reports/files'
+import { shortDate } from '@/lib/format'
+import { surface } from '@/lib/nav'
 import { SENT_FIGURES_NOTE, dateFilterLine, emptyGroupLine, hasDateFilter, listCap, parseDateFilter, printedFigures, readingLine, readingStampOf, sentFigures, withinDates, type ListReach, type StoredFigures } from '@/lib/reports/archive'
-import { BRIEF_CARDS, cadenceWord, cardSending, briefLabel, briefWhat, type BriefCard } from '@/lib/reports/briefs'
+import { BRIEFS_META, BRIEF_CARDS, cadenceWord, cardSending, briefLabel, briefMonthChip, briefReader, briefStamp, briefWhat, type BriefCard } from '@/lib/reports/briefs'
 import { loadReportsPage } from '@/lib/settings/reports-load'
 import { isArtefact } from '@/lib/settings/artefacts'
 import { canSeeStudio, STUDIO_HREF } from '@/lib/studio-visibility'
@@ -98,7 +110,6 @@ const BASE = '/dashboard/reports'
 const LIST_CAP = { sent: 200, legacy: 1000, built: 100, exported: 50 } as const
 const fmtDate = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : null)
 const fmtWhen = (iso: string) => new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
-const fmtBytes = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1000))} KB`)
 /** Every link on this page carries the reader's filter — a rail link that
  *  dropped the date filter would silently widen the archive under them. */
 const hrefWith = (extra: Record<string, string | undefined>) => (group: Group, item?: string | null) => {
@@ -164,6 +175,20 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
     supabase.from('reports').select('id, template_key, kind, latest_snapshot_id').eq('client_id', clientId).eq('kind', 'document'),
     loadReportsPage(supabase, clientId).catch(() => null),
   ])
+
+  // THE PAGE'S ONE READING HANDLE (Block D wave 2). The bar's context line, the
+  // archive's delivery meta, the preset chips and the method footnote all come
+  // from `loadReportsPageContext`; the quarterly card reads its own two windows
+  // and answers null on a workspace with no confirmed subject, which is every
+  // workspace until M4 is applied. Both degrade in words and neither can take
+  // the archive down with it.
+  const [ctx, quarterly] = await Promise.all([
+    loadReportsPageContext(supabase, clientId),
+    loadQuarterlyCard({ supabase, clientId, reading: readingHandle(clientId), params: sp }).catch((e: unknown) => {
+      console.error(`[reports] quarterly card: ${(e as { message?: string })?.message ?? String(e)}`)
+      return null
+    }),
+  ])
   // readRows, not `data ?? []`: a failed read and an empty archive render the
   // same page, so a broken query would show a client an empty Sent or Exported
   // tab with nothing anywhere saying the read failed.
@@ -221,12 +246,8 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   // the sends' cap alone told a workspace with exactly 200 sends and 47 legacy
   // rows — a complete list, searched end to end — that "only the 200 most
   // recent are searched". `listCap` takes both pools and answers about the
-  // group.
-  const cappedAt = group === 'sent'
-    ? listCap([{ total: sendTotal.count, cap: LIST_CAP.sent }, { total: legacyTotal.count, cap: LIST_CAP.legacy }])
-    : group === 'built'
-      ? listCap([{ total: builtTotal.count, cap: LIST_CAP.built }])
-      : listCap([{ total: exportTotal.count, cap: LIST_CAP.exported }])
+  // group. All of that is `reachOf` below, which answers per group now that
+  // the three lists are drawn at once rather than one at a time.
 
   // ── RP1: the three cards ───────────────────────────────────────────────
   // readRows, for the reason stated above: a failed read must not read as a
@@ -242,6 +263,13 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
     const reportRow = documentReports.find((r) => r.template_key === role) ?? null
     const schedule = scheduleRows.find((x) => isArtefact(x.artefact) && x.artefact === artefact) ?? null
     const recipients = schedule?.recipients ?? []
+    // The last build's own stamp, read ONCE: the month chip, the footer stamp
+    // and the reading line are three renderings of it and must not be three
+    // reads of it.
+    const stamp = latest ? readingStampOf(latest) : null
+    // THE PDF, NOT ANY FILE. A build can carry a PNG of one tile; the card's
+    // action says PDF and must hand back one.
+    const pdf = latest?.artifacts.find((a) => a.format.toLowerCase() === 'pdf') ?? null
     return {
       role,
       artefact,
@@ -250,7 +278,12 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
       reportId: reportRow?.id ?? null,
       everBuilt: reportRow ? reportRow.latest_snapshot_id != null : null,
       poolCappedAt: briefPoolCappedAt,
-      latest: latest ? { snapshotId: latest.id, title: latest.title, readingLine: readingLine(readingStampOf(latest)) } : null,
+      latest: latest && stamp ? { snapshotId: latest.id, title: latest.title, readingLine: readingLine(stamp) } : null,
+      reader: briefReader(artefact),
+      monthChip: briefMonthChip(stamp),
+      stamp: briefStamp(stamp),
+      figures: sentFigures(latest?.figures ?? null, 4),
+      pdf: pdf ? { id: pdf.id, bytes: pdf.bytes, stale: pdf.stale } : null,
       cadence: cadenceWord(schedule?.cadence ?? null),
       recipients,
       sending: cardSending({ artefact, active: Boolean(schedule?.active), recipients, period: schedules?.period ?? 'weekly' }),
@@ -259,13 +292,24 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   })
 
   // ── selection ─────────────────────────────────────────────────────────
-  const sentIds = [...sends.map((s) => s.id), ...legacy.map((l) => l.id)]
-  const sentId = group === 'sent' ? (sp.item && sentIds.includes(sp.item) ? sp.item : sentIds[0] ?? null) : null
+  // AN ID THAT NAMES NOTHING IS NOT AN INVITATION TO OPEN SOMETHING ELSE. A
+  // link into the archive carries `?item=`, and where that row is gone — a
+  // purged snapshot, a share link sent weeks ago, or dates that now exclude it
+  // — falling through to the newest row opened a different document under the
+  // reader's own link, silently. The fallback is for a group opened WITHOUT an
+  // item; a named one either resolves or is said to be missing below.
+  const pick = <T,>(rows: readonly T[], id: (r: T) => string, on: boolean): string | null => {
+    if (!on) return null
+    if (sp.item) return rows.some((r) => id(r) === sp.item) ? sp.item : null
+    return rows[0] ? id(rows[0]) : null
+  }
+  const sentRows = [...sends.map((s) => ({ id: s.id })), ...legacy.map((l) => ({ id: l.id }))]
+  const sentId = pick(sentRows, (r) => r.id, group === 'sent')
   const selectedSend = sentId ? sends.find((s) => s.id === sentId) ?? null : null
   const selectedLegacy = sentId && !selectedSend ? legacy.find((l) => l.id === sentId) ?? null : null
-  const buildId = group === 'built' ? (sp.item && builds.some((b) => b.id === sp.item) ? sp.item : builds[0]?.id ?? null) : null
+  const buildId = pick(builds, (b) => b.id, group === 'built')
   const selectedBuild = buildId ? builds.find((b) => b.id === buildId) ?? null : null
-  const exportId = group === 'exported' ? (sp.item && exports.some((e) => e.id === sp.item) ? sp.item : exports[0]?.id ?? null) : null
+  const exportId = pick(exports, (e) => e.id, group === 'exported')
   const selectedExport = exportId ? exports.find((e) => e.id === exportId) ?? null : null
 
   // Share links for the selected item — read server-side (the token is
@@ -322,116 +366,121 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   }
   const href = hrefWith(carry)
 
-  const rail = (
-    <>
-      <PaneHeader title="Archive" meta="what left the building" />
-      <PaneBody>
-        <RailGroup label="Reports">
-          <RailLink href={href('sent')} active={group === 'sent'} count={totals.sent}>Sent</RailLink>
-          <RailLink href={href('built')} active={group === 'built'} count={totals.built}>Built</RailLink>
-          <RailLink href={href('exported')} active={group === 'exported'} count={totals.exported}>Exported</RailLink>
-        </RailGroup>
-      </PaneBody>
-    </>
-  )
+  // ── The archive, as three lists at once (Block D wave 2) ───────────────
+  // The rail and the one-group-at-a-time list are gone; `?group=` survives as
+  // the selector for the DETAIL pane, so every link already in circulation
+  // still opens the same item.
+  const reachOf = (g: Group): ListReach => ({
+    cappedAt: g === 'sent'
+      ? listCap([{ total: sendTotal.count, cap: LIST_CAP.sent }, { total: legacyTotal.count, cap: LIST_CAP.legacy }])
+      : g === 'built'
+        ? listCap([{ total: builtTotal.count, cap: LIST_CAP.built }])
+        : listCap([{ total: exportTotal.count, cap: LIST_CAP.exported }]),
+    ...(g === 'built' ? { clock: 'built' } : {}),
+    unread: unread[g],
+  })
+  const emptyFor = (g: Group, verb: string, invite: string) =>
+    emptyGroupLine({ verb, invite, filtered: hasDateFilter(dates), reach: reachOf(g) })
 
-  const LIST_ID = 'reports-list'
-  const shown = group === 'sent' ? sends.length + legacy.length : group === 'built' ? builds.length : exports.length
-  // The pane's line and the header's line are one answer: an empty pane must
-  // not say "nothing was built in those dates" under a header saying only the
-  // newest hundred were searched.
-  const reach: ListReach = { cappedAt, ...(group === 'built' ? { clock: 'built' } : {}), unread: unread[group] }
-  const emptyLine = (verb: string, invite: string) => emptyGroupLine({ verb, invite, filtered: hasDateFilter(dates), reach })
+  // ONE FILTER LINE OVER THREE LISTS, so it weighs every pool the three were
+  // drawn from. `listCap` takes them all and answers about the archive rather
+  // than about whichever tab happened to be open.
+  const shownAll = sends.length + legacy.length + builds.length + exports.length
+  const totalAll = totals.sent + totals.built + totals.exported
+  const allReach: ListReach = {
+    cappedAt: listCap([
+      { total: sendTotal.count, cap: LIST_CAP.sent },
+      { total: legacyTotal.count, cap: LIST_CAP.legacy },
+      { total: builtTotal.count, cap: LIST_CAP.built },
+      { total: exportTotal.count, cap: LIST_CAP.exported },
+    ]),
+    unread: unread.sent || unread.built || unread.exported,
+  }
   const filter = (
     <ArchiveDateFilter
       filter={dates}
-      hidden={{ ...(group !== 'sent' ? { group } : {}), ...(sp.item ? { item: sp.item } : {}) }}
-      // The Built list is capped by when each artefact was BUILT and narrowed
-      // by when it READ; the caveat names the clock its cap is on so the two
-      // dates cannot be read as one.
-      line={dateFilterLine(dates, shown, group === 'sent' ? totals.sent : group === 'built' ? totals.built : totals.exported, reach)}
+      hidden={{ ...(sp.group ? { group: sp.group } : {}), ...(sp.item ? { item: sp.item } : {}) }}
+      line={dateFilterLine(dates, shownAll, totalAll, allReach)}
     />
   )
-  const list = group === 'sent' ? (
-    <>
-      <PaneHeader title="Sent" meta={sends.length + legacy.length > 0 ? 'newest first' : undefined}>
-        {sends.length + legacy.length > 5 && <ListSearch scope={LIST_ID} placeholder="Search sent updates…" />}
-        {filter}
-      </PaneHeader>
-      <PaneBody>
-        <div id={LIST_ID}>
-          {sends.length + legacy.length > 0 ? (
-            <ListRows>
-              {sends.map((s) => (
-                <ListRow key={s.id} href={href('sent', s.id)} active={s.id === sentId} search={`${s.subject ?? ''} ${scheduleName(s)}`}>
-                  <p className="line-clamp-2 text-[13px] font-semibold leading-[1.3]">{s.subject ?? 'Update'}</p>
-                  <p className={`mt-0.5 font-mono text-[10.5px] ${s.status === 'failed' || sendDidNotFinish(s.status, s.claimed_at) ? 'text-negative' : 'text-muted-foreground'}`}>{scheduleName(s)} · {sendLine(s)}</p>
-                </ListRow>
-              ))}
-              {legacy.map((l) => (
-                <ListRow key={l.id} href={href('sent', l.id)} active={l.id === sentId} search={`${l.subject ?? ''} ${fmtDate(l.week_end) ?? ''}`}>
-                  <p className="line-clamp-2 text-[13px] font-semibold leading-[1.3]">{l.subject ?? 'Update'}</p>
-                  <p className="mt-0.5 font-mono text-[10.5px] text-muted-foreground">earlier update · {fmtDate(l.week_start)} – {fmtDate(l.week_end)} · {l.sent_at ? `emailed ${fmtDate(l.sent_at)}` : 'viewable here'}</p>
-                </ListRow>
-              ))}
-            </ListRows>
-          ) : (
-            <PaneEmpty>{emptyLine('was sent', studio
-              ? 'Nothing sent yet. Each report in the Studio sends after the next update; the first lands then.'
-              : 'Nothing sent yet. Your updates are set up by Verbatim and send after the next update; the first lands then.')}</PaneEmpty>
-          )}
-        </div>
-      </PaneBody>
-    </>
-  ) : group === 'built' ? (
-    <>
-      <PaneHeader title="Built" meta={builds.length > 0 ? 'newest first' : undefined}>
-        {builds.length > 5 && <ListSearch scope={LIST_ID} placeholder="Search builds…" />}
-        {filter}
-      </PaneHeader>
-      <PaneBody>
-        <div id={LIST_ID}>
-          {builds.length > 0 ? (
-            <ListRows>
-              {builds.map((b) => (
-                <ListRow key={b.id} href={viewerHref(BASE, { group: 'built', item: b.id }, b.id)} active={b.id === buildId} search={b.title}>
-                  <p className="line-clamp-2 text-[13px] font-semibold leading-[1.3]">{b.title}</p>
-                  <p className="mt-0.5 font-mono text-[10.5px] text-muted-foreground">{readingLine(readingStampOf(b))} · {b.artifacts.length ? b.artifacts.map((a) => a.format.toUpperCase()).join(', ') : 'no file'}</p>
-                </ListRow>
-              ))}
-            </ListRows>
-          ) : (
-            <PaneEmpty>{emptyLine('was built', studio
-              ? 'Nothing built by hand yet. Build any template in the Studio and its PDF lands here.'
-              : 'Nothing built by hand yet. Ask your Verbatim contact for a report built to order and its PDF lands here.')}</PaneEmpty>
-          )}
-        </div>
-      </PaneBody>
-    </>
-  ) : (
-    <>
-      <PaneHeader title="Exported" meta={exports.length > 0 ? 'newest first' : undefined}>
-        {exports.length > 5 && <ListSearch scope={LIST_ID} placeholder="Search exports…" />}
-        {filter}
-      </PaneHeader>
-      <PaneBody>
-        <div id={LIST_ID}>
-          {exports.length > 0 ? (
-            <ListRows>
-              {exports.map((e) => (
-                <ListRow key={e.id} href={href('exported', e.id)} active={e.id === exportId} search={`${e.title} ${e.what}`}>
-                  <p className="line-clamp-2 text-[13px] font-semibold leading-[1.3]">{e.title}</p>
-                  <p className="mt-0.5 font-mono text-[10.5px] text-muted-foreground">{exportedLine(e, fmtWhen(e.createdAt))}</p>
-                </ListRow>
-              ))}
-            </ListRows>
-          ) : (
-            <PaneEmpty>{emptyLine('was exported', 'Nothing exported yet. Export any page or tile from its menu; the files collect here.')}</PaneEmpty>
-          )}
-        </div>
-      </PaneBody>
-    </>
-  )
+
+  const sentItems: ArchiveItem[] = [
+    ...sends.map((s): ArchiveItem => ({
+      id: s.id,
+      title: s.subject ?? 'Update',
+      meta: `${scheduleName(s)} · ${sendLine(s)}`,
+      stamp: shortDate(s.sent_at ?? s.claimed_at),
+      href: href('sent', s.id),
+      active: s.id === sentId,
+      failed: s.status === 'failed' || sendDidNotFinish(s.status, s.claimed_at),
+      icon: 'mail',
+      search: `${s.subject ?? ''} ${scheduleName(s)}`,
+    })),
+    ...legacy.map((l): ArchiveItem => ({
+      id: l.id,
+      title: l.subject ?? 'Update',
+      meta: `earlier update · ${fmtDate(l.week_start)} – ${fmtDate(l.week_end)}${l.sent_at ? '' : ' · viewable here'}`,
+      stamp: l.sent_at ? shortDate(l.sent_at) : null,
+      href: href('sent', l.id),
+      active: l.id === sentId,
+      icon: 'mail',
+      search: `${l.subject ?? ''} ${fmtDate(l.week_end) ?? ''}`,
+    })),
+  ]
+
+  const columns: ArchiveColumn[] = [
+    {
+      key: 'sent',
+      label: 'Sent',
+      meta: 'to your inbox',
+      items: sentItems,
+      // WHAT THIS COLUMN HOLDS UNDER THE FILTER, and what its list was drawn
+      // from — two different facts, and the all-time head count is neither.
+      held: sentItems.length,
+      cappedAt: reachOf('sent').cappedAt,
+      empty: emptyFor('sent', 'was sent', studio
+        ? 'Nothing sent yet. Each report in the Studio sends after the next update; the first lands then.'
+        : 'Nothing sent yet. Your updates are set up by Verbatim and send after the next update; the first lands then.'),
+    },
+    {
+      key: 'built',
+      label: 'Built',
+      meta: 'documents',
+      items: builds.map((b): ArchiveItem => ({
+        id: b.id,
+        title: b.title,
+        meta: `${readingLine(readingStampOf(b))} · ${b.artifacts.length ? b.artifacts.map((a) => a.format.toUpperCase()).join(', ') : 'no file'}`,
+        stamp: shortDate(readingStampOf(b).at),
+        href: viewerHref(BASE, { group: 'built', item: b.id }, b.id),
+        active: b.id === buildId,
+        icon: 'file',
+        search: b.title,
+      })),
+      held: builds.length,
+      cappedAt: reachOf('built').cappedAt,
+      empty: emptyFor('built', 'was built', studio
+        ? 'Nothing built by hand yet. Build any template in the Studio and its PDF lands here.'
+        : 'Nothing built by hand yet. Ask your Verbatim contact for a report built to order and its PDF lands here.'),
+    },
+    {
+      key: 'exported',
+      label: 'Exported',
+      meta: 'pages and tiles',
+      items: exports.map((e): ArchiveItem => ({
+        id: e.id,
+        title: e.title,
+        meta: exportedLine(e, fmtWhen(e.createdAt)),
+        stamp: shortDate(e.createdAt),
+        href: href('exported', e.id),
+        active: e.id === exportId,
+        icon: 'image',
+        search: `${e.title} ${e.what}`,
+      })),
+      held: exports.length,
+      cappedAt: reachOf('exported').cappedAt,
+      empty: emptyFor('exported', 'was exported', 'Nothing exported yet. Export any page or tile from its menu; the files collect here.'),
+    },
+  ]
 
   const detail = group === 'sent' ? (
     selectedSend ? (
@@ -543,14 +592,124 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
     <PaneEmpty>Select a file.</PaneEmpty>
   )
 
+  const selected = selectedSend != null || selectedLegacy != null || selectedBuild != null || selectedExport != null
+  // The reader named an item and it is not here. The master-detail printed
+  // "Select a file." into its third pane; with the pane gone the page drew
+  // nothing at all, so a share link to a deleted snapshot said nothing.
+  const missing = Boolean(sp.item) && !selected
+  const presetKey = activePreset(ctx.presets, dates)
+  const chosen = ctx.presets.find((x) => x.key === presetKey) ?? null
+
   return (
-    <PageFrame className="min-h-0 flex-1">
-      <PageBar title="Reports" context="your briefs, and what went out">
-        {studio && <Link href={STUDIO_HREF}><BarPill primary>Open the Studio</BarPill></Link>}
+    <PageFrame className="gap-4">
+      {/* THE BAR IS THE ARTBOARD'S, COMPOSED HERE (`reports.shell`,
+          `reports.bar.question`). `lib/nav.ts` still gives Reports
+          `bar: 'title'` — the horizon control and the soundness band stay off,
+          because this page still makes no reading of a period — so the page
+          takes the primitive and passes the two things the artboard draws that
+          the table would not: the month the archive is being read in, and the
+          question the surface answers, which has been in `SURFACES` verbatim
+          all along with nothing printing it. */}
+      <PageBar title={surface('reports').label} context={ctx.context} subtitle={surface('reports').question ?? undefined}>
+        <Suspense fallback={null}>
+          <HowToRead items={['month', 'level', 'change', 'video']} basePath={BASE} />
+        </Suspense>
+        {/* NOT `primary`. The artboard puts EXPORT in this slot and Reports has
+            no page module to export (deviation 1); what stood in its place was
+            the page's loudest element pointing AWAY from every document on it,
+            and since wave 2 the Studio is offered from its own card as well —
+            "Start a report", "Open the catalogue" and one action per brief. A
+            page that asks "Which document do I need?" answers with the
+            documents. */}
+        {studio && <Link href={STUDIO_HREF}><BarPill>Open the Studio</BarPill></Link>}
       </PageBar>
-      <BriefCards cards={cards} />
-      <MasterDetail id="reports" rail={rail} list={list} detail={detail} />
+
+      <BriefCards cards={cards} meta={BRIEFS_META} studio={studio} basePath={BASE} />
+
+      {/* THE ROWS GROW WITH THEIR CONTENT, as the artboard's do: its cards are
+          `min-height:248px`, not a fixed grid track. `PageGrid`'s 116px row
+          unit is right for a reading page whose tiles are sized by their
+          layout; here the honest form of a figure is longer than the mock's
+          and a fixed track would clip it under `overflow-hidden`.
+          `row={2}` is the 248px floor the artboard states; at `row={3}` the
+          stacked (sub-xl) minimum was 380px and `distribute="between"` spread
+          two sentences over it.
+          AND THE CARD IS NEVER SIMPLY ABSENT: `loadQuarterlyCard` answers null
+          where no subject is confirmed — the state both live workspaces are in
+          — and a page advertising documents may not go silent about the one it
+          was built to advertise. */}
+      <PageGrid className="xl:auto-rows-min">
+        {quarterly
+          ? <QuarterlyCardTile card={quarterly} col={studio ? 7 : 12} row={2} />
+          : <QuarterlyAbsentTile col={studio ? 7 : 12} row={2} />}
+        {studio && <StudioCard pages={catalogueChips()} col={5} row={2} />}
+      </PageGrid>
+
+      <PageGrid className="xl:auto-rows-min">
+        <ArchiveTile
+          col={12}
+          row={4}
+          columns={columns}
+          meta={ctx.delivery?.line ?? null}
+          presets={ctx.presets}
+          activePresetKey={presetKey}
+          presetHref={(x) => presetPath(BASE, x, sp.group)}
+          // A FAILED RUN READ SAYS SO. `ctx.presets` is empty in exactly that
+          // case (never four chips reading zero), and silence there would let
+          // a reader take an unread record for an empty one.
+          presetNote={chosen ? presetLine(chosen) : ctx.updatesUnread ? UPDATES_UNREAD_LINE : null}
+          filter={filter}
+          footer={
+            <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="text-[12px] text-muted-foreground">
+                Share links are created on an item below.
+              </span>
+              <span className="font-mono text-[11px] font-normal text-muted-foreground">{PRIVACY_LINE}</span>
+            </span>
+          }
+        />
+      </PageGrid>
+
+      {(selected || missing) && (
+        <PageGrid className="xl:auto-rows-min">
+          <Tile col={12} row={missing ? 1 : 3} className="p-0">
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+              {missing
+                ? <PaneEmpty>That item is not in the archive any more, or the dates you have set exclude it. Pick one from the lists above.</PaneEmpty>
+                : detail}
+            </div>
+          </Tile>
+        </PageGrid>
+      )}
+
+      {/* THE METHOD FOOTNOTE (`reports.method.footer`). The decision the brief
+          asked for, made: the page was given one minimal reading handle
+          (lib/reports/page-context.ts) and prints the REAL footnote —
+          `methodLines`, the same five facts in the same words every other
+          surface states them in. Nothing here is invented, and where the
+          record could not be read the footnote is absent rather than thin. */}
+      {ctx.method && (
+        <p className="m-0 flex flex-col gap-0.5 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
+          {ctx.method.lines.map((line, i) => (
+            <span key={i} className={i === 0 ? 'text-secondary-foreground' : undefined}>{line}</span>
+          ))}
+        </p>
+      )}
+
       {viewer && <ReportViewer snapshot={viewer} closeHref={closeViewer} showStudio={studio} />}
     </PageFrame>
   )
+}
+
+/** Where a preset chip points: the archive's own date filter, plus the group
+ *  the reader is reading — a chip that kept `?item=` would open a send the new
+ *  dates exclude, which is why `item` is dropped, but dropping `group` with it
+ *  silently reset an open Built item to the Sent list. */
+function presetPath(base: string, p: { from: string | null; to: string | null }, group?: string): string {
+  const q = new URLSearchParams()
+  if (group) q.set('group', group)
+  if (p.from) q.set('from', p.from)
+  if (p.to) q.set('to', p.to)
+  const qs = q.toString()
+  return qs ? `${base}?${qs}` : base
 }
