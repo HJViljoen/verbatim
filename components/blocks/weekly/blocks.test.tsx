@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { blockAnswers, blockContext, figureCount, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
-import { render, renderText } from '@/lib/test/render'
+import { markupText, render, renderText } from '@/lib/test/render'
 import { FIRST_SCREEN_BUDGET, NOTHING_UNUSUAL, WEEKLY_BLOCK_KEYS, WEEKLY_RULE, firstScreenCount } from '@/lib/reports/weekly'
 import { WEEKLY_BLOCKS, forSales, weeklyBlocksFor } from './index'
 import { formingFixture, quietFixture, thinFixture, weeklyFixture } from './fixture'
@@ -195,9 +195,31 @@ describe('WR2 · where things stand', () => {
   })
 
   it('prints every side as a level with its count', () => {
-    const text = renderText(block.render(weeklyFixture(), 'app', ctx))
-    expect(text).toContain('31% 26 of 84')
-    expect(text).toContain('22% 305 of 1,388')
+    for (const mode of MODES) {
+      const text = renderText(block.render(weeklyFixture(), mode, ctx))
+      expect(text, mode).toContain('31% 26 of 84')
+      expect(text, mode).toContain('22% 305 of 1,388')
+    }
+  })
+
+  // THE ARTBOARD'S ROW (block D wave 2): the month share leads, in its own
+  // right-hand column with its "of N" under it, and the bar is drawn from it.
+  it('leads with the month share and says what the bar is', () => {
+    const markup = render(block.render(weeklyFixture(), 'app', ctx))
+    expect(markup).toContain('data-copy="level"')
+    expect(markupText(markup)).toContain('the bar is each subject’s share of the category this month')
+  })
+
+  // The mock draws a tick at "a typical week"; nothing on this artefact
+  // computes one, and an unmeasured mark is the one thing a chart may not draw.
+  it('draws no typical-week mark and says nothing about a typical week', () => {
+    for (const mode of MODES) {
+      expect(renderText(block.render(weeklyFixture(), mode, ctx))).not.toMatch(/typical/i)
+    }
+  })
+
+  it('names what these are mentions in, in the frame’s footer note', () => {
+    expect(renderText(block.render(weeklyFixture(), 'app', ctx))).toContain('mentions in your audience')
   })
 
   it('says the subjects are not recorded rather than drawing an empty table', () => {
