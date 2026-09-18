@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 
 import {
   PLAN_CLAIM_BASIS, PLAN_FLOOR_LINE, PLAN_VERDICT_FLOOR, PLAN_VERDICT_LABEL,
-  movedSinceUpload, planCard, type PlanEvaluation,
+  currentReading, movedSinceUpload, planCard, type PlanEvaluation,
 } from './plan-cards'
 import type { ClaimResult } from './types'
 import { validateVerdicts, type AskTheme } from './verdicts'
@@ -115,6 +115,55 @@ describe('movedSinceUpload', () => {
   })
 })
 
+describe('currentReading — the card prints the newest re-reading, not the upload', () => {
+  const ev = (createdAt: string, runDate: string, claims: ClaimResult[] | null, summary: PlanEvaluation['summary'] = null): PlanEvaluation =>
+    ({ createdAt, runDate, moved: [], claims, summary })
+
+  it('takes the newest evaluation’s claims over the stored ones', () => {
+    const stored = [claim('C1', 'contradicts', 41)]
+    const out = currentReading(stored, { supported: 0, contradicted: 1, untested: 0 }, [
+      ev('2026-09-06T02:00:00Z', '2026-09-06', [claim('C1', 'contradicts', 38)]),
+      ev('2026-09-13T02:00:00Z', '2026-09-13', [claim('C1', 'silent', 0)], { supported: 0, contradicted: 0, untested: 1 }),
+    ])
+    expect(out.claims[0].verdict).toBe('silent')
+    expect(out.summary).toEqual({ supported: 0, contradicted: 0, untested: 1 })
+    expect(out.checkedOn).toBe('2026-09-13')
+  })
+
+  it('falls back to the check’s own answer where nothing has re-read it', () => {
+    const stored = [claim('C1', 'echoes', 9)]
+    const summary = { supported: 1, contradicted: 0, untested: 0 }
+    const out = currentReading(stored, summary, [])
+    expect(out.claims).toEqual(stored)
+    expect(out.summary).toBe(summary)
+    expect(out.checkedOn).toBeNull()
+  })
+
+  it('skips an evaluation that stored no claims, in any order', () => {
+    const out = currentReading([claim('C1', 'echoes', 9)], null, [
+      ev('2026-09-13T02:00:00Z', '2026-09-13', null),
+      ev('2026-09-06T02:00:00Z', '2026-09-06', [claim('C1', 'contradicts', 3)]),
+    ])
+    expect(out.claims[0].verdict).toBe('contradicts')
+    expect(out.checkedOn).toBe('2026-09-06')
+  })
+
+  it('never carries the upload’s summary onto a later reading’s claims', () => {
+    const out = currentReading([claim('C1', 'echoes', 9)], { supported: 1, contradicted: 0, untested: 0 }, [
+      ev('2026-09-13T02:00:00Z', '2026-09-13', [claim('C1', 'silent', 0)]),
+    ])
+    expect(out.summary).toBeNull()
+    // planCard derives it from the claims it is printing instead.
+    expect(planCard({
+      planId: 'p1', title: null, sourceFilename: null, uploadedOn: '2026-08-20T09:00:00Z', notice: null,
+      corpusVideos: 100, href: '/x',
+      claims: [claim('C1', 'echoes', 9)],
+      summary: { supported: 1, contradicted: 0, untested: 0 },
+      evaluations: [ev('2026-09-13T02:00:00Z', '2026-09-13', [claim('C1', 'silent', 0)])],
+    }).summary).toEqual({ supported: 0, contradicted: 0, untested: 1 })
+  })
+})
+
 describe('planCard', () => {
   const base = {
     planId: 'p1',
@@ -182,5 +231,31 @@ describe('planCard', () => {
 
   it('says so when a document yielded no checkable claim', () => {
     expect(planCard({ ...base, claims: [], summary: null }).empty).toMatch(/could be read as a claim/)
+  })
+
+  it('prints the re-read verdict and the date it was read, never the upload’s chip', () => {
+    // Össur's C1: contradicted at upload, untested on the newest reading. A
+    // card printing "Contradicted" beside a `moved` row saying it changed on
+    // 13 Sep is the page disagreeing with itself.
+    const card = planCard({
+      ...base,
+      claims: [claim('C1', 'contradicts', 41, ['i1'])],
+      summary: { supported: 0, contradicted: 1, untested: 0 },
+      evaluations: [{
+        createdAt: '2026-09-13T02:00:00Z',
+        runDate: '2026-09-13',
+        moved: [{ ref: 'C1', claim: 'claim C1', from: 'contradicts', to: 'silent' }],
+        claims: [claim('C1', 'silent', 0, ['i1'])],
+        summary: { supported: 0, contradicted: 0, untested: 1 },
+      }],
+    })
+    expect(card.claims[0].verdictLabel).toBe('Untested')
+    expect(card.summary).toEqual({ supported: 0, contradicted: 0, untested: 1 })
+    expect(card.checkedOn).toBe('2026-09-13')
+    expect(card.moved[0].to).toBe('Untested')
+  })
+
+  it('says nothing has re-read the document by leaving checkedOn null', () => {
+    expect(planCard({ ...base, claims: [claim('C1', 'echoes', 9)], summary: null }).checkedOn).toBeNull()
   })
 })

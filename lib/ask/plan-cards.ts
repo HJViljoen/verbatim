@@ -105,6 +105,11 @@ export interface PlanCheckCard {
   planId: string
   title: string
   uploadedOn: string
+  /** The update the printed verdicts were read on — `plan_check_evaluations
+   *  .run_date` of the newest re-reading. Null where nothing has re-read the
+   *  document since it was uploaded, in which case the verdicts ARE the
+   *  upload's and `uploadedOn` is the date that matters. */
+  checkedOn: string | null
   claims: PlanClaimRow[]
   summary: AskSummary
   /** What changed since the last check, from the stored re-evaluations. */
@@ -130,6 +135,47 @@ export interface PlanEvaluation {
   runDate: string
   createdAt: string
   moved: { ref: string; claim: string; from: string; to: string }[]
+  /** The claims AS RE-READ on that update. Optional because a check nothing
+   *  has re-read has none, and because a row written before this column was
+   *  read here carries none either. */
+  claims?: ClaimResult[] | null
+  summary?: AskSummary | null
+}
+
+/**
+ * The reading the card prints: the newest re-evaluation that carries one, and
+ * the check's own first answer only where nothing has re-read it.
+ *
+ * WHY THIS IS NOT `plan_checks.claims`. That column is written once, when the
+ * document is uploaded, and `lib/ask/reevaluate.ts` never writes it back — a
+ * re-evaluation upserts `plan_check_evaluations` and leaves the original answer
+ * in place for ever. So a card built off the check alone prints the verdicts of
+ * the day the document was uploaded, while `PLAN_HOLD_CAVEAT` beside it says
+ * each claim is read fresh against every update and the `moved` rows under it
+ * name a transition the chips above them do not show. Measured on production
+ * 2026-09-18: Össur's claim C1 went contradicts → silent → contradicts →
+ * silent over four consecutive re-readings, so this is not a theoretical
+ * staleness — it is wrong on the row that moved most, and the card is carried
+ * to the quarterly review, which goes to people outside the workspace.
+ */
+export function currentReading(
+  stored: readonly ClaimResult[],
+  storedSummary: AskSummary | null,
+  evaluations: readonly PlanEvaluation[],
+): { claims: ClaimResult[]; summary: AskSummary | null; checkedOn: string | null } {
+  const newest = [...evaluations]
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .find((e) => Array.isArray(e.claims) && e.claims.length > 0)
+  if (!newest) return { claims: [...stored], summary: storedSummary, checkedOn: null }
+  return {
+    claims: (newest.claims ?? []).filter((c) => c && typeof c.claim === 'string'),
+    // The summary travels with the claims it counts. A re-evaluation that
+    // stored claims and no summary gets one derived in `planCard`, never the
+    // upload's — three numbers counting a different reading are worse than
+    // none.
+    summary: newest.summary ?? null,
+    checkedOn: newest.runDate,
+  }
 }
 
 /**
@@ -201,7 +247,9 @@ export interface PlanCardInput {
  * could not count is worse than none.
  */
 export function planCard(input: PlanCardInput): PlanCheckCard {
-  const claims: PlanClaimRow[] = input.claims.map((c) => ({
+  // THE NEWEST RE-READING, NOT THE UPLOAD'S ANSWER. See `currentReading`.
+  const current = currentReading(input.claims, input.summary, input.evaluations)
+  const claims: PlanClaimRow[] = current.claims.map((c) => ({
     claim: c.claim,
     verdict: c.verdict,
     verdictLabel: PLAN_VERDICT_LABEL[c.verdict] ?? c.verdict,
@@ -212,10 +260,10 @@ export function planCard(input: PlanCardInput): PlanCheckCard {
     quote: c.verdict === 'silent' ? null : input.quoteFor?.(c) ?? null,
   }))
 
-  const summary: AskSummary = input.summary ?? {
-    supported: input.claims.filter((c) => c.verdict === 'echoes').length,
-    contradicted: input.claims.filter((c) => c.verdict === 'contradicts').length,
-    untested: input.claims.filter((c) => c.verdict === 'silent').length,
+  const summary: AskSummary = current.summary ?? {
+    supported: current.claims.filter((c) => c.verdict === 'echoes').length,
+    contradicted: current.claims.filter((c) => c.verdict === 'contradicts').length,
+    untested: current.claims.filter((c) => c.verdict === 'silent').length,
   }
 
   return {
@@ -224,6 +272,7 @@ export function planCard(input: PlanCardInput): PlanCheckCard {
     // campaign brief.pdf" and not a model-written title of it.
     title: input.sourceFilename?.trim() || input.title?.trim() || 'An uploaded plan',
     uploadedOn: input.uploadedOn,
+    checkedOn: current.checkedOn,
     claims,
     summary,
     moved: movedSinceUpload(input.evaluations),
@@ -253,6 +302,10 @@ interface EvaluationRow {
   run_date: string
   created_at: string
   moved: { ref: string; claim: string; from: string; to: string }[] | null
+  /** The re-read verdicts. The whole reason the card is not built off
+   *  `plan_checks.claims`; see `currentReading`. */
+  claims: ClaimResult[] | null
+  summary: AskSummary | null
 }
 
 /**
@@ -284,7 +337,7 @@ export async function loadPlanChecks(scope: Scope, corpusVideos: number | null =
   const ids = checks.map((c) => c.id)
   const [evalRes, threadRes] = await Promise.all([
     supabase.from('plan_check_evaluations')
-      .select('plan_check_id, run_date, created_at, moved')
+      .select('plan_check_id, run_date, created_at, moved, claims, summary')
       .eq('client_id', clientId).in('plan_check_id', ids)
       .order('created_at', { ascending: true }),
     supabase.from('agent_threads')
@@ -298,7 +351,13 @@ export async function loadPlanChecks(scope: Scope, corpusVideos: number | null =
   const evalsByCheck = new Map<string, PlanEvaluation[]>()
   for (const e of evaluations) {
     const arr = evalsByCheck.get(e.plan_check_id) ?? []
-    arr.push({ runDate: e.run_date, createdAt: e.created_at, moved: e.moved ?? [] })
+    arr.push({
+      runDate: e.run_date,
+      createdAt: e.created_at,
+      moved: e.moved ?? [],
+      claims: Array.isArray(e.claims) ? e.claims : null,
+      summary: e.summary ?? null,
+    })
     evalsByCheck.set(e.plan_check_id, arr)
   }
 
@@ -306,10 +365,16 @@ export async function loadPlanChecks(scope: Scope, corpusVideos: number | null =
   // across cards as it does across tiles, so a quote shown under one claim is
   // not shown again under another.
   const claimsOf = (c: CheckRow) => (c.claims ?? []).filter((x) => x && typeof x.claim === 'string')
+  // THE QUOTES ARE RESOLVED AGAINST THE PRINTED READING, not the upload's. A
+  // re-evaluation re-runs the whole verdict pass, so its claims carry their own
+  // `insightIds` — the evidence behind the verdict the card shows. Fetching the
+  // upload's ids would hand a chip from September a comment shortlisted in
+  // August.
+  const printed = (c: CheckRow) => currentReading(claimsOf(c), c.summary, evalsByCheck.get(c.id) ?? []).claims
   const insightIds = [
     ...new Set(
       checks.flatMap((c) =>
-        claimsOf(c)
+        printed(c)
           .filter((x) => x.verdict !== 'silent')
           .flatMap((x) => (x.insightIds ?? []).slice(0, ASK_THEMES_PER_CLAIM)),
       ),
