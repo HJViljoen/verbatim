@@ -4,7 +4,7 @@ import type { RecDecision } from '../rec-decisions'
 import { afterwardsFor } from '../reading/afterwards'
 import {
   acceptableRow, actedLine, adviceAnchor, buildAdviceRows, ledgerRowsShown, lineageKey, madeInMonth,
-  marketSurfaceHref, monthsMadeIn, moveLedgerLine, moveTargetLabel, registryIdsByInsight, repeatLine,
+  marketSurfaceHref, monthsMadeIn, moveLedgerLine, moveTargetLabel, orderedTargets, registryIdsByInsight, repeatLine,
   unlockRows, waysOfMoving, type AdviceRow, type RecCopy,
 } from './market-surface'
 
@@ -384,5 +384,53 @@ describe('registryIdsByInsight \u2014 the join a recommendation never had', () =
       { supporting_insight_ids: null, registry_id: 'reg-a' },
     ])
     expect(map.size).toBe(0)
+  })
+})
+
+describe('orderedTargets — one ledger row, one identity', () => {
+  const reg = new Map<string, string[]>([
+    ['ai-1', ['reg-a']],
+    ['ai-2', ['reg-a', 'reg-b']],
+    ['ai-3', ['reg-b']],
+    ['ai-4', ['reg-a']],
+  ])
+
+  it('leads with the identity most of the row’s own evidence points at', () => {
+    expect(orderedTargets(['ai-1', 'ai-2', 'ai-3', 'ai-4'], reg)).toEqual(['reg-a', 'reg-b'])
+  })
+
+  it('breaks a tie on the id, so the object is the same between renders', () => {
+    expect(orderedTargets(['ai-2'], reg)).toEqual(['reg-a', 'reg-b'])
+    expect(orderedTargets(['ai-3', 'ai-1'], reg)).toEqual(['reg-a', 'reg-b'])
+  })
+
+  it('contributes nothing for evidence no theme carries', () => {
+    expect(orderedTargets(['ai-9'], reg)).toEqual([])
+    expect(orderedTargets([], reg)).toEqual([])
+  })
+
+  it('never pools two identities’ months into one comparison', () => {
+    // The defect this ordering exists for: target A carries Jul–Sep and target
+    // B Jan–Jun, so a concatenation takes the "after" month from A and the
+    // "before" month from B and bands one theme's rise against another's.
+    const aOnly = [
+      { month: '2026-07-01', k: 11, n: 118 },
+      { month: '2026-09-01', k: 21, n: 130 },
+    ]
+    const bOnly = [{ month: '2026-01-01', k: 40, n: 100 }]
+    const points = new Map([['reg-a', aOnly], ['reg-b', bOnly]])
+    const [target] = orderedTargets(['ai-1', 'ai-2', 'ai-4'], reg)
+    const out = afterwardsFor({
+      decidedAt: '2026-06-02T00:00:00.000Z',
+      targetIds: [target],
+      series: points.get(target) ?? [],
+      audience: 'client',
+      objectLabel: 'Repair & warranty',
+    })
+    expect(target).toBe('reg-a')
+    // Both sides after the decision, so there is no "before" month of A's to
+    // read — and the answer is that, not B's January.
+    expect(out.state).toBe('too_soon')
+    expect(out.line).not.toContain('January')
   })
 })

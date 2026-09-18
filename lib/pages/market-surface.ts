@@ -876,26 +876,20 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   //
   // The rows were built above; this is the three columns they did not have.
   const registryByInsight = registryIdsByInsight(bucketRows)
-  const groundedRows = shownRows.map((r) => ({
-    ...r,
-    grounded: groundingFor({
-      basedOn: [...new Set(r.basedOn.flatMap((id) => evidenceByInsight.get(id) ?? []))],
-      videoByInsight,
-      themeIds: r.basedOn
-        .flatMap((id) => evidenceByInsight.get(id) ?? [])
-        .map((a) => themeSlugById.get(a))
-        .filter((s): s is string => Boolean(s)),
-      audience: LEDGER_AUDIENCE,
-      month,
-    }),
-    targetIds: [
-      ...new Set(
-        r.basedOn
-          .flatMap((id) => evidenceByInsight.get(id) ?? [])
-          .flatMap((a) => registryByInsight.get(a) ?? []),
-      ),
-    ],
-  }))
+  const groundedRows = shownRows.map((r) => {
+    const cited = r.basedOn.flatMap((id) => evidenceByInsight.get(id) ?? [])
+    return {
+      ...r,
+      grounded: groundingFor({
+        basedOn: [...new Set(cited)],
+        videoByInsight,
+        themeIds: cited.map((a) => themeSlugById.get(a)).filter((s): s is string => Boolean(s)),
+        audience: LEDGER_AUDIENCE,
+        month,
+      }),
+      targetIds: orderedTargets(cited, registryByInsight),
+    }
+  })
   const withAfterwards = await readAfterwards(reading, clientId, month, groundedRows, themeLabels)
   // The NEWEST copy's hero quote per identity — the ledger prints the current
   // wording of a piece of advice, so it prints the current copy's quote. Kept
@@ -1055,6 +1049,38 @@ export function registryIdsByInsight(
   return out
 }
 
+/**
+ * The identities a ledger row is about, MOST-CITED FIRST.
+ *
+ * ONE ROW, ONE OBJECT. `registryIdsByInsight` is one-to-many — an insight
+ * feeds every theme built from it — so a row routinely names several
+ * identities, and the reading can only be about one of them: "the newest month
+ * after against the newest month before" over a concatenation of two themes'
+ * series takes the after side from whichever theme happened to have a recent
+ * month and the before side from the other, bands two different objects
+ * against each other, and labels the result with the first one. A rise in
+ * Durability printed as Zips, with a band beside it to make it look checkable.
+ *
+ * SO THE ORDER IS THE ANSWER AND IT IS MEASURED, NOT ARBITRARY: the identity
+ * the most of this row's own cited insights point at leads, ties broken by id
+ * so the choice is stable between renders. `afterwardsFor` reads
+ * `targetIds[0]` as its object and the loader reads that one identity's
+ * series; the rest stay on the row so a `no_target` state still knows the
+ * difference between "several" and "none".
+ */
+export function orderedTargets(
+  citedInsightIds: readonly string[],
+  registryByInsight: Map<string, string[]>,
+): string[] {
+  const weight = new Map<string, number>()
+  for (const id of citedInsightIds) {
+    for (const reg of registryByInsight.get(id) ?? []) weight.set(reg, (weight.get(reg) ?? 0) + 1)
+  }
+  return [...weight.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([id]) => id)
+}
+
 /** The audience the ledger's afterwards reading is taken in. The advice is
  *  addressed to the client, so what it did afterwards is a reading of the
  *  CLIENT's own audience — not the category's. Named once rather than typed
@@ -1096,7 +1122,9 @@ async function readAfterwards(
   themeLabels: Map<string, string>,
 ): Promise<AdviceRow[]> {
   const readable = rows.filter((r) => r.decidedAt && r.targetIds.length > 0)
-  const targets = [...new Set(readable.flatMap((r) => r.targetIds))]
+  // ONE IDENTITY PER ROW, so the read asks for the objects the page will
+  // actually print rather than every theme the evidence touches.
+  const targets = [...new Set(readable.map((r) => r.targetIds[0]))]
   if (targets.length === 0) {
     return rows.map(({ targetIds, ...r }) => ({
       ...r,
@@ -1130,6 +1158,9 @@ async function readAfterwards(
   }
 
   return rows.map(({ targetIds, ...r }) => {
+    // THE SERIES IS ONE OBJECT'S, and it is the object the verdict is labelled
+    // with. See `orderedTargets`: pooling every target's months takes the two
+    // sides of the comparison from two different themes.
     const target = targetIds[0] ?? null
     return {
       ...r,
@@ -1137,7 +1168,7 @@ async function readAfterwards(
         decidedAt: r.decidedAt,
         targetIds,
         objectLabel: target ? themeLabels.get(target) ?? target : undefined,
-        series: targetIds.flatMap((id) => points.get(id) ?? []).filter((p, i, all) => all.findIndex((q) => q.month === p.month) === i),
+        series: target ? points.get(target) ?? [] : [],
         audience: LEDGER_AUDIENCE,
       }),
     }
