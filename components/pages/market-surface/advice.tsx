@@ -10,7 +10,7 @@ import { fmtInt, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import {
-  ADVICE_UNRECORDED, GROUNDED_CORPUS_LINE, LEDGER_SHOWN, adviceAnchor, ageInMonths, madeInMonth,
+  ADVICE_UNRECORDED, GROUNDED_CORPUS_LINE, adviceAnchor, ageInMonths, madeInMonth,
   marketSurfaceHref, repeatCell,
   type AdviceRow, type MarketSurfaceData,
 } from '@/lib/pages/market-surface'
@@ -264,7 +264,14 @@ export const marketAdvice: Block<MarketSurfaceData> = {
         // is replaced by what the right-hand note can honestly say — how much
         // of the ledger this table is showing.
         footer={a.total > 0 ? a.actedLine : undefined}
-        footerNote={more > 0 ? `${fmtInt(LEDGER_SHOWN)} oldest shown · ${fmtInt(more)} behind them` : undefined}
+        // THE NOTE COUNTS THE ROWS IT DREW, NEVER `LEDGER_SHOWN`. The constant
+        // is the cap the loader asks for and is not what is on the page: the
+        // fixture draws 3 of 64 and printed "12 oldest shown · 61 behind them",
+        // where 12 + 61 is 73 and no reader can make that add. The deep-link
+        // arm is the same defect the other way — `ledgerRowsShown` APPENDS the
+        // named row, so 13 are drawn under a note claiming 12. Both halves are
+        // now read off the same array.
+        footerNote={more > 0 ? `${fmtInt(a.rows.length)} shown · ${fmtInt(more)} behind them` : undefined}
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         {email ? (

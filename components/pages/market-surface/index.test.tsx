@@ -259,9 +259,35 @@ describe('MK2 · the ledger', () => {
     // The artboard's footer note is "Jul → Sep 2026", which D12 refuses: the
     // denominator is every identity ever recommended and has no quarter. What
     // the note can honestly say is how much of the ledger is on the page.
-    const text = renderText(marketAdvice.render(marketFixture(), 'app', ctx))
-    expect(text).toContain('12 oldest shown · 61 behind them')
+    //
+    // CHANGED BY THE FIX PASS. It printed the CONSTANT `LEDGER_SHOWN` on the
+    // left and the computed remainder on the right, so this fixture — 3 rows
+    // of 64 — read "12 oldest shown · 61 behind them", and 12 + 61 = 73. The
+    // assertion held the wrong sentence in place, which is why the rule below
+    // is now the arithmetic and not a string: the two halves are the same
+    // array counted twice and they must add to the total.
+    const data = marketFixture()
+    const text = renderText(marketAdvice.render(data, 'app', ctx))
+    expect(text).toContain('3 shown · 61 behind them')
+    expect(text).not.toContain('12 oldest shown')
     expect(text).not.toMatch(/quarter/i)
+    const shown = data.advice.rows.length
+    const behind = Number((text.match(/(\d+) behind them/) ?? [])[1])
+    expect(shown + behind).toBe(data.advice.total)
+  })
+
+  it('never states a row count the table is not showing, in any state', () => {
+    // Every state that draws a footer note: the note's two halves come off the
+    // rows on the page, so a loader returning fewer rows than the cap — or the
+    // deep-link arm, which APPENDS a row and draws one MORE than the cap —
+    // still adds up.
+    for (const data of [marketFixture(), unrecordedFixture(), deepLinkFixture()]) {
+      const text = renderText(marketAdvice.render(data, 'app', ctx))
+      const note = text.match(/(\d+) shown · ([\d,]+) behind them/)
+      if (!note) continue
+      expect(Number(note[1])).toBe(data.advice.rows.length)
+      expect(Number(note[1]) + Number(note[2].replace(/,/g, ''))).toBe(data.advice.total)
+    }
   })
 })
 
