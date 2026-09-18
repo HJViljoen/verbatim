@@ -71,7 +71,19 @@ const VOICES_SHOWN = 5
 /** Hook styles / formats listed per column in "What works right now". */
 const PERF_SHOWN = 6
 
-export type ContentParams = { detail?: string; intent?: string }
+/**
+ * `subject` is carried, NOT YET READ (Block D wave 2, subjects).
+ *
+ * Subjects' "the 26 videos behind your figure →" lands here with
+ * `?subject=<id>`, and until now the type did not admit the parameter at all —
+ * so the link arrived at an unfiltered catalogue with nothing recording that a
+ * filter had been asked for. Declaring it is half the fix and the half this
+ * package owns: this file is the retiring Content page's, and the read that
+ * would actually filter a catalogue by subject membership belongs with whoever
+ * retires it. Until then the page shows everything, which is what it showed
+ * before, and the status note says so.
+ */
+export type ContentParams = { detail?: string; intent?: string; subject?: string }
 
 export interface ContentSelection {
   intent: Intent | null
