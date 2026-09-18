@@ -200,11 +200,12 @@ function ChartPane({
         // `height` IS THE viewBox'S, NOT A PIXEL HEIGHT — the SVG is emitted
         // `width:100%` with `height:auto`, so this prop sets an ASPECT RATIO of
         // `height / 880`. The previous comment here claimed 168 "buys the block
-        // 42px", which is not a mechanism the code has: in the ~562px pane this
-        // tile gives each chart at 1440, 168/880 rendered the chart 107px tall
-        // against the artboard's 196, and dropping from 210 saved 27px rather
-        // than 42. 307/880 of 562 is ~196px, which is the artboard's chart.
-        height={307}
+        // 42px", which is not a mechanism the code has: at 1440 this tile gives
+        // each chart a 674px pane, and 168/880 of that rendered the chart 107px
+        // tall against the artboard's 196; dropping from 210 saved 27px, not
+        // 42. 256 is the number that renders 196 in a 674px pane, measured with
+        // the repo's own Chromium rather than reasoned about.
+        height={256}
         format={(v) => fmtPct(v)}
         label={label}
         id={chartId([chartKey, ...series.map((x) => x.label), axis[0], axis[axis.length - 1]])}
