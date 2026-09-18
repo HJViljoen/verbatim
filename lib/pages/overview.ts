@@ -53,7 +53,7 @@ import {
 import { buildStandings, type StandingRow } from '../reading/standings'
 import type { MonthStatus } from '../reading/types'
 import { isAnswer, type FigureTable, type Verdict } from '../reading/verdicts'
-import { isMissingSubjects, MOVE_PROMISE, RPC_WINDOW_SUBJECT_READINGS, TABLE_MOVES, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
+import { isMissingSubjects, MOVE_PROMISE, RPC_WINDOW_SUBJECT_READINGS, TABLE_MOVES, TABLE_SUBJECT_MEMBERSHIPS, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
 import { chunk, UUID_IN_CHUNK } from '../chunk'
 import { selectAll } from '../supabase-admin'
 import { row, rows } from './read'
@@ -1649,7 +1649,7 @@ async function loadOwnSubjectMatches(
       chunk([...videoOf.keys()], UUID_IN_CHUNK).map((ids) =>
         selectAll<{ subject_id: string; audience_insight_id: string }>(() =>
           supabase
-            .from('subject_memberships')
+            .from(TABLE_SUBJECT_MEMBERSHIPS)
             .select('subject_id, audience_insight_id')
             .eq('client_id', clientId)
             .eq('member', true)
