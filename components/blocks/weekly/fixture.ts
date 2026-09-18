@@ -142,10 +142,11 @@ function base(overview = overviewFixture()): WeeklyData {
         },
       ],
       worthAReplyNote: null,
-      // The inbox's OWN total, and the split by intent — the shown array is
-      // three, and counting it would print `WORTH_A_REPLY` as a measurement.
-      worthAReplyTotal: 12,
-      worthAReplyCounts: [
+      // WHAT THE QUEUE SURFACED, and the split by intent. Both are bounded by
+      // `rankEngageCandidates` (three a kind, twelve in all, plus three
+      // flagged), which is why the row is headed "Surfaced" and says so.
+      surfaced: 12,
+      surfacedCounts: [
         { label: 'question', count: 7 },
         { label: 'objection', count: 3 },
         { label: 'buying signal', count: 2 },
@@ -232,8 +233,8 @@ export function formingFixture(over: Partial<WeeklyData> = {}): WeeklyData {
       ...data.content,
       worthAReply: [],
       worthAReplyNote: 'Nothing is waiting for a reply from this update.',
-      worthAReplyTotal: null,
-      worthAReplyCounts: [],
+      surfaced: null,
+      surfacedCounts: [],
       rising: overview.category.growing,
       risingNote: overview.category.moversNote,
       format: null,

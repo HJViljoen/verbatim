@@ -131,22 +131,34 @@ export const weeklyContent: Block<WeeklyData> = {
         {/* ONE COUNTED ROW, THEN THE WORDS (weekly.s5.reply). The mock counts
             the queue and splits it by intent; the artefact printed three quote
             rails and no count, so a content person could not tell three from
-            thirty. The count is the inbox's OWN total, taken before
-            `WORTH_A_REPLY` capped what is shown — counting the shown array
-            would print the cap as a measurement. */}
-        {c.worthAReplyTotal != null ? (
+            thirty.
+
+            AND THE ROW SAYS "SURFACED", BECAUSE THAT IS WHAT THE NUMBER IS.
+            It was headed "Worth a reply this week" over `inbox.total`, which
+            is the length of a RANKED, CAPPED list — `rankEngageCandidates`
+            allows three per kind and twelve in all, plus three flagged, so the
+            figure is bounded at fifteen for every tenant forever and the
+            intent split at three apiece (lib/engage.ts; the field's own
+            docblock in lib/pages/weekly.ts has the chain). A cap printed at
+            16px under "worth a reply" tells a content person how much of their
+            week is waiting, and it cannot know that. The queue's own verb —
+            lib/pages/content.ts's method note, "the reply inbox SURFACES N
+            comments the analysis already cited" — is the honest one, and the
+            sub-line states the cap so the number can be weighed. */}
+        {c.surfaced != null ? (
           <CountedRow
             mode={mode}
-            title={`Worth a reply ${inPeriod(noun)}`}
-            value={fmtInt(c.worthAReplyTotal)}
+            title={`Surfaced for a reply ${inPeriod(noun)}`}
+            value={fmtInt(c.surfaced)}
             note={
               <>
-                {c.worthAReplyCounts.length > 0
-                  ? c.worthAReplyCounts.map((i) => `${i.label} ${fmtInt(i.count)}`).join(' · ')
+                {c.surfacedCounts.length > 0
+                  ? c.surfacedCounts.map((i) => `${i.label} ${fmtInt(i.count)}`).join(' · ')
                   : 'grouped by what the comment was'}
-                {c.worthAReply.length > 0 && c.worthAReplyTotal > c.worthAReply.length
+                {c.worthAReply.length > 0 && c.surfaced > c.worthAReply.length
                   ? ` · ${fmtInt(c.worthAReply.length)} below in full`
                   : ''}
+                {' · '}the queue ranks and caps what it shows, so this is what was surfaced and not everything worth answering
               </>
             }
           >

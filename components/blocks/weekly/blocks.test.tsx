@@ -414,13 +414,20 @@ describe('WR5 · for content', () => {
 
   // THE ARTBOARD'S COUNTED ROWS (block D wave 2). Three quote rails and no
   // count anywhere left a content person unable to tell three from thirty.
-  it('counts the reply queue and splits it by intent, never the shown three', () => {
+  // AND IT SAYS "SURFACED", NOT "WORTH A REPLY". `inbox.total` is the length
+  // of a ranked, capped list — bounded at fifteen for every tenant forever by
+  // `rankEngageCandidates` — so the row prints the queue's own verb and states
+  // the cap, rather than printing a cap as a count of the week.
+  it('counts what the queue surfaced, says it is capped, and never the shown three', () => {
     for (const mode of MODES) {
       const text = renderText(block.render(weeklyFixture(), mode, ctx))
-      expect(text, mode).toContain('Worth a reply this week')
+      expect(text, mode).toContain('Surfaced for a reply this week')
+      expect(text, mode).not.toContain('Worth a reply this week')
       expect(text, mode).toContain('question 7 · objection 3 · buying signal 2')
       expect(text, mode).toContain('1 below in full')
-      // D14: nothing records whether a comment was answered.
+      expect(text, mode).toContain('the queue ranks and caps what it shows')
+      // D14: nothing records whether a comment was answered. ("answering" in
+      // the cap clause is about the reader's own work, not a record of one.)
       expect(text, mode).not.toMatch(/answered|ignored/i)
     }
   })

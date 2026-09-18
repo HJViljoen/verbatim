@@ -106,21 +106,45 @@ export interface ForContentBlock {
   worthAReply: { ref: string; text: string; lang?: string | null; english?: string | null; context: string; intentLabel: string; href: string | null }[]
   worthAReplyNote: string | null
   /**
-   * How many comments this update's inbox holds in all, and of what kinds —
-   * the mock's "Worth a reply this week · 12 · questions 7 · complaints 3 ·
-   * wanting to buy 2" (`weekly.s5.reply`).
+   * How many comments the reply queue SURFACED for this update, and of what
+   * kinds — the mock's "Worth a reply this week · 12 · questions 7 ·
+   * complaints 3 · wanting to buy 2" (`weekly.s5.reply`).
    *
-   * THE TOTAL IS THE INBOX'S OWN, TAKEN BEFORE THE CAP. `worthAReply` above is
-   * the three SHOWN, and counting that array would print `WORTH_A_REPLY` as a
-   * measurement — the same mistake `switchingTotal` exists to stop one section
-   * up. Null where the Content loader could not be read at all.
+   * IT IS NOT A COUNT OF WHAT IS WAITING, AND THE FIELD'S NAME SAYS SO NOW.
+   * This was `worthAReplyTotal`, over a docblock claiming it was "the inbox's
+   * own total, taken before the cap". It is `ContentData.inbox.total`, which
+   * is `inboxRows.length` (lib/pages/content.ts) over
+   * `shapeInbox([...digest.engage, ...digest.flagged])` — and both of those
+   * arrays are the output of `rankEngageCandidates`, which is CAPPED:
+   * `perCategoryCap` 3 and `totalCap` 12 for `engage`, `totalCap` 3 for
+   * `flagged` (lib/engage.ts). So the number is bounded at fifteen for every
+   * tenant forever and each kind's count at three, and the fixture's "12 ·
+   * question 7 · objection 3 · buying signal 2" is the cap's own shape rather
+   * than a reading of anyone's week.
+   *
+   * Printing that as a measurement is the `switching.length` defect one
+   * section up (lib/blocks/for-sales.ts, "NEVER COUNT THIS ARRAY AND PRINT THE
+   * ANSWER") one level higher: this artefact correctly refused
+   * `WORTH_A_REPLY` = 3 and landed on 12 of 15 instead.
+   * `lib/pages/content.ts` already words the same number honestly in its own
+   * method note — "the reply inbox SURFACES N comments the analysis already
+   * cited" — so the block prints it under that verb, with the cap stated,
+   * rather than telling a content person that fifteen is how much of their
+   * week is waiting.
+   *
+   * A real head count of the window's reply-worthy comments would have to come
+   * off the candidate POOL, which lives inside the Content loader and is not
+   * returned; this artefact is the page's own reading and does not open a
+   * second one to get it.
+   *
+   * Null where the Content loader could not be read at all.
    *
    * The mock's second sub-line, "8 answered last week · 4 ignored", is not
    * here and cannot be: nothing in this product records whether a comment was
    * answered (mock-gap §6 D14).
    */
-  worthAReplyTotal: number | null
-  worthAReplyCounts: { label: string; count: number }[]
+  surfaced: number | null
+  surfacedCounts: { label: string; count: number }[]
   rising: Mover[]
   risingNote: string | null
   /** `label` is the READER'S word for the format, through `workedLabel` — never
@@ -881,8 +905,8 @@ function buildContent(
     return {
       worthAReply: [],
       worthAReplyNote: 'Nothing is waiting for a reply from this update.',
-      worthAReplyTotal: null,
-      worthAReplyCounts: [],
+      surfaced: null,
+      surfacedCounts: [],
       rising,
       risingNote,
       format: null,
@@ -911,8 +935,9 @@ function buildContent(
     // inbox's own sentence, so the artefact keeps the same shape every week
     // rather than dropping the section.
     worthAReplyNote: top.length > 0 ? null : 'Nothing is waiting for a reply from this update.',
-    worthAReplyTotal: c.inbox.total,
-    worthAReplyCounts: c.inbox.counts
+    // THE QUEUE'S SURFACED COUNT, NOT A COUNT OF THE WEEK (see `surfaced`).
+    surfaced: c.inbox.total,
+    surfacedCounts: c.inbox.counts
       .filter((i) => i.count > 0)
       .map((i) => ({ label: (INTENT_LABEL[i.intent] ?? 'Worth a reply').toLowerCase(), count: i.count })),
     rising,
