@@ -745,16 +745,23 @@ describe('WK §6 · what worked', () => {
     expect(text).toContain('of 81 posts with a hook, 109 published')
   })
 
-  it('says which median the multiple is against, and not the mock’s', () => {
+  it('says which median the multiple is against, in every mode, and not the mock’s', () => {
     // The artboard reads "median engagement · TikTok · month to date"; what is
     // computed is the median video of this update, on every platform whose
     // rate is comparable.
-    const text = renderText(weekWorked.render(weekFixture(), 'app', ctx))
-    expect(text).toContain('against this update’s own median video')
-    // The artboard's own words appear nowhere on the format rows. ("month to
-    // date" survives as the heading of the OWN-hooks panel, which is a month
-    // reading and says so.)
-    expect(text).not.toContain('median engagement · TikTok')
+    //
+    // ALL THREE MODES, since the wave-2 fix pass (code review C1). The basis
+    // was rendered under `mode !== 'email'`, so the inbox arm printed
+    // "Promotional 3.8% · 1.8×" and named no median anywhere — a multiple with
+    // no basis, in the one mode nobody re-reads before it is sent.
+    for (const mode of MODES) {
+      const text = renderText(weekWorked.render(weekFixture(), mode, ctx))
+      expect(text, mode).toContain('against this update’s own median video')
+      // The artboard's own words appear nowhere on the format rows. ("month to
+      // date" survives as the heading of the OWN-hooks panel, which is a month
+      // reading and says so.)
+      expect(text, mode).not.toContain('median engagement · TikTok')
+    }
   })
 
   it('draws no stacked hook bar, and invents no hook taxonomy', () => {

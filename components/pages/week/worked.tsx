@@ -128,13 +128,24 @@ function Group({
     <div className={mode === 'email' ? undefined : 'flex min-w-0 flex-col gap-2'} style={mode === 'email' ? { marginTop: 10 } : undefined}>
       <div className={mode === 'email' ? undefined : 'flex items-baseline justify-between gap-2'}>
         <Heading mode={mode}>{title}</Heading>
-        {mode !== 'email' ? (
-          // WHICH MEDIAN (D9). Not the mock's "TikTok · month to date" — that
-          // is a figure nothing here computes.
+        {/* WHICH MEDIAN (D9), IN EVERY MODE. Not the mock's "TikTok · month to
+            date" — that is a figure nothing here computes.
+            IT WAS SCREEN-ONLY UNTIL THE WAVE-2 FIX PASS, which meant the inbox
+            arm printed "Promotional 3.8% · 1.8×" with the word "median"
+            appearing nowhere in the block except inside the Reddit exclusion —
+            a multiple with no basis, which is the one thing this block's own
+            header forbids ("a multiple without its n is the shape of a claim
+            that one fluke can make"). A block renders three modes and the basis
+            travels with the figure in all three. */}
+        {mode === 'email' ? (
+          <div style={{ fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.muted, marginBottom: 4 }}>
+            against this update’s own median video
+          </div>
+        ) : (
           <span className="flex-none font-mono text-[10.5px] text-muted-foreground">
             against this update’s own median video
           </span>
-        ) : null}
+        )}
       </div>
       <BlockRanked
         mode={mode}
