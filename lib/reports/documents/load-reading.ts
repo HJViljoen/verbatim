@@ -425,7 +425,7 @@ export async function briefSlideFigures(
   // answer to D3, applied to a document.
   const lead = chartLead(a.overview.subjects.rows, a.overview.category.label)
   const line = lead
-    ? monthLine({ months: lead.months, labelFor: monthlyLineLabel, series: [{ label: lead.label, points: lead.points }] })
+    ? monthLine({ months: lead.months, labelFor: monthlyLineLabel, series: [{ label: lead.label, points: lead.points, unit: 'pct' }] })
     : null
 
   return {

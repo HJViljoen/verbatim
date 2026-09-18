@@ -204,7 +204,7 @@ export function crosscheckLine(
   const objectionPct = (objection.value.k / objection.value.n) * 100
   return (
     `${fmtInt(figure.toward.k)} of ${fmtInt(figure.pool)} (${fmtPct(towardPct)}) leaned toward you among the videos that named both; ` +
-    `${objection.label.toLowerCase()} ran at ${fmtInt(objection.value.k)} of ${fmtInt(objection.value.n)} (${fmtPct(objectionPct)}) of the category's month. ` +
+    `${objection.label.toLowerCase()} ran at ${fmtInt(objection.value.k)} of ${fmtInt(objection.value.n)} (${fmtPct(objectionPct)}) of the category\u2019s month. ` +
     'Two populations, two denominators — read them side by side, not against each other.'
   )
 }
@@ -346,6 +346,17 @@ export interface MonthLineSeries {
   /** How many readings the side actually carries — what `DIRECTION_RUN` is
    *  counted against, and what decides whether it is drawn at all. */
   readings: number
+  /**
+   * What the points are measured in, where the caller knows.
+   *
+   * A PRINTED LINE HAS NO HOVER, so the axis is all a reader gets — and a
+   * shape with two month names under it and no magnitude anywhere is
+   * decoration. The artboard labels both endpoints with their value; this is
+   * the field that lets a render do the same without guessing, and it is
+   * optional so a caller that does not know its unit prints the months alone,
+   * exactly as before.
+   */
+  unit?: 'pct'
 }
 
 export interface MonthLine {
@@ -380,7 +391,7 @@ export const LINE_MIN_READINGS = 3
  */
 export function monthLine(input: {
   months: readonly string[]
-  series: readonly { label: string; points: (number | null)[] }[]
+  series: readonly { label: string; points: (number | null)[]; unit?: 'pct' }[]
   /** `monthlyLineLabel` from lib/pages/overview.ts, passed in so this stays
    *  pure of the page loader it would otherwise import. */
   labelFor: (points: readonly (number | null)[], months: readonly string[]) => string | null
@@ -391,6 +402,7 @@ export function monthLine(input: {
     label: s.label,
     points: [...s.points],
     readings: s.points.filter((p) => p != null).length,
+    ...(s.unit ? { unit: s.unit } : {}),
   }))
   const drawn = sides.filter((s) => s.readings >= min)
   // THE LABEL IS THE THICKEST SIDE'S, because it describes the axis the chart

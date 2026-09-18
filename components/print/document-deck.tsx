@@ -63,20 +63,34 @@ const CARD = 'rounded-lg border border-border bg-tile'
 const BODY = 'text-[13px] leading-[1.5] text-foreground'
 const BODY_SM = 'text-[12.5px] leading-[1.45] text-foreground'
 
-export function Figured({ text, figures }: { text: string; figures: FigureTable }) {
+/**
+ * A caller's sentence with its `[[key]]` figures substituted (D13).
+ *
+ * THE FACE IS THE CALLER'S, AND IT IS MONO BY DEFAULT. Plex Mono is the
+ * product's identity for a count and it is right wherever the number is the
+ * element — a tile's value, a card's figure, a headline's count. Inside
+ * RUNNING PROSE at 16px it is not: Plex Mono sets a comma in a full advance,
+ * so "1,388" reads as three tokens in the middle of a sentence ("across 1 ,
+ * 388 category videos" on the cover, measured against the artboard, which sets
+ * the same figure in Plex Sans in its paragraph and in Plex Mono on its tile —
+ * SalesBrief.dc.html:27 against :42). `sans` keeps `tabular-nums`, so the
+ * digits still align; only the face moves.
+ */
+export function Figured({ text, figures, face = 'mono' }: { text: string; figures: FigureTable; face?: 'mono' | 'sans' }) {
+  const cls = face === 'sans' ? 'tabular-nums text-foreground' : 'font-mono tabular-nums text-foreground'
   return (
     <>
       {substituteFigures(text, figures).map((p, i) =>
-        'text' in p ? <Fragment key={i}>{p.text}</Fragment> : <span key={i} className="font-mono tabular-nums text-foreground">{p.figure}</span>,
+        'text' in p ? <Fragment key={i}>{p.text}</Fragment> : <span key={i} className={cls}>{p.figure}</span>,
       )}
     </>
   )
 }
 
-function Paragraphs({ text, figures, className }: { text: string; figures: FigureTable; className: string }) {
+function Paragraphs({ text, figures, className, face }: { text: string; figures: FigureTable; className: string; face?: 'mono' | 'sans' }) {
   return (
     <>
-      {text.split(/\n\n+/).filter(Boolean).map((p, i) => <p key={i} className={className}><Figured text={p} figures={figures} /></p>)}
+      {text.split(/\n\n+/).filter(Boolean).map((p, i) => <p key={i} className={className}><Figured text={p} figures={figures} face={face} /></p>)}
     </>
   )
 }
@@ -108,7 +122,7 @@ function Paragraphs({ text, figures, className }: { text: string; figures: Figur
  * fixed templates calls this today. It is the seam D-brief (P13–P17) binds
  * when the quarterly's and the leadership one-pager's charts land.
  */
-export function DeckSpark({ values, months, color = 'var(--primary)', width = 104, height = 22, className }: {
+export function DeckSpark({ values, months, color = 'var(--primary)', width = 104, height = 22, className, unit }: {
   values: (number | null)[]
   /** The months these points are, in order — the printed page's only axis. */
   months: string[]
@@ -123,6 +137,10 @@ export function DeckSpark({ values, months, color = 'var(--primary)', width = 10
    *  its card instead of leaving a dead gutter down the right of it — the
    *  `viewBox` keeps the drawn geometry, so the shape does not change. */
   className?: string
+  /** The points' unit (`MonthLineSeries.unit`), so the axis can carry the
+   *  magnitude a printed line has no hover to ask for. Absent prints the
+   *  months alone, which is what every caller did before. */
+  unit?: 'pct'
 }) {
   // The months that carried a reading, in order. A slot with no reading is not
   // a month this line can name.
@@ -149,13 +167,24 @@ export function DeckSpark({ values, months, color = 'var(--primary)', width = 10
   return (
     <span className={`flex flex-col gap-1 ${className ?? ''}`}>
       <Sparkline values={values} color={color} width={width} height={height} animate={false} endDot className={className} />
-      <span className="flex justify-between font-mono text-[9.5px] text-muted-foreground">
-        <span>{months[0]}</span>
-        <span>{months[months.length - 1]}</span>
+      {/* BOTH ENDS, WITH THEIR VALUE WHERE THERE IS ONE. A printed line has no
+          hover and a shape with two month names under it and no magnitude
+          anywhere is decoration — the artboard labels both endpoints
+          ("Price 27%", "Durability 22%"). The value is printed only for a
+          slot that carries a reading, because an end month with a gap in it
+          is not a point on this line. */}
+      <span className="flex justify-between gap-2 font-mono text-[9.5px] text-muted-foreground">
+        <span>{months[0]}{endLabel(values[0], unit)}</span>
+        <span>{months[months.length - 1]}{endLabel(values[values.length - 1], unit)}</span>
       </span>
     </span>
   )
 }
+
+/** An axis end's value, where the slot carries one and the caller named the
+ *  unit. One decimal, which is what every share in this product prints. */
+const endLabel = (v: number | null | undefined, unit?: 'pct'): string =>
+  v == null || !unit ? '' : ` ${Math.round(v * 10) / 10}%`
 
 /** An eyebrow: mono, uppercase, with a short rule in the accent. */
 function Eyebrow({ children, className = '' }: { children: ReactNode; className?: string }) {
@@ -271,7 +300,7 @@ function DocumentCover({ data, pages, contents, date }: {
             </div>
             {summary && summaryText && (
               <BlockSlot block={summary} textClass="max-w-[66ch] text-[16px] leading-[1.5] text-foreground">
-                <Paragraphs text={summaryText} figures={data.figures} className="max-w-[66ch] text-[16px] leading-[1.5] text-foreground" />
+                <Paragraphs text={summaryText} figures={data.figures} face="sans" className="max-w-[66ch] text-[16px] leading-[1.5] text-foreground" />
               </BlockSlot>
             )}
             {contents.length > 0 && (
@@ -1551,7 +1580,7 @@ function SectionPane({ section, data, why }: {
           <div className="flex flex-col gap-2.5">
             {line!.series.map((serie) => (
               <div key={serie.label} className="flex flex-col gap-1.5">
-                <DeckSpark values={serie.points} months={line!.months.map(monthLabel)} width={300} height={120} className="w-full" />
+                <DeckSpark values={serie.points} months={line!.months.map(monthLabel)} width={300} height={120} className="w-full" unit={serie.unit} />
                 <p className="text-[11px] leading-[1.35] text-muted-foreground">{serie.label}</p>
               </div>
             ))}

@@ -59,6 +59,16 @@ describe('sales.p1 — the cover', () => {
     expect(cover()).toContain('data-copy="figure"')
   })
 
+  // …and the figure sets in SANS inside running prose (deviation 7, reopened).
+  // Plex Mono sets a comma in a full advance, so "1,388" reads as three tokens
+  // mid-sentence; the artboard sets the same figure in sans in its paragraph
+  // and in mono on its tile. `tabular-nums` stays, so the digits still align.
+  it('sets the cover paragraph’s figure in sans and the tile’s in mono', () => {
+    const c = cover()
+    expect(c).toContain('<span class="tabular-nums text-foreground">1,388</span>')
+    expect(c).toContain('font-mono text-[38px]')
+  })
+
   // …and exactly once in the document: the overview sheet gives it up rather
   // than printing the same paragraph twice.
   it('and the overview sheet does not print it again', () => {
