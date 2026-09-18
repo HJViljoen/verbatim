@@ -76,17 +76,32 @@ export function voiceContext(params: Record<string, string | undefined> = {}): B
   return blockContext('', EMAIL, params)
 }
 
+/**
+ * `controls` IS THE ROUTE'S, NOT THE PAGE'S, and that is deliberate.
+ *
+ * The artboard's page bar carries a "How to read this page" pill, which is
+ * `components/how-to-read.tsx` — a client component reading `useSearchParams`.
+ * This page renders in three places and only one of them is a browser: the
+ * render tier calls it through `renderToStaticMarkup` with no router mounted,
+ * and the print path renders it inside Chrome with no app shell. So the route
+ * passes the control in and the two other callers pass nothing, rather than
+ * this component importing a hook that only one of its three callers can
+ * satisfy.
+ */
 export function VoiceSurfacePage({
   data,
   params = {},
+  controls,
 }: {
   data: VoiceSurfaceData | null
   params?: Record<string, string | undefined>
+  /** The page bar's right-hand end — the legend pill, from the route. */
+  controls?: ReactNode
 }) {
   if (!data) {
     return (
       <PageFrame>
-        <SurfacePageBar nav="voice" params={params} />
+        <SurfacePageBar nav="voice" params={params}>{controls}</SurfacePageBar>
         <PageGrid>
           <Tile col={12} row={2}>
             <TileEmpty>
@@ -106,7 +121,9 @@ export function VoiceSurfacePage({
         params={params}
         context={{ brand: data.brand, month: data.month, status: data.monthStatus, readingAt: data.readingAt }}
         record={{ line: data.record.line, lines: data.record.lines }}
-      />
+      >
+        {controls}
+      </SurfacePageBar>
       {VOICE_BLOCKS.map((block) => (
         <GrowingTile key={block.key}>{block.render(data, 'app', ctx)}</GrowingTile>
       ))}
@@ -117,6 +134,22 @@ export function VoiceSurfacePage({
               re-words the sentence from it (lib/reading/series.ts
               mergeSeriesNotes). */}
           {data.notes.map((n) => n.text).join(' ')}
+        </p>
+      ) : null}
+      {/* THE METHOD FOOTNOTE — the one element of this artboard that was
+          missing rather than different (D15). Five facts this page already
+          holds and printed nowhere: who it was prepared for and when, how much
+          was read in this window and where, how much of each video we managed
+          to read, how much of what was said on camera was not in English, and
+          the Reddit cap — which has never rendered on any reading surface at
+          all. Each line states its own clock, which is the whole reason
+          `methodLines` composes them in one place: read depth and language are
+          ALL-TIME and the coverage line is this window's, and a footnote whose
+          lines are on three clocks with only one of them labelled is the defect
+          the module was written to end. */}
+      {data.method ? (
+        <p data-copy="figure" className="m-0 flex flex-col gap-0.5 pt-1 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
+          {data.method.lines.map((line) => <span key={line}>{line}</span>)}
         </p>
       ) : null}
     </PageFrame>

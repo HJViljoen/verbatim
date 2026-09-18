@@ -1,4 +1,6 @@
 import { getSessionContext } from '@/lib/auth'
+import { READER_FLAGS, THIRTEEN_WORDS } from '@/lib/calibration'
+import { HowToRead } from '@/components/how-to-read'
 import { readingHandle } from '@/lib/reading/read'
 import { loadVoiceSurface, type VoiceSurfaceParams } from '@/lib/pages/voice-surface'
 import { VoiceSurfacePage } from '@/components/pages/voice-surface'
@@ -20,5 +22,20 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Vo
   const { supabase, clientId } = await getSessionContext()
   const sp = ((await searchParams) ?? {}) as Record<string, string | undefined>
   const data = await loadVoiceSurface({ supabase, clientId, reading: readingHandle(clientId), params: sp })
-  return <VoiceSurfacePage data={data} params={sp} />
+  // The legend the artboard's page bar carries, and the list is not a taste:
+  // a new reading surface draws its vocabulary from THIRTEEN_WORDS plus the two
+  // READER_FLAGS (lib/calibration.ts), so the legend for such a page is exactly
+  // that list rather than a hand-picked subset that can fall behind it.
+  //
+  // MOUNTED HERE, NOT IN THE PAGE COMPONENT: `HowToRead` reads
+  // `useSearchParams`, and the page also renders under `renderToStaticMarkup`
+  // in the test tier and inside Chrome on the print path, where no router is
+  // mounted. See VoiceSurfacePage's `controls`.
+  return (
+    <VoiceSurfacePage
+      data={data}
+      params={sp}
+      controls={<HowToRead items={[...THIRTEEN_WORDS, ...READER_FLAGS]} basePath="/dashboard/voice" anchor="voice" />}
+    />
+  )
 }

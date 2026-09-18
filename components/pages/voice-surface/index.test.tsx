@@ -90,6 +90,32 @@ describe('VoiceSurfacePage', () => {
     expect(text).toContain('A video can carry more than one group')
   })
 
+  it('prints the method footnote, each line on its own clock (D15)', () => {
+    // The one element of this artboard that was MISSING rather than different.
+    // The Reddit cap in particular has never rendered on any reading surface.
+    const text = renderText(<VoiceSurfacePage data={voiceFixture()} params={{}} />)
+    expect(text).toContain('Prepared for Sealand with Verbatim')
+    expect(text).toContain('read in this window')
+    expect(text).toContain('Of everything we have ever read for you, not just this window')
+    expect(text).toContain('of what was said on camera was not in English')
+    expect(text).toContain('Reddit comments are capped at')
+    expect(text).toContain('Commenters are never identified; quotes carry platform and date only.')
+  })
+
+  it('keeps the footnote standing on the lines it can still back when the record is thin', () => {
+    const text = renderText(<VoiceSurfacePage data={refusedVoiceFixture()} params={{}} />)
+    expect(text).toContain('Commenters are never identified')
+    expect(text).not.toContain('of what was said on camera was not in English')
+  })
+
+  it('takes the page bar\u2019s right-hand control from its caller, never from a hook', () => {
+    // `HowToRead` reads useSearchParams; this page also renders under
+    // renderToStaticMarkup and inside Chrome on the print path, where no
+    // router is mounted. The route passes the pill in.
+    const text = renderText(<VoiceSurfacePage data={voiceFixture()} params={{}} controls={<span>How to read this page</span>} />)
+    expect(text).toContain('How to read this page')
+  })
+
   it('carries the record band under the bar', () => {
     const text = renderText(<VoiceSurfacePage data={voiceFixture()} params={{}} />)
     expect(text).toContain('4 updates · 2,359 videos')
