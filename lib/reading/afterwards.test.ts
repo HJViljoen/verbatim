@@ -269,3 +269,20 @@ describe('afterwardsFor — the comparison carries its caveats', () => {
     expect(a.verdict?.flags).toEqual([])
   })
 })
+
+describe('afterwardsFor — which silence a cell prints', () => {
+  it('says the decision is missing before it says the target is', () => {
+    // Production today: a June recommendation whose cited insights have been
+    // pruned resolves to no target AND has never been decided on. The cell a
+    // reader is owed names the thing that resolves on the calendar.
+    const a = afterwardsFor({ decidedAt: null, targetIds: [], series: [], audience: 'client' })
+    expect(a.state).toBe('too_soon')
+    expect(a.line).toContain('have not decided')
+    expect(a.line).not.toContain('does not name a subject')
+  })
+
+  it('still says no_target for a row that HAS been decided on', () => {
+    const a = afterwardsFor({ decidedAt: '2026-07-04', targetIds: [], series: SERIES, audience: 'client' })
+    expect(a.state).toBe('no_target')
+  })
+})

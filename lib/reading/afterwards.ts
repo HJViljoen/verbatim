@@ -255,20 +255,32 @@ export function afterwardsFor(input: AfterwardsInput): Afterwards {
   if (input.refused) {
     return { state: 'refused', verdict: null, months: [], line: REFUSED_LINE[input.refused] }
   }
-  if (input.targetIds.length === 0) {
-    return {
-      state: 'no_target',
-      verdict: null,
-      months: [],
-      line: 'This advice does not name a subject or a theme we follow month by month, so there is nothing to read afterwards.',
-    }
-  }
+  // THE DECISION IS ASKED ABOUT FIRST, AND THE ORDER IS THE WHOLE ANSWER ON
+  // TODAY'S DATA. Targets resolve only through the current themed run's
+  // `themes.supporting_insight_ids`, and Sealand's twelve drawn rows were all
+  // written in June from `audience_insights` rows `prune-stale-analysis` has
+  // since removed — so every one of them resolves to no target. Asking about
+  // targets first printed "this advice does not name a subject or a theme we
+  // follow" down the whole page: a claim about the ADVICE, where the truth is
+  // that nobody has decided on it yet and the evidence behind it was replaced
+  // — the distinction `Grounding.pruned` carries one column to the left. An
+  // undecided row's answer resolves on the calendar; `no_target` never does,
+  // and it is the wrong silence to print about a row nothing has been decided
+  // for.
   if (!input.decidedAt) {
     return {
       state: 'too_soon',
       verdict: null,
       months: [],
       line: 'You have not decided on this one yet. We start reading the month after you do.',
+    }
+  }
+  if (input.targetIds.length === 0) {
+    return {
+      state: 'no_target',
+      verdict: null,
+      months: [],
+      line: 'This advice does not name a subject or a theme we follow month by month, so there is nothing to read afterwards.',
     }
   }
 

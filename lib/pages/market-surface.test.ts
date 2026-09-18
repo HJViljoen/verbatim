@@ -359,8 +359,10 @@ describe('D4 · the ledger\u2019s number, its why and its quote', () => {
   })
 
   it('defaults a row nothing was read for to a state and a sentence, never a dash', () => {
+    // `too_soon`, not `no_target`: the row has not been decided on, and that
+    // is the silence that resolves on the calendar. See `afterwardsFor`.
     const [row] = buildAdviceRows([copy()], [])
-    expect(row.afterwards.state).toBe('no_target')
+    expect(row.afterwards.state).toBe('too_soon')
     expect(row.afterwards.line.length).toBeGreaterThan(0)
     expect(row.afterwards.line).not.toBe('\u2014')
     expect(row.grounded).toBeNull()
