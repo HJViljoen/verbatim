@@ -91,7 +91,14 @@ const PAGES: DocumentSnapshotData['pages'] = [
     title: 'A finding',
     blocks: [
       { id: 'f1.headline', field: 'headline', text: 'Durability is where the category’s conversation sits, and it is asked as a question, not praised.' },
-      { id: 'f1.saw', field: 'saw', text: 'The subject is raised in [[subject_s1_share]] of the category’s videos, and the raising is almost always a question about what happens after a year of use.\n\nNobody we read answers it on camera.' },
+      // A QUOTE ON EACH FINDING SHEET (`mkt.p4.quotes`). The fixture carried
+      // none, so the one element the brief calls out on that sheet could not be
+      // judged from the evidence at all — a populated fixture that leaves the
+      // called-out element unpopulated is worse than no fixture there.
+      // ONE, not the artboard's two: `DocBlock.quote` is a single quote per
+      // block, and a second is a change to the composer's type and its writer
+      // schema (both sales-owned). Recorded as a deviation.
+      { id: 'f1.saw', field: 'saw', text: 'The subject is raised in [[subject_s1_share]] of the category’s videos, and the raising is almost always a question about what happens after a year of use.\n\nNobody we read answers it on camera.', quote: { ref: 'c:f1a', text: 'Mine is three winters in and the seams have not moved. Does it hold up in proper rain though?' } },
       { id: 'f1.heard', field: 'heard', text: '305 conversations across 3 strands of the research.' },
       { id: 'f1.means', field: 'means', text: 'The campaign has a question to answer rather than a claim to repeat.' },
       { id: 'f1.practice', field: 'practice', text: '', items: ['Answer the wet-commute question on camera.', 'Lead with repair, not with recycling.'] },
@@ -105,7 +112,7 @@ const PAGES: DocumentSnapshotData['pages'] = [
     title: 'A finding',
     blocks: [
       { id: 'f2.headline', field: 'headline', text: 'The wet-commute question is category-wide; no tracked brand answers it on camera.' },
-      { id: 'f2.saw', field: 'saw', text: 'It is asked under every tracked audience and under the category’s own videos.' },
+      { id: 'f2.saw', field: 'saw', text: 'It is asked under every tracked audience and under the category’s own videos.', quote: { ref: 'c:f2a', text: 'Nobody ever films one of these in the rain. That is the only thing I want to see.' } },
       { id: 'f2.heard', field: 'heard', text: '130 conversations across 2 strands of the research.' },
       { id: 'f2.means', field: 'means', text: 'The first brand to answer it owns the answer.' },
       { id: 'f2.practice', field: 'practice', text: '', items: ['Film one wet commute end to end.'] },

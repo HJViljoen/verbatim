@@ -318,6 +318,23 @@ describe('the gap card', () => {
   })
 })
 
+describe('the finding sheets', () => {
+  // `mkt.p4.quotes`. The fixture carried no quote on either finding, so the one
+  // element the brief calls out on that sheet could not be judged from the
+  // evidence (fix pass). ONE and not the artboard's two: `DocBlock.quote` is a
+  // single quote per block.
+  it('prints the commenter’s own words on each finding sheet', () => {
+    const html = render(<DocumentDeck data={marketingDeckFixture()} date="28 Sep 2026" />)
+    const text = markupText(html)
+    expect(text).toContain('the seams have not moved')
+    expect(text).toContain('Nobody ever films one of these in the rain')
+    // A commenter's words are marked as the speaker's, so rule (c) does not
+    // police them and the scrubbers do not reach inside them.
+    expect(html).toContain('data-copy="quote"')
+    assertCopyContract(html)
+  })
+})
+
 describe('the method sheet', () => {
   // `mkt.p7.numbers`, and the sharpest deviation on the deck: the card printed
   // `run_summary.period_comments` / `period_videos` under a month stamp, three
