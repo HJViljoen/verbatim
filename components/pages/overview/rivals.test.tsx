@@ -4,7 +4,7 @@ import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
-import { overviewRivals } from './rivals'
+import { brandLabel, caveatLine, overviewRivals } from './rivals'
 import { overviewFixture, refusedFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
@@ -136,5 +136,37 @@ describe('OV4 · rivals, read from outside the workspace', () => {
   it('draws no in-app affordance on paper', () => {
     expect(render(overviewRivals.render(overviewFixture(), 'print', ctx))).not.toContain('Open Competitive')
     expect(render(overviewRivals.render(overviewFixture(), 'app', ctx))).toContain('Open Competitive')
+  })
+})
+
+// ---- Block D wave 2 · the artboard's §4 ------------------------------------
+
+describe('OV4, ported to the artboard', () => {
+  it('marks your own row, so a reader can find it', () => {
+    // `main.rivals.col.brand`. On a tenant whose name sorts between two rivals
+    // there was nothing at all marking which row was theirs.
+    const text = renderText(overviewRivals.render(overviewFixture(), 'app', ctx))
+    expect(text).toContain('Sealand (you)')
+    expect(text).toContain('The category')
+    const rows = overviewFixture().rivals.rows
+    expect(brandLabel(rows.find((r) => r.role === 'rival')!)).toBe('Freitag')
+  })
+
+  it('stacks every share over its two counts, never the percentage alone', () => {
+    // D10: the mock prints "39%" with no denominator anywhere, which is the
+    // score this product does not show.
+    const markup = render(overviewRivals.render(overviewFixture(), 'app', ctx))
+    const text = renderText(overviewRivals.render(overviewFixture(), 'app', ctx))
+    expect(markup).toContain('data-copy="level"')
+    expect(text).toContain('6,200 of 41,200')
+  })
+
+  it('puts the dual-mention caveat in the footer note, with its count only where there is one', () => {
+    const r = overviewFixture().rivals
+    expect(caveatLine(r)).toBe(`${r.caveat} 41 did this month.`)
+    expect(caveatLine({ ...r, dualMention: 0 })).toBe(r.caveat)
+    expect(caveatLine({ ...r, dualMention: null })).toBe(r.caveat)
+    const markup = render(overviewRivals.render(overviewFixture(), 'app', ctx))
+    expect(markup).toContain('font-normal text-muted-foreground">')
   })
 })

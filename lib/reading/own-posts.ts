@@ -187,24 +187,23 @@ export interface OwnPostInput {
 }
 
 /**
- * The sentence a rival's own-post row already carries on Overview when their
- * claims cannot be read.
+ * The sentence a rival's own-post row carries on Overview when their claims
+ * cannot be read.
  *
- * THE SAME STRING AS `lib/pages/overview.ts:OWN_POSTS_UNREADABLE`, AND A COPY,
- * which is a thing this codebase otherwise refuses. Two reasons it is a copy
- * today and neither is "nobody looked": `lib/reading` is a leaf that `lib/pages`
- * imports and not the other way round — importing a page module here would
- * drag the Supabase client into the reading layer — and `lib/pages/overview.ts`
- * belongs to another package in this wave, so the constant cannot be MOVED to a
- * shared leaf from here. `own-posts.test.ts` asserts the two are character-
- * identical, so the day one is re-worded the other fails rather than drifting;
- * the move belongs to whoever next owns both files.
+ * THE ONE COPY, AS OF BLOCK D WAVE 2. It used to be two — this one and a
+ * character-identical constant in `lib/pages/overview.ts`, with a test pinning
+ * them equal — because `lib/reading` is a LEAF that `lib/pages` imports and not
+ * the other way round, and the page module belonged to another package. The
+ * E-main port owns both files, so the string lives here, in the leaf, and
+ * Overview re-exports it under the name its callers already use.
  */
 export const OWN_POSTS_UNREADABLE = '— not tracked · their own posts are not readable yet · Verbatim engineering'
 
-/** The same absence without the internal owner, for a reader outside the
- *  workspace (a brief's PDF, a `/r/<token>` page). Pinned against Overview's
- *  copy by the same test. */
+/** The same absence WITHOUT the internal owner, for a reader outside the
+ *  workspace. "Verbatim engineering" is a readiness owner — right on a page
+ *  where a tenant can go and look at Settings › Readiness, and an internal
+ *  label in a brief's PDF and on a `/r/<token>` share page, which is what WP19
+ *  put it in front of. The absence is still named; only the owner is dropped. */
 export const OWN_POSTS_UNREADABLE_OUTSIDE = '— not tracked · their own posts are not readable yet'
 
 /** A rival that is named and has no account configured anywhere. Nothing they

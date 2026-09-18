@@ -1005,24 +1005,27 @@ export function buildMoves(input: BuildMovesInput): MovesBlock {
 export const MOVES_MASTHEAD = MOVE_PROMISE
 
 /**
- * What OV4 says under "on their own posts" until M8.
+ * What OV4 says under "on their own posts" until M8 — RE-EXPORTED, not a second
+ * copy (Block D wave 2).
  *
  * `video_claims` has no tenant SELECT policy until M8 (WP16), so no tenant may
  * read a rival's own claims. The design's words for a side we cannot read are
  * "— not tracked", and the mock's fuller string names who fixes it
  * ("— not tracked · accounts not configured · digital director · by 15 Oct").
  * The owner is nameable and is named; the DATE is not — nothing in the product
- * holds one, and inventing a date on a client's page is the defect OV5's
- * unlock had.
+ * holds one, and inventing a date on a client's page is the defect OV5's unlock
+ * had.
+ *
+ * THE DUPLICATE IS GONE. `lib/reading/own-posts.ts` carried a character-
+ * identical copy with a docblock saying so and a test pinning the two equal,
+ * because that file's package did not own this one. This package owns both, so
+ * the string now lives once, in the LEAF — `lib/reading` is what `lib/pages`
+ * imports and not the other way round — and Overview re-exports it under the
+ * name every caller already uses. The pinning test still passes, because it now
+ * compares a value with itself; that is the shape of a de-duplication, and it
+ * is why the test was written to survive one.
  */
-export const OWN_POSTS_UNREADABLE = '— not tracked · their own posts are not readable yet · Verbatim engineering'
-
-/** The same absence WITHOUT the owner, for a reader outside the workspace.
- *  "Verbatim engineering" is a readiness owner — right on a page where a
- *  tenant can go and look at Settings › Readiness, and an internal label in a
- *  brief's PDF and on a `/r/<token>` share page, which is what WP19 put it in
- *  front of. The absence is still named; only the owner is dropped. */
-export const OWN_POSTS_UNREADABLE_OUTSIDE = '— not tracked · their own posts are not readable yet'
+export { OWN_POSTS_UNREADABLE, OWN_POSTS_UNREADABLE_OUTSIDE } from '../reading/own-posts'
 
 /**
  * The rivals lead — one composed sentence over the rows' attention verdicts.

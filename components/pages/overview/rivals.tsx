@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { openLink } from '@/components/blocks/open-link'
-import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
+import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
 import { fmtInt, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
@@ -38,13 +38,12 @@ function Share({ share, recorded, mode }: { share: StandingShare | null; recorde
       ? <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>{words}</span>
       : <span className="text-[12px] text-muted-foreground">{words}</span>
   }
-  const body = <>
-    <span data-copy="figure">{standingText(share)}</span>{' '}
-    <span data-copy="figure">{fmtInt(share.k)} of {fmtInt(share.n)}</span>
-  </>
-  return mode === 'email'
-    ? <span style={{ fontFamily: FONT.mono, fontSize: 12, color: EMAIL.ink }}>{body}</span>
-    : <span className="font-mono text-[12px] tabular-nums">{body}</span>
+  // P0'S CELL (`main.rivals.col.attention` / `.col.content`): the share stacked
+  // over the two counts it rests on, at the artboard's ramp. The mock prints
+  // the percentage ALONE, which is the score this product does not show (D10),
+  // so the "of N" stays and takes the artboard's second line rather than
+  // sitting inline beside the figure.
+  return <FigureCell mode={mode} value={standingText(share)} of={`${fmtInt(share.k)} of ${fmtInt(share.n)}`} />
 }
 
 /** What they said on their own posts — or the honest absence.
@@ -82,6 +81,31 @@ function Raised({ row, mode }: { row: RivalRow; mode: RenderMode }): ReactNode {
     : <span className="text-[12px]">{body}</span>
 }
 
+/**
+ * "Sealand (you)" · "The category" · "Freitag" (`main.rivals.col.brand`).
+ *
+ * WHICH ROW IS YOURS IS THE FIRST THING A READER LOOKS FOR, and the table gave
+ * them the brand name with nothing marking it — on a tenant whose own name sits
+ * between two rivals in alphabetical order that is one row of six with no
+ * marker at all. The artboard says "(you)" and the build has the field:
+ * `StandingRow.role`, which `buildStandings` fills. The category's own row
+ * keeps the label the standings gave it.
+ *
+ * NO TINT AND NO RANK, which is the block's own rule — the row is a reading,
+ * not a league table — so the marker is a word rather than a colour.
+ */
+/** The dual-mention caveat, as one string for the footer note — the count
+ *  appended only where there is one, never "0 did this month". */
+export function caveatLine(r: OverviewData['rivals']): string {
+  return r.dualMention != null && r.dualMention > 0
+    ? `${r.caveat} ${fmtInt(r.dualMention)} did this month.`
+    : r.caveat
+}
+
+export function brandLabel(row: RivalRow): string {
+  return row.role === 'client' ? `${row.label} (you)` : row.label
+}
+
 export const overviewRivals: Block<OverviewData> = {
   key: 'overview.rivals',
   title: 'Rivals',
@@ -100,17 +124,6 @@ export const overviewRivals: Block<OverviewData> = {
       : openLink(mode, href, 'Open Competitive →')
 
     const empty = overviewRivals.emptyState(data)
-    const caveat = (
-      <p
-        className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'}
-        style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 6 } : undefined}
-      >
-        {r.caveat}
-        {r.dualMention != null && r.dualMention > 0 ? (
-          <> <span data-copy="figure">{fmtInt(r.dualMention)}</span> did this month.</>
-        ) : null}
-      </p>
-    )
 
     return (
       <BlockFrame
@@ -127,6 +140,12 @@ export const overviewRivals: Block<OverviewData> = {
         // population, different sentence.
         meta="both shares of a frozen panel of accounts · no rank is printed"
         footer={footer}
+        // THE DUAL-MENTION CAVEAT INTO THE FOOTER NOTE
+        // (`main.rivals.footer`). It is a statement about how the denominator
+        // was built, which is metadata about the reading rather than one of its
+        // findings — and as a body paragraph under the table it read as the
+        // block's conclusion.
+        footerNote={caveatLine(r)}
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         {r.standingsNote ? <BlockEmpty mode={mode}>{r.standingsNote}</BlockEmpty> : null}
@@ -134,14 +153,13 @@ export const overviewRivals: Block<OverviewData> = {
           <div>
             {r.rows.map((row) => (
               <div key={row.audience} style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '4px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
-                <strong>{row.label}</strong>{row.retiredAt ? <span style={{ color: EMAIL.muted }}> · tracked until {shortDate(row.retiredAt)}</span> : null}
+                <strong>{brandLabel(row)}</strong>{row.retiredAt ? <span style={{ color: EMAIL.muted }}> · tracked until {shortDate(row.retiredAt)}</span> : null}
                 <div style={{ marginTop: 2 }}>
                   attention <Share share={row.attention} recorded={r.recorded} mode={mode} /> · content <Share share={row.content} recorded={r.recorded} mode={mode} /> <BlockMovement verdict={row.attentionVerdict} unit="pts" mode={mode} />
                 </div>
                 <div style={{ marginTop: 2 }}>raised most under their content: <Raised row={row} mode={mode} /></div>
               </div>
             ))}
-            {caveat}
           </div>
         ) : (
           <>
@@ -161,7 +179,7 @@ export const overviewRivals: Block<OverviewData> = {
                   {r.rows.map((row) => (
                     <tr key={row.audience}>
                       <td className="py-1.5 pr-3 text-[12.5px] font-medium">
-                        {row.label}
+                        {brandLabel(row)}
                         {row.retiredAt ? <span className="ml-1 text-[11px] font-normal text-muted-foreground">tracked until {shortDate(row.retiredAt)}</span> : null}
                       </td>
                       <td className="py-1.5 pr-3"><Share share={row.attention} recorded={r.recorded} mode={mode} /></td>
@@ -174,7 +192,6 @@ export const overviewRivals: Block<OverviewData> = {
                 </tbody>
               </table>
             </div>
-            {caveat}
           </>
         )}
       </BlockFrame>
