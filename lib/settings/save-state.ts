@@ -196,6 +196,15 @@ export function listWords(names: readonly string[]): string {
  * (lib/gather/subreddits.ts) reads `status === 'active'`, so demoting is what
  * "stop watching" means to the gather. Re-adding a community the client once
  * stopped promotes the entry it already has rather than writing a second one.
+ *
+ * AND THE DEMOTION IS `stopped`, NOT `rejected`. `rejected` is the relevance
+ * probe's own verdict and Settings prints it to the client as "ruled out"
+ * (`communityWords`) — so writing it here would tell a client that our probe
+ * threw out a community THEY took off the list, on a row whose own probe line
+ * may read "31 of 40 on topic". Both statuses keep the community out of the
+ * gather and out of discovery's proposals; only one of them is a claim about
+ * what we measured. `stopped_at` records when, because the entry is a record
+ * and a record says when.
  */
 export function applySubredditEdit(
   entries: readonly SubredditEntry[],
@@ -209,9 +218,16 @@ export function applySubredditEdit(
   const key = subredditKey(op.name)
   const existing = entries.find((e) => subredditKey(e.name) === key)
   const next: SubredditEntry[] = op.kind === 'stop'
-    ? entries.map((e) => (subredditKey(e.name) === key ? { ...e, status: 'rejected' as const } : e))
+    ? entries.map((e) => (subredditKey(e.name) === key ? { ...e, status: 'stopped' as const, stopped_at: now } : e))
     : existing
-      ? entries.map((e) => (subredditKey(e.name) === key ? { ...e, status: 'active' as const } : e))
+      // Re-adding drops `stopped_at` with the status it belonged to: the entry
+      // is watched again, and a stop date on a watched community is a fact
+      // about a state it is no longer in.
+      ? entries.map((e) => {
+        if (subredditKey(e.name) !== key) return e
+        const { stopped_at: _stopped, ...rest } = e
+        return { ...rest, status: 'active' as const }
+      })
       : [...entries, { name: key, status: 'active' as const, discovered_at: now }]
 
   return { next, change: result.change }

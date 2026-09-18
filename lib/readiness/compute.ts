@@ -156,6 +156,11 @@ function communities(i: ReadinessInputs): ReadinessRow {
   const active = i.communities.filter((c) => c.status === 'active')
   const proposedUnsampled = i.communities.filter((c) => c.status === 'candidate' && !c.probed)
   const ruledOut = i.communities.filter((c) => c.status === 'rejected')
+  // COUNTED APART FROM THE RULED-OUT ONES. A community the client stopped was
+  // often kept by the probe; folding the two together would make the row say we
+  // judged something we did not, and leaving it out of both would make a
+  // community disappear from a row that is supposed to account for the list.
+  const stopped = i.communities.filter((c) => c.status === 'stopped')
   const silent = active.filter((c) => c.postsStored === 0)
   const unconfiguredShare = i.reddit.postsStored > 0
     ? (i.reddit.postsFromUnconfigured / i.reddit.postsStored) * 100
@@ -168,6 +173,7 @@ function communities(i: ReadinessInputs): ReadinessRow {
 
   const detail =
     `${fmtInt(active.length)} watched, ${fmtInt(proposedUnsampled.length)} proposed and not yet sampled, ${fmtInt(ruledOut.length)} ruled out` +
+    (stopped.length > 0 ? `, ${fmtInt(stopped.length)} you stopped watching` : '') +
     (i.reddit.postsStored > 0
       ? ` · ${fmtPct(unconfiguredShare, 0)} of stored Reddit posts come from communities nobody configured.`
       : ' · no Reddit post stored yet.')

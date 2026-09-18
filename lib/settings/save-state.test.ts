@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
+import { activeSubreddits, knownSubreddits } from '../gather/subreddits'
 import type { SubredditEntry } from '../gather/types'
+import { communityWords } from './communities'
 import { applySubredditEdit, NOTHING_PENDING, saveState, subredditEdit, type LastChange } from './save-state'
 
 // The save-state strip (block D, D9). What these hold is the difference
@@ -161,11 +163,42 @@ describe('applySubredditEdit', () => {
     expect('error' in r).toBe(false)
     if ('error' in r) return
     expect(r.next).toHaveLength(2)
-    expect(r.next[0].status).toBe('rejected')
+    expect(r.next[0].status).toBe('stopped')
+    expect(r.next[0].stopped_at).toBe('2026-09-18')
     expect(r.next[0].probe).toEqual({ sampled: 40, kept: 31, at: '2026-04-06' })
   })
 
-  it('promotes an entry the client once stopped, rather than writing a second one', () => {
+  it('does not say the probe ruled out a community the client stopped', () => {
+    const r = applySubredditEdit(entries, { kind: 'stop', name: 'r/prosthetics' }, '2026-09-18')
+    if ('error' in r) throw new Error('expected an edit')
+    // r/prosthetics PASSED its probe, 31 of 40. `rejected` is the probe's own
+    // verdict and Settings prints it as "ruled out", so storing it here would
+    // tell the client we threw out a community they took off the list.
+    expect(r.next[0].status).not.toBe('rejected')
+    expect(communityWords({
+      key: 'prosthetics', label: 'r/prosthetics', status: r.next[0].status,
+      discoveredAt: '2026-04-06', probe: r.next[0].probe ?? null, posts: 12, eligible: 10,
+      comments: 40, insights: 3, keptPct: null, found: null, unconfigured: false,
+    })).toBe('you stopped watching it')
+    // And the gather stops reading it either way — that is what the client asked for.
+    expect(activeSubreddits(r.next).includes('prosthetics')).toBe(false)
+    // Discovery does not propose it again: it is known in every state.
+    expect(knownSubreddits(r.next).has('prosthetics')).toBe(true)
+  })
+
+  it('promotes an entry the client once stopped, and drops the stop date with it', () => {
+    const stopped = applySubredditEdit(entries, { kind: 'stop', name: 'r/prosthetics' }, '2026-09-18')
+    if ('error' in stopped) throw new Error('expected an edit')
+    const r = applySubredditEdit(stopped.next, { kind: 'add', name: 'r/prosthetics' }, '2026-09-20')
+    if ('error' in r) throw new Error('expected an edit')
+    expect(r.next).toHaveLength(2)
+    expect(r.next[0]).toEqual({
+      name: 'prosthetics', status: 'active', discovered_at: '2026-04-06',
+      probe: { sampled: 40, kept: 31, at: '2026-04-06' },
+    })
+  })
+
+  it('promotes an entry the probe once rejected, rather than writing a second one', () => {
     const r = applySubredditEdit(entries, { kind: 'add', name: 'r/onebag' }, '2026-09-18')
     expect('error' in r).toBe(false)
     if ('error' in r) return
