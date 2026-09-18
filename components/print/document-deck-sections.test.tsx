@@ -69,16 +69,26 @@ describe('documentSlides over a layout', () => {
   // `documentSlides(data).length + 1`, so a brief's sheets were undercounted by
   // its borrowed blocks — roughly half of every one of the four briefs.
   //
-  // E-marketing folded the cover onto the In-short sheet for a brief composed
-  // from a section map, so the "+ 1" is now conditional — and BOTH paginators
-  // read `documentCoverSheet`, because the two disagreeing by one is the bug
-  // this test was written for in the first place.
+  // E-marketing folded the cover onto the In-short sheet for a brief whose MAP
+  // opts in, so the "+ 1" is now conditional — and all three paginators read
+  // `documentCoverSheet` through `documentSheetCount`, because two of them
+  // disagreeing by one is the bug this test was written for in the first place.
+  //
+  // THE FOLD IS A FROZEN FIELD, NOT A PROPERTY OF HAVING A LAYOUT (fix pass).
+  // Keyed on `layout`, the fold reached every brief the other three maps build
+  // and every artefact stored since WP19 — re-paginating documents already
+  // sent. A brief that carries no `cover` keeps the cover it printed.
   it('documentViewerPages counts a borrowed block as a sheet', () => {
-    expect(documentViewerPages(base())).toBe(documentSlides(base()).length)
-    expect(documentViewerPages(base())).toBe(2)
+    const folded = base({ cover: false })
+    expect(documentViewerPages(folded)).toBe(documentSlides(folded).length)
+    expect(documentViewerPages(folded)).toBe(2)
+    expect(documentCoverSheet(folded)).toBe(false)
+    // A brief with a layout and no `cover`: composed before the fold, or by a
+    // map that has not opted in. It keeps its cover and its page count.
+    expect(documentCoverSheet(base())).toBe(true)
+    expect(documentViewerPages(base())).toBe(3)
     const old = base({ layout: undefined, sections: undefined, surfaces: undefined })
     expect(documentViewerPages(old)).toBe(2)
-    expect(documentCoverSheet(base())).toBe(false)
     expect(documentCoverSheet(old)).toBe(true)
   })
 })

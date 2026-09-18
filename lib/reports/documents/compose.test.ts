@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { composeDocument, documentFigures, documentSlides, heardLine, pickQuote, thinWeek } from './compose'
+import { composeDocument, documentCoverSheet, documentFigures, documentSlides, heardLine, pickQuote, thinWeek } from './compose'
 import { buildWriterPrompts, deltaInWords, figureKeyFor, writerPageKinds, writerSchema, type WriterOutput } from './write'
 import { CONTENT_BRIEF, CUSTOM_BRIEF, LEADERSHIP_BRIEF, MARKET_BRIEF, SALES_BRIEF, resolveTemplate, type DocumentTemplate } from './templates'
 import { overviewTiles } from './overview'
-import { MARKETING_MAP } from './sections'
+import { CONTENT_MAP, LEADERSHIP_MAP, MARKETING_MAP, SALES_MAP, type BriefEntry } from './sections'
 import { DEFAULT_DOCUMENT_SETTINGS } from './types'
 import { freezeQuotes } from '../../renderables/quotes-freeze'
 import type { Signals } from './signals'
@@ -342,6 +342,25 @@ describe('a document composed from a section map', () => {
     expect(user).not.toContain('What moved since the previous update')
     expect(user).toContain('reading of September 2026')
     expect(system).toContain('Do not claim movement between the two briefs')
+  })
+
+  // THE COVER FOLD IS ONE MAP'S, AND IT IS FROZEN (fix pass). Written as "any
+  // brief composed from a section map", it took the cover off the sales,
+  // leadership and content briefs too — from under the three packages building
+  // them — and re-paginated every artefact stored since WP19.
+  it('folds the cover for the map that opts in, and for no other', () => {
+    const compose = (map: readonly BriefEntry[], template: DocumentTemplate) => composeDocument({
+      template, settings: DEFAULT_DOCUMENT_SETTINGS, reportId: 'rep', title: 't', period: 'p',
+      signals: { ...signals, map } as unknown as Signals, answers, written, figures: documentFigures(signals, answers), model: 'm', promptVersion: 'v', costUsd: 0, timings: {},
+    }).data
+    const marketing = compose(MARKETING_MAP, MARKET_BRIEF)
+    expect(marketing.cover).toBe(false)
+    expect(documentCoverSheet(marketing)).toBe(false)
+    for (const [map, template] of [[SALES_MAP, SALES_BRIEF], [LEADERSHIP_MAP, LEADERSHIP_BRIEF], [CONTENT_MAP, CONTENT_BRIEF]] as const) {
+      const d = compose(map, template)
+      expect(d.cover).toBeUndefined()
+      expect(documentCoverSheet(d)).toBe(true)
+    }
   })
 
   it('still describes the pages the template alone would print', () => {

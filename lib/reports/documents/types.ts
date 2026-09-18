@@ -336,6 +336,18 @@ export interface DocumentSnapshotData {
   missing?: DocumentMissingInput[]
   /** The borrowed page blocks, in the section map's order (WP19). */
   sections?: DocBriefSection[]
+  /**
+   * FALSE where this brief's map folds its title onto the first sheet of
+   * content instead of spending a landscape sheet on it (E-marketing).
+   *
+   * FROZEN, AND ABSENT MEANS "KEEP THE COVER". A stored artefact re-renders
+   * from this field, never from today's map: pagination is the artefact's, so a
+   * brief that printed a cover, was shared on a `/r/<token>` and is opened
+   * again next March prints the same sheets with the same numbers in the same
+   * footers. The fold reaching a brief built before it landed is exactly the
+   * re-pagination `documentSlides` refuses for `sheet` and `span`.
+   */
+  cover?: boolean
   /** Each borrowed surface's loader output, frozen — the same data the page
    *  drew, so the brief and the page cannot come to say different things
    *  (WP19). Quotes inside it freeze and resolve like any other snapshot's. */

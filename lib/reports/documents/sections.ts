@@ -298,6 +298,23 @@ export const BRIEF_MAPS: Record<DocumentRole, readonly BriefEntry[]> = {
 
 export const briefMap = (role: DocumentRole): readonly BriefEntry[] => BRIEF_MAPS[role]
 
+/**
+ * The maps whose brief opens on CONTENT, with the title at the top of the first
+ * sheet rather than on a landscape sheet of its own.
+ *
+ * ONE MAP OPTS IN, AND ITS OWN PACKAGE OPTS IT IN. The fold was written as
+ * "any brief composed from a section map", which is all four of them — so the
+ * sales, leadership and content briefs lost their cover sheet from under the
+ * three packages building them, mid-wave, and every stored brief built since
+ * WP19 re-rendered one sheet shorter with every footer renumbered. All four
+ * artboards do open on content, so the direction is right for each of them;
+ * the decision is each map owner's to take, and to take in a diff that says so.
+ */
+export const COVER_FOLDED_MAPS: readonly (readonly BriefEntry[])[] = [MARKETING_MAP]
+
+export const foldsCoverSheet = (map: readonly BriefEntry[] | undefined): boolean =>
+  map != null && COVER_FOLDED_MAPS.includes(map)
+
 /** Every block section in a map, in order. */
 export function sectionsOf(map: readonly BriefEntry[]): BriefBlockSection[] {
   return map.flatMap((e) => (e.kind === 'block' ? [e.section] : []))

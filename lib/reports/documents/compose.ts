@@ -7,7 +7,7 @@ import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../../rivals'
 import { CLUSTERING_CAVEAT, briefStamp, denominatorLine, platformLine, type BriefReading } from './reading'
 import { SECTION_SLIDE_PREFIX, type DocBriefSection, type DocLayoutEntry, type DocumentReading } from './types'
 import type { BriefEntry } from './sections'
-import { missingSentence, missingSummary, pageKindsOf } from './sections'
+import { foldsCoverSheet, missingSentence, missingSummary, pageKindsOf } from './sections'
 import type { Signals } from './signals'
 import type { ResearchAnswer, ResearchPoint } from './research'
 import { ASKED_MAX, CLAIMS_PER_PAGE, PAGE_TITLE, PERSONAS_PER_PAGE, SAY_HEAR_MAX, type DocumentTemplate } from './templates'
@@ -496,6 +496,13 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
     ...(s.reading ? { reading: documentReading(s.reading) } : {}),
     ...(s.missing?.length ? { missing: s.missing.map((m) => ({ ...m, sections: [...m.sections] })) } : {}),
     ...(s.sections?.length ? { sections: s.sections.map((x) => ({ ...x })), surfaces: s.surfaces ?? {}, layout } : {}),
+    // WHETHER THIS BRIEF PRINTS A COVER, decided by the MAP and frozen here.
+    // The fold was written as "any brief composed from a section map", which is
+    // all four of them — so the other three lost their cover from under the
+    // packages building them. Only a map that opts in folds, and only a brief
+    // built from one carries the field, so a stored artefact keeps the
+    // pagination it printed.
+    ...(foldsCoverSheet(s.map) ? { cover: false } : {}),
     pages,
     // What the skeleton above was composed from, so it can be composed again
     // (WP7d): the eval and any rebuild read these, not the picker.
@@ -691,21 +698,29 @@ export function documentSlides(data: DocumentSnapshotData): Slide[] {
 /**
  * Whether this brief prints a cover sheet of its own (package E-marketing).
  *
- * NO, FOR A BRIEF COMPOSED FROM A SECTION MAP. All four brief artboards open
- * on the In-short sheet with a 17px page title and one mono context line, and
- * none of them spends a landscape sheet on a 58px title — "Marketing brief ·
- * September 2026 · Sealand · as at 28 Sep · still filling · 7 pages" sits at
- * the top of the first sheet of content. A stored artefact built before the
- * section maps has no `layout` and keeps its cover, which is what makes this
- * a change to what is built from now on rather than a re-pagination of every
- * brief already sent.
+ * NO, WHERE THE BRIEF'S OWN MAP FOLDED IT. All four brief artboards open on the
+ * In-short sheet with a 17px page title and one mono context line, and none of
+ * them spends a landscape sheet on a 58px title — "Marketing brief · September
+ * 2026 · Sealand · as at 28 Sep · still filling · 7 pages" sits at the top of
+ * the first sheet of content. MARKETING_MAP is the one map that opts in today
+ * (`COVER_FOLDED_MAPS`); each other map's own package makes that call.
  *
- * READ BY BOTH PAGINATORS. `DocumentDeck` draws the sheets and
- * `documentViewerPages` counts them, and the two disagreeing by one is a bug
- * this file has already shipped once.
+ * READ FROM THE FROZEN FIELD, NOT FROM `layout` (fix pass). The first rule here
+ * was "no cover for any brief that has a layout", which is every brief built
+ * since WP19 — so the sales, leadership and content briefs lost their cover
+ * from under the three packages building them, and every stored artefact built
+ * since the maps re-rendered a sheet shorter, with every footer renumbered and
+ * a different page count in the viewer, the Studio bar and any `/r/<token>`
+ * already sent. Pagination belongs to the artefact: `cover: false` is written
+ * at compose and an artefact that carries no such field keeps the cover it
+ * printed, which is the same rule `documentSlides` applies to `sheet`/`span`.
+ *
+ * READ BY ALL THREE PAGINATORS through `documentSheetCount`. `DocumentDeck`
+ * draws the sheets, the viewer counts them and the share header prints the
+ * count, and any two disagreeing by one is a bug this file has shipped twice.
  */
 export function documentCoverSheet(data: DocumentSnapshotData): boolean {
-  return !data.layout?.length
+  return data.cover !== false
 }
 
 /**

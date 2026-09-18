@@ -170,6 +170,11 @@ function deck(surfaces: Record<string, unknown>, over: Partial<DocumentSnapshotD
     },
     sections: sections(surfaces),
     surfaces,
+    // MARKETING_MAP opts out of the cover sheet (`COVER_FOLDED_MAPS`), and
+    // `composeDocument` freezes that decision onto the snapshot rather than
+    // leaving the deck to re-derive it from today's map. A fixture that did not
+    // carry the field would be a brief built before the fold.
+    cover: false,
     // THE MAP'S OWN ORDER, walked the way `composeDocument` walks it — written
     // pages and borrowed blocks interleaved, a `finding` entry expanding to
     // every finding page. A fixture that listed the sections first and the
