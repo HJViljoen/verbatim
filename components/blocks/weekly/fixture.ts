@@ -108,7 +108,13 @@ function base(overview = overviewFixture()): WeeklyData {
     // time (block D wave 2).
     sales: {
       window: WINDOW,
-      videos: 271,
+      // VIDEOS DATED IN THE WINDOW, not videos gathered. `incoming.gathered`
+      // is 271 — what this update LOOKED at — and this is
+      // `window_denominators` over the same days, dated by the comment. They
+      // are different measures and the fixture keeps them different numbers,
+      // because a fixture in which they agree teaches a reviewer that they
+      // are one thing. 205 is the n the flag's own week side rests on.
+      videos: 205,
       grouping: 'theme',
       objections: [
         {
@@ -122,6 +128,9 @@ function base(overview = overviewFixture()): WeeklyData {
         { id: 't-recycled', label: 'Is it really recycled', videos: 41, quotes: [] },
         { id: 't-zips', label: 'Zips', videos: 22, quotes: [] },
       ],
+      // SEVEN GROUPS, THREE SHOWN — the shape `objections.slice(1).length`
+      // made invisible by always answering "2 more objections".
+      objectionsTotal: 7,
       praise: [
         { quote: { ref: 'e:3', text: 'Dit het twee winters gehou.', lang: 'af', english: 'It held through two winters.' }, cite: 'TikTok · 11 Sep · under a category video', href: null },
       ],
@@ -233,6 +242,7 @@ export function formingFixture(over: Partial<WeeklyData> = {}): WeeklyData {
       videos: null,
       grouping: 'theme',
       objections: [],
+      objectionsTotal: 0,
       praise: [],
       switching: [],
       switchingTotal: null,
@@ -271,6 +281,11 @@ export function thinFixture(over: Partial<WeeklyData> = {}): WeeklyData {
       }),
     },
     incoming: { ...data.incoming, gathered: 38, analysed: 34, platforms: [{ platform: 'tiktok', videos: 38 }] },
+    // THE WHOLE UPDATE IS THIN, NOT HALF OF IT. The thin state overrode
+    // `incoming` alone and left §4 on the base window's 205, so one email said
+    // "38 videos gathered" in WR3 and "of 205 videos dated in the window"
+    // twice in WR4, five inches apart. A fixture state is a whole reading.
+    sales: { ...data.sales, videos: 31 },
     ...over,
   }
 }

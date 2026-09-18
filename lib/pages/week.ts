@@ -1795,6 +1795,7 @@ export async function buildSales(input: {
     videos: input.windowVideos,
     grouping,
     objections: [],
+    objectionsTotal: null,
     praise: [],
     switching: [],
     switchingTotal: null,
@@ -1827,6 +1828,8 @@ export async function buildSales(input: {
   return {
     ...base,
     objections: objections.slice(0, SALES_GROUPS_SHOWN),
+    // COUNTED BEFORE IT IS CAPPED, so "N more objections" can name a real N.
+    objectionsTotal: objections.length,
     praise: cited.filter((c) => c.category === 'praise').slice(0, SALES_PRAISE_SHOWN).map(toSalesQuote),
     switching: switching.slice(0, SALES_SWITCHING_SHOWN).map(toSalesQuote),
     switchingTotal: switchingComments,

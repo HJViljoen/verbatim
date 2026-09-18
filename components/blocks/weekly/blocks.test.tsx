@@ -31,7 +31,7 @@ describe('the six blocks', () => {
     const markup = render(forSales.render({ sales }, 'app', ctx))
     expect(markupText(markup)).toContain('They object to price against longevity')
     expect(forSales.emptyState({ sales })).toBeNull()
-    expect(blockAnswers(forSales, { sales }).quotes).toEqual(['e:3', 'e:2'])
+    expect(blockAnswers(forSales, { sales }).quotes).toEqual(['e:3', 'e:2', 'e:9'])
   })
 
   it('is one block per stored key, in the design’s order', () => {
@@ -360,13 +360,61 @@ describe('WR4 · for sales', () => {
       const text = renderText(block.render(weeklyFixture(), mode, ctx))
       expect(text, mode).toContain('They object to price against longevity')
       expect(text, mode).toContain('96')
-      expect(text, mode).toContain('videos this update carrying it · of 271 videos this update')
+      // "DATED IN THE WINDOW", never "this update": `ForSalesData.videos` is
+      // `window_denominators` over the window, dated by the comment, while
+      // WR3's "271 videos gathered" is dated by when we looked. Both said
+      // "this update" and a reader could not tell the two measures apart.
+      expect(text, mode).toContain('videos carrying it · of 205 videos dated in the window')
+      expect(text, mode).not.toContain('271 videos this update')
     }
   })
 
-  it('names the objections it did not give a row to, in the link', () => {
+  // THE LINK COUNTS `objectionsTotal`, NEVER THE SLICE. `objections` arrives
+  // capped at three, so counting `slice(1)` said "2 more objections" on every
+  // tenant with three or more groups, whatever the real number was.
+  it('names the objections it did not give a row to, and counts them all', () => {
     expect(renderText(block.render(weeklyFixture(), 'app', ctx)))
-      .toContain('2 more objections — is it really recycled and zips')
+      .toContain('6 more objections, including — is it really recycled and zips')
+  })
+
+  it('says how many objections there were, not how many it could name', () => {
+    const { sales } = weeklyFixture()
+    const three = { sales: { ...sales, objectionsTotal: 3 } }
+    expect(renderText(forSales.render(three, 'app', ctx))).toContain('2 more objections — is it really recycled and zips')
+    expect(renderText(forSales.render(three, 'app', ctx))).not.toContain('including')
+  })
+
+  // THE FOUR COUNTS CARRY THE MARKERS THE COMMENT PROMISED. The block printed
+  // four figures at 16px and declared no `figure` or `level` node anywhere, so
+  // `assertCopyContract` passed vacuously over the one block that is nothing
+  // but counts.
+  it('marks its figures, and marks the denominator a level where there is one', () => {
+    const markup = render(block.render(weeklyFixture(), 'app', ctx))
+    expect(copyViolations(markup)).toEqual([])
+    expect(markup).toContain('data-copy="figure"')
+    expect(markup).toContain('data-copy="level"')
+    // No denominator, no level node — a count with nothing to be a share of is
+    // a bare figure and `NO_DENOMINATOR` explains it.
+    const bare = render(forSales.render({ sales: { ...weeklyFixture().sales, videos: null } }, 'app', ctx))
+    expect(copyViolations(bare)).toEqual([])
+    expect(bare).not.toContain('data-copy="level"')
+    expect(markupText(bare)).toContain('nothing to be a share of')
+  })
+
+  // The row promised "· N below" and the card was handed praise and the top
+  // objection only, so the clause pointed at nothing.
+  it('draws the switching words the row says are below it', () => {
+    const text = renderText(block.render(weeklyFixture(), 'app', ctx))
+    expect(text).toContain('1 below')
+    expect(text).toContain('Moving off Freitag after the strap went')
+  })
+
+  // `rivalComplaints` is the objection citations whose audience is a rival —
+  // drawn from the same pool as the row above, so two adjacent counts over one
+  // n invited a reader to add them.
+  it('says the rival row is inside the objections above, not beside them', () => {
+    expect(renderText(block.render(weeklyFixture(), 'app', ctx)))
+      .toContain('already inside the objections above')
   })
 
   it('counts the rival’s complaints under the rival’s own content', () => {
@@ -403,7 +451,7 @@ describe('WR4 · for sales', () => {
   it('declares the counts it prints, under the keys This week already froze', () => {
     const figures = blockAnswers(block, weeklyFixture()).figures
     expect(Object.keys(figures)).toEqual(['sales_videos', 'objection_1_videos', 'objection_2_videos', 'objection_3_videos', 'switching_comments'])
-    expect(blockAnswers(block, weeklyFixture()).quotes).toEqual(['e:3', 'e:2'])
+    expect(blockAnswers(block, weeklyFixture()).quotes).toEqual(['e:3', 'e:2', 'e:9'])
   })
 })
 

@@ -46,30 +46,39 @@ import type { FigureTable } from '@/lib/reading/verdicts'
 //     beside a quote — so the card carries the quote and its provenance.
 
 const NO_DENOMINATOR =
-  'The number of videos this update covered is not recorded for this workspace yet, so these counts have nothing to be a share of.'
+  'The number of videos dated inside this update’s window is not recorded for this workspace yet, so these counts have nothing to be a share of.'
 
 /**
  * The artboard's counted row: a title, a mono 16/600 figure at the right end, a
  * mono denominator under it, and an optional green link.
  *
- * THE FIGURE IS MARKED A LEVEL WHEN IT HAS ITS "of N" AND A BARE FIGURE WHEN
- * IT DOES NOT — which is rule (b) made visible rather than asserted: a count
- * with a denominator is a measurement, and a count without one is a number the
- * block has to explain, which `NO_DENOMINATOR` does.
+ * THE MARKERS ARE REAL NOW, AND THEY USED NOT TO BE. This docblock said "the
+ * figure is marked a level when it has its 'of N' and a bare figure when it
+ * does not — which is rule (b) made visible rather than asserted", and the row
+ * carried no `data-copy` at all: the block printed four counts at 16px and
+ * `assertCopyContract` had nothing to check rule (b) against, so the contract
+ * passed vacuously over the one block on the artefact that is nothing but
+ * counts. The figure is `data-copy="figure"` always, and the line under it is
+ * `data-copy="level"` exactly when the caller passes a denominator with it —
+ * so a `denominatorOf` that stops printing its "of N" fails the block's own
+ * render test instead of going quiet.
  */
 function CountedRow({
-  title, value, of, link, last = false, mode, children,
+  title, value, of, denominated, link, last = false, mode, children,
 }: {
   title: ReactNode
   value: string
   /** The denominator line under the figure, or the basis where there is none. */
   of: string
+  /** True when `of` carries a real "of N" — then it is the level node. */
+  denominated: boolean
   link?: { href: string; label: ReactNode } | null
   last?: boolean
   mode: RenderMode
   children?: ReactNode
 }) {
-  const figure = <span style={mode === 'email' ? { fontFamily: FONT.mono, fontSize: 16, fontWeight: 600, color: EMAIL.ink } : undefined} className={mode === 'email' ? undefined : 'font-mono text-[16px] font-semibold tabular-nums'}>{value}</span>
+  const figure = <span data-copy="figure" style={mode === 'email' ? { fontFamily: FONT.mono, fontSize: 16, fontWeight: 600, color: EMAIL.ink } : undefined} className={mode === 'email' ? undefined : 'font-mono text-[16px] font-semibold tabular-nums'}>{value}</span>
+  const copy = denominated ? ({ 'data-copy': 'level' } as const) : {}
   if (mode === 'email') {
     return (
       <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} border={0} style={{ borderCollapse: 'collapse', borderSpacing: 0, borderBottom: last ? undefined : `1px solid ${EMAIL.hairline}` }}>
@@ -84,7 +93,7 @@ function CountedRow({
                   </tr>
                 </tbody>
               </table>
-              <div style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.faint, marginTop: 5 }}>{of}</div>
+              <div {...copy} style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted, marginTop: 5 }}>{of}</div>
               {link ? <div style={{ marginTop: 5 }}><a href={link.href} style={{ fontFamily: FONT.sans, fontSize: 12, fontWeight: 500, color: EMAIL.link, textDecoration: 'none' }}>{link.label} →</a></div> : null}
               {children}
             </td>
@@ -99,7 +108,7 @@ function CountedRow({
         <span className="min-w-0 text-[14px]">{title}</span>
         <span className="flex-none">{figure}</span>
       </div>
-      <span className="font-mono text-[11px] text-muted-foreground">{of}</span>
+      <span {...copy} className="font-mono text-[11px] text-muted-foreground">{of}</span>
       {link ? <Link href={link.href} className="text-[12px] font-medium hover:underline">{link.label} →</Link> : null}
       {children}
     </div>
@@ -132,24 +141,43 @@ function Note({ mode, children }: { mode: RenderMode; children: ReactNode }) {
     : <p className="m-0 mt-2 text-[11.5px] leading-relaxed text-muted-foreground">{children}</p>
 }
 
-/** "of 655 videos this update", or the basis when there is no denominator. */
+/**
+ * "videos carrying it · of 655 videos dated in the window", or the basis alone
+ * when there is no denominator.
+ *
+ * "DATED IN THE WINDOW", NOT "THIS UPDATE". `ForSalesData.videos` is
+ * `window_denominators` summed over the update's window — videos dated by the
+ * COMMENT — while WR3's "271 videos gathered" three inches up is dated by when
+ * we LOOKED. Both said "this update" and a reader had no way to tell that they
+ * are different measures of different things, which is exactly the confusion
+ * the two-clocks note in WR3 exists to prevent.
+ */
 const denominatorOf = (videos: number | null, what: string): string =>
-  videos == null ? what : `${what} · of ${fmtInt(videos)} videos this update`
+  videos == null ? what : `${what} · of ${fmtInt(videos)} videos dated in the window`
 
 /** "2 more objections — is it really recycled and zips" — the objections the
  *  block counted and did not give a row of their own, NAMED in the link rather
  *  than hidden behind "more".
  *
+ *  THE COUNT IS `objectionsTotal`, NEVER THE SLICE. `objections` arrives capped
+ *  at `SALES_GROUPS_SHOWN` = 3, so `groups.slice(1).length` said "2 more
+ *  objections" on every tenant with three or more groups whatever the real
+ *  number was — the `switching.length` rule, one field over. Where the total is
+ *  larger than what can be named, the link says "including" rather than
+ *  promising that the names ARE the remainder.
+ *
  *  THE NAMES ARE RETURNED SEPARATELY because they are a model's words when the
  *  grouping is a theme, and the caller has to mark them: rule (c) sweeps
  *  unmarked markup, and "Concerns about declining quality" is a real label off
  *  the register (components/blocks/theme-label.test.tsx). */
-function nameRest(groups: readonly SalesGroup[]): { head: string; names: string } | null {
-  const rest = groups.slice(1)
-  if (rest.length === 0) return null
-  const names = rest.map((g) => g.label.toLowerCase())
+function nameRest(groups: readonly SalesGroup[], total: number | null): { head: string; names: string } | null {
+  const named = groups.slice(1)
+  if (named.length === 0) return null
+  const rest = Math.max(named.length, (total ?? groups.length) - 1)
+  const names = named.map((g) => g.label.toLowerCase())
+  const head = rest === 1 ? 'One more objection' : `${fmtInt(rest)} more objections`
   return {
-    head: rest.length === 1 ? 'One more objection —' : `${fmtInt(rest.length)} more objections —`,
+    head: `${head}${rest > named.length ? ', including' : ''} —`,
     names: names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`,
   }
 }
@@ -171,7 +199,7 @@ export const forSales: Block<{ sales: ForSalesData }> = {
         title={forSales.title}
         question={forSales.question}
         mode={mode}
-        meta={s.videos != null ? `${fmtInt(s.videos)} videos this update` : undefined}
+        meta={s.videos != null ? `${fmtInt(s.videos)} videos in the window` : undefined}
         footer={mode === 'email'
           ? <a href={briefHref} style={{ color: EMAIL.ink }}>{s.brief.label}</a>
           : <Link href={briefHref} className="hover:underline">{s.brief.label}</Link>}
@@ -188,7 +216,7 @@ export const forSales: Block<{ sales: ForSalesData }> = {
 
     const top = s.objections[0] ?? null
     const rival = s.rivalComplaints[0] ?? null
-    const rest = nameRest(s.objections)
+    const rest = nameRest(s.objections, s.objectionsTotal)
     // WHOSE WORDS THE HEADING IS. A group is keyed by a SUBJECT the client
     // named or by a THEME a model wrote (`SalesGrouping`), and only the second
     // is model prose — marking a client's own subject `pass_b_theme` would
@@ -204,7 +232,8 @@ export const forSales: Block<{ sales: ForSalesData }> = {
             mode={mode}
             title={<>They object to {named(top.label.toLowerCase())}</>}
             value={fmtInt(top.videos)}
-            of={denominatorOf(s.videos, 'videos this update carrying it')}
+            of={denominatorOf(s.videos, 'videos carrying it')}
+            denominated={s.videos != null}
             link={rest ? { href: briefHref, label: <>{rest.head} {named(rest.names)}</> } : null}
             last={!rival && s.switchingTotal == null}
           />
@@ -215,7 +244,12 @@ export const forSales: Block<{ sales: ForSalesData }> = {
             mode={mode}
             title={<>They complain about {rival.label}</>}
             value={fmtInt(rival.videos)}
-            of={denominatorOf(s.videos, 'videos this update · counted under that rival’s content, never under yours')}
+            // A SUBSET, AND THE ROW SAYS SO. `rivalComplaints` is the objection
+            // citations whose audience is `competitor:*` — drawn from the same
+            // pool as the row above, not beside it — so two adjacent counts
+            // over one n invited a reader to add them together.
+            of={denominatorOf(s.videos, 'videos · objections counted under that rival’s content, never under yours, and already inside the objections above')}
+            denominated={s.videos != null}
             last={s.switchingTotal == null}
           />
         ) : null}
@@ -227,12 +261,22 @@ export const forSales: Block<{ sales: ForSalesData }> = {
             title="Someone said they were moving between brands"
             value={fmtInt(s.switchingTotal)}
             // D14: the mock says "both toward Sealand · 7 toward, 5 away", and
-            // nothing on this branch records which way a switch points.
+            // nothing on this branch records which way a switch points. The
+            // "N below" clause is true because the card below now DRAWS them.
             of={`comments this update${s.switching.length > 0 && s.switchingTotal > s.switching.length ? ` · ${fmtInt(s.switching.length)} below` : ''} · which way they point is not recorded`}
+            // A COUNT OF COMMENTS, NOT A SHARE OF THE VIDEO DENOMINATOR. Every
+            // other row here counts videos; this one counts comments, and
+            // `videos` is not its n (FigureCell's rule for an omitted "of").
+            denominated={false}
           />
         ) : null}
 
-        <WordsCard quotes={[...s.praise, ...(top?.quotes.slice(0, 1) ?? [])]} mode={mode} />
+        {/* AND THE SWITCHING WORDS ARE IN IT. The row promised "· 1 below" and
+            the card was handed praise and the top objection only, so the
+            clause pointed at nothing. They are the one row whose DIRECTION the
+            product refuses to resolve, which makes the commenter's own
+            sentence the most useful thing §4 can hand a salesperson. */}
+        <WordsCard quotes={[...s.praise, ...(top?.quotes.slice(0, 1) ?? []), ...s.switching]} mode={mode} />
 
         {s.videos == null ? <Note mode={mode}>{NO_DENOMINATOR}</Note> : null}
         <Note mode={mode}>{groupingLine(s.grouping)}</Note>
@@ -260,7 +304,11 @@ export const forSales: Block<{ sales: ForSalesData }> = {
     // resolve; declaring a quote this artefact does not print would freeze a
     // voice nobody reads here.
     const s = data.sales
-    return [...s.praise.map((q) => q.quote.ref), ...(s.objections[0]?.quotes.slice(0, 1) ?? []).map((q) => q.quote.ref)]
+    return [
+      ...s.praise.map((q) => q.quote.ref),
+      ...(s.objections[0]?.quotes.slice(0, 1) ?? []).map((q) => q.quote.ref),
+      ...s.switching.map((q) => q.quote.ref),
+    ]
   },
 
   emptyState(data) {

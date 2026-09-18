@@ -433,6 +433,9 @@ export function weekFixture(): WeekData {
         { id: 's3', label: 'Durability', videos: 38, quotes: [] },
         { id: 's4', label: 'Fit and refit waits', videos: 12, quotes: [] },
       ],
+      // Three shown of five counted (`SALES_GROUPS_SHOWN`), so "N more
+      // objections" can name a real N instead of the slice's length.
+      objectionsTotal: 5,
       praise: [quote('ev-6', 'Two winters on this socket and it still fits like day one', 'TikTok · 11 Sep · under a category video')],
       // Two shown of seven counted — the shape the block has to print
       // honestly, and the shape a slice-then-count made invisible.
@@ -650,6 +653,7 @@ export function thinFixture(): WeekData {
       videos: 655,
       grouping: 'theme',
       objections: [],
+      objectionsTotal: 0,
       praise: [],
       switching: [],
       switchingTotal: 0,

@@ -5,7 +5,7 @@ import type { MonthStatus } from '../reading/types'
 import { selectAll } from '../supabase-admin'
 import { rows } from './read'
 import { isMissingMonthlyReading, readDenominators } from '../reading/monthly'
-import type { ReadingHandle } from '../reading/read'
+import { loadWindowReading, type ReadingHandle } from '../reading/read'
 import { fetchQuoteResolutionsByRefs } from '../quotes'
 import { monthStartOf, prevMonth } from '../reading/month-key'
 import { BASELINE_MONTHS, baselineStateOf, thinUpdate, type ThinUpdateVerdict } from '../reading/anomaly'
@@ -468,13 +468,25 @@ export async function loadWeekly(scope: Scope): Promise<WeeklyData | null> {
   // §4 IS THIS WEEK'S OWN LOADER, CALLED A SECOND TIME (block D wave 2). It
   // reads THE UPDATE'S WINDOW and produces counted groups with a denominator;
   // the month-scoped quote list this artefact had instead was the second
-  // implementation its own file warned about. `windowVideos` is null here for
-  // the same reason it is null on This week — M3's windowed read is not
-  // applied — and `ForSalesData` carries that as a stated absence rather than
-  // as a count with nothing under it.
+  // implementation its own file warned about.
+  //
+  // AND `windowVideos` IS THE SAME READ THIS WEEK MAKES, NOT A HARDCODED NULL.
+  // It was passed `null` unconditionally, which meant the frame's
+  // "N videos this update" meta and both `denominatorOf` sub-lines could NEVER
+  // print on a real send — the arm that ships is the degraded one, and three
+  // of the four screenshots were of an artefact that cannot exist. The n is
+  // `window_denominators` summed over every audience, exactly as This week
+  // derives it (`lib/pages/week.ts`, `totalVideos(windowRead.denominators)`),
+  // so the page and the report state one denominator or neither. Where M3 is
+  // not applied `loadWindowReading` answers `denominators: null` by its own
+  // `isMissingMonthlyReading` guard, the sum is null, and `ForSalesData`
+  // carries that as a stated absence — which is what the degraded arm is for.
   const [incoming, sales] = await Promise.all([
     loadIncoming(supabase, clientId, run, overview, window),
-    loadSubjects(supabase, clientId).then((subjects) =>
+    Promise.all([
+      loadSubjects(supabase, clientId),
+      windowVideosOf(scope.reading, clientId, window),
+    ]).then(([subjects, windowVideos]) =>
       buildSales({
         supabase,
         clientId,
@@ -483,7 +495,7 @@ export async function loadWeekly(scope: Scope): Promise<WeeklyData | null> {
         // record can say it. An older database that has no such column says
         // so rather than having one invented for it.
         window: window ? { ...window, basis: run?.window_basis ?? 'unrecorded' } : null,
-        windowVideos: null,
+        windowVideos,
         subjects,
       }),
     ),
@@ -662,6 +674,48 @@ async function baselineMonths(
   } catch (error) {
     if (!isMissingMonthlyReading(error)) {
       console.error(`[pages] weekly.baseline: ${(error as { message?: string })?.message ?? String(error)}`)
+    }
+    return null
+  }
+}
+
+/**
+ * Videos dated inside this update's window, every audience together — the n
+ * §4's counts are counts against (`ForSalesData.videos`).
+ *
+ * THE SAME READ THIS WEEK MAKES, AND THAT IS THE WHOLE POINT. This week takes
+ * `totalVideos(windowRead.denominators)` off `window_denominators`
+ * (lib/pages/week.ts); the weekly report passed `windowVideos: null` to
+ * `buildSales` unconditionally, so the denominator the block is built around
+ * could never print on a real send and the fixture showed a figure no tenant
+ * could receive. Two surfaces over one window now state one denominator, or
+ * neither of them does.
+ *
+ * DATED BY THE COMMENT, like every other reading (AGENTS.md). §4's citations
+ * are filtered on `comments.comment_date` inside the same window, so the
+ * numerator and this denominator are on one clock — and NOT on the clock
+ * `incoming.gathered` is on, which counts by when we LOOKED. The two are
+ * labelled differently by the blocks for exactly that reason.
+ *
+ * NULL IS A STATED ABSENCE, NEVER A ZERO. `loadWindowReading` swallows the
+ * missing-migration error by its own `isMissingMonthlyReading` guard and
+ * answers `denominators: null`; M3 unapplied then reaches the block as "the
+ * number of videos this update covered is not recorded", which is a claim
+ * about our bookkeeping rather than about the week.
+ */
+async function windowVideosOf(
+  reading: ReadingHandle,
+  clientId: string,
+  window: { from: string; to: string } | null,
+): Promise<number | null> {
+  if (!window) return null
+  try {
+    const read = await loadWindowReading(reading.client, clientId, { from: window.from, to: window.to })
+    if (read.denominators == null) return null
+    return read.denominators.reduce((total, d) => total + (d.videos ?? 0), 0)
+  } catch (error) {
+    if (!isMissingMonthlyReading(error)) {
+      console.error(`[pages] weekly.windowVideos: ${(error as { message?: string })?.message ?? String(error)}`)
     }
     return null
   }
