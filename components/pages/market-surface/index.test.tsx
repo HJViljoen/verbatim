@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest'
 import { blockAnswers, blockContext, figureCount, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
-import { render, renderText } from '@/lib/test/render'
+import { markupText as markupOf, render, renderText } from '@/lib/test/render'
 import { ADVICE_REQUESTED_GONE } from '@/lib/pages/market-surface'
 import { MOVES_UNLOCK } from '@/lib/pages/overview'
 import { pageModule } from '@/components/pages/registry'
@@ -317,6 +317,28 @@ describe('MK2 · the ledger', () => {
     // all 64 identities, and it may not be smaller than what the table shows.
     expect(text).toContain('acted on 2 of 64')
     expect(text).not.toMatch(/quarter/i)
+  })
+
+  it('puts the derivation one press from the number, and prints it inline where nothing can be pressed', () => {
+    // Three tiles ended in a wall of 11px grey prose that a reader's eye skips
+    // — which is the one thing a stated basis must not do. It is behind the
+    // page's own dotted-underline disclosure in `app` and INLINE in print and
+    // email, where there is nothing to press: a disclosure nobody can open is
+    // a basis that has been hidden.
+    const app = render(marketAdvice.render(marketFixture(), 'app', ctx))
+    expect(app).toContain('<details')
+    expect(app).toContain('How these columns count')
+    expect(renderText(marketAdvice.render(marketFixture(), 'app', ctx))).toContain('Grounded in counts the videos')
+    for (const mode of ['print', 'email'] as RenderMode[]) {
+      const markup = render(marketAdvice.render(marketFixture(), mode, ctx))
+      expect(markup).not.toContain('<details')
+      expect(markupOf(markup)).toContain('Grounded in counts the videos')
+    }
+    // Same rule on the other three blocks that carry one.
+    for (const block of [marketConclusions, marketPlans, marketSayHear]) {
+      expect(render(block.render(marketFixture(), 'app', ctx))).toContain('<details')
+      expect(render(block.render(marketFixture(), 'print', ctx))).not.toContain('<details')
+    }
   })
 
   it('explains the within-month repeat once underneath, where the column now counts updates', () => {

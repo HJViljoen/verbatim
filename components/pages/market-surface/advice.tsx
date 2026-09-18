@@ -5,6 +5,7 @@ import { BlockQuote } from '@/components/blocks/quote'
 import { MovementBadge } from '@/components/delta-badge'
 import { RecStatusMenu, RecStatusWord } from '@/components/rec-status'
 import { TileBlock } from '@/components/shell/tile'
+import { Derivation } from './derivation'
 import { FLAG_NOTE } from '@/lib/agent/movement'
 import { fmtInt, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
@@ -236,8 +237,17 @@ export const marketAdvice: Block<MarketSurfaceData> = {
     // `title` no keyboard and no touch reaches.
     const anyFirstTime = a.rows.some((r) => r.firstMade.slice(0, 7) === data.month.slice(0, 7))
 
+    // THE READER'S OWN ANSWER STAYS ON THE PAGE; THE DERIVATION IS ONE PRESS
+    // AWAY. `requestedLine` answers a link the reader followed and the two
+    // state sentences — nothing is being written down, nothing has been read
+    // in the Afterwards column yet — are facts about this workspace, not
+    // method. What goes behind the disclosure is how the columns count.
+    const state = [
+      !a.recorded ? ADVICE_UNRECORDED : null,
+      !anyReading ? a.unlock : null,
+    ].filter((x): x is string => Boolean(x)).join(' ')
     const notes = (
-      <div className={email ? undefined : 'flex min-w-0 flex-col gap-0.5'}>
+      <div className={email ? undefined : 'flex min-w-0 flex-col gap-1'}>
         {a.requestedLine ? (
           <p
             className={email ? undefined : 'm-0 text-[11px] text-secondary-foreground'}
@@ -246,15 +256,18 @@ export const marketAdvice: Block<MarketSurfaceData> = {
             {a.requestedLine}
           </p>
         ) : null}
-        <p
-          className={email ? undefined : 'm-0 text-[11px] leading-[1.35] text-muted-foreground'}
-          style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 } : undefined}
-        >
+        {state ? (
+          <p
+            className={email ? undefined : 'm-0 text-[11px] leading-[1.35] text-muted-foreground'}
+            style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 } : undefined}
+          >
+            {state}
+          </p>
+        ) : null}
+        <Derivation mode={mode} label="How these columns count">
           {GROUNDED_CORPUS_LINE} {a.repeatLine}
           {anyFirstTime ? ` ${LEDGER_FIRST_TIME_LINE}` : ''}
-          {!a.recorded ? ` ${ADVICE_UNRECORDED}` : ''}
-          {!anyReading ? ` ${a.unlock}` : ''}
-        </p>
+        </Derivation>
       </div>
     )
 

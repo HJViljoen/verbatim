@@ -2,6 +2,7 @@ import Link from 'next/link'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { TileBlock } from '@/components/shell/tile'
+import { Derivation } from './derivation'
 import { TierChip, tierMetaLine } from './tier'
 import { fmtInt, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
@@ -185,10 +186,7 @@ export const marketConclusions: Block<MarketSurfaceData> = {
               nobody can open would hide them. */}
           {!app ? below.map(row) : null}
         </div>
-        <p
-          className={email ? undefined : 'm-0 text-[11px] leading-[1.35] text-muted-foreground'}
-          style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 6 } : undefined}
-        >
+        <Derivation mode={mode} label="How these are counted">
           {/* THE SORT IS PRINTED, not implied. The design asks for tier and
               then the size of the MOVEMENT behind each conclusion, and the
               movement is not computable: a conclusion cites audience_insight
@@ -198,7 +196,7 @@ export const marketConclusions: Block<MarketSurfaceData> = {
               `newLine` rides with them because the chip above is a fact about
               our record and must not be read as one about the conversation. */}
           Ordered by {c.sortedBy}. {c.corpusLine} {c.newLine}
-        </p>
+        </Derivation>
       </BlockFrame>
     )
   },

@@ -3,6 +3,7 @@ import type { Block, QuoteRef, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockQuote } from '@/components/blocks/quote'
 import { TileBlock } from '@/components/shell/tile'
+import { Derivation } from './derivation'
 import { fmtInt, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { PlanCheckCard, PlanClaimRow } from '@/lib/ask/plan-cards'
@@ -189,13 +190,20 @@ export const marketPlans: Block<MarketSurfaceData> = {
             </div>
           ) : null}
 
-          <p
-            className={email ? undefined : 'm-0 text-[11px] leading-[1.35] text-muted-foreground'}
-            style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted, marginTop: 6 } : undefined}
-          >
+          {/* THE NOTICE IS A FACT ABOUT THIS PLAN and stays on the page; the
+              basis, the floor and the hold caveat are how the counts were
+              made and sit one press from them. */}
+          {card.notice ? (
+            <p
+              className={email ? undefined : 'm-0 text-[11px] leading-[1.35] text-muted-foreground'}
+              style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted, marginTop: 6 } : undefined}
+            >
+              {card.notice}
+            </p>
+          ) : null}
+          <Derivation mode={mode} label="How these verdicts are counted">
             {card.basis} {card.floorLine} {card.caveat}
-            {card.notice ? ` ${card.notice}` : ''}
-          </p>
+          </Derivation>
         </div>
       </BlockFrame>
     )
