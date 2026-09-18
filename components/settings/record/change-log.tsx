@@ -17,7 +17,9 @@ import { MonthFlag, RecordSection } from './frame'
  * sentence and it is what a reader came for; `before → after` is printed under
  * it only where both sides render, because on the rows that have it ("nothing →
  * Poler") it is the whole content of the change and on the rows that do not it
- * would be a line of "nothing → nothing".
+ * would be a line of "nothing → nothing". And where it is printed it is printed
+ * WHOLE: it is the change itself, so a row that wraps to two lines is better
+ * than a row that hides half of what moved.
  *
  * "MADE BY" PRINTS A PERSON, NOT A ROLE (mock-gap §6 D14). The artboard's column
  * is captioned "a role, never a name" and prints "digital director" on all four
@@ -106,8 +108,15 @@ function ChangeRow({ change, now }: { change: ClientChange; now: string }) {
           <span>{change.said}</span>
           {madeThisMonth(change, now) ? <MonthFlag>this month</MonthFlag> : null}
         </span>
+        {/* NOT TRUNCATED. On the rows that have it the before→after IS the
+            change, and `truncate` hid it with no title, no wrap and no way to
+            see the rest: at 1440 six named subjects read "nothing → fit,
+            comfort, delivery, price, ser…" and at 960 a rival rename read
+            "Freitag → Fre…" (design review finding 6). A record whose own rule
+            is "added to, never edited" cannot hide the edit; the line wraps
+            instead, and only on the rows that carry one. */}
         {change.before && change.after ? (
-          <span className="mt-0.5 block truncate font-mono text-[11px] text-muted-foreground">
+          <span className="mt-0.5 block break-words font-mono text-[11px] leading-[1.45] text-muted-foreground">
             {change.before} → {change.after}
           </span>
         ) : null}

@@ -163,6 +163,15 @@ describe('the change log', () => {
     expect(render(changeLog).match(/bg-warning\/20/g)).toHaveLength(1)
   })
 
+  it('prints the before→after whole, because on those rows it is the change', () => {
+    const text = renderText(changeLog)
+    // Six named subjects, not "nothing → fit, comfort, delivery, price, ser…"
+    // (design review finding 6).
+    expect(text).toContain('fit, comfort, delivery, price, service, sizing')
+    expect(text).toContain('sealand, recycled sails')
+    expect(render(changeLog)).not.toContain('truncate')
+  })
+
   it('prints a person where the artboard prints a role, because the product has no roles', () => {
     // D14. `actorWords` resolves the actor; nothing maps a user to a job title.
     const text = renderText(changeLog)
