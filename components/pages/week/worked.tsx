@@ -73,8 +73,13 @@ export const weekWorked: Block<WeekData> = {
           ? <a href={href} style={{ color: EMAIL.ink }}>Open the content brief →</a>
           : <Link href={href} className="hover:underline">Open the content brief →</Link>}
         // THE MOCK'S RIGHT-HAND NOTE, in the slot it draws it in rather than as
-        // a body line.
-        footerNote={w.excluded.length > 0 ? `${listNames(w.excluded)} excluded from engagement` : undefined}
+        // a body line — AND ONE SENTENCE, NOT TWO (code review C10). It said
+        // "Reddit excluded from engagement" and a body line said "Reddit
+        // carries no engagement figure this product can read and is out of the
+        // median above" — the same fact twice on one tile, in a span-5 tile
+        // that has no room for either of them twice. The note keeps the
+        // artboard's slot AND the reason the body line carried.
+        footerNote={w.excluded.length > 0 ? `${listNames(w.excluded)}: no engagement figure to read` : undefined}
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         {/* WHOSE VIDEOS — in the body, because it does not fit the meta of a
@@ -86,11 +91,6 @@ export const weekWorked: Block<WeekData> = {
         ) : null}
         {w.hooks.length > 0 ? (
           <Group title="Hooks this update" rows={w.hooks} rated={w.rated} mode={mode} />
-        ) : null}
-        {w.excluded.length > 0 ? (
-          <Note mode={mode}>
-            {listNames(w.excluded)} carries no engagement figure this product can read and is out of the median above.
-          </Note>
         ) : null}
         <OwnSide sides={w.sides} mode={mode} />
       </BlockFrame>

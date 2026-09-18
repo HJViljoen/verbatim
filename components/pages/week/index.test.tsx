@@ -833,9 +833,15 @@ describe('WK §6 · what worked', () => {
     expect(text).not.toContain('380%')
   })
 
-  it('names what it left out of the median', () => {
-    expect(renderText(weekWorked.render(weekFixture(), 'app', ctx)))
-      .toContain('Reddit carries no engagement figure this product can read')
+  it('names what it left out of the median, once', () => {
+    // Code review C10: the exclusion was printed twice on one tile — the
+    // footer's own note and a body line — so the note now carries the reason
+    // and the body line is gone.
+    for (const mode of MODES) {
+      const text = renderText(weekWorked.render(weekFixture(), mode, ctx))
+      expect(text, mode).toContain('Reddit: no engagement figure to read')
+      expect(text.match(/Reddit/g)?.length ?? 0, mode).toBe(1)
+    }
   })
 
   it('refuses to read a format off too few rated videos', () => {

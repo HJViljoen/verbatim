@@ -182,7 +182,11 @@ function headerMeta(u: WeekData['unusual'], windowVideos: number | null): string
   const watched = u.setSize != null ? `${fmtInt(u.setSize)} objects watched · ${fmtInt(u.tested ?? 0)} testable` : undefined
   if (u.state !== 'flagged' || u.flaggedCount === 0) return watched
   const cleared = `${fmtInt(u.flaggedCount)} of ${fmtInt(u.tested ?? u.flaggedCount)} tested cleared its band`
-  return windowVideos != null ? `${cleared} · of ${fmtInt(windowVideos)} videos this update` : cleared
+  // "· across 205 videos", NOT "· of 205 videos" (code review C10). The two
+  // halves have different denominators — the first counts OBJECTS the check
+  // tested, the second counts the VIDEOS the update covered — and joining two
+  // "of"s with a dot read as one count over two denominators.
+  return windowVideos != null ? `${cleared} · across ${fmtInt(windowVideos)} videos this update` : cleared
 }
 
 /** One flag, in full: the object, the week, the months behind it, the band,

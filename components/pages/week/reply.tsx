@@ -8,7 +8,7 @@ import { PlatformIcon } from '@/components/charts/platform-icon'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, platformLabel, shortDate } from '@/lib/format'
 import { INTENT_PLURAL, INTENT_LABEL, type Intent } from '@/lib/content-tiles'
-import { windowDays, type ReplyRow, type WeekData } from '@/lib/pages/week'
+import { REPLIES_SHOWN, windowDays, type ReplyRow, type WeekData } from '@/lib/pages/week'
 import type { FigureTable } from '@/lib/reading/verdicts'
 
 // WK §2 · Worth a reply (the mock's §2), moved here from the Content page in
@@ -63,7 +63,11 @@ export const weekReply: Block<WeekData> = {
     const email = mode === 'email'
     const empty = weekReply.emptyState(data)
     const days = windowDays(r.window)
-    const shown = r.rows.slice(0, 4)
+    // THE CONSTANT, NOT A 4 (code review C9). `REPLIES_SHOWN` is exported from
+    // the loader with the reasoning for its value beside it and was read by
+    // nothing, while this line hard-coded the same number — two places to
+    // change, one of them documented and neither of them load-bearing.
+    const shown = r.rows.slice(0, REPLIES_SHOWN)
     const more = r.rows.length - shown.length
     const href = `${ctx.appUrl}/dashboard/videos?detail=replies`
 

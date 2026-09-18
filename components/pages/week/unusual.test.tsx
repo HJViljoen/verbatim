@@ -49,6 +49,15 @@ describe('WK1 · unusual this week', () => {
     expect(text).not.toContain('×')
   })
 
+  it('joins the header’s two counts without claiming one denominator', () => {
+    // Code review C10. The meta read "3 of 42 tested cleared its band · of 205
+    // videos this update": two "of"s joined by a dot, over two different
+    // denominators — objects the check tested, and videos the update covered.
+    const text = renderText(weekUnusual.render(weekFixture(), 'app', ctx))
+    expect(text).toContain('1 of 14 tested cleared its band · across 205 videos this update')
+    expect(text).not.toContain('cleared its band · of ')
+  })
+
   it('marks the flag’s own label as the model’s words, not as the page’s verdict', () => {
     // Code review C6 / design review F9. `flag.label` is a `pass_b_theme`
     // string a reasoning model wrote. The lead sentence was ONE verdict node

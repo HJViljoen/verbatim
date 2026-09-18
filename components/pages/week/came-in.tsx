@@ -350,7 +350,12 @@ function Themes({ block, mode }: { block: CameInBlock; mode: 'app' | 'print' | '
         <Note mode={mode}>{newThemesLine(block.newThemesSeen, block.newThemes.length)}</Note>
         {block.newThemes.map((t) => (
           <p key={t.id} style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink, padding: '2px 0' }}>
-            {t.label} — <span data-copy="figure">{fmtInt(t.videos)}</span> videos this month
+            {/* MARKED IN THIS ARM TOO (code review C10). The app arm marks the
+                same string `stored` / `pass_b_theme`; here it was bare, so a
+                label carrying a direction word would have passed on screen and
+                failed the contract in the inbox — a confusing way to find out
+                which arm is stricter. */}
+            <span data-copy="stored" data-slot="pass_b_theme">{t.label}</span> — <span data-copy="figure">{fmtInt(t.videos)}</span> videos this month
           </p>
         ))}
       </div>

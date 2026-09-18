@@ -121,7 +121,14 @@ const EMPTY_ROWS: Record<string, number> = {
  * answer to "have I anything to draw" and it is computed without rendering
  * (lib/blocks/types.ts). A block that returns a sentence AND draws rows — §1
  * with a refusal and its series, §4 with no videos and its new themes — is not
- * empty, and the two that do that are excluded here rather than guessed at.
+ * empty, and the two that do that have no entry in `EMPTY_ROWS` at all.
+ *
+ * THERE WAS A THIRD ARM HERE AND IT WAS UNREACHABLE (code review C9): §5 was
+ * given back its full span when a rival was tracked, on the belief that it
+ * draws its table under its own empty sentence. It does not —
+ * `weekRivalPosts.emptyState` returns non-null only when there is no rival at
+ * all, so `empty != null && rivals.length > 0` could never both hold. A guard
+ * that cannot fire is a guard the next reader trusts.
  */
 function tileRows(key: string, data: WeekData): number {
   const full = ROWS[key] ?? 2
@@ -130,9 +137,6 @@ function tileRows(key: string, data: WeekData): number {
   const block = WEEK_BLOCKS.find((b) => b.key === key)
   const empty = block?.emptyState(data) ?? null
   if (empty == null) return full
-  // §5 draws its table under its own empty sentence when a rival is tracked
-  // and silent, so it is short only when there is no rival at all.
-  if (key === 'week.rival-posts' && data.cameIn.rivals.length > 0) return full
   return short
 }
 
