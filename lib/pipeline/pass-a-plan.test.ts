@@ -208,4 +208,66 @@ describe('staleInsightIds', () => {
   it('returns nothing when everything is current', () => {
     expect(staleInsightIds(videos, [{ id: 'a', run_id: 'run-2', source_video_id: 'v1' }])).toEqual([])
   })
+
+  // ── cited evidence survives re-analysis (2026-09-18) ────────────────────────
+  //
+  // The defect these pin: all twelve of Sealand's oldest recommendations cited
+  // audience_insights rows this function had already returned, so the ledger's
+  // "Grounded in" column read zero live videos down the whole page. A row that
+  // something stored still points at is not stale merely because a later run
+  // re-read its video.
+  describe('the protected set', () => {
+    const rows = [
+      { id: 'a', run_id: 'run-2', source_video_id: 'v1' }, // current
+      { id: 'b', run_id: 'run-1', source_video_id: 'v1' }, // superseded by run-2
+      { id: 'c', run_id: 'run-1', source_video_id: 'v2' }, // video has no pointer
+      { id: 'd', run_id: null, source_video_id: 'v1' },    // its run was deleted
+      { id: 'e', run_id: 'run-2', source_video_id: null }, // no source video
+      { id: 'f', run_id: 'run-2', source_video_id: 'v9' }, // unknown video
+    ]
+
+    it('never returns a protected id, though its video pointer has moved on', () => {
+      expect(staleInsightIds(videos, rows, new Set(['b']))).toEqual(['c', 'd', 'e', 'f'])
+    })
+
+    it('still returns an unprotected superseded row — the set narrows, it does not disable', () => {
+      const stale = staleInsightIds(videos, rows, new Set(['b']))
+      expect(stale).toContain('c')
+      expect(stale).not.toContain('b')
+    })
+
+    // The four non-pointer reasons a row is stale are each an id-level
+    // decision, so protection has to beat all four and not only the common
+    // one: a snapshot's frozen quote ref can name a row whose run has since
+    // been deleted, and dropping that row empties a stored export.
+    it('protects a row whose run was deleted, whose video is unknown, or which has no source video', () => {
+      expect(staleInsightIds(videos, rows, new Set(['c', 'd', 'e', 'f']))).toEqual(['b'])
+    })
+
+    it('a null run_id or a null source_video_id is still stale when NOT protected', () => {
+      expect(staleInsightIds(videos, rows, new Set(['b']))).toEqual(expect.arrayContaining(['d', 'e']))
+    })
+
+    // Regression guard on the existing signature: the third argument is
+    // optional, and the two empty forms must behave exactly as the call did
+    // before it existed, or an untouched caller changes meaning in silence.
+    it('the omitted and empty-set calls are identical to today', () => {
+      const today = ['b', 'c', 'd', 'e', 'f']
+      expect(staleInsightIds(videos, rows)).toEqual(today)
+      expect(staleInsightIds(videos, rows, new Set())).toEqual(today)
+      expect(staleInsightIds(videos, rows, undefined)).toEqual(today)
+    })
+
+    it('protecting a row that is already current changes nothing', () => {
+      expect(staleInsightIds(videos, rows, new Set(['a']))).toEqual(['b', 'c', 'd', 'e', 'f'])
+    })
+
+    it('an id in the protected set that names no row is simply ignored', () => {
+      expect(staleInsightIds(videos, rows, new Set(['not-a-row']))).toEqual(['b', 'c', 'd', 'e', 'f'])
+    })
+
+    it('protecting everything returns nothing at all', () => {
+      expect(staleInsightIds(videos, rows, new Set(rows.map((r) => r.id)))).toEqual([])
+    })
+  })
 })
