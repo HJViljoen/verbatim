@@ -49,11 +49,20 @@ const COLOUR: Record<string, string> = {
 
 const sideColour = (side: FormatMatrixSide): string => COLOUR[side.audience] ?? 'var(--comp)'
 
-/** What the two tables left off, said ONCE. Every key dropped is still counted
- *  in every "of N" above it, so the shares stay shares of the same thing. */
+/**
+ * What the two tables left off, said ONCE. Every key dropped is still counted
+ * in every "of N" above it, so the shares stay shares of the same thing.
+ *
+ * COUNTED OFF THE READING, NOT OFF THE KEY LIST (code review 7). `keys` has
+ * already been cut once by `formatMatrix`'s own `top` — six per side before the
+ * union — so a format ranked seventh or lower on EVERY side never entered it
+ * and was never counted in "3 more formats not drawn". The shares were always
+ * honest; the sentence that exists to say what was left off stated a number
+ * smaller than the truth.
+ */
 function moreLine(p: { formats: FormatMatrix; hooks: FormatMatrix }): string {
-  const f = Math.max(0, p.formats.keys.length - (SHOWN['What gets made'] ?? 0))
-  const h = Math.max(0, p.hooks.keys.length - (SHOWN['How they open'] ?? 0))
+  const f = Math.max(0, p.formats.keysTotal - (SHOWN['What gets made'] ?? 0))
+  const h = Math.max(0, p.hooks.keysTotal - (SHOWN['How they open'] ?? 0))
   const parts: string[] = []
   if (f > 0) parts.push(`${f} more ${f === 1 ? 'format' : 'formats'}`)
   if (h > 0) parts.push(`${h} more ${h === 1 ? 'hook' : 'hooks'}`)

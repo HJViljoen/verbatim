@@ -277,6 +277,16 @@ export interface FormatMatrixSide {
  *  several readings, aligned by key, each cell keeping its own "of N". */
 export interface FormatMatrix {
   keys: { key: string; label: string }[]
+  /**
+   * How many distinct keys the READINGS carry, `top` ignored.
+   *
+   * `keys` is already shortened twice — by `top` here and again by whatever a
+   * renderer shows — so a caller counting "how many did we leave off" off
+   * `keys.length` undercounts by every key that ranked below `top` on every
+   * side (E-content code review 7). Denominators were never affected; the
+   * sentence that exists to say what was left off was.
+   */
+  keysTotal: number
   sides: FormatMatrixSide[]
   basisLine: string
   /** The one sentence comparing two formats, composed in code from the two
@@ -328,6 +338,7 @@ export function formatMatrix(
 
   return {
     keys,
+    keysTotal: new Set(readings.flatMap((r) => r.rows.map((row) => row.key))).size,
     sides,
     basisLine: readings[0]?.basisLine ?? '',
     conclusion: matrixConclusion(readings, { leadMinRated: options.leadMinRated }),
