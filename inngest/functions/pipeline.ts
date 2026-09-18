@@ -4,7 +4,8 @@ import { inngest } from '@/inngest/client'
 import { createAdminClient, selectAll } from '@/lib/supabase-admin'
 import { planGatherSearches, searchStepId, searchOne, gatePlatform, scrapeCommentsBatch, transcribeBatch, planTranscribeBatches, resolveGatherWindow, inWindow, loadGatherConfig, type SearchResult } from '@/lib/gather/gather'
 import { runPassA, passALane, passAPromptVersion } from '@/lib/pipeline/pass-a'
-import { decideAnalysis, emptyReasonTally, staleInsightIds, type SelectReason } from '@/lib/pipeline/pass-a-plan'
+import { decideAnalysis, emptyReasonTally, protectedKeptIds, staleInsightIds, type SelectReason } from '@/lib/pipeline/pass-a-plan'
+import { parseRef } from '@/lib/renderables/quotes-freeze'
 import { loadGroupedInsights, runStepA2Bucket, type StepA2BucketResult } from '@/lib/pipeline/step-a2'
 import { runPassB } from '@/lib/pipeline/pass-b'
 import { runPassC } from '@/lib/pipeline/pass-c'
@@ -1878,13 +1879,40 @@ export const runPipeline = inngest.createFunction(
     //    close-run on purpose: the dashboard flips to this run on that status
     //    write, so the previous run's quotes resolve right up to the flip. Only
     //    completed/partial runs reach here (a failed run's stale rows wait for
-    //    the next successful close). Non-fatal and uncounted — leftovers are
-    //    harmless, just storage.
+    //    the next successful close). Non-fatal and uncounted — a leftover is
+    //    just storage.
+    //
+    //    IT DOES NOT TAKE CITED EVIDENCE (2026-09-18). The "leftovers are
+    //    harmless" this comment used to end on was true when nothing pointed at
+    //    a superseded row. Recommendations, plan checks, saved Ask answers and
+    //    frozen exports all do now, so citedEvidenceIds resolves what still
+    //    cites what and staleInsightIds never returns one of those rows. Same
+    //    step id, same position, one function body — see the note in
+    //    citedEvidenceIds for the four classes it protects, the two it
+    //    deliberately does not, and why each is resolved the way it is.
+    //
+    //    ITS FAILURE SURFACE GREW WITH THAT, AND THE FAILURE IS QUIET. The
+    //    cited-set walk alone is EIGHT table reads — recommendations, both
+    //    insight tables, both plan-check tables, agent_messages,
+    //    report_snapshots, insight_evidence — on top of the videos and rows
+    //    reads the step always did, and every one of them happens before the
+    //    first delete. Any one throwing — a schema-cache miss, a malformed
+    //    stored id, a PostgREST hiccup — takes it here. Non-fatal and uncounted
+    //    is still the right trade (fail-closed costs storage; the alternative
+    //    costs evidence, which is unrecoverable), but the shape of the failure is
+    //    "prunes nothing, on this run and every later one, until someone reads
+    //    the log". Deliberately not noteError'd — the keyword-discovery
+    //    precedent: a record kept alongside the report must not make a clean
+    //    run read 'partial'. The log line below is the only surface that says
+    //    so, so it says it plainly.
     const pruned = await step
       .run('prune-stale-analysis', () => pruneStaleAnalysis(clientId))
       .catch((e) => {
-        console.error(`[prune-stale-analysis] out of retries: ${e instanceof Error ? e.message : String(e)}`)
-        return { insights: 0, languageSamples: 0, failed: true }
+        console.error(
+          `[prune-stale-analysis] out of retries — NOTHING was pruned this run, and nothing will be ` +
+          `on any later run until this succeeds: ${e instanceof Error ? e.message : String(e)}`,
+        )
+        return { insights: 0, languageSamples: 0, keptInsights: 0, keptSamples: 0, failed: true }
       })
 
     // 8. Periodic report — only when requested (the scheduler sets this), so a
@@ -2167,21 +2195,261 @@ async function planPassABatches(clientId: string, runId: string, force: boolean,
   return { batches, considered, selected: eligible.length, reasons }
 }
 
+/**
+ * What a prune MAY NOT TAKE: the `audience_insights` / `language_samples` rows
+ * something stored still points at.
+ *
+ * THE DEFECT THIS CLOSES (2026-09-18). `prune-stale-analysis` removes every row
+ * a later re-read superseded, and its own comment called the leftovers
+ * "harmless, just storage" — true when nothing cited them. Things cite them
+ * now: all twelve of Sealand's oldest recommendations, every row its advice
+ * ledger actually draws, had lost every `audience_insights` row beneath them,
+ * so "Grounded in" resolved to zero live videos down the whole page.
+ *
+ * FAIL CLOSED. Everything here is loaded BEFORE the first delete, so a read
+ * that fails takes the step to its retry and then to its non-fatal catch with
+ * nothing deleted. Deleting less than we could is a storage cost; deleting a
+ * cited row is unrecoverable.
+ *
+ * THE FOUR CITATION CLASSES, and why each is resolved the way it is:
+ *
+ *  1. RECOMMENDATIONS, a two-link chain. `recommendations.based_on.insight_ids`
+ *     names insight rows, and it MIXES `market_insights` (M#) and
+ *     `competitive_insights` (C#) ids — the resolution lib/pipeline/pass-d.ts
+ *     writes, and the same reason app/api/cron/ops-check/route.ts unions both
+ *     tables. Their `evidence.supporting_theme_ids` then holds the
+ *     `audience_insights` ids (scripts/citation-floor.ts states that mapping).
+ *     ONLY THE SECOND LINK IS PROTECTED HERE, and the first needs no protecting
+ *     by this step: it deletes `audience_insights` and `language_samples` and
+ *     nothing else, so no `market_insights` / `competitive_insights` row is at
+ *     risk from a prune. Those two tables ACCUMULATE across runs — lib/pipeline/
+ *     pass-d.ts:695 and lib/pipeline/pass-c.ts:285 delete only THEIR OWN run's
+ *     rows before re-inserting — which is why 329 of 334 stored refs still
+ *     resolved when this was measured. The one way the first link breaks is
+ *     documented at lib/pipeline/pass-d.ts:878-895: a D-b retry that fails
+ *     after `market_insights` was re-inserted with fresh ids leaves the
+ *     surviving recommendations' `based_on` pointing at rows that are gone.
+ *     That hole is real, it is deliberate ("degraded beats empty"), and it is
+ *     not this step's to close — a row whose market insight is itself gone
+ *     reaches lib/reading/afterwards.ts as an empty `based_on`, which is what
+ *     `GroundingInput.cited` exists to tell from the other absence.
+ *
+ *  2. PLAN CHECKS, both tables. `plan_checks.claims[].insightIds` is the
+ *     upload's reading and `plan_check_evaluations.claims[].insightIds` each
+ *     re-check's; `currentReading` (lib/ask/plan-cards.ts) prints the newest
+ *     evaluation that has claims and FALLS BACK to the upload's, so protecting
+ *     only one of the two leaves the other printing a card with no voices.
+ *
+ *  3. SAVED ASK ANSWERS. `agent_messages.result.grounded[].insightIds` stores
+ *     the ids an answer was grounded on and stores NO quote text — the column's
+ *     own comment says so in as many words, and lib/pages/agent-thread.ts
+ *     resolves the words live by comment id through `insight_evidence`, which
+ *     cascades from `audience_insights`. The quotes under a grounded point come
+ *     only from THAT point's own live insight ids (lib/agent/enforce.ts builds
+ *     them from `insights = live.map(...)`, its dedup fallback included), so
+ *     protecting `insightIds` is exactly what keeps a reopened thread's quotes
+ *     resolving. Id-exact like classes 1 and 2, on the surface a client reopens
+ *     most often — NOT the `c:`/`v:`/`m:` case below, which stores no row id.
+ *     Only role='agent' rows carry a `result`; a user's message is the question
+ *     they typed.
+ *
+ *  4. FROZEN SNAPSHOT QUOTES. `report_snapshots.evidence_ids` repeats the refs
+ *     in the stored artefact (lib/renderables/quotes-freeze.ts). Two of the ref
+ *     kinds name a row this prune can delete, and both are id-exact:
+ *     `e:<insight_evidence.id>`, which cascades from `audience_insights` and so
+ *     resolves back through it, and `p:<language_samples.id>`, which IS one of
+ *     these rows. The brief listed snapshots as a named non-goal to be measured
+ *     rather than fixed, "unless the count says it is the same one-line set
+ *     union". It is the same set union — `p:` needs no resolution at all and
+ *     `e:` needs one chunked select — so it is done here rather than left as a
+ *     second defect of the same shape. This is also why `language_samples` is
+ *     protected at all: it carries no OTHER citation path, but a stored export
+ *     names its rows by id.
+ *
+ *     "REPEATS THE REFS" IS TRUE SINCE 2026-08-31, AND THE DATE IS
+ *     LOAD-BEARING. Before T11 `createSnapshot` froze the workings' quotes and
+ *     threw their refs away, so a pre-T11 snapshot's `evidence_ids` carries only
+ *     what its PAGES cite — this class is therefore exactly as complete as
+ *     scripts/backfill-evidence-ids.ts --apply left it. The write path is fixed,
+ *     so every new snapshot is whole. The alternative, `collectQuoteRefs` over
+ *     `data` / `workings`, means selecting every snapshot's entire jsonb on
+ *     every run and is not worth it for a repaired window. Named here so the
+ *     dependency is not rediscovered as a bug.
+ *
+ * WHAT IS DELIBERATELY NOT PROTECTED — read this before treating the four above
+ * as all of them. Each exclusion is a judgement, and an unrecorded judgement
+ * reads as an oversight to whoever finds the path next:
+ *
+ *  a. THEME MEMBERS. `theme_observations.member_insight_ids` is a fifth
+ *     id-exact path into `audience_insights`: `monthly_theme_readings` walks it
+ *     to `insight_evidence` to `comments`
+ *     (supabase/migrations/20260915092000_monthly_reading.sql). It is NOT
+ *     protected and should not be — a run's themes name most of that run's
+ *     corpus, so protecting members would retain nearly everything and the
+ *     prune would stop being a prune. The monthly reading is built for this
+ *     already: its own header measures 18.2% of stored member references
+ *     dangling, 20260918091000_theme_key.sql:87 measures 20.2% at one run old,
+ *     and that is the stated reason `member_video_ids` became the PRIMARY
+ *     matching key — a video id survives a re-read, an insight id does not.
+ *
+ *  b. `c:` / `v:` / `m:` SNAPSHOT REFS, and the comment ids stored beside a
+ *     saved answer's insight ids. These name no row at all: they resolve by
+ *     SEARCHING `insight_evidence` for a live excerpt on that comment or video.
+ *     So they keep resolving IF the re-read produced evidence on that comment —
+ *     a Pass A re-read is free to quote different comments entirely, and
+ *     nothing guarantees it did. The honest reading is "usually still resolves,
+ *     possibly to a DIFFERENT excerpt, sometimes to nothing", and whether a
+ *     frozen export may change its quoted words is a real and separate
+ *     question. They cannot be added to the protected set by id; they have no
+ *     id. What class 3 protects is the insight ids stored ALONGSIDE them, which
+ *     is what makes a saved answer's quotes hold.
+ *
+ *  c. `k:` / `h:` / `b:` refs read `video_claims`, a hero row and `run_summary`,
+ *     none of which this step touches.
+ *
+ * A FIFTH protected class means re-opening this list and AGENTS.md, not
+ * appending a set union to the code.
+ */
+async function citedEvidenceIds(
+  admin: ReturnType<typeof createAdminClient>,
+  clientId: string,
+): Promise<{ insights: Set<string>; languageSamples: Set<string>; from: Record<string, number> }> {
+  // COUNTED ONE WAY, AND THIS IS WHICH: each class gets its OWN set, counted on
+  // its own, and the protected set is their union at the end. The classes
+  // OVERLAP heavily — one insight is routinely cited by a recommendation and by
+  // a plan check — so the per-class figures do not add up to the union and the
+  // log line says so. The first shape of this function counted FIRST
+  // ATTRIBUTION instead ("new to the set when this class reached it"), which is
+  // order-dependent and reads as a class total: on the two measured tenants
+  // 5,445 + 1,750 + 6 first-attribution ids stood against a distinct union of
+  // 6,107, so ~1,094 ids would have changed class if these blocks were
+  // reordered. Repo rule, verbatim: count them one way and say which.
+  const cls = {
+    recommendations: new Set<string>(),
+    planChecks: new Set<string>(),
+    savedAnswers: new Set<string>(),
+    snapshots: new Set<string>(),
+  }
+  const languageSamples = new Set<string>()
+
+  // 1. Recommendations → market/competitive insights → audience insights.
+  const recs = await selectAll<{ id: string; based_on: { insight_ids?: string[] } | null }>(() =>
+    admin.from('recommendations').select('id, based_on').eq('client_id', clientId).order('id', { ascending: true }),
+  )
+  const containers = new Set<string>()
+  for (const r of recs) for (const id of r.based_on?.insight_ids ?? []) if (typeof id === 'string' && id) containers.add(id)
+  for (const table of ['market_insights', 'competitive_insights'] as const) {
+    // Chunk 200 for the same PostgREST URL-length reason as the deletes below.
+    // A 200-id chunk can return at most 200 rows (`id` is the primary key), so
+    // the 1000-row default cap on a bare `.select()` is never in play here.
+    for (const part of chunk([...containers], 200)) {
+      const { data, error } = await admin.from(table).select('id, evidence').eq('client_id', clientId).in('id', part)
+      if (error) throw new Error(`cited ${table}: ${error.message}`)
+      for (const row of (data ?? []) as { evidence: { supporting_theme_ids?: string[] } | null }[]) {
+        for (const id of row.evidence?.supporting_theme_ids ?? []) {
+          if (typeof id === 'string' && id) cls.recommendations.add(id)
+        }
+      }
+    }
+  }
+
+  // 2. Plan checks — the upload's claims and every re-evaluation's.
+  for (const table of ['plan_checks', 'plan_check_evaluations'] as const) {
+    const rows = await selectAll<{ id: string; claims: unknown }>(() =>
+      admin.from(table).select('id, claims').eq('client_id', clientId).order('id', { ascending: true }),
+    )
+    for (const row of rows) {
+      if (!Array.isArray(row.claims)) continue
+      for (const claim of row.claims as { insightIds?: unknown }[]) {
+        if (!claim || !Array.isArray(claim.insightIds)) continue
+        for (const id of claim.insightIds) {
+          if (typeof id === 'string' && id) cls.planChecks.add(id)
+        }
+      }
+    }
+  }
+
+  // 3. Saved Ask answers — the ids each grounded point rests on.
+  const answers = await selectAll<{ id: string; result: unknown }>(() =>
+    admin.from('agent_messages').select('id, result')
+      .eq('client_id', clientId).eq('role', 'agent').not('result', 'is', null)
+      .order('id', { ascending: true }),
+  )
+  for (const a of answers) {
+    const grounded = (a.result as { grounded?: unknown } | null)?.grounded
+    if (!Array.isArray(grounded)) continue
+    for (const point of grounded as { insightIds?: unknown }[]) {
+      if (!point || !Array.isArray(point.insightIds)) continue
+      for (const id of point.insightIds) {
+        if (typeof id === 'string' && id) cls.savedAnswers.add(id)
+      }
+    }
+  }
+
+  // 4. Frozen snapshot quotes.
+  const snapshots = await selectAll<{ id: string; evidence_ids: string[] | null }>(() =>
+    admin.from('report_snapshots').select('id, evidence_ids').eq('client_id', clientId).order('id', { ascending: true }),
+  )
+  const evidenceRowIds = new Set<string>()
+  for (const s of snapshots) {
+    for (const ref of s.evidence_ids ?? []) {
+      const parsed = typeof ref === 'string' ? parseRef(ref) : null
+      if (!parsed) continue
+      if (parsed.kind === 'e') evidenceRowIds.add(parsed.id)
+      else if (parsed.kind === 'p') languageSamples.add(parsed.id)
+    }
+  }
+  for (const part of chunk([...evidenceRowIds], 200)) {
+    const { data, error } = await admin.from('insight_evidence').select('id, audience_insight_id').in('id', part)
+    if (error) throw new Error(`cited insight_evidence: ${error.message}`)
+    for (const row of (data ?? []) as { audience_insight_id: string | null }[]) {
+      const id = row.audience_insight_id
+      if (id) cls.snapshots.add(id)
+    }
+  }
+
+  // The union is what protects; the class sizes are what the operator reads.
+  // `snapshots` and `snapshotSamples` are kept apart because they count rows in
+  // two different tables — one figure spanning both would be meaningless.
+  const insights = new Set<string>([
+    ...cls.recommendations, ...cls.planChecks, ...cls.savedAnswers, ...cls.snapshots,
+  ])
+  const from: Record<string, number> = {
+    recommendations: cls.recommendations.size,
+    planChecks: cls.planChecks.size,
+    savedAnswers: cls.savedAnswers.size,
+    snapshots: cls.snapshots.size,
+    snapshotSamples: languageSamples.size,
+    insights: insights.size,
+  }
+  return { insights, languageSamples, from }
+}
+
 /** Delete every audience_insights / language_samples row that is not the
- *  current analysis of its video (staleInsightIds, lib/pipeline/pass-a-plan.ts).
+ *  current analysis of its video (staleInsightIds, lib/pipeline/pass-a-plan.ts)
+ *  AND that nothing stored still cites (citedEvidenceIds, above).
  *  Chunked deletes; insight_evidence cascades. video_claims is left alone —
  *  its reader is already newest-run-wins (lib/pipeline/claims.ts). */
-async function pruneStaleAnalysis(clientId: string): Promise<{ insights: number; languageSamples: number }> {
+async function pruneStaleAnalysis(clientId: string): Promise<{ insights: number; languageSamples: number; keptInsights: number; keptSamples: number }> {
   const admin = createAdminClient()
+  // Loaded first, and a failure here throws before anything is deleted.
+  const cited = await citedEvidenceIds(admin, clientId)
   const videos = await selectAll<{ id: string; analyzed_run_id: string | null }>(() =>
     admin.from('videos').select('id, analyzed_run_id').eq('client_id', clientId).order('id', { ascending: true }),
   )
-  const out = { insights: 0, languageSamples: 0 }
+  const out = { insights: 0, languageSamples: 0, keptInsights: 0, keptSamples: 0 }
   for (const table of ['audience_insights', 'language_samples'] as const) {
     const rows = await selectAll<{ id: string; run_id: string | null; source_video_id: string | null }>(() =>
       admin.from(table).select('id, run_id, source_video_id').eq('client_id', clientId).order('id', { ascending: true }),
     )
-    const stale = staleInsightIds(videos, rows)
+    const protectedIds = table === 'audience_insights' ? cited.insights : cited.languageSamples
+    const stale = staleInsightIds(videos, rows, protectedIds)
+    // What protection actually cost, counted against this tenant's own rows
+    // rather than against the size of the cited set (protectedKeptIds, same
+    // file as the rule, where its tests are): an id cited by a recommendation
+    // may name a row that is current anyway, or one this tenant no longer has
+    // at all. It walks the protected rows alone, not the table a second time.
+    const kept = protectedKeptIds(videos, rows, protectedIds).length
     // Chunk 200, not 500: ~500 uuids in an `in.()` filter overflows the
     // PostgREST URL cap ("fetch failed" — the lesson behind every other chunked
     // .in() in this repo). A first prune on a real tenant is thousands of rows.
@@ -2189,9 +2457,17 @@ async function pruneStaleAnalysis(clientId: string): Promise<{ insights: number;
       const { error } = await admin.from(table).delete().in('id', part)
       if (error) throw new Error(`prune ${table}: ${error.message}`)
     }
-    if (table === 'audience_insights') out.insights = stale.length
-    else out.languageSamples = stale.length
+    if (table === 'audience_insights') { out.insights = stale.length; out.keptInsights = kept }
+    else { out.languageSamples = stale.length; out.keptSamples = kept }
   }
+  console.log(
+    `[prune-stale-analysis] deleted ${out.insights} insight(s) · ${out.languageSamples} language sample(s); ` +
+    `kept ${out.keptInsights} + ${out.keptSamples} superseded row(s) because something still cites them ` +
+    `(cited ids PER CLASS, and the classes overlap: recommendations ${cited.from.recommendations} · ` +
+    `plan checks ${cited.from.planChecks} · saved answers ${cited.from.savedAnswers} · ` +
+    `snapshots ${cited.from.snapshots}; distinct union ${cited.from.insights} insight id(s) ` +
+    `+ ${cited.from.snapshotSamples} language sample id(s))`,
+  )
   return out
 }
 

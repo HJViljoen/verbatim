@@ -85,6 +85,41 @@ This version has breaking changes — APIs, conventions, and file structure may 
   stay on the base tables so they resolve rows an in-flight run has superseded
   but not yet pruned. A Pass A prompt-version bump re-reads the whole corpus
   on the next run — that is the cost of a change, budget for it.
+  **Cited evidence is retained past re-analysis** (2026-09-18): the
+  `prune-stale-analysis` step deletes a superseded row only when nothing stored
+  points at it, so an id-set lookup keeps resolving past the next run and not
+  only during it. FOUR citation classes are protected, resolved in
+  `citedEvidenceIds` (`inngest/functions/pipeline.ts`) and enforced by the
+  optional third argument to `staleInsightIds` (`lib/pipeline/pass-a-plan.ts`,
+  where the tests are):
+  **recommendations** — `based_on.insight_ids` through BOTH `market_insights`
+  and `competitive_insights` (it mixes M# and C# ids) to
+  `evidence.supporting_theme_ids`; **plan checks** — `insightIds` on the claims
+  of `plan_checks` AND `plan_check_evaluations`, because `currentReading` prints
+  the newest evaluation and falls back to the upload's; **saved Ask answers** —
+  `agent_messages.result.grounded[].insightIds`, which stores ids and never
+  quote text, so a reopened thread resolves its words through `insight_evidence`
+  off exactly those rows; and **frozen exports** —
+  `report_snapshots.evidence_ids`, where `e:<insight_evidence.id>` resolves back
+  to its `audience_insights` row and `p:<language_samples.id>` IS one of these
+  rows (the only citation path `language_samples` has). **Two further paths are
+  deliberately NOT protected, and that is a judgement, not an omission:**
+  `theme_observations.member_insight_ids` (a fifth id-exact path, walked by
+  `monthly_theme_readings`) is left unprotected because a run's themes name most
+  of its corpus and protecting them would retain nearly everything — which is
+  why `member_video_ids` is the primary matching key and why that migration's
+  own header writes down the share of member references already dangling; and
+  `c:` / `v:` / `m:` refs name no row, so they cannot be protected by id — they
+  resolve by SEARCHING `insight_evidence` for a live excerpt on that comment or
+  video, which holds only IF a re-read produced evidence on that comment,
+  possibly a different excerpt and sometimes none. Adding a fifth protected
+  class means re-opening that list here, not appending a set union to the step.
+  The set loads before the first delete, so the step fails closed — and a read
+  that fails deletes nothing, on that run and every later one, until it is
+  fixed. This is a different thing from the retention
+  cron (`inngest/functions/retention.ts`), which drops raw payloads and AI-call
+  bodies past 30 days and refreshes-or-deletes YouTube only; nothing analytical
+  is deleted on any other platform, which is what the notice says.
 - **Theme identity lives in `theme_registry`.** `themes.id` is a per-run row id
   (the table is fully replaced each run) and must NEVER be used as a cross-run
   key; `themes.registry_id` is the stable identity, and cross-run joins use it.

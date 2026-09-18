@@ -116,20 +116,68 @@ export function decideAnalysis(a: DecideAnalysisArgs): { select: boolean; reason
  *  analysis: their run_id differs from the video's pointer, the video pointer
  *  is unset, the row has no source video, or the row's run was deleted
  *  (run_id null). Called at successful close-run only — never mid-run, so the
- *  displayed run's quotes keep resolving until the dashboard has flipped. */
+ *  displayed run's quotes keep resolving until the dashboard has flipped.
+ *
+ *  CITED EVIDENCE IS NEVER STALE (2026-09-18). `protectedIds` holds the rows
+ *  something stored still points at — a recommendation's `based_on` chain, a
+ *  plan check's claims, a snapshot's frozen quote refs (`citedEvidenceIds`,
+ *  inngest/functions/pipeline.ts). Superseding a row is not the same event as
+ *  ceasing to be cited, and this function conflated the two: all twelve of
+ *  Sealand's oldest recommendations lost every `audience_insights` row beneath
+ *  them, so "Grounded in" resolved to zero live videos down the whole ledger
+ *  and lib/reading/afterwards.ts had to print "the evidence this was written
+ *  from is no longer on record" — an honest sentence about a thing that should
+ *  not have happened.
+ *
+ *  WHY RETAINING IS SAFE, AND NOT A SECOND CORPUS. Every POPULATION read goes
+ *  through `audience_insights_current` / `language_samples_current`, which
+ *  INNER JOIN `videos` on `ai.run_id = v.analyzed_run_id` — so a retained
+ *  superseded row is invisible to every count, every share and every
+ *  similarity search, and visible only to the id-set lookups on the base
+ *  tables. That is exactly what a citation is, and it is what makes the
+ *  AGENTS.md sentence about id-set lookups true past the next run as well.
+ *
+ *  The protection is BY ID and not by rule, deliberately: a protected id is
+ *  kept whatever else is true of it (its video's pointer moved, its run was
+ *  deleted, its `source_video_id` is null), because the thing citing it cites
+ *  THAT row and no other. */
 export function staleInsightIds(
   videos: { id: string; analyzed_run_id: string | null }[],
   rows: { id: string; run_id: string | null; source_video_id: string | null }[],
+  protectedIds?: ReadonlySet<string>,
 ): string[] {
   const pointer = new Map<string, string | null>()
   for (const v of videos) pointer.set(v.id, v.analyzed_run_id)
   const stale: string[] = []
   for (const r of rows) {
+    if (protectedIds?.has(r.id)) continue
     if (!r.source_video_id || !r.run_id) { stale.push(r.id); continue }
     const p = pointer.get(r.source_video_id)
     if (!p || p !== r.run_id) stale.push(r.id)
   }
   return stale
+}
+
+/** What the protected set actually SAVED on this tenant, as ids: the protected
+ *  rows that the rule above would otherwise have returned as stale.
+ *
+ *  Counted against this tenant's own rows and never against the size of the
+ *  cited set, because those are different questions — a cited id may name a row
+ *  that is current anyway, or one this tenant no longer has at all, and neither
+ *  was saved by anything.
+ *
+ *  It is the same rule applied to the protected rows ALONE. The difference of
+ *  two full passes (`staleInsightIds(videos, rows).length - staleInsightIds(
+ *  videos, rows, protectedIds).length`) gives the same number, but it re-walks
+ *  every row of the table to produce a log figure and reads at a glance like a
+ *  correctness guard, which it is not. */
+export function protectedKeptIds(
+  videos: { id: string; analyzed_run_id: string | null }[],
+  rows: { id: string; run_id: string | null; source_video_id: string | null }[],
+  protectedIds?: ReadonlySet<string>,
+): string[] {
+  if (!protectedIds?.size) return []
+  return staleInsightIds(videos, rows.filter((r) => protectedIds.has(r.id)))
 }
 
 /** Tally helper for the plan-pass-a step result. */
