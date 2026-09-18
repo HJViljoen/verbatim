@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import type { RenderMode } from '@/lib/blocks/types'
 import { Bar, RankedRow, text as emailText } from '@/components/email/primitives'
 import { RankedBar } from '@/components/charts/ranked-bar'
+import { fmtPct } from '@/lib/format'
 import { EMAIL, FONT, tokenHex } from '@/lib/email/theme'
 
 // The two bars, in three modes (Phase 1 WP10). See components/blocks/frame.tsx.
@@ -71,6 +72,74 @@ export function BlockProportion({
             {s.label} <span data-copy="figure">{s.pct}%</span>
           </span>
         ))}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * ONE share, drawn against a stated axis, with a rule where it stood before.
+ *
+ * The artboards draw this under Voice's big figure: a 10px bar, the month's
+ * share filling part of it, and a 2px rule at the previous month's. It is the
+ * one bar in the product that is not a partition — `BlockProportion` divides a
+ * whole into its parts; this places a single reading on a scale.
+ *
+ * THE SCALE IS PRINTED, WHICH IS THE WHOLE ARGUMENT FOR THE COMPONENT. The
+ * artboard fills 62.7% of the bar for a reading of 9.4% and rules at 45.3% for
+ * one of 6.8% — a silent 15% axis, which is a bar a reader cannot weigh: at a
+ * glance it says two thirds. So `max` is required, it is named at the
+ * right-hand end of the axis, and the caller derives it from the readings
+ * rather than from taste (`reachAxisMax`). Drawn as a true share of 100 the
+ * same reading is a sliver nobody can compare with anything; drawn against a
+ * silent maximum it is six times its own size. Printed, it is a measurement.
+ *
+ * The rule carries its own words, because a rule with no label is a line.
+ */
+export function BlockReach({
+  pct, max, rule = null, ruleLabel, axisLabel, mode = 'app',
+}: {
+  /** The reading, 0–100. */
+  pct: number
+  /** The top of the axis, 0–100, and it is printed. */
+  max: number
+  /** Where the previous reading stood, 0–100, or null for no rule. */
+  rule?: number | null
+  /** "rule at Aug 6.8% · Sep 9.4%" — code's own figures. */
+  ruleLabel?: ReactNode
+  /** "share of category videos". */
+  axisLabel: string
+  mode?: RenderMode
+}) {
+  const top = Math.max(max, pct, rule ?? 0)
+  if (top <= 0) return null
+  const width = Math.max(1, Math.min(100, (pct / top) * 100))
+  const at = rule == null ? null : Math.max(0, Math.min(100, (rule / top) * 100))
+  const scale = `${axisLabel}, axis to ${fmtPct(top, 0)}`
+
+  if (mode === 'email') {
+    return (
+      <div>
+        <Bar segments={[{ pct: width, color: tokenHex('var(--cat)'), label: scale }]} height={10} />
+        <div style={{ ...emailText.small, marginTop: 4 }}>
+          <span data-copy="figure">{ruleLabel ? <>{ruleLabel} · </> : null}{scale}</span>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <div className="relative flex h-2.5 w-full shrink-0 overflow-hidden rounded-full bg-inner">
+        <span className="rounded-full" style={{ width: `${width}%`, background: 'var(--cat)' }} />
+        {at != null ? (
+          <span className="absolute -top-0.5 -bottom-0.5 w-0.5 bg-muted-foreground" style={{ left: `${at}%` }} aria-hidden />
+        ) : null}
+      </div>
+      <div className="flex items-baseline justify-between gap-2 font-mono text-[10px] tabular-nums text-muted-foreground">
+        <span data-copy="figure">0</span>
+        {ruleLabel ? <span data-copy="figure">{ruleLabel}</span> : <span />}
+        <span data-copy="figure">{scale}</span>
       </div>
     </div>
   )

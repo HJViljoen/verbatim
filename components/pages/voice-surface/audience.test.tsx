@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { blockContext, blockAnswers, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { copyViolations } from '@/lib/test/copy-contract'
-import { renderText } from '@/lib/test/render'
+import { render, renderText } from '@/lib/test/render'
 import { voiceAudience } from './audience'
 import { refusedVoiceFixture, voiceFixture } from './fixture'
 
@@ -24,9 +24,26 @@ describe('voiceAudience', () => {
   })
 
   it('shows a thin audience WITH its count and marks it — never hides it', () => {
+    // PORTED (wave 2): the pill wears the SWITCH's short label and marks thin
+    // by weight, the way the artboard does; the words "too thin to compare"
+    // move to the pill's title and to the row's note, where they are about the
+    // audience actually being read.
     const text = draw()
-    expect(text).toContain('Your own brand 3')
-    expect(text).toContain('too thin to compare')
+    expect(text).toContain('Yours 3')
+    expect(render(voiceAudience.render(voiceFixture(), 'app', ctx))).toContain('title="too thin to compare"')
+  })
+
+  it('says so in words when the audience being READ is the thin one', () => {
+    const data = voiceFixture()
+    const thin = { ...data, audience: { ...data.audience, thin: true, videos: 27 } }
+    expect(draw(thin)).toContain('27 videos in this audience · Sep 2026 · too thin to compare')
+    expect(draw()).not.toContain('· too thin to compare')
+  })
+
+  it('keeps the audience its PROSE name in an email, where there is no switch', () => {
+    // `audiencePillLabel` shortens a control's words, not the product's: the
+    // email arm is a list of sentences and keeps "Your own brand".
+    expect(draw(voiceFixture(), 'email')).toContain('Your own brand 3')
   })
 
   it('says "not observed" for an audience with no row rather than 0', () => {
@@ -35,8 +52,20 @@ describe('voiceAudience', () => {
     expect(text).not.toMatch(/Poler\s+0\b/)
   })
 
-  it('names a rival that was tracked and stopped, with the date', () => {
-    expect(draw()).toContain('was tracked, stopped 2026-09-09')
+  it('names a rival that left the tracked set by the day it left — never a start date', () => {
+    // D14: both "since" dates in the mock are earliest EVIDENCE, not start
+    // dates, and this one is a retirement. The pill says what the record holds.
+    expect(draw()).toContain('tracked to 2026-09-09')
+    expect(draw()).not.toContain('since 3 Sep')
+  })
+
+  it('offers no "All" audience, because no row holds one', () => {
+    // The mock opens the switch with "All". Every figure under this bar is
+    // keyed by audience, and an "All" would be a SUM of denominators — the one
+    // arithmetic AGENTS.md forbids. A pill that selects nothing readable is a
+    // control that does not work, which this block does not print.
+    const text = draw()
+    expect(text).not.toMatch(/Audience\s+All\b/)
   })
 
   it('prints the platform mix largest first, with its share, and omits what the month did not carry', () => {
@@ -50,6 +79,10 @@ describe('voiceAudience', () => {
     const text = draw()
     expect(text).toContain('Asking how it works 34% 472 of 1,388')
     expect(text).toContain('Saying it worked 28% 389 of 1,388')
+    // D4: the mock's bare "questions 34%" beside five others reads as a
+    // partition, and the kinds do not partition anything — every pill carries
+    // its own count and the row names the denominator once.
+    expect(text).toContain('share of 1,388 videos in this audience · Sep 2026')
   })
 
   it('says what is not recorded instead of a kind ladder when M5 is unapplied', () => {

@@ -478,6 +478,75 @@ export function pickAudience(asked: string | undefined, available: readonly stri
 export const audienceThin = (videos: number | null): boolean =>
   videos == null || videos < THIN_AUDIENCE_VIDEOS
 
+/**
+ * The SWITCH's word for an audience, which is not a sentence's word for it.
+ *
+ * `audienceLabel` (lib/readiness/types.ts) names an audience in prose — "Your
+ * own brand", "The category" — and every line on this page that says the
+ * audience in a sentence keeps it. A pill is not a sentence: the artboard's
+ * switch reads "Yours · Freitag · Patagonia · Category", four words in a row
+ * where a reader is choosing, and "Your own brand" beside "The category" turns
+ * a control into a paragraph.
+ *
+ * Two labels for one thing is a risk, and it is taken deliberately and in one
+ * place: this is the only function that shortens them, and it shortens only
+ * the two that are code's own words. A rival's name is never touched — that
+ * string is the client's (`tracking_configs.competitor_names`), and shortening
+ * it would rename a brand.
+ */
+export function audiencePillLabel(audience: string, label: string): string {
+  if (audience === CLIENT_AUDIENCE) return 'Yours'
+  if (audience === INDUSTRY_AUDIENCE) return 'Category'
+  return label
+}
+
+/**
+ * The top of the reach bar's axis, and it is printed beside the bar.
+ *
+ * A single reading drawn on a bar needs a maximum, and there are two honest
+ * ways to pick one: 100 (a true share, which draws a 9.4% theme as a sliver
+ * nobody can compare with the rule beside it) or a stated headroom. The
+ * artboard takes the second and does not state it — 9.4% drawn at 62.7% of the
+ * bar reads as two thirds of something. So this rounds the largest reading on
+ * the bar UP to the next clean step and `BlockReach` prints the answer: the bar
+ * exaggerates by a factor the reader can see.
+ *
+ * Never below the readings it has to hold, never above 100, and stepped so the
+ * axis does not jitter month to month: a theme at 9.4% and the same theme at
+ * 9.6% both draw against 15.
+ */
+export function reachAxisMax(values: readonly (number | null | undefined)[]): number {
+  const seen = values.filter((v): v is number => v != null && Number.isFinite(v) && v > 0)
+  if (seen.length === 0) return 0
+  const top = Math.max(...seen)
+  const steps = [1, 2, 5, 10, 15, 20, 25, 30, 40, 50, 60, 75, 100]
+  return steps.find((s) => s >= top * 1.5) ?? 100
+}
+
+/**
+ * "Nothing else moved clearly this month." — a CODA, and only where it is true.
+ *
+ * The mock prints this line at the foot of a POPULATED list; the build only
+ * ever printed it as the whole block's empty state. It is a real statement with
+ * a real precondition: every row that cleared its band is on the page. With an
+ * arm truncated to six of fourteen, "nothing else moved" is false — the eight
+ * below the cut moved, and the reader is being told the opposite of what the
+ * expander offers them one line to the right. So the coda prints when no banded
+ * arm was cut, and says nothing when one was.
+ */
+export function moversCoda(input: {
+  growing: number
+  fading: number
+  shown: number
+  /** Whether anything at all is on the list. Nothing at all is the block's own
+   *  empty state, which says it in its own words. */
+  any: boolean
+}): string | null {
+  if (!input.any) return null
+  if (input.growing > input.shown || input.fading > input.shown) return null
+  return 'Nothing else moved clearly this month.'
+}
+
 /** The platform mix of one month, largest first, with a share each. */
 export function platformShares(
   mix: Readonly<Record<string, number>> | null | undefined,

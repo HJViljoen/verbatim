@@ -46,19 +46,36 @@ export function BlockQuote({
 }
 
 /** Several quotes, in order. The block decides how many; this decides nothing
- *  except that they are stacked and separated. */
+ *  except that they are stacked — or, where the caller says so, laid across the
+ *  page.
+ *
+ *  `columns` IS THE ARTBOARD'S OWN LAYOUT, NOT A DENSITY KNOB (Block D wave 2,
+ *  E-voice). Voice's theme sets six voices in three columns, because six
+ *  stacked quotes push the evidence a screen and a half below the figure they
+ *  are evidence for. It collapses to one column under `xl`, for the reason
+ *  `TileColumns` does: a 14px italic in a third of a phone is a column of
+ *  syllables, not a quote. The email arm ignores it — Outlook lays out with
+ *  Word — and stacks, which is what an email quote has always done. */
 export function BlockQuotes({
-  quotes, mode = 'app',
+  quotes, mode = 'app', columns = 1,
 }: {
   quotes: readonly { quote: (Pick<Quote, 'text'> & Partial<Pick<Quote, 'lang' | 'english'>>) | null; cite?: ReactNode }[]
   mode?: RenderMode
+  columns?: 1 | 2 | 3
 }) {
   if (!quotes.length) return null
   if (mode === 'email') {
     return <div>{quotes.map((q, i) => <BlockQuote key={i} quote={q.quote} cite={q.cite} mode={mode} />)}</div>
   }
+  // Written out in full, never interpolated, so Tailwind v4's scanner sees
+  // them (the rule the tile span maps follow).
+  const across = columns === 3
+    ? 'grid min-w-0 grid-cols-1 gap-x-6 gap-y-3.5 xl:grid-cols-3'
+    : columns === 2
+      ? 'grid min-w-0 grid-cols-1 gap-x-6 gap-y-3.5 xl:grid-cols-2'
+      : 'flex min-w-0 flex-col gap-3'
   return (
-    <div className="flex min-w-0 flex-col gap-3">
+    <div className={across}>
       {quotes.map((q, i) => <BlockQuote key={i} quote={q.quote} cite={q.cite} mode={mode} />)}
     </div>
   )
