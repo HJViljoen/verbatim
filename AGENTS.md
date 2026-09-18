@@ -107,15 +107,16 @@ This version has breaking changes — APIs, conventions, and file structure may 
   `theme_observations.member_insight_ids` (a fifth id-exact path, walked by
   `monthly_theme_readings`) is left unprotected because a run's themes name most
   of its corpus and protecting them would retain nearly everything — which is
-  why `member_video_ids` is the primary matching key and why the monthly
-  reading's own header measures ~18–20% of member references already dangling;
-  and `c:` / `v:` / `m:` refs name no row, so they cannot be protected by id —
-  they resolve by SEARCHING `insight_evidence` for a live excerpt on that
-  comment or video, which holds only IF a re-read produced evidence on that
-  comment, possibly a different excerpt and sometimes none. Adding a fifth
-  protected class means re-opening that list here, not appending a set union to
-  the step. The set loads before the first delete, so the step fails closed — a
-  read that fails deletes nothing, on every subsequent run, until it is fixed. This is a different thing from the retention
+  why `member_video_ids` is the primary matching key and why that migration's
+  own header writes down the share of member references already dangling; and
+  `c:` / `v:` / `m:` refs name no row, so they cannot be protected by id — they
+  resolve by SEARCHING `insight_evidence` for a live excerpt on that comment or
+  video, which holds only IF a re-read produced evidence on that comment,
+  possibly a different excerpt and sometimes none. Adding a fifth protected
+  class means re-opening that list here, not appending a set union to the step.
+  The set loads before the first delete, so the step fails closed — and a read
+  that fails deletes nothing, on that run and every later one, until it is
+  fixed. This is a different thing from the retention
   cron (`inngest/functions/retention.ts`), which drops raw payloads and AI-call
   bodies past 30 days and refreshes-or-deletes YouTube only; nothing analytical
   is deleted on any other platform, which is what the notice says.
