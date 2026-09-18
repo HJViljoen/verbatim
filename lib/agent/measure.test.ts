@@ -141,6 +141,24 @@ describe('measureAnswer', () => {
     expect(m.figures.f1_band.unit).toBe('pts')
   })
 
+  it('earns the word from the months up to the one being measured, never after it', () => {
+    // Four months: the last three climb, the three ending in August do not.
+    const withAugust = climbing({
+      points: [
+        point('2026-06-01', 300, 1400),
+        point('2026-07-01', 210, 1400),
+        point('2026-08-01', 276, 1455),
+        point(MONTH, 320, 1388),
+      ],
+    })
+    expect(measureAnswer({ findings, series: [withAugust], month: MONTH, directionWords: true }).findings[0].direction)
+      .toBe('growing')
+    // Measured AT August, the run is June–August and it does not climb.
+    const atAugust = measureAnswer({ findings, series: [withAugust], month: '2026-08-01', directionWords: true })
+    expect(atAugust.findings[0].value).toEqual({ k: 276, n: 1455 })
+    expect(atAugust.findings[0].direction).not.toBe('growing')
+  })
+
   it('picks the theme deliberately when a finding rests on several, not by read order', () => {
     // Same audience, same denominator: `videos` and the audience string tie, so
     // before this the winner was whatever order the loader returned.

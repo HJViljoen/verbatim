@@ -305,7 +305,15 @@ export function measureAnswer(input: MeasureAnswerInput): AnswerMeasure {
     // carried beside the verdict and not on it would leave every earned
     // sentence unlicensed and delete the one thing this reader is allowed to
     // say.
-    const direction = input.directionWords ? movementDirection(curr, series.points) : null
+    // AND THE RUN ENDS AT THE MONTH BEING MEASURED. `directionWord` reads the
+    // last three points of whatever it is handed (lib/reading/bands.ts), and
+    // `measureAnswer` is pure and takes `month` as an argument — so a caller
+    // measuring an earlier month got a word earned from the months AFTER it,
+    // with nothing to say so. The loader happens to end its axis at the month
+    // it asks for; that is the loader's habit, not a guarantee this function
+    // may rely on.
+    const upTo = series.points.filter((p) => monthStartOf(p.month) <= month)
+    const direction = input.directionWords ? movementDirection(curr, upTo) : null
     verdict.direction = direction
 
     const value: Counted = { k: curr.k ?? 0, n: curr.videos ?? 0 }
