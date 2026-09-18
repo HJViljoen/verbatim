@@ -6,7 +6,7 @@ import { fmtPct } from '@/lib/format'
 import { proseFigures } from '@/lib/prose/figures'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
-import { render, renderText } from '@/lib/test/render'
+import { markupText, render } from '@/lib/test/render'
 import { PRIVACY_LINE, REDDIT_CAP_LINE } from '@/lib/reading/method'
 import { BRIEF_UNIT, LABEL_RULE, LEAD_MIN_RATED, PLAYBOOK_EMPTY, PLAYBOOK_GONE, RECORD_GONE } from '@/lib/pages/content-brief'
 import { CONTENT_BRIEF_BLOCKS, contentMake, contentPlaybook, contentRecord } from './index'
@@ -69,7 +69,7 @@ describe('the content brief’s own blocks', () => {
     // nothing CODE writes on these slides claims a direction. D5: the mock's
     // "growing, 3rd month" and "outperformed" are exactly what may not appear.
     const sweep = (markup: string) =>
-      renderText(markup.replace(/<([a-z0-9]+)[^>]*data-copy="(stored|quote)"[^>]*>[\s\S]*?<\/\1>/g, ' '))
+      markupText(markup.replace(/<([a-z0-9]+)[^>]*data-copy="(stored|quote)"[^>]*>[\s\S]*?<\/\1>/g, ' '))
     for (const block of CONTENT_BRIEF_BLOCKS) {
       for (const data of STATES) {
         expect(sweep(render(block.render(data, 'app', ctx)))).not.toMatch(
@@ -88,7 +88,7 @@ describe('the content brief’s own blocks', () => {
 describe('content.playbook — the mock’s page 3', () => {
   const data = contentBriefFixture()
   const markup = render(contentPlaybook.render(data, 'print', ctx))
-  const text = renderText(markup)
+  const text = markupText(markup)
 
   it('names the clock every figure on it keeps (D9)', () => {
     expect(text).toContain('videos published in September')
@@ -103,7 +103,7 @@ describe('content.playbook — the mock’s page 3', () => {
     expect(markup).not.toContain('text-right font-mono text-[11px] text-muted-foreground')
     // In app mode the block draws its own heading row, and the meta belongs to
     // it: the flag is about a slide, not about the value.
-    expect(renderText(render(contentPlaybook.render(data, 'app', ctx)))).toContain('September')
+    expect(markupText(render(contentPlaybook.render(data, 'app', ctx)))).toContain('September')
   })
 
   it('prints a denominator in every cell it draws (D10)', () => {
@@ -111,6 +111,22 @@ describe('content.playbook — the mock’s page 3', () => {
     // copy contract fails a level without one — so the assertion that matters
     // is that there ARE levels here and the contract passed above.
     expect(markup.match(/data-copy="level"/g)?.length ?? 0).toBeGreaterThan(6)
+  })
+
+  // A TABLE THAT SAYS IT IS ONE (design review 9). The matrix is a CSS grid of
+  // spans, so a row read by a screen reader or extracted as text was "Story
+  // 40.8% of 687 28 of 84 21.8% of 124" with the column names nowhere near it.
+  // The layout is unchanged — `display: contents` keeps every cell a direct
+  // grid child — and the semantics are now the numbers card's.
+  it('carries table semantics over the artboard’s grid', () => {
+    expect(markup).toContain('role="table"')
+    expect(markup).toContain('aria-label="What gets made, videos published in September"')
+    expect(markup).toContain('aria-label="How they open, videos published in September"')
+    expect(markup.match(/role="columnheader"/g)?.length ?? 0).toBe(8)
+    // Two tables, four rows and three rows, plus a header row each.
+    expect(markup.match(/role="row"/g)?.length ?? 0).toBe(9)
+    expect(markup).toContain('role="rowheader"')
+    expect(markup.match(/role="cell"/g)?.length ?? 0).toBe(21)
   })
 
   it('states the classified n against the published one, per side', () => {
@@ -187,7 +203,7 @@ describe('content.playbook — the mock’s page 3', () => {
   it('says the formats could not be read when the read threw', () => {
     const data = emptyContentBriefFixture()
     expect(blockAnswers(contentPlaybook, data).empty).toBe(PLAYBOOK_GONE)
-    const text = renderText(render(contentPlaybook.render(data, 'print', ctx)))
+    const text = markupText(render(contentPlaybook.render(data, 'print', ctx)))
     expect(text).toContain(PLAYBOOK_GONE)
     expect(text).not.toContain(PLAYBOOK_EMPTY)
   })
@@ -195,20 +211,20 @@ describe('content.playbook — the mock’s page 3', () => {
   it('says nothing published has been read where the read found nothing', () => {
     const data = refusedContentBriefFixture()
     expect(blockAnswers(contentPlaybook, data).empty).toBe(PLAYBOOK_EMPTY)
-    expect(renderText(render(contentPlaybook.render(data, 'print', ctx)))).toContain(PLAYBOOK_EMPTY)
+    expect(markupText(render(contentPlaybook.render(data, 'print', ctx)))).toContain(PLAYBOOK_EMPTY)
   })
 
   it('counts the published videos where none of them is classified yet', () => {
     const data = unclassifiedContentBriefFixture()
     const empty = blockAnswers(contentPlaybook, data).empty ?? ''
     expect(empty).toContain('none of them has been classified yet')
-    expect(renderText(render(contentPlaybook.render(data, 'print', ctx)))).toContain(empty)
+    expect(markupText(render(contentPlaybook.render(data, 'print', ctx)))).toContain(empty)
   })
 })
 
 describe('content.record — the mock’s page 5', () => {
   const data = contentBriefFixture()
-  const text = renderText(render(contentRecord.render(data, 'print', ctx)))
+  const text = markupText(render(contentRecord.render(data, 'print', ctx)))
 
   it('names the unit every share on the brief is a share of', () => {
     expect(text).toContain(BRIEF_UNIT)
@@ -237,7 +253,7 @@ describe('content.record — the mock’s page 5', () => {
   })
 
   it('falls back to the sentences it can stand behind on a fresh database', () => {
-    const refused = renderText(render(contentRecord.render(refusedContentBriefFixture(), 'print', ctx)))
+    const refused = markupText(render(contentRecord.render(refusedContentBriefFixture(), 'print', ctx)))
     expect(refused).toContain('The month-by-month reading has not been recorded for this workspace yet.')
     expect(refused).toContain(BRIEF_UNIT)
     expect(refused).not.toContain('monthly reading · the quarter view')
@@ -270,7 +286,7 @@ describe('content.record — the mock’s page 5', () => {
 describe('content.make — the mock’s page 2', () => {
   const data = ledgerWithDismissal()
   const markup = render(contentMake.render(data, 'print', ctx))
-  const text = renderText(markup)
+  const text = markupText(markup)
 
   it('draws the things to make, numbered, and the one to stop', () => {
     expect(text).toContain('01')

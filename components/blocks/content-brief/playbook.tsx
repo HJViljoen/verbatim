@@ -113,10 +113,10 @@ export function cellFigure(side: FormatMatrixSide, row: FormatRow | null): { val
 }
 
 function Cell({ side, row, max, mode }: { side: FormatMatrixSide; row: FormatRow | null; max: number; mode: RenderMode }) {
-  if (side.unread) return <span />
+  if (side.unread) return <span role="cell" />
   const figure = cellFigure(side, row)
   return (
-    <span className="flex items-center gap-2.5">
+    <span role="cell" className="flex items-center gap-2.5">
       <Bar pct={pctOf(row)} max={max} colour={sideColour(side)} />
       <span className="w-[62px] flex-none">
         <FigureCell mode={mode} value={figure.value} of={figure.of} />
@@ -137,7 +137,7 @@ function Cell({ side, row, max, mode }: { side: FormatMatrixSide; row: FormatRow
  * strength is 4.87:1 and identical in every other respect.
  */
 function ColumnHead({ children }: { children: ReactNode }) {
-  return <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground">{children}</span>
+  return <span role="columnheader" className="font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground">{children}</span>
 }
 
 function Eyebrow({ children }: { children: ReactNode }) {
@@ -187,9 +187,19 @@ function Matrix({ matrix, heading, mode, legend = true }: { matrix: FormatMatrix
         <Eyebrow>{heading}</Eyebrow>
         {legend ? <Legend sides={sides} /> : null}
       </div>
-      <div className="grid items-center gap-x-5 gap-y-[3px]" style={{ gridTemplateColumns: cols }}>
-        <ColumnHead>{heading === 'What gets made' ? 'Format' : 'Hook'}</ColumnHead>
-        {sides.map((s) => <ColumnHead key={s.audience}>{s.label}</ColumnHead>)}
+      {/* A TABLE THAT SAYS IT IS ONE (design review 9). The layout is the
+          artboard's CSS grid and stays exactly that — `display: contents` on
+          each row keeps every cell a direct grid child — but the grid now
+          carries table semantics, so a screen reader and a text extraction get
+          "Story · The category · 40.8% of 687" instead of a row of numbers with
+          the column names four lines above them. The numbers card next door has
+          had `<dl>` since it was written; this is the same instinct applied
+          evenly. */}
+      <div role="table" aria-label={`${heading}, ${matrix.basisLine}`} className="grid items-center gap-x-5 gap-y-[3px]" style={{ gridTemplateColumns: cols }}>
+        <div role="row" className="contents">
+          <ColumnHead>{heading === 'What gets made' ? 'Format' : 'Hook'}</ColumnHead>
+          {sides.map((s) => <ColumnHead key={s.audience}>{s.label}</ColumnHead>)}
+        </div>
         {keys.map((k) => (
           <Row key={k.key} label={k.label}>
             {sides.map((s) => (
@@ -205,14 +215,14 @@ function Matrix({ matrix, heading, mode, legend = true }: { matrix: FormatMatrix
   )
 }
 
-/** A `<Fragment>` would be right here and is not: the grid needs each cell as
- *  its own child, so the row is the label plus its cells, flattened. */
+/** One row: its own element, so it can BE a row, and `display: contents` so
+ *  the grid still sees the label and the cells as its own children. */
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <>
-      <span className="truncate text-[13.5px] text-foreground">{label}</span>
+    <div role="row" className="contents">
+      <span role="rowheader" className="truncate text-[13.5px] text-foreground">{label}</span>
       {children}
-    </>
+    </div>
   )
 }
 
