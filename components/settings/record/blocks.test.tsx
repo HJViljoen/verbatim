@@ -249,6 +249,22 @@ describe('the coverage grid', () => {
     expect(text).toContain('of everything we have ever read for you, not just this window')
     expect(text).toContain('Reddit excluded')
     expect(text).toContain('what was said on camera, not what was written in comments')
+    // The two read-depth rows sit side by side and both owe a reader the
+    // all-time basis; the twenty-word sentence is printed once and the second
+    // row says it short (design review finding 5).
+    expect(text.match(/of everything we have ever read for you/g)).toHaveLength(1)
+  })
+
+  it('draws one grid, so the hairlines cross the gutter', () => {
+    // Design review finding 4: two independent flex columns can only line up
+    // where every row is the same height, and ours differ by up to 5:1. The
+    // rows are cells of ONE grid — one container, one closing rule, and each
+    // row's label and value are siblings in it rather than a box of their own.
+    const markup = render(coverage)
+    expect(markup.match(/xl:grid-cols-\[186px_minmax\(0,1fr\)_186px_minmax\(0,1fr\)\]/g)).toHaveLength(1)
+    expect(markup.match(/border-b border-border\/70/g)).toHaveLength(1)
+    // One label cell per row, each opening its own hairline.
+    expect(markup.match(/border-t border-border\/70 pt-3 font-mono/g)).toHaveLength(coverageRowsFixture().length)
   })
 
   it('refuses the artboard’s four dishonest figures and says what it prints instead', () => {

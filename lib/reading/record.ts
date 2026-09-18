@@ -1252,13 +1252,21 @@ export function recordRows(input: RecordInputs, extra: RecordExtras = {}): Recor
   // such thing as "speech read on 71% of September" — the same sentence
   // `recordLines` and `methodLines` both print, in the same words.
   const allTime = 'of everything we have ever read for you, not just this window — Reddit excluded, which has neither audio nor a cover frame'
+  // THE SECOND READ-DEPTH ROW CARRIES THE SAME BASIS, SHORTER, and that is not
+  // a weakening of D15 (design review finding 5). Both figures are all-time and
+  // both owe a reader that basis, so both carry one — but the two rows sit side
+  // by side in the grid and the first port attached this twenty-word sentence
+  // VERBATIM to each, so six lines at one eye level said one thing twice. The
+  // short form is self-contained rather than a reference to the row beside it,
+  // which would be false the moment the grid reflowed.
+  const allTimeAgain = 'of everything we have ever read, not just this window — Reddit excluded'
   push(
     'speech', 'Speech read', r.analysed > 0 ? share(r.speech, r.analysed) : null,
     r.analysed > 0 ? `of videos · translated on ${share(r.translated, r.analysed)}` : 'How much of each video we managed to read is not recorded yet.',
     r.analysed > 0 ? { lead: 'on', basis: allTime } : {},
   )
   if (r.analysed > 0) {
-    push('ocr', 'On-screen text read', share(r.onScreenText, r.analysed), 'of videos', { lead: 'on', basis: allTime })
+    push('ocr', 'On-screen text read', share(r.onScreenText, r.analysed), 'of videos', { lead: 'on', basis: allTimeAgain })
     if (r.unflagged > 0) {
       push('unflagged', 'Read before the flags', fmtInt(r.unflagged), 'videos read before the product recorded which of the three it managed')
     }

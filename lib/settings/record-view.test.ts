@@ -188,11 +188,19 @@ describe('the record as rows', () => {
     expect(row('refused').rest).toContain('Counted by the page that draws the comparisons')
   })
 
-  it('carries the all-time basis on the two read-depth rows (D15)', () => {
+  it('carries the all-time basis on both read-depth rows, and says it twice in one voice', () => {
+    // D15: the basis is part of the figure, so both rows carry one. They land
+    // side by side in the grid, so the second says it in seven words rather
+    // than repeating the first's twenty at the same eye level (design review
+    // finding 5) — and it is self-contained, never "as above".
     for (const id of ['speech', 'ocr']) {
-      expect(row(id).basis).toContain('of everything we have ever read for you, not just this window')
+      expect(row(id).basis).toContain('of everything we have ever read')
+      expect(row(id).basis).toContain('Reddit excluded')
       expect(row(id).lead).toBe('on')
     }
+    expect(row('ocr').basis).not.toBe(row('speech').basis)
+    expect(row('ocr').basis.length).toBeLessThan(row('speech').basis.length / 1.5)
+    expect(row('ocr').basis).not.toMatch(/above|beside|same as/)
   })
 
   it('states the Reddit cap the product actually enforces', () => {
