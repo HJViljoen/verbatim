@@ -35,14 +35,13 @@ import { sideEyebrow, type SubjectSide, type SubjectsData } from '@/lib/pages/su
 // the page. The verdicts are banded and each carries its own k and n, so they
 // are honest to print; they do NOT sum and nothing here adds them.
 
-function Audience({ side, brand, mode }: { side: SubjectSide; brand: string; mode: RenderMode }) {
+function Audience({ side, brand, mode, max }: { side: SubjectSide; brand: string; mode: RenderMode; max: number }) {
   const email = mode === 'email'
   const shown = side.kinds
     .filter((k) => k.pct != null && k.pct > 0)
     .sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind))
     .slice(0, 5)
   if (shown.length === 0) return null
-  const max = Math.max(...shown.map((k) => k.pct ?? 0), 1)
 
   return (
     <div className={email ? undefined : 'flex min-w-0 flex-col gap-1'} style={email ? { paddingTop: 8 } : undefined}>
@@ -129,6 +128,16 @@ export const subjectsKinds: Block<SubjectsData> = {
     }
 
     const withKinds = pane.sides.filter((s) => s.kinds.length > 0)
+    // ONE SCALE ACROSS THE TILE (fix pass). Each audience was normalised to its
+    // OWN leader, and three audiences stacked in one column at one x-offset on
+    // one track width is a layout that exists to be read DOWNWARD. It looked
+    // right only because the three maxima happened to be 34.5 / 33.8 / 34; the
+    // first tenant whose own audience runs at 60% against a rival's 25% would
+    // get two identical full-width bars. The bars are shares of three different
+    // denominators — which is why each row carries its own "of N" — but their
+    // LENGTHS are now comparable, which is the one thing a stacked bar chart
+    // promises.
+    const trackMax = Math.max(...withKinds.flatMap((s) => s.kinds.map((k) => k.pct ?? 0)), 1)
     // THE CATEGORY'S Reddit share, not the first side's. Reddit is where the
     // questions are and the category is where Reddit is; naming your own
     // audience's figure here would answer a question nobody asked about a
@@ -157,7 +166,7 @@ export const subjectsKinds: Block<SubjectsData> = {
           <span data-copy="level">Reddit · {fmtInt(reddit.reddit)} of {fmtInt(reddit.videos)} question videos</span>
         ) : undefined}
       >
-        {withKinds.map((s) => <Audience key={s.audience} side={s} brand={data.brand} mode={mode} />)}
+        {withKinds.map((s) => <Audience key={s.audience} side={s} brand={data.brand} mode={mode} max={trackMax} />)}
         {category && prevMonth ? <KindMovement side={category} brand={data.brand} prevMonth={prevMonth} mode={mode} /> : null}
         {/* THE OVERLAP, WITH THE SHARES IT IS ABOUT. The footer note states
             Reddit's share; this states why the kinds it pools do not sum, and

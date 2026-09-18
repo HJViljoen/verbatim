@@ -292,6 +292,34 @@ describe('SU2 · the kind mix', () => {
     expect(text).toContain('counted in each')
   })
 
+  // THREE AUDIENCES IN ONE COLUMN, ON ONE TRACK. Each group was scaled to its
+  // own leader, so a tenant at 60% and a rival at 25% drew two identical
+  // full-width bars in a layout whose whole point is reading downward. The
+  // widths are now one scale; the "of N" per row is what keeps the three
+  // DENOMINATORS apart.
+  it('scales every audience’s bars against one maximum, not against its own', () => {
+    const data = subjectsFixture()
+    const skewed = {
+      ...data,
+      selected: {
+        ...data.selected!,
+        sides: data.selected!.sides.map((side) =>
+          side.kind === 'you'
+            ? { ...side, kinds: side.kinds.map((k) => ({ ...k, pct: (k.pct ?? 0) / 4 })) }
+            : side,
+        ),
+      },
+    }
+    const markup = render(subjectsKinds.render(skewed, 'app', ctx))
+    const widths = [...markup.matchAll(/width:\s*([\d.]+)%/g)].map((m) => Number(m[1]))
+    // Your own audience renders first, three kinds of it. Quartered against
+    // the others it cannot still own a full-width bar — which is exactly what
+    // it did while each group was scaled to its own leader.
+    const yours = Math.max(...widths.slice(0, 3))
+    expect(yours).toBeLessThan(40)
+    expect(Math.max(...widths)).toBeGreaterThan(99)
+  })
+
   // `kindChange` has existed since WP3 and this block called it for the first
   // time in wave 2 — mock-gap's "cheapest real gap on the page". Each verdict
   // is banded and carries its own k and n, so each is honest to print; they do
