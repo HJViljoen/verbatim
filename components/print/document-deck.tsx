@@ -531,6 +531,30 @@ export function movementLines(data: DocumentSnapshotData): {
   return out
 }
 
+/**
+ * One row of "what moved": the levels, then the badge that judges the
+ * difference between them.
+ *
+ * IT IS A COMPONENT SO THE MARKER IS TESTABLE. The row used to be written
+ * inline in `StandingPage`, which is not exported, so the only check anywhere
+ * near it ran the copy contract over a hand-built `<span>{value}</span>` — an
+ * unmarked node, which produces no copy node at all, so the assertion passed
+ * on "99%" and on the empty string alike. The value of a calibrated share now
+ * renders under `data-copy="level"`, which is what makes rule (b) — a level
+ * prints its "of N" — actually read these two figures, on the real markup the
+ * page prints. The lines that are a plain count or a list of theme labels
+ * claim no level and mark nothing, exactly as before.
+ */
+export function MovementLine({ line }: { line: ReturnType<typeof movementLines>[number] }) {
+  return (
+    <dd className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[13.5px] leading-[1.4] text-foreground">
+      <span {...(line.copy ? { 'data-copy': line.copy } : {})}>{line.value}</span>
+      {line.verdict ? <MovementBadge verdict={line.verdict} unit="pts" good={line.good} /> : null}
+      {line.count != null ? <CountBadge delta={line.count} good={line.good} /> : null}
+    </dd>
+  )
+}
+
 /** What the conversation was about this update: the merged concerns with the
  *  conversations behind them and how long each has been running. The findings
  *  pick three; this is the field they were picked from. */
@@ -581,11 +605,7 @@ function StandingPage({ page, data }: { page: DocPage; data: DocumentSnapshotDat
             {moved.map((m) => (
               <Fragment key={m.label}>
                 <dt className="pt-[2px] font-mono text-[11px] uppercase tracking-[0.06em] text-muted-foreground">{m.label}</dt>
-                <dd className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[13.5px] leading-[1.4] text-foreground">
-                  <span>{m.value}</span>
-                  {m.verdict ? <MovementBadge verdict={m.verdict} unit="pts" good={m.good} /> : null}
-                  {m.count != null ? <CountBadge delta={m.count} good={m.good} /> : null}
-                </dd>
+                <MovementLine line={m} />
               </Fragment>
             ))}
           </dl>

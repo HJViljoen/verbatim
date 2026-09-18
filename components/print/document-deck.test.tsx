@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { render, renderText, markupText } from '@/lib/test/render'
 import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
-import { DeckSpark, movementLines } from './document-deck'
+import { DeckSpark, MovementLine, movementLines } from './document-deck'
 import type { DocumentSnapshotData } from '@/lib/reports/documents/types'
 import type { DeltaVerdict } from '@/lib/report-bands'
 
@@ -129,7 +129,26 @@ describe('movementLines', () => {
     expect(movementLines(data(null))).toEqual([{ label: 'Movement', value: 'No earlier update to compare with.' }])
   })
 
+  // WHAT THIS REPLACED, because a green check under a name like this is worse
+  // than no check: the assertion used to be
+  // `copyViolations('<span>' + l.value + '</span>')`, over an UNMARKED node.
+  // An unmarked node produces no copy node, so rule (b) never ran and the
+  // assertion passed on '23.4% to 27.1%', on '99%' and on ''. It is now run
+  // over the markup the page really prints, through `MovementLine`.
   it('prints a level nowhere without its evidence', () => {
-    for (const l of movementLines(moved)) expect(copyViolations(`<span>${l.value}</span>`)).toEqual([])
+    for (const l of movementLines(moved)) assertCopyContract(render(<MovementLine line={l} />))
+    expect(render(<MovementLine line={movementLines(moved)[0]} />)).toContain('data-copy="level"')
+  })
+
+  it('and the check is a real one — an unevidenced level fails it', () => {
+    const bare = copyViolations(render(<MovementLine line={{ label: 'Tone', value: '27.1% positive', copy: 'level' }} />))
+    expect(bare.map((v) => v.rule)).toContain('level-denominator')
+  })
+
+  // The lines that are not calibrated shares stay unmarked: a count of
+  // conversations and a list of theme labels claim no level.
+  it('marks only the two lines that are levels', () => {
+    const marked = movementLines(moved).filter((l) => l.copy === 'level').map((l) => l.label)
+    expect(marked).toEqual(['Tone', 'Share'])
   })
 })
