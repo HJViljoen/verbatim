@@ -1610,10 +1610,11 @@ async function loadMoves(supabase: SupabaseClient, clientId: string): Promise<Mo
  * a theme with no rows at all is silence we never heard.
  *
  * READ WITHOUT AN ID BOUND, ON PURPOSE, AND IT IS THE CHEAP HALF OF THE READ.
- * The predicate is `status = 'dormant'`, which is a small slice of a register
- * Sealand carries 1,927 entries in, and it does not depend on the theme series
- * — so it joins the same parallel wave rather than adding a serial hop after
- * it. `buildCategory` then keeps only the entries this page's own axis ever
+ * The predicate is `status = 'dormant'`, a slice of a register that is in the
+ * low thousands of rows on the live tenants (an inherited figure — this file
+ * has not measured it, and the register is the place to ask), and it does not
+ * depend on the theme series — so it joins the same parallel wave rather than
+ * adding a serial hop after it. `buildCategory` then keeps only the entries this page's own axis ever
  * drew. The two columns are named out; `embedding` lives on this table and is
  * never selected (AGENTS.md).
  *

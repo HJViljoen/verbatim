@@ -9,9 +9,14 @@ import type { RecordInputs } from '../reading/record'
 // by the real `methodLines`, over a `RecordInputs` shaped like Sealand's, so a
 // fixture can never print a sentence the composer would not.
 //
-// The refused state is PRODUCTION's today: `coverage: null` because the month
-// tables are not applied on every tenant, and no language recorded, so the
-// footnote falls to what it can still honestly say.
+// The refused state is the DEGRADED one, and it is reachable two ways rather
+// than one: `loadCoverage` returns null where the month tables cannot be read
+// AND where a window spans months without M3's windowed function, so a footnote
+// with no coverage line is not by itself evidence about which tenant is in
+// which state. Whether either live tenant is in it today is a question for the
+// database, not for this comment — nothing here has measured it. What the
+// fixture is for is the shape: with no coverage and no language on record, the
+// footnote falls to the three lines it can still stand behind.
 
 const READING_AT = '2026-09-18T09:00:00.000Z'
 
@@ -41,8 +46,8 @@ export function methodRecordFixture(over: Partial<RecordInputs> = {}): RecordInp
 export const methodFixture = (brand = 'Sealand'): MethodLines =>
   methodLines(methodRecordFixture(), { brand })
 
-/** The state production is in: no month-by-month coverage, no language on
- *  record. The footnote keeps the three lines it can still stand behind. */
+/** The degraded state: no month-by-month coverage, no language on record. The
+ *  footnote keeps the three lines it can still stand behind. */
 export const methodRefusedFixture = (brand = 'Sealand'): MethodLines =>
   methodLines(
     methodRecordFixture({
