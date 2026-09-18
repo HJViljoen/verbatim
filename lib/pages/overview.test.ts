@@ -22,6 +22,7 @@ import {
   moveLine,
   MOVES_EMPTY,
   recordWindow,
+  categoryAttentionVerdict,
   rivalsLead,
   splitMovers,
   subjectsNote,
@@ -746,6 +747,34 @@ describe('buildRivals', () => {
   })
 })
 
+describe('categoryAttentionVerdict', () => {
+  const v: Verdict = {
+    objectKind: 'audience', objectId: INDUSTRY_AUDIENCE, objectLabel: 'The category', audience: INDUSTRY_AUDIENCE,
+    window: { kind: 'month', from: '2026-09-01', to: '2026-10-01' },
+    value: { k: 3, n: 4 }, changePts: null, bandPts: null, state: 'refused', refusedReason: 'tracking_change', flags: [],
+  }
+  const standing = (audience: string, role: RivalRow['role'], verdict: Verdict | null): RivalRow => ({
+    audience, label: audience, role, observed: true, attention: null, content: null,
+    attentionVerdict: verdict, contentVerdict: null, ownPosts: null, raisedMost: null, retiredAt: null,
+  })
+
+  it('takes the category’s own row, not whichever row was stamped “category”', () => {
+    // `buildStandings` stamps `role: 'category'` on any audience the panel holds
+    // that nobody asked for and that is not a rival key, and appends those rows
+    // after the wanted ones — so the role is not unique and the audience is.
+    const rows = [
+      standing(INDUSTRY_AUDIENCE, 'category', v),
+      standing('some-audience-nobody-asked-for', 'category', null),
+    ]
+    expect(categoryAttentionVerdict(rows)).toBe(v)
+    expect(categoryAttentionVerdict([...rows].reverse())).toBe(v)
+  })
+
+  it('is null where the standings drew no category row at all', () => {
+    expect(categoryAttentionVerdict([standing(rivalKey('Freitag'), 'rival', v)])).toBeNull()
+  })
+})
+
 describe('rivalsLead', () => {
   const row = (label: string, v: Verdict | null): RivalRow => ({
     audience: rivalKey(label),
@@ -790,6 +819,16 @@ describe('rivalsLead', () => {
     const lead = rivalsLead([row('Freitag', v('too_little_data')), row('Poler', v('refused', { refusedReason: 'tracking_change' }))]) as string
     expect(lead).toContain('could be compared')
     expect(lead).not.toContain('moved beyond its band this month, of')
+  })
+
+  it('says a rival is no longer tracked rather than naming it as a current one', () => {
+    // `buildStandings` keeps a retired rival on the table on purpose — its
+    // frozen months are under its name and the number still exists — and the
+    // ROW prints "tracked until 9 Sep". The lead has to carry the same stamp,
+    // or it claims a brand we stopped watching moved this month.
+    const retired = { ...row('Poler', v('moved')), retiredAt: '2026-09-09' }
+    const lead = rivalsLead([row('Freitag', v('no_clear_change')), retired]) as string
+    expect(lead).toContain('Poler (tracked until 9 Sep) is the one rival')
   })
 
   it('joins several names without an Oxford list of one', () => {

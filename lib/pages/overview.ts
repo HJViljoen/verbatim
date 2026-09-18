@@ -894,13 +894,39 @@ export function rivalsLead(rows: readonly RivalRow[]): string | null {
   if (moved.length === 0) {
     return `No rival\u2019s share of attention moved beyond its band this month, of ${answered.length} compared.`
   }
-  const names = moved.map((r) => r.label)
+  // A RETIRED RIVAL IS NAMED AS A RETIRED RIVAL. `buildStandings` deliberately
+  // keeps a rival dropped from the tracked list on the table — its months are
+  // frozen under its name and the number still exists — and the ROW says
+  // "tracked until 9 Sep" beside it. A lead sentence that called it "the one
+  // rival whose share of attention moved this month" with nothing saying it is
+  // no longer tracked would make a claim about a brand we stopped watching.
+  const names = moved.map((r) => (r.retiredAt ? `${r.label} (tracked until ${shortDate(r.retiredAt)})` : r.label))
   const who = names.length === 1
     ? names[0]
     : names.length === 2
       ? `${names[0]} and ${names[1]}`
       : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
   return `${who} ${names.length === 1 ? 'is the one rival' : `are the ${names.length} rivals`} whose share of attention moved beyond its band this month, of ${answered.length} compared \u2014 the change and the band are on each row.`
+}
+
+/**
+ * OV3's attention verdict, off OV4's own row.
+ *
+ * BY AUDIENCE, NOT BY ROLE. `role: 'category'` is not unique on the standings
+ * table: `buildStandings` stamps it on any audience the panel holds that nobody
+ * asked for and that is not a rival key (lib/reading/standings.ts), and those
+ * rows are appended after the wanted ones. Picking by role is right today only
+ * because INDUSTRY_AUDIENCE happens to be placed first, which is an ordering
+ * detail of another file; the predicate that means "the category" is the
+ * audience itself.
+ *
+ * It is a HAND-OFF and not a second computation, which is the point: OV3's card
+ * and OV4's table then print one answer about one panel.
+ *
+ * Pure.
+ */
+export function categoryAttentionVerdict(rows: readonly RivalRow[]): Verdict | null {
+  return rows.find((r) => r.audience === INDUSTRY_AUDIENCE)?.attentionVerdict ?? null
 }
 
 /** The precedence caveat OV4 carries (§7, bucket precedence). */
@@ -1315,7 +1341,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     panel,
     perAudience: audienceMonthVideos(history.denominators),
     recordFrom: started.from,
-    attentionVerdict: rivalsBlock.rows.find((r) => r.role === 'category')?.attentionVerdict ?? null,
+    attentionVerdict: categoryAttentionVerdict(rivalsBlock.rows),
     dormant,
     thin: suppress,
   })
