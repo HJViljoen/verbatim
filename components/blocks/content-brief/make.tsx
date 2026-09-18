@@ -109,11 +109,19 @@ export function provenance(row: AdviceRow): string {
 export const GROUNDING_BASIS =
   'A card’s grounding is counted over everything we have read for you, not over one month.'
 
+/**
+ * THE DISMISSED CHIP READS IN INK, NOT IN RED (design review 8, code review 12).
+ * `text-negative` on `bg-negative/15` measured 3.64:1 at 11px — the app-wide
+ * chip pattern, and under the line wherever it is used. The tint stays, so the
+ * chip still reads as the negative one; the WORD is `text-foreground` on it,
+ * which is above 10:1. The card around it carries the rest of the signal — a
+ * negative border and a negative headline, both on the card's own background.
+ */
 function Chip({ tone, children }: { tone: 'new' | 'done' | 'plain' | 'stop'; children: ReactNode }) {
   const cls =
     tone === 'done' ? 'bg-accent text-accent-foreground'
     : tone === 'new' ? 'bg-warning/20 text-foreground'
-    : tone === 'stop' ? 'bg-negative/15 text-negative'
+    : tone === 'stop' ? 'bg-negative/15 text-foreground'
     : 'bg-inner text-secondary-foreground'
   return <span className={`inline-flex flex-none items-center rounded-full px-2.5 py-[3px] font-mono text-[11px] leading-none ${cls}`}>{children}</span>
 }
@@ -162,7 +170,7 @@ const STOP_LABEL = 'The advice you dismissed'
 function Card({ row, n, mode }: { row: AdviceRow; n: number | null; mode: RenderMode }) {
   const stop = n == null
   return (
-    <div className={`flex min-w-0 flex-col gap-1 rounded-md border px-4 py-3 ${stop ? 'border-negative/30 bg-negative/[0.04]' : 'border-border bg-tile'}`}>
+    <div className={`flex min-w-0 flex-col gap-1 rounded-md border px-4 py-3 ${stop ? 'border-negative/40 bg-tile' : 'border-border bg-tile'}`}>
       <div className="flex items-center justify-between gap-2">
         {stop
           ? <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-negative">Stop</span>

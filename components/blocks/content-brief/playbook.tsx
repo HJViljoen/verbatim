@@ -125,8 +125,19 @@ function Cell({ side, row, max, mode }: { side: FormatMatrixSide; row: FormatRow
   )
 }
 
+/**
+ * FORMAT · THE CATEGORY · ÖSSUR · OTTOBOCK — the only labels telling a reader
+ * which number is theirs, and the smallest type on the slide.
+ *
+ * AT FULL STRENGTH, WHICH IS ONE PLACE THE MOCK IS NOT COPIED (design review 8,
+ * code review 12). The artboard sets these at `rgba(110,115,120,.8)`, measured
+ * at 3.77:1 on white and worse on paper at 297mm. The size, the tracking and
+ * the colour FAMILY are the artboard's; the 80% alpha is not, because it is the
+ * one thing on the slide a reader cannot afford to lose — `#6E7378` at full
+ * strength is 4.87:1 and identical in every other respect.
+ */
 function ColumnHead({ children }: { children: ReactNode }) {
-  return <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground/80">{children}</span>
+  return <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground">{children}</span>
 }
 
 function Eyebrow({ children }: { children: ReactNode }) {
