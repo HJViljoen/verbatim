@@ -140,6 +140,37 @@ export const PLATFORM_SHARE_UNREAD =
  *
  * Pure.
  */
+/** The seven things this form can change, in the words the strip and the save
+ *  row use. The allowlist a saved-fields POST is read against: a label that is
+ *  not one of these is dropped, so the success sentence can never echo a
+ *  crafted string back at the page. */
+export const TRACKING_FIELDS = [
+  'Brand terms', 'Competitor terms', 'Category terms', 'Not this',
+  'Rivals', 'Cadence', 'The day it lands',
+] as const
+
+/**
+ * What the one save row says afterwards.
+ *
+ * ONE SAVE, ONE OUTCOME — AND IT NAMES WHAT IT WROTE. The composed save could
+ * change the terms, the exclusions, the rival list, the cadence and the day,
+ * and it answered with the terms form's own sentence ("Saved. Your next update
+ * searches these terms.") whichever of them had moved. The fields come off the
+ * form, through the allowlist above.
+ *
+ * Pure.
+ */
+export function savedMessage(fields: readonly string[]): string {
+  const known = fields.filter((f): f is (typeof TRACKING_FIELDS)[number] =>
+    (TRACKING_FIELDS as readonly string[]).includes(f))
+  if (known.length === 0) return 'Saved. Nothing had changed, so nothing moved.'
+  const words = known.map((f) => f.toLowerCase())
+  const list = words.length === 1
+    ? words[0]
+    : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`
+  return `Saved — ${list}. Your next update is the first one to use ${known.length === 1 ? 'it' : 'them'}.`
+}
+
 export function trackingPending(
   before: TrackingFormState,
   after: TrackingFormState,

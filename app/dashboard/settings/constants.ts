@@ -45,3 +45,8 @@ export type Platform = (typeof PLATFORMS)[number]
  * nothing but async functions.
  */
 export const RIVALS_PRESENT = 'competitor_names_present'
+
+/** The field the form posts once per pending edit, so the one save row can say
+ *  what it wrote rather than what a third of it wrote. Read against
+ *  `TRACKING_FIELDS` (lib/settings/connections.ts) and never echoed raw. */
+export const SAVED_FIELDS = 'saved_fields'

@@ -12,7 +12,8 @@ import type { SubredditEntry } from '@/lib/gather/types'
 import { subredditKey, subredditLabel } from '@/lib/gather/subreddits'
 import { ensureRivals } from '@/lib/rivals'
 import { takeSuggestionSlot } from '@/lib/keywords/suggest-guard'
-import { PERIODS, DAYS, RIVALS_PRESENT } from './constants'
+import { savedMessage } from '@/lib/settings/connections'
+import { PERIODS, DAYS, RIVALS_PRESENT, SAVED_FIELDS } from './constants'
 
 export interface SettingsFormState {
   ok: boolean
@@ -506,5 +507,9 @@ export async function saveTracking(
   if (!terms.ok) return terms
   const config = await updateTrackingConfig(prev, formData)
   if (!config.ok) return config
-  return { ok: true, message: 'Saved. Your next update searches these terms.' }
+  // What it wrote, not what a third of it wrote: the form posts one
+  // `saved_fields` value per pending edit and `savedMessage` reads them against
+  // its own allowlist, so the sentence names the cadence and the rival list
+  // when those are what moved.
+  return { ok: true, message: savedMessage(formData.getAll(SAVED_FIELDS).map(String)) }
 }

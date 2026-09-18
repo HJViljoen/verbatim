@@ -2,6 +2,7 @@
 
 import { useActionState, useState, type ReactNode } from 'react'
 import { saveTracking, type SettingsFormState } from './actions'
+import { SAVED_FIELDS } from './constants'
 import { CadenceSection } from '@/components/settings/tracking/cadence'
 import { RivalsSection } from '@/components/settings/tracking/rivals'
 import { TermsSection, type Bucket } from '@/components/settings/tracking/terms'
@@ -172,6 +173,9 @@ export function TrackingForm(props: TrackingFormProps) {
         lastUpdate={props.lastUpdate}
         showStudio={props.showStudio}
       />
+
+      {/* What this save is about to write, so its answer can name it. */}
+      {pending.map((p) => <input key={p.field} type="hidden" name={SAVED_FIELDS} value={p.field} />)}
 
       <div className="flex flex-wrap items-center gap-3 border-t border-border pt-5">
         {props.canEdit ? (

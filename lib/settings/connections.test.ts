@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 import { communitiesMeta, type CommunityRow } from './communities'
-import { platformRows, platformShareBasis, PLATFORM_SHARE_ABSENT, PLATFORM_SHARE_UNREAD, trackingPending, type TrackingFormState } from './connections'
+import { platformRows, platformShareBasis, savedMessage, PLATFORM_SHARE_ABSENT, PLATFORM_SHARE_UNREAD, trackingPending, type TrackingFormState } from './connections'
 import { isNewRival, rivalRefusalNote, rivalsMeta, type RivalRow } from './rivals-view'
 import { removeTerm, termDateShort, termsMeta } from './terms'
 
@@ -192,6 +192,37 @@ describe('the platform share’s basis sentence', () => {
     // month would take.
     expect(platformShareBasis({ month: '2026-07-01', status: 'frozen', videos: 412, audience: 'Your own brand' }))
       .toMatch(/July.* is closed/)
+  })
+})
+
+describe('what the one save row says afterwards', () => {
+  it('names what was written, not the terms alone', () => {
+    // m4: the composed save may change the terms, the exclusions, the rival
+    // list, the cadence and the day, and answered with the terms form's own
+    // sentence whichever of them had moved.
+    expect(savedMessage(['Cadence'])).toBe('Saved — cadence. Your next update is the first one to use it.')
+    expect(savedMessage(['Brand terms', 'Rivals', 'Cadence']))
+      .toBe('Saved — brand terms, rivals and cadence. Your next update is the first one to use them.')
+  })
+
+  it('drops a field it does not know, so nothing crafted is echoed back', () => {
+    expect(savedMessage(['<script>', 'Rivals'])).toBe('Saved — rivals. Your next update is the first one to use it.')
+    expect(savedMessage([])).toBe('Saved. Nothing had changed, so nothing moved.')
+  })
+
+  it('knows the same seven fields the pending strip does', () => {
+    const before: TrackingFormState = {
+      brand: ['a'], competitor: ['b'], category: ['c'], exclusions: ['d'],
+      rivals: ['Freitag'], period: 'weekly', day: 'monday',
+    }
+    const after: TrackingFormState = {
+      brand: [], competitor: [], category: [], exclusions: [],
+      rivals: [], period: 'monthly', day: 'sunday',
+    }
+    for (const edit of trackingPending(before, after)) {
+      expect(savedMessage([edit.field]), `${edit.field} is a field the message knows`)
+        .not.toBe('Saved. Nothing had changed, so nothing moved.')
+    }
   })
 })
 
