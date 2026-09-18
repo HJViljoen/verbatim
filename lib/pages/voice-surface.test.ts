@@ -22,6 +22,7 @@ import {
   openRefusal,
   pickAudience,
   platformShares,
+  quoteCite,
   reachAxisMax,
   repliesNote,
   searchRegistry,
@@ -516,6 +517,47 @@ describe('reachAxisMax', () => {
   it('is zero where there is nothing to draw, so the bar renders nothing', () => {
     expect(reachAxisMax([])).toBe(0)
     expect(reachAxisMax([null, undefined, 0])).toBe(0)
+  })
+})
+
+describe('quoteCite', () => {
+  const video = { platform: 'tiktok', upload_date: '2026-09-14', kind: 'a category video' }
+
+  it('says platform · date · where, which is what the artboard asks for', () => {
+    expect(quoteCite({ video, source: 'comment' })).toBe('TikTok · 14 Sep · under a category video')
+  })
+
+  it('moves the COLUMN to the end, because it is a different claim from where the video was posted', () => {
+    // "said on camera" and "on-screen text" say these words were spoken or
+    // written ON the video rather than typed under it. The old phrase named
+    // the column and nothing else, so six quotes carried three words between
+    // them.
+    expect(quoteCite({ video, source: 'transcript' })).toBe('TikTok · 14 Sep · a category video, transcript')
+    expect(quoteCite({ video, source: 'ocr' })).toBe('TikTok · 14 Sep · a category video, on-screen text')
+  })
+
+  it('keeps the rival’s own post as the kind, as the loader reads it', () => {
+    expect(quoteCite({ video: { ...video, kind: 'a Cotopaxi post' }, source: 'comment' }))
+      .toBe('TikTok · 14 Sep · under a Cotopaxi post')
+  })
+
+  it('falls back to the old phrase when the video is gone, and never invents a platform', () => {
+    // `audience_insights` rows are superseded and pruned by later runs. A
+    // quote whose video did not resolve must still say honestly where it was
+    // read rather than claim a platform nobody can check.
+    expect(quoteCite({ video: null, source: 'comment' })).toBe('in the comments')
+    expect(quoteCite({ video: null, source: 'transcript' })).toBe('said on camera')
+    expect(quoteCite({ video: null, source: 'ocr' })).toBe('on-screen text')
+    expect(quoteCite({ video: null, source: null })).toBe('in the comments')
+  })
+
+  it('drops a fact it does not have rather than printing a gap for it', () => {
+    expect(quoteCite({ video: { ...video, upload_date: null }, source: 'comment' }))
+      .toBe('TikTok · under a category video')
+    expect(quoteCite({ video: { ...video, platform: null }, source: 'comment' }))
+      .toBe('14 Sep · under a category video')
+    expect(quoteCite({ video: { platform: null, upload_date: null, kind: 'a category video' }, source: 'comment' }))
+      .toBe('under a category video')
   })
 })
 
