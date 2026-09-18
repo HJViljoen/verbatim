@@ -93,6 +93,13 @@ describe('quote freeze / resolve', () => {
     expect(isQuote({ ref: 'm:c9', text: 'x' })).toBe(true)
     expect(quoteRef.phrase('ls1')).toBe('p:ls1')
     expect(isQuote({ ref: 'p:ls1', text: 'x' })).toBe(true)
+    // A claim SPOKEN on a post — the speaker's own words off their transcript,
+    // which is why it cannot ride on `v:` (that resolves to a commenter's
+    // excerpt on the video, so a frozen claim would come back as a stranger's
+    // comment attributed to the brand).
+    expect(quoteRef.claim('vc1')).toBe('k:vc1')
+    expect(parseRef('k:vc1')).toEqual({ kind: 'k', id: 'vc1' })
+    expect(isQuote({ ref: 'k:vc1', text: 'x' })).toBe(true)
   })
 })
 

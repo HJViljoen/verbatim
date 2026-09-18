@@ -131,7 +131,10 @@ describe('ownPostCensus', () => {
     expect(c.claims[0].claim).toBe('Built to last a decade')
     expect(c.claims[0].posts).toEqual({ k: 2, n: 3 })
     expect(c.claims[0].postedOn).toBe('2026-09-04')
-    expect(c.claims[0].quote?.ref).toMatch(/^v:/)
+    // The claim's OWN ref. A `v:<videos.id>` ref resolves through
+    // insight_evidence to a commenter's excerpt on that video, so a snapshot
+    // frozen under one would print a stranger's comment as the brand's claim.
+    expect(c.claims[0].quote?.ref).toBe('k:c1')
   })
 
   it('counts a claim by the post it sits on, never by the entity a run froze on it', () => {
@@ -261,17 +264,29 @@ describe('saidAbout', () => {
       label: 'Patagonia',
       of: 376,
       claims: [
-        { claim: 'They repair for free', quote: 'Fixed my 8 year old pack for free.', videoId: 'a' },
-        { claim: 'they  REPAIR for free', quote: 'Sent it back and they fixed it.', videoId: 'b' },
-        { claim: 'they repair for free', quote: 'Same story here.', videoId: 'b' },
-        { claim: 'Expensive', quote: 'Costs a fortune.', videoId: 'c' },
+        { id: 'k1', claim: 'They repair for free', quote: 'Fixed my 8 year old pack for free.', videoId: 'a' },
+        { id: 'k2', claim: 'they  REPAIR for free', quote: 'Sent it back and they fixed it.', videoId: 'b' },
+        { id: 'k3', claim: 'they repair for free', quote: 'Same story here.', videoId: 'b' },
+        { id: 'k4', claim: 'Expensive', quote: 'Costs a fortune.', videoId: 'c' },
       ],
     })
     expect(s.rows).toHaveLength(2)
     expect(s.rows[0]).toMatchObject({ claim: 'They repair for free', value: { k: 2, n: 376 } })
-    expect(s.rows[0].quote?.ref).toBe('v:a')
+    // The CLAIM's ref, not the video's: `v:` resolves to a commenter's excerpt.
+    expect(s.rows[0].quote?.ref).toBe('k:k1')
     expect(s.rows[1].value).toEqual({ k: 1, n: 376 })
     expect(s.empty).toBeNull()
+  })
+
+  it('carries no quote for a row whose claim row it cannot key', () => {
+    const s = saidAbout({
+      audience: 'competitor:Patagonia',
+      label: 'Patagonia',
+      of: 376,
+      claims: [{ claim: 'They repair for free', quote: 'Fixed my pack for free.', videoId: 'a' }],
+    })
+    expect(s.rows[0].value).toEqual({ k: 1, n: 376 })
+    expect(s.rows[0].quote).toBeNull()
   })
 
   it('has its own words for nothing said', () => {

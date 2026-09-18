@@ -365,8 +365,15 @@ export function ownPostCensus(input: OwnPostInput): OwnPostCensus {
     entity: c.entity,
     entityLabel: input.audienceLabel,
     claim: c.claim,
+    // A CLAIM'S REF IS THE CLAIM'S, NEVER THE VIDEO'S. `v:<videos.id>` resolves
+    // through `insight_evidence` to a COMMENTER's excerpt on that video
+    // (lib/quotes.ts), and these words are the speaker's own, off their own
+    // transcript — so under a `v:` ref a frozen snapshot would empty the
+    // brand's sentence and hand back a stranger's comment in its place,
+    // printed as what the brand claims. `k:<video_claims.id>` is the claim's
+    // own kind, on `b:`'s precedent.
     quote: c.quote.trim()
-      ? { ref: quoteRef.video([...c.videos][0]), text: c.quote.replace(/\s+/g, ' ').trim() }
+      ? { ref: quoteRef.claim(c.id), text: c.quote.replace(/\s+/g, ' ').trim() }
       : null,
     postedOn: c.postedOn,
     posts: { k: c.videos.size, n: published.k },
@@ -446,28 +453,34 @@ export const SAID_ABOUT_EMPTY = (label: string): string =>
  * so this figure sits beside a theme's reading without changing units under
  * the reader.
  *
- * The quote travels as a ref (`v:<videos.id>`), never as stored words: a
- * snapshot keeps the ref and resolves the text at render, which is how an
- * erased voice disappears from an export (lib/renderables/quotes-freeze.ts).
+ * The quote travels as a ref (`k:<video_claims.id>`), never as stored words: a
+ * snapshot keeps the ref and resolves the text at render, which is how a voice
+ * withdrawn after the freeze disappears from an export
+ * (lib/renderables/quotes-freeze.ts). It is the CLAIM's own ref and not the
+ * video's, because `v:` resolves to a commenter's excerpt on that video and
+ * these words are the speaker's — the same rule the census's own claims keep.
+ * A row that arrives without its claim row's `id` carries NO quote: a ref that
+ * cannot be keyed is not a ref, and an unkeyed quotation frozen into a
+ * snapshot is exactly the wrong-attribution failure this rule exists to stop.
  */
 export function saidAbout(input: {
   audience: string
   label: string
-  claims: readonly { claim: string; quote: string; videoId: string }[]
+  claims: readonly { claim: string; quote: string; videoId: string; id?: string }[]
   of: number
 }): SaidAbout {
-  const byClaim = new Map<string, { claim: string; quote: string; videos: Set<string> }>()
+  const byClaim = new Map<string, { claim: string; quote: string; id?: string; videos: Set<string> }>()
   for (const c of input.claims) {
     const key = normClaim(c.claim)
     if (!key) continue
     const cur = byClaim.get(key)
     if (cur) cur.videos.add(c.videoId)
-    else byClaim.set(key, { claim: c.claim, quote: c.quote, videos: new Set([c.videoId]) })
+    else byClaim.set(key, { claim: c.claim, quote: c.quote, id: c.id, videos: new Set([c.videoId]) })
   }
   const rows = [...byClaim.values()]
     .map((c) => ({
       claim: c.claim,
-      quote: c.quote.trim() ? { ref: quoteRef.video([...c.videos][0]), text: c.quote.replace(/\s+/g, ' ').trim() } : null,
+      quote: c.id && c.quote.trim() ? { ref: quoteRef.claim(c.id), text: c.quote.replace(/\s+/g, ' ').trim() } : null,
       value: { k: c.videos.size, n: input.of },
     }))
     .sort((a, b) => b.value.k - a.value.k || a.claim.localeCompare(b.claim))
