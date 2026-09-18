@@ -6,7 +6,9 @@ import { getSessionContext, canManageTenant } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { mergeCompetitorKeywords, cleanTerms, MIN_KEYWORD_CHARS, MAX_TERM_CHARS, MAX_TERMS_PER_BUCKET } from '@/lib/onboarding-config'
 import { suggestSearchTerms, flattenCompetitorTerms } from '@/lib/keywords/suggest'
-import { actorStamp, updateWithActor } from '@/lib/config-log'
+import { actorStamp, recordConfigChange, updateWithActor } from '@/lib/config-log'
+import { applySubredditEdit } from '@/lib/settings/save-state'
+import type { SubredditEntry } from '@/lib/gather/types'
 import { ensureRivals } from '@/lib/rivals'
 import { takeSuggestionSlot } from '@/lib/keywords/suggest-guard'
 import { PERIODS, DAYS } from './constants'
@@ -311,5 +313,104 @@ export async function suggestMoreTerms(_prev: SuggestState, _formData: FormData)
     return { ok: true, message: `${total} to consider. Keep the ones that sound like your buyers.`, suggestions }
   } catch (e) {
     return { ok: false, message: `Could not suggest terms right now: ${e instanceof Error ? e.message : String(e)}`, suggestions: null }
+  }
+}
+
+/**
+ * Stop watching a community, or add one (block D, D9 — `settings.reddit.add`
+ * and `settings.reddit.col.action`).
+ *
+ * TWO WRITE PATHS THE PAGE HAS NEVER HAD. `tracking_configs.subreddits` has
+ * exactly one writer in the whole app today, the onboarding/operator path;
+ * a client watching a community that yields nothing has had no way to stop it
+ * and no way to add the one they know about. The control is wave 2's; this is
+ * the action behind it.
+ *
+ * The validation is pure and tested (`lib/settings/save-state.ts`): the name is
+ * folded by `subredditKey`, so 'r/Prosthetics', 'Prosthetics' and a pasted URL
+ * are one community, and STOPPING DEMOTES RATHER THAN DELETES so the paid
+ * relevance probe and the date it was taken on survive.
+ *
+ * The write goes through `updateWithActor` so the audit trigger logs a PERSON
+ * rather than the database role, and a `config_changes` row is written naming
+ * what the edit breaks.
+ */
+export async function updateCommunity(
+  _prev: SettingsFormState,
+  formData: FormData,
+): Promise<SettingsFormState> {
+  const session = await getSessionContext()
+  const { supabase, clientId, role } = session
+  if (!canManageTenant(role)) {
+    return { ok: false, message: 'You don’t have permission to change what we watch.' }
+  }
+
+  const kind = formData.get('op') === 'stop' ? 'stop' : formData.get('op') === 'add' ? 'add' : null
+  const name = String(formData.get('name') ?? '')
+  if (!kind) return { ok: false, message: 'Could not save: say whether to add a community or stop watching one.' }
+
+  const { data: current, error: readErr } = await supabase
+    .from('tracking_configs')
+    .select('subreddits')
+    .eq('client_id', clientId)
+    .maybeSingle()
+  if (readErr) {
+    console.error(`[settings] communities not read for ${clientId}: ${readErr.message}`)
+    return { ok: false, message: 'Could not read what we watch right now. Try again.' }
+  }
+  if (!current) {
+    return { ok: false, message: 'Nothing was saved — this workspace has no tracking setup yet. Talk to us and we’ll set it up.' }
+  }
+
+  const entries = Array.isArray(current.subreddits) ? (current.subreddits as SubredditEntry[]) : []
+  const now = new Date()
+  const edit = applySubredditEdit(entries, { kind, name }, now.toISOString().slice(0, 10))
+  if ('error' in edit) return { ok: false, message: edit.error }
+
+  const actor = actorStamp(session, `communities: ${kind} ${name.trim()}`, now)
+  const { error, count } = await updateWithActor(
+    (payload) => supabase
+      .from('tracking_configs')
+      .update(payload, { count: 'exact' })
+      .eq('client_id', clientId),
+    { subreddits: edit.next, updated_at: now.toISOString() },
+    actor,
+  )
+  if (error) {
+    console.error(`[settings] communities not saved for ${clientId}: ${(error as { message?: string }).message ?? String(error)}`)
+    return { ok: false, message: 'Could not save that. Try again, and tell us if it keeps happening.' }
+  }
+  if (count === 0) {
+    return { ok: false, message: 'Nothing was saved — this workspace has no tracking setup yet. Talk to us and we’ll set it up.' }
+  }
+
+  // WHAT IT BREAKS, WRITTEN DOWN AT WRITE TIME. Changing where we look changes
+  // the population, so the month this happened in is the first month read on
+  // the new basis and a comparison spanning it is not like for like. The
+  // audience half is left out rather than guessed: a Reddit post is filed by
+  // the precedence rule, not by the community it came from, so no single
+  // audience can be named honestly here and NULL means "not known".
+  const month = `${now.toISOString().slice(0, 7)}-01`
+  const nextMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString().slice(0, 10)
+  await recordConfigChange(createAdminClient(), {
+    clientId,
+    surface: 'subreddits',
+    field: 'subreddits',
+    before: edit.change.from,
+    after: edit.change.to,
+    actor,
+    note: kind === 'add'
+      ? `${edit.change.to === 'nothing' ? 'A community' : name.trim()} was added to the communities we watch.`
+      : `We stopped watching ${name.trim()}.`,
+    affects: { audiences: null, months: `[${month},${nextMonthStart})` },
+  })
+
+  revalidatePath('/dashboard/settings')
+  revalidatePath('/dashboard/settings/tracking')
+  return {
+    ok: true,
+    message: kind === 'add'
+      ? 'Saved. Your next update reads that community too.'
+      : 'Saved. Your next update stops reading that community — what we already read stays.',
   }
 }
