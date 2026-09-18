@@ -48,15 +48,22 @@ import type { CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
 /** The artboard's three tables, at its own widths, wrapping to one column
  *  before they would squeeze. The tile is full width, so the three fit at
  *  1440 exactly as the mock draws them. */
-const COLUMNS = 'grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-[minmax(0,410px)_minmax(0,336px)_minmax(0,1fr)]'
+// THE ARTBOARD RUNS 410 · 336 · 1fr AND ITS HOOK TABLE HAS ONE FEWER COLUMN
+// than this one does: the mock's rival hooks were "not read this update", so it
+// draws Hook · Category · You where this draws Hook · Category · You · Rival.
+// The two data tables therefore get the same width as each other, and the
+// median column takes what is left.
+const COLUMNS = 'grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-[minmax(0,400px)_minmax(0,400px)_minmax(0,1fr)]'
 
 const HEAD = 'font-mono text-[10px] uppercase tracking-[0.06em] text-muted-foreground'
 
-/** The matrix grid, by how many sides follow the widest one. */
+/** The matrix grid, by how many sides follow the widest one. The artboard's own
+ *  widths (136 · 126 · 70 · 78), with the widest column given the room the
+ *  stacked "of N" under its percentage actually needs. */
 const GRID_FOR: Record<number, string> = {
-  0: 'grid items-center gap-2 grid-cols-[minmax(0,1fr)_112px]',
-  1: 'grid items-center gap-2 grid-cols-[minmax(0,1fr)_112px_72px]',
-  2: 'grid items-center gap-2 grid-cols-[minmax(0,1fr)_112px_72px_72px]',
+  0: 'grid items-center gap-2 grid-cols-[minmax(0,1fr)_122px]',
+  1: 'grid items-center gap-2 grid-cols-[minmax(0,1fr)_122px_58px]',
+  2: 'grid items-center gap-2 grid-cols-[minmax(0,1fr)_122px_58px_58px]',
 }
 
 const COLOR: Record<string, string> = {
@@ -85,6 +92,13 @@ function Cell({ side, formatKey, mode }: { side: FormatMatrixSide; formatKey: st
   if (side.unread) return mode === 'email' ? <span /> : <span aria-hidden />
   const row = side.byKey[formatKey] ?? null
   const value = row ? row.value.k : 0
+  // STACKED, WHICH COSTS NOTHING HERE. The widest column stacks its percentage
+  // over its "of N" (that is what `FigureCell` is, and the artboard's own table
+  // cell), so the row is already two lines tall — stacking these too adds no
+  // height and takes the column from the ~78px "27 of 124" needs on one line at
+  // 13px mono down to the ~56px "of 124" needs under it. On one line in a
+  // 68px column it wrapped, which is the same denominator printed as a second
+  // row of the table.
   return <FigureCell value={fmtInt(value)} of={`of ${fmtInt(side.of)}`} align="right" mode={mode} />
 }
 
@@ -139,7 +153,7 @@ function Matrix({
             <span className="min-w-0 truncate text-[12.5px]">{key.label}</span>
             {lead.unread ? <span aria-hidden /> : (
               <span className="flex items-center gap-2">
-                <Track pct={leadRow?.pct ?? 0} color={sideColor(lead.audience)} />
+                <Track pct={leadRow?.pct ?? 0} color={sideColor(lead.audience)} width={46} />
                 <FigureCell
                   value={leadRow?.pct != null ? fmtPct(leadRow.pct, 0) : '0%'}
                   of={`${fmtInt(leadRow?.value.k ?? 0)} of ${fmtInt(lead.of)}`}
@@ -183,17 +197,17 @@ function Medians({ rows, mode }: { rows: readonly FormatRow[]; mode: RenderMode 
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
       <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,176px)] items-center border-b border-border/70 pb-1.5">
-        <span className={HEAD}>Median engagement</span>
+        <span className={`${HEAD} whitespace-nowrap`}>Median engagement</span>
         {/* NOT "Category · TikTok". The median is read across every platform
             except the ones the exclusion list names, and Reddit's rate is
             measured against a 40-comment ceiling. */}
-        <span className={`${HEAD} text-right`}>The category · Reddit excluded</span>
+        <span className={`${HEAD} whitespace-nowrap text-right`}>The category · no Reddit</span>
       </div>
       {rows.map((r) => (
-        <div key={r.key} className="grid min-h-[22px] grid-cols-[minmax(0,1fr)_minmax(0,176px)] items-center">
+        <div key={r.key} className="grid min-h-[22px] grid-cols-[minmax(0,1fr)_minmax(0,142px)] items-center">
           <span className="min-w-0 truncate text-[12.5px]">{r.label}</span>
           <span className="flex items-center justify-end gap-2">
-            <Track pct={top > 0 ? ((r.engagement.median ?? 0) / top) * 100 : 0} color="var(--cat)" width={84} />
+            <Track pct={top > 0 ? ((r.engagement.median ?? 0) / top) * 100 : 0} color="var(--cat)" width={60} />
             <span data-copy="figure" className="shrink-0 font-mono text-[11.5px] font-semibold tabular-nums">{fmtPct(r.engagement.median ?? 0)}</span>
             <span className="w-[42px] shrink-0 text-right font-mono text-[10.5px] tabular-nums text-muted-foreground">n {fmtInt(r.engagement.n)}</span>
           </span>

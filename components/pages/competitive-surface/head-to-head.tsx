@@ -49,7 +49,12 @@ import type { CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
  *  a comparison and its columns must line up across five rows — inside an
  *  `overflow-x-auto` so a narrow viewport scrolls the table and never reflows
  *  it into a different comparison. */
-const GRID = 'grid grid-cols-[minmax(160px,230px)_76px_56px_92px_76px_56px_92px] items-center'
+// The change column is 112px because that is what the WORD needs: a
+// non-answer is "too few to compare" or "comparison refused" in 12px sans,
+// which is wider than the mock's "+0.2 pt" and the mock never has to draw one.
+// A `Tile` is `overflow-hidden`, so a column too narrow does not scroll — it
+// clips the answer off the page.
+const GRID = 'grid grid-cols-[minmax(150px,1fr)_68px_50px_112px_68px_50px_112px] items-center'
 
 const HEAD = 'font-mono text-[10px] uppercase tracking-[0.06em] text-muted-foreground'
 
@@ -202,7 +207,7 @@ export const competitiveHeadToHead: Block<CompetitiveSurfaceData> = {
               </div>
             ) : (
               <div className="-mx-1 overflow-x-auto px-1">
-                <div className="min-w-[578px]">
+                <div className="min-w-[610px]">
                   <div className={`${GRID} border-b border-border/70`}>
                     <span className={`${HEAD} pb-1.5`}>Measure</span>
                     <SideHead label={data.brand} color="var(--you)" mode={mode} />

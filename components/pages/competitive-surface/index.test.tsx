@@ -476,7 +476,11 @@ describe('CO7 · how the category makes content', () => {
     const p = competitiveFixture().playbook!
     const medians = p.engagement.map((r) => r.engagement.median ?? 0)
     expect([...medians].sort((a, b) => b - a)).toEqual(medians)
-    expect(renderText(competitivePlaybook.render(competitiveFixture(), 'app', ctx))).toContain('Reddit excluded')
+    // The column header names the exclusion; the reason (the 40-comment cap)
+    // is the sentence under the tables.
+    const text = renderText(competitivePlaybook.render(competitiveFixture(), 'app', ctx))
+    expect(text).toContain('The category · no Reddit')
+    expect(text).toContain('capped at 40 a thread')
   })
 
   it('states the published clock in its meta, not the page’s month', () => {

@@ -69,13 +69,17 @@ export const COMPETITIVE_TILES: readonly Block<CompetitiveSurfaceData>[] = [
 /** The artboard's twelve-column grid: `span 12` · `span 7` + `span 5` ·
  *  `span 3` + `span 4` + `span 5` · `span 12`. Rows are 116px units. */
 const SPAN: Record<string, { col: number; row: number }> = {
-  'competitive.months': { col: 12, row: 6 },
+  'competitive.months': { col: 12, row: 4 },
   'competitive.h2h': { col: 7, row: 4 },
   'competitive.ownclaims': { col: 5, row: 4 },
-  'competitive.saidabout': { col: 3, row: 4 },
-  'competitive.questions': { col: 4, row: 4 },
-  'competitive.unlocks': { col: 5, row: 4 },
-  'competitive.playbook': { col: 12, row: 3 },
+  // THE THREE IN ONE GRID ROW SHARE ITS HEIGHT, so the row is sized to the
+  // tallest of them (the asked block, which carries four notes under its rows)
+  // and not to the average. A `Tile` is `overflow-hidden`: a row too short
+  // does not scroll, it clips.
+  'competitive.saidabout': { col: 3, row: 6 },
+  'competitive.questions': { col: 4, row: 6 },
+  'competitive.unlocks': { col: 5, row: 6 },
+  'competitive.playbook': { col: 12, row: 5 },
 }
 
 /** The app's context: RELATIVE links. */

@@ -88,7 +88,22 @@ function Change({ verdict, observed, prevMonthLabel, mode }: {
     : <span className="text-[11.5px] text-muted-foreground">{text}</span>
 }
 
-function Share({ share, mode }: { share: StandingShare | null; mode: RenderMode }) {
+/**
+ * One share cell: the artboard's bar, the level, and the "of N" the artboard
+ * pushes into a footnote (D8/D10 — the build's form wins).
+ *
+ * THE BAR IS PER ROW, AGAINST ITS OWN DENOMINATOR, and is not a segment of
+ * anything. Each row is one audience's share of the month's total, and those
+ * DO happen to sum — but drawn as one stacked bar they would read as a
+ * partition a reader could do arithmetic on across months whose denominators
+ * differ, which is the reading the whole layer exists to stop. So: one track
+ * per cell, filled to that cell's own percentage, in the ENTITY's colour and
+ * never the rank's (`components/charts/ranked-bar.tsx`'s own rule).
+ *
+ * No bar where there is no reading. `NOT_OBSERVED` is a brand absent from the
+ * month, and an empty track beside it reads as a measured zero.
+ */
+function Share({ share, role, mode }: { share: StandingShare | null; role: StandingRow['role']; mode: RenderMode }) {
   if (share == null || share.pct == null) {
     return mode === 'email'
       ? <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>{NOT_OBSERVED}</span>
@@ -98,9 +113,15 @@ function Share({ share, mode }: { share: StandingShare | null; mode: RenderMode 
     <span data-copy="figure">{standingText(share)}</span>{' '}
     <span data-copy="figure">{fmtInt(share.k)} of {fmtInt(share.n)}</span>
   </>
-  return mode === 'email'
-    ? <span style={{ fontFamily: FONT.mono, fontSize: 12, color: EMAIL.ink }}>{body}</span>
-    : <span className="font-mono text-[12px] tabular-nums">{body}</span>
+  if (mode === 'email') return <span style={{ fontFamily: FONT.mono, fontSize: 12, color: EMAIL.ink }}>{body}</span>
+  return (
+    <span className="flex items-center gap-2">
+      <span className="h-1.5 w-[64px] shrink-0 overflow-hidden rounded-full bg-inner" aria-hidden>
+        <span className="block h-full rounded-full" style={{ width: `${Math.max(2, Math.min(100, share.pct))}%`, background: COLOR[role] }} />
+      </span>
+      <span className="font-mono text-[12px] tabular-nums">{body}</span>
+    </span>
+  )
 }
 
 /**
@@ -134,6 +155,11 @@ function ChartPane({
         series={series}
         rules={rules}
         legend={false}
+        // 168, NOT THE 210 DEFAULT. Two charts abreast in a tile that also
+        // carries a table and four notes; the artboard's own pair is about this
+        // tall, and the 42px buys the block its footer inside a four-row tile
+        // instead of clipping it.
+        height={168}
         format={(v) => fmtPct(v)}
         label={label}
         id={chartId([chartKey, ...series.map((x) => x.label), axis[0], axis[axis.length - 1]])}
@@ -359,8 +385,8 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
                 <div key={row.audience} style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '4px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
                   <strong>{row.label}</strong>
                   <div style={{ marginTop: 2 }}>
-                    videos <Share share={row.content} mode={mode} /> <Change verdict={row.contentVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} />
-                    {' · '}comments <Share share={row.attention} mode={mode} /> <Change verdict={row.attentionVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} />
+                    videos <Share share={row.content} role={row.role} mode={mode} /> <Change verdict={row.contentVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} />
+                    {' · '}comments <Share share={row.attention} role={row.role} mode={mode} /> <Change verdict={row.attentionVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} />
                   </div>
                 </div>
               ))}
@@ -384,8 +410,8 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
                     return (
                       <tr key={row.audience}>
                         <td className="py-1.5 pr-3 text-[12.5px] font-medium">{row.label}</td>
-                        <td className="py-1.5 pr-3"><Share share={row.content} mode={mode} /></td>
-                        <td className="py-1.5 pr-3"><Share share={row.attention} mode={mode} /></td>
+                        <td className="py-1.5 pr-3"><Share share={row.content} role={row.role} mode={mode} /></td>
+                        <td className="py-1.5 pr-3"><Share share={row.attention} role={row.role} mode={mode} /></td>
                         <td className="py-1.5 pr-3 font-mono text-[11.5px] tabular-nums text-muted-foreground">{fmtInt(months)} of {fmtInt(s.months.length)}</td>
                         <td className="py-1.5 pr-3"><Change verdict={row.contentVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} /></td>
                         <td className="py-1.5"><Change verdict={row.attentionVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} /></td>
