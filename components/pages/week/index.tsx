@@ -95,7 +95,8 @@ const ROWS: Record<string, number> = {
   'week.unusual': 5,
   'week.reply': 4,
   'week.subjects': 3,
-  'week.came-in': 5,
+  // `week.came-in` is not here: its span is a reading, not a constant — see
+  // `cameInRows`.
   'week.rival-posts': 3,
   'week.worked': 4,
   'week.sales': 4,
@@ -151,7 +152,27 @@ const EMPTY_ROWS: Record<string, number> = {
  * all, so `empty != null && rivals.length > 0` could never both hold. A guard
  * that cannot fire is a guard the next reader trusts.
  */
+/**
+ * The one block whose TALLEST reading is not its fullest one.
+ *
+ * §4 prints a sentence wherever a figure is absent — "The month's own reading
+ * is not available here", "Comments in these days are not recorded for this
+ * workspace yet" — and a sentence is taller than the number it replaces. So
+ * Össur's populated arm is 465px at 1008 while Sealand's and the absent arm
+ * are 571 and 555: `emptyState` is null on all three (every arm has audience
+ * rows), and the block that needs five rows is the degraded one.
+ *
+ * The three conditions below are exactly the three extra lines: a window that
+ * reaches into another month, no month reading to state a contribution
+ * against, and no windowed comment count. Measured, not guessed.
+ */
+function cameInRows(data: WeekData): number {
+  const c = data.cameIn
+  return c.crossesInto != null || c.contribution == null || c.windowComments == null ? 5 : 4
+}
+
 function tileRows(key: string, data: WeekData): number {
+  if (key === weekCameIn.key) return cameInRows(data)
   const full = ROWS[key] ?? 2
   const short = EMPTY_ROWS[key]
   if (short == null) return full

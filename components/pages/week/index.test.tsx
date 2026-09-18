@@ -974,7 +974,10 @@ describe('the page', () => {
     }
     // Össur, flagged: §1 takes five rows because its right column wraps to
     // 553px at 1008, where it fitted 496 at 1216.
-    expect(spans(weekFixture())).toEqual(['12x5', '12x4', '12x3', '12x5', '12x3', '5x4', '7x4', '12x2', '12x3'])
+    // §4 takes FOUR on this arm and five on the others: it prints a sentence
+    // wherever a figure is absent, and a sentence is taller than the number it
+    // replaces, so the degraded arms are the tall ones (`cameInRows`).
+    expect(spans(weekFixture())).toEqual(['12x5', '12x4', '12x3', '12x4', '12x3', '5x4', '7x4', '12x2', '12x3'])
     // Sealand, and the arm both tenants render today: five of these blocks
     // stand on one sentence, and they take one or two rows rather than three.
     expect(spans(thinFixture())).toEqual(['12x4', '12x1', '12x2', '12x5', '12x3', '5x3', '7x2', '12x1', '12x2'])
