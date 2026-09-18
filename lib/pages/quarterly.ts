@@ -2221,10 +2221,21 @@ function buildUnsettled(a: {
   }
   for (const move of a.moves.moves) {
     if (a.moves.readings.some((r) => r.moveId === move.id && r.verdict)) continue
-    waiting.push(`${move.title}, ${move.on} — ${move.line}`)
+    // `move.line` IS ALREADY THE WHOLE SENTENCE, title and subject included
+    // (`moveLedgerLine`, lib/pages/market-surface.ts), so prefixing it with
+    // the title and the subject printed both twice: "Say less about recycling,
+    // on the subject Durability — Say less about recycling · on the subject
+    // Durability · tracked 14 Sep · …".
+    waiting.push(move.line)
   }
   for (const q of a.category.quiet ?? []) {
-    waiting.push(`${q.label} has not been read since ${q.lastHeard ? monthName(q.lastHeard) : 'the months on this axis'}; a theme is never called dead, only dormant.`)
+    // NOT "<label> has not been read", WHICH IS UNGRAMMATICAL HALF THE TIME.
+    // A theme label is free text a reasoning model wrote and is as often
+    // plural as singular — "Shipping and delivery times HAS not been read",
+    // "Sizing and fit questions HAS not been read". The label is the object of
+    // the sentence instead, so no agreement is claimed over words this code
+    // did not choose.
+    waiting.push(`No reading has been recorded for ${q.label} since ${q.lastHeard ? monthName(q.lastHeard) : 'the months on this axis'}; a theme is never called dead, only dormant.`)
   }
   for (const note of a.overview.notes.slice(0, 3)) waiting.push(note.text)
 

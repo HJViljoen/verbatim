@@ -788,6 +788,15 @@ describe('the artboard port (Block D wave 2)', () => {
   it('qr.p8.waiting · named things, not the overview’s series notes alone', () => {
     const t = text('quarterly.unsettled')
     expect(t).toContain('a theme is never called dead, only dormant')
+    // NO SENTENCE PRINTS ITSELF TWICE. `move.line` already opens with the
+    // title and the subject, so prefixing it with both put each on the page
+    // twice inside one wait.
+    expect(t).toContain('Say less about recycling · on the subject Durability')
+    expect(t).not.toContain('Say less about recycling, on the subject Durability —')
+    // AND NO AGREEMENT IS CLAIMED OVER A LABEL THIS CODE DID NOT WRITE. A
+    // theme label is as often plural as singular.
+    expect(t).not.toMatch(/times has not been read/)
+    expect(t).toContain('No reading has been recorded for')
   })
 
   it('qr.p8.heldback · the gate’s share, and why no sample is drawn', () => {
