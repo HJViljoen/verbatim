@@ -25,6 +25,48 @@ export function PageGrid({ children, className }: { children: ReactNode; classNa
   )
 }
 
+/**
+ * Two or three columns INSIDE one tile (Block D wave 1, P0 item 3).
+ *
+ * `PageGrid` has been the page's twelve columns since the redesign; what the
+ * artboards also do, and the build had no way to say, is put two or three
+ * readings SIDE BY SIDE inside a single tile — your side against the
+ * category's, three kinds abreast, a figure beside the quote that evidences
+ * it. Every block that wanted it reached for its own `grid-cols-2` with its
+ * own gap and its own divider, which is how a product ends up with four
+ * gutters.
+ *
+ * THE GUTTER IS THE PAGE'S OWN 16px, and the hairline between columns is the
+ * one already inside a tile (`--border` at 70%, the tile footer's rule). Two
+ * nesting levels stay two: this draws a grid, not a third surface — no
+ * background, no shadow, no border box.
+ *
+ * IT COLLAPSES UNDER `xl`, where the page itself is one stacked column: two
+ * comparisons squeezed into half a phone are two unreadable comparisons. The
+ * divider turns with it — horizontal between stacked rows, vertical between
+ * columns — so it never rules beside a column that is no longer beside
+ * anything. Class strings are written out in full, never interpolated, so
+ * Tailwind v4's scanner sees them (the rule the span maps in tile.tsx follow).
+ */
+const COLUMNS: Record<2 | 3, string> = {
+  2: 'xl:grid-cols-2',
+  3: 'xl:grid-cols-3',
+}
+
+export function TileColumns({ of, children, className }: { of: 2 | 3; children: ReactNode; className?: string }) {
+  return (
+    <div
+      className={cn(
+        'grid min-w-0 grid-cols-1 gap-4 divide-y divide-border/70 xl:divide-x xl:divide-y-0',
+        COLUMNS[of],
+        className,
+      )}
+    >
+      {children}
+    </div>
+  )
+}
+
 /** Page title · context · right-hand controls, in one slim row at the top of
  *  the page. `subtitle` (optional) is a one-line reading under the title —
  *  component-map §1: orientation and actions in one place. */

@@ -31,7 +31,13 @@ const MIN_H: Record<number, string> = {
   4: 'min-h-[512px]', 5: 'min-h-[644px]', 6: 'min-h-[776px]',
 }
 
-export type TileVariant = 'default' | 'hero' | 'warm' | 'strip'
+// `warm` was retired 2026-09-18 (Block D wave 1, P0 item 2). It was a tone
+// from the cream identity MASTER rule 3 retired (`#F6F1E7`, `#FDFAF3`), and
+// after that retirement it rendered EXACTLY as `default` — same gap, same
+// padding, same surface — with no call site anywhere. A variant that names a
+// tone and paints none is a trap for the wave-2 ports: a porter asks for warmth
+// and gets silence. Depth is elevation, never tone.
+export type TileVariant = 'default' | 'hero' | 'strip'
 
 export interface TileProps {
   /** Column span on the 12-column grid (≥xl). */
@@ -41,7 +47,10 @@ export interface TileProps {
   variant?: TileVariant
   eyebrow?: ReactNode
   meta?: ReactNode
-  /** Hero only: a serif lead line under the eyebrow — the page's one sentence. */
+  /** Hero only: a serif lead line under the eyebrow — the page's one sentence.
+   *  Serif 17px/500, `1.35`, `-0.005em`, `text-wrap:pretty`, clamped to three
+   *  lines (the mock's §1 ramp). Dropped without a word on any other variant,
+   *  which is why `hero` and `lead` are tested together. */
   lead?: ReactNode
   /** Left side of the footer — usually a Link deeper. */
   footer?: ReactNode
@@ -55,7 +64,9 @@ export interface TileProps {
   className?: string
   bodyClassName?: string
   /** How the body's groups share spare height: packed at the top, spread
-   *  between, or centred. */
+   *  between, or centred. MASTER §0 rule 8 is that tiles SPREAD their content;
+   *  `start` is the default only because it is what a tile with one group
+   *  wants. Ignored by `strip`, whose cells are the layout. */
   distribute?: 'start' | 'between' | 'center'
   children?: ReactNode
 }
@@ -80,7 +91,7 @@ export function Tile({
         ROW[row] ?? 'xl:row-span-1',
         MIN_H[row] ?? 'min-h-[116px]',
         'xl:min-h-0',
-        (variant === 'default' || variant === 'warm') && 'gap-2.5 px-4 py-3.5',
+        variant === 'default' && 'gap-2.5 px-4 py-3.5',
         isHero && 'gap-3 px-5 py-4',
         isStrip && 'flex-col divide-y divide-border/70 p-0 sm:flex-row sm:items-stretch sm:divide-x sm:divide-y-0',
         hoverable && 'motion-safe:transition-[transform,box-shadow] motion-safe:duration-150 hover:-translate-y-0.5 hover:shadow-tile-hover',
