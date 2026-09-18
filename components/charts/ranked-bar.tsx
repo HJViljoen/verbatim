@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 // its rank. Used for themes, platforms, hooks, formats.
 
 export function RankedBar({
-  label, pct, color, count, dot, badge, barWidth = 110, href, animate = true, className,
+  label, pct, color, count, dot, badge, barWidth = 110, countWidth, href, animate = true, className,
 }: {
   label: ReactNode
   /** 0–100, relative to the list's maximum. */
@@ -18,6 +18,11 @@ export function RankedBar({
   dot?: boolean
   badge?: ReactNode
   barWidth?: number
+  /** Width of the count cell, in px. Default 28 — one short number, which is
+   *  what this row was built for. A row whose count carries its denominator
+   *  ("128 of 331 videos", copy contract rule (b)) needs the artboard's wider
+   *  right-hand cell, or it wraps to four lines inside a span-5 tile. */
+  countWidth?: number
   href?: string
   /** One-time grow-in on mount (no-op under prefers-reduced-motion). */
   animate?: boolean
@@ -31,7 +36,14 @@ export function RankedBar({
       <span className="h-1.5 shrink-0 overflow-hidden rounded-full bg-inner" style={{ width: barWidth }} aria-hidden>
         <span className={animate ? 'vi-anim-bar block h-full rounded-full' : 'block h-full rounded-full'} style={{ width: `${Math.max(2, Math.min(100, pct))}%`, background: color }} />
       </span>
-      {count != null && <span className="w-7 shrink-0 text-right font-mono text-[11.5px] font-semibold tabular-nums">{count}</span>}
+      {count != null && (
+        <span
+          className={cn('shrink-0 text-right font-mono text-[11.5px] font-semibold tabular-nums', countWidth == null && 'w-7')}
+          style={countWidth != null ? { width: countWidth } : undefined}
+        >
+          {count}
+        </span>
+      )}
     </>
   )
   const cls = cn('flex items-center gap-2 leading-[1.3]', href && 'rounded-sm hover:bg-muted/50', className)

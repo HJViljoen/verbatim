@@ -55,7 +55,7 @@ export function forSalesBlock<D>(key: string, pick: (data: D) => ForSalesData): 
         <div className={email ? undefined : 'flex min-w-0 flex-col gap-2.5'}>
           {d.objections.length > 0 ? (
             <Section title="The objections this update heard" mode={mode}>
-              <BlockRanked mode={mode} rows={rank(d.objections, d.videos)} />
+              <BlockRanked mode={mode} countWidth={80} barWidth={64} rows={rank(d.objections, d.videos)} />
               {d.videos == null ? <Note mode={mode}>{NO_DENOMINATOR}</Note> : null}
               <Note mode={mode}>{groupingLine(d.grouping)}</Note>
               <Note mode={mode}>Grounded answers to these sit in the sales brief.</Note>
@@ -111,7 +111,7 @@ export function forSalesBlock<D>(key: string, pick: (data: D) => ForSalesData): 
 
           {d.rivalComplaints.length > 0 ? (
             <Section title="What they complain about in a rival" mode={mode}>
-              <BlockRanked mode={mode} rows={rank(d.rivalComplaints, d.videos)} />
+              <BlockRanked mode={mode} countWidth={80} barWidth={64} rows={rank(d.rivalComplaints, d.videos)} />
               <Note mode={mode}>Counted under videos about that rival, never under yours.</Note>
               {d.videos == null && d.objections.length === 0 ? <Note mode={mode}>{NO_DENOMINATOR}</Note> : null}
             </Section>
@@ -211,7 +211,10 @@ function rank(groups: readonly SalesGroup[], of: number | null): BlockRankedRow[
     pct: (g.videos / max) * 100,
     color: 'var(--cat)',
     count: of != null
-      ? <span data-copy="level">{fmtInt(g.videos)} of {fmtInt(of)} videos</span>
+      // "96 of 205" rather than "96 of 205 videos": the noun is on the block's
+      // own meta ("objections counted in 205 videos this update"), and a row
+      // cell that repeats it wraps to three lines in the artboard's column.
+      ? <span data-copy="level">{fmtInt(g.videos)} of {fmtInt(of)}</span>
       : fmtInt(g.videos),
   }))
 }

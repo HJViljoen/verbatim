@@ -638,7 +638,7 @@ describe('WK §5 · for sales', () => {
 
   it('puts the denominator on every ranked row, marked as the level it is', () => {
     const markup = render(weekSales.render(weekFixture(), 'app', ctx))
-    expect(markup).toContain('<span data-copy="level">96 of 205 videos</span>')
+    expect(markup).toContain('<span data-copy="level">96 of 205</span>')
     assertCopyContract(markup)
   })
 
@@ -726,7 +726,10 @@ describe('WK §6 · what worked', () => {
   it('puts an n on every row, beside the multiple', () => {
     const text = renderText(weekWorked.render(weekFixture(), 'app', ctx))
     expect(text).toContain('Promotional')
-    expect(text).toContain('1.8× the median · 128 of 331 videos')
+    // The count cell carries the level; the multiple rides in the artboard's
+    // right-hand badge beside the engagement figure.
+    expect(text).toContain('128 of 331')
+    expect(text).toContain('3.8% · 1.8×')
   })
 
   it('prints your own hooks on the published clock, and says which clock', () => {
@@ -763,7 +766,7 @@ describe('WK §6 · what worked', () => {
     expect(text).not.toContain('Caption only')
     expect(text).toContain('Question')
     // Every hook row keeps its own denominator.
-    expect(text).toContain('181 of 331 videos')
+    expect(text).toContain('181 of 331')
   })
 
   it('says the own side is unread rather than printing a zero', () => {
@@ -777,7 +780,7 @@ describe('WK §6 · what worked', () => {
     // else's, and the block sits four inches under "Your own brand — 52
     // analysed" asking which formats earned attention.
     const text = renderText(weekWorked.render(weekFixture(), 'app', ctx))
-    expect(text).toContain('yours, your rivals’ and the category’s together')
+    expect(text).toContain('Yours, your rivals’ and the category’s together.')
   })
 
   it('names a hook without claiming a direction', () => {

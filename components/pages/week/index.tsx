@@ -73,18 +73,67 @@ const COLS: Record<string, number> = {
   'week.sales': 7,
 }
 
-/** How tall each block's tile is, in the grid's 116px row units. */
+/** How tall each block's tile is, in the grid's 116px row units — the height a
+ *  FULL one needs.
+ *
+ *  GENEROUS BY DESIGN. A tile is `overflow-hidden` and its span is fixed, so a
+ *  block whose content outgrows its span is CLIPPED — and the degraded arms are
+ *  not the short ones: Sealand carries three rival rows where Össur carries
+ *  one, and a refusal sentence is longer than the figure it replaces. Every
+ *  span below was set against the TALLEST of the three fixtures at 1440. */
 const ROWS: Record<string, number> = {
   'week.unusual': 4,
-  'week.reply': 3,
+  'week.reply': 4,
   'week.subjects': 3,
-  'week.came-in': 4,
+  'week.came-in': 5,
   'week.rival-posts': 3,
   'week.worked': 4,
   'week.sales': 4,
+  'week.flagged': 2,
+  'week.rising': 3,
+  'week.coverage': 1,
+}
+
+/** What a tile is worth when its block has nothing to draw. */
+const EMPTY_ROWS: Record<string, number> = {
+  'week.reply': 2,
+  'week.subjects': 2,
+  'week.rival-posts': 2,
+  'week.worked': 3,
+  'week.sales': 3,
   'week.flagged': 1,
   'week.rising': 2,
-  'week.coverage': 1,
+}
+
+/**
+ * The height this tile needs for THIS reading.
+ *
+ * A TILE KEEPS ITS SIZE AND THE GRID NEVER COLLAPSES — that is the shell's own
+ * rule and it stays: a block with nothing to say prints a sentence at the size
+ * it would have been, so the page does not reshuffle between updates. What it
+ * does not have to keep is the height of the rows it DOES NOT HAVE: on Sealand
+ * today five of these ten blocks print one sentence each, and at the full span
+ * that is 1,400px of white the artboard does not have. So a block that is
+ * standing on its empty state takes the shorter span, and one with rows takes
+ * the height its rows need.
+ *
+ * `emptyState` IS THE TEST, not a count of rows, because it is the block's own
+ * answer to "have I anything to draw" and it is computed without rendering
+ * (lib/blocks/types.ts). A block that returns a sentence AND draws rows — §1
+ * with a refusal and its series, §4 with no videos and its new themes — is not
+ * empty, and the two that do that are excluded here rather than guessed at.
+ */
+function tileRows(key: string, data: WeekData): number {
+  const full = ROWS[key] ?? 2
+  const short = EMPTY_ROWS[key]
+  if (short == null) return full
+  const block = WEEK_BLOCKS.find((b) => b.key === key)
+  const empty = block?.emptyState(data) ?? null
+  if (empty == null) return full
+  // §5 draws its table under its own empty sentence when a rival is tracked
+  // and silent, so it is short only when there is no rival at all.
+  if (key === 'week.rival-posts' && data.cameIn.rivals.length > 0) return full
+  return short
 }
 
 /** The app's context: RELATIVE links, so `next/link` navigates on the client
@@ -162,7 +211,7 @@ export function WeekPage({
         </SurfacePageBar>
         <PageGrid>
           {WEEK_BLOCKS.map((block) => (
-            <Tile key={block.key} col={COLS[block.key] ?? 12} row={ROWS[block.key] ?? 2}>
+            <Tile key={block.key} col={COLS[block.key] ?? 12} row={tileRows(block.key, data)}>
               {block.render(data, 'app', ctx)}
             </Tile>
           ))}

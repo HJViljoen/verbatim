@@ -68,7 +68,7 @@ export const weekWorked: Block<WeekData> = {
         // population and it is the right one (a format works or does not,
         // whoever filmed it), but a reader who is not told will read these
         // rows as a verdict on their own content.
-        meta={`of ${fmtInt(w.rated)} videos with an engagement figure · yours, your rivals’ and the category’s together`}
+        meta={`of ${fmtInt(w.rated)} videos with an engagement figure`}
         footer={email
           ? <a href={href} style={{ color: EMAIL.ink }}>Open the content brief →</a>
           : <Link href={href} className="hover:underline">Open the content brief →</Link>}
@@ -77,6 +77,10 @@ export const weekWorked: Block<WeekData> = {
         footerNote={w.excluded.length > 0 ? `${listNames(w.excluded)} excluded from engagement` : undefined}
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
+        {/* WHOSE VIDEOS — in the body, because it does not fit the meta of a
+            span-5 tile and it is not an aside: a reader who is not told will
+            read these rows as a verdict on their own content. */}
+        <Note mode={mode}>Yours, your rivals’ and the category’s together.</Note>
         {w.formats.length > 0 ? (
           <Group title="Formats this update" rows={w.formats} rated={w.rated} mode={mode} />
         ) : null}
@@ -134,6 +138,11 @@ function Group({
       </div>
       <BlockRanked
         mode={mode}
+        // THE ARTBOARD'S WIDER RIGHT-HAND CELL. The count carries its
+        // denominator (rule (b)) and the default 28px cell wraps it to four
+        // lines inside a span-5 tile.
+        countWidth={96}
+        barWidth={64}
         rows={rows.map((r) => ({
           // ALREADY A LABEL — humanised by `workedLabel` in the loader, and
           // never CSS `capitalize`: an email client applies no stylesheet, and
@@ -148,11 +157,10 @@ function Group({
           // THE LEVEL AND ITS DENOMINATOR TOGETHER. A multiple on its own is a
           // score; "1.8× the update's median · 128 of 331 videos" is a
           // measurement (copy contract rule (b)).
-          count: (
-            <span data-copy="level">
-              {r.multiple.toFixed(1)}× the median · {fmtInt(r.videos)} of {fmtInt(rated)} videos
-            </span>
-          ),
+          // THE LEVEL AND ITS DENOMINATOR TOGETHER, in the artboard's own
+          // right-hand cell. The multiple rides in the badge beside the
+          // engagement figure, where the mock puts "3.8% n 233".
+          count: <span data-copy="level">{fmtInt(r.videos)} of {fmtInt(rated)}</span>,
           // A PLAIN STRING, NOT A STYLED SPAN. `BlockRanked`'s email arm
           // renders a badge verbatim into its table cell, so a className here
           // would ship a Tailwind class into an inbox that has no stylesheet —
@@ -163,7 +171,7 @@ function Group({
           // here read "Promotional 998%" against a 3.3× multiple on
           // production, which is the kind of number a reader stops trusting a
           // page over.
-          badge: fmtPct(r.engagement, 1),
+          badge: `${fmtPct(r.engagement, 1)} · ${r.multiple.toFixed(1)}×`,
         }))}
       />
     </div>

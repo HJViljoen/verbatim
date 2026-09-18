@@ -95,10 +95,17 @@ export interface BlockRankedRow {
  * the row is for.
  */
 export function BlockRanked({
-  rows, mode = 'app',
+  rows, mode = 'app', countWidth, barWidth,
 }: {
   rows: readonly BlockRankedRow[]
   mode?: RenderMode
+  /** Width of the app arm's count cell, in px (`RankedBar.countWidth`). The
+   *  email arm needs none: its count is a table cell that sizes itself. */
+  countWidth?: number
+  /** Width of the app arm's bar, in px. The default 110 is right in a
+   *  full-width tile and eats the label in a span-5 one, where the artboard's
+   *  own bar is 84. */
+  barWidth?: number
 }) {
   if (!rows.length) return null
 
@@ -131,6 +138,8 @@ export function BlockRanked({
           count={r.count != null ? <span data-copy="figure">{r.count}</span> : undefined}
           badge={r.badge}
           href={r.href}
+          countWidth={countWidth}
+          barWidth={barWidth}
           dot
         />
       ))}

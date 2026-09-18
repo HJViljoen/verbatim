@@ -100,7 +100,7 @@ export const weekSubjects: Block<WeekData> = {
             )
             : (
               <>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3 xl:grid-cols-6">
+                <div className={`grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3 ${STRIP_COLUMNS[Math.min(s.rows.length, 6)] ?? 'xl:grid-cols-6'}`}>
                   {s.rows.map((r) => <Column key={r.id} row={r} />)}
                 </div>
                 <Legend rows={s.rows} />
@@ -125,6 +125,20 @@ export const weekSubjects: Block<WeekData> = {
   emptyState(data) {
     return data.subjects.unread
   },
+}
+
+/**
+ * As many columns as there are subjects, up to the artboard's six.
+ *
+ * Written out in full, never interpolated, so Tailwind v4's scanner sees them
+ * (the rule `components/shell/tile.tsx`'s span maps follow). Six columns with
+ * three subjects in them is three sixths of a strip and half a tile of white:
+ * a workspace naming three subjects is the common case, and the strip should
+ * fill the tile it is given.
+ */
+const STRIP_COLUMNS: Record<number, string> = {
+  1: 'xl:grid-cols-1', 2: 'xl:grid-cols-2', 3: 'xl:grid-cols-3',
+  4: 'xl:grid-cols-4', 5: 'xl:grid-cols-5', 6: 'xl:grid-cols-6',
 }
 
 /** One of the mock's six columns. */

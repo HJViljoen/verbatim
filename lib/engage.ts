@@ -197,6 +197,25 @@ export async function loadEngageCandidates(
   db: SupabaseClient,
   clientId: string,
   runId: string,
+  opts: {
+    /**
+     * Only comments written at or after this instant — an ISO timestamp.
+     *
+     * A COST BOUND THAT CHANGES NO ANSWER (Block D wave 2, E-week). Every
+     * caller of this loader filters on freshness afterwards anyway —
+     * `rankEngageCandidates` drops a candidate whose comment predates its
+     * window, and drops one with no `comment_date` at all — so pushing the
+     * same cut into the comments read returns the same digest off a fraction
+     * of the rows. It is optional because the Content page's digest also
+     * builds `EngageInsightDetail` out of the WHOLE candidate list ("why it
+     * surfaced" shows every evidence quote behind an insight, not just the
+     * fresh ones) and narrowing that would change what it prints.
+     *
+     * This week passes the run's own frozen `window_start`, which is the same
+     * clock every other figure on that page is dated by.
+     */
+    commentsSince?: string
+  } = {},
 ): Promise<EngageCandidate[]> {
   const insights = await selectAll<{
     id: string; category: string; theme: string; description: string; strength_score: number | null
@@ -228,11 +247,12 @@ export async function loadEngageCandidates(
     id: string; author: string | null; text: string; likes: number | null
     comment_date: string | null; platform: string; video_id: string; comment_id: string
   }>(
-    (ids) => () =>
-      db.from('comments')
+    (ids) => () => {
+      const q = db.from('comments')
         .select('id, author, text, likes, comment_date, platform, video_id, comment_id')
         .in('id', ids)
-        .order('id'),
+      return (opts.commentsSince ? q.gte('comment_date', opts.commentsSince) : q).order('id')
+    },
     // Retention nulls the author on cited comments and deletes uncited ones
     // past 30 days (T0-9), so an evidence row can outlive its comment; a null
     // id must never reach the `in.()` filter.

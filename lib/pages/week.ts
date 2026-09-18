@@ -1296,7 +1296,12 @@ async function buildReplies(input: {
 
   try {
     const [candidates, configRes] = await Promise.all([
-      loadEngageCandidates(supabase, clientId, runId),
+      // BOUNDED BY THE RUN'S OWN WINDOW, which is the same cut
+      // `rankEngageCandidates` applies below — so the read returns the same
+      // digest off the comments of these days rather than off the corpus.
+      // This page is a second reader of a digest the Content page already
+      // loads whole, and until Content retires both run on every page view.
+      loadEngageCandidates(supabase, clientId, runId, { commentsSince: window.from }),
       supabase.from('tracking_configs')
         .select('own_handles, brand_keywords, competitor_keywords, industry_keywords')
         .eq('client_id', clientId).maybeSingle(),
