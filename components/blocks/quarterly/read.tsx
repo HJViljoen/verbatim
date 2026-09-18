@@ -90,12 +90,23 @@ export const quarterlyRead: Block<QuarterlyData> = {
         <Note mode={mode}>
           Our reading of the counted data, not a counted result. Every figure below is printed with what it is out of.
         </Note>
+        {/* THE ARTBOARD'S OWN SIZE, THROUGH THE DECK'S ZOOM.
+            `.vb-slide-body` lays out at 1168px and is zoomed to 0.902 to fit
+            the 297mm sheet, so a nominal px value lands at 90% of the drawing
+            at the same physical size: the artboard's 24px headline is 21.7px
+            of paper when it is coded as 24, and it was coded as 22 — 19.8px,
+            close enough to the 12.5px body around it that it did not read as
+            a headline at all. 27 and 15 are the artboard's 24 and 14 DIVIDED
+            by the zoom, which is what makes them the drawing's size on paper.
+            The rest of the deck keeps the nominal scale, and that is a
+            recorded deviation, not an oversight: every other sheet spends the
+            difference on rows, and page 2 is the one with room. */}
         {headline ? (
-          <div className={email ? undefined : 'max-w-[30ch] text-[22px] font-semibold leading-[1.18] tracking-[-0.02em] [text-wrap:balance]'}>
+          <div className={email ? undefined : 'max-w-[30ch] text-[27px] font-semibold leading-[1.15] tracking-[-0.02em] [text-wrap:balance]'}>
             <TokenProse body={headline} figures={r.figures} mode={mode} model={!i.fallback} />
           </div>
         ) : null}
-        <div className={email ? undefined : 'flex max-w-[66ch] flex-col gap-2 text-[13.5px] leading-[1.5]'}>
+        <div className={email ? undefined : 'flex max-w-[66ch] flex-col gap-2 text-[15px] leading-[1.5]'}>
           {body.map((sentence, n) => (
             <TokenProse key={n} body={sentence} figures={r.figures} mode={mode} model={!i.fallback} />
           ))}

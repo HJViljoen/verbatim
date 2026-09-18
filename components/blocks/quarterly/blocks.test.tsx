@@ -680,7 +680,7 @@ describe('the artboard port (Block D wave 2)', () => {
     // entire argument at 22px on every state this branch can render.
     for (const state of STATES) {
       const markup = render(QUARTERLY_BLOCKS['quarterly.read'].render(state, 'app', ctx))
-      const headline = markup.match(/text-\[22px\][^>]*>([\s\S]*?)<\/div>/)
+      const headline = markup.match(/text-\[27px\][^>]*>([\s\S]*?)<\/div>/)
       if (!headline) continue
       const words = headline[1].replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
       expect(words.replace(/\.$/, '')).not.toContain('. ')
