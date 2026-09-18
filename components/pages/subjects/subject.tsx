@@ -132,7 +132,13 @@ const PILL = 'inline-flex h-8 flex-none items-center gap-1.5 whitespace-nowrap r
 export const subjectsSubject: Block<SubjectsData> = {
   key: 'subjects.subject',
   title: 'This subject',
-  question: 'How are we seen on this subject?',
+  // NOT THE PAGE'S OWN SUBTITLE. `lib/nav.ts` prints "How are we seen on this
+  // subject?" under the page title, and this block printed the identical string
+  // as its question line 90px below it — twice on the no-selection arm, with one
+  // tile between them. Every block carries a question line (§7 keeps them); a
+  // literal repeat of the page's is the one that has to give way, and this
+  // block's own question is the three-sided comparison it draws.
+  question: 'How do we compare with the rivals we track?',
 
   render(data, mode = 'app', ctx) {
     const pane = data.selected

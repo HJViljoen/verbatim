@@ -4,6 +4,7 @@ import { blockAnswers, blockContext, figureConflicts, type RenderMode } from '@/
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
+import { surface } from '@/lib/nav'
 import { layoutFor, SUBJECT_BLOCKS } from './index'
 import { subjectsList } from './list'
 import { subjectsOwnPosts } from './own-posts'
@@ -19,6 +20,10 @@ import { candidatesFixture, refusedFixture, retiredRivalFixture, subjectsFixture
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
+
+/** The page's own subtitle, out of `lib/nav.ts` — main's file, and the string
+ *  this page's detail pane used to repeat verbatim. */
+const NAV_SUBTITLE = surface('subjects').question!
 
 describe('the Subjects blocks, all of them', () => {
   it('render in all three modes on a reading, a refusal and a candidate set, and keep the copy contract', () => {
@@ -642,6 +647,26 @@ describe('the mock’s own shape, where the data allows it', () => {
     expect(text).toContain('Said on camera')
     expect(text).toContain('On-screen text on the same video')
     expect(text).toContain('1 bag. 3 years. 0 regrets')
+  })
+})
+
+// THE PAGE SAYS A THING ONCE. Two paragraphs were rendered twice within one
+// screenful: the page's own subtitle (`lib/nav.ts`) as this block's question
+// line, and `axisNote` at the foot of the hero and again as the chart's
+// caption ~60px below it.
+describe('the page says each of its sentences once', () => {
+  it('does not repeat the page’s own subtitle as the pane’s question', () => {
+    expect(subjectsSubject.question).not.toBe(NAV_SUBTITLE)
+    for (const data of [subjectsFixture(), refusedFixture()]) {
+      expect(renderText(subjectsSubject.render(data, 'app', ctx))).not.toContain(NAV_SUBTITLE)
+    }
+  })
+
+  it('prints the axis note on the hero and not again under the chart', () => {
+    const data = subjectsFixture()
+    const note = data.selected!.axisNote!
+    expect(renderText(subjectsSubject.render(data, 'app', ctx))).toContain(note)
+    expect(renderText(subjectsLine.render(data, 'app', ctx))).not.toContain(note)
   })
 })
 

@@ -124,7 +124,12 @@ export const subjectsLine: Block<SubjectsData> = {
             annotate={annotate}
             format={(v) => fmtPct(v)}
             label={`${pane.name}, share of each audience's videos, month by month`}
-            caption={pane.axisNote ?? undefined}
+            // NO CAPTION. `axisNote` is the hero's sentence and the hero is the
+            // tile directly above this one — the same paragraph rendered twice
+            // about 60px apart, in one screenful. The chart's own key now says
+            // which ink draws no line and which months a gutter token marks
+            // (`undrawnNote`, `legendEveryMonth`), which is what the caption was
+            // carrying and where a reader looks for it.
             mode={mode}
             ctx={ctx}
           />
