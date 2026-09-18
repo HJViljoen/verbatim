@@ -118,6 +118,16 @@ describe('voiceTheme', () => {
     expect(text).toContain('in the comments')
   })
 
+  it('marks a cite with its platform glyph and still says the platform in words', () => {
+    // The artboard puts a glyph before the platform's name. It is decoration —
+    // aria-hidden — and the word stays: a glyph is a second rendering of a
+    // fact, never the only one. A quote whose video did not resolve has no
+    // platform to mark and says "in the comments".
+    const markup = render(voiceTheme.render(voiceFixture(), 'app', ctx))
+    expect(markup.match(/<svg viewBox="0 0 24 24"/g)?.length).toBeGreaterThanOrEqual(5)
+    expect(renderText(voiceTheme.render(voiceFixture(), 'app', ctx))).toContain('TikTok · 14 Sep · under a category video')
+  })
+
   it('nests a video\u2019s on-screen text under the quote taken FROM that video', () => {
     const text = draw()
     expect(text).toContain('On-screen text on the same video: 1 bag. 3 years. 0 regrets')

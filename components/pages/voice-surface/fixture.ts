@@ -220,6 +220,7 @@ export function voiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurface
         'Reddit · 8 Sep · under a category video',
         'Instagram · 5 Sep · under a Cotopaxi post',
       ],
+      quotePlatforms: ['tiktok', 'tiktok', null, 'youtube', 'reddit', 'instagram'],
       quoteOnScreen: [null, '1 bag. 3 years. 0 regrets', null, null, 'Zip test: 400 cycles, no failure', null],
       quotesOf: 182,
       // A DIFFERENT VIDEO FROM ANY THE QUOTES CAME OUT OF. Quote 2 is cited

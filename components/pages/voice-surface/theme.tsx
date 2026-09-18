@@ -7,6 +7,7 @@ import { BlockMovement } from '@/components/blocks/movement'
 import { BlockProportion, BlockReach } from '@/components/blocks/bars'
 import { BlockQuotes } from '@/components/blocks/quote'
 import { BlockStat } from '@/components/blocks/stat'
+import { PlatformIcon } from '@/components/charts/platform-icon'
 import { TileColumns } from '@/components/shell/page-grid'
 import { DirectionWord } from '@/components/pages/overview/subjects'
 import { STATE_LABEL, type CalendarSeries } from '@/lib/charts/calendar'
@@ -480,7 +481,14 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
                           <span data-copy="quote" className={email ? undefined : 'text-secondary-foreground'}>{t.quoteOnScreen[i]}</span>
                         </span>
                       ) : null}
-                      <span>{t.quoteCites[i] ?? ''}</span>
+                      {/* THE ARTBOARD'S GLYPH BEFORE THE PLATFORM'S NAME.
+                          Decoration only — `aria-hidden`, and the cite still
+                          says the word, because a glyph is a second rendering
+                          of a fact and never the only one. */}
+                      <span className={email ? undefined : 'inline-flex items-center gap-1'}>
+                        {!email && t.quotePlatforms[i] ? <PlatformIcon platform={t.quotePlatforms[i] as string} /> : null}
+                        {t.quoteCites[i] ?? ''}
+                      </span>
                     </span>
                   ),
                 }))}

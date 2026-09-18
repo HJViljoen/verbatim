@@ -318,6 +318,12 @@ export interface ThemeBlock {
   onCameraOf: number | null
   quotes: Quote[]
   quoteCites: string[]
+  /** The platform each quote's video was posted on, for the artboard's glyph
+   *  before the platform's name. Parallel to `quotes`; null where the video
+   *  did not resolve — the cite says "in the comments" there and there is no
+   *  platform to mark. The WORD stays in `quoteCites`: a glyph is a second
+   *  rendering of a fact, never the only one. */
+  quotePlatforms: (string | null)[]
   /** The on-screen text of the video a quote was written under, nested with
    *  that quote and no other (the artboard's "On-screen text on the same
    *  video"). One entry per quote, null where the video carries none or did not
@@ -1477,7 +1483,7 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
     tone: null,
     toneNote: null,
     onCamera: null, onCameraSaid: null, onCameraOf: null,
-    quotes: [], quoteCites: [], quoteOnScreen: [], quotesOf: null,
+    quotes: [], quoteCites: [], quotePlatforms: [], quoteOnScreen: [], quotesOf: null,
     spoken: null, onScreen: null,
     withheld: 0,
     conclusionHref: '/dashboard/market',
@@ -1545,6 +1551,7 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
   // per-run row id that must never be a cross-run key (AGENTS.md).
   let quotes: Quote[] = []
   let quoteCites: string[] = []
+  let quotePlatforms: (string | null)[] = []
   let quoteOnScreen: (string | null)[] = []
   let quotesOf: number | null = null
   let withheld = 0
@@ -1629,6 +1636,7 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
 
       const seen = new Set<string>()
       const cites: string[] = []
+      const platforms: (string | null)[] = []
       const nested: (string | null)[] = []
       const out: Quote[] = []
       /** The videos a quote was drawn out of the TRANSCRIPT of — the other
@@ -1643,6 +1651,7 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
         const video = videoById.get(videoOfInsight.get(ev.audience_insight_id) ?? '') ?? null
         if (video && ev.source === 'transcript') quotedTranscript.add(video.id)
         cites.push(quoteCite({ video: video ? { ...video, kind: kindOf(video) } : null, source: ev.source }))
+        platforms.push(video?.platform ?? null)
         // The mock nests the video's own on-screen text under the quote taken
         // from that video. Only that quote: the same words under a quote from
         // a different video would be a caption about someone else's post.
@@ -1651,6 +1660,7 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
       }
       quotes = out
       quoteCites = cites
+      quotePlatforms = platforms
       quoteOnScreen = nested
       // THE BLOCK-LEVEL LINES STAY ON THE THEME'S OWN SUPPORTING VIDEOS. The
       // videos read above is now a superset — it carries the quotes' videos
@@ -1763,6 +1773,7 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
     onCameraOf,
     quotes,
     quoteCites,
+    quotePlatforms,
     quoteOnScreen,
     spoken,
     onScreen,
