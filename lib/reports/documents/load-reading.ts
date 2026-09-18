@@ -285,6 +285,41 @@ async function loadSwitchingPool(
   }
 }
 
+/** The one subject row `sales.p2.chart` is drawn from, named for what it is. */
+export interface ChartLead {
+  months: readonly string[]
+  label: string
+  points: (number | null)[]
+}
+
+/**
+ * The lead subject's series, labelled with the subject AND the category.
+ *
+ * THE LABEL NAMES THE SUBJECT, BECAUSE THE NUMBERS ARE THE SUBJECT'S.
+ * `SubjectRow.spark` is that subject's share of the CATEGORY's month
+ * (lib/pages/overview.ts) — not the category's own series — and labelling it
+ * `category.label` printed the category's name over one subject's line. The
+ * quarterly's chart, built in this same package, names it
+ * `${subject} · ${category}` (lib/pages/quarterly.ts); two surfaces of one
+ * product must not disagree about what the same numbers are called.
+ *
+ * AND THE LEAD IS THE FIRST ROW THAT HAS A SERIES. Taken blind, `rows[0]`
+ * whose spark is all nulls yields a chart that silently has nothing in it —
+ * the same guard the quarterly already applies, applied here.
+ *
+ * ONE SIDE, NOT TWO. The brief asked for a two-series line; the tenant's own
+ * side carries no month series on a subject row, so there is one side here and
+ * the shape says so rather than drawing a second line off the same numbers.
+ */
+export function chartLead(
+  rows: readonly { label: string; spark: (number | null)[]; sparkMonths: string[] }[],
+  categoryLabel: string,
+): ChartLead | null {
+  const lead = rows.find((r) => r.spark.some((p) => p != null)) ?? null
+  if (!lead) return null
+  return { months: lead.sparkMonths, label: `${lead.label} · ${categoryLabel}`, points: lead.spark }
+}
+
 export async function documentFiguresFor(
   scope: Scope,
   a: { reading: BriefReading; overview: OverviewData; readingAt: string; untracked: UntrackedNote[] },
@@ -354,19 +389,9 @@ export async function documentFiguresFor(
   // THE TWO-SERIES LINE. Only the side with the n is drawn, and below three
   // readings `monthlyLineLabel` names the months instead — the build's own
   // answer to D3, applied to a document.
-  const first = a.overview.subjects.rows[0] ?? null
-  const line = first
-    ? monthLine({
-        months: first.sparkMonths,
-        labelFor: monthlyLineLabel,
-        series: [
-          { label: a.overview.category.label, points: first.spark },
-          // The tenant's own side has no month series on the subject row — the
-          // spark is the category's by construction (lib/pages/overview.ts) —
-          // so there is one side here and the shape says so rather than
-          // drawing a second line off the same numbers.
-        ],
-      })
+  const lead = chartLead(a.overview.subjects.rows, a.overview.category.label)
+  const line = lead
+    ? monthLine({ months: lead.months, labelFor: monthlyLineLabel, series: [{ label: lead.label, points: lead.points }] })
     : null
 
   return {
