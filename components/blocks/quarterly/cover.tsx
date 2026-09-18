@@ -129,9 +129,16 @@ export const quarterlyCover: Block<QuarterlyData> = {
   },
 
   // THE CARDS' OWN COMPARISONS, DECLARED. Two of the three may carry a
-  // `Verdict`, and this artefact counts what it drew — `confidenceOf` reads the
-  // same list, so a comparison printed on the cover and counted nowhere would
-  // make the confidence word describe a smaller page than the reader holds.
+  // `Verdict`, and a block declares what it drew.
+  //
+  // NOT BECAUSE `confidenceOf` READS THIS LIST — it does not, and the first cut
+  // of this comment said it did. `confidenceOf` is called once, in
+  // `buildRead` (lib/pages/quarterly.ts), over the list `composeQuarterly`
+  // built from `overview.sentence.verdicts` and the quarter's own steps; the
+  // cards are drawn FROM that list, so the confidence word already counts
+  // them. What this answer reaches is `blockAnswers`, which feeds the digest
+  // and the summary composition — and those must not be told a comparison was
+  // printed here that was not, nor miss one that was.
   verdicts(data) {
     return data.cover.stats.map((s) => s.verdict).filter((v): v is NonNullable<typeof v> => v != null)
   },
