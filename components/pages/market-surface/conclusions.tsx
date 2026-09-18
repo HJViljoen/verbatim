@@ -60,13 +60,28 @@ function Row({ row, mode, appUrl, corpus }: { row: ConclusionRow; mode: RenderMo
   // the WHOLE corpus (Össur: 1,699 analysed videos), so "305 of 1,388" beside a
   // page bar reading "September 2026" is a fraction of two populations.
   // `corpusLine` under the rows says which population this one is.
-  const count = (
-    <span data-copy="figure" className={email ? undefined : FIGURE} style={email ? { fontFamily: FONT.mono, fontSize: 11.5, color: EMAIL.muted } : undefined}>
-      {corpus != null
-        ? <>{fmtInt(row.videos)} of {fmtInt(corpus)} videos behind it</>
-        : <>{fmtInt(row.videos)} {row.videos === 1 ? 'video' : 'videos'} behind it</>}
-    </span>
-  )
+  // A COUNT OF NOTHING IS NOT A SHARE OF ANYTHING. "0 of 1,699 videos behind
+  // it" is a fraction whose numerator says the record is empty, printed in the
+  // dotted-underline of a measured figure and sitting beside a chip promising
+  // an early signal. The row says it in words instead, and `TierChip` drops
+  // its tint (never its label) for the same reason.
+  const grounded = row.videos > 0
+  const count = !grounded
+    ? (
+      <span
+        className={email ? undefined : 'text-[11.5px] text-muted-foreground'}
+        style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}
+      >
+        no videos we can still count behind it
+      </span>
+    )
+    : (
+      <span data-copy="figure" className={email ? undefined : FIGURE} style={email ? { fontFamily: FONT.mono, fontSize: 11.5, color: EMAIL.muted } : undefined}>
+        {corpus != null
+          ? <>{fmtInt(row.videos)} of {fmtInt(corpus)} videos behind it</>
+          : <>{fmtInt(row.videos)} {row.videos === 1 ? 'video' : 'videos'} behind it</>}
+      </span>
+    )
   const chips = row.themes.map((t) => {
     const href = `${appUrl}/dashboard/voice?themes=${encodeURIComponent(t.slug)}`
     const label = t.label ?? t.slug
@@ -86,7 +101,7 @@ function Row({ row, mode, appUrl, corpus }: { row: ConclusionRow; mode: RenderMo
     return (
       <div style={{ padding: '6px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
         <div data-copy="stored" data-slot="pass_d_a_insight" style={{ fontFamily: FONT.sans, fontSize: 13, fontWeight: 600, color: EMAIL.ink }}>{row.title}</div>
-        <div style={{ marginTop: 3 }}><TierChip tier={row.tier} mode={mode} /> {count}</div>
+        <div style={{ marginTop: 3 }}><TierChip tier={row.tier} mode={mode} ungrounded={!grounded} /> {count}</div>
         <div data-copy="stored" data-slot="pass_d_a_insight" style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink2, marginTop: 3 }}>{row.description}</div>
         {chips.length > 0 || newChip ? <div style={{ marginTop: 3 }}>{chips} {newChip}</div> : null}
       </div>
@@ -96,7 +111,7 @@ function Row({ row, mode, appUrl, corpus }: { row: ConclusionRow; mode: RenderMo
   return (
     <TileBlock className="flex min-w-0 flex-col gap-1.5">
       <div className="flex items-center justify-between gap-2">
-        <TierChip tier={row.tier} mode={mode} />
+        <TierChip tier={row.tier} mode={mode} ungrounded={!grounded} />
         {count}
       </div>
       <p data-copy="stored" data-slot="pass_d_a_insight" className="m-0 text-[13px] font-medium leading-[1.4]">{row.title}</p>
@@ -106,8 +121,15 @@ function Row({ row, mode, appUrl, corpus }: { row: ConclusionRow; mode: RenderMo
   )
 }
 
-/** The artboard's footer control, counted by name. */
+/** The artboard's footer control, counted by name — over EVERY row below the
+ *  bar (`ConclusionsBlock.belowBar`), not over the ones this block happened to
+ *  draw. `rows` is capped at `CONCLUSIONS_SHOWN`, so counting the drawn ones
+ *  under-counted exactly the rows the block's own rule ("labelled, never
+ *  hidden") is about. Where the cap bites, the disclosure says how many of
+ *  them it is showing. */
 const belowBarWord = (n: number): string => `${fmtInt(n)} below the bar this update`
+const belowBarShown = (drawn: number, all: number): string | null =>
+  drawn < all ? `${fmtInt(drawn)} of them are on this page; the rest are past this update's cap.` : null
 
 export const marketConclusions: Block<MarketSurfaceData> = {
   key: 'market.conclusions',
@@ -138,15 +160,20 @@ export const marketConclusions: Block<MarketSurfaceData> = {
           ? undefined
           : app
             ? (
-              <details className="min-w-0">
+              <details className="group min-w-0">
                 <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[12px] font-medium text-foreground">
-                  <span aria-hidden className="text-[10px] text-muted-foreground">▼</span>
-                  {belowBarWord(below.length)}
+                  {/* The arrow turns with the disclosure — it was a static ▼
+                      in both states, which says "open" when it is shut. */}
+                  <span aria-hidden className="text-[10px] text-muted-foreground transition-transform group-open:rotate-90 motion-reduce:transition-none">▶</span>
+                  {belowBarWord(c.belowBar)}
                 </summary>
                 <div className="mt-2 grid min-w-0 grid-cols-1 gap-2.5 xl:grid-cols-2">{below.map(row)}</div>
+                {belowBarShown(below.length, c.belowBar)
+                  ? <p className="m-0 mt-1.5 text-[11px] font-normal text-muted-foreground">{belowBarShown(below.length, c.belowBar)}</p>
+                  : null}
               </details>
             )
-            : belowBarWord(below.length)}
+            : belowBarWord(c.belowBar)}
         footerNote={concluded}
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}

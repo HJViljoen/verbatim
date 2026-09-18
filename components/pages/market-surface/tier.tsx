@@ -32,16 +32,29 @@ const TIP: Record<GateTier, string> = {
   archive: 'Below the evidence bar: it is shown, labelled, and not counted as a finding.',
 }
 
-export function TierChip({ tier, mode = 'app' }: { tier: GateTier; mode?: RenderMode }) {
+/**
+ * `ungrounded` — the chip beside a count of NOTHING.
+ *
+ * The tier is what `gateTier` decided and the label never changes: a
+ * conclusion the model is confident about with no evidence we can still count
+ * is precisely the row MK1's gate exists for, and hiding its tier would be the
+ * blank the gate refuses. What misreads is the TINT: "Early signal" in the
+ * amber of a finding, printed over "no videos we can still count behind it",
+ * promises evidence in the same breath as saying there is none. So the chip
+ * keeps its word and drops to the neutral tone, which is the one thing on it
+ * that was making a claim the count disproves.
+ */
+export function TierChip({ tier, mode = 'app', ungrounded = false }: { tier: GateTier; mode?: RenderMode; ungrounded?: boolean }) {
+  const tone = ungrounded ? TONE.archive : TONE[tier]
   if (mode === 'email') {
     return (
-      <span style={{ display: 'inline-block', fontFamily: FONT.sans, fontSize: 10.5, fontWeight: 600, padding: '1px 8px', borderRadius: 10, background: TONE[tier].bg, color: TONE[tier].fg }}>
+      <span style={{ display: 'inline-block', fontFamily: FONT.sans, fontSize: 10.5, fontWeight: 600, padding: '1px 8px', borderRadius: 10, background: tone.bg, color: tone.fg }}>
         {LABEL[tier]}
       </span>
     )
   }
   return (
-    <span title={TIP[tier]} className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2 py-px text-[10.5px] font-medium ${TONE[tier].app}`}>
+    <span title={TIP[tier]} className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2 py-px text-[10.5px] font-medium ${tone.app}`}>
       {LABEL[tier]}
     </span>
   )

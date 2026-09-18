@@ -171,6 +171,33 @@ describe('MK1 · what we concluded', () => {
     expect(renderText(markup)).toContain('New means no earlier month in which the theme behind it was mentioned, in your audience or in the category')
   })
 
+  it('says a conclusion has nothing behind it in words, and drops the chip’s tint rather than its label', () => {
+    // The second fixture row is an early signal with `videos: 0`: the chip
+    // promised evidence while the count beside it said there was none, and
+    // "0 of 1,699" is a share whose numerator says the record is empty.
+    const markup = render(marketConclusions.render(marketFixture(), 'app', ctx))
+    const text = renderText(marketConclusions.render(marketFixture(), 'app', ctx))
+    expect(text).toContain('no videos we can still count behind it')
+    expect(text).not.toContain('0 of 1,699')
+    // The tier is still labelled — MK1's gate is that a row is labelled, never
+    // hidden — and the amber is spent only where there is evidence.
+    expect(text).toContain('Early signal')
+    expect(markup).toContain('bg-inner text-muted-foreground')
+  })
+
+  it('counts every row below the bar, not only the ones it drew', () => {
+    // `rows` is capped at CONCLUSIONS_SHOWN and `belowBar` counts them all, so
+    // a tenant with more than eight conclusions saw the summary under-count
+    // exactly the rows "labelled, never hidden" is about.
+    const base = marketFixture()
+    const data = { ...base, conclusions: { ...base.conclusions, belowBar: 4 } }
+    const text = renderText(marketConclusions.render(data, 'app', ctx))
+    expect(text).toContain('4 below the bar this update')
+    expect(text).toContain('1 of them are on this page')
+    // Where nothing is past the cap, the disclosure says nothing extra.
+    expect(renderText(marketConclusions.render(base, 'app', ctx))).not.toContain('are on this page')
+  })
+
   it('dates the conclusions by the update that reached them, with the word update on it', () => {
     const text = renderText(marketConclusions.render(marketFixture(), 'app', ctx))
     expect(text).toContain('concluded with the update of 27 Sep')
