@@ -1,5 +1,6 @@
 import { getSessionContext } from '@/lib/auth'
 import { readingHandle } from '@/lib/reading/read'
+import { shortDate } from '@/lib/format'
 import { canAsk } from '@/lib/agent/access'
 import { askBasisLine, loadAskBasis, nothingSearchable } from '@/lib/agent/basis'
 import { loadNotAnswered } from '@/lib/agent/measure'
@@ -71,12 +72,18 @@ export default async function AgentPage({
   const recordLines = askRecordLines(basis, delivered)
 
   return (
-    <AskShell context={askBasisLine(basis)} record={{ line: recordLines[0], lines: recordLines }} params={sp}>
+    <AskShell context={askBasisLine(basis, { short: true })} record={{ line: recordLines[0], lines: recordLines }} params={sp}>
       <AskColumns
         rail={
           <>
             <EarlierQuestionsTile history={history} row={3} />
-            <DrawsTile draws={askDraws(basis, delivered)} recordHref={askRecordHref()} delivered={delivered} row={2} />
+            <DrawsTile
+              draws={askDraws(basis, delivered)}
+              recordHref={askRecordHref()}
+              delivered={delivered}
+              asAt={basis.lastEmbeddedAt ? shortDate(basis.lastEmbeddedAt) : null}
+              row={2}
+            />
             <NotAnsweredTile notAnswered={notAnswered} row={2} />
           </>
         }

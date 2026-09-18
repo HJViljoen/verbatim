@@ -95,11 +95,26 @@ export function ClaimChip({ tone, children }: { tone: 'supported' | 'contradicte
   )
 }
 
-/** The amber "this one is inference" pill — a block-level mark, not a per-point
- *  one. See `JudgementRegister`. */
+/**
+ * The amber "this one is inference" pill — a block-level mark, not a per-point
+ * one. See `Judgement`.
+ *
+ * THE AMBER IS IN THE TINT AND THE RING, NOT IN THE TEXT. `bg-warning/15
+ * text-warning` is #E6B03C on a 15% tint of ITSELF — about 1.9:1, so the two
+ * honesty flags this surface added ("this one is inference", "1 claim crossed")
+ * were the least legible text on the page. The colour still has to signal, so
+ * it moves to a ring and a slightly stronger tint and the words go to
+ * `foreground`, which reads at well over 4.5:1 on that tint.
+ *
+ * The `bg-warning/15 text-warning` pair is app-wide (fourteen other call sites,
+ * `lib/ui-colors.ts` included) and the real fix is a `--warning-foreground`
+ * token dark enough to carry text — that is a palette change and it belongs to
+ * whoever owns `app/globals.css`, named in the merge note. This file fixes the
+ * two marks this package put the product's inference marker on.
+ */
 export function InferencePill({ children = 'this one is inference' }: { children?: ReactNode }) {
   return (
-    <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-warning/15 px-2 py-px text-[12px] font-medium text-warning">
+    <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-warning/15 px-2 py-px text-[12px] font-medium text-foreground ring-1 ring-warning/50">
       {children}
     </span>
   )

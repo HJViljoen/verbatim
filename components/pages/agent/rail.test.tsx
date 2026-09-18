@@ -23,12 +23,30 @@ describe('earlier questions', () => {
     assertCopyContract(<EarlierQuestionsTile history={null} />)
   })
 
-  it('draws the newest three and counts the month', () => {
+  it('never lists the thread the reader is on, and still counts it', () => {
+    // "Earlier questions" listed the OPEN thread as its first row, linking to
+    // itself, 300px from the same question rendered at 15px in the answer tile
+    // beside it. It is excluded from the rows and kept in the month count: the
+    // reader did ask it, and the rail is a list of where else to go.
+    expect(text).not.toContain('Should our summer campaign lead')
     expect(text).toContain('3 this month')
-    expect(text).toContain('Should our summer campaign lead')
     expect(text).toContain('Is price fading, or just quieter?')
-    // The fourth is August's and is neither drawn nor counted.
-    expect(text).not.toContain('What do people complain about with Freitag?')
+  })
+
+  it('draws the newest three of what is left', () => {
+    // With the open thread out, August's fourth row moves into view — the cap
+    // is three DRAWN rows, not three rows held.
+    expect(text).toContain('Did the recycled-sails claim land')
+    expect(text).toContain('What do people complain about with Freitag?')
+  })
+
+  it('says "nothing else" rather than "nothing", because one question exists', () => {
+    // The refused fixture holds exactly one thread and it is the one being
+    // read, so the rows are empty while the workspace has asked a question.
+    // "No question has been asked in this workspace yet" would be a lie told
+    // beside the question the reader is reading.
+    const empty = renderText(<EarlierQuestionsTile history={{ ...measured.history!, rows: [] }} />)
+    expect(empty).toContain('Nothing else has been asked')
   })
 
   it('carries no per-row figure, because nothing stores one', () => {
@@ -63,7 +81,7 @@ describe('earlier questions', () => {
 
 describe('what an answer draws on', () => {
   const tile = (d: ReturnType<typeof agentFixture>, delivered: number | null) => (
-    <DrawsTile draws={d.draws} recordHref={d.record!.href} delivered={delivered} />
+    <DrawsTile draws={d.draws} recordHref={d.record!.href} delivered={delivered} asAt={d.basis.lastEmbeddedAt ? '15 Sep' : null} />
   )
 
   it('keeps the copy contract in both states', () => {
@@ -113,8 +131,20 @@ describe('not answered this month', () => {
     expect(renderText(<NotAnsweredTile notAnswered={measured.notAnswered} />)).toContain('3 of 40 questions asked this month')
   })
 
-  it('says every question was answered rather than drawing an empty list', () => {
-    expect(renderText(<NotAnsweredTile notAnswered={refused.notAnswered} />)).toContain('Every question asked this month was answered')
+  it('states the month’s budget once, not twice', () => {
+    // The budget line already says "1 of 40 questions asked this month. Every
+    // one was answered from the conversation"; an empty state above it said the
+    // same thing again, in the state a fresh workspace is in.
+    const text = renderText(<NotAnsweredTile notAnswered={refused.notAnswered} />)
+    expect(text).toContain('Every one was answered from the conversation')
+    expect(text.match(/answered from the conversation/g)).toHaveLength(1)
+  })
+
+  it('names what its meta counts, and prints no bare zero', () => {
+    expect(renderText(<NotAnsweredTile notAnswered={measured.notAnswered} />)).toContain('2 of 3 asked')
+    // Nothing declined: the slot is empty rather than carrying a "0" over an
+    // empty state.
+    expect(renderText(<NotAnsweredTile notAnswered={refused.notAnswered} />)).not.toContain('0 of 1 asked')
   })
 
   it('points at what we track', () => {

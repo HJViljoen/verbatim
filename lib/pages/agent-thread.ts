@@ -404,16 +404,24 @@ export const ASK_INDEX_HREF = '/dashboard/agent'
  * `shown` caps the rail at the mock's three; `thisMonth` counts every row in
  * the wall-clock month whether or not it is drawn, because the meta is a count
  * of the month and not a count of the tile.
+ *
+ * `exclude` is THE THREAD THE READER IS ON. "Earlier questions" listed the open
+ * thread as its first row, linking to itself, 300px from the same question
+ * rendered at 15px in the answer tile beside it. The row is still COUNTED —
+ * `thisMonth` is a count of the month and the reader did ask this one — it is
+ * only not drawn as somewhere else to go.
  */
 export function askHistory(
   rows: readonly { threadId: string; title: string; askedAt: string; claimCrossed?: boolean | null }[],
   now: Date = new Date(),
   shown = 3,
+  exclude?: string | null,
 ): AskHistory {
   const ordered = [...rows].sort((a, b) => b.askedAt.localeCompare(a.askedAt))
   const month = monthStartIso(now)
+  const drawn = exclude ? ordered.filter((r) => r.threadId !== exclude) : ordered
   return {
-    rows: ordered.slice(0, shown).map((r) => ({
+    rows: drawn.slice(0, shown).map((r) => ({
       threadId: r.threadId,
       title: r.title,
       askedAt: r.askedAt,
@@ -490,6 +498,9 @@ export async function loadAskHistory(
   cardsIn: readonly PlanCheckCard[] | Promise<readonly PlanCheckCard[]>,
   limit = 50,
 ): Promise<AskHistory> {
+  // The thread the reader is ON, off the same param the loader reads. Not
+  // drawn in the rail; still counted in the month (`askHistory`).
+  const openThread = (scope.params as AgentParams | undefined)?.thread ?? null
   const supabase = scope.supabase as SupabaseClient
   const { clientId } = scope
   const [listRes, oldestRes, cards] = await Promise.all([
@@ -524,6 +535,9 @@ export async function loadAskHistory(
       // reads as "its claims held" (`AskHistoryRow.claimCrossed`).
       claimCrossed: !t.plan_check_id ? false : crossedByPlan.get(t.plan_check_id) ?? null,
     })),
+    new Date(),
+    3,
+    openThread,
   )
   const oldest = row<{ created_at: string }>(oldestRes, 'askHistory.oldest')
   return { ...history, earliest: oldest?.created_at ?? history.earliest }
@@ -826,7 +840,7 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
     planChip,
     history: await historyP,
     draws: askDraws(basis, delivered),
-    bar: { question: surface('ask').question ?? '', context: askBasisLine(basis) },
+    bar: { question: surface('ask').question ?? '', context: askBasisLine(basis, { short: true }) },
     record: { lines: askRecordLines(basis, delivered), href: askRecordHref(id) },
     method: {
       company: brand,

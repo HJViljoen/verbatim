@@ -8,6 +8,7 @@ import { ExportScope } from '@/components/export-menu'
 import { Tile, TileEmpty } from '@/components/shell/tile'
 import { canAsk } from '@/lib/agent/access'
 import { askBasisLine, nothingSearchable } from '@/lib/agent/basis'
+import { shortDate } from '@/lib/format'
 import { askRecordHref, loadAgentThread } from '@/lib/pages/agent-thread'
 import { AgentComposer } from '@/components/agent-composer'
 import { AnswerTile } from '@/components/pages/agent/answer'
@@ -72,7 +73,13 @@ export default async function AgentThreadPage({
       {/* No delivered count in the footer note here: the thread loader reads
           the count once, into the Updates row of `draws`, and a second copy in
           the footer would be a second chance to disagree with it. */}
-      <DrawsTile draws={data.draws} recordHref={data.record?.href ?? askRecordHref(id)} delivered={null} row={2} />
+      <DrawsTile
+        draws={data.draws}
+        recordHref={data.record?.href ?? askRecordHref(id)}
+        delivered={null}
+        asAt={data.basis.lastEmbeddedAt ? shortDate(data.basis.lastEmbeddedAt) : null}
+        row={2}
+      />
       <NotAnsweredTile notAnswered={data.notAnswered} row={2} />
     </>
   )

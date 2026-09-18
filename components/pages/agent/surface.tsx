@@ -73,7 +73,20 @@ export function AskShell({
             not a control they operate. Gated on `hasRecord` exactly as the
             shared bar gates it, so the day Ask stops making a reading the band
             goes with one edit to the table. */}
-        {record && hasRecord(s) && <HowSound basePath={s.href} params={params} line={record.line} lines={record.lines} />}
+        {record && hasRecord(s) && (
+          // `line` is the band AND the drawer's opening <p>; `lines` is the
+          // <ul> under it. Passed whole, the first line printed twice inside
+          // the drawer ("23 updates delivered." as the paragraph and again as
+          // the first bullet). Ask is the only surface passing a record today,
+          // so this sets the convention: the list is what the sentence does not
+          // already say.
+          <HowSound
+            basePath={s.href}
+            params={params}
+            line={record.line}
+            lines={record.lines.filter((l) => l !== record.line)}
+          />
+        )}
       </div>
       {children}
     </PageFrame>

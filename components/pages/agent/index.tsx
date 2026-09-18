@@ -8,7 +8,7 @@ import {
 import { fmtInt } from '@/lib/format'
 import type { PageModule, Renderable } from '@/lib/renderables/types'
 import type { AnswerMeasure, FindingMeasure } from '@/lib/agent/measure'
-import { JUDGEMENT_HEADING, NEAREST_HEADING, citationWhere, saidHeading } from '@/lib/agent/types'
+import { JUDGEMENT_HEADING, NEAREST_HEADING, citationDestination, citationWhere, saidHeading } from '@/lib/agent/types'
 import { askBasisLine } from '@/lib/agent/basis'
 
 // The agent thread on paper (Reports & Exports T11, 2026-08-29). Question
@@ -182,7 +182,7 @@ function Citations({ d, from, to }: { d: D; from: number; to: number }) {
                   appendix printed the stored `2026-08-30` while the answer on
                   screen said "30 Aug" for the same numbered quote. */}
               {citationWhere(c) || 'source on file'}
-              {c.href && <> · <a href={c.href} className="underline decoration-dotted underline-offset-2">{c.commentLevel ? 'the comment' : 'the post'}</a></>}
+              {c.href && <> · <a href={c.href} className="underline decoration-dotted underline-offset-2">{citationDestination(c)}</a></>}
             </p>
           </div>
         </div>

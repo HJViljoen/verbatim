@@ -94,6 +94,39 @@ describe('the measurement half', () => {
     expect(text).toContain(MOVEMENT_WORDS.too_little_data)
   })
 
+  it('prints every plotted month as a figure a reader can check', () => {
+    // The shared CalendarLine labels the baseline and one midline, so in a
+    // 104px box the only labelled gridline sits BELOW the data: the axis says
+    // 0% and 5% and the line ends at 9.4%. Changing the axis is a change to
+    // `components/charts/*`, which all six surfaces draw through. The trail is
+    // the months themselves, in order, as figures.
+    expect(text).toContain('Jul 5.1% → Aug 6.8% → Sep 9.4%')
+  })
+
+  it('names what the figures are figures OF, rather than dropping a bare label', () => {
+    // The theme name printed as an orphaned 11px line under the own-side
+    // sentence. It is introduced now, and it is still the model's words with
+    // its slot named.
+    expect(text).toContain('measured on Will it survive a wet commute')
+    expect(render(tile(measured))).toContain('data-slot="pass_b_theme"')
+  })
+
+  it('keeps the own-thin caveat under its finding and out of the judgement', () => {
+    // `measure.caveats` carries one own-thin sentence per finding and every one
+    // was already printed beside the counted pair it qualifies. Four lines
+    // where the artboard has one, and a caveat moved away from its figure.
+    expect(text).toContain('Interpretation, not counted.')
+    expect(text).not.toContain('Your own side of Will it survive a wet commute')
+  })
+
+  it('names what a provenance link opens, by platform', () => {
+    // The artboard says "the video →" and "the thread →". Branching on
+    // `commentLevel` alone made a TikTok video and a Reddit thread read
+    // identically, which is the one thing a provenance link has to say.
+    expect(text).toContain('the video →')
+    expect(text).toContain('the thread →')
+  })
+
   it('draws one line, and never a rival’s', () => {
     // Retrieval drops every rival voice before an answer is written, so a rival
     // series behind a claim about this client's own audience does not exist to

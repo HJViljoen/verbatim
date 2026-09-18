@@ -46,7 +46,11 @@ export function EarlierQuestionsTile({ history, row = 2 }: { history: AskHistory
       {!history ? (
         <TileEmpty>Your earlier questions could not be read just now.</TileEmpty>
       ) : history.rows.length === 0 ? (
-        <TileEmpty>No question has been asked in this workspace yet.</TileEmpty>
+        // TRUE ON BOTH ROUTES. The open thread is excluded from the rows
+        // (`askHistory`'s `exclude`) but still counted in the month, so on a
+        // thread page "no question has been asked" would be a lie told beside
+        // the question the reader is reading.
+        <TileEmpty>Nothing else has been asked in this workspace yet.</TileEmpty>
       ) : (
         <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
           {history.rows.map((r, i) => (
@@ -85,13 +89,16 @@ export function EarlierQuestionsTile({ history, row = 2 }: { history: AskHistory
  * month, the video count, the language mix and the tracking changes live.
  */
 export function DrawsTile({
-  draws, recordHref, delivered, row = 2,
+  draws, recordHref, delivered, asAt, row = 2,
 }: {
   draws: readonly AskDrawRow[]
   recordHref: string | null
   /** The footer note — the same count the Updates row prints, in the artboard's
    *  own position. Null prints no note rather than a zero. */
   delivered: number | null
+  /** The artboard's "as at 28 Sep" — when the index these facts describe was
+   *  last written. Null leaves the slot empty rather than dating it today. */
+  asAt?: string | null
   row?: number
 }) {
   return (
@@ -99,6 +106,10 @@ export function DrawsTile({
       col={12}
       row={row}
       eyebrow="What an answer draws on"
+      // The artboard's "as at 28 Sep". Both neighbours use their meta slot and
+      // this one left it blank; the fact is already in the Indexed row, so the
+      // meta names WHEN rather than inventing a second one.
+      meta={asAt ?? undefined}
       footer={recordHref ? <Link href={recordHref} className="hover:underline">The record →</Link> : undefined}
       footerNote={delivered != null ? `${fmtInt(delivered)} ${delivered === 1 ? 'update' : 'updates'} delivered` : undefined}
       distribute="between"
@@ -137,7 +148,16 @@ export function NotAnsweredTile({ notAnswered, row = 2 }: { notAnswered: NotAnsw
       col={12}
       row={row}
       eyebrow="Not answered this month"
-      meta={notAnswered ? `${fmtInt(notAnswered.declined.length)}` : undefined}
+      // The neighbours' meta reads "3 this month"; this one printed a bare "2"
+      // — and in the refused state a bare "0" over an empty state saying the
+      // same thing. A meta is a fact, so it says what the number is OF, with
+      // its denominator, and it is absent rather than zero where there is
+      // nothing to report. ("declined" is on the direction list and rule (c)
+      // sweeps the whole block, so the word stays in the reasons below, which
+      // are the reader's own.)
+      meta={notAnswered && notAnswered.declined.length > 0
+        ? `${fmtInt(notAnswered.declined.length)} of ${fmtInt(notAnswered.asked)} asked`
+        : undefined}
       footer={<Link href={notAnswered?.href ?? TRACKED_HREF} className="hover:underline">What we track →</Link>}
       footerNote="Settings"
       distribute="between"
@@ -147,15 +167,28 @@ export function NotAnsweredTile({ notAnswered, row = 2 }: { notAnswered: NotAnsw
       ) : (
         <div className="flex flex-col gap-2.5">
           {notAnswered.declined.length === 0 ? (
-            <TileEmpty>Every question asked this month was answered from the conversation.</TileEmpty>
+            // ONE SENTENCE, NOT TWO. The budget line below already says "1 of
+            // 40 questions asked this month. Every one was answered from the
+            // conversation", so an empty state saying it again made the tile
+            // state the same fact twice in the state a fresh workspace is in.
+            notAnswered.asked === 0 ? (
+              <TileEmpty>No question has been asked this month.</TileEmpty>
+            ) : null
           ) : (
             <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
               {notAnswered.declined.map((d, i) => (
                 <li key={`${d.question}-${i}`} className={`flex flex-col gap-0.5 ${i > 0 ? 'border-t border-border/70 pt-2.5' : ''}`}>
-                  {/* The reader's own question, verbatim. Not our prose and not
-                      the model's: a question a reader typed is the one string
-                      on this page neither scrubber has any business touching. */}
-                  <p className="m-0 text-[12.5px] font-medium text-foreground">{d.question}</p>
+                  {/* The reader's own question, verbatim, AND MARKED AS
+                      THEIRS. Not our prose and not the model's — a question a
+                      reader typed is the one string on this page neither
+                      scrubber has any business touching — but unmarked markup
+                      is not exempt from rule (c), which is by design, so "Is
+                      durability growing?" put a direction word in a node the
+                      sweep would take. `quote` is the kind for words that are
+                      not the product's: the model-written thread title two
+                      tiles up already names its slot, and this is the other
+                      reader-authored string on the same page. */}
+                  <p data-copy="quote" className="m-0 text-[12.5px] font-medium text-foreground">{d.question}</p>
                   <span className="font-mono text-[10.5px] leading-[1.35] text-muted-foreground">{d.why}</span>
                 </li>
               ))}

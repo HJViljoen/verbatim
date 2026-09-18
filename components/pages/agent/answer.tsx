@@ -6,9 +6,9 @@ import { QuoteBlock } from '@/components/quote-block'
 import { Tile, TileBlock } from '@/components/shell/tile'
 import { askBasisLine, type AskBasis } from '@/lib/agent/basis'
 import { INTERPRETATION_CAVEAT, TOO_FEW, type AnswerMeasure, type FindingMeasure } from '@/lib/agent/measure'
-import { JUDGEMENT_HEADING, NEAREST_HEADING, citationWhere, saidHeading } from '@/lib/agent/types'
+import { JUDGEMENT_HEADING, NEAREST_HEADING, citationDestination, citationWhere, saidHeading } from '@/lib/agent/types'
 import { monthlyLineLabel } from '@/lib/pages/overview'
-import { fmtInt, longMonth, shortDate } from '@/lib/format'
+import { fmtInt, longMonth, monthName, shortDate } from '@/lib/format'
 import type { Citation, ThreadAnswer, Turn } from '@/lib/pages/agent-thread'
 import { findingKey } from '@/lib/pages/agent-thread'
 import { DirectionWord, FindingLevel, InferencePill } from './marks'
@@ -143,7 +143,7 @@ function FindingChart({ f }: { f: FindingMeasure }) {
     )
   }
   return (
-    <div className="w-[380px] shrink-0">
+    <div className="flex w-[380px] shrink-0 flex-col gap-1">
       <CalendarLine
         axis={f.chart.axis}
         series={[f.chart.line]}
@@ -162,7 +162,41 @@ function FindingChart({ f }: { f: FindingMeasure }) {
         label={`${f.audienceLabel}, month by month`}
         caption={`share of videos · ${f.audienceLabel.toLowerCase()} · to ${longMonth(f.chart.axis[f.chart.axis.length - 1] ?? '')}`}
       />
+      <MonthTrail f={f} />
     </div>
+  )
+}
+
+/**
+ * The months, as numbers: "Jul 5.1% → Aug 6.8% → Sep 9.4%".
+ *
+ * THE BRIEF ASKS FOR IT AND THE CHART CANNOT DO ITS JOB WITHOUT IT. The shared
+ * `CalendarLine` labels the baseline and one midline — `niceMid` over a scale
+ * with 12% headroom — so in a 104px box the only labelled gridline sits BELOW
+ * the data and a reader has to interpolate to read a magnitude off the line.
+ * Two labelled gridlines do define a scale, but "the axis says 0 and 5 and the
+ * line ends somewhere above 5" is not a figure anyone can check, which is the
+ * whole promise of this half of the page.
+ *
+ * Changing the axis would be a change to `components/charts/*` and
+ * `lib/charts/calendar.ts`, which every reading surface draws through — one
+ * surface with a different axis from the other five is worse than this. So the
+ * plotted values are printed, in order, as figures: every month on the line,
+ * with its own number, in the reader's own words. `MeasuredPoint.pct` is null
+ * for a month that could not be read, and a null prints as a dash rather than
+ * as a zero.
+ */
+function MonthTrail({ f }: { f: FindingMeasure }) {
+  const months = f.series.filter((p) => f.chart.axis.includes(p.month))
+  if (months.length === 0) return null
+  return (
+    <p className="m-0 font-mono text-[10px] leading-[1.4] text-muted-foreground">
+      <span data-copy="figure">
+        {months
+          .map((p) => `${monthName(p.month).split(' ')[0]} ${p.pct == null ? '—' : `${p.pct}%`}`)
+          .join(' → ')}
+      </span>
+    </p>
   )
 }
 
@@ -230,11 +264,18 @@ function Finding({
           </p>
         )}
         {point.themeRefs.length > 0 && (
-          <p className="m-0 text-[11px] text-muted-foreground">
+          // THE NAME IS INTRODUCED, not dropped. This printed as a bare 11px
+          // line with no label, so a finding ended with "Will it survive a wet
+          // commute" floating under the own-side sentence and read as orphaned
+          // text — worst in the refused state, where a finding is prose, one
+          // mono refusal and then a bare name. Naming what the figures above
+          // are figures OF is also the only place this page says it.
+          <p className="m-0 font-mono text-[11px] text-muted-foreground">
+            measured on{' '}
             {/* The theme's label is the model's words (`pass_b_theme`), which
                 the prose policy never direction-scrubs — so the node names its
                 slot rather than silencing rule (c) for free. */}
-            <span data-copy="subject" data-slot="pass_b_theme">
+            <span data-copy="subject" data-slot="pass_b_theme" className="text-secondary-foreground">
               {point.themeRefs.map((t) => t.label).filter(Boolean).join(' · ')}
             </span>
           </p>
@@ -262,7 +303,7 @@ function Provenance({ q, meta }: { q: ThreadAnswer['grounded'][number]['quotes']
             rel="noreferrer"
             className="font-sans text-[12px] font-medium text-foreground hover:underline"
           >
-            {meta.commentLevel ? 'the comment →' : 'the post →'}
+            {citationDestination(meta)} →
           </a>
         </>
       )}
@@ -316,7 +357,16 @@ function Judgement({
 }) {
   if (answer.judgement.length === 0) return null
   const numberOf = new Map(answer.grounded.map((g, i) => [g.id, i + 1]))
-  const caveats = measure?.caveats ?? [INTERPRETATION_CAVEAT]
+  // THE INTERPRETATION SENTENCE, AND NOT THE FINDINGS AGAIN. `measure.caveats`
+  // is the interpretation caveat followed by one own-thin sentence PER FINDING
+  // ("Your own side of Will it survive a wet commute is 26 of 84 videos in
+  // September — too few to compare"), and every one of those was already
+  // printed by `OwnSide` under the finding it belongs to, beside the counted
+  // pair it is about. Reprinted here they turned the page's one tinted panel
+  // into its longest stack of grey metadata — four lines where the artboard has
+  // one — and moved a caveat away from the figure it qualifies. The own-thin
+  // caveats stay on the findings; this register keeps its own sentence.
+  const caveats = measure?.caveats?.filter((c) => c === INTERPRETATION_CAVEAT) ?? [INTERPRETATION_CAVEAT]
   return (
     <TileBlock className="flex flex-col gap-1.5">
       <div className="flex items-center gap-2">
@@ -422,7 +472,10 @@ export function AnswerTile({
       {/* The question, under a mono eyebrow — the artboard's device, and the
           one the build printed only on paper. */}
       <div className="flex flex-col gap-1">
-        <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground/80">
+        {/* The un-faded token: `/80` at 10px is about 3.3:1 on white against a
+            4.5:1 floor, and this eyebrow carries a date. Every other eyebrow on
+            the page uses the token straight. */}
+        <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
           You asked · {shortDate(turn.askedAt)}
         </span>
         <p className="m-0 text-[15px] font-semibold text-foreground">{turn.question}</p>

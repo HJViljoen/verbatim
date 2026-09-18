@@ -87,7 +87,7 @@ export interface AskBasis {
  */
 export function askBasisLine(
   basis: AskBasis,
-  opts: { asked?: boolean; verb?: 'Answered' | 'Checked' } = {},
+  opts: { asked?: boolean; verb?: 'Answered' | 'Checked'; short?: boolean } = {},
 ): string {
   if (!basis.updateAt) {
     return 'Nothing has been read for this workspace yet, so there is nothing to answer from.'
@@ -95,6 +95,18 @@ export function askBasisLine(
   const lead = opts.asked
     ? `${opts.verb ?? 'Answered'} against the update of ${shortDate(basis.updateAt)}`
     : `Answers are given against the update of ${shortDate(basis.updateAt)}`
+
+  // SHORT IS THE LEAD ALONE, and it exists for the page BAR (E-ask fix pass).
+  // The four facts printed in the bar's context slot, again in the answer
+  // footer (this same function) and again as the draws tile's four rows — three
+  // times above the fold, with the record band making "the record →" twice and
+  // the delivered count twice. It also made the bar's context the longest
+  // string on the page, so `truncate` ate the indexed fact at 1440 and both
+  // states at 1024: a line whose whole job is to state what an answer is
+  // measured against, ellipsized, with no title and no hover. The bar states
+  // the ONE fact that is about this page (which update), and the other three
+  // stay where a reader can read them whole.
+  if (opts.short) return lead
 
   const months =
     basis.monthlyReadings == null

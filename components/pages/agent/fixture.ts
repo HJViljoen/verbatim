@@ -327,9 +327,11 @@ export function agentFixture(over: Partial<AgentThreadData> = {}): AgentThreadDa
       href: NOT_ANSWERED_HREF,
     },
     planChip: PLAN_CHIP,
-    history: askHistory(HISTORY_ROWS, new Date('2026-09-28T08:00:00.000Z')),
+    // EXCLUDING th-1, which IS this thread: the rail lists where else to go,
+    // not where you are (`askHistory`'s `exclude`).
+    history: askHistory(HISTORY_ROWS, new Date('2026-09-28T08:00:00.000Z'), 3, 'th-1'),
     draws: askDraws(BASIS, 23),
-    bar: { question: surface('ask').question ?? '', context: askBasisLine(BASIS) },
+    bar: { question: surface('ask').question ?? '', context: askBasisLine(BASIS, { short: true }) },
     record: { lines: askRecordLines(BASIS, 23), href: askRecordHref('th-1') },
     method: METHOD,
     ...over,
@@ -370,7 +372,7 @@ export function refusedFixture(over: Partial<AgentThreadData> = {}): AgentThread
     // size and says what is not there rather than drawing three empty rows.
     history: askHistory(HISTORY_ROWS.slice(0, 1), new Date('2026-09-28T08:00:00.000Z')),
     draws: askDraws(EMPTY_BASIS, null),
-    bar: { question: surface('ask').question ?? '', context: askBasisLine(EMPTY_BASIS) },
+    bar: { question: surface('ask').question ?? '', context: askBasisLine(EMPTY_BASIS, { short: true }) },
     record: { lines: askRecordLines(EMPTY_BASIS, null), href: askRecordHref('th-1') },
     ...over,
   }
