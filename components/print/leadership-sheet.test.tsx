@@ -176,6 +176,21 @@ describe('which rows the figure cards are about', () => {
     // with the n to carry a month on this corpus.
     expect(leadSubject(overviewFixture().subjects.rows)?.id).toBe('s1')
   })
+
+  // Three cards about one subject is one card. The artboard leads with the
+  // Durability gap and closes with Price, which is what a three-up row is for.
+  it('steps over the subject the gap card already took', () => {
+    const rows = overviewFixture().subjects.rows
+    expect(leadSubject(rows, 's1')?.id).toBe('s2')
+    // … and takes it anyway when it is the only subject there is.
+    expect(leadSubject([rows[0]], 's1')?.id).toBe('s1')
+  })
+
+  it('draws the two cards about two different subjects', () => {
+    const words = renderText(sheet())
+    expect(words).toContain('Durability gap to Freitag')
+    expect(words).toContain('Price')
+  })
 })
 
 describe('the sheet inside the deck', () => {

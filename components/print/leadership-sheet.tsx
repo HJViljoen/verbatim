@@ -124,7 +124,7 @@ function Chip({ tone = 'plain', children }: { tone?: 'plain' | 'good'; children:
  * (AGENTS.md, mock-gap §6 D3) and a printed page has no hover to check a line
  * against.
  */
-function MonthLine({ spark, months, width = 206, height = 46, color = 'var(--cat)' }: {
+function MonthLine({ spark, months, width = 200, height = 44, color = 'var(--cat)' }: {
   spark: (number | null)[]
   months: string[]
   width?: number
@@ -133,8 +133,34 @@ function MonthLine({ spark, months, width = 206, height = 46, color = 'var(--cat
 }) {
   const refusal = monthlyLineLabel(spark, months)
   if (refusal) return <p className={TRAIL}>{refusal}</p>
-  return <Sparkline values={spark} color={color} width={width} height={height} animate={false} endDot />
+  // THE DRAWN PATH NAMES ITS OWN ENDS. A printed line has no hover, so the two
+  // months it was plotted between are the only axis it can have — the artboard
+  // draws exactly that ("May · Apr below the floor" left, "Sep" right), and
+  // the deck's own `DeckSpark` makes the same argument at length.
+  const read = months.filter((_, i) => spark[i] != null)
+  return (
+    <span className="flex flex-col gap-0.5">
+      <Sparkline values={spark} color={color} width={width} height={height} animate={false} endDot />
+      <span className="flex justify-between font-mono text-[9px] text-muted-foreground" style={{ width }}>
+        <span>{axisMonth(read[0])}</span>
+        <span>{axisMonth(read[read.length - 1])}</span>
+      </span>
+    </span>
+  )
 }
+
+/**
+ * A month on an AXIS: "Jul", not "Jul 2026".
+ *
+ * `monthName` is the product's month form and carries its year on purpose — on
+ * the readiness page two Augusts four years apart sit on one screen. On a
+ * 9.5px trail of three consecutive months under a sheet already stamped
+ * "September 2026" the year is three times the same noise, and it wraps the
+ * line. `monthlyLineLabel` (lib/pages/overview.ts) already draws exactly this
+ * distinction for exactly this reason — `monthName(m).split(' ')[0]` — and this
+ * is that rule, not a second month format.
+ */
+const axisMonth = (month: string): string => monthName(month).split(' ')[0]
 
 /** The months a series actually read, oldest first — "Jul 34% · Aug 30% · Sep 27%". */
 function trailOf(spark: readonly (number | null)[], months: readonly string[]): string | null {
@@ -143,7 +169,7 @@ function trailOf(spark: readonly (number | null)[], months: readonly string[]): 
     .map((m, i) => ({ month: m, pct: spark[i] }))
     .filter((p): p is { month: string; pct: number } => p.pct != null)
   if (read.length < 3) return null
-  return read.slice(-3).map((p) => `${monthName(p.month)} ${fmtPct(p.pct, 0)}`).join(' · ')
+  return read.slice(-3).map((p) => `${axisMonth(p.month)} ${fmtPct(p.pct, 0)}`).join(' · ')
 }
 
 // ── which rows the three figure cards are about ────────────────────────────
@@ -170,12 +196,20 @@ export function leadGap(gaps: Record<string, Gap | null>): Gap | null {
 
 /** The subject the third card is about: the biggest banded move on the side
  *  that can carry one (the category), else the first row. */
-export function leadSubject(rows: readonly SubjectRow[]): SubjectRow | null {
-  const moved = rows.filter((r) => r.category.verdict?.state === 'moved' && r.category.verdict.changePts != null)
+export function leadSubject(rows: readonly SubjectRow[], exceptId?: string | null): SubjectRow | null {
+  // THREE CARDS ABOUT ONE SUBJECT IS ONE CARD. The artboard leads with the
+  // Durability gap and closes with Price, which is the whole point of a
+  // three-up row: a reader gets the gap, the category's attention and a second
+  // subject. Where the gap card has already taken a subject this one steps over
+  // it — and where that is the only subject there is, it takes it anyway,
+  // because a repeated card says more than an empty one.
+  const other = exceptId ? rows.filter((r) => r.id !== exceptId) : [...rows]
+  const pool = other.length > 0 ? other : [...rows]
+  const moved = pool.filter((r) => r.category.verdict?.state === 'moved' && r.category.verdict.changePts != null)
   if (moved.length > 0) {
     return [...moved].sort((a, b) => Math.abs(b.category.verdict!.changePts!) - Math.abs(a.category.verdict!.changePts!))[0]
   }
-  return rows[0] ?? null
+  return pool[0] ?? null
 }
 
 // ── the three figure cards ─────────────────────────────────────────────────
@@ -203,7 +237,7 @@ function GapCard({ gap, row }: { gap: Gap | null; row: SubjectRow | null }) {
   const apart = gap.state === 'apart' && gap.gapPts != null
   const basis = gapBasisLine(gap)
   return (
-    <div className={`${CARD} flex flex-col gap-1.5`}>
+    <div className={`${CARD} flex flex-col justify-between gap-1.5`}>
       <div className="flex items-start gap-3.5">
         <div className="flex w-[170px] shrink-0 flex-col gap-1.5">
           {apart
@@ -252,9 +286,9 @@ function AttentionCard({ attention, note }: { attention: AttentionBlock | null; 
   }
   const size = attention.accountCount
   const frozen = attention.panel?.frozen_at ? shortDate(attention.panel.frozen_at) : null
-  const levels = attention.months.slice(-3).map((m) => `${monthName(m.month)} ${fmtInt(m.comments)}`).join(' · ')
+  const levels = attention.months.slice(-3).map((m) => `${axisMonth(m.month)} ${fmtInt(m.comments)}`).join(' · ')
   return (
-    <div className={`${CARD} flex flex-col gap-1.5`}>
+    <div className={`${CARD} flex flex-col justify-between gap-1.5`}>
       <div className="flex items-end justify-between gap-2.5">
         <Hero value={fmtInt(latest.comments)} unit="comments" />
         <span className="shrink-0"><BlockMovement verdict={attention.verdict} unit="pts" /></span>
@@ -289,7 +323,7 @@ function SubjectCard({ row, categoryLabel }: { row: SubjectRow | null; categoryL
   }
   const trail = trailOf(row.spark, row.sparkMonths)
   return (
-    <div className={`${CARD} flex flex-col gap-1.5`}>
+    <div className={`${CARD} flex flex-col justify-between gap-1.5`}>
       <div className="flex items-end justify-between gap-2.5">
         <Hero value={fmtPct(row.category.pct, 0)} unit="of category videos" />
         <span className="shrink-0"><BlockMovement verdict={row.category.verdict} unit="pts" /></span>
@@ -383,7 +417,7 @@ function Cell({ side }: { side: SideReading | null }) {
  */
 function SubjectsTable({ data }: { data: OverviewData }) {
   const s = data.subjects
-  const COLS = 'grid grid-cols-[minmax(0,132px)_86px_96px_118px_minmax(0,1fr)] items-center gap-x-2'
+  const COLS = 'grid grid-cols-[minmax(0,112px)_82px_120px_138px_minmax(0,1fr)] items-center gap-x-2'
   return (
     <div className="flex min-h-0 shrink-0 flex-col gap-1.5">
       <Eyebrow meta={s.rows.length > 0 ? `${fmtInt(s.rows.length)} named · share of videos where the subject came up` : undefined}>
@@ -397,8 +431,8 @@ function SubjectsTable({ data }: { data: OverviewData }) {
             <span>Subject</span>
             <span className="flex items-center gap-1.5"><Dot tone="you" />You{firstOf(s.rows, (r) => r.you)}</span>
             <span className="flex min-w-0 items-center gap-1.5"><Dot tone="comp" /><span className="truncate">{s.rivalLabel ?? 'Lead rival'}{firstOf(s.rows, (r) => r.rival)}</span></span>
-            <span className="flex min-w-0 items-center gap-1.5"><Dot tone="cat" /><span className="truncate">{s.categoryLabel}{firstOf(s.rows, (r) => r.category)}</span></span>
-            <span>{s.categoryLabel} change</span>
+            <span className="flex min-w-0 items-center gap-1.5"><Dot tone="cat" /><span className="truncate">{shortLabel(s.categoryLabel)}{firstOf(s.rows, (r) => r.category)}</span></span>
+            <span>{shortLabel(s.categoryLabel)} change</span>
           </div>
           {s.rows.map((r, i) => (
             <div key={r.id} className={`${COLS} py-[3px] text-[12.5px] text-foreground ${i === s.rows.length - 1 ? '' : 'border-b border-border/70'}`}>
@@ -421,6 +455,12 @@ function SubjectsTable({ data }: { data: OverviewData }) {
     </div>
   )
 }
+
+/** "The category" reads as a heading on a page and as a stutter in a table
+ *  header beside a legend dot; the artboard writes "Category · 1,388". The
+ *  label is the block's, with the article dropped — never a second name for the
+ *  audience. */
+const shortLabel = (label: string): string => label.replace(/^The\s+/i, '')
 
 /** " · of 84" for the header, from the first row that read that side — the
  *  denominator the artboard hoists out of the cells. Absent where the side is
@@ -454,12 +494,18 @@ function Moves({ data }: { data: OverviewData }) {
   const readings = m.readings
   return (
     <div className="flex shrink-0 flex-col gap-2">
-      <Eyebrow meta={m.acted?.line}>Your moves</Eyebrow>
+      {/* The artboard's meta is four words ("you acted on 2 of 5 this
+          quarter") and `actedTally`'s sentence is twenty, because the twenty
+          are what make the ratio readable — it is the WHOLE ledger and not a
+          quarter (D12). The count goes in the eyebrow at the artboard's length
+          and the scoping sentence under the cards, so neither is truncated. */}
+      <Eyebrow meta={m.acted ? `acted on ${m.acted.decided} of ${m.acted.of}` : undefined}>Your moves</Eyebrow>
       {readings.length === 0 ? (
         <p className={BODY}>{m.empty ?? m.unlock}</p>
       ) : (
         readings.slice(0, 2).map((r) => <MoveCard key={r.moveId} reading={r} />)
       )}
+      {m.acted ? <p className={TRAIL}>{m.acted.line}</p> : null}
     </div>
   )
 }
@@ -525,7 +571,10 @@ function SheetFooter({ data, company, date }: { data: OverviewData; company: str
     .join(' · ')
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
-      <p className="truncate font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
+      {/* TWO LINES RATHER THAN AN ELLIPSIS. The artboard's coverage line runs
+          to five clauses and the last of them is "2 comparisons refused" — the
+          one clause a reader most needs and the first a `truncate` eats. */}
+      <p className="line-clamp-2 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
         <span className="text-secondary-foreground">Coverage</span>
         <span aria-hidden> · </span>
         <span>{coverage}</span>
@@ -571,7 +620,7 @@ export function LeadershipSheet({
 }) {
   const gap = leadGap(overview.subjects.gaps)
   const gapRow = gap ? overview.subjects.rows.find((r) => r.id === gap.objectId) ?? null : null
-  const subject = leadSubject(overview.subjects.rows)
+  const subject = leadSubject(overview.subjects.rows, gap?.objectId ?? null)
   // THE SERIF LEAD THE MOCK DRAWS AND THE DECK NEVER FILLED. `Slide`'s note
   // slot has existed since the Studio shipped and `DocumentDeck` passes none,
   // so the one place the artboard's lead would go was empty. The mock's own
