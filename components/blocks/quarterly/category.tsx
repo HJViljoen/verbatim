@@ -176,10 +176,16 @@ export const quarterlyCategory: Block<QuarterlyData> = {
     const voices = c.quotes.filter(hasQuote)
     const panel = attentionSeries(c, data.monthStatus === 'filling' ? data.month : '')
 
+    // THE MOVERS' OWN NOTE IS PRINTED ONCE. It is the sentence that says what
+    // the mover list is and why it may be empty, and both the empty arm and
+    // the flags block below printed it — so `thinMonthFixture()` read "What
+    // moved most · Nothing moved clearly this month. · Nothing this artefact
+    // follows has stopped being said. · Nothing moved clearly this month."
+    const anyMover = c.growing.length + c.fading.length > 0
     const movers = (
       <Column mode={mode} gap={10}>
         <Eyebrow mode={mode}>What moved most</Eyebrow>
-        {c.growing.length + c.fading.length > 0 ? (
+        {anyMover ? (
           <Columns weights={[1, 1]} gap={24} mode={mode}>
             <Column mode={mode} gap={8}>
               <span className={email ? undefined : 'text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground'}>
@@ -227,7 +233,7 @@ export const quarterlyCategory: Block<QuarterlyData> = {
           ) : (
             <Note mode={mode}>{c.quietNote}</Note>
           )}
-          {c.moversNote ? <Note mode={mode}>{c.moversNote}</Note> : null}
+          {anyMover && c.moversNote ? <Note mode={mode}>{c.moversNote}</Note> : null}
         </div>
 
 

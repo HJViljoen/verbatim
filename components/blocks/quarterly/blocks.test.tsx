@@ -671,6 +671,17 @@ describe('the artboard port (Block D wave 2)', () => {
       .toMatch(/data-copy="verdict"[^>]*>[^<]*<span[^>]*>gone quiet/)
   })
 
+  it('qr.p4.movers · the movers’ note prints once, on every state', () => {
+    // It was printed by the movers-empty arm AND unconditionally by the flags
+    // block, so a month with nothing moving said it twice on one sheet.
+    for (const state of STATES) {
+      const note = state.category.moversNote
+      if (!note) continue
+      const t = renderText(QUARTERLY_BLOCKS['quarterly.category'].render(state, 'print', ctx))
+      expect(t.split(note).length - 1).toBe(1)
+    }
+  })
+
   it('qr.p4.kinds · rows with their own "of N", and no partition bar', () => {
     const t = text('quarterly.category')
     expect(t).toContain('470 of 1,388')
