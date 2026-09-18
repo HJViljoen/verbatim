@@ -95,30 +95,39 @@ function base(overview = overviewFixture()): WeeklyData {
       quotesTotal: 41,
       quotesNote: null,
     },
+    // §4 IS `ForSalesData` — the counted shape This week's loader produces,
+    // which this artefact now calls rather than reading the month a second
+    // time (block D wave 2).
     sales: {
-      rows: [
+      window: WINDOW,
+      videos: 271,
+      grouping: 'theme',
+      objections: [
         {
-          kind: 'objection',
-          kindLabel: 'Objection',
-          label: 'Price',
-          rival: 'Freitag',
-          quote: { ref: 'e:2', text: 'Beautiful, but I cannot justify that for a bag.', lang: 'en', english: null },
-          cite: 'TikTok · 12 Sep · under a video we read',
-          href: 'https://www.tiktok.com/@x/video/1',
+          id: 't-price',
+          label: 'Price against longevity',
+          videos: 96,
+          quotes: [
+            { quote: { ref: 'e:2', text: 'Beautiful, but I cannot justify that for a bag.', lang: 'en', english: null }, cite: 'TikTok · 12 Sep · under a category video', href: 'https://www.tiktok.com/@x/video/1' },
+          ],
         },
-        {
-          kind: 'praise',
-          kindLabel: 'Selling point',
-          label: 'Durability',
-          rival: null,
-          quote: { ref: 'e:3', text: 'Dit het twee winters gehou.', lang: 'af', english: 'It held through two winters.' },
-          cite: 'tiktok · 11 Sep · under a video we read',
-          href: null,
-        },
+        { id: 't-recycled', label: 'Is it really recycled', videos: 41, quotes: [] },
+        { id: 't-zips', label: 'Zips', videos: 22, quotes: [] },
       ],
-      hasMore: true,
-      note: null,
-      briefHref: '/dashboard/reports',
+      praise: [
+        { quote: { ref: 'e:3', text: 'Dit het twee winters gehou.', lang: 'af', english: 'It held through two winters.' }, cite: 'TikTok · 11 Sep · under a category video', href: null },
+      ],
+      // Two shown of twelve counted — the shape a slice-then-count made
+      // invisible, and the reason `switchingTotal` is taken before the cap.
+      switching: [
+        { quote: { ref: 'e:9', text: 'Moving off Freitag after the strap went', lang: 'en', english: null }, cite: 'Reddit · 12 Sep · under a Freitag video', href: null },
+      ],
+      switchingTotal: 12,
+      rivalComplaints: [
+        { id: 'competitor:Freitag', label: 'Freitag', videos: 41, quotes: [] },
+      ],
+      brief: { href: '/dashboard/reports', label: 'Open the sales brief →' },
+      unread: null,
     },
     content: {
       worthAReply: [
@@ -197,7 +206,19 @@ export function formingFixture(over: Partial<WeeklyData> = {}): WeeklyData {
       quotesTotal: null,
       quotesNote: 'Quotes are counted against your subjects once subjects are recorded for this workspace. Until then this update’s comments are read, grouped and counted — they are simply not yours to name.',
     },
-    sales: { rows: [], hasMore: false, note: 'Grouped by what customers raised; your subjects are not recorded for this workspace yet.', briefHref: '/dashboard/reports' },
+    // The degraded arm: the window was read and nothing in it was an
+    // objection, a switch or a piece of praise — and `videos` is null, so
+    // `forSalesEmpty` says which of those two facts is the reason.
+    sales: {
+      ...data.sales,
+      videos: null,
+      grouping: 'theme',
+      objections: [],
+      praise: [],
+      switching: [],
+      switchingTotal: null,
+      rivalComplaints: [],
+    },
     content: {
       ...data.content,
       worthAReply: [],

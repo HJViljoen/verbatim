@@ -22,16 +22,16 @@ describe('the six blocks', () => {
     }
   })
 
-  // The status note pins `forSales` as `Block<{ sales: ForSalesBlock }>` for
-  // WP15 to import without building a whole weekly reading. It declared
-  // `Block<WeeklyData>`, so This week could not have handed it `{ sales }` at
-  // all. This is the pinned shape, exercised.
-  it('lets For sales be handed the loader’s rows alone', () => {
+  // The status note pins `forSales` as a block over the SECTION alone, so This
+  // week's own loader can hand it `{ sales }` without building a whole weekly
+  // reading. Since block D wave 2 that section is `ForSalesData` — the counted
+  // shape, produced once by `buildSales` for both artefacts.
+  it('lets For sales be handed the loader’s section alone', () => {
     const { sales } = weeklyFixture()
     const markup = render(forSales.render({ sales }, 'app', ctx))
-    expect(markup).toContain('More in their own words')
+    expect(markupText(markup)).toContain('They object to price against longevity')
     expect(forSales.emptyState({ sales })).toBeNull()
-    expect(blockAnswers(forSales, { sales }).quotes).toEqual(sales.rows.map((r) => r.quote.ref))
+    expect(blockAnswers(forSales, { sales }).quotes).toEqual(['e:3', 'e:2'])
   })
 
   it('is one block per stored key, in the design’s order', () => {
@@ -341,30 +341,58 @@ describe('WR3 · what came in this week', () => {
 describe('WR4 · for sales', () => {
   const block = WEEKLY_BLOCKS['weekly.sales']
 
+  // THE ARTBOARD'S COUNTED ROWS (block D wave 2). The artefact printed four
+  // quotes and no count anywhere; This week printed counts off the same
+  // window. One loader now, and this is its row.
+  it('counts the objection in videos, with the n it is a count against', () => {
+    for (const mode of MODES) {
+      const text = renderText(block.render(weeklyFixture(), mode, ctx))
+      expect(text, mode).toContain('They object to price against longevity')
+      expect(text, mode).toContain('96')
+      expect(text, mode).toContain('videos this update carrying it · of 271 videos this update')
+    }
+  })
+
+  it('names the objections it did not give a row to, in the link', () => {
+    expect(renderText(block.render(weeklyFixture(), 'app', ctx)))
+      .toContain('2 more objections — is it really recycled and zips')
+  })
+
+  it('counts the rival’s complaints under the rival’s own content', () => {
+    const text = renderText(block.render(weeklyFixture(), 'app', ctx))
+    expect(text).toContain('They complain about Freitag')
+    expect(text).toContain('counted under that rival’s content, never under yours')
+  })
+
+  // D14: the mock says "both toward Sealand · 7 toward, 5 away", and nothing
+  // on this branch records which way a switch points.
+  it('prints the switching count and refuses the direction of the switch', () => {
+    const text = renderText(block.render(weeklyFixture(), 'app', ctx))
+    expect(text).toContain('Someone said they were moving between brands')
+    expect(text).toContain('12')
+    expect(text).toContain('which way they point is not recorded')
+    expect(text).not.toMatch(/toward/i)
+  })
+
   it('prints the words the customer used, original first, English under it', () => {
     const text = renderText(block.render(weeklyFixture(), 'app', ctx))
-    expect(text).toContain('Beautiful, but I cannot justify that for a bag.')
+    expect(text).toContain('In the customers’ words')
     expect(text).toContain('Dit het twee winters gehou.')
     expect(text).toContain('It held through two winters.')
-  })
-
-  it('names the rival under whose post it was said', () => {
-    expect(renderText(block.render(weeklyFixture(), 'app', ctx))).toContain('under Freitag’s post')
-  })
-
-  it('says it is the Sales brief’s short form', () => {
-    expect(renderText(block.render(weeklyFixture(), 'app', ctx))).toContain('Sales brief’s short form')
+    expect(text).toContain('Beautiful, but I cannot justify that for a bag.')
   })
 
   it('prints its empty state rather than being dropped', () => {
     const markup = render(block.render(formingFixture(), 'app', ctx))
     expect(markup).toContain('For sales')
-    expect(renderText(block.render(formingFixture(), 'app', ctx))).toContain('your subjects are not recorded')
+    expect(renderText(block.render(formingFixture(), 'app', ctx)))
+      .toContain('The number of videos it covered is not recorded for this workspace yet')
   })
 
-  it('declares no figures — it is quotation, not measurement', () => {
-    expect(blockAnswers(block, weeklyFixture()).figures).toEqual({})
-    expect(blockAnswers(block, weeklyFixture()).quotes).toEqual(['e:2', 'e:3'])
+  it('declares the counts it prints, under the keys This week already froze', () => {
+    const figures = blockAnswers(block, weeklyFixture()).figures
+    expect(Object.keys(figures)).toEqual(['sales_videos', 'objection_1_videos', 'objection_2_videos', 'objection_3_videos', 'switching_comments'])
+    expect(blockAnswers(block, weeklyFixture()).quotes).toEqual(['e:3', 'e:2'])
   })
 })
 

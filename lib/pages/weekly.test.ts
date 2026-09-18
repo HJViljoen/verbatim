@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { thinUpdate } from '../reading/anomaly'
-import { checkStateOf, headlineObject, humanTheme, salesCite, RISING_NOW, SALES_KINDS, SALES_ROWS, WORTH_A_REPLY } from './weekly'
+import { checkStateOf, headlineObject, humanTheme, RISING_NOW, WORTH_A_REPLY } from './weekly'
 import type { OverviewData, SideReading, SubjectRow } from './overview'
 
 const side = (over: Partial<SideReading> = {}): SideReading => ({ k: 65, n: 271, pct: 24, verdict: null, observed: true, ...over })
@@ -193,29 +193,14 @@ describe('humanTheme', () => {
 })
 
 describe('the sizes the design names', () => {
-  it('prints three worth-a-reply, three rising, four sales rows over four kinds', () => {
+  it('prints three worth-a-reply and three rising', () => {
     expect(WORTH_A_REPLY).toBe(3)
     expect(RISING_NOW).toBe(3)
-    expect(SALES_ROWS).toBe(4)
-    expect(SALES_KINDS).toEqual(['objection', 'praise', 'switching_signal', 'pain_point'])
-  })
-})
-
-describe('salesCite', () => {
-  it('names the platform and the day the comment was written', () => {
-    expect(salesCite('tiktok', '2026-09-12T00:00:00+00:00')).toBe('TikTok · 12 Sep · under a video we read')
   })
 
-  it('keeps whichever half it has', () => {
-    expect(salesCite('tiktok', null)).toBe('TikTok · under a video we read')
-    expect(salesCite(null, '2026-09-12T00:00:00+00:00')).toBe('12 Sep · under a video we read')
-  })
-
-  // The parts used to be filtered and joined, so a comment row the lookup did
-  // not return left the bare trailing phrase behind, which reads like a
-  // truncation — and is no longer the true sentence anyway: every quote this
-  // section prints was found through the month's own comments.
-  it('says what it does know rather than trailing off', () => {
-    expect(salesCite(null, null)).toBe('a comment we read this month')
-  })
+  // §4's own sizes left this file with `loadSales` (block D wave 2): the
+  // weekly report reads This week's `buildSales` now, so the caps that govern
+  // it are `lib/blocks/for-sales.ts`'s — SALES_GROUPS_SHOWN,
+  // SALES_QUOTES_PER_GROUP, SALES_SWITCHING_SHOWN, SALES_PRAISE_SHOWN — and
+  // they are pinned where they live, once, rather than twice.
 })

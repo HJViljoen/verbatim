@@ -52,7 +52,7 @@ describe('the weekly email', () => {
   it('never drops a section whose block is empty — the shape is the same every week', () => {
     const text = words(snapshot(formingFixture()))
     expect(text).toContain('For sales')
-    expect(text).toContain('your subjects are not recorded')
+    expect(text).toContain('Nothing this update read was an objection')
   })
 
   it('prints the rule that keeps it honest under the masthead and again at the foot', () => {

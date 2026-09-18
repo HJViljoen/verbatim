@@ -13,10 +13,11 @@ import { platformLabel, shortDate } from '../format'
 import { monthStartOf, nextMonth, prevMonth } from '../reading/month-key'
 import { BASELINE_MONTHS, baselineStateOf, thinUpdate, type ThinUpdateVerdict } from '../reading/anomaly'
 import { INDUSTRY_AUDIENCE } from '../rivals'
+import type { ForSalesData } from '../blocks/for-sales'
 import type { MethodLines } from '../reading/method'
 import { loadOverview, audienceInLabel, daysInto, isMissingAnomalyFlags, type Mover, type OverviewData, type SubjectsBlock } from './overview'
 import { loadContent, isContentEmpty, type ContentInboxRow } from './content'
-import { loadSubjectQuotes, loadSubjects, workedLabel } from './week'
+import { buildSales, loadSubjectQuotes, loadSubjects, workedLabel } from './week'
 import {
   periodNounFor,
   weekCheck,
@@ -103,40 +104,6 @@ export interface RivalPost {
   href: string | null
 }
 
-/** Section 4 — for sales. The customers' words, grouped by rival where they
- *  named one. */
-export interface SalesRow {
-  /** The insight kind, as the pipeline wrote it. */
-  kind: string
-  /** The kind in the reader's words. */
-  kindLabel: string
-  /** What it was about, in plain words. */
-  label: string
-  /** The rival the video belonged to, where it belonged to one. */
-  rival: string | null
-  quote: Quote
-  cite: string
-  href: string | null
-}
-
-export interface ForSalesBlock {
-  rows: SalesRow[]
-  /**
-   * Whether the month holds more of these than the four printed.
-   *
-   * A BOOLEAN, NOT A COUNT, and deliberately. The count printed here was
-   * `insights.length - rows.length` over a query capped at 120, so both tenants
-   * printed the identical "116 more in their own words" while the real numbers
-   * of qualifying rows were 838 and 1,486 — two workspaces of very different
-   * size printing the same number is the tell. An exact count means counting
-   * every quoted comment of the month, which is a read this artefact does not
-   * need in order to draw one link.
-   */
-  hasMore: boolean
-  note: string | null
-  briefHref: string
-}
-
 /** Section 5 — for content. */
 export interface ForContentBlock {
   worthAReply: { ref: string; text: string; lang?: string | null; english?: string | null; context: string; intentLabel: string; href: string | null }[]
@@ -194,25 +161,22 @@ export interface WeeklyData {
   contributions: Record<string, number> | null
   contributionsNote: string | null
   incoming: IncomingBlock
-  sales: ForSalesBlock
+  /**
+   * Section 4, THE COUNTED SHAPE (`lib/blocks/for-sales.ts`, block D wave 2).
+   *
+   * This was a flat list of four quotes over the MONTH with no count anywhere,
+   * beside This week's counted groups over the UPDATE'S WINDOW — two loaders,
+   * two shapes, two things to tell a salesperson about one week, and the file
+   * that carried it said so in its own header. `buildSales` is now called
+   * once per artefact: the same objection groups, the same denominator, the
+   * same switching total.
+   */
+  sales: ForSalesData
   content: ForContentBlock
   coverage: CoverageBlock
 }
 
 // ---- the pure half ------------------------------------------------------------
-
-const KIND_LABEL: Record<string, string> = {
-  objection: 'Objection',
-  pain_point: 'Complaint',
-  switching_signal: 'Switching signal',
-  praise: 'Selling point',
-}
-
-/** The four kinds section 4 is about, in the order the design lists them. */
-export const SALES_KINDS = ['objection', 'praise', 'switching_signal', 'pain_point'] as const
-
-/** How many of the customers' own words section 4 prints. */
-export const SALES_ROWS = 4
 
 /** How many comments section 5 names as worth a reply (design: "top three"). */
 export const WORTH_A_REPLY = 3
@@ -351,6 +315,7 @@ interface RunRow {
   videos_scraped: number | null
   window_start?: string | null
   window_end?: string | null
+  window_basis?: string | null
   stalled?: boolean | null
 }
 
@@ -446,9 +411,29 @@ export async function loadWeekly(scope: Scope): Promise<WeeklyData | null> {
   }
 
   // ── sections 3, 4 ───────────────────────────────────────────────────────
+  //
+  // §4 IS THIS WEEK'S OWN LOADER, CALLED A SECOND TIME (block D wave 2). It
+  // reads THE UPDATE'S WINDOW and produces counted groups with a denominator;
+  // the month-scoped quote list this artefact had instead was the second
+  // implementation its own file warned about. `windowVideos` is null here for
+  // the same reason it is null on This week — M3's windowed read is not
+  // applied — and `ForSalesData` carries that as a stated absence rather than
+  // as a count with nothing under it.
   const [incoming, sales] = await Promise.all([
     loadIncoming(supabase, clientId, run, overview, window),
-    loadSales(supabase, clientId, month, overview),
+    loadSubjects(supabase, clientId).then((subjects) =>
+      buildSales({
+        supabase,
+        clientId,
+        // `WeekWindow` carries the BASIS the window was frozen under
+        // (`pipeline_runs.window_basis`) — printed nowhere, carried so the
+        // record can say it. An older database that has no such column says
+        // so rather than having one invented for it.
+        window: window ? { ...window, basis: run?.window_basis ?? 'unrecorded' } : null,
+        windowVideos: null,
+        subjects,
+      }),
+    ),
   ])
 
   // ── section 5 ───────────────────────────────────────────────────────────
@@ -490,7 +475,7 @@ async function latestRuns(supabase: SupabaseClient, clientId: string): Promise<R
   // and the read falls back.
   const full = await supabase
     .from('pipeline_runs')
-    .select('id, started_at, completed_at, status, videos_scraped, window_start, window_end, stalled')
+    .select('id, started_at, completed_at, status, videos_scraped, window_start, window_end, window_basis, stalled')
     .eq('client_id', clientId)
     .in('status', ['completed', 'partial'])
     .order('started_at', { ascending: false })
@@ -849,197 +834,6 @@ async function newThemesOf(supabase: SupabaseClient, clientId: string, runId: st
     .filter((t) => t.videos > 0)
     .sort((a, b) => b.videos - a.videos)
     .slice(0, 3)
-}
-
-// ---- section 4 ----------------------------------------------------------------
-
-interface InsightRow {
-  id: string
-  category: string
-  theme: string
-  source_video_id: string | null
-  strength_score?: number | null
-}
-
-/**
- * How many of the month's quoted comments section 4 scans for words to print.
- *
- * One PostgREST page, newest first. The pool only has to be large enough to
- * find four quotes over four kinds, and an unbounded read here would make a
- * popular tenant's weekly build scan every comment anyone was ever quoted on. A
- * month that holds more than this is why the section links out rather than
- * counting.
- */
-export const SALES_SCAN = 1000
-
-/**
- * How a quoted comment is cited — "TikTok · 12 Sep · under a video we read".
- *
- * WHERE NEITHER HALF IS KNOWN, IT SAYS SOMETHING ELSE. The parts used to be
- * filtered and joined, so a comment row the lookup did not return collapsed to
- * the bare trailing phrase "under a video we read", which reads like a
- * truncation. It is also no longer the true sentence: every quote section 4
- * prints was found through the month's own comments, so the thing we can always
- * say is when it was said, even when the row behind it did not come back.
- */
-export function salesCite(platform: string | null, commentDate: string | null): string {
-  // THROUGH `platformLabel`, which exists so a client never sees the column
-  // value. The same email printed "TikTok 87 · Reddit 54" and "TikTok · 12 Sep
-  // · 95 comments read" from WR3, then "tiktok · 12 Sep · under a video we
-  // read" on all four of WR4's rows.
-  const parts = [platform ? platformLabel(platform) : null, commentDate ? shortDate(commentDate) : null].filter(Boolean)
-  return parts.length > 0 ? `${parts.join(' · ')} · under a video we read` : 'a comment we read this month'
-}
-
-/** Evidence rows chunked into `.in()` lists the database will accept. */
-const chunked = <T>(xs: readonly T[], size: number): T[][] => {
-  const out: T[][] = []
-  for (let i = 0; i < xs.length; i += size) out.push(xs.slice(i, i + size))
-  return out
-}
-
-async function loadSales(
-  supabase: SupabaseClient,
-  clientId: string,
-  month: string,
-  overview: OverviewData,
-): Promise<ForSalesBlock> {
-  const briefHref = '/dashboard/reports'
-  const empty: ForSalesBlock = {
-    rows: [],
-    hasMore: false,
-    note: 'Nothing a customer said this month was an objection, a complaint, a switching signal or a selling point we could quote.',
-    briefHref,
-  }
-  // A QUOTE IS DATED BY THE COMMENT, NEVER BY THE RUN (AGENTS.md).
-  //
-  // This read used to be `audience_insights_current … gte('created_at', month
-  // start)`, which is when the PIPELINE WROTE THE ROW. Verified on production:
-  // insights created in 2026-09 on Össur cite comments back to 2026-04, and
-  // those created in 2026-08 cite comments back to 2021 — so a masthead reading
-  // "Every number below is this month so far" sat over a quote cited "9 Mar",
-  // and the empty state's "Nothing a customer said this month" was a sentence
-  // the query could not support.
-  //
-  // So the read is driven from the side the date is on: the month's own
-  // COMMENTS, newest first, inner-joined to the evidence that quotes them. That
-  // is also the cheaper direction — `comments(client_id, …)` narrows first and
-  // `idx_insight_evidence_comment` does the join; driving from
-  // `insight_evidence` ordered by its primary key cost 3.1s on Össur and timed
-  // out once on Sealand.
-  const from = monthStartOf(month)
-  const to = nextMonth(month)
-  const evidenceRes = await supabase
-    .from('comments')
-    .select('id, insight_evidence!inner(audience_insight_id)')
-    .eq('client_id', clientId)
-    .gte('comment_date', from)
-    .lt('comment_date', to)
-    .eq('insight_evidence.redacted', false)
-    // Newest first, then by id, so two builds of the same minute scan the same
-    // pool: an unordered page is whatever the planner hands back.
-    .order('comment_date', { ascending: false })
-    .order('id')
-    .limit(SALES_SCAN)
-  const quoted = rows<{ id: string; insight_evidence: { audience_insight_id: string }[] }>(evidenceRes, 'weekly.salesEvidence')
-  if (quoted.length === 0) return empty
-  // The comments this month holds, so a citation quoting an OLDER comment of
-  // the same insight is not printed under a month heading either.
-  const thisMonth = new Set(quoted.map((c) => c.id))
-  const scanned = [...new Set(quoted.flatMap((c) => (c.insight_evidence ?? []).map((e) => e.audience_insight_id)))]
-
-  // Which of those are the four kinds sales reads, strongest first — through
-  // the CURRENT view, so an insight a later run superseded is not quoted as
-  // though it were still the video's analysis.
-  const found: InsightRow[] = []
-  for (const chunk of chunked(scanned, 200)) {
-    const res = await supabase
-      .from('audience_insights_current')
-      .select('id, category, theme, source_video_id, strength_score')
-      .eq('client_id', clientId)
-      .in('category', [...SALES_KINDS])
-      .in('id', chunk)
-    found.push(...rows<InsightRow>(res, 'weekly.salesInsights'))
-  }
-  const insights = found.sort((a, b) => (b.strength_score ?? 0) - (a.strength_score ?? 0)).slice(0, 120)
-  if (insights.length === 0) return empty
-
-  const videoIds = [...new Set(insights.map((i) => i.source_video_id).filter((v): v is string => Boolean(v)))]
-  const rivalByVideo = new Map<string, string>()
-  if (videoIds.length > 0) {
-    const vres = await supabase.from('videos').select('id, competitor_name, is_competitor').eq('client_id', clientId).in('id', videoIds)
-    for (const v of rows<{ id: string; competitor_name: string | null; is_competitor: boolean | null }>(vres, 'weekly.salesVideos')) {
-      if (v.is_competitor && v.competitor_name) rivalByVideo.set(v.id, v.competitor_name)
-    }
-  }
-
-  const citations = await fetchQuoteCitationsByAudience(supabase, insights.map((i) => i.id))
-  const commentIds: string[] = []
-  const picked: { insight: InsightRow; citation: QuoteCitation }[] = []
-  const seen = new Set<string>()
-  const usedKinds = new Set<string>()
-  // ONE PER KIND FIRST, then the rest. The design lists four kinds and a sales
-  // reader who gets four objections and no selling point has been handed half
-  // the brief.
-  for (const pass of [0, 1]) {
-    for (const insight of insights) {
-      if (picked.length >= SALES_ROWS) break
-      if (pass === 0 && usedKinds.has(insight.category)) continue
-      for (const c of (citations.get(insight.id) ?? []).sort((a, b) => a.rank - b.rank)) {
-        // AN INSIGHT MAY BE EVIDENCED FROM SEVERAL MONTHS. It reaches this loop
-        // because ONE of its comments was written this month; only that comment
-        // may be printed under a month heading.
-        if (!c.commentId || !thisMonth.has(c.commentId)) continue
-        const text = cleanQuote(c.quote)
-        const key = text.toLowerCase()
-        if (!text || seen.has(key) || !readsAsHeroQuote(text, c)) continue
-        seen.add(key)
-        usedKinds.add(insight.category)
-        picked.push({ insight, citation: { ...c, quote: text } })
-        if (c.commentId) commentIds.push(c.commentId)
-        break
-      }
-    }
-  }
-  if (picked.length === 0) return empty
-
-  const meta = new Map<string, { platform: string | null; comment_date: string | null; video_id: string | null; comment_id: string | null }>()
-  if (commentIds.length > 0) {
-    const res = await supabase.from('comments').select('id, platform, comment_date, video_id, comment_id').eq('client_id', clientId).in('id', commentIds)
-    for (const c of rows<{ id: string; platform: string | null; comment_date: string | null; video_id: string | null; comment_id: string | null }>(res, 'weekly.salesComments')) meta.set(c.id, c)
-  }
-  const nativeIds = [...new Set([...meta.values()].map((m) => m.video_id).filter((v): v is string => Boolean(v)))]
-  const urlByKey = new Map<string, string>()
-  if (nativeIds.length > 0) {
-    const res = await supabase.from('videos').select('platform, video_id, video_url').eq('client_id', clientId).in('video_id', nativeIds)
-    for (const v of rows<{ platform: string | null; video_id: string | null; video_url: string | null }>(res, 'weekly.salesVideoUrls')) {
-      if (v.video_url && v.video_id) urlByKey.set(`${v.platform}::${v.video_id}`, v.video_url)
-    }
-  }
-
-  const out: SalesRow[] = picked.map(({ insight, citation }) => {
-    const m = citation.commentId ? meta.get(citation.commentId) : undefined
-    const url = m?.platform && m.video_id ? urlByKey.get(`${m.platform}::${m.video_id}`) ?? null : null
-    return {
-      kind: insight.category,
-      kindLabel: KIND_LABEL[insight.category] ?? humanTheme(insight.category),
-      label: humanTheme(insight.theme),
-      rival: insight.source_video_id ? rivalByVideo.get(insight.source_video_id) ?? null : null,
-      quote: {
-        ref: quoteRef.evidence(citation.evidenceId),
-        text: citation.quote,
-        ...(citation.lang != null ? { lang: citation.lang, english: citation.english ?? null } : {}),
-      },
-      cite: salesCite(m?.platform ?? null, m?.comment_date ?? null),
-      href: citationLink(m?.platform ?? null, url, m?.comment_id ?? null).href,
-    }
-  })
-  return {
-    rows: out,
-    hasMore: insights.length > out.length,
-    note: overview.subjects.state === 'not_recorded' ? 'Grouped by what customers raised; your subjects are not recorded for this workspace yet.' : null,
-    briefHref,
-  }
 }
 
 // ---- section 5 ----------------------------------------------------------------
