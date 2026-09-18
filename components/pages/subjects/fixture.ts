@@ -1,4 +1,5 @@
-import { buildSeries, type DenominatorPoint, type NumeratorPoint } from '@/lib/reading/series'
+import { buildSeries, type DenominatorPoint, type NumeratorPoint, type SeriesChange } from '@/lib/reading/series'
+import { nextMonth } from '@/lib/reading/monthly'
 import { monthChange } from '@/lib/reading/bands'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '@/lib/rivals'
 import { kindShares, redditRead } from '@/lib/reading/kinds'
@@ -42,6 +43,9 @@ const AXIS = ['2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01', '2026-08-0
 
 const RIVAL = 'competitor:Freitag'
 
+/** The day the tracked rival was stopped, in the retired-rival arm. */
+const RIVAL_STOPPED = '2026-08-12'
+
 const subject = (over: Partial<Subject> = {}): Subject => ({
   id: 's1', client_id: 'c1', name: 'Durability', description: 'Whether the bag lasts',
   origin: 'category_theme', source_ref: null, named_at: '2026-08-19', status: 'active',
@@ -51,7 +55,18 @@ const subject = (over: Partial<Subject> = {}): Subject => ({
   ...over,
 })
 
-function sidesAndSeries() {
+/**
+ * @param retiredAt  The day the tracked rival was STOPPED, where the fixture is
+ *   the retired-rival arm. It is not decoration: `buildSides` takes the rival's
+ *   `retiredAt`, which is what labels the side "Freitag — stopped" and what
+ *   makes the gap `refused: 'tracking_change'` — and the stop is a change to
+ *   what this workspace tracks, so the rival's own series carries it as a dated
+ *   `tracking_change` and the chart draws the rule. Passing only a refusal
+ *   reason (which is what this fixture used to do) produces a pane that is
+ *   pixel-identical to the live one but for one sentence, and proves nothing
+ *   about how the page behaves when a rival was actually stopped.
+ */
+function sidesAndSeries(retiredAt: string | null = null) {
   const denominators: DenominatorPoint[] = []
   const per = new Map<string, number>()
   const add = (month: string, audience: string, videos: number) => {
@@ -76,11 +91,26 @@ function sidesAndSeries() {
   const readings = (audience: string, k: (m: string) => number): NumeratorPoint[] =>
     AXIS.map((m) => ({ month: m, audience, videos: k(m), comments: k(m) * 3, run_id: 'r1' }))
 
+  // The stop, as the reading layer carries it: one logged change over the month
+  // it happened in, on the audience it happened to.
+  const stopped: SeriesChange[] = retiredAt
+    ? [{
+        changed_at: retiredAt,
+        surface: 'settings.rivals',
+        note: 'Freitag was stopped as a tracked rival from this month, so a comparison across it is partly a change in what we track.',
+        months: `[${retiredAt.slice(0, 8)}01,${nextMonth(retiredAt.slice(0, 8) + '01')})`,
+      }]
+    : []
+
   const seriesFor = (subjectId: string, audience: string) => {
     const k = audience === INDUSTRY_AUDIENCE ? (m: string) => catK[m]
       : audience === CLIENT_AUDIENCE ? () => 26
         : () => 62
-    return buildSeries({ axis: AXIS, audience, denominators, readings: readings(audience, k), objectId: subjectId, objectLabel: 'Durability' })
+    return buildSeries({
+      axis: AXIS, audience, denominators, readings: readings(audience, k),
+      objectId: subjectId, objectLabel: 'Durability',
+      ...(audience === RIVAL ? { changes: stopped } : {}),
+    })
   }
 
   // TWO MONTHS, NOT ONE. August exists so the per-kind verdicts are REAL — a
@@ -104,8 +134,8 @@ function sidesAndSeries() {
 
   const sides = buildSides({
     subject: subject(),
-    rivals: [{ name: 'Freitag', retiredAt: null }],
-    leadRival: { name: 'Freitag', retiredAt: null },
+    rivals: [{ name: 'Freitag', retiredAt }],
+    leadRival: { name: 'Freitag', retiredAt },
     month: MONTH,
     prevMonth: '2026-08-01',
     axis: AXIS,
@@ -450,9 +480,17 @@ export function fixtureKindShares() {
  */
 export function retiredRivalFixture(): SubjectsData {
   const base = subjectsFixture()
-  const { sides } = sidesAndSeries()
+  const { sides, series } = sidesAndSeries(RIVAL_STOPPED)
   return {
     ...base,
-    selected: base.selected ? { ...base.selected, gap: paneGapFor(sides, 'tracking_change') } : null,
+    selected: base.selected
+      ? {
+          ...base.selected,
+          sides,
+          series,
+          gap: paneGapFor(sides, 'tracking_change'),
+          axisNote: axisNote(sides, 100, series),
+        }
+      : null,
   }
 }

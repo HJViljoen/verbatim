@@ -14,6 +14,7 @@ import { subjectsLine } from './line'
 import { subjectsKinds } from './kinds'
 import { subjectsVoices } from './voices'
 import { subjectsUnanswered } from './unanswered'
+import { calendarRulesFor } from '@/lib/charts/from-series'
 import { freezeQuotes } from '@/lib/renderables/quotes-freeze'
 import { gapBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
 import { candidatesFixture, refusedFixture, retiredRivalFixture, subjectsFixture } from './fixture'
@@ -832,8 +833,24 @@ describe('SU2 · the two-audience gap the pane carries', () => {
     expect(gap.gapPts).toBeNull()
     // The levels survive; only the difference is withheld, on this month and
     // on the earlier one.
-    expect(gapLine(gap)).toBe('You 31% of 84 · Freitag 43.7% of 142 · comparison refused')
+    // The side names itself stopped — the fixture now carries the rival's own
+    // `retiredAt`, not just a refusal reason.
+    expect(gapLine(gap)).toBe('You 31% of 84 · Freitag — stopped 43.7% of 142 · comparison refused')
     expect(gapBasisLine(gap)).toBe('comparison refused in August')
+  })
+
+  // THE ARM HAS TO BE A DIFFERENT READING, NOT A DIFFERENT STRING. It varied
+  // only `selected.gap.refused`, so the chart still drew Freitag as a live
+  // rival with no dated rule on the axis and the shot proved the gapline branch
+  // and nothing else.
+  it('draws the stop as a dated rule on the axis, in the rival’s own series', () => {
+    const retired = retiredRivalFixture()
+    const live = subjectsFixture()
+    const rules = calendarRulesFor(retired.selected!.series)
+    expect(rules.map((r) => r.kind)).toContain('tracking_change')
+    expect(rules.find((r) => r.kind === 'tracking_change')!.month).toBe('2026-08-01')
+    expect(calendarRulesFor(live.selected!.series)).toEqual([])
+    expect(renderText(subjectsLine.render(retired, 'app', ctx))).toContain('Freitag — stopped')
   })
 
   it('renders every block on the retired-rival reading and keeps the copy contract', () => {
