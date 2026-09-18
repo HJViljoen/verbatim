@@ -1,6 +1,7 @@
 import { MAX_FLAGS, baselineLabel, type ThinUpdateReason } from '../reading/anomaly'
-import { fmtInt, fmtPct, shortDate } from '../format'
+import { fmtInt, fmtPct, fullDate, shortDate } from '../format'
 import { longMonth } from '../format'
+import { PRIVACY_LINE, platformShareLine } from '../reading/method'
 import { prevMonth } from '../reading/month-key'
 import { mergeFigures } from '../blocks/types'
 import type { FigureTable } from '../reading/verdicts'
@@ -473,6 +474,96 @@ export function withinFirstScreenBudget(s: Section1): boolean {
 export function weeklyPeriod(window: { from: string; to: string } | null, month: string): string {
   if (!window) return `${longMonth(month)} so far`
   return `${shortDate(window.from)} – ${shortDate(window.to)}`
+}
+
+/**
+ * "Verbatim · weekly · update of 27 Sep" — the artboard's eyebrow
+ * (`weekly.eyebrow`, block D wave 2).
+ *
+ * THE ARTEFACT IS NAMED AND THE UPDATE IS DATED, which is what the mock puts
+ * here and what the built eyebrow did not: it printed the tenant and the
+ * product category (`Sealand · consumer intelligence`), so a reader with three
+ * Verbatim emails open could not tell which artefact or which week they were
+ * in. The TENANT moves to the right end of the date line, where the mock has
+ * it.
+ *
+ * "weekly" IS THE ARTEFACT'S NAME, NOT A CLAIM ABOUT THE WINDOW. Sealand's
+ * window is thirty days and every line that describes the window takes
+ * `periodNounFor`; this one names the report a reader subscribed to, and the
+ * update's own date sits beside it so the two cannot be confused.
+ *
+ * `27 September` in the mock, `27 Sep` here: the product has ONE short date
+ * form (`shortDate`), and a second one invented for a single line is how
+ * "16 Sept" came to sit under "Sep" in the deck footer.
+ */
+export function weeklyEyebrow(updateDate: string | null): string {
+  return updateDate ? `Verbatim · weekly · update of ${shortDate(updateDate)}` : 'Verbatim · weekly'
+}
+
+/**
+ * "6 – 13 Sep · previous update 30 Aug" — the left half of the masthead's
+ * two-ended row (`weekly.daterange`).
+ *
+ * THE PREVIOUS UPDATE IS BOUND RATHER THAN DROPPED. The mock prints it and the
+ * gap note recorded "no field on this artefact" — but `latestRuns` already
+ * reads this tenant's last nine delivered runs for the thin gate, so the one
+ * behind this one costs no query at all. It is the same expression This week's
+ * `WeekUpdate.previous` uses, and a first update SAYS it is one rather than
+ * leaving the clause off: "no previous update" is the reason such a report has
+ * nothing behind it to be read against.
+ */
+export function weeklyDateLine(period: string, previous: string | null): string {
+  return `${period} · ${previous ? `previous update ${shortDate(previous)}` : 'no previous update'}`
+}
+
+/**
+ * The three mono lines at the foot (`weekly.footer`).
+ *
+ * WHAT THE MOCK ASKS FOR, MINUS ONE CLAUSE. Prepared-by · the update's date ·
+ * the platform mix · the privacy sentence. "next update 4 Oct" is NOT here:
+ * nothing in this product computes a next update date — a schedule's cadence
+ * is not a promise about when a run will land — and a date printed in an email
+ * a client can hold up is a promise.
+ *
+ * "PREPARED FOR", NOT "BY", and that is argued in `components/email/weekly.tsx`:
+ * this artefact is sent to the client's own staff, and only a share link is a
+ * document the client forwards under their own name.
+ *
+ * THE MIX IS THIS UPDATE'S OWN AND SAYS SO. The mock prints a bare
+ * "TikTok 38% · YouTube 29% …" under a footer whose other line is dated by the
+ * update; the record's mix (WR6) is the MONTH's, and two mixes with no label
+ * between them is how one share comes to mean two things (D15). The line is
+ * composed by `platformShareLine`, the one renderer of a mix as percentages.
+ */
+export interface WeeklyFooterLines {
+  prepared: string
+  /** Null where this update gathered nothing, or recorded no platform. */
+  mix: string | null
+  privacy: string
+}
+
+export function weeklyFooterLines(input: {
+  company: string
+  updateDate: string | null
+  readingAt: string
+  platforms: readonly { platform: string; videos: number }[]
+}): WeeklyFooterLines {
+  const mixOf: Record<string, number> = {}
+  let videos = 0
+  for (const p of input.platforms) {
+    mixOf[p.platform] = (mixOf[p.platform] ?? 0) + p.videos
+    videos += p.videos
+  }
+  const share = platformShareLine(mixOf)
+  return {
+    prepared: [
+      `Prepared for ${input.company} · with Verbatim`,
+      input.updateDate ? `update of ${fullDate(input.updateDate)}` : null,
+      `read ${fullDate(input.readingAt)}`,
+    ].filter((s): s is string => s != null).join(' · '),
+    mix: share ? `${share} — this update’s ${fmtInt(videos)} ${videos === 1 ? 'video' : 'videos'}` : null,
+    privacy: PRIVACY_LINE,
+  }
 }
 
 /**

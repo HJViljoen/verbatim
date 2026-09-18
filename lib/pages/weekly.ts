@@ -13,6 +13,7 @@ import { platformLabel, shortDate } from '../format'
 import { monthStartOf, nextMonth, prevMonth } from '../reading/month-key'
 import { BASELINE_MONTHS, baselineStateOf, thinUpdate, type ThinUpdateVerdict } from '../reading/anomaly'
 import { INDUSTRY_AUDIENCE } from '../rivals'
+import type { MethodLines } from '../reading/method'
 import { loadOverview, audienceInLabel, daysInto, isMissingAnomalyFlags, type Mover, type OverviewData, type SubjectsBlock } from './overview'
 import { loadContent, isContentEmpty, type ContentInboxRow } from './content'
 import { loadSubjectQuotes, loadSubjects, workedLabel } from './week'
@@ -166,6 +167,25 @@ export interface WeeklyData {
   runId: string | null
   /** The update's frozen window (`pipeline_runs.window_start/_end`). */
   window: { from: string; to: string } | null
+  /**
+   * This update's own date and the one delivered before it — the masthead's
+   * two-ended row (`weekly.daterange`).
+   *
+   * BOTH OFF `latestRuns`, WHICH THIS LOADER ALREADY READS for the thin gate,
+   * so binding the mock's "previous update 20 Sep" costs no query. The same
+   * expression This week uses (`lib/pages/week.ts:WeekUpdate`): a run is dated
+   * by when it finished, and by when it started where it never recorded a
+   * finish.
+   */
+  update: { date: string | null; previous: string | null }
+  /**
+   * The method footnote, composed once for every surface (block D, D9).
+   *
+   * OVERVIEW ALREADY COMPOSED IT off the `RecordInputs` this report's §6 rests
+   * on, so the artefact and the page cannot word one basis two ways. Null where
+   * the record could not be read at all.
+   */
+  method: MethodLines | null
   section1: Section1
   /** OV2's own block, rendered at report width. */
   subjects: SubjectsBlock
@@ -441,6 +461,12 @@ export async function loadWeekly(scope: Scope): Promise<WeeklyData | null> {
     readingAt,
     runId: run?.id ?? null,
     window,
+    // THE MASTHEAD'S DATES, OFF THE RUNS ALREADY IN HAND (weekly.daterange).
+    update: {
+      date: run?.completed_at ?? run?.started_at ?? null,
+      previous: runsRaw[1]?.completed_at ?? runsRaw[1]?.started_at ?? null,
+    },
+    method: overview.method,
     section1,
     subjects: overview.subjects,
     // THE CONTRIBUTION PER SUBJECT NEEDS M4's WINDOW FUNCTION, which is not

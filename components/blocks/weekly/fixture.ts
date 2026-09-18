@@ -46,6 +46,9 @@ function base(overview = overviewFixture()): WeeklyData {
     readingAt: NOW,
     runId: 'run-1',
     window: WINDOW,
+    // The masthead's two dates: this update, and the one behind it.
+    update: { date: '2026-09-13T06:00:00.000Z', previous: '2026-09-05T06:00:00.000Z' },
+    method: overview.method,
     section1: {
       month: MONTH,
       daysIn: 18,

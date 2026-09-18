@@ -62,7 +62,39 @@ describe('the weekly email', () => {
 
   it('stamps the reading date, which M9 will read back out of `data`', () => {
     // In the product's own date form, never raw ISO beside "6 Sep - 13 Sep".
-    expect(words(snapshot())).toContain('reading as at 18 Sep 2026')
+    // It sits in the footer's provenance line now, where the artboard keeps
+    // every stamp, rather than halfway up the masthead.
+    expect(words(snapshot())).toContain('read 18 Sep 2026')
+  })
+
+  // ---- the artboard's masthead and footer (block D wave 2) ----------------
+
+  it('names the artefact and dates the update in the eyebrow', () => {
+    const text = words(snapshot())
+    expect(text).toContain('Verbatim · weekly · update of 13 Sep')
+    // The tenant is no longer the eyebrow — it is the right end of the date
+    // row, which is where the artboard puts it.
+    expect(text).not.toContain('consumer intelligence')
+  })
+
+  it('prints the update behind this one on the date row', () => {
+    expect(words(snapshot())).toContain('6 Sep – 13 Sep · previous update 5 Sep')
+  })
+
+  it('says there is no previous update rather than dropping the clause', () => {
+    const reading = weeklyFixture()
+    const data = snapshot({ ...reading, update: { ...reading.update, previous: null } })
+    expect(words(data)).toContain('no previous update')
+  })
+
+  it('prints the three mono footer lines, and promises no next update', () => {
+    const text = words(snapshot())
+    expect(text).toContain('Prepared for Sealand · with Verbatim · update of 13 Sep 2026')
+    expect(text).toContain('— this update’s 271 videos')
+    expect(text).toContain('Commenters are never identified; quotes carry platform and date only.')
+    // A cadence is not a promise about when a run lands, and nothing in this
+    // product computes one.
+    expect(text).not.toMatch(/next update/i)
   })
 
   it('leads with the frozen subject, so the inbox line and the artefact agree', () => {
