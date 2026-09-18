@@ -813,7 +813,6 @@ interface OwnPostRow {
   comments_count: number
   hook_style: string | null
   classified_type: string | null
-  platform: string | null
 }
 
 interface OwnClaimStored {
@@ -878,7 +877,7 @@ export async function loadOwnPosts(
     selectAll<OwnPostRow>(() =>
       supabase
         .from('videos')
-        .select('id, upload_date, comments_count, hook_style, classified_type, platform')
+        .select('id, upload_date, comments_count, hook_style, classified_type')
         .eq('client_id', clientId)
         .or('is_client.eq.true,source.eq.owned')
         .gte('upload_date', days.from)

@@ -155,8 +155,6 @@ export interface OwnPostInput {
     comments_count: number
     hook_style: string | null
     classified_type: string | null
-    /** Only read to date the claim rows that hang off this post. */
-    platform?: string | null
   }[]
   claims: readonly { id: string; source_video_id: string; entity: string; claim: string; quote: string }[]
   membership: readonly { subjectId: string; label: string; videoIds: readonly string[] }[]

@@ -114,7 +114,7 @@ function sidesAndSeries() {
 function ownPostsInput(): OwnPostInput {
   const post = (id: string, day: number, comments: number, hook: string | null, format: string | null) => ({
     id, upload_date: `2026-09-${String(day).padStart(2, '0')}`, comments_count: comments,
-    hook_style: hook, classified_type: format, platform: 'tiktok',
+    hook_style: hook, classified_type: format,
   })
   return {
     month: MONTH,

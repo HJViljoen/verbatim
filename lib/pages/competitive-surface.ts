@@ -770,7 +770,6 @@ interface RivalPostRow {
   comments_count: number
   hook_style: string | null
   classified_type: string | null
-  platform: string | null
 }
 
 /**
@@ -807,7 +806,7 @@ export async function loadRivalOwnPosts(
     selectAll<RivalPostRow>(() =>
       supabase
         .from('videos')
-        .select('id, competitor_name, upload_date, comments_count, hook_style, classified_type, platform')
+        .select('id, competitor_name, upload_date, comments_count, hook_style, classified_type')
         .eq('client_id', clientId)
         .eq('source', 'competitor_owned')
         .gte('upload_date', start)
