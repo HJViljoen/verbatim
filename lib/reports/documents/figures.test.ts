@@ -11,7 +11,7 @@ import {
   type SwitchingVideo,
 } from './figures'
 import { monthlyLineLabel } from '../../pages/overview'
-import { REFUSAL_WHY } from '../../reading/record'
+import { NOT_DRAWN_WHY, REFUSAL_WHY, refusedSentence } from '../../reading/record'
 import type { FigureTable as ReadingFigures, RefusedReason, Verdict, VerdictState, VerdictWindow } from '../../reading/verdicts'
 
 const WINDOW: VerdictWindow = { kind: 'month', from: '2026-09-01', to: '2026-10-01' }
@@ -292,6 +292,22 @@ describe('cannotTell', () => {
       // The record's wording, capitalised and stopped — never a second wording.
       expect(out.items[0].toLowerCase()).toContain(REFUSAL_WHY[reason])
     }
+  })
+
+  it('says the record\u2019s own words about a refusal that carries no reason', () => {
+    const out = cannotTell([verdict('refused')])
+    expect(out.refusals).toEqual([{ state: 'refused', reason: null }])
+    // Not `unlogged_era` — that asserts a specific cause the record does not
+    // have, and it contradicted the summary line about the very same row.
+    expect(out.items[0].toLowerCase()).toContain(NOT_DRAWN_WHY.refused)
+    expect(out.items[0].toLowerCase()).not.toContain(REFUSAL_WHY.unlogged_era)
+    expect(out.line.toLowerCase()).toContain(NOT_DRAWN_WHY.refused)
+    expect(out.line).toBe(refusedSentence(out.refusals))
+  })
+
+  it('carries exactly one item per refusal', () => {
+    const out = cannotTell([verdict('refused'), verdict('too_little_data'), verdict('refused', 'rename'), verdict('moved')])
+    expect(out.items).toHaveLength(out.refusals.length)
   })
 
   it('counts the two not-drawn states as refusals too, each with its own reason', () => {

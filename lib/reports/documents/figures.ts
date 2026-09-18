@@ -2,7 +2,7 @@ import { SHARE_BAND, type BandOptions } from '../../report-bands'
 import { fmtInt, fmtPct } from '../../format'
 import { scrubProse } from '../../prose/scrub'
 import { proseFigures } from '../../prose/figures'
-import { REFUSAL_WHY, refusals as refusalsOf, refusedSentence, type Refusal } from '../../reading/record'
+import { NOT_DRAWN_WHY, REFUSAL_WHY, refusals as refusalsOf, refusedSentence, type Refusal } from '../../reading/record'
 import { bandVerdict, type Counted, type FigureTable as ReadingFigures, type Verdict, type VerdictWindow } from '../../reading/verdicts'
 import type { Quote } from '../../renderables/types'
 
@@ -419,15 +419,6 @@ export interface CannotTell {
   items: string[]
 }
 
-/** The other two ways a comparison goes undrawn, in the same voice as
- *  `REFUSAL_WHY`. Kept beside it rather than imported: `record.ts` holds its
- *  copy private because the record's own sentence pools them, and a per-item
- *  list has to name each one. */
-const NOT_DRAWN_ITEM: Record<string, string> = {
-  too_little_data: 'too little was read on one side or both',
-  baseline_forming: 'there are not enough months behind it yet',
-}
-
 /**
  * The refusals, carried to the slide.
  *
@@ -442,9 +433,16 @@ const NOT_DRAWN_ITEM: Record<string, string> = {
 export function cannotTell(verdicts: readonly Verdict[]): CannotTell {
   const list = refusalsOf(verdicts)
   const items = list.map((r) => {
-    const why = r.state === 'refused' && r.reason
-      ? REFUSAL_WHY[r.reason]
-      : NOT_DRAWN_ITEM[r.state] ?? REFUSAL_WHY.unlogged_era
+    // THE RECORD'S TABLE, NOT A COPY OF TWO THIRDS OF IT. A refused verdict
+    // whose `refusedReason` is null falls to `NOT_DRAWN_WHY.refused` — the
+    // words `refusedSentence` uses for the same row — where a local copy
+    // holding only the two not-drawn states fell through to
+    // `REFUSAL_WHY.unlogged_era` and asserted a cause the record does not
+    // have, contradicting this list's own summary line.
+    // ONE ITEM PER REFUSAL, ALWAYS: `items[i]` is `refusals[i]`, and a state
+    // the table has never heard of says that it was not drawn rather than
+    // naming a cause nobody recorded.
+    const why = r.state === 'refused' && r.reason ? REFUSAL_WHY[r.reason] : NOT_DRAWN_WHY[r.state] ?? 'this comparison was not drawn'
     return capitalise(`${why}.`)
   })
   return { refusals: list, line: refusedSentence(list), items }
