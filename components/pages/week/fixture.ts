@@ -109,7 +109,7 @@ function seriesOf(input: {
     monthOf: new Map(Object.entries(input.monthOf)),
     windowless: input.windowless ?? 0,
     requested: input.requested ?? 13,
-    windowReadAvailable: true,
+    windowRead: 'read',
   })
 }
 

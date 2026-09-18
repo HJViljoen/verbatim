@@ -275,8 +275,17 @@ export function buildUpdateSeries(input: {
   windowless: number
   /** How many updates were asked for. */
   requested: number
-  /** Whether the windowed reading answered at all. */
-  windowReadAvailable: boolean
+  /**
+   * What the windowed reading DID, in three states and not two.
+   *
+   * `read` — it answered. `absent` — M3 is not applied here, so the RPC does
+   * not exist and no contribution can ever be stated for this workspace until
+   * it is. `failed` — the call errored, which is a fact about one read and not
+   * about our deployment. A boolean folded the last two together and the page
+   * then told a reader "the windowed reading is not installed for this
+   * workspace" on the strength of a single blinked read.
+   */
+  windowRead: 'read' | 'absent' | 'failed'
 }): UpdateSeries {
   const points: UpdatePoint[] = input.runs.map((r) => {
     const months = monthsOfWindow(r.window.from, r.window.to)
@@ -337,8 +346,11 @@ export function buildUpdateSeries(input: {
         : `Fewer than ${fmtInt(UPDATE_BAND_MINIMUM - 1)} of the updates behind this one found anything, so there is no typical for this one to be read against.`,
     )
   }
-  if (!input.windowReadAvailable) {
+  if (input.windowRead === 'absent') {
     notes.push('The windowed reading is not installed for this workspace, so no update’s contribution to its month can be stated.')
+  }
+  if (input.windowRead === 'failed') {
+    notes.push('The windowed reading could not be read just now, so no update’s contribution to its month is stated here.')
   }
 
   if (points.length === 0) {
@@ -422,7 +434,7 @@ export async function loadUpdateSeries(scope: Scope, opts: UpdateSeriesOptions =
   if (withWindow.length === 0) {
     return buildUpdateSeries({
       runs: [], videosByRun: new Map(), spans: new Map(), monthOf: new Map(),
-      windowless, requested, windowReadAvailable: true,
+      windowless, requested, windowRead: 'read',
     })
   }
 
@@ -440,7 +452,7 @@ export async function loadUpdateSeries(scope: Scope, opts: UpdateSeriesOptions =
   ])
 
   const spans = new Map<string, { videos: number; comments: number }>()
-  for (const s of spanReads) if (s) spans.set(s.key, { videos: s.videos, comments: s.comments })
+  for (const s of spanReads.reads) if (s) spans.set(s.key, { videos: s.videos, comments: s.comments })
 
   return buildUpdateSeries({
     runs: withWindow,
@@ -449,11 +461,13 @@ export async function loadUpdateSeries(scope: Scope, opts: UpdateSeriesOptions =
     monthOf,
     windowless,
     requested,
-    // A SPAN THAT ANSWERED NOTHING IS NOT AN EMPTY SPAN. `loadWindowReading`
-    // returns `denominators: null` when M3 is absent and `[]` when it is
-    // present and the days were quiet — the same distinction every reader on
-    // this page keeps, carried up so the note can say which happened.
-    windowReadAvailable: spanKeys.length === 0 || spans.size > 0,
+    // A SPAN THAT ANSWERED NOTHING IS NOT AN EMPTY SPAN, AND A SPAN THAT COULD
+    // NOT BE READ IS NEITHER. `loadWindowReading` returns `denominators: null`
+    // when M3 is absent and `[]` when it is present and the days were quiet —
+    // the same distinction every reader on this page keeps — and a throw is a
+    // third thing again. `readSpans` carries all three up so the note says
+    // which happened rather than blaming the deployment for one failed call.
+    windowRead: spanKeys.length === 0 ? 'read' : spanReads.probe,
   })
 }
 
@@ -473,32 +487,53 @@ export async function loadUpdateSeries(scope: Scope, opts: UpdateSeriesOptions =
  * rejection would take the whole chart down, and a chart of thirteen updates is
  * worth drawing with twelve contributions on it — as long as the thirteenth
  * prints no number rather than a zero.
+ *
+ * AND THE PROBE'S OWN ANSWER IS THREE-VALUED, because the note it drives is.
+ * "The RPC does not exist here" is a fact about this deployment; "that call
+ * errored" is a fact about one read of it. Folding them into one `null` had the
+ * page tell a reader the windowed reading was not installed for their
+ * workspace on the strength of a single blinked read.
  */
 async function readSpans(
   reading: ReadingHandle,
   clientId: string,
   spanKeys: readonly { runId: string; month: string; span: { from: string; to: string } }[],
-): Promise<({ key: string; videos: number; comments: number } | null)[]> {
-  if (spanKeys.length === 0) return []
-  const one = async (s: (typeof spanKeys)[number]) => {
+): Promise<{
+  reads: ({ key: string; videos: number; comments: number } | null)[]
+  probe: 'read' | 'absent' | 'failed'
+}> {
+  if (spanKeys.length === 0) return { reads: [], probe: 'read' }
+  type SpanRead =
+    | { kind: 'read'; key: string; videos: number; comments: number }
+    | { kind: 'absent' }
+    | { kind: 'failed' }
+  const one = async (s: (typeof spanKeys)[number]): Promise<SpanRead> => {
     try {
       const read = await loadWindowReading(reading.client, clientId, { from: s.span.from, to: s.span.to })
-      if (read.denominators == null) return null
+      // `denominators: null` is `loadWindowReading` having swallowed the 404 by
+      // name: the RPC does not exist here, which is a fact about the deployment.
+      if (read.denominators == null) return { kind: 'absent' }
       return {
+        kind: 'read',
         key: `${s.runId}::${s.month}`,
         videos: read.denominators.reduce((t, d) => t + (d.videos ?? 0), 0),
         comments: read.denominators.reduce((t, d) => t + (d.comments ?? 0), 0),
       }
     } catch (error) {
-      if (!isMissingMonthlyReading(error)) {
-        console.error(`[reading] updates.span: ${(error as { message?: string })?.message ?? String(error)}`)
-      }
-      return null
+      // A THROW IS NOT THE SAME SILENCE. A PostgREST that cannot load its
+      // schema cache throws where a missing function answers null, and calling
+      // that "not installed for this workspace" is a claim about our deployment
+      // made from one blinked read.
+      if (isMissingMonthlyReading(error)) return { kind: 'absent' }
+      console.error(`[reading] updates.span: ${(error as { message?: string })?.message ?? String(error)}`)
+      return { kind: 'failed' }
     }
   }
+  const held = (r: SpanRead) => (r.kind === 'read' ? { key: r.key, videos: r.videos, comments: r.comments } : null)
   const probe = await one(spanKeys[0])
-  if (probe == null) return []
-  return [probe, ...(await mapWithLimit(spanKeys.slice(1), READ_CONCURRENCY, one))]
+  if (probe.kind !== 'read') return { reads: [], probe: probe.kind }
+  const rest = await mapWithLimit(spanKeys.slice(1), READ_CONCURRENCY, one)
+  return { reads: [held(probe), ...rest.map(held)], probe: 'read' }
 }
 
 /**

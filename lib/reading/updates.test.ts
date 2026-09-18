@@ -152,7 +152,7 @@ describe('buildUpdateSeries', () => {
     const monthOf = new Map([['2026-06-01', 380], ['2026-07-01', 400], ['2026-08-01', 420], ['2026-09-01', 449]])
 
     const series = buildUpdateSeries({
-      runs, videosByRun, spans, monthOf, windowless: 0, requested: 13, windowReadAvailable: true,
+      runs, videosByRun, spans, monthOf, windowless: 0, requested: 13, windowRead: 'read',
     })
 
     expect(series.points).toHaveLength(13)
@@ -184,7 +184,7 @@ describe('buildUpdateSeries', () => {
       monthOf: new Map([['2026-08-01', 512], ['2026-09-01', 475]]),
       windowless: 0,
       requested: 13,
-      windowReadAvailable: true,
+      windowRead: 'read',
     })
 
     const point = series.points[0]
@@ -205,7 +205,7 @@ describe('buildUpdateSeries', () => {
     const { runs, videosByRun } = weeklyRuns([11, 12, 13])
     const series = buildUpdateSeries({
       runs, videosByRun, spans: new Map(), monthOf: new Map(),
-      windowless: 2, requested: 13, windowReadAvailable: true,
+      windowless: 2, requested: 13, windowRead: 'read',
     })
     expect(series.points).toHaveLength(3)
     expect(series.note).toContain('2 delivered updates carry no window')
@@ -219,7 +219,7 @@ describe('buildUpdateSeries', () => {
     const { runs, videosByRun } = weeklyRuns([11, 12])
     const series = buildUpdateSeries({
       runs, videosByRun, spans: new Map(), monthOf: new Map(),
-      windowless: 0, requested: 13, windowReadAvailable: true,
+      windowless: 0, requested: 13, windowRead: 'read',
     })
     expect(series.band).toBeNull()
     expect(series.median).toBeNull()
@@ -233,7 +233,7 @@ describe('buildUpdateSeries', () => {
     const { runs, videosByRun } = weeklyRuns([0, 0, 12])
     const series = buildUpdateSeries({
       runs, videosByRun, spans: new Map(), monthOf: new Map(),
-      windowless: 0, requested: 13, windowReadAvailable: true,
+      windowless: 0, requested: 13, windowRead: 'read',
     })
     expect(series.band).toBeNull()
     expect(series.note).toContain('Fewer than 2 of the updates behind this one found anything')
@@ -244,17 +244,31 @@ describe('buildUpdateSeries', () => {
     const { runs, videosByRun } = weeklyRuns([11, 12, 13])
     const series = buildUpdateSeries({
       runs, videosByRun, spans: new Map(), monthOf: new Map(),
-      windowless: 0, requested: 3, windowReadAvailable: false,
+      windowless: 0, requested: 3, windowRead: 'absent',
     })
     expect(series.points.every((p) => p.contribution.length === 0)).toBe(true)
     expect(series.points.every((p) => p.comments === null)).toBe(true)
     expect(series.note).toContain('windowed reading is not installed')
   })
 
+  it('tells a read that FAILED apart from a reading that is not installed', () => {
+    // One blinked read is a fact about one call. Saying "not installed for this
+    // workspace" from it is a claim about our deployment, on the one surface
+    // whose discipline is that a stated fact is checkable.
+    const { runs, videosByRun } = weeklyRuns([11, 12, 13])
+    const series = buildUpdateSeries({
+      runs, videosByRun, spans: new Map(), monthOf: new Map(),
+      windowless: 0, requested: 3, windowRead: 'failed',
+    })
+    expect(series.points.every((p) => p.contribution.length === 0)).toBe(true)
+    expect(series.note).toContain('could not be read just now')
+    expect(series.note).not.toContain('not installed')
+  })
+
   it('is an empty series with a reason when no update carries a window', () => {
     const series = buildUpdateSeries({
       runs: [], videosByRun: new Map(), spans: new Map(), monthOf: new Map(),
-      windowless: 4, requested: 13, windowReadAvailable: true,
+      windowless: 4, requested: 13, windowRead: 'read',
     })
     expect(series.points).toEqual([])
     expect(series.band).toBeNull()
@@ -268,7 +282,7 @@ describe('updateSeriesLine', () => {
     const { runs, videosByRun } = weeklyRuns(counts)
     return buildUpdateSeries({
       runs, videosByRun, spans: new Map(), monthOf: new Map(),
-      windowless: 0, requested: counts.length, windowReadAvailable: true,
+      windowless: 0, requested: counts.length, windowRead: 'read',
     })
   }
 
