@@ -128,10 +128,11 @@ describe('rivalRows', () => {
       competitor({ name: 'Patagonia', slug: 'patagonia', retired_at: '2026-09-09' }),
     ],
     census: [
-      { competitorName: 'Cotopaxi', platform: 'instagram', captured: 20, read: 3 },
-      { competitorName: 'Cotopaxi', platform: 'tiktok', captured: 11, read: 0 },
-      { competitorName: 'Freitag', platform: 'instagram', captured: 28, read: 0 },
+      { competitorName: 'Cotopaxi', platform: 'instagram', captured: 20, read: 3, publishedThisMonth: 5 },
+      { competitorName: 'Cotopaxi', platform: 'tiktok', captured: 11, read: 0, publishedThisMonth: 3 },
+      { competitorName: 'Freitag', platform: 'instagram', captured: 28, read: 0, publishedThisMonth: 14 },
     ],
+    month: '2026-09-01',
   })
 
   it('tells named, configured and read apart — three states, not two', () => {
@@ -165,6 +166,34 @@ describe('rivalRows', () => {
     const ottobock = rows.find((r) => r.name === 'Ottobock')!
     expect(ottobock.identity).toBeNull()
     expect(ottobock.trackedSince).toBeNull()
+  })
+
+  it('counts what each rival PUBLISHED this month, with the post’s own clock beside it', () => {
+    const cotopaxi = rows.find((r) => r.name === 'Cotopaxi')!
+    // Eight across two platforms, and the basis travels with the figure: the
+    // rest of this page is not dated at all, so an undated count would be read
+    // as all-time — which is what `captured` (31) is.
+    expect(cotopaxi.ownPosts).toEqual({ value: { k: 8, n: 8 }, basis: 'posts published in September', month: '2026-09-01' })
+    expect(cotopaxi.ownPostsWhy).toBeNull()
+    expect(rows.find((r) => r.name === 'Freitag')!.ownPosts?.value).toEqual({ k: 14, n: 14 })
+  })
+
+  it('gives a rival with no account a sentence, never a zero', () => {
+    const ottobock = rows.find((r) => r.name === 'Ottobock')!
+    expect(ottobock.ownPosts).toBeNull()
+    expect(ottobock.ownPostsWhy).toContain('No account is configured')
+  })
+
+  it('draws no own-post column at all for a caller that has not named a month', () => {
+    const [only] = rivalRows({ names: ['Ottobock'], handles: {}, identities: [], census: [] })
+    expect(only.ownPosts).toBeNull()
+    expect(only.ownPostsWhy).toBeNull()
+  })
+
+  it('never counts a rival nobody tracks any more as having published nothing', () => {
+    const patagonia = rows.find((r) => r.name === 'Patagonia')!
+    expect(patagonia.ownPosts).toBeNull()
+    expect(patagonia.ownPostsWhy).toContain('No longer tracked')
   })
 
   it('states the precedence rule in one sentence, as the design asks', () => {

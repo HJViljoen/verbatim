@@ -1,4 +1,6 @@
 import { rivalSlug, type Competitor } from '../rivals'
+import { ownPostBasis, OWN_POSTS_NO_ACCOUNTS } from '../reading/own-posts'
+import type { Counted } from '../reading/verdicts'
 
 /**
  * The rivals panel (Phase 1 WP16, design ST4).
@@ -24,6 +26,29 @@ export interface RivalCensusRow {
   platform: string
   captured: number
   read: number
+  /** Of `captured`, the posts PUBLISHED in the month the column is headed by.
+   *  `captured` is all-time and is not a period figure; this is, and it is
+   *  dated by `videos.upload_date` — the post's own date. */
+  publishedThisMonth: number
+}
+
+/** What the rivals table's own-posts column holds.
+ *
+ * THE MOCK'S COLUMN IS "Own posts with a claim (Sep)" AND THIS IS NOT THAT.
+ * A rival's claims are `video_claims` rows in their bucket, which no tenant
+ * session may select — M8's policy is `entity = 'client'` and the verbatim
+ * quote is not granted at all, both on purpose. So the column counts what they
+ * PUBLISHED, which is real, readable and the half the mock's number was mostly
+ * made of; the claim half would be a figure computed from a read that comes
+ * back refused. `basis` travels with it, because a post is dated by the day it
+ * went up and the rest of this page is not dated at all.
+ *
+ * Null where no account is configured: nothing that rival publishes is read,
+ * so there is no census — which is not a zero, and `why` says which. */
+export interface RivalOwnPosts {
+  value: Counted
+  basis: string
+  month: string
 }
 
 export interface RivalRow {
@@ -42,6 +67,11 @@ export interface RivalRow {
   /** True when a name is tracked and no account is configured anywhere: the
    *  cheapest red on the page, and the only one a client can close. */
   noAccounts: boolean
+  /** What they published in the month this table is headed by, or null with
+   *  `ownPostsWhy` where nothing of theirs is read at all. */
+  ownPosts: RivalOwnPosts | null
+  /** Why there is no census, in the reader's words. Null where there is one. */
+  ownPostsWhy: string | null
 }
 
 export function rivalRows(args: {
@@ -49,8 +79,13 @@ export function rivalRows(args: {
   handles: Readonly<Record<string, Record<string, string>>>
   identities: readonly Competitor[]
   census: readonly RivalCensusRow[]
+  /** The month the own-posts column is headed by, as a month start. Omitted,
+   *  the column is not drawn at all — a caller that has not said which month
+   *  it means may not have one guessed for it. */
+  month?: string | null
 }): RivalRow[] {
   const { names, handles, identities, census } = args
+  const month = args.month ?? null
   const bySlug = new Map(identities.map((c) => [c.slug, c]))
 
   const rows = names.map((name): RivalRow => {
@@ -59,6 +94,7 @@ export function rivalRows(args: {
     const theirHandles = handles[name] ?? {}
     const mine = census.filter((c) => rivalSlug(c.competitorName) === slug)
     const platforms = [...new Set([...Object.keys(theirHandles), ...mine.map((c) => c.platform)])].sort()
+    const noAccounts = Object.values(theirHandles).filter((h) => !!h && h.trim() !== '').length === 0
     return {
       identity,
       name: identity?.name ?? name,
@@ -73,7 +109,19 @@ export function rivalRows(args: {
       })),
       captured: mine.reduce((n, c) => n + c.captured, 0),
       read: mine.reduce((n, c) => n + c.read, 0),
-      noAccounts: Object.values(theirHandles).filter(Boolean).length === 0,
+      noAccounts,
+      ownPosts:
+        month == null || noAccounts
+          ? null
+          : {
+              value: (() => {
+                const k = mine.reduce((n, c) => n + c.publishedThisMonth, 0)
+                return { k, n: k }
+              })(),
+              basis: ownPostBasis(month),
+              month,
+            },
+      ownPostsWhy: month == null ? null : noAccounts ? OWN_POSTS_NO_ACCOUNTS : null,
     }
   })
 
@@ -88,6 +136,11 @@ export function rivalRows(args: {
     .map((c): RivalRow => ({
       identity: c, name: c.name, trackedSince: c.first_seen_at, retiredAt: c.retired_at,
       handles: {}, perPlatform: [], captured: 0, read: 0, noAccounts: false,
+      // A rival that is no longer named is not being read, whatever its
+      // handles once were. An own-post census of "nothing this month" would
+      // read as a fact about them rather than about us having stopped.
+      ownPosts: null,
+      ownPostsWhy: month == null ? null : 'No longer tracked, so nothing they publish is read.',
     }))
 
   return [...rows, ...gone]

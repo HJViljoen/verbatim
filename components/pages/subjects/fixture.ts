@@ -15,7 +15,7 @@ import {
   type StoredKindRow,
   type SubjectsData,
 } from '@/lib/pages/subjects'
-import { claimEcho, ownCensusWithClaims, ownPostCensus, type OwnPostInput } from '@/lib/reading/own-posts'
+import { claimEcho, ownCensusWithClaims, type OwnPostInput } from '@/lib/reading/own-posts'
 import { claimCounts } from '@/lib/market-tiles'
 import type { Subject } from '@/lib/subjects/types'
 

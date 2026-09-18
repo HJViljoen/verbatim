@@ -18,7 +18,6 @@ import type { Verdict } from '../reading/verdicts'
 import {
   rivalOwnClaims,
   saidAbout,
-  SAID_ABOUT_EMPTY,
   type OwnPostCensus,
   type OwnPostInput,
   type SaidAbout,
