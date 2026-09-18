@@ -10,7 +10,7 @@ import type { CalendarSeries } from '@/lib/charts/calendar'
 import { gapBasisLine, gapLine } from '@/lib/reading/gap'
 import { hasQuote } from '@/lib/renderables/quotes-freeze'
 import type { MonthLine } from '@/lib/reports/documents/figures'
-import type { QuarterlyData, SubjectQuarterRow, SubjectsPage } from '@/lib/pages/quarterly'
+import { leadGap, type QuarterlyData, type SubjectQuarterRow, type SubjectsPage } from '@/lib/pages/quarterly'
 import { QUARTER_PAGE_QUESTION, QUARTER_PAGE_TITLE, quarterLabel } from '@/lib/reports/quarterly'
 import { Card, Column, Columns, Eyebrow, Note, NotDrawn, TableHead, TableRow } from './parts'
 
@@ -115,7 +115,11 @@ export const quarterlySubjects: Block<QuarterlyData> = {
     const empty = quarterlySubjects.emptyState(data)
     if (empty) return frame(<BlockEmpty mode={mode}>{empty}</BlockEmpty>)
 
-    const gap = s.rows.map((r) => r.gap).find((g) => g != null) ?? null
+    // THE SAME GAP THE COVER LEADS WITH, BY THE SAME RULE (`leadGap`). This
+    // line took the FIRST row carrying a gap while `buildCover` sorted so an
+    // `apart` state won — two rules for one claim, agreeing only while the
+    // fixture holds a single gap.
+    const gap = leadGap(s.rows.map((r) => r.gap))
     const voices = s.quotes.filter(hasQuote)
     const series = s.line ? lineSeries(s.line, data.monthStatus === 'filling' ? data.month : null) : []
 
@@ -220,6 +224,13 @@ export const quarterlySubjects: Block<QuarterlyData> = {
             className={email ? undefined : 'm-0 font-serif text-[12.5px] italic leading-[18px] text-secondary-foreground'}
             style={email ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink2, marginBottom: 6 } : undefined}
           >
+            {/* THE OBJECT IS NAMED. `gapLine` composes both sides, the
+                difference and the band and carries NO object label, so on a
+                table of six subjects this headline read as the page's gap
+                when it is one subject's. The label is the operator's own
+                word from Settings, so it is unmarked, exactly as the table's
+                first column is. */}
+            <span className={email ? undefined : 'font-sans not-italic'}>{gap.objectLabel} — </span>
             <span data-copy="level">{gapLine(gap, { period: true })}</span>
             {/* THE BASIS LINE IS NOT A LEVEL AND IS NOT MARKED AS ONE. It is
                 a DIFFERENCE with its band — "7.8 points apart in the quarter

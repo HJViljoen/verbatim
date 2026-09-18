@@ -1348,6 +1348,28 @@ function windowVideos(reading: WindowReading, audience: string): number | null {
   return reading.denominators?.find((d) => d.audience === audience)?.videos ?? null
 }
 
+/**
+ * THE ONE GAP AN ARTEFACT LEADS WITH, CHOSEN ONCE.
+ *
+ * The cover's first card and page 3's headline are the same claim about the
+ * same quarter, and they were choosing it by two different rules: the cover
+ * sorted the list so a state of `apart` won, page 3 took the FIRST row that
+ * carried a gap at all. With one gap on the table the two agree; with a table
+ * whose first subject is `level` and whose second is `apart` they name
+ * different subjects, and the cover stops being a reading of the page behind
+ * it. One rule, in one place, and both callers take it.
+ *
+ * WHY `apart` WINS. It is the only state that carries a measured difference
+ * with a band; `level` and the refusals are answers about a comparison that
+ * was drawn and came back inside the band, and a cover leads with the reading
+ * that has something to say. The sort is stable, so within a state the page's
+ * own order is kept.
+ */
+export function leadGap(gaps: readonly (Gap | null | undefined)[]): Gap | null {
+  const drawn = gaps.filter((g): g is Gap => g != null)
+  return [...drawn].sort((g, h) => (h.state === 'apart' ? 1 : 0) - (g.state === 'apart' ? 1 : 0))[0] ?? null
+}
+
 // ---- page 1 · the cover -------------------------------------------------------
 
 function buildCover(a: {
@@ -1401,7 +1423,7 @@ function buildCover(a: {
   // the remaining slots, in that order, and the cover always carries three
   // real figures. Trimmed to three at the end, which is the mock's grid.
   const stats: CoverStat[] = []
-  const gap = [...a.gaps].sort((g, h) => (h.state === 'apart' ? 1 : 0) - (g.state === 'apart' ? 1 : 0))[0] ?? null
+  const gap = leadGap(a.gaps)
   if (gap) {
     const apart = gap.state === 'apart' && gap.gapPts != null
     stats.push({

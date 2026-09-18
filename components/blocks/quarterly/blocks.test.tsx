@@ -5,7 +5,7 @@ import { assertCopyContract, copyViolations, directionRe } from '@/lib/test/copy
 import { render, renderText } from '@/lib/test/render'
 import { QUARTERLY_BLOCK_KEYS, QUARTERLY_CLAIMS_CAVEAT, QUARTERLY_RULE, quarterGateSentence } from '@/lib/reports/quarterly'
 import { CLAIMS_CAVEAT } from '@/lib/pages/market-surface'
-import { unsettledItems } from '@/lib/pages/quarterly'
+import { leadGap, unsettledItems } from '@/lib/pages/quarterly'
 import type { Verdict } from '@/lib/reading/verdicts'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '@/lib/rivals'
 import { gapBasisLine, gapLine } from '@/lib/reading/gap'
@@ -674,12 +674,28 @@ describe('the artboard port (Block D wave 2)', () => {
     expect(t).not.toContain('0 videos behind it')
   })
 
+  it('the cover and page 3 lead with the SAME gap', () => {
+    // Two rules for one claim: the cover sorted so `apart` won, page 3 took
+    // the first row that carried a gap at all. `leadGap` is the one rule.
+    for (const state of STATES) {
+      const lead = leadGap(state.subjects.rows.map((r) => r.gap))
+      if (!lead) continue
+      const cover = renderText(QUARTERLY_BLOCKS['quarterly.cover'].render(state, 'print', ctx))
+      const page3 = renderText(QUARTERLY_BLOCKS['quarterly.subjects'].render(state, 'print', ctx))
+      expect(cover).toContain(lead.objectLabel)
+      expect(page3).toContain(`${lead.objectLabel} — `)
+    }
+  })
+
   it('qr.p3.* · five columns, the gap headline, the chart and the rival level', () => {
     const t = text('quarterly.subjects')
     expect(t).toContain('Subject You, September The category, September')
     expect(t).toContain('Durability 31% 26 of 84 22% 305 of 1,388')
-    // The gap, labelled with its own period because the row prints the month's.
-    expect(t).toContain('The quarter from July 2026 · you 30.1% of 249')
+    // The gap, NAMED, and labelled with its own period because the row prints
+    // the month's. `gapLine` carries no object label of its own, so without
+    // this the page's opening line read as the page's gap when it is one
+    // subject's.
+    expect(t).toContain('Durability — The quarter from July 2026 · you 30.1% of 249')
     // The chart, and the rival's own month as a level beside it.
     expect(render(QUARTERLY_BLOCKS['quarterly.subjects'].render(data, 'print', ctx))).toContain('<svg')
     expect(t).toContain('Freitag, September:')
