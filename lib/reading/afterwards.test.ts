@@ -105,8 +105,11 @@ describe('afterwardsFor', () => {
     // The newest month after the decision against the newest month before it.
     expect(a.verdict?.value).toEqual({ k: 18, n: 130 })
     expect(a.verdict?.baseline).toEqual({ k: 8, n: 110 })
-    expect(a.verdict?.window.from).toBe('2026-09-01')
-    expect(a.verdict?.basis).toEqual({ from: '2026-06-01', to: '2026-06-01' })
+    // HALF-OPEN, like every other window in the product: [month, nextMonth).
+    // `{ from: m, to: m }` is an EMPTY interval, and anything that measures a
+    // verdict's span or filters rows by it reads "1 Sep to 1 Sep".
+    expect(a.verdict?.window).toEqual({ kind: 'month', from: '2026-09-01', to: '2026-10-01' })
+    expect(a.verdict?.basis).toEqual({ from: '2026-06-01', to: '2026-07-01' })
     expect(a.months).toEqual(['2026-08-01', '2026-09-01'])
   })
 
@@ -219,5 +222,50 @@ describe('afterwardsFor', () => {
     const a = afterwardsFor({ decidedAt: '2026-07-04', targetIds: ['reg-1'], series: shuffled, audience: 'client' })
     expect(a.verdict?.value).toEqual({ k: 18, n: 130 })
     expect(a.verdict?.baseline).toEqual({ k: 8, n: 110 })
+  })
+})
+
+describe('afterwardsFor — the comparison carries its caveats', () => {
+  it('flags a pair nobody recorded a grouping for, which is today’s whole corpus', () => {
+    const a = afterwardsFor({ decidedAt: '2026-07-04', targetIds: ['reg-1'], series: SERIES, audience: 'client' })
+    // Every month frozen before the clustering fingerprint shipped carries no
+    // key, and two unknowns are deliberately not one regime — so `flags: []`
+    // here would be a positive claim that there is nothing to caveat.
+    expect(a.verdict?.flags).toContain('clustering_unknown')
+  })
+
+  it('flags two months grouped differently as a re-grouping, not as unknown', () => {
+    const a = afterwardsFor({
+      decidedAt: '2026-07-04',
+      targetIds: ['reg-1'],
+      series: SERIES.map((p, i) => ({ ...p, clusteringKey: i < 2 ? 'k-old' : 'k-new' })),
+      audience: 'client',
+    })
+    expect(a.verdict?.flags).toContain('clustering_changed')
+    expect(a.verdict?.flags).not.toContain('clustering_unknown')
+  })
+
+  it('draws no comparison at all across a rename, and says which silence it is', () => {
+    const a = afterwardsFor({
+      decidedAt: '2026-07-04',
+      targetIds: ['reg-1'],
+      series: SERIES.map((p, i) => ({ ...p, clusteringKey: 'k1', audience: i < 2 ? 'competitor:Old' : 'competitor:New' })),
+      audience: 'competitor:New',
+    })
+    expect(a.state).toBe('refused')
+    // The band and the change are not printed beside a refusal (D2).
+    expect(a.verdict).toBeNull()
+    expect(a.line).toMatch(/renamed/)
+  })
+
+  it('says nothing about a grouping where every month is in one', () => {
+    const a = afterwardsFor({
+      decidedAt: '2026-07-04',
+      targetIds: ['reg-1'],
+      series: SERIES.map((p) => ({ ...p, clusteringKey: 'k1', audience: 'client' })),
+      audience: 'client',
+    })
+    expect(a.state).toBe('reading')
+    expect(a.verdict?.flags).toEqual([])
   })
 })

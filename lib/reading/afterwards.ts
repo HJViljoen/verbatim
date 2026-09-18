@@ -1,6 +1,7 @@
 import { fmtInt, monthName } from '../format'
+import { monthChange } from './bands'
 import { monthStartOf } from './monthly'
-import { bandVerdict, type Counted, type RefusedReason, type Verdict, type VerdictWindow } from './verdicts'
+import type { Counted, RefusedReason, Verdict } from './verdicts'
 
 // The two columns the advice ledger has never had: what a piece of advice was
 // GROUNDED IN, and what the conversation did AFTERWARDS (Phase 1 Block D, D4).
@@ -193,8 +194,25 @@ export interface AfterwardsInput {
   /** The stable identities the advice is about — `theme_registry` ids, a
    *  subject id. Never a label. */
   targetIds: readonly string[]
-  /** One point per calendar month, any order; `k` of `n` distinct videos. */
-  series: readonly { month: string; k: number; n: number }[]
+  /**
+   * One point per calendar month, any order; `k` of `n` distinct videos.
+   *
+   * `clusteringKey` and `audience` ride along because the comparison is drawn
+   * by `monthChange`, which is where the like-for-like rules live: two months
+   * grouped by two clusterings earn `clustering_changed`, a pair nobody
+   * recorded a grouping for earns `clustering_unknown` — which is every month
+   * frozen before the fingerprint shipped — and two names for one audience
+   * refuse the comparison outright. A caller that drops them is not making a
+   * comparison with nothing to caveat; it is making one it cannot caveat, and
+   * `flags: []` would be a positive claim that there is nothing to say.
+   */
+  series: readonly {
+    month: string
+    k: number
+    n: number
+    clusteringKey?: string | null
+    audience?: string | null
+  }[]
   audience: string
   minReadings?: number
   /** What a reader is shown for the target. Added beside the pinned fields
@@ -258,7 +276,12 @@ export function afterwardsFor(input: AfterwardsInput): Afterwards {
   const readable = [...input.series]
     .filter((p) => p.n > 0)
     .sort((a, b) => monthStartOf(a.month).localeCompare(monthStartOf(b.month)))
-    .map((p) => ({ month: monthStartOf(p.month), value: { k: p.k, n: p.n } as Counted }))
+    .map((p) => ({
+      month: monthStartOf(p.month),
+      value: { k: p.k, n: p.n } as Counted,
+      // Carried to `monthChange`, which is what decides the caveats.
+      point: { month: monthStartOf(p.month), videos: p.n, k: p.k, clusteringKey: p.clusteringKey, audience: p.audience },
+    }))
 
   const after = readable.filter((p) => p.month > decidedMonth)
   const before = readable.filter((p) => p.month < decidedMonth)
@@ -286,17 +309,32 @@ export function afterwardsFor(input: AfterwardsInput): Afterwards {
 
   const now = after[after.length - 1]
   const then = before[before.length - 1]
-  const window: VerdictWindow = { kind: 'month', from: now.month, to: now.month }
-  const verdict = bandVerdict({
-    objectKind: 'theme',
-    objectId: input.targetIds[0],
-    objectLabel: input.objectLabel ?? input.targetIds[0],
+  // THE PRODUCT'S ONE MONTH-AGAINST-MONTH RULE, NOT A SECOND ONE. This called
+  // `bandVerdict` directly, which meant two things a reader needs went missing.
+  // The caveats: `monthChange` attaches `clustering_changed` where the two
+  // months were grouped differently and `clustering_unknown` where nobody
+  // recorded a grouping — which on today's corpus is every frozen month — and
+  // refuses outright where the audience either side is two names. Shipping
+  // `flags: []` said there was nothing to caveat, which is a claim, not a
+  // silence. And the window: it was `{ from: m, to: m }`, an EMPTY half-open
+  // interval, where every other producer in the codebase writes
+  // `[monthStart, nextMonth)`.
+  const verdict = monthChange({
+    object: {
+      kind: 'theme',
+      id: input.targetIds[0],
+      label: input.objectLabel ?? input.targetIds[0],
+    },
     audience: input.audience,
-    window,
-    basis: { from: then.month, to: then.month },
-    value: now.value,
-    baseline: then.value,
+    curr: now.point,
+    prev: then.point,
   })
+
+  // A REFUSAL IS AN ANSWER, AND IT IS THE CELL'S. `monthChange` refuses a
+  // rename; the comparison it would have drawn is not printed beside it.
+  if (verdict.refusedReason) {
+    return { state: 'refused', verdict: null, months, line: REFUSED_LINE[verdict.refusedReason] }
+  }
 
   // THE NUMBERS AND THE BAND, AND NOT A WORD FOR THEM. See the file header's
   // last paragraph: the state's word is the badge's, changed once, and a

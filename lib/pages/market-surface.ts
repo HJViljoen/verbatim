@@ -1132,7 +1132,10 @@ async function readAfterwards(
     }))
   }
 
-  const points = new Map<string, { month: string; k: number; n: number }[]>()
+  // THE CLUSTERING KEY AND THE AUDIENCE TRAVEL WITH THE POINT. Dropping them
+  // here would hand `afterwardsFor` two months it cannot tell apart — see
+  // `AfterwardsInput.series`.
+  const points = new Map<string, { month: string; k: number; n: number; clusteringKey: string | null; audience: string | null }[]>()
   try {
     const set = await loadMonthSeries(reading.client, clientId, {
       audiences: [LEDGER_AUDIENCE],
@@ -1147,7 +1150,13 @@ async function readAfterwards(
         series.objectId,
         series.points
           .filter((p) => p.k != null && p.videos != null)
-          .map((p) => ({ month: p.month, k: p.k as number, n: p.videos as number })),
+          .map((p) => ({
+            month: p.month,
+            k: p.k as number,
+            n: p.videos as number,
+            clusteringKey: p.clusteringKey,
+            audience: p.audience,
+          })),
       )
     }
   } catch (error) {
