@@ -10,6 +10,7 @@ import { CONTROL } from '@/components/settings/chrome'
 import type { TermSummary } from '@/lib/keywords/value'
 import { cleanTerms, MIN_KEYWORD_CHARS, MAX_TERM_CHARS, MAX_TERMS_PER_BUCKET } from '@/lib/onboarding-config'
 import { trackingPending } from '@/lib/settings/connections'
+import { removeTerm } from '@/lib/settings/terms'
 import type { RivalRow } from '@/lib/settings/rivals-view'
 import { saveState, type LastChange } from '@/lib/settings/save-state'
 
@@ -138,7 +139,10 @@ export function TrackingForm(props: TrackingFormProps) {
         review={props.review}
         canEdit={props.canEdit}
         onAdd={addTerm}
-        onRemove={(bucket, term) => { setTerms((prev) => ({ ...prev, [bucket]: prev[bucket].filter((t) => t !== term) })); setEdited(true) }}
+        // By what the term SAYS, not by which array it was filed in: the review
+        // strip removes the performance table's spelling and bucket, which are
+        // not always the stored ones (lib/settings/terms.ts, removeTerm).
+        onRemove={(bucket, term) => { setTerms((prev) => removeTerm(prev, bucket, term).terms); setEdited(true) }}
       >
         {props.performance}
       </TermsSection>

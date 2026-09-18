@@ -6,7 +6,7 @@ import { rowMessage } from './community-controls'
 import { PlatformsSection } from './platforms'
 import { RivalsSection, RENAME_UNAVAILABLE } from './rivals'
 import { RIVAL_REMOVED_PENDING } from '@/lib/settings/rivals-view'
-import { NEW_TERM_RULE, TermsSection } from './terms'
+import { NEW_TERM_RULE, REVIEW_KEEP_NOTE, TermsSection } from './terms'
 import { BREAK_NOT_RECORDED, BROKE_NOTHING, LastSaveStrip, NEVER_SAVED, SaveStateLine } from '../save-state-strip'
 import { gridIntrinsic } from '@/components/settings/chrome'
 import { render, renderText } from '@/lib/test/render'
@@ -87,6 +87,23 @@ describe('the search terms section', () => {
 
   it('states what adding one does, beside the field that does it', () => {
     expect(words).toContain(NEW_TERM_RULE)
+  })
+
+  it('puts the review strip’s control at the strip’s own edge, and drops the strip with the term', () => {
+    // M7: "Remove it" sat mid-strip with a grey note trailing to the right
+    // edge, so the row did not scan as sentence-then-action. And the strip
+    // came from a server prop, so it stayed put after a removal — the one
+    // control on it looked inert whether it had worked or not.
+    const markup = render(termsSection)
+    const strip = markup.slice(markup.indexOf('Worth reviewing'))
+    expect(strip.indexOf(REVIEW_KEEP_NOTE)).toBeLessThan(strip.indexOf('Remove it'))
+    const gone = renderText(
+      <TermsSection
+        terms={{ ...TERMS, industry_keywords: [] }}
+        dates={{}} review={[term()]} canEdit onAdd={() => null} onRemove={() => {}}
+      />,
+    )
+    expect(gone).not.toContain('Worth reviewing')
   })
 
   it('prints the review strip as k of n, with the evidence', () => {

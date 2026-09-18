@@ -67,6 +67,12 @@ export function TermsSection({ terms, dates, datesNote, review, canEdit, onAdd, 
   const [bucket, setBucket] = useState<Bucket>('industry_keywords')
   const [error, setError] = useState<string | null>(null)
   const full = terms[bucket].length >= MAX_TERMS_PER_BUCKET
+  // A strip whose term is no longer in any list has nothing left to act on.
+  // The rows come from the server's pooled record and stayed put after a
+  // removal, so the one control on the strip looked inert whether it had
+  // worked or not; now the strip goes with the term.
+  const tracked = new Set(Object.values(terms).flat().map((t) => t.trim().toLowerCase()))
+  const flagged = review.filter((t) => tracked.has(t.keyword.trim().toLowerCase()))
 
   function add() {
     const problem = onAdd(bucket, draft)
@@ -127,14 +133,14 @@ export function TermsSection({ terms, dates, datesNote, review, canEdit, onAdd, 
         </LabelRow>
       )}
 
-      {review.length > 0 && (
+      {flagged.length > 0 && (
         <LabelRow
           label="Worth reviewing"
-          meta={`${review.length} term${review.length === 1 ? '' : 's'}`}
+          meta={`${flagged.length} term${flagged.length === 1 ? '' : 's'}`}
           top="control"
         >
           <div className="flex flex-col gap-2">
-            {review.map((t) => (
+            {flagged.map((t) => (
               <ReviewStrip key={t.key} term={t} canEdit={canEdit} onDrop={() => onRemove(bucketOf(t.bucket), t.keyword)} />
             ))}
           </div>
@@ -194,9 +200,12 @@ export function ReviewStrip({ term, canEdit, onDrop }: { term: TermSummary; canE
         <span className="font-mono font-medium tabular-nums">{term.found.toLocaleString('en-GB')}</span> found
         {term.because[0] ? ` — ${term.because[0]}` : ''}
       </span>
-      <span className="flex shrink-0 items-center gap-2">
-        <button type="button" onClick={onDrop} disabled={!canEdit} className={CONTROL}>Remove it</button>
+      {/* The note first, the control at the strip's own right edge, so the row
+          scans as sentence-then-action the way the artboard's does (design
+          M7). Nothing here is a "Keep it": see the constant below. */}
+      <span className="flex shrink-0 items-center gap-3">
         <MonoNote>{REVIEW_KEEP_NOTE}</MonoNote>
+        <button type="button" onClick={onDrop} disabled={!canEdit} className={CONTROL}>Remove it</button>
       </span>
     </div>
   )

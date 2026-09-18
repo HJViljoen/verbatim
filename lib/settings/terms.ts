@@ -97,6 +97,42 @@ export function termDateShort(date: TermDate | undefined): string {
   return date.source === 'recorded' ? `added ${on}` : `in use by ${on}, not recorded`
 }
 
+/**
+ * Take a term off a list — by what it SAYS, not by which array it was filed in.
+ *
+ * The review strip's button removes `TermSummary.keyword`, which is the first
+ * `keyword_performance` row's spelling and bucket, while the stored term is
+ * whatever the client typed: a term stored as "Ossur" whose performance rows
+ * recorded "ossur", or a term that has since moved bucket, matched nothing on
+ * an exact comparison and the button reported nothing either — it looked inert
+ * when it had worked and when it had not, alike.
+ *
+ * So the fold is the comparison (the same `fold` the date map uses), and a
+ * miss in the named bucket falls through to the list that actually holds the
+ * term. `removed` says whether anything moved, so a caller need not diff.
+ *
+ * Pure.
+ */
+export function removeTerm<B extends string>(
+  terms: Readonly<Record<B, readonly string[]>>,
+  bucket: B,
+  term: string,
+): { terms: Record<B, string[]>; removed: boolean } {
+  const want = fold(term)
+  const out = Object.fromEntries(
+    (Object.keys(terms) as B[]).map((k) => [k, [...terms[k]]]),
+  ) as Record<B, string[]>
+  const order: B[] = [bucket, ...(Object.keys(terms) as B[]).filter((k) => k !== bucket)]
+  for (const k of order) {
+    const i = out[k].findIndex((t) => fold(t) === want)
+    if (i >= 0) {
+      out[k].splice(i, 1)
+      return { terms: out, removed: true }
+    }
+  }
+  return { terms: out, removed: false }
+}
+
 /** The terms section's mono meta: "21 terms · brand 4 · competitor 5 ·
  *  category 12 · not this 3". Every count is the length of the list it names,
  *  so the head cannot disagree with the rows under it. */

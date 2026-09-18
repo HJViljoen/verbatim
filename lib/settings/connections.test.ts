@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { communitiesMeta, type CommunityRow } from './communities'
 import { platformRows, platformShareBasis, PLATFORM_SHARE_ABSENT, trackingPending, type TrackingFormState } from './connections'
 import { isNewRival, rivalRefusalNote, rivalsMeta, type RivalRow } from './rivals-view'
-import { termDateShort, termsMeta } from './terms'
+import { removeTerm, termDateShort, termsMeta } from './terms'
 
 // The pure half of the Settings › Tracking artboard port (Block D wave 2).
 
@@ -133,6 +133,44 @@ describe('a term’s date at the artboard’s scale', () => {
     expect(termDateShort({ on: '2026-04-06', source: 'recorded' })).toBe('added 6 Apr')
     expect(termDateShort({ on: '2026-04-06', source: 'reconstructed' })).toBe('in use by 6 Apr, not recorded')
     expect(termDateShort(undefined)).toBe('in the set before we kept a record')
+  })
+})
+
+describe('taking a term off a list', () => {
+  const lists = {
+    brand_keywords: ['Ossur', 'Össur'],
+    competitor_keywords: ['Ottobock'],
+    industry_keywords: ['prosthetic leg'],
+    exclude_terms: [],
+  }
+
+  it('matches what the term says, not the case it was stored in', () => {
+    // m1: the review strip removes `TermSummary.keyword`, which is the first
+    // keyword_performance row's spelling — "ossur" where the client typed
+    // "Ossur". An exact comparison removed nothing and reported nothing.
+    const out = removeTerm(lists, 'brand_keywords', 'ossur')
+    expect(out.removed).toBe(true)
+    expect(out.terms.brand_keywords).toEqual(['Össur'])
+  })
+
+  it('falls through to the list that actually holds it', () => {
+    // The performance row's bucket is its own; a term that has since moved
+    // must still come off the list it is on.
+    const out = removeTerm(lists, 'brand_keywords', 'Ottobock')
+    expect(out.removed).toBe(true)
+    expect(out.terms.competitor_keywords).toEqual([])
+    expect(out.terms.brand_keywords).toEqual(['Ossur', 'Össur'])
+  })
+
+  it('says when it removed nothing, and changes nothing', () => {
+    const out = removeTerm(lists, 'brand_keywords', 'not a term here')
+    expect(out.removed).toBe(false)
+    expect(out.terms).toEqual(lists)
+  })
+
+  it('takes one term, not every term that folds the same way', () => {
+    const out = removeTerm({ brand_keywords: ['bag', 'BAG'] }, 'brand_keywords', 'bag')
+    expect(out.terms.brand_keywords).toEqual(['BAG'])
   })
 })
 
