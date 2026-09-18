@@ -1,6 +1,6 @@
 import { PAGES } from '../../components/pages/registry'
 import { isStaticKey } from './compose'
-import { ALL_SECTION_PAGES } from './types'
+import { ALL_SECTION_PAGES, isPickablePage } from './types'
 import type { PageKey } from '../renderables/types'
 
 /** The Studio's catalogue: every page a section MAY NAME and its STATIC tiles,
@@ -36,3 +36,26 @@ export function studioCatalogue(): CataloguePage[] {
 }
 
 export const catalogueTitle = (page: string): string => PAGES[page as PageKey]?.title ?? page
+
+/**
+ * The catalogue narrowed to what a NEW section may name today — the picker's
+ * own list, written once (Block D wave 2).
+ *
+ * `studioCatalogue()` is what a STORED section is looked up in, so it carries
+ * `dashboard` (retired, three stored reports name it) and `agent` (joined only
+ * through "add to report" from a thread). Two surfaces now advertise the
+ * catalogue — the editor's picker and the Studio card on Reports — and a card
+ * offering a page the picker does not is a promise the next screen breaks, so
+ * the rule the picker was carrying inline lives here and both read it.
+ *
+ * It is deliberately computed from the REGISTRY rather than from
+ * `SECTION_PAGES` alone: a page with no module cannot be rendered into a
+ * report, and `overview` and `subjects` have none yet.
+ *
+ * The predicate itself is `isPickablePage` in `./types`, which imports a type
+ * and nothing else — this module imports the page registry, and the editor's
+ * picker is a CLIENT component that may not pull that into its bundle.
+ */
+export function pickableCatalogue(catalogue: CataloguePage[] = studioCatalogue()): CataloguePage[] {
+  return catalogue.filter((c) => isPickablePage(c.page))
+}

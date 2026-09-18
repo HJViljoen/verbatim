@@ -23,7 +23,7 @@ import { QuarterlyCardTile } from '@/components/blocks/reports-card/card'
 import { ArchiveDateFilter } from '@/components/reports/date-filter'
 import { loadQuarterlyCard } from '@/lib/pages/reports-card'
 import { readingHandle } from '@/lib/reading/read'
-import { studioCatalogue } from '@/lib/reports/catalogue'
+import { pickableCatalogue } from '@/lib/reports/catalogue'
 import { activePreset, loadReportsPageContext, presetLine } from '@/lib/reports/page-context'
 import { fmtBytes } from '@/lib/reports/files'
 import { shortDate } from '@/lib/format'
@@ -600,13 +600,18 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
       <BriefCards cards={cards} meta={BRIEFS_META} studio={studio} basePath={BASE} />
 
       {(quarterly || studio) && (
-        <PageGrid>
+        // THE ROWS GROW WITH THEIR CONTENT, as the artboard's do: its cards are
+        // `min-height:248px`, not a fixed grid track. `PageGrid`'s 116px row
+        // unit is right for a reading page whose tiles are sized by their
+        // layout; here the honest form of a figure is longer than the mock's
+        // and a fixed track would clip it under `overflow-hidden`.
+        <PageGrid className="xl:auto-rows-min">
           {quarterly && <QuarterlyCardTile card={quarterly} col={studio ? 7 : 12} row={3} />}
-          {studio && <StudioCard pages={studioCatalogue().map((c) => c.title)} col={quarterly ? 5 : 12} row={3} />}
+          {studio && <StudioCard pages={pickableCatalogue().map((c) => c.title)} col={quarterly ? 5 : 12} row={3} />}
         </PageGrid>
       )}
 
-      <PageGrid>
+      <PageGrid className="xl:auto-rows-min">
         <ArchiveTile
           col={12}
           row={4}
@@ -629,8 +634,8 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
       </PageGrid>
 
       {selected && (
-        <PageGrid>
-          <Tile col={12} row={3} className="p-0 xl:min-h-[380px]">
+        <PageGrid className="xl:auto-rows-min">
+          <Tile col={12} row={3} className="p-0">
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">{detail}</div>
           </Tile>
         </PageGrid>

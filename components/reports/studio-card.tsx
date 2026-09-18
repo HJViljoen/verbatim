@@ -17,11 +17,14 @@ import { STUDIO_HREF } from '@/lib/studio-visibility'
  * THE CHIPS PRINT WHAT IS TRUE, which is the one place this card departs from
  * the artboard in words:
  *
- *  · The catalogue is `studioCatalogue()` and it is a list of PAGES — eight of
- *    them. The mock draws nine chips whose names ("Movers", "Head to head",
- *    "Quotes", "Method") are closer to the TILES inside a page than to
- *    anything a section may name. A chip naming something the picker does not
- *    offer is a promise the next screen breaks.
+ *  · The catalogue is a list of PAGES, and the chips are `pickableCatalogue()`
+ *    — what a NEW section may name TODAY, which is the picker's own list and
+ *    is five pages, not the mock's nine. The mock's names ("Movers", "Head to
+ *    head", "Quotes", "Method") are closer to the TILES inside a page than to
+ *    anything a section may name, and `studioCatalogue()` itself carries two
+ *    more a reader cannot pick (`dashboard`, retired; `agent`, joined only
+ *    from a thread). A chip naming something the next screen does not offer is
+ *    a promise that screen breaks.
  *  · The audiences are `AUDIENCES` and their labels are Leadership ·
  *    Marketing · Sales · Content · General. The mock relabels them as five
  *    personas (Digital director · Sales lead · …). Those are not options: the
@@ -37,13 +40,13 @@ import { STUDIO_HREF } from '@/lib/studio-visibility'
 export function StudioCard({
   pages, col = 5, row = 3,
 }: {
-  /** `studioCatalogue().map(p => p.title)` — the pages a section may name. */
+  /** `pickableCatalogue().map(p => p.title)` — what a new section may name. */
   pages: readonly string[]
   col?: number
   row?: number
 }) {
   return (
-    <Tile col={col} row={row} eyebrow="Report Studio" meta="build your own" distribute="between">
+    <Tile col={col} row={row} eyebrow="Report Studio" meta="build your own" distribute="between" className="xl:min-h-[248px]">
       <p className="m-0 text-[12.5px] leading-[1.45] text-foreground">
         Arrange pages from the catalogue; the cover is written for an audience.
       </p>

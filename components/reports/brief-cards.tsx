@@ -57,7 +57,11 @@ export function BriefCards({
         {meta && <span className="font-mono text-[11px] text-muted-foreground">{meta}</span>}
       </div>
 
-      <PageGrid>
+      {/* The artboard's cards are `min-height:248px` and GROW; `PageGrid`'s
+          116px row unit is a fixed track, and a fixed track clips under the
+          tile's `overflow-hidden`. `auto-rows-min` is the artboard's own rule,
+          and the tiles keep the 248px floor. */}
+      <PageGrid className="xl:auto-rows-min">
         {cards.map((c) => (
           <Tile
             key={c.role}
@@ -66,6 +70,7 @@ export function BriefCards({
             eyebrow={c.label}
             meta={c.monthChip ?? undefined}
             distribute="between"
+            className="xl:min-h-[248px]"
             footer={<BriefActions card={c} studio={studio} basePath={basePath} />}
             footerNote={c.stamp ?? undefined}
           >

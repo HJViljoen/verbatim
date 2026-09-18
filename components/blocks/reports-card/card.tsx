@@ -63,6 +63,7 @@ export function QuarterlyCardTile({
       eyebrow="The quarterly review"
       meta={`${card.quarter.label} · ${monthSpan(card.quarter.from, card.quarter.to)} · ${readingWord(card.readings)}`}
       distribute="between"
+      className="xl:min-h-[248px]"
       footer={<Link href={card.href} className="underline underline-offset-2">See what it will cover</Link>}
       // `quarterGateSentence` verbatim — the artefact's own gate, on the card
       // that advertises it, so the two cannot come to say different numbers.

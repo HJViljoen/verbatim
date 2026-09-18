@@ -54,6 +54,23 @@ export const LEGACY_SECTION_PAGES: PageKey[] = ['dashboard']
 /** What validation accepts: what may be added, plus what is already stored. */
 export const ALL_SECTION_PAGES: PageKey[] = [...SECTION_PAGES, ...LEGACY_SECTION_PAGES]
 
+/**
+ * May a NEW section name this page today? — the picker's own rule, written
+ * once (Block D wave 2).
+ *
+ * `SECTION_PAGES` minus `agent`, which joins a report only through "add to
+ * report" from a thread (its params carry the thread id) and so is not
+ * something a reader picks off a list.
+ *
+ * IT LIVES HERE AND NOT IN `catalogue.ts` because two surfaces apply it and
+ * one of them is a CLIENT component: `lib/reports/catalogue.ts` imports the
+ * page registry, and pulling that into the editor's bundle takes every page
+ * loader — and `node:async_hooks` — with it. This file imports a type and
+ * nothing else.
+ */
+export const isPickablePage = (page: PageKey): boolean =>
+  page !== 'agent' && SECTION_PAGES.includes(page)
+
 export interface ReportSection {
   /** Client-minted, stable across edits (React keys, reorder, remove). */
   id: string

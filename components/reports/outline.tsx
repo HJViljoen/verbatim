@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, LoaderCircle, X } from 'lucide-react'
 import { updateReport, type ActionState } from '@/app/dashboard/studio/actions'
 import { newSectionId } from '@/lib/reports/templates'
-import { AUDIENCES, REPORT_FRAMING_MAX, SECTION_PAGES, type Audience, type ReportSection } from '@/lib/reports/types'
+import { AUDIENCES, REPORT_FRAMING_MAX, isPickablePage, type Audience, type ReportSection } from '@/lib/reports/types'
 import type { CataloguePage } from '@/lib/reports/catalogue'
 import { REPORT_MAX_SECTIONS } from '@/lib/config'
 
@@ -43,7 +43,7 @@ export function Outline(p: Props) {
   // included, so an already-stored section still finds its title and its tiles;
   // offering `dashboard` in this menu would let a new report name a retired
   // page. `agent` joins a report only through "add to report" from a thread.
-  const pickable = p.catalogue.filter((c) => c.page !== 'agent' && SECTION_PAGES.includes(c.page))
+  const pickable = p.catalogue.filter((c) => isPickablePage(c.page))
   // No fallback key: `SECTION_PAGES[0]` is `overview`, which has no module yet,
   // and an "Add page" that files a section naming a page nothing can render is
   // worse than one that is greyed out.
