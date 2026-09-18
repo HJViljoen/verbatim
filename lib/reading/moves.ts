@@ -279,6 +279,17 @@ export interface MoveReading {
   months: string[]
   /** "declared 12 Aug · read against the two months since" — the footer. */
   line: string
+  /**
+   * Why a line may not be DRAWN over this reading, or null when it may.
+   *
+   * A CHART IS A DIRECTION CLAIM TOO (AGENTS.md), and two readings drawn as a
+   * line make one. `monthlyLineLabel` (lib/pages/overview.ts) is the built
+   * answer on OV2 — it refuses below three readings and names the months
+   * instead — and a move's chart is the same picture over the same kind of
+   * series, so it gets the same refusal rather than a second opinion. Wave 2
+   * prints this string where the mock draws the line.
+   */
+  chartNote: string | null
   /** Why there is no verdict, when there is none. */
   unread: string | null
 }
@@ -356,6 +367,23 @@ function monthsSince(series: MoveSeries | null, declaredMonth: string): number {
   return series.points.filter((p) => readable(p) && p.month >= from).length
 }
 
+/** Three readings or it is not a line. Mirrors `monthlyLineLabel`'s rule and
+ *  its wording; a second threshold for one picture is how two surfaces come to
+ *  draw the same two points two ways. */
+export function moveChartNote(series: MoveSeries | null): string | null {
+  const read = (series?.points ?? []).filter(readable).map((p) => p.month)
+  if (read.length >= DRAWABLE_READINGS) return null
+  if (read.length === 0) return 'no month reads'
+  const short = (m: string) => SHORT_MONTHS[Number(m.slice(5, 7)) - 1] ?? m.slice(0, 7)
+  return read.length === 1 ? `${short(read[0])} only` : `${short(read[0])} → ${short(read[read.length - 1])} only`
+}
+
+/** Readings a line needs behind it before it is a line — `DIRECTION_RUN`'s
+ *  three, and `monthlyLineLabel`'s. */
+export const DRAWABLE_READINGS = 3
+
+const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
 const countWord = (n: number): string =>
   n === 1 ? 'the one month since' : n === 0 ? 'no complete month since' : `the ${fmtInt(n)} months since`
 
@@ -427,6 +455,7 @@ export function readMove(input: MoveReadingInput): MoveReading {
     figures,
     months,
     line: `declared ${shortDate(input.move.declared_at)} · read against ${countWord(since)}`,
+    chartNote: moveChartNote(touched),
     unread,
   }
 }

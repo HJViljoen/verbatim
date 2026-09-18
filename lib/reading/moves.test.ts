@@ -10,6 +10,7 @@ import {
   MOVE_NO_CLIENT_SERIES,
   MOVE_NO_TARGET_SERIES,
   MOVE_TOO_YOUNG,
+  moveChartNote,
   readMove,
   type MoveCandidateInput,
   type MoveReadingInput,
@@ -367,5 +368,36 @@ describe('actedTally — the whole ledger, never a quarter', () => {
 
   it('reads the same as the ledger’s own line at the same numbers', () => {
     expect(actedTally(1, 64).line).toContain('1 of 64')
+  })
+})
+
+describe('moveChartNote — two readings are not a line', () => {
+  it('refuses the line below three readings and names the months instead', () => {
+    expect(moveChartNote(series({ points: [] }))).toBe('no month reads')
+    expect(moveChartNote(series({ points: [{ month: '2026-09-01', k: 10, n: 84, pct: 11.9 }] }))).toBe('Sep only')
+    expect(
+      moveChartNote(
+        series({
+          points: [
+            { month: '2026-08-01', k: 8, n: 83, pct: 9.6 },
+            { month: '2026-09-01', k: 10, n: 84, pct: 11.9 },
+          ],
+        }),
+      ),
+    ).toBe('Aug → Sep only')
+    // Three readings and the line may be drawn.
+    expect(moveChartNote(series())).toBeNull()
+    expect(reading().chartNote).toBeNull()
+  })
+
+  it('a month with no denominator is not a reading', () => {
+    const hollow = series({
+      points: [
+        { month: '2026-07-01', k: null, n: null, pct: null },
+        { month: '2026-08-01', k: 8, n: 83, pct: 9.6 },
+        { month: '2026-09-01', k: 10, n: 84, pct: 11.9 },
+      ],
+    })
+    expect(moveChartNote(hollow)).toBe('Aug → Sep only')
   })
 })
