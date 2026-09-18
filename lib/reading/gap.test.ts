@@ -7,6 +7,7 @@ import {
   gapDirection,
   gapFigures,
   gapLine,
+  gapPrintsLevel,
   inheritRefusal,
   sidePct,
   type GapReading,
@@ -289,6 +290,40 @@ describe('gapLine', () => {
       const text = `${gapLine(gap)} ${gapBasisLine(gap) ?? ''}`
       expect(text.match(directionRe())).toBeNull()
     }
+  })
+})
+
+// THE MARKER'S CONDITION, NOT THE RENDERED STRING (the fix pass, E-monthly
+// review [Minor]). The monthly email decided `data-copy="level"` by testing
+// the line for /\bof\s\d/, which is true exactly when rule (b) would already
+// pass — so the rule could never fail on that node, and a `levelOf` that
+// printed "31% (84 videos)" would have dropped the marker instead of turning a
+// test red.
+describe('gapPrintsLevel', () => {
+  it('is true where either side was read and carries a denominator', () => {
+    expect(gapPrintsLevel(gapBetween({ ...durability, a: side(), b: them(), window: SEP }))).toBe(true)
+    expect(gapPrintsLevel(gapBetween({ ...durability, a: side({ observed: false }), b: them(), window: SEP }))).toBe(true)
+  })
+
+  it('is false where neither side printed a level, so there is no evidence to owe', () => {
+    const neither = gapBetween({
+      ...durability,
+      a: side({ observed: false }),
+      b: them({ observed: false }),
+      window: SEP,
+    })
+    expect(gapPrintsLevel(neither)).toBe(false)
+    expect(gapLine(neither)).toBe('you — not tracked · Freitag — not tracked · too few to compare')
+  })
+
+  it('agrees with what the line actually printed, on every shape the module makes', () => {
+    const shapes = [
+      gapBetween({ ...durability, a: side(), b: them(), window: SEP }),
+      gapBetween({ ...durability, a: side({ value: { k: 78, n: 252 }, pct: 31 }), b: them({ value: { k: 186, n: 426 }, pct: 43.7 }), window: SEP }),
+      gapBetween({ ...durability, a: side({ observed: false }), b: them({ observed: false }), window: SEP }),
+      gapBetween({ ...durability, a: side({ value: { k: 0, n: 0 }, pct: null }), b: them({ value: { k: 0, n: 0 }, pct: null }), window: SEP }),
+    ]
+    for (const gap of shapes) expect(gapPrintsLevel(gap)).toBe(/\bof\s\d/.test(gapLine(gap)))
   })
 })
 

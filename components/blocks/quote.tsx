@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import type { RenderMode } from '@/lib/blocks/types'
 import { QuoteBlock } from '@/components/quote-block'
+import { EMAIL, FONT } from '@/lib/email/theme'
 import type { Quote } from '@/lib/renderables/types'
 
 // Quotes, in three modes (Phase 1 WP10). See components/blocks/frame.tsx.
@@ -39,7 +40,14 @@ export function BlockQuote({
 }) {
   if (!quote || !quote.text.trim()) {
     return mode === 'email'
-      ? <div style={{ fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontSize: 11, color: '#8a867e' }}>{gone}</div>
+      // THE THEME'S OWN MONO AND THE THEME'S OWN GREY (the fix pass,
+      // E-monthly review [Nit]). This cell kept `#8a867e` — a hex from the
+      // retired cream identity, on `components/quote-block.test.tsx`'s dead
+      // colour list, and 3.63:1 — and a mono stack of its own, so an erased
+      // quote rendered in a different typeface from everything around it.
+      // Wave 1 repainted `QuoteBlock` onto the real theme and this arm was
+      // missed.
+      ? <div style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted }}>{gone}</div>
       : <p className="m-0 font-mono text-[10.5px] text-muted-foreground">{gone}</p>
   }
   return <QuoteBlock quote={quote} cite={cite} mode={mode} />

@@ -5,10 +5,16 @@ import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { TokenProse } from '@/components/blocks/prose'
 import { INTERPRETATION_LABEL } from '@/lib/prose/interpret'
 import { EMAIL, FONT } from '@/lib/email/theme'
+
 import { fullDate, shortDate } from '@/lib/format'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { briefStaleLine, type BriefLink, type MonthlyData } from '@/lib/pages/monthly'
 import type { LedgerRow } from '@/lib/pages/overview'
+
+/** The artboard's amber interpretation pill, `rgba(230,176,60,.20)` — the same
+ *  `EMAIL.mixed` every other amber on the artefact is, at the artboard's own
+ *  opacity. An email may not use `color-mix`, so the rgba is literal. */
+const AMBER_TINT = 'rgba(230,176,60,.20)'
 
 /**
  * MR7 · What to decide before the next reading (Phase 1 WP18; the mock's
@@ -59,6 +65,11 @@ export const monthlyDecide: Block<MonthlyData> = {
         title={monthlyDecide.title}
         question={monthlyDecide.question}
         mode={mode}
+        // THE ARTBOARDS' RULED EYEBROW (E-monthly): a 2 x 16 green mark and
+        // the title in mono 11 uppercase, which is how all seventeen head a
+        // section. Off by default on the primitive; on for every section of
+        // this artefact, so the eight read as one document.
+        accent
         // NO `meta` WITH THE NEXT READING'S DATE ON IT. The body says "The next
         // reading of this is 1 Oct 2026." in full, and the frame said the same
         // date three lines above it — confirmed in both rendered emails. One
@@ -74,14 +85,33 @@ export const monthlyDecide: Block<MonthlyData> = {
 
     const ledger = d.ledger ? <Ledger row={d.ledger} mode={mode} appUrl={ctx.appUrl} /> : null
 
-    const read = d.interpretation.sentences.length > 0 ? (
-      <div className={email ? undefined : 'flex flex-col gap-1'}>
+    // THE ARTBOARD'S INNER TILE AND ITS AMBER CHIP (Block D wave 2, E-monthly).
+    // The artboard draws "Our read" as a shaded #F6F7F8 card with an amber
+    // "Interpretation" pill beside the label — the one labelled slot on the
+    // artefact, set apart from the record (design §7 item 9). Built, it was an
+    // uppercase eyebrow over prose, visually identical to every other heading
+    // on the page, so the one paragraph a model wrote read exactly like the
+    // seven code wrote. The artboard puts this tile in section 1; the build
+    // keeps it in section 7, because printing one paragraph twice on one
+    // artefact is worse than either placement (this file's own header).
+    const readLabel = (
+      <>
         <span
-          className={email ? undefined : 'text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground'}
-          style={email ? { fontFamily: FONT.sans, fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: EMAIL.muted } : undefined}
+          className={email ? undefined : 'text-[12px] font-semibold uppercase tracking-[0.06em] text-muted-foreground'}
+          style={email ? { fontFamily: FONT.sans, fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: EMAIL.muted } : undefined}
         >
-          Our read · {INTERPRETATION_LABEL}
+          Our read
+        </span>{' '}
+        <span
+          className={email ? undefined : 'ml-1.5 inline-block rounded-[10px] bg-warning/20 px-2 py-0.5 text-[11px] font-semibold text-foreground'}
+          style={email ? { display: 'inline-block', marginLeft: 6, borderRadius: 10, padding: '2px 8px', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', background: AMBER_TINT, color: EMAIL.ink, fontFamily: FONT.sans } : undefined}
+        >
+          {INTERPRETATION_LABEL}
         </span>
+      </>
+    )
+    const readBody = (
+      <>
         <TokenProse body={d.interpretation.sentences.join(' ')} figures={d.figures} mode={mode} model />
         {d.interpretation.note ? (
           <span
@@ -91,7 +121,20 @@ export const monthlyDecide: Block<MonthlyData> = {
             {d.interpretation.note}
           </span>
         ) : null}
-      </div>
+      </>
+    )
+    const read = d.interpretation.sentences.length > 0 ? (
+      email ? (
+        <div style={{ background: EMAIL.inner, borderRadius: 6, padding: '18px 20px', marginTop: 12 }}>
+          <div>{readLabel}</div>
+          <div style={{ fontFamily: FONT.sans, fontSize: 14, lineHeight: '1.55', color: EMAIL.ink, marginTop: 10 }}>{readBody}</div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2.5 rounded-md bg-inner px-5 py-4">
+          <div>{readLabel}</div>
+          <div className="flex flex-col gap-1 text-[14px] leading-[1.55]">{readBody}</div>
+        </div>
+      )
     ) : null
 
     const deadline = email ? (
@@ -138,27 +181,33 @@ export const monthlyDecide: Block<MonthlyData> = {
 function Ledger({ row, mode, appUrl }: { row: LedgerRow; mode: RenderMode; appUrl: string }) {
   const email = mode === 'email'
   const meta = ledgerMeta(row)
+  // THE RULE IS GREEN AND IT IS 3px (the artboard). Grey at 2 reads as a
+  // blockquote; the one thing on the artefact a reader is asked to DECIDE gets
+  // the product's one accent, which the artboard spends here and in the
+  // masthead and nowhere else above the button. The title is serif 20 at
+  // -.01em, the artboard's, and the metadata mono — it is a provenance line,
+  // and mono is what every other provenance line on the artefact is set in.
   if (email) {
     return (
-      <div style={{ borderLeft: `2px solid ${EMAIL.border}`, paddingLeft: 12 }}>
-        <div style={{ fontFamily: FONT.serif, fontSize: 17, lineHeight: 1.3, color: EMAIL.ink }}>
+      <div style={{ borderLeft: `3px solid ${EMAIL.green}`, paddingLeft: 16 }}>
+        <div style={{ fontFamily: FONT.serif, fontSize: 20, fontWeight: 500, lineHeight: 1.34, letterSpacing: '-.01em', color: EMAIL.ink }}>
           <span data-copy="stored" data-slot="pass_d_b_recommendation">{row.title}</span>
         </div>
-        <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 4 }}>{meta}</div>
+        <div style={{ fontFamily: FONT.mono, fontSize: 10.5, lineHeight: '1.55', color: EMAIL.muted, marginTop: 7 }}>{meta}</div>
       </div>
     )
   }
   return (
-    <div className="flex min-w-0 flex-col gap-1 border-l-2 border-border pl-3">
+    <div className="flex min-w-0 flex-col gap-1.5 border-l-[3px] border-positive pl-4">
       <Link
         data-copy="stored"
         data-slot="pass_d_b_recommendation"
         href={`${appUrl}${row.href}`}
-        className="font-serif text-[17px] leading-[1.3] underline-offset-2 hover:underline"
+        className="font-serif text-[20px] font-medium leading-[1.34] tracking-[-0.01em] underline-offset-2 hover:underline"
       >
         {row.title}
       </Link>
-      <span className="text-[11.5px] text-muted-foreground">{meta}</span>
+      <span className="font-mono text-[10.5px] leading-[1.55] text-muted-foreground">{meta}</span>
     </div>
   )
 }

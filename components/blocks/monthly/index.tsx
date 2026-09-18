@@ -12,6 +12,10 @@ import { overviewRivals } from '@/components/pages/overview/rivals'
 import { overviewMoves } from '@/components/pages/overview/moves'
 import { overviewRecord } from '@/components/pages/overview/record'
 import { fromOverview } from './adapt'
+import { monthlySubjectsEmail } from './subjects'
+import { monthlyRivalsEmail } from './rivals'
+import { monthlyMovesEmail } from './moves'
+import { monthlySoundEmail } from './sound'
 import { monthlyMonth } from './month'
 import { monthlyMovers } from './movers'
 import { monthlyVoices } from './voices'
@@ -28,16 +32,26 @@ import { monthlyDecide } from './decide'
  *
  * `MONTHLY_BLOCKS` is a RECORD and not an array, because a stored arrangement
  * is a list of keys and a build must be able to resolve one without scanning.
+ *
+ * AND THREE OF THE FIVE DRAW THEIR OWN EMAIL ARM (Block D wave 2, E-monthly).
+ * The fourth argument to `fromOverview` replaces the MARKUP of one mode and
+ * nothing else: same projected data, same fields, same verdicts, same words,
+ * and `figures` / `verdicts` / `quotes` / `emptyState` still the page's. It
+ * exists because a page's email arm is a fallback for a table three feet away,
+ * while on this artefact the email IS the document — six subjects across four
+ * aligned columns, seven rivals with a level and a band each — and Overview's
+ * arm stacks all of it into full-width lines. The record block keeps the
+ * page's arm, because a paragraph is a paragraph in every mode.
  */
 export const MONTHLY_BLOCKS: Record<MonthlyBlockKey, Block<MonthlyData>> = {
   'monthly.month': monthlyMonth,
-  'monthly.subjects': fromOverview('monthly.subjects', overviewSubjects),
+  'monthly.subjects': fromOverview('monthly.subjects', overviewSubjects, undefined, monthlySubjectsEmail),
   'monthly.movers': monthlyMovers,
-  'monthly.rivals': fromOverview('monthly.rivals', overviewRivals),
-  'monthly.moves': fromOverview('monthly.moves', overviewMoves, artefactMoves),
+  'monthly.rivals': fromOverview('monthly.rivals', overviewRivals, undefined, monthlyRivalsEmail),
+  'monthly.moves': fromOverview('monthly.moves', overviewMoves, artefactMoves, monthlyMovesEmail),
   'monthly.voices': monthlyVoices,
   'monthly.decide': monthlyDecide,
-  'monthly.sound': fromOverview('monthly.sound', overviewRecord),
+  'monthly.sound': fromOverview('monthly.sound', overviewRecord, undefined, monthlySoundEmail),
 }
 
 /**

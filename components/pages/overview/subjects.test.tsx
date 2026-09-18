@@ -181,7 +181,15 @@ describe('OV2, ported to the artboard', () => {
     // FigureCell stamps the markers itself: the figure on top, the pair as the
     // level. A hand-rolled cell loses the copy contract by construction.
     expect(markup).toContain('data-copy="level"')
-    expect(markup).toContain('font-mono text-[13px] font-semibold leading-none tabular-nums')
+    // MERGE, BLOCK D WAVE 2: E-monthly's additive `size` prop re-ordered the
+    // classes `FigureCell` emits at the default size (the `md` arm is now the
+    // false branch of a `cn`), so this asserted a byte string that no longer
+    // exists while the cell it names is unchanged. The figure's own face and
+    // size are what this test is about, and they are asserted as classes.
+    const figure = markup.slice(markup.indexOf('data-copy="figure"'))
+    expect(figure).toContain('font-mono')
+    expect(figure).toContain('text-[13px]')
+    expect(figure).toContain('tabular-nums')
   })
 
   it('puts the caveat in the footer note, not in the body', () => {

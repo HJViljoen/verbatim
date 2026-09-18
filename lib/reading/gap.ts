@@ -338,6 +338,23 @@ function levelOf(side: GapSide): string {
   return `${side.label} ${fmtPct(p)} of ${fmtInt(side.value.n)}`
 }
 
+/**
+ * Did `gapLine` print a LEVEL — a share with the denominator it rests on?
+ *
+ * WHY A PREDICATE AND NOT A REGEX (the fix pass, E-monthly review [Minor]).
+ * The monthly email marked the gap line `data-copy="level"` when the rendered
+ * string matched /\bof\s\d/ — which is exactly when rule (b) would already
+ * pass on it, so the rule could never fail on that node, and changing
+ * `levelOf` to print "31% (84 videos)" would have removed the marker rather
+ * than turning the test red. A marker belongs on the CONDITION the rule is
+ * about: a side was read and carries a denominator, so the line states a level
+ * and owes its evidence. `levelOf` and this answer the same question from the
+ * same fields.
+ */
+export function gapPrintsLevel(gap: Gap): boolean {
+  return readable(gap.a) || readable(gap.b)
+}
+
 /** A magnitude in points, trailing `.0` dropped: 19 → "19", 12.7 → "12.7". */
 const pts = (n: number): string => `${round1(n)}`
 

@@ -38,7 +38,7 @@ import { cn } from '@/lib/utils'
  */
 export function BlockFrame({
   title, question, mode = 'app', footer, footerNote, meta, heading = false, lead, actions,
-  truncateFooter = false, children, className,
+  truncateFooter = false, children, className, accent = false,
 }: {
   title: string
   question?: string
@@ -94,6 +94,25 @@ export function BlockFrame({
   meta?: ReactNode
   children: ReactNode
   className?: string
+  /**
+   * The artboards' RULED EYEBROW (Block D wave 2, E-monthly — ADDITIVE, and
+   * the default is off, so every existing caller is byte-identical).
+   *
+   * Every one of the seventeen artboards heads a section the same way: a
+   * 2 x 16px green rule, then the title in MONO 11 uppercase at `.08em`. The
+   * built frame sets it in sans 12/600 at `.6px` with no mark, which is why
+   * the built pages read softer and less instrument-like than the artboards
+   * do — mock-gap's own diagnosis for the MonthlyReport, where it is the
+   * largest remaining chrome difference once the tables are ported.
+   *
+   * IT IS A FLAG AND NOT A COLOUR. The mark is the product's one accent and a
+   * caller may not choose another: a second green would be a second meaning.
+   *
+   * Left off by default deliberately. Turning it on for every block in the
+   * product is a change to seventeen surfaces at once and belongs to whoever
+   * merges this wave, not to the one package that needed it first.
+   */
+  accent?: boolean
 }) {
   if (mode === 'email') {
     return (
@@ -104,7 +123,25 @@ export function BlockFrame({
               <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} border={0} style={{ borderCollapse: 'collapse', borderSpacing: 0 }}>
                 <tbody>
                   <tr>
-                    <td style={{ fontFamily: FONT.sans, fontSize: 12, fontWeight: 600, color: EMAIL.muted, textTransform: 'uppercase', letterSpacing: '.6px' }}>{title}</td>
+                    {accent ? (
+                      <>
+                        {/* THE MARK IS A SPAN INSIDE THE CELL, not the cell's
+                            own background. A `<td>` with a background fills
+                            whatever height the row takes from the title beside
+                            it, so a 2px rule painted on the cell rendered as a
+                            16px green square. */}
+                        <td width={16} style={{ width: 16, verticalAlign: 'middle', lineHeight: 0 }}>
+                          <span style={{ display: 'inline-block', width: 16, height: 2, borderRadius: 2, background: EMAIL.green, fontSize: 0, lineHeight: 0 }} />
+                        </td>
+                        <td width={8} style={{ width: 8, fontSize: 1 }}>&nbsp;</td>
+                      </>
+                    ) : null}
+                    <td style={accent
+                      ? { fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted, textTransform: 'uppercase', letterSpacing: '.08em' }
+                      : { fontFamily: FONT.sans, fontSize: 12, fontWeight: 600, color: EMAIL.muted, textTransform: 'uppercase', letterSpacing: '.6px' }}
+                    >
+                      {title}
+                    </td>
                     {meta ? <td align="right" style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.faint }}>{meta}</td> : null}
                   </tr>
                 </tbody>
@@ -146,6 +183,17 @@ export function BlockFrame({
   const big = mode === 'print'
   return (
     <section className={cn('flex min-w-0 flex-col gap-2.5', className)}>
+      {/* THREE ADDITIVE FLAGS IN ONE HEADER (merge, Block D wave 2).
+          `heading` (E-subjects) sets the title at heading scale for the one
+          block a page is about; `accent` (E-monthly) is the artboards' ruled
+          mono eyebrow; `actions` (E-subjects) is the app's controls at the
+          right-hand end. They are orthogonal and all three default off, so a
+          caller passing none renders what it always did — except for the
+          header element's own class ORDER, which `cn` now emits as
+          "flex gap-2 items-baseline justify-between"; E-monthly's byte-for-byte
+          test on that string is updated with this reason. `heading` wins over
+          `accent` where a caller passes both: a 20px heading with a 2px rule
+          before it is neither of the two things the artboards draw. */}
       <header className={cn('flex gap-2', heading ? 'items-center justify-between gap-4' : 'items-baseline justify-between')}>
         {heading ? (
           <span className="flex min-w-0 items-baseline gap-2.5">
@@ -154,7 +202,22 @@ export function BlockFrame({
           </span>
         ) : (
           <>
-            <h2 className={cn('m-0 font-semibold uppercase tracking-[0.06em] text-secondary-foreground', big ? 'text-[11px]' : 'text-[10.5px]')}>{title}</h2>
+            {/* AND `accent` IS ADDITIVE ON THE SCREEN TOO (E-monthly's fix
+                pass, review finding [Important]). The flex classes were
+                outside the branch, so an omitted `accent` still turned the
+                title into a flex container and — through `min-w-0` — newly let
+                it shrink below its own min-content inside this
+                `items-baseline` header, where it used to push `meta` out. They
+                live inside the branch. */}
+            <h2 className={cn(
+              'm-0',
+              accent
+                ? 'flex min-w-0 items-center gap-2 font-mono text-[11px] uppercase tracking-[0.08em] text-secondary-foreground'
+                : cn('font-semibold uppercase tracking-[0.06em] text-secondary-foreground', big ? 'text-[11px]' : 'text-[10.5px]'),
+            )}>
+              {accent ? <span aria-hidden className="inline-block h-[2px] w-4 flex-none rounded-full bg-positive" /> : null}
+              {title}
+            </h2>
             {meta ? <span className="flex-none whitespace-nowrap font-mono text-[11px] text-muted-foreground">{meta}</span> : null}
           </>
         )}
@@ -214,26 +277,50 @@ export function BlockFrame({
  * is what catches that.
  */
 export function FigureCell({
-  value, of, align = 'left', mode = 'app',
+  value, of, align = 'left', mode = 'app', size = 'md',
 }: {
   value: ReactNode
   /** "of 142". Omitted ONLY for a count that is not a share of anything. */
   of?: ReactNode
   align?: 'left' | 'right'
   mode?: RenderMode
+  /**
+   * How loud the figure is (Block D wave 2, E-monthly — ADDITIVE, and the
+   * default is untouched).
+   *
+   * `md` (13px) is what every existing caller gets and is the artboards' size
+   * in a dense table. `lg` is 17px, which is what the MonthlyReport artboard
+   * sets on the three columns of section 2: six subjects × three sides is the
+   * one table on that artefact where the figure is meant to be read before the
+   * label, and at 13px it reads as metadata. The "of N" does NOT grow with it —
+   * the denominator is evidence rather than headline, and the artboard keeps it
+   * at 10.5 in both sizes.
+   *
+   * AND `lg` IS SET IN THE SANS, TABULAR (the fix pass, review finding
+   * [Medium]). The artboard sets mono here and only ever puts whole
+   * percentages in the slot, so it never met the thing mono does at this
+   * size: every glyph takes one advance, so "79.1%" sets as "79 . 1%" and the
+   * figure reads as two numbers. It is the same effect this artefact's own
+   * hero sentence already refuses at 23px ("1 , 388"), one size down.
+   * `tabular-nums` keeps the column aligned, which is what the artboard's mono
+   * was buying. `md` is untouched — at 13px the advance is small enough that
+   * the point stays attached, and every other caller is on `md`.
+   */
+  size?: 'md' | 'lg'
 }) {
   const right = align === 'right'
+  const big = size === 'lg'
   if (mode === 'email') {
     return (
       <div style={{ textAlign: right ? 'right' : 'left' }}>
-        <div data-copy="figure" style={{ fontFamily: FONT.mono, fontSize: 13, fontWeight: 600, lineHeight: '1', color: EMAIL.ink }}>{value}</div>
-        {of ? <div data-copy="level" style={{ fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.muted, marginTop: 2 }}>{of}</div> : null}
+        <div data-copy="figure" style={{ fontFamily: big ? FONT.sans : FONT.mono, fontSize: big ? 17 : 13, fontWeight: 600, lineHeight: '1', letterSpacing: big ? '-.01em' : undefined, fontVariantNumeric: 'tabular-nums', color: EMAIL.ink }}>{value}</div>
+        {of ? <div data-copy="level" style={{ fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.muted, marginTop: big ? 3 : 2 }}>{of}</div> : null}
       </div>
     )
   }
   const cell = (
     <span className={cn('flex min-w-0 flex-col gap-px', right && 'items-end text-right')}>
-      <span data-copy="figure" className="font-mono text-[13px] font-semibold leading-none tabular-nums">{value}</span>
+      <span data-copy="figure" className={cn('font-semibold leading-none tabular-nums', big ? 'text-[17px] tracking-[-0.01em]' : 'font-mono text-[13px]')}>{value}</span>
       {of ? <span className="font-mono text-[10.5px] tabular-nums text-muted-foreground">{of}</span> : null}
     </span>
   )

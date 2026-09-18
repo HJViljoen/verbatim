@@ -177,9 +177,18 @@ export function Quote({ text: t, cite, lang, english }: { text: string; cite?: R
   )
 }
 
+/**
+ * The artefacts' one control.
+ *
+ * IT IS 44px TALL (the fix pass, E-monthly review [Nit]). At 13px over 9px of
+ * padding it measured about 34, under every touch-target guideline there is,
+ * on the artefacts most likely to be tapped with a thumb — a monthly report is
+ * opened on a phone more often than anywhere else. 18px of line box inside
+ * 13px of padding each side is 44 exactly, and the type is unchanged.
+ */
 export function Button({ href, children, primary }: { href: string; children: ReactNode; primary?: boolean }) {
   return (
-    <a href={href} style={{ display: 'inline-block', fontFamily: FONT.sans, fontSize: 13, fontWeight: 600, textDecoration: 'none', padding: '9px 16px', borderRadius: 6, background: primary ? EMAIL.green : EMAIL.card, color: primary ? EMAIL.card : EMAIL.ink, border: primary ? `1px solid ${EMAIL.green}` : `1px solid ${EMAIL.border}` }}>{children}</a>
+    <a href={href} style={{ display: 'inline-block', fontFamily: FONT.sans, fontSize: 13, lineHeight: '18px', fontWeight: 600, textDecoration: 'none', padding: '13px 18px', borderRadius: 6, background: primary ? EMAIL.green : EMAIL.card, color: primary ? EMAIL.card : EMAIL.ink, border: primary ? `1px solid ${EMAIL.green}` : `1px solid ${EMAIL.border}` }}>{children}</a>
   )
 }
 

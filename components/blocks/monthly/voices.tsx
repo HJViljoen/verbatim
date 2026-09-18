@@ -8,6 +8,7 @@ import { fmtInt } from '@/lib/format'
 import { hasQuote } from '@/lib/renderables/quotes-freeze'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import type { MonthlyData, SubjectVoiceRow } from '@/lib/pages/monthly'
+import { presentation, T } from './email-table'
 
 /**
  * MR6 · One voice per subject (Phase 1 WP18; the mock's section 6, new in
@@ -45,6 +46,11 @@ export const monthlyVoices: Block<MonthlyData> = {
         title={monthlyVoices.title}
         question={monthlyVoices.question}
         mode={mode}
+        // THE ARTBOARDS' RULED EYEBROW (E-monthly): a 2 x 16 green mark and
+        // the title in mono 11 uppercase, which is how all seventeen head a
+        // section. Off by default on the primitive; on for every section of
+        // this artefact, so the eight read as one document.
+        accent
         meta={v.rows.length > 0 ? `${fmtInt(v.rows.length)} named` : undefined}
         footer={email
           ? <a href={href} style={{ color: EMAIL.ink }}>Open Subjects →</a>
@@ -57,8 +63,31 @@ export const monthlyVoices: Block<MonthlyData> = {
     const empty = monthlyVoices.emptyState(data)
     if (empty) return frame(<BlockEmpty mode={mode}>{empty}</BlockEmpty>)
 
+    // TWO COLUMNS IN THE EMAIL TOO (Block D wave 2, E-monthly). The artboard
+    // draws a 2 x 3 grid and the app/print arms already do; the email arm
+    // queued six quotes down one column, which is the difference between a set
+    // a reader scans and a list they stop reading at the third. An email has no
+    // grid, so the rows are paired into a two-cell table — and an odd last row
+    // keeps its own cell rather than stretching across both, so the left column
+    // stays a column.
     if (email) {
-      return frame(<div>{v.rows.map((r) => <Row key={r.subjectId} row={r} mode={mode} appUrl={ctx.appUrl} />)}</div>)
+      const pairs: SubjectVoiceRow[][] = []
+      for (let i = 0; i < v.rows.length; i += 2) pairs.push(v.rows.slice(i, i + 2))
+      return frame(
+        <table width="100%" {...presentation} style={{ ...T, tableLayout: 'fixed' }}>
+          <tbody>
+            {pairs.map((pair) => (
+              <tr key={pair[0].subjectId}>
+                {[0, 1].map((i) => (
+                  <td key={i} width="50%" style={{ verticalAlign: 'top', paddingRight: i === 0 ? 12 : 0, paddingLeft: i === 0 ? 0 : 12 }}>
+                    {pair[i] ? <Row row={pair[i]} mode={mode} appUrl={ctx.appUrl} /> : null}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>,
+      )
     }
     // TWO COLUMNS ON SCREEN AND PAPER, one on a phone — the mock's grid, which
     // is what makes six quotes read as a set rather than as a queue.
@@ -126,7 +155,7 @@ function Row({ row, mode, appUrl }: { row: SubjectVoiceRow; mode: RenderMode; ap
   )
 
   return email ? (
-    <div style={{ marginTop: 14 }}>{name}{body}</div>
+    <div style={{ borderTop: `1px solid ${EMAIL.hairline}`, paddingTop: 12, marginTop: 14 }}>{name}{body}</div>
   ) : (
     <div className="flex min-w-0 flex-col gap-1.5">{name}{body}</div>
   )

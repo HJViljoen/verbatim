@@ -49,6 +49,41 @@ describe('BlockFrame', () => {
     }
   })
 
+  // THE DEFAULT HEADER, BYTE FOR BYTE (the fix pass, E-monthly review
+  // [Important]). `accent` was added for the MonthlyReport artboard and the
+  // note told the merge lead it was "off by default, so every existing caller
+  // renders byte-identically" — true of the email arm and false of the other
+  // two, because the three flex classes sat outside the branch. Nothing pinned
+  // this markup, so ~17 surfaces changed behaviour (a flex title, and `min-w-0`
+  // letting it shrink past its own min-content instead of pushing `meta` out)
+  // with a green suite. Now a regression here is a failure here.
+  it('leaves the app and print header untouched when accent is omitted', () => {
+    expect(render(<BlockFrame mode="app" title="Rivals"><span>x</span></BlockFrame>))
+      .toContain('<h2 class="m-0 font-semibold uppercase tracking-[0.06em] text-secondary-foreground text-[10.5px]">Rivals</h2>')
+    expect(render(<BlockFrame mode="print" title="Rivals"><span>x</span></BlockFrame>))
+      .toContain('<h2 class="m-0 font-semibold uppercase tracking-[0.06em] text-secondary-foreground text-[11px]">Rivals</h2>')
+    // And with it on, the mark and the mono title the artboards head with.
+    const accented = render(<BlockFrame mode="app" title="Rivals" accent><span>x</span></BlockFrame>)
+    expect(accented).toContain('font-mono text-[11px] uppercase tracking-[0.08em]')
+    expect(accented).toContain('bg-positive')
+  })
+
+  // A BIG FIGURE IS NOT SET IN MONO (the fix pass, E-monthly review [Medium]).
+  // Mono gives every glyph one advance, so at 17px "79.1%" sets as "79 . 1%"
+  // and reads as two numbers — the artboard never met it because it only puts
+  // whole percentages in that slot. `tabular-nums` keeps the column aligned,
+  // which is what the mono was for.
+  it('sets a large figure in the sans, tabular, and leaves the small one mono', () => {
+    const big = render(<FigureCell mode="email" size="lg" value="79.1%" of="32,600 of 41,200" />)
+    expect(big).toContain('font-variant-numeric:tabular-nums')
+    expect(big).not.toMatch(/font-size:17px[^"]*IBM Plex Mono/)
+    const small = render(<FigureCell mode="email" value="79.1%" of="32,600 of 41,200" />)
+    expect(small).toMatch(/IBM Plex Mono[^"]*font-size:13px/)
+    const app = render(<FigureCell size="lg" value="79.1%" of="32,600 of 41,200" />)
+    expect(app).toContain('tabular-nums')
+    expect(app).not.toMatch(/font-mono[^"]*text-\[17px\]/)
+  })
+
   it('renders an email-safe frame', () => {
     assertEmailSafe(render(<BlockFrame mode="email" title="Rivals"><span>x</span></BlockFrame>))
   })

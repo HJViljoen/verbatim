@@ -1,7 +1,17 @@
 /* eslint-disable @next/next/no-head-element, @next/next/no-page-custom-font -- an email document, not a page */
+import { Fragment } from 'react'
 import type { BlockContext } from '@/lib/blocks/types'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { MONTHLY_EMAIL_WIDTH, monthlyRuleFor, readingCaveat } from '@/lib/reports/monthly'
+import { longMonth } from '@/lib/format'
+import { PRIVACY_LINE } from '@/lib/reading/method'
+import {
+  MONTHLY_CANVAS_GUTTER,
+  MONTHLY_CARD_WIDTH,
+  monthlyContext,
+  monthlyEyebrow,
+  monthlyRuleFor,
+  readingCaveat,
+} from '@/lib/reports/monthly'
 import type { MonthlySnapshotData } from '@/lib/reports/monthly-build'
 import { monthlyBlocksFor } from '@/components/blocks/monthly'
 import { Button, Hairline, text } from './primitives'
@@ -44,6 +54,7 @@ const presentation = { role: 'presentation', cellPadding: 0, cellSpacing: 0, bor
 export function MonthlyEmail({ data, shareUrl, appUrl, attached, ctx, preheader }: MonthlyEmailProps) {
   const blocks = monthlyBlocksFor(data.keys)
   const caveat = readingCaveat(data.reading.notes)
+  const method = data.reading.overview.method
   return (
     <html lang="en">
       <head>
@@ -58,18 +69,54 @@ export function MonthlyEmail({ data, shareUrl, appUrl, attached, ctx, preheader 
         <table width="100%" {...presentation} style={{ borderCollapse: 'collapse', background: EMAIL.canvas }}>
           <tbody>
             <tr>
-              <td align="center" style={{ padding: '24px 12px' }}>
-                <table width="100%" {...presentation} style={{ borderCollapse: 'separate', maxWidth: MONTHLY_EMAIL_WIDTH, background: EMAIL.card, borderRadius: 6, border: `1px solid ${EMAIL.border}` }}>
+              {/* THE FRAME IS 640 AND THE CARD IS 600 (E-monthly). The canvas
+                  gutter is the artboard's 20px, not 12, and the card inside it
+                  carries the artboard's own 30px of side padding — so the card
+                  is the only width that binds, and 600 + 20 + 20 is the 640.
+                  The cell carried a `max-width:640` too, which does nothing:
+                  max-width is not honoured on a table cell in CSS 2.1 and
+                  Outlook lays out with Word. */}
+              <td align="center" style={{ padding: `${MONTHLY_CANVAS_GUTTER}px ${MONTHLY_CANVAS_GUTTER}px 24px` }}>
+                <table width="100%" {...presentation} style={{ borderCollapse: 'separate', maxWidth: MONTHLY_CARD_WIDTH, background: EMAIL.card, borderRadius: 6, border: `1px solid ${EMAIL.border}` }}>
                   <tbody>
                     <tr>
-                      <td style={{ padding: '24px 28px 4px' }}>
-                        <div style={text.eyebrow}>{data.company} · consumer intelligence</div>
-                        <div style={{ fontFamily: FONT.serif, fontSize: 22, fontWeight: 500, lineHeight: '1.25', color: EMAIL.ink, marginTop: 8 }}>{data.subject}</div>
-                        {/* ONE DATE FORMAT PER LINE, and the whole stamp is
-                            composed once (`monthlyPeriod`) rather than
-                            assembled here, so the email, the deck and the share
-                            page cannot word the same three facts three ways. */}
-                        <div style={{ ...text.mono, color: EMAIL.muted, fontSize: 12, marginTop: 6 }}>{data.period}</div>
+                      <td style={{ padding: '28px 30px 22px' }}>
+                        {/* THE GREEN RULE, then the product and the reading.
+                            It is the only green on the artefact above the
+                            button, and it is what makes the masthead read as a
+                            masthead rather than as a first paragraph.
+                            THE RULE IS INSIDE THE SENTENCE'S OWN BOX (the fix
+                            pass, review finding [Important]). As three cells of
+                            a bare shrink-to-fit table — a 30px rule, a 10px
+                            spacer and the words — the masthead sized itself to
+                            the eyebrow's max-content plus 40px of fixed lead
+                            and held the WHOLE artefact at a 398px floor in all
+                            three arms, so even with section 2 fixed the email
+                            was wider than an iPhone. The rule is an
+                            inline-block at the head of the line, as the
+                            artboard draws it, and the sentence wraps under
+                            itself like any other sentence.
+                            AND THE WORDS ARE THE SNAPSHOT'S OWN STAMP, never
+                            recomposed here: `data.period` is what the deck and
+                            the share page print. */}
+                        <div style={{ ...text.eyebrow, color: EMAIL.muted, lineHeight: '1.45' }}>
+                          <span style={{ display: 'inline-block', width: 30, height: 3, borderRadius: 2, background: EMAIL.green, verticalAlign: 'middle', marginRight: 10, fontSize: 0, lineHeight: 0 }} />
+                          {monthlyEyebrow(data.period)}
+                        </div>
+                        <div style={{ fontFamily: FONT.serif, fontSize: 20, fontWeight: 500, lineHeight: '1.25', letterSpacing: '-.01em', color: EMAIL.ink2, marginTop: 11 }}>{data.subject}</div>
+                        {/* THE CONTEXT ROW: the month's own days and the updates
+                            that were delivered into it on the left, the tenant
+                            right-aligned. `updateDates` has been loaded since
+                            WP11 and printed by nothing; the tenant was in the
+                            eyebrow, where the artboard puts the product. */}
+                        <table width="100%" {...presentation} style={{ borderCollapse: 'collapse', borderSpacing: 0, marginTop: 11 }}>
+                          <tbody>
+                            <tr>
+                              <td style={{ ...text.mono, color: EMAIL.muted, fontSize: 12 }}>{monthlyContext(data.reading.overview.bar)}</td>
+                              <td align="right" style={{ ...text.mono, color: EMAIL.muted, fontSize: 12, whiteSpace: 'nowrap' }}>{data.company}</td>
+                            </tr>
+                          </tbody>
+                        </table>
                         <div style={{ ...text.small, fontStyle: 'italic', marginTop: 10 }}>{monthlyRuleFor(data.monthStatus)}</div>
                         {/* AND WHAT THE READING CANNOT SUPPORT, beside the rule
                             that says how to read it. One sentence for the whole
@@ -79,29 +126,66 @@ export function MonthlyEmail({ data, shareUrl, appUrl, attached, ctx, preheader 
                         {caveat ? <div style={{ ...text.small, color: EMAIL.muted, marginTop: 8 }}>{caveat}</div> : null}
                       </td>
                     </tr>
+                    {/* ONE SECTION PER ROW, WITH A FULL-BLEED RULE BETWEEN THEM
+                        (E-monthly, the artboard's own structure). The email
+                        stacked all eight inside one padded cell, so the only
+                        thing separating "Rivals" from "Your moves" was 22px of
+                        margin — on an artefact eight sections deep that reads
+                        as one long column rather than as a document with parts.
+                        The rule is `#DCDFE3` edge to edge, exactly as the
+                        artboard draws it, and the section's own top padding is
+                        4 because `BlockFrame`'s email arm already carries 22 of
+                        margin (a shared primitive this package may not change). */}
+                    {blocks.map((block) => (
+                      <Fragment key={block.key}>
+                        <tr>
+                          <td style={{ height: 1, background: EMAIL.border, fontSize: 1, lineHeight: '1px' }}>&nbsp;</td>
+                        </tr>
+                        <tr>
+                          <td style={{ padding: '4px 30px 24px' }}>{block.render(data.reading, 'email', ctx)}</td>
+                        </tr>
+                      </Fragment>
+                    ))}
                     <tr>
-                      <td style={{ padding: '0 28px 8px' }}>
-                        {blocks.map((block) => (
-                          <div key={block.key}>{block.render(data.reading, 'email', ctx)}</div>
-                        ))}
-                      </td>
+                      <td style={{ height: 1, background: EMAIL.border, fontSize: 1, lineHeight: '1px' }}>&nbsp;</td>
                     </tr>
                     <tr>
-                      <td style={{ padding: '18px 28px 24px' }}>
-                        <Hairline />
-                        <div style={{ marginTop: 8 }}>
-                          {shareUrl ? <span style={{ marginRight: 8 }}><Button href={shareUrl} primary>Open the full report</Button></span> : null}
+                      <td style={{ padding: '22px 30px 26px' }}>
+                        <div>
+                          {/* THE MONTH IS ON THE BUTTON. "Open the full report"
+                              names no reading, and a reader with twelve of
+                              these a year has twelve identical buttons in one
+                              mailbox. */}
+                          {shareUrl ? <span style={{ marginRight: 10 }}><Button href={shareUrl} primary>Open the {longMonth(data.month)} reading</Button></span> : null}
                           <Button href={`${appUrl}/dashboard`}>Open Verbatim</Button>
                         </div>
-                        <div style={{ ...text.small, marginTop: 12 }}>
+                        <div style={{ ...text.small, marginTop: 13 }}>
                           {attached ? 'The PDF is attached. ' : ''}One link per section; the evidence behind each figure opens on the page.
                         </div>
+                        <Hairline />
                         {/* "Prepared FOR", not "by" — this is a list Verbatim
                             sends to the client's own staff. The share page says
                             "by", because a share link is a document the client
-                            forwards to THEIR stakeholders. */}
-                        <div style={{ ...text.small, fontSize: 11, marginTop: 10, color: EMAIL.faint }}>
-                          Prepared for {data.company} · with Verbatim. Commenters are never identified; quotes carry platform and date only. You are receiving this because you are on {data.company}’s update list; an owner or admin changes it in Verbatim, in Settings.
+                            forwards to THEIR stakeholders.
+                            THE FOOTER NAMES THE READING AND WHAT IT WAS READ
+                            OVER (the artboard's last line): the month, then the
+                            coverage sentence `methodLines` composes, which
+                            carries the platform mix and the video total. The
+                            artboard also prints a comment total; no field on
+                            this artefact holds one, so it is not printed. */}
+                        <div style={{ fontFamily: FONT.mono, fontSize: 9.5, lineHeight: '1.4', marginTop: 10, color: EMAIL.muted }}>
+                          <div>
+                            <span style={{ color: EMAIL.ink2 }}>Prepared for {data.company}</span> · with Verbatim · {longMonth(data.month)} {data.month.slice(0, 4)} reading{method ? ` · ${method.coverage}` : ''}
+                          </div>
+                          {/* THE PRIVACY SENTENCE IS NEVER CONDITIONAL. A
+                              workspace whose method footnote could not be
+                              composed is still a workspace whose commenters are
+                              never identified, so it falls back to the
+                              constant the footnote itself prints. */}
+                          <div style={{ marginTop: 4 }}>{method?.privacy ?? PRIVACY_LINE}</div>
+                          <div style={{ marginTop: 4 }}>
+                            You are receiving this because you are on {data.company}’s update list; an owner or admin changes it in Verbatim, in Settings.
+                          </div>
                         </div>
                       </td>
                     </tr>

@@ -66,6 +66,31 @@ export type MonthlyBlockKey = (typeof MONTHLY_BLOCK_KEYS)[number]
 export const MONTHLY_EMAIL_WIDTH = 640
 
 /**
+ * The CARD inside that frame (Block D wave 2, E-monthly).
+ *
+ * TWO NUMBERS, NOT ONE, and the artefact had collapsed them into one. The
+ * artboard's outer element is 640 wide with 20px of canvas padding all round,
+ * so the white card it holds is 600 — which is also what the design system
+ * states in so many words (`spec/design-system.md` §4: "600px card on a
+ * #F6F7F8 canvas"). The built email set `maxWidth: 640` on the CARD and padded
+ * it 24/12, so every line of copy ran about 40px longer than the artboard's and
+ * the canvas gutter all but disappeared. The frame keeps its name and its value
+ * because the artefact's geometry is still 640 overall.
+ *
+ * AND THE CARD IS THE ONLY WIDTH THAT BINDS (the fix pass, review finding
+ * [Minor]). `MONTHLY_EMAIL_WIDTH` was also set as a `max-width` on the
+ * centring `<td>`, where max-width is not honoured on a table cell in CSS 2.1
+ * and is ignored outright by Outlook's Word renderer — a declaration with no
+ * effect, asserted by a test that read the string back. The card's 600 plus
+ * the canvas gutter IS the 640, `MONTHLY_CANVAS_GUTTER` says how, and the test
+ * asserts that arithmetic instead of a dead style.
+ */
+export const MONTHLY_CARD_WIDTH = 600
+
+/** The artboard's canvas padding, each side: 600 + 20 + 20 = 640. */
+export const MONTHLY_CANVAS_GUTTER = 20
+
+/**
  * How many movers each side of section 3 prints.
  *
  * TEN, against Overview's three and the weekly report's three — the WP's own
@@ -193,6 +218,112 @@ export function freezesOn(month: string): string {
 }
 
 /**
+ * The masthead's eyebrow — "Verbatim · September · reading as at 18 Sep 2026 ·
+ * still filling until 31 Oct 2026" (Block D wave 2, E-monthly, `monthly.eyebrow`).
+ *
+ * THE PRODUCT'S NAME AND THE READING, which is what the artboard puts in the
+ * eyebrow slot and what the built email put nowhere. The email's eyebrow read
+ * "Sealand · consumer intelligence" — the TENANT and a category noun — and the
+ * three facts of the reading were printed as a mono line below the headline, so
+ * the two had swapped jobs. The artboard puts the tenant on the context row,
+ * right-aligned beside the dates, where a reader looks for "whose is this".
+ *
+ * IT IS THE STAMP WITH THE PRODUCT IN FRONT, and deliberately not a second
+ * composer: the mock's eyebrow stops at "still filling" and the stamp says
+ * which day it stops filling ON, which is the fact nobody else on the artefact
+ * carries (the brief: "keep the freeze date"). One composer means the email,
+ * the deck and the share page cannot word one reading three ways.
+ *
+ * AND IT TAKES THE STAMP RATHER THAN RE-DERIVING IT (the fix pass, review
+ * finding [Important]). `MonthlySnapshotData.period` is `monthlyPeriod` FROZEN
+ * AT BUILD (`monthly-build.ts`), and it is what the print deck, the share
+ * shell and the snapshot's own title print. Recomposing it at render read the
+ * same today and meant that a re-render of an archived snapshot would take
+ * today's `FREEZE_AFTER_DAYS` while the deck beside it kept the words it was
+ * built with — three surfaces wording one reading two ways, which is the one
+ * thing this composer exists to prevent.
+ */
+export const MONTHLY_PRODUCT = 'Verbatim'
+
+export function monthlyEyebrow(period: string): string {
+  return `${MONTHLY_PRODUCT} · ${period}`
+}
+
+/** What the masthead's context row needs: the month's shape and the updates
+ *  that were delivered into it. `BarBlock`'s own fields, named here so this
+ *  composer stays pure and this module keeps importing no loader. */
+export interface MonthlyContextInput {
+  month: string
+  status: MonthlyStatus
+  /** Days of the month elapsed at the reading, or null on a complete month. */
+  daysIn: number | null
+  updates: number
+  /** Already formatted, as `BarBlock.updateDates` holds them ("6 Sep"). */
+  updateDates: readonly string[]
+}
+
+/**
+ * "1–18 Sep 2026 · 3 updates · 6 Sep, 13 Sep" — the artboard's context row
+ * (`monthly.headline`).
+ *
+ * THE UPDATE DATES ARE LOADED AND WERE PRINTED NOWHERE. `BarBlock.updateDates`
+ * has been on `OverviewData` since WP11 and no surface in the product draws it;
+ * the artefact printed the COUNT alone ("3 updates"), which tells a reader how
+ * often we looked and not when. On an artefact read once a month by somebody
+ * who was not watching, when we looked is the difference between "the month is
+ * thin" and "we stopped gathering on the 13th".
+ *
+ * AND THE RANGE IS THE MONTH'S, NEVER THE RUN'S. A period is dated by the
+ * comment (AGENTS.md), so the left half is day 1 of the month to the day the
+ * reading reached — `daysIn`, the same field OV0's filling line counts — and on
+ * a closed month it is the whole month. It is NOT the run window, which is the
+ * weekly artefact's clock and would date a calendar month by when we gathered.
+ */
+export function monthlyContext(input: MonthlyContextInput): string {
+  const parts = [monthRange(input.month, input.status, input.daysIn)]
+  parts.push(`${fmtInt(input.updates)} ${input.updates === 1 ? 'update' : 'updates'}`)
+  if (input.updateDates.length > 0) parts.push(input.updateDates.join(', '))
+  return parts.join(' · ')
+}
+
+/** "1–18 Sep 2026", or "1–30 Sep 2026" once the month has run out. */
+export function monthRange(month: string, status: MonthlyStatus, daysIn: number | null): string {
+  const last = daysInMonth(month)
+  const reached = status === 'frozen' || daysIn == null ? last : Math.min(Math.max(daysIn, 1), last)
+  // `shortDate` gives "18 Sep"; the year is said once, at the end of the range,
+  // because both ends are inside one month by construction.
+  //
+  // AND THE MONTH KEY IS NORMALISED FIRST (the fix pass, review finding
+  // [Minor]). The day was spliced in at `month.slice(0, 8)`, which is correct
+  // only for `YYYY-MM-DD`: `BarBlock.month` is that today (`monthStartOf`), so
+  // this was not a live defect — but handed a `YYYY-MM` it built
+  // "2026-0918T00:00:00.000Z", an Invalid Date, and printed "NaN undefined"
+  // into the masthead. `longMonth` three files away guards the same input
+  // class on purpose and says why; so does this.
+  const key = monthKey(month)
+  if (key == null) return month
+  const tail = shortDate(`${key.slice(0, 8)}${String(reached).padStart(2, '0')}T00:00:00.000Z`)
+  return `1–${tail} ${key.slice(0, 4)}`
+}
+
+/** `YYYY-MM-01` from any month key this product holds, or null where the
+ *  string is not a date at all. An UNPARSEABLE month gives the caller its own
+ *  string back, never "NaN undefined" — `longMonth`'s rule, for the same
+ *  reason: the gap a reader cannot see is the one nobody can debug. */
+function monthKey(month: string): string | null {
+  const d = new Date(month.length === 7 ? `${month}-01` : month)
+  if (Number.isNaN(d.getTime())) return null
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-01`
+}
+
+function daysInMonth(month: string): number {
+  const key = monthKey(month)
+  const d = new Date(key ?? month)
+  if (Number.isNaN(d.getTime())) return 31
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate()
+}
+
+/**
  * The subject line, from the largest banded change (the WP's own rule).
  *
  * WHAT IT MAY AND MAY NOT SAY. A subject line is read before any of the
@@ -278,10 +409,26 @@ export interface TrailPoint {
  * readable, where "Aug 6.8% → Sep 9.4%" would silently re-date the whole
  * series. A trail with NO readable month at all is empty rather than a row of
  * dashes, so a row with nothing to say prints no line.
+ *
+ * AND THE POINTS ARE AVAILABLE ONE BY ONE (`trailPoints`, the fix pass, review
+ * finding [High]/[Minor]). Rendered as one string in a 254px column the line
+ * wrapped to four, and one of the wraps fell between "9.4% of" and "1,388" —
+ * a share parted from what it is a share of, which is the rule the "of N" on
+ * every point exists to keep, broken by other means. A renderer that holds the
+ * points can set each one unbreakable and let the line break BETWEEN months.
+ * `seriesTrail` is that array joined, so the two can never say different
+ * things.
  */
 export function seriesTrail(months: readonly string[], values: readonly (TrailPoint | null)[]): string {
+  return trailPoints(months, values).join(TRAIL_SEPARATOR)
+}
+
+/** What a trail is made of, before it is a sentence: "Aug 6.8% of 402" per
+ *  readable month, "Jul —" for a month under the floor, and nothing at all
+ *  where no month was readable. */
+export function trailPoints(months: readonly string[], values: readonly (TrailPoint | null)[]): string[] {
   const n = Math.min(months.length, values.length)
-  if (n === 0) return ''
+  if (n === 0) return []
   const parts: string[] = []
   let readable = 0
   for (let i = 0; i < n; i += 1) {
@@ -289,8 +436,12 @@ export function seriesTrail(months: readonly string[], values: readonly (TrailPo
     if (v) readable += 1
     parts.push(`${shortMonth(months[i])} ${v == null ? '—' : `${fmtPct(v.pct)} of ${fmtInt(v.n)}`}`)
   }
-  return readable === 0 ? '' : parts.join(' → ')
+  return readable === 0 ? [] : parts
 }
+
+/** The one arrow between two points, so a renderer that splits the line and a
+ *  caller that reads it whole cannot disagree about where a point ends. */
+export const TRAIL_SEPARATOR = ' → '
 
 /** "Jul" from "2026-07". `monthName` in lib/format.ts is the same three-letter
  *  form with the year on it; a trail of six months does not repeat the year six

@@ -987,6 +987,22 @@ export function discardCaveat(g: DiscardRecord): string {
  * the same way and are dated the same way now; one test asserts no line of the
  * record holds an ISO day.
  */
+/**
+ * "This month stops moving on 31 Oct 2026; until then every figure above may
+ * still change."
+ *
+ * ONE COMPOSER, BECAUSE TWO SURFACES PRINT IT (the fix pass, E-monthly review
+ * [Minor]). `recordLines` is window-shaped and holds no freeze date, so the
+ * block that prints the record adds this sentence — and the monthly email's
+ * own section 8 was a COPY of that composition rather than a call to it: the
+ * same template string in two files, with nothing holding them equal, on an
+ * artefact whose whole point is that the page and the email cannot state one
+ * reading two ways. Both call this.
+ */
+export function freezeSentence(freezesOn: string): string {
+  return `This month stops moving on ${fullDate(freezesOn)}; until then every figure above may still change.`
+}
+
 export function recordLines(input: RecordInputs): string[] {
   const lines: string[] = []
   const d = input.delivery

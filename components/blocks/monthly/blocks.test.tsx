@@ -7,6 +7,11 @@ import { render, renderText } from '@/lib/test/render'
 import { fmtInt, fmtPct } from '@/lib/format'
 import { sentFigureRows } from '@/lib/reports/sent-figures'
 import { MONTHLY_BLOCK_KEYS, MONTHLY_MOVES_UNLOCK } from '@/lib/reports/monthly'
+import { MOVEMENT_WORDS } from '@/components/delta-badge'
+import { freezeSentence, REFUSAL_WHY } from '@/lib/reading/record'
+import { overviewRecord } from '@/components/pages/overview/record'
+import { gapLine, type Gap } from '@/lib/reading/gap'
+import { OWN_POSTS_UNREADABLE_OUTSIDE } from '@/lib/pages/overview'
 import { MOVERS_UNREAD_NOTE } from '@/lib/pages/monthly'
 import { ALL_MONTHLY_BLOCKS, MONTHLY_BLOCKS, monthlyBlocksFor } from './index'
 import { formingMonthlyFixture, monthlyFixture, refusedMonthlyFixture } from './fixture'
@@ -153,6 +158,15 @@ describe('MR3 · what moved', () => {
     const text = renderText(block.render(monthlyFixture(), 'app', ctx))
     expect(text).toContain('Cleared their band · a larger share than last month')
     expect(text).toContain('Cleared their band · a smaller share than last month')
+    // AND THE ONE WORD THAT DIFFERS IS THE DARK ONE (the fix pass, review
+    // finding [Medium]): at 10.5px caps over two lines, two headings of the
+    // same shape whose distinguishing word arrives fifth read as two copies of
+    // one heading.
+    const app = render(block.render(monthlyFixture(), 'app', ctx))
+    expect(app).toContain('<span class="text-foreground">larger</span>')
+    expect(app).toContain('<span class="text-foreground">smaller</span>')
+    const email = render(block.render(monthlyFixture(), 'email', ctx))
+    expect(email).toContain(`<span style="color:${EMAIL.ink}">larger</span>`)
   })
 
   it('writes every row’s line out in words, so an email with no images loses nothing', () => {
@@ -166,11 +180,27 @@ describe('MR3 · what moved', () => {
 
   // THE TRAIL IS SIX LEVELS AND IT CARRIED NO MARKER, so rule (b) — which is
   // checked on marked nodes alone — never saw six bare percentages a row, ten
-  // rows a side, on a sent artefact.
+  // rows a side, on a sent artefact. The marker is on the LINE and not on each
+  // point: rule (b) reads a level node's whole text, and "Jul —" alone is a
+  // month with no reading rather than a level missing its evidence.
   it('marks the trail as the levels it is, in every mode', () => {
     for (const mode of MODES) {
       const markup = render(block.render(monthlyFixture(), mode, ctx))
-      expect(markup).toMatch(/data-copy="level"[^>]*>\s*Apr 3\.1% of 1,204/)
+      expect(markup).toMatch(/data-copy="level"[^>]*>(<span[^>]*>)?\s*Apr 3\.1% of 1,204/)
+    }
+  })
+
+  // AND A POINT IS UNBREAKABLE (the fix pass, review finding [High]/[Minor]).
+  // Set as one string in a 254px column the line wrapped to four, and one wrap
+  // fell between "9.4% of" and "1,388" — a share on one line and what it is a
+  // share of on the next, which is the denominator rule broken by other means.
+  // The arrows are where the line may break.
+  it('never breaks a point of the trail in half', () => {
+    for (const mode of MODES) {
+      const markup = render(block.render(monthlyFixture(), mode, ctx))
+      for (const point of ['Apr 3.1% of 1,204', 'Sep 9.4% of 1,388', 'Apr —']) {
+        expect(markup).toContain(`<span style="white-space:nowrap">${point}</span>`)
+      }
     }
   })
 
@@ -376,6 +406,23 @@ describe('the five sections that are Overview’s', () => {
     expect(Object.keys(subjects).length).toBeGreaterThan(0)
   })
 
+  // THE RECORD PARAGRAPH IS OVERVIEW'S, AND A TEST SAYS SO (the fix pass,
+  // review finding [Minor]). Section 8's header claims the paragraph is
+  // Overview's "word for word", and it was a COPY of Overview's composition —
+  // the same template string in two files, so the first re-wording on the page
+  // would have left the artefact stating one reading two ways, silently. The
+  // freeze sentence is one composer now; this asserts the whole paragraph
+  // against what the page itself renders.
+  it('state the record in Overview’s own words, not in a copy of them', () => {
+    const data = monthlyFixture()
+    const page = renderText(overviewRecord.render(data.overview, 'email', ctx))
+    const artefact = renderText(MONTHLY_BLOCKS['monthly.sound'].render(data, 'email', ctx))
+    const freeze = freezeSentence(data.overview.record.freezesOn)
+    expect(page).toContain(freeze)
+    expect(artefact).toContain(freeze)
+    for (const line of data.overview.record.lines) expect(artefact).toContain(line)
+  })
+
   // A Block renders its own heading inside its own frame, so an adapter that
   // renamed one would print the new name on the deck's sheet and the old one
   // three lines under it. The page's heading travels, and the month is said
@@ -406,20 +453,206 @@ describe('the five sections that are Overview’s', () => {
     }
   })
 
+  // THE MOVE'S LINE IS STILL PRINTED WHOLE — it is just printed in the
+  // artboard's two type sizes (E-monthly). `moveLine` composes "{title} ·
+  // tracked 14 Sep · …", and the email arm sets the name in 15/600 above the
+  // rest of it, so the joined text reads "Advanced technology tracked 14 Sep …"
+  // with the separator gone. The assertion is the two halves, which is what the
+  // reader sees; asserting the raw line back would pin the block to printing
+  // the name once, in one size, which is the thing that changed.
   it('still print the rows, the promise and the figures the page declares', () => {
     const data = monthlyFixture()
     const text = renderText(MONTHLY_BLOCKS['monthly.moves'].render(data, 'email', ctx))
     expect(text).toContain(MONTHLY_MOVES_UNLOCK)
     expect(text).toContain(data.overview.moves.masthead)
-    // BLOCK D WAVE 2: a move with a READING behind it prints the reading
-    // instead of its own fallback sentence (`main.moves.move1.*`), so the
-    // composed line is asserted only for the moves that have none — which is
-    // what `MoveRow.line` was always for.
+    // BLOCK D WAVE 2, BOTH INTENTS. Every row prints its TITLE (E-monthly:
+    // the name is printed once, in its own size, and the composed line's
+    // remainder beside it); and a move with a READING behind it prints the
+    // reading instead of its own fallback sentence (E-main,
+    // `main.moves.move1.*`), so the composed remainder is asserted only for
+    // the moves that have none — which is what `MoveRow.line` was always for.
     const readMoves = new Set(data.overview.moves.readings.map((r) => r.moveId))
     for (const row of data.overview.moves.rows) {
-      if (readMoves.has(row.id)) expect(text).toContain(row.title)
-      else expect(text).toContain(row.line)
+      expect(text).toContain(row.title)
+      if (readMoves.has(row.id)) continue
+      const rest = row.line.startsWith(`${row.title} · `) ? row.line.slice(row.title.length + 3) : row.line
+      expect(text).toContain(rest)
     }
+    // AND THE WHOLE-LEDGER TALLY, which nothing on this artefact printed before
+    // (mock-gap D12 — never "this quarter").
+    expect(text).toContain(data.overview.moves.acted?.line as string)
+  })
+
+  it('prints the rivals lead sentence, which wave 1 composed and nothing drew', () => {
+    const data = monthlyFixture()
+    const text = renderText(MONTHLY_BLOCKS['monthly.rivals'].render(data, 'email', ctx))
+    expect(text).toContain(data.overview.rivals.lead as string)
+    // D8: a count and the names, never "slipped 2" — a direction word for a
+    // movement the row beneath it says did not clear its band.
+    expect(text).not.toMatch(/slipped/i)
+  })
+
+  it('says in the open why a comparison was refused, where a title cannot be read', () => {
+    const data = monthlyFixture()
+    const text = renderText(MONTHLY_BLOCKS['monthly.rivals'].render(data, 'email', ctx))
+    expect(text).toContain(MOVEMENT_WORDS.refused)
+    expect(text).toContain(REFUSAL_WHY.tracking_change)
+  })
+
+  it('marks your own row and prints what the rivals said on their own posts', () => {
+    const data = monthlyFixture()
+    const text = renderText(MONTHLY_BLOCKS['monthly.rivals'].render(data, 'email', ctx))
+    expect(text).toContain('Sealand (you)')
+    expect(text).toContain('What the tracked rivals said on their own posts')
+    // THE OUTSIDE WORDING, AND SAID ONCE (the fix pass, review finding
+    // [Minor]). The panel printed one identical sentence per rival — 100%
+    // absence said six times on a six-rival workspace — and the sentence it
+    // printed ended "· Verbatim engineering", a READINESS OWNER meant for a
+    // reader who can open Settings › Readiness. An update list is not that
+    // reader, and this branch is the first time the string would leave the app
+    // at all.
+    expect(text).toContain(OWN_POSTS_UNREADABLE_OUTSIDE)
+    expect(text).not.toContain('Verbatim engineering')
+    expect(text.split(OWN_POSTS_UNREADABLE_OUTSIDE).length - 1).toBe(1)
+  })
+
+  // A RIVAL WITH NOTHING RAISED IS PRINTED, NOT DROPPED (the fix pass, review
+  // finding [Minor]). The panel carries no count, so a filtered-out row was a
+  // silent disappearance on the artefact that is read unaccompanied; the page
+  // prints an explicit "—" for the same row.
+  it('says a rival raised nothing rather than dropping it from the panel', () => {
+    const data = monthlyFixture()
+    const rivals = data.overview.rivals
+    const quiet = {
+      ...data,
+      overview: {
+        ...data.overview,
+        rivals: {
+          ...rivals,
+          rows: [
+            ...rivals.rows,
+            { ...rivals.rows.find((r) => r.role === 'rival')!, audience: 'competitor:Cotopaxi', label: 'Cotopaxi', raisedMost: null },
+          ],
+        },
+      },
+    }
+    const text = renderText(MONTHLY_BLOCKS['monthly.rivals'].render(quiet, 'email', ctx))
+    expect(text).toContain('Cotopaxi — nothing was raised under their content this month.')
+  })
+
+  it('prints both sides of a subject as a column, each with its own "of N"', () => {
+    const data = monthlyFixture()
+    const text = renderText(MONTHLY_BLOCKS['monthly.subjects'].render(data, 'email', ctx))
+    for (const row of data.overview.subjects.rows) {
+      expect(text).toContain(`${fmtInt(row.you.k ?? 0)} of ${fmtInt(row.you.n ?? 0)}`)
+      expect(text).toContain(`${fmtInt(row.category.k ?? 0)} of ${fmtInt(row.category.n ?? 0)}`)
+    }
+    // D1: the gap prints as both sides and a band, and the earlier gap as its
+    // own dated reading — never "narrowed from 19 in June".
+    expect(text).toContain(gapLine(data.overview.subjects.gaps.s1 as Gap))
+    expect(text).not.toMatch(/narrowed/i)
+  })
+
+  // THE FIX PASS: THE ARTEFACT HAS TO FIT A PHONE (review finding [Critical]).
+  // Measured in the repo's own Chromium on all three fixture states, this
+  // branch held the document at 593 / 389 / 398 px at every viewport below
+  // that — a monthly report that could not be read in the place it is most
+  // often opened. Three things set the floor and all three are markup this
+  // tier can see: an unbreakable verdict cell in section 2, pixel widths on
+  // two rivals columns, and twelve acted segments held on one line. A render
+  // test cannot measure a layout, so it pins the three causes; the measurement
+  // itself is in the status note.
+  it('keeps no unbreakable box wider than a phone', () => {
+    for (const data of STATES) {
+      const subjects = render(MONTHLY_BLOCKS['monthly.subjects'].render(data, 'email', ctx))
+      // No CELL is unbreakable — the sides inside it are, one at a time.
+      expect(subjects).not.toMatch(/<td[^>]*white-space:nowrap/)
+      const rivals = render(MONTHLY_BLOCKS['monthly.rivals'].render(data, 'email', ctx))
+      // Chrome takes a pixel width on an auto-layout cell as that column's
+      // minimum, so the figure and verdict columns carry none.
+      expect(rivals).not.toMatch(/width:112px|width:124px/)
+    }
+  })
+
+  // AN EMPTY SECTION SAYS ONE THING (the fix pass, review finding [Nit]).
+  // With nothing dated, "Your moves" printed the empty state plus the masthead
+  // plus the unlock — three sentences of methodology about scoring moves that
+  // do not exist, more policy prose than the populated arm prints content.
+  it('prints one honest line where nothing has been dated, not three of policy', () => {
+    const forming = formingMonthlyFixture()
+    const m = forming.overview.moves
+    const text = renderText(MONTHLY_BLOCKS['monthly.moves'].render(forming, 'email', ctx))
+    expect(text).toContain('No move has been dated yet')
+    expect(text).not.toContain(m.masthead)
+    expect(text).not.toContain(MONTHLY_MOVES_UNLOCK)
+    // And the populated arm still carries both.
+    const full = renderText(MONTHLY_BLOCKS['monthly.moves'].render(monthlyFixture(), 'email', ctx))
+    expect(full).toContain(monthlyFixture().overview.moves.masthead)
+    expect(full).toContain(MONTHLY_MOVES_UNLOCK)
+  })
+
+  // THE APPARATUS IS NOT DECORATION (the fix pass, review finding [High]).
+  // `EMAIL.faint` is #9AA0A6: 2.64:1 on white and 2.46:1 on the panels, far
+  // under AA, and it was carrying the six-month trails, the method footnote,
+  // the side labels on every subject row and the refusal reasons — the part of
+  // the artefact that makes the numbers honest, set in the one grey a reader
+  // cannot see. This artefact's own nodes are at the muted grey (#6E7378,
+  // 4.79:1); the token itself is the artboards' hex and shared by every email
+  // surface, so lowering it product-wide is the merge lead's call.
+  it('sets the evidence in a grey a reader can actually see', () => {
+    const data = monthlyFixture()
+    for (const key of ['monthly.movers', 'monthly.subjects', 'monthly.rivals', 'monthly.sound'] as const) {
+      const body = render(MONTHLY_BLOCKS[key].render(data, 'email', ctx))
+        // The frame's own `meta` cell is a shared primitive and keeps the
+        // token; this is about what the block itself prints.
+        .replace(/<td align="right" style="font-family:[^"]*font-size:11px;color:#9AA0A6">[^<]*<\/td>/g, '')
+      expect(body).not.toContain(EMAIL.faint)
+    }
+  })
+
+  // THE METER MAY NOT SAY MORE THAN THE FIGURE BESIDE IT (review finding
+  // [Important]). It drew min(of, 12) segments and filled max(1, round(…)), so
+  // "1 of 64" — 1.6% — drew as 1 of 12, or 8.3%: a picture five times its own
+  // subject, directly beside the number it annotates.
+  it('draws the acted meter at the ratio it prints, at both scales', () => {
+    const at = (decided: number, of: number) => {
+      const data = monthlyFixture()
+      const acted = { decided, of, line: data.overview.moves.acted?.line ?? '' }
+      return render(MONTHLY_BLOCKS['monthly.moves'].render(
+        { ...data, overview: { ...data.overview, moves: { ...data.overview.moves, acted } } },
+        'email',
+        ctx,
+      ))
+    }
+    // Twelve or fewer: one segment each, `decided` of them filled, nothing
+    // rounded — the artboard's own meter at the artboard's own scale.
+    const five = at(2, 5)
+    expect((five.match(/width:14px/g) ?? []).length).toBe(5)
+    expect((five.match(new RegExp(`width:14px[^"]*background:${EMAIL.green}`, 'g')) ?? []).length).toBe(2)
+    // Past that, a bar drawn to scale: 1 of 64 is 1.5625% of its track and is
+    // allowed to be a sliver, because that is what 1 of 64 looks like.
+    const many = at(1, 64)
+    expect(many).toContain('width:1.5625%')
+    expect(many).not.toMatch(/width:14px/)
+  })
+
+  // THE SECTION'S ONE GRAPHIC (review finding [High]). The artboard's rival row
+  // is dot · name · BAR · share · verdict; the build drew every part but the
+  // bar, so the one section whose argument is that shares can be compared by
+  // eye compared them by reading. The bar is the share's own percentage of the
+  // track — never normalised to the leading row, which would draw the leader
+  // as all of something.
+  it('draws each rival’s attention share as a bar at its own width', () => {
+    const data = monthlyFixture()
+    const markup = render(MONTHLY_BLOCKS['monthly.rivals'].render(data, 'email', ctx))
+    let drawn = 0
+    for (const row of data.overview.rivals.rows) {
+      const pct = row.attention?.pct
+      if (pct == null) continue
+      drawn += 1
+      expect(markup).toContain(`width:${Math.max(2, Math.min(100, pct))}%`)
+    }
+    expect(drawn).toBeGreaterThan(0)
   })
 
   it('merge into one figure table with no key printed two ways', () => {

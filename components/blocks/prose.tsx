@@ -22,7 +22,7 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 // missing figure can never reach a reader as an empty gap.
 
 export function TokenProse({
-  body, figures, mode = 'app', model = false, figureFace = 'mono', className,
+  body, figures, mode = 'app', model = false, figureFace, className, size = 'body',
 }: {
   /** The sentence(s), with `[[key]]` placeholders. */
   body: string
@@ -51,11 +51,50 @@ export function TokenProse({
    * is only what a reader sees. Opt-in, because every other surface's prose
    * was laid out against the mono face.
    */
+  /* MERGE (Block D wave 2): `figureFace` and `size` arrived from two packages
+   * one day apart and say the same thing from two directions, so the default
+   * is DERIVED rather than fixed — `mono` in a body sentence, `inherit` in a
+   * hero one — and a caller that passes the prop still wins either way. */
   figureFace?: 'mono' | 'inherit'
   className?: string
+  /**
+   * How loud the sentence is (Block D wave 2, E-monthly — ADDITIVE, default
+   * unchanged).
+   *
+   * `body` is 13.5px sans, which is what every caller gets today. `hero` is
+   * the SERIF lead: the one sentence a surface is about, at the design
+   * system's hero size (17px on a page, 23px in the 600px email, where the
+   * MonthlyReport artboard sets it). P0 item 2 is that the pages' biggest
+   * sentences must print at hero scale and none of them does; this is the
+   * knob for the sentences that reach the reader through `TokenProse` rather
+   * than through a `Tile`.
+   *
+   * AND `hero` SETS MODEL PROSE IN THE SERIF, WHICH IS A PRODUCT-WIDE RULE
+   * THIS PROP BENDS — said here because nothing said it anywhere (the fix
+   * pass, E-monthly review [Medium]). `design-system/verbatim/MASTER.md`
+   * §Typography reads "Serif: IBM Plex Serif — verbatim quotes only; quotes
+   * are speech", and on the MonthlyReport artboard the hero sentence, the
+   * headline and the advice title are all serif, two sections above six
+   * quotes in the same face. The artboard is the spec and the wave is porting
+   * it, so the prop keeps the artboard's face — but the rule it bends is a
+   * matter of the product's identity, not of one artefact, and it belongs to
+   * whoever merges this wave alongside `BlockFrame`'s `accent`: either
+   * MASTER.md gains "and the one hero sentence a surface is about", or this
+   * arm goes back to the sans and the artboards lose their lead. Nothing
+   * outside `size="hero"` is affected; `body` is the sans it always was.
+   */
+  size?: 'body' | 'hero'
 }) {
   const parts = substituteFigures(body, proseFigures(figures))
   if (parts.length === 0) return null
+  const hero = size === 'hero'
+  const face = figureFace ?? (hero ? 'inherit' : 'mono')
+  // A FIGURE IN A HERO SENTENCE TAKES THE SENTENCE'S FACE. Mono inside 13.5px
+  // sans is a deliberate signal — code's number, in code's typeface — and at
+  // 23px serif it is the opposite: tabular mono sets "1,388" as "1 , 388" and
+  // "9.4%" as "9 . 4%", so the one sentence the artefact is about reads as
+  // machine output. The artboard sets its figures in the sentence's own face at
+  // weight 600, which says the same thing without breaking the line.
   const children: ReactNode[] = parts.map((p, i) =>
     'text' in p
       ? <span key={i}>{p.text}</span>
@@ -64,9 +103,9 @@ export function TokenProse({
           key={i}
           data-copy="figure"
           style={mode === 'email'
-            ? (figureFace === 'mono' ? { fontFamily: FONT.mono, color: EMAIL.ink } : { fontWeight: 600, color: EMAIL.ink })
+            ? (face === 'mono' ? { fontFamily: FONT.mono, color: EMAIL.ink } : { fontWeight: 600, color: EMAIL.ink })
             : undefined}
-          className={mode === 'email' ? undefined : (figureFace === 'mono' ? 'font-mono tabular-nums' : 'font-semibold tabular-nums')}
+          className={mode === 'email' ? undefined : (face === 'mono' ? 'font-mono tabular-nums' : 'font-semibold tabular-nums')}
         >
           {p.figure}
         </span>
@@ -74,13 +113,21 @@ export function TokenProse({
   )
   if (mode === 'email') {
     return (
-      <div {...(model ? { 'data-copy': 'prose' } : {})} style={{ fontFamily: FONT.sans, fontSize: 13.5, lineHeight: 1.5, color: EMAIL.ink }}>
+      <div
+        {...(model ? { 'data-copy': 'prose' } : {})}
+        style={hero
+          ? { fontFamily: FONT.serif, fontSize: 23, fontWeight: 500, lineHeight: 1.34, letterSpacing: '-.01em', color: EMAIL.ink }
+          : { fontFamily: FONT.sans, fontSize: 13.5, lineHeight: 1.5, color: EMAIL.ink }}
+      >
         {children}
       </div>
     )
   }
   return (
-    <p {...(model ? { 'data-copy': 'prose' } : {})} className={className ?? 'm-0 text-[13.5px] leading-relaxed'}>
+    <p
+      {...(model ? { 'data-copy': 'prose' } : {})}
+      className={className ?? (hero ? 'm-0 font-serif text-[17px] font-medium leading-[1.35] tracking-[-0.005em]' : 'm-0 text-[13.5px] leading-relaxed')}
+    >
       {children}
     </p>
   )
