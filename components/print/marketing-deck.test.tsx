@@ -297,7 +297,19 @@ describe('the method sheet', () => {
   it('states the sources as shares and both sides of the findings bar', () => {
     const rows = Object.fromEntries(methodRows(marketingDeckFixture()))
     expect(rows.Sources).toMatch(/TikTok \d+%/)
-    expect(rows.Findings).toBe('2 above the bar · 5 below it')
+    expect(rows.Findings).toBe('2 printed above the bar · 5 below it')
+  })
+
+  // THE CAP IS NOT THE BAR (fix pass). A finding that cleared the conversations
+  // floor and was not printed was held back by the template's cap, which is not
+  // an evidence failure — `findingsBelow` used to count it as one.
+  it('says which findings the cap held and which the bar cut', () => {
+    const data = marketingDeckFixture()
+    const rows = Object.fromEntries(methodRows({
+      ...data,
+      method: { ...data.method, findingsBelow: 1, findingsHeld: 3 },
+    }))
+    expect(rows.Findings).toBe('2 printed of 5 above the bar · 1 below it')
   })
 
   // `mkt.p7.cannottell`: the causation refusal is the moves block's masthead

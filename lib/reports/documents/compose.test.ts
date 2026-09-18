@@ -254,6 +254,63 @@ describe('composeDocument', () => {
 // marketing brief prints no claims page, no competitor pages and no personas;
 // the method page was built from the TEMPLATE's kinds and went on describing
 // all three.
+// "N BELOW THE BAR" IS A CLAIM ABOUT THE EVIDENCE (fix pass, package
+// E-marketing). It was `candidates.length - findingPages.length`, which counted
+// the template's CAP and the scrub as evidence failures — so a brief capped at
+// three with eight findings that all cleared the floor printed "3 above the bar
+// · 5 below it" about five findings that were above it. The bar is
+// DOCUMENT_FINDING_MIN_CONVERSATIONS; the cap is its own sentence.
+describe('the findings bar and the findings cap are counted apart', () => {
+  const compose = (w: WriterOutput, findings: 3 | 4 = 4, a: ResearchAnswer[] = answers) =>
+    composeDocument({
+      template: SALES_BRIEF, settings: { ...DEFAULT_DOCUMENT_SETTINGS, findings }, reportId: 'rep', title: 't', period: 'p',
+      signals, answers: a, written: w, figures: documentFigures(signals, a), model: 'm', promptVersion: 'v', costUsd: 0, timings: {},
+    }).data
+
+  it('counts nothing below the bar when nothing fell below it', () => {
+    // The shared fixture drops "A thin one" for resting on no grounded point,
+    // which is not a reading the bar ever weighed.
+    const d = compose(written)
+    expect(d.method.findingsBelow).toBe(0)
+    expect(d.method.findingsHeld).toBeUndefined()
+  })
+
+  it('counts the findings the cap held, and does not call them thin', () => {
+    const five: WriterOutput = {
+      ...written,
+      // No digit in a headline: the scrub drops the sentence that carries one,
+      // and a dropped headline is a different reason again.
+      findings: ['one', 'two', 'three', 'four', 'five'].map((n) => ({
+        headline: `A finding called ${n}`, saw: 'People say so.', means: 'It matters.', practice: [], sure_note: '',
+        based_on: ['G1'], quote_from: null, continued_from: null,
+      })),
+    }
+    const d = compose(five, 3)
+    expect(d.pages.filter((p) => p.kind === 'finding')).toHaveLength(3)
+    expect(d.method.findingsHeld).toBe(2)
+    expect(d.method.findingsBelow).toBe(0)
+  })
+
+  it('counts a finding the conversations floor cut, and only that', () => {
+    const thin: ResearchAnswer[] = [
+      { ...answers[0], grounded: [...answers[0].grounded, point('G3', 1, 'One voice said it once.')] },
+      answers[1],
+    ]
+    const w: WriterOutput = {
+      ...written,
+      findings: [
+        { headline: 'A grounded one', saw: 'People say so.', means: 'It matters.', practice: [], sure_note: '', based_on: ['G1'], quote_from: null, continued_from: null },
+        { headline: 'One voice only', saw: 'One person said so.', means: 'Little.', practice: [], sure_note: '', based_on: ['G3'], quote_from: null, continued_from: null },
+        { headline: 'Rests on nothing we know', saw: 'Unsourced.', means: 'Nothing.', practice: [], sure_note: '', based_on: ['G99'], quote_from: null, continued_from: null },
+      ],
+    }
+    const d = compose(w, 4, thin)
+    expect(d.pages.filter((p) => p.kind === 'finding')).toHaveLength(1)
+    expect(d.method.findingsBelow).toBe(1)
+    expect(d.method.findingsHeld).toBeUndefined()
+  })
+})
+
 describe('a document composed from a section map', () => {
   const mapped = { ...signals, map: MARKETING_MAP } as unknown as Signals
   const method = () => composeDocument({

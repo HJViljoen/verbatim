@@ -925,6 +925,7 @@ export function methodRows(data: DocumentSnapshotData): [string, string][] {
     (r?.gaps ?? []).filter((g) => g.state === 'refused').length
   const findings = data.pages.filter((p) => p.kind === 'finding').length
   const below = m.findingsBelow ?? 0
+  const held = m.findingsHeld ?? 0
   const rows: [string, string][] = [
     // THE PERIOD ENDS WHEN THE MONTH ENDS, NOT WHEN WE LOOKED. This printed
     // `month start → readingAt`, and `readingAt` is the instant we read: a
@@ -956,7 +957,15 @@ export function methodRows(data: DocumentSnapshotData): [string, string][] {
         ? `${refused} ${refused === 1 ? 'comparison' : 'comparisons'} refused${m.heldBack ? ` · ${fmtCount(m.heldBack)} phrases in other languages` : ''}`
         : `${fmtCount(m.heldBack)} phrases in other languages`,
     ],
-    ['Findings', `${findings} above the bar${below > 0 ? ` · ${below} below it` : ''}${m.thin ? ' (thin update)' : ''}`],
+    // BOTH SIDES OF THE BAR, AND THE CAP IS A THIRD THING. The bar is the
+    // conversations floor; a finding that cleared it and was not printed was
+    // held back by the template's cap, which is not an evidence failure and may
+    // not be counted as one.
+    [
+      'Findings',
+      `${findings} printed${held > 0 ? ` of ${findings + held} above the bar` : ' above the bar'}`
+      + `${below > 0 ? ` · ${below} below it` : ''}${m.thin ? ' (thin update)' : ''}`,
+    ],
     // The artboard's own definition, and the reason every count on this deck
     // is comparable with every other: the unit is a VIDEO, never a comment.
     ['The unit', 'a video with at least one analysed comment'],

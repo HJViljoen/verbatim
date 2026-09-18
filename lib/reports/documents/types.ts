@@ -285,6 +285,16 @@ export interface DocumentMethod {
    */
   findingsBelow?: number
   /**
+   * Findings that CLEARED the bar and were not printed, because the template's
+   * cap stopped first (`findingsMax`, and three on a thin update).
+   *
+   * Its own field because it is its own sentence. `findingsBelow` used to be
+   * `candidates - printed`, which folded the cap and the scrub into a claim
+   * about the evidence: a brief capped at three with eight good findings said
+   * "3 above the bar · 5 below it" about five findings that were above it.
+   */
+  findingsHeld?: number
+  /**
    * "27% of what was said on camera was not in English" — `MethodLines.language`,
    * with the basis it must never be printed without.
    *

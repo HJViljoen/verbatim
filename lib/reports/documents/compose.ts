@@ -237,11 +237,17 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
     const { sure, conversations } = calibrateSure(gs)
     return { f, ok, gs, cs, sure, conversations }
   })
+  // THE BAR IS THE CONVERSATIONS FLOOR, AND ONLY THAT. "N below the bar" is a
+  // claim about the evidence, so it counts the findings the FLOOR cut and
+  // nothing else: a headline that did not survive the scrub and a finding that
+  // rests on no grounded point were not weighed against the bar at all, and the
+  // cap is a different sentence again. Counted here, where each reason is known.
+  let belowBar = 0
   const kept = candidates.filter((c) => {
     const headline = line(c.f.headline, figures, cap('headline'), true)
     if (!headline) { dropped.push({ headline: c.f.headline, reason: 'no headline survived scrub' }); return false }
     if (c.gs.length === 0) { dropped.push({ headline, reason: 'rests on no grounded point' }); notSure.push(headline); return false }
-    if (c.conversations < DOCUMENT_FINDING_MIN_CONVERSATIONS) { dropped.push({ headline, reason: `too thin: ${c.conversations} conversations` }); notSure.push(headline); return false }
+    if (c.conversations < DOCUMENT_FINDING_MIN_CONVERSATIONS) { dropped.push({ headline, reason: `too thin: ${c.conversations} conversations` }); notSure.push(headline); belowBar += 1; return false }
     return true
   })
   kept.sort((x, y) => y.conversations - x.conversations || y.gs.length - x.gs.length)
@@ -510,7 +516,14 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
       // below the bar, the language share with its basis, and the delivery
       // record. All three are already computed — two on the reading, one right
       // here — and none of them has ever reached a printed artefact.
-      findingsBelow: Math.max(0, candidates.length - findingPages.length),
+      // NOT `candidates.length - findingPages.length`, which counted the cap
+      // and the scrub as evidence failures: on a template with `findingsMax` 3
+      // and eight findings that all cleared the floor the card printed "3 above
+      // the bar · 5 below it" when five were above it and were simply not
+      // printed. The bar is DOCUMENT_FINDING_MIN_CONVERSATIONS; the cap gets
+      // its own half of the sentence.
+      findingsBelow: belowBar,
+      ...(kept.length > findingPages.length ? { findingsHeld: kept.length - findingPages.length } : {}),
       ...(s.reading?.method?.language ? { languages: s.reading.method.language } : {}),
       ...(s.reading?.delivery
         ? { delivery: `${s.reading.delivery}${s.reading.counter ? ` — ${s.reading.counter}` : ''}` }
