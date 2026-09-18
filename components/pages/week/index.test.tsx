@@ -16,6 +16,7 @@ import { weekFlagged } from './flagged'
 import { weekSales } from './sales'
 import { weekWorked } from './worked'
 import { weekCoverage } from './coverage'
+import { weekPage } from './module'
 import { absentReadingFixture, thinFixture, weekFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
@@ -903,5 +904,34 @@ describe('WK §6 · your own side, month to date (Block D, D6)', () => {
         }
       }
     }
+  })
+})
+
+describe('the page module an export addresses', () => {
+  it('names every block the page draws, at the same keys', () => {
+    // The page bar carries an Export control; `/api/export` resolves a tile by
+    // `<page>.<tile>` through the registry, so the module's keys and the
+    // page's blocks are the same list or a tile export 400s on a key the page
+    // shows.
+    expect(Object.keys(weekPage.renderables).sort()).toEqual(WEEK_BLOCKS.map((b) => b.key).sort())
+    expect(weekPage.key).toBe('week')
+  })
+
+  it('puts one block on one slide, in the page’s own order', () => {
+    const slides = weekPage.slides(weekFixture(), 'default')
+    expect(slides.map((s) => s.keys[0])).toEqual(WEEK_BLOCKS.map((b) => b.key))
+    for (const slide of slides) expect(slide.layout).toBe('single')
+  })
+
+  it('renders every tile on paper without the app’s context', () => {
+    for (const block of WEEK_BLOCKS) {
+      const markup = render(weekPage.renderables[block.key].render(weekFixture(), 'print'))
+      expect(markup.length, block.key).toBeGreaterThan(0)
+      assertCopyContract(markup)
+    }
+  })
+
+  it('titles a snapshot by the update it is a reading of', () => {
+    expect(weekPage.snapshotTitle(weekFixture())).toContain('This week · Össur')
   })
 })
