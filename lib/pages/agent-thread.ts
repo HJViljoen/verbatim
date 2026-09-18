@@ -153,10 +153,17 @@ export interface AgentThreadData {
   method: MethodNoteData
 }
 
-/** Where "The record →" opens the how-sound drawer from Ask. The address is
- *  Ask's own, so the drawer opens over the page a reader is on; whether the bar
- *  mounts it is `lib/nav.ts:hasRecord`'s answer and not this file's. */
-export const ASK_RECORD_HREF = detailHref(surface('ask').href, {}, 'record')
+/**
+ * Where "The record →" opens the how-sound drawer from Ask.
+ *
+ * OVER THE PAGE THE READER IS ON. The drawer is a detail param, so the address
+ * has to be the CURRENT one: pointed at Ask's index, opening the record from
+ * inside a thread threw the reader back to the question list and lost the
+ * answer they were reading. Whether the bar mounts the drawer at all is
+ * `lib/nav.ts:hasRecord`'s answer and not this file's.
+ */
+export const askRecordHref = (threadId?: string | null): string =>
+  detailHref(threadId ? `${surface('ask').href}/${threadId}` : surface('ask').href, {}, 'record')
 
 /**
  * A finding's key on this page: the TURN it was written in, then the model's
@@ -544,7 +551,7 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
     notAnswered: await notAnsweredP,
     planChip,
     bar: { question: surface('ask').question ?? '', context: askBasisLine(basis) },
-    record: { lines: askRecordLines(basis, delivered), href: ASK_RECORD_HREF },
+    record: { lines: askRecordLines(basis, delivered), href: askRecordHref(id) },
     method: {
       company: brand,
       period: `Asked ${weekdayDate(thread.created_at as string)}`,

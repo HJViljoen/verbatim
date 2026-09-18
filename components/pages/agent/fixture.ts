@@ -1,6 +1,6 @@
 import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
 import { INTERPRETATION_CAVEAT, TOO_FEW, type AnswerMeasure } from '@/lib/agent/measure'
-import { ASK_RECORD_HREF, askRecordLines, type AgentThreadData } from '@/lib/pages/agent-thread'
+import { askRecordHref, askRecordLines, type AgentThreadData } from '@/lib/pages/agent-thread'
 import { askBasisLine, type AskBasis } from '@/lib/agent/basis'
 import { NOT_ANSWERED_HREF, DECLINED_WHY } from '@/lib/agent/measure'
 import { surface } from '@/lib/nav'
@@ -197,7 +197,7 @@ export function agentFixture(over: Partial<AgentThreadData> = {}): AgentThreadDa
     },
     planChip: { planId: 'pc-1', title: 'Summer 2026/27 campaign brief', moved: true },
     bar: { question: surface('ask').question ?? '', context: askBasisLine(BASIS) },
-    record: { lines: askRecordLines(BASIS, 23), href: ASK_RECORD_HREF },
+    record: { lines: askRecordLines(BASIS, 23), href: askRecordHref('th-1') },
     method: METHOD,
     ...over,
   }
@@ -234,7 +234,7 @@ export function refusedFixture(over: Partial<AgentThreadData> = {}): AgentThread
     },
     planChip: null,
     bar: { question: surface('ask').question ?? '', context: askBasisLine(EMPTY_BASIS) },
-    record: { lines: askRecordLines(EMPTY_BASIS, null), href: ASK_RECORD_HREF },
+    record: { lines: askRecordLines(EMPTY_BASIS, null), href: askRecordHref('th-1') },
     ...over,
   }
 }

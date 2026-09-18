@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { freezeQuotes, resolveQuotes } from '../renderables/quotes-freeze'
 import { agentFixture, refusedFixture } from '../../components/pages/agent/fixture'
 import type { AskBasis } from '../agent/basis'
-import { ASK_RECORD_HREF, agentThreadSlides, answerFindings, askRecordLines, documentPages, findingKey, type AgentThreadData } from './agent-thread'
+import { agentThreadSlides, answerFindings, askRecordHref, askRecordLines, documentPages, findingKey, type AgentThreadData } from './agent-thread'
 
 const base: AgentThreadData = {
   threadId: 't1', kind: 'question', title: 'Why do people hesitate before buying a liner?', brand: 'Sealand', createdAt: '2026-08-22T10:00:00Z',
@@ -102,8 +102,12 @@ describe('agent thread data', () => {
     ])
   })
 
-  it('opens the record over Ask’s own address', () => {
-    expect(ASK_RECORD_HREF).toBe('/dashboard/agent?detail=record')
+  it('opens the record over the page the reader is on, not Ask’s index', () => {
+    // From inside a thread the index address would throw the reader back to the
+    // question list and lose the answer they were reading.
+    expect(askRecordHref('th-1')).toBe('/dashboard/agent/th-1?detail=record')
+    expect(agentFixture().record!.href).toBe('/dashboard/agent/th-1?detail=record')
+    expect(askRecordHref()).toBe('/dashboard/agent?detail=record')
   })
 })
 
