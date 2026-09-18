@@ -510,8 +510,16 @@ export function recurrenceOf(
   return {
     seenIn,
     isNew,
-    line: isNew
-      ? `First heard in ${monthName(here)}.`
-      : `Heard in ${fmtInt(seenIn.length)} months, first in ${monthName(seenIn[0])}.`,
+    line: recurrenceLine(seenIn, isNew, here),
   }
+}
+
+/** A conclusion heard in an EARLIER month but not this one has `seenIn.length
+ *  === 1` and `isNew === false`, which read "Heard in 1 months, first in Aug
+ *  2026." — a plural off by one and a "first" with nothing after it. One month
+ *  is named, several are counted. */
+function recurrenceLine(seenIn: readonly string[], isNew: boolean, here: string): string {
+  if (isNew) return `First heard in ${monthName(here)}.`
+  if (seenIn.length === 1) return `Heard in ${monthName(seenIn[0])}.`
+  return `Heard in ${fmtInt(seenIn.length)} months, first in ${monthName(seenIn[0])}.`
 }

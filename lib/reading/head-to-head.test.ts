@@ -232,6 +232,15 @@ describe('recurrenceOf · identity, never a label', () => {
     expect(r.line).toBe('Heard in 3 months, first in Jun 2026.')
   })
 
+  it('names the one month rather than counting it, when it was not heard this month', () => {
+    // Heard in August, not in September: `seenIn.length === 1` and not new,
+    // which printed "Heard in 1 months, first in Aug 2026."
+    const r = recurrenceOf('reg-5', ['2026-08-01'], '2026-09-01')
+    expect(r.isNew).toBe(false)
+    expect(r.seenIn).toEqual(['2026-08-01'])
+    expect(r.line).toBe('Heard in Aug 2026.')
+  })
+
   it('ignores a month after the one being read, and de-duplicates', () => {
     const r = recurrenceOf('reg-3', ['2026-10-01', '2026-08-01', '2026-08-01', '2026-09-01'], '2026-09-01')
     expect(r.seenIn).toEqual(['2026-08-01', '2026-09-01'])
