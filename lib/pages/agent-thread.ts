@@ -495,8 +495,13 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
   // theme labels the answer rests on. A product name with a digit in it
   // ("3R78", "L5999") is a NAME, and without this every sentence carrying one
   // dropped whole — on Ossur, the tenant the allow-list was written for.
+  //
+  // NOT the thread's title: that is model-written (`ask_extract_title` is a
+  // slot in PROSE_POLICY), and a model that can seed its own allow-list has no
+  // rule. The questions are the client's own words; the theme labels are the
+  // sanctioned source `allowTokens` was written against ("a run's own inputs —
+  // theme labels and descriptions, the tenant's claims, its product names").
   const allow = askAllowList([
-    thread.title as string | null,
     ...turns.map((t) => t.question),
     ...turns.flatMap((t) => (t.answer?.grounded ?? []).flatMap((g) => (g.themeRefs ?? []).map((r) => r.label))),
   ])
