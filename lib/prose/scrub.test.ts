@@ -192,8 +192,9 @@ describe('the policy table — every prose slot is listed with its policy', () =
   const EXPECTED: Record<string, string> = {
     pass_a_audience_insight: 'digits',
     // The other half of the same Pass A v4 response — `video_claims.claim`,
-    // what a brand says about itself. One call, one policy; Competitive's CO4
-    // and CO5 replay these words and the copy contract reads this row.
+    // in EITHER voice: what a brand says about itself (CO4) and what everybody
+    // else says about it (CO5). One call over one column, so one policy; the
+    // copy contract reads this row for both.
     pass_a_brand_claim: 'digits',
     pass_b_theme: 'none',
     pass_c_finding: 'digits',

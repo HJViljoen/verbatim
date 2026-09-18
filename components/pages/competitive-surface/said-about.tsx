@@ -82,6 +82,10 @@ function Group({ group, mode }: { group: SaidAbout; mode: RenderMode }) {
         <div key={row.quote?.ref ?? `${group.audience}-${i}`} className={email ? undefined : 'flex min-w-0 flex-col gap-1'}>
           <div className={email ? undefined : 'flex items-baseline justify-between gap-2.5'}>
             <span
+              // THE 'about' VOICE OF THE SAME COLUMN. `video_claims.voice` is
+              // 'own' on CO4's rows and 'about' on these; both are written by
+              // one Pass A v4 call over one column, so both name the one slot
+              // whose policy row now says so out loud.
               data-copy="stored"
               data-slot="pass_a_brand_claim"
               className={email ? undefined : 'min-w-0 text-[12.5px] text-secondary-foreground'}

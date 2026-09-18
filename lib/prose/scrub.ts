@@ -482,11 +482,23 @@ export type ProsePolicy = 'none' | 'digits' | 'direction' | 'both'
  *
  * WHY A BRAND CLAIM IS `digits`, AND THE ONE THING THAT MAKES IT SURVIVABLE
  * (Phase 1 Block D wave 2, E-competitive). `pass_a_brand_claim` is
- * `video_claims.claim` — what a brand says about itself in its own video,
- * summarised by the SAME Pass A v4 call that writes `pass_a_audience_insight`
- * into the same response (lib/pipeline/pass-a.ts, one insert after the other).
- * One call, one adjudication: a second policy for the second half of one
- * response would be this table disagreeing with itself.
+ * `video_claims.claim` — a claim ABOUT a brand, summarised by the SAME Pass A
+ * v4 call that writes `pass_a_audience_insight` into the same response
+ * (lib/pipeline/pass-a.ts, one insert after the other). One call, one
+ * adjudication: a second policy for the second half of one response would be
+ * this table disagreeing with itself.
+ *
+ * BOTH VOICES, AND THE ROW HAS TO SAY SO. `video_claims.voice` is 'own' or
+ * 'about' (lib/pipeline/claims.ts) — the brand's own words on its own post,
+ * and what everybody else says about it — and Competitive replays BOTH through
+ * this slot: CO4 the 'own' voice, CO5 the 'about' voice. The row was written
+ * as "what a brand says about itself in its own video" and then used for the
+ * other half too, which is the one thing a named exemption may not do: the
+ * point of `data-slot` is that the exemption names its writer, and the writer
+ * here is one call over one column, whichever voice the row carries. The
+ * POLICY is the same for both because the risk is the same — a third party
+ * quoting a brand's spec sheet types the brand's digits just as the brand
+ * does — and a second slot would be two policies for one column.
  *
  * The risk the row carries, written down rather than discovered later: a brand
  * claim is FULL of the brand's own figures — "made from used truck tarps for
