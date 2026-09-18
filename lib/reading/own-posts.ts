@@ -332,9 +332,10 @@ export function claimEcho(input: ClaimEchoInput): ClaimEcho {
   }
 }
 
-/** The four figures, each over the census's own denominator. Exported for the
- *  loaders, which need the same grouping over a rival's posts without taking
- *  the whole census. */
+/** One enum column grouped over the census's posts, each row carrying that
+ *  same denominator. Private: nothing outside this file needs the grouping
+ *  without the census around it, and `ownPostCensus` is how every caller —
+ *  including `rivalOwnClaims` — gets it. */
 function countBy(
   posts: readonly { id: string; hook_style: string | null; classified_type: string | null }[],
   key: 'hook_style' | 'classified_type',
