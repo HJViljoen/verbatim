@@ -310,11 +310,15 @@ export async function documentFiguresFor(
     ? { label: objectionKind.label, value: { k: objectionKind.videos, n: objectionKind.denominator } }
     : null
 
-  // THE "BECAUSE" LIST IS THE SUBJECTS, EACH OVER ITS OWN n. The mock prints
-  // three bare phrases; a subject row carries the count and the denominator
-  // the count is a share of, so the reason is checkable and the three do not
-  // read as a partition of the objection.
-  const because = a.overview.subjects.rows
+  // NOT A "BECAUSE" LIST — "ALSO RUNNING". The mock prints three bare phrases
+  // under the objection, and the three the loader can count are the month's
+  // biggest SUBJECTS. A subject and a kind are orthogonal dimensions over
+  // different denominators: nothing here measured a relation between them, so
+  // the same three would appear under any objection whatever it was. Each
+  // carries its own n and is printed as context of the same month, never as a
+  // cause — the standard `figures.ts` holds one line above ("A REASON WITH NO
+  // DENOMINATOR IS NOT A REASON") and this loader was quietly failing.
+  const alsoRunning = a.overview.subjects.rows
     .map((row) => ({ label: row.label, value: { k: row.category.k ?? 0, n: row.category.n ?? 0 } }))
     .filter((b) => b.value.n > 0 && b.value.k > 0)
     .sort((x, y) => y.value.k - x.value.k)
@@ -326,7 +330,9 @@ export async function documentFiguresFor(
         lines: [
           {
             objection: { label: objection.label, registryId: `kind:objection`, value: objection.value },
-            because,
+            // No reason for this objection was measured, so none is claimed.
+            because: [],
+            alsoRunning,
             // NO DRAFT AND NO MODEL CALL. The scripted sentence is the writer's
             // and reaches this shape through the build that wrote it; a loader
             // that invented one would be the one thing `scrubProse` exists to

@@ -161,6 +161,26 @@ describe('scriptedLines', () => {
     expect(line.objection.value).toEqual({ k: 28, n: 205 })
   })
 
+  it('keeps context out of "Because" — a counted figure beside an objection is not a reason for it', () => {
+    const [line] = scriptedLines({
+      figures,
+      lines: [
+        {
+          objection: { label: 'Price', registryId: 'r1', value: { k: 28, n: 205 } },
+          because: [],
+          alsoRunning: [
+            { label: 'Durability', value: { k: 46, n: 205 } },
+            { label: 'Sizing and fit', value: { k: 0, n: 0 } },
+          ],
+        },
+      ],
+    })
+    // Nothing measured a relation between a subject and a kind, so nothing is
+    // claimed as a cause — and a figure with no denominator is still dropped.
+    expect(line.because).toEqual([])
+    expect(line.alsoRunning.map((b) => b.label)).toEqual(['Durability'])
+  })
+
   it('drops an objection one person raised, and a reason nobody counted', () => {
     const lines = scriptedLines({
       figures,

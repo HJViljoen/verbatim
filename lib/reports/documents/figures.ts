@@ -215,8 +215,13 @@ export function crosscheckLine(
  *  the reasons under it, and the sentence a writer drafted for it. */
 export interface ScriptedLineInput {
   objection: { label: string; registryId: string; value: Counted }
-  /** Each reason with its own n — never a share of the objection's k. */
+  /** Each reason with its own n — never a share of the objection's k, and
+   *  never a figure that merely happened to be measured beside it. */
   because: { label: string; value: Counted }[]
+  /** Counted figures of the same month that are NOT reasons for this
+   *  objection: the mock's second row of context, printed under its own
+   *  heading. See `ScriptedLine.alsoRunning`. */
+  alsoRunning?: { label: string; value: Counted }[]
   /** The drafted sentence, as the model wrote it. Absent where no draft
    *  exists, which is the state every workspace is in until a build runs. */
   draft?: string | null
@@ -239,6 +244,19 @@ export interface ScriptedLine {
   say: string
   /** Each reason with its own n. */
   because: { label: string; value: Counted }[]
+  /**
+   * Counted figures of the same month that are not reasons — printed as "also
+   * running this month", never under "Because".
+   *
+   * WHY THE SECOND FIELD EXISTS. "Because" is a causal claim, and the product
+   * refuses those it has not measured. The three biggest SUBJECTS of a
+   * category month are not reasons for a KIND's share: the two are orthogonal
+   * dimensions over different denominators, nothing measured a relation
+   * between them, and the same three phrases would sit under every objection
+   * whatever it was. They are still worth printing — they are counted, with
+   * their own n — so they are printed as what they are.
+   */
+  alsoRunning: { label: string; value: Counted }[]
   quote: Quote | null
 }
 
@@ -275,6 +293,7 @@ export function scriptedLines(input: ScriptedLinesInput): ScriptedLine[] {
       // bare phrases under each objection; each one here carries the n it is a
       // share of, and a reason nobody counted does not appear.
       because: line.because.filter((b) => b.value.n > 0),
+      alsoRunning: (line.alsoRunning ?? []).filter((b) => b.value.n > 0),
       quote: line.quote ?? null,
     })
   }
