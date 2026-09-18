@@ -1,4 +1,4 @@
-import { Dot, Figure, GridRow, GridTable, MonoNote, Section, SectionHead } from '@/components/settings/chrome'
+import { Dot, Figure, gridIntrinsic, GridRow, GridTable, MonoNote, Section, SectionHead } from '@/components/settings/chrome'
 import { shortDate } from '@/lib/format'
 import { REDDIT_CAP_LINE } from '@/lib/reading/method'
 import { COMMUNITY_STATE_RULE, communitiesMeta, communityWords, type CommunityRow } from '@/lib/settings/communities'
@@ -32,6 +32,10 @@ import { CommunityAction, CommunityAdd } from './community-controls'
 // what a community with no stored posts actually tells you.
 
 const COLS = '188px 84px 212px 92px 104px 72px 84px minmax(104px,1fr)'
+/** Derived, never declared: the eight tracks and their seven gaps come to
+ *  1,024px, and a hand-typed 980 left the "Stop watching" column hanging 44px
+ *  past the end of every row rule at the page's real content width. */
+const COLS_MIN = gridIntrinsic(COLS)
 const HEAD = ['Community', 'Found', 'State', 'Posts · all time', 'Comments · all time', 'Kept', 'Findings', ''] as const
 
 export function CommunitiesSection({
@@ -53,7 +57,7 @@ export function CommunitiesSection({
       {rows.length === 0 ? (
         <p className="text-[12.5px] text-muted-foreground">No community is watched for this workspace.</p>
       ) : (
-        <GridTable cols={COLS} min={980} head={HEAD}>
+        <GridTable cols={COLS} min={COLS_MIN} head={HEAD}>
           {rows.map((r) => (
             <GridRow
               key={r.key}

@@ -8,7 +8,8 @@ import { RivalsSection, RENAME_UNAVAILABLE } from './rivals'
 import { RIVAL_REMOVED_PENDING } from '@/lib/settings/rivals-view'
 import { NEW_TERM_RULE, TermsSection } from './terms'
 import { BREAK_NOT_RECORDED, BROKE_NOTHING, LastSaveStrip, NEVER_SAVED, SaveStateLine } from '../save-state-strip'
-import { renderText } from '@/lib/test/render'
+import { gridIntrinsic } from '@/components/settings/chrome'
+import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import type { TermSummary } from '@/lib/keywords/value'
 import { platformRows, platformShareBasis } from '@/lib/settings/connections'
@@ -133,6 +134,17 @@ describe('the communities section', () => {
     expect(words).toContain('Stop watching')
     expect(words).toContain('Watch this community')
     expect(words).toContain('capped at 40 per thread')
+  })
+
+  it('declares a minimum no narrower than its own columns', () => {
+    // C5/B2: the row rule is painted on the row element, which takes the
+    // wrapper's width; the cells keep their tracks. A minimum short of the
+    // tracks is the last column hanging past every rule, which at the page's
+    // real content width (≈912px) is exactly what it did.
+    expect(gridIntrinsic('188px 84px 212px 92px 104px 72px 84px minmax(104px,1fr)')).toBe(1024)
+    const markup = render(section)
+    expect(markup).toContain('min-width:1024px')
+    expect(markup).not.toContain('min-width:980px')
   })
 
   it('keeps a community’s control after its own click, and retires the message with the row', () => {

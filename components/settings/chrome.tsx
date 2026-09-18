@@ -83,12 +83,41 @@ export function GridTable({
 }: { cols: string; min: number; head: readonly ReactNode[]; children: ReactNode }) {
   return (
     <div className="-mx-1 overflow-x-auto px-1">
-      <div style={{ minWidth: `${min}px` }}>
+      <div style={{ minWidth: `${Math.max(min, gridIntrinsic(cols))}px` }}>
         <GridHead cols={cols} cells={head} />
         {children}
       </div>
     </div>
   )
+}
+
+/** The gap `GridHead` and `GridRow` set between columns (`gap-x-3`), in px. */
+export const GRID_GAP = 12
+
+/**
+ * The narrowest a track list can actually be drawn: every fixed column, every
+ * `minmax()` floor, and the gaps between them.
+ *
+ * A DECLARED MINIMUM NARROWER THAN THIS IS A BROKEN ROW, NOT A NARROWER TABLE.
+ * The hairline rule is painted on the ROW element, which takes the wrapper's
+ * width, while the cells keep their declared tracks — so where `min` is short
+ * the last column hangs past the end of every rule and the section scrolls on a
+ * desktop the artboard does not scroll on. The communities table declared 980
+ * against 1,024 of columns, which at the page's real content width (≈912px
+ * behind the app sidebar and the settings rail) showed as a 44px overhang on
+ * eight rows. `min` stays a floor the caller may raise; it can no longer be one
+ * the columns overflow.
+ */
+export function gridIntrinsic(cols: string, gap: number = GRID_GAP): number {
+  const tracks = cols.trim().split(/\s+/).filter(Boolean)
+  const width = (t: string): number => {
+    const fixed = /^(\d+(?:\.\d+)?)px$/.exec(t)
+    if (fixed) return Number(fixed[1])
+    const floor = /^minmax\(\s*(\d+(?:\.\d+)?)px\s*,/.exec(t)
+    if (floor) return Number(floor[1])
+    return 0
+  }
+  return tracks.reduce((n, t) => n + width(t), 0) + Math.max(0, tracks.length - 1) * gap
 }
 
 function GridHead({ cols, cells }: { cols: string; cells: readonly ReactNode[] }) {
