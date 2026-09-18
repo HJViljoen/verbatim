@@ -7,6 +7,7 @@ import { TileColumns } from '@/components/shell/page-grid'
 import { BlockProportion } from '@/components/blocks/bars'
 import { BlockQuote } from '@/components/blocks/quote'
 import { CrowdFigure } from '@/components/crowd-figure'
+import { platformColour } from '@/components/profile-stats'
 import { fmtInt } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable } from '@/lib/reading/verdicts'
@@ -125,7 +126,14 @@ function Persona({ persona, mode }: { persona: CastPersona; mode: RenderMode }) 
           of="videos"
           segments={persona.platformMix
             .filter((p) => p.pct != null)
-            .map((p) => ({ label: p.label, count: p.videos, pct: p.pct as number, color: `var(--platform-${p.platform})` }))}
+            // THE PRODUCT'S ONE PLATFORM PALETTE, which exists and is not
+            // this. `var(--platform-tiktok)` is defined nowhere in the repo,
+            // so every segment and every legend dot painted transparent: the
+            // artboard's four-segment bar rendered as three mono percentages
+            // floating in a card. `platformColour` is the map the profile
+            // page's donuts have used since Stage 2 — fixed per platform, so a
+            // platform keeps its colour when another is absent from the data.
+            .map((p) => ({ label: p.label, count: p.videos, pct: p.pct as number, color: platformColour(p.platform) }))}
         />
       ) : null}
       {persona.quote ? <BlockQuote mode={mode} quote={persona.quote} cite={persona.quoteCite ?? undefined} /> : null}

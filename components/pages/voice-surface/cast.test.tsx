@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
-import { EMAIL } from '@/lib/email/theme'
+import { EMAIL, tokenHex } from '@/lib/email/theme'
+import { platformColour } from '@/components/profile-stats'
 import { copyNodes, copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { voiceCast } from './cast'
@@ -49,6 +50,22 @@ describe('voiceCast', () => {
     const text = draw()
     expect(text).toContain('read over 3,129 separate points people made')
     expect(text).not.toContain("comments' worth")
+  })
+
+  it('paints the platform bar and its dots in a colour that exists', () => {
+    // `var(--platform-tiktok)` is defined nowhere in the repo, so every
+    // segment and every legend dot painted transparent: the artboard's
+    // four-segment bar rendered as three mono percentages floating in a card.
+    // `platformColour` is the product's one platform palette.
+    const markup = render(voiceCast.render(voiceFixture(), 'app', ctx))
+    expect(markup).not.toContain('var(--platform-')
+    expect(markup).toContain(platformColour('tiktok'))
+    expect(markup).toContain(platformColour('youtube'))
+    // And the email arm resolves them to hex rather than painting four dots
+    // the same muted grey.
+    const email = render(voiceCast.render(voiceFixture(), 'email', ctx))
+    expect(email).toContain(tokenHex(platformColour('tiktok')))
+    expect(tokenHex(platformColour('tiktok'))).not.toBe(tokenHex(platformColour('youtube')))
   })
 
   it('says the groups overlap instead of taking a remainder from them', () => {
