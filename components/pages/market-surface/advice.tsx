@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import type { Block, BlockContext, RenderMode } from '@/lib/blocks/types'
+import type { Block, BlockContext, QuoteRef, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockQuote } from '@/components/blocks/quote'
 import { MovementBadge } from '@/components/delta-badge'
@@ -8,7 +8,7 @@ import { TileBlock } from '@/components/shell/tile'
 import { FLAG_NOTE } from '@/lib/agent/movement'
 import { fmtInt, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import type { FigureTable } from '@/lib/reading/verdicts'
+import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import {
   ADVICE_UNRECORDED, GROUNDED_CORPUS_LINE, adviceAnchor, ageInMonths, madeInMonth,
   marketSurfaceHref, repeatCell,
@@ -363,6 +363,25 @@ export const marketAdvice: Block<MarketSurfaceData> = {
   // surface states as its own figures.
   figures(): FigureTable {
     return {}
+  },
+
+  // THE AFTERWARDS COLUMN'S COMPARISONS, DECLARED. `market.advice` is a named
+  // brief section (`lib/reports/documents/sections.ts`, `ct.advice`), and a
+  // brief composing this block folds its answers through `blockAnswers` →
+  // `blockReading`: a movement claim this block PRINTS and does not declare is
+  // a claim the brief's own reading does not know about. Every other block in
+  // the codebase that draws a `MovementBadge` declares them.
+  verdicts(data): Verdict[] {
+    return data.advice.rows.map((r) => r.afterwards.verdict).filter((v): v is Verdict => v != null)
+  },
+
+  // THE ONE COMMENT THIS BLOCK SHOWS, by the same choice the render makes —
+  // `expandedLineage` decides which row opens, and only that row's quote is
+  // drawn. Declaring every row's would freeze refs the page never prints.
+  quotes(data): QuoteRef[] {
+    const open = expandedLineage(data.advice.rows, data.advice.highlight)
+    const row = data.advice.rows.find((r) => r.lineageId === open)
+    return row?.quote ? [row.quote.ref] : []
   },
 
   emptyState(data) {

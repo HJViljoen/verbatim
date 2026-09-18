@@ -86,6 +86,54 @@ describe('Market · every block, every mode, every state', () => {
   it('declares no figures — nothing on this surface is a reading of a month', () => {
     expect(figureCount(MARKET_BLOCKS.map((b) => blockAnswers(b, marketFixture()).figures))).toBe(0)
   })
+
+  it('declares every movement claim and every quote it prints', () => {
+    // `market.advice` is a named brief section (lib/reports/documents/
+    // sections.ts), and a brief folds a page through `blockAnswers` →
+    // `blockReading`. A block that DRAWS a `MovementBadge` or a `BlockQuote`
+    // and declares neither hands the brief a reading that cannot see its own
+    // page's claims — which is what all four of these blocks did.
+    const data = marketFixture()
+    const answers = Object.fromEntries(MARKET_BLOCKS.map((b) => [b.key, blockAnswers(b, data)]))
+
+    // Every Verdict the page renders a badge for is declared, and each carries
+    // both sides and its band, as a Verdict always does.
+    expect(answers['market.advice'].verdicts).toHaveLength(1)
+    expect(answers['market.card'].verdicts.length).toBeGreaterThan(0)
+    expect(answers['market.moves'].verdicts.length).toBeGreaterThan(0)
+    // A declared verdict is a whole one: both sides, the state, and the band
+    // beside the change or neither (D2).
+    for (const key of ['market.advice', 'market.card', 'market.moves']) {
+      for (const v of answers[key].verdicts) {
+        expect(v.value).toBeDefined()
+        expect(v.state).toBeTruthy()
+        expect(v.changePts == null).toBe(v.bandPts == null)
+      }
+    }
+
+    // Every quote the page shows is declared BY REF — the words never travel
+    // in an answer, so a freeze keeps the ref and resolves them at render.
+    expect(answers['market.advice'].quotes).toEqual(['e:ev-1'])
+    expect(answers['market.plans'].quotes).toEqual(['e:ev-9'])
+
+    // And the declaration matches what is DRAWN, not merely what is held: the
+    // ledger holds one quote and draws it on the row `expandedLineage` opens,
+    // and the plan card draws the lead claim's comment. Both are asserted by
+    // the words that reach the page.
+    const ledger = renderText(marketAdvice.render(data, 'app', ctx))
+    expect(ledger).toContain('Wat gebeur as')
+    const plans = renderText(marketPlans.render(data, 'app', ctx))
+    expect(plans).toContain('Ek kyk eers of dit hou')
+  })
+
+  it('declares no verdict and no quote where the state has none', () => {
+    const data = firstUpdateFixture()
+    for (const block of MARKET_BLOCKS) {
+      const a = blockAnswers(block, data)
+      expect(a.verdicts.every((v) => v != null)).toBe(true)
+      expect(a.quotes.every((q) => typeof q === 'string' && q.length > 0)).toBe(true)
+    }
+  })
 })
 
 describe('MK1 · what we concluded', () => {

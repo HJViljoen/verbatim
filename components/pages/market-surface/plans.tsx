@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import type { Block, RenderMode } from '@/lib/blocks/types'
+import type { Block, QuoteRef, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockQuote } from '@/components/blocks/quote'
 import { TileBlock } from '@/components/shell/tile'
@@ -200,6 +200,15 @@ export const marketPlans: Block<MarketSurfaceData> = {
   // period, and the budget counts readings.
   figures(): FigureTable {
     return {}
+  },
+
+  // THE COMMENT UNDER THE LEAD CLAIM, by ref — the same claim `leadClaim`
+  // chooses to draw, so a freeze resolves exactly the words the page prints
+  // and no others.
+  quotes(data): QuoteRef[] {
+    const card = data.plans[0] ?? null
+    const lead = card ? leadClaim(card) : null
+    return lead?.quote ? [lead.quote.ref] : []
   },
 
   emptyState(data) {

@@ -283,6 +283,14 @@ export const marketMoves: Block<MarketSurfaceData> = {
     return {}
   },
 
+  // THE MOVE'S OWN COMPARISON AND EVERY CONTROL BESIDE IT. Both are drawn
+  // through `MovementBadge`, so both are declared — a control is a reading of
+  // an audience the move did not touch, and a brief folding this block has to
+  // know it was stated beside the move and never subtracted from it.
+  verdicts(data): Verdict[] {
+    return data.moves.readings.flatMap((r) => [...(r.verdict ? [r.verdict] : []), ...r.control])
+  },
+
   emptyState(data) {
     return data.moves.empty
   },

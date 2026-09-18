@@ -264,6 +264,15 @@ export const marketCard: Block<MarketSurfaceData> = {
     return {}
   },
 
+  // AND THOSE TWO ROWS ARE DECLARED. A block that puts a `MovementBadge` on
+  // the page and declares no `verdicts()` hands a brief a page whose movement
+  // claims its own reading cannot see (`blockAnswers` → `blockReading`).
+  verdicts(data): Verdict[] {
+    const card = data.moves.card
+    if (!card) return []
+    return [card.movement.yours, card.movement.category].filter((v): v is Verdict => v != null)
+  },
+
   // TWO ABSENCES, TWO SENTENCES. A month with no card at all is not a card
   // whose press is missing, and `MoveCandidate.unread` already tells the second
   // from the third.
