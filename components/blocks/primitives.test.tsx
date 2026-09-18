@@ -68,6 +68,22 @@ describe('BlockFrame', () => {
     expect(accented).toContain('bg-positive')
   })
 
+  // A BIG FIGURE IS NOT SET IN MONO (the fix pass, E-monthly review [Medium]).
+  // Mono gives every glyph one advance, so at 17px "79.1%" sets as "79 . 1%"
+  // and reads as two numbers — the artboard never met it because it only puts
+  // whole percentages in that slot. `tabular-nums` keeps the column aligned,
+  // which is what the mono was for.
+  it('sets a large figure in the sans, tabular, and leaves the small one mono', () => {
+    const big = render(<FigureCell mode="email" size="lg" value="79.1%" of="32,600 of 41,200" />)
+    expect(big).toContain('font-variant-numeric:tabular-nums')
+    expect(big).not.toMatch(/font-size:17px[^"]*IBM Plex Mono/)
+    const small = render(<FigureCell mode="email" value="79.1%" of="32,600 of 41,200" />)
+    expect(small).toMatch(/IBM Plex Mono[^"]*font-size:13px/)
+    const app = render(<FigureCell size="lg" value="79.1%" of="32,600 of 41,200" />)
+    expect(app).toContain('tabular-nums')
+    expect(app).not.toMatch(/font-mono[^"]*text-\[17px\]/)
+  })
+
   it('renders an email-safe frame', () => {
     assertEmailSafe(render(<BlockFrame mode="email" title="Rivals"><span>x</span></BlockFrame>))
   })

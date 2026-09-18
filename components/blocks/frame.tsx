@@ -225,12 +225,22 @@ export function FigureCell({
    * default is untouched).
    *
    * `md` (13px) is what every existing caller gets and is the artboards' size
-   * in a dense table. `lg` is 17px at `-.02em`, which is what the MonthlyReport
-   * artboard sets on the three columns of section 2: six subjects × three
-   * sides is the one table on that artefact where the figure is meant to be
-   * read before the label, and at 13px it reads as metadata. The "of N" does
-   * NOT grow with it — the denominator is evidence rather than headline, and
-   * the artboard keeps it at 10.5 in both sizes.
+   * in a dense table. `lg` is 17px, which is what the MonthlyReport artboard
+   * sets on the three columns of section 2: six subjects × three sides is the
+   * one table on that artefact where the figure is meant to be read before the
+   * label, and at 13px it reads as metadata. The "of N" does NOT grow with it —
+   * the denominator is evidence rather than headline, and the artboard keeps it
+   * at 10.5 in both sizes.
+   *
+   * AND `lg` IS SET IN THE SANS, TABULAR (the fix pass, review finding
+   * [Medium]). The artboard sets mono here and only ever puts whole
+   * percentages in the slot, so it never met the thing mono does at this
+   * size: every glyph takes one advance, so "79.1%" sets as "79 . 1%" and the
+   * figure reads as two numbers. It is the same effect this artefact's own
+   * hero sentence already refuses at 23px ("1 , 388"), one size down.
+   * `tabular-nums` keeps the column aligned, which is what the artboard's mono
+   * was buying. `md` is untouched — at 13px the advance is small enough that
+   * the point stays attached, and every other caller is on `md`.
    */
   size?: 'md' | 'lg'
 }) {
@@ -239,14 +249,14 @@ export function FigureCell({
   if (mode === 'email') {
     return (
       <div style={{ textAlign: right ? 'right' : 'left' }}>
-        <div data-copy="figure" style={{ fontFamily: FONT.mono, fontSize: big ? 17 : 13, fontWeight: 600, lineHeight: '1', letterSpacing: big ? '-.02em' : undefined, color: EMAIL.ink }}>{value}</div>
+        <div data-copy="figure" style={{ fontFamily: big ? FONT.sans : FONT.mono, fontSize: big ? 17 : 13, fontWeight: 600, lineHeight: '1', letterSpacing: big ? '-.01em' : undefined, fontVariantNumeric: 'tabular-nums', color: EMAIL.ink }}>{value}</div>
         {of ? <div data-copy="level" style={{ fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.muted, marginTop: big ? 3 : 2 }}>{of}</div> : null}
       </div>
     )
   }
   const cell = (
     <span className={cn('flex min-w-0 flex-col gap-px', right && 'items-end text-right')}>
-      <span data-copy="figure" className={cn('font-mono font-semibold leading-none tabular-nums', big ? 'text-[17px] tracking-[-0.02em]' : 'text-[13px]')}>{value}</span>
+      <span data-copy="figure" className={cn('font-semibold leading-none tabular-nums', big ? 'text-[17px] tracking-[-0.01em]' : 'font-mono text-[13px]')}>{value}</span>
       {of ? <span className="font-mono text-[10.5px] tabular-nums text-muted-foreground">{of}</span> : null}
     </span>
   )
