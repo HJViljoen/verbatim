@@ -50,15 +50,25 @@ export function TierChip({ tier, mode = 'app' }: { tier: GateTier; mode?: Render
 export const tierLabel = (tier: GateTier): string => LABEL[tier]
 
 /**
- * MK1's meta line, in the chips' own words.
+ * MK1's meta line - the mock's "4 above the bar / of 9 concluded".
  *
- * It read "5 confirmed · 1 early · 0 below the bar" — `confirmed` is the
- * internal `GateTier` key, and `early` and `below the bar` are two more
- * abbreviations of words the chips beside them spell out in full. Three
- * vocabularies for three tiers on one block. `tierLabel` was exported for
- * exactly this and had no caller.
+ * ONE NUMBER ABOVE, AGAINST THE TOTAL CONCLUDED. This read "1 strong evidence
+ * / 1 early signal / 1 below the evidence bar": three counts of three tiers,
+ * each spelled out again on the chip of every row beneath it, and none of them
+ * saying how many conclusions this update actually reached. The mock asks the
+ * question a reader of this block has - how much of what we concluded cleared
+ * the bar - and the chips go on telling them which tier each row is.
+ *
+ * "Above the bar" IS THE BLOCK'S OWN WORD, not a new one: the third chip reads
+ * "Below the evidence bar", so the line above the rows and the labels on them
+ * stay one vocabulary. `tierLabel` keeps its caller in the chip.
+ *
+ * `total` is every conclusion the update reached, drawn or not
+ * (`ConclusionsBlock.total`) - the rows are capped at `CONCLUSIONS_SHOWN`, and
+ * a denominator counting only the drawn ones would shrink the day a prompt
+ * change made twenty.
  */
-export function tierMetaLine(counts: { confirmed: number; early: number; archive: number }): string {
-  const say = (n: number, tier: GateTier) => `${fmtInt(n)} ${LABEL[tier].toLowerCase()}`
-  return [say(counts.confirmed, 'confirmed'), say(counts.early, 'early_signal'), say(counts.archive, 'archive')].join(' · ')
+export function tierMetaLine(counts: { confirmed: number; early: number; archive: number }, total: number): string {
+  const above = counts.confirmed + counts.early
+  return `${fmtInt(above)} above the bar · of ${fmtInt(total)} concluded`
 }

@@ -71,13 +71,39 @@ describe('Market · every block, every mode, every state', () => {
 
 describe('MK1 · what we concluded', () => {
   it('labels a conclusion below the evidence bar rather than hiding it', () => {
+    // CHANGED BY THE ARTBOARD PORT (wave 2). The below-bar rows moved behind
+    // the artboard's footer control in `app` — counted by name in the summary,
+    // one press away — and are drawn INLINE in print and email, where there is
+    // nothing to press. Both arms are asserted, because "labelled, not hidden"
+    // is a rule about every mode and a disclosure only satisfies it where a
+    // reader can open it. The meta line is the mock's: one number above the bar
+    // against the total concluded, where this restated the three tier counts
+    // the chips beneath it already spell out.
+    const app = renderText(marketConclusions.render(marketFixture(), 'app', ctx))
+    expect(app).toContain('Strong evidence')
+    expect(app).toContain('Early signal')
+    expect(app).toContain('Below the evidence bar')
+    expect(app).toContain('1 below the bar this update')
+    expect(app).toContain('2 above the bar · of 9 concluded')
+    expect(app).not.toMatch(/\bconfirmed\b/)
+    const print = renderText(marketConclusions.render(marketFixture(), 'print', ctx))
+    expect(print).toContain('Below the evidence bar')
+    expect(print).toContain('Showcase Innovations in 3D Printed Prosthetics')
+  })
+
+  it('flags a conclusion as New only where it holds an earlier month to compare, and says what New means', () => {
+    // `recurrence` is `recurrenceOf` over the leading theme registry id: the
+    // first row has three months behind it, the third has one and is new, and
+    // the second has no month reading at all — which is NOT new and carries no
+    // chip, because an absent record is not a new theme.
+    const markup = render(marketConclusions.render(marketFixture(), 'app', ctx))
+    expect(markup.match(/>New</g) ?? []).toHaveLength(1)
+    expect(renderText(markup)).toContain('New means we have no earlier month')
+  })
+
+  it('dates the conclusions by the update that reached them, with the word update on it', () => {
     const text = renderText(marketConclusions.render(marketFixture(), 'app', ctx))
-    expect(text).toContain('Strong evidence')
-    expect(text).toContain('Early signal')
-    expect(text).toContain('Below the evidence bar')
-    // The meta line speaks the chips' language, not the GateTier keys'.
-    expect(text).toContain('1 strong evidence · 1 early signal · 1 below the evidence bar')
-    expect(text).not.toMatch(/\bconfirmed\b/)
+    expect(text).toContain('concluded with the update of 27 Sep')
   })
 
   it('links each conclusion’s themes into Voice by slug', () => {
