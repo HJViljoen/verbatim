@@ -442,10 +442,12 @@ export const quarterlyRivals: Block<QuarterlyData> = {
               // a share of the window's comments, and inventing one at render is
               // what `FigureCell`'s optional `of` exists to refuse.
               aside={
-                <span className={email ? undefined : 'flex items-baseline gap-1.5'}>
-                  <FigureCell mode={mode} value={fmtInt(q.comments)} />
-                  <Note mode={mode}>comments behind it in this window</Note>
-                </span>
+                q.comments == null ? null : (
+                  <span className={email ? undefined : 'flex items-baseline gap-1.5'}>
+                    <FigureCell mode={mode} value={fmtInt(q.comments)} />
+                    <Note mode={mode}>comments behind it in this window</Note>
+                  </span>
+                )
               }
             >
               {r.questionsRival ? <span className={email ? undefined : 'text-muted-foreground'}>{r.questionsRival} — </span> : null}

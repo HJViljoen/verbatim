@@ -182,8 +182,15 @@ export interface QuestionRow {
    * is SHOWN. This is the count the row is a reading of, on the same window
    * the block's own sentences frame, so a surface printing it beside the
    * question is printing evidence and not a display limit.
+   *
+   * OPTIONAL, BECAUSE THIS INTERFACE IS NOT THIS PACKAGE'S. The field was
+   * added for the quarterly review and landed here as a REQUIRED one; it
+   * compiled only because both constructors in the tree were updated in the
+   * same commit, which is exactly the coupling "additive only" exists to stop.
+   * A reader that has it prints it; a reader that does not says nothing rather
+   * than printing a zero.
    */
-  comments: number
+  comments?: number
 }
 
 export interface QuestionsBlock {
