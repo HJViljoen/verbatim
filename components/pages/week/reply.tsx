@@ -68,7 +68,6 @@ export const weekReply: Block<WeekData> = {
     // nothing, while this line hard-coded the same number — two places to
     // change, one of them documented and neither of them load-bearing.
     const shown = r.rows.slice(0, REPLIES_SHOWN)
-    const more = r.rows.length - shown.length
     const href = `${ctx.appUrl}/dashboard/videos?detail=replies`
 
     return (
@@ -77,10 +76,14 @@ export const weekReply: Block<WeekData> = {
         question={weekReply.question}
         mode={mode}
         meta={r.rows.length > 0 ? `${fmtInt(r.total)} picked, at most three of a kind` : undefined}
+        // THE ARTBOARD'S OWN FOOTER: "Open all 12 →" (design review, nits). It
+        // read "2 more →" where the pick was bigger than the four shown, which
+        // names a remainder rather than the queue, and changed shape between
+        // updates. `total` is the pick, which is what the link opens.
         footer={r.rows.length > 0
           ? (email
-            ? <a href={href} style={{ color: EMAIL.ink }}>{more > 0 ? `${fmtInt(more)} more →` : `All ${fmtInt(r.total)} in one list →`}</a>
-            : <Link href={href} className="hover:underline">{more > 0 ? `${fmtInt(more)} more →` : `All ${fmtInt(r.total)} in one list →`}</Link>)
+            ? <a href={href} style={{ color: EMAIL.ink }}>{`Open all ${fmtInt(r.total)} →`}</a>
+            : <Link href={href} className="hover:underline">{`Open all ${fmtInt(r.total)} →`}</Link>)
           : undefined}
         // THE BASIS, NOT A MEMORY. The days these comments were written in is
         // the one fact the footer can state about them, and it is the fact that
@@ -210,7 +213,10 @@ function Row({ row, mode }: { row: ReplyRow; mode: 'app' | 'print' | 'email' }) 
           href={row.href}
           target="_blank"
           rel="noopener noreferrer"
-          className="justify-self-start text-[12px] font-medium text-foreground hover:underline xl:justify-self-end"
+          // A 28px TARGET FOR THE PAGE'S PRIMARY ACTION (design review, nits).
+          // The link's text box is 17px tall; the negative margin keeps the
+          // row's own height while the hit area is the height a thumb needs.
+          className="inline-flex min-h-[28px] -my-1.5 items-center justify-self-start text-[12px] font-medium text-foreground hover:underline xl:justify-self-end"
         >
           Reply →
         </a>

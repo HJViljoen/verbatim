@@ -214,12 +214,18 @@ export function WeekPage({
           <ExportMenu />
         </SurfacePageBar>
         <PageGrid>
-          {WEEK_BLOCKS.map((block) => (
+          {/* EVERY BLOCK BUT THE FOOTNOTE. `week.coverage` is the artboard's
+              method note, and the artboard sets it BARE on the page ground —
+              no tile, no eyebrow, 10.5px mono under everything (design review,
+              nits). The port had it inside a titled tile, which is both the
+              wrong face and a 116px row a 124px footnote overflowed at 1280. */}
+          {WEEK_BLOCKS.filter((b) => b.key !== weekCoverage.key).map((block) => (
             <Tile key={block.key} col={COLS[block.key] ?? 12} row={tileRows(block.key, data)}>
               {block.render(data, 'app', ctx)}
             </Tile>
           ))}
         </PageGrid>
+        {weekCoverage.render(data, 'app', ctx)}
         {data.notes.length > 0 ? (
           <p className="m-0 text-[11px] text-muted-foreground">
             {/* THE READING LAYER'S OWN CAVEATS, ONCE FOR THE PAGE. §1 pools three

@@ -520,6 +520,16 @@ describe('WK §2 · worth a reply', () => {
     }
   })
 
+  it('opens the queue it picked, in the artboard’s own words', () => {
+    // Design review, nits: the footer read "2 more →", which names a remainder
+    // rather than the queue and changes shape between updates. The artboard
+    // says "Open all 12 →" and `total` is the pick that link opens.
+    for (const mode of MODES) {
+      expect(renderText(weekReply.render(weekFixture(), mode, ctx)), mode).toContain('Open all 6 →')
+      expect(renderText(weekReply.render(weekFixture(), mode, ctx)), mode).not.toContain('more →')
+    }
+  })
+
   it('says the queue is empty rather than drawing an empty table', () => {
     const text = renderText(weekReply.render(thinFixture(), 'app', ctx))
     expect(text).toContain('nothing here to answer')
@@ -930,12 +940,24 @@ describe('the coverage line and the two sections Phase 1 does not build', () => 
 })
 
 describe('the page', () => {
-  it('draws the seven blocks, the two updates and the update’s own size', () => {
+  it('draws every block, the two updates and the update’s own size', () => {
     const text = renderText(<WeekPage data={weekFixture()} />)
     expect(text).toContain('This week')
     expect(text).toContain('update of 13 Sep · previous 6 Sep')
     expect(text).toContain('Össur · 205 videos this update')
-    for (const block of WEEK_BLOCKS) expect(text).toContain(block.title)
+    // Every block's TITLE is on the page — except the footnote's, which the
+    // artboard sets bare on the page ground with no eyebrow (design review,
+    // nits). Its two lines are there; its heading is not, on screen.
+    for (const block of WEEK_BLOCKS) {
+      if (block.key === weekCoverage.key) continue
+      expect(text, block.key).toContain(block.title)
+    }
+    expect(text).not.toContain('What this reading rests on')
+    expect(text).toContain('Prepared for Össur with Verbatim')
+    // And on paper and in the inbox it keeps its heading, because there it is
+    // a findable section of a document.
+    expect(renderText(weekCoverage.render(weekFixture(), 'print', ctx))).toContain('What this reading rests on')
+    expect(renderText(weekCoverage.render(weekFixture(), 'email', ctx))).toContain('What this reading rests on')
   })
 
   it('takes no horizon and no soundness band — it is dated by the update', () => {

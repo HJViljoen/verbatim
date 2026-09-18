@@ -31,7 +31,13 @@ export const weekCoverage: Block<WeekData> = {
 
   render(data, mode = 'app') {
     return (
-      <BlockFrame title={weekCoverage.title} mode={mode}>
+      // NO TITLE ON THE PAGE (design review, nits). The artboard sets this
+      // bare on the page ground: 9.5px mono, two lines, no eyebrow, no tile —
+      // it is the footnote under everything and not a tenth answer. On paper
+      // and in an email it keeps its heading, because there it is a section of
+      // a document that has to be findable. `BlockFrame` with no `title` draws
+      // the block's chrome without a heading.
+      <BlockFrame title={mode === 'app' ? '' : weekCoverage.title} mode={mode}>
         {/* THE ARTBOARD'S FOOTNOTE FACE. Its method note is 9.5px mono in two
             lines with the "Prepared by" half in darker ink; these are the same
             two lines and they take the same face, a little larger because they
