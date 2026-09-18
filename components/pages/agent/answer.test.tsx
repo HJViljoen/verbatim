@@ -6,6 +6,7 @@ import { render, renderText } from '@/lib/test/render'
 import { MOVEMENT_WORDS } from '@/components/delta-badge'
 import { citationWhere, saidHeading } from '@/lib/agent/types'
 import { PREVALENCE_LABEL } from '@/lib/calibration'
+import { scrubThreadAnswer } from '@/lib/agent/measure'
 
 // The answer tile's render tier (Block D wave 2, E-ask).
 //
@@ -211,5 +212,70 @@ describe('a follow-up prints its own turn’s figure', () => {
       />
     )
     expect(renderText(unmeasured)).not.toContain('Open the')
+  })
+})
+
+describe('THE SEAM: the scrubber licenses a direction word the contract refuses', () => {
+  // NOT A PASSING TEST DRESSED AS A NOTE — this asserts the collision, so the
+  // day either side is settled it fails loudly and whoever settled it finds
+  // this case.
+  //
+  // `dropUnverdictedDirection` (lib/prose/scrub.ts) deliberately KEEPS a model
+  // sentence whose direction word sits in a clause naming an object whose
+  // verdict earned one. That is the whole point of `agent.movement` being the
+  // one true reader flag. The copy contract's rule (c) then refuses a direction
+  // word anywhere outside a `data-copy="verdict"` node, whoever wrote it — and
+  // an answer's prose has to be a `prose` node, because that is what runs rule
+  // (a) against a digit the model typed.
+  //
+  // So a real answer reading "Will it survive a wet commute is growing" passes
+  // the scrubber and fails the block's render test. The fixture above avoids it
+  // by carrying no direction word at all, which is honest about what the page
+  // prints and proves nothing about the one sentence class where the two rules
+  // collide. This case is that class.
+  //
+  // NEITHER FILE IS THIS PACKAGE'S TO SETTLE: the contract is P0's and the
+  // policy table is `competitive`'s. Two options — a licensed-prose kind in the
+  // contract, or `PROSE_POLICY.agent_answer` dropping every direction sentence
+  // and leaving the word to the surface. The second is the better one: the
+  // surface's verdict node carries the band and both sides' k and n, and the
+  // model's sentence carries neither.
+  const LICENSED = 'Will it survive a wet commute is growing, and no tracked brand answers it on camera.'
+  const base = agentFixture()
+
+  it('the scrubber keeps the sentence (it names an object whose verdict earned the word)', () => {
+    const turn0 = base.turns[0]
+    const scrubbed = scrubThreadAnswer(
+      { answer: turn0.answer!.answer, grounded: [{ ...turn0.answer!.grounded[0], text: LICENSED }] },
+      base.measure!,
+      { keyOf: () => '0:G1' },
+    )
+    expect(scrubbed.grounded[0].text).toBe(LICENSED)
+    expect(scrubbed.scrub.droppedDirection).toBe(0)
+  })
+
+  it('and the copy contract refuses it on the rendered block', () => {
+    const leaky = agentFixture({
+      turns: [
+        {
+          ...base.turns[0],
+          answer: {
+            ...base.turns[0].answer!,
+            grounded: base.turns[0].answer!.grounded.map((g, i) => (i === 0 ? { ...g, text: LICENSED } : g)),
+          },
+        },
+      ],
+    })
+    const violations = copyViolations(
+      <AnswerTile
+        turn={leaky.turns[0]}
+        turnIndex={0}
+        measure={leaky.measure}
+        citations={leaky.citations}
+        basis={leaky.basis}
+      />,
+    )
+    expect(violations.map((v) => v.rule)).toContain('direction-word')
+    expect(violations.map((v) => v.text).join(' ')).toMatch(/growing/)
   })
 })
