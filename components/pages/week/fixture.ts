@@ -68,6 +68,20 @@ function seriesOf(input: {
   /** How much of an update's analysed set the windowed read answers for —
    *  Össur's newest update analysed 508 and its window carried 205. */
   windowShare?: number
+  /**
+   * The newest point's spans, by month, EXACTLY as the windowed read answers
+   * them — because the newest point is the one the page states twice.
+   *
+   * §1's series restates the newest update's contribution to its month and §4
+   * states the same fact from the same RPC clipped the same way, so on
+   * production the two agree by construction. A fixture that derived §1's from
+   * an even split of `windowShare` had the two sections of one page print
+   * different numbers for one claim, which is the page disagreeing with itself
+   * in the handover artefact wave 2 builds against. Videos do not add across
+   * months and comments do (`buildUpdateSeries`), so these are given, not
+   * divided.
+   */
+  newestSpans?: Record<string, { videos: number; comments: number }>
   windowless?: number
   requested?: number
 }): UpdateSeries {
@@ -94,8 +108,9 @@ function seriesOf(input: {
     runs.push({ runId, window: { from, to } })
     videosByRun.set(runId, videos)
     const months = monthsOfWindow(from, to)
+    const newest = i === input.counts.length - 1 ? input.newestSpans : undefined
     for (const month of months) {
-      spans.set(`${runId}::${month}`, {
+      spans.set(`${runId}::${month}`, newest?.[month] ?? {
         videos: Math.round((videos * share) / months.length),
         comments: Math.round((videos * 25) / months.length),
       })
@@ -214,6 +229,10 @@ export function weekFixture(): WeekData {
         days: 7,
         monthOf: { '2026-06-01': 480, '2026-07-01': 505, '2026-08-01': 520, '2026-09-01': 449 },
         windowShare: 205 / 618,
+        // THE SAME TWO NUMBERS §4 PRINTS — 205 of 449, and the 5,134 comments
+        // dated in these days — because they are the same read of the same
+        // days and the page says them twice.
+        newestSpans: { '2026-09-01': { videos: 205, comments: 5134 } },
       }),
       flags: [{
         objectKind: 'kind',
@@ -429,6 +448,15 @@ export function thinFixture(): WeekData {
         days: [7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 30],
         monthOf: { '2026-06-01': 402, '2026-07-01': 466, '2026-08-01': 512, '2026-09-01': 475 },
         windowShare: 655 / 1098,
+        // A CROSSING WINDOW CARRIES BOTH MONTHS, each with its own clipped
+        // numerator: 394 of September is what §4 prints, and 260 of August is
+        // the part §4's crossing line says it is leaving out. The two comment
+        // counts add to the 9,331 §4 states, because comments do add across
+        // disjoint spans and videos do not.
+        newestSpans: {
+          '2026-08-01': { videos: 260, comments: 5900 },
+          '2026-09-01': { videos: 394, comments: 3431 },
+        },
       }),
     },
     subjects: {

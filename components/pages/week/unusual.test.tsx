@@ -186,6 +186,53 @@ describe('WK1 · unusual this week', () => {
     }
   })
 
+  it('restates the newest update’s count as a contribution to its month', () => {
+    // THE RULE THIS SURFACE LIVES UNDER. The legend states three window-dated
+    // counts and the axis a fourth; without the restatement a reader has four
+    // numbers about a delivery and nothing tying any of them to a period.
+    for (const mode of MODES) {
+      const text = renderText(weekUnusual.render(weekFixture(), mode, ctx))
+      expect(text, mode).toContain('this update’s contribution to September so far: 205 of 449')
+      expect(text, mode).toContain('each point is one delivery’s own days, never a month')
+    }
+  })
+
+  it('states the SAME contribution §4 states, because it is the same read', () => {
+    // §1 and §4 print this claim from one windowed read clipped one way. A
+    // fixture in which they disagreed would be the page contradicting itself
+    // in the artefact wave 2 builds its port against.
+    const d = weekFixture()
+    const one = renderText(weekUnusual.render(d, 'app', ctx))
+    expect(d.cameIn.contribution).not.toBeNull()
+    expect(one).toContain(`this update’s contribution to September so far: ${d.cameIn.contribution!.videos} of ${d.cameIn.contribution!.of}`)
+    const thin = thinFixture()
+    expect(thin.cameIn.contribution).not.toBeNull()
+    expect(renderText(weekUnusual.render(thin, 'app', ctx)))
+      .toContain(`this update’s contribution to September so far: ${thin.cameIn.contribution!.videos} of ${thin.cameIn.contribution!.of}`)
+  })
+
+  it('names BOTH months where the window crossed one', () => {
+    // Sealand's newest update covers 11 Aug – 10 Sep. A window that crosses
+    // carries two months, each with its own clipped numerator and its own
+    // denominator — never one sum, because denominators do not add.
+    const text = renderText(weekUnusual.render(thinFixture(), 'app', ctx))
+    expect(text).toContain('this update’s contribution to August so far: 260 of 512')
+    expect(text).toContain('this update’s contribution to September so far: 394 of 475')
+  })
+
+  it('says so rather than leaving four window counts standing alone', () => {
+    // Production today: M3 is not applied, so every point's contribution is
+    // empty. The restatement is then a sentence, not a silence.
+    const d = weekFixture()
+    const series = d.unusual.series!
+    const points = series.points.map((p) => ({ ...p, contribution: [], comments: null }))
+    const text = renderText(weekUnusual.render(
+      { ...d, unusual: { ...d.unusual, series: { ...series, points } } }, 'app', ctx,
+    ))
+    expect(text).toContain('cannot be stated here, so every figure above is of the delivery’s own days alone')
+    expect(text).not.toContain('contribution to September so far')
+  })
+
   it('draws the series while the baseline is still forming', () => {
     // Sealand cannot be told whether its update was unusual for two more
     // months. What it CAN be told is what each update brought in — a fact about

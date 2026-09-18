@@ -5,7 +5,7 @@ import { BlockStat } from '@/components/blocks/stat'
 import { TokenProse } from '@/components/blocks/prose'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, fmtPct, longMonth, monthName } from '@/lib/format'
-import { baselineFormingLine, flagFigures, type UnusualFlag, type WeekData } from '@/lib/pages/week'
+import { baselineFormingLine, contributionLine, flagFigures, type UnusualFlag, type WeekData } from '@/lib/pages/week'
 import { updateSeriesLine, type UpdateSeries } from '@/lib/reading/updates'
 import type { FigureTable } from '@/lib/reading/verdicts'
 
@@ -272,13 +272,39 @@ function Interpretation({
  * DRAWN IN EVERY STATE, including the four where the check cannot speak: what
  * each update brought in is a fact about our reading, and it is true whether or
  * not there are three months to compare it with.
+ *
+ * AND EVERY COUNT HERE IS RESTATED AS A CONTRIBUTION TO ITS MONTH. This week is
+ * the one surface dated by the delivery rather than the month, and the rule it
+ * lives under is that a count stated against the run's own frozen window is
+ * stated again against the month it falls in — "that second half is what stops
+ * a reader treating a week as a period, and it is not optional decoration"
+ * (AGENTS.md). The legend states three window-dated counts (this update's, the
+ * band's low and high) and the axis a fourth, so the newest point's own
+ * contribution is printed under them, from the SAME windowed read clipped the
+ * same way that §4 prints it from — which is why the two sections cannot
+ * disagree. Where there is no contribution to state, the line says so rather
+ * than leaving four window counts standing alone.
  */
 function Series({ series, mode }: { series: UpdateSeries | null; mode: 'app' | 'print' | 'email' }) {
   if (!series || series.points.length === 0) return null
+  const newest = series.points[series.points.length - 1]
   return (
     <>
       <Line mode={mode}>{updateSeriesLine(series)}</Line>
-      <Line mode={mode}>{series.basis}</Line>
+      {/* THE AXIS SAYS WHAT A POINT IS. Thirteen deliveries at the dates those
+          deliveries covered — a chart of our own cadence — and naming that on
+          the axis is what keeps a reader from reading thirteen windows as
+          thirteen periods. */}
+      <Line mode={mode}>{series.basis}; each point is one delivery’s own days, never a month</Line>
+      {newest.contribution.length > 0
+        ? newest.contribution.map((c) => (
+          <Line key={c.month} mode={mode}>{contributionLine(c.month, c.videos, c.of)}</Line>
+        ))
+        : (
+          <Line mode={mode}>
+            This update’s contribution to the month it falls in cannot be stated here, so every figure above is of the delivery’s own days alone.
+          </Line>
+        )}
       {series.note ? <Line mode={mode}>{series.note}</Line> : null}
     </>
   )
