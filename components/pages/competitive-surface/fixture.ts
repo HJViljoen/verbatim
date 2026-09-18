@@ -48,17 +48,23 @@ const OSSUR = [
 // ---- CO3 and CO7's videos (Phase 1 Block D, D6) --------------------------------
 //
 // ÖSSUR'S OWN SEPTEMBER AND AUGUST, read read-only on 2026-09-18 and rebuilt
-// here as the rows the loader would have read. The aggregates are the measured
-// ones — September published 757 / 109 / 145 by audience, classified 687 / 84 /
-// 124, rated (non-Reddit, rate > 0) 483 / 77 / 86, median 3.0 / 2.1 / 2.6, and
-// Ottobock's own accounts yielding ZERO posts in either month while Össur's
-// yielded 29 in August and 8 in September.
+// here as the rows the loader would have read.
 //
-// Each format's rated videos carry that format's own measured median, so the
-// per-format figures come back exactly; the audience median is then a real
-// median of that real set and lands near, not on, the measured one (the
-// client's reads 1.8% here against 2.1% in production, because the expansion
-// gives every rated video of a format the same rate).
+// WHAT IS REPRODUCED EXACTLY: September published 757 / 109 / 145 by audience,
+// classified 687 / 84 / 124, hooks 647 / 81 / 118, each format's own count and
+// its own measured median, the judged and positive counts, and Ottobock's own
+// accounts yielding ZERO posts in either month while Össur's yielded 29 in
+// August and 8 in September.
+//
+// WHAT IS NEAR AND NOT EXACT, AND WHY — stated because a fixture comment that
+// claims a figure it does not build is worse than no comment. Production's
+// rated counts (non-Reddit, rate > 0) are 483 / 77 / 86 with medians
+// 3.0 / 2.1 / 2.6; this expansion builds 438 / 63 / 72 with medians
+// 3.1 / 1.8 / 2.6. The gap is 45 / 14 / 14 videos that carry a rate and NO
+// `classified_type`, which the per-format expansion below has nowhere to put:
+// it hands a rate only to a classified video. The medians drift with it,
+// because every rated video of a format here carries that format's median
+// rather than its own spread.
 //
 // THREE OF THOSE FACTS ARE WHY THE FIXTURE IS REAL RATHER THAN INVENTED:
 //   · the classified n is well under the published one on every side (84 of
