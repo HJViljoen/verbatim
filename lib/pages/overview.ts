@@ -33,6 +33,7 @@ import { freezeBoundary, freezeStateFor, isMissingMonthlyReading, isMissingMonth
 import { monthStartOf, nextMonth, prevMonth as previousMonthOf } from '../reading/month-key'
 import { moodChange, moodShares, framingShare, type MoodShare } from '../reading/mood'
 import { loadMonthSeries, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
+import { methodLines, type MethodLines } from '../reading/method'
 import { countRefused, howSoundLine, loadRecordInputs, monthRecordWindow, recordLines, refusals, type RecordInputs } from '../reading/record'
 import {
   mergeSeriesNotes,
@@ -383,6 +384,16 @@ export interface OverviewData {
   rivals: RivalsBlock
   moves: MovesBlock
   record: RecordBlock
+  /**
+   * The method footnote, composed once for every surface (block D, D9).
+   *
+   * ONE FIELD, ONE CALL LINE, ON EVERY PAGE. The five facts in it were already
+   * computed and printed on two surfaces out of eleven, each in its own words;
+   * `methodLines` composes them from the `RecordInputs` this page already
+   * loaded, so the field costs no read. Null only where that record could not
+   * be read at all. See lib/reading/method.ts.
+   */
+  method: MethodLines | null
   /**
    * WHAT WE LAST TOLD THIS CLIENT ABOUT THIS MONTH (Phase 1 WP18, item 13).
    *
@@ -1256,6 +1267,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     href: '/dashboard/settings',
     freezesOn: freezesOn(month),
   }
+  const method = methodLines(recordInputs, { brand })
 
   const sent = sentMonthOf(await sentAhead)
 
@@ -1276,6 +1288,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     rivals: rivalsBlock,
     moves,
     record,
+    method,
     sent,
   }
 }

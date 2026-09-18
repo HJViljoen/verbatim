@@ -5,6 +5,7 @@ import type { MonthPoint } from '@/lib/reading/series'
 import type { Mover } from '@/lib/pages/overview'
 import type { VoiceSurfaceData } from '@/lib/pages/voice-surface'
 import { PERSONA_VIDEO_FLOOR, voiceSurfaceHref } from '@/lib/pages/voice-surface'
+import { methodFixture, methodRefusedFixture } from '@/lib/test/method-fixture'
 
 // Voice's block fixtures (Phase 1 WP13).
 //
@@ -226,6 +227,7 @@ export function voiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurface
       line: '4 updates · 2,359 videos (TikTok 38%, YouTube 29%, Instagram 21%, Reddit 12%) · 27% not in English',
       lines: ['4 updates delivered, 1 Sep to 15 Sep.', '27% of the comments read were not in English.'],
     },
+    method: methodFixture(),
     ...over,
   }
 }
@@ -241,6 +243,7 @@ export function refusedVoiceFixture(over: Partial<VoiceSurfaceData> = {}): Voice
   const base = voiceFixture()
   return {
     ...base,
+    method: methodRefusedFixture('Össur'),
     brand: 'Össur',
     audience: {
       ...base.audience,

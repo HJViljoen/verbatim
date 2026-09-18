@@ -5,6 +5,7 @@ import {
   competitiveUnlockRows, questionsEmpty,
   type CompetitiveSurfaceData,
 } from '@/lib/pages/competitive-surface'
+import { methodFixture, methodRefusedFixture } from '@/lib/test/method-fixture'
 
 // Competitive's block fixtures (Phase 1 WP14).
 //
@@ -122,6 +123,7 @@ export function competitiveFixture(over: Partial<CompetitiveSurfaceData> = {}): 
       lines: ['2 updates delivered in this month.'],
       href: '/dashboard/settings',
     },
+    method: methodFixture(),
     ...over,
   }
 }
@@ -206,6 +208,7 @@ export function unreadMonthsFixture(): CompetitiveSurfaceData {
   const base = competitiveFixture()
   return {
     ...base,
+    method: methodRefusedFixture(),
     standings: {
       ...base.standings,
       rows: [],

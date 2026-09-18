@@ -18,6 +18,7 @@ import {
 import { freezeStateFor, isMissingMonthlyReading, isMissingMonthTable } from '../reading/monthly'
 import { monthStartOf, nextMonth } from '../reading/month-key'
 import { loadMonthSeries, loadWindowReading, type ReadingHandle } from '../reading/read'
+import type { MethodLines } from '../reading/method'
 import { platformMixLine } from '../reading/record'
 import { mergeSeriesNotes, type MonthLabel, type MonthSeries } from '../reading/series'
 import type { MonthStatus, PlatformMix } from '../reading/types'
@@ -419,6 +420,24 @@ export interface WeekData {
   worked: WorkedBlock
   coverage: CoverageBlock
   /**
+   * The method footnote every other surface carries (block D, D9) — NULL here,
+   * always, and that is the finding rather than a gap.
+   *
+   * This week is the one surface dated by the DELIVERY rather than by the
+   * month, and it already composes its own footer from the same facts:
+   * `coverageLine` names who it was prepared for, which update, how long the
+   * window was and the platform mix, and `coverage.privacy` is the identical
+   * privacy sentence `methodLines` prints. A second footnote beside it would
+   * state the coverage of a MONTH under a page whose every count is an
+   * update's, which is the one confusion this page exists to prevent.
+   *
+   * The field is here so the seventeen artboard ports bind ONE name on every
+   * page and This week's port falls through to `coverage`, and so that loading
+   * `RecordInputs` — eight reads — is not added to a page that needs none of
+   * it. See lib/reading/method.ts.
+   */
+  method: MethodLines | null
+  /**
    * The reading layer's own caveats about the months this page compares, said
    * ONCE for the page.
    *
@@ -789,6 +808,7 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
     sales,
     worked,
     coverage,
+    method: null,
     // EVERY SERIES READ HERE, SAID ONCE. `monthSet` is the denominator-only
     // set behind §1's baseline and §4's contribution; `risingRead.notes` are
     // §3's per-theme ones. `mergeSeriesNotes` collapses a run of months into

@@ -16,6 +16,7 @@ import {
   type SubjectsData,
 } from '@/lib/pages/subjects'
 import type { Subject } from '@/lib/subjects/types'
+import { methodFixture, methodRefusedFixture } from '@/lib/test/method-fixture'
 
 // The Subjects page's block fixtures (Phase 1 WP12).
 //
@@ -186,6 +187,7 @@ export function subjectsFixture(over: Partial<SubjectsData> = {}): SubjectsData 
       line: '4 updates · 2,359 videos · TikTok, YouTube, Instagram, Reddit',
       lines: ['4 updates delivered in this window.', 'Nothing was refused on this page.'],
     },
+    method: methodFixture(),
     ...over,
   }
 }
@@ -195,6 +197,7 @@ export function refusedFixture(over: Partial<SubjectsData> = {}): SubjectsData {
   const base = subjectsFixture()
   return {
     ...base,
+    method: methodRefusedFixture(),
     substrate: 'missing',
     list: {
       rows: [],

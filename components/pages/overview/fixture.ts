@@ -4,6 +4,7 @@ import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '@/lib/rivals'
 import type { Verdict } from '@/lib/reading/verdicts'
 import type { OverviewData } from '@/lib/pages/overview'
 import { MOVES_MASTHEAD, MOVES_EMPTY, MOVES_UNLOCK, RIVALS_CAVEAT, fillingLine, readingsCounter } from '@/lib/pages/overview'
+import { methodFixture, methodRefusedFixture } from '@/lib/test/method-fixture'
 
 // The Overview's block fixtures (Phase 1 WP11).
 //
@@ -276,6 +277,7 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
       href: '/dashboard/settings',
       freezesOn: '2026-10-31',
     },
+    method: methodFixture(),
     ...over,
   }
 }
@@ -339,5 +341,6 @@ export function refusedFixture(): OverviewData {
       empty: MOVES_EMPTY,
       recorded: true,
     },
+    method: methodRefusedFixture(),
   }
 }

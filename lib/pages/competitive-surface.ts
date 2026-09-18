@@ -9,6 +9,7 @@ import { attentionTotals, type AttentionRow } from '../reading/attention'
 import { horizonWindow, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
 import { freezeStateFor, monthStartOf } from '../reading/monthly'
 import { loadMonthSeries, type MonthSeriesSet, type ReadingHandle } from '../reading/read'
+import { methodLines, type MethodLines } from '../reading/method'
 import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordInputs } from '../reading/record'
 import { buildStandings, type StandingRow } from '../reading/standings'
 import type { MonthStatus, PlatformMix } from '../reading/types'
@@ -209,6 +210,15 @@ export interface CompetitiveSurfaceData {
   questions: QuestionsBlock
   unlocks: { rows: CompetitiveUnlockRow[] }
   record: { line: string; lines: string[]; href: string }
+  /**
+   * The method footnote, composed once for every surface (block D, D9).
+   *
+   * ONE FIELD, ONE CALL LINE, ON EVERY PAGE, from the `RecordInputs` this page
+   * already loads — so the language share and the read-depth basis cannot come
+   * to be worded differently here and on the next surface. Null only where the
+   * record behind it could not be read. See lib/reading/method.ts.
+   */
+  method: MethodLines | null
 }
 
 // ---- the pure half ------------------------------------------------------------
@@ -632,6 +642,7 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
     questions,
     unlocks: { rows: competitiveUnlockRows() },
     record: { line: howSoundLine(recordInputs), lines: recordLines(recordInputs), href: '/dashboard/settings' },
+    method: methodLines(recordInputs, { brand }),
   }
 }
 
