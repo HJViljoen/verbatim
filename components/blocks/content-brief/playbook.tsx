@@ -209,6 +209,14 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
  *  .engagement`'s own order and not the count order of the table beside it. */
 const ENGAGEMENT_SHOWN = 3
 
+// EVERY PERCENTAGE ON THIS SLIDE GOES THROUGH `fmtPct` (code review 5). Three
+// places wrote `${median}%` by hand while the file imported the formatter for
+// the matrix cells, and the result was on the page: 3.7% beside 21.8%, rounded
+// by two different rules. AGENTS.md names this exactly — "three hand-rolled
+// ones is how '3.4%', '3%' and '3.4 pct' reach one product". What `fmtPct` does
+// NOT do is pad a whole number to one decimal, so "21%" still sits beside
+// "21.8%" down the category column; that is the product's one rounding rule and
+// a second one here to make a column look even would be the defect over again.
 function Engagement({ rows: all, mode, of, basisLine }: { rows: readonly FormatRow[]; mode: RenderMode; of: number; basisLine: string }) {
   const rows = all.slice(0, ENGAGEMENT_SHOWN)
   if (rows.length === 0) return null
@@ -224,7 +232,7 @@ function Engagement({ rows: all, mode, of, basisLine }: { rows: readonly FormatR
               <span className="block h-full rounded-[3px]" style={{ width: `${Math.max(3, ((r.engagement.median ?? 0) / max) * 100)}%`, background: 'var(--cat)' }} />
             </span>
             <span className="w-[92px] flex-none">
-              <FigureCell mode={mode} align="right" value={`${r.engagement.median}%`} of={`of ${fmtInt(r.engagement.n)} rated`} />
+              <FigureCell mode={mode} align="right" value={fmtPct(r.engagement.median ?? 0)} of={`of ${fmtInt(r.engagement.n)} rated`} />
             </span>
           </div>
         ))}
@@ -326,7 +334,7 @@ export const contentPlaybook: Block<ContentBriefData> = {
               {slide.below.map((r) => (
                 <span key={r.key} className="flex items-baseline gap-1.5 text-secondary-foreground">
                   <span>{r.label}</span>
-                  <FigureCell mode={mode} value={`${r.engagement.median}%`} of={`of ${fmtInt(r.engagement.n)} rated`} />
+                  <FigureCell mode={mode} value={fmtPct(r.engagement.median ?? 0)} of={`of ${fmtInt(r.engagement.n)} rated`} />
                 </span>
               ))}
             </p>
@@ -347,7 +355,7 @@ export const contentPlaybook: Block<ContentBriefData> = {
     }
     const best = p.engagement[0]
     if (best?.engagement.median != null) {
-      out.content_best_format_engagement = { value: best.engagement.median, unit: 'pct', label: `${best.engagement.median}% median engagement` }
+      out.content_best_format_engagement = { value: best.engagement.median, unit: 'pct', label: `${fmtPct(best.engagement.median)} median engagement` }
       out.content_best_format_videos = { value: best.engagement.n, unit: 'videos', label: `${fmtInt(best.engagement.n)} rated videos` }
     }
     return out

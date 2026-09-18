@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '@/lib/rivals'
+import { fmtPct } from '@/lib/format'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
@@ -133,6 +134,17 @@ describe('content.playbook — the mock’s page 3', () => {
     // sides' cells never share a denominator.
     const sides = data.playbook.playbook!.formats.sides
     expect(new Set(sides.map((s) => s.of)).size).toBeGreaterThan(1)
+  })
+
+  // ONE FORMATTER (code review 5). `${median}%` was hand-written in three places
+  // in a file that imports `fmtPct` for the matrix cells.
+  it('prints every percentage through the product’s one formatter', () => {
+    for (const r of data.playbook.playbook!.engagement.slice(0, 3)) {
+      expect(text).toContain(fmtPct(r.engagement.median ?? 0))
+    }
+    // A median of a whole number prints as "3%", never as "3.0%" — the
+    // formatter's own rule, and the reason to have exactly one.
+    expect(fmtPct(3)).toBe('3%')
   })
 
   it('publishes its figures by token, prefixed so nothing collides', () => {
