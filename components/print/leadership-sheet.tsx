@@ -666,14 +666,21 @@ export function LeadershipSheet({
   const gap = leadGap(overview.subjects.gaps)
   const gapRow = gap ? overview.subjects.rows.find((r) => r.id === gap.objectId) ?? null : null
   const subject = leadSubject(overview.subjects.rows, gap?.objectId ?? null)
-  // THE SERIF LEAD THE MOCK DRAWS AND THE DECK NEVER FILLED. `Slide`'s note
-  // slot has existed since the Studio shipped and `DocumentDeck` passes none,
-  // so the one place the artboard's lead would go was empty. The mock's own
-  // lead ("Durability gap to Freitag narrowed to 13 points · price fading, 3rd
-  // month") is two direction claims in one line; what goes here is the gap's
-  // own banded sentence, which carries no direction word — the cards below
-  // carry the movement, inside the nodes allowed to make the claim.
-  const note = gap ? `${gap.objectLabel} · ${gapLine(gap)}` : null
+  // THE SERIF SLOT STAYS THE OPERATOR'S, AND STAYS EMPTY HERE. The artboard
+  // draws a lead line under the title and `Slide`'s `note` is the slot in that
+  // position, so an earlier draft fed it `${objectLabel} · ${gapLine(gap)}`.
+  // Three things were wrong with that. The serif face is SPEECH — verbatim
+  // quotes, and the one framing line a person writes (`report-deck.tsx` passes
+  // a section's framing) — so a machine-composed four-clause figures trail in
+  // it reads as something somebody said; the slot is `truncate`, one line, with
+  // no `title`, so a long subject or rival label drops the band off the end
+  // with no other trace; and the figures are set in proportional italic where
+  // every figure elsewhere on this sheet is tabular mono. The sentence is not
+  // lost — `gapLine` prints it on the gap card, in mono, marked `level`, thirty
+  // pixels below. The mock's own lead ("…narrowed to 13 points · price fading,
+  // 3rd month") is two direction claims and is refused whatever face it is set
+  // in (D1), so there is no honest sentence to put here; leaving the slot empty
+  // gives its 26px back to the body and keeps it free for the Studio.
   const stamp = `${overview.brand} · ${overview.monthStatus === 'filling' ? 'still filling' : 'frozen'} · as at ${shortDate(overview.readingAt)}`
   return (
     <Slide
@@ -682,7 +689,6 @@ export function LeadershipSheet({
       page={page}
       pages={pages}
       layout="single"
-      note={note}
     >
       <div className="flex h-full min-h-0 flex-col gap-3">
         <div className="grid shrink-0 grid-cols-[5fr_3.5fr_3.5fr] gap-4">

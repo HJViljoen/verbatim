@@ -89,12 +89,19 @@ describe('the leadership one-pager', () => {
     expect(words).toContain('Coverage')
   })
 
-  it('leads with the serif gap sentence, not the cover', () => {
-    const words = renderText(sheet())
+  it('prints the gap as both sides with their counts, in mono, not in the serif slot', () => {
+    const markup = render(sheet())
+    const words = markupText(markup)
     // D1: the gap is both sides with their counts, the difference and the band.
     expect(words).toContain('Durability')
     expect(words).toMatch(/26 of 84/)
     expect(words).toMatch(/62 of 142/)
+    // The serif face is speech — a quote, or the one framing line a person
+    // writes. A machine-composed figures trail in it reads as something
+    // somebody said, it truncates to one line with no other trace, and it
+    // takes the slot the Studio's operator writes into.
+    expect(markup).not.toContain('vb-slide-note')
+    expect(markup).not.toContain('font-serif')
   })
 
   // mock-gap §6 D1. "narrowed to 13 points" is a direction claim off two
