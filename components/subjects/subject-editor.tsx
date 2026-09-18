@@ -110,9 +110,27 @@ const cls = {
   meta: 'font-mono text-[10.5px] tabular-nums text-muted-foreground',
 }
 
+/**
+ * A control on a rail row: a REAL TARGET, and it can be reached by keyboard.
+ *
+ * The row's controls were set to 10.5px, then to 10px at `gap-x-1`, which
+ * bought two lines of rail density and left "Stop" — the one state this
+ * product cannot undo — as a roughly 28 x 13px hit area 4px from Rename, with
+ * no focus treatment of its own. WCAG 2.2's 24px target size fails twice over
+ * at that size. The text stays small, because the rail is 240px and six rows
+ * have to fit; the TARGET is padded out to 24px high and the padding is pulled
+ * back out of the line with a negative margin, so the row costs no extra
+ * height for it.
+ */
+const CONTROL = 'inline-flex min-h-6 items-center rounded-[3px] px-1 -my-1 font-sans underline-offset-2 ' +
+  'transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ' +
+  'disabled:cursor-not-allowed disabled:opacity-50'
+
 export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'rail', canEdit = false, chrome = true }: SubjectEditorProps) {
   const [adding, setAdding] = useState(false)
   const [renaming, setRenaming] = useState<SubjectEditorRow | null>(null)
+  /** Which row has been asked to stop, and has not answered yet. */
+  const [stopping, setStopping] = useState<string | null>(null)
   const [said, setSaid] = useState<{ ok: boolean; message: string } | null>(null)
   const [pending, start] = useTransition()
 
@@ -211,7 +229,7 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
                   six of these; at `gap-x-2` with 12.5px separators the line
                   wrapped and every row cost three lines instead of two, which
                   is two subjects' worth of tile. */}
-              <span className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-[10px] text-muted-foreground">
+              <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] text-muted-foreground">
                 <span className="font-mono">named {fullDate(r.namedAt)}</span>
                 {variant === 'settings' ? <span>· {r.because}</span> : null}
                 {r.status === 'retired' ? (
@@ -233,7 +251,7 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
                         type="button"
                         disabled={pending}
                         onClick={() => run(() => confirmSubjectAction(r.id))}
-                        className="font-sans font-medium text-foreground underline-offset-2 hover:underline disabled:opacity-50"
+                        className={`${CONTROL} font-medium text-foreground`}
                       >
                         Confirm
                       </button>
@@ -241,13 +259,41 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
                   </>
                 ) : null}
                 {canEdit && r.status !== 'retired' ? (
+                  stopping === r.id ? (
+                    // STOPPING IS THE ONE THING THIS PRODUCT CANNOT UNDO, and
+                    // it fired on a single click of a 13px-high word 4px from
+                    // Rename — which opens a sheet. It asks now. Two controls
+                    // in the row rather than a dialog: the row is the object,
+                    // and a modal over a 240px rail hides the set the reader is
+                    // deciding about.
+                    <>
+                      <span className="font-sans">Stop counting this subject?</span>
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() => { setStopping(null); run(() => retireSubjectAction(r.id)) }}
+                        className={`${CONTROL} font-medium text-negative`}
+                      >
+                        Yes, stop
+                      </button>
+                      <span aria-hidden>·</span>
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() => setStopping(null)}
+                        className={`${CONTROL} text-muted-foreground hover:text-foreground`}
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
                   <>
                     <span aria-hidden>·</span>
                     <button
                       type="button"
                       disabled={pending}
                       onClick={() => setRenaming(r)}
-                      className="font-sans text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:opacity-50"
+                      className={`${CONTROL} text-muted-foreground hover:text-foreground`}
                     >
                       Rename
                     </button>
@@ -255,12 +301,13 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
                     <button
                       type="button"
                       disabled={pending}
-                      onClick={() => run(() => retireSubjectAction(r.id))}
-                      className="font-sans text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:opacity-50"
+                      onClick={() => setStopping(r.id)}
+                      className={`${CONTROL} text-muted-foreground hover:text-foreground`}
                     >
                       Stop
                     </button>
                   </>
+                  )
                 ) : null}
               </span>
             </div>

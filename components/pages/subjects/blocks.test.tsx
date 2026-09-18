@@ -136,6 +136,20 @@ describe('SU1 · the subjects list', () => {
     expect(text).not.toContain('Stop')
   })
 
+  // THE ONE STATE THIS PRODUCT CANNOT UNDO GOT SMALLER AND CLOSER TO ITS
+  // NEIGHBOUR. "Stop" was a ~28 x 13px word 4px from "Rename" — which opens a
+  // sheet — firing on a single click with no focus treatment of its own. WCAG
+  // 2.2's 24px target size fails twice over at that size.
+  it('gives the rail’s controls a real target and a focus ring', () => {
+    const markup = render(subjectsList.render(subjectsFixture(), 'app', ctx))
+    const buttons = [...markup.matchAll(/<button[^>]*>(?:(?!<\/button>).)*?(Rename|Stop)</gs)].map((m) => m[0])
+    expect(buttons.length).toBe(6) // three rows, two controls each
+    for (const b of buttons) {
+      expect(b).toContain('min-h-6')
+      expect(b).toContain('focus-visible:ring')
+    }
+  })
+
   it('is email-safe', () => {
     const markup = render(subjectsList.render(subjectsFixture(), 'email', ctx))
     expect(markup).toContain('<table')
