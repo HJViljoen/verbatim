@@ -1,12 +1,13 @@
 import Link from 'next/link'
 import type { Block } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
+import { TileColumns } from '@/components/shell/page-grid'
 import { BlockQuote } from '@/components/blocks/quote'
 import { BlockRanked, type BlockRankedRow } from '@/components/blocks/bars'
 import { BlockStat } from '@/components/blocks/stat'
 import { forSalesEmpty, groupingLine, type ForSalesData, type SalesGroup, type SalesQuote } from '@/lib/blocks/for-sales'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fmtInt } from '@/lib/format'
+import { fmtInt, shortDate } from '@/lib/format'
 import type { FigureTable } from '@/lib/reading/verdicts'
 
 /**
@@ -46,18 +47,12 @@ export function forSalesBlock<D>(key: string, pick: (data: D) => ForSalesData): 
       const href = `${ctx.appUrl}${d.brief.href}`
       const of = d.videos != null ? `of ${fmtInt(d.videos)} videos this update` : 'this update'
 
-      return (
-        <BlockFrame
-          title={block.title}
-          question={block.question}
-          mode={mode}
-          meta={d.videos != null ? `${fmtInt(d.videos)} videos this update` : undefined}
-          footer={email
-            ? <a href={href} style={{ color: EMAIL.ink }}>{d.brief.label}</a>
-            : <Link href={href} className="hover:underline">{d.brief.label}</Link>}
-        >
-          {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
-
+      // THE ARTBOARD'S TWO COLUMNS: what they push back on, beside what they
+      // say in your favour and who is moving. The email arm stacks them — a
+      // two-column grid inside a 640px table is two columns Outlook lays out
+      // with Word.
+      const left = (
+        <div className={email ? undefined : 'flex min-w-0 flex-col gap-2.5'}>
           {d.objections.length > 0 ? (
             <Section title="The objections this update heard" mode={mode}>
               <BlockRanked mode={mode} rows={rank(d.objections, d.videos)} />
@@ -68,6 +63,10 @@ export function forSalesBlock<D>(key: string, pick: (data: D) => ForSalesData): 
             </Section>
           ) : null}
 
+        </div>
+      )
+      const right = (
+        <div className={email ? undefined : 'flex min-w-0 flex-col gap-2.5'}>
           {d.praise.length > 0 ? (
             <Section title="A selling point, in their words" mode={mode}>
               <Quotes quotes={d.praise} mode={mode} />
@@ -95,6 +94,17 @@ export function forSalesBlock<D>(key: string, pick: (data: D) => ForSalesData): 
                   }`}
                 />
               ) : null}
+              {/* WHICH WAY THE SWITCH RAN IS NOT RESOLVED, AND THE BLOCK SAYS
+                  SO. The artboard reads "2 this week, both toward Sealand".
+                  `SalesCitation` carries `category: 'switching_signal'` and an
+                  audience, and nothing anywhere reads a direction of travel out
+                  of the comment — so the count is printed and the direction is
+                  named as missing rather than guessed from whose video the
+                  comment sat under, which is where it was said, not where the
+                  commenter was going. */}
+              <Note mode={mode}>
+                Which way each switch ran — toward you or away — is not read from the comment, so it is not stated here.
+              </Note>
               <Quotes quotes={d.switching} mode={mode} />
             </Section>
           ) : null}
@@ -106,6 +116,25 @@ export function forSalesBlock<D>(key: string, pick: (data: D) => ForSalesData): 
               {d.videos == null && d.objections.length === 0 ? <Note mode={mode}>{NO_DENOMINATOR}</Note> : null}
             </Section>
           ) : null}
+        </div>
+      )
+
+      return (
+        <BlockFrame
+          title={block.title}
+          question={block.question}
+          mode={mode}
+          meta={d.videos != null ? `objections counted in ${fmtInt(d.videos)} videos this update` : undefined}
+          footer={email
+            ? <a href={href} style={{ color: EMAIL.ink }}>{d.brief.label}</a>
+            : <Link href={href} className="hover:underline">{d.brief.label}</Link>}
+          // THE MOCK'S "WEEK OF 21–27 SEP", in the slot it draws it in. The
+          // days are the run's own frozen window, so this note and §4's meta
+          // are the same two dates.
+          footerNote={windowNote(d.window)}
+        >
+          {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
+          {email ? <>{left}{right}</> : <TileColumns of={2}>{left}{right}</TileColumns>}
         </BlockFrame>
       )
     },
@@ -140,6 +169,14 @@ export function forSalesBlock<D>(key: string, pick: (data: D) => ForSalesData): 
     },
   }
   return block
+}
+
+/** "21–27 Sep" — the days the section's counts are of, in the footer's own
+ *  slot. Null where the update carries no window, because a footer naming days
+ *  nobody read is worse than a footer with nothing in it. */
+function windowNote(window: { from: string; to: string } | null): string | undefined {
+  if (!window) return undefined
+  return `week of ${shortDate(window.from)} – ${shortDate(window.to)}`
 }
 
 /**

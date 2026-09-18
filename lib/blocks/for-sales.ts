@@ -90,10 +90,14 @@ export interface ForSalesData {
   unread: string | null
 }
 
-/** How many objection groups a reader is shown. Three, because the mock draws
- *  three and because the sentence under them promises grounded answers to "the
- *  top three" — a list that grows past the promise is a list nobody reads. */
-export const SALES_GROUPS_SHOWN = 3
+/** How many objection groups a reader is shown.
+ *
+ *  FOUR SINCE BLOCK D WAVE 2, which is what the artboard draws
+ *  (`week.sales.objections`: price, "is it really recycled", zips, buckle and
+ *  strap). It was three, on the reasoning that the sentence under the rows
+ *  promised grounded answers to "the top three"; that sentence now says "to
+ *  these", so the promise and the list are the same length again. */
+export const SALES_GROUPS_SHOWN = 4
 
 /** How many quotes hang under one group. Two: enough to show the objection is
  *  not one person, few enough that the section stays a strip. */

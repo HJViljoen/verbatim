@@ -4,6 +4,7 @@ import { blockAnswers, blockContext, figureConflicts, type RenderMode } from '@/
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { markupText, render, renderText } from '@/lib/test/render'
+import { SALES_GROUPS_SHOWN } from '@/lib/blocks/for-sales'
 import { FIRST_SCREEN_BUDGET, LATER_LINE, RIVAL_POSTS_CONSIDERED, RIVAL_POSTS_SHOWN, type WeekData } from '@/lib/pages/week'
 import { FIRST_SCREEN, WEEK_BLOCKS, WeekPage, weekContext, weekFigureCount } from '.'
 import { weekSubjects } from './subjects'
@@ -675,11 +676,80 @@ describe('WK §5 · for sales', () => {
   })
 })
 
+describe('WK §7 · for sales', () => {
+  it('draws the artboard’s four objection rows', () => {
+    // The cap was three, on a sentence that promised "the top three"; the
+    // artboard draws four and the sentence now says "to these".
+    expect(SALES_GROUPS_SHOWN).toBe(4)
+    const text = renderText(weekSales.render(weekFixture(), 'app', ctx))
+    expect(text).toContain('Grounded answers to these sit in the sales brief.')
+  })
+
+  it('refuses the switch’s direction and says it is refused', () => {
+    // The artboard reads "2 this week, both toward Sealand". Nothing reads a
+    // direction of travel out of a switching comment — the audience on the
+    // citation is whose video it sat UNDER, not where the commenter went.
+    const text = renderText(weekSales.render(weekFixture(), 'app', ctx))
+    expect(text).toContain('7 comments')
+    expect(text).toContain('Which way each switch ran — toward you or away — is not read from the comment')
+    expect(text).not.toContain('toward Sealand')
+  })
+
+  it('puts the week of the window in the footer’s own slot', () => {
+    const text = renderText(weekSales.render(weekFixture(), 'app', ctx))
+    // The same two dates §4's meta prints, off the run's own frozen window.
+    expect(text).toContain('week of 6 Sep – 13 Sep')
+  })
+})
+
 describe('WK §6 · what worked', () => {
   it('puts an n on every row, beside the multiple', () => {
     const text = renderText(weekWorked.render(weekFixture(), 'app', ctx))
     expect(text).toContain('Promotional')
     expect(text).toContain('1.8× the median · 128 of 331 videos')
+  })
+
+  it('prints your own hooks on the published clock, and says which clock', () => {
+    // `week.worked.yourhooks` — the mock's tinted panel, and the one panel on
+    // this block about the client's own content. D9: everything above it is
+    // dated by the update that GATHERED a video; these are the videos the
+    // client PUBLISHED in the month, so the basis travels with the figure.
+    const text = renderText(weekWorked.render(weekFixture(), 'app', ctx))
+    expect(text).toContain('Your own hooks, month to date')
+    expect(text).toContain('videos published in September')
+    // Two numbers where the artboard prints one, and the larger: 81 of Össur's
+    // 109 published videos carry a hook at all.
+    expect(text).toContain('of 81 posts with a hook, 109 published')
+  })
+
+  it('says which median the multiple is against, and not the mock’s', () => {
+    // The artboard reads "median engagement · TikTok · month to date"; what is
+    // computed is the median video of this update, on every platform whose
+    // rate is comparable.
+    const text = renderText(weekWorked.render(weekFixture(), 'app', ctx))
+    expect(text).toContain('against this update’s own median video')
+    // The artboard's own words appear nowhere on the format rows. ("month to
+    // date" survives as the heading of the OWN-hooks panel, which is a month
+    // reading and says so.)
+    expect(text).not.toContain('median engagement · TikTok')
+  })
+
+  it('draws no stacked hook bar, and invents no hook taxonomy', () => {
+    // D4: a mix drawn as one bar reads as a partition and invites summing.
+    // The mock's "on-screen text against spoken" is not the classifier's
+    // column and nothing reduces `ocr_text` and `transcript_en` to a mix.
+    const text = renderText(weekWorked.render(weekFixture(), 'app', ctx))
+    expect(text).not.toContain('On-screen text')
+    expect(text).not.toContain('Caption only')
+    expect(text).toContain('Question')
+    // Every hook row keeps its own denominator.
+    expect(text).toContain('181 of 331 videos')
+  })
+
+  it('says the own side is unread rather than printing a zero', () => {
+    const d = weekFixture()
+    const text = renderText(weekWorked.render({ ...d, worked: { ...d.worked, sides: null } }, 'app', ctx))
+    expect(text).toContain('has not been read here')
   })
 
   it('says whose videos it read', () => {
