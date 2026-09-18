@@ -179,7 +179,19 @@ function SubjectBlock({ row, sentLine }: { row: SubjectRow; sentLine: string | n
                       six, which is only legible if your side's answer is on the
                       row. "you" / "the category" are the artboard's own column
                       words, not new vocabulary. */}
-                  <td align="right" style={{ paddingLeft: 10, whiteSpace: 'nowrap', verticalAlign: 'baseline' }}>
+                  {/* AND THE CELL BREAKS BETWEEN THE SIDES, NEVER INSIDE ONE
+                      (the fix pass, review finding [Critical]). Held
+                      `white-space: nowrap`, the four things in this cell
+                      measured 435px, which set a 553px floor on the card and a
+                      593px document at every viewport under 593 — so the
+                      artefact could not be read on a phone, which is where a
+                      monthly report is opened most. Each side is now its own
+                      inline-block that will not break INTERNALLY ("you" never
+                      parts from its badge, "the category" never from its
+                      direction word), and the cell wraps between them: one
+                      line at 640, two or three on a phone, the same words in
+                      the same order. */}
+                  <td align="right" style={{ paddingLeft: 10, verticalAlign: 'baseline' }}>
                     {/* A SIDE'S LABEL ONLY WHERE THAT SIDE HAS AN ANSWER. A
                         bare "you" with nothing after it — which is what a null
                         verdict left behind — reads as a truncated sentence, and
@@ -187,15 +199,23 @@ function SubjectBlock({ row, sentLine }: { row: SubjectRow; sentLine: string | n
                         label at all. No verdict is not a refusal: it is a first
                         reading, and the row simply shows no comparison. */}
                     {row.you.verdict ? (
-                      <>
+                      <span style={{ display: 'inline-block', whiteSpace: 'nowrap' }}>
                         <span style={{ fontFamily: FONT.sans, fontSize: 10.5, color: EMAIL.faint, marginRight: 4 }}>you</span>
                         <BlockMovement verdict={row.you.verdict} unit="pts" mode="email" />
-                      </>
+                      </span>
                     ) : null}
                     {row.category.verdict ? (
                       <>
-                        <span style={{ fontFamily: FONT.sans, fontSize: 10.5, color: EMAIL.faint, margin: row.you.verdict ? '0 4px 0 8px' : '0 4px 0 0' }}>the category</span>
-                        <BlockMovement verdict={row.category.verdict} unit="pts" mode="email" />{' '}
+                        <span style={{ display: 'inline-block', whiteSpace: 'nowrap', marginLeft: row.you.verdict ? 8 : 0 }}>
+                          <span style={{ fontFamily: FONT.sans, fontSize: 10.5, color: EMAIL.faint, marginRight: 4 }}>the category</span>
+                          <BlockMovement verdict={row.category.verdict} unit="pts" mode="email" />
+                        </span>{' '}
+                        {/* THE DIRECTION WORD IS ITS OWN GROUP. It belongs to
+                            the category's reading and reads as such beside it,
+                            but three months of consecutive readings is a
+                            SEPARATE claim from the banded change, so breaking
+                            the line between them loses nothing — and holding
+                            them together was 40px of the phone's floor. */}
                         <DirectionWord direction={row.direction} mode="email" />
                       </>
                     ) : null}

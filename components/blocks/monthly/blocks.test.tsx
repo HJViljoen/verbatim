@@ -469,6 +469,27 @@ describe('the five sections that are Overview’s', () => {
     expect(text).not.toMatch(/narrowed/i)
   })
 
+  // THE FIX PASS: THE ARTEFACT HAS TO FIT A PHONE (review finding [Critical]).
+  // Measured in the repo's own Chromium on all three fixture states, this
+  // branch held the document at 593 / 389 / 398 px at every viewport below
+  // that — a monthly report that could not be read in the place it is most
+  // often opened. Three things set the floor and all three are markup this
+  // tier can see: an unbreakable verdict cell in section 2, pixel widths on
+  // two rivals columns, and twelve acted segments held on one line. A render
+  // test cannot measure a layout, so it pins the three causes; the measurement
+  // itself is in the status note.
+  it('keeps no unbreakable box wider than a phone', () => {
+    for (const data of STATES) {
+      const subjects = render(MONTHLY_BLOCKS['monthly.subjects'].render(data, 'email', ctx))
+      // No CELL is unbreakable — the sides inside it are, one at a time.
+      expect(subjects).not.toMatch(/<td[^>]*white-space:nowrap/)
+      const rivals = render(MONTHLY_BLOCKS['monthly.rivals'].render(data, 'email', ctx))
+      // Chrome takes a pixel width on an auto-layout cell as that column's
+      // minimum, so the figure and verdict columns carry none.
+      expect(rivals).not.toMatch(/width:112px|width:124px/)
+    }
+  })
+
   // THE METER MAY NOT SAY MORE THAN THE FIGURE BESIDE IT (review finding
   // [Important]). It drew min(of, 12) segments and filled max(1, round(…)), so
   // "1 of 64" — 1.6% — drew as 1 of 12, or 8.3%: a picture five times its own

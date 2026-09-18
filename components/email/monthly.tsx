@@ -83,17 +83,21 @@ export function MonthlyEmail({ data, shareUrl, appUrl, attached, ctx, preheader 
                             It is the only green on the artefact above the
                             button, and it is what makes the masthead read as a
                             masthead rather than as a first paragraph. */}
-                        <table {...presentation} style={{ borderCollapse: 'collapse', borderSpacing: 0 }}>
-                          <tbody>
-                            <tr>
-                              <td width={30} style={{ width: 30, verticalAlign: 'middle', lineHeight: 0 }}>
-                                <span style={{ display: 'inline-block', width: 30, height: 3, borderRadius: 2, background: EMAIL.green, fontSize: 0, lineHeight: 0 }} />
-                              </td>
-                              <td width={10} style={{ width: 10, fontSize: 1 }}>&nbsp;</td>
-                              <td style={text.eyebrow}>{monthlyEyebrow(data.month, data.monthStatus, data.readingAt)}</td>
-                            </tr>
-                          </tbody>
-                        </table>
+                        {/* AND THE RULE IS INSIDE THE SENTENCE'S OWN BOX (the
+                            fix pass, review finding [Important]). As three
+                            cells of a bare shrink-to-fit table — a 30px rule,
+                            a 10px spacer and the words — the masthead sized
+                            itself to the eyebrow's max-content plus 40px of
+                            fixed lead and held the WHOLE artefact at a 398px
+                            floor in all three arms, so even with section 2
+                            fixed the email was wider than an iPhone. The rule
+                            is now an inline-block at the head of the line, as
+                            the artboard draws it, and the sentence wraps
+                            under itself like any other sentence. */}
+                        <div style={{ ...text.eyebrow, lineHeight: '1.45' }}>
+                          <span style={{ display: 'inline-block', width: 30, height: 3, borderRadius: 2, background: EMAIL.green, verticalAlign: 'middle', marginRight: 10, fontSize: 0, lineHeight: 0 }} />
+                          {monthlyEyebrow(data.month, data.monthStatus, data.readingAt)}
+                        </div>
                         <div style={{ fontFamily: FONT.serif, fontSize: 20, fontWeight: 500, lineHeight: '1.25', letterSpacing: '-.01em', color: EMAIL.ink2, marginTop: 11 }}>{data.subject}</div>
                         {/* THE CONTEXT ROW: the month's own days and the updates
                             that were delivered into it on the left, the tenant
