@@ -9,7 +9,7 @@ import type { GlossaryKey } from '@/lib/calibration'
 import type { MarketSurfaceData } from '@/lib/pages/market-surface'
 import { marketConclusions } from './conclusions'
 import { marketAdvice } from './advice'
-import { marketCard } from './card'
+import { CARD_CLAIMS_SHOWN, marketCard } from './card'
 import { marketMoves } from './moves'
 import { marketSayHear } from './sayhear'
 import { marketPlans } from './plans'
@@ -108,17 +108,132 @@ const COLS: Record<string, number> = {
   'market.ways': 12,
 }
 
-/** How tall each block's tile is, in the grid's 116px row units. A block that
- *  grows past its box scrolls with the page (MASTER rule 7). */
-const ROWS: Record<string, number> = {
-  'market.conclusions': 3,
-  'market.advice': 5,
-  'market.card': 5,
-  'market.moves': 5,
-  'market.sayhear': 3,
-  'market.plans': 5,
-  'market.unlocks': 3,
-  'market.ways': 2,
+// ── how tall each tile is ─────────────────────────────────────────────────────
+//
+// A TILE IS A FIXED BOX AND ITS CONTENT IS NOT, WHICH IS ONE DECISION SEEN FROM
+// TWO ENDS. `Tile` is `overflow-hidden` over an `N × 116px` grid area at ≥xl:
+// a block taller than its span is CUT — no scrollbar, no fade, no affordance —
+// and a block shorter than it shows empty ground. Both ends shipped in the
+// port, from one table of constants tuned against a fixture thinner than the
+// page:
+//
+//   * the ledger draws THREE rows in the fixture and TWELVE in production.
+//     Measured at 1440, twelve rows want 1,435px of a 644px box, so rows 5–12,
+//     the "you have acted on 2 of 64" line and the grounding note were gone
+//     from the page the block is named after;
+//   * and in the arm every new workspace starts in — the gather is meant to
+//     fill up over time, so this is the first weeks of every account, not an
+//     edge case — the same constants held Plans re-checked at 644px for two
+//     sentences, Say vs hear at 380 for one, and more than half the page was
+//     white ground inside shadowed boxes.
+//
+// SO THE SPAN IS READ OFF THE DATA. Each block estimates the height it is
+// about to draw from what it is about to draw — rows, claims, readings,
+// series — in px measured at 1440 through the dashboard shell's own geometry
+// (sidebar 14rem, main p-6), and the span is that height in row units, rounded
+// up. The estimate errs HIGH by design: a row of slack is 132px of white and a
+// row short is a table with its bottom cut off.
+//
+// AND A GRID ROW IS ONE HEIGHT. The tiles that sit beside each other take the
+// TALLEST of their own estimates, so the grid stays rectangular: a per-tile
+// span in one row lets CSS grid's auto-placement flow the next tile into the
+// gap beside a short one, which reorders the page.
+const ROW_UNIT = 116
+const ROW_GAP = 16
+const spanFor = (px: number): number =>
+  Math.min(12, Math.max(2, Math.ceil((px + ROW_GAP) / (ROW_UNIT + ROW_GAP))))
+
+/**
+ * What each block is about to draw, in px.
+ *
+ * MEASURED AT 1280, NOT AT 1440 — the low end of MASTER's stated primary range
+ * ("verified at 1280–1440px") and the width at which these tiles are TALLEST,
+ * because the grid is still twelve columns there and every column is narrower.
+ * Tuning at 1440 is how the Plans tile came to drop its own footer — "See the
+ * claim-by-claim verdicts → · as re-read on 13 Sep" — at 1280 and only at
+ * 1280: present at the width it was reviewed at, gone at the width nobody
+ * re-checked. The cost of measuring at the narrow end is some white at the
+ * wide one, which `distribute="between"` spreads through the tile rather than
+ * pooling under it.
+ *
+ * Every constant here was measured with the fix pass's own probe against all
+ * five fixture states, and the comment beside each says what it counts.
+ */
+const HEIGHT: Record<string, (d: MarketSurfaceData) => number> = {
+  // Chrome, then one row of two-abreast cards per pair above the bar.
+  'market.conclusions': (d) => 120 + Math.ceil(d.conclusions.rows.filter((r) => r.tier !== 'archive').length / 2) * 137,
+  // Chrome + header, a table row each, a taller row wherever the Afterwards
+  // cell holds a verdict (two months, the badge and the caveat), and the one
+  // expanded row's argument and comment.
+  'market.advice': (d) => {
+    const rows = d.advice.rows
+    if (rows.length === 0) return 150
+    const verdicts = rows.filter((r) => r.afterwards.state === 'reading').length
+    const expanded = rows.some((r) => r.why || r.quote) ? 130 : 0
+    return 120 + rows.length * 80 + verdicts * 45 + expanded
+  },
+  // The card's parts, each counted: the lead figure and the floor, the claims
+  // at two lines each, the hooks row, the subjects row and its basis, and a
+  // movement row per side.
+  'market.card': (d) => {
+    const card = d.moves.card
+    if (!card) return 150
+    const claims = Math.min(card.claimRows.length, CARD_CLAIMS_SHOWN)
+    const movements = [card.movement.yours, card.movement.category].filter(Boolean).length
+    return 289 + claims * 40 + (card.hooks.some((h) => h.value.k > 0) ? 26 : 0) + 60 + movements * 62
+  },
+  // A read move is a chart, its legend and one line per side; a declared move
+  // with nothing read yet is a sentence.
+  'market.moves': (d) => {
+    const read = d.moves.readings
+    const sides = read.reduce((n, r) => n + (r.verdict ? 1 : 0) + r.control.length, 0)
+    const charts = read.filter((r) => r.chartNote == null && r.months.length > 0).length
+    const unscored = d.moves.rows.length - read.length
+    return 110 + charts * 250 + read.length * 60 + sides * 40 + Math.max(0, unscored) * 24 + 60
+  },
+  // A claim is the client's line, its verdict and the audience's answer.
+  'market.sayhear': (d) => 90 + d.ways.claims.length * 70 + 60,
+  // The plan's title row, the bar, the three counts, the lead claim with its
+  // comment, and a line per claim that moved.
+  'market.plans': (d) => {
+    const card = d.plans[0]
+    if (!card) return 110
+    const lead = card.claims.length > 0 ? 215 : 0
+    return 260 + lead + card.moved.length * 48
+  },
+  // One block per section that is not built, each with its owner.
+  'market.unlocks': (d) => 105 + d.unlocks.rows.length * 95,
+  // Two lines of 44px slots at 1440, and under each the sentence a dead way
+  // now prints for itself.
+  'market.ways': (d) => {
+    const ways = d.ways.ways
+    const lines = Math.max(1, Math.ceil(ways.length / 4))
+    const note = ways.some((w) => !w.live) ? 77 : ways.some((w) => w.unlock) ? 45 : 0
+    return 60 + lines * (44 + note)
+  },
+}
+
+/** The grid rows of this page, in order: the two full-width readings, then the
+ *  artboard's moves row, the three narrow cards, and the button strip. Tiles
+ *  named on one line share its height. */
+const GRID_ROWS: readonly (readonly string[])[] = [
+  ['market.conclusions'],
+  ['market.advice'],
+  ['market.card', 'market.moves'],
+  ['market.sayhear', 'market.plans', 'market.unlocks'],
+  ['market.ways'],
+]
+
+/** How tall each block's tile is, in the grid's 116px row units — computed from
+ *  the data it is about to draw. Exported so the rule is testable without a
+ *  browser. */
+export function tileRows(data: MarketSurfaceData): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const line of GRID_ROWS) {
+    const span = Math.max(...line.map((key) => spanFor(HEIGHT[key]?.(data) ?? 248)))
+    for (const key of line) out[key] = span
+  }
+  return out
 }
 
 /** The words this page is measured against, for "How to read this page". Every
@@ -154,11 +269,12 @@ export function MarketSurfacePage({
   }
 
   const ctx = marketContext(params)
+  const rows = tileRows(data)
   const tile = (block: Block<MarketSurfaceData>) => (
     <Tile
       key={block.key}
       col={COLS[block.key] ?? 12}
-      row={ROWS[block.key] ?? 2}
+      row={rows[block.key] ?? 2}
       distribute="between"
     >
       {block.render(data, 'app', ctx)}

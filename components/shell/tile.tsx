@@ -20,15 +20,29 @@ const COL: Record<number, string> = {
   5: 'xl:col-span-5', 6: 'xl:col-span-6', 7: 'xl:col-span-7', 8: 'xl:col-span-8',
   9: 'xl:col-span-9', 10: 'xl:col-span-10', 11: 'xl:col-span-11', 12: 'xl:col-span-12',
 }
+// SIX BECAME TWELVE, ADDITIVELY (Block D wave 2, the Market fix pass). Every
+// existing span keeps its exact class and its exact min-height; the map simply
+// answers for a taller tile. A tile is `overflow-hidden` on a fixed
+// `N × 116px` area at ≥xl, so a block whose content is taller than its span
+// does not scroll and does not grow — it is CUT, with no scrollbar and no
+// affordance. Market's ledger draws twelve rows in production and was tuned
+// from a three-row fixture: measured at 1440 it wanted 1,435px of a 644px box,
+// and rows 5–12, the "you have acted on 2 of 64" line and the grounding note
+// were simply gone. A page cannot hide the table it is named after, so the
+// span has to be able to say eleven.
 const ROW: Record<number, string> = {
   1: 'xl:row-span-1', 2: 'xl:row-span-2', 3: 'xl:row-span-3',
   4: 'xl:row-span-4', 5: 'xl:row-span-5', 6: 'xl:row-span-6',
+  7: 'xl:row-span-7', 8: 'xl:row-span-8', 9: 'xl:row-span-9',
+  10: 'xl:row-span-10', 11: 'xl:row-span-11', 12: 'xl:row-span-12',
 }
 // Stacked (sub-xl) heights roughly follow the row span so the page keeps its
 // rhythm when it scrolls; a 1-row tile is at least one row unit tall.
 const MIN_H: Record<number, string> = {
   1: 'min-h-[116px]', 2: 'min-h-[248px]', 3: 'min-h-[380px]',
   4: 'min-h-[512px]', 5: 'min-h-[644px]', 6: 'min-h-[776px]',
+  7: 'min-h-[908px]', 8: 'min-h-[1040px]', 9: 'min-h-[1172px]',
+  10: 'min-h-[1304px]', 11: 'min-h-[1436px]', 12: 'min-h-[1568px]',
 }
 
 // `warm` was retired 2026-09-18 (Block D wave 1, P0 item 2). It was a tone

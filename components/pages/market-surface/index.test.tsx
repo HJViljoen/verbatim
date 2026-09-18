@@ -7,7 +7,8 @@ import { markupText as markupOf, render, renderText } from '@/lib/test/render'
 import { ADVICE_REQUESTED_GONE } from '@/lib/pages/market-surface'
 import { MOVES_UNLOCK } from '@/lib/pages/overview'
 import { pageModule } from '@/components/pages/registry'
-import { MARKET_BLOCKS } from './index'
+import type { AdviceRow } from '@/lib/pages/market-surface'
+import { MARKET_BLOCKS, tileRows } from './index'
 import { marketConclusions } from './conclusions'
 import { marketAdvice } from './advice'
 import { marketCard } from './card'
@@ -133,6 +134,75 @@ describe('Market · every block, every mode, every state', () => {
       expect(a.verdicts.every((v) => v != null)).toBe(true)
       expect(a.quotes.every((q) => typeof q === 'string' && q.length > 0)).toBe(true)
     }
+  })
+})
+
+describe('the tiles are as tall as what they draw', () => {
+  // A tile is `overflow-hidden` over a fixed N × 116px grid area at >= xl, so a
+  // block taller than its span is CUT with no scrollbar and no affordance, and
+  // a block shorter than it shows empty ground. The port set one table of
+  // constants from a fixture thinner than the page: the ledger draws three rows
+  // in the fixture and twelve in production, where it wanted 1,435px of a 644px
+  // box — rows 5 to 12, the acted line and the grounding note all gone.
+  //
+  // These are the RULES the estimate has to keep. The pixel constants behind it
+  // were measured in a browser at 1280 (the low end of the primary range, where
+  // these tiles are tallest); this asserts the arithmetic and the shape.
+  const twelveRowLedger = () => {
+    const base = marketFixture()
+    const rows: AdviceRow[] = Array.from({ length: 12 }, (_, i) => ({
+      ...base.advice.rows[i % base.advice.rows.length],
+      lineageId: `L-${i}`,
+      recommendationId: `r-${i}`,
+      number: i + 1,
+    }))
+    return { ...base, advice: { ...base.advice, rows } }
+  }
+
+  it('grows the ledger with its rows, up to the twelve production draws', () => {
+    const three = tileRows(marketFixture())['market.advice']
+    const twelve = tileRows(twelveRowLedger())['market.advice']
+    expect(three).toBe(5)
+    // 11 row units is 1,436px, which is what twelve rows measured.
+    expect(twelve).toBe(11)
+    expect(twelve).toBeGreaterThan(three)
+  })
+
+  it('shrinks the arm every new workspace starts in', () => {
+    // The gather fills up over time, so this is the first weeks of every
+    // account rather than an edge case: half a page of white inside shadowed
+    // boxes is what a client met.
+    const full = tileRows(marketFixture())
+    const thin = tileRows(firstUpdateFixture())
+    const total = (r: Record<string, number>) => Object.values(r).reduce((a, b) => a + b, 0)
+    expect(total(thin)).toBeLessThan(total(full))
+    expect(thin['market.advice']).toBe(2)
+  })
+
+  it('gives the tiles that sit beside each other one height', () => {
+    // A per-tile span inside one grid line lets CSS grid flow the next tile up
+    // into the gap beside a short one, which reorders the page.
+    for (const data of STATES) {
+      const rows = tileRows(data)
+      expect(rows['market.card']).toBe(rows['market.moves'])
+      expect(rows['market.sayhear']).toBe(rows['market.plans'])
+      expect(rows['market.plans']).toBe(rows['market.unlocks'])
+    }
+  })
+
+  it('never asks for a span the grid cannot draw', () => {
+    for (const data of [...STATES, twelveRowLedger()]) {
+      for (const [key, span] of Object.entries(tileRows(data))) {
+        expect(span, key).toBeGreaterThanOrEqual(2)
+        expect(span, key).toBeLessThanOrEqual(12)
+        expect(Number.isInteger(span)).toBe(true)
+      }
+    }
+  })
+
+  it('answers for every block on the page', () => {
+    const rows = tileRows(marketFixture())
+    for (const block of MARKET_BLOCKS) expect(rows[block.key]).toBeGreaterThan(0)
   })
 })
 
