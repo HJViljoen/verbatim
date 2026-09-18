@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { isAudienceSentiment } from '../competitive-tiles'
+import { median } from '../content-tiles'
 import { fmtInt, longMonth } from '../format'
 import { EXCLUDED_NOTE, ENGAGEMENT_EXCLUDED, belowMedian, formatMatrix, formatReading, type FormatMatrix, type FormatRow, type FormatVideo } from '../reading/formats'
 import { headToHead, type HeadToHead, type HeadToHeadSide } from '../reading/head-to-head'
@@ -90,8 +91,13 @@ export function buildPlaybook(input: {
   brand: string
   rival: string | null
   videos: readonly PlaybookVideo[]
+  /** Platforms whose engagement rate is not comparable. Defaulted here, and
+   *  defaulted the SAME WAY in `buildHeadToHead`, so the one page cannot print
+   *  two medians of the same videos under two exclusion lists. */
+  excludePlatforms?: readonly string[]
 }): PlaybookBlock {
   const month = monthStartOf(input.month)
+  const excludePlatforms = input.excludePlatforms ?? ENGAGEMENT_EXCLUDED
   const rivalAudience = input.rival ? rivalKey(input.rival) : null
   const published = input.videos.filter((v) => inMonth(v, month))
 
@@ -109,7 +115,7 @@ export function buildPlaybook(input: {
         audienceLabel: side.label,
         key,
         videos: published.filter((v) => audienceOf(v) === side.audience),
-        excludePlatforms: ENGAGEMENT_EXCLUDED,
+        excludePlatforms,
         label: workedLabel,
       }),
     )
@@ -179,8 +185,11 @@ export function buildHeadToHead(input: {
   rival: string
   videos: readonly PlaybookVideo[]
   denominators: readonly { month: string; audience: string; videos: number; comments: number }[]
+  /** As `buildPlaybook` — same default, threaded rather than hardcoded. */
+  excludePlatforms?: readonly string[]
 }): HeadToHead {
   const month = monthStartOf(input.month)
+  const excludePlatforms = input.excludePlatforms ?? ENGAGEMENT_EXCLUDED
   const previousMonth = prevMonth(month)
   const rivalAudience = rivalKey(input.rival)
 
@@ -202,8 +211,8 @@ export function buildHeadToHead(input: {
       label,
       month: denom(audience, month),
       previous: denom(audience, previousMonth),
-      engagement: medianRate(now),
-      engagementPrev: medianRate(before),
+      engagement: medianRate(now, excludePlatforms),
+      engagementPrev: medianRate(before, excludePlatforms),
       published: now.length,
       publishedPrev: before.length,
       sentiment: moodOf(now),
@@ -226,16 +235,30 @@ export function buildHeadToHead(input: {
 const ownedCount = (videos: readonly PlaybookVideo[]): number =>
   videos.filter((v) => v.source === 'owned' || v.source === 'competitor_owned').length
 
-function medianRate(videos: readonly PlaybookVideo[]): { median: number | null; n: number } {
+/**
+ * CO3's engagement median — `lib/content-tiles.ts:median`, the same one
+ * `formatReading` uses, over the same rows under the same exclusion list.
+ *
+ * It rolled its own middle-of-a-sorted-array once and hardcoded
+ * `ENGAGEMENT_EXCLUDED` while `formatReading` took the list as a parameter, so
+ * a caller that ever overrode the exclusion got CO3 and CO7 printing two
+ * different medians of the same videos on one page. AGENTS.md's own rule:
+ * three hand-rolled ones is how "3.4%", "3%" and "3.4 pct" reach one product.
+ *
+ * No `ENGAGEMENT_MIN_VIDEOS` floor here on purpose: this is the SIDE's own
+ * median over every rated video it published, which is `FormatReading.median`'s
+ * position and not a per-format group's, and its `n` is printed beside it.
+ */
+function medianRate(
+  videos: readonly PlaybookVideo[],
+  excludePlatforms: readonly string[],
+): { median: number | null; n: number } {
   const rates = videos
-    .filter((v) => !ENGAGEMENT_EXCLUDED.includes(v.platform))
+    .filter((v) => !excludePlatforms.includes(v.platform))
     .map((v) => Number(v.engagement_rate))
     .filter((e) => Number.isFinite(e) && e > 0)
-    .sort((a, b) => a - b)
-  if (rates.length === 0) return { median: null, n: 0 }
-  const mid = Math.floor(rates.length / 2)
-  const value = rates.length % 2 ? rates[mid] : (rates[mid - 1] + rates[mid]) / 2
-  return { median: Math.round(value * 10) / 10, n: rates.length }
+  const value = median(rates)
+  return { median: value === null ? null : Math.round(value * 10) / 10, n: rates.length }
 }
 
 /** Audience-family sentiment only — how commenters received the video, never
@@ -262,13 +285,24 @@ function moodOf(videos: readonly PlaybookVideo[]): { positive: number; judged: n
  * stated against, on the published clock, so the figure reads "5 of the 9 you
  * published in September" rather than a share of a gather.
  */
-export function ownSides(input: { month: string; brand: string; videos: readonly PlaybookVideo[] }): {
+export function ownSides(input: {
+  month: string
+  brand: string
+  videos: readonly PlaybookVideo[]
+  excludePlatforms?: readonly string[]
+}): {
   formats: FormatMatrix
   hooks: FormatMatrix
   coverageLine: string
   basisLine: string
 } {
-  const built = buildPlaybook({ month: input.month, brand: input.brand, rival: null, videos: input.videos })
+  const built = buildPlaybook({
+    month: input.month,
+    brand: input.brand,
+    rival: null,
+    videos: input.videos,
+    excludePlatforms: input.excludePlatforms,
+  })
   const mine = (m: FormatMatrix): FormatMatrix => ({ ...m, sides: m.sides.filter((s) => s.audience === CLIENT_AUDIENCE) })
   return {
     formats: mine(built.formats),

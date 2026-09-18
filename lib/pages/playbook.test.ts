@@ -244,6 +244,33 @@ describe('buildHeadToHead · CO3', () => {
   it('names the rival’s videos and what they are of, in the footer', () => {
     expect(h2h().footerLine).toBe('42 videos of theirs read in Sep 2026, of 449 read in all.')
   })
+
+  it('reads its median off the same exclusion list CO7 does, whatever that list is', () => {
+    // One page, two sections, one set of videos: if the head-to-head hardcodes
+    // the exclusion and the playbook takes it as a parameter, a caller that
+    // ever overrides it gets two medians of the same videos side by side.
+    const videos = [
+      ...run('client', 3, { classified_type: 'story', engagement_rate: 2 }),
+      ...run('client', 3, { classified_type: 'story', engagement_rate: 40, platform: 'youtube' }),
+    ]
+    const den = [{ month: '2026-09-01', audience: 'client', videos: 6, comments: 60 }]
+    const both = (excludePlatforms: readonly string[]) => {
+      const h = buildHeadToHead({
+        month: '2026-09-01', brand: 'Össur', rival: 'Ottobock', videos, denominators: den, excludePlatforms,
+      })
+      const p = buildPlaybook({ month: '2026-09-01', brand: 'Össur', rival: null, videos, excludePlatforms })
+      return [
+        h.measures.find((m) => m.key === 'engagement')!.you!.figure!.value,
+        p.formats.sides.find((side) => side.audience === 'client')!.median.value,
+      ]
+    }
+    const [h2hAll, playbookAll] = both(['reddit'])
+    expect(h2hAll).toBe(playbookAll)
+    expect(h2hAll).toBe(21)
+    const [h2hNoYouTube, playbookNoYouTube] = both(['reddit', 'youtube'])
+    expect(h2hNoYouTube).toBe(playbookNoYouTube)
+    expect(h2hNoYouTube).toBe(2)
+  })
 })
 
 describe('coverageLine', () => {
