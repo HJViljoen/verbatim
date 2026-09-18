@@ -130,7 +130,7 @@ function FindingChart({ f }: { f: FindingMeasure }) {
   const readable = values.filter((v) => v != null).length
   if (label) {
     return (
-      <div className="flex w-[300px] shrink-0 flex-col justify-center gap-1">
+      <div className="flex w-[380px] shrink-0 flex-col justify-center gap-1">
         <p className="m-0 font-mono text-[11px] text-muted-foreground">{label}</p>
         <p className="m-0 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
           {readable === 0
@@ -141,14 +141,20 @@ function FindingChart({ f }: { f: FindingMeasure }) {
     )
   }
   return (
-    <div className="w-[300px] shrink-0">
+    <div className="w-[380px] shrink-0">
       <CalendarLine
         axis={f.chart.axis}
         series={[f.chart.line]}
-        width={300}
+        width={380}
+        // The artboard's box is 300 wide with the plot ending at x=200 and the
+        // end label beside it. The end label here carries the AUDIENCE's own
+        // words and the denominator ("The category 9.4% of 1,388") where the
+        // mock's carries a rival's short name and a bare percentage, so the
+        // box is 80px wider and the right gutter 66px deeper — a clipped
+        // denominator is a level without its "of N".
         height={104}
         padL={30}
-        padR={104}
+        padR={170}
         legend={false}
         format={(v) => `${v}%`}
         label={`${f.audienceLabel}, month by month`}

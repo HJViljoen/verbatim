@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react'
-import { PageFrame } from '@/components/shell/page-grid'
-import { SurfacePageBar } from '@/components/shell/page-bar'
+import { PageBar, PageFrame } from '@/components/shell/page-grid'
+import { HowSound } from '@/components/shell/how-sound'
 import { HowToRead } from '@/components/how-to-read'
 import { ExportMenu } from '@/components/export-menu'
-import { surface } from '@/lib/nav'
+import { hasRecord, surface } from '@/lib/nav'
 import { THIRTEEN_WORDS, READER_FLAGS } from '@/lib/calibration'
 
 // Ask's shell (Block D wave 2, E-ask · `ask.shell`, `ask.bar.question`).
@@ -21,6 +21,18 @@ import { THIRTEEN_WORDS, READER_FLAGS } from '@/lib/calibration'
 // corpus is searchable. That string is composed in the loader
 // (`AgentThreadData.bar.context`) and passed in, so the page and the deck say
 // it once.
+//
+// AND THAT IS WHY THIS COMPOSES `PageBar` RATHER THAN MOUNTING
+// `SurfacePageBar`. `SurfacePageBar` fills its context slot from a MONTH
+// reading or from This week's two updates, and a `title` bar gets neither — so
+// Ask's basis could only be passed through the bar's `children`, which is the
+// shrink-0 controls group at the right-hand end. On a workspace whose months
+// are not recorded the basis line is 174px longer than the viewport and the
+// whole page scrolled sideways, measured at 1440. The label, the question and
+// the record gate still come from `lib/nav.ts` — the one table — so nothing
+// here is a second opinion about what Ask is called or whether it states a
+// basis. A one-line additive `context` prop on `SurfacePageBar` would let this
+// go back to the shared component; that file is `main`'s.
 //
 // THE RECORD BAND IS THE ONE CONTROL ASK GAINED. `hasRecord(s)` admits Ask
 // because Ask is the one reader whose direction-word flag is true, and a
@@ -53,15 +65,15 @@ export function AskShell({
   return (
     <PageFrame>
       <div className="flex shrink-0 flex-col gap-1.5">
-        <SurfacePageBar nav="ask" params={params} record={record}>
-          {/* The bar's own context slot takes a MONTH line on a reading
-              surface and Ask has none, so the basis is printed here — in the
-              same mono, at the same weight, in the same place the other six
-              print their month. */}
-          <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">{context}</span>
+        <PageBar title={s.label} context={context} subtitle={s.question ?? undefined}>
           <HowToRead items={ASK_LEGEND} basePath={s.href} anchor="ask" />
           <ExportMenu />
-        </SurfacePageBar>
+        </PageBar>
+        {/* Under the bar, not in it: the basis is a sentence a reader reads,
+            not a control they operate. Gated on `hasRecord` exactly as the
+            shared bar gates it, so the day Ask stops making a reading the band
+            goes with one edit to the table. */}
+        {record && hasRecord(s) && <HowSound basePath={s.href} params={params} line={record.line} lines={record.lines} />}
       </div>
       {children}
     </PageFrame>
