@@ -135,6 +135,20 @@ describe('voiceMovers', () => {
     expect(draw(bare)).toContain('Nothing moved clearly this month.')
   })
 
+  it('rules the two-column comparison off before the neutral arm', () => {
+    // "Inside the band" lands directly under "a larger share than last month",
+    // at the same width, with the columns' own rule stopping just above it: a
+    // scan attributes a no-clear-change row to the larger-share arm. The rule
+    // runs the full width of the block, so it reads as the end of the
+    // comparison rather than as a divider inside one column of it.
+    const markup = render(voiceMovers.render(voiceFixture(), 'app', ctx))
+    const flat = markup.indexOf('Inside the band')
+    expect(flat).toBeGreaterThan(-1)
+    expect(markup.slice(0, flat)).toContain('<div class="border-t border-border/70"></div>')
+    // No rule where there is no neutral arm to separate.
+    expect(render(voiceMovers.render(refusedVoiceFixture(), 'app', ctx))).not.toContain('<div class="border-t border-border/70"></div>')
+  })
+
   it('names no audience in its heading — the audience is the switch\u2019s, and it travels on the meta', () => {
     // The artboard was drawn in the category and "Movers · category themes"
     // was ported as a constant. Read in the client's own brand the block then

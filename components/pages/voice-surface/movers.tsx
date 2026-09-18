@@ -258,7 +258,17 @@ export const voiceMovers: Block<VoiceSurfaceData> = {
             {/* THE THIRD ARM KEEPS THE COLUMN WIDTH OF THE TWO ABOVE IT. It
                 has no opposite — the artboard has no "inside the band" arm at
                 all — so it is not a second column; run full width, its badges
-                sit a foot away from the counts they belong to. */}
+                sit a foot away from the counts they belong to.
+
+                AND THE COMPARISON HAS TO BE SEEN TO END. At the same width,
+                directly under "a larger share than last month", with the
+                two-column rule stopping just above it, a scan reads "Airline
+                carry-on fit · no clear change" as a row of the larger-share
+                arm — the one reading this block exists to keep apart from the
+                other two. The rule runs the FULL width of the block, across
+                both columns, so it is the boundary of the comparison and not a
+                divider inside one column of it. */}
+            {m.flat.length > 0 && !email ? <div className="border-t border-border/70" /> : null}
             <div className={email ? undefined : 'xl:w-1/2 xl:pr-6'}>
               <Arm label="Inside the band" rows={arm(m.flat, m.shown)} mode={mode} ctx={ctx} />
             </div>
