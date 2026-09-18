@@ -141,9 +141,18 @@ describe('WK1 · unusual this week', () => {
     expect(blockAnswers(weekUnusual, weekFixture()).quotes).toHaveLength(2)
   })
 
-  it('says "nothing unusual this week" in full, with the set it watched', () => {
+  it('says "nothing unusual in this update" in full, with the set it watched', () => {
     const text = renderText(weekUnusual.render(withState('nothing_unusual'), 'app', ctx))
-    expect(text).toContain('Nothing unusual this week. Every one of the 31 objects this check watches read inside its usual band.')
+    expect(text).toContain('Nothing unusual in this update. Every one of the 31 objects this check watches read inside its usual band.')
+    // ONE CLOCK PER SENTENCE (design review F8). The question, the metas and
+    // the footer all say "update"; these three said "week", on a page where
+    // Sealand's newest update covers thirty days. The block's TITLE keeps the
+    // artboard's "Unusual this week" — that is the page's own name — and every
+    // sentence stating what was MEASURED says update.
+    for (const state of ['nothing_unusual', 'refused', 'baseline_forming'] as const) {
+      const sentence = weekUnusual.emptyState(withState(state)) ?? ''
+      expect(sentence, state).not.toMatch(/\bweek\b/)
+    }
   })
 
   it('says when the check can first speak, rather than "forming" and nothing', () => {

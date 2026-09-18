@@ -148,14 +148,23 @@ export const weekUnusual: Block<WeekData> = {
     switch (u.state) {
       case 'flagged':
         return null
+      // THE SENTENCES SAY "UPDATE", AS THE QUESTION AND THE METAS DO (design
+      // review F8). The tile carried both clocks: the question asked about
+      // "this update", the footer said "nothing else was unusual this update",
+      // and these three still said "week" — on a page where Sealand's newest
+      // update covers thirty days, which is the exact confusion D6 exists to
+      // prevent. The block's TITLE stays the artboard's "Unusual this week",
+      // because that is what the page is called and the reader arrived by
+      // clicking it; what was measured is an update, and every sentence that
+      // states what was measured now says so.
       case 'nothing_unusual':
         return u.setSize != null
-          ? `Nothing unusual this week. Every one of the ${fmtInt(u.setSize)} objects this check watches read inside its usual band.`
-          : 'Nothing unusual this week. Everything this check watches read inside its usual band.'
+          ? `Nothing unusual in this update. Every one of the ${fmtInt(u.setSize)} objects this check watches read inside its usual band.`
+          : 'Nothing unusual in this update. Everything this check watches read inside its usual band.'
       case 'refused':
-        return u.note ?? 'This week was not compared with the months behind it.'
+        return u.note ?? 'This update was not compared with the months behind it.'
       case 'baseline_forming':
-        return 'This check compares a week with the three complete months behind it, and this workspace does not have three yet.'
+        return 'This check compares one update with the three complete months behind it, and this workspace does not have three yet.'
       case 'unreadable':
         // THE RECORD SAYS SOMETHING FIRED AND WE CANNOT SHOW IT. Every word
         // here is chosen against the sentence it replaces: "Nothing unusual

@@ -50,7 +50,11 @@ import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 export const weekRising: Block<WeekData> = {
   key: 'week.rising',
   title: 'Moving now',
-  question: 'What is worth making something about this week?',
+  // THE QUESTION IS DATED LIKE THE FIGURES UNDER IT (design review F8). It
+  // asked "about this week" over a "September so far" meta, a "videos this
+  // month" figure and a month-to-date comparison — the one block on this page
+  // whose every number is the MONTH's, asking about a week.
+  question: 'What is worth making something about this month?',
 
   render(data, mode = 'app', ctx) {
     const r = data.rising
