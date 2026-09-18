@@ -9,7 +9,7 @@ import { DeckFooter } from '@/components/print/report-deck'
 import { Slide } from '@/components/print/slide'
 import { fmtInt, fmtPct, monthName, shortDate } from '@/lib/format'
 import { audienceInLabel, monthlyLineLabel, type AttentionBlock, type LedgerRow, type OverviewData, type SideReading, type SubjectRow } from '@/lib/pages/overview'
-import { gapBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
+import { GAP_WORDS, gapBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
 import type { MoveReading } from '@/lib/reading/moves'
 import { monthAndYear } from '@/lib/reports/documents/reading'
 import type { DocumentSnapshotData } from '@/lib/reports/documents/types'
@@ -116,6 +116,20 @@ function Eyebrow({ children, meta }: { children: ReactNode; meta?: ReactNode }) 
 export const SHEET_SUBJECT_ROWS = 5
 /** The same budget for the right column's move cards, which are ~90px each. */
 export const SHEET_MOVE_CARDS = 2
+
+/**
+ * The gap's own word, for the headline of a card with no magnitude to show.
+ *
+ * `GAP_WORDS[state]` is the value, so it is READ rather than reconstructed by
+ * splitting `gapLine` on ' · ' and taking the last piece — a split that breaks
+ * the moment either side's `levelOf` contains the separator. The one state that
+ * needs a sentence is `apart` WITHOUT a magnitude, which the split printed as a
+ * bare "apart": a headline saying the sides differ and declining to say by how
+ * much, without saying that it is declining.
+ */
+function gapWord(gap: Gap): string {
+  return gap.state === 'apart' ? 'apart, by an amount this reading did not state' : GAP_WORDS[gap.state]
+}
 
 /** "3 more subjects, on “Your subjects”." — the count the sheet did not show,
  *  and where all of them are. The sheet absorbs no section, so the page it
@@ -292,9 +306,23 @@ function GapCard({ gap, row, categoryLabel }: { gap: Gap | null; row: SubjectRow
     <div className={`${CARD} flex flex-col justify-between gap-1.5`}>
       <div className="flex items-start gap-3.5">
         <div className="flex w-[170px] shrink-0 flex-col gap-1.5">
+          {/* A REFUSAL IS THIS CARD'S ANSWER AND IS SET LIKE ONE. Three of the
+              four words `gapBetween` answers in carry no number, and on Sealand's
+              own September — 84 videos against a 100-video floor — the refusal
+              IS the reading. Set at 15px in a slot sized for a 38px hero, the
+              widest card on the sheet was also the emptiest and the eye started
+              on the middle card's 41,200; at 22px it is the card's focal point,
+              which is what it is.
+
+              AND IT COMES FROM `GAP_WORDS`, not from splitting the composed
+              sentence on ' · ' and taking the last piece — that reconstructed the
+              value it was reading and broke the moment either side's `levelOf`
+              contained the separator. Its one live edge is handled here rather
+              than printed: `apart` with no magnitude fell through to the split
+              and set a bare "apart" as the card's headline. */}
           {apart
             ? <Hero value={fmtInt(Math.round(Math.abs(gap.gapPts!)))} unit="points" />
-            : <p className="m-0 text-[15px] font-semibold leading-[1.2] text-foreground">{gapLine(gap).split(' · ').pop()}</p>}
+            : <p className="m-0 text-[22px] font-semibold leading-[1.1] tracking-[-0.01em] text-foreground">{gapWord(gap)}</p>}
           <span className="text-[12.5px] leading-[1.35] text-foreground">{gap.objectLabel} gap to {gap.b.label}</span>
           {/* D1: the earlier gap as its own dated, banded reading — never
               "narrowed". Null until a second window has been read. */}
@@ -353,11 +381,17 @@ function AttentionCard({ attention, note }: { attention: AttentionBlock | null; 
   const levels = attention.months.slice(-3).map((m) => `${axisMonth(m.month)} ${fmtInt(m.comments)}`).join(' · ')
   return (
     <div className={`${CARD} flex flex-col justify-between gap-1.5`}>
-      <div className="flex items-end justify-between gap-2.5">
-        <Hero value={fmtInt(latest.comments)} unit="comments" />
+      {/* THE VERDICT SITS WITH THE CAPTION, NOT AGAINST THE UNIT. Immediately
+          after "comments", at the unit's own size and colour, "comparison
+          refused" reads as the end of the caption rather than as the answer to
+          the comparison — and on this reading it IS the answer. Beside the
+          caption it has a line of its own and the same shape the subject card
+          beside it uses. */}
+      <Hero value={fmtInt(latest.comments)} unit="comments" />
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="min-w-0 text-[12.5px] leading-[1.35] text-foreground">Attention across the panel</span>
         <span className="shrink-0"><BlockMovement verdict={attention.verdict} unit="pts" /></span>
       </div>
-      <span className="text-[12.5px] leading-[1.35] text-foreground">Attention across the panel</span>
       <p data-copy="level" className={TRAIL}>
         {size != null ? `a fixed panel of ${fmtInt(size)} accounts` : 'a fixed panel'}
         {frozen ? ` · re-frozen ${frozen}` : ''}
@@ -388,14 +422,17 @@ function SubjectCard({ row, categoryLabel }: { row: SubjectRow | null; categoryL
   const trail = trailOf(row.spark, row.sparkMonths)
   return (
     <div className={`${CARD} flex flex-col justify-between gap-1.5`}>
-      <div className="flex items-end justify-between gap-2.5">
-        <Hero value={fmtPct(row.category.pct, 0)} unit="of category videos" />
-        <span className="shrink-0"><BlockMovement verdict={row.category.verdict} unit="pts" /></span>
-      </div>
+      {/* THE HERO KEEPS ITS OWN LINE. "27% of category videos" broke across two
+          lines the moment the badge beside it carried "· band 2.1" — which the
+          artboard's badge does not, because the artboard puts no band beside a
+          change and this product never prints one without it. So the band's row
+          is the caption's, where there is width for it. */}
+      <Hero value={fmtPct(row.category.pct, 0)} unit="of category videos" />
       <div className="flex items-baseline justify-between gap-2">
         <span className="min-w-0 truncate text-[12.5px] leading-[1.35] text-foreground">{row.label}</span>
-        {row.direction ? <Chip><DirectionWord direction={row.direction} /></Chip> : null}
+        <span className="shrink-0"><BlockMovement verdict={row.category.verdict} unit="pts" /></span>
       </div>
+      {row.direction ? <span className="flex"><Chip><DirectionWord direction={row.direction} /></Chip></span> : null}
       <p data-copy="level" className={TRAIL}>
         {fmtInt(row.category.k ?? 0)} of {fmtInt(row.category.n ?? 0)} category videos
         {trail ? ` · ${trail}` : ''}

@@ -4,6 +4,7 @@ import { markupText, render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { overviewFixture, refusedFixture } from '@/components/pages/overview/fixture'
 import type { OverviewData } from '@/lib/pages/overview'
+import type { Gap } from '@/lib/reading/gap'
 import { documentSlides } from '@/lib/reports/documents/compose'
 import { documentViewerPages } from '@/lib/reports/viewer'
 import type { DocumentSnapshotData } from '@/lib/reports/documents/types'
@@ -229,6 +230,22 @@ describe('which rows the figure cards are about', () => {
   it('answers with a refused gap rather than nothing — that is Sealand today', () => {
     const only = { s1: { ...overviewFixture().subjects.gaps.s1!, state: 'too_little_data' as const, gapPts: null, bandPts: null } }
     expect(leadGap(only)?.state).toBe('too_little_data')
+  })
+
+  // The card's headline used to be `gapLine(gap).split(' · ').pop()` — the
+  // value reconstructed from the sentence that carries it, which breaks the
+  // moment either side's `levelOf` contains the separator. Its live edge:
+  // `apart` with no magnitude fell past the hero test and printed a bare
+  // "apart", a headline that says the sides differ and declines to say by how
+  // much without saying so.
+  it('takes the refusal word from GAP_WORDS, and says when “apart” has no magnitude', () => {
+    const one = overviewFixture().subjects.gaps.s1!
+    const refused = { s1: { ...one, state: 'refused' as const, gapPts: null, bandPts: null } }
+    const base = overviewFixture()
+    const words = (gaps: Record<string, Gap | null>) => renderText(sheet({ ...base, subjects: { ...base.subjects, gaps } }))
+    expect(words(refused)).toContain('comparison refused')
+    const bare = { s1: { ...one, state: 'apart' as const, gapPts: null } }
+    expect(words(bare)).toContain('apart, by an amount this reading did not state')
   })
 
   it('has no gap to lead with when no subject read on both sides', () => {
