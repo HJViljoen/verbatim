@@ -27,7 +27,7 @@ import {
   type SubjectPane,
   type SubjectSide,
 } from './subjects'
-import { buildSeries, type DenominatorPoint, type NumeratorPoint } from '../reading/series'
+import { buildSeries, type DenominatorPoint, type MonthPoint, type MonthSeries, type NumeratorPoint } from '../reading/series'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '../rivals'
 import { gapLine, type GapSide } from '../reading/gap'
 import type { Subject } from '../subjects/types'
@@ -277,6 +277,63 @@ describe('axisNote', () => {
 
   it('is silent when every line carries its n', () => {
     expect(axisNote([side({ n: 1388, k: 305 })], 100)).toBeNull()
+  })
+
+  // A LINE THAT BEGINS HALFWAY IS NOT A LINE THAT FELL TO ZERO.
+  describe('the line that starts late', () => {
+    const MONTHS = ['2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01']
+    const line = (audience: string, label: string, from: string): MonthSeries => ({
+      audience,
+      names: [audience],
+      objectId: 's1',
+      objectLabel: label,
+      points: MONTHS.map((month) => ({
+        month,
+        state: (month < from ? 'hollow' : 'frozen') as MonthPoint['state'],
+        videos: month < from ? null : 1388,
+        comments: null,
+        k: month < from ? null : 300,
+        pct: month < from ? null : 21,
+        labels: [],
+        runId: null,
+        readAt: null,
+      } as unknown as MonthPoint)),
+      notes: [],
+      firstReadable: from,
+      substrate: 'seeded' as const,
+    })
+
+    it('names the line that starts after its neighbours', () => {
+      const note = axisNote(
+        [side({ n: 1388, k: 305 }), side({ label: 'Patagonia', kind: 'rival', audience: 'competitor:Patagonia', n: 1388, k: 300 })],
+        100,
+        [line(CLIENT_AUDIENCE, 'You', '2026-06-01'), line('competitor:Patagonia', 'Patagonia', '2026-08-01')],
+      )!
+      expect(note).toContain('Patagonia is read from August')
+      expect(note).not.toContain('You is read from')
+    })
+
+    // THE HOLE THE RELATIVE YARDSTICK LEFT. Comparing the lines against each
+    // other names nothing when they ALL begin after the axis does — which is
+    // the state a whole tenant is in for its first months, and exactly when a
+    // short line most reads as a collapse.
+    it('names every line where they all start after the axis does', () => {
+      const note = axisNote(
+        [side({ n: 1388, k: 305 }), side({ label: 'Patagonia', kind: 'rival', audience: 'competitor:Patagonia', n: 1388, k: 300 })],
+        100,
+        [line(CLIENT_AUDIENCE, 'You', '2026-08-01'), line('competitor:Patagonia', 'Patagonia', '2026-08-01')],
+      )!
+      expect(note).toContain('You is read from August')
+      expect(note).toContain('Patagonia is read from August')
+    })
+
+    it('says nothing where every line runs the whole axis', () => {
+      expect(axisNote(
+        [side({ n: 1388, k: 305 })],
+        100,
+        [line(CLIENT_AUDIENCE, 'You', '2026-06-01')],
+      )).toBeNull()
+    })
   })
 })
 

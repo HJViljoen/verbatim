@@ -792,15 +792,29 @@ export function axisNote(
   // read as a fall.
   const firstRead = (s: MonthSeries): string | null =>
     s.points.find((p) => p.pct != null)?.month ?? null
-  const axisStart = series.map(firstRead).filter((m): m is string => m != null).sort()[0] ?? null
-  if (axisStart) {
-    const late = series
-      .map((s) => ({ s, from: firstRead(s) }))
-      .filter((x): x is { s: MonthSeries; from: string } => x.from != null && x.from > axisStart)
-      .map(({ s, from }) => {
-        const side = sides.find((x) => x.audience === s.audience)
-        return `${side?.label ?? s.objectLabel ?? s.audience} is read from ${longMonth(from)}`
-      })
+  const read = series
+    .map((s) => ({ s, from: firstRead(s) }))
+    .filter((x): x is { s: MonthSeries; from: string } => x.from != null)
+  const earliest = read.map((x) => x.from).sort()[0] ?? null
+  // THE AXIS'S OWN FIRST MONTH, AS WELL AS THE EARLIEST LINE. Comparing the
+  // lines against each other names a line that starts later than its
+  // neighbours and names NOTHING on an axis where every line starts late —
+  // which is the state a whole tenant is in for its first months, and exactly
+  // when a short line most reads as a collapse. So: a line later than its
+  // neighbours is named as before, and where none is but they ALL begin after
+  // the axis does, every one of them is.
+  const axisFirst = series.flatMap((s) => s.points.map((p) => p.month)).sort()[0] ?? null
+  if (earliest) {
+    const later = read.filter((x) => x.from > earliest)
+    const drawn = later.length > 0
+      ? later
+      : axisFirst && earliest > axisFirst
+        ? read
+        : []
+    const late = drawn.map(({ s, from }) => {
+      const side = sides.find((x) => x.audience === s.audience)
+      return `${side?.label ?? s.objectLabel ?? s.audience} is read from ${longMonth(from)}`
+    })
     if (late.length > 0) parts.push(`${late.join('; ')}.`)
   }
   return parts.length > 0 ? parts.join(' ') : null
