@@ -16,6 +16,8 @@ import {
   pageKindsOf,
   sectionsOf,
   surfacesOf,
+  untrackedNotes,
+  untrackedSentence,
   type ReadinessLike,
 } from './sections'
 
@@ -186,5 +188,41 @@ describe('missingSummary', () => {
   it('is null when nothing is missing, and counts otherwise', () => {
     expect(missingSummary([])).toBeNull()
     expect(missingSummary(missingInputs(briefMap('market_brief'), READINESS))).toContain('One thing')
+  })
+})
+
+describe('untrackedNotes — the readiness NOTE rule (sales.p4.untracked)', () => {
+  it('notes a partial input the section still draws without, and refuses nothing', () => {
+    const notes = untrackedNotes(briefMap('sales_brief'), READINESS)
+    expect(notes.map((n) => n.id)).toEqual(['rival-accounts'])
+    // The SAME row is `partial`, so it is deliberately NOT a missing input:
+    // the two functions answer two different questions about one row.
+    expect(missingInputs(briefMap('sales_brief'), READINESS).map((m) => m.id)).not.toContain('rival-accounts')
+    expect(notes[0].sections).toEqual(['By rival'])
+  })
+
+  it('says nothing about an input that exists', () => {
+    const notes = untrackedNotes(briefMap('sales_brief'), [
+      { ...READINESS[1], status: 'exists' },
+    ])
+    expect(notes).toHaveLength(0)
+  })
+
+  it('names the ROLE and never a date or a person', () => {
+    const line = untrackedSentence({ input: 'the rival accounts we read', ownerRole: 'ops', sections: ['By rival'] })
+    expect(line).toContain('Not tracked: the rival accounts we read.')
+    expect(line).toContain('Ours to set up.')
+    // D14: ReadinessRow carries a role token and never a person or a due date,
+    // so neither may appear here.
+    expect(line).not.toMatch(/\b(by|before|due|from)\s+\d/i)
+    expect(line).not.toMatch(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/)
+  })
+
+  it('points a client-owned row at the client', () => {
+    expect(untrackedSentence({ input: 'x', ownerRole: 'client', sections: [] })).toContain('Yours to name in Settings.')
+  })
+
+  it('is empty for a map that notes nothing', () => {
+    expect(untrackedNotes(briefMap('content_brief'), READINESS)).toHaveLength(0)
   })
 })

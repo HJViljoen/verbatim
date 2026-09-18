@@ -10,7 +10,7 @@ import { fmtInt, fmtPct, monthName } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { PANEL_EXCLUDES_NOTE } from '@/lib/reading/attention'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
-import type { CategoryBlock, Mover, OverviewData } from '@/lib/pages/overview'
+import type { CategoryBlock, Mover, OverviewData, Voice } from '@/lib/pages/overview'
 import { DirectionWord } from './subjects'
 
 // OV3 · What the category is saying (design §3 OV3). Four lines: what kind of
@@ -132,6 +132,16 @@ export function panelRule(c: CategoryBlock): CalendarRule[] {
   // same event must not call it something else. `RULE_STROKE` draws the two
   // identically today, which is exactly why the drift would have gone unseen.
   return [{ month, kind: 'tracking_change', label: 'panel re-frozen', at: at.slice(0, 10) }]
+}
+
+/** The month's voices, where they belong to the category rather than to a
+ *  subject. Exported so a wave-2 render and this block's `quotes()` cannot
+ *  disagree about which two they are. */
+export function categoryVoices(data: OverviewData): Voice[] {
+  const lead = data.sentence.lead
+  if (!lead || lead.objectKind !== 'theme') return []
+  if (lead.audience !== data.category.audience) return []
+  return data.sentence.voices
 }
 
 export const overviewCategory: Block<OverviewData> = {
@@ -343,6 +353,24 @@ export const overviewCategory: Block<OverviewData> = {
       }
     }
     return out
+  },
+
+  /**
+   * `mkt.p3.quote` — the voices this block may show, as refs.
+   *
+   * WHOSE QUOTES THESE ARE. `sentence.voices` is loaded from the SUPPORTING
+   * INSIGHTS of the month's lead object (lib/pages/overview.ts `loadVoices`),
+   * and where that lead is a THEME those insights are the category's own
+   * evidence for the very theme this block's movers are about. Where the lead
+   * is a subject they are not, and this block declares none — a quote is only
+   * a quote about the category when the thing it was cited for is one.
+   *
+   * REFS, never the words: a snapshot freezes ids and resolves at render
+   * (lib/renderables/quotes-freeze.ts, decision H). Two blocks naming the same
+   * ref is not a conflict — a ref is an address, and the freeze de-duplicates.
+   */
+  quotes(data) {
+    return categoryVoices(data).map((v) => v.quote.ref)
   },
 
   verdicts(data): Verdict[] {

@@ -8,8 +8,11 @@ import { RPC_WINDOW_DENOMINATORS, RPC_WINDOW_THEME_READINGS } from '../reading/t
 import { quarterFor } from '../reports/quarterly'
 import {
   confidenceOf, countedLines, coverBody, flagOutcome, methodNumbers, ordinal, quarterWindowFor,
-  readingCounter, unsettledItems,
+  quietRows, readingCounter, unsettledItems, withFlags,
 } from './quarterly'
+import type { Mover } from './overview'
+import { READER_FLAGS } from '../calibration'
+import { quarterlyFixture, formingFixture, subjectLeadFixture, thinMonthFixture } from '../../components/blocks/quarterly/fixture'
 
 const verdict = (over: Partial<Verdict> = {}): Verdict => ({
   objectKind: 'theme',
@@ -354,3 +357,118 @@ describe('qr.p6.plan \u2014 the re-checked plan on the quarterly review (D4)', (
     expect(formingFixture().moves.plan).toBeNull()
   })
 })
+
+describe('withFlags — the two READER_FLAGS on a mover (qr.p4.flags)', () => {
+  const mover = (over: Partial<Mover> = {}): Mover => ({
+    id: 'm1',
+    label: 'Durability',
+    k: 30,
+    n: 100,
+    pct: 30,
+    verdict: verdict(),
+    direction: null,
+    isNew: false,
+    ...over,
+  })
+
+  it('carries new off the row', () => {
+    expect(withFlags(mover({ isNew: true })).flags).toEqual(['new'])
+    expect(withFlags(mover()).flags).toEqual([])
+  })
+
+  it('carries only the two READER_FLAGS off the verdict — the rest are about our bookkeeping', () => {
+    const flags = withFlags(mover({ verdict: verdict({ flags: ['clustering_unknown', 'gone_quiet', 'renamed', 'thin'] }) })).flags
+    expect(flags).toEqual(['gone_quiet'])
+    for (const f of flags) expect(READER_FLAGS as readonly string[]).toContain(f)
+  })
+
+  it('never repeats a flag the row and the verdict both carry', () => {
+    expect(withFlags(mover({ isNew: true, verdict: verdict({ flags: ['new'] }) })).flags).toEqual(['new'])
+  })
+})
+
+describe('what the quarterly pages now carry (package D7)', () => {
+  it('page 3 keeps the rival column and the category series', () => {
+    const q = quarterlyFixture()
+    const row = q.subjects.rows[0]
+    expect(row).toHaveProperty('rival')
+    expect(row.spark.length).toBe(row.sparkMonths.length)
+    // A LEVEL, never a difference. Nothing on the page subtracts the rival's
+    // share from yours: two proportions on two different denominators have no
+    // band (deviation D1).
+    expect(Object.keys(row)).not.toContain('gap')
+  })
+
+  it('page 3 draws its line only where the side has the readings, and names no direction', () => {
+    const q = quarterlyFixture()
+    if (q.subjects.line) {
+      const printed = [q.subjects.line.label, q.subjects.line.empty, ...q.subjects.line.series.map((s) => s.label)]
+        .filter(Boolean)
+        .join(' ')
+      expect(printed).not.toMatch(directionRe())
+      for (const side of q.subjects.line.series) expect(side.readings).toBeGreaterThanOrEqual(3)
+    }
+  })
+
+  it('tells a register it could not read from a register with nothing in it', () => {
+    expect(formingFixture().category.quiet).toBeNull()
+    expect(formingFixture().category.quietNote).toContain('could not be read')
+    expect(thinMonthFixture().category.quiet).toEqual([])
+    expect(thinMonthFixture().category.quietNote).toContain('has gone quiet')
+    expect(quarterlyFixture().category.quiet).toHaveLength(2)
+    expect(quarterlyFixture().category.quietNote).toBeNull()
+  })
+
+  it('orders the gone-quiet list by the month it was last heard in, never by a run clock', () => {
+    const dormant = [
+      { id: 'a', label: 'Alpha' },
+      { id: 'b', label: 'Beta' },
+      { id: 'c', label: 'Gamma' },
+      { id: 'd', label: 'Delta' },
+    ]
+    const heard = new Map([
+      ['a', '2026-05-01'],
+      ['b', '2026-08-01'],
+      ['c', '2026-05-01'],
+    ])
+    const out = quietRows(dormant, heard, 5)
+    expect(out.map((q) => q.id)).toEqual(['b', 'a', 'c'])
+    // Every month printed is a month start — the comment-dated key, not an instant.
+    for (const q of out) expect(q.lastHeard).toMatch(/^\d{4}-\d{2}-01$/)
+  })
+
+  it('leaves out silence we never heard, which is Voice’s rule on the same register', () => {
+    // Measured: all 50 dormant entries on the larger tenant carry no month
+    // reading at all, so "gone quiet" about them is a claim the comment-dated
+    // axis cannot support and the page's "nothing has gone quiet" is the true
+    // sentence.
+    expect(quietRows([{ id: 'd', label: 'Delta' }], new Map(), 5)).toEqual([])
+  })
+
+  it('takes the same five in the same order every time it is asked', () => {
+    const dormant = Array.from({ length: 8 }, (_, i) => ({ id: `t${i}`, label: `Theme ${7 - i}` }))
+    // One identical month across every row is the shape that made the first
+    // implementation's database order arbitrary; here the label is what decides.
+    const heard = new Map(dormant.map((d) => [d.id, '2026-08-01']))
+    const once = quietRows(dormant, heard, 5).map((q) => q.label)
+    const twice = quietRows([...dormant].reverse(), heard, 5).map((q) => q.label)
+    expect(once).toEqual(twice)
+    expect(once).toEqual(['Theme 0', 'Theme 1', 'Theme 2', 'Theme 3', 'Theme 4'])
+  })
+
+  it('gives the month’s voices to the page the thing they were cited for belongs to', () => {
+    const q = quarterlyFixture()
+    // The fixture's lead is a THEME of the category, so page 4 claims them and
+    // page 3 declines: a theme's supporting insights are not a subject's
+    // evidence, and three pages carrying one pair of quotes is what an
+    // unfiltered hand-off printed.
+    expect(q.category.quotes.map((x) => x.quote.ref)).toEqual(q.read.quotes.map((x) => x.quote.ref))
+    expect(q.subjects.quotes).toEqual([])
+    const s = subjectLeadFixture()
+    expect(s.subjects.quotes.map((x) => x.quote.ref)).toEqual(s.read.quotes.map((x) => x.quote.ref))
+    expect(s.category.quotes).toEqual([])
+    // Whichever page claims them, they are the SAME words — never a second read.
+    expect(q.category.quotes.map((x) => x.quote.ref)).toEqual(s.subjects.quotes.map((x) => x.quote.ref))
+  })
+})
+

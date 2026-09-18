@@ -73,6 +73,25 @@ export interface BriefBlockSection {
   framing: string
   /** What has to be recorded for this section to hold anything. */
   needs: readonly ReadinessId[]
+  /**
+   * Inputs this section READS BETTER WITH and draws fine without — printed as
+   * a line beside it, never as a refusal (`sales.p4.untracked`).
+   *
+   * THE DISTINCTION `needs` COULD NOT CARRY. `rival-accounts` is the case this
+   * field exists for: the standings block reads the category corpus whether or
+   * not we read each rival's OWN accounts, so declaring it in `needs` refused a
+   * section the block could draw — measured against production on both tenants,
+   * and written into the comment at the top of this file. But "we do not read
+   * Freitag's own posts" is exactly what the mock's readiness line says, and
+   * dropping it altogether left a reader to assume we did. So the row is
+   * NOTED: what is not tracked, what it waits for, and whose job it is.
+   *
+   * AND NO PROMISED DATE. `ReadinessRow` carries a role token and never a
+   * person or a due date (deviations D12 and D14), so the line names the ROLE
+   * and says nothing about when — which is the honest half of the mock's
+   * "owner · by date".
+   */
+  notes?: readonly ReadinessId[]
 }
 
 export type BriefEntry =
@@ -166,6 +185,10 @@ export const SALES_MAP: readonly BriefEntry[] = [
     id: 'sl.rivals', block: 'competitive.rivals', surface: 'competitive',
     title: 'By rival', framing: 'What is said about each rival, in the same month, with its denominator.',
     needs: ['months-of-history'],
+    // `sales.p4.untracked` — the mock's readiness line. NOT a `needs`: this
+    // block reads the category corpus either way, and refusing it would drop a
+    // section the block can draw.
+    notes: ['rival-accounts'],
   }),
   block({
     id: 'sl.questions', block: 'competitive.questions', surface: 'competitive',
@@ -351,3 +374,84 @@ export function missingSummary(missing: readonly MissingInput[]): string | null 
 }
 
 const trimStop = (s: string): string => s.trim().replace(/[.!?]+$/, '')
+
+// ── the readiness NOTE rule ────────────────────────────────────────────────
+
+/** One input a section reads better with and did not have, as a LINE rather
+ *  than a refusal. */
+export interface UntrackedNote {
+  id: ReadinessId
+  /** The input, in the client's words. */
+  input: string
+  /** Who closes it, by ROLE — never a person, and never a date. */
+  owner: string
+  ownerRole: 'client' | 'ops' | 'engineering'
+  /** The sections it is noted on, by title. */
+  sections: string[]
+  /** The line itself, already composed. */
+  line: string
+}
+
+/**
+ * What a brief does not track, said beside the section rather than in place
+ * of it (`sales.p4.untracked`).
+ *
+ * `partial` COUNTS HERE AND DOES NOT COUNT IN `missingInputs`, which is the
+ * whole reason there are two functions. A `partial` row is "the input exists
+ * but does not cover what the block will be asked to draw" — which is not a
+ * reason to refuse a section and IS the thing this note says out loud: we read
+ * two of your four rivals' own accounts. `exists` says nothing, because a note
+ * about an input we have is noise.
+ */
+export function untrackedNotes(
+  map: readonly BriefEntry[],
+  readiness: readonly ReadinessLike[],
+): UntrackedNote[] {
+  const byId = new Map(readiness.map((r) => [r.id, r]))
+  const out = new Map<string, UntrackedNote>()
+  for (const section of sectionsOf(map)) {
+    for (const note of section.notes ?? []) {
+      const row = byId.get(note)
+      if (!row || row.status === 'exists') continue
+      const held = out.get(note)
+      if (held) {
+        held.sections.push(section.title)
+        held.line = untrackedSentence(held)
+        continue
+      }
+      const built: UntrackedNote = {
+        id: note,
+        input: row.input,
+        owner: row.owner,
+        ownerRole: row.ownerRole,
+        sections: [section.title],
+        line: '',
+      }
+      built.line = untrackedSentence(built)
+      out.set(note, built)
+    }
+  }
+  return [...out.values()]
+}
+
+/**
+ * "We do not read the rival accounts we read for this workspace. Ours to set
+ * up." — the mock's "their own posts, not tracked · owner · by date", minus
+ * the date.
+ *
+ * NO DATE, AND THAT IS THE DEVIATION. `ReadinessRow` carries a role token and
+ * nothing else; a due date on a brief would be a promise the product has no
+ * field for and no mechanism behind. The ROLE stays, because it is what the
+ * mock's line is actually for: a reader has to know whether this is theirs to
+ * fix or ours.
+ */
+export function untrackedSentence(note: Pick<UntrackedNote, 'input' | 'ownerRole' | 'sections'>): string {
+  const where = note.sections.length > 0 ? ` ${note.sections.join(' and ')} ${note.sections.length === 1 ? 'is' : 'are'} read without it.` : ''
+  const whose =
+    note.ownerRole === 'client'
+      ? 'Yours to name in Settings.'
+      : note.ownerRole === 'ops'
+        ? 'Ours to set up.'
+        : 'Ours to build.'
+  return `Not tracked: ${note.input}.${where} ${whose}`
+}

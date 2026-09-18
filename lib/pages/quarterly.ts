@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import { READER_FLAGS } from '../calibration'
 import { fmtInt, fullDate, longMonth, monthName, shortDate } from '../format'
 import type { Quote, Scope } from '../renderables/types'
 import { selectAll } from '../supabase-admin'
@@ -18,7 +19,8 @@ import {
 import { methodLines, type MethodLines } from '../reading/method'
 import { loadDeckChangeLog, loadSearchPlan, type DeckChangeLog, type SearchPlan } from '../settings/deck-record'
 import { loadWindowReading, readingClient, type WindowReading } from '../reading/read'
-import { isAnswer, type FigureTable as ReadingFigures, type Verdict } from '../reading/verdicts'
+import { isMissingMonthTable } from '../reading/monthly'
+import { isAnswer, type FigureTable as ReadingFigures, type Verdict, type VerdictFlag } from '../reading/verdicts'
 import { gapBetween, inheritRefusal, type Gap, type GapSide } from '../reading/gap'
 import type { OwnPostCensus, SaidAbout } from '../reading/own-posts'
 import { proseFigures } from '../prose/figures'
@@ -36,10 +38,12 @@ import {
   quarterlyPeriod,
   type Quarter,
 } from '../reports/quarterly'
+import { monthLine, type MonthLine } from '../reports/documents/figures'
 import { rows } from './read'
 import {
   isMissingAnomalyFlags,
   loadOverview,
+  monthlyLineLabel,
   type CategoryBlock,
   type Mover,
   type OverviewData,
@@ -155,12 +159,54 @@ export interface ReadPage {
   counted: string[]
 }
 
+/**
+ * A mover on this artefact, with the two READER_FLAGS beside it.
+ *
+ * `flags` IS NOT A DIRECTION AND NEVER BECOMES ONE. `new` and `gone_quiet` are
+ * the two `READER_FLAGS` (lib/calibration.ts) — facts about whether an object
+ * was heard at all, which is a different question from whether its share
+ * moved. A flag may be printed where a direction word may not, which is why
+ * the mock's page 4 can carry them on a workspace whose every direction flag
+ * is false.
+ *
+ * Only these two, taken from the verdict's own list plus `Mover.isNew`. The
+ * other six `VerdictFlag`s are about what WE did to the corpus and belong
+ * beside the verdict, not beside the row's name.
+ */
+export interface QuarterMover extends Mover {
+  flags: VerdictFlag[]
+}
+
+/** A theme the register has marked dormant, with the last month it was read
+ *  in on this artefact's axis. The monthly report's `GoneQuiet`, same rule. */
+export interface QuarterQuiet {
+  id: string
+  label: string
+  lastHeard: string | null
+}
+
 export interface SubjectQuarterRow {
   id: string
   label: string
   /** The month columns — the tenant's own audience and the category's. */
   you: { k: number; n: number; pct: number | null } | null
   category: { k: number; n: number; pct: number | null } | null
+  /**
+   * The LEAD rival's month, where one is tracked and carried a row.
+   *
+   * Overview's subject row has carried this since WP11 and the quarterly
+   * dropped it on the floor (`qr.p3`: the mock draws three series and the
+   * build drew two). It is a LEVEL, like the other two — never a difference
+   * between it and yours, which is deviation D1's ruling: two proportions on
+   * two different denominators have no band, so the two are printed side by
+   * side and nothing is said about the gap.
+   */
+  rival: { k: number; n: number; pct: number | null } | null
+  /** The last months of the CATEGORY side, for the line — the only side with
+   *  the n to carry one (lib/pages/overview.ts `spark`). */
+  spark: (number | null)[]
+  /** The months `spark` is indexed by, same length. */
+  sparkMonths: string[]
   /** The quarter columns. `baseline_forming` below six readings. */
   youQuarter: Verdict | null
   categoryQuarter: Verdict | null
@@ -196,6 +242,15 @@ export interface SubjectQuarterRow {
 
 export interface SubjectsPage {
   rows: SubjectQuarterRow[]
+  /** The lead rival's name, where one is tracked. Null means no third column.
+   *  */
+  rivalLabel: string | null
+  /** `qr.p3.chart` — the month line, drawn only for the side with the n and
+   *  carrying no direction word (D3). Null where no subject has a series. */
+  line: MonthLine | null
+  /** `qr.p3.quote` — the voices this page may show, as refs that resolve at
+   *  render. */
+  quotes: { quote: Quote; cite: string }[]
   monthLabel: string
   /** "October is outside this quarter …", where the month-level columns are of
    *  a month the heading's quarter does not contain. Page 3 named its month and
@@ -223,9 +278,17 @@ export interface CategoryPage {
    *  has. Printed unconditionally, this page told a workspace standing at nine
    *  readings that the quarter view "needs six months — you have 9". */
   gate: string | null
-  growing: Mover[]
-  fading: Mover[]
+  growing: QuarterMover[]
+  fading: QuarterMover[]
   moversNote: string | null
+  /** `qr.p4.flags`, the second of the two READER_FLAGS. The registry's own
+   *  dormancy rule, read here exactly as Voice and the monthly report read it
+   *  — never a second rule for one word. Empty where nothing is dormant; null
+   *  where the register could not be read at all. */
+  quiet: QuarterQuiet[] | null
+  quietNote: string | null
+  /** `qr.p4.quote` — the voices this page may show, as refs. */
+  quotes: { quote: Quote; cite: string }[]
   kinds: CategoryBlock['kinds']
   kindVerdicts: CategoryBlock['kindVerdicts']
   kindsNote: string | null
@@ -693,7 +756,7 @@ export async function loadQuarterly(scope: Scope, options: QuarterlyOptions = {}
   const themeOptions = themeIds.length
     ? { runId: themedRunId, objectIds: themeIds }
     : { runId: null }
-  const [thisQuarter, lastQuarter, subjectsNow, subjectsBefore, checks, searchPlan, changeLog, record] = await Promise.all([
+  const [thisQuarter, lastQuarter, subjectsNow, subjectsBefore, checks, searchPlan, changeLog, record, quiet] = await Promise.all([
     quarterWindowFor(reading, clientId, quarter, themeOptions),
     quarterWindowFor(reading, clientId, prior, themeOptions),
     subjectWindowFor(reading, clientId, quarter),
@@ -715,6 +778,7 @@ export async function loadQuarterly(scope: Scope, options: QuarterlyOptions = {}
       console.error(`[pages] quarterly.record: ${(error as { message?: string })?.message ?? String(error)}`)
       return null
     }),
+    loadQuiet(supabase, clientId, overview),
   ])
 
   return composeQuarterly({
@@ -732,9 +796,142 @@ export async function loadQuarterly(scope: Scope, options: QuarterlyOptions = {}
     record,
     searchPlan,
     changeLog,
+    quiet,
     draft: options.draft ?? null,
   })
 }
+
+/**
+ * The themes that have gone quiet — `qr.p4.flags`, the second of the two
+ * `READER_FLAGS`.
+ *
+ * THE REGISTER'S OWN RULE, NOT A SECOND ONE. `theme_registry.status =
+ * 'dormant'` is what Voice and the monthly report already read, fired by the
+ * pipeline over updates that produced observations. The tempting alternative
+ * — "a mover whose k is zero this month" — is a READING of this month and
+ * would be a second meaning for one word, which is the drift the verdict
+ * contract exists to stop. A theme currently growing or fading is by
+ * construction not dormant, so this is a list beside the movers and never a
+ * flag on one of them.
+ *
+ * AND `lastHeard` IS DATED BY THE COMMENT, WHICH COST THIS FUNCTION ITS FIRST
+ * IMPLEMENTATION. It read `theme_registry.last_seen_at`, which is the RUN's
+ * wall clock at persist (`lib/pipeline/themes.ts` writes `nowIso`) — measured
+ * read-only on 2026-09-18, all 50 dormant rows on one tenant carry the single
+ * value `2026-08-23`, so the artefact would have printed "last heard August"
+ * for fifty themes whose comments are from any month, and ordered the five it
+ * shows arbitrarily inside one identical timestamp. `lib/pages/voice-surface.ts`
+ * already refuses those two columns in writing on this same table. The answer
+ * is the one Voice takes: the last month the theme actually carried a reading
+ * on this artefact's axis (`month_theme_readings`, the category's audience,
+ * comment-dated), and null where the axis does not reach back to it.
+ */
+export async function loadQuiet(
+  supabase: SupabaseClient,
+  clientId: string,
+  overview: OverviewData,
+  limit = 5,
+): Promise<QuarterQuiet[] | null> {
+  try {
+    const res = await supabase
+      .from('theme_registry')
+      .select('id, canonical_label')
+      .eq('client_id', clientId)
+      .eq('status', 'dormant')
+      .limit(QUIET_POOL)
+    if (res.error) throw res.error
+    const dormant = rows<{ id: string; canonical_label: string | null }>(res, 'quarterly.quiet').map((r) => ({
+      id: r.id,
+      label: r.canonical_label ?? r.id,
+    }))
+    if (dormant.length === 0) return []
+    const heard = await lastHeardMonths(supabase, clientId, overview, dormant.map((d) => d.id))
+    return quietRows(dormant, heard, limit)
+  } catch (error) {
+    console.error(`[pages] quarterly.quiet: ${(error as { message?: string })?.message ?? String(error)}`)
+    return null
+  }
+}
+
+/** How many dormant entries are ranked before the five are taken. The register
+ *  is small (1,046 active / 50 dormant on the larger tenant, measured) and the
+ *  ranking needs the whole set, because the top five by LAST MONTH cannot be
+ *  taken by a database order on a column that is not the answer. */
+export const QUIET_POOL = 200
+
+/**
+ * The last month each of these themes was read in, on the category's axis.
+ *
+ * One bounded read of `month_theme_readings` — the comment-dated table — for
+ * the dormant ids alone, and never a per-theme loop. A month with no videos is
+ * not a month it was heard in. Where the month tables are not applied here the
+ * map is empty and every row's `lastHeard` is null, which is the honest
+ * answer and not a guessed date.
+ */
+async function lastHeardMonths(
+  supabase: SupabaseClient,
+  clientId: string,
+  overview: OverviewData,
+  ids: readonly string[],
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  if (ids.length === 0) return out
+  try {
+    const read = await selectAll<{ theme_id: string; month: string; videos: number | null }>(() =>
+      supabase
+        .from('month_theme_readings')
+        .select('theme_id, month, videos')
+        .eq('client_id', clientId)
+        .eq('audience', overview.category.audience)
+        .in('theme_id', [...ids])
+        .lte('month', overview.month)
+        .order('month', { ascending: true }),
+    )
+    for (const r of read) {
+      if ((r.videos ?? 0) <= 0) continue
+      const month = monthStartOfDay(r.month)
+      const held = out.get(r.theme_id)
+      if (!held || month > held) out.set(r.theme_id, month)
+    }
+  } catch (error) {
+    if (!isMissingMonthTable(error)) throw error
+  }
+  return out
+}
+
+/**
+ * The five to print: the most recently heard first, and a stable order under
+ * them.
+ *
+ * SILENCE WE HEARD, NOT SILENCE WE NEVER DID — Voice's rule, in Voice's own
+ * words (`lib/pages/voice-surface.ts`): "a theme with no rows at all is
+ * silence we never heard; a dormant entry that carried a reading on this axis
+ * is silence we did." Voice takes its list off the page's month series, so a
+ * dormant entry the series never held is not in it; this list is taken off the
+ * register, so the same rule has to be applied here. Measured read-only
+ * 2026-09-18: all 50 dormant entries on the larger tenant carry NO
+ * `month_theme_readings` row at all, so "gone quiet" about any of them is a
+ * claim the comment-dated axis cannot support, and the page's own sentence —
+ * "Nothing this artefact follows has gone quiet" — is the true one.
+ *
+ * AND THE ORDER IS STABLE, because the five a reader sees must not change
+ * between a render and its re-render: most recent first, ties broken by label.
+ * The first implementation ordered on a column whose fifty rows held one
+ * identical value, which is not an order at all.
+ */
+export function quietRows(
+  dormant: readonly { id: string; label: string }[],
+  heard: ReadonlyMap<string, string>,
+  limit: number,
+): QuarterQuiet[] {
+  return [...dormant]
+    .map((d) => ({ id: d.id, label: d.label, lastHeard: heard.get(d.id) ?? null }))
+    .filter((d) => d.lastHeard != null)
+    .sort((a, b) => (a.lastHeard === b.lastHeard ? a.label.localeCompare(b.label) : (b.lastHeard ?? '').localeCompare(a.lastHeard ?? '')))
+    .slice(0, limit)
+}
+
+const monthStartOfDay = (iso: string): string => `${iso.slice(0, 7)}-01`
 
 /**
  * One windowed read of the tenant's own subjects, or null where M4 is not
@@ -793,6 +990,10 @@ export interface ComposeQuarterlyInput {
    *  composes — both arrive as null and the method page says so. */
   searchPlan?: SearchPlan | null
   changeLog?: DeckChangeLog | null
+  /** Themes the register has marked dormant. Null — never [] — where the
+   *  register could not be read, because "nothing has gone quiet" and "we
+   *  could not look" are two different sentences. */
+  quiet?: QuarterQuiet[] | null
   draft?: string | null
 }
 
@@ -839,9 +1040,20 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
   const monthNote = monthOutsideNote(overview.month, quarter)
 
   const cover = buildCover({ overview, quarter, readingAt, readings, thisQuarter: a.thisQuarter })
-  const subjects = buildSubjects({ overview, quarterVerdicts, unlocked, gate, monthLabel, monthNote, subjectsRead })
+  // ONE SET OF VOICES, THREE PAGES. `overview.sentence.voices` is the month's
+  // own evidence, already resolved and already erasure-safe; the quarterly
+  // pages that want a quote take REFS from it rather than each running its own
+  // quote read, so no two pages of one artefact can show the same theme with
+  // two different people's words.
+  const quotes = overview.sentence.voices.map((v: Voice) => ({ quote: v.quote, cite: v.cite }))
+  const subjects = buildSubjects({
+    overview, quarterVerdicts, unlocked, gate, monthLabel, monthNote, subjectsRead,
+    quotes: voicesFor(overview, 'subject', quotes),
+  })
   const category = buildCategory({
     overview,
+    quiet: a.quiet ?? null,
+    quotes: voicesFor(overview, 'theme', quotes),
     quarterVerdicts,
     monthLabel,
     unlocked,
@@ -1221,6 +1433,7 @@ function buildSubjects(a: {
   monthLabel: string
   monthNote: string | null
   subjectsRead: boolean
+  quotes: { quote: Quote; cite: string }[]
 }): SubjectsPage {
   const block = a.overview.subjects
   const categoryLabel = a.overview.category.label
@@ -1281,6 +1494,22 @@ function buildSubjects(a: {
     // it on `overview.rivals.rows[0].audience` — the first COMPETITOR — so the
     // "you" column could not have been drawn even had a subject verdict
     // existed, which none did.
+    // THE RIVAL COLUMN, WHICH THE ARTEFACT HAD AND DROPPED. Overview's own
+    // subject row carries the lead rival's side; the quarterly kept two of the
+    // three. It is a LEVEL beside the other two levels, and nothing on this
+    // page subtracts one from another: two proportions on two different
+    // denominators have no band (deviation D1), so the three are printed and
+    // the gap is not named.
+    rival:
+      row.rival && row.rival.k != null && row.rival.n != null
+        ? { k: row.rival.k, n: row.rival.n, pct: row.rival.pct }
+        : null,
+    // THE CATEGORY'S OWN MONTHS. The spark is the category side by
+    // construction (lib/pages/overview.ts) — it is the only side with the n to
+    // carry a line on today's corpus — and the page draws it only where three
+    // readings stand behind it.
+    spark: row.spark,
+    sparkMonths: row.sparkMonths,
     youQuarter: byObject.get(`subject:${row.id}:${CLIENT_AUDIENCE}`) ?? null,
     categoryQuarter: byObject.get(`subject:${row.id}:${a.overview.category.audience}`) ?? null,
     gap: quarterGap(
@@ -1290,8 +1519,22 @@ function buildSubjects(a: {
     ),
   }))
   const drawn = rows.some((r) => r.youQuarter || r.categoryQuarter)
+  // ONE LINE, NOT SIX. The chart is the LEAD subject's category series — the
+  // row the page opens with — because six overlaid series on a printed sheet
+  // is not a reading, and because every one of them divides by the same
+  // denominator anyway.
+  const lead = rows.find((r) => r.spark.some((p) => p != null)) ?? null
   return {
     rows,
+    rivalLabel: block.rivalLabel,
+    line: lead
+      ? monthLine({
+          months: lead.sparkMonths,
+          labelFor: monthlyLineLabel,
+          series: [{ label: `${lead.label} · ${block.categoryLabel}`, points: lead.spark }],
+        })
+      : null,
+    quotes: a.quotes,
     monthLabel: a.monthLabel,
     monthNote: a.monthNote,
     note: block.note,
@@ -1311,8 +1554,49 @@ function buildSubjects(a: {
 
 // ---- page 4 · what the category talked about ----------------------------------
 
+/**
+ * The month's voices, claimed by the page the thing they were cited for
+ * belongs to.
+ *
+ * THE OVERVIEW BLOCK'S RULE, MIRRORED. `sentence.voices` is loaded from the
+ * supporting insights of the month's LEAD object (`loadVoices`), so it is
+ * evidence for one thing — a subject or a theme — and not for the artefact at
+ * large. `components/pages/overview/category.tsx` already refuses them where
+ * the lead is not a theme of the category, on the principle that a quote is
+ * about the category only when the thing it was cited for is one. Handed
+ * unfiltered to both pages, page 3 cited a THEME's evidence as a subject quote
+ * — the exact case that guard exists to refuse — and the printed artefact
+ * carried the same two quotes on pages 2, 3 and 4.
+ *
+ * A theme's voices are further held to the category's own audience, which is
+ * the audience page 4 prints. The read page keeps all of them: it is the page
+ * the sentence itself is on, and they are that sentence's evidence.
+ */
+export function voicesFor<T>(
+  overview: OverviewData,
+  kind: 'subject' | 'theme',
+  quotes: readonly T[],
+): T[] {
+  const lead = overview.sentence.lead
+  if (!lead || lead.objectKind !== kind) return []
+  if (kind === 'theme' && lead.audience !== overview.category.audience) return []
+  return [...quotes]
+}
+
+/** The two READER_FLAGS on a mover, and nothing else. `isNew` is the row's own
+ *  answer to "first heard this month"; the rest come off the verdict, which is
+ *  where every other flag on this artefact already lives. */
+export function withFlags(mover: Mover): QuarterMover {
+  const flags: VerdictFlag[] = []
+  if (mover.isNew) flags.push('new')
+  for (const f of mover.verdict.flags) if ((READER_FLAGS as readonly string[]).includes(f) && !flags.includes(f)) flags.push(f)
+  return { ...mover, flags }
+}
+
 function buildCategory(a: {
   overview: OverviewData
+  quiet: QuarterQuiet[] | null
+  quotes: { quote: Quote; cite: string }[]
   quarterVerdicts: Verdict[]
   monthLabel: string
   unlocked: boolean
@@ -1349,9 +1633,21 @@ function buildCategory(a: {
     // you have 9" to a workspace that cleared the gate three readings ago.
     // `buildSubjects` has always dropped it at six; this page now does too.
     gate: a.unlocked ? null : a.gate,
-    growing: c.growing,
-    fading: c.fading,
+    growing: c.growing.map(withFlags),
+    fading: c.fading.map(withFlags),
     moversNote: c.moversNote,
+    quiet: a.quiet,
+    // TWO SILENCES, AND THEY ARE NOT THE SAME CLAIM. A register we could not
+    // read is a failure of ours; a register with nothing dormant in it is a
+    // reading. The mock's "gone quiet" column would say the same thing for
+    // both, and a reader would take the first for the second.
+    quietNote:
+      a.quiet == null
+        ? 'The register of what has gone quiet could not be read for this workspace.'
+        : a.quiet.length === 0
+          ? 'Nothing this artefact follows has gone quiet.'
+          : null,
+    quotes: a.quotes,
     kinds: c.kinds,
     kindVerdicts: c.kindVerdicts,
     kindsNote: c.kindsNote,

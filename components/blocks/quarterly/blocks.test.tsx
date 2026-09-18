@@ -12,7 +12,7 @@ import { gapBasisLine, gapLine } from '@/lib/reading/gap'
 import { marketFixture } from '@/components/pages/market-surface/fixture'
 import { competitiveFixture } from '@/components/pages/competitive-surface/fixture'
 import { QUARTERLY_BLOCKS, quarterlyBlocksFor } from './index'
-import { afterQuarterFixture, closedFixture, formingFixture, quarterlyFixture, thinMonthFixture } from './fixture'
+import { afterQuarterFixture, closedFixture, formingFixture, quarterlyFixture, subjectLeadFixture, thinMonthFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -538,5 +538,38 @@ describe('the two-audience gap the quarter can actually carry', () => {
     const price = quarterlyFixture().subjects.rows.find((r) => r.id === 's2')
     expect(price?.gap ?? null).toBeNull()
     expect(formingFixture().subjects.rows.every((r) => r.gap == null)).toBe(true)
+  })
+})
+
+describe('the quotes a page declares (qr.p3.quote, qr.p4.quote)', () => {
+  it('pages 3 and 4 answer quotes() with refs, never words', () => {
+    // The month's voices are the LEAD object's evidence, so the page that
+    // claims them is the page the lead belongs to: a theme lead on page 4, a
+    // subject lead on page 3.
+    for (const [data, key] of [
+      [quarterlyFixture(), 'quarterly.category'],
+      [subjectLeadFixture(), 'quarterly.subjects'],
+    ] as const) {
+      const refs = blockAnswers(QUARTERLY_BLOCKS[key], data).quotes
+      expect(refs.length).toBeGreaterThan(0)
+      // `e:` / `c:` / `v:` — an ADDRESS. A block handing back text would be a
+      // second place for a third party's words to leak into a snapshot.
+      for (const ref of refs) expect(ref).toMatch(/^[ecvmp]:|^h:|^b:/)
+    }
+  })
+
+  it('a page declares no quote for evidence cited about something else', () => {
+    // A theme's supporting insights are not a subject's evidence, and the
+    // Overview block already refuses them on exactly this rule. Unfiltered,
+    // one printed artefact carried the same two quotes on pages 2, 3 and 4.
+    expect(blockAnswers(QUARTERLY_BLOCKS['quarterly.subjects'], quarterlyFixture()).quotes).toEqual([])
+    expect(blockAnswers(QUARTERLY_BLOCKS['quarterly.category'], subjectLeadFixture()).quotes).toEqual([])
+  })
+
+  it('declares none where nothing was read', () => {
+    const data = formingFixture()
+    for (const key of ['quarterly.subjects', 'quarterly.category'] as const) {
+      expect(blockAnswers(QUARTERLY_BLOCKS[key], data).quotes).toEqual([])
+    }
   })
 })

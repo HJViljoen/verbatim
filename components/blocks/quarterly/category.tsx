@@ -150,6 +150,11 @@ export const quarterlyCategory: Block<QuarterlyData> = {
     )
   },
 
+  // `qr.p4.quote`, on the same rule as page 3: refs, resolved at render.
+  quotes(data) {
+    return data.category.quotes.map((q) => q.quote.ref)
+  },
+
   verdicts(data) {
     return [
       ...data.category.growing.map((m) => m.verdict),

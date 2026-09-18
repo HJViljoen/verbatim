@@ -258,11 +258,18 @@ export const REFUSAL_WHY: Record<RefusedReason, string> = {
   rename: 'the two sides are two names for one rival',
 }
 
-/** The other two ways a comparison goes undrawn. Not refusals of the record —
+/** The other ways a comparison goes undrawn. Not refusals of the record —
  *  one is about this reading's thinness and one resolves on the calendar
  *  (lib/reading/verdicts.ts) — but a reader owed a reason is owed one for all
- *  three. */
-const NOT_DRAWN_WHY: Record<string, string> = {
+ *  three, including the refusal that carries no reason at all.
+ *
+ *  EXPORTED SO THERE IS ONE TABLE. A per-item copy of it in
+ *  `lib/reports/documents/figures.ts` held two of the three keys, so a refused
+ *  verdict with a null reason fell past both arms onto `unlogged_era` and the
+ *  brief asserted a specific cause the record does not have — while the
+ *  record's own sentence, built from this table, said something else about the
+ *  same row. */
+export const NOT_DRAWN_WHY: Record<string, string> = {
   too_little_data: 'too little was read on one side or both',
   baseline_forming: 'there are not enough months behind it yet',
   refused: 'our record of what changed does not reach across it',
