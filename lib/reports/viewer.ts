@@ -9,7 +9,7 @@ import { WEEKLY_BLOCK_KEYS } from './weekly'
 import { MONTHLY_BLOCK_KEYS } from './monthly'
 import { QUARTERLY_BLOCK_KEYS } from './quarterly'
 import { deckSlides } from './compose'
-import { documentSlides } from './documents/compose'
+import { documentCoverSheet, documentSlides } from './documents/compose'
 import type { ReportSnapshotData } from './types'
 
 // The in-app viewer's data (2026-09-09). Opening a build is a URL — `?view=`
@@ -132,7 +132,10 @@ export async function loadViewerSnapshot(admin: SupabaseClient, clientId: string
  * took the lesson; the brief is the one kind that did not.
  */
 export function documentViewerPages(data: DocumentSnapshotData): number {
-  return documentSlides(data).length + 1
+  // + the cover, where this brief still has one (E-marketing folded the title
+  // onto the In-short sheet for a brief composed from a section map). Read
+  // from the same function the deck draws from, never counted twice.
+  return documentSlides(data).length + (documentCoverSheet(data) ? 1 : 0)
 }
 
 /**

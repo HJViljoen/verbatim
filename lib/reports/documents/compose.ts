@@ -506,6 +506,15 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
       sources: sourcesOf(s),
       heldBack: s.heldBackPhrases,
       thin,
+      // The three the numbers card could not reach: how many findings fell
+      // below the bar, the language share with its basis, and the delivery
+      // record. All three are already computed — two on the reading, one right
+      // here — and none of them has ever reached a printed artefact.
+      findingsBelow: Math.max(0, candidates.length - findingPages.length),
+      ...(s.reading?.method?.language ? { languages: s.reading.method.language } : {}),
+      ...(s.reading?.delivery
+        ? { delivery: `${s.reading.delivery}${s.reading.counter ? ` — ${s.reading.counter}` : ''}` }
+        : {}),
     },
     notSureYet,
     generatedAt: new Date().toISOString(),
@@ -540,6 +549,11 @@ export function documentReading(r: BriefReading): DocumentReading {
     denominators: r.denominators.map((d) => ({ ...d })),
     platformMix: { ...r.platformMix },
     crossesClustering: r.crossesClustering,
+    // E-marketing: the gaps and the banded comparisons travel onto the
+    // snapshot, because the sheets that print them are drawn from the frozen
+    // artefact and never from a live loader.
+    ...(r.gaps.length ? { gaps: r.gaps.map((g) => ({ ...g })) } : {}),
+    ...(r.verdicts.length ? { verdicts: r.verdicts.map((v) => ({ ...v })) } : {}),
   }
 }
 
@@ -640,9 +654,45 @@ export function documentSlides(data: DocumentSnapshotData): Slide[] {
       continue
     }
     const section = data.sections?.find((x) => x.id === entry.id)
-    if (section) out.push({ title: section.title, keys: [`${SECTION_SLIDE_PREFIX}${section.id}`], layout: 'single' })
+    if (!section) continue
+    // CONSECUTIVE SECTIONS SHARING A SHEET BECOME ONE SLIDE (E-marketing).
+    // The sheet's NAME is its title, so a two-block sheet is not headed by
+    // whichever block happened to come first. A section with no `sheet` — every
+    // section of every brief built before 2026-09-18, and every section of the
+    // other three maps — keeps its own sheet exactly as it had one, which is
+    // what makes this additive rather than a re-pagination of stored artefacts.
+    const last = out[out.length - 1]
+    if (section.sheet && last && last.layout === 'grid' && last.title === section.sheet) {
+      last.keys.push(`${SECTION_SLIDE_PREFIX}${section.id}`)
+      continue
+    }
+    out.push(
+      section.sheet
+        ? { title: section.sheet, keys: [`${SECTION_SLIDE_PREFIX}${section.id}`], layout: 'grid' }
+        : { title: section.title, keys: [`${SECTION_SLIDE_PREFIX}${section.id}`], layout: 'single' },
+    )
   }
   return out
+}
+
+/**
+ * Whether this brief prints a cover sheet of its own (package E-marketing).
+ *
+ * NO, FOR A BRIEF COMPOSED FROM A SECTION MAP. All four brief artboards open
+ * on the In-short sheet with a 17px page title and one mono context line, and
+ * none of them spends a landscape sheet on a 58px title — "Marketing brief ·
+ * September 2026 · Sealand · as at 28 Sep · still filling · 7 pages" sits at
+ * the top of the first sheet of content. A stored artefact built before the
+ * section maps has no `layout` and keeps its cover, which is what makes this
+ * a change to what is built from now on rather than a re-pagination of every
+ * brief already sent.
+ *
+ * READ BY BOTH PAGINATORS. `DocumentDeck` draws the sheets and
+ * `documentViewerPages` counts them, and the two disagreeing by one is a bug
+ * this file has already shipped once.
+ */
+export function documentCoverSheet(data: DocumentSnapshotData): boolean {
+  return !data.layout?.length
 }
 
 /** The section a slide key names, or null where it names a written page. */

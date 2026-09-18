@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { render } from '@/lib/test/render'
 import { overviewFixture } from '@/components/pages/overview/fixture'
-import { documentSlides, sectionOfSlide } from '@/lib/reports/documents/compose'
+import { documentCoverSheet, documentSlides, sectionOfSlide } from '@/lib/reports/documents/compose'
 import { documentViewerPages } from '@/lib/reports/viewer'
 import type { DocumentSnapshotData } from '@/lib/reports/documents/types'
 import { DocumentDeck } from './document-deck'
@@ -68,11 +68,18 @@ describe('documentSlides over a layout', () => {
   // Studio bar counted `pages.length + 1` while DocumentDeck numbered
   // `documentSlides(data).length + 1`, so a brief's sheets were undercounted by
   // its borrowed blocks — roughly half of every one of the four briefs.
+  //
+  // E-marketing folded the cover onto the In-short sheet for a brief composed
+  // from a section map, so the "+ 1" is now conditional — and BOTH paginators
+  // read `documentCoverSheet`, because the two disagreeing by one is the bug
+  // this test was written for in the first place.
   it('documentViewerPages counts a borrowed block as a sheet', () => {
-    expect(documentViewerPages(base())).toBe(documentSlides(base()).length + 1)
-    expect(documentViewerPages(base())).toBe(3)
+    expect(documentViewerPages(base())).toBe(documentSlides(base()).length)
+    expect(documentViewerPages(base())).toBe(2)
     const old = base({ layout: undefined, sections: undefined, surfaces: undefined })
     expect(documentViewerPages(old)).toBe(2)
+    expect(documentCoverSheet(base())).toBe(false)
+    expect(documentCoverSheet(old)).toBe(true)
   })
 })
 

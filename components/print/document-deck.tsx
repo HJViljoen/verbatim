@@ -5,17 +5,22 @@ import { DeckFooter } from '@/components/print/report-deck'
 import { Slide } from '@/components/print/slide'
 import { Sparkline } from '@/components/charts/sparkline'
 import { CountBadge, MovementBadge } from '@/components/delta-badge'
+import { FigureCell } from '@/components/blocks/frame'
+import { gapBasisLine, gapLine, sidePct, type Gap } from '@/lib/reading/gap'
+import { fullDate, round1 } from '@/lib/format'
+import { platformShareLine } from '@/lib/reading/method'
+import { MOVE_PROMISE } from '@/lib/subjects/types'
 import type { Good } from '@/components/charts/stat'
 import type { DeltaVerdict } from '@/lib/report-bands'
 import type { ShareSide } from '@/lib/report-delta'
 import { substituteFigures } from '@/lib/reports/cover'
-import { documentSlides, sectionOfSlide } from '@/lib/reports/documents/compose'
+import { documentCoverSheet, documentSlides, sectionOfSlide } from '@/lib/reports/documents/compose'
 import { blocksFor } from '@/lib/reports/documents/load-reading'
 import type { BriefSurface } from '@/lib/reports/documents/sections'
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { appBaseUrl } from '@/lib/site'
-import { findingHeadlines, overviewTiles, slugOf } from '@/lib/reports/documents/overview'
+import { findingHeadlines, leadGap, overviewTiles, slugOf } from '@/lib/reports/documents/overview'
 import { shownTrajectory, type DocBlock, type DocBriefSection, type DocLens, type DocPage, type DocumentSnapshotData } from '@/lib/reports/documents/types'
 import type { FigureTable } from '@/lib/reports/types'
 
@@ -197,16 +202,59 @@ function DocumentCover({ data, pages }: { data: DocumentSnapshotData; pages: num
 
 // ── overview ───────────────────────────────────────────────────────────────
 
-function StatTile({ value, label }: { value: string; label: string }) {
+function StatTile({ value, label, word }: { value: string; label: string; word?: boolean }) {
   return (
     <div className={`${CARD} px-5 py-4`}>
-      <p className="font-mono text-[38px] font-medium leading-none tracking-[-0.02em] tabular-nums text-foreground">{value}</p>
+      {/* A refusal is the tile's ANSWER and is set as a sentence, not as a
+          38px figure: "too few to compare" at the artboard's numeral scale
+          reads as a measurement (mock-gap §6 D2). */}
+      <p className={word
+        ? 'text-[19px] font-medium leading-[1.2] tracking-[-0.01em] text-secondary-foreground'
+        : 'font-mono text-[38px] font-medium leading-none tracking-[-0.02em] tabular-nums text-foreground'}>{value}</p>
       <p className="mt-2 text-[12.5px] leading-[1.35] text-muted-foreground">{label}</p>
     </div>
   )
 }
 
-function OverviewPage({ page, data }: { page: DocPage; data: DocumentSnapshotData }) {
+/**
+ * The calibration note, at last on a brief (`mkt.p1.calibrationnote`).
+ *
+ * The sentence exists twice in the product — `components/how-to-read.tsx` and
+ * the quarterly's method block — and has never reached a printed artefact,
+ * where it matters most: a reader of a PDF has no How-to-read drawer to open,
+ * and the whole question a brief raises is which of its words a model chose.
+ * It names the words this deck actually prints.
+ */
+export const CALIBRATION_NOTE =
+  'Every calibrated word here — up, down, no clear change, too few to compare, comparison refused — is assigned by a fixed rule from counted videos, never worded by the model.'
+
+/** The brief's own title, on the first sheet of content rather than on a
+ *  landscape sheet of its own (`mkt.p1.title`). The mono line under it is the
+ *  artboard's context line: the month, the company, the reading instant and
+ *  how much follows. */
+function SheetTitle({ data, pages }: { data: DocumentSnapshotData; pages: number }) {
+  const stamp = data.reading?.stamp ?? data.period
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="inline-block h-[3px] w-14 rounded-full bg-primary" aria-hidden />
+      <h1 className="max-w-[24ch] text-[26px] font-semibold leading-[1.1] tracking-[-0.02em] text-foreground [text-wrap:balance]">{data.title}</h1>
+      <p className="font-mono text-[11px] text-muted-foreground">
+        {stamp} · {data.company} · {pages} {pages === 1 ? 'page' : 'pages'}
+      </p>
+    </div>
+  )
+}
+
+/** The count and the confidence word behind finding n, off the finding page
+ *  itself so an edit to the deck's pages flows through to this list. */
+function findingMeta(data: DocumentSnapshotData, i: number): { conversations: number; sure: string } | null {
+  const page = data.pages.filter((p) => p.kind === 'finding')[i]
+  const conversations = Number(page?.meta?.conversations ?? 0)
+  if (!page || !Number.isFinite(conversations) || conversations <= 0) return null
+  return { conversations, sure: page.meta?.sure ?? 'thin' }
+}
+
+function OverviewPage({ page, data, title, pages }: { page: DocPage; data: DocumentSnapshotData; title?: boolean; pages?: number }) {
   const f = data.figures
   const summary = page.blocks.find((b) => b.field === 'summary')
   // The numbers and the headlines are derived in
@@ -219,27 +267,52 @@ function OverviewPage({ page, data }: { page: DocPage; data: DocumentSnapshotDat
   const tiles = overviewTiles(data)
   return (
     <div className="grid h-full min-h-0 grid-cols-[7fr_5fr] gap-x-12">
-      <div className="flex min-h-0 flex-col gap-6">
+      <div className="flex min-h-0 flex-col gap-5">
+        {title && <SheetTitle data={data} pages={pages ?? 0} />}
         <div className="flex flex-col gap-3">
-          <Eyebrow>In short</Eyebrow>
+          {!title && <Eyebrow>In short</Eyebrow>}
           {summary?.text && <BlockSlot block={summary} textClass="max-w-[66ch] text-[17px] leading-[1.55] text-foreground"><Paragraphs text={summary.text} figures={f} className="max-w-[66ch] text-[17px] leading-[1.55] text-foreground" /></BlockSlot>}
         </div>
         {findings.length > 0 && (
           <div className="flex flex-col gap-2.5">
             <Eyebrow>Findings in this brief</Eyebrow>
             <ol className="flex flex-col gap-2">
-              {findings.map((h, i) => (
-                <li key={i} className="flex items-baseline gap-4 text-[16px] leading-[1.4] text-foreground">
-                  <span className="w-6 shrink-0 font-mono text-[13px] tabular-nums text-primary">{i + 1}</span>
-                  <span className="font-medium"><Figured text={h} figures={f} /></span>
-                </li>
-              ))}
+              {findings.map((h, i) => {
+                const meta = findingMeta(data, i)
+                return (
+                  <li key={i} className="flex items-baseline gap-4 text-[16px] leading-[1.4] text-foreground">
+                    <span className="w-6 shrink-0 font-mono text-[13px] tabular-nums text-primary">{i + 1}</span>
+                    <span className="min-w-0 font-medium">
+                      <Figured text={h} figures={f} />
+                      {/* The artboard's right-hand pair on every row: the count
+                          the finding rests on, and its confidence word as a
+                          chip. NOT the artboard's "305 videos": a finding is
+                          calibrated on conversations and independent strands
+                          (`calibrateSure`), and the research spine produces no
+                          video count with a denominator for it — a level
+                          without its "of N" is a score. So the count keeps its
+                          own noun, and the chip is the word the deck already
+                          calibrates rather than `gateTier`'s, which is a
+                          judgement about a THEME. */}
+                      {meta && (
+                        <>
+                          {' '}
+                          <span className="whitespace-nowrap font-mono text-[12px] font-medium text-muted-foreground">{fmtCount(meta.conversations)} conversations</span>
+                          {' '}
+                          <Pill tone={meta.sure === 'solid' ? 'you' : meta.sure === 'reasonable' ? 'cat' : 'plain'}>{meta.sure}</Pill>
+                        </>
+                      )}
+                    </span>
+                  </li>
+                )
+              })}
             </ol>
           </div>
         )}
+        <p className="mt-auto max-w-[70ch] text-[12px] leading-[1.45] text-muted-foreground">{CALIBRATION_NOTE}</p>
       </div>
       <div className="flex min-h-0 flex-col gap-4">
-        <div className="flex flex-col gap-3">{tiles.map((t, i) => <StatTile key={i} value={t.value} label={t.label} />)}</div>
+        <div className="flex flex-col gap-3">{tiles.map((t, i) => <StatTile key={i} value={t.value} label={t.label} word={t.word} />)}</div>
         {notSure.length > 0 && (
           <div className="rounded-lg bg-inner px-5 py-4">
             <Eyebrow className="mb-2">Not settled this update</Eyebrow>
@@ -786,33 +859,99 @@ function LanguagePage({ page }: { page: DocPage }) {
 
 // ── method ─────────────────────────────────────────────────────────────────
 
+/**
+ * "This brief in numbers" (`mkt.p7.numbers`).
+ *
+ * THE SHARPEST DEVIATION ON THE DECK, FIXED. `data.method.conversations` and
+ * `.videos` are `run_summary.period_comments` / `period_videos` — an UPDATE's
+ * two biggest counts, printed under a month stamp in the row above them, three
+ * inches from a basis paragraph stating the month's own denominators from
+ * `month_denominators`. Two measurements of one quantity on one sheet, which is
+ * the thing `lib/reports/documents/reading.ts` says in its header it exists to
+ * prevent. Where the brief HAS a reading, this card is the reading's.
+ *
+ * Eight rows against the six the card printed: the artboard's "The unit" and
+ * its language share are added, `Sources` becomes the mix as SHARES rather
+ * than a list of names, `Held back` becomes the comparisons this reading
+ * refused (the phrase count keeps its place where there is no reading), and
+ * `Findings` states both sides of the bar.
+ *
+ * NOT THE ARTBOARD'S "trailing median 2,240" and not its "4 updates": neither
+ * is computed anywhere in the product, and a median invented at render would
+ * be a figure with no basis on the sheet that explains the basis.
+ */
+export function methodRows(data: DocumentSnapshotData): [string, string][] {
+  const m = data.method
+  const r = data.reading ?? null
+  const category = r?.denominators.find((d) => d.audience === 'industry-other') ?? r?.denominators[0] ?? null
+  const comments = r ? r.denominators.reduce((n, d) => n + d.comments, 0) : 0
+  const refused =
+    (r?.verdicts ?? []).filter((v) => v.state === 'refused').length +
+    (r?.gaps ?? []).filter((g) => g.state === 'refused').length
+  const findings = data.pages.filter((p) => p.kind === 'finding').length
+  const below = m.findingsBelow ?? 0
+  const rows: [string, string][] = [
+    ['Period', r ? `${fullDate(r.month)} → ${fullDate(r.readingAt)}${r.monthStatus === 'filling' ? ' · still filling' : ''}` : m.period],
+    ['Conversations', r && comments > 0 ? `${fmtCount(comments)} comments read in ${r.monthLabel}` : fmtCount(m.conversations)],
+    [
+      'Videos',
+      r && category
+        ? `${fmtCount(category.videos)} in ${category.label}${r.denominators.filter((d) => d !== category).map((d) => ` · ${fmtCount(d.videos)} in ${d.label}`).join('')}`
+        : `${fmtCount(m.videos)} · ${fmtCount(m.clientVideos)} ${data.company} · ${fmtCount(m.competitorVideos)} competitor`,
+    ],
+    [
+      'Sources',
+      (r ? platformShareLine(r.platformMix) : '') || m.sources.map((s) => PLATFORM[s] ?? s).join(', ') || 'public video platforms',
+    ],
+    [
+      'Held back',
+      r && refused > 0
+        ? `${refused} ${refused === 1 ? 'comparison' : 'comparisons'} refused${m.heldBack ? ` · ${fmtCount(m.heldBack)} phrases in other languages` : ''}`
+        : `${fmtCount(m.heldBack)} phrases in other languages`,
+    ],
+    ['Findings', `${findings} above the bar${below > 0 ? ` · ${below} below it` : ''}${m.thin ? ' (thin update)' : ''}`],
+    // The artboard's own definition, and the reason every count on this deck
+    // is comparable with every other: the unit is a VIDEO, never a comment.
+    ['The unit', 'a video with at least one analysed comment'],
+  ]
+  if (m.languages) rows.push(['Languages', m.languages])
+  return rows
+}
+
 function MethodPage({ page, data }: { page: DocPage; data: DocumentSnapshotData }) {
   const items = page.blocks.find((b) => b.field === 'method')?.items ?? []
-  const m = data.method
-  const rows: [string, string][] = [
-    ['Period', m.period],
-    ['Conversations', fmtCount(m.conversations)],
-    ['Videos', `${fmtCount(m.videos)} · ${fmtCount(m.clientVideos)} ${data.company} · ${fmtCount(m.competitorVideos)} competitor`],
-    ['Sources', m.sources.map((s) => PLATFORM[s] ?? s).join(', ') || 'public video platforms'],
-    ['Held back', `${fmtCount(m.heldBack)} phrases in other languages`],
-    ['Findings', `${data.pages.filter((p) => p.kind === 'finding').length}${m.thin ? ' (thin update)' : ''}`],
-  ]
+  const rows = methodRows(data)
   return (
     <div className="grid h-full min-h-0 grid-cols-[7fr_5fr] gap-x-12">
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3">
         <Eyebrow>How this brief was made</Eyebrow>
         {items.map((it, i) => <p key={i} className={`max-w-[66ch] ${BODY}`}>{it}</p>)}
+        {/* `mkt.p7.cannottell`. The sentence is the moves block's masthead and
+            has never had its own heading on the sheet a reader goes to for what
+            the brief can and cannot say. It is the one refusal this product
+            makes about CAUSE, and it belongs beside the ones it makes about
+            counting. */}
+        <div className="mt-1 flex max-w-[66ch] flex-col gap-1.5 rounded-lg bg-inner px-5 py-3.5">
+          <p className="font-mono text-[10.5px] uppercase tracking-[0.06em] text-secondary-foreground">What this brief cannot tell you</p>
+          <p className={BODY_SM}>Why the conversation moved. {MOVE_PROMISE}</p>
+        </div>
       </div>
-      <div className={`${CARD} self-start px-6 py-5`}>
-        <Eyebrow className="mb-3">This brief in numbers</Eyebrow>
-        <dl className="grid grid-cols-[130px_1fr] gap-x-4 gap-y-2.5">
+      <div className={`${CARD} flex flex-col gap-3.5 self-start px-6 py-5`}>
+        <Eyebrow>This brief in numbers</Eyebrow>
+        <dl className="grid grid-cols-[118px_1fr] gap-x-4 gap-y-2">
           {rows.map(([k, v]) => (
             <Fragment key={k}>
               <dt className="pt-[3px] font-mono text-[11px] uppercase tracking-[0.06em] text-muted-foreground">{k}</dt>
-              <dd className="text-[14.5px] leading-[1.4] text-foreground">{v}</dd>
+              <dd className="text-[13.5px] leading-[1.4] text-foreground">{v}</dd>
             </Fragment>
           ))}
         </dl>
+        {/* Under the hairline because it is the one line here that is NOT a
+            month reading: the delivery record is dated by the run, and says so
+            in its own words. */}
+        {data.method.delivery && (
+          <p className="border-t border-border pt-3 text-[12.5px] leading-[1.45] text-muted-foreground">{data.method.delivery}</p>
+        )}
       </div>
     </div>
   )
@@ -824,11 +963,11 @@ function MethodPage({ page, data }: { page: DocPage; data: DocumentSnapshotData 
  *  2026-09-02) carry none: they are all Sales briefs. */
 const lensOf = (data: DocumentSnapshotData): DocLens => data.lens ?? { means: 'What it means for a sale', short: 'for a sale' }
 
-function PageBody({ page, data }: { page: DocPage; data: DocumentSnapshotData }) {
+function PageBody({ page, data, title, pages }: { page: DocPage; data: DocumentSnapshotData; title?: boolean; pages?: number }) {
   const figures = data.figures
   const lens = lensOf(data)
   switch (page.kind) {
-    case 'in_short': return <OverviewPage page={page} data={data} />
+    case 'in_short': return <OverviewPage page={page} data={data} title={title} pages={pages} />
     case 'finding': return <FindingPage page={page} figures={figures} company={data.company} lens={lens} />
     case 'competitor': return <CompetitorPage page={page} figures={figures} data={data} />
     case 'personas': return <PersonasPage page={page} figures={figures} lens={lens} />
@@ -870,22 +1009,136 @@ function SectionBody({ section, data }: { section: DocBriefSection; data: Docume
   )
 }
 
+/**
+ * "The gap that matters" — the artboard's own headline, in the honest form
+ * (package E-marketing, `mkt.p2.gap`; mock-gap §6 D1).
+ *
+ * THE ARTBOARD WRITES "gap 13 points, narrowed from 19 in June". "Narrowed" is
+ * a movement claim about a DERIVED quantity — the difference of two shares on
+ * two denominators — and nothing bands it, so the product cannot say it.
+ * `gapLine` prints both sides with their k, their n and the band beside the
+ * magnitude, and `gapBasisLine` prints the EARLIER gap as its own dated, banded
+ * reading beside it, which is what lets a reader see that it was larger without
+ * the product deciding for them. Below the floor the line reads "too few to
+ * compare" and across a rename "comparison refused" — and in both cases no
+ * magnitude is printed at all, because a `Gap` carries the number and the band
+ * together or neither.
+ *
+ * THE BARS ARE THE TWO SIDES THE GAP IS BETWEEN. The artboard draws three,
+ * adding the category; a `Gap` is a claim about two audiences and holds two,
+ * and drawing a third bar from another figure would put a number on this card
+ * that the sentence above it was not measured against.
+ */
+export function GapCard({ gap }: { gap: Gap }) {
+  const basis = gapBasisLine(gap)
+  const sides = [gap.a, gap.b]
+  const pcts = sides.map((s) => sidePct(s))
+  const max = Math.max(...pcts.map((p) => p ?? 0), 1)
+  return (
+    <div className={`${CARD} flex flex-col gap-3 px-5 py-4`}>
+      <Eyebrow>The gap that matters</Eyebrow>
+      <p className={`m-0 ${BODY_SM}`}>
+        <span className="font-medium">{gap.objectLabel}</span>
+        {' — '}
+        <span data-copy="level">{gapLine(gap)}</span>
+        {basis && <>{'. '}<span data-copy="level">{basis}</span></>}
+      </p>
+      <div className="flex flex-col gap-2">
+        {sides.map((side, i) => {
+          const pct = pcts[i]
+          return (
+            <div key={side.audience} className="flex items-center gap-3">
+              <span className="w-[104px] shrink-0 truncate text-[12.5px] text-foreground">{side.label}</span>
+              <span className="h-[10px] flex-1">
+                <span
+                  className={`block h-full rounded-[3px] ${i === 0 ? 'bg-you' : 'bg-comp'}`}
+                  style={{ width: pct == null ? '0%' : `${Math.max(2, (pct / max) * 100)}%` }}
+                />
+              </span>
+              <span className="w-[104px] shrink-0">
+                {side.observed && pct != null
+                  ? <FigureCell align="right" value={`${round1(pct)}%`} of={`${fmtCount(side.value.k)} of ${fmtCount(side.value.n)}`} />
+                  : <span className="block text-right font-mono text-[11px] text-muted-foreground">&mdash; not tracked</span>}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * What the deck draws on a sheet BESIDE its blocks.
+ *
+ * One element today: the gap card on the subjects sheet. It is here rather
+ * than in a block because no surface owns it — `overview.subjects` publishes
+ * the two levels and deliberately publishes no gap figure, and the gap itself
+ * is frozen onto the reading. Keyed by the sheet's name, which is the section
+ * map's own string, so a map that does not cut that sheet gets nothing extra
+ * rather than an element in a layout that has no room for it.
+ */
+function sheetExtras(sheet: string, data: DocumentSnapshotData): ReactNode {
+  if (sheet !== 'Your subjects') return null
+  const gap = leadGap(data.reading?.gaps)
+  if (!gap) return null
+  return <div data-col="6" className="flex min-w-0 flex-col"><GapCard gap={gap} /></div>
+}
+
+/**
+ * One sheet carrying two or three borrowed blocks, on the 12-column print grid
+ * (package E-marketing).
+ *
+ * `.vb-print-grid` and `Slide.layout: 'grid'` have been in the codebase since
+ * the deck was written and no built page has ever composed internal columns —
+ * which is most of the density gap between the artboards and the deck. A
+ * section's own `span` is its width; a section that declares none takes the
+ * full twelve, so a sheet that groups by accident still reads as the stack it
+ * was.
+ *
+ * `data-col` is what `.vb-print [data-col="n"]` keys on, and the extra wrapper
+ * is deliberate: the block renders itself and must not be asked to know what
+ * width it was given.
+ */
+function SheetSection({ section, data }: { section: DocBriefSection; data: DocumentSnapshotData }) {
+  return (
+    <div data-col={String(Math.min(12, Math.max(1, section.span ?? 12)))} className="flex min-w-0 flex-col gap-2">
+      <p className="m-0 font-mono text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground">{section.title}</p>
+      <SectionBody section={section} data={data} />
+    </div>
+  )
+}
+
 export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: DocumentSnapshotData; date?: string }) {
   const slides = documentSlides(data)
-  const pages = slides.length + 1
+  // The artboards open on the In-short sheet, not on a 58px title sheet. A
+  // brief composed from a section map folds its cover onto that first sheet;
+  // a stored artefact built before the maps keeps the cover it printed.
+  const cover = documentCoverSheet(data)
+  const pages = slides.length + (cover ? 1 : 0)
   // WP19: the stamp rides every sheet, the way the weekly deck's rule does —
   // a reader of a PDF has no masthead to scroll back to, and a brief whose
   // numbers are a month's has to name the month on the page they are read on.
   const stamp = data.reading?.stamp ?? data.period
   const chrome = (title: string) => ({ context: `${title} · ${stamp}`, footer: <DeckFooter company={data.company} date={date} /> })
+  const n = (i: number) => i + (cover ? 2 : 1)
   return (
     <>
-      <DocumentCover data={data} pages={pages} />
+      {cover && <DocumentCover data={data} pages={pages} />}
       {slides.map((s, i) => {
-        const section = sectionOfSlide(data, s.keys[0])
-        if (section) {
+        const sections = s.keys.map((k) => sectionOfSlide(data, k)).filter(Boolean) as DocBriefSection[]
+        if (sections.length > 1 || (sections.length === 1 && s.layout === 'grid')) {
           return (
-            <Slide key={section.id} title={section.title} chrome={chrome(section.title)} page={i + 2} pages={pages} layout="single">
+            <Slide key={sections[0].id} title={s.title} chrome={chrome(s.title)} page={n(i)} pages={pages} layout="grid">
+              {sections.map((sec) => <SheetSection key={sec.id} section={sec} data={data} />)}
+              {sheetExtras(s.title, data)}
+            </Slide>
+          )
+        }
+        if (sections.length === 1) {
+          const section = sections[0]
+          return (
+            <Slide key={section.id} title={section.title} chrome={chrome(section.title)} page={n(i)} pages={pages} layout="single">
               <SectionBody section={section} data={data} />
             </Slide>
           )
@@ -894,8 +1147,10 @@ export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: Docum
         if (!page) return null
         const title = page.kind === 'finding' ? `Finding ${page.meta?.n ?? ''}` : page.kind === 'competitor' ? 'Competitor' : page.title
         return (
-          <Slide key={page.id} title={title} chrome={chrome(page.title)} page={i + 2} pages={pages} layout="single">
-            <PageBody page={page} data={data} />
+          <Slide key={page.id} title={title} chrome={chrome(page.title)} page={n(i)} pages={pages} layout="single">
+            {/* The brief's own title rides the first sheet of content when the
+                cover was folded away — never on a second one. */}
+            <PageBody page={page} data={data} title={!cover && page.kind === 'in_short'} pages={pages} />
           </Slide>
         )
       })}

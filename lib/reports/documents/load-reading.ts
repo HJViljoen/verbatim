@@ -469,7 +469,14 @@ export function briefSections(
         : block
           ? block.emptyState(data as never)
           : 'This section names a block this build does not know how to draw.'
-    return { id: s.id, block: s.block, surface: s.surface, title: s.title, framing: s.framing, empty }
+    // `sheet` / `span` travel onto the snapshot, because pagination is decided
+    // from the frozen artefact and never from today's map: a brief built
+    // before the sheets were cut must keep paginating the way it printed.
+    return {
+      id: s.id, block: s.block, surface: s.surface, title: s.title, framing: s.framing, empty,
+      ...(s.sheet ? { sheet: s.sheet } : {}),
+      ...(s.span ? { span: s.span } : {}),
+    }
   })
 }
 

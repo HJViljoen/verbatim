@@ -74,6 +74,31 @@ export interface BriefBlockSection {
   /** What has to be recorded for this section to hold anything. */
   needs: readonly ReadinessId[]
   /**
+   * The SHEET this section shares with its neighbours (package E-marketing).
+   *
+   * WHY A GROUPING AND NOT A SECOND MAP. `documentSlides` gave every section a
+   * landscape sheet of its own, which is why the marketing brief spends twelve
+   * sheets on a month the artboard spends seven on — a sheet holding only
+   * `overview.moves` (three short lines) against a mock sheet holding two move
+   * charts, a card and three claim rows. The artboards are dense 12-column
+   * grids and `Slide.layout: 'grid'` plus `.vb-print-grid` have been sitting
+   * in the codebase unused since the deck was written.
+   *
+   * CONSECUTIVE SECTIONS SHARING A NAME BECOME ONE SLIDE, and the name is the
+   * slide's title. Absent — which every section in the other three maps is —
+   * the section keeps its own sheet exactly as before, so nothing that has
+   * ever been built changes shape.
+   *
+   * `span` is the section's own width on the twelve columns. It is per
+   * SECTION rather than per sheet because two blocks on one sheet are almost
+   * never equal halves: the subjects table wants eight columns and the gap
+   * card four.
+   */
+  sheet?: string
+  /** Columns of twelve this section takes when it shares a sheet. Ignored on
+   *  a section that has a sheet to itself. */
+  span?: number
+  /**
    * Inputs this section READS BETTER WITH and draws fine without — printed as
    * a line beside it, never as a refusal (`sales.p4.untracked`).
    *
@@ -105,33 +130,70 @@ const page = (p: DocPageKind): BriefEntry => ({ kind: 'page', page: p })
 // RP1's own words: "subjects, the category, rivals, the moves, the method
 // page". Five blocks and the written pages that argue from them.
 
+/**
+ * THE SHEETS ARE THE ARTBOARD'S (package E-marketing, 2026-09-18).
+ *
+ * The map used to be seven entries that paginated to twelve landscape sheets —
+ * a cover, five borrowed blocks one to a sheet, four findings and the method
+ * page — against an artboard that spends seven on the same month. `sheet`
+ * groups the neighbours that belong together, so the subjects table now shares
+ * its sheet with its monthly line and the gap card the deck draws beside them,
+ * and the moves block shares its sheet with what the company claims and what
+ * comes back. The month sentence and the standings keep a sheet between them:
+ * neither is on the artboard, and both are what mock-gap §7 calls the
+ * product's own honesty machinery (the anomaly line with its band, the top
+ * recommendation with its ledger meta, the dual-mention caveat).
+ */
 export const MARKETING_MAP: readonly BriefEntry[] = [
   page('in_short'),
-  block({
-    id: 'mk.month', block: 'overview.sentence', surface: 'overview',
-    title: 'The month', framing: 'Where the month stands, with the band it cleared and the count behind it.',
-    needs: ['months-of-history'],
-  }),
   block({
     id: 'mk.subjects', block: 'overview.subjects', surface: 'overview',
     title: 'Your subjects', framing: 'Each subject this month, against the month before and against the category.',
     needs: ['subject-set', 'months-of-history'],
+    sheet: 'Your subjects', span: 12,
+  }),
+  // The artboard's own chart, built since Block B and never borrowed by a
+  // brief: the calendar line per side, with the tracking-change rule, the
+  // back-read band and a below-floor month drawn as a gutter mark.
+  block({
+    id: 'mk.subjectline', block: 'subjects.line', surface: 'subjects',
+    title: 'Month by month', framing: 'The same subjects month by month, on the axis each side was read on.',
+    needs: ['subject-set', 'months-of-history'],
+    sheet: 'Your subjects', span: 6,
   }),
   block({
-    id: 'mk.category', block: 'overview.category', surface: 'overview',
-    title: 'The category', framing: 'What the wider conversation was about this month.',
+    id: 'mk.month', block: 'overview.sentence', surface: 'overview',
+    title: 'The month', framing: 'Where the month stands, with the band it cleared and the count behind it.',
     needs: ['months-of-history'],
+    sheet: 'The month and the rivals', span: 12,
   }),
   block({
     id: 'mk.rivals', block: 'overview.rivals', surface: 'overview',
     title: 'Rivals', framing: 'Where each tracked rival sits in the same month.',
     needs: ['months-of-history'],
+    sheet: 'The month and the rivals', span: 12,
+  }),
+  block({
+    id: 'mk.category', block: 'overview.category', surface: 'overview',
+    title: 'What changed this month', framing: 'What the wider conversation was about this month.',
+    needs: ['months-of-history'],
+    sheet: 'What changed this month', span: 12,
   }),
   page('finding'),
   block({
     id: 'mk.moves', block: 'overview.moves', surface: 'overview',
     title: 'Your moves', framing: 'What you said you would do, and the reading it will show up in.',
     needs: ['decisions'],
+    sheet: 'Your moves', span: 7,
+  }),
+  // `mkt.p6.sayhear`. The artboard prints a stable "echoed 14 / pushed back 3";
+  // the block prints the latest update's reading AND its own caveat that six of
+  // the eight recurring claims have flipped a verdict. The caveat travels.
+  block({
+    id: 'mk.ways', block: 'market.ways', surface: 'market',
+    title: 'Say and hear', framing: 'Your own claims, and what the conversation does with each one.',
+    needs: [],
+    sheet: 'Your moves', span: 5,
   }),
   page('method'),
 ]

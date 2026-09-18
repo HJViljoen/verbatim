@@ -1,5 +1,7 @@
 import { DOCUMENT_BRIEF_MAX, directionWordsFor } from '../../config'
+import type { Gap } from '../../reading/gap'
 import type { MonthStatus } from '../../reading/types'
+import type { Verdict } from '../../reading/verdicts'
 import type { Quote } from '../../renderables/types'
 import type { RunDelta } from '../../report-delta'
 import type { Audience, FigureTable } from '../types'
@@ -193,6 +195,19 @@ export interface DocumentReading {
   stamp: string
   denominators: { audience: string; label: string; videos: number; comments: number }[]
   platformMix: Record<string, number>
+  /**
+   * The two-audience gaps the blocks drew (D1), frozen (package E-marketing).
+   *
+   * `BriefReading.gaps` has carried these since wave 1 and `documentReading`
+   * dropped them, so no artefact could print the one sentence the artboards
+   * lead with. Frozen because a brief freezes NUMBERS: the gap is measured at
+   * the reading instant, and re-deriving it at render would be a second
+   * measurement of a month a reader may open in March.
+   */
+  gaps?: Gap[]
+  /** The banded comparisons the blocks drew, frozen for the same reason. The
+   *  stat tiles print one; nothing on the deck may invent another. */
+  verdicts?: Verdict[]
   /** True where the window crosses a recorded clustering boundary — the label
    *  decision L requires travels with it. */
   crossesClustering: boolean
@@ -234,6 +249,12 @@ export interface DocBriefSection {
   title: string
   framing: string
   empty: string | null
+  /** The sheet this section shares with its neighbours (E-marketing). Absent
+   *  on every section that has a landscape sheet to itself, which is every
+   *  section of every brief built before 2026-09-18. */
+  sheet?: string
+  /** Columns of twelve this section takes on a shared sheet. */
+  span?: number
 }
 
 /** The brief's order: written pages and borrowed blocks, interleaved. */
@@ -254,6 +275,35 @@ export interface DocumentMethod {
   heldBack: number
   /** The update was partial or below the conversation floor. */
   thin: boolean
+  /**
+   * Findings written and dropped BELOW the bar this build (`mkt.p7.numbers`).
+   *
+   * The artboard's row is "4 above the bar · 5 below the bar", and the deck
+   * could only ever print the first half: the dropped ones live in the
+   * workings, which the render and share paths never select. A count is not a
+   * headline and carries no evidence, so it travels on the snapshot.
+   */
+  findingsBelow?: number
+  /**
+   * "27% of what was said on camera was not in English" — `MethodLines.language`,
+   * with the basis it must never be printed without.
+   *
+   * NOT THE ARTBOARD'S PER-LANGUAGE BREAKDOWN. "Afrikaans 14% · German 6% ·
+   * other 7%" needs a per-language count and the product records one bit —
+   * English or not — on `video_speech`. The share it does hold is printed, with
+   * its stated basis (D15).
+   */
+  languages?: string | null
+  /**
+   * "23 updates since 6 Apr 2026 · longest gap 35 days · last on 27 Sep 2026 —
+   * your 3rd monthly reading, the quarter view needs 6" (`mkt.p7.delivery`).
+   *
+   * RUN-DATED AND SAYING SO. It is the record OF the deliveries, which is the
+   * one figure a run's own clock is the honest index for — and it is the one
+   * line on the numbers card that is NOT a month reading, which is why it sits
+   * under the hairline rather than as a row beside them.
+   */
+  delivery?: string | null
 }
 
 /** report_snapshots.data for a document build (kind stays 'report'). */
