@@ -145,6 +145,21 @@ export interface GapReading {
    * `'n/a'`, exactly as `SeriesPoint.regime` does.
    */
   regime?: string | null
+  /**
+   * The two audiences this reading compares, as `a.audience|b.audience` —
+   * filled by `gapBetween` from the sides it was handed.
+   *
+   * NOT IN THE PINNED INTERFACE either, and for the gate `directionWord`
+   * already applies and this module could not: `directionWord` refuses a run
+   * whose readings change audience (lib/reading/bands.ts), because a word
+   * spoken across that change is a claim about which rival we happened to
+   * read rather than about the conversation. A `GapReading` carries no
+   * audience at all — it is a difference of two — so a series that swapped
+   * Freitag for Cotopaxi halfway earned a direction word from two different
+   * comparisons. Optional, and an absent pair refuses the word, the same way
+   * an absent regime does: two unknowns are not one pair.
+   */
+  pair?: string | null
 }
 
 export interface Gap extends GapReading {
@@ -203,7 +218,7 @@ function readingBetween(
   refused: RefusedReason | undefined,
   regime: string | null | undefined,
 ): GapReading {
-  const base = { window, ...(regime !== undefined ? { regime } : {}) }
+  const base = { window, pair: `${a.audience}|${b.audience}`, ...(regime !== undefined ? { regime } : {}) }
   // A REFUSAL IS NOT A THIN READING. The counts are real on both sides and the
   // levels still print; it is the DIFFERENCE that must not be stated, so it
   // carries neither a magnitude nor a band — the same shape `bandVerdict`
@@ -429,9 +444,20 @@ export function gapFigures(gap: Gap, prefix: string): FigureTable {
  *   · every reading is an ANSWER (`apart` or `level`). A run that includes a
  *     `too few to compare` month is a run with a hole in it;
  *   · one clustering regime, by `sameRegime`, so two unknown keys are not one;
- *   · the two steps agree in raw sign, and the first-to-last change clears the
- *     band drawn on the newest reading. `flat` is the honest answer when three
- *     readings exist and do not agree; `null` when three do not exist.
+ *   · ONE PAIR OF AUDIENCES (`GapReading.pair`), which is this module's form of
+ *     the "one name" gate: a run that swapped Freitag for Cotopaxi halfway is
+ *     three readings of two different questions, and a word drawn across it
+ *     describes our tracked list rather than the conversation;
+ *   · the two steps agree in raw sign, and the first-to-last change clears a
+ *     band drawn across BOTH ENDPOINTS. The move being banded is a
+ *     difference-of-differences — the September gap minus the July gap, four
+ *     independent proportions — so its band is the two endpoint bands added in
+ *     quadrature (each is 2×SE, so sqrt(b₀² + bₙ²) is 2×SE of the move), never
+ *     the newest reading's alone. The newest alone is NARROWER than the truth,
+ *     which makes the word easier to earn rather than harder, and this is the
+ *     one gate in the product where erring costs a direction claim nobody made.
+ *     `flat` is the honest answer when three readings exist and do not agree;
+ *     `null` when three do not exist.
  */
 export function gapDirection(readings: readonly GapReading[], allowed: boolean): Direction | null {
   if (!allowed) return null
@@ -446,6 +472,10 @@ export function gapDirection(readings: readonly GapReading[], allowed: boolean):
   for (let i = 1; i < tail.length; i++) {
     if (monthStartOf(tail[i].window.from) !== nextMonth(tail[i - 1].window.from)) return null
     if (!sameRegime(tail[i].regime ?? null, tail[i - 1].regime ?? null)) return null
+    // Two unknown pairs are not one pair, exactly as two unknown regimes are
+    // not one regime.
+    const pair = tail[i].pair ?? null
+    if (pair == null || pair !== (tail[i - 1].pair ?? null)) return null
   }
 
   const size = tail.map((r) => Math.abs(r.gapPts as number))
@@ -455,8 +485,10 @@ export function gapDirection(readings: readonly GapReading[], allowed: boolean):
   const closer = steps.every((s) => s <= 0) && steps.some((s) => s < 0)
   if (!wider && !closer) return 'flat'
 
-  const band = tail[tail.length - 1].bandPts
-  if (band == null) return 'flat'
+  const first = tail[0].bandPts
+  const last = tail[tail.length - 1].bandPts
+  if (first == null || last == null) return 'flat'
+  const band = round1(Math.max(Math.sqrt(first * first + last * last), SHARE_BAND.minBandPts))
   if (Math.abs(size[size.length - 1] - size[0]) <= band) return 'flat'
   return wider ? 'growing' : 'fading'
 }

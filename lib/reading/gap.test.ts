@@ -330,6 +330,7 @@ describe('gapDirection', () => {
     bandPts: 2,
     state: 'apart',
     regime: 'c1',
+    pair: 'client|competitor:Freitag',
     ...over,
   })
 
@@ -388,6 +389,28 @@ describe('gapDirection', () => {
       reading('2026-09-01', '2026-10-01', -19),
     ]
     expect(gapDirection(wobble, true)).toBe('flat')
+  })
+
+  it('returns null where the run changes which two audiences it compares', () => {
+    const swapped = widening.map((r, i) => (i === 0 ? { ...r, pair: 'client|competitor:Cotopaxi' } : r))
+    expect(gapDirection(swapped, true)).toBeNull()
+    // And two unknown pairs are not one pair, as two unknown regimes are not
+    // one regime.
+    expect(gapDirection(widening.map((r) => ({ ...r, pair: null })), true)).toBeNull()
+  })
+
+  it('bands the whole move across BOTH endpoints, not on the newest reading alone', () => {
+    // First to last is 3 points against a newest band of 2.5 — a word under
+    // the old rule. The move is a difference of differences, so its band is
+    // sqrt(2.5² + 2.5²) = 3.5, and 3 does not clear it.
+    const crawl = [
+      reading('2026-07-01', '2026-08-01', -8, { bandPts: 2.5 }),
+      reading('2026-08-01', '2026-09-01', -10, { bandPts: 2.5 }),
+      reading('2026-09-01', '2026-10-01', -11, { bandPts: 2.5 }),
+    ]
+    expect(gapDirection(crawl, true)).toBe('flat')
+    // A move that clears the wider band still earns its word.
+    expect(gapDirection(widening, true)).toBe('growing')
   })
 
   it('is flat where the readings agree but the whole move is inside the band', () => {
