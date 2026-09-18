@@ -4,13 +4,27 @@ import { createCitedQuotePicker, fetchQuotesByAudience, fetchQuoteTextsByComment
 import { quoteRef } from '../renderables/quotes-freeze'
 import type { Quote, Scope, Slide } from '../renderables/types'
 import { resolveCitations, type CitationMeta } from '../evidence-cite'
-import { ASK_THEMES_PER_CLAIM } from '../config'
-import { weekdayDate } from '../format'
+import { AGENT_MOVEMENT_MONTHS, ASK_THEMES_PER_CLAIM, directionWordsFor } from '../config'
+import { fmtInt, weekdayDate } from '../format'
 import { row, rows as readRows } from './read'
 import { isMissingColumnError } from '../supabase-admin'
 import type { ClaimResult, Judgement, AskSummary } from '../ask/types'
 import { JUDGEMENT_HEADING, NEAREST_HEADING, type AgentAnswer } from '../agent/types'
-import { loadIndexFacts, type AskBasis } from '../agent/basis'
+import { askBasisLine, loadIndexFacts, type AskBasis } from '../agent/basis'
+import {
+  answerFallback,
+  askAllowList,
+  loadNotAnswered,
+  measureAnswer,
+  scrubThreadAnswer,
+  type AnswerMeasure,
+  type NotAnswered,
+} from '../agent/measure'
+import { loadMonthSeries } from '../reading/read'
+import { monthStartOf, prevMonth } from '../reading/month-key'
+import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../rivals'
+import { detailHref } from '../shell/bar'
+import { surface } from '../nav'
 import type { MethodNoteData } from '../../components/print/method-note'
 
 // The agent thread as a page module (Reports & Exports T11, 2026-08-29) —
@@ -33,7 +47,27 @@ export interface ThreadQuote extends Quote {
 }
 
 export interface ThreadAnswer extends Omit<AgentAnswer, 'grounded'> {
-  grounded: (Omit<AgentAnswer['grounded'][number], 'quotes'> & { quotes: ThreadQuote[] })[]
+  /** `replaced` is a point whose own sentence the scrubbers emptied: `text` is
+   *  the product's reading in its place and says so in words, never a blank. */
+  grounded: (Omit<AgentAnswer['grounded'][number], 'quotes'> & { quotes: ThreadQuote[]; replaced?: boolean })[]
+  /**
+   * What the scrubbers removed from THIS answer's prose (D8, mock-gap D13).
+   *
+   * `answer` and every `grounded[].text` above are the SCRUBBED strings: a
+   * sentence in which the model typed a figure of its own is gone, and so is
+   * one naming a direction no verdict earned. The quotes are untouched — they
+   * are the commenter's own words and travel as their own nodes.
+   *
+   * The counters are here rather than only in `ai_call_log` because a reader
+   * has to be able to tell a short answer from a scrubbed one, and because a
+   * prompt that starts leaking should be visible on the surface it leaks onto.
+   * Absent on an answer measured against nothing at all.
+   */
+  scrub?: { dropped: number; droppedDigits: number; droppedDirection: number; magnitude: number; leaked: boolean }
+  /** What the product says in place of an answer the scrubbers emptied —
+   *  composed from the same verdicts, and saying that it was. Null whenever
+   *  `answer` survived. */
+  fallback?: string | null
 }
 
 export interface Turn {
@@ -84,7 +118,135 @@ export interface AgentThreadData {
    *  answered against an older update carries its own date in `Turn.updateAt`;
    *  the index facts are shared, because there is one index. */
   basis: AskBasis
+  /**
+   * The newest answered turn's MEASUREMENT (D8) — the levels with their own
+   * denominators, the banded verdicts, the month series each chart is drawn
+   * from, the figure table its prose may name and the caveats the registers
+   * owe. Null when the monthly reading is not recorded for this workspace, or
+   * when no turn here rests on a theme the months carry, which are two real
+   * states and not an error.
+   *
+   * ONE MEASUREMENT PER THREAD, not one per turn: the findings of a follow-up
+   * are the findings of the same conversation about the same months, and a
+   * second measurement would be a second set of figure keys over one page.
+   */
+  measure: AnswerMeasure | null
+  /** The wall-clock month's questions, its refusals and the workspace budget.
+   *  Null only where the read failed. */
+  notAnswered: NotAnswered | null
+  /** The workspace's most recently checked plan, for the ask box's chip.
+   *  `moved` is whether its newest re-evaluation moved a claim's verdict
+   *  (`plan_check_evaluations.moved`), which the pipeline has written since
+   *  2026-08-23 and nothing has ever read. */
+  planChip: { planId: string; title: string; moved: boolean } | null
+  /**
+   * What the page bar prints. Ask's bar is `title` (lib/nav.ts) because nothing
+   * on this surface is a reading of a month, so `context` is the ASK BASIS —
+   * which update an answer is given against and how much of the corpus is
+   * searchable — and never the month/still-filling context line the five
+   * reading surfaces carry.
+   */
+  bar: { question: string; context: string }
+  /** The "what an answer draws on" lines and where the record drawer opens.
+   *  Exposed whatever `lib/nav.ts:hasRecord` says about Ask today. */
+  record: { lines: string[]; href: string } | null
   method: MethodNoteData
+}
+
+/**
+ * Where "The record →" opens the how-sound drawer from Ask.
+ *
+ * OVER THE PAGE THE READER IS ON. The drawer is a detail param, so the address
+ * has to be the CURRENT one: pointed at Ask's index, opening the record from
+ * inside a thread threw the reader back to the question list and lost the
+ * answer they were reading. Whether the bar mounts the drawer at all is
+ * `lib/nav.ts:hasRecord`'s answer and not this file's.
+ */
+export const askRecordHref = (threadId?: string | null): string =>
+  detailHref(threadId ? `${surface('ask').href}/${threadId}` : surface('ask').href, {}, 'record')
+
+/**
+ * A finding's key on this page: the TURN it was written in, then the model's
+ * own ref inside that turn.
+ *
+ * `GroundedPoint.id` is the model's ref and is stable WITHIN ONE ANSWER only
+ * (lib/agent/types.ts; `enforce.ts` assigns `id: ref`) — every answer starts
+ * again at "G1". Keyed on the ref alone a follow-up's first finding is dropped
+ * as a duplicate of the first answer's, and the follow-up's prose is then
+ * scrubbed against the FIRST answer's figure table and the FIRST answer's
+ * verdicts. Two of the seven production threads that carry an answer are
+ * multi-turn, so that is the normal case rather than an edge.
+ *
+ * The key is composed here and nowhere else, because a rendered point has to be
+ * matched back to its `FindingMeasure` with the same string — by this file when
+ * the scrubbers empty a point, and by wave 2 when it draws the chart.
+ */
+export const findingKey = (turnIndex: number, ref: string): string => `${turnIndex}:${ref}`
+
+/** One finding per grounded point, in the answer's own order, carrying the
+ *  registry ids that point rests on and keyed by the turn it was written in. */
+export function answerFindings(turns: readonly Turn[]): { findingId: string; registryIds: string[] }[] {
+  const out: { findingId: string; registryIds: string[] }[] = []
+  const seen = new Set<string>()
+  turns.forEach((t, i) => {
+    for (const g of t.answer?.grounded ?? []) {
+      const key = findingKey(i, g.id)
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push({
+        findingId: key,
+        registryIds: (g.themeRefs ?? []).map((r) => r.registryId).filter((r): r is string => Boolean(r)),
+      })
+    }
+  })
+  return out
+}
+
+/**
+ * "What an answer draws on", in the reader's words.
+ *
+ * FOUR OF THE MOCK'S FIVE ROWS ARE NOT HERE, and each is left out for its own
+ * reason rather than for want of a query. Updates-this-month, videos-analysed
+ * and the language mix all live on `lib/reading/record.ts:loadRecordInputs`,
+ * which is the record surface's loader and a far heavier read than this page
+ * has any business doing; the tracking-changes row is `config_changes`, the
+ * same. What is here is what this page already holds: the two facts the basis
+ * line reads, plus the one count that makes "The record →" mean something.
+ * Pure, so the sentences are argued in a test.
+ */
+export function askRecordLines(basis: AskBasis, delivered: number | null): string[] {
+  const lines: string[] = []
+  lines.push(
+    delivered == null
+      ? 'How many updates have been delivered is not recorded here.'
+      : delivered === 0
+        ? 'No update has been delivered for this workspace yet.'
+        : `${fmtInt(delivered)} ${delivered === 1 ? 'update' : 'updates'} delivered.`,
+  )
+  lines.push(
+    basis.monthlyReadings == null
+      ? 'The month-by-month reading has not been recorded for this workspace yet.'
+      : basis.monthlyReadings === 0
+        ? 'No month yet carries enough videos to compare on.'
+        : basis.monthlyReadings === 1
+          ? '1 monthly reading carries enough videos to compare on.'
+          : `${fmtInt(basis.monthlyReadings)} monthly readings carry enough videos to compare on.`,
+  )
+  lines.push(
+    basis.total == null || basis.embedded == null
+      ? 'How much of the corpus a question can search is not recorded.'
+      : basis.total === 0
+        ? 'There is nothing to search yet.'
+        : `${fmtInt(basis.embedded)} of ${fmtInt(basis.total)} findings are searchable.`,
+  )
+  return lines
+}
+
+/** `n` months before `month`, as a month start. */
+function monthsBack(month: string, n: number): string {
+  let m = monthStartOf(month)
+  for (let i = 0; i < n; i++) m = prevMonth(m)
+  return m
 }
 
 export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | null> {
@@ -127,6 +289,70 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
   const runsP = runIds.length
     ? supabase.from('pipeline_runs').select('id, started_at').eq('client_id', clientId).in('id', runIds)
     : Promise.resolve({ data: [], error: null })
+
+  // D8's four reads, all of them functions of the tenant alone, so they leave
+  // with the wave above rather than after it. Every one is small: a head count,
+  // one plan row, one month of message rows, and the month series for the
+  // themes THIS thread already rests on (never the whole registry, and never a
+  // rival's audience — see lib/agent/measure.ts).
+  const deliveredP = supabase
+    .from('pipeline_runs')
+    .select('id', { count: 'exact', head: true })
+    .eq('client_id', clientId)
+  const planP = supabase
+    .from('plan_checks')
+    .select('id, title, source_filename')
+    .eq('client_id', clientId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  // The workspace's newest re-evaluation, BESIDE the plan read rather than
+  // after it. `ask-reevaluate` writes a row per plan per run, so on a tenant
+  // with one plan — every tenant today — the newest row in the workspace IS the
+  // newest row for the newest plan, and the round trip is saved. Where it is
+  // not (several plans written in one batch), the chip asks for its own plan's
+  // row below: correct first, parallel where it can be.
+  const newestEvalP = supabase
+    .from('plan_check_evaluations')
+    .select('plan_check_id, moved')
+    .eq('client_id', clientId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const notAnsweredP = loadNotAnswered(scope).catch(() => null)
+
+  const storedRegistryIds = [
+    ...new Set(
+      messages.flatMap((m) =>
+        (m.result?.grounded ?? []).flatMap((g) =>
+          (g.themeRefs ?? []).map((r) => r.registryId).filter((r): r is string => Boolean(r)),
+        ),
+      ),
+    ),
+  ]
+  // THE AXIS ENDS AT THE MONTH THIS THREAD WAS ANSWERED IN, and not at today's.
+  //
+  // The months are the COMMENT's either way — that is what the reading layer
+  // holds and nothing here changes it. What this decides is WHICH of them the
+  // answer is measured against, and "today" was wrong: a thread answered in
+  // June, opened in September, printed September's figures under June's prose
+  // and had June's sentences scrubbed against September's verdicts. The answer
+  // was written against a June update and can only be checked against what
+  // June's conversation says. Capped at the current month, because a clock that
+  // ran ahead is not a month anyone can read.
+  const answeredAt = [...messages].reverse().find((m) => m.role === 'agent' && m.result)?.created_at ?? null
+  const thisMonth = monthStartOf(new Date().toISOString())
+  const answeredMonth = answeredAt ? monthStartOf(answeredAt) : thisMonth
+  const readMonth = answeredMonth > thisMonth ? thisMonth : answeredMonth
+  const seriesP = storedRegistryIds.length
+    ? loadMonthSeries(scope.reading.client, scope.reading.clientId, {
+        audiences: [CLIENT_AUDIENCE, INDUSTRY_AUDIENCE],
+        objectKind: 'theme',
+        objectIds: storedRegistryIds,
+        from: monthsBack(readMonth, AGENT_MOVEMENT_MONTHS - 1),
+        to: readMonth,
+      }).catch(() => null)
+    : Promise.resolve(null)
 
   // A document thread wraps a plan_check; its quotes resolve from stored
   // insight ids — no quote text is kept in either table.
@@ -244,6 +470,91 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
   const platforms = [...new Set(citations.map((c) => c.platform).filter((p): p is string => !!p))]
   const conversations = new Set(turns.flatMap((t) => (t.answer?.grounded ?? []).flatMap((g) => g.insightIds)))
 
+  // ── D8 · the measurement, and the scrub it licenses ──────────────────────
+  //
+  // THE ORDER MATTERS AND IS THE WHOLE RULE. The measurement is taken FIRST,
+  // off the comment-dated months; the prose is scrubbed AGAINST it. A figure
+  // the model typed survives only as a `[[key]]` this table holds, and a
+  // direction word only for an object one of these verdicts earned one for —
+  // which, on this surface, is possible at all because `agent.movement` is the
+  // one reader flag that is true. Measured against nothing, the table is empty
+  // and the rules delete every figure and every direction, which is what the
+  // prompts have asked for in words since WP7 and nothing has enforced.
+  const set = await seriesP
+  const seeded = set != null && set.substrate === 'seeded' && set.numeratorSubstrate === 'seeded'
+  const measure = measureAnswer({
+    findings: answerFindings(turns),
+    series: seeded ? (set as NonNullable<typeof set>).series : [],
+    month: readMonth,
+    directionWords: directionWordsFor('agent.movement'),
+    ownAudience: CLIENT_AUDIENCE,
+    hasJudgement: turns.some((t) => (t.answer?.judgement.length ?? 0) > 0),
+  })
+  const fallback = answerFallback(measure)
+  // The thread's own inputs, never its output: the client's questions and the
+  // theme labels the answer rests on. A product name with a digit in it
+  // ("3R78", "L5999") is a NAME, and without this every sentence carrying one
+  // dropped whole — on Ossur, the tenant the allow-list was written for.
+  //
+  // NOT the thread's title: that is model-written (`ask_extract_title` is a
+  // slot in PROSE_POLICY), and a model that can seed its own allow-list has no
+  // rule. The questions are the client's own words; the theme labels are the
+  // sanctioned source `allowTokens` was written against ("a run's own inputs —
+  // theme labels and descriptions, the tenant's claims, its product names").
+  const allow = askAllowList([
+    ...turns.map((t) => t.question),
+    ...turns.flatMap((t) => (t.answer?.grounded ?? []).flatMap((g) => (g.themeRefs ?? []).map((r) => r.label))),
+  ])
+  turns.forEach((t, i) => {
+    if (!t.answer) return
+    // `findingKey` on both ends: a point that loses its sentence finds its own
+    // measurement, never the neighbouring turn's.
+    const scrubbed = scrubThreadAnswer(t.answer, measure, { keyOf: (g) => findingKey(i, g.id), allow })
+    t.answer = {
+      ...t.answer,
+      answer: scrubbed.answer,
+      grounded: scrubbed.grounded,
+      scrub: scrubbed.scrub,
+      // Only where the model's own sentences are gone: an answer that survived
+      // needs no substitute, and printing one beside it would read as a second
+      // opinion rather than as a replacement. Both renderers print this INSTEAD
+      // OF `answer` — an emptied head used to render as a blank paragraph,
+      // which is a worse artefact than the prose it replaced.
+      fallback: scrubbed.answer.trim() === '' ? fallback : null,
+    }
+  })
+
+  const plan = row<{ id: string; title: string | null; source_filename: string | null }>(await planP, 'agentThread.plan')
+  const newestEval = row<{ plan_check_id: string; moved: unknown }>(await newestEvalP, 'agentThread.planEval')
+  let planChip: AgentThreadData['planChip'] = null
+  if (plan) {
+    // `plan_check_evaluations.moved` is written by the pipeline's
+    // `ask-reevaluate` step and has never been read by anything (grep, 2026-09).
+    // A failed read is `false` rather than a thrown page: the chip is an
+    // affordance, and a plan whose re-check we cannot see is still a plan.
+    let moved: unknown = newestEval?.plan_check_id === plan.id ? newestEval.moved : undefined
+    if (moved === undefined) {
+      const own = await supabase
+        .from('plan_check_evaluations')
+        .select('moved')
+        .eq('plan_check_id', plan.id)
+        .eq('client_id', clientId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      moved = row<{ moved: unknown }>(own, 'agentThread.planEval.own')?.moved
+    }
+    planChip = {
+      planId: plan.id,
+      title: plan.title ?? plan.source_filename ?? 'A plan you checked',
+      moved: Array.isArray(moved) && moved.length > 0,
+    }
+  }
+
+  const deliveredRes = (await deliveredP) as { count: number | null; error: unknown }
+  const delivered = deliveredRes.error ? null : deliveredRes.count ?? null
+  const basis: AskBasis = { updateAt: newestUpdateAt, ...facts }
+
   return {
     threadId: id,
     kind: thread.kind === 'document' ? 'document' : 'question',
@@ -254,7 +565,15 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
     citations,
     silentQuestions,
     document,
-    basis: { updateAt: newestUpdateAt, ...facts },
+    basis,
+    // NULL MEANS "nothing measured AND nothing owed". A thread with no month
+    // rows behind it still owes the interpretation caveat wherever the model
+    // argued, so a measurement carrying only caveats is still a measurement.
+    measure: measure.findings.length || measure.caveats.length ? measure : null,
+    notAnswered: await notAnsweredP,
+    planChip,
+    bar: { question: surface('ask').question ?? '', context: askBasisLine(basis) },
+    record: { lines: askRecordLines(basis, delivered), href: askRecordHref(id) },
     method: {
       company: brand,
       period: `Asked ${weekdayDate(thread.created_at as string)}`,

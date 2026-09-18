@@ -520,6 +520,20 @@ export interface ScrubProseInput {
   verdicts?: readonly Verdict[]
   /** The run's allow-list (allowTokens), carried. */
   allow?: readonly string[]
+  /**
+   * Strip magnitude words as WORDS. On by default, and the one dial a caller
+   * may turn — `dropDigitSentences` has always had it; before this the wrapper
+   * every wired slot goes through could not reach it.
+   *
+   * It is turned off in exactly one place (`lib/agent/measure.ts:scrubAnswer`)
+   * and for the reason this file's own header gives for preferring a
+   * sentence-drop: a word-delete leaves the leak on the page. On a Pass D
+   * insight "many buyers said so" survives losing `many`; in Ask's
+   * conversational prose "The majority of commenters mention fit" becomes "The
+   * of commenters mention fit". A slot that turns it off owes a COUNT of what
+   * it kept, the `flaggedDirection` bargain, so the trade stays visible.
+   */
+  magnitude?: boolean
 }
 
 /**
@@ -537,7 +551,7 @@ export function scrubProse(slot: ProseSlot, raw: string, input: ScrubProseInput 
   if (policy === 'none') return { ...EMPTY, text: source }
   let out: ProseScrub = { ...EMPTY, text: source }
   if (policy === 'digits' || policy === 'both') {
-    out = merge(out, dropDigitSentences(out.text, input.figures ?? {}, { allow: input.allow }))
+    out = merge(out, dropDigitSentences(out.text, input.figures ?? {}, { allow: input.allow, magnitude: input.magnitude }))
   }
   if (policy === 'direction' || policy === 'both') {
     out = merge(out, dropUnverdictedDirection(out.text, input.verdicts ?? []))
