@@ -235,9 +235,19 @@ function StatTile({ value, label, word }: { value: string; label: string; word?:
  * where it matters most: a reader of a PDF has no How-to-read drawer to open,
  * and the whole question a brief raises is which of its words a model chose.
  * It names the words this deck actually prints.
+ *
+ * AND IT NAMES THE EVIDENCE WORDS TOO (fix pass). The sentence listed the five
+ * movement words and stopped, two lines above finding rows carrying chips that
+ * read `solid` and `reasonable` — calibrated words by exactly the definition
+ * this sentence uses, assigned by `calibrateSure` (lib/reports/documents/
+ * scrub.ts) from distinct conversations and independent strands. On the one
+ * sheet whose job is to make the vocabulary checkable, two of its own words
+ * were unlisted; the artboard's version names its evidence words as well.
+ * The basis clause names both measures, because the two tiers are not counted
+ * off the same thing.
  */
 export const CALIBRATION_NOTE =
-  'Every calibrated word here — up, down, no clear change, too few to compare, comparison refused — is assigned by a fixed rule from counted videos, never worded by the model.'
+  'Every calibrated word here — up, down, no clear change, too few to compare, comparison refused, and a finding’s solid, reasonable or thin — is assigned by a fixed rule from counted videos and the conversations behind each finding, never worded by the model.'
 
 /** The brief's own title, on the first sheet of content rather than on a
  *  landscape sheet of its own (`mkt.p1.title`). The mono line under it is the

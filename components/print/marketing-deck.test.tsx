@@ -7,6 +7,7 @@ import { documentViewerPages } from '@/lib/reports/viewer'
 import { leadGap, leadVerdict, overviewTiles } from '@/lib/reports/documents/overview'
 import { DocumentShareShell } from '@/components/share/document-share-shell'
 import { DocumentDeck, GapCard, methodRows, paperEmpty, CALIBRATION_NOTE } from './document-deck'
+import { SURE_WORDS } from '@/lib/reports/documents/scrub'
 import { MOVES_EMPTY } from '@/lib/pages/overview'
 import { MONTHLY_MOVES_EMPTY } from '@/lib/reports/monthly'
 import { marketingDeckFixture, refusedDeckFixture } from './fixture'
@@ -170,6 +171,21 @@ describe('the In-short sheet', () => {
     const html = render(<DocumentDeck data={marketingDeckFixture()} date="28 Sep 2026" />)
     expect(html).toContain('never worded by the model')
     expect(CALIBRATION_NOTE).toContain('too few to compare')
+  })
+
+  // EVERY CALIBRATED WORD ON THE SHEET IS IN THE SENTENCE (fix pass). The note
+  // listed the five movement words and stopped, two lines above finding rows
+  // carrying chips reading `solid` and `reasonable` — assigned by
+  // `calibrateSure` from counted conversations and strands, calibrated by
+  // exactly the definition the sentence uses.
+  it('names the evidence words its own finding rows print', () => {
+    // Every word `calibrateSure` can assign is in the sentence.
+    for (const sure of Object.keys(SURE_WORDS)) expect(CALIBRATION_NOTE).toContain(sure)
+    // And the chips are on the same sheet as the sentence: the In-short page.
+    const sheet = markupText(render(<DocumentDeck data={marketingDeckFixture()} date="28 Sep 2026" />)).split('1 / 9')[0]
+    expect(sheet).toContain('solid')
+    expect(sheet).toContain('reasonable')
+    expect(sheet).toContain('Every calibrated word')
   })
 
   // `mkt.p1.findings`: the artboard's right-hand pair on every row. NOT its
