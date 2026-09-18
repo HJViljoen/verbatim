@@ -6,6 +6,7 @@ import { TokenProse } from '@/components/blocks/prose'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, fmtPct, longMonth, monthName } from '@/lib/format'
 import { baselineFormingLine, flagFigures, type UnusualFlag, type WeekData } from '@/lib/pages/week'
+import { updateSeriesLine, type UpdateSeries } from '@/lib/reading/updates'
 import type { FigureTable } from '@/lib/reading/verdicts'
 
 // WK1 · Unusual this week (design §3 WK1, item 40; the mock's §1).
@@ -58,6 +59,8 @@ export const weekUnusual: Block<WeekData> = {
         meta={u.setSize != null ? `${fmtInt(u.setSize)} objects watched · ${fmtInt(u.tested ?? 0)} testable` : undefined}
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
+
+        <Series series={u.series} mode={mode} />
 
         {u.state === 'baseline_forming' ? (
           <Line mode={mode}>{baselineFormingLine(u.baseline!, data.month)}</Line>
@@ -250,6 +253,34 @@ function Interpretation({
       <span className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{label}</span>
       <TokenProse body={body} figures={figures} mode={mode} model className="m-0 text-[12.5px] leading-relaxed" />
     </div>
+  )
+}
+
+/**
+ * The thirteen-update series, in words — the mock's chart legend
+ * (`week.unusual.chart.legend`), which is the half of it that carries the
+ * numbers. The chart itself is drawn in wave 2 off `UnusualBlock.series`.
+ *
+ * THE BASIS IS PRINTED BESIDE THE BAND, AND IT SAYS "UPDATES". The mock's axis
+ * is thirteen WEEKS; this one is thirteen deliveries, which is a chart of our
+ * own cadence and not of the conversation — so the axis's own words go on the
+ * block rather than in a caption somewhere a reader may not reach. And the band
+ * says "videos", because the other band in this block (a flag's) is in
+ * percentage points and two unlabelled bands on one block is how 4.9 points
+ * gets read as five videos.
+ *
+ * DRAWN IN EVERY STATE, including the four where the check cannot speak: what
+ * each update brought in is a fact about our reading, and it is true whether or
+ * not there are three months to compare it with.
+ */
+function Series({ series, mode }: { series: UpdateSeries | null; mode: 'app' | 'print' | 'email' }) {
+  if (!series || series.points.length === 0) return null
+  return (
+    <>
+      <Line mode={mode}>{updateSeriesLine(series)}</Line>
+      <Line mode={mode}>{series.basis}</Line>
+      {series.note ? <Line mode={mode}>{series.note}</Line> : null}
+    </>
   )
 }
 

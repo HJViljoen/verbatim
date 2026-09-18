@@ -20,6 +20,7 @@ import { monthStartOf, nextMonth } from '../reading/month-key'
 import { loadMonthSeries, loadWindowReading, type ReadingHandle } from '../reading/read'
 import { platformMixLine } from '../reading/record'
 import { mergeSeriesNotes, type MonthLabel, type MonthSeries } from '../reading/series'
+import { loadUpdateSeries, type UpdateSeries } from '../reading/updates'
 import type { MonthStatus, PlatformMix } from '../reading/types'
 import { bandVerdict, type FigureTable, type Verdict } from '../reading/verdicts'
 import { parseRef, quoteRef } from '../renderables/quotes-freeze'
@@ -112,6 +113,20 @@ export const WORKED_SHOWN = 4
 
 /** Quotes shown under §4's "new quotes on your subjects". */
 export const NEW_QUOTES_SHOWN = 4
+
+/**
+ * Rival posts named per rival in §5.
+ *
+ * THREE, the mock's own row count, and a cap that is load-bearing rather than
+ * cosmetic: each named post costs one HEAD count of the comments dated under it
+ * inside the window, so "every post" would be a hundred round trips on a live
+ * tenant to print a column. `RivalPosts.postsTotal` carries how many there were
+ * in all, so three of ninety-four never reads as ninety-four.
+ */
+export const RIVAL_POSTS_SHOWN = 3
+
+/** How much of a caption stands in for the title `videos` does not have. */
+export const RIVAL_CAPTION_CHARS = 90
 
 /**
  * The two sections the mock draws and Phase 1 does not.
@@ -220,6 +235,25 @@ export interface UnusualBlock {
    *  the check recorded them. */
   updateVideos: number | null
   medianVideos: number | null
+  /**
+   * The last thirteen UPDATES, with what each one brought in — the mock's
+   * thirteen-point chart, built at the one cadence that is real (D5).
+   *
+   * NOT THE SAME NUMBERS AS `updateVideos` / `medianVideos` ABOVE, and the two
+   * must never be printed as if they were. Those are what the anomaly CHECK
+   * recorded for this update at the moment it ran, off its own read
+   * (`anomaly_checks.update_videos` / `.median_videos`); this is a reading
+   * taken now, over the runs that exist now. They agree on a quiet tenant and
+   * drift the moment a run is resumed or a check is re-run, and a block
+   * printing one beside the other without saying which is which is the page
+   * disagreeing with itself.
+   *
+   * Null where the series could not be read at all. `lib/reading/updates.ts`
+   * has the four rules the shape enforces — chief among them that its band is
+   * a COUNT band in videos, where this block's other band (`UnusualFlag.
+   * bandPts`) is in percentage points.
+   */
+  series: UpdateSeries | null
 }
 
 /** One subject, month-to-date, with what this update put into it. */
@@ -232,6 +266,30 @@ export interface SubjectWeekRow {
   monthOf: number
   /** What THIS update added — the videos of its window carrying the subject. */
   addedVideos: number | null
+  /**
+   * What an update that gave this subject its ordinary share of the month
+   * would have added — the subject's month-to-date videos scaled by this
+   * update's own share of the month.
+   *
+   * MEASURED ON BOTH SIDES AND NOT A HISTORY. `typical = monthVideos ×
+   * (this update's client-audience videos in the month ÷ the month's own
+   * client-audience denominator)`. Every one of those four numbers is read: two
+   * off the stored month rows, two off the windowed read clipped to the month.
+   * So the comparison is a ratio of ratios — did this subject take a larger
+   * share of this update than it holds of the month so far — and neither side
+   * is a modelled or averaged history.
+   *
+   * WHY NOT "THE MEDIAN OF ITS LAST THIRTEEN CONTRIBUTIONS", which is what the
+   * words "a typical week" suggest: that is one `window_subject_readings` call
+   * per update per subject, and it would be a thirteen-point series per subject
+   * keyed on the delivery — the thing this page is allowed exactly one of
+   * (`UnusualBlock.series`). Null where the window read or the month
+   * denominator cannot answer.
+   */
+  typical: number | null
+  /** `above typical` · `about typical` · `below typical` — `typicalTag`'s own
+   *  words, which are a LEVEL against a level and never a direction. */
+  tag: string | null
   verdict: Verdict | null
 }
 
@@ -241,6 +299,17 @@ export interface WeekSubjectsBlock {
   unread: string | null
   /** The month the figures are of. */
   month: string
+  /**
+   * "Two of your three subjects ran above typical in this update" — the mock's
+   * §2 lead (`weekly.s2.lead`), as a k of n over the rows that carry the tag.
+   *
+   * The mock's own sentence is "Three of the six ran above a typical week", and
+   * the half that is refused is "a typical week": there is no weekly series to
+   * be typical of. What is kept is the count, its denominator, and the names —
+   * with the basis said in the same breath, because a tag without its basis is
+   * the score this product does not print. Null where no row carries a tag.
+   */
+  lead: string | null
 }
 
 /** One theme rising in the month's reading. */
@@ -316,6 +385,28 @@ export interface AudienceRow {
    * windowed read is not available.
    */
   contribution: { videos: number; of: number } | null
+  /**
+   * This row's analysed videos over the update's own analysed total — the
+   * mock's share bar (`week.camein.col.share`).
+   *
+   * BOTH SIDES CARRIED, never a bare percentage: a level without its "of N" is
+   * a score, and the block prints "360 of 508". It is a share of the UPDATE,
+   * not of the month and not of the category — the one denominator on this
+   * block that every row genuinely divides, which is why the bar is drawn on
+   * `analysed` and not on `gathered` (gathered and analysed are two sets, not a
+   * part and a whole).
+   */
+  share: { k: number; n: number }
+  /**
+   * Comments dated INSIDE the window under this audience's videos
+   * (`week.camein.col.comments`).
+   *
+   * `WindowDenominator.comments` per audience — the figure the loader already
+   * fetched and summed away into `CameInBlock.windowComments`. Null where the
+   * windowed read is not installed here; 0 where it is and this audience drew
+   * no comment in these days, which is a measurement and not a silence.
+   */
+  comments: number | null
 }
 
 /** A theme first heard in this update that cleared the floor. */
@@ -324,6 +415,40 @@ export interface NewTheme {
   label: string
   /** Videos carrying it in the month so far. */
   videos: number
+}
+
+/**
+ * ONE rival post, by the only identity a post in this product has.
+ *
+ * THERE IS NO TITLE COLUMN. `videos` carries no title, so the mock's "Post"
+ * column has nothing to print; identity here is what the row actually holds —
+ * the platform, the account that posted it, the day it was uploaded, the
+ * caption trimmed to a line, and the link. Four of those five are facts about
+ * the POST and are dated by `videos.upload_date`, which is the video's own
+ * clock and not a comment's; only `comments` is window-dated, and it says so.
+ */
+export interface RivalPost {
+  platform: string
+  /** The account that posted it, as the platform reports it. */
+  account: string
+  /** `videos.upload_date` — the POST's own date, never the update's and never
+   *  a comment's. Null where the platform did not report one. */
+  postedOn: string | null
+  /** The caption, trimmed to one line. Empty where the post carries none. */
+  caption: string
+  href: string | null
+  /**
+   * Comments under THIS post dated inside the update's window
+   * (`week.rivalposts.col.comments`), counted in `comments` rows we hold.
+   *
+   * NOT `videos.comments_count`, which is the platform's own current report and
+   * is documented twice in this codebase as the opposite of a count of stored
+   * comments — the weekly report's WR3 prints 106 / 1 / 0 where we hold
+   * 95 / 0 / 0. This page's window is the days the update covered, so the count
+   * is of comments written in those days, which is also what makes it
+   * comparable with `AudienceRow.comments` beside it.
+   */
+  comments: number
 }
 
 /** A rival's posts this update, with the distinction the design leaves unsaid
@@ -335,7 +460,31 @@ export interface RivalPosts {
   byThem: number
   /** Posts by anybody else that our search found under their name. */
   aboutThem: number
+  /**
+   * Comments dated inside the window under THE POSTS NAMED BELOW, and under no
+   * others.
+   *
+   * IT IS NOT THIS RIVAL'S TOTAL and must never be printed as one. It was
+   * hard-coded to `0` from the day the field was written, which is the other
+   * way to be wrong about it. Counting every comment under every one of a
+   * rival's videos this update is a head count per video — a hundred round
+   * trips on a live tenant to print one integer — so what is counted is what is
+   * SHOWN: the sum over `posts`, which a reader can check by adding the column
+   * up. `postsTotal` beside it says how many posts there were in all, so the
+   * figure is never mistaken for the whole.
+   */
   comments: number
+  /**
+   * The posts themselves — the mock's per-post table
+   * (`week.rivalposts.col.post` / `.col.comments`), capped at
+   * `RIVAL_POSTS_SHOWN` and ranked by the comments the window carried under
+   * them.
+   */
+  posts: RivalPost[]
+  /** How many posts this update found for this rival in all, of which `posts`
+   *  are the shown few. `byThem + aboutThem`, carried so the block never has
+   *  to add two numbers to say "3 of 94". */
+  postsTotal: number
   /** Present when the tenant has no handle for this rival, so `byThem` is 0
    *  because nothing is read and not because nothing was posted. */
   ownPostsUnread: boolean
@@ -524,6 +673,83 @@ export function typicalTag(added: number | null, typical: number | null): string
   return 'about typical'
 }
 
+/**
+ * What an update that treated this subject like everything else would have
+ * added to it.
+ *
+ * `monthVideos × (updateVideos ÷ monthOf)` — the subject's size in the month
+ * so far, scaled by how much of the month this update carried. Every input is
+ * read: two off the stored month rows, two off the windowed read clipped to the
+ * month, all four in the CLIENT's audience, which is the audience the subject
+ * rows are of. Null wherever one of them cannot answer, because a typical
+ * computed off a missing denominator is an invention.
+ */
+export function typicalContribution(input: {
+  /** The subject's videos in the month so far, in the client's audience. */
+  monthVideos: number
+  /** The month's own client-audience denominator. */
+  monthOf: number
+  /** This update's client-audience videos, clipped to the month. */
+  updateVideos: number | null
+}): number | null {
+  if (input.updateVideos == null) return null
+  if (input.monthOf <= 0) return null
+  return input.monthVideos * (input.updateVideos / input.monthOf)
+}
+
+/**
+ * "2 of your 3 subjects ran above typical in this update" — the mock's §2 lead
+ * (`weekly.s2.lead`).
+ *
+ * THE MOCK'S SENTENCE IS "Three of the six ran above a typical week" AND HALF
+ * OF IT IS REFUSED. "A typical week" would need a weekly series per subject,
+ * which is a period series at a cadence this product does not key on; what
+ * survives is the count, its denominator, the names, and — in the same breath —
+ * the basis the tag was earned on, because a tag printed without it is the
+ * score this product does not show.
+ *
+ * ROWS WITH NO TAG ARE NOT IN THE DENOMINATOR AND THE SENTENCE SAYS SO. A
+ * subject the window read cannot answer for has not been compared, and folding
+ * it into "of 6" would count a silence as a comparison that came back "not
+ * above".
+ */
+export function subjectLead(rows: readonly SubjectWeekRow[], month: string): string | null {
+  const tagged = rows.filter((r) => r.tag != null)
+  if (tagged.length === 0) return null
+  const above = tagged.filter((r) => r.tag === 'above typical')
+  const of = tagged.length === rows.length
+    ? `your ${fmtInt(tagged.length)} ${tagged.length === 1 ? 'subject' : 'subjects'}`
+    : `the ${fmtInt(tagged.length)} of your ${fmtInt(rows.length)} subjects this update could be read against`
+  const basis = `${longMonth(month)} so far`
+  if (above.length === 0) {
+    return `None of ${of} ran above typical in this update — none took a larger share of it than it holds of ${basis}.`
+  }
+  const clause = above.length === 1
+    ? `took a larger share of it than it holds of ${basis}`
+    : `each took a larger share of it than they hold of ${basis}`
+  return `${fmtInt(above.length)} of ${of} ran above typical in this update — ${namesOf(above.map((r) => r.label))} ${clause}.`
+}
+
+/** Up to three names, then "and N more" — never a list that runs off the line. */
+function namesOf(labels: readonly string[]): string {
+  const shown = labels.slice(0, 3)
+  const rest = labels.length - shown.length
+  const joined = shown.length === 1
+    ? shown[0]
+    : `${shown.slice(0, -1).join(', ')} and ${shown[shown.length - 1]}`
+  return rest > 0 ? `${joined} and ${fmtInt(rest)} more` : joined
+}
+
+/** A caption standing in for the title `videos` has no column for. One line,
+ *  whitespace collapsed, cut on a word. */
+export function postCaption(caption: string | null, chars: number = RIVAL_CAPTION_CHARS): string {
+  const flat = (caption ?? '').replace(/\s+/g, ' ').trim()
+  if (flat.length <= chars) return flat
+  const cut = flat.slice(0, chars)
+  const space = cut.lastIndexOf(' ')
+  return `${(space > chars * 0.6 ? cut.slice(0, space) : cut).trimEnd()}…`
+}
+
 /** The foot of the page: who it is for, which update, what it covered.
  *
  *  Composed here rather than in the block so the weekly report's own coverage
@@ -639,6 +865,13 @@ interface VideoRow {
   engagement_rate: number | string | null
   hook_style: string | null
   classified_type: string | null
+  // The post's own identity, for §5's rival table. `videos` has no title
+  // column, so this is what a post IS here.
+  account_name: string | null
+  caption: string | null
+  upload_date: string | null
+  video_url: string | null
+  views: number | null
 }
 
 /**
@@ -694,7 +927,7 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
   const audiences = [CLIENT_AUDIENCE, ...rivals.map((r) => rivalKey(r.name)), INDUSTRY_AUDIENCE]
 
   // ── wave 2: the readings ───────────────────────────────────────────────
-  const [check, flags, monthSet, windowRead, monthWindowRead, videos, themedRunId, subjects] =
+  const [check, flags, monthSet, windowRead, monthWindowRead, videos, themedRunId, subjects, series] =
     await Promise.all([
       loadCheck(supabase, clientId, anchor.id),
       loadFlags(supabase, clientId, anchor.id),
@@ -710,6 +943,16 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
       loadUpdateVideos(supabase, clientId, anchor.id),
       fetchThemedRunId(supabase, clientId, runningIds, 'week'),
       loadSubjects(supabase, clientId),
+      // THE ONE SERIES THIS PAGE IS ALLOWED, and it is a series of UPDATES —
+      // our own cadence — never of weeks (lib/reading/updates.ts). It reads its
+      // own runs rather than taking `runsRaw` above: that read asks for two
+      // rows and this one asks for thirteen, and a loader that quietly widened
+      // the first to serve the second would make the page's anchor depend on
+      // the chart's point count.
+      loadUpdateSeries(scope).catch((error) => {
+        console.error(`[pages] week.series: ${(error as { message?: string })?.message ?? String(error)}`)
+        return null
+      }),
     ])
 
   const denominators = monthSet.denominators
@@ -729,14 +972,19 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
   // reading layer's memo is keyed on the client, so two sections asking for the
   // same labels or the same change log ask once.)
   const baseline = pooledBaseline(denominators, month, windowVideos ?? 0)
+  const contributionRead = (monthWindowRead ?? windowRead)?.denominators ?? null
   const [unusual, subjectsBlock, risingRead, cameIn, sales] = await Promise.all([
     // ── §1 · unusual this week ───────────────────────────────────────────
     buildUnusual({
-      supabase, clientId, check, flags, baseline, month,
+      supabase, clientId, check, flags, baseline, month, series,
     }),
     // ── §2 · this week in your subjects ──────────────────────────────────
     buildSubjects({
       reading, clientId, subjects, month, window, audiences,
+      // The CLIENT audience's own slice of this update, clipped to the month —
+      // the denominator the subject rows are of, and the one half of
+      // `typicalContribution` that is not a stored month row.
+      clientUpdateVideos: contributionRead?.find((d) => d.audience === CLIENT_AUDIENCE)?.videos ?? null,
     }),
     // ── §3 · rising now ──────────────────────────────────────────────────
     buildRising({
@@ -751,7 +999,7 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
       // The window clipped to the month where it crosses one, and the window
       // itself where it does not — per audience, which is what the plan's
       // per-row contribution line needs and what the RPC already returns.
-      contributionRead: (monthWindowRead ?? windowRead)?.denominators ?? null,
+      contributionRead,
       contributionVideos, denominators, monthVideos, subjects, themedRunId,
     }),
     // ── §5 · for sales ───────────────────────────────────────────────────
@@ -808,8 +1056,10 @@ async function buildUnusual(input: {
   flags: FlagRow[] | null
   baseline: BaselineState
   month: string
+  /** The last thirteen updates, or null where the series could not be read. */
+  series: UpdateSeries | null
 }): Promise<UnusualBlock> {
-  const { check, flags, baseline, month } = input
+  const { check, flags, baseline, month, series } = input
   const base: UnusualBlock = {
     state: 'not_checked',
     note: null,
@@ -821,6 +1071,13 @@ async function buildUnusual(input: {
     startsWith: baselineStartsWith(baseline, month),
     updateVideos: null,
     medianVideos: null,
+    // THE SERIES IS DRAWN IN EVERY STATE, including the four that say the check
+    // could not speak. It is a reading of our own cadence and not of the
+    // check's, so a workspace whose baseline is one month of three still has
+    // thirteen updates to show — and showing them is the honest half of
+    // "baseline forming": here is what we have read, and here is why we cannot
+    // yet say whether it was unusual.
+    series,
   }
 
   // THE BASELINE SENTENCE WINS OVER SILENCE, AND ONLY OVER SILENCE. A tenant
@@ -928,13 +1185,18 @@ async function buildSubjects(input: {
   month: string
   window: WeekWindow | null
   audiences: string[]
+  /** This update's CLIENT-audience videos, clipped to the month — the other
+   *  half of `typicalContribution`, and null where the windowed read cannot
+   *  answer. */
+  clientUpdateVideos: number | null
 }): Promise<WeekSubjectsBlock> {
   const { reading, clientId, subjects, month, window } = input
-  if (subjects == null) return { rows: [], unread: SUBJECTS_UNREAD, month }
-  if (subjects.length === 0) return { rows: [], unread: SUBJECTS_UNREAD, month }
+  const nothing = { rows: [], unread: SUBJECTS_UNREAD, month, lead: null }
+  if (subjects == null) return nothing
+  if (subjects.length === 0) return nothing
 
   const stored = await readSubjectMonths(reading, clientId, month)
-  if (stored == null) return { rows: [], unread: SUBJECTS_UNREAD, month }
+  if (stored == null) return nothing
 
   const added = window ? await readSubjectWindow(reading, clientId, window) : null
   const denominator = await readClientMonthVideos(reading, clientId, month)
@@ -945,18 +1207,30 @@ async function buildSubjects(input: {
       const held = stored.filter((r) => r.subject_id === s.id && r.audience === CLIENT_AUDIENCE)
       const monthVideos = held.reduce((t, r) => t + (r.videos ?? 0), 0)
       const addedVideos = added ? added.filter((r) => r.subject_id === s.id && r.audience === CLIENT_AUDIENCE).reduce((t, r) => t + (r.videos ?? 0), 0) : null
+      const typical = typicalContribution({
+        monthVideos,
+        monthOf: denominator,
+        updateVideos: input.clientUpdateVideos,
+      })
       return {
         id: s.id,
         label: s.name,
         monthVideos,
         monthOf: denominator,
         addedVideos,
+        typical,
+        tag: typicalTag(addedVideos, typical),
         verdict: null,
       }
     })
     .sort((a, b) => b.monthVideos - a.monthVideos)
 
-  return { rows: rowsOut, unread: rowsOut.length > 0 ? null : SUBJECTS_UNREAD, month }
+  return {
+    rows: rowsOut,
+    unread: rowsOut.length > 0 ? null : SUBJECTS_UNREAD,
+    month,
+    lead: subjectLead(rowsOut, month),
+  }
 }
 
 // ---- §3 ----------------------------------------------------------------------
@@ -1192,7 +1466,7 @@ async function buildCameIn(input: {
   const take = (audience: string): AudienceRow => {
     const held = byAudience.get(audience)
     if (held) return held
-    const made: AudienceRow = { audience, label: audienceLabel(audience), gathered: 0, analysed: 0, platformMix: {}, contribution: null }
+    const made: AudienceRow = { audience, label: audienceLabel(audience), gathered: 0, analysed: 0, platformMix: {}, contribution: null, share: { k: 0, n: 0 }, comments: null }
     byAudience.set(audience, made)
     return made
   }
@@ -1206,7 +1480,14 @@ async function buildCameIn(input: {
       rowOut.platformMix[v.platform] = (rowOut.platformMix[v.platform] ?? 0) + 1
     }
   }
+  // PER-AUDIENCE COMMENTS, WHICH THE LOADER ALREADY HAD AND SUMMED AWAY.
+  // `WindowDenominator.comments` comes back per audience and went straight into
+  // `totalComments`; the mock's row carries it, and it costs no read to keep.
+  // Null when the windowed read is not installed (M3) and 0 when it is and this
+  // audience drew no comment in these days — a measurement, not a silence.
+  const commentsBy = new Map((windowRead?.denominators ?? []).map((d) => [d.audience, d.comments ?? 0]))
   for (const rowOut of byAudience.values()) {
+    if (windowRead?.denominators != null) rowOut.comments = commentsBy.get(rowOut.audience) ?? 0
     if (input.contributionRead == null) continue
     rowOut.contribution = {
       videos: addedBy.get(rowOut.audience) ?? 0,
@@ -1214,21 +1495,63 @@ async function buildCameIn(input: {
     }
   }
   const audienceRows = [...byAudience.values()].sort((a, b) => b.analysed - a.analysed || b.gathered - a.gathered)
+  // THE SHARE BAR'S BOTH SIDES, set once the total exists. `analysed` over the
+  // update's analysed total: the one denominator on this block every row
+  // genuinely divides. Never `gathered`, which is a different set and not a
+  // whole this is a part of.
+  const analysedTotal = audienceRows.reduce((t, r) => t + r.analysed, 0)
+  for (const rowOut of audienceRows) rowOut.share = { k: rowOut.analysed, n: analysedTotal }
 
   // POSTS BY A RIVAL AND POSTS ABOUT ONE ARE DIFFERENT FACTS, and the design's
   // "notable rival posts" does not say which. Both are printed, named: Össur
   // has zero competitor-owned videos in production, so the first is empty on
   // the paying tenant and would have read as "the rivals posted nothing".
   const everOwned = await loadOwnedRivalAudiences(supabase, clientId)
+  // THE POSTS THEMSELVES, ACROSS EVERY RIVAL, COUNTED IN ONE PASS. Each named
+  // post costs one HEAD count of the comments dated under it inside the window,
+  // so the candidates are picked first (by reach, which is the only "notable"
+  // the row holds) and counted once, together — never a count per rival per
+  // post in sequence.
+  const candidates = window
+    ? rivals.flatMap((r) => {
+      const audience = rivalKey(r.name)
+      return videos
+        .filter((v) => v.run_id === runId && v.is_competitor && rivalKey(v.competitor_name) === audience)
+        .sort((a, b) => (b.views ?? -1) - (a.views ?? -1) || (b.upload_date ?? '').localeCompare(a.upload_date ?? ''))
+        .slice(0, RIVAL_POSTS_SHOWN)
+        .map((v) => ({ audience, video: v }))
+    })
+    : []
+  const postComments = await windowCommentsPerVideo(supabase, clientId, candidates.map((c) => c.video), window)
+  const postsBy = new Map<string, RivalPost[]>()
+  for (const c of candidates) {
+    const list = postsBy.get(c.audience) ?? []
+    list.push({
+      platform: c.video.platform,
+      account: c.video.account_name ?? '',
+      postedOn: c.video.upload_date,
+      caption: postCaption(c.video.caption),
+      href: c.video.video_url,
+      comments: postComments.get(`${c.video.platform}::${c.video.video_id}`) ?? 0,
+    })
+    postsBy.set(c.audience, list)
+  }
+
   const rivalRows: RivalPosts[] = rivals.map((r) => {
     const audience = rivalKey(r.name)
     const mine = videos.filter((v) => v.run_id === runId && v.is_competitor && rivalKey(v.competitor_name) === audience)
+    const posts = postsBy.get(audience) ?? []
     return {
       audience,
       label: r.name,
       byThem: mine.filter((v) => v.source === 'competitor_owned').length,
       aboutThem: mine.filter((v) => v.source !== 'competitor_owned').length,
-      comments: 0,
+      // THE SUM OVER THE POSTS NAMED, AND NOTHING WIDER. It was hard-coded to
+      // zero, which is a claim about a rival's week; this is a claim about
+      // three posts, and `postsTotal` beside it says how many there were.
+      comments: posts.reduce((t, post) => t + post.comments, 0),
+      posts,
+      postsTotal: mine.length,
       // NOT "IS A HANDLE CONFIGURED" — that is a setting, and a setting is not
       // evidence. A configured handle that has never yielded a post is exactly
       // the readiness gap Phase 0 names on the prosthetics tenant, and a row
@@ -1558,6 +1881,56 @@ async function loadRivals(
   return (tc?.competitor_names ?? []).map((name) => ({ name, retiredAt: null }))
 }
 
+/**
+ * How many comments dated INSIDE the window we hold under each of these posts,
+ * keyed `platform::video_id`.
+ *
+ * COUNTED, NOT REPORTED, AND WINDOW-DATED. `videos.comments_count` is the
+ * platform's own current number and drifts upward between updates — WR3 prints
+ * 106 / 1 / 0 on three Ottobock posts where we hold 95 / 0 / 0 — and this page
+ * is about the days the update covered, so the count is of `comments` rows
+ * whose `comment_date` falls in the window. That makes it the same clock as
+ * `AudienceRow.comments` beside it, which is the only way the two columns can
+ * sit on one block.
+ *
+ * HEAD COUNTS, ONE PER POST, ISSUED TOGETHER. Nothing is fetched: the only
+ * thing printed is the integer, and a popular post is thousands of rows. Capped
+ * at `RIVAL_POSTS_SHOWN` per rival by the caller, which is what keeps this from
+ * being a hundred round trips.
+ *
+ * A COUNT THAT FAILS IS ABSENT FROM THE MAP, and the caller prints 0 for it —
+ * the one place this file rounds a silence to a number, because a post row with
+ * no comment column at all would be a hole in a table the other rows fill.
+ */
+async function windowCommentsPerVideo(
+  supabase: SupabaseClient,
+  clientId: string,
+  videos: readonly VideoRow[],
+  window: WeekWindow | null,
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>()
+  if (!window) return out
+  const wanted = videos.filter((v) => v.platform && v.video_id)
+  if (wanted.length === 0) return out
+  const counts = await mapWithLimit(wanted, READ_CONCURRENCY, async (v) => {
+    const res = await supabase
+      .from('comments')
+      .select('id', { count: 'exact', head: true })
+      .eq('client_id', clientId)
+      .eq('platform', v.platform)
+      .eq('video_id', v.video_id)
+      .gte('comment_date', window.from)
+      .lt('comment_date', window.to)
+    if (res.error) {
+      console.error(`[pages] week.postComments: ${res.error.message}`)
+      return null
+    }
+    return { key: `${v.platform}::${v.video_id}`, count: res.count ?? 0 }
+  })
+  for (const c of counts) if (c) out.set(c.key, c.count)
+  return out
+}
+
 /** The rivals this workspace has EVER captured a post of, by audience key.
  *  Measured, not configured: Össur has a handle for Ottobock and zero
  *  competitor-owned videos in six months of gathering. */
@@ -1688,7 +2061,7 @@ async function readClientMonthVideos(reading: ReadingHandle, clientId: string, m
 async function loadUpdateVideos(supabase: SupabaseClient, clientId: string, runId: string): Promise<VideoRow[]> {
   return selectAll<VideoRow>(() =>
     supabase.from('videos')
-      .select('id, platform, video_id, run_id, analyzed_run_id, is_client, is_competitor, competitor_name, source, engagement_rate, hook_style, classified_type')
+      .select('id, platform, video_id, run_id, analyzed_run_id, is_client, is_competitor, competitor_name, source, engagement_rate, hook_style, classified_type, account_name, caption, upload_date, video_url, views')
       .eq('client_id', clientId)
       .or(`run_id.eq.${runId},analyzed_run_id.eq.${runId}`)
       .order('id', { ascending: true }),

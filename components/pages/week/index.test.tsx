@@ -85,8 +85,29 @@ describe('WK §2 · this week in your subjects', () => {
     const text = renderText(weekSubjects.render(weekFixture(), 'app', ctx))
     expect(text).toContain('Comfort')
     expect(text).toContain('31 of 96 videos')
-    expect(text).toContain('+14 this update')
+    expect(text).toContain('+8 this update')
     expect(text).toContain('September so far')
+  })
+
+  it('leads with how many subjects ran above typical, k of n, with the basis', () => {
+    for (const mode of MODES) {
+      const text = renderText(weekSubjects.render(weekFixture(), mode, ctx))
+      // The mock says "Three of the six ran above a typical week". "A typical
+      // week" is refused — there is no weekly series to be typical of — and
+      // what survives is the count, its denominator, the names and the basis.
+      expect(text, mode).toContain('2 of your 3 subjects ran above typical in this update')
+      expect(text, mode).toContain('Comfort and Price and cover')
+      expect(text, mode).toContain('a larger share of it than they hold of September so far')
+      expect(text, mode).not.toContain('typical week')
+    }
+  })
+
+  it('leads with nothing where no subject could be compared', () => {
+    // "0 of 0 ran above typical" would be a sentence counting comparisons
+    // nobody drew.
+    const text = renderText(weekSubjects.render(thinFixture(), 'app', ctx))
+    expect(text).not.toContain('ran above typical')
+    expect(text).toContain('No subjects are recorded for this workspace yet')
   })
 
   it('says subjects are not recorded rather than drawing an empty table', () => {
@@ -232,8 +253,64 @@ describe('WK §4 · what came in', () => {
     // And one is a post, not "1 posts" — production has a rival with exactly
     // one (Sealand's Rareform).
     const one = thinFixture()
-    one.cameIn.rivals = [{ audience: 'competitor:Rareform', label: 'Rareform', byThem: 1, aboutThem: 1, comments: 0, ownPostsUnread: false }]
+    one.cameIn.rivals = [{ audience: 'competitor:Rareform', label: 'Rareform', byThem: 1, aboutThem: 1, comments: 0, postsTotal: 2, posts: [], ownPostsUnread: false }]
     expect(renderText(weekCameIn.render(one, 'app', ctx))).toContain('1 post about them, 1 post of their own')
+  })
+
+  it('prints each audience’s share with both sides and its own comments', () => {
+    for (const mode of MODES) {
+      const text = renderText(weekCameIn.render(weekFixture(), mode, ctx))
+      // BOTH SIDES, NEVER A BARE PERCENTAGE — and the denominator named is the
+      // update's analysed total, the one thing every row is a part of.
+      expect(text, mode).toContain('360 of 508 videos this update analysed')
+      expect(text, mode).toContain('96 of 508 videos this update analysed')
+      // The per-audience comments the loader used to sum away into one stat.
+      expect(text, mode).toContain('3,600 comments written in these days')
+      expect(text, mode).toContain('434 comments written in these days')
+    }
+  })
+
+  it('says the comments are not recorded rather than printing a zero', () => {
+    const d = weekFixture()
+    const data = { ...d, cameIn: { ...d.cameIn, rows: d.cameIn.rows.map((r) => ({ ...r, comments: null })) } }
+    const text = renderText(weekCameIn.render(data, 'app', ctx))
+    expect(text).toContain('comments in these days are not recorded for this workspace yet')
+    expect(text).not.toContain('0 comments written in these days')
+  })
+
+  it('names the rival posts themselves, and says how many of how many', () => {
+    for (const mode of MODES) {
+      const text = renderText(weekCameIn.render(weekFixture(), mode, ctx))
+      // A post has no title column, so identity is platform · account · date ·
+      // caption · link.
+      expect(text, mode).toContain('PhysioWithPriya')
+      expect(text, mode).toContain('Testing the Ottobock C-Leg 4 on stairs')
+      expect(text, mode).toContain('posted 8 Sep')
+      expect(text, mode).toContain('610 comments under it in these days')
+      // THREE OF NINETY-TWO, SAID OUT LOUD. The rival's comment figure is the
+      // sum over the posts NAMED; a bare total would be a claim about their
+      // week that nothing here counted.
+      expect(text, mode).toContain('2 of 92 shown, by reach')
+      expect(text, mode).toContain('998 comments under those two in these days')
+    }
+  })
+
+  it('draws no post table for a rival with no post this update', () => {
+    // Rareform's posts ARE read and none came in: the row is a zero and there
+    // is nothing under it, which is different from the row being dropped.
+    const text = renderText(weekCameIn.render(thinFixture(), 'app', ctx))
+    expect(text).toContain('Rareform')
+    expect(text).not.toContain('0 of 0 shown')
+  })
+
+  it('restates every audience’s count as a contribution to the month', () => {
+    // The rule the whole block exists for, on EVERY row: a window is not a
+    // period, whoever's conversation it was.
+    const text = renderText(weekCameIn.render(weekFixture(), 'app', ctx))
+    for (const row of weekFixture().cameIn.rows) {
+      expect(row.contribution).not.toBeNull()
+      expect(text).toContain(`this update’s contribution to September so far: ${row.contribution!.videos} of ${row.contribution!.of}`)
+    }
   })
 
   it('words its own no-window sentence, not the sales section’s', () => {

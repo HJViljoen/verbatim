@@ -164,6 +164,43 @@ describe('WK1 · unusual this week', () => {
     }
   })
 
+  it('draws the thirteen-update series and says it is a series of UPDATES', () => {
+    for (const mode of MODES) {
+      const text = renderText(weekUnusual.render(weekFixture(), mode, ctx))
+      // THE COUNT BAND CARRIES ITS UNIT. This block's other band is in
+      // percentage points ("a band of 4.9"); an unlabelled count band beside it
+      // is how 4.9 points gets read as five videos.
+      expect(text, mode).toContain('508 videos this update')
+      expect(text, mode).toContain('videos, typical 476')
+      // The axis's own words, which are the whole deviation: thirteen
+      // deliveries, not thirteen weeks.
+      expect(text, mode).toContain('the last 13 updates · what each one brought in')
+      expect(text, mode).not.toContain('weeks')
+      // And no multiple: the mock's "3.1× its usual rate" has no honest form.
+      expect(text, mode).not.toContain('×')
+    }
+  })
+
+  it('draws the series while the baseline is still forming', () => {
+    // Sealand cannot be told whether its update was unusual for two more
+    // months. What it CAN be told is what each update brought in — a fact about
+    // our reading, true whether or not there are three months to compare it
+    // with, and the honest half of "baseline forming".
+    const text = renderText(weekUnusual.render(thinFixture(), 'app', ctx))
+    expect(text).toContain('baseline forming — 1 of 3 months')
+    expect(text).toContain('253 videos this update')
+    expect(text).toContain('the last 4 updates')
+    // Four points, not thirteen, and the block says which.
+    expect(text).toContain('not 13')
+  })
+
+  it('says nothing about the series where no update carries a window', () => {
+    const d = weekFixture()
+    const text = renderText(weekUnusual.render({ ...d, unusual: { ...d.unusual, series: null } }, 'app', ctx))
+    expect(text).not.toContain('this update ·')
+    expect(text).not.toContain('what each one brought in')
+  })
+
   it('is email-safe', () => {
     const markup = render(weekUnusual.render(weekFixture(), 'email', ctx))
     expect(markup).toContain('<table')

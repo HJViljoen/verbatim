@@ -50,6 +50,19 @@ export const weekSubjects: Block<WeekData> = {
           : <Link href={href} className="hover:underline">Open Subjects →</Link>}
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
+        {/* THE MOCK'S LEAD, WITH THE HALF THAT IS REFUSED REPLACED RATHER THAN
+            DROPPED. "Three of the six ran above a typical week" needs a weekly
+            series per subject; what is printed instead is the same count, the
+            same denominator and the same names, with the basis the tag was
+            earned on said in the same sentence (`subjectLead`). */}
+        {s.lead ? (
+          <p
+            className={email ? undefined : 'm-0 text-[12px]'}
+            style={email ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink, marginBottom: 6 } : undefined}
+          >
+            {s.lead}
+          </p>
+        ) : null}
         {s.rows.length > 0 ? (
           <>
             <BlockRanked
