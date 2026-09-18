@@ -10,6 +10,7 @@ import { candidateLine } from '@/lib/pages/overview'
 import type { SideReading, SubjectRow } from '@/lib/pages/overview'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { WeeklyData } from '@/lib/pages/weekly'
+import { subjectsLead } from '@/lib/reports/weekly'
 
 // WR2 · Where things stand (design §3 WR section 2).
 //
@@ -184,15 +185,22 @@ const BAR_LEGEND = 'the bar is each subject’s share of the category this month
 
 export const weeklySubjects: Block<WeeklyData> = {
   key: 'weekly.subjects',
-  title: 'Where things stand',
+  // THE ARTBOARD'S OWN HEADING (`weekly.s2.header`). It read "Where things
+  // stand", which names no thing and could head any of the six sections; the
+  // mock heads it "Your subjects this week", which is what the table is. The
+  // `Block.title` stays the generic one for registries and deck slides, and
+  // the rendered heading takes the window's own word — Sealand's is thirty
+  // days long, so "this week" is not true of it (`periodNounFor`).
+  title: 'Your subjects',
   question: 'How are we seen on the things we chose to be known for?',
 
   render(data, mode = 'app', ctx) {
     const s = data.subjects
     const href = `${ctx.appUrl}/dashboard/subjects`
+    const lead = subjectsLead(s.rows)
     const frame = (children: ReactNode) => (
       <BlockFrame
-        title={weeklySubjects.title}
+        title={data.section1.check.noun === 'week' ? 'Your subjects this week' : 'Your subjects in this update'}
         question={weeklySubjects.question}
         mode={mode}
         meta={s.rows.length > 0 ? `${fmtInt(s.rows.length)} named · month to date` : undefined}
@@ -215,6 +223,21 @@ export const weeklySubjects: Block<WeeklyData> = {
     const top = Math.max(0.1, ...s.rows.map((r) => r.category.pct ?? 0))
     return frame(
       <div>
+        {/* WHAT THE SIX ROWS ADD UP TO, BEFORE ANY OF THEM (weekly.s2.lead).
+            The artboard opens §2 with a sentence and the block opened cold on
+            a table, so a reader had to read every row to learn whether any of
+            them mattered. The mock's own line counts subjects "above a typical
+            week"; nothing computes a typical week, so the count is of subjects
+            whose MONTH reading cleared its band, which is the brief's own
+            instruction for this slot under D6. */}
+        {lead ? (
+          <div
+            style={mode === 'email' ? { fontFamily: FONT.sans, fontSize: 14, lineHeight: 1.5, color: EMAIL.ink2, marginBottom: 4 } : undefined}
+            className={mode === 'email' ? undefined : 'mb-1 text-[14px] leading-relaxed text-secondary-foreground'}
+          >
+            {lead.level ? <span data-copy="level">{lead.level}</span> : null}{lead.body}
+          </div>
+        ) : null}
         {s.rows.map((r) => (
           <Row
             key={r.id}

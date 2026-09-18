@@ -43,7 +43,7 @@ describe('the weekly email', () => {
   it('prints all six sections, in the stored order, on every state', () => {
     for (const reading of [weeklyFixture(), quietFixture(), formingFixture(), thinFixture()]) {
       const text = words(snapshot(reading))
-      for (const title of ['The week in one sentence', 'Where things stand', 'What came in this week', 'For sales', 'For content', 'Coverage']) {
+      for (const title of ['The week in one sentence', 'Your subjects this week', 'What came in this week', 'For sales', 'For content', 'Coverage']) {
         expect(text).toContain(title)
       }
     }

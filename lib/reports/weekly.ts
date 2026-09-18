@@ -493,6 +493,77 @@ export function withinFirstScreenBudget(s: Section1): boolean {
   return firstScreenCount(s) <= FIRST_SCREEN_BUDGET
 }
 
+// ---- Section 2's lead ---------------------------------------------------------
+
+/**
+ * What the subject table adds up to, said before a reader reads any row
+ * (`weekly.s2.lead`).
+ *
+ * THE MOCK'S LINE IS A WEEK COUNT AGAINST A TYPICAL WEEK — "Three of the six
+ * ran above a typical week — durability, waterproofing and repair & warranty"
+ * — and nothing in this product computes a typical week (the same refusal the
+ * block already makes about the artboard's typical-week tick; mock-gap §6 D6).
+ * The brief names the honest substitute in as many words: "Under D6 the honest
+ * lead counts subjects whose MONTH reading cleared its band; write that, or
+ * leave the slot empty and say why." This writes that. It was neither written
+ * nor refused, which is how a named MISSING item came to read as an oversight.
+ *
+ * WHAT "CLEARED ITS BAND" MEANS HERE is `Verdict.state === 'moved'` on the
+ * CATEGORY side — the only one of the three sides with the n to carry a
+ * comparison on today's corpus (`SubjectRow.categoryAtLastMonth`'s own
+ * docblock) — and `moved` is the one state that asserts both gates passed.
+ *
+ * A SUBJECT THAT COULD NOT BE COMPARED IS NOT A SUBJECT THAT DID NOT MOVE.
+ * `refused` and `baseline_forming` are claims about our own bookkeeping, and
+ * counting them among the still ones would turn a gap in the record into a
+ * finding about the conversation. So the line tells "none of the six moved"
+ * apart from "none of the six could be compared".
+ *
+ * NO DIRECTION WORD, ON PURPOSE. "moved beyond its band" is a magnitude and a
+ * threshold; "ran above", "rose" or "grew" would be a direction claim made in
+ * a lead before any row below it has earned one (rule (c)).
+ */
+export interface SubjectsLead {
+  /** The count and its "of N", for the block's level node. Null where the
+   *  sentence states no count. */
+  level: string | null
+  /** The rest of the sentence, which follows the level directly. */
+  body: string
+}
+
+export function subjectsLead(
+  rows: readonly { label: string; category: { verdict: { state: string } | null } }[],
+): SubjectsLead | null {
+  if (rows.length === 0) return null
+  const comparable = (state: string | undefined) => state != null && state !== 'baseline_forming' && state !== 'refused'
+  const compared = rows.filter((r) => comparable(r.category.verdict?.state))
+  const moved = rows.filter((r) => r.category.verdict?.state === 'moved')
+  const noun = rows.length === 1 ? 'subject' : 'subjects'
+  if (compared.length === 0) {
+    return {
+      level: null,
+      body: `No ${rows.length === 1 ? 'subject' : 'subject'} carried a comparison this month — the readings are here, the months to read them against are not.`,
+    }
+  }
+  if (moved.length === 0) {
+    return {
+      level: `0 of ${fmtInt(rows.length)}`,
+      body: ` ${noun} moved beyond their band this month — every change is inside the margin of the measurement.`,
+    }
+  }
+  return {
+    level: `${fmtInt(moved.length)} of ${fmtInt(rows.length)}`,
+    body: ` ${noun} moved beyond their band this month — ${nameList(moved.map((r) => r.label.toLowerCase()))}.`,
+  }
+}
+
+/** "a, b and c". No serial comma: a subject's own label may carry one, and the
+ *  list would then read as an item longer than it is. */
+function nameList(names: readonly string[]): string {
+  if (names.length === 1) return names[0]
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+}
+
 // ---- The masthead -------------------------------------------------------------
 
 /** "6 – 13 Sep", or the month so far where the update records no window. */

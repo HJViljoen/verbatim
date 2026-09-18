@@ -18,6 +18,7 @@ import {
   monthScopedFigures,
   levelOf,
   section1Figures,
+  subjectsLead,
   weekCheck,
   weekSentence,
   weeklyPeriod,
@@ -377,5 +378,46 @@ describe('what to call the window', () => {
     expect(weeklySubject('Sealand', quiet)).toBe('Sealand: your update — nothing unusual in this update')
     const fired = weekCheck({ state: 'flagged', flags: [flag()], noun: 'update' })
     expect(weeklySubject('Sealand', fired)).toBe('Sealand: Objections is unusual in this update — 29 of 205 videos')
+  })
+})
+
+// `weekly.s2.lead` — one of the brief's two MISSING items. The mock's line
+// counts subjects "above a typical week"; nothing in this product computes a
+// typical week, so the count is of subjects whose MONTH reading cleared its
+// band, which is what the brief asks for under D6.
+describe('what the subject table adds up to', () => {
+  const row = (label: string, state: string | null) => ({
+    label,
+    category: { verdict: state == null ? null : { state } },
+  })
+
+  it('counts the subjects that cleared their band, and names them', () => {
+    const lead = subjectsLead([row('Durability', 'moved'), row('Price', 'no_clear_change'), row('Zips', 'moved')])
+    expect(lead?.level).toBe('2 of 3')
+    expect(lead?.body).toBe(' subjects moved beyond their band this month — durability and zips.')
+  })
+
+  it('says none moved when the comparison ran and nothing cleared', () => {
+    const lead = subjectsLead([row('Durability', 'no_clear_change'), row('Price', 'no_clear_change')])
+    expect(lead?.level).toBe('0 of 2')
+    expect(lead?.body).toContain('inside the margin of the measurement')
+  })
+
+  // A SUBJECT THAT COULD NOT BE COMPARED IS NOT A SUBJECT THAT DID NOT MOVE.
+  // `refused` and `baseline_forming` are claims about our bookkeeping.
+  it('tells "none moved" apart from "none could be compared"', () => {
+    const lead = subjectsLead([row('Durability', 'refused'), row('Price', 'baseline_forming'), row('Zips', null)])
+    expect(lead?.level).toBeNull()
+    expect(lead?.body).toContain('carried a comparison this month')
+    expect(lead?.body).not.toContain('moved')
+  })
+
+  it('says nothing at all where there are no rows', () => {
+    expect(subjectsLead([])).toBeNull()
+  })
+
+  it('prints no direction word', () => {
+    const lead = subjectsLead([row('Durability', 'moved')])
+    expect(`${lead?.level}${lead?.body}`).not.toMatch(/\b(grew|growing|rose|rising|above|climbed)\b/i)
   })
 })

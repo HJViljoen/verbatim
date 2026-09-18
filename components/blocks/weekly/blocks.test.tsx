@@ -230,6 +230,30 @@ describe('WR2 · where things stand', () => {
     }
   })
 
+  // THE BRIEF NAMED BOTH OF THESE AND NEITHER LANDED IN WAVE 2:
+  // `weekly.s2.header` is the artboard's own heading, and `weekly.s2.lead` is
+  // the sentence that tells a reader what the rows add up to before they read
+  // one. The mock's lead counts subjects "above a typical week"; nothing
+  // computes a typical week, so the count is of subjects whose month reading
+  // cleared its band (the brief's own instruction under D6).
+  it('heads the block the way the artboard does, in the window’s own word', () => {
+    expect(renderText(block.render(weeklyFixture(), 'app', ctx))).toContain('Your subjects this week')
+    const week = weeklyFixture()
+    const update = weeklyFixture({ section1: { ...week.section1, check: { ...week.section1.check, noun: 'update' } } })
+    expect(renderText(block.render(update, 'app', ctx))).toContain('Your subjects in this update')
+  })
+
+  it('leads with how many subjects cleared their band, and names them', () => {
+    for (const mode of MODES) {
+      const text = renderText(block.render(weeklyFixture(), mode, ctx))
+      expect(text, mode).toContain('2 of 2 subjects moved beyond their band this month — durability and price.')
+      // Not the mock's "ran above a typical week", which nothing computes, and
+      // not a direction word in a lead no row below has earned (rule (c)).
+      expect(text, mode).not.toMatch(/typical/i)
+    }
+    expect(copyViolations(render(block.render(weeklyFixture(), 'app', ctx)))).toEqual([])
+  })
+
   it('names what these are mentions in, in the frame’s footer note', () => {
     expect(renderText(block.render(weeklyFixture(), 'app', ctx))).toContain('mentions in your audience')
   })
