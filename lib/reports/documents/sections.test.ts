@@ -67,7 +67,9 @@ describe('the four section maps', () => {
 
   it('surfacesOf names only the surfaces a map borrows from', () => {
     expect(surfacesOf(briefMap('leadership_brief'))).toEqual(['overview', 'competitive'])
-    expect(surfacesOf(briefMap('content_brief'))).toEqual(['subjects', 'market'])
+    // The content brief gained `overview` with the `ct.ways` block-key fix:
+    // the section draws `overview.category`, the block its own words describe.
+    expect(surfacesOf(briefMap('content_brief'))).toEqual(['overview', 'subjects', 'market'])
     expect(surfacesOf(briefMap('market_brief'))).toEqual(['overview'])
   })
 

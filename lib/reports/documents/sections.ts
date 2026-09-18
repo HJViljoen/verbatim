@@ -209,8 +209,19 @@ export const CONTENT_MAP: readonly BriefEntry[] = [
     title: 'What to make next', framing: 'What the conversation asked for, and what was decided about each one.',
     needs: [],
   }),
+  // THE BLOCK KEY WAS WRONG, AND THE TITLE WAS RIGHT (Block D wave 2, E-content).
+  // `market.ways` renders "How a move is made" — the five ways to act and the
+  // say-vs-hear claims table (components/pages/market-surface/ways.tsx) — under
+  // a title and a framing that promise where the category is talking and what
+  // about. A content brief's reader met a heading about the category and a page
+  // about our own workflow. `overview.category` is the block those words
+  // describe ("What the category is saying · What is this category talking
+  // about, and how does it feel about it?"), so the KEY moves and the words
+  // stay. The section id does not move: it names a slide and an edit in
+  // `report_edits`, and every brief already built keeps drawing what its own
+  // frozen `DocBriefSection.block` names.
   block({
-    id: 'ct.ways', block: 'market.ways', surface: 'market',
+    id: 'ct.ways', block: 'overview.category', surface: 'overview',
     title: 'Ways in', framing: 'Where the category is already talking, and what it is talking about.',
     needs: ['months-of-history'],
   }),
