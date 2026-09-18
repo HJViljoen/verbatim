@@ -185,7 +185,16 @@ function Flag({ chip, tone, label, note, mode }: {
 
 export const voiceMovers: Block<VoiceSurfaceData> = {
   key: 'voice.moved',
-  title: 'Movers · category themes',
+  // THE TITLE NAMES NO AUDIENCE, because the block does not choose one. The
+  // artboard was drawn in the category and its heading — "Movers · category
+  // themes" — was ported as a constant onto a block whose whole scope is the
+  // audience switch one tile above. Rendered with the client's own brand
+  // selected it printed "Movers · category themes" directly above
+  // "share of 212 videos in this audience · Sep 2026 vs Aug 2026": a label
+  // contradicting the figure beside it, on every audience but one. The scope
+  // travels on `meta`, where it is read off the data, and the heading says
+  // what the block is.
+  title: 'Movers',
   question: 'What is this audience saying more of, and less of, than last month?',
 
   render(data, mode = 'app', ctx) {

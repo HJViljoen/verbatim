@@ -135,6 +135,23 @@ describe('voiceMovers', () => {
     expect(draw(bare)).toContain('Nothing moved clearly this month.')
   })
 
+  it('names no audience in its heading — the audience is the switch\u2019s, and it travels on the meta', () => {
+    // The artboard was drawn in the category and "Movers · category themes"
+    // was ported as a constant. Read in the client's own brand the block then
+    // printed that heading directly above a meta line naming a different
+    // population — a label contradicting the figure beside it on every
+    // audience but one.
+    const base = voiceFixture()
+    const client = {
+      ...base,
+      audience: { ...base.audience, selected: 'client', label: 'Your own brand', videos: 212 },
+    }
+    const text = draw(client)
+    expect(voiceMovers.title).toBe('Movers')
+    expect(text).not.toContain('category themes')
+    expect(text).toContain('share of 212 videos in this audience · Sep 2026 vs Aug 2026')
+  })
+
   it('keeps its key, which is a stored contract', () => {
     expect(voiceMovers.key).toBe('voice.moved')
   })
