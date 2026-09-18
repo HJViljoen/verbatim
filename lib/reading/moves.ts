@@ -100,6 +100,18 @@ export interface MoveCandidate {
   subjectsBasis: string
   /** Subjects your own posts matched, by subject id — of `readPosts`. */
   subjects: { subjectId: string; label: string; matched: Counted }[]
+  /**
+   * Why the subject rows are missing rather than empty, in the reader's words.
+   * Null when they were read — including when they were read and matched
+   * nothing, which is a zero and prints as one.
+   *
+   * AN EMPTY LIST IS TWO FACTS AND A CARD MAY NOT CONFLATE THEM. "Your posts
+   * matched no subject" is a measurement; "we could not read which subjects
+   * your posts matched" is our bookkeeping, and printing the second as the
+   * first is an absence dressed as a zero. `subjects` is empty either way, so
+   * the difference has to live in a field of its own.
+   */
+  subjectsUnread: string | null
   /** Your movement and the category's, side by side. Either may be null. */
   movement: { yours: Verdict | null; category: Verdict | null }
   /** What the confirm button would declare. Null when there is nothing to
@@ -124,6 +136,11 @@ export interface MoveCandidateInput {
   /** False where `moves` (M4) is not applied here: the card still counts, and
    *  there is nothing to declare it as. */
   declarable?: boolean
+  /** True where the membership read was REFUSED OR BROKE — not where the table
+   *  is simply not applied here, which `declarable` already states. With it,
+   *  the subject rows are missing; without it, an empty `membership` is a
+   *  measured zero. */
+  membershipUnread?: boolean
 }
 
 /** Said on the card when M4 is not applied — the same fact `MOVES_UNLOCK`
@@ -134,6 +151,12 @@ export const CARD_NOT_DECLARABLE =
 /** Said when the month carries none of your own posts. Not the same fact as
  *  "we did not read them": you published nothing we found. */
 export const CARD_NO_POSTS = 'No posts of your own were found in this month, so there is nothing to confirm.'
+
+/** Said where the membership read failed — never where it returned nothing.
+ *  A zero and an unread are different answers and the card prints whichever
+ *  one it has. */
+export const CARD_SUBJECTS_UNREAD =
+  'We could not read which subjects your posts matched this month, so these rows are missing rather than empty.'
 
 /**
  * The hook a post led with, in the reader's words.
@@ -233,6 +256,7 @@ export function buildMoveCandidate(input: MoveCandidateInput): MoveCandidate {
     .sort((a, b) => b.matched.k - a.matched.k || a.label.localeCompare(b.label))
 
   const declarable = input.declarable ?? true
+  const subjectsUnread = input.membershipUnread ? CARD_SUBJECTS_UNREAD : null
   const top = subjects[0] ?? null
   // WHAT THE BUTTON WOULD DECLARE, and why it is a SUBJECT move. `moves` takes
   // exactly one target matching its kind (`moves_one_target`), and the only
@@ -258,6 +282,7 @@ export function buildMoveCandidate(input: MoveCandidateInput): MoveCandidate {
     readPosts: { label: 'we have read', value: counted(read, n), basis },
     subjectsBasis,
     subjects,
+    subjectsUnread,
     movement: { yours: input.yours, category: input.category },
     proposal,
     unread,

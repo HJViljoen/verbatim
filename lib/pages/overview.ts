@@ -1615,14 +1615,18 @@ async function loadOwnClaims(
  * Both reads are bounded by the month's own posts (17 on Sealand in September,
  * 109 on Össur), so this is tens to low hundreds of rows either way.
  *
- * Null — never {} — when `subject_memberships` (M4) is not applied here.
+ * Null — never {} — when the matches could not be read, and `failed` says
+ * WHICH not-read it was: `subject_memberships` (M4) not applied here, which
+ * the card already states as "not recorded for this workspace yet", against a
+ * read that was refused or broke, which the card has to state separately or an
+ * absence prints as a zero.
  */
 async function loadOwnSubjectMatches(
   supabase: SupabaseClient,
   clientId: string,
   videoIds: readonly string[],
-): Promise<Map<string, string[]> | null> {
-  if (videoIds.length === 0) return new Map()
+): Promise<{ matches: Map<string, string[]> | null; failed: boolean }> {
+  if (videoIds.length === 0) return { matches: new Map(), failed: false }
   let insights: { id: string; source_video_id: string }[]
   try {
     const pages = await Promise.all(
@@ -1640,9 +1644,9 @@ async function loadOwnSubjectMatches(
     insights = pages.flat()
   } catch (error) {
     console.error(`[pages] overview.ownInsights: ${(error as { message?: string })?.message ?? String(error)}`)
-    return null
+    return { matches: null, failed: true }
   }
-  if (insights.length === 0) return new Map()
+  if (insights.length === 0) return { matches: new Map(), failed: false }
   const videoOf = new Map(insights.map((i) => [i.id, i.source_video_id]))
   try {
     const pages = await Promise.all(
@@ -1667,43 +1671,51 @@ async function loadOwnSubjectMatches(
       set.add(video)
       bySubject.set(row.subject_id, set)
     }
-    return new Map([...bySubject].map(([id, set]) => [id, [...set]]))
+    return { matches: new Map([...bySubject].map(([id, set]) => [id, [...set]])), failed: false }
   } catch (error) {
     // DEGRADE, BUT SAY SO — `loadFlags`'s precedent, and for its reason. The
     // subject row is one line of a card whose other five stand on their own,
     // so a failed read costs the line and nothing else; a bare catch would
     // make an RLS refusal, a network error and "M4 is not applied" one value
-    // with nothing written anywhere. The two are told apart in the log and
-    // answered the same way on the page, because the page has one honest
-    // answer for both: we could not read which subjects your posts matched.
-    if (!isMissingSubjects(error)) {
+    // with nothing written anywhere.
+    //
+    // AND THE TWO REACH THE CARD APART. A missing table is already stated on
+    // the card ("not recorded for this workspace yet"); a refused or broken
+    // read is not, and printing it as an empty subject list would read as
+    // "your posts matched no subject" — an absence printed as a zero, which is
+    // what the rest of this card exists to refuse. `failed` is what carries
+    // the difference to `MoveCandidate.subjectsUnread`.
+    const missing = isMissingSubjects(error)
+    if (!missing) {
       console.error(`[pages] overview.ownMemberships: ${(error as { message?: string })?.message ?? String(error)}`)
     }
-    return null
+    return { matches: null, failed: !missing }
   }
 }
 
 /** What the card is built from: the month's own posts, the claims on them, and
  *  which subjects they matched. `videos` null is "we could not read your
- *  posts"; `matches` null is "M4 is not applied here". Two different absences,
- *  and the card says which. */
+ *  posts"; `matches` null with `matchesFailed` false is "M4 is not applied
+ *  here", and with it true is "the read was refused or broke". Three different
+ *  absences, and the card says which. */
 export interface CardInputs {
   videos: ClientPost[] | null
   claims: { source_video_id: string; claim: string; entity: string }[]
   matches: Map<string, string[]> | null
+  matchesFailed: boolean
 }
 
 /** The card's three reads, issued together. The claims and the memberships are
  *  both keyed by the posts, so they wait on that one read and on nothing else. */
 async function loadCardInputs(supabase: SupabaseClient, clientId: string, month: string): Promise<CardInputs> {
   const videos = await loadOwnPosts(supabase, clientId, month)
-  if (!videos) return { videos: null, claims: [], matches: null }
+  if (!videos) return { videos: null, claims: [], matches: null, matchesFailed: false }
   const ids = videos.map((v) => v.id)
-  const [claims, matches] = await Promise.all([
+  const [claims, matched] = await Promise.all([
     loadOwnClaims(supabase, clientId, ids),
     loadOwnSubjectMatches(supabase, clientId, ids),
   ])
-  return { videos, claims, matches }
+  return { videos, claims, matches: matched.matches, matchesFailed: matched.failed }
 }
 
 /**
@@ -1885,6 +1897,11 @@ export async function loadMovesExtras(input: {
       yours: movement.yours,
       category: movement.category,
       declarable: input.moves != null,
+      // MISSING, NOT EMPTY. A refused or broken membership read leaves
+      // `membership` at [] exactly as "your posts matched nothing" does, and
+      // the card may not print one as the other — `loadOwnSubjectMatches`
+      // tells the two apart and this is where the difference reaches a reader.
+      membershipUnread: posts.matchesFailed,
     }),
     readings,
   }

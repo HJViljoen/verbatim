@@ -6,6 +6,7 @@ import {
   CARD_COMMENT_FLOOR,
   CARD_NOT_DECLARABLE,
   CARD_NO_POSTS,
+  CARD_SUBJECTS_UNREAD,
   HOOK_UNCLASSIFIED,
   MOVE_NO_CLIENT_SERIES,
   MOVE_NO_MONTHS_RECORDED,
@@ -208,6 +209,23 @@ describe('buildMoveCandidate — the pre-filled card', () => {
     const c = card({ membership: [] })
     expect(c.proposal).toBeNull()
     expect(c.unread).toBeNull()
+    // Read, and nothing matched: a measured zero, and the card says nothing
+    // extra about it.
+    expect(c.subjectsUnread).toBeNull()
+  })
+
+  it('tells a membership read that failed apart from one that matched nothing', () => {
+    const measured = card({ membership: [] })
+    const unread = card({ membership: [], membershipUnread: true })
+    expect(measured.subjects).toEqual([])
+    expect(unread.subjects).toEqual([])
+    // Same empty list, two different facts — and only the second says so.
+    expect(measured.subjectsUnread).toBeNull()
+    expect(unread.subjectsUnread).toBe(CARD_SUBJECTS_UNREAD)
+    // It costs the subject rows and nothing else: the counted rows stand.
+    expect(unread.posts.value).toEqual({ k: 9, n: 9 })
+    expect(unread.claims.value.k).toBe(5)
+    expect(unread.unread).toBeNull()
   })
 })
 
