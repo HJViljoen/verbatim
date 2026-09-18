@@ -44,15 +44,33 @@ describe('the settings rail', () => {
 })
 
 describe('the settings vocabulary', () => {
-  it('is forms, not tiles: no elevated card ground inside a sub-page', () => {
+  // CHANGED BY THE ARTBOARD PORT (Block D wave 2, E-settings). This used to
+  // assert exactly TWO elevated grounds — the rail's card and the content
+  // card — and the artboard has neither: the settings area is a bare nav
+  // beside a flat column on white, so the two nesting levels the system allows
+  // (tile → flat inner block) are spent inside a sub-page rather than on its
+  // furniture. The rule the test is about is unchanged and is now stronger:
+  // nothing in the frame draws an elevated card at all.
+  it('is forms, not tiles: the frame draws no elevated card ground', () => {
     const markup = render(
-      <SettingsFrame active="tracking" title="Settings">
+      <SettingsFrame active="tracking" title="Settings" contentTitle="Tracking" contentMeta="21 terms" contentRule="What we look for.">
         <FactRow label="Platforms">TikTok · YouTube</FactRow>
       </SettingsFrame>,
     )
-    // The two tile grounds belong to the frame's own two panes and to nothing
-    // a sub-page draws.
-    expect(markup.match(/bg-tile shadow-tile/g)).toHaveLength(2)
+    expect(markup).not.toContain('shadow-tile')
+    // The sub-page header is the artboard's: a title, a mono meta and one
+    // sentence of rule — not a PaneHeader eyebrow, which is what a SECTION
+    // inside the page uses.
+    expect(markup).toContain('Tracking')
+    expect(markup).toContain('21 terms')
+    expect(markup).toContain('What we look for.')
+  })
+
+  it('hangs the save-state strip under the rail when a page has one', () => {
+    const markup = render(
+      <SettingsFrame active="tracking" title="Settings" railFooter={<p>Last save 3 Sep</p>}>x</SettingsFrame>,
+    )
+    expect(markup).toContain('Last save 3 Sep')
   })
 
   it('says a table is empty in words rather than drawing an empty table', () => {

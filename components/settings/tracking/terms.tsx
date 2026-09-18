@@ -43,8 +43,8 @@ export const BUCKETS: readonly { key: Bucket; label: string; hint: string }[] = 
  *  searches it, and the line it starts is a new line. */
 export const NEW_TERM_RULE = 'a new term starts a new line; the old line is kept'
 
-/** Why there is no "Keep it" beside "Drop it". */
-export const REVIEW_KEEP_NOTE = 'keeping it needs nothing — it stays until you drop it'
+/** Why there is no "Keep it" beside the control that takes a term off. */
+export const REVIEW_KEEP_NOTE = 'keeping it needs nothing — it stays until you take it off'
 
 export interface TermsSectionProps {
   terms: Record<Bucket, string[]>
@@ -195,7 +195,7 @@ export function ReviewStrip({ term, canEdit, onDrop }: { term: TermSummary; canE
         {term.because[0] ? ` — ${term.because[0]}` : ''}
       </span>
       <span className="flex shrink-0 items-center gap-2">
-        <button type="button" onClick={onDrop} disabled={!canEdit} className={CONTROL}>Drop it</button>
+        <button type="button" onClick={onDrop} disabled={!canEdit} className={CONTROL}>Remove it</button>
         <MonoNote>{REVIEW_KEEP_NOTE}</MonoNote>
       </span>
     </div>
@@ -203,7 +203,7 @@ export function ReviewStrip({ term, canEdit, onDrop }: { term: TermSummary; canE
 }
 
 /** `TermSummary.bucket` is the column's own word; the form's key is the
- *  column. One map, so "Drop it" cannot remove a term from the wrong list. */
+ *  column. One map, so the review strip cannot remove a term from the wrong list. */
 export function bucketOf(bucket: string): Bucket {
   if (bucket === 'brand') return 'brand_keywords'
   if (bucket === 'competitor') return 'competitor_keywords'
