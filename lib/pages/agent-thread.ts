@@ -493,7 +493,10 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
     silentQuestions,
     document,
     basis,
-    measure: measure.findings.length ? measure : null,
+    // NULL MEANS "nothing measured AND nothing owed". A thread with no month
+    // rows behind it still owes the interpretation caveat wherever the model
+    // argued, so a measurement carrying only caveats is still a measurement.
+    measure: measure.findings.length || measure.caveats.length ? measure : null,
     notAnswered: await notAnsweredP,
     planChip,
     bar: { question: surface('ask').question ?? '', context: askBasisLine(basis) },
