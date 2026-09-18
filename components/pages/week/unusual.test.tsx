@@ -201,16 +201,35 @@ describe('WK1 · unusual this week', () => {
   it('draws the thirteen-update series and says it is a series of UPDATES', () => {
     for (const mode of MODES) {
       const text = renderText(weekUnusual.render(weekFixture(), mode, ctx))
+      // THE NEWEST UPDATE'S OWN COUNT, IN WORDS, IN EVERY ARM. The chart's end
+      // label draws the digits; only this says what they are.
+      expect(text, mode).toContain('618 videos this update found')
       // THE COUNT BAND CARRIES ITS UNIT. This block's other band is in
       // percentage points ("a band of 4.9"); an unlabelled count band beside it
-      // is how 4.9 points gets read as five videos.
-      expect(text, mode).toContain('618 videos this update found')
-      expect(text, mode).toContain('ran 1–559 videos, typical 462')
-      // THREE OF THE TWELVE BEHIND IT FOUND NOTHING, and the legend counts 9
-      // rather than 12: a legend saying "the 12 before it" while the band was
-      // drawn on 9 would be the page and the picture disagreeing.
-      expect(text, mode).toContain('the 9 that found anything')
-      expect(text, mode).toContain('3 of the updates behind this one found nothing at all')
+      // is how 4.9 points gets read as five videos. THREE OF THE TWELVE BEHIND
+      // IT FOUND NOTHING, and the band counts 9 rather than 12: a legend saying
+      // "the 12 before it" while the band was drawn on 9 would be the page and
+      // the picture disagreeing.
+      //
+      // WHICH SENTENCE SAYS IT DEPENDS ON WHETHER THE CHART IS DRAWN (design
+      // review F4). On screen and on paper the picture's own legend carries the
+      // band and the quiet count, and the words under it carry the head alone —
+      // they used to carry all three, so the tile stated the band twice and the
+      // quiet count twice, two lines apart in one column. The email arm draws
+      // no SVG, so there the words ARE the chart and state everything.
+      if (mode === 'email') {
+        expect(text, mode).toContain('the 9 that found anything')
+        expect(text, mode).toContain('ran 1–559 videos, typical 462')
+        expect(text, mode).toContain('3 of the updates behind this one found nothing at all')
+      } else {
+        expect(text, mode).toContain('the 9 updates behind it that found anything ran')
+        expect(text, mode).toContain('1–559 videos')
+        expect(text, mode).toContain('typical 462')
+        expect(text, mode).toContain('3 of them found nothing at all, drawn and left out of the range')
+        // ONCE, not twice — the defect F4 named.
+        expect(text.match(/1–559/g) ?? [], mode).toHaveLength(1)
+        expect(text.match(/found nothing at all/g) ?? [], mode).toHaveLength(1)
+      }
       // The axis's own words, which are the whole deviation: thirteen
       // deliveries, not thirteen weeks.
       expect(text, mode).toContain('the last 13 updates · what each one brought in')
@@ -288,8 +307,9 @@ describe('WK1 · unusual this week', () => {
     expect(text).toContain('the last 13 updates · what each one brought in')
     // SEVEN OF SEALAND'S TWELVE FOUND NOTHING. The band stands on five, and the
     // seven are drawn rather than dropped.
-    expect(text).toContain('the 5 that found anything')
-    expect(text).toContain('7 of the updates behind this one found nothing at all')
+    // The legend's words, because the chart is drawn on this arm (F4).
+    expect(text).toContain('the 5 updates behind it that found anything ran')
+    expect(text).toContain('7 of them found nothing at all, drawn and left out of the range')
   })
 
   it('says nothing about the series where no update carries a window', () => {

@@ -152,11 +152,22 @@ export function UpdateSeriesChart({ series }: { series: UpdateSeries }) {
   )
 }
 
+/**
+ * One legend entry: a swatch and a sentence.
+ *
+ * THE SENTENCE IS ONE FLEX ITEM (design review F7). This row is
+ * `flex items-center gap-1.5`, and a flex container makes an item of EVERY
+ * child — including each text run between the inline `<span data-copy=
+ * "figure">`s — so the 6px gap landed on both sides of every figure and the
+ * legend read "…ran:  1–559 videos , typical  462", with a space before the
+ * comma. Visible at 1×. The gap belongs between the swatch and the words, and
+ * the words are one child.
+ */
 function Key({ swatch, children }: { swatch: React.ReactNode; children: React.ReactNode }) {
   return (
     <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
       {swatch}
-      {children}
+      <span className="min-w-0">{children}</span>
     </span>
   )
 }

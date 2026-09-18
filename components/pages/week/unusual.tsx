@@ -8,7 +8,7 @@ import { TokenProse } from '@/components/blocks/prose'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, fmtPct, longMonth, monthName } from '@/lib/format'
 import { baselineFormingLine, contributionLine, flagFigures, type UnusualFlag, type WeekData } from '@/lib/pages/week'
-import { updateSeriesLine, type UpdateSeries } from '@/lib/reading/updates'
+import { updateSeriesHead, updateSeriesLine, type UpdateNote, type UpdateSeries } from '@/lib/reading/updates'
 import type { FigureTable } from '@/lib/reading/verdicts'
 
 // WK1 · Unusual this week (design §3 WK1, item 40; the mock's §1).
@@ -57,10 +57,14 @@ export const weekUnusual: Block<WeekData> = {
     // then said in words. The words are printed in EVERY mode — an email
     // client is no place for an SVG, and the legend is the half of a chart
     // that carries the numbers anyway.
+    // THE CHART CARRIES THE LEGEND'S NUMBERS, so where it is drawn the words
+    // that repeat them are not printed (design review F4). `charted` is the
+    // exact condition `UpdateSeriesChart` renders under.
+    const charted = !email && u.series != null && u.series.points.length > 1
     const left = (
       <div className={email ? undefined : 'flex min-w-0 flex-col gap-2'}>
-        {!email && u.series && u.series.points.length > 1 ? <UpdateSeriesChart series={u.series} /> : null}
-        <Series series={u.series} mode={mode} />
+        {charted ? <UpdateSeriesChart series={u.series!} /> : null}
+        <Series series={u.series} mode={mode} charted={charted} />
       </div>
     )
     const right = (
@@ -246,7 +250,12 @@ function Flag({ flag, n, mode, figures }: { flag: UnusualFlag; n: number; mode: 
           word: <span data-copy="subject" data-slot="pass_b_theme">{flag.label}</span>,
           of: `of ${fmtInt(flag.week.n)} videos this update covered`,
         }}
-        base={`${flag.denominator} · against ${fmtPct(basePct, 1)} across ${months}`}
+        // THE DENOMINATOR'S OWN QUALIFIER, AND NOTHING ELSE (design review F4).
+        // It used to end "· against 3.5% across Jun 2026, Jul 2026, Aug 2026",
+        // which is the second half of the claim line four lines above it and
+        // the second half of the model's opening sentence below it: one
+        // comparison, stated three times in 200px.
+        base={flag.denominator}
       />
       {/* THE OTHER CAVEAT ABOUT THE SAME THREE MONTHS. `baseline_filling_months`
           says the baseline is still moving; `baseline_regime` says whether the
@@ -357,12 +366,18 @@ function Interpretation({
  * disagree. Where there is no contribution to state, the line says so rather
  * than leaving four window counts standing alone.
  */
-function Series({ series, mode }: { series: UpdateSeries | null; mode: 'app' | 'print' | 'email' }) {
+function Series({ series, mode, charted }: { series: UpdateSeries | null; mode: 'app' | 'print' | 'email'; charted: boolean }) {
   if (!series || series.points.length === 0) return null
   const newest = series.points[series.points.length - 1]
   return (
     <>
-      <Line mode={mode}>{updateSeriesLine(series)}</Line>
+      {/* WHERE THE CHART IS DRAWN, ITS LEGEND IS THIS SENTENCE (design review
+          F4): the legend prints the band, its "typical", and how many updates
+          found nothing, so printing `updateSeriesLine` and `series.note` under
+          it said the same two facts twice, two lines apart, in one column.
+          Where there is no chart — the email arm, and a series of one point —
+          these ARE the chart and they are printed in full. */}
+      <Line mode={mode}>{charted ? updateSeriesHead(series) : updateSeriesLine(series)}</Line>
       {/* THE AXIS SAYS WHAT A POINT IS. Thirteen deliveries at the dates those
           deliveries covered — a chart of our own cadence — and naming that on
           the axis is what keeps a reader from reading thirteen windows as
@@ -377,7 +392,14 @@ function Series({ series, mode }: { series: UpdateSeries | null; mode: 'app' | '
             This update’s contribution to its own month cannot be stated here, so every figure above is of the delivery’s own days alone.
           </Line>
         )}
-      {series.note ? <Line mode={mode}>{series.note}</Line> : null}
+      {/* EVERY CAVEAT EXCEPT THE ONE THE PICTURE ALREADY MADE (design review
+          F4). `notes` carries each with its kind; where the chart is drawn it
+          has already put the quiet updates on the floor and counted them in
+          its legend, so printing the `quiet` note under it said the same fact
+          twice, two lines apart. Every other kind — a windowless update, a
+          short series, no band, an absent windowed reading — is printed in
+          both arms, because nothing draws those. */}
+      {caveats(series, charted).map((n) => <Line key={n.kind + n.text} mode={mode}>{n.text}</Line>)}
     </>
   )
 }
@@ -387,6 +409,15 @@ function Line({ mode, children }: { mode: 'app' | 'print' | 'email'; children: R
     return <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 4 }}>{children}</div>
   }
   return <p className="m-0 text-[11.5px] text-muted-foreground">{children}</p>
+}
+
+/** The series' caveats a surface still has to say in words. */
+function caveats(series: UpdateSeries, charted: boolean): UpdateNote[] {
+  // `notes` is empty on a series built before the kinds existed — a frozen
+  // snapshot, a hand-made fixture — and `note` is then the only thing to
+  // print, so the joined string stands in as one unkinded caveat.
+  if (series.notes.length === 0) return series.note ? [{ kind: 'short', text: series.note }] : []
+  return charted ? series.notes.filter((n) => n.kind !== 'quiet') : series.notes
 }
 
 const pct = (k: number, n: number): number => (n > 0 ? (k / n) * 100 : 0)
