@@ -365,13 +365,19 @@ describe('the coverage grid', () => {
 describe('the page’s own chrome', () => {
   it('states the record’s rule in the header, in the artboard’s words', () => {
     const text = renderText(
-      <RecordHeader meta="23 updates delivered · longest gap 5 weeks · last on 27 Sep">
+      <RecordHeader meta="23 updates on record · since 6 Apr · longest gap 5 weeks · last on 27 Sep">
         What was delivered, what changed, what was thrown away, and how much was read. Written as the work happens; it
         is added to, never edited.
       </RecordHeader>,
     )
     expect(text).toContain('added to, never edited')
-    expect(text).toContain('23 updates delivered')
+    // The brief's meta, with its first date back (design review finding 8) and
+    // without the word the count cannot carry (code review finding 1).
+    expect(text).toContain('23 updates on record')
+    expect(text).toContain('since 6 Apr')
+    // ("What was delivered" in the sentence under it describes the page, and
+    // is not a caption on a count.)
+    expect(text).not.toMatch(/updates delivered/)
   })
 
   it('tells a save that broke nothing from a save whose breakage was never written down', () => {

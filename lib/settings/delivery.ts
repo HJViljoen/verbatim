@@ -40,6 +40,11 @@ const FINISHED = new Set(['completed', 'partial'])
 export const DELIVERED_STATUSES: ReadonlySet<string> = FINISHED
 
 export interface DeliveryRecord {
+  /** Every run row on record for this workspace — the ones that finished, the
+   *  one that failed, and a run that is in flight while the page is open. NOT
+   *  a count of updates DELIVERED: `DELIVERED_STATUSES` is that question, and
+   *  the monthly-readings strip is what asks it. Nothing that prints this
+   *  number may caption it "delivered" (code review finding 1). */
   total: number
   /** The first update, `YYYY-MM-DD`. */
   since: string | null
@@ -209,10 +214,17 @@ export function deliveryStats(record: DeliveryRecord, updates: readonly UpdateIn
     })
   }
   out.push({
+    // NOT "delivered". `total` has no status filter at all, so on a workspace
+    // with one failed run it counted 22 while the readings strip two lines
+    // below — which filters `DELIVERED_STATUSES` — totalled 21, and the page
+    // marked that very run "· did not finish" on its own pill. Open the page
+    // during a run and the figure gains one that has delivered nothing yet.
+    // "On record" is what the number is, and it is the page bar's own word for
+    // the first of them (code review finding 1).
     id: 'delivered',
     figure: fmtInt(record.total),
     unit: record.total === 1 ? 'update' : 'updates',
-    caption: 'delivered',
+    caption: 'on record',
   })
   const gap = gapFigure(record.longestGapDays)
   if (gap) {

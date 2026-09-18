@@ -16,11 +16,15 @@ import { DatePill, LabelRow, RecordSection, StatCell } from './frame'
  * rendered on OVERVIEW'S page bar.
  *
  * TWO COUNTS OF "UPDATES" ON ONE SECTION, AND BOTH SAY WHICH THEY ARE. The
- * stat cells and the pills count every update that settled, failures included,
- * because an update that failed still happened and is still in the record
- * (`lib/settings/delivery.ts`). The readings strip counts DELIVERED updates,
- * because that is what Overview's counter and the thin-month rule count. A
- * failed update is marked on its own pill rather than quietly dropped.
+ * stat cells and the pills count every update ON RECORD — the ones that
+ * finished, the one that failed, and a run still in flight while the page is
+ * open — because an update that failed still happened and is still in the
+ * record (`lib/settings/delivery.ts`). The readings strip counts DELIVERED
+ * updates, because that is what Overview's counter and the thin-month rule
+ * count. So the two totals differ by the failures, which is why the cell is
+ * captioned "on record" and not "delivered": captioned "delivered" it said 22
+ * over a strip saying 21, two lines above a pill reading "· did not finish".
+ * A failed update is marked on its own pill rather than quietly dropped.
  */
 export function DeliveryBlock({
   record, stats, updates, month, readings,

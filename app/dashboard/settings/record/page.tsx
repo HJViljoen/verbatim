@@ -109,8 +109,14 @@ export default async function SettingsRecordPage() {
   })
 
   const gap = gapFigure(delivery.longestGapDays)
+  // "ON RECORD", NOT "DELIVERED" (code review finding 1): `delivery.total`
+  // counts every run row, the failed one included. AND IT CARRIES ITS FIRST
+  // DATE, which the brief asked for and the port dropped (design review
+  // finding 8) — "since" here is the same earliest-evidence claim D14 makes of
+  // the page bar, one line up.
   const headerMeta = [
-    `${fmtInt(delivery.total)} update${delivery.total === 1 ? '' : 's'} delivered`,
+    `${fmtInt(delivery.total)} update${delivery.total === 1 ? '' : 's'} on record`,
+    delivery.since ? `since ${shortDate(delivery.since)}` : null,
     gap ? `longest gap ${gap.figure} ${gap.unit}` : null,
     delivery.lastOn ? `last on ${shortDate(delivery.lastOn)}` : null,
   ].filter(Boolean).join(' · ')
