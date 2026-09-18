@@ -13,6 +13,16 @@ import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, ty
 import { buildStandings, type StandingRow } from '../reading/standings'
 import type { MonthStatus, PlatformMix } from '../reading/types'
 import type { Verdict } from '../reading/verdicts'
+// D3 · own posts, own claims and what the rivals say. This module's own two
+// fields and one call line; everything counted is in lib/reading/own-posts.ts.
+import {
+  rivalOwnClaims,
+  saidAbout,
+  SAID_ABOUT_EMPTY,
+  type OwnPostCensus,
+  type OwnPostInput,
+  type SaidAbout,
+} from '../reading/own-posts'
 import { CLIENT_AUDIENCE, isMissingCompetitors, loadCompetitors, rivalKey, stitchRenames } from '../rivals'
 import type { Quote, Scope } from '../renderables/types'
 import { quoteRef } from '../renderables/quotes-freeze'
@@ -207,6 +217,32 @@ export interface CompetitiveSurfaceData {
   rivals: RivalsBlock
   standings: StandingsBlock
   questions: QuestionsBlock
+  /**
+   * CO4 · what each tracked rival published this month, and what they said in
+   * it — one census per rival, in the tracked order.
+   *
+   * DATED BY THE POST. Every figure on a census is over `videos.upload_date`
+   * and `OwnPostCensus.basis` says so; the rest of this page is comment-dated
+   * and the two must not be read as one clock.
+   *
+   * THREE STATES, NOT TWO. A rival with no account configured has no read at
+   * all (`unread`); a rival with accounts and nothing captured this month is a
+   * real census that came back empty; a rival with posts is a census. And a
+   * rival's CLAIMS are never a tenant's to read — M8's policy is
+   * `entity = 'client'` — so a census carries real post counts beside
+   * `claimsNote` rather than an empty list that reads as "they claimed
+   * nothing".
+   */
+  ownClaims: OwnPostCensus[]
+  /**
+   * CO6 · what is said ABOUT each rival by everybody else.
+   *
+   * Empty on every row today, and the block says why rather than not
+   * existing: the claims are `video_claims` rows in a rival's bucket, which no
+   * tenant session may select. The shape is here so the surface that can read
+   * them — a document built on the service role — binds the same field.
+   */
+  saidAbout: SaidAbout[]
   unlocks: { rows: CompetitiveUnlockRow[] }
   record: { line: string; lines: string[]; href: string }
 }
@@ -549,6 +585,12 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
 
   const denominators = storedDenominators(history, readAxis)
 
+  // CO4 · what each rival published this month. It needs the month and the
+  // tracked list and nothing else, so it starts here and is collected at the
+  // bottom beside the record.
+  const ownClaimsAhead = loadRivalOwnPosts(supabase, clientId, month, rivals.rivals)
+  ownClaimsAhead.catch(() => {})
+
   // The record's reads depend on the month and nothing else; the refusals it
   // also carries are arithmetic over verdicts, added below.
   const recordAhead = loadRecordInputs(reading.client, clientId, recordWindow(month, readingAt), { now: readingAt })
@@ -630,6 +672,14 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
     },
     standings,
     questions,
+    ownClaims: await ownClaimsAhead,
+    // CO6 · the denominator is the audience's own videos this month, off the
+    // rows the standings already read — never a second count of the same thing.
+    saidAbout: buildSaidAbout(rivals.rivals, (audience) =>
+      (denominators ?? [])
+        .filter((row2) => monthStartOf(row2.month) === month && row2.audience === audience)
+        .reduce((n, row2) => n + row2.videos, 0),
+    ),
     unlocks: { rows: competitiveUnlockRows() },
     record: { line: howSoundLine(recordInputs), lines: recordLines(recordInputs), href: '/dashboard/settings' },
   }
@@ -672,6 +722,105 @@ async function loadRivals(
   const res = await supabase.from('tracking_configs').select('competitor_names').eq('client_id', clientId).maybeSingle()
   const tc = row<{ competitor_names: string[] | null }>(res, 'competitive-surface.rivals')
   return { rivals: (tc?.competitor_names ?? []).map((name) => ({ name, retiredAt: null })), recorded: false }
+}
+
+// ---- CO4 and CO6 · own posts, own claims, and what is said about them --------
+
+interface RivalPostRow {
+  id: string
+  competitor_name: string | null
+  upload_date: string | null
+  comments_count: number
+  hook_style: string | null
+  classified_type: string | null
+  platform: string | null
+}
+
+/**
+ * What each tracked rival published in this month, and the accounts we read it
+ * from.
+ *
+ * TWO READS, BOTH SMALL. The month's `competitor_owned` videos (a date range on
+ * an indexed column — nineteen rows on Sealand in September) and the handle
+ * map. `source = 'competitor_owned'` is authorship and not a subject tag: a
+ * post read off a rival's own profile is theirs whatever the caption says,
+ * which is `claimEntity`'s first test (lib/pipeline/claims.ts).
+ *
+ * THE HANDLE MAP IS WHAT MAKES THE ABSENCE HONEST. Without it "no post this
+ * month" and "nobody is watching this brand" are one empty list, and the
+ * rivals panel's whole point is that they are three different states
+ * (lib/settings/rivals-view.ts). `rivalOwnClaims` takes the handles per rival
+ * and words each state itself.
+ */
+async function loadRivalOwnPosts(
+  supabase: SupabaseClient,
+  clientId: string,
+  month: string,
+  rivals: readonly { name: string }[],
+): Promise<OwnPostCensus[]> {
+  if (rivals.length === 0) return []
+  const start = monthStartOf(month)
+  const d = new Date(`${start}T00:00:00.000Z`)
+  const to = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)).toISOString().slice(0, 10)
+
+  const [posts, handleRes] = await Promise.all([
+    selectAll<RivalPostRow>(() =>
+      supabase
+        .from('videos')
+        .select('id, competitor_name, upload_date, comments_count, hook_style, classified_type, platform')
+        .eq('client_id', clientId)
+        .eq('source', 'competitor_owned')
+        .gte('upload_date', start)
+        .lt('upload_date', to)
+        .order('id', { ascending: true }),
+    ),
+    supabase.from('tracking_configs').select('competitor_handles').eq('client_id', clientId).maybeSingle(),
+  ])
+  const handles =
+    row<{ competitor_handles: Record<string, Record<string, string>> | null }>(handleRes, 'competitive-surface.handles')?.competitor_handles ?? {}
+  const fold = (s: string) => s.toLowerCase().trim()
+  const handlesByName = new Map(Object.entries(handles).map(([name, h]) => [fold(name), h ?? {}]))
+
+  const inputs: OwnPostInput[] = rivals.map((r) => ({
+    month: start,
+    audience: rivalKey(r.name),
+    audienceLabel: r.name,
+    videos: posts.filter((p) => fold(p.competitor_name ?? '') === fold(r.name)),
+    // A rival's claims are not the tenant's to read, at any migration:
+    // `video_claims`' tenant policy is `entity = 'client'` by design (M8's own
+    // comment). `rivalOwnClaims` says so on every census rather than leaving an
+    // empty list to be read as "they claimed nothing".
+    claims: [],
+    membership: [],
+    echoes: [],
+    handles: handlesByName.get(fold(r.name)) ?? {},
+  }))
+  return rivalOwnClaims(inputs)
+}
+
+/**
+ * CO6, as the honest absence it is today.
+ *
+ * `saidAbout` is a claims reading and the claims are `video_claims` rows in a
+ * rival's bucket — which M8 does not open to a tenant session and deliberately
+ * will not: they are whole sentences out of a third party's transcript. So
+ * every row comes back with its `empty` sentence, and the block exists and says
+ * why, which is more than the page does today: mock-gap records that "Said
+ * about them, by others" is not even named in `competitiveUnlockRows()`.
+ *
+ * The function itself is the real one, over an empty list, rather than a
+ * hand-built shape — so the day a service-role surface feeds it rows, this
+ * page's shape is already the one they arrive in.
+ */
+export function buildSaidAbout(
+  rivals: readonly { name: string }[],
+  denominatorFor: (audience: string) => number,
+  claimsFor: (audience: string) => readonly { claim: string; quote: string; videoId: string }[] = () => [],
+): SaidAbout[] {
+  return rivals.map((r) => {
+    const audience = rivalKey(r.name)
+    return saidAbout({ audience, label: r.name, claims: claimsFor(audience), of: denominatorFor(audience) })
+  })
 }
 
 async function loadSubreddits(supabase: SupabaseClient, clientId: string): Promise<string[]> {

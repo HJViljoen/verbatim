@@ -4,6 +4,7 @@ import { horizonWindow } from '../reading/horizon'
 import { NOT_OBSERVED } from '../reading/standings'
 import {
   ATTENTION_UNLOCK, CORPUS_DENOMINATOR_LINE, QUESTIONS_GROUPING_NOTE,
+  buildSaidAbout,
   buildStandingsBlock, changeNote, citationsInWindow, comparabilityCaveat, competitiveSurfaceHref,
   competitiveUnlockRows, mixLine, questionsEmpty, rivalState, splitKeysCaveat, storedDenominators, trackingRules,
   type StandingsMonthRow,
@@ -386,5 +387,28 @@ describe('the sections that are not built', () => {
     }
     // CO4's owner is the client's, not ours: the accounts are theirs to name.
     expect(rows.find((r) => r.section === 'CO4')?.owner).toBe('Your digital director')
+  })
+})
+
+describe('buildSaidAbout', () => {
+  it('gives every rival a row and its own denominator', () => {
+    const rows = buildSaidAbout([{ name: 'Ottobock' }, { name: 'Rareform' }], (a) => (a === 'competitor:Ottobock' ? 42 : 0))
+    expect(rows.map((r) => r.audience)).toEqual(['competitor:Ottobock', 'competitor:Rareform'])
+    // Nothing is readable today, so every row is the block's own empty
+    // sentence — a named absence, not a missing block.
+    for (const r of rows) {
+      expect(r.rows).toEqual([])
+      expect(r.empty).toContain('Nothing was said about')
+    }
+  })
+
+  it('counts distinct videos over the audience’s month when the claims arrive', () => {
+    const [row0] = buildSaidAbout([{ name: 'Ottobock' }], () => 42, () => [
+      { claim: 'They repair for free', quote: 'Fixed mine for nothing.', videoId: 'a' },
+      { claim: 'they repair for free', quote: 'Same here.', videoId: 'b' },
+    ])
+    expect(row0.rows).toHaveLength(1)
+    expect(row0.rows[0].value).toEqual({ k: 2, n: 42 })
+    expect(row0.empty).toBeNull()
   })
 })

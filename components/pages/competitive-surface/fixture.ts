@@ -2,9 +2,10 @@ import { horizonWindow } from '@/lib/reading/horizon'
 import {
   PRECEDENCE_RULE, ATTENTION_UNLOCK, CORPUS_DENOMINATOR_LINE, QUESTIONS_GROUPING_NOTE,
   QUESTIONS_SUBJECTS_NOTE, STANDINGS_UNREAD, buildStandingsBlock, competitiveSurfaceHref,
-  competitiveUnlockRows, questionsEmpty,
+  buildSaidAbout, competitiveUnlockRows, questionsEmpty,
   type CompetitiveSurfaceData,
 } from '@/lib/pages/competitive-surface'
+import { rivalOwnClaims, type OwnPostInput } from '@/lib/reading/own-posts'
 
 // Competitive's block fixtures (Phase 1 WP14).
 //
@@ -42,6 +43,55 @@ const OSSUR = [
   den(MONTH, 'competitor:Ottobock', 42, 645),
   den(MONTH, 'industry-other', 388, 10534),
 ]
+
+/**
+ * CO4 · what the tracked rivals published in September, as three of the states
+ * the block has to draw at once.
+ *
+ * Ottobock is Össur's one configured rival and has handles on three platforms
+ * (read read-only from `tracking_configs` 2026-09-18), so it is a real census:
+ * posts, a comment floor, hooks on some of them and not others. The other two
+ * are the states a reviewer has to see beside it — a rival whose accounts are
+ * configured and who published nothing this month, and a rival nobody has
+ * configured an account for at all, which is NOT the same absence.
+ *
+ * Every census carries `claimsNote`, because a rival's claims are never a
+ * tenant's to read: an empty claims list on its own reads as "they claimed
+ * nothing", which is a statement about them rather than about our permissions.
+ */
+function ownClaimsFixture() {
+  const post = (id: string, day: number, comments: number, hook: string | null, format: string | null) => ({
+    id, upload_date: `2026-09-${String(day).padStart(2, '0')}`, comments_count: comments,
+    hook_style: hook, classified_type: format, platform: 'youtube',
+  })
+  const inputs: OwnPostInput[] = [
+    {
+      month: MONTH, audience: 'competitor:Ottobock', audienceLabel: 'Ottobock',
+      videos: [
+        post('o1', 3, 61, 'demonstration', 'educational'),
+        post('o2', 8, 22, 'personal-story', 'testimonial'),
+        post('o3', 15, 9, 'demonstration', 'educational'),
+        post('o4', 19, 4, null, null),
+        post('o5', 26, 1, null, null),
+        // August, and therefore not in this census — the basis line's reason.
+        { ...post('o0', 29, 88, 'demonstration', 'educational'), upload_date: '2026-08-29' },
+      ],
+      claims: [], membership: [], echoes: [],
+      handles: { youtube: '@ottobock', tiktok: '@ottobock', instagram: '@ottobock' },
+    },
+    {
+      month: MONTH, audience: 'competitor:Rareform', audienceLabel: 'Rareform',
+      videos: [], claims: [], membership: [], echoes: [],
+      handles: { tiktok: '@rareform' },
+    },
+    {
+      month: MONTH, audience: 'competitor:Patagonia', audienceLabel: 'Patagonia',
+      videos: [], claims: [], membership: [], echoes: [],
+      handles: {},
+    },
+  ]
+  return rivalOwnClaims(inputs)
+}
 
 export function competitiveFixture(over: Partial<CompetitiveSurfaceData> = {}): CompetitiveSurfaceData {
   const window = horizonWindow('last_3', NOW, '2026-06-01')
@@ -116,6 +166,13 @@ export function competitiveFixture(over: Partial<CompetitiveSurfaceData> = {}): 
       groupingNote: QUESTIONS_GROUPING_NOTE,
       subjectsNote: QUESTIONS_SUBJECTS_NOTE,
     },
+    ownClaims: ownClaimsFixture(),
+    // CO6 · empty on every row today and the row says why, which is the point:
+    // the block did not exist at all before, not even as an unlock.
+    saidAbout: buildSaidAbout(
+      [{ name: 'Ottobock' }, { name: 'Rareform' }, { name: 'Patagonia' }],
+      (audience) => (audience === 'competitor:Ottobock' ? 42 : 0),
+    ),
     unlocks: { rows: competitiveUnlockRows() },
     record: {
       line: 'your 4th monthly reading · 2 updates · 449 videos · 34% of what was said on camera was not in English',
@@ -219,5 +276,13 @@ export function unreadMonthsFixture(): CompetitiveSurfaceData {
       unlock: ATTENTION_UNLOCK,
       empty: STANDINGS_UNREAD,
     },
+    // THE CENSUS DOES NOT DEPEND ON THE MONTH TABLES and does not vanish with
+    // them: `videos` is readable whatever `month_denominators` says. What this
+    // workspace has is no configured account anywhere, so every row is the
+    // no-accounts absence and none of them is a zero.
+    ownClaims: rivalOwnClaims([
+      { month: MONTH, audience: 'competitor:Ottobock', audienceLabel: 'Ottobock', videos: [], claims: [], membership: [], echoes: [], handles: {} },
+    ]),
+    saidAbout: buildSaidAbout([{ name: 'Ottobock' }], () => 0),
   }
 }
