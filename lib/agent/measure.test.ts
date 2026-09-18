@@ -141,6 +141,35 @@ describe('measureAnswer', () => {
     expect(m.figures.f1_band.unit).toBe('pts')
   })
 
+  it('picks the theme deliberately when a finding rests on several, not by read order', () => {
+    // Same audience, same denominator: `videos` and the audience string tie, so
+    // before this the winner was whatever order the loader returned.
+    const other = (k: number): MonthSeries => ({
+      ...climbing(),
+      objectId: 'reg-2',
+      objectLabel: 'The zip',
+      points: [point('2026-07-01', k, 1400), point('2026-08-01', k, 1455), point(MONTH, k, 1388)],
+    })
+    const both = [{ findingId: 'G1', registryIds: ['reg-1', 'reg-2'] }]
+    // The bigger numerator wins: the month says more about it.
+    const bigger = measureAnswer({ findings: both, series: [climbing(), other(400)], month: MONTH, directionWords: true })
+    expect(bigger.findings[0].label).toBe('The zip')
+    // Reversed read order, same answer.
+    const reversed = measureAnswer({ findings: both, series: [other(400), climbing()], month: MONTH, directionWords: true })
+    expect(reversed.findings[0].label).toBe('The zip')
+    // Numerators equal too: the order the ANSWER cited them in decides, and
+    // reversing the citation order reverses the choice.
+    const tied = [{ findingId: 'G1', registryIds: ['reg-2', 'reg-1'] }]
+    expect(
+      measureAnswer({ findings: tied, series: [climbing(), other(320)], month: MONTH, directionWords: true })
+        .findings[0].label,
+    ).toBe('The zip')
+    expect(
+      measureAnswer({ findings: both, series: [climbing(), other(320)], month: MONTH, directionWords: true })
+        .findings[0].label,
+    ).toBe('Will it survive a wet commute')
+  })
+
   it('measures nothing when the month carries no row for the topic', () => {
     const empty = climbing({ points: [point('2026-07-01', 210, 1400)] })
     const m = measureAnswer({ findings, series: [empty], month: MONTH, directionWords: true })

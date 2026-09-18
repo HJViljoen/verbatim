@@ -177,19 +177,50 @@ function measuredPoints(series: MonthSeries): MeasuredPoint[] {
  * neither side clearing, the largest denominator is still drawn, because a
  * level with its "of N" is a real thing to print and the verdict beside it
  * will say `too_little_data` in its own words.
+ *
+ * AND WHICH OBJECT — which is a second decision, and it used to be an accident.
+ * A grounded point may rest on up to `ASK_THEMES_PER_CLAIM` themes, so this is
+ * the ordinary case. Two themes of the same finding read against the SAME
+ * audience share the audience denominator and the audience string, so ranking
+ * by `videos` and then by audience returned 0 for both and the winner was
+ * whichever order `loadMonthSeries` happened to hand over — a different theme
+ * on a different day, with nothing on the page saying which. It decides the
+ * label every figure is stated against and, through
+ * `dropUnverdictedDirection`, which sentences of the answer may keep a
+ * direction word.
+ *
+ * So it is decided, in this order, and nothing in it can tie: the side that
+ * clears the floor; the bigger DENOMINATOR (the side with the n); the bigger
+ * NUMERATOR, so the theme the month actually says more about wins; then the
+ * order the ANSWER cited its themes in, which is the model's own ranking of
+ * what the point rests on; then the ids, so two runs of the same data agree.
  */
 function chooseSide(
   candidates: readonly MonthSeries[],
   month: string,
+  cited: readonly string[] = [],
 ): { series: MonthSeries; curr: MonthPoint } | null {
   const rows = candidates
     .map((s) => ({ series: s, curr: pointsByMonth(s).get(month) }))
     .filter((r): r is { series: MonthSeries; curr: MonthPoint } => r.curr != null)
   if (rows.length === 0) return null
   const n = (r: { curr: MonthPoint }): number => r.curr.videos ?? 0
+  const k = (r: { curr: MonthPoint }): number => r.curr.k ?? 0
+  // An id the answer did not cite sorts after every one it did.
+  const rank = (r: { series: MonthSeries }): number => {
+    const i = cited.indexOf(r.series.objectId ?? '')
+    return i === -1 ? cited.length : i
+  }
   const floored = rows.filter((r) => clearsFloor({ month: r.curr.month, videos: r.curr.videos, k: r.curr.k }))
   const pool = floored.length ? floored : rows
-  return [...pool].sort((a, b) => n(b) - n(a) || a.series.audience.localeCompare(b.series.audience))[0]
+  return [...pool].sort(
+    (a, b) =>
+      n(b) - n(a) ||
+      k(b) - k(a) ||
+      rank(a) - rank(b) ||
+      (a.series.objectId ?? '').localeCompare(b.series.objectId ?? '') ||
+      a.series.audience.localeCompare(b.series.audience),
+  )[0]
 }
 
 /** The figures one finding publishes. Values, with their units and the labels
@@ -247,6 +278,9 @@ export function measureAnswer(input: MeasureAnswerInput): AnswerMeasure {
       // about denominators rather than about audience politics.
       mine.filter((s) => s.audience !== input.ownAudience).length ? mine.filter((s) => s.audience !== input.ownAudience) : mine,
       month,
+      // The order the answer cited them in, which is the model's own ranking of
+      // what the point rests on and the last tie-break before the ids.
+      finding.registryIds.filter(Boolean),
     )
     if (!chosen) return
     const { series, curr } = chosen
