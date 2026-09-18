@@ -1,10 +1,11 @@
 import { Fragment, type ReactNode } from 'react'
 import { QuoteBlock } from '@/components/quote-block'
 import { BlockSlot } from './block-slot'
-import { DeckFooter } from '@/components/print/report-deck'
 import { Slide } from '@/components/print/slide'
 import { Sparkline } from '@/components/charts/sparkline'
 import { CountBadge, MovementBadge } from '@/components/delta-badge'
+import { shortDate } from '@/lib/format'
+import type { Verdict } from '@/lib/reading/verdicts'
 import type { Good } from '@/components/charts/stat'
 import type { DeltaVerdict } from '@/lib/report-bands'
 import type { ShareSide } from '@/lib/report-delta'
@@ -15,7 +16,7 @@ import type { BriefSurface } from '@/lib/reports/documents/sections'
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { appBaseUrl } from '@/lib/site'
-import { findingHeadlines, overviewTiles, slugOf } from '@/lib/reports/documents/overview'
+import { coverCarriesSummary, findingHeadlines, overviewTiles, slugOf } from '@/lib/reports/documents/overview'
 import { shownTrajectory, type DocBlock, type DocBriefSection, type DocLens, type DocPage, type DocumentSnapshotData } from '@/lib/reports/documents/types'
 import type { FigureTable } from '@/lib/reports/types'
 
@@ -172,36 +173,158 @@ function audiencePills(audiences: string, company: string) {
   })
 }
 
-function DocumentCover({ data, pages }: { data: DocumentSnapshotData; pages: number }) {
-  // A BORROWED BLOCK IS A SECTION TOO (WP19). Counting only written page KINDS
-  // read "0 sections · 6 pages" on a brief composed entirely from the section
-  // map — the count is what the cover is for, and it was about half the
-  // document.
-  const sections = new Set(data.pages.map((p) => p.kind)).size + (data.sections?.length ?? 0)
+/**
+ * The cover (`sales.p1.*`, ported from the artboard).
+ *
+ * WHAT MOVED, AND WHY. The artboard's cover is not a title card: it is the
+ * brief's first working page — a vertical rule and a 58px title on the left
+ * over the summary and a numbered table of contents, three stat tiles down the
+ * right, and the same hairline footer every other sheet carries. The build
+ * drew a centred title, two mono lines and nothing else, and put the summary
+ * and the contents on slide 2.
+ *
+ * THE CONTENTS ARE THE DECK'S OWN PAGINATION, not a second list. `documentSlides`
+ * already decides what every sheet is and in what order; the cover is sheet 1,
+ * so slide `i` is page `i + 2`. The build's "Findings in this brief" indexed
+ * findings rather than pages, which is a different list of a different length
+ * from the document it sits in front of — and it stays, on the overview sheet,
+ * because a finding list is worth having. This one indexes the document.
+ *
+ * ONE MONO SUB-LINE. The mock reads "September 2026 · Sealand · as at 28 Sep ·
+ * 7 pages" and the build printed two lines — a section/page count, then the
+ * full stamp. The stamp's freeze boundary ("still filling until 30 October")
+ * is not dropped: it rides the FOOTER, on this sheet and on every other, which
+ * is where the mock puts it too.
+ *
+ * AND THE SUMMARY ONLY WHERE ITS ARTBOARD ASKS (see `coverCarriesSummary`).
+ */
+/**
+ * The footer every sheet of a brief carries, the cover included.
+ *
+ * NOT `DeckFooter` (components/print/report-deck.tsx), and the difference is
+ * the stamp. A REPORT's footer is "Created by X with Verbatim · 18 Sep 2026" —
+ * the day it was made, which is all an arranged report has. A BRIEF is a
+ * reading of a month, and the artboard puts that month, the instant it was
+ * read and the freeze boundary on every single sheet, because a reader of a
+ * PDF has no masthead to scroll back to. So the brief prints its reading's own
+ * stamp where the report prints a render date, and falls back to the date on a
+ * brief that has no reading.
+ */
+function BriefFooter({ company, date, stamp }: { company: string; date: string; stamp: string | null }) {
+  return (
+    <p className="truncate font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
+      <span className="text-secondary-foreground">Created by {company} with Verbatim</span>
+      <span aria-hidden> · </span>
+      <span>{stamp ?? date}</span>
+    </p>
+  )
+}
+
+function DocumentCover({ data, pages, contents, date }: {
+  data: DocumentSnapshotData
+  pages: number
+  contents: { page: number; title: string }[]
+  date: string
+}) {
+  const tiles = overviewTiles(data)
+  // THE BLOCK, NOT JUST ITS TEXT: the Studio edits a brief through `BlockSlot`,
+  // which keys on the block's stored id, so moving the paragraph to the cover
+  // must move the edit handle with it or the summary silently stops being
+  // editable on the one brief that prints it here.
+  const summary = coverCarriesSummary(data)
+    ? data.pages.find((p) => p.kind === 'in_short')?.blocks.find((b) => b.field === 'summary') ?? null
+    : null
+  const summaryText = summary?.text ?? ''
+  const stamp = data.reading ? `${data.reading.monthLabel} · ${data.company} · as at ${shortDate(data.reading.readingAt)}` : data.period
   return (
     <section className="vb-slide">
       <div className="vb-slide-body">
-        <div className="flex h-full flex-col justify-center gap-8 px-[6%]">
-          <span className="inline-block h-[3px] w-14 rounded-full bg-primary" aria-hidden />
-          <h1 className="max-w-[16ch] text-[58px] font-semibold leading-[1.05] tracking-[-0.025em] text-foreground [text-wrap:balance]">{data.title}</h1>
-          <p className="font-mono text-[13px] text-muted-foreground">
-            {sections} {sections === 1 ? 'section' : 'sections'} · {pages} {pages === 1 ? 'page' : 'pages'}
-          </p>
-          {/* The month on the cover, where a reader meets the document. */}
-          {data.reading && <p className="font-mono text-[13px] text-secondary-foreground">{data.reading.stamp}</p>}
+        <div className="grid h-full min-h-0 grid-cols-[7fr_5fr] items-center gap-x-12">
+          <div className="flex flex-col gap-[18px]">
+            <div className="flex flex-col gap-3.5">
+              {/* VERTICAL, 3 × 48. The build drew it lying down. */}
+              <span className="inline-block h-12 w-[3px] rounded-full bg-primary" aria-hidden />
+              <h1 className="max-w-[16ch] text-[58px] font-semibold leading-[1.05] tracking-[-0.025em] text-foreground [text-wrap:balance]">{data.title}</h1>
+              <p className="font-mono text-[13px] text-muted-foreground">
+                {stamp} · {pages} {pages === 1 ? 'page' : 'pages'}
+              </p>
+            </div>
+            {summary && summaryText && (
+              <BlockSlot block={summary} textClass="max-w-[66ch] text-[16px] leading-[1.5] text-foreground">
+                <Paragraphs text={summaryText} figures={data.figures} className="max-w-[66ch] text-[16px] leading-[1.5] text-foreground" />
+              </BlockSlot>
+            )}
+            {contents.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <Eyebrow>In this brief</Eyebrow>
+                <ol className="flex flex-col gap-[5px]">
+                  {contents.map((c) => (
+                    <li key={c.page} className="flex text-[14.5px] font-medium leading-[1.35] text-foreground">
+                      <span className="w-6 shrink-0 font-mono text-[13px] font-normal tabular-nums text-primary">{c.page}</span>
+                      <span>{c.title}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+          </div>
+          <div className="flex flex-col gap-4">
+            {tiles.map((t, i) => <StatTile key={i} value={t.value} label={t.label} verdict={t.verdict} note={t.note} />)}
+          </div>
         </div>
       </div>
+      {/* THE COVER CARRIES THE FOOTER TOO. The mock numbers it 1 / 7; the build
+          printed no footer at all, so the first sheet of a paid PDF was the one
+          sheet with no page number and no "Created by". */}
+      <footer className="flex shrink-0 items-baseline justify-between gap-4 border-t border-border/70 pt-1.5">
+        <div className="min-w-0 flex-1"><BriefFooter company={data.company} date={date} stamp={data.reading?.stamp ?? null} /></div>
+        <span className="shrink-0 font-mono text-[9.5px] text-muted-foreground">1 / {pages}</span>
+      </footer>
     </section>
   )
 }
 
 // ── overview ───────────────────────────────────────────────────────────────
 
-function StatTile({ value, label }: { value: string; label: string }) {
+/**
+ * A cover tile: the figure, what it is of, and — where the reading earned one
+ * — the claim about it (`sales.p1.stats`).
+ *
+ * THE BADGE ROW IS THE ARTBOARD'S THIRD LINE AND IT IS NOT A THIRD SENTENCE.
+ * The mock writes "▼ 3 pts · fading, 3rd month" by hand; here the magnitude
+ * and the band come from `MovementBadge` (which prints points only when the
+ * state is `moved`, D2) and the direction word does not come at all, because
+ * only `directionWord` may fill one and no reader on this artefact has its
+ * flag true (D5). Where the comparison was refused the FIGURE's own words say
+ * why and how many it had, which the mock's bare "too few to compare" does
+ * not.
+ *
+ * THE PAIR IS THE LEVEL. The number is code's figure and the label carries the
+ * "of N", so the two together are what rule (b) reads — a tile whose label
+ * names no population is a score, which this product does not print.
+ */
+function StatTile({ value, label, verdict, note }: {
+  value: string
+  label: string
+  verdict?: Verdict | null
+  note?: string | null
+}) {
+  const body = (
+    <>
+      <p data-copy="figure" className="font-mono text-[38px] font-medium leading-none tracking-[-0.02em] tabular-nums text-foreground">{value}</p>
+      <p className="mt-2 text-[12.5px] leading-[1.35] text-muted-foreground">{label}</p>
+    </>
+  )
+  const level = /\bof\s[\d]/.test(label)
   return (
     <div className={`${CARD} px-5 py-4`}>
-      <p className="font-mono text-[38px] font-medium leading-none tracking-[-0.02em] tabular-nums text-foreground">{value}</p>
-      <p className="mt-2 text-[12.5px] leading-[1.35] text-muted-foreground">{label}</p>
+      {level ? <div data-copy="level">{body}</div> : body}
+      {(verdict || note) && (
+        <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          {verdict ? <MovementBadge verdict={verdict} unit="pts" /> : null}
+          {note ? <span className="text-[11.5px] leading-[1.35] text-muted-foreground">{note}</span> : null}
+        </div>
+      )}
     </div>
   )
 }
@@ -217,13 +340,20 @@ function OverviewPage({ page, data }: { page: DocPage; data: DocumentSnapshotDat
   const notSureBlock = page.blocks.find((b) => b.field === 'not_sure')
   const notSure = notSureBlock?.items ?? []
   const tiles = overviewTiles(data)
+  // ONE SUMMARY PER DOCUMENT. The sales brief's artboard puts it on the cover,
+  // under the 58px title; the marketing brief's puts it here. The predicate is
+  // stated once, in `overview.ts`, and read by both, so neither sheet can come
+  // to draw it twice or drop it between them.
+  const onCover = coverCarriesSummary(data)
   return (
     <div className="grid h-full min-h-0 grid-cols-[7fr_5fr] gap-x-12">
       <div className="flex min-h-0 flex-col gap-6">
-        <div className="flex flex-col gap-3">
-          <Eyebrow>In short</Eyebrow>
-          {summary?.text && <BlockSlot block={summary} textClass="max-w-[66ch] text-[17px] leading-[1.55] text-foreground"><Paragraphs text={summary.text} figures={f} className="max-w-[66ch] text-[17px] leading-[1.55] text-foreground" /></BlockSlot>}
-        </div>
+        {!onCover && (
+          <div className="flex flex-col gap-3">
+            <Eyebrow>In short</Eyebrow>
+            {summary?.text && <BlockSlot block={summary} textClass="max-w-[66ch] text-[17px] leading-[1.55] text-foreground"><Paragraphs text={summary.text} figures={f} className="max-w-[66ch] text-[17px] leading-[1.55] text-foreground" /></BlockSlot>}
+          </div>
+        )}
         {findings.length > 0 && (
           <div className="flex flex-col gap-2.5">
             <Eyebrow>Findings in this brief</Eyebrow>
@@ -239,7 +369,12 @@ function OverviewPage({ page, data }: { page: DocPage; data: DocumentSnapshotDat
         )}
       </div>
       <div className="flex min-h-0 flex-col gap-4">
-        <div className="flex flex-col gap-3">{tiles.map((t, i) => <StatTile key={i} value={t.value} label={t.label} />)}</div>
+        {/* THE TILES BELONG TO WHICHEVER SHEET CARRIES THE SUMMARY. They are
+            the same three numbers either way, and a brief that printed them on
+            the cover AND here would be a document stating one measurement
+            twice, three sheets apart, with nothing saying they are the same
+            one. */}
+        {!onCover && <div className="flex flex-col gap-3">{tiles.map((t, i) => <StatTile key={i} value={t.value} label={t.label} verdict={t.verdict} note={t.note} />)}</div>}
         {notSure.length > 0 && (
           <div className="rounded-lg bg-inner px-5 py-4">
             <Eyebrow className="mb-2">Not settled this update</Eyebrow>
@@ -877,10 +1012,10 @@ export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: Docum
   // a reader of a PDF has no masthead to scroll back to, and a brief whose
   // numbers are a month's has to name the month on the page they are read on.
   const stamp = data.reading?.stamp ?? data.period
-  const chrome = (title: string) => ({ context: `${title} · ${stamp}`, footer: <DeckFooter company={data.company} date={date} /> })
+  const chrome = (title: string) => ({ context: `${title} · ${stamp}`, footer: <BriefFooter company={data.company} date={date} stamp={data.reading?.stamp ?? null} /> })
   return (
     <>
-      <DocumentCover data={data} pages={pages} />
+      <DocumentCover data={data} pages={pages} date={date} contents={slides.map((s, i) => ({ page: i + 2, title: s.title }))} />
       {slides.map((s, i) => {
         const section = sectionOfSlide(data, s.keys[0])
         if (section) {
