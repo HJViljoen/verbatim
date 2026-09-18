@@ -45,15 +45,41 @@ export function TokenProse({
    * page's one sentence at 17.5px — through the same token substitution as
    * body copy. A caller that wants the hero scale has no way to ask for it
    * from outside. The app and print arms take `className`, as they already do.
+   *
+   * PASSING IT ALSO SAYS "THIS IS THE HERO", AND THE FIGURES CHANGE FACE WITH
+   * IT — see the comment below.
    */
   size?: number
 }) {
   const parts = substituteFigures(body, proseFigures(figures))
   if (parts.length === 0) return null
+  // A HERO FIGURE IS SANS BOLD, NOT MONO (block D wave 2, E-weekly's fix
+  // pass). Every glyph in IBM Plex Mono takes one advance, so at 17.5px the
+  // decimal point and the thousands comma each open a full character space:
+  // the weekly email's one sentence rendered as "running at 9 . 4% of 1 , 388
+  // videos read for the category, against 7 . 4%". The artboard bolds its own
+  // hero figure in sans for exactly this reason. Body copy at 13.5px keeps
+  // mono — a tabular column of figures is what mono is for, and the spacing is
+  // not visible at that size — so the rule is tied to the hero condition and
+  // to nothing else: pass `size`, get the hero treatment.
+  const hero = size != null
   const children: ReactNode[] = parts.map((p, i) =>
     'text' in p
       ? <span key={i}>{p.text}</span>
-      : <span key={i} data-copy="figure" style={mode === 'email' ? { fontFamily: FONT.mono, color: EMAIL.ink } : undefined} className={mode === 'email' ? undefined : 'font-mono tabular-nums'}>{p.figure}</span>,
+      : (
+          <span
+            key={i}
+            data-copy="figure"
+            style={mode === 'email'
+              ? hero
+                ? { fontFamily: FONT.sans, fontWeight: 600, color: EMAIL.ink }
+                : { fontFamily: FONT.mono, color: EMAIL.ink }
+              : undefined}
+            className={mode === 'email' ? undefined : hero ? 'font-semibold tabular-nums' : 'font-mono tabular-nums'}
+          >
+            {p.figure}
+          </span>
+        ),
   )
   if (mode === 'email') {
     return (

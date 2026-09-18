@@ -91,6 +91,21 @@ describe('WR1 · the week in one sentence', () => {
     expect(text).toContain('at this point in August')
   })
 
+  // IBM PLEX MONO GIVES EVERY GLYPH ONE ADVANCE, so at the hero's 17.5px the
+  // decimal point and the thousands comma each open a full character space and
+  // the page's one sentence reads "9 . 4% of 1 , 388". The artboard bolds its
+  // hero figure in sans for exactly this reason; body copy at 13.5px keeps
+  // mono.
+  it('sets the hero sentence’s figures in sans, not mono', () => {
+    const email = render(block.render(quietFixture(), 'email', ctx))
+    const at = email.indexOf('9.4%')
+    expect(at).toBeGreaterThan(-1)
+    expect(email.slice(email.lastIndexOf('<span', at), at)).toContain('IBM Plex Sans')
+    const app = render(block.render(quietFixture(), 'app', ctx))
+    const appAt = app.indexOf('9.4%')
+    expect(app.slice(app.lastIndexOf('<span', appAt), appAt)).not.toContain('font-mono')
+  })
+
   it('prints "Nothing unusual this week." in full', () => {
     expect(renderText(block.render(quietFixture(), 'app', ctx))).toContain(NOTHING_UNUSUAL)
   })
