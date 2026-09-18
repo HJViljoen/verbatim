@@ -228,7 +228,7 @@ export async function loadQuarterlyCard(scope: Scope): Promise<QuarterlyCard | n
     loadWindowReading(admin, clientId, { from: prior.from, to: nextDay(prior.to) }).catch(guardWindow),
     readSubjectWindow(admin, clientId, { from: quarter.from, to: nextDay(quarter.to) }).catch(guardSubjects),
     readSubjectWindow(admin, clientId, { from: prior.from, to: nextDay(prior.to) }).catch(guardSubjects),
-    readEra(admin, clientId, quarter),
+    readEra(admin, clientId, quarter, readingAt),
   ])
 
   return buildQuarterlyCard({
@@ -268,11 +268,21 @@ const nextDay = (day: string): string => {
  * card that counted them a second way would put a different number beside the
  * same gate sentence the artefact prints, on a page a reader reaches both
  * from.
+ *
+ * AND THE MONTH IN HAND IS THE READING'S, NOT THE QUARTER'S. `quarter` is the
+ * PREVIOUS quarter — the one under review — so bounding the series at
+ * `quarter.to` stopped the count at June while the artefact counted through
+ * September, and the card printed "you have 4" beside the same gate sentence
+ * the artefact printed "you have 7" under, one click away. Worse, it could
+ * hold every row at `baseline_forming` on a workspace whose artefact draws
+ * banded verdicts. The series therefore runs to the month the reading is
+ * taken in, which is Overview's `month` (`lib/pages/overview.ts`).
  */
 async function readEra(
   admin: SupabaseClient,
   clientId: string,
   quarter: Quarter,
+  readingAt: string,
 ): Promise<{ readings: number; monthsInQuarter: { month: string; videos: number | null; backRead: boolean }[] }> {
   const empty = { readings: 0, monthsInQuarter: [] as { month: string; videos: number | null; backRead: boolean }[] }
   try {
@@ -285,12 +295,27 @@ async function readEra(
     const firstRun = (runRes.data?.[0] as { started_at?: string } | undefined)?.started_at ?? null
     if (!firstRun) return empty
     const firstRunMonth = monthStartOf(firstRun)
-    const set = await loadMonthSeries(admin, clientId, { from: firstRunMonth, to: quarter.to })
+    const set = await loadMonthSeries(admin, clientId, { from: firstRunMonth, to: eraTo(firstRunMonth, readingAt) })
     return { readings: countReadings(set.denominators, firstRunMonth), monthsInQuarter: quarterMonths(set.denominators, quarter) }
   } catch (error) {
     if (!isMissingMonthlyReading(error)) console.error(`[reports-card] era: ${(error as { message?: string })?.message ?? String(error)}`)
     return empty
   }
+}
+
+/**
+ * The last month the era's series is read to: the month the card is read in.
+ *
+ * NOT THE QUARTER'S LAST MONTH — that is the bug this replaced: the quarter
+ * under review is the PREVIOUS one, so its `to` stops the count up to three
+ * months short of the number the artefact prints from the same rule.
+ *
+ * NEVER BACKWARDS either: a first update inside the month the card is read in
+ * gives `firstRunMonth === to`, which is one month and not none.
+ */
+export function eraTo(firstRunMonth: string, readingAt: string): string {
+  const readingMonth = monthStartOf(readingAt)
+  return readingMonth >= firstRunMonth ? readingMonth : firstRunMonth
 }
 
 /** Overview's rule, verbatim: months of the gathered era carrying a

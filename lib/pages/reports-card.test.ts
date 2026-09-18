@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildQuarterlyCard, countReadings, monthsBetween, quarterCaveat, quarterMonths, type QuarterlyCardInput } from './reports-card'
+import { buildQuarterlyCard, countReadings, eraTo, monthsBetween, quarterCaveat, quarterMonths, type QuarterlyCardInput } from './reports-card'
 import { QUARTER_UNLOCKS_AT } from '../reading/bands'
 import type { DenominatorPoint } from '../reading/series'
 import type { WindowReading } from '../reading/read'
@@ -144,6 +144,21 @@ describe('the gathered era', () => {
 
   it('counts only the gathered era', () => {
     expect(countReadings([point('2026-03-01', 'back_read'), point('2026-07-01', 'live')], '2026-07-01')).toBe(1)
+  })
+
+  it('reads the era to the month in hand, not to the end of the quarter under review', () => {
+    // The quarter under review is the PREVIOUS one, so its `to` is up to three
+    // months behind the reading. Bounding there put "you have 4" on the card
+    // and "you have 7" on the artefact the card links to.
+    expect(eraTo('2026-01-01', '2026-09-18T09:00:00.000Z')).toBe('2026-09-01')
+    const months = ['2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01'].map((m) => point(m, 'live'))
+    expect(countReadings(months, '2026-06-01')).toBe(4)
+  })
+
+  it('never reads the era backwards', () => {
+    // A first update inside the month the card is read in is one month, not none.
+    expect(eraTo('2026-09-01', '2026-09-18T09:00:00.000Z')).toBe('2026-09-01')
+    expect(eraTo('2026-10-01', '2026-09-18T09:00:00.000Z')).toBe('2026-10-01')
   })
 
   it('takes back-read off the row, not off a date', () => {
