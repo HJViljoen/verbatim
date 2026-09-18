@@ -15,6 +15,10 @@ import { RecordSection } from './frame'
  * column. The build drew a `<ul>` of stacked list items with an 11.5px
  * hover-underline text link — the one place the build was meaningfully quieter
  * than the design intends, on the control that is the page's whole argument.
+ * The button is now the artboard's (`app/dashboard/settings/record/
+ * appeal-control.tsx`): the first port drew this table and left that link
+ * exactly as it was, and the package's own side-by-side did not show it because
+ * the shot route supplied a stand-in (design review finding 2).
  *
  * THE NOTE UNDER THE TABLE IS NEW AND IT IS TRUE (`record.rejects.note`).
  * "Kept rejections train the gate; they do not change a month already read."
@@ -27,7 +31,8 @@ import { RecordSection } from './frame'
  * THE APPEAL CONTROL IS PASSED IN. It is a client component with an action
  * behind it; this file is rendered by the block test tier, which renders once
  * and statically. So the page supplies the control per row and this draws the
- * column it sits in.
+ * column it sits in — and what it supplies is `AppealControl`, which is pure,
+ * so the test tier renders the control a reader gets rather than a stand-in.
  */
 
 /**

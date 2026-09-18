@@ -2,6 +2,8 @@
 
 import { useActionState } from 'react'
 import { fileGateAppeal, type AppealState } from './actions'
+import { AppealControl } from './appeal-control'
+import { APPEAL_FILED } from './appeal-copy'
 
 // "This should have been kept" — one button per discarded candidate.
 //
@@ -9,6 +11,12 @@ import { fileGateAppeal, type AppealState } from './actions'
 // gate_appeals is unique on the verdict's own key, so a second click reads
 // "Already filed". The row that has one says so rather than offering the
 // button again.
+//
+// THE MARKUP IS `AppealControl` AND THE COPY IS `appeal-copy.ts`. This file
+// holds the action and the state and nothing else, so the render tier can
+// assert the control a reader actually gets rather than a stand-in (design
+// review finding 2, code review finding 7) — and so one state cannot be
+// described by two different sentences (finding 10).
 
 const initial: AppealState = { ok: false, message: '' }
 
@@ -18,22 +26,15 @@ export function AppealButton({
   const [state, action, pending] = useActionState(fileGateAppeal, initial)
 
   if (filed || state.ok) {
-    return <span className="text-[11.5px] text-muted-foreground">{state.message || 'Filed — we will look at this one.'}</span>
+    return <AppealControl filed={state.message || APPEAL_FILED} />
   }
 
   return (
-    <form action={action} className="flex items-center gap-2">
+    <form action={action}>
       <input type="hidden" name="runId" value={runId ?? ''} />
       <input type="hidden" name="platform" value={platform} />
       <input type="hidden" name="videoId" value={videoId} />
-      <button
-        type="submit"
-        disabled={pending}
-        className="shrink-0 rounded-[3px] text-[11.5px] font-medium text-secondary-foreground transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
-      >
-        {pending ? 'Filing…' : 'This should have been kept'}
-      </button>
-      {state.message && !state.ok && <span className="text-[11.5px] text-negative">{state.message}</span>}
+      <AppealControl pending={pending} error={state.message || null} />
     </form>
   )
 }

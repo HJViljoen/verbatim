@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { GATE_APPEALS_TABLE, isMissingGateAppeals } from '@/lib/settings/record-load'
 import { createAdminClient } from '@/lib/supabase-admin'
+import { APPEAL_ALREADY, APPEAL_FILED } from './appeal-copy'
 
 // "This should have been kept" (design ST5, decision V).
 //
@@ -97,12 +98,15 @@ export async function fileGateAppeal(_prev: AppealState, formData: FormData): Pr
     // One appeal per verdict: a second click is the same statement, not a
     // second one, and saying "already filed" is the truth.
     if (error.code === '23505') {
-      return { ok: true, message: 'Already filed — we have this one.' }
+      return { ok: true, message: APPEAL_ALREADY }
     }
     console.error(`[settings] gate appeal not filed for ${clientId}: ${error.code ?? '?'} ${error.message}`)
     return { ok: false, message: 'We could not file that just now. Try again, and tell us if it keeps happening.' }
   }
 
   revalidatePath('/dashboard/settings/record')
-  return { ok: true, message: 'Filed. We will look at this one by hand.' }
+  // ONE STATE, ONE SENTENCE (code review finding 10): the control printed its
+  // own "Filed — we will look at this one." beside this one, and a reader saw
+  // whichever the render happened to take. Both read `appeal-copy.ts` now.
+  return { ok: true, message: APPEAL_FILED }
 }

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import { AppealControl } from '@/app/dashboard/settings/record/appeal-control'
+import { APPEAL_ASK, APPEAL_FILED } from '@/app/dashboard/settings/record/appeal-copy'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 
@@ -52,7 +54,12 @@ const rejects = (
     byTerm={keptByTermFixture()}
     byPlatform={keptByPlatformFixture()}
     basis={gateBasisFixture()}
-    control={(r) => <span>{r.appealed ? 'Filed — we will look at this one.' : 'This should have been kept'}</span>}
+    // THE CONTROL A READER ACTUALLY GETS. `AppealButton` holds `useActionState`
+    // and a static render cannot drive it, so the markup and the copy live in
+    // `AppealControl` / `appeal-copy.ts` and this renders those — the stand-in
+    // `<span>` that used to sit here is why the artboard's 44px button stayed
+    // unported and unnoticed (design review finding 2, code review finding 7).
+    control={(r) => <AppealControl filed={r.appealed ? APPEAL_FILED : null} />}
   />
 )
 
@@ -199,8 +206,18 @@ describe('the reject log', () => {
     expect(text).toContain('The rule that fired')
     expect(text).toContain('Sealand sardines recipe')
     expect(text).toContain('homonym — food')
-    expect(text).toContain('This should have been kept')
-    expect(text).toContain('Filed — we will look at this one.')
+    expect(text).toContain(APPEAL_ASK)
+    expect(text).toContain(APPEAL_FILED)
+  })
+
+  it('draws the artboard’s 44px button, not a hover-underline text link', () => {
+    const markup = render(rejects)
+    // Two rows still offer the control; the third has been filed and says so.
+    expect(markup.match(/h-\[44px\]/g)).toHaveLength(2)
+    expect(markup).toContain('ring-1 ring-border')
+    expect(markup).not.toContain('hover:underline')
+    // One state, one sentence: the action and the control read the same string.
+    expect(renderText(rejects)).not.toContain('Filed — we will look at this one.')
   })
 
   it('prints the note about what an appeal does and does not do', () => {
