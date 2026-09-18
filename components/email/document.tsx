@@ -1,4 +1,4 @@
-/* eslint-disable @next/next/no-head-element, @next/next/no-page-custom-font -- an email document, not a page */
+/* eslint-disable @next/next/no-head-element, @next/next/no-page-custom-font, @next/next/no-img-element -- an email document, not a page */
 import type { ReactNode } from 'react'
 import { pageModule } from '../pages/registry'
 import type { EmailContext } from '../../lib/renderables/types'
@@ -83,6 +83,10 @@ export function DigestEmail({ data, shareUrl, appUrl, attached, ctx, preheader }
                   <tbody>
                     <tr>
                       <td style={{ padding: '24px 28px 4px' }}>
+                        <div style={{ fontFamily: FONT.sans, fontSize: 15, fontWeight: 600, letterSpacing: '-.02em', color: EMAIL.ink, marginBottom: 10 }}>
+                          <img src={`${appUrl}/brand/verbatim-mark.png`} width="16" height="16" alt="" style={{ verticalAlign: '-2px', marginRight: 7 }} />
+                          Verbatim
+                        </div>
                         <div style={text.eyebrow}>{data.company} · consumer intelligence</div>
                         <div style={{ fontFamily: FONT.serif, fontSize: 22, fontWeight: 500, lineHeight: '1.25', color: EMAIL.ink, marginTop: 8 }}>{data.title}</div>
                         <div style={{ ...text.mono, color: EMAIL.muted, fontSize: 12, marginTop: 6 }}>{data.period}</div>

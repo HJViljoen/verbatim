@@ -12,6 +12,7 @@ import { createAdminClient } from '@/lib/supabase-admin'
 import { RivalRename } from './rival-rename'
 import { SearchTermsForm, type SearchTermsConfig } from './search-terms-form'
 import { SettingsForm, type TrackingConfig } from './settings-form'
+import { canSeeStudio } from '@/lib/studio-visibility'
 import { TermPerformance } from './term-performance'
 
 // Settings › Tracking (Phase 1 WP16, design ST2 and ST4) — everything about
@@ -32,7 +33,12 @@ import { TermPerformance } from './term-performance'
 // says so rather than letting a reader assume they can.
 
 export default async function SettingsTrackingPage() {
-  const { supabase, clientId, role } = await getSessionContext()
+  const session = await getSessionContext()
+  const { supabase, clientId, role } = session
+  // Whether this session is shown a door into the Studio (main, 2026-09-17,
+  // lib/studio-visibility.ts). The cadence card's "who receives what" line is
+  // one of those doors, so it asks here and the form takes the answer.
+  const showStudio = canSeeStudio(session)
   const canEdit = canManageTenant(role)
   // The one read on this page that a tenant session may never make: the
   // community a verdict was about is `gate_verdicts.account_name`, which M8
@@ -222,7 +228,7 @@ export default async function SettingsTrackingPage() {
           </SettingsCard>
 
           {/* ---- Cadence --------------------------------------------------- */}
-          <SettingsForm cfg={c} canEdit={canEdit} />
+          <SettingsForm cfg={c} canEdit={canEdit} showStudio={showStudio} />
 
         </div>
       )}

@@ -7,6 +7,14 @@
 // (Sent · Built) · Settings/Team copy · no export chrome on any dashboard
 // page · no em dash in any of that copy. Creates real rows for the demo
 // tenant, which it deletes at the end unless --keep.
+//
+// The Studio is hidden from tenant users since 2026-09-17 (owner's call, see
+// lib/studio-visibility.ts): the demo account is not a platform operator, so
+// every check below asserts the DOOR is gone — no sidebar item, no CTA on
+// Reports, no "in the Studio" copy on Settings or Team — while the Studio
+// itself still answers by direct URL, which is how the rest of the walk gets
+// in. Set OPS_EMAIL / OPS_PASSWORD to a platform_admins account and the run
+// starts with the operator's side of the same gate: the sidebar item is there.
 
 import { mkdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
@@ -59,16 +67,38 @@ async function main() {
       // The demo tenant is named "Össur — Demo", and its seeded pre-Stage-3 subjects carry the old
       // dash: both are data, not our copy.
       const noDash = (label: string, raw: string) => { const t = raw.replace(/Össur — Demo/gi, '').replace(/ÖSSUR — DEMO/g, '').replace(/^\s*— .*$/gm, ''); check(`no em dash: ${label}`, !t.includes('—'), t.includes('—') ? t.split('\n').find((l) => l.includes('—'))?.slice(0, 80) : undefined) }
-      await goto('/login')
-      await page.type('input[type="email"]', email)
-      await page.type('input[type="password"]', password)
-      await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle0' }), page.keyboard.press('Enter')])
+      const signIn = async (addr: string, pw: string) => {
+        await goto('/login')
+        await page.type('input[type="email"]', addr)
+        await page.type('input[type="password"]', pw)
+        await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle0' }), page.keyboard.press('Enter')])
+      }
 
-      // 1. The Studio: reports left, the picked one right
+      // 0. The operator's side of the Studio gate, when an operator login is
+      //    on hand. Optional: the rest of the walk needs the demo tenant.
+      const opsEmail = process.env.OPS_EMAIL
+      const opsPassword = process.env.OPS_PASSWORD
+      if (opsEmail && opsPassword) {
+        await signIn(opsEmail, opsPassword)
+        await goto('/dashboard/reports')
+        check('operator: sidebar has Studio', await page.$('a[href="/dashboard/studio"]') != null)
+        check('operator: Reports offers Open the Studio', /open the studio/i.test(await text(page)))
+        // Sign out by dropping the session cookies: logging out is a server
+        // action on a button, and this script does not need to click it.
+        const jar = await page.cookies()
+        if (jar.length) await page.deleteCookie(...jar)
+      } else {
+        console.log('- operator checks skipped (set OPS_EMAIL and OPS_PASSWORD)')
+      }
+
+      await signIn(email, password)
+
+      // 1. The Studio: reports left, the picked one right. Reached by URL —
+      //    a tenant has no link to it any more, and must not have.
       await goto('/dashboard/studio')
       await shot('1-studio')
       const t1 = await text(page)
-      check('sidebar has Studio', await page.$('a[href="/dashboard/studio"]') != null)
+      check('tenant: no sidebar Studio item', await page.$('a[href="/dashboard/studio"]') == null)
       check('Weekly digest listed with Edit and sending on the right', t1.includes('Weekly digest') && t1.includes('Edit') && /Sending/i.test(t1))
       check('no rail of groups on the Studio', !t1.includes('Who gets what') && !t1.includes('All templates'))
       noDash('studio', t1)
@@ -153,18 +183,25 @@ async function main() {
       await goto('/dashboard/reports')
       const t6 = await text(page)
       check('Reports shows Sent and Built, no Exports', t6.includes('Sent') && t6.includes('Built') && !t6.includes('Everything exported'))
+      check('tenant: Reports has no way into the Studio', !/studio/i.test(t6) && await page.$('a[href^="/dashboard/studio"]') == null)
       noDash('reports', t6)
       await shot('6-reports')
 
       // 6. Settings + Team copy
       await goto('/dashboard/settings')
       const t7 = await text(page)
-      check('Settings has no address field and points at the Studio', !(await page.$('input[name="report_emails"]')) && t7.includes('Studio'))
+      check('Settings has no address field and says who manages the lists', !(await page.$('input[name="report_emails"]')) && /managed by verbatim/i.test(t7))
+      check('tenant: Settings never names the Studio', !/studio/i.test(t7))
       noDash('settings', t7)
       await goto('/dashboard/team')
       const t8 = await text(page)
       check('Team lists addresses per report', t8.includes('Weekly digest') && t8.includes('Who gets the update'))
+      check('tenant: Team never names the Studio', !/studio/i.test(t8))
       noDash('team', t8)
+      await goto('/dashboard/settings/connections')
+      const t9 = await text(page)
+      check('tenant: Connections has no Edit link into the Studio', !/studio/i.test(t9) && await page.$('a[href^="/dashboard/studio"]') == null)
+      noDash('connections', t9)
 
       // 7. No export chrome on the dashboard pages
       for (const p of ['/dashboard', '/dashboard/voice', '/dashboard/market-intel', '/dashboard/competitive-intel', '/dashboard/videos']) {

@@ -1,6 +1,7 @@
 import { getSessionContext } from "@/lib/auth"
 import { listWorkspaces } from "@/lib/workspaces"
 import { WorkspaceSwitcher } from "@/components/workspace-switcher"
+import { VerbatimMark } from "@/components/brand/mark"
 
 /**
  * The wordmark as it has always been — and, for everyone who is not a platform
@@ -9,7 +10,8 @@ import { WorkspaceSwitcher } from "@/components/workspace-switcher"
  */
 export function SidebarWordmark() {
   return (
-    <div className="flex items-baseline gap-2 px-4 pt-5 pb-1">
+    <div className="flex items-center gap-2 px-4 pt-5 pb-1">
+      <VerbatimMark size={20} className="shrink-0 text-primary" />
       <span className="text-[17px] font-bold tracking-[-0.02em] text-foreground">Verbatim</span>
     </div>
   )

@@ -333,7 +333,7 @@ export default async function StudioPage({ searchParams }: { searchParams?: Prom
           )}
         </section>
       </div>
-      {viewer && <ReportViewer snapshot={viewer} closeHref={closeViewer} />}
+      {viewer && <ReportViewer snapshot={viewer} closeHref={closeViewer} showStudio />}
     </PageFrame>
   )
 }

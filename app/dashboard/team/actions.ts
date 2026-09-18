@@ -75,11 +75,23 @@ export async function inviteMember(_prev: ActionState, formData: FormData): Prom
   // invite say "a Verbatim workspace" (T0-10). Resend is live, so this sends.
   const { data: client } = await supabase
     .from('clients').select('company_name').eq('id', clientId).maybeSingle()
+  // The inviter's NAME, on the service role and keyed by user id.
+  //
+  // Not the session client, and not `clientId`. A platform admin inviting from
+  // inside someone else's workspace is still the real signed-in person
+  // (lib/auth.ts keeps userId and email theirs), but their `users` row lives in
+  // their OWN tenant — and the only policy on `users` is
+  // `client_id = get_my_client_id()`, which resolves to their home tenant. So a
+  // read scoped to the VIEWED tenant finds nothing and the invite silently
+  // falls back to an address. The service role has no such coupling.
+  const { data: inviter } = await createAdminClient()
+    .from('users').select('full_name').eq('id', userId).maybeSingle()
   const { sent } = await sendInviteEmail({
     to: email,
     inviteUrl,
     companyName: (client?.company_name as string | undefined) ?? '',
     invitedByEmail: inviterEmail,
+    invitedByName: (inviter?.full_name as string | undefined) ?? undefined,
   })
 
   revalidatePath('/dashboard/team')

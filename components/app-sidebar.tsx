@@ -5,10 +5,12 @@ import {
   SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { LayoutDashboard, Target, MessageCircle, Swords, Play, FileText, Layers, CalendarDays, Sparkles, Settings, LogOut } from "lucide-react"
+import { LayoutDashboard, Target, MessageCircle, Swords, Play, FileText, Layers, CalendarDays, Sparkles, Settings, LogOut, LayoutTemplate } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { signOut } from "@/app/login/actions"
+import { VerbatimMark } from "@/components/brand/mark"
+import { STUDIO_HREF } from "@/lib/studio-visibility"
 import { OLD_PAGES, oldPageFor, oldPagesGroupLabel, surfaceForPath, surfacesIn, type NavKey } from "@/lib/nav"
 
 // The nine reading surfaces, in the mock's order, from lib/nav.ts — the one
@@ -40,6 +42,13 @@ const OLD_ICON: Record<string, typeof LayoutDashboard> = {
   "/dashboard/videos": Play,
 }
 
+// The Studio is not one of the nine and is not in any group list (2026-09-17,
+// from main). It arrives through the `studio` slot instead, for the reason the
+// operator group does: whether this session may see it depends on the session,
+// and resolving that is async. See lib/studio-visibility.ts and
+// components/studio-nav-loader.tsx.
+const STUDIO_ITEM = { href: STUDIO_HREF, label: "Studio", icon: LayoutTemplate }
+
 type NavItem = { href: string; label: string; icon: typeof LayoutDashboard }
 
 // Active = weight + a 2px green bar on the left (rule 1: green marks the active
@@ -52,7 +61,41 @@ const ITEM_CLASS =
   "data-[active=true]:before:absolute data-[active=true]:before:-left-2 data-[active=true]:before:top-2 data-[active=true]:before:bottom-2 " +
   "data-[active=true]:before:w-0.5 data-[active=true]:before:rounded-full data-[active=true]:before:bg-primary data-[active=true]:before:content-['']"
 
-export function AppSidebar({ header, ops }: { header?: React.ReactNode; ops?: React.ReactNode }) {
+// One row of the navigation, module-level so the streamed Studio item below
+// renders exactly the same markup the static groups do. `active` is a PROP
+// rather than a pathname comparison made in here: in Phase 1 the one table
+// (lib/nav.ts `surfaceForPath`) decides which row is marked, and a row that
+// worked it out for itself would disagree with the table on exactly the
+// addresses `UNDER` exists to place. setOpenMobile closes the mobile drawer
+// when a row is tapped — otherwise it stays open over the new page until the
+// backdrop is tapped.
+function NavRow({ item, active }: { item: NavItem; active: boolean }) {
+  const { setOpenMobile } = useSidebar()
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton asChild isActive={active} className={ITEM_CLASS}>
+        <Link href={item.href} onClick={() => setOpenMobile(false)}>
+          <item.icon className="size-4 text-muted-foreground group-data-[active=true]/menu-button:text-foreground" aria-hidden />
+          <span>{item.label}</span>
+        </Link>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  )
+}
+
+/** The Studio's row, rendered by `StudioNavLoader` only for a session that may
+ *  see it. A client component with no props, so a server component can render
+ *  it across the boundary.
+ *
+ *  Never marked active, and that is the table's answer rather than an
+ *  oversight: `lib/nav.ts` `UNDER` maps `/dashboard/studio` onto Reports, so a
+ *  reader inside the Studio is told they are in Reports and exactly one row
+ *  lights — which is the rule `lib/nav.test.ts` pins. */
+export function StudioNavItem() {
+  return <NavRow item={STUDIO_ITEM} active={false} />
+}
+
+export function AppSidebar({ header, ops, studio }: { header?: React.ReactNode; ops?: React.ReactNode; studio?: React.ReactNode }) {
   const pathname = usePathname()
   // Ask is one of the nine, unconditionally (Phase 1 WP21, decision B). It
   // rode AGENT_ENABLED while sending was platform-admin only, on the argument
@@ -67,30 +110,20 @@ export function AppSidebar({ header, ops }: { header?: React.ReactNode; ops?: Re
   const oldPages: NavItem[] = OLD_PAGES.map((p) => ({ href: p.href, label: p.label, icon: OLD_ICON[p.href] ?? Play }))
   const parked = oldPageFor(pathname)
 
-  // Close the mobile drawer when a nav item is tapped — otherwise it stays
-  // open over the new page until the backdrop is tapped.
-  const { setOpenMobile } = useSidebar()
-
   async function handleLogout() {
     await signOut()
   }
 
-  const renderGroup = (label: string, items: NavItem[], isActive: (href: string) => boolean) => (
+  const renderGroup = (label: string, items: NavItem[], isActive: (href: string) => boolean, lead?: React.ReactNode) => (
     <SidebarGroup className="px-1.5">
       <SidebarGroupLabel className="h-7 px-2.5 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground/80">
         {label}
       </SidebarGroupLabel>
       <SidebarGroupContent>
         <SidebarMenu className="gap-0.5">
+          {lead}
           {items.map((navItem) => (
-            <SidebarMenuItem key={navItem.href}>
-              <SidebarMenuButton asChild isActive={isActive(navItem.href)} className={ITEM_CLASS}>
-                <Link href={navItem.href} onClick={() => setOpenMobile(false)}>
-                  <navItem.icon className="size-4 text-muted-foreground group-data-[active=true]/menu-button:text-foreground" aria-hidden />
-                  <span>{navItem.label}</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
+            <NavRow key={navItem.href} item={navItem} active={isActive(navItem.href)} />
           ))}
         </SidebarMenu>
       </SidebarGroupContent>
@@ -106,7 +139,8 @@ export function AppSidebar({ header, ops }: { header?: React.ReactNode; ops?: Re
           this is the wordmark, unchanged. */}
       <SidebarHeader>
         {header ?? (
-          <div className="flex items-baseline gap-2 px-4 pt-5 pb-1">
+          <div className="flex items-center gap-2 px-4 pt-5 pb-1">
+            <VerbatimMark size={20} className="shrink-0 text-primary" />
             <span className="text-[17px] font-bold tracking-[-0.02em] text-foreground">Verbatim</span>
           </div>
         )}
@@ -114,7 +148,9 @@ export function AppSidebar({ header, ops }: { header?: React.ReactNode; ops?: Re
 
       <SidebarContent className="gap-1 pt-1">
         {renderGroup("Intelligence", intelligence, (href) => active?.href === href)}
-        {renderGroup("Account", account, (href) => active?.href === href)}
+        {/* The Studio leads the Account group when this session may see it,
+            and is absent — not hidden, never rendered — when it may not. */}
+        {renderGroup("Account", account, (href) => active?.href === href, studio)}
         {/* The pages Phase 1 replaces, in their own group with the date on the
             label (decision C). They are listed rather than hidden because the
             reading on them is the reading people have been using for months,

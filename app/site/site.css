@@ -37,6 +37,11 @@
   .nav.dark { position: absolute; inset: 0 0 auto 0; background: var(--room); color: #EEF3EF; border-bottom: 1px solid rgba(159,195,178,.22); }
   .nav.light { position: sticky; top: 0; background: var(--paper); color: var(--ink); border-bottom: 1px solid #EBEDF0; }
   .wordmark { display: flex; align-items: baseline; gap: 10px; }
+  /* The ditto mark leads the lockup. The two words keep their shared baseline,
+     so the mark centres itself against them rather than joining it. Mint on the
+     dark bar, green on paper; never any other colour. */
+  .wordmark .mark { flex: none; align-self: center; color: var(--green-dark); }
+  .nav.light .wordmark .mark, .site-footer .wordmark .mark { color: var(--green); }
   .wordmark b { font-weight: 700; font-size: 22px; letter-spacing: -0.02em; }
   .wordmark span { font-size: 13px; opacity: .6; }
   .nav.light .wordmark span { opacity: 1; color: var(--muted); }

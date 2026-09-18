@@ -7,6 +7,7 @@ import { PERIODS, DAYS } from './constants'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { SettingsCard } from '@/components/settings-frame'
+import { STUDIO_HREF } from '@/lib/studio-visibility'
 
 // Facts vs knobs (Redesign Spec §9): clients edit the facts only they know —
 // competitor names, the terms we search for (search-terms-form.tsx, 2026-09-11)
@@ -42,7 +43,7 @@ function Labeled({ label, hint, children }: { label: string; hint?: string; chil
   )
 }
 
-export function SettingsForm({ cfg, canEdit }: { cfg: TrackingConfig; canEdit: boolean }) {
+export function SettingsForm({ cfg, canEdit, showStudio = false }: { cfg: TrackingConfig; canEdit: boolean; showStudio?: boolean }) {
   const [state, formAction, pending] = useActionState(updateTrackingConfig, initialState)
 
   return (
@@ -78,12 +79,21 @@ export function SettingsForm({ cfg, canEdit }: { cfg: TrackingConfig; canEdit: b
                   {DAYS.map((d) => <option key={d} value={d}>{cap(d)}</option>)}
                 </select>
               </Labeled>
+              {/* A client is not sent to a page they cannot find
+                  (lib/studio-visibility.ts, 2026-09-17). The line still has to
+                  answer "so who gets it?", so the other half says who to ask. */}
               <p className="text-[11px] text-muted-foreground">
-                Who receives what is set per schedule in{' '}
-                <Link href="/dashboard/studio" className="underline underline-offset-2">
-                  the Studio
-                </Link>
-                .
+                {showStudio ? (
+                  <>
+                    Who receives what is set per schedule in{' '}
+                    <Link href={STUDIO_HREF} className="underline underline-offset-2">
+                      the Studio
+                    </Link>
+                    .
+                  </>
+                ) : (
+                  <>Who receives each update is managed by Verbatim for now. Ask us to change a list.</>
+                )}
               </p>
             </div>
           </SettingsCard>
