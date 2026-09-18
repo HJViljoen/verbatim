@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { CONFIG_CHANGES_TABLE, isMissingConfigLog, type ConfigChange } from '../config-log'
 import { GATE_APPEALS_TABLE, isMissingGateAppeals, type GateAccess } from '../gate-record'
+import { REDDIT_COMMENT_DEPTH_CAP } from '../config'
 import { GATE_DEFAULT_REASONS } from '../gather/gate-verdicts'
 import { fmtInt, fmtPct, fullDate, shortDate } from '../format'
 import { selectAll } from '../supabase-admin'
@@ -1072,4 +1073,231 @@ export function recordLines(input: RecordInputs): string[] {
   lines.push(`Reading as at ${fullDate(input.readingAt)}.`)
   lines.push(input.frozenAt == null ? 'No month in this window has been frozen yet — they are still filling.' : `The newest month here was frozen ${fullDate(input.frozenAt)}.`)
   return lines
+}
+
+// ---- The record as ROWS (block E wave 2, `record.coverage.rows`) -------------
+//
+// `recordLines` above is the record as SENTENCES, and it is what OV6, the
+// monthly report's section 8 and the quarterly method page print — one fact per
+// line, each with its basis, in prose. The artboard draws the same record as a
+// two-column grid of `LABEL │ figure — basis` rows, and the difference is not
+// decoration: a reader scanning fifteen sentences for "how many videos" has to
+// READ, where a reader scanning fifteen labelled figures can LOOK. The gap
+// mapping calls this the largest single gap on the page.
+//
+// SAME FACTS, SAME BASES, SAME REFUSALS. Nothing here computes a figure
+// `recordLines` does not already state, and every row that carries a basis
+// carries the same one in the same words. Where the two differ is only that a
+// row can put the figure in one node and its basis in another, which is what
+// lets the figure be set in mono and the basis be set quietly beside it.
+//
+// AND FOUR OF THE ARTBOARD'S ROWS ARE NOT WHAT THEY LOOK LIKE. They are kept in
+// the artboard's POSITION with the honest figure in their place:
+//
+//   · "Comments read 11,840 — 2,960 per update" divides a COMMENT-DATED
+//     numerator by a RUN-DATED divisor. The quotient is neither, and it moves
+//     when a run straddles a month boundary. The row prints the count with its
+//     clock named, and no per-update ratio.
+//   · "Themes per video 2.4 — August 2.3" keys an instrument figure measured on
+//     ONE RUN by a calendar month (AGENTS.md: a run's date is a period key for
+//     nothing outside `run_summary`). The row names the update instead.
+//   · "Platform mix TikTok 38% · YouTube 29% …" needs one denominator, and
+//     audience denominators do not add — the same reason a window read is its
+//     own table and not a sum of month rows. `platformMixLine`'s COUNTS are the
+//     honest form and every platform is named.
+//   · "Comparisons refused 2 — the Poler rows" is a property of the page that
+//     DREW the comparisons, not of the corpus (`RecordInputs.comparisonsRefused`
+//     is the caller's own count). The record page draws none, so the row says
+//     where the number lives rather than printing a zero.
+//
+// Pure, and the callers' extras are optional: a caller with no change log or no
+// month history gets the rows it can honestly fill and no others.
+
+/** One row of the record grid. */
+export interface RecordRow {
+  id: string
+  /** The mono uppercase label in the left column. */
+  label: string
+  /** Words before the figure — "on", "discarded". Usually empty. */
+  lead: string
+  /** The one figure the row is about, set in mono. Null where nothing has
+   *  recorded it: then `rest` is the sentence that says so. */
+  figure: string | null
+  /** What follows the figure — the basis, the breakdown, the caveat. */
+  rest: string
+  /** True where an em dash separates the figure from what follows ("4 — 6, 13,
+   *  20, 27 Sep") and false where `rest` continues the figure's own sentence
+   *  ("214 threads, each read to 40 comments"). Per row, because the artboard
+   *  does both and a rule that guessed would punctuate half of them wrong. */
+  dash: boolean
+}
+
+/** What the RECORD PAGE knows and the record loader does not: the change log's
+ *  own rows, the denominator history, the month the strip is about. Every one
+ *  is optional and an absent one drops its clause rather than guessing it. */
+export interface RecordExtras {
+  /** The pooled trailing median of the gathered era (`lib/settings/readings.ts`,
+   *  computed Overview's way). */
+  trailingMedian?: number | null
+  /** "Poler added as a rival, 3 Sep" — `changeNote` over the same
+   *  `config_changes` rows the count came from. */
+  changeNote?: string | null
+  /** The thinnest month under the audience floor, and the floor itself. */
+  belowFloor?: { label: string; who: string; videos: number; floor: number; more: number } | null
+  /** Where the refused-comparison count actually lives, for a page that draws
+   *  no comparison of its own. */
+  refusedElsewhere?: string | null
+}
+
+/** "6, 13, 20, 27 Sep" where a window is one month, and dated short forms
+ *  otherwise. Never an ISO day: `recordLines`' own rule, one row over. */
+export function datesLine(dates: readonly string[]): string {
+  if (dates.length === 0) return ''
+  const months = new Set(dates.map((d) => d.slice(0, 7)))
+  if (months.size === 1) {
+    const last = shortDate(dates[dates.length - 1])
+    const days = dates.slice(0, -1).map((d) => String(new Date(`${d}T00:00:00.000Z`).getUTCDate()))
+    return days.length ? `${days.join(', ')}, ${last}` : last
+  }
+  return dates.map((d) => shortDate(d)).join(' · ')
+}
+
+export function recordRows(input: RecordInputs, extra: RecordExtras = {}): RecordRow[] {
+  const rows: RecordRow[] = []
+  const push = (
+    id: string, label: string, figure: string | null, rest: string,
+    opts: { lead?: string; dash?: boolean } = {},
+  ): void => {
+    rows.push({ id, label, lead: opts.lead ?? '', figure, rest, dash: figure != null && (opts.dash ?? false) })
+  }
+
+  const d = input.delivery
+  push(
+    'updates', 'Updates this window',
+    d.delivered === 0 ? null : fmtInt(d.delivered),
+    d.delivered === 0 ? 'No update ran inside this window.' : datesLine(d.dates),
+    { dash: true },
+  )
+
+  if (input.coverage == null) {
+    push('coverage', 'How much was read', null, 'The month-by-month reading has not been recorded for this workspace yet.')
+  } else if (input.coverage.length === 0) {
+    push('coverage', 'How much was read', null, 'Nothing was read in this window.')
+  } else {
+    const videos = totalVideos(input.coverage)
+    const comments = input.coverage.reduce((n, c) => n + c.comments, 0)
+    const dual = input.coverage.reduce((n, c) => n + c.dualMention, 0)
+    const undated = input.coverage.reduce((n, c) => n + c.excludedUndated, 0)
+    const mix = totalPlatformMix(input.coverage)
+
+    push('comments', 'Comments read', fmtInt(comments), 'dated by the comment, not by the update', { dash: true })
+    push(
+      'videos', 'Videos analysed', fmtInt(videos),
+      extra.trailingMedian != null
+        ? `trailing median ${fmtInt(Math.round(extra.trailingMedian))} over the months we have gathered`
+        : 'no trailing median yet — two gathered months are the fewest one can be taken over',
+      { dash: true },
+    )
+    push('dual', 'Dual-mention videos', fmtInt(dual), 'counted in one audience by precedence', { dash: true })
+    push('platforms', 'Platform mix', null, platformMixLine(mix) || 'No platform was recorded on anything read in this window.')
+    const threads = mix.reddit ?? 0
+    push(
+      'reddit', 'Reddit', threads > 0 ? fmtInt(threads) : null,
+      threads > 0
+        ? `threads, each read to ${fmtInt(REDDIT_COMMENT_DEPTH_CAP)} comments and no deeper`
+        : 'No Reddit thread carried conversation in this window.',
+    )
+    if (undated > 0) push('undated', 'Comments with no date', fmtInt(undated), 'in no month, and in no reading', { dash: true })
+  }
+
+  const lang = input.language
+  const known = lang.english + lang.notEnglish
+  push(
+    'language', 'Not in English',
+    lang.analysed > 0 && known > 0 ? share(lang.notEnglish, known) : null,
+    lang.analysed === 0
+      ? 'No video has been analysed for this workspace yet.'
+      : known === 0
+        ? 'No language was recorded for any video, so the share not in English cannot be drawn.'
+        : `of the ${fmtInt(known)} videos whose language we know — what was said on camera, not what was written in comments${lang.unknown > 0 ? `; ${fmtInt(lang.unknown)} have no language recorded at all` : ''}`,
+  )
+
+  const r = input.readDepth
+  // D15: the basis is part of the figure. `analyzed_with_*` is a fact about a
+  // video and a video belongs to a month through its comments, so there is no
+  // such thing as "speech read on 71% of September" — the same sentence
+  // `recordLines` and `methodLines` both print, in the same words.
+  const allTime = 'of everything we have ever read for you, not just this window — Reddit excluded, which has neither audio nor a cover frame'
+  push(
+    'speech', 'Speech read', r.analysed > 0 ? share(r.speech, r.analysed) : null,
+    r.analysed > 0 ? `${allTime}; translated on ${share(r.translated, r.analysed)}` : 'How much of each video we managed to read is not recorded yet.',
+    { lead: r.analysed > 0 ? 'on' : '' },
+  )
+  if (r.analysed > 0) {
+    push('ocr', 'On-screen text read', share(r.onScreenText, r.analysed), allTime, { lead: 'on' })
+    if (r.unflagged > 0) {
+      push('unflagged', 'Read before the flags', fmtInt(r.unflagged), 'videos read before the product recorded which of the three it managed')
+    }
+  }
+
+  const g = input.discard
+  push(
+    'gate', 'Relevance gate',
+    g.readable && g.recordedFrom != null && g.judged > 0 ? share(g.setAside, g.judged) : null,
+    !g.readable
+      ? 'What we looked at and set aside is recorded, and we do not yet show it to you.'
+      : g.recordedFrom == null
+        ? 'What was looked at and set aside is not recorded at all, so the share left out cannot be drawn for any month.'
+        : g.judged === 0
+          ? `Nothing was looked at and set aside in this window — the record of it begins ${fullDate(g.recordedFrom)}.`
+          : `of what was looked at, dated by the update; recorded only from ${fullDate(g.recordedFrom)}, so no month before that can show it${discardCaveat(g)}`,
+    { lead: g.readable && g.recordedFrom != null && g.judged > 0 ? 'discarded' : '' },
+  )
+
+  const i = input.instrument
+  push(
+    'themes', 'Themes per video',
+    i.themesPerVideo == null ? null : String(i.themesPerVideo),
+    i.themesPerVideo == null
+      ? 'How many themes attach to each video has not been recorded yet.'
+      // NOT "August 2.3". The figure is measured on one run, and a run's date is
+      // a period key for nothing (AGENTS.md).
+      : 'attached per analysed video on the most recent update — an update’s own measure, not a month’s',
+    { dash: false },
+  )
+
+  const c = input.changes
+  push(
+    'changes', 'Tracking changes',
+    c.inWindow === 0 ? null : fmtInt(c.inWindow),
+    c.inWindow === 0
+      ? 'Nothing about what we track changed in this window.'
+      : extra.changeNote ?? 'inside this window',
+    { dash: true },
+  )
+  push(
+    'changelog', 'Change record begins',
+    null,
+    c.loggedFrom == null
+      ? 'No change to what we track has been recorded yet, so no comparison can be checked against one.'
+      : `${fullDate(c.loggedFrom)}${c.reconstructed > 0 ? `, with ${fmtInt(c.reconstructed)} earlier ${c.reconstructed === 1 ? 'entry' : 'entries'} worked out afterwards from what each update searched` : ''}`,
+  )
+
+  push(
+    'refused', 'Comparisons refused',
+    input.comparisonsRefused == null ? null : fmtInt(input.comparisonsRefused),
+    input.comparisonsRefused == null
+      ? extra.refusedElsewhere ?? 'Counted by the page that draws the comparisons, never by the corpus.'
+      : refusedSentence(input.refusals),
+  )
+
+  if (extra.belowFloor) {
+    const f = extra.belowFloor
+    push(
+      'floor', 'Below the floor', fmtInt(f.videos),
+      `videos in ${f.label} for ${f.who} — under the ${fmtInt(f.floor)} a banded reading needs${f.more > 0 ? `, and ${fmtInt(f.more)} other ${f.more === 1 ? 'month is' : 'months are'} under it too` : ''}`,
+    )
+  }
+
+  return rows
 }

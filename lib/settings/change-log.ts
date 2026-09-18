@@ -1,4 +1,4 @@
-import { fullDate, monthName } from '../format'
+import { fullDate, monthName, shortDate } from '../format'
 import { audienceLabel } from '../readiness/types'
 import type { ActorKind, ConfigChange, ConfigSurface } from '../config-log'
 
@@ -159,6 +159,12 @@ export interface ClientChange {
    *  this. */
   on: string
   date: string
+  /** The same date in the artboard's form, "3 Sep". The long form stays on
+   *  `date` because the quarterly deck's change log prints it beside dates a
+   *  year apart, and there "3 Sep" beside "3 Sep" is two different Septembers
+   *  (lib/format.ts's own reason for `fullDate`). The record page's table is
+   *  one workspace's own recent history in a column 100px wide. */
+  dateShort: string
   surface: ConfigSurface
   what: string
   /** The plain sentence from `note`, or a composed one when the row has none
@@ -240,6 +246,7 @@ export function readChangeLog(args: ReadChangeLogArgs): ChangeLogView {
     id: change.id,
     on: change.changed_at.slice(0, 10),
     date: fullDate(change.changed_at),
+    dateShort: shortDate(change.changed_at),
     surface: change.surface,
     what: SURFACE_WORDS[change.surface] ?? SURFACE_WORDS.other,
     said: change.note?.trim() || composedNote(change),
@@ -264,4 +271,56 @@ export function readChangeLog(args: ReadChangeLogArgs): ChangeLogView {
     prehistory: prehistory.map(view),
     firstLoggedAt: firstLogged,
   }
+}
+
+// ---- The artboard's header meta and the coverage row -------------------------
+
+/**
+ * "4 changes since 6 Apr · 1 this month" — the mono meta beside the section's
+ * eyebrow.
+ *
+ * RECORDED ROWS ONLY, for the reason the module's header gives: a reconstructed
+ * row is inference and is never summed with the record. "This month" is the
+ * WALL CLOCK, which is what a change is dated by (`ClientChange.on` is
+ * `changed_at`, and its doc comment says it is a period key for nothing) — so
+ * this counts changes made in the current calendar month and not comments
+ * written in it. The two clocks are named where they meet, which is here.
+ */
+export function changeLogMeta(view: ChangeLogView, args: { since: string | null; now: string }): string {
+  const total = view.recorded.length
+  const month = args.now.slice(0, 7)
+  const thisMonth = view.recorded.filter((c) => c.on.slice(0, 7) === month).length
+  const parts = [
+    total === 0
+      ? 'no change recorded yet'
+      : `${total} change${total === 1 ? '' : 's'}${args.since ? ` since ${shortDate(args.since)}` : ''}`,
+  ]
+  if (thisMonth > 0) parts.push(`${thisMonth} this month`)
+  return parts.join(' · ')
+}
+
+/** Was this change made inside the current calendar month? The artboard's amber
+ *  flag, and the reason the meta above can say "1 this month". */
+export function madeThisMonth(change: ClientChange, now: string): boolean {
+  return change.on.slice(0, 7) === now.slice(0, 7)
+}
+
+/**
+ * The coverage grid's "Tracking changes · 1 — Poler added 3 Sep" clause.
+ *
+ * The count itself is `ChangeRecord.inWindow`, read off the same table by
+ * `lib/reading/record.ts`; this NAMES the change, which the record loader
+ * cannot, because it counts rows and never reads their notes. Both halves come
+ * off `config_changes`, so the page is not putting two tables' answers in one
+ * sentence — and where the two disagree (a change recorded outside this page's
+ * change-log read) the clause is dropped rather than guessed.
+ */
+export function changeNote(view: ChangeLogView, window: { from: string; to: string }): string | null {
+  const inside = view.recorded.filter((c) => c.on >= window.from && c.on <= window.to)
+  if (inside.length === 0) return null
+  const newest = inside[0]
+  const said = newest.said.replace(/\.$/, '')
+  return inside.length === 1
+    ? `${said}, ${newest.dateShort}`
+    : `the newest ${said}, ${newest.dateShort}`
 }
