@@ -88,14 +88,18 @@ This version has breaking changes — APIs, conventions, and file structure may 
   **Cited evidence is retained past re-analysis** (2026-09-18): the
   `prune-stale-analysis` step deletes a superseded row only when nothing stored
   points at it, so an id-set lookup keeps resolving past the next run and not
-  only during it. Three citation classes count, resolved in `citedEvidenceIds`
-  (`inngest/functions/pipeline.ts`) and enforced by the optional third argument
-  to `staleInsightIds` (`lib/pipeline/pass-a-plan.ts`, where the tests are):
+  only during it. FOUR citation classes are protected, resolved in
+  `citedEvidenceIds` (`inngest/functions/pipeline.ts`) and enforced by the
+  optional third argument to `staleInsightIds` (`lib/pipeline/pass-a-plan.ts`,
+  where the tests are):
   **recommendations** — `based_on.insight_ids` through BOTH `market_insights`
   and `competitive_insights` (it mixes M# and C# ids) to
   `evidence.supporting_theme_ids`; **plan checks** — `insightIds` on the claims
   of `plan_checks` AND `plan_check_evaluations`, because `currentReading` prints
-  the newest evaluation and falls back to the upload's; and **frozen exports** —
+  the newest evaluation and falls back to the upload's; **saved Ask answers** —
+  `agent_messages.result.grounded[].insightIds`, which stores ids and never
+  quote text, so a reopened thread resolves its words through `insight_evidence`
+  off exactly those rows; and **frozen exports** —
   `report_snapshots.evidence_ids`, where `e:<insight_evidence.id>` resolves back
   to its `audience_insights` row and `p:<language_samples.id>` IS one of these
   rows (the only citation path `language_samples` has). `c:` / `v:` / `m:` refs

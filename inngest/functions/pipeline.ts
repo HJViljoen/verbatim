@@ -1884,11 +1884,12 @@ export const runPipeline = inngest.createFunction(
     //
     //    IT DOES NOT TAKE CITED EVIDENCE (2026-09-18). The "leftovers are
     //    harmless" this comment used to end on was true when nothing pointed at
-    //    a superseded row. Recommendations, plan checks and frozen exports all
-    //    do now, so citedEvidenceIds resolves what still cites what and
-    //    staleInsightIds never returns one of those rows. Same step id, same
-    //    position, one function body — see the note in citedEvidenceIds for
-    //    the three classes and why each is resolved the way it is.
+    //    a superseded row. Recommendations, plan checks, saved Ask answers and
+    //    frozen exports all do now, so citedEvidenceIds resolves what still
+    //    cites what and staleInsightIds never returns one of those rows. Same
+    //    step id, same position, one function body — see the note in
+    //    citedEvidenceIds for the four classes it protects, the two it
+    //    deliberately does not, and why each is resolved the way it is.
     const pruned = await step
       .run('prune-stale-analysis', () => pruneStaleAnalysis(clientId))
       .catch((e) => {
@@ -2192,7 +2193,7 @@ async function planPassABatches(clientId: string, runId: string, force: boolean,
  * nothing deleted. Deleting less than we could is a storage cost; deleting a
  * cited row is unrecoverable.
  *
- * THE THREE CITATION CLASSES, and why each is resolved the way it is:
+ * THE FOUR CITATION CLASSES, and why each is resolved the way it is:
  *
  *  1. RECOMMENDATIONS, a two-link chain. `recommendations.based_on.insight_ids`
  *     names insight rows, and it MIXES `market_insights` (M#) and
@@ -2210,7 +2211,20 @@ async function planPassABatches(clientId: string, runId: string, force: boolean,
  *     evaluation that has claims and FALLS BACK to the upload's, so protecting
  *     only one of the two leaves the other printing a card with no voices.
  *
- *  3. FROZEN SNAPSHOT QUOTES. `report_snapshots.evidence_ids` repeats every ref
+ *  3. SAVED ASK ANSWERS. `agent_messages.result.grounded[].insightIds` stores
+ *     the ids an answer was grounded on and stores NO quote text — the column's
+ *     own comment says so in as many words, and lib/pages/agent-thread.ts
+ *     resolves the words live by comment id through `insight_evidence`, which
+ *     cascades from `audience_insights`. The quotes under a grounded point come
+ *     only from THAT point's own live insight ids (lib/agent/enforce.ts builds
+ *     them from `insights = live.map(...)`, its dedup fallback included), so
+ *     protecting `insightIds` is exactly what keeps a reopened thread's quotes
+ *     resolving. Id-exact like classes 1 and 2, on the surface a client reopens
+ *     most often — NOT the `c:`/`v:`/`m:` case below, which stores no row id.
+ *     Only role='agent' rows carry a `result`; a user's message is the question
+ *     they typed.
+ *
+ *  4. FROZEN SNAPSHOT QUOTES. `report_snapshots.evidence_ids` repeats every ref
  *     in the stored artefact (lib/renderables/quotes-freeze.ts). Two of the ref
  *     kinds name a row this prune can delete, and both are id-exact:
  *     `e:<insight_evidence.id>`, which cascades from `audience_insights` and so
@@ -2237,7 +2251,7 @@ async function citedEvidenceIds(
 ): Promise<{ insights: Set<string>; languageSamples: Set<string>; from: Record<string, number> }> {
   const insights = new Set<string>()
   const languageSamples = new Set<string>()
-  const from: Record<string, number> = { recommendations: 0, planChecks: 0, snapshots: 0 }
+  const from: Record<string, number> = { recommendations: 0, planChecks: 0, savedAnswers: 0, snapshots: 0 }
 
   // 1. Recommendations → market/competitive insights → audience insights.
   const recs = await selectAll<{ id: string; based_on: { insight_ids?: string[] } | null }>(() =>
@@ -2276,7 +2290,24 @@ async function citedEvidenceIds(
     }
   }
 
-  // 3. Frozen snapshot quotes.
+  // 3. Saved Ask answers — the ids each grounded point rests on.
+  const answers = await selectAll<{ id: string; result: unknown }>(() =>
+    admin.from('agent_messages').select('id, result')
+      .eq('client_id', clientId).eq('role', 'agent').not('result', 'is', null)
+      .order('id', { ascending: true }),
+  )
+  for (const a of answers) {
+    const grounded = (a.result as { grounded?: unknown } | null)?.grounded
+    if (!Array.isArray(grounded)) continue
+    for (const point of grounded as { insightIds?: unknown }[]) {
+      if (!point || !Array.isArray(point.insightIds)) continue
+      for (const id of point.insightIds) {
+        if (typeof id === 'string' && id && !insights.has(id)) { insights.add(id); from.savedAnswers++ }
+      }
+    }
+  }
+
+  // 4. Frozen snapshot quotes.
   const snapshots = await selectAll<{ id: string; evidence_ids: string[] | null }>(() =>
     admin.from('report_snapshots').select('id, evidence_ids').eq('client_id', clientId).order('id', { ascending: true }),
   )
@@ -2339,7 +2370,8 @@ async function pruneStaleAnalysis(clientId: string): Promise<{ insights: number;
   console.log(
     `[prune-stale-analysis] deleted ${out.insights} insight(s) · ${out.languageSamples} language sample(s); ` +
     `kept ${out.keptInsights} + ${out.keptSamples} superseded row(s) because something still cites them ` +
-    `(recommendations ${cited.from.recommendations} · plan checks ${cited.from.planChecks} · snapshots ${cited.from.snapshots} cited id(s))`,
+    `(recommendations ${cited.from.recommendations} · plan checks ${cited.from.planChecks} · ` +
+    `saved answers ${cited.from.savedAnswers} · snapshots ${cited.from.snapshots} cited id(s))`,
   )
   return out
 }
