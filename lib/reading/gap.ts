@@ -107,10 +107,15 @@ export interface GapReading {
   window: VerdictWindow
   /** a.pct − b.pct, one decimal. Signed, so the caller keeps which side is
    *  higher; the SENTENCE prints the magnitude, because "apart" is symmetric
-   *  and the two levels beside it already say which way round it is. Null when
-   *  either side is unreadable, and on a refusal. */
+   *  and the two levels beside it already say which way round it is.
+   *
+   *  NULL WHEREVER THE STATE IS NOT AN ANSWER — a side unread, a side under the
+   *  floor, or a refusal. The two words that refuse a comparison never carry
+   *  the number that comparison would have been, in the data or on the page. */
   gapPts: number | null
-  /** Half-width of the no-difference band, same units. Null when none drawn. */
+  /** Half-width of the no-difference band, same units. Null wherever no band
+   *  was drawn — which is everywhere `gapPts` is null, and for the same
+   *  reason. */
   bandPts: number | null
   state: GapState
   /**
@@ -205,8 +210,20 @@ function readingBetween(
     },
     floor,
   )
-  const state: GapState =
-    delta.state === 'moved' ? 'apart' : delta.state === 'no_clear_change' ? 'level' : 'too_little_data'
+  if (delta.state === 'too_little_data') {
+    // A THIN COMPARISON CARRIES NO NUMBERS AT ALL, not even on the data.
+    // `proportionDelta` still returns a change and a band here — it is
+    // answering "what would this have been" — but a `too few to compare` gap
+    // that carries 12.7 in `gapPts` is a magnitude beside a word that refuses
+    // the comparison, and the only thing standing between it and the page is
+    // whether every future caller remembers to check `state` first.
+    // `gapLine` and `gapFigures` check; block DATA is what wave 2 binds, and a
+    // port writing `{gap.gapPts} points` would print the number the word
+    // refused. So the refusal is in the DATA, and the field's docblock is true
+    // of the field: numbers only where the comparison was drawn.
+    return { ...base, gapPts: null, bandPts: null, state: 'too_little_data' }
+  }
+  const state: GapState = delta.state === 'moved' ? 'apart' : 'level'
   return { ...base, gapPts: delta.change, bandPts: delta.band, state }
 }
 

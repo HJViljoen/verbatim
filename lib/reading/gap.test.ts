@@ -98,6 +98,11 @@ describe('gapBetween — both sides present', () => {
       window: SEP,
     })
     expect(gap.state).toBe('too_little_data')
+    // The counts are real and still print; the difference does not exist on the
+    // object at all, so no port can bind it by accident.
+    expect(gap.gapPts).toBeNull()
+    expect(gap.bandPts).toBeNull()
+    expect(gap.a.value).toEqual({ k: 4, n: 252 })
   })
 
   it('never draws a band narrower than two points', () => {
@@ -281,7 +286,11 @@ describe('gapFigures', () => {
 
   it('withholds the magnitude from a model wherever the page withholds it from a reader', () => {
     const thin = gapBetween({ ...durability, a: side(), b: them(), window: SEP })
-    expect(thin.gapPts).not.toBeNull()
+    // And it is withheld from the DATA too, not only from the two printers: a
+    // `too few to compare` gap carries no magnitude and no band, so a surface
+    // that binds the field cannot print the number the word refused.
+    expect(thin.gapPts).toBeNull()
+    expect(thin.bandPts).toBeNull()
     expect(gapFigures(thin, 'durability').durability_gap_pts).toBeUndefined()
     expect(gapFigures(thin, 'durability').durability_you_n.value).toBe(84)
   })
