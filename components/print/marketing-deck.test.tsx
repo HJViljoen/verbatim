@@ -249,6 +249,16 @@ describe('the In-short sheet', () => {
     expect(sheet).toContain('Every calibrated word')
   })
 
+  // THE EVIDENCE CHIPS KEEP THE ARTBOARD'S TIER STEP (fix pass): a green one
+  // and an amber one, not green and the neutral inner tint, which drew the
+  // second tier as the third. The WORDS are the calibrated ones and do not
+  // change; only the treatment is the mock's.
+  it('draws the second evidence tier in its own tint', () => {
+    const sheet = render(<DocumentDeck data={marketingDeckFixture()} date="28 Sep 2026" />).split('1 / 9')[0]
+    expect(sheet).toContain('bg-warning/20')
+    expect(markupText(sheet)).toContain('reasonable')
+  })
+
   // `mkt.p1.findings`: the artboard's right-hand pair on every row. NOT its
   // "305 videos" — a finding is calibrated on conversations and strands, and
   // the research spine produces no video count with a denominator for it.

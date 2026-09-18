@@ -201,7 +201,11 @@ export const MARKETING_MAP: readonly BriefEntry[] = [
   }),
   block({
     id: 'mk.rivals', block: 'overview.rivals', surface: 'overview',
-    title: 'Rivals', framing: 'Where each tracked rival sits in the same month.',
+    // AND THE READER'S OWN ROW IS IN IT. The table prints you beside every
+    // rival — which is what makes the rivals readable — so "Where each tracked
+    // rival sits" had the client's own brand listed under a heading that said
+    // it was about other people.
+    title: 'Rivals', framing: 'Where you and each tracked rival sit in the same month.',
     needs: ['months-of-history'],
   }),
   page('finding'),

@@ -346,7 +346,14 @@ function OverviewPage({ page, data, title, pages }: { page: DocPage; data: Docum
                           {' '}
                           <span className="whitespace-nowrap font-mono text-[12px] font-medium text-muted-foreground">{fmtCount(meta.conversations)} conversations</span>
                           {' '}
-                          <Pill tone={meta.sure === 'solid' ? 'you' : meta.sure === 'reasonable' ? 'cat' : 'plain'}>{meta.sure}</Pill>
+                          {/* THE TIER KEEPS ITS COLOUR STEP (fix pass). The
+                              artboard's evidence chips are a green one and an
+                              amber one; `reasonable` was drawn on the neutral
+                              inner tint, so the second tier read as the third
+                              and both looked like code tokens rather than
+                              judgements. The WORDS are the calibrated ones and
+                              do not change — the treatment is the mock's. */}
+                          <Pill tone={meta.sure === 'solid' ? 'you' : meta.sure === 'reasonable' ? 'new' : 'plain'}>{meta.sure}</Pill>
                         </>
                       )}
                     </span>
