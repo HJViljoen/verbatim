@@ -39,7 +39,10 @@ export function AcceptAdviceButton({ lineageId, title }: { lineageId: string; ti
       >
         {pending ? 'Saving…' : 'Accept this advice'}
       </button>
-      {result && !result.ok ? <span className="text-[11.5px] text-muted-foreground">{result.message}</span> : null}
+      {/* A FAILED WRITE LOOKS LIKE ONE. This rendered in the same muted grey as
+          the explanatory notes around it, so the one message on the page that
+          says "your press did not save" read as another hint. */}
+      {result && !result.ok ? <span role="alert" className="text-[11.5px] font-medium text-negative">{result.message}</span> : null}
     </span>
   )
 }

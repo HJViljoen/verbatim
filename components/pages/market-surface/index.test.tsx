@@ -455,6 +455,19 @@ describe('MK5 · how a move is made', () => {
     // "Register a claim you make" is not live, so it is not a link.
     expect(markup).not.toMatch(/<a[^>]*>\s*Register a claim you make/)
   })
+
+  it('announces a dead way as disabled and prints the sentence a mouse used to have to find', () => {
+    // It was a <span> wearing the live button's ring: not focusable, no role,
+    // no aria-disabled, and its "how" in a `title` no keyboard and no touch
+    // reaches — told apart from a working control by a colour shift alone.
+    const markup = render(marketWays.render(marketFixture(), 'app', ctx))
+    expect(markup).toContain('aria-disabled="true"')
+    expect(markup).toMatch(/<button[^>]*disabled[^>]*>Register a claim you make<\/button>/)
+    // The "how" of a dead way is now on the page, not only in a tooltip.
+    expect(renderText(markup)).toContain('each with its verdict per month')
+    // And paper still draws no control at all.
+    expect(render(marketWays.render(marketFixture(), 'print', ctx))).not.toContain('<button')
+  })
 })
 
 describe('MK5b · say vs hear', () => {

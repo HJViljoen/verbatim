@@ -37,7 +37,14 @@ import { AcceptAdviceButton } from './accept-button'
 /** The artboard's button shape: 44px, rounded 6, green for the one primary. */
 const BUTTON = 'inline-flex h-[44px] items-center gap-2 rounded-md px-4 text-[13px] font-medium'
 const LIVE = `${BUTTON} bg-tile text-foreground ring-1 ring-border transition-colors hover:bg-inner`
-const DEAD = `${BUTTON} bg-tile text-muted-foreground ring-1 ring-border`
+const DEAD = `${BUTTON} cursor-not-allowed bg-inner text-muted-foreground ring-1 ring-border/70`
+
+/** One way's slot. THE NOTE IS CAPPED BY ITS SLOT, NEVER BY ITSELF: a
+ *  `max-w-[240px]` on the note alone is wider than most of these buttons, so at
+ *  1440 the sentence belonging to "Confirm this month's card" ran under "Track
+ *  this" as well and a reader could not tell which sentence explained which
+ *  control. The cap belongs to the column. */
+const SLOT = 'flex min-w-0 max-w-[260px] flex-col gap-1'
 
 function Way({ way, mode, appUrl }: { way: WayRow; mode: RenderMode; appUrl: string }) {
   const email = mode === 'email'
@@ -52,12 +59,25 @@ function Way({ way, mode, appUrl }: { way: WayRow; mode: RenderMode; appUrl: str
       </div>
     )
   }
+  // A WAY THAT DOES NOT WORK IS A DISABLED CONTROL, AND IT SAYS SO IN WORDS.
+  // It was a `<span>` wearing the live button's ring: not focusable, carrying
+  // no `aria-disabled` and no role, told apart from a working control by a
+  // colour shift alone — and its "how" lived in a `title` no keyboard and no
+  // touch reaches. A real `disabled` button announces itself, and the sentence
+  // that a mouse used to have to find is printed under it.
+  const dead = !way.live
   return (
-    <span className="flex min-w-0 flex-col gap-1">
+    <span className={SLOT}>
       {way.href && mode === 'app'
         ? <Link href={`${appUrl}${way.href}`} className={LIVE} title={way.how}>{way.title}</Link>
-        : <span className={way.live ? LIVE : DEAD} title={way.how}>{way.title}</span>}
-      {way.unlock ? <span className="max-w-[240px] text-[11px] leading-[1.35] text-muted-foreground">{way.unlock}</span> : null}
+        : dead && mode === 'app'
+          // PAPER DRAWS NO CONTROL AT ALL, live or dead: an export must not
+          // render a button nobody can press, so print keeps the slot's shape
+          // as a plain span and the words under it carry the whole answer.
+          ? <button type="button" disabled aria-disabled="true" data-print-hide className={DEAD}>{way.title}</button>
+          : <span className={dead ? DEAD : LIVE}>{way.title}</span>}
+      {dead ? <span className="text-[11px] leading-[1.35] text-secondary-foreground">{way.how}</span> : null}
+      {way.unlock ? <span className="text-[11px] leading-[1.35] text-muted-foreground">{way.unlock}</span> : null}
     </span>
   )
 }
@@ -92,9 +112,9 @@ export const marketWays: Block<MarketSurfaceData> = {
                 // THE ONE BUTTON ON THIS PAGE THAT WRITES, in its own slot in
                 // the artboard's order, with the row it would act on named
                 // under it. It used to be rendered below the whole list.
-                <span key={way.key} className="flex min-w-0 flex-col gap-1">
+                <span key={way.key} className={SLOT}>
                   <AcceptAdviceButton lineageId={w.acceptable.lineageId} title={w.acceptable.title} />
-                  <span className="max-w-[240px] text-[11px] leading-[1.35] text-muted-foreground">
+                  <span className="text-[11px] leading-[1.35] text-muted-foreground">
                     The oldest you have not decided on: <span data-copy="stored" data-slot="pass_d_b_recommendation">{w.acceptable.title}</span>
                   </span>
                 </span>
