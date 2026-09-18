@@ -285,8 +285,12 @@ export function SubjectsPage({
             a full point under the eyebrows and the smallest thing on the page
             — for the paragraph that says which clock each figure is on, which
             is the paragraph the page asks a client to trust most. */}
+        {/* AND NO MARKER. `methodLines` composes every one of these sentences
+            in code, figures included, so there is no model value here to mark
+            — `data-copy="figure"` on the whole paragraph claimed the block had
+            marked something it had not. Unmarked, rule (c) still sweeps it. */}
         {data.method ? (
-          <p data-copy="figure" className="m-0 flex flex-col gap-0.5 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">
+          <p className="m-0 flex flex-col gap-0.5 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">
             {data.method.lines.map((line, i) => (
               <span key={i} className={i === 0 ? 'text-secondary-foreground' : undefined}>{line}</span>
             ))}

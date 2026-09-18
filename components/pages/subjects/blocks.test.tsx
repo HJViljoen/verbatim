@@ -491,6 +491,17 @@ describe('SU3 · questions your posts did not answer', () => {
     expect(subjectsUnanswered.emptyState(short)).toContain('we do not rank a gap under 10')
   })
 
+  // A BLOCK MARKS THE MODEL'S VALUE, NOT THE ROW IT SITS IN. The lead was one
+  // `data-copy="figure"` node around a sentence containing a Pass B theme
+  // label — a model's words declared to be one of code's figures.
+  it('marks the clustering’s label as the model’s, and the count as code’s', () => {
+    const markup = render(subjectsUnanswered.render(subjectsFixture(), 'app', ctx))
+    expect(markup).toContain('data-copy="subject" data-slot="pass_b_theme"')
+    expect(markup).toContain('Questions grouped as')
+    // And it still passes every rule, unmarked sentence included.
+    assertCopyContract(markup)
+  })
+
   it('declares one figure per row it printed', () => {
     const figures = blockAnswers(subjectsUnanswered, subjectsFixture()).figures
     expect(Object.keys(figures)).toHaveLength(2)

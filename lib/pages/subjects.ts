@@ -357,7 +357,7 @@ export interface UnansweredBlock {
   questionVideos: number
   /** Your own posts in the drawn window. */
   yourPosts: number
-  lead: string | null
+  lead: UnansweredLead | null
   basis: string
   /** What half of your posts this matched on, while the other half is
    *  unreadable. Null the day M8 lands and the claims can be read. */
@@ -625,17 +625,45 @@ export function answeredBy(label: string, haystack: readonly string[]): boolean 
  * simply not true. A verbatim question belongs to 31b's evidence freeze, not
  * to a label.
  */
+/**
+ * The lead, IN ITS PARTS.
+ *
+ * ONE OF THESE WORDS IS A MODEL'S AND THE REST ARE CODE'S (fix pass). The
+ * sentence was composed here and printed inside a single `data-copy="figure"`
+ * node, which marks the model's value as code's: `label` is the CLUSTERING's
+ * summary, written by Pass B, and the copy contract's own instruction is that
+ * a block marks the model's value, not the row it sits in. The block prints the
+ * label in a `subject` node naming the `pass_b_theme` slot, the count in a
+ * `figure` node, and leaves the sentence it composed itself unmarked — where
+ * rule (c) still sweeps it, which is the point.
+ */
+export interface UnansweredLead {
+  /** Pass B's own label for the group — a model's words, replayed. */
+  label: string
+  /** Videos that asked it. */
+  videos: number
+  /** What your own posts did about it, in the reader's own period. */
+  posts: string
+}
+
 export function unansweredLead(
   rows: readonly UnansweredRow[],
   yourPosts: number,
   period: string,
-): string | null {
+): UnansweredLead | null {
   const top = rows.find((r) => !r.answered)
   if (!top) return null
   const posts = yourPosts > 0
     ? `none of your ${fmtInt(yourPosts)} post${yourPosts === 1 ? '' : 's'} ${period} touched it`
     : `you published nothing ${period}`
-  return `Questions grouped as “${top.label}” came up in ${fmtInt(top.videos)} of the videos we have read — ${posts}.`
+  return { label: top.label, videos: top.videos, posts }
+}
+
+/** The same sentence as one string, for a caller with no JSX to mark up. */
+export function unansweredLeadText(lead: UnansweredLead | null): string | null {
+  return lead
+    ? `Questions grouped as “${lead.label}” came up in ${fmtInt(lead.videos)} of the videos we have read — ${lead.posts}.`
+    : null
 }
 
 /**

@@ -114,18 +114,29 @@ export const subjectsUnanswered: Block<SubjectsData> = {
         footerNote={<span data-copy="figure">{fmtInt(u.yourPosts)} posts of yours</span>}
       >
         {u.lead ? (
+          // THE MODEL'S VALUE IS MARKED, NOT THE ROW IT SITS IN. The whole
+          // sentence carried `data-copy="figure"`, which declared a Pass B
+          // theme label to be one of code's figures. The label is a `subject`
+          // node naming its own slot, the count is a `figure`, and the sentence
+          // around them is code's and unmarked — where rule (c) still sweeps
+          // it, which is what "unmarked is not exempt" is for.
           <p
-            data-copy="figure"
             className={email ? undefined : 'm-0 text-[12px] leading-[1.4] text-muted-foreground'}
             style={email ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted } : undefined}
           >
-            {u.lead}
+            Questions grouped as “<span data-copy="subject" data-slot="pass_b_theme">{u.lead.label}</span>” came up in{' '}
+            <span data-copy="figure">{fmtInt(u.lead.videos)}</span> of the videos we have read — {u.lead.posts}.
           </p>
         ) : null}
         <div>{u.rows.map((r) => <Row key={r.id} row={r} of={askedOf(u)} mode={mode} />)}</div>
-        {small(u.basis)}
+        {/* ONE PARAGRAPH OF BASIS, NOT THREE. The artboard's tile is a lead and
+            three rows; this one was a lead, two rows and three more paragraphs.
+            What it read as is a tile arguing with itself. The two sentences
+            that are both about WHERE the count came from are one paragraph; the
+            claims caveat, which is about a half we could not read at all, keeps
+            its own. */}
+        {small([u.basis, u.reddit].filter(Boolean).join(' '))}
         {u.claims ? small(u.claims === UNANSWERED_CLAIMS_UNREADABLE && mode === 'print' ? UNANSWERED_CLAIMS_UNREADABLE_OUTSIDE : u.claims) : null}
-        {u.reddit ? small(u.reddit) : null}
       </BlockFrame>
     )
   },
