@@ -111,7 +111,7 @@ export function briefFiguresFixture(): BriefSlideFigures {
     line: monthLine({
       months: MONTHS,
       labelFor: monthlyLineLabel,
-      series: [{ label: 'Durability · the prosthetics conversation', points: [18, 19, 19.5, 20] }],
+      series: [{ label: 'Durability · the prosthetics conversation', points: [18, 19, 19.5, 20], unit: 'pct' }],
     }),
     untracked: untrackedNotes(SALES_MAP, READINESS),
   }
@@ -132,7 +132,7 @@ export function thinFiguresFixture(): BriefSlideFigures {
     line: monthLine({
       months: MONTHS,
       labelFor: monthlyLineLabel,
-      series: [{ label: 'Durability · the prosthetics conversation', points: [null, null, 19, 19.2] }],
+      series: [{ label: 'Durability · the prosthetics conversation', points: [null, null, 19, 19.2], unit: 'pct' }],
     }),
   }
 }

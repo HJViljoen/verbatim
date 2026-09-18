@@ -511,7 +511,10 @@ describe('the borrowed sheets carry the artboard’s chrome', () => {
     const w = words(objections())
     expect(w).toContain('The line behind these')
     expect(objections()).toContain('<svg')
-    expect(w).toContain('Jun 2026')
+    // BOTH ENDS WITH THEIR VALUE. A printed line has no hover, and a shape
+    // with two month names under it and no magnitude is decoration.
+    expect(w).toContain('Jun 2026 18%')
+    expect(w).toContain('Sep 2026 20%')
     expect(w).toContain('Your own audience carries no month-by-month series on a subject')
   })
 
