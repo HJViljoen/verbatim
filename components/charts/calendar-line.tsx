@@ -424,7 +424,7 @@ function SeriesMarks({
         return (
           <g key={`m${i}`}>
             {p.state === 'filling' && (
-              <FillingBar x={x} value={p.value} atLastMonth={p.atLastMonth ?? null} y={y} baseline={g.baseline} slot={g.slot} color={series.color} format={format} padR={padR} />
+              <FillingBar x={x} value={p.value} atLastMonth={p.atLastMonth ?? null} y={y} baseline={g.baseline} slot={g.slot} format={format} padR={padR} />
             )}
             <circle cx={x} cy={y(p.value)} r={isEnd ? 3.4 : 2.2} fill={series.color} stroke="var(--tile)" strokeWidth={isEnd ? 1.5 : 1} />
           </g>
@@ -450,9 +450,20 @@ function SeriesMarks({
  * The bar is the affordance item 6 asks for and §3.9 forbids ("no filled
  * areas"); it is part of the amendment. It is the ONE filled shape on the
  * chart and it means one thing: this number is not finished.
+ *
+ * AND IT IS AXIS FURNITURE, NOT A SERIES (fix pass). It was painted in the
+ * entity's own colour, so on a chart where a rival held the only visible point
+ * the newest month rendered as a solid peach column running the full plot
+ * height — the loudest coloured shape on the page, encoding "incomplete" and
+ * reading as the rival's ink. Two series filling in the same month drew two
+ * overlapping colours for one fact. It takes the neutral token every other
+ * piece of furniture on this chart takes (the dated rules, the midline), so
+ * the coloured inks on the plot belong to the data alone.
  */
+const FILLING_INK = 'var(--muted-foreground)'
+
 function FillingBar({
-  x, value, atLastMonth, y, baseline, slot, color, format, padR,
+  x, value, atLastMonth, y, baseline, slot, format, padR,
 }: {
   x: number
   value: number
@@ -460,7 +471,6 @@ function FillingBar({
   y: (v: number) => number
   baseline: number
   slot: number
-  color: string
   format: (v: number) => string
   padR: number
 }) {
@@ -468,7 +478,7 @@ function FillingBar({
   const top = y(value)
   return (
     <g>
-      <rect x={x - w / 2} y={top} width={w} height={Math.max(0, baseline - top)} fill={color} opacity={0.14}>
+      <rect x={x - w / 2} y={top} width={w} height={Math.max(0, baseline - top)} fill={FILLING_INK} opacity={0.1}>
         <title>Still filling — this month is still taking comments</title>
       </rect>
       {atLastMonth != null && (
@@ -503,15 +513,19 @@ function FillingBar({
  *  ringed in grey beside it is a different mark.
  *
  *  The filling swatch is the one place the legend cannot be literal: the chart's
- *  bar is the entity colour at `opacity .14` over 150px of plot, and .14 over an
- *  8px swatch is nothing at all. It is drawn at .3, which is the same colour at
- *  the smallest opacity that survives the size. */
+ *  bar is `FILLING_INK` at `opacity .1` over 150px of plot, and .1 over an 8px
+ *  swatch is nothing at all. It is the same ink at the smallest opacity that
+ *  survives the size. It does NOT take the entity colour, because the bar it
+ *  keys does not either — the still-filling month is furniture. */
 function LegendToken({ state, color }: { state: 'below_floor' | 'below_numerator' | 'filling' | 'read' | 'hollow'; color: string }) {
   if (state === 'below_floor') {
     return <span className="size-2 rounded-full bg-tile" style={{ boxShadow: `inset 0 0 0 1.5px ${color}` }} aria-hidden />
   }
   if (state === 'below_numerator') {
     return <span className="size-2 bg-tile" style={{ boxShadow: `inset 0 0 0 1.5px ${color}` }} aria-hidden />
+  }
+  if (state === 'filling') {
+    return <span className="h-2 w-2.5 rounded-[1px]" style={{ background: FILLING_INK, opacity: 0.35 }} aria-hidden />
   }
   return <span className="h-2 w-2.5 rounded-[1px]" style={{ background: color, opacity: 0.3 }} aria-hidden />
 }
