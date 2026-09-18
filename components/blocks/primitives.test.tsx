@@ -75,6 +75,14 @@ describe('BlockFrame', () => {
   // The truncation is a PROP, not a default. It landed as a default and clipped
   // every footer link in the product — 56 call sites — for one page's 240px
   // rail. A block that has the whole tile's width wraps, as it always has.
+  // Where the two halves do not fit, the NOTE drops to its own line: it is
+  // `shrink-0`, so without this the link took the whole squeeze and set one
+  // word per line (measured at 1024 on the voices tile).
+  it('lets the footer’s two halves wrap instead of crushing the link', () => {
+    const markup = render(<BlockFrame title="Rivals" footer="Hear these voices in Voice →" footerNote="27% of what was said on camera was not in English"><p>body</p></BlockFrame>)
+    expect(markup).toContain('flex-wrap')
+  })
+
   it('wraps the footer link unless the block asks for one line', () => {
     const wrapped = render(<BlockFrame title="Rivals" footer="Open the content brief →" footerNote="all-time"><p>body</p></BlockFrame>)
     const clipped = render(<BlockFrame title="Rivals" footer="Open the content brief →" footerNote="all-time" truncateFooter><p>body</p></BlockFrame>)

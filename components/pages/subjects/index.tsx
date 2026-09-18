@@ -103,9 +103,12 @@ export function layoutFor(data: SubjectsData): { block: Block<SubjectsData>; col
   // TWO FULL ROWS OF TWELVE, not a ragged L. These spans are what the page
   // DRAWS in this state (the app arm reads them now), so they have to add up:
   // 4 + 8 and 6 + 6.
+  // AND AT THE HEIGHT OF WHAT THEY HAVE TO SAY. The two tiles in the top row
+  // hold three lines and one line of refusal; at the selected reading's own
+  // heights they were 520px boxes of white.
   return [
-    { block: subjectsList, col: 4, row: 3 },
-    { block: subjectsSubject, col: 8, row: 3 },
+    { block: subjectsList, col: 4, row: 2 },
+    { block: subjectsSubject, col: 8, row: 2 },
     { block: subjectsOwnPosts, col: 6, row: 3 },
     { block: subjectsSayHear, col: 6, row: 2 },
   ]

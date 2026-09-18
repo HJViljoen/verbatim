@@ -166,11 +166,15 @@ export function BlockFrame({
       ) : null}
       {children}
       {footer || footerNote ? (
-        <footer className="mt-auto flex items-center justify-between gap-2 border-t border-border/70 pt-2 text-[12px] font-medium text-foreground">
-          {/* The note on the right is `shrink-0`, so a narrow tile pushes the
-              link on the left onto several lines. A block that would rather
-              clip than wrap asks for it — `truncateFooter` — and every block
-              that has not asked keeps the wrap it has always had. */}
+        <footer className="mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-border/70 pt-2 text-[12px] font-medium text-foreground">
+          {/* IT WRAPS RATHER THAN CRUSHES. The note on the right is
+              `shrink-0`, so where the two halves do not fit on one line the
+              LINK took the whole squeeze and set one word per line — measured
+              at 1024 on the voices tile, whose note is a full sentence. With
+              `flex-wrap` the note drops to its own line instead, and a footer
+              that already fits is unchanged. A block that would rather clip
+              than wrap its link asks for that — `truncateFooter` — and every
+              block that has not asked keeps the wrap it has always had. */}
           <span className={cn('min-w-0', truncateFooter && 'truncate')}>{footer}</span>
           {footerNote ? <span className="shrink-0 font-mono text-[11px] font-normal text-muted-foreground">{footerNote}</span> : null}
         </footer>
