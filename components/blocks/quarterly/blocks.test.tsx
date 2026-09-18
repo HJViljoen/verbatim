@@ -694,7 +694,22 @@ describe('the artboard port (Block D wave 2)', () => {
 
   it('qr.p5.col.* · the month cells, and the refusal’s reason in print', () => {
     const t = text('quarterly.rivals')
-    expect(t).toContain('Attention · Jul Aug Sep')
+    // THE UNIT IS IN THE HEADER AND ON EVERY CELL. The first cut drew two
+    // shapes under one header — a `FigureCell` on a brand with no month
+    // series and bare, unitless values on the ones that had one — so a
+    // reader could not tell that "15%" and "2.4" were the same measure.
+    expect(t).toContain('Attention % · Jul Aug Sep')
+    expect(t).toContain('Content % · Jul Aug Sep')
+    // Every month cell prints its unit, on the row that HAS a series…
+    expect(t).toContain('2.4%')
+    expect(t).toContain('0.9%')
+    // …and the newest month's counts print under the cells, on every row,
+    // so nothing on this table is a share of nothing in particular.
+    expect(t).toContain('6,200 of 41,200')
+    expect(t).toContain('2,400 of 41,200')
+    expect(t).toContain('the counts under each cell are that month’s (Sep)')
+    // And no bare unitless month value survives anywhere on the table.
+    expect(t).not.toMatch(/2\.4\s+0\.9/)
     // PRINTED, not a `title` — a tooltip is nothing at all on paper.
     expect(t).toContain('what we track changed inside this window')
   })

@@ -70,33 +70,75 @@ const TEMPLATE = 'minmax(0,150fr) minmax(0,160fr) minmax(0,160fr) minmax(0,120fr
 /** How many month cells the artboard draws per share. */
 const MONTH_CELLS = 4
 
-function Share({ share, recorded, mode }: { share: StandingShare | null; recorded: boolean; mode: RenderMode }): ReactNode {
-  if (!share || share.pct == null) {
-    const words = recorded ? NOT_OBSERVED : NOT_RECORDED
-    return mode === 'email'
-      ? <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>{words}</span>
-      : <span className="text-[12px] text-muted-foreground">{words}</span>
-  }
-  return <FigureCell mode={mode} value={standingText(share)} of={`${fmtInt(share.k)} of ${fmtInt(share.n)}`} />
+/** The words a cell says where there is no reading at all — never a zero, and
+ *  never four em dashes, which say neither of the two things that can be true. */
+function Absent({ recorded, mode }: { recorded: boolean; mode: RenderMode }): ReactNode {
+  const words = recorded ? NOT_OBSERVED : NOT_RECORDED
+  return mode === 'email'
+    ? <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>{words}</span>
+    : <span className="text-[12px] text-muted-foreground">{words}</span>
 }
 
-/** The four month cells of one share, in one row — the artboard's inner grid.
- *  A month with no reading is an em dash, never a zero. */
-function Months({ values, mode }: { values: (number | null)[]; mode: RenderMode }) {
+/**
+ * ONE CELL SHAPE FOR EVERY ROW, WITH THE UNIT AND THE DENOMINATOR.
+ *
+ * The first cut drew two shapes under one header: a `FigureCell` ("15% ·
+ * 6,200 of 41,200") where a brand carried no month series, and a row of bare
+ * values ("2.4 0.9 1.3") where it did. Three rows then answered two different
+ * questions under one heading, and the bare half dropped BOTH the unit and the
+ * "of N" — a reader could not tell that 15% and 2.4 were the same measure, nor
+ * what 2.4 was a share of. `StandingsSeriesPoint.attention` / `.content` are
+ * percentages (`competitive-surface.ts`, `round1(… * 100)`), so the `%` is the
+ * measure's own and is printed.
+ *
+ * THE NEWEST MONTH'S CELL CARRIES THE COUNTS UNDER THE ROW. A month point
+ * holds a percentage and nothing else; `StandingRow.attention` / `.content` is
+ * that same share for the table's newest read month WITH its k and n, so the
+ * denominator prints once, under the cells, naming the month it belongs to.
+ * The older months are levels with no denominator on record, which is why they
+ * are `figure` nodes and not `level` ones — a level node must carry its "of N"
+ * and this product does not manufacture one.
+ */
+function MonthCells({ months, values, newest, newestLabel, share, recorded, mode }: {
+  months: readonly string[]
+  values: readonly (number | null)[]
+  newest: string | null
+  newestLabel: string | null
+  share: StandingShare | null
+  recorded: boolean
+  mode: RenderMode
+}): ReactNode {
+  // The newest month's own cell comes off the row where the series has no
+  // point for it: the two are the same reading of the same month.
+  const cells = months.map((m, i) => (values[i] ?? (m === newest && share ? share.pct : null)))
+  if (cells.every((v) => v == null)) return <Absent recorded={recorded} mode={mode} />
+  const text = (v: number | null) => (v == null ? '—' : `${v}%`)
   if (mode === 'email') {
-    return <span style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.ink }}>{values.map((v) => (v == null ? '—' : v)).join(' · ')}</span>
+    return (
+      <span style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.ink }}>
+        {months.map((m, i) => `${monthName(m).split(' ')[0]} ${text(cells[i])}`).join(' · ')}
+        {share && share.pct != null ? ` · ${fmtInt(share.k)} of ${fmtInt(share.n)} in ${newestLabel}` : ''}
+      </span>
+    )
   }
   return (
-    <span className="flex gap-2">
-      {values.map((v, i) => (
-        <span
-          key={i}
-          data-copy="figure"
-          className={`font-mono text-[11.5px] tabular-nums ${i === values.length - 1 ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}
-        >
-          {v == null ? '—' : v}
+    <span className="flex min-w-0 flex-col gap-[1px]">
+      <span className="flex gap-2">
+        {cells.map((v, i) => (
+          <span
+            key={i}
+            data-copy="figure"
+            className={`font-mono text-[11.5px] tabular-nums ${i === cells.length - 1 ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}
+          >
+            {text(v)}
+          </span>
+        ))}
+      </span>
+      {share && share.pct != null ? (
+        <span data-copy="figure" className="whitespace-nowrap font-mono text-[9.5px] leading-[1.3] text-muted-foreground">
+          {fmtInt(share.k)} of {fmtInt(share.n)}
         </span>
-      ))}
+      ) : null}
     </span>
   )
 }
@@ -187,21 +229,35 @@ export const quarterlyRivals: Block<QuarterlyData> = {
     }
     /**
      * A ROW OF EM DASHES IS NOT AN ANSWER, AND THE TWO ANSWERS ARE DIFFERENT.
-     * Where a brand carries no month at all, the cell falls back to the words
-     * `Share` prints — "not observed" where the panel was read and this brand
-     * was not in it, "not recorded yet" where `month_audience_stats` (M5) does
-     * not exist here and nobody looked. Four dashes say neither, and the
+     * Where a brand carries no reading at all, the cell falls back to the
+     * words — "not observed" where the panel was read and this brand was not
+     * in it, "not recorded yet" where `month_audience_stats` (M5) does not
+     * exist here and nobody looked. Four dashes say neither, and the
      * distinction is the exact defect the Block B fix pass corrected on OV4.
      */
+    const newest = r.standings?.month ?? null
+    const newestLabel = newest ? monthName(newest).split(' ')[0] : null
     const cellFor = (
       audience: string,
       key: 'attention' | 'content',
       share: StandingShare | null,
     ): ReactNode => {
-      if (months.length === 0) return <Share share={share} recorded={r.recorded} mode={mode} />
-      const values = seriesFor(audience, key)
-      if (values.every((v) => v == null)) return <Share share={share} recorded={r.recorded} mode={mode} />
-      return <Months values={values} mode={mode} />
+      if (months.length === 0) {
+        return share && share.pct != null
+          ? <FigureCell mode={mode} value={standingText(share)} of={`${fmtInt(share.k)} of ${fmtInt(share.n)}`} />
+          : <Absent recorded={r.recorded} mode={mode} />
+      }
+      return (
+        <MonthCells
+          months={months}
+          values={seriesFor(audience, key)}
+          newest={newest}
+          newestLabel={newestLabel}
+          share={share}
+          recorded={r.recorded}
+          mode={mode}
+        />
+      )
     }
     const refusedWhy = (verdict: { state: string; refusedReason?: string | null } | null): string | null =>
       verdict && verdict.state === 'refused' && verdict.refusedReason
@@ -218,8 +274,12 @@ export const quarterlyRivals: Block<QuarterlyData> = {
           template={TEMPLATE}
           cells={[
             'Brand',
-            `Attention · ${months.map((m) => monthName(m).split(' ')[0]).join(' ')}`,
-            `Content · ${months.map((m) => monthName(m).split(' ')[0]).join(' ')}`,
+            // THE UNIT IS IN THE HEADER, WHICH IS THE ARTBOARD'S OWN ANSWER
+            // ("ATTENTION %"). Every cell under it is a percentage and each
+            // one prints its own `%` as well: a header is read once and a row
+            // is scanned, and the deck is a PDF nobody can hover.
+            `Attention % · ${months.map((m) => monthName(m).split(' ')[0]).join(' ')}`,
+            `Content % · ${months.map((m) => monthName(m).split(' ')[0]).join(' ')}`,
             'Change · attention',
           ]}
         />
@@ -242,7 +302,7 @@ export const quarterlyRivals: Block<QuarterlyData> = {
         ))}
         <div className={email ? undefined : 'mt-2 flex flex-col gap-1'}>
           {months.length > 0 ? (
-            <Note mode={mode}>The newest month is the bold column; both shares are of the month’s tracked set.</Note>
+            <Note mode={mode}>The newest month is the bold column, and the counts under each cell are that month’s ({newestLabel}); both shares are of the month’s tracked set.</Note>
           ) : null}
           {/* `qr.p5.standings.note` · the two denominators as figures, and the
               per-month tracking rules with their dates. Both were carried on
