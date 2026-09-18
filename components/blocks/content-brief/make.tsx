@@ -1,0 +1,385 @@
+import type { ReactNode } from 'react'
+import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
+import { BlockMovement } from '@/components/blocks/movement'
+import { BlockQuote } from '@/components/blocks/quote'
+import type { Block, RenderMode } from '@/lib/blocks/types'
+import { EMAIL, FONT } from '@/lib/email/theme'
+import { fmtInt, fmtPct, fullDate, longMonth } from '@/lib/format'
+import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
+import type { AdviceRow, MarketSurfaceData } from '@/lib/pages/market-surface'
+import { madeInMonth } from '@/lib/pages/market-surface'
+
+// The content brief's page 2 — "Three things to make, and one to stop"
+// (Block D wave 2, package E-content; artboard ContentBrief.dc.html slide 2).
+//
+// THE SAME ROWS, IN THE MOCK'S ANATOMY. `market.advice` draws the ledger as a
+// four-column table — what it was · first made · repeated · what you decided —
+// and the brief already borrows it. The artboard draws the SAME identities as
+// three numbered cards: the advice, its provenance, the reading behind it, a
+// quote in the speaker's own words, and what happened afterwards. So this block
+// takes `MarketSurfaceData` — the surface the brief already loads, at no second
+// read — and draws the cards. Nothing here recomputes a ledger row.
+//
+// WHAT THE ARTBOARD HAS THAT THIS DOES NOT, AND WHY:
+//
+//   · the share and its badge ("4.3% of 1,388 ▲ 1.4 pts"). `AdviceRow` carries
+//     no month reading of its own — nothing joins a ledger row to a theme id at
+//     the row level. What it DOES carry is `afterwards`, which is a banded
+//     month-against-month reading of the identity the advice is about, taken
+//     after the client decided. That is the reading printed here, with both
+//     sides' k and n and the band beside the word, and it is labelled as what
+//     it is rather than as "this month's share".
+//
+//   · the sparkline and the "Jul 5.1 · Aug 6.8 · Sep 9.4" trail. Same reason: a
+//     ledger row carries two month readings, not a series. Drawing a line
+//     through two points would be a direction claim (D3), which two points
+//     cannot earn.
+//
+//   · "growing, 3rd month". `directionWordsFor('documents.trajectory')` is
+//     false and `shownTrajectory` blanks a stored one at render (D1/D5). The
+//     badge alone is what a brief may print.
+//
+//   · the confidence dots. `ConfidenceDots` is a finding page's field
+//     (`page.meta.sure`); a ledger row has no confidence, and three dots with
+//     nothing behind them is the score this product does not show.
+//
+//   · "8 answered last week · 4 ignored" and the reply rows. Nothing records
+//     whether a reply was sent (D6), and the inbox those rows come from is
+//     `lib/pages/content.ts`, which another package is moving this wave.
+
+/** How many "things to make" a brief prints. The mock's three, and the reason
+ *  is the mock's: a page of cards a reader acts on is three, and the ledger
+ *  behind it is a table (`ct.advice`) that prints twelve. */
+export const MAKE_SHOWN = 3
+
+/**
+ * The ledger rows a brief calls "things to make": STILL ON THE TABLE, oldest
+ * first, which is the ledger's own order and the honest answer to "what has
+ * been sitting here".
+ *
+ * TWO STATUSES ARE OUT, AND ONE OF THEM USED TO BE IN (design review 2, code
+ * review 2). `dismissed` is the stop card. `acted_on` reads **"Done"**
+ * (lib/calibration.ts REC_STATUS_LABEL) and the ledger is sorted oldest-first,
+ * so the three oldest rows won regardless of status: on production's own shape
+ * — two `acted_on`, one `new` — cards 01 and 02 were both chipped Done and the
+ * only open item sat third. A client opening a page titled after things to make
+ * read two items they had already made as their top two instructions.
+ */
+export function toMake(rows: readonly AdviceRow[], shown = MAKE_SHOWN): AdviceRow[] {
+  return rows.filter((r) => r.status !== 'dismissed' && r.status !== 'acted_on').slice(0, shown)
+}
+
+/**
+ * The one "what not to make" — the most recently dismissed piece of advice.
+ *
+ * NEWEST DECISION FIRST, not newest advice: the card is about a decision the
+ * client made, so the decision's own date orders it. A dismissal with no date
+ * (a status set before `rec_decisions` was applied) sorts last rather than
+ * being dropped, because the row is still a dismissal.
+ */
+export function toStop(rows: readonly AdviceRow[]): AdviceRow | null {
+  const dismissed = rows.filter((r) => r.status === 'dismissed')
+  if (dismissed.length === 0) return null
+  return [...dismissed].sort(
+    (a, b) => (b.decidedAt ?? '').localeCompare(a.decidedAt ?? '') || b.firstMade.localeCompare(a.firstMade),
+  )[0]
+}
+
+/**
+ * "First raised July · advised in 2 months · Dismissed 28 Jul · grounded in 3
+ * videos" — the card's mono provenance line, every clause a field.
+ *
+ * THE GROUNDING IS A COUNT HERE AND A SENTENCE ONCE, UNDER THE ROW.
+ * `Grounding.line` states its own basis in full ("counted over everything we
+ * have read for you up to September, not over one month"), which is right on a
+ * table with one row per line and is four lines of a card at 1123 × 631 —
+ * printed four times, once per card, saying the same thing. `GROUNDING_BASIS`
+ * is that sentence, said once; a row whose evidence was PRUNED still gets its
+ * own words, because that is a fact about the row and not about the basis.
+ */
+export function provenance(row: AdviceRow): string {
+  const parts = [`First raised ${madeInMonth(row.firstMade)}`]
+  if (row.monthsRepeated > 1) parts.push(`advised in ${fmtInt(row.monthsRepeated)} months`)
+  else if (row.repeatedWithinMonth) parts.push('advised twice, in one month')
+  if (row.status !== 'new') parts.push(row.decidedAt ? `${row.statusLabel} ${fullDate(row.decidedAt)}` : row.statusLabel)
+  if (row.grounded && !row.grounded.pruned) parts.push(`grounded in ${fmtInt(row.grounded.videos)} ${row.grounded.videos === 1 ? 'video' : 'videos'}`)
+  return parts.join(' · ')
+}
+
+export const GROUNDING_BASIS =
+  'A card’s grounding is counted over everything we have read for you, not over one month.'
+
+/**
+ * THE DISMISSED CHIP READS IN INK, NOT IN RED (design review 8, code review 12).
+ * `text-negative` on `bg-negative/15` measured 3.64:1 at 11px — the app-wide
+ * chip pattern, and under the line wherever it is used. The tint stays, so the
+ * chip still reads as the negative one; the WORD is `text-foreground` on it,
+ * which is above 10:1. The card around it carries the rest of the signal — a
+ * negative border and a negative headline, both on the card's own background.
+ */
+function Chip({ tone, children }: { tone: 'new' | 'done' | 'plain' | 'stop'; children: ReactNode }) {
+  const cls =
+    tone === 'done' ? 'bg-accent text-accent-foreground'
+    : tone === 'new' ? 'bg-warning/20 text-foreground'
+    : tone === 'stop' ? 'bg-negative/15 text-foreground'
+    : 'bg-inner text-secondary-foreground'
+  return <span className={`inline-flex flex-none items-center rounded-full px-2.5 py-[3px] font-mono text-[11px] leading-none ${cls}`}>{children}</span>
+}
+
+const toneOf = (row: AdviceRow): 'new' | 'done' | 'plain' | 'stop' =>
+  row.status === 'dismissed' ? 'stop' : row.status === 'acted_on' ? 'done' : row.status === 'new' ? 'new' : 'plain'
+
+const chipWord = (row: AdviceRow): string =>
+  row.status === 'new' ? `new · raised ${madeInMonth(row.firstMade)}` : row.statusLabel
+
+/** The reading behind a row: both sides' k and n, and the band beside the word.
+ *  Null where the advice earned no comparison — the card then prints the
+ *  sentence that says why, which `afterwards.line` always carries. */
+function Reading({ verdict, mode }: { verdict: Verdict | null; mode: RenderMode }) {
+  if (!verdict) return null
+  const { k, n } = verdict.value
+  return (
+    <span className="flex flex-wrap items-baseline gap-2.5">
+      <span className="flex-none">
+        <FigureCell mode={mode} value={n > 0 ? fmtPct((k / n) * 100) : fmtInt(k)} of={`${fmtInt(k)} of ${fmtInt(n)} videos`} />
+      </span>
+      <BlockMovement verdict={verdict} unit="pts" mode={mode} />
+    </span>
+  )
+}
+
+/**
+ * The stop card's headline, and why it is not the advice (design review 3).
+ *
+ * The card printed the stored title — "Lead with price comparisons against
+ * Ottobock" — at 17px semibold, the largest type on the card, negated only by a
+ * 10.5px mono eyebrow above it. Scanned at a glance, which is how a four-column
+ * row is read, it was a fourth thing to MAKE. The artboard solved it in the
+ * words ("Stop leading with price comparisons against Freitag"); we cannot,
+ * because those words are `pass_d_b_recommendation`'s own and rewriting a
+ * model's stored sentence is the one thing a render may never do.
+ *
+ * So the negation is carried by the card's STRUCTURE: the headline is code's
+ * ("What not to make"), the advice sits under it at body size behind a label
+ * that says what it is, and the largest, boldest thing on the card is the one
+ * word a scanner needs.
+ */
+const STOP_HEAD = 'What not to make'
+/** The eyebrow, in the numeral's slot. Short because the chip beside it already
+ *  says "Dismissed" and the provenance line under it says when. */
+const STOP_LABEL = 'Stop'
+
+/**
+ * A CARD IS A FIXED BOX, SO ITS VARIABLE PROSE IS BOUNDED (design review 10).
+ *
+ * The slide body is 563px with `overflow: hidden` (app/globals.css
+ * `.vb-slide-body`) and `data-overflow` is only ever toggled inside the
+ * document editor — never on the export path — so nothing signals a clip in a
+ * PDF. Three of a card's strings are model-written and length-checked nowhere
+ * in the product: the advice's title, the commenter's quote and Pass D-b's
+ * argument. Measured on the fix pass's own stress fixture (`longContentLedger`,
+ * every one of them at its worst), the row ran 179px past the sheet and the
+ * bottom of a card went with it.
+ *
+ * Clamped, each to the lines the artboard's own card gives it — except the
+ * `afterwards` sentence, which is clamped at three because it is the one that
+ * says why a comparison was REFUSED, and half of "we compare from 2" is a worse
+ * sentence than none. A clamp is
+ * VISIBLE — the ellipsis is on the page and the full string is in the element's
+ * title — where a clip is not, and every clamped string is also printed in full
+ * on the ledger section two slides earlier. The quote is clamped last and least
+ * for the reason the file already gives: a commenter's own words are on this
+ * page or nowhere.
+ */
+function Card({ row, n, mode }: { row: AdviceRow; n: number | null; mode: RenderMode }) {
+  const stop = n == null
+  return (
+    <div className={`flex min-w-0 flex-col gap-1 rounded-md border px-4 py-3 ${stop ? 'border-negative/40 bg-tile' : 'border-border bg-tile'}`}>
+      <div className="flex items-center justify-between gap-2">
+        {stop
+          ? <span className="font-mono text-[13px] font-medium uppercase tracking-[0.06em] text-negative">{STOP_LABEL}</span>
+          : <span className="font-mono text-[13px] font-medium tabular-nums text-primary">{String(n).padStart(2, '0')}</span>}
+        <Chip tone={toneOf(row)}>{chipWord(row)}</Chip>
+      </div>
+      {/* THE ADVICE'S OWN WORDS, WRITTEN BY PASS D-b AND READ BACK OUT OF A
+          COLUMN — the `stored` kind, naming the slot that adjudicated them
+          (lib/test/copy-contract.ts). On the stop card they are the SUBJECT of
+          the headline rather than the headline. */}
+      {stop ? (
+        <>
+          <h3 className="m-0 text-[17px] font-semibold leading-[1.2] tracking-[-0.01em] text-negative">{STOP_HEAD}</h3>
+          <p
+            data-copy="stored"
+            data-slot="pass_d_b_recommendation"
+            title={row.title}
+            className="m-0 line-clamp-3 text-[13px] font-normal leading-[1.3] text-secondary-foreground"
+          >
+            {row.title}
+          </p>
+        </>
+      ) : (
+        <h3
+          data-copy="stored"
+          data-slot="pass_d_b_recommendation"
+          title={row.title}
+          className="m-0 line-clamp-2 text-[17px] font-semibold leading-[1.2] tracking-[-0.01em] text-foreground"
+        >
+          {row.title}
+        </h3>
+      )}
+      <p className="m-0 font-mono text-[10.5px] leading-[1.35] text-muted-foreground">{provenance(row)}</p>
+      {row.grounded?.pruned ? <p className="m-0 line-clamp-2 text-[12px] leading-[1.4] text-muted-foreground">{row.grounded.line}</p> : null}
+      <div className="flex flex-col gap-1 rounded-md bg-inner px-3 py-2.5">
+        <p className="m-0 font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">What the conversation did after</p>
+        <Reading verdict={row.afterwards.verdict} mode={mode} />
+        <p className="m-0 line-clamp-3 text-[11.5px] leading-[1.4] text-secondary-foreground">{row.afterwards.line}</p>
+      </div>
+      {/* THE QUOTE BEFORE THE ARGUMENT, WHICH IS THE ARTBOARD'S ORDER AND THE
+          SAFER ONE. A card is a fixed box on a 1123 × 631 sheet and the last
+          thing in it is what a long row clips; the model's argument is also on
+          the ledger section two slides earlier, and a commenter's own words are
+          on this page or nowhere. */}
+      {row.quote ? (
+        <div className="[&_p]:line-clamp-2">
+          <BlockQuote quote={row.quote} mode={mode} />
+        </div>
+      ) : null}
+      {row.why ? (
+        <p data-copy="stored" data-slot="pass_d_b_recommendation" title={row.why} className="m-0 line-clamp-2 text-[12px] leading-[1.4] text-secondary-foreground">
+          {row.why}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
+function EmailCard({ row, n }: { row: AdviceRow; n: number | null }) {
+  const stop = n == null
+  return (
+    <div style={{ marginTop: 10, paddingTop: 8, borderTop: `1px solid ${EMAIL.hairline}` }}>
+      <div style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted }}>
+        {stop ? 'Stop' : String(n).padStart(2, '0')} · {chipWord(row)}
+      </div>
+      {/* THE HEADLINE IS CODE'S ON THE STOP CARD (design review 3) — the same
+          structural negation the app and print arms draw, because an email is
+          scanned harder than a sheet. */}
+      {stop ? (
+        <div style={{ fontFamily: FONT.sans, fontSize: 14, fontWeight: 600, color: EMAIL.ink, marginTop: 3 }}>{STOP_HEAD}</div>
+      ) : null}
+      {stop ? (
+        <div style={{ fontFamily: FONT.mono, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.6px', color: EMAIL.muted, marginTop: 3 }}>{STOP_LABEL}</div>
+      ) : null}
+      <div
+        data-copy="stored"
+        data-slot="pass_d_b_recommendation"
+        style={{ fontFamily: FONT.sans, fontSize: stop ? 12.5 : 14, fontWeight: stop ? 400 : 600, color: stop ? EMAIL.ink2 : EMAIL.ink, marginTop: 3 }}
+      >
+        {row.title}
+      </div>
+      <div style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted, marginTop: 3 }}>{provenance(row)}</div>
+      <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink2, marginTop: 4 }}>{row.afterwards.line}</div>
+      {row.quote ? <BlockQuote quote={row.quote} mode="email" /> : null}
+    </div>
+  )
+}
+
+/** Every row the block draws, computed once. `verdicts()` and `quotes()` each
+ *  re-ran `toMake` and called `toStop` twice inside themselves — four
+ *  traversals of the ledger per `blockAnswers` (code review 12). */
+export function shownRows(data: MarketSurfaceData): AdviceRow[] {
+  const stop = toStop(data.advice.rows)
+  return [...toMake(data.advice.rows), ...(stop ? [stop] : [])]
+}
+
+export const contentMake: Block<MarketSurfaceData> = {
+  key: 'content.make',
+  // NOT "THREE THINGS TO MAKE, AND ONE TO STOP" (design review 15). A block
+  // title is fixed and the ledger is not: the same words printed over two open
+  // items, over none, and — on the empty arm — over "Advice lands with your
+  // next update." The mock's "3 to make · 1 to stop" is a COUNT, and a count
+  // belongs where a count can be recomputed, which is the meta line below and
+  // the cover's stamp. The title says what the page is.
+  title: 'What to make, and what to stop',
+  question: 'What has the conversation asked for, and what did you decide about each one?',
+
+  render(data, mode = 'app') {
+    const empty = contentMake.emptyState(data)
+    if (empty) {
+      return (
+        <BlockFrame title={contentMake.title} question={contentMake.question} mode={mode}>
+          <BlockEmpty mode={mode}>{empty}</BlockEmpty>
+        </BlockFrame>
+      )
+    }
+    const make = toMake(data.advice.rows)
+    const stop = toStop(data.advice.rows)
+    // THE COUNTS THE TITLE NO LONGER CLAIMS, where they can be recomputed from
+    // the rows actually drawn (design review 15).
+    const meta = `${fmtInt(make.length)} to make${stop ? ' · 1 to stop' : ''} · ${fmtInt(data.advice.total)} in the ledger`
+
+    if (mode === 'email') {
+      return (
+        <BlockFrame title={contentMake.title} question={contentMake.question} mode={mode} meta={meta} footerNote={data.advice.actedLine}>
+          <div>
+            {make.map((r, i) => <EmailCard key={r.lineageId} row={r} n={i + 1} />)}
+            {stop ? <EmailCard row={stop} n={null} /> : null}
+          </div>
+        </BlockFrame>
+      )
+    }
+
+    return (
+      <BlockFrame
+        title={contentMake.title}
+        question={contentMake.question}
+        mode={mode}
+        header={mode !== 'print'}
+        meta={meta}
+        footer={data.advice.actedLine}
+        footerNote={`${longMonth(data.month)} \u00b7 ${GROUNDING_BASIS}`}
+      >
+        <div className="flex min-w-0 flex-col gap-3">
+          {/* ONE ROW, AND THE STOP CARD IS THE LAST COLUMN. The artboard puts
+              the three make cards on page 2 and the one stop card in page 4's
+              right pane; folded into one section they have to share a slide,
+              and a full-width stop card under three columns runs off the
+              sheet. Four columns keeps every card on the page at the mock's
+              own density, and the stop card keeps its own eyebrow. */}
+          {/* `items-start`, SO A CARD IS ITS OWN HEIGHT. Stretched, the row
+              was as tall as the fullest card and the thinnest — a row with no
+              reading, no quote and no argument yet — was a bordered box two
+              thirds white (design review 2's second half). The mock's three
+              cards are all full because the mock's three rows all carry
+              everything; ours do not, and a short card that ends where its
+              content ends says so. */}
+          <div className={`grid min-w-0 items-start gap-[18px] ${stop ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
+            {make.map((r, i) => <Card key={r.lineageId} row={r} n={i + 1} mode={mode} />)}
+            {stop ? <Card key={stop.lineageId} row={stop} n={null} mode={mode} /> : null}
+          </div>
+          {!data.advice.recorded ? (
+            <p className="m-0 text-[11.5px] leading-[1.4] text-muted-foreground">{data.advice.unlock}</p>
+          ) : null}
+        </div>
+      </BlockFrame>
+    )
+  },
+
+  figures(data): FigureTable {
+    const out: FigureTable = {}
+    out.content_advice_total = { value: data.advice.total, unit: 'videos', label: `${fmtInt(data.advice.total)} pieces of advice` }
+    out.content_advice_acted = { value: data.advice.acted, unit: 'videos', label: `${fmtInt(data.advice.acted)} acted on` }
+    return out
+  },
+
+  verdicts(data): Verdict[] {
+    return shownRows(data).map((r) => r.afterwards.verdict).filter((v): v is Verdict => v != null)
+  },
+
+  quotes(data) {
+    return shownRows(data).map((r) => r.quote?.ref).filter((ref): ref is string => !!ref)
+  },
+
+  emptyState(data) {
+    return data.advice.rows.length === 0 ? data.advice.empty ?? 'Advice lands with your next update.' : null
+  },
+}

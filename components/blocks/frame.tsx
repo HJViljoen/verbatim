@@ -37,7 +37,7 @@ import { cn } from '@/lib/utils'
  * chrome rather than content and lives here.
  */
 export function BlockFrame({
-  title, question, mode = 'app', footer, footerNote, meta, heading = false, lead, actions,
+  title, question, mode = 'app', footer, footerNote, meta, heading = false, header = true, lead, actions,
   truncateFooter = false, children, className, accent = false,
 }: {
   title: string
@@ -63,6 +63,36 @@ export function BlockFrame({
    *  passing these on a print or email arm is passing a picture of a button,
    *  so it is the caller that branches, not this. */
   actions?: ReactNode
+  /**
+   * Draw the block's own heading row at all (Block D wave 2, E-content —
+   * ADDITIVE, default unchanged).
+   *
+   * NAMED `header`, NOT `heading` (merge, Block D wave 2). E-subjects landed a
+   * `heading` in the same wave and it is a different question — the SCALE the
+   * title is set at — so two booleans with one name and opposite defaults
+   * would have been one silent behaviour change per call site.
+   *
+   * A BORROWED BLOCK ON A BRIEF ALREADY HAS A HEADING: the slide's `<h1>` is
+   * the section's title (components/print/slide.tsx) and the block's own
+   * `<h2>` prints the same idea again, in caps, one line under it — two
+   * headings for one section, which the artboards draw once. A block that
+   * knows it is inside a titled sheet passes `header={false}` and keeps the
+   * footer and the footer note, which are the block's and not the section's.
+   * Nothing else changes: the default is true and every existing call site is
+   * untouched.
+   *
+   * THE META GOES WITH THE HEADING (E-content design review 7, code review 9).
+   * It was re-emitted as a right-aligned mono paragraph, which put "September"
+   * two lines under a slide header already reading "Content brief · September
+   * 2026", "September · still filling" under another and "64 in the ledger ·
+   * oldest first" under a third — none of them in the artboard, each landing in
+   * the dead space between the framing line and the first eyebrow. `meta` is
+   * the right-hand half of the heading ROW; a slide that prints no heading
+   * prints no heading row, and a block with something to say about its own
+   * basis says it in the body or in the footer note, where a reader can see
+   * what it is about.
+   */
+  header?: boolean
   /** The line along the bottom, LEFT: a link deeper. */
   footer?: ReactNode
   /**
@@ -183,7 +213,12 @@ export function BlockFrame({
   const big = mode === 'print'
   return (
     <section className={cn('flex min-w-0 flex-col gap-2.5', className)}>
-      {/* THREE ADDITIVE FLAGS IN ONE HEADER (merge, Block D wave 2).
+      {/* FOUR ADDITIVE FLAGS IN ONE HEADER (merge, Block D wave 2).
+          `header` (E-content) says whether the row is drawn at ALL — a block
+          borrowed onto a titled brief sheet already has the slide's `<h1>`
+          above it, and its own `<h2>` printed the same idea again one line
+          under it. The question and the meta go with the row, because the meta
+          is the row's right-hand half.
           `heading` (E-subjects) sets the title at heading scale for the one
           block a page is about; `accent` (E-monthly) is the artboards' ruled
           mono eyebrow; `actions` (E-subjects) is the app's controls at the
@@ -194,6 +229,7 @@ export function BlockFrame({
           test on that string is updated with this reason. `heading` wins over
           `accent` where a caller passes both: a 20px heading with a 2px rule
           before it is neither of the two things the artboards draw. */}
+      {header ? (
       <header className={cn('flex gap-2', heading ? 'items-center justify-between gap-4' : 'items-baseline justify-between')}>
         {heading ? (
           <span className="flex min-w-0 items-baseline gap-2.5">
@@ -223,7 +259,8 @@ export function BlockFrame({
         )}
         {actions ? <span className="flex flex-none items-center gap-2">{actions}</span> : null}
       </header>
-      {question ? <p className={cn('m-0 text-muted-foreground', big ? 'text-[11.5px]' : 'text-[12.5px]')}>{question}</p> : null}
+      ) : null}
+      {header && question ? <p className={cn('m-0 text-muted-foreground', big ? 'text-[11.5px]' : 'text-[12.5px]')}>{question}</p> : null}
       {heading && lead ? (
         <p className="m-0 font-serif text-[17px] font-medium leading-[1.35] tracking-[-0.005em] text-foreground [text-wrap:pretty]">{lead}</p>
       ) : null}

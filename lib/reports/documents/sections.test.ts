@@ -5,10 +5,12 @@ import { SUBJECT_BLOCKS } from '../../../components/pages/subjects'
 import { VOICE_BLOCKS } from '../../../components/pages/voice-surface'
 import { MARKET_BLOCKS } from '../../../components/pages/market-surface'
 import { COMPETITIVE_BLOCKS } from '../../../components/pages/competitive-surface'
+import { CONTENT_BRIEF_BLOCKS, contentMake } from '../../../components/blocks/content-brief'
 import { OWNER_LABEL } from '../../readiness/types'
 import { DOCUMENT_ROLES } from './types'
 import {
   BRIEF_MAPS,
+  BRIEF_SURFACES,
   briefMap,
   missingInputs,
   missingSentence,
@@ -21,12 +23,23 @@ import {
   type ReadinessLike,
 } from './sections'
 
+// MIRRORS `BLOCKS` IN `load-reading.ts`, WHICH IS THE ONE TABLE. Imported by
+// hand rather than from there because that module imports five page loaders,
+// each of which reaches Supabase at module scope, and this tier is pure. Two
+// entries are not a page's block array and say why:
+//   · `content` is the content brief's own surface (Block D wave 2, E-content):
+//     its two blocks are the brief's, not a page's, because the formats table
+//     is CO7 (unmounted) and the record slide is a Settings drawer.
+//   · `contentMake` renders `MarketSurfaceData` in the content artboard's card
+//     anatomy and is reachable on the MARKET surface without being in
+//     `MARKET_BLOCKS` — adding it there would mount a tile on the Market page.
 const KEYS: Record<string, readonly { key: string }[]> = {
   overview: OVERVIEW_BLOCKS,
   subjects: SUBJECT_BLOCKS,
   voice: VOICE_BLOCKS,
-  market: MARKET_BLOCKS,
+  market: [...MARKET_BLOCKS, contentMake],
   competitive: COMPETITIVE_BLOCKS,
+  content: CONTENT_BRIEF_BLOCKS,
 }
 
 const READINESS: ReadinessLike[] = [
@@ -52,6 +65,31 @@ describe('the four section maps', () => {
     }
   })
 
+  // THE MIRROR IS CHECKED AGAINST THE SURFACE LIST IT MIRRORS (E-content code
+  // review 8). `KEYS` is a hand-written copy of `BLOCKS` in `load-reading.ts`,
+  // for the reason above it; nothing forced the two to name the same surfaces,
+  // so a surface added there and forgotten here would simply not be asserted.
+  it('the mirrored block table names every brief surface and no other', () => {
+    expect(Object.keys(KEYS).sort()).toEqual([...BRIEF_SURFACES].sort())
+  })
+
+  // `content.make` IS REACHABLE ON THE MARKET SURFACE WITHOUT BEING A MARKET
+  // PAGE BLOCK, and `blockReading` runs every block of a loaded surface — so
+  // the day a second map borrows any market block, it would inherit this
+  // block's figures, verdicts and quote refs into its own `BriefReading`, and
+  // `confidenceOf` / `countRefused` / the cover prompt would all argue from
+  // them. Contained today by the fact that only CONTENT_MAP names the market
+  // surface at all; that containment is asserted here rather than left to luck.
+  it('content.make is drawn by the content map and by no other', () => {
+    for (const role of DOCUMENT_ROLES) {
+      const blocks = sectionsOf(briefMap(role)).map((s) => s.block)
+      if (role === 'content_brief') expect(blocks).toContain('content.make')
+      else expect(blocks, `${role} borrows content.make`).not.toContain('content.make')
+    }
+    const borrowsMarket = DOCUMENT_ROLES.filter((role) => surfacesOf(briefMap(role)).includes('market'))
+    expect(borrowsMarket).toEqual(['content_brief'])
+  })
+
   it('a section id is unique across every map — it names a slide and an edit', () => {
     const ids = Object.values(BRIEF_MAPS).flatMap((m) => sectionsOf(m).map((s) => s.id))
     expect(new Set(ids).size).toBe(ids.length)
@@ -67,7 +105,10 @@ describe('the four section maps', () => {
 
   it('surfacesOf names only the surfaces a map borrows from', () => {
     expect(surfacesOf(briefMap('leadership_brief'))).toEqual(['overview', 'competitive'])
-    expect(surfacesOf(briefMap('content_brief'))).toEqual(['subjects', 'market'])
+    // The content brief gained `overview` (the `ct.ways` block-key fix: it
+    // draws `overview.category`, the block its own words describe) and
+    // `content` (its own two slides) in Block D wave 2 (E-content).
+    expect(surfacesOf(briefMap('content_brief'))).toEqual(['overview', 'subjects', 'market', 'content'])
     // E-marketing: the artboard's slide 2 carries the monthly line, which is
     // `subjects.line`, so the marketing brief now pays for a second loader.
     expect(surfacesOf(briefMap('market_brief'))).toEqual(['overview', 'subjects'])

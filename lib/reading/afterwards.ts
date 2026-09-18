@@ -349,8 +349,15 @@ export function afterwardsFor(input: AfterwardsInput): Afterwards {
         `and we do not compare until ${fmtInt(minReadings)} have been read. ${monthName(decidedMonth)} itself is in neither side — ` +
         // A decision dated the 1st was not made partway through anything. The
         // month is still left out of both sides, and the reason is the same
-        // one either way: the decision falls inside it.
-        `${input.decidedAt.slice(8, 10) === '01' ? 'your decision falls at the start of it' : 'you decided partway through it'}.`,
+        // one either way: the decision sits inside it.
+        //
+        // "SITS", NOT "FALLS" (E-content fix pass, wave 2). `falls` is on the
+        // shared movement list (lib/calibration.ts DIRECTION_WORDS), so this
+        // sentence — code's own, unmarked, and printed on every ledger row
+        // decided on the 1st with fewer than two readings since — failed copy
+        // contract rule (c) on any block that renders it. Nothing here claims a
+        // direction; the word was the whole violation.
+        `${input.decidedAt.slice(8, 10) === '01' ? 'your decision sits at the start of it' : 'you decided partway through it'}.`,
     }
   }
   if (before.length === 0) {

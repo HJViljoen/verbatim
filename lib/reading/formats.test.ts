@@ -275,6 +275,12 @@ describe('formatMatrix · three audiences, one table', () => {
     // sixth, and neither is a row the two-row table prints.
     expect(wide.median.value).toBe(2.9)
     expect(belowMedian(wide).map((r) => r.key)).toEqual(['promotional', 'tutorial'])
+    // AND THE COUNT OF WHAT WAS LEFT OFF IS THE READING'S, NOT THE KEY LIST'S
+    // (E-content code review 7): `keys` is already cut by `top`, so a caller
+    // subtracting its own row count from `keys.length` undercounts by every
+    // key that ranked below `top` on every side.
+    expect(m.keysTotal).toBe(7)
+    expect(m.keysTotal).toBeGreaterThan(m.keys.length)
   })
 
   it('says nothing at all where fewer than two rows carry a median', () => {

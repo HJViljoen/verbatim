@@ -30,9 +30,19 @@ import type { DocPageKind, DocumentRole } from './types'
 
 /** The surfaces a brief may borrow a block from. Each one is a page loader
  *  plus a block array; nothing else in the product answers `figures()`. */
-export type BriefSurface = 'overview' | 'subjects' | 'voice' | 'competitive' | 'market'
+export type BriefSurface = 'overview' | 'subjects' | 'voice' | 'competitive' | 'market' | 'content'
 
-export const BRIEF_SURFACES: readonly BriefSurface[] = ['overview', 'subjects', 'voice', 'competitive', 'market']
+/**
+ * `content` IS NOT A PAGE, AND IT IS STILL A SURFACE (Block D wave 2,
+ * E-content). Every other entry here is a reading page a client opens; this one
+ * is the content brief's own loader (`lib/pages/content-brief.ts`), and it
+ * exists because two of that brief's slides have no page to borrow from — the
+ * formats/hooks/engagement table is CO7, which Competitive has not mounted, and
+ * the record slide is a Settings drawer rather than a reading block. Appended
+ * last so `surfacesOf`'s order — which is this array's — is unchanged for the
+ * three maps that do not name it.
+ */
+export const BRIEF_SURFACES: readonly BriefSurface[] = ['overview', 'subjects', 'voice', 'competitive', 'market', 'content']
 
 /**
  * What a section needs before it can say anything, named by its readiness row
@@ -399,13 +409,40 @@ export const SALES_MAP: readonly BriefEntry[] = [
 export const CONTENT_MAP: readonly BriefEntry[] = [
   page('in_short'),
   page('finding'),
+  // THE ARTBOARD'S PAGE 2, AND THE LEDGER BEHIND IT — two sections over one
+  // body of data (Block D wave 2, E-content). `ct.make` draws the ledger's
+  // top rows as the mock's numbered cards, with the reading and the quote each
+  // one rests on; `ct.advice` keeps the whole table behind it, which is what a
+  // reader goes to when they want the twelve rather than the three. Both read
+  // `MarketSurfaceData`, so the pair costs one surface load.
+  // THE TITLE AND THE FRAMING SAY NOTHING THE ROWS MIGHT NOT (design review 15).
+  // They were "Three things to make" and "…with the count behind it", printed
+  // unchanged over two rows, over none, and over a card whose advice has no
+  // reading yet. A section's words are fixed; the ledger is not, so the counts
+  // live on the block, which recomputes them from the rows it drew.
   block({
-    id: 'ct.advice', block: 'market.advice', surface: 'market',
-    title: 'What to make next', framing: 'What the conversation asked for, and what was decided about each one.',
+    id: 'ct.make', block: 'content.make', surface: 'market',
+    title: 'What to make next', framing: 'Each one is something the conversation asked for, with the reading behind it where there is one.',
     needs: [],
   }),
   block({
-    id: 'ct.ways', block: 'market.ways', surface: 'market',
+    id: 'ct.advice', block: 'market.advice', surface: 'market',
+    title: 'The ledger behind them', framing: 'Every piece of advice on record, and what was decided about each one.',
+    needs: [],
+  }),
+  // THE BLOCK KEY WAS WRONG, AND THE TITLE WAS RIGHT (Block D wave 2, E-content).
+  // `market.ways` renders "How a move is made" — the five ways to act and the
+  // say-vs-hear claims table (components/pages/market-surface/ways.tsx) — under
+  // a title and a framing that promise where the category is talking and what
+  // about. A content brief's reader met a heading about the category and a page
+  // about our own workflow. `overview.category` is the block those words
+  // describe ("What the category is saying · What is this category talking
+  // about, and how does it feel about it?"), so the KEY moves and the words
+  // stay. The section id does not move: it names a slide and an edit in
+  // `report_edits`, and every brief already built keeps drawing what its own
+  // frozen `DocBriefSection.block` names.
+  block({
+    id: 'ct.ways', block: 'overview.category', surface: 'overview',
     title: 'Ways in', framing: 'Where the category is already talking, and what it is talking about.',
     needs: ['months-of-history'],
   }),
@@ -415,6 +452,18 @@ export const CONTENT_MAP: readonly BriefEntry[] = [
     needs: ['subject-set'],
   }),
   page('asked'),
+  // THE MOCK'S PAGE 3 AND PAGE 5 (Block D wave 2, E-content). Both are the
+  // brief's own reading — see the `content` surface above.
+  block({
+    id: 'ct.playbook', block: 'content.playbook', surface: 'content',
+    title: 'Hooks and formats that worked', framing: 'What the category makes, what you make, and what is rated highest — every row with the number it is counted from.',
+    needs: [],
+  }),
+  block({
+    id: 'ct.record', block: 'content.record', surface: 'content',
+    title: 'The record behind this brief', framing: 'What was read, over what, and what was held back.',
+    needs: [],
+  }),
   page('method'),
 ]
 

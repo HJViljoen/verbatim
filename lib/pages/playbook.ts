@@ -104,6 +104,14 @@ export function buildPlaybook(input: {
    *  defaulted the SAME WAY in `buildHeadToHead`, so the one page cannot print
    *  two medians of the same videos under two exclusion lists. */
   excludePlatforms?: readonly string[]
+  /**
+   * Rated videos a format needs before the two-format SENTENCE may name it
+   * (`matrixConclusion`'s `leadMinRated`). A floor on what may lead, never on
+   * what may be shown: every row stays in the table with its own n. Undefined
+   * keeps the sentence as it was — a surface that promotes it into a takeaway
+   * passes the floor it is willing to rest a finding on.
+   */
+  conclusionMinRated?: number
 }): PlaybookBlock {
   const month = monthStartOf(input.month)
   const excludePlatforms = input.excludePlatforms ?? ENGAGEMENT_EXCLUDED
@@ -135,8 +143,9 @@ export function buildPlaybook(input: {
   // highest median of the month is regularly a format nobody makes much of.
   const formatReadings = readingsFor('classified_type')
   const hookReadings = readingsFor('hook_style')
-  const formats = formatMatrix(formatReadings, { top: PLAYBOOK_ROWS })
-  const hooks = formatMatrix(hookReadings, { top: PLAYBOOK_ROWS })
+  const matrixOptions = { top: PLAYBOOK_ROWS, leadMinRated: input.conclusionMinRated }
+  const formats = formatMatrix(formatReadings, matrixOptions)
+  const hooks = formatMatrix(hookReadings, matrixOptions)
 
   const category = formatReadings[0]
   const own = formatReadings.find((r) => r.audience === CLIENT_AUDIENCE) ?? null
