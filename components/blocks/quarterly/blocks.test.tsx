@@ -751,6 +751,11 @@ describe('the artboard port (Block D wave 2)', () => {
     // The control audiences — what moved on the sides you did not touch.
     expect(t).toContain('Repair & warranty 153 of 1,388')
     expect(render(QUARTERLY_BLOCKS['quarterly.moves'].render(data, 'print', ctx))).toContain('<svg')
+    // AN UNREAD MOVE'S CARD SAYS ITS TITLE AND SUBJECT ONCE. `move.line` is a
+    // whole ledger sentence that opens with both, and the card's eyebrow and
+    // mono line had already printed them.
+    expect(t).toContain('first scoring lands with the')
+    expect(t).not.toMatch(/Say less about recycling[\s\S]{0,40}Say less about recycling/)
   })
 
   it('qr.p6.ledger · numbered, grounded, and what happened afterwards', () => {

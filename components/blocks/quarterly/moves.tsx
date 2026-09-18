@@ -88,6 +88,23 @@ function moveSeries(reading: MoveReading): CalendarSeries[] {
     }))
 }
 
+/**
+ * The part of a move's ledger sentence this card has not already printed.
+ *
+ * `move.line` (`moveLedgerLine`, lib/pages/market-surface.ts) is a
+ * self-contained row for a LIST — "<title> · <subject> · tracked 14 Sep ·
+ * first scoring lands with the October reading." — and this card is not a
+ * list: the title is its eyebrow and the subject is in the mono line under it.
+ * Printed whole, the card said both twice. The segments are dropped by exact
+ * equality with the fields the card drew, so a change to how the line is
+ * composed drops nothing and the whole sentence prints rather than a cut one.
+ */
+function unreadTail(move: MoveRow): string {
+  const parts = move.line.split(' · ')
+  const tail = parts.filter((p) => p !== move.title && p !== move.on)
+  return tail.length > 0 ? tail.join(' · ') : move.line
+}
+
 function MoveCard({ move, reading, mode }: { move: MoveRow; reading: MoveReading | null; mode: RenderMode }) {
   const email = mode === 'email'
   const series = reading ? moveSeries(reading) : []
@@ -140,7 +157,7 @@ function MoveCard({ move, reading, mode }: { move: MoveRow; reading: MoveReading
           <Note mode={mode}>{reading.line}</Note>
         </>
       ) : (
-        <Note mode={mode}>{move.line}</Note>
+        <Note mode={mode}>{unreadTail(move)}</Note>
       )}
     </div>
   )
