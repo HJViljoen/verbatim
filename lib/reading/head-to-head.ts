@@ -156,6 +156,13 @@ export function headToHead(input: HeadToHeadInput): HeadToHead {
   const { you, them } = input
   const month = monthStartOf(input.month)
   const floor = input.floor ?? FACE_OFF_FLOOR
+  // TWO CLOCKS ON ONE TABLE, AND EVERY ROW SAYS WHICH IT KEEPS. The share and
+  // the rate come off `month_denominators`, which is comment-dated — the one
+  // clock this product keeps for a period. Engagement, positive share and own
+  // posts are properties of a VIDEO and are dated by its upload. Printing the
+  // five under one month heading without naming the difference is decision D9's
+  // exact defect, so the difference is named per row rather than argued once in
+  // a footnote nobody reads.
   const commentBasis = `videos and comments dated in ${longMonth(month)}`
   const publishedBasis = `videos published in ${longMonth(month)}`
 
@@ -163,7 +170,7 @@ export function headToHead(input: HeadToHeadInput): HeadToHead {
     videosMeasure(input, month, floor, commentBasis),
     commentsMeasure(input, commentBasis),
     engagementMeasure(input, publishedBasis),
-    sentimentMeasure(input, month, floor, commentBasis),
+    sentimentMeasure(input, month, floor, publishedBasis),
     postsMeasure(input, publishedBasis),
   ]
 
