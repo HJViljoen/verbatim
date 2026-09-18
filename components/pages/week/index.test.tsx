@@ -298,6 +298,32 @@ describe('WK §4 · what came in', () => {
     }
   })
 
+  it('does not make a direction claim out of a rival’s own caption', () => {
+    // A CAPTION IS SOMEBODY ELSE'S WORDS. Production captions are marketing
+    // copy in six languages — "Since 1993, it's been about two things",
+    // "Hola biónicos!!" — and one of them will say "growing" the week it does.
+    // Rule (c) may not police it, for the same reason it may not police a
+    // commenter, so the caption and the account are marked as a quote.
+    const d = weekFixture()
+    const data = {
+      ...d,
+      cameIn: {
+        ...d.cameIn,
+        rivals: d.cameIn.rivals.map((r) => ({
+          ...r,
+          posts: r.posts.map((post) => ({ ...post, caption: 'Our waitlist is growing fast and prices are rising', account: 'up.and.rising' })),
+        })),
+      },
+    }
+    for (const mode of MODES) {
+      const markup = render(weekCameIn.render(data, mode, ctx))
+      // The words ARE on the page — the test would pass vacuously if the
+      // caption were simply not rendered.
+      expect(markupText(markup), mode).toContain('Our waitlist is growing fast and prices are rising')
+      assertCopyContract(markup)
+    }
+  })
+
   it('draws no post table for a rival with no post this update', () => {
     // Rareform's posts ARE read and none came in: the row is a zero and there
     // is nothing under it, which is different from the row being dropped.
