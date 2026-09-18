@@ -348,6 +348,14 @@ export interface DocumentSnapshotData {
    * re-pagination `documentSlides` refuses for `sheet` and `span`.
    */
   cover?: boolean
+  /**
+   * TRUE where the sections this brief could not fill share one sheet instead
+   * of taking a landscape sheet each (E-marketing).
+   *
+   * Frozen for the same reason as `cover`, and absent means "one sheet each",
+   * which is what every brief built before this printed.
+   */
+  unfilledSheet?: boolean
   /** Each borrowed surface's loader output, frozen — the same data the page
    *  drew, so the brief and the page cannot come to say different things
    *  (WP19). Quotes inside it freeze and resolve like any other snapshot's. */

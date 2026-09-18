@@ -175,6 +175,11 @@ function deck(surfaces: Record<string, unknown>, over: Partial<DocumentSnapshotD
     // leaving the deck to re-derive it from today's map. A fixture that did not
     // carry the field would be a brief built before the fold.
     cover: false,
+    // And MARKETING_MAP asks for the sections it could not fill to share one
+    // sheet rather than taking a landscape sheet each (`UNFILLED_SHEET_MAPS`).
+    // The refused arm is what this is for: five of its blocks degrade to a
+    // sentence, which was five sheets carrying a sentence apiece.
+    unfilledSheet: true,
     // THE MAP'S OWN ORDER, walked the way `composeDocument` walks it — written
     // pages and borrowed blocks interleaved, a `finding` entry expanding to
     // every finding page. A fixture that listed the sections first and the

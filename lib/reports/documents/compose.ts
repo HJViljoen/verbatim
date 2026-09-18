@@ -7,7 +7,7 @@ import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../../rivals'
 import { CLUSTERING_CAVEAT, briefStamp, denominatorLine, platformLine, type BriefReading } from './reading'
 import { SECTION_SLIDE_PREFIX, type DocBriefSection, type DocLayoutEntry, type DocumentReading } from './types'
 import type { BriefEntry } from './sections'
-import { foldsCoverSheet, missingSentence, missingSummary, pageKindsOf } from './sections'
+import { UNFILLED_SHEET, foldsCoverSheet, groupsUnfilledSections, missingSentence, missingSummary, pageKindsOf } from './sections'
 import type { Signals } from './signals'
 import type { ResearchAnswer, ResearchPoint } from './research'
 import { ASKED_MAX, CLAIMS_PER_PAGE, PAGE_TITLE, PERSONAS_PER_PAGE, SAY_HEAR_MAX, type DocumentTemplate } from './templates'
@@ -503,6 +503,9 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
     // built from one carries the field, so a stored artefact keeps the
     // pagination it printed.
     ...(foldsCoverSheet(s.map) ? { cover: false } : {}),
+    // And whether the sections it could not fill share one sheet. Same rule,
+    // same reason: the map decides, the artefact remembers.
+    ...(groupsUnfilledSections(s.map) ? { unfilledSheet: true } : {}),
     pages,
     // What the skeleton above was composed from, so it can be composed again
     // (WP7d): the eval and any rebuild read these, not the picker.
@@ -675,6 +678,20 @@ export function documentSlides(data: DocumentSnapshotData): Slide[] {
     }
     const section = data.sections?.find((x) => x.id === entry.id)
     if (!section) continue
+    // A SECTION THAT COULD NOT BE FILLED DOES NOT GET A SHEET OF ITS OWN (fix
+    // pass). Its body is one sentence, and four of them on the marketing brief
+    // meant four numbered, footed, stamped landscape sheets carrying a sentence
+    // each — one of them 92% white paper. They share a sheet, wherever the
+    // first of them fell in the map's order; an unfilled section has no content
+    // to be in order with, which is what makes moving it honest. Only for a
+    // brief whose map asked for it, and only from the frozen field, so a stored
+    // artefact keeps the sheets it printed.
+    if (data.unfilledSheet && section.empty != null) {
+      const sheet = out.find((s) => s.layout === 'grid' && s.title === UNFILLED_SHEET)
+      if (sheet) sheet.keys.push(`${SECTION_SLIDE_PREFIX}${section.id}`)
+      else out.push({ title: UNFILLED_SHEET, keys: [`${SECTION_SLIDE_PREFIX}${section.id}`], layout: 'grid' })
+      continue
+    }
     // CONSECUTIVE SECTIONS SHARING A SHEET BECOME ONE SLIDE (E-marketing).
     // The sheet's NAME is its title, so a two-block sheet is not headed by
     // whichever block happened to come first. A section with no `sheet` — every

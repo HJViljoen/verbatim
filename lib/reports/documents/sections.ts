@@ -315,6 +315,33 @@ export const COVER_FOLDED_MAPS: readonly (readonly BriefEntry[])[] = [MARKETING_
 export const foldsCoverSheet = (map: readonly BriefEntry[] | undefined): boolean =>
   map != null && COVER_FOLDED_MAPS.includes(map)
 
+/**
+ * The sheet a brief's UNFILLED sections share.
+ *
+ * A section that could not be filled prints one sentence — the block's own
+ * empty state, or the missing-input sentence naming the input and who closes
+ * it — and it used to print that sentence on a numbered, footed, stamped
+ * landscape sheet of its own. On production today the marketing brief has
+ * FOUR: "Your moves" is two sentences and a page number over 92% white paper.
+ * The answer is neither to drop them (the sentence is the answer to "why is
+ * this not here", and dropping it is the silence `briefSections` was written
+ * to end) nor to spend a sheet each: they share one, titled as what they are.
+ */
+export const UNFILLED_SHEET = 'Not read this month'
+export const UNFILLED_FRAMING = 'What this brief could not read for this month, and what each one is waiting on.'
+
+/**
+ * The maps whose unfilled sections share that sheet.
+ *
+ * OPT-IN AND FROZEN, for the reason `COVER_FOLDED_MAPS` is: pagination belongs
+ * to the artefact. A stored brief re-renders the sheets it printed, with the
+ * numbers its footers carry, however this list reads later.
+ */
+export const UNFILLED_SHEET_MAPS: readonly (readonly BriefEntry[])[] = [MARKETING_MAP]
+
+export const groupsUnfilledSections = (map: readonly BriefEntry[] | undefined): boolean =>
+  map != null && UNFILLED_SHEET_MAPS.includes(map)
+
 /** Every block section in a map, in order. */
 export function sectionsOf(map: readonly BriefEntry[]): BriefBlockSection[] {
   return map.flatMap((e) => (e.kind === 'block' ? [e.section] : []))

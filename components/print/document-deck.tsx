@@ -19,7 +19,7 @@ import type { ShareSide } from '@/lib/report-delta'
 import { substituteFigures } from '@/lib/reports/cover'
 import { documentCoverSheet, documentSheetCount, documentSlides, sectionOfSlide } from '@/lib/reports/documents/compose'
 import { blocksFor } from '@/lib/reports/documents/load-reading'
-import type { BriefSurface } from '@/lib/reports/documents/sections'
+import { UNFILLED_FRAMING, UNFILLED_SHEET, type BriefSurface } from '@/lib/reports/documents/sections'
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { appBaseUrl } from '@/lib/site'
@@ -1078,7 +1078,7 @@ export function paperEmpty(section: Pick<DocBriefSection, 'block' | 'empty'>): s
   return PAPER_EMPTY.find((x) => x.block === section.block && x.screen === section.empty)?.paper ?? section.empty
 }
 
-function SectionBody({ section, data, framing = true }: { section: DocBriefSection; data: DocumentSnapshotData; framing?: boolean }) {
+function SectionBody({ section, data, framing = true, title = false }: { section: DocBriefSection; data: DocumentSnapshotData; framing?: boolean; title?: boolean }) {
   const surface = (data.surfaces ?? {})[section.surface]
   const block = blocksFor(section.surface as BriefSurface)?.find((b) => b.key === section.block)
   const body = section.empty != null || !block || surface == null
@@ -1090,7 +1090,12 @@ function SectionBody({ section, data, framing = true }: { section: DocBriefSecti
     ? <p className="m-0 text-[13px] leading-[1.5] text-muted-foreground">{paperEmpty(section) ?? 'This section could not be read for this month.'}</p>
     : block.render(surface as never, 'print', blockContext(appBaseUrl(), EMAIL))
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-2">
+      {/* AN UNFILLED SECTION SAYS WHICH SECTION IT IS. A filled block prints its
+          own `BlockFrame` title; a section that could not be filled prints one
+          sentence, and on the shared sheet that sentence had nothing above it
+          naming what it was about. */}
+      {title && <Eyebrow>{section.title}</Eyebrow>}
       {framing && section.framing && <p className="m-0 text-[12.5px] leading-[1.45] text-muted-foreground">{section.framing}</p>}
       {body}
     </div>
@@ -1196,13 +1201,16 @@ function sheetExtras(sheet: string, data: DocumentSnapshotData): ReactNode {
  * width it was given.
  */
 function SheetSection({ section, data }: { section: DocBriefSection; data: DocumentSnapshotData }) {
+  // NO SECTION TITLE AND NO FRAMING LINE FOR A FILLED BLOCK. `BlockFrame`
+  // prints the block's own title and its question, so a wrapper heading printed
+  // "YOUR SUBJECTS" twice, four lines apart; and the sheet's framing is hoisted
+  // to the Slide's serif note, once, which is where the artboard puts it. An
+  // UNFILLED section draws no frame of its own, so on the shared sheet it takes
+  // both: the title says which section, the framing says what it was for.
+  const unfilled = section.empty != null
   return (
-    // NO SECTION TITLE AND NO FRAMING LINE HERE. `BlockFrame` prints the
-    // block's own title and its question, so a wrapper heading printed "YOUR
-    // SUBJECTS" twice, four lines apart; and the sheet's framing is hoisted to
-    // the Slide's serif note, once, which is where the artboard puts it.
-    <div data-col={String(Math.min(12, Math.max(1, section.span ?? 12)))} className="flex min-w-0 flex-col">
-      <SectionBody section={section} data={data} framing={false} />
+    <div data-col={String(unfilled ? 6 : Math.min(12, Math.max(1, section.span ?? 12)))} className="flex min-w-0 flex-col">
+      <SectionBody section={section} data={data} framing={unfilled} title={unfilled} />
     </div>
   )
 }
@@ -1237,7 +1245,7 @@ export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: Docum
               pages={pages}
               layout="grid"
               flow
-              note={sections[0].framing}
+              note={s.title === UNFILLED_SHEET ? UNFILLED_FRAMING : sections[0].framing}
             >
               {sections.map((sec) => <SheetSection key={sec.id} section={sec} data={data} />)}
               {sheetExtras(s.title, data)}

@@ -84,13 +84,39 @@ describe('the sheets', () => {
     expect(shared).toContain(`1 / ${n}`)
   })
 
-  // A sheet of two blocks where both refuse is still a sheet: five of the
-  // borrowed blocks degrade to a sentence on production today.
-  it('keeps its sheets when the month tables are not applied', () => {
+  // A SECTION THAT COULD NOT BE FILLED DOES NOT GET A SHEET OF ITS OWN (fix
+  // pass). Its body is one sentence, and on production today the brief had four
+  // of them — four numbered, footed, stamped landscape sheets carrying a
+  // sentence each, one of them 92% white paper. They share a sheet, titled as
+  // what they are, and the sentence itself is never dropped.
+  it('gives the sections it could not read one sheet between them', () => {
     const data = refusedDeckFixture()
+    const titles = sheets(data).map((s) => s.title)
+    expect(titles).toContain('Not read this month')
+    expect(titles.filter((t) => t === 'Not read this month')).toHaveLength(1)
+    const unfilled = sheets(data).find((s) => s.title === 'Not read this month')!
+    expect(unfilled.keys).toEqual(['section:mk.subjects', 'section:mk.moves'])
+    const text = markupText(render(<DocumentDeck data={data} date="28 Sep 2026" />))
+    // Each one still says which section it is and what it was waiting on.
+    expect(text).toContain('not recorded')
+    expect(text).toContain('Your subjects')
+    expect(text).toContain('Your moves')
+  })
+
+  // ONE SHEET NEVER SAYS BOTH. The refused arm drew "Your subjects are not
+  // recorded for this workspace yet." immediately above a fully drawn chart
+  // headed "SHARE OF VIDEOS WHERE DURABILITY CAME UP", on one sheet.
+  it('does not print an empty state beside a drawn chart', () => {
+    const data = refusedDeckFixture()
+    const subjects = sheets(data).find((s) => s.title === 'Your subjects')!
+    expect(subjects.keys).toEqual(['section:mk.subjectline'])
+  })
+
+  // A stored brief re-renders the sheets it printed: pagination is the
+  // artefact's, not today's map's.
+  it('leaves a brief built before the shared sheet exactly as it paginated', () => {
+    const data = refusedDeckFixture({ unfilledSheet: undefined })
     expect(sheets(data).map((s) => s.title)).toEqual(sheets().map((s) => s.title))
-    const html = render(<DocumentDeck data={data} date="28 Sep 2026" />)
-    expect(html).toContain('not recorded')
   })
 })
 
