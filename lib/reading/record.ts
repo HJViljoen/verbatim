@@ -1189,14 +1189,24 @@ export function recordDate(iso: string, within: string): string {
 /** "6, 13, 20, 27 Sep" where a window is one month, and dated short forms
  *  otherwise. Never an ISO day: `recordLines`' own rule, one row over. */
 export function datesLine(dates: readonly string[]): string {
-  if (dates.length === 0) return ''
-  const months = new Set(dates.map((d) => d.slice(0, 7)))
+  // A DATE NOTHING CAN PARSE IS REFUSED, NOT PRINTED. `getUTCDate` on an
+  // unparseable string is NaN, and "NaN, 13, 20 Sep" is worse than a shorter
+  // line: the rule this module states about every other figure is that a thing
+  // it cannot say it does not say (code review finding 8).
+  const ok = dates.filter((d) => !Number.isNaN(Date.parse(`${d.slice(0, 10)}T00:00:00.000Z`)))
+  if (ok.length === 0) return ''
+  const months = new Set(ok.map((d) => d.slice(0, 7)))
+  const years = new Set(ok.map((d) => d.slice(0, 4)))
+  // THE LAST DATE CARRIES ITS YEAR WHERE THE WINDOW CROSSES ONE — `recordLines`'
+  // own rule, one row over, and this function is exported from the shared
+  // record module, so the next caller's window may not be a calendar month as
+  // this page's is: "31 Dec · 6 Jan" is two different Januaries.
+  const last = years.size === 1 ? shortDate(ok[ok.length - 1]) : fullDate(ok[ok.length - 1])
   if (months.size === 1) {
-    const last = shortDate(dates[dates.length - 1])
-    const days = dates.slice(0, -1).map((d) => String(new Date(`${d}T00:00:00.000Z`).getUTCDate()))
+    const days = ok.slice(0, -1).map((d) => String(new Date(`${d.slice(0, 10)}T00:00:00.000Z`).getUTCDate()))
     return days.length ? `${days.join(', ')}, ${last}` : last
   }
-  return dates.map((d) => shortDate(d)).join(' · ')
+  return [...ok.slice(0, -1).map((d) => shortDate(d)), last].join(' · ')
 }
 
 export function recordRows(input: RecordInputs, extra: RecordExtras = {}): RecordRow[] {

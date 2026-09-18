@@ -200,6 +200,12 @@ describe('the record as rows', () => {
     expect(datesLine(['2026-09-06', '2026-09-13', '2026-09-20', '2026-09-27'])).toBe('6, 13, 20, 27 Sep')
     // A window that crosses a month dates every one of them.
     expect(datesLine(['2026-08-31', '2026-09-06'])).toBe('31 Aug · 6 Sep')
+    // And one that crosses a YEAR carries the year on the last, which is the
+    // rule `recordLines` states one row over (code review finding 8).
+    expect(datesLine(['2026-12-28', '2027-01-04'])).toBe('28 Dec · 4 Jan 2027')
+    // A date nothing can parse is refused rather than printed as NaN.
+    expect(datesLine(['not a date', '2026-09-06'])).toBe('6 Sep')
+    expect(datesLine(['not a date'])).toBe('')
     expect(rows().some((r) => /\d{4}-\d{2}-\d{2}/.test(`${r.figure ?? ''} ${r.rest} ${r.basis}`))).toBe(false)
   })
 
