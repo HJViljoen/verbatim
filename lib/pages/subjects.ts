@@ -834,9 +834,16 @@ function monthDays(month: string): { from: string; to: string } {
 /**
  * What you published this month, and what those posts said.
  *
- * FOUR READS, EACH BOUNDED BY THE MONTH'S OWN POSTS. The videos (a date range
- * on an indexed column), the claims, the insights those posts drew and the
- * subject memberships over exactly those insights. Nothing here reads a
+ * FOUR READS, EACH BOUNDED BY THE MONTH'S OWN POSTS. The videos, the claims,
+ * the insights those posts drew and the subject memberships over exactly those
+ * insights. The video read is NOT an index seek on the date, and the docblock
+ * said it was: `videos` carries twelve indexes and none of them is on
+ * `upload_date` (checked 2026-09-18; `videos_client_upload_date_idx` is written
+ * in 20260918094000 and not applied anywhere). The plan takes
+ * `videos_client_id_idx` and filters the month out, which on 3,927 and 4,450
+ * rows a tenant is cheap — an accuracy fix, not a performance one, and after
+ * the 2026-09-16 outage a docblock claiming a read is indexed when it is not is
+ * the wrong thing to leave lying around. Nothing here reads a
  * cumulative corpus and nothing here touches `audience_insights.embedding` —
  * the population read goes through `audience_insights_current` and selects
  * three columns (AGENTS.md).

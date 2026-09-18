@@ -769,9 +769,12 @@ interface RivalPostRow {
  * What each tracked rival published in this month, and the accounts we read it
  * from.
  *
- * TWO READS, BOTH SMALL. The month's `competitor_owned` videos (a date range on
- * an indexed column — nineteen rows on Sealand in September) and the handle
- * map. `source = 'competitor_owned'` is authorship and not a subject tag: a
+ * TWO READS, BOTH SMALL. The month's `competitor_owned` videos (nineteen rows
+ * on Sealand in September) and the handle map. The date is NOT indexed —
+ * `videos` carries twelve indexes and none is on `upload_date` (checked
+ * 2026-09-18); the plan takes `videos_client_id_idx` and filters, which on
+ * ~4,000 rows a tenant is cheap. `source = 'competitor_owned'` is authorship
+ * and not a subject tag: a
  * post read off a rival's own profile is theirs whatever the caption says,
  * which is `claimEntity`'s first test (lib/pipeline/claims.ts).
  *
