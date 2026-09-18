@@ -113,6 +113,17 @@ describe('the delivery block', () => {
     expect(june).toContain('did not finish')
   })
 
+  it('keeps the delivery caveats with the delivery figures', () => {
+    // Design review finding 7: rendered after the readings strip they read as
+    // footnotes to the readings, and the section's argument went stats → month
+    // → readings → stats again.
+    const text = renderText(delivery)
+    const finished = text.indexOf('of the last 8 finished')
+    const readings = text.indexOf('Monthly readings')
+    expect(finished).toBeGreaterThan(-1)
+    expect(finished).toBeLessThan(readings)
+  })
+
   it('prints the monthly readings strip this page never had', () => {
     const text = renderText(delivery)
     expect(text).toContain('Monthly readings')

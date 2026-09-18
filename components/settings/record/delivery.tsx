@@ -45,6 +45,26 @@ export function DeliveryBlock({
         </div>
       )}
 
+      {/* THE DELIVERY CAVEATS BELONG TO THE DELIVERY FIGURES, and they used to
+          render after the monthly-readings strip, outside the 172px gutter,
+          where they read as footnotes to the readings and the section's
+          argument went stats → month → readings → stats again (design review
+          finding 7). How many of the last few finished, and what the slot
+          bookkeeping cannot tell, are both about the four cells above. */}
+      <div className="flex flex-col gap-1">
+        {record.total > 0 ? (
+          <p className="m-0 text-[11.5px] text-muted-foreground">
+            {fmtInt(record.recentSettled)} of the last {fmtInt(record.recent)} finished.
+            {record.scheduledServed
+              ? ` ${fmtInt(record.scheduledServed.scheduled)} served a scheduled slot, ${fmtInt(record.scheduledServed.byHand)} were run by hand.`
+              : ''}
+          </p>
+        ) : null}
+        {record.caveats.map((c) => (
+          <p key={c} className="m-0 text-[11.5px] text-muted-foreground">{c}</p>
+        ))}
+      </div>
+
       <LabelRow label={month} sub={`${fmtInt(updates.length)} ${updates.length === 1 ? 'update' : 'updates'}`}>
         {updates.length === 0 ? (
           <p className="m-0 pt-1.5 text-[12px] text-muted-foreground">No update has run this month yet.</p>
@@ -117,19 +137,6 @@ export function DeliveryBlock({
         )}
       </LabelRow>
 
-      <div className="flex flex-col gap-1">
-        {record.total > 0 ? (
-          <p className="m-0 text-[11.5px] text-muted-foreground">
-            {fmtInt(record.recentSettled)} of the last {fmtInt(record.recent)} finished.
-            {record.scheduledServed
-              ? ` ${fmtInt(record.scheduledServed.scheduled)} served a scheduled slot, ${fmtInt(record.scheduledServed.byHand)} were run by hand.`
-              : ''}
-          </p>
-        ) : null}
-        {record.caveats.map((c) => (
-          <p key={c} className="m-0 text-[11.5px] text-muted-foreground">{c}</p>
-        ))}
-      </div>
     </RecordSection>
   )
 }
