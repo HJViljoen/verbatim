@@ -9,6 +9,7 @@ import { suggestSearchTerms, flattenCompetitorTerms } from '@/lib/keywords/sugge
 import { actorStamp, recordConfigChange, updateWithActor } from '@/lib/config-log'
 import { applySubredditEdit } from '@/lib/settings/save-state'
 import type { SubredditEntry } from '@/lib/gather/types'
+import { subredditKey, subredditLabel } from '@/lib/gather/subreddits'
 import { ensureRivals } from '@/lib/rivals'
 import { takeSuggestionSlot } from '@/lib/keywords/suggest-guard'
 import { PERIODS, DAYS } from './constants'
@@ -392,6 +393,10 @@ export async function updateCommunity(
   // audience can be named honestly here and NULL means "not known".
   const month = `${now.toISOString().slice(0, 7)}-01`
   const nextMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString().slice(0, 10)
+  // THE FOLDED NAME IN THE SENTENCE, not what was typed. A client may paste a
+  // URL; `subredditKey` is what was actually stored, and a log that quoted the
+  // paste would not match the column it is the record of.
+  const community = subredditLabel(subredditKey(name))
   await recordConfigChange(createAdminClient(), {
     clientId,
     surface: 'subreddits',
@@ -400,8 +405,8 @@ export async function updateCommunity(
     after: edit.change.to,
     actor,
     note: kind === 'add'
-      ? `${edit.change.to === 'nothing' ? 'A community' : name.trim()} was added to the communities we watch.`
-      : `We stopped watching ${name.trim()}.`,
+      ? `${community} was added to the communities we watch.`
+      : `We stopped watching ${community}.`,
     affects: { audiences: null, months: `[${month},${nextMonthStart})` },
   })
 
