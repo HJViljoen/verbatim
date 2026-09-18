@@ -401,6 +401,8 @@ describe('the save state', () => {
     const words = renderText(<SaveStateLine state={state} />)
     expect(words).toContain('1 change waiting to be saved — category terms')
     expect(words).toContain('last saved 3 Sep')
+    // M3: the break half is the rail's, and it is drawn once.
+    expect(words).not.toContain('was not written down')
     // The rule is only printed where the strip can actually name a break.
     expect(words).not.toContain('A save names the series it breaks')
   })

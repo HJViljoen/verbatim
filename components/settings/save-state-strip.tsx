@@ -17,6 +17,15 @@ import { NOTHING_PENDING, type SaveState } from '@/lib/settings/save-state'
 // three unsaved edits would be the one sentence on this page that is checkable
 // and wrong.
 //
+// AND THE BREAK IS DRAWN IN ONE OF THEM. Both halves used to end with "what
+// that save broke was not written down" — the rail's strip and the save row's
+// sentence, the same clause twice on one screen, against this component's own
+// rule that the two tenses are drawn in the two places that hold them. The
+// break is the RAIL's half. What the save row keeps is the RULE ("A save names
+// the series it breaks."), where there is a break to name, and the date of the
+// last save, which is what a reader needs beside the button they are about to
+// press.
+//
 // THE THIRD LINE IS USUALLY AN ABSENCE. What a save broke is
 // `config_changes.affects_audiences` / `affects_months`, which arrive with M1
 // and are applied on neither tenant today. `saveState.recorded` tells "this
@@ -62,7 +71,7 @@ export function SaveStateLine({ state }: { state: SaveState }) {
       {pending === 0
         ? `${NOTHING_PENDING}`
         : `${pending} change${pending === 1 ? '' : 's'} waiting to be saved — ${state.pending.map((p) => p.field.toLowerCase()).join(', ')}`}
-      {state.lastSavedAt ? <> · last saved <span className="font-mono text-[12px] text-secondary-foreground">{shortDate(state.lastSavedAt)}</span>, and {breakClause(state)}</> : '.'}
+      {state.lastSavedAt ? <> · last saved <span className="font-mono text-[12px] text-secondary-foreground">{shortDate(state.lastSavedAt)}</span>.</> : '.'}
     </span>
   )
 }
@@ -72,9 +81,4 @@ function breakWords(state: SaveState): string {
   return state.breaks.length > 0 ? `Broke: ${state.breaks.map((b) => b.line).join(' · ')}.` : BROKE_NOTHING
 }
 
-function breakClause(state: SaveState): string {
-  if (!state.recorded) return 'what that save broke was not written down.'
-  return state.breaks.length > 0
-    ? `that save broke ${state.breaks.map((b) => b.line).join(' and ')}.`
-    : 'that save broke nothing that is read as a series.'
-}
+
