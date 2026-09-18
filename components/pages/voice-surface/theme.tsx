@@ -301,6 +301,11 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
           size="lg"
           value={t.pct == null ? '—' : fmtPct(t.pct)}
           unit={`of ${t.audienceLabel.toLowerCase()} videos`}
+          // THIS BASIS WRAPS TOO, for the reason the prop exists (D15): with
+          // the prior month beside it this line is 231px against the 226px
+          // half-column at 1280, so it clipped to "… · Aug 6.8% of 1,20" —
+          // a denominator cut mid-number, which takes the figure with it.
+          baseWrap
           base={<>{fmtInt(t.k ?? 0)} of {fmtInt(t.n ?? 0)} this month{prevLine ? ` · ${prevLine}` : ''}</>}
         />
         {onCameraStat ? (

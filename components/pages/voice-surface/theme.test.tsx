@@ -173,6 +173,15 @@ describe('voiceTheme', () => {
     expect(markup).toContain('background:var(--chart-3)')
   })
 
+  it('lets both bases wrap rather than clipping a denominator mid-number', () => {
+    // D15, and `BlockStat({ baseWrap })` exists for it. Measured at 1280 in
+    // the two-column grid: "130 of 1,388 this month · Aug 6.8% of 1,200" is
+    // 231px in a 226px half-column, so the default truncation cut the
+    // baseline's own n off the end of it.
+    const markup = render(voiceTheme.render(voiceFixture(), 'app', ctx))
+    expect(markup).not.toContain('truncate')
+  })
+
   it('prints the month the share moved from, and rules the bar there against a NAMED axis', () => {
     const text = draw()
     expect(text).toContain('130 of 1,388 this month · Aug 6.8% of 1,200')
