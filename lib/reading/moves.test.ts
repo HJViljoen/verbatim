@@ -19,6 +19,7 @@ import {
   type MoveSeries,
 } from './moves'
 import type { Verdict } from './verdicts'
+import { monthlyLineLabel } from '../pages/overview'
 
 const MONTH = '2026-09-01'
 
@@ -478,6 +479,9 @@ describe('moveChartNote — two readings are not a line', () => {
         }),
       ),
     ).toBe('Aug → Sep only')
+    // The same words `monthlyLineLabel` prints on OV2 — one month-name table
+    // for one picture, so two charts of one product cannot disagree.
+    expect(monthlyLineLabel([null, 4, 6], ['2026-07-01', '2026-08-01', '2026-09-01'])).toBe('Aug → Sep only')
     // Three readings and the line may be drawn.
     expect(moveChartNote(series())).toBeNull()
     expect(reading().chartNote).toBeNull()

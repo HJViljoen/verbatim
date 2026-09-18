@@ -1,5 +1,5 @@
 import { PASS_A_MIN_COMMENTS_DEFAULT } from '../config'
-import { fmtInt, longMonth, shortDate } from '../format'
+import { fmtInt, longMonth, monthName, shortDate } from '../format'
 import { monthChange } from './bands'
 import { monthStartOf, nextMonth } from './month-key'
 import type { Counted, FigureTable, Verdict, VerdictWindow } from './verdicts'
@@ -428,7 +428,12 @@ export function moveChartNote(series: MoveSeries | null): string | null {
   const read = (series?.points ?? []).filter(readable).map((p) => p.month)
   if (read.length >= DRAWABLE_READINGS) return null
   if (read.length === 0) return 'no month reads'
-  const short = (m: string) => SHORT_MONTHS[Number(m.slice(5, 7)) - 1] ?? m.slice(0, 7)
+  // THE SAME DERIVATION `monthlyLineLabel` USES, off the one month table in
+  // lib/format — not a second copy of it here. A private month-name array is
+  // how "Sep only" and "September only" come to sit on two charts of one
+  // product: the hand-rolled-conversion failure lib/prose/figures.ts warns
+  // about, in miniature.
+  const short = (m: string) => monthName(m).split(' ')[0]
   return read.length === 1 ? `${short(read[0])} only` : `${short(read[0])} → ${short(read[read.length - 1])} only`
 }
 
@@ -436,7 +441,6 @@ export function moveChartNote(series: MoveSeries | null): string | null {
  *  three, and `monthlyLineLabel`'s. */
 export const DRAWABLE_READINGS = 3
 
-const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 const countWord = (n: number): string =>
   n === 1 ? 'the one month since' : n === 0 ? 'no complete month since' : `the ${fmtInt(n)} months since`
