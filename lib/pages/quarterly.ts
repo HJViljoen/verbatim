@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { READER_FLAGS } from '../calibration'
-import { fmtInt, fullDate, longMonth, monthName, shortDate } from '../format'
+import { fmtInt, fmtPct, fullDate, longMonth, monthName, shortDate } from '../format'
 import type { Quote, Scope } from '../renderables/types'
 import { selectAll } from '../supabase-admin'
 import { quarterChange, QUARTER_UNLOCKS_AT } from '../reading/bands'
@@ -16,7 +16,8 @@ import {
   type RecordWindow,
   type Refusal,
 } from '../reading/record'
-import { methodLines, type MethodLines } from '../reading/method'
+import { methodLines, platformShareLine, type MethodLines } from '../reading/method'
+import type { PlatformMix } from '../reading/types'
 import { loadDeckChangeLog, loadSearchPlan, type DeckChangeLog, type SearchPlan } from '../settings/deck-record'
 import { loadWindowReading, readingClient, type WindowReading } from '../reading/read'
 import { isMissingMonthTable } from '../reading/monthly'
@@ -2100,6 +2101,44 @@ export function methodNumbers(
     value: `${fmtInt(inputs.delivery.delivered)} this quarter`,
     note: inputs.delivery.longestGapDays != null ? `longest gap ${fmtInt(inputs.delivery.longestGapDays)} days` : undefined,
   })
+  // THE ARTBOARD'S OTHER FOUR ROWS — Sources, Held back, Languages and the
+  // refusals — which the build had as PROSE above the table and the mock has as
+  // rows (`qr.p7.numbers`). Same figures, same basis sentences, in the shape a
+  // reader can scan. Each is pushed only where its own read exists, so a row is
+  // never a blank and never a zero standing in for a silence.
+  const mix: PlatformMix = {}
+  for (const c of inputs.coverage) for (const [k, n] of Object.entries(c.platformMix)) mix[k] = (mix[k] ?? 0) + n
+  const sources = platformShareLine(mix)
+  if (sources) out.push({ label: 'Sources', value: sources, note: 'of the videos read in this quarter' })
+  if (inputs.discard.readable && inputs.discard.judged > 0) {
+    out.push({
+      label: 'Held back',
+      value: `${fmtPct((inputs.discard.setAside / inputs.discard.judged) * 100, 0)} set aside`,
+      // THE GATE'S OWN CLOCK, NAMED. `recordedFrom` is the day the gate started
+      // recording what it discarded, and no month before it can show this.
+      note: `${fmtInt(inputs.discard.setAside)} of ${fmtInt(inputs.discard.judged)} looked at${
+        inputs.discard.recordedFrom ? `, recorded from ${fullDate(inputs.discard.recordedFrom)}` : ''
+      }`,
+    })
+  }
+  if (inputs.language.analysed > 0 && inputs.language.notEnglish + inputs.language.english > 0) {
+    const known = inputs.language.notEnglish + inputs.language.english
+    out.push({
+      label: 'Languages',
+      value: `${fmtPct((inputs.language.notEnglish / known) * 100, 0)} not in English`,
+      // THE BASIS TRAVELS WITH THE FIGURE (D15). It is a share of the videos
+      // whose language we KNOW, not of everything read, and the two differ by
+      // however many videos carry no language at all.
+      note: `of ${fmtInt(known)} videos whose language is recorded`,
+    })
+  }
+  if (inputs.comparisonsRefused != null) {
+    out.push({
+      label: 'Refused',
+      value: inputs.comparisonsRefused === 1 ? '1 comparison' : `${fmtInt(inputs.comparisonsRefused)} comparisons`,
+      note: 'held back rather than drawn — the reasons are under this table',
+    })
+  }
   return out
 }
 
