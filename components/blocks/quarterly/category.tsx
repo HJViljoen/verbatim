@@ -75,8 +75,14 @@ function seriesLine(mover: Mover): string | null {
   const spark = mover.spark
   const months = mover.sparkMonths
   if (!spark || !months) return null
+  // WITH THE UNIT. `Mover.spark` holds the same share the `FigureCell` above
+  // the line prints, so a line reading "Jul 5.1 · Aug 6.8 · Sep 9.4" dropped
+  // the `%` off three copies of a figure printed with it two rows up.
   const read = months
-    .map((m, i) => (spark[i] == null ? null : `${monthName(m).split(' ')[0]} ${spark[i]}`))
+    .map((m, i) => {
+      const v = spark[i]
+      return v == null ? null : `${monthName(m).split(' ')[0]} ${fmtPct(v)}`
+    })
     .filter((v): v is string => v != null)
   // THE LAST FOUR, WHICH IS WHAT THE ARTBOARD DRAWS. A six-month line wraps to
   // two rows on a column this narrow and the older half is already in the

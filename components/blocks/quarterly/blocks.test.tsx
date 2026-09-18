@@ -716,8 +716,9 @@ describe('the artboard port (Block D wave 2)', () => {
     const t = text('quarterly.category')
     expect(t).toContain('Cleared their band · a larger share than last month')
     expect(t).toContain('Cleared their band · a smaller share than last month')
-    // The months a mover's own series carried, and the first month it was read.
-    expect(t).toContain('Jul 5.1 · Aug 6.8 · Sep 9.4')
+    // The months a mover's own series carried, WITH THE UNIT — the same share
+    // the FigureCell two rows up prints — and the first month it was read.
+    expect(t).toContain('Jul 5.1% · Aug 6.8% · Sep 9.4%')
     expect(t).toContain('first read May 2026')
     // Rule (c) over the whole block, with live theme labels on it.
     for (const mode of MODES) assertCopyContract(render(QUARTERLY_BLOCKS['quarterly.category'].render(data, mode, ctx)))
