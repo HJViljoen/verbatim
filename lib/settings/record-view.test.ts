@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { recordRows, datesLine } from '../reading/record'
+import { recordDate, recordRows, datesLine } from '../reading/record'
 import type { DenominatorPoint } from '../reading/series'
 import { changeLogMeta, changeNote, readChangeLog } from './change-log'
 import { deliveryRecord, deliveryStats, gapFigure, gapMonth } from './delivery'
@@ -239,6 +239,18 @@ describe('the record as rows', () => {
     expect(row('ocr').basis).not.toBe(row('speech').basis)
     expect(row('ocr').basis.length).toBeLessThan(row('speech').basis.length / 1.5)
     expect(row('ocr').basis).not.toMatch(/above|beside|same as/)
+  })
+
+  it('sets the date the record begins as a figure, short like every other date', () => {
+    // Design review finding 9: it was passed as `rest` with `figure: null`, so
+    // the one number in the row missed the grid's mono/semibold treatment, and
+    // it was the only long-form date on a page of short ones.
+    expect(row('changelog').figure).toBe('6 Apr')
+    expect(row('changelog').rest).toBe('')
+    expect(row('changelog').basis).toContain('worked out afterwards')
+    // The year is kept where the year is the point.
+    expect(recordDate('2025-04-06T06:00:00.000Z', '2026-09-28')).toBe('6 Apr 2025')
+    expect(recordDate('2026-04-06T06:00:00.000Z', '2026-09-28')).toBe('6 Apr')
   })
 
   it('states the Reddit cap the product actually enforces', () => {

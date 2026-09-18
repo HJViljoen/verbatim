@@ -188,9 +188,10 @@ export interface InstrumentRecord {
 export interface ChangeRecord {
   /** Logged changes inside the window. */
   inWindow: number
-  /** The first REAL entry: a reconstructed row is inference from what an update
-   *  searched, and dating the boundary from one would say the log begins before
-   *  anything was written down. */
+  /** The first REAL entry, as an ISO timestamp — its readers format it, and a
+   *  value that arrives already rendered is formatted twice. A reconstructed
+   *  row is inference from what an update searched, and dating the boundary
+   *  from one would say the log begins before anything was written down. */
   loggedFrom: string | null
   /** Rows reconstructed rather than recorded at the time. */
   reconstructed: number
@@ -842,7 +843,14 @@ async function loadChanges(client: SupabaseClient, clientId: string, w: RecordWi
   const logged = all.filter((c) => c.source !== 'reconstructed')
   return {
     inWindow: all.filter((c) => c.changed_at >= from && c.changed_at <= to).length,
-    loggedFrom: logged[0] ? fullDate(logged[0].changed_at) : null,
+    // THE ISO TIMESTAMP, NOT A RENDERED DATE. The field is formatted by both
+    // its readers (`fullDate` in `recordLines`, `recordDate` in `recordRows`)
+    // and every fixture and test in the repo hands it an ISO day, so a loader
+    // that pre-rendered it was formatting a formatted string: on a machine east
+    // of UTC `new Date('6 Apr 2026')` is 5 Apr 22:00Z and the record's first
+    // date printed a day early. The type says `string | null` and could not
+    // catch it.
+    loggedFrom: logged[0] ? logged[0].changed_at : null,
     reconstructed: all.length - logged.length,
   }
 }
@@ -1163,6 +1171,21 @@ export interface RecordExtras {
   refusedElsewhere?: string | null
 }
 
+/**
+ * A date on the grid: the page's short form, and the long one where the year is
+ * the point.
+ *
+ * `fullDate` exists because the readiness page dates things four years apart on
+ * one screen, and "16 Aug" beside "16 Aug" is two different Augusts. Nothing on
+ * this grid is: every other date it prints is inside the window it is reading.
+ * So a date that falls in the window's own year is short, like its neighbours,
+ * and one that does not carries its year, because that is the case `fullDate`
+ * was written for.
+ */
+export function recordDate(iso: string, within: string): string {
+  return iso.slice(0, 4) === within.slice(0, 4) ? shortDate(iso) : fullDate(iso)
+}
+
 /** "6, 13, 20, 27 Sep" where a window is one month, and dated short forms
  *  otherwise. Never an ISO day: `recordLines`' own rule, one row over. */
 export function datesLine(dates: readonly string[]): string {
@@ -1312,12 +1335,17 @@ export function recordRows(input: RecordInputs, extra: RecordExtras = {}): Recor
       : extra.changeNote ?? 'inside this window',
     { dash: true },
   )
+  // A DATE IS THIS ROW'S FIGURE, and it is set like every other figure on the
+  // grid: it was passed as `rest` with `figure: null`, so the one number in the
+  // row missed the mono/semibold treatment the whole grid exists for, and it
+  // was the only long-form date on a page of short ones (design review finding
+  // 9). `recordDate` keeps the year where the year is the point.
   push(
     'changelog', 'Change record begins',
-    null,
+    c.loggedFrom == null ? null : recordDate(c.loggedFrom, input.window.to),
     c.loggedFrom == null
       ? 'No change to what we track has been recorded yet, so no comparison can be checked against one.'
-      : fullDate(c.loggedFrom),
+      : '',
     c.loggedFrom != null && c.reconstructed > 0
       ? { basis: `${fmtInt(c.reconstructed)} earlier ${c.reconstructed === 1 ? 'entry was' : 'entries were'} worked out afterwards from what each update searched` }
       : {},
