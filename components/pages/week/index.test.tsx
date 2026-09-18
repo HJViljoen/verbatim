@@ -271,7 +271,8 @@ describe('WK §4 · what came in', () => {
     // M3 is unapplied on both tenants, so the comments column, the total above
     // it and every contribution go silent TOGETHER. Each absence is a sentence.
     const text = renderText(weekCameIn.render(absentReadingFixture(), 'app', ctx))
-    expect(text).toContain('comments in these days are not recorded for this workspace yet')
+    expect(text).toContain('Comments in these days are not recorded for this workspace yet.')
+    expect(text).toContain('not recorded')
     expect(text).not.toContain('comments written in these days')
     expect(text).not.toContain('The rows below account for')
     // The shares are NOT windowed and still print with both sides.
@@ -312,9 +313,11 @@ describe('WK §4 · what came in', () => {
       // update's analysed total, the one thing every row is a part of.
       expect(text, mode).toContain('360 of 508 videos this update analysed')
       expect(text, mode).toContain('96 of 508 videos this update analysed')
-      // The per-audience comments the loader used to sum away into one stat.
-      expect(text, mode).toContain('3,600 comments written in these days')
-      expect(text, mode).toContain('434 comments written in these days')
+      // The per-audience comments the loader used to sum away into one stat —
+      // a column on the page, a sentence in an email, which is the same split
+      // the rival table makes and for the same reason.
+      expect(text, mode).toContain(mode === 'email' ? '3,600 comments written in these days' : '3,600')
+      expect(text, mode).toContain(mode === 'email' ? '434 comments written in these days' : '434')
     }
   })
 
@@ -322,8 +325,47 @@ describe('WK §4 · what came in', () => {
     const d = weekFixture()
     const data = { ...d, cameIn: { ...d.cameIn, rows: d.cameIn.rows.map((r) => ({ ...r, comments: null })) } }
     const text = renderText(weekCameIn.render(data, 'app', ctx))
-    expect(text).toContain('comments in these days are not recorded for this workspace yet')
+    // The cell says "not recorded" and the block says the whole sentence once:
+    // an em dash in the column would read as a zero, and a zero here would be
+    // a measurement nobody made.
+    expect(text).toContain('not recorded')
     expect(text).not.toContain('0 comments written in these days')
+  })
+
+  it('draws the mock’s table, with five columns where the mock has four', () => {
+    // ANALYSED and NEWLY FOUND are two sets, not a part and a whole, so they
+    // get a column each rather than being collapsed into the mock's single
+    // "Videos". The share bar's denominator is the update's own analysed total.
+    const text = renderText(weekCameIn.render(weekFixture(), 'app', ctx))
+    expect(text).toContain('Audience')
+    expect(text).toContain('Share of this update')
+    expect(text).toContain('Analysed')
+    expect(text).toContain('Found')
+    expect(text).toContain('All audiences')
+    // The total row adds the two video columns, which do add, and the comments
+    // column, which the windowed read supplies whole.
+    expect(text).toContain('508')
+    expect(text).toContain('618')
+    expect(text).toContain('5,134')
+  })
+
+  it('names a rival whose line starts inside the months this page compares', () => {
+    // The mock's "Poler since 3 Sep" — `competitors.first_seen_at` (M1), on the
+    // row it is about. Every other row is tracked from before those months and
+    // prints no start, because a rival with the same history as the rows above
+    // it is not news.
+    const text = renderText(weekCameIn.render(thinFixture(), 'app', ctx))
+    expect(text).toContain('tracked since 3 Sep — a shorter line than the rows above it')
+    expect(text.match(/tracked since/g)).toHaveLength(1)
+    // Össur has no rival added inside its own four months.
+    expect(renderText(weekCameIn.render(weekFixture(), 'app', ctx))).not.toContain('tracked since')
+  })
+
+  it('links to every new quote and keeps the first-heard floor sentence', () => {
+    const text = renderText(weekCameIn.render(weekFixture(), 'app', ctx))
+    expect(text).toContain('See all 41 new quotes →')
+    expect(text).toContain('2 heard for the first time')
+    expect(text).toContain('2 of the 303 themes first heard in this update carried 10 videos or more this month.')
   })
 
   it('restates every audience’s count as a contribution to the month', () => {

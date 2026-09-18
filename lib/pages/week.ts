@@ -445,6 +445,18 @@ export interface AudienceRow {
    */
   contribution: { videos: number; of: number } | null
   /**
+   * When this rival's line STARTS — the mock's "Poler since 3 Sep".
+   *
+   * `competitors.first_seen_at` (M1), and printed only where it falls inside
+   * the months this page compares against: a rival tracked since April has the
+   * same history as everybody else on this table and saying so is noise, while
+   * a rival added three weeks ago has a shorter line than the rows above it and
+   * a reader comparing the two needs to know. Null on the client's own row, on
+   * the category, on a rival whose identity row is not there (M1 unapplied),
+   * and on one tracked from before the window this page reads.
+   */
+  trackedSince: string | null
+  /**
    * This row's analysed videos over the update's own analysed total — the
    * mock's share bar (`week.camein.col.share`).
    *
@@ -1764,7 +1776,7 @@ async function buildCameIn(input: {
   window: WeekWindow | null
   month: string
   videos: VideoRow[]
-  rivals: { name: string; retiredAt: string | null }[]
+  rivals: { name: string; retiredAt: string | null; firstSeenAt: string | null }[]
   windowRead: Awaited<ReturnType<typeof loadWindowReading>> | null
   /** The window clipped to the month, per audience — the contribution's
    *  numerator, and never a sum of month rows. */
@@ -1782,7 +1794,7 @@ async function buildCameIn(input: {
   const take = (audience: string): AudienceRow => {
     const held = byAudience.get(audience)
     if (held) return held
-    const made: AudienceRow = { audience, label: audienceLabel(audience), gathered: 0, analysed: 0, platformMix: {}, contribution: null, share: { k: 0, n: 0 }, comments: null }
+    const made: AudienceRow = { audience, label: audienceLabel(audience), gathered: 0, analysed: 0, platformMix: {}, contribution: null, trackedSince: null, share: { k: 0, n: 0 }, comments: null }
     byAudience.set(audience, made)
     return made
   }
@@ -1802,7 +1814,16 @@ async function buildCameIn(input: {
   // Null when the windowed read is not installed (M3) and 0 when it is and this
   // audience drew no comment in these days — a measurement, not a silence.
   const commentsBy = new Map((windowRead?.denominators ?? []).map((d) => [d.audience, d.comments ?? 0]))
+  // WHOSE LINE STARTS LATE, AND ONLY THOSE. A rival first seen before the
+  // months this page compares has the same history as every row above it.
+  const trackedFrom = backMonths(month, BASELINE_MONTHS)
+  const sinceBy = new Map(
+    rivals
+      .filter((r) => r.firstSeenAt != null && r.firstSeenAt.slice(0, 10) >= trackedFrom)
+      .map((r) => [rivalKey(r.name), r.firstSeenAt as string]),
+  )
   for (const rowOut of byAudience.values()) {
+    rowOut.trackedSince = sinceBy.get(rowOut.audience) ?? null
     if (windowRead?.denominators != null) rowOut.comments = commentsBy.get(rowOut.audience) ?? 0
     if (input.contributionRead == null) continue
     rowOut.contribution = {
@@ -2197,16 +2218,21 @@ function toWorkedRow(p: PerfMultiple): WorkedRow {
 async function loadRivals(
   supabase: SupabaseClient,
   clientId: string,
-): Promise<{ name: string; retiredAt: string | null }[]> {
+): Promise<{ name: string; retiredAt: string | null; firstSeenAt: string | null }[]> {
   try {
     const stored = await loadCompetitors(supabase, clientId)
-    if (stored.length > 0) return stored.map((r) => ({ name: r.name, retiredAt: r.retired_at }))
+    // `first_seen_at` IS THE IDENTITY ROW'S, NOT THE TRACKED LIST'S. The
+    // fallback below is the tracked list, which is a set of strings and knows
+    // no dates — so a workspace without M1 gets `null` and the table prints no
+    // start at all, rather than a date read off something that does not record
+    // one.
+    if (stored.length > 0) return stored.map((r) => ({ name: r.name, retiredAt: r.retired_at, firstSeenAt: r.first_seen_at }))
   } catch (error) {
     if (!isMissingCompetitors(error)) throw error
   }
   const res = await supabase.from('tracking_configs').select('competitor_names').eq('client_id', clientId).maybeSingle()
   const tc = row<{ competitor_names: string[] | null }>(res, 'week.rivals')
-  return (tc?.competitor_names ?? []).map((name) => ({ name, retiredAt: null }))
+  return (tc?.competitor_names ?? []).map((name) => ({ name, retiredAt: null, firstSeenAt: null }))
 }
 
 /**

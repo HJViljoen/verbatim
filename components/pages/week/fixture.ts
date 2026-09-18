@@ -449,9 +449,9 @@ export function weekFixture(): WeekData {
       // figure, which sums to `windowComments` below — both sides carried, no
       // bare percentage anywhere.
       rows: [
-        { audience: 'industry-other', label: 'The category', gathered: 429, analysed: 360, platformMix: { youtube: 210, instagram: 85, tiktok: 45, reddit: 20 }, contribution: { videos: 144, of: 398 }, share: { k: 360, n: 508 }, comments: 3600 },
-        { audience: 'competitor:Ottobock', label: 'Ottobock', gathered: 137, analysed: 96, platformMix: { youtube: 52, instagram: 30, tiktok: 12, reddit: 2 }, contribution: { videos: 47, of: 118 }, share: { k: 96, n: 508 }, comments: 1100 },
-        { audience: 'client', label: 'Your own brand', gathered: 52, analysed: 52, platformMix: { youtube: 33, instagram: 12, tiktok: 7 }, contribution: { videos: 14, of: 96 }, share: { k: 52, n: 508 }, comments: 434 },
+        { audience: 'industry-other', label: 'The category', gathered: 429, analysed: 360, platformMix: { youtube: 210, instagram: 85, tiktok: 45, reddit: 20 }, contribution: { videos: 144, of: 398 }, trackedSince: null, share: { k: 360, n: 508 }, comments: 3600 },
+        { audience: 'competitor:Ottobock', label: 'Ottobock', gathered: 137, analysed: 96, platformMix: { youtube: 52, instagram: 30, tiktok: 12, reddit: 2 }, contribution: { videos: 47, of: 118 }, trackedSince: null, share: { k: 96, n: 508 }, comments: 1100 },
+        { audience: 'client', label: 'Your own brand', gathered: 52, analysed: 52, platformMix: { youtube: 33, instagram: 12, tiktok: 7 }, contribution: { videos: 14, of: 96 }, trackedSince: null, share: { k: 52, n: 508 }, comments: 434 },
       ],
       gathered: 618,
       analysed: 508,
@@ -666,9 +666,13 @@ export function thinFixture(): WeekData {
         // produces. The absent arm is `absentReadingFixture()` below, whole.
         // The three contributions add to the 394 the block states, and their
         // denominators to its 475.
-        { audience: 'industry-other', label: 'The category', gathered: 933, analysed: 150, platformMix: { youtube: 80, instagram: 40, tiktok: 25, reddit: 5 }, contribution: { videos: 300, of: 350 }, share: { k: 150, n: 253 }, comments: 6000 },
-        { audience: 'competitor:Freitag', label: 'Freitag', gathered: 138, analysed: 71, platformMix: { instagram: 45, tiktok: 20, youtube: 6 }, contribution: { videos: 60, of: 80 }, share: { k: 71, n: 253 }, comments: 2400 },
-        { audience: 'competitor:Cotopaxi', label: 'Cotopaxi', gathered: 27, analysed: 32, platformMix: { instagram: 20, tiktok: 12 }, contribution: { videos: 34, of: 45 }, share: { k: 32, n: 253 }, comments: 931 },
+        { audience: 'industry-other', label: 'The category', gathered: 933, analysed: 150, platformMix: { youtube: 80, instagram: 40, tiktok: 25, reddit: 5 }, contribution: { videos: 300, of: 350 }, trackedSince: null, share: { k: 150, n: 253 }, comments: 6000 },
+        { audience: 'competitor:Freitag', label: 'Freitag', gathered: 138, analysed: 71, platformMix: { instagram: 45, tiktok: 20, youtube: 6 }, contribution: { videos: 60, of: 80 }, trackedSince: null, share: { k: 71, n: 253 }, comments: 2400 },
+        { audience: 'competitor:Cotopaxi', label: 'Cotopaxi', gathered: 27, analysed: 32, platformMix: { instagram: 20, tiktok: 12 }, contribution: { videos: 34, of: 45 },
+          // THE ONE ROW WHOSE LINE STARTS LATE — the mock's "Poler since 3 Sep".
+          // `competitors.first_seen_at` (M1); every other row here is tracked
+          // from before the months this page compares and prints no start.
+          trackedSince: '2026-09-03T00:00:00.000Z', share: { k: 32, n: 253 }, comments: 931 },
       ],
       gathered: 1098,
       analysed: 253,
