@@ -1,5 +1,5 @@
 import { methodLines, type MethodLines } from '../reading/method'
-import type { RecordInputs } from '../reading/record'
+import { howSoundLine, recordLines, type RecordInputs } from '../reading/record'
 
 // The method footnote's two fixture states, in ONE place (block D, D9).
 //
@@ -46,13 +46,32 @@ export function methodRecordFixture(over: Partial<RecordInputs> = {}): RecordInp
 export const methodFixture = (brand = 'Sealand'): MethodLines =>
   methodLines(methodRecordFixture(), { brand })
 
+/** The degraded state's inputs, NAMED — so a fixture that carries both the
+ *  footnote and the record band can compose them from one record. */
+export const methodRefusedRecordFixture = (over: Partial<RecordInputs> = {}): RecordInputs =>
+  methodRecordFixture({
+    coverage: null,
+    language: { analysed: 2_359, unknown: 2_359, english: 0, notEnglish: 0, basis: 'video_speech' },
+    ...over,
+  })
+
 /** The degraded state: no month-by-month coverage, no language on record. The
  *  footnote keeps the three lines it can still stand behind. */
 export const methodRefusedFixture = (brand = 'Sealand'): MethodLines =>
-  methodLines(
-    methodRecordFixture({
-      coverage: null,
-      language: { analysed: 2_359, unknown: 2_359, english: 0, notEnglish: 0, basis: 'video_speech' },
-    }),
-    { brand },
-  )
+  methodLines(methodRefusedRecordFixture(), { brand })
+
+/**
+ * The "how sound is this" band, composed the way every loader composes it.
+ *
+ * SAME REASON AS THE FOOTNOTE ABOVE, and the same defect one layer up. A page
+ * fixture that hand-writes the band writes it in words the composer would
+ * never produce — "27% not in English", which `howSoundLine` states as "27% of
+ * what was said on camera was not in English", a period and a subject apart
+ * (lib/reading/method.ts's own header names that wording as two errors in one
+ * clause). Mounting the method footnote then puts BOTH sentences on one page,
+ * about one measure, contradicting each other — and the screenshots that are
+ * the evidence for a port's honesty claims show the un-based one.
+ */
+export const recordBandFixture = (
+  inputs: RecordInputs = methodRecordFixture(),
+): { line: string; lines: string[] } => ({ line: howSoundLine(inputs), lines: recordLines(inputs) })

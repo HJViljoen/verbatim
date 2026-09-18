@@ -75,6 +75,14 @@ describe('voiceTheme', () => {
     expect(draw()).toContain('Tone · the category, all judged videos')
   })
 
+  it('draws all four moods, because `moodShares` returns four', () => {
+    // The fixture listed three and left `mixed` out, so the fourth segment and
+    // the two-row legend four segments produce at this width had never been
+    // rendered — although production returns four on every judged month.
+    const text = draw()
+    for (const label of ['Warm', 'Both ways', 'Matter-of-fact', 'Cold']) expect(text, label).toContain(label)
+  })
+
   it('says what is not recorded instead of a tone line when M5 is unapplied', () => {
     const text = draw(refusedVoiceFixture())
     expect(text).toContain('not recorded month by month for this workspace yet')
@@ -277,7 +285,7 @@ describe('voiceTheme', () => {
     const table = blockAnswers(voiceTheme, voiceFixture()).figures
     expect(table.theme_share.value).toBe(9.4)
     expect(table.theme_videos).toMatchObject({ value: 130, unit: 'videos' })
-    expect(table.theme_tone_negative.value).toBe(18)
+    expect(table.theme_tone_negative.value).toBe(18.1)
   })
 
   it('hands its quotes up as refs, so a snapshot freezes ids and not words', () => {

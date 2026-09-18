@@ -116,9 +116,18 @@ describe('VoiceSurfacePage', () => {
     expect(text).toContain('How to read this page')
   })
 
-  it('carries the record band under the bar', () => {
+  it('carries the record band under the bar, in the words the footnote uses', () => {
+    // ONE RECORD, TWO RENDERINGS. The band is composed by `howSoundLine` and
+    // the footnote at the foot of the page by `methodLines`, both off one
+    // `RecordInputs` — so the page cannot print "27% not in English" in the
+    // band and "27% of what was said on camera was not in English" under it,
+    // which is what the hand-written fixture did once the footnote was
+    // mounted.
     const text = renderText(<VoiceSurfacePage data={voiceFixture()} params={{}} />)
-    expect(text).toContain('4 updates · 2,359 videos')
+    expect(text).toContain('3 updates · 2,359 videos')
+    expect(text).toContain('27% of what was said on camera was not in English')
+    expect(text).not.toContain('27% not in English')
+    expect(text).not.toContain('27% of the comments read were not in English')
   })
 
   it('says the workspace has been read at all before it says anything else', () => {

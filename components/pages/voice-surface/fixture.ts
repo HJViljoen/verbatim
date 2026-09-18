@@ -5,7 +5,8 @@ import type { MonthPoint } from '@/lib/reading/series'
 import type { Mover } from '@/lib/pages/overview'
 import type { VoiceSurfaceData } from '@/lib/pages/voice-surface'
 import { PERSONA_VIDEO_FLOOR, voiceSurfaceHref } from '@/lib/pages/voice-surface'
-import { methodFixture, methodRefusedFixture } from '@/lib/test/method-fixture'
+import { methodFixture, methodRefusedFixture, methodRefusedRecordFixture, recordBandFixture } from '@/lib/test/method-fixture'
+import { moodShares } from '@/lib/reading/mood'
 
 // Voice's block fixtures (Phase 1 WP13).
 //
@@ -175,11 +176,13 @@ export function voiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurface
       axis,
       points: [point('2026-07-01', 71, 1200), point(PREV, 82, 1200), point(MONTH, 130, 1388)],
       tone: {
-        shares: [
-          { mood: 'positive', label: 'Warm', videos: 678, judged: 1112, pct: 61 },
-          { mood: 'neutral', label: 'Neutral', videos: 233, judged: 1112, pct: 21 },
-          { mood: 'negative', label: 'Cold', videos: 201, judged: 1112, pct: 18 },
-        ],
+        // ALL FOUR MOODS, FROM THE REAL FUNCTION. The fixture listed three, in
+        // an order `moodShares` does not produce and without `mixed` ("Both
+        // ways") at all — so the fourth segment, and the two-row legend four
+        // segments produce at this width, had never been rendered or reviewed
+        // although production returns them on every judged month. The counts
+        // balance, which is what `moodCountsBalance` says a real row does.
+        shares: moodShares({ judged: 1112, positive: 678, mixed: 111, neutral: 122, negative: 201 }),
         judged: 1112,
         // THE MOOD VERDICT'S TWO SIDES ARE JUDGED VIDEOS, not the theme's. It
         // inherited the theme's 130-of-1,388 and its 82-of-1,200, so the block
@@ -289,10 +292,15 @@ export function voiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurface
       stateNote: 'this month as it stands, never compared with another month',
       empty: null,
     },
-    record: {
-      line: '4 updates · 2,359 videos (TikTok 38%, YouTube 29%, Instagram 21%, Reddit 12%) · 27% not in English',
-      lines: ['4 updates delivered, 1 Sep to 15 Sep.', '27% of the comments read were not in English.'],
-    },
+    // THE BAND AND THE FOOTNOTE COME OFF ONE RECORD. Hand-written, the band
+    // said "27% not in English" and "27% of the comments read were not in
+    // English" — the mock's clause, which `howSoundLine` never produces and
+    // which lib/reading/method.ts names as two errors in one clause (the
+    // period and the subject). With the method footnote mounted at the foot of
+    // this page, that put two contradictory sentences about one measure on one
+    // screenshot, and the screenshots are the evidence for this port's own
+    // D15 claim.
+    record: recordBandFixture(),
     method: methodFixture(),
     ...over,
   }
@@ -310,6 +318,7 @@ export function refusedVoiceFixture(over: Partial<VoiceSurfaceData> = {}): Voice
   return {
     ...base,
     method: methodRefusedFixture('Össur'),
+    record: recordBandFixture(methodRefusedRecordFixture()),
     brand: 'Össur',
     audience: {
       ...base.audience,
