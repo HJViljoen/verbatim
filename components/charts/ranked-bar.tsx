@@ -31,7 +31,12 @@ export function RankedBar({
   const row = (
     <>
       {dot && <span className="size-1.5 shrink-0 rounded-full" style={{ background: color }} aria-hidden />}
-      <span className="min-w-0 flex-1 truncate text-[12.5px]">{label}</span>
+      {/* A label longer than its cell is clipped, so it carries its own words
+          in a title (Block D wave 2): "Riding what is current" needs 122px and
+          gets 95 inside a span-5 tile at 1008, and a truncated label with no
+          tooltip is a row a reader cannot identify. `title` takes a string
+          only, so a node label (a marked span) keeps the plain clip. */}
+      <span className="min-w-0 flex-1 truncate text-[12.5px]" title={typeof label === 'string' ? label : undefined}>{label}</span>
       {badge}
       <span className="h-1.5 shrink-0 overflow-hidden rounded-full bg-inner" style={{ width: barWidth }} aria-hidden>
         <span className={animate ? 'vi-anim-bar block h-full rounded-full' : 'block h-full rounded-full'} style={{ width: `${Math.max(2, Math.min(100, pct))}%`, background: color }} />

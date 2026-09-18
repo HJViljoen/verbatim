@@ -960,6 +960,27 @@ describe('the page', () => {
     expect(renderText(weekCoverage.render(weekFixture(), 'email', ctx))).toContain('What this reading rests on')
   })
 
+  it('gives every tile the span its tallest reading needs at 1008, and no more', () => {
+    // Design review F1 and F3, pinned. The spans were set against the widest
+    // the grid ever is (1440 → a 1216 content column) and clipped at 1280 →
+    // 1008, which is the NARROWEST the twelve-column grid gets: below it the
+    // page stacks and tiles size to their content. Every number here is a
+    // measured `scrollHeight - clientHeight` of zero at 1008 and at 1216, on
+    // the arm named — and the shorter readings take shorter spans, because a
+    // tile holding 248px for 71px of content is the other half of the finding.
+    const spans = (data: WeekData) => {
+      const markup = render(<WeekPage data={data} />)
+      return [...markup.matchAll(/data-col="(\d+)" data-row="(\d+)"/g)].map((m) => `${m[1]}x${m[2]}`)
+    }
+    // Össur, flagged: §1 takes five rows because its right column wraps to
+    // 553px at 1008, where it fitted 496 at 1216.
+    expect(spans(weekFixture())).toEqual(['12x5', '12x4', '12x3', '12x5', '12x3', '5x4', '7x4', '12x2', '12x3'])
+    // Sealand, and the arm both tenants render today: five of these blocks
+    // stand on one sentence, and they take one or two rows rather than three.
+    expect(spans(thinFixture())).toEqual(['12x4', '12x1', '12x2', '12x5', '12x3', '5x3', '7x2', '12x1', '12x2'])
+    expect(spans(absentReadingFixture())).toEqual(['12x4', '12x1', '12x2', '12x5', '12x3', '5x3', '7x2', '12x1', '12x2'])
+  })
+
   it('takes no horizon and no soundness band — it is dated by the update', () => {
     const markup = render(<WeekPage data={weekFixture()} />)
     expect(markup).not.toContain('How far back')

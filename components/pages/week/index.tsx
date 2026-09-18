@@ -76,13 +76,23 @@ const COLS: Record<string, number> = {
 /** How tall each block's tile is, in the grid's 116px row units — the height a
  *  FULL one needs.
  *
- *  GENEROUS BY DESIGN. A tile is `overflow-hidden` and its span is fixed, so a
- *  block whose content outgrows its span is CLIPPED — and the degraded arms are
- *  not the short ones: Sealand carries three rival rows where Össur carries
- *  one, and a refusal sentence is longer than the figure it replaces. Every
- *  span below was set against the TALLEST of the three fixtures at 1440. */
+ *  A tile is `overflow-hidden` and its span is fixed, so a block whose content
+ *  outgrows its span is CLIPPED, silently. The degraded arms are not the short
+ *  ones: Sealand carries three rival rows where Össur carries one, and a
+ *  refusal sentence is longer than the figure it replaces.
+ *
+ *  MEASURED AT 1008, NOT AT 1440 (design review F1). Every span here was set
+ *  against the tallest of the three fixtures at 1440 — and 1440 is the WIDEST
+ *  the twelve-column grid ever is. At a 1280 viewport the content column is
+ *  1008 and every tile's content is taller: §1 lost 55px there, which took a
+ *  quote's "YouTube · 11 Sep" citation and the tile's own footer, on the
+ *  commonest laptop width after 1440. Below 1280 the grid stacks and tiles
+ *  size to their content, so 1008 is the narrowest width at which a span can
+ *  clip anything — which makes it the only width worth setting one against.
+ *  The numbers below are `scrollHeight - clientHeight` per tile, per arm, at
+ *  1008 and at 1216, zero everywhere. */
 const ROWS: Record<string, number> = {
-  'week.unusual': 4,
+  'week.unusual': 5,
   'week.reply': 4,
   'week.subjects': 3,
   'week.came-in': 5,
@@ -91,16 +101,27 @@ const ROWS: Record<string, number> = {
   'week.sales': 4,
   'week.flagged': 2,
   'week.rising': 3,
-  'week.coverage': 1,
 }
 
-/** What a tile is worth when its block has nothing to draw. */
+/** What a tile is worth on its SHORTER reading.
+ *
+ *  Not "when its block has nothing to draw" — that is what `emptyState` tests,
+ *  and it is a good proxy but not the thing itself. §1 on Sealand returns a
+ *  sentence ("the check cannot speak yet") AND draws its thirteen-point chart;
+ *  measured, that reading is 383px where the flagged one is 553, so it takes
+ *  the shorter span and neither clips.
+ *
+ *  These came down in the wave-2 fix pass (design review F3), which measured
+ *  the white per tile rather than eyeballing it: the reply tile held 248px for
+ *  71px of content and the sales tile 380px for 125px, which is a quarter of
+ *  the page a tenant sees today given over to empty tile. */
 const EMPTY_ROWS: Record<string, number> = {
-  'week.reply': 2,
+  'week.unusual': 4,
+  'week.reply': 1,
   'week.subjects': 2,
   'week.rival-posts': 2,
   'week.worked': 3,
-  'week.sales': 3,
+  'week.sales': 2,
   'week.flagged': 1,
   'week.rising': 2,
 }
