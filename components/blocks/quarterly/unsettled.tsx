@@ -5,7 +5,7 @@ import { fmtInt, fmtPct, fullDate } from '@/lib/format'
 import { PRIVACY_LINE } from '@/lib/reading/method'
 import type { QuarterlyData } from '@/lib/pages/quarterly'
 import { QUARTER_PAGE_QUESTION, QUARTER_PAGE_TITLE, quarterLabel } from '@/lib/reports/quarterly'
-import { Card, Column, Columns, Eyebrow, Note, Row, State, TableRow } from './parts'
+import { Card, Chip, Column, Columns, Eyebrow, Note, Row, State, TableRow } from './parts'
 
 // QR8 · What we could not settle (mock page 8).
 //
@@ -98,11 +98,25 @@ export const quarterlyUnsettled: Block<QuarterlyData> = {
           <Note mode={mode}>Every comparison this quarter asked for was drawn.</Note>
         )}
 
+        {/* `qr.p8.waiting` · THE ARTBOARD'S SHAPE: a headline and a badge per
+            wait, so a reader scans named open questions rather than three
+            unheaded paragraphs in a row. The words are ours where the honesty
+            rules refuse the mock's; the layout is the mock's, which is what
+            "the mock is the spec" governs. The badge is a STATE — what is
+            missing — and never a direction: "gone quiet" belongs on page 4,
+            inside a verdict node, with the register's own flag behind it. */}
         {u.waiting.length > 0 ? (
           <div className={email ? undefined : 'mt-2 flex flex-col gap-1'}>
             <Eyebrow mode={mode}>Also waiting on a reading</Eyebrow>
-            {u.waiting.map((line, n) => (
-              <Row key={n} mode={mode}>{line}</Row>
+            {u.waiting.map((w, n) => (
+              <Row
+                key={n}
+                mode={mode}
+                label={w.line ? w.title : undefined}
+                aside={<Chip tone="muted" mode={mode}>{w.why}</Chip>}
+              >
+                {w.line ?? w.title}
+              </Row>
             ))}
           </div>
         ) : null}

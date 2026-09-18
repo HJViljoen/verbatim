@@ -545,6 +545,34 @@ export interface UnsettledItem {
   body: string
 }
 
+/**
+ * The part of a move's ledger sentence a surface that has already printed its
+ * title and its subject may still add.
+ *
+ * `moveLedgerLine` (lib/pages/market-surface.ts) composes a self-contained row
+ * for a LIST — "<title> · <subject> · tracked 14 Sep · first scoring lands
+ * with the October reading." — and both page 6's card and page 8's wait head
+ * their entry with the title, so printed whole it said the title and the
+ * subject twice inside one entry. The segments are dropped by exact equality
+ * with the fields the surface drew them from, so if the line is ever
+ * recomposed the filter matches nothing and the whole sentence prints rather
+ * than a cut one.
+ */
+export function moveTail(move: { title: string; on: string; line: string }): string {
+  const parts = move.line.split(' · ')
+  const tail = parts.filter((p) => p !== move.title && p !== move.on)
+  return tail.length > 0 ? tail.join(' · ') : move.line
+}
+
+export interface UnsettledWait {
+  /** The open question, as a heading. */
+  title: string
+  /** Why it is open — the artboard's badge. */
+  why: string
+  /** The sentence under it, or null where the heading and the badge say it. */
+  line: string | null
+}
+
 export interface UnsettledPage {
   items: UnsettledItem[]
   /** What was never ASKED, as against what was asked and could not be
@@ -554,7 +582,23 @@ export interface UnsettledPage {
    *  — on the same artefact whose other pages say the quarter-on-quarter
    *  reading is not recorded. Null when both halves were attempted. */
   notAsked: string | null
-  waiting: string[]
+  /**
+   * `qr.p8.waiting` — the artboard's named open questions, each with the
+   * badge that says why it is open.
+   *
+   * IT IS NOT A LIST OF SENTENCES. The artboard draws a headline and a badge
+   * per wait ("Whether your own durability share really moved" · `too few to
+   * compare`) so a reader scans three named questions; built as bare strings
+   * the page printed three unheaded paragraphs in a row and a reader had to
+   * read each to find out what it was about. The words changed with wave 2 —
+   * these are subject-level waits now, not the overview's series notes — and
+   * the LAYOUT is still the mock's, which is what "the mock is the spec"
+   * governs.
+   *
+   * `why` is a STATE, never a direction: it says what is missing, and every
+   * one of them is code's own vocabulary.
+   */
+  waiting: UnsettledWait[]
   heldBack: string[]
   /** When the first quarter-on-quarter verdict lands, in the reader's words —
    *  with the month it settles in, where that can be counted. */
@@ -2325,13 +2369,25 @@ function buildUnsettled(a: {
   // behind it, a theme the register has marked dormant. The series notes stay,
   // at the end, because they are true — they are simply not the answer to the
   // question this heading asks.
-  const waiting: string[] = []
+  //
+  // AND EACH ONE IS A HEADLINE AND A BADGE, which is the artboard's own shape
+  // for this section. The words are ours where the rules refuse the mock's;
+  // the layout is the mock's.
+  const waiting: UnsettledWait[] = []
   if (!quarterUnlocked(a.readings)) {
-    waiting.push(quarterGateSentence(a.readings))
+    waiting.push({
+      title: 'The quarter view itself',
+      why: 'not enough readings yet',
+      line: quarterGateSentence(a.readings),
+    })
   }
   for (const row of a.subjects.rows) {
     if (row.categoryQuarter || row.youQuarter) continue
-    waiting.push(`${row.label}, quarter on quarter: neither side carried a reading on both sides of this quarter, so no verdict is printed for it.`)
+    waiting.push({
+      title: `${row.label}, quarter on quarter`,
+      why: 'neither side read on both sides',
+      line: 'Neither side carried a reading on both sides of this quarter, so no verdict is printed for it.',
+    })
   }
   for (const move of a.moves.moves) {
     if (a.moves.readings.some((r) => r.moveId === move.id && r.verdict)) continue
@@ -2339,8 +2395,9 @@ function buildUnsettled(a: {
     // (`moveLedgerLine`, lib/pages/market-surface.ts), so prefixing it with
     // the title and the subject printed both twice: "Say less about recycling,
     // on the subject Durability — Say less about recycling · on the subject
-    // Durability · tracked 14 Sep · …".
-    waiting.push(move.line)
+    // Durability · tracked 14 Sep · …". It is the body under its own title
+    // here, unchanged.
+    waiting.push({ title: move.title, why: 'no reading behind it yet', line: moveTail(move) })
   }
   for (const q of a.category.quiet ?? []) {
     // NOT "<label> has not been read", WHICH IS UNGRAMMATICAL HALF THE TIME.
@@ -2349,9 +2406,25 @@ function buildUnsettled(a: {
     // "Sizing and fit questions HAS not been read". The label is the object of
     // the sentence instead, so no agreement is claimed over words this code
     // did not choose.
-    waiting.push(`No reading has been recorded for ${q.label} since ${q.lastHeard ? monthName(q.lastHeard) : 'the months on this axis'}; a theme is never called dead, only dormant.`)
+    //
+    // AND THE BADGE IS NOT "gone quiet" HERE. That word is in DIRECTION_WORDS
+    // and page 4 prints it inside a verdict node with the register's own flag
+    // behind it; this page is listing what we are waiting to read, so the
+    // badge says what is missing and claims nothing about a series.
+    waiting.push({
+      title: q.label,
+      why: `not read since ${q.lastHeard ? monthName(q.lastHeard) : 'the months on this axis'}`,
+      line: 'A theme is never called dead, only dormant.',
+    })
   }
-  for (const note of a.overview.notes.slice(0, 3)) waiting.push(note.text)
+  // THE SERIES NOTES LAST, AND THEY ARE NOT NAMED QUESTIONS. A clustering
+  // change or an unlogged era is a fact about our bookkeeping — true, already
+  // the method page's subject, and not the answer to the question this heading
+  // asks — so each is its own row under the bookkeeping badge rather than
+  // pretending to be a named wait.
+  for (const note of a.overview.notes.slice(0, 3)) {
+    waiting.push({ title: note.text, why: 'in the record, not in the reading', line: null })
+  }
 
   // `qr.p8.heldback` · THE GATE'S SHARE, ON THIS PAGE. The figure is the record
   // page's own (`methodNumbers`' "Held back" row), read off it rather than

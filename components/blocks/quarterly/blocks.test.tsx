@@ -903,18 +903,29 @@ describe('the artboard port (Block D wave 2)', () => {
     expect(labels).not.toContain('Conversations')
   })
 
-  it('qr.p8.waiting · named things, not the overview’s series notes alone', () => {
+  it('qr.p8.waiting · a headline and a badge per wait, as the artboard draws it', () => {
     const t = text('quarterly.unsettled')
-    expect(t).toContain('a theme is never called dead, only dormant')
-    // NO SENTENCE PRINTS ITSELF TWICE. `move.line` already opens with the
-    // title and the subject, so prefixing it with both put each on the page
-    // twice inside one wait.
-    expect(t).toContain('Say less about recycling · on the subject Durability')
-    expect(t).not.toContain('Say less about recycling, on the subject Durability —')
+    // THE ARTBOARD'S SHAPE: a named open question, then the badge that says
+    // why it is open. Built as bare sentences the page printed three unheaded
+    // paragraphs in a row.
+    expect(t).toContain('Say less about recycling tracked 14 Sep')
+    expect(t).toContain('no reading behind it yet')
+    expect(t).toContain('Shipping and delivery times')
+    expect(t).toContain('not read since Jun 2026')
+    expect(t).toContain('A theme is never called dead, only dormant')
+    // NO SENTENCE PRINTS ITSELF TWICE. `move.line` opens with the title and
+    // the subject, and the wait is headed with the title, so the body is the
+    // tail (`moveTail`) — the same rule page 6's card follows.
+    expect(t).toContain('tracked 14 Sep · first scoring lands with the October reading')
+    expect(t).not.toMatch(/Say less about recycling[\s\S]{0,40}Say less about recycling/)
     // AND NO AGREEMENT IS CLAIMED OVER A LABEL THIS CODE DID NOT WRITE. A
     // theme label is as often plural as singular.
     expect(t).not.toMatch(/times has not been read/)
-    expect(t).toContain('No reading has been recorded for')
+    // THE BADGE IS A STATE, NEVER A DIRECTION. "gone quiet" is a
+    // DIRECTION_WORD and belongs on page 4 inside a verdict node.
+    for (const state of STATES) {
+      for (const mode of MODES) assertCopyContract(render(QUARTERLY_BLOCKS['quarterly.unsettled'].render(state, mode, ctx)))
+    }
   })
 
   it('qr.p8.heldback · the gate’s share, and why no sample is drawn', () => {
