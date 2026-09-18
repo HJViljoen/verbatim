@@ -51,6 +51,25 @@ import type { PlatformMix } from './types'
 export const PRIVACY_LINE =
   'Commenters are never identified; quotes carry platform and date only.'
 
+/**
+ * The Reddit clause, as a constant, because two surfaces print it.
+ *
+ * BOTH CLAUSES ARE CHECKED AGAINST THE CODE. The cap is
+ * `REDDIT_COMMENT_DEPTH_CAP`, spent in lib/gather/platforms/reddit.ts. The
+ * engagement clause is the mock's, and it is true for a reason the mock does
+ * not give: `lib/gather/platforms/reddit.ts` writes `engagement_rate: null` on
+ * every Reddit post because there are no views to blend, so a Reddit post is in
+ * no engagement average anywhere. Saying "excluded from engagement rows"
+ * without that reason would read as a policy we could change.
+ *
+ * Settings › Tracking prints it under the watched-communities table
+ * (`settings.reddit.footer`), where a client reading a Reddit post count is the
+ * reader who most needs it; the method footnote prints it as one of its lines.
+ * One sentence, two places — never two sentences.
+ */
+export const REDDIT_CAP_LINE =
+  `Reddit comments are capped at ${REDDIT_COMMENT_DEPTH_CAP} per thread, and a Reddit post has no views, so it carries no engagement rate and is in no engagement row.`
+
 export interface MethodLines {
   /** "Prepared by Verbatim · 18 Sep 2026" */
   preparedBy: string
@@ -164,14 +183,7 @@ export function methodLines(inputs: RecordInputs, opts: MethodOptions = {}): Met
     // about the comments.
     : `${share(lang.notEnglish, known)} of what was said on camera was not in English — ${fmtInt(lang.notEnglish)} of ${fmtInt(known)} videos whose language we know${lang.unknown > 0 ? `, and ${fmtInt(lang.unknown)} with no language recorded at all` : ''}.`
 
-  // BOTH CLAUSES ARE CHECKED AGAINST THE CODE. The cap is
-  // `REDDIT_COMMENT_DEPTH_CAP`, spent in lib/gather/platforms/reddit.ts. The
-  // engagement clause is the mock's, and it is true for a reason the mock does
-  // not give: `lib/gather/platforms/reddit.ts` writes `engagement_rate: null`
-  // on every Reddit post because there are no views to blend, so a Reddit post
-  // is in no engagement average anywhere. Saying "excluded from engagement
-  // rows" without that reason would read as a policy we could change.
-  const redditCap = `Reddit comments are capped at ${REDDIT_COMMENT_DEPTH_CAP} per thread, and a Reddit post has no views, so it carries no engagement rate and is in no engagement row.`
+  const redditCap = REDDIT_CAP_LINE
 
   const lines = [preparedBy, coverage, basis, language, redditCap, PRIVACY_LINE].filter(
     (l): l is string => typeof l === 'string' && l.length > 0,

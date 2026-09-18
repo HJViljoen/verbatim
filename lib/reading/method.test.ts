@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { PRIVACY_LINE as WEEK_PRIVACY_LINE } from '../pages/week'
 import { REDDIT_COMMENT_DEPTH_CAP } from '../config'
-import { methodLines, platformShareLine, PRIVACY_LINE } from './method'
+import { methodLines, platformShareLine, PRIVACY_LINE, REDDIT_CAP_LINE } from './method'
 import type { RecordInputs } from './record'
 
 // The method footnote (block D, D9). What these tests hold is the BASIS rule:
@@ -90,6 +90,11 @@ describe('methodLines', () => {
 
   it('prints the Reddit cap from the constant the gather spends', () => {
     expect(methodLines(inputs()).redditCap).toContain(`capped at ${REDDIT_COMMENT_DEPTH_CAP} per thread`)
+    // ONE SENTENCE, TWO HOMES. Settings prints it under the watched-communities
+    // table, where the post and comment counts it qualifies are; the footnote
+    // prints it as a line. Two wordings of one cap is how a client comes to
+    // believe they are two rules.
+    expect(methodLines(inputs()).redditCap).toBe(REDDIT_CAP_LINE)
   })
 
   it('prints the privacy sentence, identical to This week’s', () => {

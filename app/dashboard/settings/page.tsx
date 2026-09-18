@@ -4,6 +4,7 @@ import {
 import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { platformLabel } from '@/lib/format'
 import { HANDLE_FORMAT_CAVEAT } from '@/lib/provisioning'
+import { REDDIT_CAP_LINE } from '@/lib/reading/method'
 import { communityRows, communityWords, tableRows, unconfiguredShare } from '@/lib/settings/communities'
 import { RIVAL_PRECEDENCE, rivalRows, rivalState } from '@/lib/settings/rivals-view'
 import { termDateWords } from '@/lib/settings/terms'
@@ -140,6 +141,14 @@ export default async function SettingsTrackingPage() {
                 look when a Reddit figure looks wrong.
               </p>
             )}
+            {/* `settings.reddit.footer` — THE CAP AND THE EXCLUSION, printed
+                where the counts are. A client reading "292 posts · 1,880
+                comments" off this table has no way to know the comment column
+                is capped per thread, or that none of those posts is in an
+                engagement figure anywhere. The sentence is the method
+                footnote's own (lib/reading/method.ts REDDIT_CAP_LINE), not a
+                second wording of it. */}
+            <p className="mt-2 text-[11.5px] text-muted-foreground">{REDDIT_CAP_LINE}</p>
             {inputs.communityKept === null && (
               <p className="mt-1 text-[11.5px] text-muted-foreground">
                 How much of each community we kept is shown to owners and admins only — it is read off the accounts
