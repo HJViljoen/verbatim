@@ -281,16 +281,42 @@ export function seriesLabel(reading: MoveReading, audience: string): string {
  * nothing in this product computes one.
  */
 export function seriesLine(reading: MoveReading): string {
+  // AN ARROWED RUN IS THE SAME CLAIM AS THE SPARKLINE (code review I4). This
+  // printed "You 07/26 7.3% → 08/26 9.6% → 09/26 11.9%" unconditionally, two
+  // lines above `chartNote` — whose whole job is to say why a LINE may not be
+  // drawn over this reading — and beside a verdict that on this fixture reads
+  // "too few to compare". So the arrows are gated on the same rule the chart
+  // is: three readings in one regime, `chartNote === null`, or the points are
+  // printed side by side with no arrow between them.
+  const arrows = reading.chartNote === null
   return reading.series
     .map((s) => {
-      const points = s.points
-        .filter((p) => p.pct != null)
-        .map((p) => `${p.month.slice(5, 7)}/${p.month.slice(2, 4)} ${p.pct}%`)
-      return points.length > 0 ? `${s.label} ${points.join(' → ')}` : null
+      // AND A CLUSTERING CHANGE BREAKS THE RUN. `MoveSeries.regimeByMonth`
+      // says which clustering each month was produced under, and months under
+      // two clusterings are not like-for-like — the verdict beside this line
+      // refuses them with `clustering_changed`, and an unbroken arrow through
+      // the break is that refusal contradicted in the reader's own eye. The
+      // break is MARKED, not hidden: the reader sees both months and sees why
+      // they are not one run.
+      const read = s.points.filter((p) => p.pct != null)
+      const parts = read.map((p, i) => {
+        const label = `${p.month.slice(5, 7)}/${p.month.slice(2, 4)} ${p.pct}%`
+        if (i === 0) return label
+        const broke =
+          !s.noClustering &&
+          s.regimeByMonth != null &&
+          (s.regimeByMonth[read[i - 1].month] ?? null) !== (s.regimeByMonth[p.month] ?? null)
+        return `${broke ? REGIME_BREAK : arrows ? ' → ' : ' · '}${label}`
+      })
+      return parts.length > 0 ? `${s.label} ${parts.join('')}` : null
     })
     .filter((x): x is string => x != null)
     .join(' · ')
 }
+
+/** What stands between two months grouped differently — never an arrow. A
+ *  reader subtracts across an arrow, and these two are not comparable. */
+export const REGIME_BREAK = ' | grouped differently | '
 
 /** One declared move: the artboard's row — title, subject chip, declared stamp,
  *  the move's one movement claim, and the series beside it. */

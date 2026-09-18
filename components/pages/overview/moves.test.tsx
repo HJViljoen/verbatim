@@ -5,7 +5,7 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { MOVES_UNLOCK } from '@/lib/pages/overview'
-import { CARD_CONFIRM_SLOT, claimText, movesMeta, overviewMoves, seriesLine } from './moves'
+import { CARD_CONFIRM_SLOT, REGIME_BREAK, claimText, movesMeta, overviewMoves, seriesLine } from './moves'
 import { overviewRecord } from './record'
 import { overviewFixture, refusedFixture } from './fixture'
 
@@ -241,6 +241,32 @@ describe('OV5, ported to the artboard', () => {
     expect(line).toContain('The category')
     expect(line).toContain('Freitag')
     expect(line).not.toContain('per 100 videos')
+  })
+
+  it('draws the arrows only where a LINE would be allowed, and marks a regime break', () => {
+    // Code review I4. An arrowed run of levels is the same claim as the
+    // sparkline, and it was printed unconditionally two lines above the very
+    // note that says why no line may be drawn.
+    const reading = overviewFixture().moves.readings[0]
+    expect(reading.chartNote).toBeNull()
+    expect(seriesLine(reading)).toContain('→')
+
+    // Below three readings the chart is refused, so the points are printed
+    // side by side and nothing between them says "and then".
+    const refused = { ...reading, chartNote: 'Aug → Sep only' }
+    expect(seriesLine(refused)).not.toContain('→')
+    expect(seriesLine(refused)).toContain('%')
+
+    // Two months grouped differently are not one run, whatever the count.
+    const broken = {
+      ...reading,
+      series: reading.series.map((s, i) =>
+        i === 0
+          ? { ...s, noClustering: false, regimeByMonth: Object.fromEntries(s.points.map((p, j) => [p.month, j === 0 ? 'r1' : 'r2'])) }
+          : s,
+      ),
+    }
+    expect(seriesLine(broken)).toContain(REGIME_BREAK.trim())
   })
 
   it('declares the moves’ verdicts, so the record can count what refused', () => {

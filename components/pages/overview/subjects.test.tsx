@@ -95,7 +95,9 @@ describe('OV2 · your subjects', () => {
   it('prints "at this point last month" on the category side, in both drawn modes', () => {
     for (const mode of ['app', 'email'] as const) {
       const text = renderText(overviewSubjects.render(overviewFixture(), mode, ctx))
-      expect(text, mode).toContain('at this point last month 20.5% 264 of 1,290')
+      // The two figures are separated (design review Medium 18): they ran
+      // together with no separator, which reads as one number gone wrong.
+      expect(text, mode).toContain('at this point last month 20.5% · 264 of 1,290')
     }
   })
 })

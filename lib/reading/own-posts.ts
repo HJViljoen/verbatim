@@ -197,13 +197,18 @@ export interface OwnPostInput {
  * E-main port owns both files, so the string lives here, in the leaf, and
  * Overview re-exports it under the name its callers already use.
  */
-export const OWN_POSTS_UNREADABLE = '— not tracked · their own posts are not readable yet · Verbatim engineering'
+export const OWN_POSTS_UNREADABLE = '— not tracked · their own posts are not readable yet · Settings › Readiness'
 
-/** The same absence WITHOUT the internal owner, for a reader outside the
- *  workspace. "Verbatim engineering" is a readiness owner — right on a page
- *  where a tenant can go and look at Settings › Readiness, and an internal
- *  label in a brief's PDF and on a `/r/<token>` share page, which is what WP19
- *  put it in front of. The absence is still named; only the owner is dropped. */
+/** The same absence WITHOUT the pointer, for a reader outside the workspace.
+ *
+ *  IT NAMES THE PAGE, NOT THE OWNER (design review nit 25). This clause read
+ *  "· Verbatim engineering" — a readiness owner, which is the right fact on the
+ *  Readiness page and a dangling internal label in the middle of a client's
+ *  rivals table, with no link and nothing saying where that page is. The
+ *  tenant's form names where to look; the owner is on the page it names. A
+ *  reader outside the workspace has no Settings to open, so they get the
+ *  absence and no pointer, which is what this constant is for — a brief's PDF
+ *  and a `/r/<token>` share page, which is what WP19 put it in front of. */
 export const OWN_POSTS_UNREADABLE_OUTSIDE = '— not tracked · their own posts are not readable yet'
 
 /** A rival that is named and has no account configured anywhere. Nothing they

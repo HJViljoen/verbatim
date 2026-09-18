@@ -55,7 +55,9 @@ export function voicesLabel(shown: number): string {
 
 export function voicesFromLine(shown: number, from: number): string | null {
   const pool = Math.max(from, shown)
-  return pool > shown ? `chosen from ${fmtInt(pool)} the month’s videos carried` : null
+  // "chosen from 37 the month's videos carried" was ungrammatical, directly
+  // under "TWO VOICES" in the page's lead block (design review High 10).
+  return pool > shown ? `chosen from the ${fmtInt(pool)} the month’s videos carried` : null
 }
 
 /**
@@ -171,7 +173,13 @@ export const overviewSentence: Block<OverviewData> = {
           body={s.body}
           figures={s.figures}
           mode={mode}
-          className="m-0 font-serif text-[17px] font-medium leading-[1.35] tracking-[-0.005em] [text-wrap:pretty]"
+          // AND A MEASURE (design review Medium 19). With no voices column
+          // beside it — the refused state, which is what production is in
+          // today — the sentence ran the tile's full 1,150px at 17px serif,
+          // about 120 characters a line. 68ch is the house measure for
+          // continuous prose and it costs the populated state nothing, where
+          // the column already holds the line to about that.
+          className="m-0 max-w-[68ch] font-serif text-[17px] font-medium leading-[1.35] tracking-[-0.005em] [text-wrap:pretty]"
         />
         {s.lead ? <BlockMovement verdict={s.lead} unit="pts" mode={mode} /> : null}
       </div>
@@ -236,11 +244,24 @@ export const overviewSentence: Block<OverviewData> = {
           </div>
         </div>
       ) : (
-        <TileBlock className="flex items-center gap-4">
+        // THE ONE ROW THAT SAYS WHAT TO DO IS DRAWN AS THE ONE ROW THAT SAYS
+        // WHAT TO DO (design review High 6). Sampled from the render, this
+        // block, the "no longer being said" flag strip and the moves card were
+        // the identical #F6F7F8 inner block — so the recommendation looked
+        // exactly like the row reporting that a theme stopped mattering, and
+        // the page had no focal point at all.
+        //
+        // IT IS MARKED BY ELEVATION AND WEIGHT, NEVER BY TONE. `Tile
+        // variant="warm"` (MASTER's clay ring, reserved for this row) was
+        // RETIRED on 2026-09-18 with the cream identity — it painted nothing
+        // and had no call site — and MASTER's own rule is "depth is elevation,
+        // never tone". So: the primary rail the sidebar uses to mark the active
+        // row, and a heavier lead. No new colour, no second palette.
+        <TileBlock className="flex items-center gap-4 border-l-2 border-primary pl-3">
           <div className="flex min-w-0 flex-1 flex-col gap-[3px]">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Top recommendation</span>
-            <Link data-copy="stored" data-slot="pass_d_b_recommendation" href={s.ledger.href} className="text-[13px] font-medium underline-offset-2 hover:underline">{s.ledger.title}</Link>
-            {provenance ? <span className="font-mono text-[10.5px] tabular-nums text-muted-foreground">{provenance}</span> : null}
+            <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">Top recommendation</span>
+            <Link data-copy="stored" data-slot="pass_d_b_recommendation" href={s.ledger.href} className="text-[13.5px] font-semibold underline-offset-2 hover:underline">{s.ledger.title}</Link>
+            {provenance ? <span className="font-mono text-[10.5px] tabular-nums text-secondary-foreground">{provenance}</span> : null}
           </div>
           <div className="flex shrink-0 flex-col items-end gap-1">
             {/* THE CONTROL, NOT A WORD (`main.sentence.rec.status`). The status
@@ -251,7 +272,7 @@ export const overviewSentence: Block<OverviewData> = {
             {mode === 'app'
               ? <RecStatusMenu id={s.ledger.id} status={s.ledger.status} />
               : <RecStatusWord status={s.ledger.status} />}
-            <span className="font-mono text-[10.5px] text-muted-foreground">{decisionStamp(s.ledger)}</span>
+            <span className="font-mono text-[10.5px] text-secondary-foreground">{decisionStamp(s.ledger)}</span>
           </div>
         </TileBlock>
       )

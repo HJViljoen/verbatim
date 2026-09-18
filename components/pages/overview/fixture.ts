@@ -481,8 +481,8 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
       // own on-screen text, which is the artboard's second line and a second
       // speaker — the brand's words under the audience's.
       voices: [
-        { quote: { ref: 'e:1', text: 'Three winters on the bike and the seams are still perfect.', lang: 'en', english: null }, cite: 'tiktok · 14 Sep · under a category video', onScreen: null, href: 'https://www.tiktok.com/@x/video/1' },
-        { quote: { ref: 'e:2', text: 'Dit het twee winters gehou.', lang: 'af', english: 'It held through two winters.' }, cite: 'tiktok · 11 Sep · under your own video', onScreen: { ref: 't:11111111-1111-4111-8111-111111111111', text: '1 bag. 3 years. 0 regrets' }, href: null },
+        { quote: { ref: 'e:1', text: 'Three winters on the bike and the seams are still perfect.', lang: 'en', english: null }, cite: 'TikTok · 14 Sep · under a category video', onScreen: null, href: 'https://www.tiktok.com/@x/video/1' },
+        { quote: { ref: 'e:2', text: 'Dit het twee winters gehou.', lang: 'af', english: 'It held through two winters.' }, cite: 'TikTok · 11 Sep · under your own video', onScreen: { ref: 't:11111111-1111-4111-8111-111111111111', text: '1 bag. 3 years. 0 regrets' }, href: null },
       ],
       voicesFrom: 37,
       verdicts: [lead],

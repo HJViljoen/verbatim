@@ -122,7 +122,7 @@ describe('OV1 · in one sentence', () => {
     // The cite tail names WHOSE video it was (`main.sentence.voice1`), which
     // is the fact that makes a quote evidence for the claim above it — it used
     // to end with the constant "under a video we read" on every quote.
-    expect(markup).toContain('tiktok · 11 Sep · under your own video')
+    expect(markup).toContain('TikTok · 11 Sep · under your own video')
     expect((markup.match(/<a [^>]*href="https:\/\/www\.tiktok\.com/g) ?? []).length).toBe(1)
   })
 })

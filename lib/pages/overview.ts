@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { recStatus, REC_STATUS_LABEL, type RecStatus } from '../calibration'
 import { topRecommendation } from '../dashboard-tiles'
-import { fmtInt, longMonth, monthName, shortDate } from '../format'
+import { fmtInt, longMonth, monthName, platformLabel, shortDate } from '../format'
 import { inheritedStatus, REC_DECISIONS_TABLE, type RecDecision } from '../rec-decisions'
 import { composeInterpretation, type Interpretation } from '../prose/interpret'
 import { loadSentFigures, objectKey, sentMonthOf, type SentMonth } from '../reports/sent-figures'
@@ -2772,7 +2772,11 @@ async function loadVoices(
     const m = c.commentId ? meta.get(c.commentId) : undefined
     const v = m?.platform && m.video_id ? videoByKey.get(`${m.platform}::${m.video_id}`) ?? null : null
     const cite = [
-      m?.platform ? m.platform : null,
+      // THE PLATFORM'S OWN SPELLING (design review nit 20). `comments.platform`
+      // is a lowercase enum and the tail printed it raw — "tiktok · 14 Sep" —
+      // three lines above "TikTok 38%" in the record's own coverage line, on
+      // one page. `platformLabel` is the product's one answer for this.
+      m?.platform ? platformLabel(m.platform) : null,
       m?.comment_date ? shortDate(m.comment_date) : null,
       v ? citeWhere(v) : 'under a video we read',
     ].filter(Boolean).join(' · ')

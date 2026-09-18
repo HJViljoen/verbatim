@@ -114,22 +114,25 @@ describe('OV4 · rivals', () => {
     const markup = render(overviewRivals.render(overviewFixture(), 'app', ctx))
     // One rival row, one client row, in the fixture.
     expect((markup.match(/not readable yet/g) ?? []).length).toBe(1)
-    expect(markup).toContain('their own posts are not readable yet · Verbatim engineering')
+    expect(markup).toContain('their own posts are not readable yet · Settings › Readiness')
   })
 })
 
 // A BRIEF'S PRINT ARM IS READ BY SOMEBODY OUTSIDE THE WORKSPACE (WP19): the
-// PDF and the /r/<token> share page. "Verbatim engineering" is a readiness
-// owner, which is right where a reader can open Settings › Readiness and an
-// internal label where they cannot; and "Open Competitive →" resolves, for
-// such a reader, to a login wall.
+// PDF and the /r/<token> share page. The tenant's form of the absence points
+// at the page where the readiness of this is tracked — which such a reader has
+// no way to open — and "Open Competitive →" resolves, for them, to a login
+// wall. (The clause said "· Verbatim engineering" until the fix pass: a
+// readiness OWNER, dangling in the middle of a client's rivals table with
+// nothing saying where that owner could be seen. Design review nit 25.)
 describe('OV4 · rivals, read from outside the workspace', () => {
-  it('names the absence without naming our own owner', () => {
+  it('names the absence without pointing a stranger at a page they cannot open', () => {
     const print = renderText(overviewRivals.render(overviewFixture(), 'print', ctx))
     const app = renderText(overviewRivals.render(overviewFixture(), 'app', ctx))
     expect(app).toContain('their own posts are not readable yet')
-    expect(app).toContain('Verbatim engineering')
+    expect(app).toContain('Settings › Readiness')
     expect(print).toContain('their own posts are not readable yet')
+    expect(print).not.toContain('Settings')
     expect(print).not.toContain('Verbatim engineering')
   })
 

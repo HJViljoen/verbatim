@@ -81,10 +81,15 @@ function SentLine({ line, mode = 'app' }: { line: string | null; mode?: RenderMo
     : <span className="block text-[11px] text-muted-foreground">{line}</span>
 }
 
-/** "at this point last month: 20.5% (264 of 1,290)", or nothing at all. */
+/** "at this point last month 20.5% · 264 of 1,290", or nothing at all.
+ *
+ *  THE TWO FIGURES ARE SEPARATED (design review Medium 18). They ran together
+ *  with no separator — "at this point last month 20.5% 264 of 1,290" — inside a
+ *  cell whose other two lines are a figure and a mono k/n, which reads as one
+ *  number that has gone wrong. */
 function AtLastMonth({ at, mode = 'app' }: { at: SubjectRow['categoryAtLastMonth']; mode?: RenderMode }): ReactNode {
   if (!at || at.pct == null) return null
-  const body = <>at this point last month <span data-copy="figure">{fmtPct(at.pct)} {fmtInt(at.k)} of {fmtInt(at.n)}</span></>
+  const body = <>at this point last month <span data-copy="figure">{fmtPct(at.pct)}</span> <span className={mode === 'email' ? undefined : 'text-muted-foreground'}>·</span> <span data-copy="figure">{fmtInt(at.k)} of {fmtInt(at.n)}</span></>
   return mode === 'email'
     ? <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted }}>{body}</div>
     : <span className="block text-[11px] text-muted-foreground">{body}</span>
@@ -128,8 +133,10 @@ function GapHeadline({ gap, mode }: { gap: Gap; mode: RenderMode }) {
       </span>
       {basis ? (
         <span
-          className={mode === 'email' ? undefined : 'shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground'}
-          style={mode === 'email' ? { fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted } : undefined}
+          // `secondary-foreground` on the inner block's ground: #6E7378 there
+          // is 4.46:1, under MASTER's 4.5:1 floor (design review Medium 13).
+          className={mode === 'email' ? undefined : 'shrink-0 font-mono text-[11px] tabular-nums text-secondary-foreground'}
+          style={mode === 'email' ? { fontFamily: FONT.mono, fontSize: 11, color: EMAIL.ink2 } : undefined}
         >
           {basis}
         </span>
@@ -144,15 +151,21 @@ function GapHeadline({ gap, mode }: { gap: Gap; mode: RenderMode }) {
 
 function Row({ row, mode, appUrl = '', sentLine = null }: { row: SubjectRow; mode: RenderMode; appUrl?: string; sentLine?: string | null }) {
   return (
-    <tr>
-      <td className="py-1.5 pr-3 align-top text-[12.5px] font-medium">
+    // THE HAIRLINE BETWEEN ROWS (design review Medium 17). The artboard rules
+    // its rows and the port dropped it, while the rows themselves are ragged —
+    // one runs three lines because it carries "at this point last month" and
+    // its neighbour runs two because it does not. At the fixture's two subjects
+    // that is invisible; at a live tenant's six to eight across seven columns a
+    // reader loses the row between the subject and its category change.
+    <tr className="border-t border-border/60 first:border-t-0">
+      <th scope="row" className="py-1.5 pr-3 text-left align-top text-[12.5px] font-medium">
         {/* THROUGH `ctx.appUrl`, like every other link this block draws. The
             row's own href was the one that was not: relative is right in the
             app (where appUrl is the empty string) and dead everywhere else,
             and this block is rendered into a PDF and an email by the monthly
             report (WP18). The same defect WP17 fixed on the weekly blocks. */}
         <Link href={`${appUrl}${row.href}`} className="underline-offset-2 hover:underline">{row.label}</Link>
-      </td>
+      </th>
       <td className="py-1.5 pr-3 align-top"><Side side={row.you} mode={mode} /></td>
       <td className="py-1.5 pr-3 align-top"><Side side={row.rival} mode={mode} /></td>
       <td className="py-1.5 pr-3 align-top">
@@ -278,14 +291,18 @@ export const overviewSubjects: Block<OverviewData> = {
         <div className="-mx-1 overflow-x-auto px-1">
           <table className="w-full border-collapse text-left">
             <thead>
+              {/* `scope="col"` ON EVERY ONE (design review Medium 14). Seven
+                  columns, six of them numeric: without it a screen reader
+                  reads a row of figures and can name the column none of them
+                  belongs to. The subject cell is the row's own header. */}
               <tr className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-                <th className="py-1 pr-3 font-semibold">Subject</th>
-                <th className="py-1 pr-3 font-semibold">You</th>
-                <th className="py-1 pr-3 font-semibold">{s.rivalLabel ?? 'Lead rival'}</th>
-                <th className="py-1 pr-3 font-semibold">{s.categoryLabel}</th>
-                <th className="py-1 pr-3 font-semibold">Your change</th>
-                <th className="py-1 pr-3 font-semibold">Category change</th>
-                <th className="py-1 font-semibold">Monthly line</th>
+                <th scope="col" className="py-1 pr-3 font-semibold">Subject</th>
+                <th scope="col" className="py-1 pr-3 font-semibold">You</th>
+                <th scope="col" className="py-1 pr-3 font-semibold">{s.rivalLabel ?? 'Lead rival'}</th>
+                <th scope="col" className="py-1 pr-3 font-semibold">{s.categoryLabel}</th>
+                <th scope="col" className="py-1 pr-3 font-semibold">Your change</th>
+                <th scope="col" className="py-1 pr-3 font-semibold">Category change</th>
+                <th scope="col" className="py-1 font-semibold">Monthly line</th>
               </tr>
             </thead>
             <tbody className="align-top">

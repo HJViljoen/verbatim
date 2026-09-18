@@ -72,8 +72,15 @@ function Raised({ row, mode }: { row: RivalRow; mode: RenderMode }): ReactNode {
       ? <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>—</span>
       : <span className="text-[12px] text-muted-foreground">—</span>
   }
+  // THE LABEL AND THE COUNT ARE TWO THINGS (design review High 9). They were
+  // concatenated with a bare space, so a theme whose label is a question read
+  // as one broken sentence: "Does the tarp smell 41 of 142". The artboard sets
+  // the label as a quoted question with the count beside it; a theme label is
+  // MODEL prose replayed here, so it is marked `subject` with the slot that
+  // wrote it — which is also what makes the quotation marks honest.
   const body = <>
-    {row.raisedMost.label}{' '}
+    <span data-copy="subject" data-slot="pass_b_theme">“{row.raisedMost.label}”</span>
+    <span className={mode === 'email' ? undefined : 'mx-1 text-muted-foreground'}>·</span>
     <span data-copy="figure">{fmtInt(row.raisedMost.k)} of {fmtInt(row.raisedMost.n)}</span>
   </>
   return mode === 'email'
@@ -167,21 +174,25 @@ export const overviewRivals: Block<OverviewData> = {
               <table className="w-full border-collapse text-left">
                 <thead>
                   <tr className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-                    <th className="py-1 pr-3 font-semibold">Brand</th>
-                    <th className="py-1 pr-3 font-semibold">Attention</th>
-                    <th className="py-1 pr-3 font-semibold">Content</th>
-                    <th className="py-1 pr-3 font-semibold">Attention change</th>
-                    <th className="py-1 pr-3 font-semibold">On their own posts</th>
-                    <th className="py-1 font-semibold">Raised most under their content</th>
+                    {/* `scope="col"` ON EVERY ONE (design review Medium 14).
+                        Six columns, five of them numeric: without it a screen
+                        reader reads a row of figures and can name the column
+                        none of them belongs to. */}
+                    <th scope="col" className="py-1 pr-3 font-semibold">Brand</th>
+                    <th scope="col" className="py-1 pr-3 font-semibold">Attention</th>
+                    <th scope="col" className="py-1 pr-3 font-semibold">Content</th>
+                    <th scope="col" className="py-1 pr-3 font-semibold">Attention change</th>
+                    <th scope="col" className="py-1 pr-3 font-semibold">On their own posts</th>
+                    <th scope="col" className="py-1 font-semibold">Raised most under their content</th>
                   </tr>
                 </thead>
                 <tbody className="align-top">
                   {r.rows.map((row) => (
                     <tr key={row.audience}>
-                      <td className="py-1.5 pr-3 text-[12.5px] font-medium">
+                      <th scope="row" className="py-1.5 pr-3 text-left text-[12.5px] font-medium">
                         {brandLabel(row)}
                         {row.retiredAt ? <span className="ml-1 text-[11px] font-normal text-muted-foreground">tracked until {shortDate(row.retiredAt)}</span> : null}
-                      </td>
+                      </th>
                       <td className="py-1.5 pr-3"><Share share={row.attention} recorded={r.recorded} mode={mode} /></td>
                       <td className="py-1.5 pr-3"><Share share={row.content} recorded={r.recorded} mode={mode} /></td>
                       <td className="py-1.5 pr-3"><BlockMovement verdict={row.attentionVerdict} unit="pts" mode={mode} /></td>
