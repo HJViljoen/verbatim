@@ -17,9 +17,11 @@ import { STUDIO_HREF } from '@/lib/studio-visibility'
  * THE CHIPS PRINT WHAT IS TRUE, which is the one place this card departs from
  * the artboard in words:
  *
- *  · The catalogue is a list of PAGES, and the chips are `pickableCatalogue()`
- *    — what a NEW section may name TODAY, which is the picker's own list and
- *    is five pages, not the mock's nine. The mock's names ("Movers", "Head to
+ *  · The catalogue is a list of PAGES, and the chips are `catalogueChips()`
+ *    — what a NEW section may name TODAY, in the SIDEBAR's words
+ *    (`catalogueReaderTitle`): a page module's `title` is the name it prints
+ *    on paper ("Market Intelligence"), and the nav three inches away calls the
+ *    same page Market. Five pages, not the mock's nine. The mock's names ("Movers", "Head to
  *    head", "Quotes", "Method") are closer to the TILES inside a page than to
  *    anything a section may name, and `studioCatalogue()` itself carries two
  *    more a reader cannot pick (`dashboard`, retired; `agent`, joined only
@@ -30,8 +32,12 @@ import { STUDIO_HREF } from '@/lib/studio-visibility'
  *    personas (Digital director · Sales lead · …). Those are not options: the
  *    Studio's own control stores one of the five KEYS, and a card offering
  *    "Founder" advertises a choice that is not there. The mock's intent —
- *    naming the human the cover is written for — is kept by printing the
- *    audience's own `reader` string as the chip's title.
+ *    naming the human the cover is written for — used to be kept as the chip's
+ *    `title` attribute, which is unreachable by keyboard and invisible on
+ *    touch: an affordance for a mouse only is not an affordance, and a card
+ *    that LOOKS like it says nothing more is more honest than one that says it
+ *    to a third of its readers. The `reader` string is printed where the
+ *    choice is actually made — the Studio's own audience control.
  *
  * Mounted only where `canSeeStudio` is true (owner's call, 2026-09-17): a
  * client is never shown a door into a page they cannot find, and that includes
@@ -65,7 +71,7 @@ export function StudioCard({
           Cover written for
         </span>
         <div className="flex flex-wrap gap-1.5">
-          {AUDIENCES.map((a) => <Chip key={a.key} title={a.reader}>{a.label}</Chip>)}
+          {AUDIENCES.map((a) => <Chip key={a.key}>{a.label}</Chip>)}
         </div>
       </div>
 
@@ -90,10 +96,9 @@ export function StudioCard({
 
 /** The artboard's grey chip — a single-line pill, which is the only thing
  *  `rounded-full` is allowed on (design-system.md rule 5). */
-function Chip({ children, title }: { children: React.ReactNode; title?: string }) {
+function Chip({ children }: { children: React.ReactNode }) {
   return (
     <span
-      title={title}
       className="inline-block whitespace-nowrap rounded-full bg-inner px-2 py-0.5 text-[12px] font-medium text-muted-foreground"
     >
       {children}

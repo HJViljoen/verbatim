@@ -130,6 +130,14 @@ describe('the Studio card', () => {
     expect(text).not.toContain('Founder')
   })
 
+  // A `title` attribute is unreachable by keyboard and invisible on touch, so
+  // the persona was "kept" for a mouse only. The card says what it shows.
+  it('hides nothing behind a tooltip', () => {
+    const html = render(<StudioCard pages={['Market']} />)
+    expect(html).not.toContain('title=')
+    for (const a of AUDIENCES) expect(html).not.toContain(a.reader)
+  })
+
   it('names the pages it is handed, and no others', () => {
     const text = renderText(<StudioCard pages={['Overview', 'Subjects']} />)
     expect(text).toContain('Overview')

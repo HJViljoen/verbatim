@@ -23,7 +23,7 @@ import { QuarterlyCardTile } from '@/components/blocks/reports-card/card'
 import { ArchiveDateFilter } from '@/components/reports/date-filter'
 import { loadQuarterlyCard } from '@/lib/pages/reports-card'
 import { readingHandle } from '@/lib/reading/read'
-import { pickableCatalogue } from '@/lib/reports/catalogue'
+import { catalogueChips } from '@/lib/reports/catalogue'
 import { UPDATES_UNREAD_LINE, activePreset, loadReportsPageContext, presetLine } from '@/lib/reports/page-context'
 import { fmtBytes } from '@/lib/reports/files'
 import { shortDate } from '@/lib/format'
@@ -612,7 +612,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
         // and a fixed track would clip it under `overflow-hidden`.
         <PageGrid className="xl:auto-rows-min">
           {quarterly && <QuarterlyCardTile card={quarterly} col={studio ? 7 : 12} row={3} />}
-          {studio && <StudioCard pages={pickableCatalogue().map((c) => c.title)} col={quarterly ? 5 : 12} row={3} />}
+          {studio && <StudioCard pages={catalogueChips()} col={quarterly ? 5 : 12} row={3} />}
         </PageGrid>
       )}
 

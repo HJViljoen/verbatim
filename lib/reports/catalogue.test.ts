@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { pickableCatalogue, studioCatalogue } from './catalogue'
+import { catalogueChips, catalogueReaderTitle, pickableCatalogue, studioCatalogue } from './catalogue'
+import { SURFACES } from '../nav'
 import { ALL_SECTION_PAGES, SECTION_PAGES, isPickablePage } from './types'
 
 // The catalogue is what the Studio's outline looks a STORED section up in. A
@@ -61,5 +62,37 @@ describe('pickableCatalogue', () => {
   it('is the registry narrowed by the rule, not the rule alone', () => {
     expect(pickableCatalogue().length).toBeLessThan(SECTION_PAGES.length)
     expect(pickableCatalogue().length).toBeGreaterThan(0)
+  })
+})
+
+
+// THE CHIPS ARE IN THE READER'S VOCABULARY, which is the sidebar's. A page
+// module's `title` is the heading that page prints on paper — "Market
+// Intelligence", "Voice of Customer", "Competitive Intelligence" — and the nav
+// three inches to the left of the Studio card calls the same three pages
+// Market, Voice and Competitive.
+describe('catalogueReaderTitle', () => {
+  it('prefers the sidebar’s own label for a page a reader can visit', () => {
+    expect(catalogueReaderTitle('market', 'Market Intelligence')).toBe('Market')
+    expect(catalogueReaderTitle('voice', 'Voice of Customer')).toBe('Voice')
+    expect(catalogueReaderTitle('competitive', 'Competitive Intelligence')).toBe('Competitive')
+  })
+
+  it('keeps the module’s own title where no surface names the page', () => {
+    expect(catalogueReaderTitle('profile', 'Consumer Profile')).toBe('Consumer Profile')
+  })
+})
+
+describe('catalogueChips', () => {
+  it('is the pickable catalogue, named the way the nav names it', () => {
+    const chips = catalogueChips()
+    expect(chips).toHaveLength(pickableCatalogue().length)
+    expect(chips).toContain('Market')
+    expect(chips).not.toContain('Market Intelligence')
+    // and every chip that matches a surface is spelled exactly as the nav
+    // spells it — no second vocabulary on this page
+    for (const s of SURFACES) {
+      if (chips.some((c) => c.toLowerCase().startsWith(s.label.toLowerCase()))) expect(chips).toContain(s.label)
+    }
   })
 })
