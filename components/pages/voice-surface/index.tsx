@@ -2,6 +2,8 @@ import type { ReactNode } from 'react'
 import type { Block, BlockContext } from '@/lib/blocks/types'
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
+import { horizonDates } from '@/lib/reading/horizon'
+import { monthName } from '@/lib/format'
 import { PageFrame, PageGrid } from '@/components/shell/page-grid'
 import { SurfacePageBar } from '@/components/shell/page-bar'
 import { Tile, TileEmpty } from '@/components/shell/tile'
@@ -149,6 +151,18 @@ export function VoiceSurfacePage({
           the module was written to end. */}
       {data.method ? (
         <p data-copy="figure" className="m-0 flex flex-col gap-0.5 pt-1 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
+          {/* THE WINDOW THIS PAGE IS A READING OF, WHICH PRINTED NOWHERE. The
+              artboard puts it beside the range pills ("1 Sep → 28 Sep"); the
+              app's page bar has no room for it beside four horizon pills and
+              the legend, and the bar is `main`'s file. So the footnote says
+              it, in the unit the reading is drawn in: `horizonDates` is month
+              granularity on purpose — the axis is dated by the comment and a
+              day would imply a precision the freeze line does not have — and
+              the month every figure above is a reading OF is named beside it,
+              because the two are not the same span. */}
+          <span>
+            {`Months drawn: ${horizonDates(data.window)} · every figure above reads ${monthName(data.month)}`}
+          </span>
           {data.method.lines.map((line) => <span key={line}>{line}</span>)}
         </p>
       ) : null}

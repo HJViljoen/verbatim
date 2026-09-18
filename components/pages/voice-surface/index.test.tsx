@@ -130,6 +130,16 @@ describe('VoiceSurfacePage', () => {
     expect(text).not.toContain('27% of the comments read were not in English')
   })
 
+  it('says which months are drawn and which month the figures read', () => {
+    // The artboard prints the window beside its range pills ("1 Sep →
+    // 28 Sep"); the app's bar has no room beside four horizon pills and the
+    // legend, and the bar is main's file — so the window printed nowhere on
+    // the page at all. Month granularity, because the axis is dated by the
+    // comment.
+    const text = renderText(<VoiceSurfacePage data={voiceFixture()} params={{}} />)
+    expect(text).toContain('Months drawn: Jul 2026 to Sep 2026 · every figure above reads Sep 2026')
+  })
+
   it('says the workspace has been read at all before it says anything else', () => {
     const text = renderText(<VoiceSurfacePage data={null} params={{}} />)
     expect(text).toContain('Nothing has been read for this workspace yet')
