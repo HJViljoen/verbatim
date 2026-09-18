@@ -373,16 +373,39 @@ export function headToHeadFigures(h2h: HeadToHead | null): FigureTable {
   for (const m of h2h.measures) {
     for (const [who, level] of [['you', m.you], ['rival', m.them]] as const) {
       if (!level) continue
+      const whose = who === 'you' ? 'your side' : h2h.rivalLabel
       // A COUNT WITH NO DENOMINATOR PUBLISHES THE COUNT AND NOTHING ELSE
       // (`n === 0`), and a measure whose figure is not k/n publishes its
-      // numerator as the videos it was read off — never a percentage the token
-      // does not hold.
+      // numerator as what it was read off — never a percentage the token does
+      // not hold.
       if (level.pct !== null) {
-        out[`h2h_${who}_${m.key}`] = { value: level.pct, unit: 'pct', label: `${m.label}, ${who === 'you' ? 'your side' : h2h.rivalLabel}` }
+        out[`h2h_${who}_${m.key}`] = { value: level.pct, unit: 'pct', label: `${m.label}, ${whose}` }
       }
-      out[`h2h_${who}_${m.key}_k`] = { value: level.value.k, unit: 'videos', label: `${m.label} — the count behind it` }
+      // THE UNIT COMES OFF THE MEASURE, NOT OFF THIS LOOP. It ran with
+      // `unit: 'videos'` hardcoded and published 151 and 645 COMMENTS as video
+      // counts on the comments-per-video row; `proseFigures` reads `unit`, so a
+      // document naming that token rendered a comment count as a video count.
+      out[`h2h_${who}_${m.key}_k`] = {
+        value: level.value.k,
+        unit: m.countUnit.k,
+        label: `${m.label}, ${whose} — the count behind it`,
+      }
       if (level.value.n > 0) {
-        out[`h2h_${who}_${m.key}_n`] = { value: level.value.n, unit: 'videos', label: `${m.label} — what it is of` }
+        out[`h2h_${who}_${m.key}_n`] = {
+          value: level.value.n,
+          unit: m.countUnit.n,
+          label: `${m.label}, ${whose} — what it is of`,
+        }
+      }
+      // …and the figure the row actually PRINTS, where `pct` does not hold it.
+      // Without this the engagement row published its coverage and not its
+      // median, and a document could not name the one number the row is about.
+      if (level.figure) {
+        out[`h2h_${who}_${m.key}_${level.figure.token}`] = {
+          value: level.figure.value,
+          unit: level.figure.unit,
+          label: `${m.label}, ${whose}`,
+        }
       }
     }
   }

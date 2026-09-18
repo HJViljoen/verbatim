@@ -2,7 +2,7 @@ import { COMPETITIVE_MIN_VIDEOS } from '../config'
 import { fmtInt, fmtPct, longMonth, monthName } from '../format'
 import { EXCLUDED_NOTE } from './formats'
 import { monthStartOf, nextMonth } from './month-key'
-import { bandVerdict, type Counted, type Verdict } from './verdicts'
+import { bandVerdict, type Counted, type FigureTable, type Verdict } from './verdicts'
 
 // CO3 — "Head to head, then and now", on the monthly reading (Phase 1 Block D,
 // D6).
@@ -40,6 +40,28 @@ export const FACE_OFF_FLOOR = COMPETITIVE_MIN_VIDEOS
 
 export type FaceOffKey = 'videos' | 'comments_per_video' | 'engagement' | 'sentiment' | 'posts'
 
+/** The measured-figure unit vocabulary, derived from the table it is written
+ *  into rather than restated — `lib/reading/verdicts.ts` decides it, and
+ *  `proseFigures` is the one crossing to a printed string. */
+export type FaceOffUnit = FigureTable[string]['unit']
+
+/**
+ * A figure this level prints that is NOT its `pct` — the engagement median.
+ *
+ * `text` is for the page; this is for a document, which may not be handed a
+ * string. Without it `qr.p5.h2h` and `mkt.p5.comparison` could name a row's k
+ * and its n and not the figure the row is about, and a model that typed "1.8%"
+ * itself would lose the sentence to `scrubProse`, correctly.
+ *
+ * `token` is the suffix the figure table publishes it under, so the name is
+ * decided beside the measure and not by a loop that cannot see what it holds.
+ */
+export interface FaceOffFigure {
+  value: number
+  unit: FaceOffUnit
+  token: string
+}
+
 export interface FaceOffLevel {
   /**
    * What the level was counted over.
@@ -56,6 +78,10 @@ export interface FaceOffLevel {
   pct: number | null
   /** The figure as it prints, unit included. */
   text: string
+  /** The figure `text` states, as a number, where `pct` does not already hold
+   *  it. Null on every measure whose headline figure is `pct` or a bare count,
+   *  and on comments per video — see `commentsMeasure`. */
+  figure: FaceOffFigure | null
 }
 
 export interface FaceOffSide extends FaceOffLevel {
@@ -70,6 +96,16 @@ export interface FaceOffMeasure {
   /** What the row's figures are dated by, in the reader's words — the comment
    *  month for the share measures, the publication date for engagement. */
   basisLine: string
+  /**
+   * WHAT `value.k` AND `value.n` COUNT, PER MEASURE.
+   *
+   * It is not "videos" on every row and it was published as though it were:
+   * comments per video is 151 COMMENTS over 19 videos, and a figure table that
+   * hardcodes the unit in its loop renders that comment count as a video count
+   * on a document. The unit belongs to the measure, which is the only place
+   * that knows what it counted.
+   */
+  countUnit: { k: FaceOffUnit; n: FaceOffUnit }
   you: FaceOffSide | null
   them: FaceOffSide | null
   /** Your side, this month against last. Only where both months clear the
@@ -222,10 +258,10 @@ function shareSide(
   if (!side.month) return null
   const value: Counted = { k: side.month.videos, n: readNow }
   const pct = readNow > 0 ? round1((value.k / readNow) * 100) : null
-  const level: FaceOffSide = { value, pct, text: pct === null ? '—' : fmtPct(pct) }
+  const level: FaceOffSide = { value, pct, text: pct === null ? '—' : fmtPct(pct), figure: null }
   if (side.previous && readPrev > 0) {
     const prevPct = round1((side.previous.videos / readPrev) * 100)
-    level.prev = { value: { k: side.previous.videos, n: readPrev }, pct: prevPct, text: fmtPct(prevPct) }
+    level.prev = { value: { k: side.previous.videos, n: readPrev }, pct: prevPct, text: fmtPct(prevPct), figure: null }
   }
   return level
 }
@@ -253,6 +289,7 @@ function videosMeasure(input: HeadToHeadInput, month: string, floor: number, bas
     key: 'videos',
     label: 'Videos about the brand',
     basisLine,
+    countUnit: { k: 'videos', n: 'videos' },
     you,
     them,
     verdict,
@@ -269,10 +306,16 @@ function rateSide(side: HeadToHeadSide): FaceOffSide | null {
     value: { k: side.month.comments, n: side.month.videos },
     pct: null,
     text: `${per} per video`,
+    figure: null,
   }
   if (side.previous && side.previous.videos > 0) {
     const prev = round1(side.previous.comments / side.previous.videos)
-    level.prev = { value: { k: side.previous.comments, n: side.previous.videos }, pct: null, text: `${prev} per video` }
+    level.prev = {
+      value: { k: side.previous.comments, n: side.previous.videos },
+      pct: null,
+      text: `${prev} per video`,
+      figure: null,
+    }
   }
   return level
 }
@@ -284,6 +327,18 @@ function commentsMeasure(input: HeadToHeadInput, basisLine: string): FaceOffMeas
     key: 'comments_per_video',
     label: 'Comments per video',
     basisLine,
+    // k IS COMMENTS AND n IS VIDEOS — the one row on this table where they
+    // differ, and the reason the unit is a property of the measure.
+    //
+    // The RATE itself publishes no figure token. `FigureTable`'s unit
+    // vocabulary is `videos | comments | pts | pct` and a per-video rate is
+    // none of them; `lib/reports/sent-figures.ts` casts a stored figure's unit
+    // straight to `SentUnit`, so a fifth member added for this row would reach
+    // a sent report as "8 per_video" and would round 7.9 to 8 on the way. A
+    // document names the two counts instead — "151 comments across 19 videos"
+    // is the same fact, exactly, and every digit in it is a token the table
+    // holds.
+    countUnit: { k: 'comments', n: 'videos' },
     you,
     them,
     verdict: null,
@@ -299,10 +354,16 @@ function engagementSide(side: HeadToHeadSide): FaceOffSide | null {
     value: { k: side.engagement.n, n: side.published },
     pct: null,
     text: `${fmtPct(side.engagement.median)} median`,
+    figure: { value: side.engagement.median, unit: 'pct', token: 'median' },
   }
   const prev = side.engagementPrev
   if (prev && prev.median !== null) {
-    level.prev = { value: { k: prev.n, n: side.publishedPrev ?? prev.n }, pct: null, text: `${fmtPct(prev.median)} median` }
+    level.prev = {
+      value: { k: prev.n, n: side.publishedPrev ?? prev.n },
+      pct: null,
+      text: `${fmtPct(prev.median)} median`,
+      figure: { value: prev.median, unit: 'pct', token: 'median_prev' },
+    }
   }
   return level
 }
@@ -314,6 +375,10 @@ function engagementMeasure(input: HeadToHeadInput, basisLine: string): FaceOffMe
     key: 'engagement',
     label: 'Engagement per video',
     basisLine,
+    // `value` is the COVERAGE on this row — videos a rate was read off, of
+    // videos published — so both sides of it are videos. The median itself is
+    // the level's `figure`, because a median is not a numerator.
+    countUnit: { k: 'videos', n: 'videos' },
     you,
     them,
     verdict: null,
@@ -330,11 +395,11 @@ function sentimentSide(side: HeadToHeadSide): FaceOffSide | null {
   const { positive, judged } = side.sentiment
   if (judged <= 0) return null
   const pct = round1((positive / judged) * 100)
-  const level: FaceOffSide = { value: { k: positive, n: judged }, pct, text: fmtPct(pct, 0) }
+  const level: FaceOffSide = { value: { k: positive, n: judged }, pct, text: fmtPct(pct, 0), figure: null }
   const prev = side.sentimentPrev
   if (prev && prev.judged > 0) {
     const prevPct = round1((prev.positive / prev.judged) * 100)
-    level.prev = { value: { k: prev.positive, n: prev.judged }, pct: prevPct, text: fmtPct(prevPct, 0) }
+    level.prev = { value: { k: prev.positive, n: prev.judged }, pct: prevPct, text: fmtPct(prevPct, 0), figure: null }
   }
   return level
 }
@@ -363,6 +428,7 @@ function sentimentMeasure(input: HeadToHeadInput, month: string, floor: number, 
     key: 'sentiment',
     label: 'Positive share',
     basisLine,
+    countUnit: { k: 'videos', n: 'videos' },
     you,
     them,
     verdict,
@@ -374,9 +440,9 @@ function sentimentMeasure(input: HeadToHeadInput, month: string, floor: number, 
 
 function postsSide(side: HeadToHeadSide): FaceOffSide | null {
   if (side.ownPosts === null) return null
-  const level: FaceOffSide = { value: { k: side.ownPosts, n: 0 }, pct: null, text: fmtInt(side.ownPosts) }
+  const level: FaceOffSide = { value: { k: side.ownPosts, n: 0 }, pct: null, text: fmtInt(side.ownPosts), figure: null }
   if (side.ownPostsPrev != null) {
-    level.prev = { value: { k: side.ownPostsPrev, n: 0 }, pct: null, text: fmtInt(side.ownPostsPrev) }
+    level.prev = { value: { k: side.ownPostsPrev, n: 0 }, pct: null, text: fmtInt(side.ownPostsPrev), figure: null }
   }
   return level
 }
@@ -388,6 +454,7 @@ function postsMeasure(input: HeadToHeadInput, basisLine: string): FaceOffMeasure
     key: 'posts',
     label: 'Posts on the brand’s own accounts',
     basisLine,
+    countUnit: { k: 'videos', n: 'videos' },
     you,
     them,
     verdict: null,

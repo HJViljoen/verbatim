@@ -301,6 +301,59 @@ describe('the figure tables a document may name', () => {
     expect(headToHeadFigures(null)).toEqual({})
   })
 
+  it('gives each count the unit the MEASURE counted in, not the loop’s', () => {
+    const DEN = [
+      { month: '2026-08-01', audience: 'client', videos: 20, comments: 237 },
+      { month: '2026-09-01', audience: 'client', videos: 19, comments: 151 },
+      { month: '2026-09-01', audience: 'competitor:Ottobock', videos: 42, comments: 645 },
+    ]
+    const f = headToHeadFigures(
+      buildHeadToHead({ month: '2026-09-01', brand: 'Össur', rival: 'Ottobock', videos: VIDEOS, denominators: DEN }),
+    )
+    // 151 and 645 are COMMENTS. Published as `videos` they rendered a comment
+    // count as a video count on any document that named the token.
+    expect(f['h2h_you_comments_per_video_k']).toEqual({
+      value: 151,
+      unit: 'comments',
+      label: 'Comments per video, your side — the count behind it',
+    })
+    expect(f['h2h_rival_comments_per_video_k'].unit).toBe('comments')
+    expect(f['h2h_you_comments_per_video_n']).toEqual({
+      value: 19,
+      unit: 'videos',
+      label: 'Comments per video, your side — what it is of',
+    })
+    // Every other row really is videos on both sides of the count.
+    for (const key of ['videos', 'engagement', 'sentiment', 'posts']) {
+      const k = f[`h2h_you_${key}_k`]
+      if (k) expect(k.unit).toBe('videos')
+    }
+    // …and no two tokens share a label, because a label is what the token
+    // prints as and two sides of one row are two different numbers.
+    const labels = Object.values(f).map((x) => x.label)
+    expect(new Set(labels).size).toBe(labels.length)
+  })
+
+  it('publishes the figure the engagement row PRINTS, not only its coverage', () => {
+    const DEN = [
+      { month: '2026-09-01', audience: 'client', videos: 19, comments: 151 },
+      { month: '2026-09-01', audience: 'competitor:Ottobock', videos: 42, comments: 645 },
+    ]
+    const h = buildHeadToHead({ month: '2026-09-01', brand: 'Össur', rival: 'Ottobock', videos: VIDEOS, denominators: DEN })
+    const engagement = h.measures.find((m) => m.key === 'engagement')!
+    expect(engagement.you!.text).toBe('2.4% median')
+    const f = headToHeadFigures(h)
+    // The coverage is 9 of 14; the median is 2.4% and had no token at all, so
+    // `qr.p5.h2h` and `mkt.p5.comparison` could not name it — and a model that
+    // typed "2.4%" itself would lose the sentence to `scrubProse`, correctly.
+    expect(f['h2h_you_engagement_k'].value).toBe(9)
+    expect(f['h2h_you_engagement_median']).toEqual({ value: 2.4, unit: 'pct', label: 'Engagement per video, your side' })
+    expect(f['h2h_rival_engagement_median'].unit).toBe('pct')
+    // The rate row publishes no figure token: `FigureTable`'s units are
+    // videos / comments / pts / pct and a per-video rate is none of them.
+    expect(f['h2h_you_comments_per_video_rate']).toBeUndefined()
+  })
+
   it('publishes a percentage only where the measure is one, and always the count', () => {
     const DEN = [
       { month: '2026-08-01', audience: 'client', videos: 20, comments: 237 },
