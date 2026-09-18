@@ -90,3 +90,28 @@ describe('OV3 · what the category is saying', () => {
     expect(verdicts.length).toBeGreaterThanOrEqual(5)
   })
 })
+
+describe('the quotes this block declares (mkt.p3.quote)', () => {
+  it('claims the month’s voices only where the lead is a theme in this audience', () => {
+    const data = overviewFixture()
+    const lead = data.sentence.lead
+    const refs = blockAnswers(overviewCategory, data).quotes
+    if (lead && lead.objectKind === 'theme' && lead.audience === data.category.audience) {
+      expect(refs).toEqual(data.sentence.voices.map((v) => v.quote.ref))
+      // Refs, never words — a snapshot freezes ids and resolves at render.
+      for (const ref of refs) expect(ref).toMatch(/^[ecvmp]:|^h:|^b:/)
+    } else {
+      expect(refs).toEqual([])
+    }
+  })
+
+  it('claims none when the month’s lead is a subject — a quote is only about the category when its citation was', () => {
+    const data = overviewFixture()
+    const asSubject = { ...data, sentence: { ...data.sentence, lead: data.sentence.lead ? { ...data.sentence.lead, objectKind: 'subject' as const } : null } }
+    expect(blockAnswers(overviewCategory, asSubject).quotes).toEqual([])
+  })
+
+  it('claims none on a workspace whose month could not be read', () => {
+    expect(blockAnswers(overviewCategory, refusedFixture()).quotes).toEqual([])
+  })
+})

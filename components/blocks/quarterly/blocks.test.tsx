@@ -468,3 +468,23 @@ describe('the model’s words are marked and the product’s are not', () => {
     }
   })
 })
+
+describe('the quotes a page declares (qr.p3.quote, qr.p4.quote)', () => {
+  it('pages 3 and 4 answer quotes() with refs, never words', () => {
+    const data = quarterlyFixture()
+    for (const key of ['quarterly.subjects', 'quarterly.category'] as const) {
+      const refs = blockAnswers(QUARTERLY_BLOCKS[key], data).quotes
+      expect(refs.length).toBeGreaterThan(0)
+      // `e:` / `c:` / `v:` — an ADDRESS. A block handing back text would be a
+      // second place for a third party's words to leak into a snapshot.
+      for (const ref of refs) expect(ref).toMatch(/^[ecvmp]:|^h:|^b:/)
+    }
+  })
+
+  it('declares none where nothing was read', () => {
+    const data = formingFixture()
+    for (const key of ['quarterly.subjects', 'quarterly.category'] as const) {
+      expect(blockAnswers(QUARTERLY_BLOCKS[key], data).quotes).toEqual([])
+    }
+  })
+})

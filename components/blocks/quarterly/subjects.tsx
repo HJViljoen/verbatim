@@ -102,6 +102,13 @@ export const quarterlySubjects: Block<QuarterlyData> = {
     return data.subjects.rows.flatMap((r) => [r.youQuarter, r.categoryQuarter].filter((v): v is NonNullable<typeof v> => v != null))
   },
 
+  // `qr.p3.quote`. REFS ALONE, never the words: a snapshot freezes the ids and
+  // the words resolve at render, which is how an erasure reaches a stored
+  // artefact (lib/renderables/quotes-freeze.ts, decision H).
+  quotes(data) {
+    return data.subjects.quotes.map((q) => q.quote.ref)
+  },
+
   emptyState(data) {
     const s = data.subjects
     if (s.notRecorded) return s.notRecorded

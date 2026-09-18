@@ -1,5 +1,5 @@
 import { blockAnswers } from '@/lib/blocks/types'
-import type { QuarterChecks, QuarterlyData } from '@/lib/pages/quarterly'
+import type { QuarterChecks, QuarterlyData, QuarterQuiet } from '@/lib/pages/quarterly'
 import { composeQuarterly } from '@/lib/pages/quarterly'
 import type { WindowReading } from '@/lib/reading/read'
 import type { RecordInputs } from '@/lib/reading/record'
@@ -64,6 +64,15 @@ const subjectWindow = (videos: number, share: number): SubjectWindowReading[] =>
 /** M3 unapplied: told apart from an empty read, exactly as the month series
  *  tells its silences apart. */
 const notApplied: WindowReading = { denominators: null, themes: null }
+
+/** Two themes the register has marked dormant — `qr.p4.flags`, the second of
+ *  the two READER_FLAGS. Null in `formingFixture`, because "we could not read
+ *  the register" and "nothing has gone quiet" are two different sentences and
+ *  wave 2 has to draw both. */
+const QUIET: QuarterQuiet[] = [
+  { id: 'q1', label: 'Shipping and delivery times', lastHeard: '2026-06-01' },
+  { id: 'q2', label: 'Sizing and fit questions', lastHeard: '2026-05-01' },
+]
 
 const checksRan: QuarterChecks = {
   recorded: true,
@@ -134,6 +143,7 @@ export function quarterlyFixture(over: Partial<QuarterlyData> = {}): QuarterlyDa
       subjectsBefore: subjectWindow(3810, 0.18),
       checks: checksRan,
       record: record(13),
+      quiet: QUIET,
     }),
     ...over,
   }
@@ -155,6 +165,7 @@ export function formingFixture(): QuarterlyData {
     subjectsBefore: null,
     checks: checksNotRecorded,
     record: null,
+    quiet: null,
   })
 }
 
@@ -174,6 +185,7 @@ export function closedFixture(): QuarterlyData {
     subjectsBefore: subjectWindow(3810, 0.18),
     checks: checksRan,
     record: record(13, '2026-11-02T09:00:00.000Z'),
+    quiet: QUIET,
   })
 }
 
@@ -217,6 +229,7 @@ export function afterQuarterFixture(): QuarterlyData {
     subjectsBefore: subjectWindow(3810, 0.18),
     checks: checksRan,
     record: record(13, AFTER),
+    quiet: QUIET,
   })
 }
 
@@ -254,6 +267,10 @@ export function thinMonthFixture(): QuarterlyData {
     subjectsBefore: subjectWindow(3810, 0.18),
     checks: checksRan,
     record: record(13),
+    // A thin month names no mover AND the register is still readable: the two
+    // silences are independent, and the fixture proves a page can carry one
+    // without the other.
+    quiet: [],
   })
 }
 

@@ -8,8 +8,11 @@ import { RPC_WINDOW_DENOMINATORS, RPC_WINDOW_THEME_READINGS } from '../reading/t
 import { quarterFor } from '../reports/quarterly'
 import {
   confidenceOf, countedLines, coverBody, flagOutcome, methodNumbers, ordinal, quarterWindowFor,
-  readingCounter, unsettledItems,
+  readingCounter, unsettledItems, withFlags,
 } from './quarterly'
+import type { Mover } from './overview'
+import { READER_FLAGS } from '../calibration'
+import { quarterlyFixture, formingFixture, thinMonthFixture } from '../../components/blocks/quarterly/fixture'
 
 const verdict = (over: Partial<Verdict> = {}): Verdict => ({
   objectKind: 'theme',
@@ -329,3 +332,72 @@ describe('the window pair', () => {
     expect(reading.themes).toBeNull()
   })
 })
+
+describe('withFlags — the two READER_FLAGS on a mover (qr.p4.flags)', () => {
+  const mover = (over: Partial<Mover> = {}): Mover => ({
+    id: 'm1',
+    label: 'Durability',
+    k: 30,
+    n: 100,
+    pct: 30,
+    verdict: verdict(),
+    direction: null,
+    isNew: false,
+    ...over,
+  })
+
+  it('carries new off the row', () => {
+    expect(withFlags(mover({ isNew: true })).flags).toEqual(['new'])
+    expect(withFlags(mover()).flags).toEqual([])
+  })
+
+  it('carries only the two READER_FLAGS off the verdict — the rest are about our bookkeeping', () => {
+    const flags = withFlags(mover({ verdict: verdict({ flags: ['clustering_unknown', 'gone_quiet', 'renamed', 'thin'] }) })).flags
+    expect(flags).toEqual(['gone_quiet'])
+    for (const f of flags) expect(READER_FLAGS as readonly string[]).toContain(f)
+  })
+
+  it('never repeats a flag the row and the verdict both carry', () => {
+    expect(withFlags(mover({ isNew: true, verdict: verdict({ flags: ['new'] }) })).flags).toEqual(['new'])
+  })
+})
+
+describe('what the quarterly pages now carry (package D7)', () => {
+  it('page 3 keeps the rival column and the category series', () => {
+    const q = quarterlyFixture()
+    const row = q.subjects.rows[0]
+    expect(row).toHaveProperty('rival')
+    expect(row.spark.length).toBe(row.sparkMonths.length)
+    // A LEVEL, never a difference. Nothing on the page subtracts the rival's
+    // share from yours: two proportions on two different denominators have no
+    // band (deviation D1).
+    expect(Object.keys(row)).not.toContain('gap')
+  })
+
+  it('page 3 draws its line only where the side has the readings, and names no direction', () => {
+    const q = quarterlyFixture()
+    if (q.subjects.line) {
+      const printed = [q.subjects.line.label, q.subjects.line.empty, ...q.subjects.line.series.map((s) => s.label)]
+        .filter(Boolean)
+        .join(' ')
+      expect(printed).not.toMatch(directionRe())
+      for (const side of q.subjects.line.series) expect(side.readings).toBeGreaterThanOrEqual(3)
+    }
+  })
+
+  it('tells a register it could not read from a register with nothing in it', () => {
+    expect(formingFixture().category.quiet).toBeNull()
+    expect(formingFixture().category.quietNote).toContain('could not be read')
+    expect(thinMonthFixture().category.quiet).toEqual([])
+    expect(thinMonthFixture().category.quietNote).toContain('has gone quiet')
+    expect(quarterlyFixture().category.quiet).toHaveLength(2)
+    expect(quarterlyFixture().category.quietNote).toBeNull()
+  })
+
+  it('carries the same voices to both pages, as refs, and never two sets of words', () => {
+    const q = quarterlyFixture()
+    expect(q.subjects.quotes.map((x) => x.quote.ref)).toEqual(q.category.quotes.map((x) => x.quote.ref))
+    expect(q.subjects.quotes.map((x) => x.quote.ref)).toEqual(q.read.quotes.map((x) => x.quote.ref))
+  })
+})
+
