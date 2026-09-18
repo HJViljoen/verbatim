@@ -76,6 +76,15 @@ describe('the search terms section', () => {
     expect(words).toContain('in the set before we kept a record')
   })
 
+  it('gives a 20px remove icon a pressable target', () => {
+    // M5: a `size-3` glyph in `p-0.5` is roughly 20 x 20 on a page whose own
+    // CONTROL constant is h-11 for everything else. The icon keeps its size
+    // and the pseudo element carries the target out to 44.
+    const markup = render(termsSection)
+    const remove = markup.slice(markup.indexOf('aria-label="Remove Sealand"'))
+    expect(remove.slice(0, 400)).toContain('after:-inset-3')
+  })
+
   it('states what adding one does, beside the field that does it', () => {
     expect(words).toContain(NEW_TERM_RULE)
   })

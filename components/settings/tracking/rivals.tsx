@@ -102,7 +102,7 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
                       type="button"
                       onClick={() => onRemove(r.name)}
                       aria-label={`Stop tracking ${r.name}`}
-                      className="cursor-pointer rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-inner hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      className="relative cursor-pointer rounded-full p-0.5 text-muted-foreground transition-colors after:absolute after:-inset-3 after:content-[''] hover:bg-inner hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     >
                       <X className="size-3" aria-hidden />
                     </button>
@@ -170,7 +170,7 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
                     type="button"
                     onClick={() => onRemove(name)}
                     aria-label={`Remove ${name}`}
-                    className="cursor-pointer rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-inner hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    className="relative cursor-pointer rounded-full p-0.5 text-muted-foreground transition-colors after:absolute after:-inset-3 after:content-[''] hover:bg-inner hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   >
                     <X className="size-3" aria-hidden />
                   </button>
@@ -201,7 +201,7 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
           <button type="button" onClick={add} disabled={!canEdit || draft.trim() === ''} className={CONTROL}>Add a rival</button>
           {refusal && <MonoNote className="max-w-[420px]">{refusal}</MonoNote>}
         </div>
-        {error && <span className="text-[11.5px] text-negative">{error}</span>}
+        {error && <span role="alert" className="text-[11.5px] text-negative">{error}</span>}
       </div>
 
       {/* Four sentences, one paragraph (design H2). Each is true and each is

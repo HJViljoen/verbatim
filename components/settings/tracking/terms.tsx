@@ -109,7 +109,7 @@ export function TermsSection({ terms, dates, datesNote, review, canEdit, onAdd, 
                     onClick={() => { onRemove(b.key, t); setError(null) }}
                     disabled={!canEdit}
                     aria-label={`Remove ${t}`}
-                    className="cursor-pointer rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-tile hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
+                    className="relative cursor-pointer rounded-full p-0.5 text-muted-foreground transition-colors after:absolute after:-inset-3 after:content-[''] hover:bg-tile hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <X className="size-3" aria-hidden />
                   </button>
@@ -170,7 +170,7 @@ export function TermsSection({ terms, dates, datesNote, review, canEdit, onAdd, 
             <button type="button" onClick={add} disabled={!canEdit || full || draft.trim() === ''} className={CONTROL}>Add</button>
             <MonoNote>{NEW_TERM_RULE}</MonoNote>
           </div>
-          {error && <span className="text-[11.5px] text-negative">{error}</span>}
+          {error && <span role="alert" className="text-[11.5px] text-negative">{error}</span>}
         </div>
       </LabelRow>
 
