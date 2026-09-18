@@ -103,6 +103,29 @@ export interface BriefBlockSection {
    * already lays out its own columns.
    */
   pane?: 'chart' | 'confidence'
+  /**
+   * The right card's own eyebrow and its opening line (`sales.p3.howtouse`).
+   *
+   * WHY A PANE NEEDS ITS OWN WORDS. The first pass gave `confidence` one body
+   * — the reading's denominators, then the dots — so three sheets running
+   * carried an identical card: "WHAT THIS RESTS ON · 1,388 the category · …"
+   * verbatim on p3 and p4, and the same confidence sentence on p2, p3 and p4.
+   * A panel that says the same thing three sheets running reads as chrome and
+   * a reader stops looking at it, which is the opposite of what a confidence
+   * rail is for. The artboard's right cards differ sheet by sheet — "HOW TO
+   * USE THESE" over a lead and its practice items on p3, the rival material on
+   * p4 — and this is that, as far as the reading honestly reaches.
+   *
+   * `paneLead` IS THE OPERATOR'S VOICE, like `framing`: how to read the rows
+   * this sheet carries, written once here. It is not a model's and it names no
+   * figure — the artboard's own lead ("Lead with the thing that is rising…")
+   * is a sentence about one tenant's month and a direction claim besides, and
+   * nothing composes one. A pane with a lead prints it; a pane without one
+   * prints the reading's denominators, which is what every pane printed
+   * before.
+   */
+  paneTitle?: string
+  paneLead?: string
   /** What has to be recorded for this section to hold anything. */
   needs: readonly ReadinessId[]
   /**
@@ -227,6 +250,8 @@ export const SALES_MAP: readonly BriefEntry[] = [
     id: 'sl.voices', block: 'subjects.voices', surface: 'subjects',
     title: 'What sells, in their words', framing: 'What customers actually said about each subject this month — say it back, in their words.',
     context: 'Selling points', eyebrow: 'In their own words', pane: 'confidence',
+    paneTitle: 'How to use these',
+    paneLead: 'Say these back in the customer\u2019s own words rather than in ours. Every phrase carries the count it was heard in and the population that count is of, so the one with the most behind it is the one to open with — and a phrase with a thin count is a lead to test, not a line to build on.',
     needs: ['subject-set'],
   }),
   block({
@@ -243,6 +268,13 @@ export const SALES_MAP: readonly BriefEntry[] = [
     id: 'sl.questions', block: 'competitive.questions', surface: 'competitive',
     title: 'What buyers compare', framing: 'The comparisons buyers make out loud, and who they name.',
     context: 'Comparisons', eyebrow: 'Asked under their content',
+    // THE ONE SHEET WITH NO RIGHT COLUMN AT ALL. `sl.questions` carried no
+    // `pane`, so it was the single-column sheet in an otherwise 7fr/5fr deck
+    // and the only one with no confidence rail — the deck's rhythm broken once
+    // for no stated reason.
+    pane: 'confidence',
+    paneTitle: 'How to read these',
+    paneLead: 'These are comparisons the audience put, counted in the videos we read — not comparisons we drew. A pairing appearing here says it was asked about, and says nothing about which side the asker settled on.',
     needs: [],
   }),
   page('switching'),

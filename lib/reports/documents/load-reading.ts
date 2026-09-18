@@ -472,6 +472,8 @@ export function briefSections(
       ...(s.context ? { context: s.context } : {}),
       ...(s.eyebrow ? { eyebrow: s.eyebrow } : {}),
       ...(s.pane ? { pane: s.pane } : {}),
+      ...(s.paneTitle ? { paneTitle: s.paneTitle } : {}),
+      ...(s.paneLead ? { paneLead: s.paneLead } : {}),
     }
   })
 }

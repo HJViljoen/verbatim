@@ -435,6 +435,17 @@ describe('the borrowed sheets carry the artboard’s chrome', () => {
     expect(words(thin)).toContain('Aug → Sep only')
   })
 
+  // …AND THE EYEBROW DOES NOT PROMISE A LINE. The card stayed headed "THE LINE
+  // BEHIND THESE" over four words and said nothing about why there was no
+  // line — which is the state every workspace without `month_kind_readings` is
+  // in today, so it is the state most readers actually meet.
+  it('heads the empty chart pane for what is in it, and says why', () => {
+    const thin = words(sheetNamed(deck(salesBriefThinFixture()), 'What they are pushing back on'))
+    expect(thin).toContain('The months behind these')
+    expect(thin).not.toContain('The line behind these')
+    expect(thin).toContain('monthly readings yet, so the months are named instead of drawn')
+  })
+
   // TWO VOCABULARIES, ONE LADDER. A finding's `solid | reasonable | thin` and a
   // reading's `reasonable | partly | not yet` share one set of three dots, so
   // each word gets its own rung: `partly` and `not yet` drew the same single
@@ -458,6 +469,41 @@ describe('the borrowed sheets carry the artboard’s chrome', () => {
     expect(w).toContain('Confidence')
     expect(w).toContain('reasonable')
     expect(w).toContain('9 of 12 comparisons on these pages were answered against their band.')
+  })
+
+  // …AND THE SENTENCE BEHIND THE WORD ONCE. It is one reading's account of
+  // itself and it stood verbatim on three consecutive sheets, which reads as
+  // chrome. The dots and the word stay on every pane, because a reader meets
+  // each sheet on its own.
+  it('prints the confidence sentence once and the word on every pane', () => {
+    const html = deck()
+    expect(html.split('9 of 12 comparisons on these pages were answered against their band.').length - 1).toBe(1)
+    expect(html.split('>Confidence ').length - 1).toBeGreaterThanOrEqual(4)
+  })
+
+  // `sales.p3.howtouse` / the repeated panel. The pane was one body for every
+  // sheet — the reading's denominators and then the dots — so p3, p4 and p5
+  // carried the same card.
+  it('gives each pane its own card, so no two are the same', () => {
+    const voices = words(sheetNamed(deck(), 'What sells, in their words'))
+    const compare = words(sheetNamed(deck(), 'What buyers compare'))
+    expect(voices).toContain('How to use these')
+    expect(voices).toContain('Say these back in the customer’s own words')
+    // The denominators are the FALLBACK, not the body: a pane with its own
+    // lead prints the lead, and the method card prints the counts in full.
+    expect(voices).not.toContain('1,388 the category')
+    expect(words(rivals())).toContain('1,388 the category')
+    // `sl.questions` carried no pane at all — the one single-column sheet in
+    // an otherwise 7fr/5fr deck, and the only one with no confidence rail.
+    expect(compare).toContain('How to read these')
+    expect(compare).toContain('Confidence')
+  })
+
+  // A PANE CARD HUGS ITS CONTENT. It stretched to the full slide with the rail
+  // pinned to the foot, so a pane with two lines drew a 700px empty box.
+  it('does not stretch a pane card past what is in it', () => {
+    expect(rivals()).toContain('self-start')
+    expect(rivals()).not.toContain('mt-auto flex flex-col gap-1.5 border-t border-border pt-3')
   })
 
   // `sales.p4.untracked`: composed by `untrackedNotes` on every brief since

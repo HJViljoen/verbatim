@@ -286,6 +286,11 @@ export interface DocBriefSection {
   /** What the right-hand pane carries: the month line, or the confidence dots
    *  with their caveat. Absent keeps the full-bleed single column. */
   pane?: 'chart' | 'confidence'
+  /** The pane's own eyebrow and opening line, so no two panes in a deck are
+   *  the same card (`BriefBlockSection.paneTitle` / `.paneLead`). A pane with
+   *  no lead prints the reading's denominators, as every pane did before. */
+  paneTitle?: string
+  paneLead?: string
 }
 
 /**

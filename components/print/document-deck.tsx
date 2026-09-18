@@ -108,7 +108,7 @@ function Paragraphs({ text, figures, className }: { text: string; figures: Figur
  * fixed templates calls this today. It is the seam D-brief (P13–P17) binds
  * when the quarterly's and the leadership one-pager's charts land.
  */
-export function DeckSpark({ values, months, color = 'var(--primary)', width = 104, height = 22 }: {
+export function DeckSpark({ values, months, color = 'var(--primary)', width = 104, height = 22, className }: {
   values: (number | null)[]
   /** The months these points are, in order — the printed page's only axis. */
   months: string[]
@@ -119,6 +119,10 @@ export function DeckSpark({ values, months, color = 'var(--primary)', width = 10
    *  that already draws one moves. */
   width?: number
   height?: number
+  /** Passed through to the SVG. `w-full` lets a chart that IS the element fill
+   *  its card instead of leaving a dead gutter down the right of it — the
+   *  `viewBox` keeps the drawn geometry, so the shape does not change. */
+  className?: string
 }) {
   // The months that carried a reading, in order. A slot with no reading is not
   // a month this line can name.
@@ -143,8 +147,8 @@ export function DeckSpark({ values, months, color = 'var(--primary)', width = 10
     return <p className="font-mono text-[10.5px] text-muted-foreground">the months and the readings do not line up</p>
   }
   return (
-    <span className="flex flex-col gap-1">
-      <Sparkline values={values} color={color} width={width} height={height} animate={false} endDot />
+    <span className={`flex flex-col gap-1 ${className ?? ''}`}>
+      <Sparkline values={values} color={color} width={width} height={height} animate={false} endDot className={className} />
       <span className="flex justify-between font-mono text-[9.5px] text-muted-foreground">
         <span>{months[0]}</span>
         <span>{months[months.length - 1]}</span>
@@ -1478,26 +1482,52 @@ function PageBody({ page, data }: { page: DocPage; data: DocumentSnapshotData })
  * brief's blocks drew — not a finding's `sure` word, which is calibrated from
  * conversations and strands and belongs to one argument.
  */
-function SectionPane({ section, data }: { section: DocBriefSection; data: DocumentSnapshotData }) {
+function SectionPane({ section, data, why }: {
+  section: DocBriefSection
+  data: DocumentSnapshotData
+  /** Does this sheet print the SENTENCE behind the confidence word?
+   *
+   *  THE WORD IS PER SHEET AND THE SENTENCE IS PER DOCUMENT. `confidence.why`
+   *  is one reading's account of itself — "9 of 12 comparisons on these pages
+   *  were answered against their band" — and it appeared verbatim on three
+   *  consecutive sheets. The dots and the word stay on every pane, because
+   *  that is the artboard's own device and a reader meets each sheet on its
+   *  own; the sentence prints on the first pane of the deck, and the method
+   *  sheet carries the full account. */
+  why: boolean
+}) {
   const line = data.slideFigures?.line ?? null
   const confidence = data.reading?.confidence ?? null
   const rail = confidence && (
-    <div className="mt-auto flex flex-col gap-1.5 border-t border-border pt-3">
+    <div className="flex flex-col gap-1.5 border-t border-border pt-3">
       <p className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
         Confidence <ConfidenceDots sure={confidence.word} /> <span className="normal-case tracking-normal text-foreground">{confidence.word}</span>
       </p>
-      <p className="text-[12.5px] leading-[1.45] text-muted-foreground">{confidence.why}</p>
+      {why && <p className="text-[12.5px] leading-[1.45] text-muted-foreground">{confidence.why}</p>}
     </div>
   )
+  // THE CARD HUGS ITS CONTENT (`self-start`). It used to stretch to the full
+  // slide with the rail pinned to the foot by `mt-auto`, so a pane with two
+  // lines in it drew a 700px empty box with a confidence rail at the bottom —
+  // on five of eleven sheets. The artboard's right cards run the full height
+  // because they are FULL; a card that is not full and pretends to be reads as
+  // a failed render on a paid PDF, which is how both live workspaces would
+  // have received it.
+  const card = `${CARD} flex min-h-0 flex-col gap-4 self-start px-6 py-5`
   if (section.pane === 'chart') {
+    const drawn = Boolean(line && line.series.length > 0)
     return (
-      <div className={`${CARD} flex min-h-0 flex-col gap-4 px-6 py-5`}>
-        <Eyebrow>The line behind these</Eyebrow>
-        {line && line.series.length > 0 ? (
+      <div className={card}>
+        {/* THE EYEBROW DOES NOT PROMISE A LINE THERE IS NOT. Below three
+            readings nothing is drawn (D3) and the card was still headed "THE
+            LINE BEHIND THESE" over four words — which is the state every
+            workspace without `month_kind_readings` is in today. */}
+        <Eyebrow>{drawn ? 'The line behind these' : 'The months behind these'}</Eyebrow>
+        {drawn ? (
           <div className="flex flex-col gap-2.5">
-            {line.series.map((serie) => (
+            {line!.series.map((serie) => (
               <div key={serie.label} className="flex flex-col gap-1.5">
-                <DeckSpark values={serie.points} months={line.months.map(monthLabel)} width={300} height={120} />
+                <DeckSpark values={serie.points} months={line!.months.map(monthLabel)} width={300} height={120} className="w-full" />
                 <p className="text-[11px] leading-[1.35] text-muted-foreground">{serie.label}</p>
               </div>
             ))}
@@ -1510,31 +1540,43 @@ function SectionPane({ section, data }: { section: DocBriefSection; data: Docume
             </p>
           </div>
         ) : (
-          <p className={BODY_SM}>{line?.label ?? line?.empty ?? 'No month series stands behind this sheet yet.'}</p>
+          // BOTH HALVES. `label` is which months read ("Aug → Sep only") and
+          // `empty` is why that is not a line; the pane printed the first and
+          // dropped the second, so the card said four words and explained
+          // none of them.
+          <div className="flex flex-col gap-1.5">
+            <p className="font-mono text-[12px] text-foreground">{line?.label ?? 'no month reads'}</p>
+            <p className={BODY_SM}>{line?.empty ?? 'No month series stands behind this sheet yet.'}</p>
+          </div>
         )}
         {rail}
       </div>
     )
   }
+  // THE DENOMINATORS ARE THE FALLBACK, NOT THE BODY. They are the same three
+  // counts on every sheet and the method card prints them in full; a pane with
+  // its own lead prints the lead instead, so no two panes in the deck are the
+  // same card.
+  const untracked = (data.slideFigures?.untracked ?? []).filter((n) => n.sections.includes(section.title))
   return (
-    <div className={`${CARD} flex min-h-0 flex-col gap-4 px-6 py-5`}>
-      <Eyebrow>What this rests on</Eyebrow>
-      {data.reading && (
-        <p className="font-mono text-[12px] leading-[1.5] text-muted-foreground">
-          {data.reading.denominators.map((d) => (
-            <Fragment key={d.audience}>
-              <span className="text-foreground">{fmtCount(d.videos)}</span> {d.label}{' · '}
-            </Fragment>
-          ))}
-          <span className="text-foreground">{fmtCount(commentsRead(data.reading.denominators))}</span> comments read
-        </p>
-      )}
+    <div className={card}>
+      <Eyebrow>{section.paneTitle ?? 'What this rests on'}</Eyebrow>
+      {section.paneLead
+        ? <p className={BODY_SM}>{section.paneLead}</p>
+        : data.reading && (
+          <p className="font-mono text-[12px] leading-[1.5] text-muted-foreground">
+            {data.reading.denominators.map((d) => (
+              <Fragment key={d.audience}>
+                <span className="text-foreground">{fmtCount(d.videos)}</span> {d.label}{' · '}
+              </Fragment>
+            ))}
+            <span className="text-foreground">{fmtCount(commentsRead(data.reading.denominators))}</span> comments read
+          </p>
+        )}
       {/* `sales.p4.untracked` — what is NOT tracked, beside the section rather
           than in place of it, naming the ROLE and no date (D14). Composed by
           `untrackedNotes` on every brief since wave 1 and printed by nothing. */}
-      {(data.slideFigures?.untracked ?? [])
-        .filter((n) => n.sections.includes(section.title))
-        .map((n) => <p key={n.id} className={BODY_SM}>{n.line}</p>)}
+      {untracked.map((n) => <p key={n.id} className={BODY_SM}>{n.line}</p>)}
       {rail}
     </div>
   )
@@ -1548,7 +1590,7 @@ function SectionPane({ section, data }: { section: DocBriefSection; data: Docume
  *  SSR mismatch on a page that is also printed by a headless browser. */
 const monthLabel = monthName
 
-function SectionBody({ section, data }: { section: DocBriefSection; data: DocumentSnapshotData }) {
+function SectionBody({ section, data, why }: { section: DocBriefSection; data: DocumentSnapshotData; why: boolean }) {
   const surface = (data.surfaces ?? {})[section.surface]
   const block = blocksFor(section.surface as BriefSurface)?.find((b) => b.key === section.block)
   const body = section.empty != null || !block || surface == null
@@ -1572,9 +1614,9 @@ function SectionBody({ section, data }: { section: DocBriefSection; data: Docume
   )
   if (!section.pane) return left
   return (
-    <div className="grid h-full min-h-0 grid-cols-[7fr_5fr] gap-x-12">
+    <div className="grid h-full min-h-0 grid-cols-[7fr_5fr] items-start gap-x-12">
       {left}
-      <SectionPane section={section} data={data} />
+      <SectionPane section={section} data={data} why={why} />
     </div>
   )
 }
@@ -1590,6 +1632,9 @@ export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: Docum
   // now rides `BriefFooter` on every sheet including the cover, which is where
   // the artboard puts it.
   const short = data.reading?.monthLabel ?? data.period
+  // The first sheet in the deck that carries a pane — the one that prints the
+  // sentence behind the confidence word. See `SectionPane`'s `why`.
+  const firstPane = slides.map((x) => sectionOfSlide(data, x.keys[0])).find((x) => x?.pane)?.id ?? null
   // WP19: the stamp rides every sheet, the way the weekly deck's rule does — a
   // reader of a PDF has no masthead to scroll back to. In the artboard's SHORT
   // form (`briefStampShort`), because the long one is sixty characters and the
@@ -1617,7 +1662,7 @@ export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: Docum
               layout="single"
               note={section.framing}
             >
-              <SectionBody section={section} data={data} />
+              <SectionBody section={section} data={data} why={section.id === firstPane} />
             </Slide>
           )
         }
