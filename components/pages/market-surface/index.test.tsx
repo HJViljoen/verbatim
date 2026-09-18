@@ -560,6 +560,22 @@ describe('MK4 · a move, read', () => {
     expect(renderText(markup)).toContain('Freitag · 41 of 142 videos')
   })
 
+  it('marks the declaration on the line the verdict compares across', () => {
+    // The verdict under the chart says "before it was declared" and the line
+    // carried no mark for where "before" ended. `MoveReading.declaredAt` is
+    // the rule's date; the tick prints it and the rule's own title says what
+    // it is, because the four `CalendarRule` kinds are a pen and not a
+    // taxonomy this block may extend.
+    const markup = render(marketMoves.render(marketFixture(), 'app', ctx))
+    expect(markup).toContain('Move declared')
+    // The rule's tick carries the declaration's own day, drawn on the axis it
+    // belongs to, beside the meta that already named it.
+    const text = renderText(marketMoves.render(marketFixture(), 'app', ctx))
+    expect(text).toContain('Move declared — Push repairability 12 Aug')
+    expect(text).toContain('declared 12 Aug')
+    expect(text).toContain('before it was declared')
+  })
+
   it('prints the control beside the move and never subtracted from it', () => {
     const text = renderText(marketMoves.render(marketFixture(), 'app', ctx))
     expect(text).toContain('Beside it, the category')

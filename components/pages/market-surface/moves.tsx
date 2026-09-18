@@ -163,8 +163,26 @@ function Move({ reading, index, mode }: { reading: MoveReading; index: number; m
           series={r.series.map(toCalendar)}
           format={(v) => fmtPct(v, 0)}
           legend={false}
-          height={160}
-          padR={140}
+          // THE VIEWBOX IS THE BOX IT IS DRAWN IN, near enough. `CalendarLine`
+          // scales its 880-wide drawing uniformly into whatever container it
+          // gets — the tile is seven of twelve columns, about 630px at 1440 —
+          // so the default was rendering every 11px label at 7px and every
+          // 13px label gap at 8px: a plot of ~95 CSS px for a 0–30% range with
+          // the two closest series' end labels stacked on top of each other.
+          // Drawn at the size it is shown at, the chart's own spacing holds.
+          width={630}
+          height={200}
+          padL={44}
+          padR={120}
+          // THE DECLARATION IS ON THE CHART. The verdict under it says "before
+          // it was declared" and the line carried no mark for where "before"
+          // ended; `MoveReading.declaredAt` was in hand and printed two lines
+          // above in the meta. `CalendarRule.kind` is the PEN, not the
+          // taxonomy — the four kinds are the config events the chart was
+          // built for and a fifth cannot be added from here (components/charts
+          // is the subjects package's), so the declaration borrows the dashed
+          // grey rule and says what it is in its own label and tick.
+          rules={[{ month: r.declaredAt.slice(0, 7) + '-01', label: `Move declared — ${r.title}`, kind: 'tracking_change', at: r.declaredAt }]}
           label={`${r.title}, month by month`}
           id={`move-${r.moveId}`}
         />
