@@ -199,6 +199,22 @@ describe('WK §4 · what came in', () => {
     expect(text).not.toMatch(/analysed of \d/)
   })
 
+  it('says when the rows do not account for every comment in the total', () => {
+    // The rows come from the videos THIS update fetched; the total comes from
+    // the windowed read, which counts videos of any update carrying a comment
+    // dated in these days. An audience with comments in the window and no video
+    // in this update is in the total and not in the column — and a column a
+    // reader can sum has to say so.
+    const d = weekFixture()
+    const data = { ...d, cameIn: { ...d.cameIn, windowComments: 6000 } }
+    const text = renderText(weekCameIn.render(data, 'app', ctx))
+    expect(text).toContain('6,000 comments written in these days')
+    expect(text).toContain('The rows below account for 5,134 of those comments')
+    // And says nothing where the column does add up, which both fixtures do.
+    expect(renderText(weekCameIn.render(d, 'app', ctx))).not.toContain('The rows below account for')
+    expect(renderText(weekCameIn.render(thinFixture(), 'app', ctx))).not.toContain('The rows below account for')
+  })
+
   it('hands the window’s count back to the month it fell in', () => {
     expect(renderText(weekCameIn.render(weekFixture(), 'app', ctx)))
       .toContain('this update’s contribution to September so far: 205 of 449')

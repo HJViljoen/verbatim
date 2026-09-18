@@ -55,6 +55,18 @@ export const weekCameIn: Block<WeekData> = {
     const email = mode === 'email'
     const empty = weekCameIn.emptyState(data)
     const days = windowDays(c.window)
+    // WHAT THE COLUMN BELOW ACTUALLY ADDS TO. The rows are built from the
+    // videos THIS update fetched; `windowComments` is every audience the
+    // windowed read returned, and that read counts videos of ANY update that
+    // carry a comment dated in these days. So an audience with comments in the
+    // window under videos an earlier update found contributes to the total and
+    // gets no row — and the column a reader can sum then falls short of the
+    // number printed above it, on the one surface whose discipline is that a
+    // stated number is checkable. Null where any row's comments are unknown,
+    // because a partial sum is not a sum.
+    const rowedComments = c.rows.every((r) => r.comments != null)
+      ? c.rows.reduce((t, r) => t + (r.comments ?? 0), 0)
+      : null
 
     return (
       <BlockFrame
@@ -89,6 +101,11 @@ export const weekCameIn: Block<WeekData> = {
                 The month’s own reading is not available here, so this update’s contribution to it cannot be stated.
               </Note>
             )}
+            {c.windowComments != null && rowedComments != null && rowedComments < c.windowComments ? (
+              <Note mode={mode}>
+                The rows below account for <span data-copy="figure">{fmtInt(rowedComments)}</span> of those comments; the rest were written in these days under videos an earlier update found, in audiences this update read no video of.
+              </Note>
+            ) : null}
             {c.crossesInto ? <Note mode={mode}>{crossingLine(data.month, c.crossesInto)}</Note> : null}
             <Audiences rows={c.rows} mode={mode} month={data.month} />
           </>
