@@ -167,7 +167,7 @@ export function competitiveFixture(over: Partial<CompetitiveSurfaceData> = {}): 
       subjectsNote: QUESTIONS_SUBJECTS_NOTE,
     },
     ownClaims: ownClaimsFixture(),
-    // CO6 · empty on every row today and the row says why, which is the point:
+    // CO5 · empty on every row today and the row says why, which is the point:
     // the block did not exist at all before, not even as an unlock.
     saidAbout: buildSaidAbout(
       [{ name: 'Ottobock' }, { name: 'Rareform' }, { name: 'Patagonia' }],

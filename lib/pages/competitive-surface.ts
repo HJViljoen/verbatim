@@ -235,7 +235,7 @@ export interface CompetitiveSurfaceData {
    */
   ownClaims: OwnPostCensus[]
   /**
-   * CO6 · what is said ABOUT each rival by everybody else.
+   * CO5 · what is said ABOUT each rival by everybody else.
    *
    * Empty on every row today, and the block says why rather than not
    * existing: the claims are `video_claims` rows in a rival's bucket, which no
@@ -700,7 +700,7 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
     standings,
     questions,
     ownClaims: ownClaims,
-    // CO6 · the denominator is the audience's own videos this month, off the
+    // CO5 · the denominator is the audience's own videos this month, off the
     // rows the standings already read — never a second count of the same thing.
     saidAbout: buildSaidAbout(rivals.rivals, (audience) =>
       (denominators ?? [])
@@ -753,7 +753,15 @@ async function loadRivals(
   return { rivals: (tc?.competitor_names ?? []).map((name) => ({ name, retiredAt: null })), recorded: false }
 }
 
-// ---- CO4 and CO6 · own posts, own claims, and what is said about them --------
+// ---- CO4 and CO5 · own posts, own claims, and what is said about them --------
+//
+// THE SECTION NUMBERS HERE ARE THE BRIEF'S: CO4 is what they say on their own
+// posts, CO5 is what is said about them, CO6 is findings with recurrence — and
+// `competitiveUnlockRows` already calls findings CO6, so labelling "said about"
+// CO6 too (as this file did when it landed) puts two different sections behind
+// one number. The questions section further up carries an OLDER "CO5" label
+// that disagrees with the same numbering; it is not this package's to move, and
+// it is named here so the next reader knows which of the two is the outlier.
 
 interface RivalPostRow {
   id: string
@@ -831,7 +839,7 @@ export async function loadRivalOwnPosts(
 }
 
 /**
- * CO6, as the honest absence it is today.
+ * CO5, as the honest absence it is today.
  *
  * `saidAbout` is a claims reading and the claims are `video_claims` rows in a
  * rival's bucket — which M8 does not open to a tenant session and deliberately
