@@ -96,7 +96,7 @@ function MoverRow({ mover, mode }: { mover: QuarterMover; mode: RenderMode }) {
   const months = seriesLine(mover)
   return (
     <div
-      className={email ? undefined : 'flex flex-col gap-1 border-b border-border/70 pb-2.5'}
+      className={email ? undefined : 'flex flex-col gap-0.5 border-b border-border/70 pb-2 text-[12.5px] leading-[1.35]'}
       style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '5px 0', borderTop: `1px solid ${EMAIL.hairline}` } : undefined}
     >
       <ObjectLabel label={mover.label} model mode={mode} />

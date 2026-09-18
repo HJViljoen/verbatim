@@ -148,7 +148,12 @@ const record = (delivered: number, readingAt = NOW): RecordInputs => ({
   window: { kind: 'quarter', from: QUARTER.from, to: QUARTER.to },
   delivery: { delivered, dates: [], longestGapDays: 35, failed: 0, basis: 'run_clock' },
   coverage: [
-    { audience: INDUSTRY_AUDIENCE, videos: 1388, comments: 11840, platformMix: {}, dualMention: 41, excludedUndated: 0 },
+    // THE MIX IS REAL HERE (Block D wave 2), because the method table's
+    // "Sources" row is computed from it: an empty map is a workspace whose
+    // platform mix was never recorded, which is a different state from the
+    // mock's "TikTok 38% · YouTube 29% · Instagram 21% · Reddit 12%" and was
+    // the only one this fixture could draw.
+    { audience: INDUSTRY_AUDIENCE, videos: 1388, comments: 11840, platformMix: { tiktok: 527, youtube: 403, instagram: 292, reddit: 166 }, dualMention: 41, excludedUndated: 0 },
   ],
   readDepth: { analysed: 1388, speech: 694, translated: 180, onScreenText: 233, unflagged: 0, basis: 'all_time_non_reddit' },
   language: { analysed: 1388, unknown: 420, english: 640, notEnglish: 328, basis: 'video_speech' },

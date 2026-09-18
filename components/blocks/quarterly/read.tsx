@@ -1,4 +1,4 @@
-import type { Block, RenderMode } from '@/lib/blocks/types'
+import type { Block } from '@/lib/blocks/types'
 import { BlockFrame } from '@/components/blocks/frame'
 import { BlockQuotes } from '@/components/blocks/quote'
 import { TokenProse } from '@/components/blocks/prose'

@@ -200,7 +200,7 @@ export function Columns({ weights, gap = 48, children, mode = 'app' }: {
       // the sheet and on the share page's 880px column it correctly does not.
       // The template travels as a custom property because it is the artboard's
       // own ratio and there is one per table.
-      className="grid min-h-0 min-w-0 flex-1 grid-cols-1 gap-y-4 lg:gap-y-0 lg:[grid-template-columns:var(--qr-cols)]"
+      className="grid min-h-0 min-w-0 flex-1 grid-cols-1 gap-y-4 text-[12.5px] leading-[1.4] lg:gap-y-0 lg:[grid-template-columns:var(--qr-cols)]"
       style={{ ['--qr-cols' as string]: weights.map((w) => `${w}fr`).join(' '), columnGap: gap }}
     >
       {children}
@@ -212,7 +212,7 @@ export function Columns({ weights, gap = 48, children, mode = 'app' }: {
  *  `display:flex;flex-direction:column;gap:…`. */
 export function Column({ gap = 10, children, mode = 'app', className }: { gap?: number; children: ReactNode; mode?: RenderMode; className?: string }) {
   if (mode === 'email') return <div>{children}</div>
-  return <div className={`flex min-w-0 flex-col ${className ?? ''}`} style={{ gap }}>{children}</div>
+  return <div className={`flex min-w-0 flex-col text-[12.5px] leading-[1.4] ${className ?? ''}`} style={{ gap }}>{children}</div>
 }
 
 /**
