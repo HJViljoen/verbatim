@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { copyViolations } from '@/lib/test/copy-contract'
-import { renderText } from '@/lib/test/render'
+import { render, renderText } from '@/lib/test/render'
 import { voiceTheme } from './theme'
 import { refusedVoiceFixture, voiceFixture } from './fixture'
 
@@ -19,12 +19,13 @@ describe('voiceTheme', () => {
   // and a count with a definite article and no denominator on every other.
   // Rendered on production: Össur "0 of the voices", Sealand "6 of the voices".
   it('names the voices against the n behind the theme, and says "Voices" when there are none', () => {
-    expect(draw()).toContain('2 of 182 voices')
+    expect(draw()).toContain('3 of 182 voices')
     expect(draw()).not.toContain('of the voices')
 
     const none = voiceFixture()
     none.theme.quotes = []
     none.theme.quoteCites = []
+    none.theme.quoteOnScreen = []
     expect(draw(none)).toContain('Voices')
     expect(draw(none)).toContain('No comment behind this theme can be quoted.')
     expect(draw(none)).not.toContain('0 of 182 voices')
@@ -34,7 +35,7 @@ describe('voiceTheme', () => {
     // than inventing a denominator.
     const unknown = voiceFixture()
     unknown.theme.quotesOf = null
-    expect(draw(unknown)).toContain('2 voices')
+    expect(draw(unknown)).toContain('3 voices')
   })
 
   it('renders in all three modes and keeps the copy contract', () => {
@@ -86,12 +87,62 @@ describe('voiceTheme', () => {
     expect(text).toContain('After 14 months the zip is done')
   })
 
-  it('prints the spoken line and the on-screen text with their provenance', () => {
+  it('prints the spoken line with its provenance', () => {
     const text = draw()
     expect(text).toContain('Said on camera')
     expect(text).toContain('One bag, three years, no regrets.')
-    expect(text).toContain('On screen')
-    expect(text).toContain('1 bag. 3 years. 0 regrets')
+  })
+
+  it('cites a quote by platform, date and where — not by which column it came out of', () => {
+    // PORTED (wave 2): `insight_evidence` holds the words and
+    // `audience_insights.source_video_id` holds the video, so the cite can be
+    // the artboard's. The folded phrase survives for a quote whose video did
+    // not resolve, which is a real state — a superseded insight row.
+    const text = draw()
+    expect(text).toContain('TikTok · 14 Sep · under a category video')
+    expect(text).toContain('TikTok · 11 Sep · a category video, transcript')
+    expect(text).toContain('in the comments')
+  })
+
+  it('nests a video\u2019s on-screen text under the quote taken FROM that video', () => {
+    const text = draw()
+    expect(text).toContain('On-screen text on the same video: 1 bag. 3 years. 0 regrets')
+    // Said ONCE: the loose block-level "On screen" line would read as a second
+    // piece of evidence for the same words.
+    expect(text).not.toContain('On screen “1 bag')
+  })
+
+  it('sets the voices across three columns, the way the artboard does', () => {
+    expect(render(voiceTheme.render(voiceFixture(), 'app', ctx))).toContain('xl:grid-cols-3')
+  })
+
+  it('draws the on-camera count as a figure carrying its own basis (D15)', () => {
+    const text = draw()
+    expect(text).toContain('17 said it on camera')
+    expect(text).toContain('of the 120 quotes behind this theme, counted over the whole update rather than over this month')
+    // Once, not twice: the sentence form is for the arm where the numbers are
+    // absent.
+    expect(text.split('said on camera rather than typed')).toHaveLength(1)
+  })
+
+  it('prints the month the share moved from, and rules the bar there against a NAMED axis', () => {
+    const text = draw()
+    expect(text).toContain('130 of 1,388 videos this month · Aug 2026 6.8% of 1,200')
+    expect(text).toContain('rule at Aug 6.8% · Sep 9.4%')
+    // The artboard draws 9.4% at 62.7% of the bar and never says against what.
+    expect(text).toContain('share of the category videos, axis to 15%')
+  })
+
+  it('captions the monthly line with each month\u2019s own reading', () => {
+    expect(draw()).toContain('share of the category videos · Jul 5.9% · Aug 6.8% · Sep 9.4%')
+  })
+
+  it('stops cutting the theme\u2019s name to 28 characters on the chart', () => {
+    // A theme's label is the model's words; truncating them is the product
+    // editing them. The chart sits in its own column now and has the room.
+    const long = refusedVoiceFixture()
+    expect(draw(long)).toContain('Admiration for personal resilience')
+    expect(draw(long)).not.toContain('Admiration for personal resi…')
   })
 
   it('says nothing about speech when no video carries any', () => {
@@ -100,8 +151,15 @@ describe('voiceTheme', () => {
     expect(text).toContain('No video behind this theme carries readable speech')
   })
 
-  it('counts the withheld evidence and refuses to quote it', () => {
-    expect(draw()).toContain('4 comments describe who these commenters are — counted, not quoted')
+  it('counts the withheld evidence, refuses to quote it, and says so at zero too', () => {
+    expect(draw()).toContain('Who these commenters are — counted, not quoted')
+    expect(draw()).toContain('4 comments describe who these commenters are and are counted rather than quoted.')
+    // PORTED (wave 2): the line printed only when there was something to
+    // count, so at zero a reader could not tell "nothing was withheld" from
+    // "we do not do this".
+    const none = voiceFixture()
+    expect(draw({ ...none, theme: { ...none.theme, withheld: 0 } }))
+      .toContain('Nothing behind this theme describes who the commenters are.')
   })
 
   it('links to the conclusion rather than rebuilding Market’s list here (decision Q)', () => {
@@ -112,11 +170,15 @@ describe('voiceTheme', () => {
     expect(text).not.toContain('What we concluded this month')
   })
 
-  it('offers Track this, Ask about this and the videos behind it', () => {
+  it('offers Track this as a primary button, Ask about this beside it, and the videos in the footer', () => {
     const text = draw()
-    expect(text).toContain('Track this →')
-    expect(text).toContain('Ask about this →')
-    expect(text).toContain('The 130 videos behind it →')
+    const markup = render(voiceTheme.render(voiceFixture(), 'app', ctx))
+    expect(text).toContain('Track this')
+    expect(text).toContain('Ask about this')
+    expect(text).toContain('The 130 videos behind this →')
+    // The artboard's green primary. The green does four jobs in this product
+    // and the page's primary action is one of them.
+    expect(markup).toContain('bg-primary')
   })
 
   it('carries the reader’s whole selection into the search', () => {
@@ -179,7 +241,7 @@ describe('voiceTheme', () => {
   })
 
   it('hands its quotes up as refs, so a snapshot freezes ids and not words', () => {
-    expect(blockAnswers(voiceTheme, voiceFixture()).quotes).toEqual(['e:1', 'e:2'])
+    expect(blockAnswers(voiceTheme, voiceFixture()).quotes).toEqual(['e:1', 'e:2', 'e:3'])
   })
 
   it('says which of the two silences it is when nothing can be opened', () => {

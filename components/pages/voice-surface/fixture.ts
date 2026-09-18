@@ -181,18 +181,35 @@ export function voiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurface
           { mood: 'negative', label: 'Cold', videos: 201, judged: 1112, pct: 18 },
         ],
         judged: 1112,
-        verdict: verdict({ objectKind: 'mood', objectId: 'negative', objectLabel: 'Cold', state: 'no_clear_change', changePts: 2 }),
+        // THE MOOD VERDICT'S TWO SIDES ARE JUDGED VIDEOS, not the theme's. It
+        // inherited the theme's 130-of-1,388 and its 82-of-1,200, so the block
+        // printed the cold share's baseline as a count of a different thing.
+        verdict: verdict({
+          objectKind: 'mood', objectId: 'negative', objectLabel: 'Cold', state: 'no_clear_change', changePts: 2,
+          value: { k: 201, n: 1112 }, baseline: { k: 168, n: 1050 },
+        }),
       },
       toneNote: null,
       onCamera: '17 of the 120 quotes behind this theme were said on camera rather than typed — counted over the whole update, not over this month.',
+      onCameraSaid: 17,
+      onCameraOf: 120,
       quotes: [
         { ref: 'e:1', text: 'Three winters on the bike and the seams are still perfect. The zip, less so.' },
-        { ref: 'e:2', text: 'Nach 14 Monaten ist der Reißverschluss hin', lang: 'de', english: 'After 14 months the zip is done' },
+        { ref: 'e:2', text: 'I have had this bag through two Cape Town winters and it is the only one that never leaked' },
+        { ref: 'e:3', text: 'Nach 14 Monaten ist der Reißverschluss hin', lang: 'de', english: 'After 14 months the zip is done' },
       ],
-      quoteCites: ['in the comments', 'in the comments'],
+      // PLATFORM · DATE · WHERE, the artboard's cite, which the page can say
+      // now that a quote is joined to the video it was written under. The
+      // third is the shape a quote whose video did not resolve still takes.
+      quoteCites: ['TikTok · 14 Sep · under a category video', 'TikTok · 11 Sep · a category video, transcript', 'in the comments'],
+      quoteOnScreen: [null, '1 bag. 3 years. 0 regrets', null],
       quotesOf: 182,
       spoken: { text: 'One bag, three years, no regrets.', cite: 'TikTok · 11 Sep · a category video', href: 'https://example.test/v' },
-      onScreen: { text: '1 bag. 3 years. 0 regrets', cite: 'TikTok · 11 Sep · a category video', href: null },
+      // NULL, and that is the ported behaviour: this video's on-screen text is
+      // nested under the quote taken FROM that video (`quoteOnScreen`), and the
+      // loader drops the loose block-level copy so it is not read as a second
+      // piece of evidence.
+      onScreen: null,
       withheld: 4,
       conclusionHref: '/dashboard/market?theme=t1',
       videosHref: '/dashboard/videos?theme=t1',
@@ -292,6 +309,8 @@ export function refusedVoiceFixture(over: Partial<VoiceSurfaceData> = {}): Voice
       tone: null,
       toneNote: 'How this audience’s month was received is not recorded month by month for this workspace yet.',
       onCamera: null,
+      onCameraSaid: null,
+      onCameraOf: null,
       spoken: null,
       onScreen: null,
       notes: ['No video behind this theme carries readable speech or on-screen text.'],

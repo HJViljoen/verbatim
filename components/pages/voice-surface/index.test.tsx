@@ -85,7 +85,7 @@ describe('VoiceSurfacePage', () => {
 
   it('prints everything the blocks hold — the evidence at the bottom of the longest one included', () => {
     const text = renderText(<VoiceSurfacePage data={voiceFixture()} params={{}} />)
-    expect(text).toContain('Track this →')
+    expect(text).toContain('Track this')
     expect(text).toContain('Have we seen this before?')
     expect(text).toContain('A video can carry more than one group')
   })
