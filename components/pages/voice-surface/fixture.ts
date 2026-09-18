@@ -196,16 +196,31 @@ export function voiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurface
       onCamera: '17 of the 120 quotes behind this theme were said on camera rather than typed — counted over the whole update, not over this month.',
       onCameraSaid: 17,
       onCameraOf: 120,
+      // SIX, WHICH IS WHAT `THEME_QUOTES` ALLOWS AND WHAT THE ARTBOARD DRAWS.
+      // Three filled one row of the three-column grid, so the second row —
+      // its gutter, its baseline against the cite block, and the height the
+      // tile comes out at — was in no screenshot anybody reviewed.
       quotes: [
         { ref: 'e:1', text: 'Three winters on the bike and the seams are still perfect. The zip, less so.' },
         { ref: 'e:2', text: 'I have had this bag through two Cape Town winters and it is the only one that never leaked' },
         { ref: 'e:3', text: 'Nach 14 Monaten ist der Reißverschluss hin', lang: 'de', english: 'After 14 months the zip is done' },
+        { ref: 'e:4', text: 'The strap padding is the only reason I still carry it two years in' },
+        { ref: 'e:5', text: 'Everyone in the thread says the zip is a known issue on this model' },
+        { ref: 'e:6', text: 'Mine soaked through on one cycle home and theirs did not' },
       ],
       // PLATFORM · DATE · WHERE, the artboard's cite, which the page can say
       // now that a quote is joined to the video it was written under. The
-      // third is the shape a quote whose video did not resolve still takes.
-      quoteCites: ['TikTok · 14 Sep · under a category video', 'TikTok · 11 Sep · a category video, transcript', 'in the comments'],
-      quoteOnScreen: [null, '1 bag. 3 years. 0 regrets', null],
+      // third is the shape a quote whose video did not resolve still takes,
+      // and the last is a quote under a tracked rival's own post.
+      quoteCites: [
+        'TikTok · 14 Sep · under a category video',
+        'TikTok · 11 Sep · a category video, transcript',
+        'in the comments',
+        'YouTube · 12 Sep · under a category video',
+        'Reddit · 8 Sep · under a category video',
+        'Instagram · 5 Sep · under a Cotopaxi post',
+      ],
+      quoteOnScreen: [null, '1 bag. 3 years. 0 regrets', null, null, 'Zip test: 400 cycles, no failure', null],
       quotesOf: 182,
       // A DIFFERENT VIDEO FROM ANY THE QUOTES CAME OUT OF. Quote 2 is cited
       // "TikTok · 11 Sep · a category video, transcript" — an extract of that

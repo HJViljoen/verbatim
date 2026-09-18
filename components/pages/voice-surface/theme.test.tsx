@@ -19,7 +19,7 @@ describe('voiceTheme', () => {
   // and a count with a definite article and no denominator on every other.
   // Rendered on production: Össur "0 of the voices", Sealand "6 of the voices".
   it('names the voices against the n behind the theme, and says "Voices" when there are none', () => {
-    expect(draw()).toContain('3 of 182 voices')
+    expect(draw()).toContain('6 of 182 voices')
     expect(draw()).not.toContain('of the voices')
 
     const none = voiceFixture()
@@ -35,7 +35,7 @@ describe('voiceTheme', () => {
     // than inventing a denominator.
     const unknown = voiceFixture()
     unknown.theme.quotesOf = null
-    expect(draw(unknown)).toContain('3 voices')
+    expect(draw(unknown)).toContain('6 voices')
   })
 
   it('renders in all three modes and keeps the copy contract', () => {
@@ -126,8 +126,15 @@ describe('voiceTheme', () => {
     expect(text).not.toContain('On screen “1 bag')
   })
 
-  it('sets the voices across three columns, the way the artboard does', () => {
+  it('sets the voices across three columns and fills both rows of them', () => {
     expect(render(voiceTheme.render(voiceFixture(), 'app', ctx))).toContain('xl:grid-cols-3')
+    // `THEME_QUOTES` is six and the artboard draws two rows of three. With
+    // three in the fixture the second row — its gutter, its baseline against
+    // the cite block, the height the tile comes out at — was in no screenshot.
+    expect(voiceFixture().theme.quotes).toHaveLength(6)
+    const text = draw()
+    expect(text).toContain('Instagram · 5 Sep · under a Cotopaxi post')
+    expect(text).toContain('On-screen text on the same video: Zip test: 400 cycles, no failure')
   })
 
   it('draws the on-camera count as a figure carrying its own basis (D15)', () => {
@@ -289,7 +296,7 @@ describe('voiceTheme', () => {
   })
 
   it('hands its quotes up as refs, so a snapshot freezes ids and not words', () => {
-    expect(blockAnswers(voiceTheme, voiceFixture()).quotes).toEqual(['e:1', 'e:2', 'e:3'])
+    expect(blockAnswers(voiceTheme, voiceFixture()).quotes).toEqual(['e:1', 'e:2', 'e:3', 'e:4', 'e:5', 'e:6'])
   })
 
   it('says which of the two silences it is when nothing can be opened', () => {
