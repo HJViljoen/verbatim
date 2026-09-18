@@ -27,14 +27,23 @@ import { INTERPRETATION_LABEL } from '@/lib/prose/interpret'
  * over its `7fr 5fr` split, at the artboard's own 12.5px body and 9.5px mono
  * trails.
  *
- * IT REPLACES THE 58px COVER, NOT THE WRITTEN PAGES. The mock has no cover
- * slide and the port removes it. What it does NOT remove is the model's work:
- * the "In short" page, the finding pages and the method page are the substance
- * of a brief, and a one-pager that deleted them to reach "1 / 1" would be a
- * mock-shaped artefact with the research thrown away. So the sheet ABSORBS the
- * four borrowed sections it draws (`ld.month`, `ld.category`, `ld.subjects`,
- * `ld.moves` — those slides are dropped, never printed twice) and leads the
- * document; the footer then reads "1 / N" and N is honest. See
+ * IT REPLACES THE 58px COVER AND NOTHING ELSE. The mock has no cover slide and
+ * the port removes it — it is a page a director had to turn past. What it does
+ * NOT remove is anything else: the "In short" page, the finding pages, the
+ * method page and EVERY borrowed section keep their slides, and the sheet leads
+ * the document as a SUMMARY of them.
+ *
+ * IT ABSORBS NO SECTION, and an earlier draft of this file did. The sheet packs
+ * a FRAGMENT of four borrowed blocks, and those blocks carry more than the
+ * fragment: `overview.sentence` is also the month's own reading, the anomaly
+ * line (the `anomaly-check` step's output) and the voices; `overview.category`
+ * is also the kinds, the movers, the mood, Reddit and the register's quiet
+ * flags; `overview.moves` is also every row past the second. Dropping their
+ * slides deleted that substance from the document in silence, and with it each
+ * section's `empty` sentence — the one line that names the missing input and
+ * who closes it, which is what a blocked reading most needs to print. So the
+ * pagination is untouched, and the count the deck prints is the count
+ * `documentViewerPages` gives the viewer header and the Studio bar. See
  * `status/E-leadership.md`, deviation L1.
  *
  * EVERY NUMBER COMES OFF THE FROZEN OVERVIEW. `data.surfaces.overview` is the
@@ -644,10 +653,6 @@ export function leadershipSheetData(data: DocumentSnapshotData): OverviewData | 
   const overview = (data.surfaces ?? {}).overview
   return isLeadershipOverview(overview) ? overview : null
 }
-
-/** The sections the sheet DRAWS, and which therefore print no slide of their
- *  own. A key not in this set keeps its slide — `ld.standing` does. */
-export const SHEET_SECTIONS: ReadonlySet<string> = new Set(['ld.month', 'ld.category', 'ld.subjects', 'ld.moves'])
 
 export function LeadershipSheet({
   data, overview, date, page, pages,

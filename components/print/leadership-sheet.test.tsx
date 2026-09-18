@@ -4,9 +4,11 @@ import { markupText, render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { overviewFixture, refusedFixture } from '@/components/pages/overview/fixture'
 import type { OverviewData } from '@/lib/pages/overview'
+import { documentSlides } from '@/lib/reports/documents/compose'
+import { documentViewerPages } from '@/lib/reports/viewer'
 import type { DocumentSnapshotData } from '@/lib/reports/documents/types'
 import { DocumentDeck } from './document-deck'
-import { LeadershipSheet, SHEET_SECTIONS, isLeadershipOverview, leadGap, leadSubject, leadershipSheetData } from './leadership-sheet'
+import { LeadershipSheet, isLeadershipOverview, leadGap, leadSubject, leadershipSheetData } from './leadership-sheet'
 
 // The leadership one-pager (Block D wave 2, E-leadership).
 //
@@ -194,23 +196,32 @@ describe('which rows the figure cards are about', () => {
 })
 
 describe('the sheet inside the deck', () => {
-  it('replaces the cover and absorbs the sections it draws', () => {
+  it('replaces the cover, and takes no other slide with it', () => {
     const markup = render(<DocumentDeck data={LEAD} date="18 Sep 2026" />)
     const words = markupText(markup)
-    // The 58px cover is gone …
+    // The 58px cover is gone — it is the page a director had to turn past …
     expect(markup).not.toContain('text-[58px]')
-    // … and "The month" / "Your subjects" / "What was decided" / "The category"
-    // print ONCE, on the sheet, never again as their own slides.
-    expect(words.match(/What was decided/g) ?? []).toHaveLength(0)
-    // The standings slide is NOT absorbed and keeps its own sheet.
-    expect(words).toContain('Where you stand')
+    // … and EVERY borrowed section still prints its own slide. The sheet packs
+    // a fragment of four of them and those blocks carry more than the
+    // fragment: the month's own reading and its anomaly line, the category's
+    // kinds and mood and quiet flags, every move row past the second. A
+    // one-pager summarises the pages behind it; it does not delete them.
+    for (const title of ['The month', 'The category', 'Your subjects', 'What was decided', 'Where you stand']) {
+      expect(words).toContain(title)
+    }
   })
 
-  it('numbers the sheet 1 of the pages that actually follow it', () => {
-    // in_short + the sheet + ld.standing + method = four.
+  it('numbers the sheet 1 of the count the viewer header and the Studio bar print', () => {
+    // WP19's bug, in the shape this package could have re-opened: the deck
+    // paginates and `documentViewerPages` counts, and a client reads the
+    // second above a document printed by the first ("built 18 Sep 2026 · N
+    // pages"). One lead sheet plus one slide per layout entry, both sides.
     const words = markupText(render(<DocumentDeck data={LEAD} date="18 Sep 2026" />))
-    expect(words).toContain('1 / 4')
-    expect(words).toContain('4 / 4')
+    const pages = documentViewerPages(LEAD)
+    expect(pages).toBe(documentSlides(LEAD).length + 1)
+    expect(pages).toBe(8)
+    expect(words).toContain('1 / 8')
+    expect(words).toContain('8 / 8')
   })
 
   it('falls back to the cover for every other template, and for a snapshot with no Overview', () => {
@@ -260,7 +271,21 @@ describe('the sheet inside the deck', () => {
     }
   })
 
-  it('absorbs exactly the four sections the sheet draws', () => {
-    expect([...SHEET_SECTIONS].sort()).toEqual(['ld.category', 'ld.month', 'ld.moves', 'ld.subjects'])
+  // The section's own readiness sentence — "we have not recorded X, and here is
+  // who closes it" (`briefSections`, lib/reports/documents/load-reading.ts) —
+  // is on `section.empty` and is printed by `SectionBody` in the slide's place.
+  // It survives because the slide does: on a workspace with no subjects and no
+  // decisions, which is Sealand today, the brief keeps the one line that tells
+  // a reader what to do about it.
+  it('keeps each blocked section’s readiness sentence, which names the input and its owner', () => {
+    const blocked: DocumentSnapshotData = {
+      ...LEAD,
+      sections: LEAD.sections!.map((s) =>
+        s.id === 'ld.subjects' ? { ...s, empty: 'Name your subjects in Settings — an operator confirms them.' } : s,
+      ),
+      surfaces: { overview: refusedFixture() },
+    }
+    const words = markupText(render(<DocumentDeck data={blocked} date="18 Sep 2026" />))
+    expect(words).toContain('Name your subjects in Settings — an operator confirms them.')
   })
 })

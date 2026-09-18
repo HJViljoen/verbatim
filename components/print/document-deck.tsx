@@ -2,7 +2,7 @@ import { Fragment, type ReactNode } from 'react'
 import { QuoteBlock } from '@/components/quote-block'
 import { BlockSlot } from './block-slot'
 import { DeckFooter } from '@/components/print/report-deck'
-import { LeadershipSheet, SHEET_SECTIONS, leadershipSheetData } from '@/components/print/leadership-sheet'
+import { LeadershipSheet, leadershipSheetData } from '@/components/print/leadership-sheet'
 import { Slide } from '@/components/print/slide'
 import { Sparkline } from '@/components/charts/sparkline'
 import { CountBadge, MovementBadge } from '@/components/delta-badge'
@@ -872,21 +872,31 @@ function SectionBody({ section, data }: { section: DocBriefSection; data: Docume
 }
 
 export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: DocumentSnapshotData; date?: string }) {
-  // THE LEADERSHIP ONE-PAGER LEADS ITS OWN DOCUMENT (Block D wave 2,
-  // E-leadership). The artboard is ONE sheet with no cover, so where the sheet
-  // can be drawn it REPLACES the 58px cover and absorbs the four borrowed
-  // sections it packs (`SHEET_SECTIONS`), whose slides are then not printed a
-  // second time. Everything the model wrote — the short read, the findings, the
-  // method page — and the standings slide follow it, so the page count stays
-  // honest rather than being forced to "1 / 1". Null for every other template
-  // and for any snapshot with no frozen Overview, where the deck is exactly as
-  // it was.
+  // THE LEADERSHIP ONE-PAGER TAKES THE COVER'S PLACE, AND NOTHING ELSE'S
+  // (Block D wave 2, E-leadership). The artboard is one sheet with no cover, so
+  // where the sheet can be drawn it REPLACES the 58px cover — a page a director
+  // had to turn past — and leads the document as a SUMMARY of it.
+  //
+  // IT ABSORBS NO SECTION. It packs a fragment of four borrowed blocks (the
+  // gap and one attention level and the subjects table and two move readings)
+  // and those blocks carry more than the fragment: `overview.sentence` is also
+  // the month's own reading, the anomaly line and the voices;
+  // `overview.category` is also the kinds, the mood, Reddit and the register's
+  // quiet flags; `overview.moves` is also every row past the second. A sheet
+  // that dropped their slides would delete that substance from the document
+  // silently — and with it each section's `empty` sentence, which is the one
+  // line that names the missing input and who closes it, exactly when the
+  // reading is blocked. A one-pager is a summary of the pages behind it, which
+  // is what a one-pager usually is.
+  //
+  // So the pagination is untouched: one slide per layout entry plus the lead
+  // sheet, which is `documentSlides(data).length + 1` — the same arithmetic
+  // `documentViewerPages` (lib/reports/viewer.ts) does for the viewer header
+  // and the Studio bar, so the count the client reads and the count the deck
+  // prints cannot diverge. Null for every other template and for any snapshot
+  // with no readable frozen Overview, where the deck is exactly as it was.
   const sheet = leadershipSheetData(data)
-  const slides = documentSlides(data).filter(
-    (s) => !(sheet && sectionOfSlide(data, s.keys[0]) && SHEET_SECTIONS.has(sectionOfSlide(data, s.keys[0])!.id)),
-  )
-  // The sheet takes the cover's place in the count, so the arithmetic is the
-  // same either way.
+  const slides = documentSlides(data)
   const pages = slides.length + 1
   // WP19: the stamp rides every sheet, the way the weekly deck's rule does —
   // a reader of a PDF has no masthead to scroll back to, and a brief whose
