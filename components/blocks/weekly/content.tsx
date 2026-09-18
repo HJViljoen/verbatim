@@ -196,7 +196,11 @@ export const weeklyContent: Block<WeeklyData> = {
                 className={mode === 'email' ? undefined : 'mt-0.5 text-[12.5px]'}
               >
                 {m.label} — <span data-copy="figure">{m.pct == null ? `${fmtInt(m.k)} of ${fmtInt(m.n)}` : `${fmtPct(m.pct)} · ${fmtInt(m.k)} of ${fmtInt(m.n)}`}</span>{' '}
-                <BlockMovement verdict={m.verdict} unit="pts" mode={mode} />
+                {/* `good="neutral"`, for the reason WR1's badge is: "Zips
+                    failing after a year — +1.9 pts" is not good news because
+                    the number went up, and the heading over these rows is
+                    deliberately direction-free. */}
+                <BlockMovement verdict={m.verdict} unit="pts" mode={mode} good="neutral" />
               </div>
             ))}
           </Rail>

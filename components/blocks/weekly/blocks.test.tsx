@@ -585,6 +585,13 @@ describe('WR5 · for content', () => {
     expect(text).not.toContain('both against')
   })
 
+  // The heading over these rows is deliberately direction-free, and a theme's
+  // share going up is not good news for having gone up.
+  it('paints what moved most as movement, not as good news', () => {
+    const markup = render(block.render(weeklyFixture(), 'email', ctx))
+    expect(markup).not.toContain(EMAIL.greenTint)
+  })
+
   it('keeps the inbox’s empty state verbatim rather than dropping the section', () => {
     const text = renderText(block.render(formingFixture(), 'app', ctx))
     expect(text).toContain('Nothing is waiting for a reply from this update.')
