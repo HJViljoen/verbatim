@@ -2236,7 +2236,16 @@ async function planPassABatches(clientId: string, runId: string, force: boolean,
  *     they typed.
  *
  *  4. FROZEN SNAPSHOT QUOTES. `report_snapshots.evidence_ids` repeats every ref
- *     in the stored artefact (lib/renderables/quotes-freeze.ts). Two of the ref
+ *     in the stored artefact (lib/renderables/quotes-freeze.ts) — SINCE
+ *     2026-08-31, and the qualifier is load-bearing. Before that fix
+ *     `createSnapshot` froze the workings' quotes and threw their refs away, so
+ *     a pre-T11 snapshot's `evidence_ids` carries only what its PAGES cite, and
+ *     this protection is exactly as complete as
+ *     scripts/backfill-evidence-ids.ts --apply left it. The alternative is
+ *     `collectQuoteRefs` over `data` / `workings`, which means selecting every
+ *     snapshot's whole jsonb on every run — not worth it for a window that has
+ *     been repaired and a write path that has been fixed. Named here so the
+ *     dependency is not rediscovered as a bug. Two of the ref
  *     kinds name a row this prune can delete, and both are id-exact:
  *     `e:<insight_evidence.id>`, which cascades from `audience_insights` and so
  *     resolves back through it, and `p:<language_samples.id>`, which IS one of
