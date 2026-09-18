@@ -5,7 +5,7 @@ import { BlockMovement } from '@/components/blocks/movement'
 import { DirectionWord, overviewSubjects } from '@/components/pages/overview/subjects'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, fmtPct } from '@/lib/format'
-import { gapBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
+import { gapBasisLine, gapLine, gapPrintsLevel, type Gap } from '@/lib/reading/gap'
 import type { OverviewData, SideReading, SubjectRow } from '@/lib/pages/overview'
 import { sentLineFor } from '@/lib/pages/overview'
 import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
@@ -104,7 +104,7 @@ export function monthlySubjectsEmail(data: OverviewData, ctx: BlockContext): Rea
       {leadGap ? (
         <div style={{ marginTop: 6, marginBottom: 4 }}>
           <div style={{ fontFamily: FONT.sans, fontSize: 15, lineHeight: '1.5', color: EMAIL.ink }}>
-            {leadGap.objectLabel} — <GapLevel line={gapLine(leadGap)} />
+            {leadGap.objectLabel} — <GapLevel gap={leadGap} />
           </div>
           {/* THE BASIS LINE IS NOT MARKED AS A LEVEL, and that is the point of
               it. "19 points apart in June (band 8.1)" is a dated, banded
@@ -157,9 +157,16 @@ export function monthlySubjectsEmail(data: OverviewData, ctx: BlockContext): Rea
  * no level at all and there is nothing for rule (b) to check the evidence of.
  * So the marker goes on exactly when a denominator was printed, which is the
  * condition the rule is about.
+ *
+ * AND IT ASKS THE GAP, NOT THE STRING (the fix pass, review finding [Minor]).
+ * The marker used to be `/\bof\s\d/.test(line)` — true exactly when rule (b)
+ * would already pass, so the rule could never fail here and a `levelOf` that
+ * printed "31% (84 videos)" would have dropped the marker instead of turning
+ * the test red. `gapPrintsLevel` reads the same fields `levelOf` reads.
  */
-function GapLevel({ line }: { line: string }) {
-  return /\bof\s\d/.test(line) ? <span data-copy="level">{line}</span> : <span>{line}</span>
+function GapLevel({ gap }: { gap: Gap }) {
+  const line = gapLine(gap)
+  return gapPrintsLevel(gap) ? <span data-copy="level">{line}</span> : <span>{line}</span>
 }
 
 /** One subject: the name and both change badges, then the three sides in
