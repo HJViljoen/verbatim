@@ -129,8 +129,15 @@ export function unclassifiedContentBriefFixture(): ContentBriefData {
 // ── the ledger, with a dismissal on it ─────────────────────────────────────
 
 /**
- * Market's own fixture plus the one row it has never carried: a piece of advice
- * the client DISMISSED.
+ * Market's own fixture plus the rows it has never carried: two pieces of advice
+ * still OPEN, and one the client DISMISSED.
+ *
+ * MARKET'S THREE ROWS ARE TWO `acted_on` AND ONE `new`, WHICH IS PRODUCTION
+ * TODAY — and once `toMake` stopped calling finished work a thing to make
+ * (design review 2), this fixture drew one card on a page whose subject is
+ * three. The two open rows are here rather than in Market's fixture because
+ * they exist for this block: a card carries a reading, a quote and an argument,
+ * and Market's table draws none of the three.
  *
  * `content.make`'s stop card is the mock's "What not to make", and the ledger
  * fixture next door has three rows and no dismissal — so the card had no state
@@ -139,6 +146,78 @@ export function unclassifiedContentBriefFixture(): ContentBriefData {
  */
 export function ledgerWithDismissal(): MarketSurfaceData {
   const base = marketFixture()
+  const open: AdviceRow[] = [
+    {
+      lineageId: 'L-repair-clip',
+      recommendationId: 'r-repair-clip',
+      title: 'Answer the seam question in a clip of its own',
+      kind: 'content_strategy',
+      firstMade: '2026-07-15',
+      timesMade: 2,
+      monthsRepeated: 2,
+      repeatedWithinMonth: false,
+      status: 'acknowledged',
+      statusLabel: 'Acknowledged',
+      decidedAt: '2026-07-20T09:00:00.000Z',
+      number: 5,
+      basedOn: ['mi-11'],
+      grounded: groundingFor({
+        basedOn: ['ai-11', 'ai-12', 'ai-13'],
+        videoByInsight: new Map([['ai-11', 'v11'], ['ai-12', 'v12'], ['ai-13', 'v13']]),
+        themeIds: ['repair_and_warranty'],
+        audience: LEDGER_AUDIENCE,
+        month: MONTH,
+      }),
+      afterwards: afterwardsFor({
+        decidedAt: '2026-07-20T09:00:00.000Z',
+        targetIds: ['reg-repair'],
+        objectLabel: 'Repair & warranty',
+        series: [
+          { month: '2026-06-01', k: 12, n: 118 },
+          { month: '2026-08-01', k: 16, n: 124 },
+          { month: '2026-09-01', k: 21, n: 130 },
+        ],
+        audience: LEDGER_AUDIENCE,
+      }),
+      why: 'The question arrives as a question and never as a complaint, and nobody in the category answers it where it is asked.',
+      quote: { ref: 'e:ev-11', text: 'Hoe lank hou die naat werklik?', lang: 'af', english: 'How long does the seam actually hold?' },
+    },
+    {
+      lineageId: 'L-fit-sizes',
+      recommendationId: 'r-fit-sizes',
+      title: 'Show the fit on more than one body on camera',
+      kind: 'customer_experience',
+      firstMade: '2026-08-20',
+      timesMade: 1,
+      monthsRepeated: 1,
+      repeatedWithinMonth: false,
+      status: 'in_progress',
+      statusLabel: 'Working on it',
+      decidedAt: '2026-09-01T08:00:00.000Z',
+      number: 6,
+      basedOn: ['mi-12'],
+      grounded: groundingFor({
+        basedOn: ['ai-14', 'ai-15'],
+        videoByInsight: new Map([['ai-14', 'v14'], ['ai-15', 'v15']]),
+        themeIds: ['fit_and_sizing'],
+        audience: LEDGER_AUDIENCE,
+        month: MONTH,
+      }),
+      afterwards: afterwardsFor({
+        decidedAt: '2026-09-01T08:00:00.000Z',
+        targetIds: ['reg-fit'],
+        objectLabel: 'Fit & sizing',
+        series: [
+          { month: '2026-07-01', k: 18, n: 118 },
+          { month: '2026-08-01', k: 19, n: 124 },
+          { month: '2026-09-01', k: 24, n: 130 },
+        ],
+        audience: LEDGER_AUDIENCE,
+      }),
+      why: 'Fit is asked about on every video that shows one body and never on the ones that show two.',
+      quote: null,
+    },
+  ]
   const dismissed: AdviceRow = {
     lineageId: 'L-price',
     recommendationId: 'r-price',
@@ -174,7 +253,7 @@ export function ledgerWithDismissal(): MarketSurfaceData {
     why: 'Price is the subject the category argues about, and the half of that argument you can answer on camera is how long the thing lasts.',
     quote: { ref: 'e:ev-9', text: 'Die sak hou vir ewig, maar die prys is ’n grap', lang: 'af', english: 'The bag lasts forever, but the price is a joke' },
   }
-  const rows = [...base.advice.rows, dismissed]
+  const rows = [...base.advice.rows, ...open, dismissed]
   return {
     ...base,
     advice: { ...base.advice, rows, actedLine: actedLine(3, 64), repeatLine: repeatLine(rows), acted: 3 },

@@ -7,6 +7,7 @@ import { render, renderText } from '@/lib/test/render'
 import { PRIVACY_LINE, REDDIT_CAP_LINE } from '@/lib/reading/method'
 import { BRIEF_UNIT, LABEL_RULE, PLAYBOOK_EMPTY, PLAYBOOK_GONE, RECORD_GONE } from '@/lib/pages/content-brief'
 import { CONTENT_BRIEF_BLOCKS, contentMake, contentPlaybook, contentRecord } from './index'
+import { toMake } from './make'
 import {
   contentBriefFixture,
   emptyContentBriefFixture,
@@ -196,6 +197,21 @@ describe('content.make — the mock’s page 2', () => {
     expect(text).toContain('03')
     expect(text).toContain('What not to make')
     expect(text).toContain('Lead with price comparisons against Ottobock')
+  })
+
+  // WORK ALREADY DONE IS NOT A THING TO MAKE (design review 2, code review 2).
+  // The ledger is oldest-first and `acted_on` reads "Done", so the three oldest
+  // rows won regardless of status and a client read two finished items as their
+  // top two instructions.
+  it('leads with what is still open, never with what is already done', () => {
+    const shown = toMake(data.advice.rows)
+    expect(shown.length).toBeGreaterThan(0)
+    for (const r of shown) expect(r.status).not.toBe('acted_on')
+    for (const r of shown) expect(r.status).not.toBe('dismissed')
+    // And the ledger it was taken from does carry Done rows, so the filter is
+    // being exercised rather than passing on an absence.
+    expect(data.advice.rows.some((r) => r.status === 'acted_on')).toBe(true)
+    expect(shown.map((r) => r.title)).not.toContain('Lead with repairability, not recycling, in the next campaign')
   })
 
   it('marks the model’s own words as stored, naming the call that wrote them', () => {

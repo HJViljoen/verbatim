@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 
+import { directionRe } from '../test/copy-contract'
 import { AFTERWARDS_MIN_READINGS, afterwardsFor, audiencePhrase, groundingFor } from './afterwards'
 
 const videoMap = (pairs: [string, string | null][]) => new Map<string, string | null>(pairs)
@@ -157,6 +158,23 @@ describe('afterwardsFor', () => {
     expect(a.months).toEqual(['2026-09-01'])
     expect(a.line).toContain('Aug 2026')
     expect(a.line).toContain('partway through it')
+  })
+
+  // A DECISION DATED THE 1st TOOK THE OTHER ARM, AND THE OTHER ARM SAID
+  // "falls" — which is on the shared movement list, so this sentence (code's
+  // own, unmarked, printed on every ledger row in this state) failed copy
+  // contract rule (c) wherever a block rendered it. Nothing here is a movement
+  // claim; the word was the whole violation.
+  it('uses no movement word for a decision dated the first of a month', () => {
+    const a = afterwardsFor({
+      decidedAt: '2026-08-01',
+      targetIds: ['reg-1'],
+      series: SERIES,
+      audience: 'client',
+    })
+    expect(a.state).toBe('too_soon')
+    expect(a.line).toContain('at the start of it')
+    expect(directionRe().test(a.line)).toBe(false)
   })
 
   it('is too_soon with one reading and names how many it has', () => {
