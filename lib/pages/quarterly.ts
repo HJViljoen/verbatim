@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { READER_FLAGS } from '../calibration'
-import { fmtInt, fullDate, longMonth, monthName, shortDate } from '../format'
+import { fmtInt, fmtPct, fullDate, longMonth, monthName, shortDate } from '../format'
 import type { Quote, Scope } from '../renderables/types'
 import { selectAll } from '../supabase-admin'
 import { quarterChange, QUARTER_UNLOCKS_AT } from '../reading/bands'
@@ -12,16 +12,19 @@ import {
   recordLines,
   refusals,
   refusedSentence,
+  totalPlatformMix,
   type RecordInputs,
   type RecordWindow,
   type Refusal,
 } from '../reading/record'
-import { methodLines, type MethodLines } from '../reading/method'
+import { methodLines, platformShareLine, type MethodLines } from '../reading/method'
+import type { PlatformMix } from '../reading/types'
 import { loadDeckChangeLog, loadSearchPlan, type DeckChangeLog, type SearchPlan } from '../settings/deck-record'
 import { loadWindowReading, readingClient, type WindowReading } from '../reading/read'
 import { isMissingMonthTable } from '../reading/monthly'
 import { isAnswer, type FigureTable as ReadingFigures, type Verdict, type VerdictFlag } from '../reading/verdicts'
-import { gapBetween, inheritRefusal, type Gap, type GapSide } from '../reading/gap'
+import { gapBasisLine, gapBetween, gapLine, inheritRefusal, GAP_WORDS, type Gap, type GapSide } from '../reading/gap'
+import type { Grounding } from '../reading/afterwards'
 import type { OwnPostCensus, SaidAbout } from '../reading/own-posts'
 import { proseFigures } from '../prose/figures'
 import type { MonthStatus } from '../reading/types'
@@ -57,7 +60,9 @@ import { readSubjectWindow } from '../subjects/read'
 import { isMissingSubjects, type SubjectWindowReading } from '../subjects/types'
 import { CLIENT_AUDIENCE } from '../rivals'
 import type { PlanCheckCard } from '../ask/plan-cards'
+import type { HeadToHead } from '../reading/head-to-head'
 import { loadCompetitiveSurface, type CompetitiveSurfaceData, type QuestionRow, type StandingsBlock } from './competitive-surface'
+import type { MoveReading } from '../reading/moves'
 import { loadMarketSurface, type AdviceRow, type ClaimRow, type MarketSurfaceData, type MoveRow } from './market-surface'
 
 /**
@@ -111,10 +116,43 @@ export interface CoverStat {
   /** The token this figure is substituted from on the cover paragraph. */
   token: string
   value: string
+  /**
+   * Whether `value` is a FIGURE or a WORD.
+   *
+   * The artboard's cover card sets its value in mono at 38px, which is right
+   * for "13 pts" and wrong for "comparison refused". Both reach this card:
+   * where the mock prints a magnitude the product sometimes has only the
+   * refusal, and D2's rule is that the word stands alone rather than a
+   * magnitude standing beside it. So the card keeps the mock's LAYOUT and the
+   * renderer sets a word at reading size.
+   */
+  kind: 'figure' | 'word'
   /** What the number is, in the reader's words. */
   label: string
   /** The evidence under it — the denominator, the band, the panel. */
   caption: string
+  /**
+   * A SECOND DATED READING, on its own line where the card carries one.
+   *
+   * The gap card's evidence is two banded differences — this quarter's and the
+   * one before it — and they were joined into one dot-chain with the label,
+   * so the card read "… · 8.1 points apart (band 6) · 7.8 points apart in the
+   * quarter from April (band 5.9)". Two "points apart" figures running
+   * together with nothing between them is the one comparison on this cover a
+   * reader most needs to keep apart; it is also the whole of D1 (the mock
+   * writes the pair as "narrowed from 19 in June" and we refuse that word), so
+   * the second reading has to read as a second reading.
+   */
+  basis?: string
+  /**
+   * The banded step this card carries, where it carries one.
+   *
+   * A `Verdict` and never a magnitude of our own: `MovementBadge` prints
+   * points only where the band was cleared, and the three cards the mock draws
+   * ("−18%", "−3 pts") are exactly the claims that rule refuses on today's
+   * corpus.
+   */
+  verdict?: Verdict | null
 }
 
 export interface CoverPage {
@@ -143,10 +181,33 @@ export interface StandingAdvice {
   age: string
   status: string
   decidedAt: string | null
+  /**
+   * `qr.p2.standingadvice` · "grounded in 412 videos", and the PRUNED sentence
+   * beside it.
+   *
+   * The ledger has carried this since wave 1 (`AdviceRow.grounded`) and the
+   * deck dropped it. `Grounding.line` is the count with the population it is a
+   * count of, named; `Grounding.pruned` is the case the mock has no slot for —
+   * the advice cited evidence and a later update replaced every row of it, so
+   * "0 videos behind it" would be a claim about the evidence where the truth
+   * is about our own re-analysis. Null where nothing was recorded, which is
+   * not the same as zero.
+   */
+  grounded: Grounding | null
 }
 
 export interface ReadPage {
   interpretation: Interpretation
+  /**
+   * `qr.p2.meta` · the card's three facts in one mono line — "7,059 videos
+   * this quarter · 13 updates · 3 monthly readings of 6".
+   *
+   * All three existed and were split across pages 1 and 7; page 2's own meta
+   * was the quarter's label and nothing else. They are on this page because
+   * this is the page that ARGUES, and the size of the corpus an argument rests
+   * on belongs beside the argument.
+   */
+  meta: string
   figures: ReadingFigures
   /** Everything the interpretation may argue from. */
   verdicts: Verdict[]
@@ -292,6 +353,17 @@ export interface CategoryPage {
   kinds: CategoryBlock['kinds']
   kindVerdicts: CategoryBlock['kindVerdicts']
   kindsNote: string | null
+  /**
+   * `qr.p4.kinds`' basis note — how much of the question-and-objection talk
+   * arrives as a Reddit thread.
+   *
+   * `CategoryBlock.reddit` has been built since Block B and this page dropped
+   * it, so the mock's "Reddit 38% of question videos" had a field and no
+   * renderer. It travels with the kind rows because it is what those rows are
+   * a reading OF: a kind mix that is materially one platform's is a different
+   * finding from one spread across four (D15 — a figure without its basis).
+   */
+  reddit: CategoryBlock['reddit']
   attention: CategoryBlock['attention']
   attentionNote: string | null
   mood: CategoryBlock['mood']
@@ -347,6 +419,21 @@ export interface RivalsPage {
   standingsNote: string | null
   questions: QuestionRow[]
   questionsLine: string
+  /**
+   * `qr.p5.h2h` · head to head, then and now — Competitive's own five measures,
+   * passed through (`lib/reading/head-to-head.ts`, wave 1).
+   *
+   * MONTH-SCOPED ON A QUARTERLY DECK, like the rows above it and for the same
+   * reason: the share measures are comment-dated and the engagement, positive
+   * share and own-post rows are dated by a video's upload, so each row names
+   * its own clock. THREE OF THE FIVE CARRY NO BADGE ON PURPOSE — a rate, a
+   * median and a bare count are not proportions, and the product's band is
+   * built for shares. Null where no rival is selected or nothing was read.
+   */
+  headToHead: HeadToHead | null
+  /** Whose videos the questions were asked under — the mock's brand prefix on
+   *  each row. One rival, because `buildQuestions` reads one. */
+  questionsRival: string | null
   rivalsNote: string | null
   dualMention: number | null
   caveat: string
@@ -377,6 +464,31 @@ export interface MovesPage {
    * carried it — never "held N updates".
    */
   plan: PlanCheckCard | null
+  /**
+   * `qr.p6.move1` · the measured reading behind each declared move — Market's
+   * own `readMove` output, matched to the moves this quarter drew.
+   *
+   * ONE READING PER MOVE, NOT A SECOND MEASUREMENT. `MarketSurfaceData
+   * .readings` is already built and already banded; the deck takes the ones
+   * whose move it is printing and draws them. `MoveReading.chartNote` is the
+   * refusal a line gets below three readings, and it is printed where the mock
+   * draws the chart — a chart is a direction claim too.
+   */
+  readings: MoveReading[]
+  /**
+   * WHICH SIDE A CONTROL ROW WAS READ ON, in the reader's words, keyed by the
+   * audience the verdict carries.
+   *
+   * A control row is drawn as `objectLabel` and nothing else, so a move's card
+   * printed "Repair & warranty · 153 of 1,388" directly above "Repair &
+   * warranty · 41 of 142" with nothing saying which audience each was. The
+   * control audiences are the whole reason this page may report what happened
+   * after a move without claiming the move caused it; unlabelled they report
+   * nothing a reader can use. `audienceSideIn` already composes exactly these
+   * words and was called by `unsettledItems` alone; the map is built once here
+   * because the block has no `OverviewData` to resolve a key against.
+   */
+  sideOf: Record<string, string>
 }
 
 // WHAT THE METHOD PAGE PRINTS, AND NOTHING ELSE. `changePts`, `bandPts` and
@@ -405,7 +517,7 @@ export interface MethodPage {
   flags: QuarterFlag[]
   flagsNote: string | null
   /** The corpus in numbers, row by row. */
-  numbers: { label: string; value: string; note?: string }[]
+  numbers: MethodNumberRow[]
   unit: string
   /** The comparisons this artefact asked for and did not draw, and why —
    *  printed, not promised (lib/reading/record.ts `refusedSentence`). */
@@ -433,6 +545,48 @@ export interface UnsettledItem {
   body: string
 }
 
+/**
+ * The part of a move's ledger sentence a surface that has already printed its
+ * title and its subject may still add.
+ *
+ * `moveLedgerLine` (lib/pages/market-surface.ts) composes a self-contained row
+ * for a LIST — "<title> · <subject> · tracked 14 Sep · first scoring lands
+ * with the October reading." — and both page 6's card and page 8's wait head
+ * their entry with the title, so printed whole it said the title and the
+ * subject twice inside one entry. The segments are dropped by exact equality
+ * with the fields the surface drew them from, so if the line is ever
+ * recomposed the filter matches nothing and the whole sentence prints rather
+ * than a cut one.
+ */
+export function moveTail(move: { title: string; on: string; line: string }): string {
+  const parts = move.line.split(' · ')
+  const tail = parts.filter((p) => p !== move.title && p !== move.on)
+  return tail.length > 0 ? tail.join(' · ') : move.line
+}
+
+/**
+ * How many rows page 8's left column has room for, measured.
+ *
+ * A SHEET IS A FIXED BOX AND NEITHER LIST IS BOUNDED. One wait is produced per
+ * subject whose quarter column could not be drawn, per move with no reading
+ * and per dormant theme, and one item per comparison that was drawn and did
+ * not clear — so a workspace whose quarter mostly could not be read fills this
+ * page twice over, and `overflow: hidden` took the surplus in silence. Both
+ * numbers were measured at 1440 and 1024 against the slide's own 167mm box on
+ * every fixture state. The budget is shared because the column is.
+ */
+const ITEMS_SHOWN = 3
+const ROWS_SHOWN = 5 
+
+export interface UnsettledWait {
+  /** The open question, as a heading. */
+  title: string
+  /** Why it is open — the artboard's badge. */
+  why: string
+  /** The sentence under it, or null where the heading and the badge say it. */
+  line: string | null
+}
+
 export interface UnsettledPage {
   items: UnsettledItem[]
   /** What was never ASKED, as against what was asked and could not be
@@ -442,7 +596,39 @@ export interface UnsettledPage {
    *  — on the same artefact whose other pages say the quarter-on-quarter
    *  reading is not recorded. Null when both halves were attempted. */
   notAsked: string | null
-  waiting: string[]
+  /**
+   * `qr.p8.waiting` — the artboard's named open questions, each with the
+   * badge that says why it is open.
+   *
+   * IT IS NOT A LIST OF SENTENCES. The artboard draws a headline and a badge
+   * per wait ("Whether your own durability share really moved" · `too few to
+   * compare`) so a reader scans three named questions; built as bare strings
+   * the page printed three unheaded paragraphs in a row and a reader had to
+   * read each to find out what it was about. The words changed with wave 2 —
+   * these are subject-level waits now, not the overview's series notes — and
+   * the LAYOUT is still the mock's, which is what "the mock is the spec"
+   * governs.
+   *
+   * `why` is a STATE, never a direction: it says what is missing, and every
+   * one of them is code's own vocabulary.
+   */
+  waiting: UnsettledWait[]
+  /**
+   * How many waits did NOT fit on the page, and where they are named.
+   *
+   * A SHEET IS A FIXED BOX AND THE LIST IS NOT BOUNDED. A workspace whose
+   * quarter comparisons mostly could not be drawn produces one wait per
+   * subject, per unread move and per dormant theme, and page 8 is 297 × 167mm
+   * with `overflow: hidden` — so the list ran off the bottom in silence, which
+   * is the one failure mode this whole artefact is arranged to avoid. The page
+   * shows what fits and SAYS how many it did not show; every one of them is
+   * named on the page that measured it (the subjects table, the moves page,
+   * the category's dormant flags), so nothing is only here.
+   */
+  waitingMore: number
+  /** How many unsettled items did not fit. Same rule as `waitingMore`: each is
+   *  a comparison the page before it printed a badge for. */
+  itemsMore: number
   heldBack: string[]
   /** When the first quarter-on-quarter verdict lands, in the reader's words —
    *  with the month it settles in, where that can be counted. */
@@ -1039,7 +1225,6 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
   // a November reading.
   const monthNote = monthOutsideNote(overview.month, quarter)
 
-  const cover = buildCover({ overview, quarter, readingAt, readings, thisQuarter: a.thisQuarter })
   // ONE SET OF VOICES, THREE PAGES. `overview.sentence.voices` is the month's
   // own evidence, already resolved and already erasure-safe; the quarterly
   // pages that want a quote take REFS from it rather than each running its own
@@ -1065,6 +1250,20 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
     thisQuarter: a.thisQuarter,
     lastQuarter: a.lastQuarter,
   })
+  // THE COVER IS BUILT AFTER THE PAGES IT QUOTES, NOT BEFORE THEM. Its three
+  // cards are page 3's quarter gap, page 4's attention panel and the largest of
+  // the quarter's own banded steps, so it reads what those pages drew rather
+  // than drawing any of it a second time — the rule the whole artefact is
+  // arranged under (`buildMoves` takes Market's own acted sentence for it).
+  const cover = buildCover({
+    overview, quarter, prior, readingAt, readings, thisQuarter: a.thisQuarter,
+    gaps: subjects.rows.map((r) => r.gap).filter((g): g is Gap => g != null),
+    quarterVerdicts,
+    // ONE COMPOSITION OF THE MIX, SHARED. Page 7's `Sources` row is
+    // `platformShareLine` over the same record, so the cover and the method
+    // page cannot name two different corpora.
+    platforms: a.record?.coverage ? platformShareLine(totalPlatformMix(a.record.coverage)) : '',
+  })
   const rivals = buildRivals({ overview, competitive: a.competitive, monthLabel, monthNote })
   const moves = buildMoves({ overview, market: a.market, quarter })
 
@@ -1077,8 +1276,8 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
     searchPlan: a.searchPlan ?? null,
     changeLog: a.changeLog ?? null,
   })
-  const read = buildRead({ overview, market: a.market, verdicts, quarterVerdicts, unlocked, cover, draft: a.draft ?? null })
-  const unsettled = buildUnsettled({ verdicts, readings, overview, method, windowApplied, subjectsRead })
+  const read = buildRead({ overview, market: a.market, verdicts, quarterVerdicts, unlocked, cover, readings, draft: a.draft ?? null })
+  const unsettled = buildUnsettled({ verdicts, readings, overview, method, subjects, moves, category, windowApplied, subjectsRead })
 
   return {
     brand: overview.brand,
@@ -1227,11 +1426,21 @@ function themeLabel(id: string, overview: OverviewData): string | null {
  * from months: where the window read could not be taken there is no quarter
  * count to print, and the line says the month instead of guessing one.
  */
-function corpusLine(overview: OverviewData, quarter: Quarter, quarterVideos: number | null): string {
+function corpusLine(overview: OverviewData, quarter: Quarter, quarterVideos: number | null, platforms: string): string {
   const parts: string[] = []
+  // THE PLATFORMS THE CORPUS WAS READ ON, which the artboard puts first in
+  // this line and which page 7 was the only page to carry (`qr.p1.footer`).
+  // Empty where no platform mix was recorded — never a guessed list.
+  if (platforms) parts.push(platforms)
   if (quarterVideos != null) parts.push(`${fmtInt(quarterVideos)} category videos read in ${quarterLabel(quarter, false)}`)
   else if (overview.bar.videos != null) parts.push(`${fmtInt(overview.bar.videos)} videos in ${longMonth(overview.month)}`)
   if (overview.bar.updates > 0) parts.push(`${fmtInt(overview.bar.updates)} ${overview.bar.updates === 1 ? 'update' : 'updates'} in ${longMonth(overview.month)}`)
+  // AND NOT THE ARTBOARD'S PER-MONTH SPLIT ("Jul 2,295 · Aug 2,405 · Sep
+  // 2,359"). The figure beside it is the WINDOWED count of distinct videos
+  // over three months, and three month counts printed next to it invite
+  // exactly the addition D8 exists to refuse — the three do not add to it,
+  // because a video read in two months is one video here. This composer holds
+  // no per-month split either; it holds one window read and one month.
   return parts.length ? parts.join(' · ') : 'Nothing has been read for this workspace yet.'
 }
 
@@ -1255,14 +1464,44 @@ function windowVideos(reading: WindowReading, audience: string): number | null {
   return reading.denominators?.find((d) => d.audience === audience)?.videos ?? null
 }
 
+/**
+ * THE ONE GAP AN ARTEFACT LEADS WITH, CHOSEN ONCE.
+ *
+ * The cover's first card and page 3's headline are the same claim about the
+ * same quarter, and they were choosing it by two different rules: the cover
+ * sorted the list so a state of `apart` won, page 3 took the FIRST row that
+ * carried a gap at all. With one gap on the table the two agree; with a table
+ * whose first subject is `level` and whose second is `apart` they name
+ * different subjects, and the cover stops being a reading of the page behind
+ * it. One rule, in one place, and both callers take it.
+ *
+ * WHY `apart` WINS. It is the only state that carries a measured difference
+ * with a band; `level` and the refusals are answers about a comparison that
+ * was drawn and came back inside the band, and a cover leads with the reading
+ * that has something to say. The sort is stable, so within a state the page's
+ * own order is kept.
+ */
+export function leadGap(gaps: readonly (Gap | null | undefined)[]): Gap | null {
+  const drawn = gaps.filter((g): g is Gap => g != null)
+  return [...drawn].sort((g, h) => (h.state === 'apart' ? 1 : 0) - (g.state === 'apart' ? 1 : 0))[0] ?? null
+}
+
 // ---- page 1 · the cover -------------------------------------------------------
 
 function buildCover(a: {
   overview: OverviewData
   quarter: Quarter
+  prior: Quarter
   readingAt: string
   readings: number
   thisQuarter: WindowReading
+  /** The quarter gaps page 3 draws — the cover's first card is one of them. */
+  gaps: readonly Gap[]
+  /** The quarter's own banded steps — the cover's third card is the largest. */
+  quarterVerdicts: readonly Verdict[]
+  /** The platform mix the corpus was read on, for the footer line. Page 7's
+   *  own `Sources` row composes the same string from the same record. */
+  platforms: string
 }): CoverPage {
   const { overview } = a
   const lead = overview.sentence.lead
@@ -1280,10 +1519,80 @@ function buildCover(a: {
     figures.quarter_videos = { value: quarterVideos, unit: 'videos', label: `${overview.category.label} videos read in ${quarterLabel(a.quarter, false)}` }
   }
 
+  // THE MOCK'S THREE CARDS, IN THE MOCK'S ORDER, AND NONE OF THE MOCK'S THREE
+  // CLAIMS (`qr.p1.stats`).
+  //
+  //   "13 pts · gap to Freitag … narrowed from 19 points in June"
+  //     → the QUARTER gap between the two columns page 3 prints, with both
+  //       sides' k of n and the band, and the earlier quarter as its own dated
+  //       reading rather than as the word "narrowed" (D1, lib/reading/gap.ts).
+  //   "−18% · category attention since June … panel re-frozen 3 Sep"
+  //     → the panel's own level with the size of the panel under it, and the
+  //       latest BANDED step beside it. June to September crosses the
+  //       3 September re-freeze, which is the refusal `AttentionBlock.verdict`
+  //       carries instead of a percentage (D7, D8).
+  //   "−3 pts · price in the category, Q2 33% to Q3 30%. Fading for a 3rd month."
+  //     → the largest quarter-on-quarter step that CLEARED its band, printed as
+  //       its two counts with the badge. No direction word: three consecutive
+  //       quarters is not something any tenant has (D2, D5).
+  //
+  // THE CARDS FALL BACK RATHER THAN GOING BLANK. Below the migrations none of
+  // the three can be read, and a cover of three absences is not the artefact —
+  // so the month's own lead, the month's videos and the reading counter fill
+  // the remaining slots, in that order, and the cover always carries three
+  // real figures. Trimmed to three at the end, which is the mock's grid.
+  // MID-SENTENCE, THE CATEGORY IS "the category". `label` is the operator's
+  // own word from Settings and is written for the head of a line ("The
+  // category"), so dropped into "you against …" it carried a capital into the
+  // middle of a sentence that the rest of the deck does not.
+  const midSentence = (label: string): string => label.replace(/^The /, 'the ')
   const stats: CoverStat[] = []
+  const gap = leadGap(a.gaps)
+  if (gap) {
+    const apart = gap.state === 'apart' && gap.gapPts != null
+    stats.push({
+      token: `gap_${gap.objectId}`,
+      kind: apart ? 'figure' : 'word',
+      value: apart ? `${Math.round(Math.abs(gap.gapPts as number) * 10) / 10} pts` : GAP_WORDS[gap.state],
+      label: `${gap.objectLabel} — you against ${midSentence(gap.b.label)}, ${quarterLabel(a.quarter, false)}`,
+      caption: gapLine(gap, { period: true }),
+      basis: gapBasisLine(gap) ?? undefined,
+    })
+  }
+  const attention = overview.category.attention
+  const panelMonth = attention?.months[attention.months.length - 1] ?? null
+  if (attention && panelMonth) {
+    stats.push({
+      token: 'panel_comments',
+      kind: 'figure',
+      value: fmtInt(panelMonth.comments),
+      label: `panel comments under ${overview.category.label.toLowerCase()} in ${longMonth(panelMonth.month)}`,
+      caption: [
+        attention.accountCount != null ? `a fixed panel of ${fmtInt(attention.accountCount)} accounts` : 'a fixed panel of accounts',
+        attention.panel?.frozen_at ? `frozen ${fullDate(attention.panel.frozen_at)}` : null,
+      ].filter(Boolean).join(' · '),
+      verdict: attention.verdict,
+    })
+  }
+  const moved = [...a.quarterVerdicts]
+    .filter((v) => v.state === 'moved' && v.changePts != null)
+    .sort((v, w) => Math.abs(w.changePts as number) - Math.abs(v.changePts as number))[0] ?? null
+  if (moved) {
+    stats.push({
+      token: `quarter_${moved.objectKind}_${moved.objectId}`,
+      kind: 'figure',
+      value: `${fmtInt(moved.value.k)} of ${fmtInt(moved.value.n)}`,
+      label: `${moved.objectLabel}, ${quarterLabel(a.quarter, false)}`,
+      caption: moved.baseline
+        ? `against ${fmtInt(moved.baseline.k)} of ${fmtInt(moved.baseline.n)} in ${quarterLabel(a.prior, false)}`
+        : `read over ${quarterLabel(a.quarter, false)}`,
+      verdict: moved,
+    })
+  }
   if (lead && isAnswer(lead.state) && lead.value.n > 0) {
     stats.push({
       token: 'lead_share',
+      kind: 'figure',
       value: pct1((lead.value.k / lead.value.n) * 100),
       label: `${lead.objectLabel} in ${longMonth(overview.month)}`,
       caption: `${fmtInt(lead.value.k)} of ${fmtInt(lead.value.n)} videos${lead.bandPts != null ? ` · band ±${Math.round(lead.bandPts * 10) / 10}` : ''}`,
@@ -1292,6 +1601,7 @@ function buildCover(a: {
   if (overview.bar.videos != null) {
     stats.push({
       token: 'month_videos',
+      kind: 'figure',
       value: fmtInt(overview.bar.videos),
       label: `videos in ${longMonth(overview.month)}`,
       caption: overview.bar.line,
@@ -1312,6 +1622,7 @@ function buildCover(a: {
   // narrower of the two.
   stats.push({
     token: 'readings',
+    kind: 'figure',
     value: String(a.readings),
     label: 'monthly readings so far',
     caption: readingCounter(a.readings),
@@ -1327,7 +1638,7 @@ function buildCover(a: {
       monthOutside,
     }),
     figures,
-    stats,
+    stats: stats.slice(0, 3),
     // A DAY, NOT A MONTH. The first cut printed "as at Sep 2026", which is the
     // month the reading is OF; the stamp is the day the reading was TAKEN, and
     // on a still-filling quarter those are different facts about one artefact.
@@ -1345,7 +1656,7 @@ function buildCover(a: {
     ]
       .filter(Boolean)
       .join(' · '),
-    corpus: corpusLine(overview, a.quarter, quarterVideos),
+    corpus: corpusLine(overview, a.quarter, quarterVideos, a.platforms),
   }
 }
 
@@ -1360,6 +1671,7 @@ function buildRead(a: {
   quarterVerdicts: Verdict[]
   unlocked: boolean
   cover: CoverPage
+  readings: number
   draft: string | null
 }): ReadPage {
   const quotes = a.overview.sentence.voices.map((v: Voice) => ({ quote: v.quote, cite: v.cite }))
@@ -1386,9 +1698,14 @@ function buildRead(a: {
         : `new in ${longMonth(`${row.firstMade.slice(0, 7)}-01`)}`,
     status: row.statusLabel,
     decidedAt: row.decidedAt,
+    grounded: row.grounded,
   }))
   return {
     interpretation,
+    meta: [
+      a.cover.corpus,
+      readingCounter(a.readings),
+    ].join(' · '),
     figures: a.cover.figures,
     verdicts: a.verdicts,
     quotes,
@@ -1641,16 +1958,23 @@ function buildCategory(a: {
     // read is a failure of ours; a register with nothing dormant in it is a
     // reading. The mock's "gone quiet" column would say the same thing for
     // both, and a reader would take the first for the second.
+    // AND NEITHER SENTENCE MAY SAY THE FLAG'S OWN WORDS. Both were written
+    // with "gone quiet" in them and neither was ever rendered; wave 2 renders
+    // them, and rule (c) sweeps a direction word outside a verdict node —
+    // which is what the FLAG is marked as, and a sentence about the register
+    // is not. Overview's own wording is the precedent ("Nothing this page has
+    // drawn has stopped being said").
     quietNote:
       a.quiet == null
-        ? 'The register of what has gone quiet could not be read for this workspace.'
+        ? 'The register of dormant themes could not be read for this workspace.'
         : a.quiet.length === 0
-          ? 'Nothing this artefact follows has gone quiet.'
+          ? 'Nothing this artefact follows has stopped being said.'
           : null,
     quotes: a.quotes,
     kinds: c.kinds,
     kindVerdicts: c.kindVerdicts,
     kindsNote: c.kindsNote,
+    reddit: c.reddit,
     attention: c.attention,
     attentionNote: c.attentionNote,
     mood: c.mood,
@@ -1710,6 +2034,8 @@ function buildRivals(a: {
     standings: co?.standings ?? null,
     standingsNote: co ? co.standings.empty : 'The standings could not be read for this workspace.',
     questions: co?.questions.rows.slice(0, 6) ?? [],
+    questionsRival: co?.questions.rival ?? null,
+    headToHead: co?.headToHead ?? null,
     questionsLine: co
       // FINDINGS, NOT READINGS. `co.questions.insights` counts question-kind
       // audience_insights rows. "Reading" is one of the thirteen words and is
@@ -1733,8 +2059,27 @@ function buildMoves(a: { overview: OverviewData; market: MarketSurfaceData | nul
   const inQuarter = (day: string | null): boolean => !!day && day >= a.quarter.from && day <= a.quarter.to
   const moves = (m?.moves.rows ?? []).filter((r) => inQuarter(r.declaredAt.slice(0, 10)))
   const advice = m?.advice.rows ?? []
+  const declared = new Set(moves.map((r) => r.id))
+  const readings = (m?.moves.readings ?? []).filter((r: MoveReading) => declared.has(r.moveId))
+  // THE AUDIENCE BEHIND EVERY CONTROL ROW THIS PAGE WILL DRAW, named. Only
+  // the audiences actually drawn, so an audience this workspace does not name
+  // is absent from the map and the row falls back to its label alone rather
+  // than to an invented side.
+  const side = audienceSideIn(a.overview)
+  const sideOf: Record<string, string> = {}
+  for (const reading of readings) {
+    for (const v of reading.control) {
+      const words = side(v.audience)
+      if (words) sideOf[v.audience] = words
+    }
+  }
   return {
     moves,
+    sideOf,
+    // THE READINGS OF THE MOVES THIS PAGE DRAWS, and no others: a reading of a
+    // move declared in another quarter is a real reading and is not this
+    // page's, and the moves above are already filtered by declared date.
+    readings,
     movesNote: m ? (m.moves.recorded ? m.moves.empty : 'Moves are not recorded for this workspace yet.') : 'Moves could not be read for this workspace.',
     advice,
     // NEITHER SIDE OF THIS WAS QUARTER-SCOPED, AND THE DENOMINATOR WAS A
@@ -1854,6 +2199,27 @@ function buildMethod(a: {
   }
 }
 
+/**
+ * ONE ROW OF THE METHOD TABLE, WITH AN ID THAT IS NOT ITS DISPLAY STRING.
+ *
+ * Page 8 reads the gate's share off this table rather than computing it again,
+ * so the two pages of one artefact cannot disagree about how much was set
+ * aside — which is right. It reached it by `r.label === 'Held back'`, which
+ * couples the two pages through a piece of COPY: rename that row, which is a
+ * copy edit anybody may make, and the gate share and the "why no sample is
+ * drawn" sentence drop off page 8 with no test failing. The id is the join.
+ */
+export type MethodNumberId =
+  | 'period' | 'videos' | 'videos_month' | 'comments' | 'updates'
+  | 'sources' | 'held_back' | 'languages' | 'refused'
+
+export interface MethodNumberRow {
+  id: MethodNumberId
+  label: string
+  value: string
+  note?: string
+}
+
 /** The corpus in numbers, as the mock's own table. Every row carries what it
  *  is out of, or says it was not recorded. */
 export function methodNumbers(
@@ -1861,8 +2227,8 @@ export function methodNumbers(
   quarter: Quarter,
   overview: OverviewData,
   readingAt: string,
-): { label: string; value: string; note?: string }[] {
-  const out: { label: string; value: string; note?: string }[] = [
+): MethodNumberRow[] {
+  const out: MethodNumberRow[] = [
     // THE PERIOD IS THE QUARTER'S, SO ITS STATE IS THE QUARTER'S. Keyed off
     // `overview.monthStatus` this row said "still filling" about a quarter that
     // had closed weeks earlier, because the MONTH the product is in was
@@ -1872,13 +2238,13 @@ export function methodNumbers(
     // date goes through fullDate / shortDate / longMonth; the mock's own row
     // reads "1 Jul – 28 Sep 2026". The year is on the second date only,
     // because a quarter never crosses one.
-    { label: 'Period', value: `${shortDate(quarter.from)} – ${fullDate(quarter.to)}`, note: quarterFilling(quarter, readingAt) ? 'still filling' : undefined },
+    { id: 'period', label: 'Period', value: `${shortDate(quarter.from)} – ${fullDate(quarter.to)}`, note: quarterFilling(quarter, readingAt) ? 'still filling' : undefined },
   ]
   if (!inputs) {
     // NOT "The corpus", WHICH IS OURS, and this is the row a young workspace
     // is most likely to be shown. Every other label in this table is already in
     // the reader's words — Videos, Comments, Updates, "Videos in September".
-    out.push({ label: 'Videos', value: 'not recorded', note: 'the quarter’s record could not be read for this workspace' })
+    out.push({ id: 'videos', label: 'Videos', value: 'not recorded', note: 'the quarter’s record could not be read for this workspace' })
     return out
   }
   // `coverage` is NULL when the month tables are not applied and EMPTY when
@@ -1890,12 +2256,14 @@ export function methodNumbers(
     // is the only honest way to count distinct videos over three months. The
     // month in hand is printed instead, labelled as the month.
     out.push({
+      id: 'videos_month',
       label: `Videos in ${longMonth(overview.month)}`,
       value: overview.bar.videos != null ? fmtInt(overview.bar.videos) : 'not recorded',
       note: 'the quarter is not counted as one window for this workspace yet, so the month in hand is stated instead',
     })
     if (inputs.delivery.delivered > 0) {
       out.push({
+        id: 'updates',
         label: 'Updates',
         value: `${fmtInt(inputs.delivery.delivered)} this quarter`,
         note: inputs.delivery.longestGapDays != null ? `longest gap ${fmtInt(inputs.delivery.longestGapDays)} days` : undefined,
@@ -1905,18 +2273,60 @@ export function methodNumbers(
   }
   const videos = inputs.coverage.reduce((sum, c) => sum + c.videos, 0)
   const comments = inputs.coverage.reduce((sum, c) => sum + c.comments, 0)
-  out.push({ label: 'Videos', value: fmtInt(videos), note: 'distinct videos with an analysed comment in the quarter' })
+  out.push({ id: 'videos', label: 'Videos', value: fmtInt(videos), note: 'distinct videos with an analysed comment in the quarter' })
   // "COMMENTS", NOT "CONVERSATIONS". `lib/calibration.ts` fixes a conversation
   // as one video and the comments it sparked, and says comments are always
   // counted separately as comments — so this row under a Videos row labelled
   // Conversations said the quarter held 1,388 videos and 11,840 conversations,
   // where the glossary makes the conversations 1,388.
-  out.push({ label: 'Comments', value: fmtInt(comments), note: 'comments read across those videos' })
+  out.push({ id: 'comments', label: 'Comments', value: fmtInt(comments), note: 'comments read across those videos' })
   out.push({
+    id: 'updates',
     label: 'Updates',
     value: `${fmtInt(inputs.delivery.delivered)} this quarter`,
     note: inputs.delivery.longestGapDays != null ? `longest gap ${fmtInt(inputs.delivery.longestGapDays)} days` : undefined,
   })
+  // THE ARTBOARD'S OTHER FOUR ROWS — Sources, Held back, Languages and the
+  // refusals — which the build had as PROSE above the table and the mock has as
+  // rows (`qr.p7.numbers`). Same figures, same basis sentences, in the shape a
+  // reader can scan. Each is pushed only where its own read exists, so a row is
+  // never a blank and never a zero standing in for a silence.
+  const mix: PlatformMix = {}
+  for (const c of inputs.coverage) for (const [k, n] of Object.entries(c.platformMix)) mix[k] = (mix[k] ?? 0) + n
+  const sources = platformShareLine(mix)
+  if (sources) out.push({ id: 'sources', label: 'Sources', value: sources, note: 'of the videos read in this quarter' })
+  if (inputs.discard.readable && inputs.discard.judged > 0) {
+    out.push({
+      id: 'held_back',
+      label: 'Held back',
+      value: `${fmtPct((inputs.discard.setAside / inputs.discard.judged) * 100, 0)} set aside by the relevance gate`,
+      // THE GATE'S OWN CLOCK, NAMED. `recordedFrom` is the day the gate started
+      // recording what it discarded, and no month before it can show this.
+      note: `${fmtInt(inputs.discard.setAside)} of ${fmtInt(inputs.discard.judged)} looked at${
+        inputs.discard.recordedFrom ? `, recorded from ${fullDate(inputs.discard.recordedFrom)}` : ''
+      }`,
+    })
+  }
+  if (inputs.language.analysed > 0 && inputs.language.notEnglish + inputs.language.english > 0) {
+    const known = inputs.language.notEnglish + inputs.language.english
+    out.push({
+      id: 'languages',
+      label: 'Languages',
+      value: `${fmtPct((inputs.language.notEnglish / known) * 100, 0)} not in English`,
+      // THE BASIS TRAVELS WITH THE FIGURE (D15). It is a share of the videos
+      // whose language we KNOW, not of everything read, and the two differ by
+      // however many videos carry no language at all.
+      note: `of ${fmtInt(known)} videos whose language is recorded`,
+    })
+  }
+  if (inputs.comparisonsRefused != null) {
+    out.push({
+      id: 'refused',
+      label: 'Refused',
+      value: inputs.comparisonsRefused === 1 ? '1 comparison' : `${fmtInt(inputs.comparisonsRefused)} comparisons`,
+      note: 'held back rather than drawn — the reasons are under this table',
+    })
+  }
   return out
 }
 
@@ -1971,18 +2381,107 @@ function buildUnsettled(a: {
   readings: number
   overview: OverviewData
   method: MethodPage
+  /** The two pages whose own rows are what a reader is waiting on. */
+  subjects: SubjectsPage
+  moves: MovesPage
+  category: CategoryPage
   /** Whether the quarter's own window read could be taken at all, and whether
    *  the subject half of it could. A comparison never attempted is not a
    *  comparison drawn, and this is the page that has to say which it was. */
   windowApplied: boolean
   subjectsRead: boolean
 }): UnsettledPage {
-  const waiting: string[] = []
+  // `qr.p8.waiting` · THE SUBJECT-LEVEL WAITS, NOT THE OVERVIEW'S SERIES NOTES.
+  // The section listed three `MonthLabel`s — clustering changes and unlogged
+  // eras, which are facts about our bookkeeping and are already the METHOD
+  // page's subject. What a reader of page 8 is waiting on is a named thing:
+  // a subject whose quarter column could not be drawn, a move with one reading
+  // behind it, a theme the register has marked dormant. The series notes stay,
+  // at the end, because they are true — they are simply not the answer to the
+  // question this heading asks.
+  //
+  // AND EACH ONE IS A HEADLINE AND A BADGE, which is the artboard's own shape
+  // for this section. The words are ours where the rules refuse the mock's;
+  // the layout is the mock's.
+  const waiting: UnsettledWait[] = []
   if (!quarterUnlocked(a.readings)) {
-    waiting.push(quarterGateSentence(a.readings))
+    waiting.push({
+      title: 'The quarter view itself',
+      why: 'not enough readings yet',
+      line: quarterGateSentence(a.readings),
+    })
   }
-  for (const note of a.overview.notes.slice(0, 3)) waiting.push(note.text)
+  for (const row of a.subjects.rows) {
+    if (row.categoryQuarter || row.youQuarter) continue
+    waiting.push({
+      title: `${row.label}, quarter on quarter`,
+      why: 'neither side read on both sides',
+      line: 'Neither side carried a reading on both sides of this quarter, so no verdict is printed for it.',
+    })
+  }
+  for (const move of a.moves.moves) {
+    if (a.moves.readings.some((r) => r.moveId === move.id && r.verdict)) continue
+    // `move.line` IS ALREADY THE WHOLE SENTENCE, title and subject included
+    // (`moveLedgerLine`, lib/pages/market-surface.ts), so prefixing it with
+    // the title and the subject printed both twice: "Say less about recycling,
+    // on the subject Durability — Say less about recycling · on the subject
+    // Durability · tracked 14 Sep · …". It is the body under its own title
+    // here, unchanged.
+    waiting.push({ title: move.title, why: 'no reading behind it yet', line: moveTail(move) })
+  }
+  for (const q of a.category.quiet ?? []) {
+    // NOT "<label> has not been read", WHICH IS UNGRAMMATICAL HALF THE TIME.
+    // A theme label is free text a reasoning model wrote and is as often
+    // plural as singular — "Shipping and delivery times HAS not been read",
+    // "Sizing and fit questions HAS not been read". The label is the object of
+    // the sentence instead, so no agreement is claimed over words this code
+    // did not choose.
+    //
+    // AND THE BADGE IS NOT "gone quiet" HERE. That word is in DIRECTION_WORDS
+    // and page 4 prints it inside a verdict node with the register's own flag
+    // behind it; this page is listing what we are waiting to read, so the
+    // badge says what is missing and claims nothing about a series.
+    waiting.push({
+      title: q.label,
+      why: `not read since ${q.lastHeard ? monthName(q.lastHeard) : 'the months on this axis'}`,
+      line: 'A theme is never called dead, only dormant.',
+    })
+  }
+  // THE SERIES NOTES LAST, AND THEY ARE NOT NAMED QUESTIONS. A clustering
+  // change or an unlogged era is a fact about our bookkeeping — true, already
+  // the method page's subject, and not the answer to the question this heading
+  // asks — so each is its own row under the bookkeeping badge rather than
+  // pretending to be a named wait.
+  for (const note of a.overview.notes.slice(0, 3)) {
+    waiting.push({ title: note.text, why: 'in the record, not in the reading', line: null })
+  }
+
+  // `qr.p8.heldback` · THE GATE'S SHARE, ON THIS PAGE. The figure is the record
+  // page's own (`methodNumbers`' "Held back" row), read off it rather than
+  // computed again, so the two pages of one artefact cannot disagree about how
+  // much was set aside.
   const heldBack: string[] = []
+  // BY ITS ID, NOT BY ITS DISPLAY STRING. `r.label === 'Held back'` coupled
+  // these two pages through a piece of copy: renaming that row would have
+  // dropped the gate share AND the "why no sample is drawn" sentence off page
+  // 8 with nothing failing. `note` is optional on the row, so it is guarded
+  // rather than interpolated — an `undefined` in the middle of a sentence is
+  // exactly what the suite's no-`undefined` net exists to catch, and a page
+  // should not be relying on that net.
+  const gate = a.method.numbers.find((r) => r.id === 'held_back')
+  if (gate) {
+    heldBack.push(
+      `${gate.value[0].toUpperCase()}${gate.value.slice(1)} of what the search plan gathered — read, but not counted into a subject${
+        gate.note ? ` (${gate.note})` : ''
+      }.`,
+    )
+    // AND WHY THE MOCK'S THREE-ROW SAMPLE IS NOT UNDER IT. M8 withholds
+    // `gate_verdicts.reason` from an authenticated reader, so the reasons a
+    // sample would carry cannot be selected on a tenant session at all. Saying
+    // so is the honest form; a sample with the reasons blanked would read as
+    // three videos nobody could explain.
+    heldBack.push('What each discarded video was set aside FOR is not readable on this workspace’s own session, so the share is stated and no sample is drawn.')
+  }
   if (a.method.checks.recorded && a.method.checks.ran === 0) {
     heldBack.push('No unusual-week check ran inside this quarter, so nothing here rests on one.')
   }
@@ -2004,10 +2503,18 @@ function buildUnsettled(a: {
     : !a.subjectsRead
       ? 'Your subjects were not compared across this quarter — they are not counted as one window for this workspace yet, so no subject comparison was attempted.'
       : null
+  const allItems = unsettledItems(a.verdicts, { side: audienceSideIn(a.overview) })
+  // WHAT FITS, AND THE COUNT OF WHAT DOES NOT. The two lists share one column
+  // of one fixed box, so they share a budget: the unsettled items are the
+  // page's subject and are taken first, and the waits take what is left.
+  const items = allItems.slice(0, ITEMS_SHOWN)
+  const shown = Math.max(2, ROWS_SHOWN - items.length)
   return {
-    items: unsettledItems(a.verdicts, { side: audienceSideIn(a.overview) }),
+    items,
+    itemsMore: Math.max(0, allItems.length - items.length),
     notAsked,
-    waiting,
+    waiting: waiting.slice(0, shown),
+    waitingMore: Math.max(0, waiting.length - shown),
     heldBack,
     settles: quarterUnlocked(a.readings)
       ? 'Every comparison this quarter could answer is on the pages before this one.'

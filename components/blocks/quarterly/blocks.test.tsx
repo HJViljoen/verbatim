@@ -5,18 +5,18 @@ import { assertCopyContract, copyViolations, directionRe } from '@/lib/test/copy
 import { render, renderText } from '@/lib/test/render'
 import { QUARTERLY_BLOCK_KEYS, QUARTERLY_CLAIMS_CAVEAT, QUARTERLY_RULE, quarterGateSentence } from '@/lib/reports/quarterly'
 import { CLAIMS_CAVEAT } from '@/lib/pages/market-surface'
-import { unsettledItems } from '@/lib/pages/quarterly'
+import { leadGap, unsettledItems } from '@/lib/pages/quarterly'
 import type { Verdict } from '@/lib/reading/verdicts'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '@/lib/rivals'
 import { gapBasisLine, gapLine } from '@/lib/reading/gap'
 import { marketFixture } from '@/components/pages/market-surface/fixture'
 import { competitiveFixture } from '@/components/pages/competitive-surface/fixture'
 import { QUARTERLY_BLOCKS, quarterlyBlocksFor } from './index'
-import { afterQuarterFixture, closedFixture, formingFixture, quarterlyFixture, subjectLeadFixture, thinMonthFixture } from './fixture'
+import { afterQuarterFixture, closedFixture, formingFixture, quarterlyFixture, subjectLeadFixture, thinMonthFixture, thinQuarterFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
-const STATES = [quarterlyFixture(), formingFixture(), closedFixture(), afterQuarterFixture(), thinMonthFixture()]
+const STATES = [quarterlyFixture(), formingFixture(), closedFixture(), afterQuarterFixture(), thinMonthFixture(), thinQuarterFixture()]
 
 describe('the eight pages', () => {
   it('render in all three modes on every state and keep the copy contract', () => {
@@ -290,16 +290,30 @@ describe('what each page owes the reader', () => {
     expect(text).toMatch(/Movers and the mix are \w+ against \w+\./)
   })
 
-  it('draws the quarter’s own reading where the window pair was taken', () => {
+  it('draws the quarter’s own volume here and its object rows on page 2', () => {
     const text = renderText(QUARTERLY_BLOCKS['quarterly.category'].render(data, 'app', ctx))
-    expect(text).toContain('The quarter against the quarter before it')
-    // The theme half — unreachable until the window read asked for it.
-    expect(text).toContain('Will it survive a wet commute')
-    // And the volume as two counts, never as a share of itself. The defect
-    // this replaces printed "4,147 of 4,147 · no clear change".
-    expect(text).toContain('4,147 videos')
+    // THE VOLUME, as two counts and never as a share of itself. The defect this
+    // replaces printed "4,147 of 4,147 · no clear change" for every audience.
+    expect(text).toContain('Videos read this quarter')
+    expect(text).toContain('4,147')
     expect(text).toContain('against 3,810 in the quarter before it')
     expect(text).not.toContain('4,147 of 4,147')
+    // THE QUARTER'S OBJECT ROWS MOVED TO PAGE 2 (Block D wave 2). `countedLines`
+    // prints the three largest quarter readings off the SAME list, with both
+    // sides' k of n, under the paragraph that argues from them — so a second
+    // copy on this page was one artefact stating one comparison twice, and it
+    // cost 279px of a 561px slide body.
+    expect(text).not.toContain('Will it survive a wet commute 871')
+    const read = renderText(QUARTERLY_BLOCKS['quarterly.read'].render(data, 'app', ctx))
+    expect(read).toContain('What is counted under it')
+    expect(read).toContain('912 of 4,147')
+    // AND THE POINTER NAMES A PAGE, NOT A NUMBER (D13). Only the print deck
+    // paginates; the share shell and the email have no page numbers at all,
+    // and the deck's own numbering moves when a snapshot omits a key.
+    expect(text).toContain('the three largest quarter readings are under Our read')
+    for (const mode of MODES) {
+      expect(renderText(QUARTERLY_BLOCKS['quarterly.category'].render(data, mode, ctx))).not.toMatch(/on page \d/)
+    }
   })
 
   it('never counts a comparison that cannot fail as an answered one', () => {
@@ -440,8 +454,14 @@ describe('what each page owes the reader', () => {
     expect(data.subjects.rows[0].youQuarter).not.toBeNull()
     expect(data.subjects.rows[0].youQuarter?.audience).toBe(CLIENT_AUDIENCE)
     expect(data.subjects.rows[0].categoryQuarter).not.toBeNull()
-    // Each badge says whose side it is, in the row body's own order.
-    expect(text).toMatch(/Durability you .* the category /)
+    // THE ROW IS THE ARTBOARD'S FIVE COLUMNS NOW, NOT ONE SENTENCE. The build
+    // stacked all four figures into "you 31% 26 of 84 · the category 22% 305 of
+    // 1,388" and labelled each badge with its side because nothing else could
+    // tell them apart; the port puts each figure in its own column under its own
+    // header, which is what the labels were standing in for. So the assertion
+    // moves from the sentence to the header row and the cells beneath it.
+    expect(text).toContain('Subject You, September The category, September')
+    expect(text).toContain('Durability 31% 26 of 84 22% 305 of 1,388')
     expect(data.subjects.quarterNote).toBeNull()
   })
 
@@ -571,5 +591,393 @@ describe('the quotes a page declares (qr.p3.quote, qr.p4.quote)', () => {
     for (const key of ['quarterly.subjects', 'quarterly.category'] as const) {
       expect(blockAnswers(QUARTERLY_BLOCKS[key], data).quotes).toEqual([])
     }
+  })
+})
+
+// ---- the wave-2 port · every element this package bound ------------------------
+//
+// ONE ASSERTION PER ELEMENT THE MAPPING LISTED, so a later change that drops a
+// field on the floor again fails here rather than in a screenshot six weeks on.
+// `status/mock-gap/QuarterlyReview.md` is the list; the ids are its ids.
+
+describe('the artboard port (Block D wave 2)', () => {
+  const data = quarterlyFixture()
+  const forming = formingFixture()
+  const thinQuarter = thinQuarterFixture()
+  const text = (key: keyof typeof QUARTERLY_BLOCKS, d = data) => renderText(QUARTERLY_BLOCKS[key].render(d, 'print', ctx))
+
+  it('qr.p1.footer · the platforms the corpus was read on, and no per-month split', () => {
+    const t = text('quarterly.cover')
+    // The artboard's own first half of this line — page 7 was the only page
+    // carrying it.
+    expect(t).toContain('TikTok 38%')
+    expect(t).toContain('4,147 category videos read in Q3 2026')
+    // AND NOT the artboard's per-month split: the figure beside it is a
+    // WINDOWED count of distinct videos, which three month counts do not add
+    // to (D8). Printing them side by side invites exactly that addition.
+    expect(t).not.toMatch(/Jul [\d,]+ · Aug [\d,]+ · Sep [\d,]+/)
+  })
+
+  it('qr.p1.cover · one h1 per document, and one gutter', () => {
+    // The share shell puts each block inside a card with its own padding and
+    // under its own 30px `<h1>`; the print deck's `Slide` carries an `<h1>`
+    // too. The hero's own heading is subordinate to both.
+    for (const mode of MODES) {
+      expect(render(QUARTERLY_BLOCKS['quarterly.cover'].render(data, mode, ctx))).not.toContain('<h1')
+    }
+    expect(render(QUARTERLY_BLOCKS['quarterly.cover'].render(data, 'app', ctx))).not.toContain('px-[6%]')
+    expect(render(QUARTERLY_BLOCKS['quarterly.cover'].render(data, 'print', ctx))).toContain('px-[6%]')
+  })
+
+  it('qr.p1.stats · the cover carries the quarter gap, the panel and a banded quarter step', () => {
+    const t = text('quarterly.cover')
+    // The gap, with both sides and the band — never "narrowed".
+    expect(t).toContain('8.1 points apart (band 6)')
+    expect(t).toContain('7.8 points apart in the quarter from April')
+    // THE TWO DIFFERENCES DO NOT RUN TOGETHER, and the label is not joined to
+    // the caption with a full stop it does not have. D1 is the whole reason
+    // this card carries two readings instead of the word "narrowed"; they have
+    // to read as two.
+    expect(t).not.toContain('(band 6) · 7.8 points apart')
+    // And "The category" does not carry its capital into mid-sentence.
+    expect(t).toContain('you against the category')
+    for (const mode of MODES) {
+      expect(renderText(QUARTERLY_BLOCKS['quarterly.cover'].render(data, mode, ctx))).not.toMatch(/\. [a-z]/)
+    }
+    expect(t.match(directionRe())).toBeNull()
+    // The panel's level and the size of the panel, never "−18% since June".
+    expect(t).toContain('a fixed panel of 214 accounts')
+    expect(t).not.toContain('since June')
+    // The largest banded quarter step, as its two counts.
+    expect(t).toContain('against 686 of 3,810 in Q2 2026')
+    // Exactly three cards, which is the mock's grid.
+    expect(data.cover.stats).toHaveLength(3)
+  })
+
+  it('qr.p1.stats · falls back to real figures rather than three absences', () => {
+    // Below the migrations none of the three mock measures reads, and a cover
+    // of three silences is not the artefact.
+    expect(forming.cover.stats).toHaveLength(3)
+    expect(forming.cover.stats.map((s) => s.token)).toEqual(['lead_share', 'month_videos', 'readings'])
+  })
+
+  it('qr.p2.meta / .whatitmeans / .standingadvice / .confidence', () => {
+    const t = text('quarterly.read')
+    // The three facts that were split across pages 1 and 7.
+    expect(t).toContain('4,147 category videos read in Q3 2026')
+    expect(t).toContain('your 8th monthly reading')
+    // The grounding count, with the population it is a count of.
+    expect(t).toContain('videos behind it, counted over everything we have read for you')
+    // The confidence dots are aria-hidden; the WORD and its sentence remain.
+    expect(t).toContain('reasonable')
+    expect(render(QUARTERLY_BLOCKS['quarterly.read'].render(data, 'print', ctx))).toContain('aria-hidden')
+  })
+
+  it('qr.p2.headline · the headline is ONE sentence, never the whole slot', () => {
+    // `Interpretation.sentences` is one element per MODEL sentence and one
+    // per composed CLAUSE GROUP where the code wrote it — and the quarterly
+    // fallback's first element is two sentences. Cutting on elements set the
+    // entire argument at 22px on every state this branch can render.
+    for (const state of STATES) {
+      const markup = render(QUARTERLY_BLOCKS['quarterly.read'].render(state, 'app', ctx))
+      // AND THE SIZE IS ON THE PARAGRAPH. `TokenProse` renders its own `<p>`
+      // with a 13.5px default unless a className is passed, so a size set on
+      // a wrapper around it did nothing at all: the "headline" was body size
+      // on every sheet this branch rendered.
+      const headline = markup.match(/<p[^>]*text-\[27px\][^>]*>([\s\S]*?)<\/p>/)
+      expect(headline).not.toBeNull()
+      const words = headline![1].replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+      expect(words.replace(/\.$/, '')).not.toContain('. ')
+    }
+  })
+
+  it('qr.p2.whatitmeans · the card renders where the slot runs to three sentences', () => {
+    // The guard is right — below three, splitting the last sentence out
+    // leaves the headline with no body — but no state exercised the arm it
+    // guards, so the element the brief listed as MISSING shipped nowhere.
+    // `thinQuarterFixture()` reaches it the way production does: small
+    // window reads, `quarterChange` answering `too_little_data`, and the
+    // fallback composing its thin-comparison sentence as well as its opener.
+    const t = text('quarterly.read', thinQuarter)
+    expect(t).toContain('What it means')
+    expect(t).toContain('carried too few videos to compare, so they are printed as levels only')
+    // And the card does NOT appear where the slot is two sentences long.
+    expect(text('quarterly.read')).not.toContain('What it means')
+  })
+
+  it('qr.p2.standingadvice · a pruned grounding says so rather than printing a zero', () => {
+    const t = text('quarterly.read', forming)
+    expect(t).toContain('no longer on record')
+    expect(t).not.toContain('0 videos behind it')
+  })
+
+  it('the cover and page 3 lead with the SAME gap', () => {
+    // Two rules for one claim: the cover sorted so `apart` won, page 3 took
+    // the first row that carried a gap at all. `leadGap` is the one rule.
+    for (const state of STATES) {
+      const lead = leadGap(state.subjects.rows.map((r) => r.gap))
+      if (!lead) continue
+      const cover = renderText(QUARTERLY_BLOCKS['quarterly.cover'].render(state, 'print', ctx))
+      const page3 = renderText(QUARTERLY_BLOCKS['quarterly.subjects'].render(state, 'print', ctx))
+      expect(cover).toContain(lead.objectLabel)
+      expect(page3).toContain(`${lead.objectLabel} — `)
+    }
+  })
+
+  it('qr.p3.* · five columns, the gap headline, the chart and the rival level', () => {
+    const t = text('quarterly.subjects')
+    expect(t).toContain('Subject You, September The category, September')
+    expect(t).toContain('Durability 31% 26 of 84 22% 305 of 1,388')
+    // The gap, NAMED, and labelled with its own period because the row prints
+    // the month's. `gapLine` carries no object label of its own, so without
+    // this the page's opening line read as the page's gap when it is one
+    // subject's.
+    expect(t).toContain('Durability — The quarter from July 2026 · you 30.1% of 249')
+    // The chart, and the rival's own month as a level beside it.
+    expect(render(QUARTERLY_BLOCKS['quarterly.subjects'].render(data, 'print', ctx))).toContain('<svg')
+    expect(t).toContain('Freitag, September:')
+  })
+
+  it('qr.p4.movers · two banded arms, no direction word in a heading', () => {
+    const t = text('quarterly.category')
+    expect(t).toContain('Cleared their band · a larger share than last month')
+    expect(t).toContain('Cleared their band · a smaller share than last month')
+    // The months a mover's own series carried, WITH THE UNIT — the same share
+    // the FigureCell two rows up prints — and the first month it was read.
+    expect(t).toContain('Jul 5.1% · Aug 6.8% · Sep 9.4%')
+    expect(t).toContain('first read May 2026')
+    // Rule (c) over the whole block, with live theme labels on it.
+    for (const mode of MODES) assertCopyContract(render(QUARTERLY_BLOCKS['quarterly.category'].render(data, mode, ctx)))
+  })
+
+  it('qr.p4.flags · the register’s dormant themes, as flags and never as a direction', () => {
+    const t = text('quarterly.category')
+    expect(t).toContain('gone quiet')
+    expect(t).toContain('last read Jun 2026')
+    // The flag sits inside a verdict node — that marker is what says it is the
+    // register's fact and not a claim about a series.
+    expect(render(QUARTERLY_BLOCKS['quarterly.category'].render(data, 'print', ctx)))
+      .toMatch(/data-copy="verdict"[^>]*>[^<]*<span[^>]*>gone quiet/)
+  })
+
+  it('qr.p4.movers · the movers’ note prints once, on every state', () => {
+    // It was printed by the movers-empty arm AND unconditionally by the flags
+    // block, so a month with nothing moving said it twice on one sheet.
+    for (const state of STATES) {
+      const note = state.category.moversNote
+      if (!note) continue
+      const t = renderText(QUARTERLY_BLOCKS['quarterly.category'].render(state, 'print', ctx))
+      expect(t.split(note).length - 1).toBe(1)
+    }
+  })
+
+  it('qr.p4.kinds · rows with their own "of N", and no partition bar', () => {
+    const t = text('quarterly.category')
+    expect(t).toContain('470 of 1,388')
+    // D4 · the kinds do not add up to the denominator and the page says so.
+    expect(t).toContain('do not add up to them')
+    expect(t).not.toContain('Other kinds')
+  })
+
+  it('qr.p4.attention · the chart and the banded step, never a raw percentage', () => {
+    const t = text('quarterly.category')
+    expect(t).toContain('a fixed panel of 214 accounts')
+    expect(t).toContain('comparison refused')
+    expect(t).not.toContain('18% since June')
+  })
+
+  it('qr.p4.mood · four rows including Mixed, with the framing footnote', () => {
+    const t = text('quarterly.category')
+    expect(t).toContain('Mixed')
+    expect(t).toContain('20 of 1,112 judged')
+  })
+
+  it('qr.p5.col.* · the month cells, and the refusal’s reason in print', () => {
+    const t = text('quarterly.rivals')
+    // THE UNIT IS IN THE HEADER AND ON EVERY CELL. The first cut drew two
+    // shapes under one header — a `FigureCell` on a brand with no month
+    // series and bare, unitless values on the ones that had one — so a
+    // reader could not tell that "15%" and "2.4" were the same measure.
+    expect(t).toContain('Attention % · Jul Aug Sep')
+    expect(t).toContain('Content % · Jul Aug Sep')
+    // Every month cell prints its unit, on the row that HAS a series…
+    expect(t).toContain('2.4%')
+    expect(t).toContain('0.9%')
+    // …and the newest month's counts print under the cells, on every row,
+    // so nothing on this table is a share of nothing in particular.
+    expect(t).toContain('6,200 of 41,200')
+    expect(t).toContain('2,400 of 41,200')
+    expect(t).toContain('the counts under each cell are that month’s (Sep)')
+    // And no bare unitless month value survives anywhere on the table.
+    expect(t).not.toMatch(/2\.4\s+0\.9/)
+    // PRINTED, not a `title` — a tooltip is nothing at all on paper.
+    expect(t).toContain('what we track changed inside this window')
+  })
+
+  it('qr.p5 · declares the comparisons it draws, and not the one it stopped drawing', () => {
+    // The ported table has one badge column (`Change · attention`); the
+    // content badge the old aside printed is gone, and `verdicts()` went on
+    // declaring `contentVerdict` to `blockAnswers` — a comparison this
+    // artefact does not print, counted as one it did.
+    const drawn = QUARTERLY_BLOCKS['quarterly.rivals'].verdicts?.(data) ?? []
+    const content = data.rivals.rows.map((r) => r.contentVerdict).filter((v) => v != null)
+    expect(content.length).toBeGreaterThan(0)
+    for (const v of content) expect(drawn).not.toContain(v)
+    for (const v of data.rivals.rows.map((r) => r.attentionVerdict).filter((v) => v != null)) {
+      expect(drawn).toContain(v)
+    }
+  })
+
+  it('qr.p5.h2h · five measures, and three of them say why no band was drawn', () => {
+    const t = text('quarterly.rivals')
+    expect(t).toContain('Head to head, then and now')
+    expect(t).toContain('Comments per video is a rate, not a share of a population')
+    expect(t).toContain('Engagement is a median of per-video rates')
+    expect(t).toContain('Posts published is a count with no denominator')
+    // And the Reddit exclusion note the engagement rows need.
+    expect(t).toContain('Reddit is excluded from every engagement figure')
+  })
+
+  it('qr.p5.whattheysay · three absence states, never a zero', () => {
+    const t = text('quarterly.rivals')
+    expect(t).toContain('No post was published in this period')
+    expect(t).toContain('No account is configured for this rival')
+    expect(t).toContain('cleared the comment floor')
+  })
+
+  it('qr.p5.whatasked · the brand prefix and the occurrence count', () => {
+    const t = text('quarterly.rivals')
+    expect(t).toContain('Ottobock — Viewers ask about')
+    expect(t).toContain('41 comments behind it in this window')
+  })
+
+  it('qr.p6.masthead · the rule is above the moves, not under them', () => {
+    const t = text('quarterly.moves')
+    const rule = 'We never claim you caused it.'
+    expect(t.indexOf(rule)).toBeGreaterThan(-1)
+    expect(t.indexOf(rule)).toBeLessThan(t.indexOf('The advice, and what you decided'))
+  })
+
+  it('qr.p6.move1 · the reading behind a move, its control and its chart', () => {
+    const t = text('quarterly.moves')
+    expect(t).toContain('Push repairability')
+    expect(t).toContain('declared 12 Aug')
+    // The control audiences — what moved on the sides you did not touch, each
+    // with the side it was read on. The label alone put two rows with the same
+    // words and different denominators directly above one another.
+    expect(t).toContain('Repair & warranty · in the category 153 of 1,388')
+    expect(t).toContain('Repair & warranty · under Freitag 41 of 142')
+    expect(render(QUARTERLY_BLOCKS['quarterly.moves'].render(data, 'print', ctx))).toContain('<svg')
+    // AN UNREAD MOVE'S CARD SAYS ITS TITLE AND SUBJECT ONCE. `move.line` is a
+    // whole ledger sentence that opens with both, and the card's eyebrow and
+    // mono line had already printed them.
+    expect(t).toContain('first scoring lands with the')
+    expect(t).not.toMatch(/Say less about recycling[\s\S]{0,40}Say less about recycling/)
+  })
+
+  it('qr.p6.ledger · numbered, grounded, and what happened afterwards', () => {
+    const t = text('quarterly.moves')
+    expect(t).toContain('videos behind it, counted over everything we have read for you')
+    expect(t).toContain('Afterwards:')
+    // D12 · the ratio is the whole ledger's and says so.
+    expect(t).toContain('every piece of advice this product has ever given you')
+  })
+
+  it('qr.p6.sayhear · the counts are named as not recorded, never printed as zero', () => {
+    const t = text('quarterly.moves')
+    expect(t).toContain('how many pushed back is not counted yet')
+    expect(t).not.toMatch(/echoed 0/)
+  })
+
+  it('qr.p6.plan · the plan re-checked, with the population every count is of', () => {
+    const t = text('quarterly.moves')
+    expect(t).toContain('The plan, re-checked')
+    expect(t).toContain('Untested → Supported')
+    // The floor, in the card's own words, and the hold it does not have.
+    expect(t).toContain('at least 1 real comment stands behind it')
+    expect(t).toContain('nothing here is held across two updates before it is printed')
+  })
+
+  it('qr.p7.numbers · eight rows, with Sources, Held back and Languages among them', () => {
+    const labels = data.method.numbers.map((r) => r.label)
+    expect(labels).toContain('Sources')
+    expect(labels).toContain('Held back')
+    expect(labels).toContain('Languages')
+    // D5 · deliberately not the mock's "Conversations".
+    expect(labels).not.toContain('Conversations')
+  })
+
+  it('qr.p8.waiting · a headline and a badge per wait, as the artboard draws it', () => {
+    const t = text('quarterly.unsettled')
+    // THE ARTBOARD'S SHAPE: a named open question, then the badge that says
+    // why it is open. Built as bare sentences the page printed three unheaded
+    // paragraphs in a row.
+    expect(t).toContain('Say less about recycling tracked 14 Sep')
+    expect(t).toContain('no reading behind it yet')
+    expect(t).toContain('Shipping and delivery times')
+    expect(t).toContain('not read since Jun 2026')
+    expect(t).toContain('A theme is never called dead, only dormant')
+    // NO SENTENCE PRINTS ITSELF TWICE. `move.line` opens with the title and
+    // the subject, and the wait is headed with the title, so the body is the
+    // tail (`moveTail`) — the same rule page 6's card follows.
+    expect(t).toContain('tracked 14 Sep · first scoring lands with the October reading')
+    expect(t).not.toMatch(/Say less about recycling[\s\S]{0,40}Say less about recycling/)
+    // AND NO AGREEMENT IS CLAIMED OVER A LABEL THIS CODE DID NOT WRITE. A
+    // theme label is as often plural as singular.
+    expect(t).not.toMatch(/times has not been read/)
+    // THE BADGE IS A STATE, NEVER A DIRECTION. "gone quiet" is a
+    // DIRECTION_WORD and belongs on page 4 inside a verdict node.
+    for (const state of STATES) {
+      for (const mode of MODES) assertCopyContract(render(QUARTERLY_BLOCKS['quarterly.unsettled'].render(state, mode, ctx)))
+    }
+  })
+
+  it('qr.p8 · neither list is unbounded, and the page says what it did not show', () => {
+    // A sheet is a fixed 297 × 167mm box with `overflow: hidden`. One wait is
+    // produced per subject whose quarter column could not be drawn, per unread
+    // move and per dormant theme, and one item per comparison that did not
+    // clear — so a workspace whose quarter mostly could not be read overran the
+    // page in silence, which is the one failure this artefact is arranged to
+    // avoid. Both lists are bounded and the page prints the count it held back.
+    const t = text('quarterly.unsettled', thinQuarter)
+    expect(thinQuarter.unsettled.items.length).toBeLessThanOrEqual(3)
+    expect(thinQuarter.unsettled.itemsMore).toBeGreaterThan(0)
+    expect(t).toContain('more were drawn and did not clear their band')
+    // And on a state with nothing held back, no remainder sentence appears.
+    expect(data.unsettled.itemsMore).toBe(0)
+    expect(data.unsettled.waitingMore).toBe(0)
+    expect(text('quarterly.unsettled')).not.toContain('more are waiting on a reading')
+  })
+
+  it('qr.p8.heldback · the gate’s share, and why no sample is drawn', () => {
+    const t = text('quarterly.unsettled')
+    expect(t).toContain('of what the search plan gathered')
+    expect(t).toContain('is not readable on this workspace’s own session')
+  })
+
+  it('qr.p8.searchplan · the term yield with its own clock named', () => {
+    const t = text('quarterly.unsettled')
+    expect(t).toContain('eco bag')
+    expect(t).toContain('12 of 410 kept')
+    expect(t).toContain('found something and kept nothing')
+  })
+
+  it('qr.p8.changelog · the dated log, with the actor as a role', () => {
+    const t = text('quarterly.unsettled')
+    expect(t).toContain('3 Sep 2026')
+    expect(t).toContain('Poler was added to the tracked set')
+    expect(t).toContain('an operator')
+  })
+
+  it('qr.p8.settles · no promised calendar date, on any state', () => {
+    // D14 · the mock's "Next update: 4 October" has no field on this artefact.
+    for (const state of STATES) {
+      const t = renderText(QUARTERLY_BLOCKS['quarterly.unsettled'].render(state, 'print', ctx))
+      expect(t).not.toMatch(/Next update/i)
+    }
+  })
+
+  it('qr.p8.footer · the privacy sentence is on the last page', () => {
+    expect(text('quarterly.unsettled')).toContain('Commenters are never identified')
   })
 })

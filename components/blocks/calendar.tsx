@@ -38,7 +38,7 @@ import { EMAIL, FONT, tokenHex } from '@/lib/email/theme'
 export function BlockCalendar({
   blockKey, axis, series, rules = [], bands = [], format = (v) => `${v}`,
   annotate = null, caption, label, mode = 'app', ctx, emailMonths = 6, height,
-  width, padR, legend,
+  width, padL, padR, legend, endLabels,
 }: {
   /** The block's own key — what the runner rendered the PNG under. */
   blockKey: string
@@ -84,6 +84,15 @@ export function BlockCalendar({
    *  token has to be said by the caption instead; it is not optional
    *  decoration. */
   legend?: boolean
+  /** The left pad of the viewBox, forwarded to `CalendarLine` (Block D wave 2,
+   *  E-quarterly — additive). A deck column is narrow by construction, so a
+   *  caller that knows its box states it rather than taking the 880-wide
+   *  default and being scaled down uniformly with its own type. */
+  padL?: number
+  /** Forwarded to `CalendarLine` (additive, E-quarterly). False where the
+   *  caller's column is too narrow for the right gutter the end labels are
+   *  drawn in. */
+  endLabels?: boolean
 }) {
   if (!axis.length || !series.length) return null
 
@@ -100,7 +109,9 @@ export function BlockCalendar({
         label={label}
         height={height}
         width={width}
+        padL={padL}
         padR={padR}
+        endLabels={endLabels}
         {...(legend === undefined ? {} : { legend })}
         // The block key alone is not an identity: it is stripped of its
         // punctuation (so `overview.line` and `overview-line` collide) and WP12

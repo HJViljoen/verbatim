@@ -174,6 +174,23 @@ export interface QuestionRow {
   /** The rival video it was asked under. */
   videoHref: string | null
   quotes: Quote[]
+  /**
+   * How many comments IN THIS WINDOW are cited behind this question — the
+   * mock's "41 / 27 / 63" beside each row (`qr.p5.whatasked`, Block D wave 2).
+   *
+   * NOT `quotes.length`, which is capped at `QUOTES_PER_QUESTION` and is what
+   * is SHOWN. This is the count the row is a reading of, on the same window
+   * the block's own sentences frame, so a surface printing it beside the
+   * question is printing evidence and not a display limit.
+   *
+   * OPTIONAL, BECAUSE THIS INTERFACE IS NOT THIS PACKAGE'S. The field was
+   * added for the quarterly review and landed here as a REQUIRED one; it
+   * compiled only because both constructors in the tree were updated in the
+   * same commit, which is exactly the coupling "additive only" exists to stop.
+   * A reader that has it prints it; a reader that does not says nothing rather
+   * than printing a zero.
+   */
+  comments?: number
 }
 
 export interface QuestionsBlock {
@@ -1378,6 +1395,10 @@ async function buildQuestions(input: QuestionInputs): Promise<QuestionsBlock> {
       platform: i.platform ?? video?.platform ?? null,
       videoHref: video?.video_url ?? null,
       quotes: cited.map((c) => ({ ref: quoteRef.evidence(c.evidenceId), text: c.quote, lang: c.lang ?? null, english: c.english ?? null })),
+      // THE WINDOW'S CITATIONS, NOT THE TWO SHOWN. `cited` is capped for
+      // display; `window` is every comment behind this question inside the
+      // window the block's sentences frame.
+      comments: window.length,
     }
   })
   for (const i of kept.slice(QUESTIONS_SHOWN)) quotes += citedInWindow(i.id).length

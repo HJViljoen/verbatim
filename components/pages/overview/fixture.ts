@@ -516,11 +516,20 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
       reddit: { kinds: ['question', 'objection'], videos: 590, reddit: 200, pct: 33.9, exact: false },
       kindsNote: null,
       growing: [
-        { id: 't1', label: 'Will it survive a wet commute', k: 130, n: 1388, pct: 9.4, verdict: verdict(), direction: 'growing', isNew: false },
-        { id: 't2', label: 'Zips failing after a year', k: 71, n: 1388, pct: 5.1, verdict: verdict({ objectId: 't2', objectLabel: 'Zips failing after a year', changePts: 1.9, value: { k: 71, n: 1388 } }), direction: null, isNew: true },
+        // THE THREE MOVERS CARRY THEIR OWN MONTHS (Block D wave 2). `Mover`
+        // gained `spark` / `sparkMonths` / `firstHeard` for the quarterly
+        // review's sparkline column, and a fixture that omitted them would
+        // review a port of that column against nothing. `t2` carries two
+        // readings on purpose: the chart refuses below three and names the
+        // months instead, and both arms have to be drawn.
+        { id: 't1', label: 'Will it survive a wet commute', k: 130, n: 1388, pct: 9.4, verdict: verdict(), direction: 'growing', isNew: false,
+          spark: [null, 3.8, 4.4, 5.1, 6.8, 9.4], sparkMonths: ['2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01', REAL_MONTH], firstHeard: '2026-05-01' },
+        { id: 't2', label: 'Zips failing after a year', k: 71, n: 1388, pct: 5.1, verdict: verdict({ objectId: 't2', objectLabel: 'Zips failing after a year', changePts: 1.9, value: { k: 71, n: 1388 } }), direction: null, isNew: true,
+          spark: [null, null, null, null, 3.2, 5.1], sparkMonths: ['2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01', REAL_MONTH], firstHeard: '2026-08-01' },
       ],
       fading: [
-        { id: 't3', label: 'Made from truck tarps', k: 99, n: 1388, pct: 7.1, verdict: verdict({ objectId: 't3', objectLabel: 'Made from truck tarps', changePts: -2.5, value: { k: 99, n: 1388 } }), direction: 'fading', isNew: false },
+        { id: 't3', label: 'Made from truck tarps', k: 99, n: 1388, pct: 7.1, verdict: verdict({ objectId: 't3', objectLabel: 'Made from truck tarps', changePts: -2.5, value: { k: 99, n: 1388 } }), direction: 'fading', isNew: false,
+          spark: [13.1, 12.6, 12.4, 12.0, 9.6, 7.1], sparkMonths: ['2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01', REAL_MONTH], firstHeard: '2026-04-01' },
       ],
       moversNote: null,
       mood: {

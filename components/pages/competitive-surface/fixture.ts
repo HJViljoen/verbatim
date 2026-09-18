@@ -340,6 +340,10 @@ export function competitiveFixture(over: Partial<CompetitiveSurfaceData> = {}): 
           platform: 'tiktok',
           videoHref: 'https://www.tiktok.com/@x/video/1',
           quotes: [{ ref: 'e:1', text: 'Where can I get one of these fitted in Ireland?', lang: 'en', english: null }],
+          // THE WINDOW'S CITATIONS BEHIND THIS ROW, not the two shown
+          // (`QuestionRow.comments`, Block D wave 2). `quotes` is capped for
+          // display; this is what the row is a reading of.
+          comments: 41,
         },
         {
           id: 'q2',
@@ -347,6 +351,7 @@ export function competitiveFixture(over: Partial<CompetitiveSurfaceData> = {}): 
           platform: 'youtube',
           videoHref: null,
           quotes: [{ ref: 'e:2', text: 'Hoeveel kos die battery om te vervang?', lang: 'af', english: 'How much does the battery cost to replace?' }],
+          comments: 27,
         },
       ],
       floor: 10,

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { directionRe } from '../test/copy-contract'
+import type { RecordInputs } from '../reading/record'
 import type { Verdict } from '../reading/verdicts'
 import { RPC_WINDOW_DENOMINATORS, RPC_WINDOW_THEME_READINGS } from '../reading/types'
 import { quarterFor } from '../reports/quarterly'
@@ -237,6 +238,53 @@ describe('methodNumbers', () => {
   // Inside Q3: the quarter itself is still filling.
   const INSIDE = '2026-09-16T00:00:00Z'
 
+  /**
+   * A REAL `RecordInputs`, NOT A CAST PAST THE TYPE CHECKER.
+   *
+   * These cases used `{ coverage, delivery } as never`, which was fine while
+   * the table held four rows off two fields. Wave 2 gives it the artboard's
+   * other four — Sources, Held back, Languages, Refused — off `platformMix`,
+   * `discard`, `language` and `comparisonsRefused`, and a partial cast then
+   * throws inside the function under test. The fixture's own lesson applies:
+   * a cast is what stopped a render tier catching "NaN changes to what we
+   * track were made inside this window" across three modes.
+   */
+  const record = (over: Partial<RecordInputs> = {}): RecordInputs => ({
+    window: { kind: 'quarter', from: '2026-07-01', to: '2026-09-30' },
+    delivery: { delivered: 13, dates: [], longestGapDays: 35, failed: 0, basis: 'run_clock' },
+    coverage: [],
+    readDepth: { analysed: 0, speech: 0, translated: 0, onScreenText: 0, unflagged: 0, basis: 'all_time_non_reddit' },
+    language: { analysed: 0, unknown: 0, english: 0, notEnglish: 0, basis: 'video_speech' },
+    discard: { readable: false, judged: 0, kept: 0, setAside: 0, clearedByHeuristic: 0, gateOff: 0, failedOpen: 0, recordedFrom: null, basis: 'run_clock' },
+    instrument: { themesPerVideo: null, themeAttachments: 0, analysedVideos: 0, runId: null },
+    changes: { inWindow: 0, loggedFrom: null, reconstructed: 0 },
+    comparisonsRefused: null,
+    refusals: [],
+    readingAt: INSIDE,
+    frozenAt: null,
+    ...over,
+  })
+
+  it('every row carries a stable id, and page 8 joins on it', () => {
+    // Page 8 reads the gate's share off this table by `r.id === 'held_back'`.
+    // It used to match `r.label === 'Held back'`, so a copy edit to that row
+    // would have dropped the share and the "why no sample is drawn" sentence
+    // off the last page with nothing failing.
+    const rows = methodNumbers(
+      record({
+        coverage: [{ audience: INDUSTRY_AUDIENCE, videos: 1388, comments: 11840, platformMix: { tiktok: 527, youtube: 403 }, dualMention: 0, excludedUndated: 0 }],
+        discard: { readable: true, judged: 1480, kept: 1388, setAside: 92, clearedByHeuristic: 0, gateOff: 0, failedOpen: 0, recordedFrom: '2026-06-28', basis: 'run_clock' },
+      }),
+      quarterFor(2026, 3),
+      overview,
+      INSIDE,
+    )
+    for (const row of rows) expect(row.id).toBeTruthy()
+    expect(rows.find((r) => r.id === 'held_back')?.label).toBe('Held back')
+    // And no two rows of one table share an id.
+    expect(new Set(rows.map((r) => r.id)).size).toBe(rows.length)
+  })
+
   it('tells a record that could not be read apart from a window that is not counted', () => {
     const q = quarterFor(2026, 3)
     // No record at all: nothing to say, and it says that.
@@ -248,7 +296,7 @@ describe('methodNumbers', () => {
     // not applied" would have been a false sentence on the artefact; what is
     // missing is the one-window read, and the month in hand is stated instead.
     const unwindowed = methodNumbers(
-      { coverage: null, delivery: { delivered: 10, dates: [], longestGapDays: 37, failed: 0, basis: 'run_clock' } } as never,
+      record({ coverage: null, delivery: { delivered: 10, dates: [], longestGapDays: 37, failed: 0, basis: 'run_clock' } }),
       q,
       overview,
       INSIDE,
@@ -261,13 +309,12 @@ describe('methodNumbers', () => {
   it('counts videos and comments over the quarter and names the gap', () => {
     const q = quarterFor(2026, 3)
     const rows = methodNumbers(
-      {
+      record({
         coverage: [
-          { audience: 'category', videos: 1000, comments: 8000, platformMix: {}, dualMention: 0, excludedUndated: 0 },
-          { audience: 'client', videos: 84, comments: 900, platformMix: {}, dualMention: 0, excludedUndated: 0 },
+          { audience: 'category', videos: 1000, comments: 8000, platformMix: { tiktok: 600, youtube: 400 }, dualMention: 0, excludedUndated: 0 },
+          { audience: 'client', videos: 84, comments: 900, platformMix: { tiktok: 84 }, dualMention: 0, excludedUndated: 0 },
         ],
-        delivery: { delivered: 13, dates: [], longestGapDays: 35, failed: 0, basis: 'run_clock' },
-      } as never,
+      }),
       q,
       overview,
       INSIDE,
@@ -280,6 +327,14 @@ describe('methodNumbers', () => {
     expect(rows.map((r) => r.label)).not.toContain('Conversations')
     expect(rows.find((r) => r.label === 'Updates')?.note).toBe('longest gap 35 days')
     expect(rows[0]).toMatchObject({ label: 'Period', value: '1 Jul – 30 Sep 2026', note: 'still filling' })
+    // THE ARTBOARD'S OTHER ROWS (wave 2). Sources is the platform mix pooled
+    // over every audience in the window, which is the same number the record's
+    // own coverage line prints as counts.
+    expect(rows.find((r) => r.label === 'Sources')?.value).toBe('TikTok 63% · YouTube 37%')
+    // And a row whose read does not exist is ABSENT, never a zero: this record
+    // has no gate reading and no language reading behind it.
+    expect(rows.map((r) => r.label)).not.toContain('Held back')
+    expect(rows.map((r) => r.label)).not.toContain('Languages')
   })
 
   it('says a CLOSED quarter is closed, whatever the month the product is in', () => {
@@ -425,7 +480,12 @@ describe('what the quarterly pages now carry (package D7)', () => {
     expect(formingFixture().category.quiet).toBeNull()
     expect(formingFixture().category.quietNote).toContain('could not be read')
     expect(thinMonthFixture().category.quiet).toEqual([])
-    expect(thinMonthFixture().category.quietNote).toContain('has gone quiet')
+    // NOT "has gone quiet" ANY MORE, AND THE REASON IS THAT IT IS PRINTED NOW.
+    // Both sentences were written with the flag's own words in them and neither
+    // was ever rendered; wave 2 renders them, and rule (c) sweeps a direction
+    // word outside a verdict node — which is what the flag is marked as, and a
+    // sentence ABOUT the register is not one.
+    expect(thinMonthFixture().category.quietNote).toContain('has stopped being said')
     expect(quarterlyFixture().category.quiet).toHaveLength(2)
     expect(quarterlyFixture().category.quietNote).toBeNull()
   })

@@ -4,6 +4,7 @@ import { composeQuarterly } from '@/lib/pages/quarterly'
 import type { WindowReading } from '@/lib/reading/read'
 import type { RecordInputs } from '@/lib/reading/record'
 import type { SubjectWindowReading } from '@/lib/subjects/types'
+import { searchPlanView, type DeckChangeLog, type SearchPlan } from '@/lib/settings/deck-record'
 import type { QuarterlySnapshotData } from '@/lib/reports/quarterly-build'
 import { QUARTERLY_BLOCK_KEYS, previousQuarter, quarterFor, quarterlySubject, quarterlyTitle } from '@/lib/reports/quarterly'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '@/lib/rivals'
@@ -98,6 +99,44 @@ const checksRan: QuarterChecks = {
 const checksNotRecorded: QuarterChecks = { recorded: false, ran: 0, flaggedRuns: 0, flags: [] }
 
 /**
+ * `qr.p8.searchplan` and `qr.p8.changelog` — what the deck's last page now
+ * draws, and what nothing in this fixture carried.
+ *
+ * BOTH GO THROUGH THEIR OWN PURE VIEW (`searchPlanView`, `deckChangeLogView`),
+ * so the fixture exercises the cut the loader takes rather than a shape typed
+ * beside it — including `noYield`, which is the row worth reading (a term that
+ * found something and kept nothing is a term costing money to gather), and the
+ * change log's RECORDED-only rule.
+ */
+const SEARCH_PLAN: SearchPlan = searchPlanView([
+  { keyword: 'recycled sails', months: [], found: 412, kept: 388, keptPct: 94.2 },
+  { keyword: 'sail bag', months: [], found: 260, kept: 221, keptPct: 85 },
+  { keyword: 'eco bag', months: [], found: 410, kept: 12, keptPct: 2.9 },
+  { keyword: 'upcycled backpack', months: [], found: 96, kept: 0, keptPct: 0 },
+])
+
+const CHANGE_LOG: DeckChangeLog = {
+  rows: [
+    {
+      // `dateShort` is E-record's, added to `ClientChange` in the same wave:
+      // the record page's 100px column takes "3 Sep" and the quarterly's change
+      // log keeps the long form, because there two Septembers a year apart sit
+      // in one table.
+      id: 'cc-1', on: '2026-09-03', date: '3 Sep 2026', dateShort: '3 Sep', surface: 'rivals', what: 'Rival added',
+      said: 'Poler was added to the tracked set.', who: 'an operator', breaks: 'the standings and the attention panel',
+      before: null, after: null, rowsAffected: null, reconstructed: false,
+    },
+    {
+      id: 'cc-2', on: '2026-08-19', date: '19 Aug 2026', dateShort: '19 Aug', surface: 'subjects', what: 'Subjects named',
+      said: 'Six subjects were named and confirmed.', who: 'a member of your workspace', breaks: 'nothing that had been read',
+      before: null, after: null, rowsAffected: 6, reconstructed: false,
+    },
+  ],
+  showing: null,
+  affectsRecorded: true,
+}
+
+/**
  * The quarter's record — NO CAST.
  *
  * The first cut wrote five of these eight blocks in shapes `RecordInputs` does
@@ -113,7 +152,12 @@ const record = (delivered: number, readingAt = NOW): RecordInputs => ({
   window: { kind: 'quarter', from: QUARTER.from, to: QUARTER.to },
   delivery: { delivered, dates: [], longestGapDays: 35, failed: 0, basis: 'run_clock' },
   coverage: [
-    { audience: INDUSTRY_AUDIENCE, videos: 1388, comments: 11840, platformMix: {}, dualMention: 41, excludedUndated: 0 },
+    // THE MIX IS REAL HERE (Block D wave 2), because the method table's
+    // "Sources" row is computed from it: an empty map is a workspace whose
+    // platform mix was never recorded, which is a different state from the
+    // mock's "TikTok 38% · YouTube 29% · Instagram 21% · Reddit 12%" and was
+    // the only one this fixture could draw.
+    { audience: INDUSTRY_AUDIENCE, videos: 1388, comments: 11840, platformMix: { tiktok: 527, youtube: 403, instagram: 292, reddit: 166 }, dualMention: 41, excludedUndated: 0 },
   ],
   readDepth: { analysed: 1388, speech: 694, translated: 180, onScreenText: 233, unflagged: 0, basis: 'all_time_non_reddit' },
   language: { analysed: 1388, unknown: 420, english: 640, notEnglish: 328, basis: 'video_speech' },
@@ -144,6 +188,8 @@ export function quarterlyFixture(over: Partial<QuarterlyData> = {}): QuarterlyDa
       checks: checksRan,
       record: record(13),
       quiet: QUIET,
+      searchPlan: SEARCH_PLAN,
+      changeLog: CHANGE_LOG,
     }),
     ...over,
   }
@@ -183,6 +229,8 @@ export function subjectLeadFixture(): QuarterlyData {
     checks: checksRan,
     record: record(13),
     quiet: QUIET,
+    searchPlan: SEARCH_PLAN,
+    changeLog: CHANGE_LOG,
   })
 }
 
@@ -223,6 +271,8 @@ export function closedFixture(): QuarterlyData {
     checks: checksRan,
     record: record(13, '2026-11-02T09:00:00.000Z'),
     quiet: QUIET,
+    searchPlan: SEARCH_PLAN,
+    changeLog: CHANGE_LOG,
   })
 }
 
@@ -267,6 +317,8 @@ export function afterQuarterFixture(): QuarterlyData {
     checks: checksRan,
     record: record(13, AFTER),
     quiet: QUIET,
+    searchPlan: SEARCH_PLAN,
+    changeLog: CHANGE_LOG,
   })
 }
 
@@ -308,6 +360,42 @@ export function thinMonthFixture(): QuarterlyData {
     // silences are independent, and the fixture proves a page can carry one
     // without the other.
     quiet: [],
+  })
+}
+
+/**
+ * A QUARTER WHOSE COMPARISONS MOSTLY COULD NOT BE DRAWN — the state that makes
+ * the interpretation run past one sentence.
+ *
+ * WHY IT EXISTS. `qr.p2.whatitmeans` is the artboard's "What it means" card,
+ * and `argument()` splits it off only where the slot wrote three sentences or
+ * more. Every state above runs to exactly two, so the card rendered on none of
+ * them and nothing would have failed if it were deleted — one of the thirteen
+ * elements the brief listed as MISSING was, on all the evidence this branch
+ * could produce, unshipped. This is not a hand-typed interpretation: the
+ * window reads are small, `quarterChange` answers `too_little_data` /
+ * `baseline_forming` over them, and `composeInterpretation`'s fallback then
+ * composes its thin-comparison sentence as well as its opener — which is the
+ * arm the card was written for, reached the way production reaches it.
+ */
+export function thinQuarterFixture(): QuarterlyData {
+  const overview = overviewFixture()
+  return composeQuarterly({
+    overview: { ...overview, bar: { ...overview.bar, readings: 8 } },
+    market: marketFixture(),
+    competitive: competitiveFixture(),
+    quarter: QUARTER,
+    prior: PRIOR,
+    readingAt: NOW,
+    thisQuarter: windowRead(46, 320),
+    lastQuarter: windowRead(41, 288),
+    subjectsNow: subjectWindow(46, 0.22),
+    subjectsBefore: subjectWindow(41, 0.18),
+    checks: checksRan,
+    record: record(13),
+    quiet: QUIET,
+    searchPlan: SEARCH_PLAN,
+    changeLog: CHANGE_LOG,
   })
 }
 
