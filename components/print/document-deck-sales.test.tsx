@@ -330,6 +330,25 @@ describe('sales.p6 — the “Say this” sheet', () => {
   })
 })
 
+// ── one market on one deck ────────────────────────────────────────────────
+
+describe('the fixture is one market', () => {
+  // The artboard is a Sealand bag brief and the subjects fixture is one; the
+  // competitive fixture's numbers are Össur's own, read read-only off
+  // production, and its rival is Ottobock — so the deck carried "the
+  // prosthetics conversation", Ottobock and "3r85 or 3r80" inside a bag brief.
+  // `components/print/fixture.ts` re-labels the NAMES and touches no measured
+  // number. This is the guard on that: a domain word added to a borrowed
+  // fixture later fails here rather than reaching a client's PDF.
+  it('carries no word of the other market, on any sheet or in any state', () => {
+    const other = /prosthetic|amputee|bionic|Ottobock|Össur|Ossur|3r8\d|battery/i
+    for (const data of [salesBriefFixture(), salesBriefThinFixture(), salesBriefUnreadFixture(), salesBriefLegacyFixture()]) {
+      const found = other.exec(deck(data))
+      expect(found?.[0] ?? null).toBeNull()
+    }
+  })
+})
+
 describe('the sales brief’s order is the artboard’s', () => {
   it('runs cover · pushing back · in their words · rivals · compare · moving · answers · method', () => {
     const titles = sheets(deck()).map(titleOf)

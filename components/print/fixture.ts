@@ -103,7 +103,74 @@ const LANGUAGE: DocPage = {
   ],
 }
 
-const SURFACES = () => ({ subjects: subjectsFixture(), competitive: competitiveFixture() })
+/**
+ * ONE MARKET ON ONE DECK.
+ *
+ * The artboard is a Sealand bag brief and `subjectsFixture()` is one too —
+ * durability, recycled materials, "will it survive a wet commute". The
+ * competitive fixture is NOT: its numbers are Össur's own, read read-only off
+ * `month_denominators` on 2026-09-18, and its rival is Ottobock. So a deck
+ * rendered from both carried Ottobock, "the prosthetics conversation" and "the
+ * specific prosthetic model shown (3r85 or 3r80)" inside a bag brief — and
+ * this fixture is now the object every later wave-2 package and every later
+ * reviewer renders the sales brief from, so each of them would read the
+ * incoherence as a data bug first.
+ *
+ * THE NUMBERS ARE NOT TOUCHED AND MUST NOT BE. They are measured, and the
+ * competitive fixture's own header says so at length; replacing them with
+ * invented bag-market counts would swap a real reading for fiction to make a
+ * screenshot tidy. Only the NAMES are re-labelled, here rather than in
+ * `components/pages/competitive-surface/fixture.ts`, which E-competitive owns
+ * and whose own tests are written against Össur.
+ *
+ * A miss is caught rather than shipped: `document-deck-sales.test.tsx` renders
+ * the whole deck and asserts that no word of the other market survives
+ * anywhere in it, so a string added to the borrowed fixture later fails here
+ * instead of appearing on a client's PDF.
+ */
+const RELABEL: readonly (readonly [RegExp, string])[] = [
+  [/Össur/g, 'Sealand'],
+  [/Ottobock/g, 'Freitag'],
+  [/ottobock/g, 'freitag'],
+  [/the specific prosthetic model shown \(3r85 or 3r80\)/g, 'the exact bag shown (the 39L or the 25L)'],
+  [/Where can I get one of these fitted in Ireland\?/g, 'Where can I get one of these shipped to Ireland?'],
+  [/what the battery costs to replace and how often it needs doing/g, 'what a zip costs to replace and how often it needs doing'],
+  [/Hoeveel kos die battery om te vervang\?/g, 'Hoeveel kos dit om die rits te vervang?'],
+  [/How much does the battery cost to replace\?/g, 'How much does the zip cost to replace?'],
+  [/\bamputee\b/g, 'onebag'],
+  // Before the bare word below, which would otherwise eat the chart's label.
+  [/the prosthetics conversation/g, 'the category conversation'],
+  [/\bprosthetics\b/g, 'buyitforlife'],
+  [/\bbionics\b/g, 'manybaggers'],
+]
+
+const relabelString = (x: string): string => RELABEL.reduce((acc, [re, to]) => acc.replace(re, to), x)
+
+/** Deep, over strings and object KEYS alike — an audience is `competitor:X`
+ *  and a handle map is keyed by platform but valued by handle, and a rival's
+ *  name reaches the page through both. */
+function relabel<T>(value: T): T {
+  if (typeof value === 'string') return relabelString(value) as unknown as T
+  if (Array.isArray(value)) return value.map(relabel) as unknown as T
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([k, v]) => [relabelString(k), relabel(v)]),
+    ) as unknown as T
+  }
+  return value
+}
+
+const SURFACES = () => ({ subjects: subjectsFixture(), competitive: relabel(competitiveFixture()) })
+
+/** Wave 1's slide figures, in the same market. Its month line is labelled
+ *  "Durability · the prosthetics conversation" and nothing asserts that
+ *  string, but the label is the chart's caption on `sales.p2` and it is the
+ *  most visible word on the sheet. */
+const FIGURES = {
+  brief: () => relabel(briefFiguresFixture()),
+  thin: () => relabel(thinFiguresFixture()),
+  unread: () => relabel(unreadFiguresFixture()),
+}
 
 /** SALES_MAP's own order, which is the artboard's. The composer builds this
  *  list; it is written out here so a reorder of the map that this fixture does
@@ -143,7 +210,7 @@ function countedPages(figures: DocumentSnapshotData['slideFigures']): { pages: D
 
 function base(over: Partial<DocumentSnapshotData> = {}): DocumentSnapshotData {
   const surfaces = SURFACES()
-  const counted = countedPages(over.slideFigures === undefined ? briefFiguresFixture() : over.slideFigures)
+  const counted = countedPages(over.slideFigures === undefined ? FIGURES.brief() : over.slideFigures)
   return {
     version: 1,
     kind: 'document',
@@ -183,7 +250,7 @@ function base(over: Partial<DocumentSnapshotData> = {}): DocumentSnapshotData {
     sections: briefSections(SALES_MAP, surfaces, []),
     surfaces,
     layout: counted.layout,
-    slideFigures: briefFiguresFixture(),
+    slideFigures: FIGURES.brief(),
     pages: counted.pages,
     role: 'sales_brief',
     lens: { means: 'What it means for a sale', short: 'for a sale' },
@@ -207,13 +274,13 @@ export const salesBriefFixture = (over: Partial<DocumentSnapshotData> = {}): Doc
  *  the month line has two readings, so the figures refuse and say how many
  *  they had. */
 export const salesBriefThinFixture = (over: Partial<DocumentSnapshotData> = {}): DocumentSnapshotData =>
-  base({ slideFigures: thinFiguresFixture(), ...over })
+  base({ slideFigures: FIGURES.thin(), ...over })
 
 /** Nothing named both and `month_kind_readings` is unapplied: no switching
  *  figure, no objection, no scripted row, no chart. Every one of those is an
  *  absence said in words. */
 export const salesBriefUnreadFixture = (over: Partial<DocumentSnapshotData> = {}): DocumentSnapshotData =>
-  base({ slideFigures: unreadFiguresFixture(), ...over })
+  base({ slideFigures: FIGURES.unread(), ...over })
 
 /** A brief built before wave 2: no slide figures at all. What every stored
  *  Sales brief on production is, and it has to keep rendering. */
