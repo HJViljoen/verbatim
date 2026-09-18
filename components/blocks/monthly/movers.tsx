@@ -80,8 +80,8 @@ export const monthlyMovers: Block<MonthlyData> = {
     // THE ARM NAMES WHAT WAS DONE TO THE NUMBER; the row carries the word,
     // inside the node that holds the band. VO2's own wording, so a reader who
     // has seen the page reads the same two arms here.
-    const larger = <Side heading="Cleared their band · a larger share than last month" rows={m.growing} mode={mode} audience={m.audienceLabel} arm="larger" />
-    const smaller = <Side heading="Cleared their band · a smaller share than last month" rows={m.fading} mode={mode} audience={m.audienceLabel} arm="smaller" />
+    const larger = <Side rows={m.growing} mode={mode} audience={m.audienceLabel} arm="larger" />
+    const smaller = <Side rows={m.fading} mode={mode} audience={m.audienceLabel} arm="smaller" />
     const flags = (
       <>
         {m.newcomers.length > 0 ? <Flags heading="First heard this month" rows={m.newcomers} mode={mode} /> : null}
@@ -171,8 +171,7 @@ export const monthlyMovers: Block<MonthlyData> = {
   },
 }
 
-function Side({ heading, rows, mode, audience, arm }: {
-  heading: string
+function Side({ rows, mode, audience, arm }: {
   rows: readonly MoverRow[]
   mode: RenderMode
   audience: string
@@ -192,7 +191,21 @@ function Side({ heading, rows, mode, audience, arm }: {
   }
   return (
     <div className={email ? undefined : 'flex flex-col gap-2'}>
-      <Heading mode={mode}>{heading}</Heading>
+      {/* AND THE WORD THAT CARRIES THE DIFFERENCE IS SET AS SUCH (the fix
+          pass, review finding [Medium]). "CLEARED THEIR BAND · A LARGER SHARE
+          THAN LAST MONTH" and "… A SMALLER SHARE …" are the honest headings —
+          rule (c) forbids "Grew" and "Faded", which have no reading behind
+          them — but at 10.5px caps, wrapped to two lines, the distinguishing
+          word arrived fifth in two otherwise identical shapes, and the columns
+          read as two copies of one heading. The one word that differs is now
+          the dark one; the seven that do not stay muted. */}
+      <Heading mode={mode}>
+        Cleared their band · a{' '}
+        {email
+          ? <span style={{ color: EMAIL.ink }}>{arm}</span>
+          : <span className="text-foreground">{arm}</span>}
+        {' '}share than last month
+      </Heading>
       {rows.map((r) => <Row key={r.id} row={r} mode={mode} />)}
     </div>
   )

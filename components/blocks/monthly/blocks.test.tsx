@@ -157,6 +157,15 @@ describe('MR3 · what moved', () => {
     const text = renderText(block.render(monthlyFixture(), 'app', ctx))
     expect(text).toContain('Cleared their band · a larger share than last month')
     expect(text).toContain('Cleared their band · a smaller share than last month')
+    // AND THE ONE WORD THAT DIFFERS IS THE DARK ONE (the fix pass, review
+    // finding [Medium]): at 10.5px caps over two lines, two headings of the
+    // same shape whose distinguishing word arrives fifth read as two copies of
+    // one heading.
+    const app = render(block.render(monthlyFixture(), 'app', ctx))
+    expect(app).toContain('<span class="text-foreground">larger</span>')
+    expect(app).toContain('<span class="text-foreground">smaller</span>')
+    const email = render(block.render(monthlyFixture(), 'email', ctx))
+    expect(email).toContain(`<span style="color:${EMAIL.ink}">larger</span>`)
   })
 
   it('writes every row’s line out in words, so an email with no images loses nothing', () => {
