@@ -1,0 +1,282 @@
+import { describe, expect, it } from 'vitest'
+
+import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../rivals'
+import type { MonthPoint, MonthSeries } from '../reading/series'
+import {
+  DECLINED_WHY,
+  FALLBACK_NOTE,
+  INTERPRETATION_CAVEAT,
+  NOT_ANSWERED_HREF,
+  TOO_FEW,
+  answerFallback,
+  measureAnswer,
+  notAnsweredFrom,
+  scrubAnswer,
+  scrubThreadAnswer,
+} from './measure'
+
+const MONTH = '2026-09-01'
+
+function point(month: string, k: number | null, videos: number | null, over: Partial<MonthPoint> = {}): MonthPoint {
+  return {
+    month,
+    state: 'frozen',
+    videos,
+    comments: videos == null ? null : videos * 8,
+    k,
+    kComments: k == null ? null : k * 8,
+    pct: k != null && videos ? Math.round((k / videos) * 1000) / 10 : null,
+    audience: INDUSTRY_AUDIENCE,
+    status: 'frozen',
+    origin: 'live',
+    readAt: '2026-09-18T00:00:00.000Z',
+    runId: 'run-1',
+    frozenAt: null,
+    clusteringKey: 'cl-1',
+    labels: [],
+    ...over,
+  }
+}
+
+/** A three-month category axis that climbs: 15% → 19% → 23% of ~1,400 videos,
+ *  one clustering, no thin month — the shape `directionWord` was written for. */
+function climbing(over: Partial<MonthSeries> = {}): MonthSeries {
+  return {
+    audience: INDUSTRY_AUDIENCE,
+    names: [INDUSTRY_AUDIENCE],
+    objectId: 'reg-1',
+    objectLabel: 'Will it survive a wet commute',
+    points: [
+      point('2026-07-01', 210, 1400),
+      point('2026-08-01', 276, 1455),
+      point(MONTH, 320, 1388),
+    ],
+    notes: [],
+    firstReadable: '2026-07-01',
+    substrate: 'seeded',
+    ...over,
+  }
+}
+
+/** The client's own side of the same theme: real, and far under the floor. */
+function ownSide(): MonthSeries {
+  const at = (month: string, k: number, n: number): MonthPoint =>
+    point(month, k, n, { audience: CLIENT_AUDIENCE })
+  return {
+    audience: CLIENT_AUDIENCE,
+    names: [CLIENT_AUDIENCE],
+    objectId: 'reg-1',
+    objectLabel: 'Will it survive a wet commute',
+    points: [at('2026-07-01', 21, 79), at('2026-08-01', 25, 91), at(MONTH, 26, 84)],
+    notes: [],
+    firstReadable: null,
+    substrate: 'seeded',
+  }
+}
+
+const findings = [{ findingId: 'G1', registryIds: ['reg-1'] }]
+
+describe('measureAnswer', () => {
+  it('earns a direction over three clean readings when agent.movement is on', () => {
+    const m = measureAnswer({ findings, series: [climbing()], month: MONTH, directionWords: true })
+    expect(m.findings).toHaveLength(1)
+    const f = m.findings[0]
+    expect(f.direction).toBe('growing')
+    // The word is ON the verdict, not only beside it — that is what licenses a
+    // sentence through dropUnverdictedDirection.
+    expect(f.verdict?.direction).toBe('growing')
+    expect(f.value).toEqual({ k: 320, n: 1388 })
+    expect(f.audience).toBe(INDUSTRY_AUDIENCE)
+    expect(f.series.map((p) => p.month)).toEqual(['2026-07-01', '2026-08-01', MONTH])
+    expect(f.series[2]).toEqual({ month: MONTH, k: 320, n: 1388, pct: 23.1 })
+  })
+
+  it('earns none from the same series with the flag off, and keeps the verdict', () => {
+    const m = measureAnswer({ findings, series: [climbing()], month: MONTH, directionWords: false })
+    const f = m.findings[0]
+    expect(f.direction).toBeNull()
+    expect(f.verdict?.direction).toBeNull()
+    // The banded comparison survives the gate: a verdict is not a direction.
+    expect(f.verdict?.state).toBe('moved')
+    expect(f.verdict?.changePts).not.toBeNull()
+    expect(f.verdict?.bandPts).not.toBeNull()
+  })
+
+  it('withholds the word where the current month is thin, and says so on the verdict', () => {
+    const thin = climbing()
+    thin.points[2] = point(MONTH, 320, 1388, { labels: [{ kind: 'thin', text: 'thin' } as never] })
+    const m = measureAnswer({ findings, series: [thin], month: MONTH, directionWords: true })
+    expect(m.findings[0].direction).toBeNull()
+    expect(m.findings[0].verdict?.flags).toContain('thin')
+  })
+
+  it('draws the side with the n and makes the client’s own side the caveat', () => {
+    const m = measureAnswer({
+      findings,
+      series: [climbing(), ownSide()],
+      month: MONTH,
+      directionWords: true,
+      ownAudience: CLIENT_AUDIENCE,
+      hasJudgement: true,
+    })
+    expect(m.findings[0].audience).toBe(INDUSTRY_AUDIENCE)
+    expect(m.caveats[0]).toBe(INTERPRETATION_CAVEAT)
+    expect(m.caveats[1]).toBe(
+      `Your own side of Will it survive a wet commute is 26 of 84 videos in September — ${TOO_FEW}.`,
+    )
+  })
+
+  it('publishes every figure by token, with its unit, and nothing else', () => {
+    const m = measureAnswer({ findings, series: [climbing()], month: MONTH, directionWords: true })
+    expect(Object.keys(m.figures).sort()).toEqual([
+      'f1_band', 'f1_change', 'f1_k', 'f1_n', 'f1_pct', 'f1_prev_k', 'f1_prev_n', 'f1_prev_pct',
+    ])
+    expect(m.figures.f1_k).toEqual({ value: 320, unit: 'videos', label: 'videos naming Will it survive a wet commute in September' })
+    expect(m.figures.f1_pct.unit).toBe('pct')
+    expect(m.figures.f1_band.unit).toBe('pts')
+  })
+
+  it('measures nothing when the month carries no row for the topic', () => {
+    const empty = climbing({ points: [point('2026-07-01', 210, 1400)] })
+    const m = measureAnswer({ findings, series: [empty], month: MONTH, directionWords: true })
+    expect(m.findings).toEqual([])
+    expect(m.verdicts).toEqual([])
+    expect(m.figures).toEqual({})
+  })
+})
+
+describe('scrubAnswer', () => {
+  const measure = measureAnswer({
+    findings,
+    series: [climbing()],
+    month: MONTH,
+    directionWords: true,
+  })
+
+  it('drops the sentence the model typed a digit into and keeps the rest', () => {
+    const raw = 'Durability is the question underneath the category. It came up in 305 of 1,388 videos this month. No tracked brand answers it on camera.'
+    const out = scrubAnswer(raw, measure)
+    expect(out.text).toBe('Durability is the question underneath the category. No tracked brand answers it on camera.')
+    expect(out.droppedDigits).toBe(1)
+    expect(out.leaked).toBe(true)
+  })
+
+  it('keeps a figure the caller’s table holds, as its token', () => {
+    const out = scrubAnswer('Durability reached [[f1_k]] videos.', measure)
+    expect(out.text).toBe('Durability reached [[f1_k]] videos.')
+    expect(out.dropped).toBe(0)
+  })
+
+  it('drops a token the table does not hold', () => {
+    const out = scrubAnswer('Durability reached [[f9_k]] videos.', measure)
+    expect(out.text).toBe('')
+    expect(out.dropped).toBe(1)
+  })
+
+  it('licenses a direction word only for the object a verdict earned one for', () => {
+    const raw = 'Will it survive a wet commute is growing. Price talk is growing.'
+    const out = scrubAnswer(raw, measure)
+    expect(out.text).toBe('Will it survive a wet commute is growing.')
+    expect(out.droppedDirection).toBe(1)
+  })
+
+  it('licenses nothing when the flag is off', () => {
+    const off = measureAnswer({ findings, series: [climbing()], month: MONTH, directionWords: false })
+    const out = scrubAnswer('Will it survive a wet commute is growing.', off)
+    expect(out.text).toBe('')
+    expect(out.droppedDirection).toBe(1)
+  })
+
+  it('refuses a number inside the model’s own quotation marks', () => {
+    const out = scrubAnswer('People say “it lasted 3 winters” about the seams.', measure)
+    expect(out.text).toBe('')
+    expect(out.droppedDigits).toBe(1)
+  })
+})
+
+describe('scrubThreadAnswer', () => {
+  const measure = measureAnswer({ findings, series: [climbing()], month: MONTH, directionWords: true })
+
+  it('scrubs the prose nodes and leaves a quote’s own node whole, digits and all', () => {
+    const answer = {
+      answer: 'Durability leads. It ran at 22% this month.',
+      grounded: [
+        {
+          text: 'The wet-commute question is the one nobody answers. It is in 130 of 1,388 videos.',
+          quotes: [{ text: 'Three winters on the bike and the seams are still perfect. The zip, less so — 2 of them.' }],
+        },
+      ],
+    }
+    const out = scrubThreadAnswer(answer, measure)
+    expect(out.answer).toBe('Durability leads.')
+    expect(out.grounded[0].text).toBe('The wet-commute question is the one nobody answers.')
+    // The commenter's own words are a sibling node and are never handed to the
+    // scrubber: the digit in them survives.
+    expect(out.grounded[0].quotes[0].text).toContain('2 of them')
+    expect(out.scrub).toEqual({ dropped: 2, droppedDigits: 2, droppedDirection: 0, leaked: true })
+  })
+})
+
+describe('answerFallback', () => {
+  it('writes the reading itself, and says that it did', () => {
+    const m = measureAnswer({ findings, series: [climbing()], month: MONTH, directionWords: true })
+    const text = answerFallback(m) as string
+    expect(text.startsWith(FALLBACK_NOTE)).toBe(true)
+    expect(text).toContain('320 of 1,388 videos in the category')
+    expect(text).toContain('moved (')
+  })
+
+  it('writes nothing when nothing was measured', () => {
+    expect(answerFallback({ findings: [], verdicts: [], figures: {}, caveats: [] })).toBeNull()
+  })
+})
+
+describe('notAnsweredFrom', () => {
+  const at = (n: number): string => `2026-09-0${n}T09:00:00.000Z`
+  const rows = [
+    { role: 'user', content: 'What do people complain about with Freitag?', outcome: null, result: null, created_at: at(1) },
+    { role: 'agent', content: '…', outcome: 'answered', result: {}, created_at: at(1) },
+    { role: 'user', content: 'Did our August ad spend move anything?', outcome: null, result: null, created_at: at(2) },
+    { role: 'agent', content: '…', outcome: 'partial', result: { notice: 'This asks about your own numbers' }, created_at: at(2) },
+    { role: 'user', content: 'Anything compared against Poler?', outcome: null, result: null, created_at: at(3) },
+    { role: 'agent', content: '…', outcome: 'silent', result: {}, created_at: at(3) },
+  ]
+
+  it('counts the wall-clock month’s questions and names every refusal', () => {
+    const n = notAnsweredFrom(rows, '2026-09-01T00:00:00.000Z', 40)
+    expect(n.month).toBe('2026-09-01')
+    expect(n.asked).toBe(3)
+    expect(n.cap).toBe(40)
+    expect(n.declined).toEqual([
+      { question: 'Did our August ad spend move anything?', why: DECLINED_WHY.out_of_corpus },
+      { question: 'Anything compared against Poler?', why: DECLINED_WHY.silent },
+    ])
+    expect(n.line).toBe('3 of 40 questions asked this month. 2 of them could not be answered from the conversation.')
+    expect(n.href).toBe(NOT_ANSWERED_HREF)
+  })
+
+  it('says so when every question was answered', () => {
+    const n = notAnsweredFrom(rows.slice(0, 2), '2026-09-01T00:00:00.000Z', 40)
+    expect(n.declined).toEqual([])
+    expect(n.line).toBe('1 of 40 questions asked this month. Every one was answered from the conversation.')
+  })
+
+  it('reads at the cap without inventing room', () => {
+    const many = Array.from({ length: 40 }, (_, i) => ({
+      role: 'user', content: `q${i}`, outcome: null, result: null, created_at: at(1),
+    }))
+    const n = notAnsweredFrom(many, '2026-09-01T00:00:00.000Z', 40)
+    expect(n.asked).toBe(40)
+    expect(n.line.startsWith('40 of 40 questions asked this month.')).toBe(true)
+  })
+
+  it('counts an unanswered question as asked — it was, and it was paid for', () => {
+    const n = notAnsweredFrom(
+      [{ role: 'user', content: 'in flight', outcome: null, result: null, created_at: at(4) }],
+      '2026-09-01T00:00:00.000Z',
+      40,
+    )
+    expect(n.asked).toBe(1)
+    expect(n.declined).toEqual([])
+  })
+})
