@@ -68,6 +68,16 @@ describe('monthsOfWindow', () => {
     expect(monthsOfWindow('2026-07-20T00:00:00.000Z', '2026-09-05T00:00:00.000Z'))
       .toEqual(['2026-07-01', '2026-08-01', '2026-09-01'])
   })
+
+  it('terminates on a window end no month start can sort below', () => {
+    // The comparison is lexicographic against a string taken off the run row.
+    // `window_end` is `timestamptz`, so this is not reachable from the schema —
+    // but the loop is on a page-load path and an unbounded one there is a
+    // hang, not a wrong number.
+    const months = monthsOfWindow('2026-09-06T04:06:38.483Z', 'zzzz')
+    expect(months.length).toBeLessThanOrEqual(120)
+    expect(months[0]).toBe('2026-09-01')
+  })
 })
 
 describe('clipToMonth', () => {

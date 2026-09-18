@@ -132,12 +132,23 @@ export interface UpdateSeriesOptions {
 
 const DAY_MS = 86_400_000
 
+/** The most months one window may be spread over before `monthsOfWindow` stops
+ *  counting. A cap, not a rule: no real window reaches it. */
+const MAX_WINDOW_MONTHS = 120
+
 const EMPTY_BASIS = 'no update of this workspace carries a window'
+
+/** The axis's words when the runs themselves could not be read. NOT
+ *  `EMPTY_BASIS`, which asserts something we did not manage to look at: on this
+ *  arm what is true is that we could not look. Not rendered today — `Series`
+ *  draws nothing without points — which is exactly why it has to be right
+ *  before a wave-2 port prints `basis` unconditionally. */
+const UNREAD_BASIS = 'this workspace’s updates could not be read just now'
 
 /** An empty series, with a reason. The shape never changes, so a block that
  *  draws it never has to guard. */
-function emptySeries(note: string): UpdateSeries {
-  return { points: [], median: null, band: null, basis: EMPTY_BASIS, note }
+function emptySeries(note: string, basis: string = EMPTY_BASIS): UpdateSeries {
+  return { points: [], median: null, band: null, basis, note }
 }
 
 /**
@@ -223,7 +234,12 @@ export function updateSeriesLine(series: UpdateSeries): string {
 export function monthsOfWindow(from: string, to: string): string[] {
   const out: string[] = []
   let cursor = monthStartOf(from)
-  while (`${cursor}T00:00:00.000Z` < to) {
+  // BOUNDED, BECAUSE THIS RUNS ON A PAGE LOAD AND THE COMPARISON IS ON STRINGS.
+  // `to` comes off `pipeline_runs.window_end`; the column is `timestamptz`, so
+  // a value that never sorts below a month start is not reachable from the
+  // schema today — and the cost of saying so is one counter. Ten years of
+  // months is far past any window this product will draw.
+  for (let i = 0; i < MAX_WINDOW_MONTHS && `${cursor}T00:00:00.000Z` < to; i += 1) {
     out.push(cursor)
     cursor = nextMonth(cursor)
   }
@@ -416,7 +432,7 @@ export async function loadUpdateSeries(scope: Scope, opts: UpdateSeriesOptions =
     .limit(requested)
   if (res.error) {
     console.error(`[reading] updates.runs: ${res.error.message}`)
-    return emptySeries('This workspace’s updates could not be read just now, so the series is not drawn.')
+    return emptySeries('This workspace’s updates could not be read just now, so the series is not drawn.', UNREAD_BASIS)
   }
   const raw = (res.data as RunRow[] | null) ?? []
 
