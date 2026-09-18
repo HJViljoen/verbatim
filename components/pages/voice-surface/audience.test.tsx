@@ -15,6 +15,16 @@ const ctx = blockContext('', EMAIL, {})
 const draw = (data = voiceFixture(), mode: RenderMode = 'app') => renderText(voiceAudience.render(data, mode, ctx))
 
 describe('voiceAudience', () => {
+  it('agrees with itself: the selected pill and the row it selects carry one count', () => {
+    // The refused fixture overrode the audience's counts and left the options
+    // as the category month's, so the pill read "Category 1,388" beside a row
+    // reading "388 videos in this audience".
+    const text = draw(refusedVoiceFixture())
+    expect(text).toContain('Category 388')
+    expect(text).toContain('388 videos in this audience · Sep 2026')
+    expect(text).not.toContain('1,388')
+  })
+
   it('says "too thin to compare" in words, not only on a tooltip', () => {
     // The mark is the pill's weight, which is the mock's; the words were on
     // `title` alone, which reaches neither a keyboard nor a touch screen — so

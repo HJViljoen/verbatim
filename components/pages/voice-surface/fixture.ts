@@ -338,6 +338,14 @@ export function refusedVoiceFixture(over: Partial<VoiceSurfaceData> = {}): Voice
     brand: 'Össur',
     audience: {
       ...base.audience,
+      // THE SELECTED PILL AND THE ROW IT SELECTS AGREE. The refused state
+      // overrode the audience's own counts and left the OPTIONS as the
+      // category month's, so the pill read "Category 1,388" beside a row
+      // reading "388 videos in this audience" — two numbers for one audience,
+      // an inch apart, in the state a client is actually in.
+      options: base.audience.options.map((o) => (
+        o.audience === INDUSTRY_AUDIENCE ? { ...o, videos: 388, comments: 10534 } : o
+      )),
       videos: 388,
       comments: 10534,
       platformMix: [
