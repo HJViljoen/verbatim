@@ -27,12 +27,12 @@ describe('studioCatalogue', () => {
     // `overview`, `subjects` and `week` were all keys with no module behind
     // them — `PAGE_KEYS` carries the contract and the registry says which still
     // render. Block D wave 2 registers `overview`
-    // (components/pages/overview/page.tsx), so the Studio can offer it; the
-    // other two are still keys alone and must stay skipped until their own
-    // ports land.
+    // (components/pages/overview/page.tsx) and `subjects`
+    // (components/pages/subjects), so the Studio can offer both; `week` is
+    // still a key alone and must stay skipped until its own module lands.
     const pages = studioCatalogue().map((c) => c.page)
     expect(pages).toContain('overview')
-    expect(pages).not.toContain('subjects')
+    expect(pages).toContain('subjects')
     expect(pages).not.toContain('week')
   })
 
