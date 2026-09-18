@@ -41,15 +41,29 @@ export function BlockStat({
    *  passes `<span data-copy="subject">`. Rule (b) reads the level node's whole
    *  text, marked descendants included, so the "of N" is still enforced. */
   level?: { word: ReactNode; of: string }
-  /** What the figure is measured against, in words ("since last update"). */
-  base?: ReactNode
-  /** Let the base line WRAP instead of truncating (Block D wave 2, E-voice).
+  /** What the figure is measured against, in words ("since last update").
    *
-   *  The default clips to one line, which is right for "since last update" and
-   *  wrong for a basis: Voice's on-camera figure is counted over the run's
-   *  whole evidence rather than over this month, and D15 says a figure without
-   *  its basis is not printable — so a basis that is cut off mid-word takes the
-   *  figure with it. A caller that is stating a basis says so. */
+   *  ONE LINE, CLIPPED, unless the caller says otherwise — see `baseWrap`. */
+  base?: ReactNode
+  /**
+   *  Let `base` WRAP instead of being clipped to one line (Block D wave 2 —
+   *  E-voice and E-week arrived at the same prop from two pages, and it is one
+   *  prop with one name).
+   *
+   *  `base` renders inside `truncate`, which is right for the short bases this
+   *  stat was written for ("since last update") and wrong for a base that
+   *  carries a BASIS or a denominator. Voice's on-camera figure is counted
+   *  over the run's whole evidence rather than over this month, and This
+   *  week's switching stat states "someone said they were moving between
+   *  brands — of 205 videos this update · 1 below" in a 378px column: the
+   *  string needs 447px, so the rendered sentence ended "— of 205 …" and the
+   *  reader lost the very basis the block's own comment defends printing. D15
+   *  says a figure without its basis is not printable, and a clip is a silent
+   *  way to print one.
+   *
+   *  Opt-in rather than the default because every other caller's tile height
+   *  was set against a one-line base; a caller whose base carries an "of N" or
+   *  a basis asks for the wrap. */
   baseWrap?: boolean
   /** Something on the same line — a sparkline, a badge. Screen and paper only;
    *  an email drops it, because an email cannot lay two things side by side
@@ -80,7 +94,9 @@ export function BlockStat({
       {level ? (
         <span data-copy="level" className="text-[12px] text-secondary-foreground">{level.word} · {level.of}</span>
       ) : null}
-      {base ? <span className={baseWrap ? 'text-[11.5px] leading-[1.4] text-muted-foreground' : 'truncate text-[11.5px] text-muted-foreground'}>{base}</span> : null}
+      {base ? (
+        <span className={baseWrap ? 'text-[11.5px] leading-[1.4] text-muted-foreground [text-wrap:pretty]' : 'truncate text-[11.5px] text-muted-foreground'}>{base}</span>
+      ) : null}
     </div>
   )
 }

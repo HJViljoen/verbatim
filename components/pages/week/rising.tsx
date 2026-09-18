@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import type { Block } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
+import { TileColumns } from '@/components/shell/page-grid'
 import { BlockMovement } from '@/components/blocks/movement'
 import { BlockQuote } from '@/components/blocks/quote'
 import { BlockStat } from '@/components/blocks/stat'
@@ -49,7 +50,11 @@ import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 export const weekRising: Block<WeekData> = {
   key: 'week.rising',
   title: 'Moving now',
-  question: 'What is worth making something about this week?',
+  // THE QUESTION IS DATED LIKE THE FIGURES UNDER IT (design review F8). It
+  // asked "about this week" over a "September so far" meta, a "videos this
+  // month" figure and a month-to-date comparison — the one block on this page
+  // whose every number is the MONTH's, asking about a week.
+  question: 'What is worth making something about this month?',
 
   render(data, mode = 'app', ctx) {
     const r = data.rising
@@ -57,6 +62,7 @@ export const weekRising: Block<WeekData> = {
     const empty = weekRising.emptyState(data)
     const href = `${ctx.appUrl}/dashboard/voice`
 
+    const max = Math.max(1, ...r.rows.map((row) => (row.month.n > 0 ? row.month.k / row.month.n : 0)))
     return (
       <BlockFrame
         title={weekRising.title}
@@ -66,9 +72,37 @@ export const weekRising: Block<WeekData> = {
         footer={email
           ? <a href={href} style={{ color: EMAIL.ink }}>Open Voice →</a>
           : <Link href={href} className="hover:underline">Open Voice →</Link>}
+        // THE POOLED-BASELINE CAVEAT IN THE FOOTER'S OWN SLOT. It is a fact
+        // about the comparison's arithmetic rather than a finding, and the mono
+        // face is where a reader's eye skips it until it wants it. It prints
+        // only while the window read cannot answer: once M3 is applied the
+        // baseline is a window and the sentence would be false.
+        footerNote={r.rows.length > 0 && r.pooledBaseline
+          ? 'the three months behind are added together, so a video talked about in two of them counts in both'
+          : undefined}
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
-        {r.rows.map((riser) => <Row key={riser.id} riser={riser} mode={mode} month={r.month} />)}
+        {r.rows.length > 0 ? (
+          email
+            ? <>{r.rows.map((riser) => <Row key={riser.id} riser={riser} mode={mode} month={r.month} max={max} />)}</>
+            : (
+              // THE ARTBOARD'S THREE-ACROSS STRIP, AT THE WIDTH IT HAS ROWS FOR
+              // (design review F12). `RISING_SHOWN` is three and has been since
+              // the design named it, so three risers are three columns — but
+              // both paying tenants have at most ONE today, and `of={3}`
+              // unconditionally gave that one riser a third of a full-width
+              // tile with 700px of white beside it. The sibling block on this
+              // page already picks its column count from its rows
+              // (`subjects.tsx`); a single riser takes the tile.
+              r.rows.length === 1
+                ? <Row riser={r.rows[0]} mode={mode} month={r.month} max={max} />
+                : (
+                  <TileColumns of={r.rows.length === 2 ? 2 : 3}>
+                    {r.rows.map((riser) => <Row key={riser.id} riser={riser} mode={mode} month={r.month} max={max} />)}
+                  </TileColumns>
+                )
+            )
+        ) : null}
         {r.rows.length > 0 ? (
           <Note mode={mode}>
             {/* A CLAIM ABOUT THE THEMES THAT ARE NOT PRINTED, so it names how
@@ -87,24 +121,6 @@ export const weekRising: Block<WeekData> = {
             {r.moved > r.rows.length
               ? `${fmtInt(r.moved)} themes cleared their band with a larger share in this month’s reading; the ${fmtInt(r.rows.length)} largest are printed.`
               : `Nothing else of the ${fmtInt(r.pooled)} themes read against their band this month moved clearly.`}
-          </Note>
-        ) : null}
-        {r.rows.length > 0 && r.pooledBaseline ? (
-          <Note mode={mode}>
-            {/* THE BASELINE IS VIDEO-MONTHS, NOT DISTINCT VIDEOS, and a reader
-                comparing one month with three has to be told. The three months
-                are summed on both sides, so a video that carried conversation
-                in two of them counts in both — which lib/reading/anomaly.ts
-                carries twenty lines about, and it is anti-conservative exactly
-                where the week side does NOT dominate the variance, which is
-                this block's shape. Measured read-only on production: Sealand's
-                category Jun–Aug is 449 video-months against 446 distinct
-                videos, so the numbers are fine today and the exposure is the
-                rule. Printed only where the window read could not answer —
-                once M3 is applied the baseline is a window and this sentence
-                would be false, so it is gated on `pooledBaseline`. */}
-            The three months behind it are added together, so a video that was
-            talked about in two of them is counted in both.
           </Note>
         ) : null}
       </BlockFrame>
@@ -140,29 +156,77 @@ export const weekRising: Block<WeekData> = {
   },
 }
 
-function Row({ riser, mode, month }: { riser: Riser; mode: 'app' | 'print' | 'email'; month: string }) {
+/**
+ * One column of the artboard's strip.
+ *
+ * THE MONTH LEADS AND THE UPDATE FOLLOWS, which is the inversion this whole
+ * page turns on: the mock's column leads with "34 videos this week" and puts
+ * the month-to-date share second. A week alone is not a period (D6), so the
+ * level printed is the month's, with its "of N", and what this update put into
+ * it is stated under it as a contribution.
+ *
+ * NO DIRECTION WORD AND NO "Nth MONTH". The mock's chips read "growing, 3rd
+ * month" / "up, 2nd month" / "up". This block draws ONE comparison — a
+ * month-to-date share against the three months pooled behind it — and a
+ * direction is earned only by three consecutive readings under one grouping, on
+ * a surface whose own flag is true. `voice.movers` is false, and the badge says
+ * points with its band instead.
+ */
+function Row({ riser, mode, month, max }: { riser: Riser; mode: 'app' | 'print' | 'email'; month: string; max: number }) {
   const email = mode === 'email'
+  const share = riser.month.n > 0 ? riser.month.k / riser.month.n : 0
+  if (email) {
+    return (
+      <div style={{ marginTop: 12 }}>
+        <BlockStat
+          mode={mode}
+          value={fmtInt(riser.month.k)}
+          unit="videos"
+          level={{
+            word: <span data-copy="subject" data-slot="pass_b_theme">{riser.label}</span>,
+            of: `of ${fmtInt(riser.month.n)} category videos in ${longMonth(month)}`,
+          }}
+          base={baseLine(riser)}
+          aside={<BlockMovement verdict={riser.verdict} unit="pts" mode={mode} />}
+        />
+        {riser.quotes.map((q, i) => <BlockQuote key={i} quote={q.quote} cite={q.cite} mode={mode} />)}
+      </div>
+    )
+  }
   return (
-    <div className={email ? undefined : 'flex min-w-0 flex-col gap-2'} style={email ? { marginTop: 12 } : undefined}>
-      <BlockStat
-        mode={mode}
-        value={fmtInt(riser.month.k)}
-        unit="videos"
-        level={{
-          // The theme's own name, not a calibrated word: `pass_b_theme` is
-          // policy 'none', so the label is never direction-scrubbed and the
-          // register carries labels like "Concerns about declining quality".
-          word: <span data-copy="subject" data-slot="pass_b_theme">{riser.label}</span>,
-          of: `of ${fmtInt(riser.month.n)} category videos in ${longMonth(month)}`,
-        }}
-        base={`against ${fmtPct(pct(riser.baseline.k, riser.baseline.n), 1)} across the three months behind it${
-          riser.addedVideos != null ? ` · ${fmtInt(riser.addedVideos)} of them arrived with this update` : ''
-        }`}
-        aside={<BlockMovement verdict={riser.verdict} unit="pts" mode={mode} />}
-      />
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <div className="flex items-baseline gap-2">
+        {/* The theme's own name, not a calibrated word: `pass_b_theme` is
+            policy 'none', so the label is never direction-scrubbed and the
+            register carries labels like "Concerns about declining quality". */}
+        <span data-copy="subject" data-slot="pass_b_theme" className="min-w-0 flex-1 truncate text-[12.5px] font-medium" title={riser.label}>
+          {riser.label}
+        </span>
+        <BlockMovement verdict={riser.verdict} unit="pts" mode={mode} />
+      </div>
+      <span className="flex items-baseline gap-1.5">
+        <span data-copy="figure" className="font-mono text-[18px] font-semibold leading-none tracking-[-0.03em] tabular-nums">
+          {fmtInt(riser.month.k)}
+        </span>
+        <span className="text-[12px] font-medium text-muted-foreground">videos this month</span>
+      </span>
+      <span className="block h-1.5 w-full overflow-hidden rounded-full bg-inner">
+        <span className="block h-full rounded-full" style={{ width: `${Math.max(1, (share / max) * 100)}%`, background: 'var(--cat)' }} />
+      </span>
+      <span data-copy="level" className="font-mono text-[11px] tabular-nums text-muted-foreground">
+        {fmtInt(riser.month.k)} of {fmtInt(riser.month.n)} category videos in {longMonth(month)} · {fmtPct(share * 100, 1)}
+      </span>
+      <span className="text-[11px] text-muted-foreground">{baseLine(riser)}</span>
       {riser.quotes.map((q, i) => <BlockQuote key={i} quote={q.quote} cite={q.cite} mode={mode} />)}
     </div>
   )
+}
+
+/** What the month is being read against, and what this update put into it. */
+function baseLine(riser: Riser): string {
+  return `against ${fmtPct(pct(riser.baseline.k, riser.baseline.n), 1)} across the three months behind it${
+    riser.addedVideos != null ? ` · ${fmtInt(riser.addedVideos)} of them arrived with this update` : ''
+  }`
 }
 
 function Note({ mode, children }: { mode: 'app' | 'print' | 'email'; children: React.ReactNode }) {

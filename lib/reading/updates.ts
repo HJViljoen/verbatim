@@ -113,6 +113,35 @@ export interface UpdatePoint {
   contribution: { month: string; videos: number; of: number }[]
 }
 
+/**
+ * Why the series is short, or absent, or read against fewer updates than it
+ * has — one sentence, with the KIND of caveat it is beside it.
+ *
+ * THE KIND IS WHAT LETS A CHART NOT REPEAT ITSELF (Block D wave 2, design
+ * review F4). `note` is these joined with a space and is what a surface with
+ * no picture prints; a surface that DRAWS the series draws the quiet updates
+ * on the floor and says so in its legend, so it prints every caveat except
+ * `quiet`. Matching on the sentence's own words to do that would be a renderer
+ * deciding which of the reading layer's statements it had already made — this
+ * is the reading layer saying it.
+ */
+export type UpdateNoteKind =
+  /** Updates behind this one that found nothing, left out of the band. */
+  | 'quiet'
+  /** Delivered updates carrying no window at all, not drawn. */
+  | 'windowless'
+  /** Fewer points than were asked for. */
+  | 'short'
+  /** No band, and which of the two reasons. */
+  | 'no_band'
+  /** The windowed reading is absent or failed, so no contribution is stated. */
+  | 'window_read'
+
+export interface UpdateNote {
+  kind: UpdateNoteKind
+  text: string
+}
+
 export interface UpdateSeries {
   /** Oldest first, at most `updates` points. */
   points: UpdatePoint[]
@@ -122,8 +151,11 @@ export interface UpdateSeries {
   band: { low: number; high: number } | null
   /** "the last 13 updates · what each one brought in" — the axis's own words. */
   basis: string
-  /** Why the series is short or absent. */
+  /** Why the series is short or absent — every caveat, joined. */
   note: string | null
+  /** The same caveats, each with its kind, so a surface that has already drawn
+   *  one does not print it twice. */
+  notes: UpdateNote[]
 }
 
 export interface UpdateSeriesOptions {
@@ -147,8 +179,8 @@ const UNREAD_BASIS = 'this workspace’s updates could not be read just now'
 
 /** An empty series, with a reason. The shape never changes, so a block that
  *  draws it never has to guard. */
-function emptySeries(note: string, basis: string = EMPTY_BASIS): UpdateSeries {
-  return { points: [], median: null, band: null, basis, note }
+function emptySeries(note: string, basis: string = EMPTY_BASIS, notes: UpdateNote[] = []): UpdateSeries {
+  return { points: [], median: null, band: null, basis, note, notes }
 }
 
 /**
@@ -189,6 +221,24 @@ export function updateBand(points: readonly UpdatePoint[]): {
   return { median, band: { low: sorted[0], high: sorted[sorted.length - 1] }, counted: found.length, quiet }
 }
 
+const NO_SERIES = 'No delivered update of this workspace carries a window, so there is nothing to draw.'
+
+/**
+ * The newest update's own count, in words: "38 videos this update found".
+ *
+ * THE HALF OF `updateSeriesLine` A CHART DOES NOT DRAW (Block D wave 2, design
+ * review F4). Where the series is drawn, the picture's own legend states the
+ * band and its typical and how many updates found nothing — so a surface that
+ * printed the whole line under the chart said those two facts twice, two lines
+ * apart, in one column. What the chart does NOT say in words is the newest
+ * point's count, which is the number the page is about; this is that, alone.
+ */
+export function updateSeriesHead(series: UpdateSeries): string {
+  const newest = series.points[series.points.length - 1]
+  if (!newest) return NO_SERIES
+  return `${fmtInt(newest.videos)} ${newest.videos === 1 ? 'video' : 'videos'} this update found`
+}
+
 /**
  * The legend, in the reader's words:
  * "38 videos this update · the 12 updates before it ran 9–15 videos, typical 12".
@@ -202,8 +252,8 @@ export function updateBand(points: readonly UpdatePoint[]): {
  */
 export function updateSeriesLine(series: UpdateSeries): string {
   const newest = series.points[series.points.length - 1]
-  if (!newest) return 'No delivered update of this workspace carries a window, so there is nothing to draw.'
-  const head = `${fmtInt(newest.videos)} ${newest.videos === 1 ? 'video' : 'videos'} this update found`
+  if (!newest) return NO_SERIES
+  const head = updateSeriesHead(series)
   const behind = series.points.length - 1
   const { counted, quiet } = updateBand(series.points)
   if (series.median == null || series.band == null || behind < 1) {
@@ -331,21 +381,24 @@ export function buildUpdateSeries(input: {
   })
 
   const { median, band, quiet } = updateBand(points)
-  const notes: string[] = []
+  const notes: UpdateNote[] = []
   if (quiet > 0) {
-    notes.push(
-      `${fmtInt(quiet)} of the updates behind this one found nothing at all; ${quiet === 1 ? 'it is' : 'they are'} drawn and left out of the band.`,
-    )
+    notes.push({
+      kind: 'quiet',
+      text: `${fmtInt(quiet)} of the updates behind this one found nothing at all; ${quiet === 1 ? 'it is' : 'they are'} drawn and left out of the band.`,
+    })
   }
   if (input.windowless > 0) {
-    notes.push(
-      `${fmtInt(input.windowless)} delivered ${input.windowless === 1 ? 'update carries' : 'updates carry'} no window and ${input.windowless === 1 ? 'is' : 'are'} not drawn.`,
-    )
+    notes.push({
+      kind: 'windowless',
+      text: `${fmtInt(input.windowless)} delivered ${input.windowless === 1 ? 'update carries' : 'updates carry'} no window and ${input.windowless === 1 ? 'is' : 'are'} not drawn.`,
+    })
   }
   if (points.length > 0 && points.length < input.requested) {
-    notes.push(
-      `This workspace has ${fmtInt(points.length)} delivered ${points.length === 1 ? 'update' : 'updates'} with a window, not ${fmtInt(input.requested)}.`,
-    )
+    notes.push({
+      kind: 'short',
+      text: `This workspace has ${fmtInt(points.length)} delivered ${points.length === 1 ? 'update' : 'updates'} with a window, not ${fmtInt(input.requested)}.`,
+    })
   }
   if (points.length > 0 && band == null) {
     // TWO DIFFERENT REFUSALS, AND PRINTING THE WRONG ONE IS A FALSE CLAIM ABOUT
@@ -356,21 +409,23 @@ export function buildUpdateSeries(input: {
     // three updates found anything", which is not true of it. Neither paying
     // tenant can reach it (both carry thirteen windowed updates); every new
     // workspace's first two deliveries do, on the first page it opens.
-    notes.push(
-      points.length < UPDATE_BAND_MINIMUM
+    notes.push({
+      kind: 'no_band',
+      text: points.length < UPDATE_BAND_MINIMUM
         ? `Fewer than ${fmtInt(UPDATE_BAND_MINIMUM)} updates of this workspace carry a window, so there is no typical for this one to be read against.`
         : `Fewer than ${fmtInt(UPDATE_BAND_MINIMUM - 1)} of the updates behind this one found anything, so there is no typical for this one to be read against.`,
-    )
+    })
   }
   if (input.windowRead === 'absent') {
-    notes.push('The windowed reading is not installed for this workspace, so no update’s contribution to its month can be stated.')
+    notes.push({ kind: 'window_read', text: 'The windowed reading is not installed for this workspace, so no update’s contribution to its month can be stated.' })
   }
   if (input.windowRead === 'failed') {
-    notes.push('The windowed reading could not be read just now, so no update’s contribution to its month is stated here.')
+    notes.push({ kind: 'window_read', text: 'The windowed reading could not be read just now, so no update’s contribution to its month is stated here.' })
   }
 
+  const joined = notes.map((n) => n.text).join(' ')
   if (points.length === 0) {
-    return emptySeries(notes.length > 0 ? notes.join(' ') : 'No delivered update of this workspace carries a window.')
+    return emptySeries(notes.length > 0 ? joined : 'No delivered update of this workspace carries a window.', EMPTY_BASIS, notes)
   }
 
   return {
@@ -378,7 +433,8 @@ export function buildUpdateSeries(input: {
     median,
     band,
     basis: `the last ${fmtInt(points.length)} ${points.length === 1 ? 'update' : 'updates'} · what each one brought in`,
-    note: notes.length > 0 ? notes.join(' ') : null,
+    note: notes.length > 0 ? joined : null,
+    notes,
   }
 }
 

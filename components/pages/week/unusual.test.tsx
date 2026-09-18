@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest'
 import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
-import { render, renderText } from '@/lib/test/render'
+import { markupText, render, renderText } from '@/lib/test/render'
 import type { WeekData } from '@/lib/pages/week'
 import { weekUnusual } from './unusual'
 import { absentReadingFixture, thinFixture, weekFixture } from './fixture'
@@ -39,8 +39,53 @@ describe('WK1 · unusual this week', () => {
     expect(text).toContain('28')
     expect(text).toContain('Objections · of 205 videos this update covered')
     expect(text).toContain('every audience together')
-    expect(text).toContain('13.7% this update against 3.5% before it')
-    expect(text).toContain('a difference of 10.2 points on a band of 4.9')
+    // THE MOCK'S ONE-LINE CLAIM, IN THE HONEST FORM (Block D wave 2). The
+    // artboard asserts "running at 3.1× its usual rate, mostly under Freitag
+    // content"; a bare multiple carries neither n nor band, and nothing
+    // decomposes a flag by audience. What is printed in that slot is the
+    // banded k-of-n the code can actually write — the object, both levels, the
+    // difference and the band it cleared — inside a verdict node.
+    expect(text).toContain('Objections ran at 13.7% of this update against 3.5% across Jun 2026, Jul 2026, Aug 2026 — a difference of 10.2 points, on a band of 4.9.')
+    expect(text).not.toContain('×')
+  })
+
+  it('sets the interpretation’s figures in the sentence’s own face', () => {
+    // Design review F6. A mono glyph is one advance wide whatever it is, so
+    // "13.7%" and "3.5%" inside a sans paragraph read "13 . 7%" and "3 . 5%" —
+    // six lines under a claim line setting the same two numbers in sans. The
+    // marker is unchanged, so the contract still tells code's number from the
+    // model's words; only the face moves.
+    const markup = render(weekUnusual.render(weekFixture(), 'app', ctx))
+    expect(markup).toContain('data-copy="figure" class="font-semibold tabular-nums"')
+    expect(markup).not.toContain('data-copy="figure" class="font-mono tabular-nums"')
+    assertCopyContract(markup)
+  })
+
+  it('joins the header’s two counts without claiming one denominator', () => {
+    // Code review C10. The meta read "3 of 42 tested cleared its band · of 205
+    // videos this update": two "of"s joined by a dot, over two different
+    // denominators — objects the check tested, and videos the update covered.
+    const text = renderText(weekUnusual.render(weekFixture(), 'app', ctx))
+    expect(text).toContain('1 of 14 tested cleared its band · across 205 videos this update')
+    expect(text).not.toContain('cleared its band · of ')
+  })
+
+  it('marks the flag’s own label as the model’s words, not as the page’s verdict', () => {
+    // Code review C6 / design review F9. `flag.label` is a `pass_b_theme`
+    // string a reasoning model wrote. The lead sentence was ONE verdict node
+    // around it, and a verdict node is the contract's widest exemption: rule
+    // (c) cuts its whole range out of the sweep, so a label carrying a
+    // direction word printed unchecked in the page's first sentence and read
+    // as the product's own movement claim.
+    const d = weekFixture()
+    const flags = d.unusual.flags.map((f) => ({ ...f, label: 'Concerns about declining quality' }))
+    for (const mode of MODES) {
+      const markup = render(weekUnusual.render({ ...d, unusual: { ...d.unusual, flags } }, mode, ctx))
+      // The label names the call that wrote it — in the lead AND in the level
+      // cell under it, which is the second place it is printed.
+      expect(markup.match(/data-copy="subject" data-slot="pass_b_theme"/g)?.length ?? 0, mode).toBeGreaterThanOrEqual(2)
+      assertCopyContract(markup)
+    }
   })
 
   it('names the months the baseline pooled, and which of them were still filling', () => {
@@ -108,9 +153,18 @@ describe('WK1 · unusual this week', () => {
     expect(blockAnswers(weekUnusual, weekFixture()).quotes).toHaveLength(2)
   })
 
-  it('says "nothing unusual this week" in full, with the set it watched', () => {
+  it('says "nothing unusual in this update" in full, with the set it watched', () => {
     const text = renderText(weekUnusual.render(withState('nothing_unusual'), 'app', ctx))
-    expect(text).toContain('Nothing unusual this week. Every one of the 31 objects this check watches read inside its usual band.')
+    expect(text).toContain('Nothing unusual in this update. Every one of the 31 objects this check watches read inside its usual band.')
+    // ONE CLOCK PER SENTENCE (design review F8). The question, the metas and
+    // the footer all say "update"; these three said "week", on a page where
+    // Sealand's newest update covers thirty days. The block's TITLE keeps the
+    // artboard's "Unusual this week" — that is the page's own name — and every
+    // sentence stating what was MEASURED says update.
+    for (const state of ['nothing_unusual', 'refused', 'baseline_forming'] as const) {
+      const sentence = weekUnusual.emptyState(withState(state)) ?? ''
+      expect(sentence, state).not.toMatch(/\bweek\b/)
+    }
   })
 
   it('says when the check can first speak, rather than "forming" and nothing', () => {
@@ -168,16 +222,35 @@ describe('WK1 · unusual this week', () => {
   it('draws the thirteen-update series and says it is a series of UPDATES', () => {
     for (const mode of MODES) {
       const text = renderText(weekUnusual.render(weekFixture(), mode, ctx))
+      // THE NEWEST UPDATE'S OWN COUNT, IN WORDS, IN EVERY ARM. The chart's end
+      // label draws the digits; only this says what they are.
+      expect(text, mode).toContain('618 videos this update found')
       // THE COUNT BAND CARRIES ITS UNIT. This block's other band is in
       // percentage points ("a band of 4.9"); an unlabelled count band beside it
-      // is how 4.9 points gets read as five videos.
-      expect(text, mode).toContain('618 videos this update found')
-      expect(text, mode).toContain('ran 1–559 videos, typical 462')
-      // THREE OF THE TWELVE BEHIND IT FOUND NOTHING, and the legend counts 9
-      // rather than 12: a legend saying "the 12 before it" while the band was
-      // drawn on 9 would be the page and the picture disagreeing.
-      expect(text, mode).toContain('the 9 that found anything')
-      expect(text, mode).toContain('3 of the updates behind this one found nothing at all')
+      // is how 4.9 points gets read as five videos. THREE OF THE TWELVE BEHIND
+      // IT FOUND NOTHING, and the band counts 9 rather than 12: a legend saying
+      // "the 12 before it" while the band was drawn on 9 would be the page and
+      // the picture disagreeing.
+      //
+      // WHICH SENTENCE SAYS IT DEPENDS ON WHETHER THE CHART IS DRAWN (design
+      // review F4). On screen and on paper the picture's own legend carries the
+      // band and the quiet count, and the words under it carry the head alone —
+      // they used to carry all three, so the tile stated the band twice and the
+      // quiet count twice, two lines apart in one column. The email arm draws
+      // no SVG, so there the words ARE the chart and state everything.
+      if (mode === 'email') {
+        expect(text, mode).toContain('the 9 that found anything')
+        expect(text, mode).toContain('ran 1–559 videos, typical 462')
+        expect(text, mode).toContain('3 of the updates behind this one found nothing at all')
+      } else {
+        expect(text, mode).toContain('the 9 updates behind it that found anything ran')
+        expect(text, mode).toContain('1–559 videos')
+        expect(text, mode).toContain('typical 462')
+        expect(text, mode).toContain('3 of them found nothing at all, drawn off the line and left out of the range')
+        // ONCE, not twice — the defect F4 named.
+        expect(text.match(/1–559/g) ?? [], mode).toHaveLength(1)
+        expect(text.match(/found nothing at all/g) ?? [], mode).toHaveLength(1)
+      }
       // The axis's own words, which are the whole deviation: thirteen
       // deliveries, not thirteen weeks.
       expect(text, mode).toContain('the last 13 updates · what each one brought in')
@@ -255,8 +328,9 @@ describe('WK1 · unusual this week', () => {
     expect(text).toContain('the last 13 updates · what each one brought in')
     // SEVEN OF SEALAND'S TWELVE FOUND NOTHING. The band stands on five, and the
     // seven are drawn rather than dropped.
-    expect(text).toContain('the 5 that found anything')
-    expect(text).toContain('7 of the updates behind this one found nothing at all')
+    // The legend's words, because the chart is drawn on this arm (F4).
+    expect(text).toContain('the 5 updates behind it that found anything ran')
+    expect(text).toContain('7 of them found nothing at all, drawn off the line and left out of the range')
   })
 
   it('says nothing about the series where no update carries a window', () => {
@@ -271,5 +345,78 @@ describe('WK1 · unusual this week', () => {
     expect(markup).toContain('<table')
     expect(markup).not.toContain('class=')
     expect(markup).not.toContain('var(--')
+  })
+})
+
+describe('the thirteen-point chart (Block D wave 2)', () => {
+  it('draws one point per update, zeroes included, and does not join them to the line', () => {
+    const markup = render(weekUnusual.render(weekFixture(), 'app', ctx))
+    const d = weekFixture()
+    expect(d.unusual.series!.points).toHaveLength(13)
+    // A point per update, and the zero deliveries are among them: three of
+    // Össur's thirteen found nothing and are drawn on the floor rather than
+    // dropped out of the chart.
+    expect(markup.match(/<circle/g)).toHaveLength(13)
+    expect(markup).toContain('<polyline')
+    // AND THE LINE BREAKS AT EACH OF THEM (design review F5). One polyline over
+    // every point dived to the floor and climbed back three times — a gather
+    // gap drawn as the conversation collapsing and recovering. Össur's series
+    // is 0 · 94 · 0 · 1 462 · 0 · 488 456 473 376 466 559 618, so the runs of
+    // two-or-more that found something are two: [94] alone draws no stroke,
+    // [1, 462] does, and the six from 488 on do.
+    expect(markup.match(/<polyline/g)).toHaveLength(2)
+    // The quiet updates are a different MARK, not the same dot at zero: an
+    // open ring, and the legend's swatch is the same ring.
+    expect(markup).toContain('found nothing · the 7 days to 5 Jul')
+    expect(markup).toContain('drawn off the line and left out of the range')
+  })
+
+  it('names its axis as updates and never as weeks', () => {
+    // D6: months do not divide into weeks, and this page prints nothing
+    // computed over a week alone. The axis is our own delivery cadence and the
+    // chart says so under itself.
+    const text = renderText(weekUnusual.render(weekFixture(), 'app', ctx))
+    expect(text).toContain('What each update found')
+    expect(text).toContain('13 updates to 13 Sep')
+    expect(text).toContain('each point is one delivery’s own days, never a month')
+    expect(text).not.toContain('per week')
+    expect(text).not.toContain('a typical week')
+  })
+
+  it('labels the band in videos, beside a block whose other band is in points', () => {
+    // Two unlabelled bands on one block is how 4.9 points gets read as five
+    // videos. This one says "videos"; the flag's says "points".
+    const text = renderText(weekUnusual.render(weekFixture(), 'app', ctx))
+    expect(text).toContain('1–559 videos')
+    expect(text).toContain('3 of them found nothing at all, drawn off the line and left out of the range')
+    expect(text).toContain('on a band of 4.9')
+  })
+
+  it('draws no chart in an email, and keeps the words there', () => {
+    const markup = render(weekUnusual.render(weekFixture(), 'email', ctx))
+    expect(markup).not.toContain('<svg')
+    expect(markup).not.toContain('<polyline')
+    expect(renderText(weekUnusual.render(weekFixture(), 'email', ctx)))
+      .toContain('618 videos this update found')
+  })
+
+  it('draws nothing at all below two points', () => {
+    const d = weekFixture()
+    const one = { ...d, unusual: { ...d.unusual, series: { ...d.unusual.series!, points: d.unusual.series!.points.slice(-1) } } }
+    expect(render(weekUnusual.render(one, 'app', ctx))).not.toContain('<svg')
+  })
+
+  it('shades no band where no band was drawn', () => {
+    // `updateBand` refuses below its minimum, and a shaded guess behind a line
+    // is a claim about what is typical that nothing measured.
+    const d = weekFixture()
+    const short = {
+      ...d,
+      unusual: { ...d.unusual, series: { ...d.unusual.series!, band: null, median: null } },
+    }
+    const markup = render(weekUnusual.render(short, 'app', ctx))
+    expect(markup).toContain('<svg')
+    expect(markup).not.toContain('<rect')
+    expect(markupText(markup)).toContain('too few updates behind it to say what is typical')
   })
 })

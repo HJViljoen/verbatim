@@ -1,19 +1,20 @@
 import Link from 'next/link'
-import type { Block } from '@/lib/blocks/types'
-import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
+import type { Block, BlockContext } from '@/lib/blocks/types'
+import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
+import { TileColumns } from '@/components/shell/page-grid'
 import { BlockQuote } from '@/components/blocks/quote'
 import { BlockStat } from '@/components/blocks/stat'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fmtInt, platformLabel, shortDate } from '@/lib/format'
+import { fmtInt, shortDate } from '@/lib/format'
 import { platformMixLine } from '@/lib/reading/record'
 import {
+  audienceContributionLine,
   contributionLine,
   crossedIntoLine,
   crossingLine,
   newThemesLine,
   windowDays,
   type CameInBlock,
-  type RivalPost,
   type WeekData,
 } from '@/lib/pages/week'
 import type { FigureTable } from '@/lib/reading/verdicts'
@@ -39,7 +40,11 @@ import type { FigureTable } from '@/lib/reading/verdicts'
 //   videos in production and 92 posts about Ottobock. "Notable rival posts"
 //   unqualified would read as "Ottobock posted nothing this week", which is
 //   false; what is true is that we cannot see their own posts, and the row says
-//   so with the readiness owner named.
+//   so with the readiness owner named. THAT PAIR NOW LIVES IN ITS OWN TILE
+//   (`components/pages/week/rival-posts.tsx`, Block D wave 2, the mock's §5) —
+//   the data is still `CameInBlock.rivals`, read once here, because the two
+//   readings are one read and splitting the read would be two chances to count
+//   a rival's week two ways.
 //
 // AND THE CONTRIBUTION LINE, WHICH IS WHY THE SECTION EXISTS. Every count above
 // is of a window, and a window is not a period. Handing each one back to the
@@ -69,18 +74,10 @@ export const weekCameIn: Block<WeekData> = {
       ? c.rows.reduce((t, r) => t + (r.comments ?? 0), 0)
       : null
 
-    return (
-      <BlockFrame
-        title={weekCameIn.title}
-        question={weekCameIn.question}
-        mode={mode}
-        meta={days ?? 'this update covered no window'}
-        footer={email
-          ? <a href={`${ctx.appUrl}${c.playbookHref}`} style={{ color: EMAIL.ink }}>Open Market →</a>
-          : <Link href={`${ctx.appUrl}${c.playbookHref}`} className="hover:underline">Open Market →</Link>}
-      >
-        {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
-
+    // THE MOCK'S LEFT COLUMN: the audience table, with the stat and the
+    // contribution lines the table's numbers are stated against.
+    const left = (
+      <div className={email ? undefined : 'flex min-w-0 flex-col gap-2'}>
         {c.rows.length > 0 ? (
           <>
             <BlockStat
@@ -92,7 +89,8 @@ export const weekCameIn: Block<WeekData> = {
               // earlier update and re-analysed by this one is in the first and
               // not the second, which is why production reads "Ottobock — 96
               // analysed · 92 newly found": an "of" there is arithmetic that
-              // does not hold.
+              // does not hold. The mock's single "Videos" column collapses
+              // that distinction; this table keeps two columns.
               base={`${fmtInt(c.gathered)} newly found${c.windowComments != null ? ` · ${fmtInt(c.windowComments)} comments written in these days` : ''}`}
             />
             {c.contribution ? (
@@ -116,13 +114,33 @@ export const weekCameIn: Block<WeekData> = {
                 {c.contribution ? crossingLine(data.month, c.crossesInto) : crossedIntoLine(c.crossesInto)}
               </Note>
             ) : null}
-            <Audiences rows={c.rows} mode={mode} month={data.month} />
+            <Audiences block={c} mode={mode} month={data.month} />
           </>
         ) : null}
-
+      </div>
+    )
+    const right = (
+      <div className={email ? undefined : 'flex min-w-0 flex-col gap-3'}>
         <Themes block={c} mode={mode} />
-        <Rivals block={c} mode={mode} />
-        <Quotes block={c} mode={mode} />
+        <Quotes block={c} mode={mode} ctx={ctx} />
+      </div>
+    )
+
+    return (
+      <BlockFrame
+        title={weekCameIn.title}
+        question={weekCameIn.question}
+        mode={mode}
+        meta={days ?? 'this update covered no window'}
+        footer={email
+          ? <a href={`${ctx.appUrl}${c.playbookHref}`} style={{ color: EMAIL.ink }}>Open Market →</a>
+          : <Link href={`${ctx.appUrl}${c.playbookHref}`} className="hover:underline">Open Market →</Link>}
+        // THE MOCK'S RIGHT-HAND NOTE, which is the one sentence that says what
+        // the window's comment count is a count OF.
+        footerNote="videos with an analysed comment written in these days"
+      >
+        {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
+        {email ? <>{left}{right}</> : <TileColumns of={2}>{left}{right}</TileColumns>}
       </BlockFrame>
     )
   },
@@ -155,21 +173,39 @@ export const weekCameIn: Block<WeekData> = {
   },
 }
 
-/** One row per audience. Analysed leads, found follows, and the platform mix
- *  is of the ANALYSED videos — the set every reading is drawn from. */
-function Audiences({ rows, mode, month }: { rows: CameInBlock['rows']; mode: 'app' | 'print' | 'email'; month: string }) {
+/**
+ * The mock's audience table (`week.camein.col.audience` / `.col.share` /
+ * `.col.videos` / `.col.comments`).
+ *
+ * FIVE COLUMNS, NOT THE MOCK'S FOUR, and the extra one is the distinction this
+ * block exists to keep: ANALYSED and NEWLY FOUND are two sets and not a part
+ * and a whole, so they get a column each rather than being collapsed into one
+ * "Videos". The share bar is analysed over the UPDATE's own analysed total —
+ * the one thing every row is genuinely a part of — with both sides printed
+ * under it, because a bare percentage is the score this product does not show.
+ *
+ * AND THE CONTRIBUTION LINE STAYS, PER ROW, under the bar. Every count in this
+ * table is of a window, and a window is not a period, whoever's conversation it
+ * was. It costs no extra read.
+ */
+function Audiences({ block, mode, month }: { block: CameInBlock; mode: 'app' | 'print' | 'email'; month: string }) {
+  const rows = block.rows
   const email = mode === 'email'
+  const byAudience = audienceContributionLine(month, rows)
   if (email) {
     return (
       <div style={{ marginTop: 8 }}>
         {rows.map((r) => (
           <div key={r.audience} style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink, padding: '3px 0' }}>
             {r.label} — <span data-copy="figure">{fmtInt(r.analysed)}</span> analysed · {fmtInt(r.gathered)} newly found · {platformMixLine(r.platformMix) || 'no platform recorded'}
-            {r.contribution ? (
+            {r.trackedSince ? (
               <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>
-                {contributionLine(month, r.contribution.videos, r.contribution.of)}
+                tracked since {shortDate(r.trackedSince)}, so its line is shorter than the rows above it
               </div>
             ) : null}
+            {/* NO PER-ROW CONTRIBUTION HERE EITHER (design review F11): the
+                block states it once, above, in every mode. A block renders
+                three modes and they state the same reading. */}
             {r.share.n > 0 ? (
               <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>
                 <span data-copy="level">{fmtInt(r.share.k)} of {fmtInt(r.share.n)} videos this update analysed</span>
@@ -180,154 +216,223 @@ function Audiences({ rows, mode, month }: { rows: CameInBlock['rows']; mode: 'ap
             ) : null}
           </div>
         ))}
+        {byAudience ? (
+          <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 4 }}>{byAudience}</div>
+        ) : null}
+      </div>
+    )
+  }
+  const rowedComments = rows.every((r) => r.comments != null)
+    ? rows.reduce((t, r) => t + (r.comments ?? 0), 0)
+    : null
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <div className="hidden items-end gap-2.5 border-b border-border/70 pb-1 xl:grid xl:grid-cols-[112px_minmax(0,1fr)_58px_50px_64px]">
+        <Head>Audience</Head>
+        <Head>Share of this update</Head>
+        <Head right>Analysed</Head>
+        <Head right>Found</Head>
+        <Head right>Comments</Head>
+      </div>
+      {rows.map((r) => (
+        <div key={r.audience} className="grid grid-cols-1 items-start gap-1 xl:grid-cols-[112px_minmax(0,1fr)_58px_50px_64px] xl:gap-2.5">
+          <span className="flex min-w-0 items-center gap-1.5 text-[12.5px] font-medium">
+            <span className="size-1.5 shrink-0 rounded-full" style={{ background: audienceColor(r.audience) }} aria-hidden />
+            <span className="truncate" title={r.label}>{r.label}</span>
+          </span>
+          <span className="flex min-w-0 flex-col gap-1">
+            <span className="block h-1.5 w-full overflow-hidden rounded-full bg-inner">
+              <span
+                className="block h-full rounded-full"
+                style={{ width: `${r.share.n > 0 ? Math.max(1, (r.share.k / r.share.n) * 100) : 0}%`, background: audienceColor(r.audience) }}
+              />
+            </span>
+            {r.share.n > 0 ? (
+              // BOTH SIDES OF THE SHARE, NEVER A BARE PERCENTAGE, and the
+              // denominator named is the update's own analysed total.
+              <span data-copy="level" className="font-mono text-[10.5px] tabular-nums text-muted-foreground">
+                {fmtInt(r.share.k)} of {fmtInt(r.share.n)} videos this update analysed
+              </span>
+            ) : null}
+            {/* THE CONTRIBUTION IS THE BLOCK'S, NOT EVERY ROW'S (design review
+                F11). It was printed under every bar, so a row was three lines
+                instead of one, the bars stopped reading as a comparable column
+                and the sentence wrapped mid-phrase ("144 of / 398") in a
+                284px cell. The rule is that every window count this page states
+                is restated as a contribution to its month — it is stated, in
+                full, at the top of this column for the table's own total, and
+                four more copies of it under four bars is four times what the
+                rule asks for. The row's own level keeps both sides of its
+                share, which is the number the bar draws. */}
+            {/* THE MOCK'S "POLER SINCE 3 SEP", on the row it is about rather
+                than in the total row. It is printed only where the rival's line
+                starts inside the months this page compares — `first_seen_at`
+                (M1) — because a rival tracked from before them has the same
+                history as every row above it. */}
+            {r.trackedSince ? (
+              <span className="font-mono text-[10.5px] text-muted-foreground">
+                tracked since {shortDate(r.trackedSince)} — a shorter line than the rows above it
+              </span>
+            ) : null}
+          </span>
+          <Cell label="Analysed"><FigureCell value={fmtInt(r.analysed)} align="right" mode={mode} /></Cell>
+          <Cell label="Found"><FigureCell value={fmtInt(r.gathered)} align="right" mode={mode} /></Cell>
+          <Cell label="Comments">
+            {r.comments != null
+              ? <FigureCell value={fmtInt(r.comments)} align="right" mode={mode} />
+              : <NotRecorded />}
+          </Cell>
+        </div>
+      ))}
+      {/* THE MOCK'S TOTAL ROW. It adds the two video columns, which do add —
+          they are counts of this update's own videos, split by audience — and
+          the comments column only where every row carries one, because a
+          partial sum is not a sum. */}
+      <div className="grid grid-cols-1 items-center gap-1 border-t border-border/70 pt-1.5 xl:grid-cols-[112px_minmax(0,1fr)_58px_50px_64px] xl:gap-2.5">
+        <span className="text-[12.5px] font-medium text-secondary-foreground">All audiences</span>
+        <span className="font-mono text-[10.5px] text-muted-foreground">
+          {block.window ? 'this update’s own videos, split by whose conversation they were' : ''}
+        </span>
+        <Cell label="Analysed"><FigureCell value={fmtInt(block.analysed)} align="right" mode={mode} /></Cell>
+        <Cell label="Found"><FigureCell value={fmtInt(block.gathered)} align="right" mode={mode} /></Cell>
+        <Cell label="Comments">
+          {block.windowComments != null
+            ? <FigureCell value={fmtInt(block.windowComments)} align="right" mode={mode} />
+            : <NotRecorded />}
+        </Cell>
+      </div>
+      {rowedComments != null && block.windowComments != null && rowedComments < block.windowComments ? (
+        <span className="font-mono text-[10.5px] text-muted-foreground">
+          the rows above account for {fmtInt(rowedComments)} of them
+        </span>
+      ) : null}
+      {/* EVERY ROW'S WINDOW, HANDED BACK TO ITS MONTH — once, for the table
+          (design review F11). See `audienceContributionLine`. */}
+      {byAudience ? <span className="text-[11px] text-muted-foreground">{byAudience}</span> : null}
+      {/* ABSENT MEANS ABSENT, AND IT IS SAID IN WORDS ONCE. An em dash in the
+          column would read as a zero; a zero here would be a measurement. The
+          windowed reading is M3 and is installed on neither tenant today, which
+          is the arm this sentence is written for. */}
+      {block.windowComments == null ? (
+        <span className="text-[11px] text-muted-foreground">
+          Comments in these days are not recorded for this workspace yet.
+        </span>
+      ) : null}
+    </div>
+  )
+}
+
+/** The comments cell where the windowed reading is absent. An em dash would
+ *  read as a zero and a zero would be a measurement, so the words stay — set
+ *  to one line (`whitespace-nowrap`), because at 56px "not recorded" wrapped
+ *  in every cell of the absent arm and was the only two-line cell in the
+ *  table (design review, nits). The column's own width is what gives, and the
+ *  sentence under the table says the same thing in full. */
+function NotRecorded() {
+  return <span className="whitespace-nowrap font-mono text-[10.5px] text-muted-foreground xl:block xl:text-right">not recorded</span>
+}
+
+/** Colour follows the ENTITY, never the rank: you green, a rival orange, the
+ *  category grey (MASTER §Visual identity, and `components/charts/ranked-bar`'s
+ *  own rule). */
+function audienceColor(audience: string): string {
+  if (audience === 'client') return 'var(--you)'
+  if (audience.startsWith('competitor:')) return 'var(--comp)'
+  return 'var(--cat)'
+}
+
+function Head({ children, right }: { children: React.ReactNode; right?: boolean }) {
+  return (
+    <span className={`text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground${right ? ' text-right' : ''}`}>
+      {children}
+    </span>
+  )
+}
+
+/**
+ * A numeric cell that carries its own column name where the header cannot
+ * (design review F10).
+ *
+ * The header row is `hidden … xl:grid`, because below `xl` the page is ONE
+ * stacked column and a five-column header has nothing to sit over. But the
+ * cells carried no label either, so at 1024 an audience row ended in three
+ * unlabelled stacked numbers — 360 / 429 / 3,600, with nothing saying which is
+ * analysed, which found and which comments. That is every laptop under 1280,
+ * not an edge case. The label prints below `xl` and disappears under it, where
+ * the header takes over.
+ */
+function Cell({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <span className="flex items-baseline gap-1.5 xl:block xl:justify-self-end">
+      <span className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground xl:hidden">{label}</span>
+      {children}
+    </span>
+  )
+}
+
+/**
+ * "Heard for the first time" — the mock's chip row.
+ *
+ * THE FLOOR SENTENCE STAYS UNDER IT. A clustering is re-made over the whole
+ * corpus every update and labels churn about 88% run to run, so production
+ * writes 303 first-seen themes on Össur and 592 on Sealand in ONE update;
+ * `newThemesLine` says how many were heard and why only the ones carrying ten
+ * videos this month are named. The mock has no room for that sentence, which is
+ * exactly why a port must keep it.
+ */
+function Themes({ block, mode }: { block: CameInBlock; mode: 'app' | 'print' | 'email' }) {
+  const email = mode === 'email'
+  if (email) {
+    return (
+      <div style={{ marginTop: 10 }}>
+        <Heading mode={mode}>Heard for the first time</Heading>
+        <Note mode={mode}>{newThemesLine(block.newThemesSeen, block.newThemes.length)}</Note>
+        {block.newThemes.map((t) => (
+          <p key={t.id} style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink, padding: '2px 0' }}>
+            {/* MARKED IN THIS ARM TOO (code review C10). The app arm marks the
+                same string `stored` / `pass_b_theme`; here it was bare, so a
+                label carrying a direction word would have passed on screen and
+                failed the contract in the inbox — a confusing way to find out
+                which arm is stricter. */}
+            <span data-copy="stored" data-slot="pass_b_theme">{t.label}</span> — <span data-copy="figure">{fmtInt(t.videos)}</span> videos this month
+          </p>
+        ))}
       </div>
     )
   }
   return (
-    <div className="flex min-w-0 flex-col gap-1">
-      {rows.map((r) => (
-        <p key={r.audience} className="m-0 text-[12px]">
-          <span className="font-medium">{r.label}</span> — <span data-copy="figure">{fmtInt(r.analysed)}</span>{' '}
-          <span className="text-muted-foreground">analysed · {fmtInt(r.gathered)} newly found · {platformMixLine(r.platformMix) || 'no platform recorded'}</span>
-          {/* ONE PER AUDIENCE, which is what the plan's WK5 bullet asks for and
-              what makes this block's point ON EVERY ROW: each count above is of
-              a WINDOW, and a window is not a period, whoever's conversation it
-              was. It costs no extra read — the windowed RPC already comes back
-              per audience, and so do the stored month rows. */}
-          {r.contribution ? (
-            <span className="block text-[11.5px] text-muted-foreground">
-              {contributionLine(month, r.contribution.videos, r.contribution.of)}
-            </span>
-          ) : null}
-          <AudienceShare row={r} />
-        </p>
-      ))}
-    </div>
-  )
-}
-
-/**
- * The share bar's own numbers and the row's comments — the mock's two missing
- * columns (`week.camein.col.share`, `week.camein.col.comments`).
- *
- * BOTH SIDES OF THE SHARE, NEVER A BARE PERCENTAGE. "360 of 508" is a
- * measurement; "71%" on its own is the score this product does not print. And
- * the denominator named is the UPDATE's analysed total — the one thing on this
- * block every row is genuinely a part of — not the month's and not the
- * category's.
- *
- * THE COMMENTS ARE WINDOW-DATED AND ABSENT MEANS ABSENT. Null is "the windowed
- * reading is not installed here", which is a different sentence from a zero,
- * and a zero here is a real zero: this audience drew no comment in the days the
- * update covered.
- */
-function AudienceShare({ row }: { row: CameInBlock['rows'][number] }) {
-  if (row.share.n <= 0) return null
-  return (
-    <span className="block text-[11.5px] text-muted-foreground">
-      <span data-copy="level">{fmtInt(row.share.k)} of {fmtInt(row.share.n)} videos this update analysed</span>
-      {row.comments != null
-        ? <> · <span data-copy="figure">{fmtInt(row.comments)}</span> {row.comments === 1 ? 'comment' : 'comments'} written in these days</>
-        : ' · comments in these days are not recorded for this workspace yet'}
-    </span>
-  )
-}
-
-/**
- * One rival post, by the only identity a post in this product has
- * (`week.rivalposts.col.post` / `.col.comments`).
- *
- * THE CAPTION AND THE ACCOUNT ARE SOMEBODY ELSE'S WORDS, so they are marked as
- * a quote: rule (c) may not police them, for the reason the copy contract
- * already gives about a commenter — a rival whose caption says "growing" has
- * not made a direction claim on this product's behalf. Everything code says
- * about the post sits outside those nodes.
- */
-function Post({ post, mode }: { post: RivalPost; mode: 'app' | 'print' | 'email' }) {
-  const email = mode === 'email'
-  return (
-    <span
-      className={email ? undefined : 'block pl-3 text-[11.5px] text-muted-foreground'}
-      style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, paddingLeft: 10 } : undefined}
-    >
-      {platformLabel(post.platform)}
-      {post.account ? <> · <span data-copy="quote">{post.account}</span></> : null}
-      {/* THE POST'S OWN DATE, and the only figure on this row that is not
-          window-dated: `videos.upload_date` is the video's clock. The comments
-          beside it are dated by the days the update covered, which is why the
-          two are worded differently and never joined by a comma. */}
-      {post.postedOn ? ` · posted ${shortDate(post.postedOn)}` : ''}
-      {post.caption ? <> · <span data-copy="quote">{post.caption}</span></> : null}
-      {' · '}<span data-copy="figure">{fmtInt(post.comments)}</span> {post.comments === 1 ? 'comment' : 'comments'} under it in these days
-    </span>
-  )
-}
-
-function Themes({ block, mode }: { block: CameInBlock; mode: 'app' | 'print' | 'email' }) {
-  return (
-    <div className={mode === 'email' ? undefined : 'flex min-w-0 flex-col gap-1'} style={mode === 'email' ? { marginTop: 10 } : undefined}>
-      <Heading mode={mode}>Heard for the first time</Heading>
-      <Note mode={mode}>{newThemesLine(block.newThemesSeen, block.newThemes.length)}</Note>
-      {block.newThemes.map((t) => (
-        <p
-          key={t.id}
-          className={mode === 'email' ? undefined : 'm-0 text-[12px]'}
-          style={mode === 'email' ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink, padding: '2px 0' } : undefined}
-        >
-          {t.label} — <span data-copy="figure">{fmtInt(t.videos)}</span> videos this month
-        </p>
-      ))}
-    </div>
-  )
-}
-
-function Rivals({ block, mode }: { block: CameInBlock; mode: 'app' | 'print' | 'email' }) {
-  if (block.rivals.length === 0) return null
-  return (
-    <div className={mode === 'email' ? undefined : 'flex min-w-0 flex-col gap-1'} style={mode === 'email' ? { marginTop: 10 } : undefined}>
-      <Heading mode={mode}>Rival posts this update</Heading>
-      {block.rivals.map((r) => (
-        <p
-          key={r.audience}
-          className={mode === 'email' ? undefined : 'm-0 text-[12px]'}
-          style={mode === 'email' ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink, padding: '2px 0' } : undefined}
-        >
-          <span className={mode === 'email' ? undefined : 'font-medium'}>{r.label}</span>{' '}
-          <span className={mode === 'email' ? undefined : 'text-muted-foreground'}>
-            — <span data-copy="figure">{fmtInt(r.aboutThem)}</span> {r.aboutThem === 1 ? 'post' : 'posts'} about them
-            {r.ownPostsUnread
-              // THE READINESS GAP, NAMED WHERE IT BITES. This workspace has
-              // never captured a post of this rival's, so a zero here would be
-              // read as "they went quiet" when what is true is that their own
-              // posts are not being read at all.
-              ? ' · their own posts are not read yet — Verbatim engineering'
-              : `, ${fmtInt(r.byThem)} ${r.byThem === 1 ? 'post' : 'posts'} of their own`}
+    <div className="flex min-w-0 flex-col gap-2 rounded-[4px] bg-inner px-3 py-2.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <Heading mode={mode}>
+          {block.newThemes.length > 0 ? `${fmtInt(block.newThemes.length)} heard for the first time` : 'Heard for the first time'}
+        </Heading>
+        {block.newThemes.map((t) => (
+          <span key={t.id} className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-tile px-2.5 py-0.5 text-[12px] font-medium text-secondary-foreground ring-1 ring-border">
+            {/* The theme's LABEL is a model's words (`pass_b_theme`, policy
+                'none'), so it is marked as stored prose and names the call. */}
+            <span data-copy="stored" data-slot="pass_b_theme" className="truncate">{t.label}</span>
+            <span data-copy="figure" className="font-mono font-semibold tabular-nums">{fmtInt(t.videos)}</span>
           </span>
-          {/* THE POSTS THEMSELVES, AND WHAT THE COLUMN IS A COLUMN OF. Three of
-              ninety-four, said out loud: the comment count beside the rival is
-              the sum over the posts NAMED and not that rival's week, which is
-              the claim a bare total would make. */}
-          {r.posts.length > 0 ? (
-            <>
-              <span className={mode === 'email' ? undefined : 'block text-[11.5px] text-muted-foreground'} style={mode === 'email' ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}>
-                {/* THE RULE, NOT JUST THE RATIO. The pick is two stages — the
-                    widest-reaching few, then the most-commented of those — and
-                    "3 of 94" alone would describe a rule this did not follow. */}
-                <span data-copy="figure">{fmtInt(r.posts.length)}</span> shown: the most commented on in these days of the <span data-copy="figure">{fmtInt(r.postsConsidered)}</span> widest-reaching of <span data-copy="figure">{fmtInt(r.postsTotal)}</span>; <span data-copy="figure">{fmtInt(r.comments)}</span> {r.comments === 1 ? 'comment' : 'comments'} under them in these days
-              </span>
-              {r.posts.map((post, i) => <Post key={`${post.platform}:${post.href ?? i}`} post={post} mode={mode} />)}
-            </>
-          ) : null}
-        </p>
-      ))}
+        ))}
+      </div>
+      <Note mode={mode}>{newThemesLine(block.newThemesSeen, block.newThemes.length)}</Note>
     </div>
   )
 }
 
-function Quotes({ block, mode }: { block: CameInBlock; mode: 'app' | 'print' | 'email' }) {
+/**
+ * "New on your subjects" — the mock's two-up quote grid.
+ *
+ * THE COUNT LEADS AND SAYS WHAT IT COUNTS. "41 comments on your subjects were
+ * written in these days" is a count of comments, not of videos, and the four
+ * below it are named as four of that number rather than as a sample of
+ * something unstated.
+ */
+function Quotes({ block, mode, ctx }: { block: CameInBlock; mode: 'app' | 'print' | 'email'; ctx: BlockContext }) {
+  const email = mode === 'email'
   if (block.quotesUnread) {
     return (
-      <div className={mode === 'email' ? undefined : 'flex min-w-0 flex-col gap-1'} style={mode === 'email' ? { marginTop: 10 } : undefined}>
+      <div className={email ? undefined : 'flex min-w-0 flex-col gap-1'} style={email ? { marginTop: 10 } : undefined}>
         <Heading mode={mode}>New on your subjects</Heading>
         <Note mode={mode}>{block.quotesUnread}</Note>
       </div>
@@ -335,14 +440,30 @@ function Quotes({ block, mode }: { block: CameInBlock; mode: 'app' | 'print' | '
   }
   if (block.quotes.length === 0) return null
   return (
-    <div className={mode === 'email' ? undefined : 'flex min-w-0 flex-col gap-2'} style={mode === 'email' ? { marginTop: 10 } : undefined}>
-      <Heading mode={mode}>New on your subjects</Heading>
+    <div className={email ? undefined : 'flex min-w-0 flex-col gap-2'} style={email ? { marginTop: 10 } : undefined}>
+      <div className={email ? undefined : 'flex items-baseline justify-between gap-3'}>
+        <Heading mode={mode}>New on your subjects</Heading>
+        {!email && block.quotesTotal != null ? (
+          <Link href={`${ctx.appUrl}/dashboard/subjects`} className="flex-none text-[12px] font-medium hover:underline">
+            See all {fmtInt(block.quotesTotal)} new quotes →
+          </Link>
+        ) : null}
+      </div>
       {block.quotesTotal != null ? (
         <Note mode={mode}>
           <span data-copy="figure">{fmtInt(block.quotesTotal)}</span> comments on your subjects were written in these days; {block.quotes.length === 1 ? 'one is' : `${block.quotes.length} are`} below in full.
         </Note>
       ) : null}
-      {block.quotes.map((q, i) => <BlockQuote key={i} quote={q.quote} cite={`${q.subject} · ${q.cite}`} mode={mode} />)}
+      <div className={email ? undefined : 'grid grid-cols-1 gap-x-5 gap-y-3 xl:grid-cols-2'}>
+        {block.quotes.map((q, i) => (
+          <div key={i} className={email ? undefined : 'flex min-w-0 flex-col gap-1'}>
+            {!email ? (
+              <span className="inline-flex w-fit items-center rounded-full bg-inner px-2 py-px text-[10.5px] font-semibold text-muted-foreground">{q.subject}</span>
+            ) : null}
+            <BlockQuote quote={q.quote} cite={email ? `${q.subject} · ${q.cite}` : q.cite} mode={mode} />
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

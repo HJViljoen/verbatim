@@ -23,6 +23,19 @@ import type { FigureTable } from '@/lib/reading/verdicts'
 // of a window would invite the reader to compare it with the month's share,
 // which is two different denominators.
 //
+// THE MOCK'S SIX-ACROSS STRIP, WITH THE COLUMN THAT IS REFUSED REPLACED (Block
+// D wave 2). The artboard draws six columns of `31 this week` over a two-bar
+// comparison against `typical week 22`. Two things about that are impossible:
+// the leading figure may not be a week alone (D6), and there is no per-week
+// history to be typical of — a weekly series per subject is thirteen windowed
+// reads per subject, which is the one series this page is allowed exactly one
+// of. So the column keeps the mock's shape and inverts the two figures: the
+// MONTH leads with its "of N", and the pair of bars underneath is this update's
+// own contribution against what an update of its size usually adds
+// (`typicalContribution` — a ratio of ratios, both sides measured, no modelled
+// history anywhere). The tag over them is `typicalTag`'s word, which is a level
+// against a level and never a direction.
+//
 // WHEN NOTHING IS RECORDED IT SAYS SO. Subjects are M4 and the table does not
 // exist on production yet. A block that drew an empty table there would be
 // saying this workspace cares about nothing.
@@ -48,6 +61,10 @@ export const weekSubjects: Block<WeekData> = {
         footer={email
           ? <a href={href} style={{ color: EMAIL.ink }}>Open Subjects →</a>
           : <Link href={href} className="hover:underline">Open Subjects →</Link>}
+        // THE MOCK'S LEFT-HAND FOOTER NOTE, and it is a naming date rather than
+        // a start of evidence (D14): `named_at` is the day somebody typed the
+        // subject into Settings, not the day the conversation began.
+        footerNote={s.namedLine ?? undefined}
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         {/* THE MOCK'S LEAD, WITH THE HALF THAT IS REFUSED REPLACED RATHER THAN
@@ -64,24 +81,31 @@ export const weekSubjects: Block<WeekData> = {
           </p>
         ) : null}
         {s.rows.length > 0 ? (
-          <>
-            <BlockRanked
-              mode={mode}
-              rows={s.rows.map((r) => ({
-                label: r.label,
-                pct: (r.monthVideos / max) * 100,
-                color: 'var(--you)',
-                count: <Level row={r} />,
-                badge: <Added row={r} />,
-              }))}
-            />
-            <p
-              className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'}
-              style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 6 } : undefined}
-            >
-              Videos in your own audience carrying each subject this month, with what this update added.
-            </p>
-          </>
+          email
+            ? (
+              // AN EMAIL GETS THE RANKED LIST, NOT THE STRIP. Six columns of
+              // 6px bars are six columns Outlook lays out with Word; the
+              // ranked row is the primitive that already survives that, and it
+              // carries the same two numbers.
+              <BlockRanked
+                mode={mode}
+                rows={s.rows.map((r) => ({
+                  label: r.label,
+                  pct: (r.monthVideos / max) * 100,
+                  color: 'var(--you)',
+                  count: <Level row={r} />,
+                  badge: <Added row={r} />,
+                }))}
+              />
+            )
+            : (
+              <>
+                <div className={`grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3 ${STRIP_COLUMNS[Math.min(s.rows.length, 6)] ?? 'xl:grid-cols-6'}`}>
+                  {s.rows.map((r) => <Column key={r.id} row={r} />)}
+                </div>
+                <Legend rows={s.rows} />
+              </>
+            )
         ) : null}
       </BlockFrame>
     )
@@ -103,11 +127,113 @@ export const weekSubjects: Block<WeekData> = {
   },
 }
 
+/**
+ * As many columns as there are subjects, up to the artboard's six.
+ *
+ * Written out in full, never interpolated, so Tailwind v4's scanner sees them
+ * (the rule `components/shell/tile.tsx`'s span maps follow). Six columns with
+ * three subjects in them is three sixths of a strip and half a tile of white:
+ * a workspace naming three subjects is the common case, and the strip should
+ * fill the tile it is given.
+ */
+const STRIP_COLUMNS: Record<number, string> = {
+  1: 'xl:grid-cols-1', 2: 'xl:grid-cols-2', 3: 'xl:grid-cols-3',
+  4: 'xl:grid-cols-4', 5: 'xl:grid-cols-5', 6: 'xl:grid-cols-6',
+}
+
+/** One of the mock's six columns. */
+function Column({ row }: { row: SubjectWeekRow }) {
+  // BOTH BARS ARE THE SAME UNIT ON THE SAME SCALE — videos this update added,
+  // measured and expected. The mock's pair is this week against a typical week,
+  // which needs a history nothing holds; this pair is a contribution against
+  // the contribution an update of this size usually makes to this subject, and
+  // both sides come off the same two reads.
+  const added = row.addedVideos
+  const typical = row.typical
+  const top = Math.max(1, added ?? 0, typical ?? 0)
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5 border-border/70 xl:border-l xl:pl-4 xl:first:border-l-0 xl:first:pl-0">
+      {/* The subject's own name is the client's words, typed into Settings —
+          not a model's — so it carries no prose marker. */}
+      <span className="truncate text-[12.5px] font-medium" title={row.label}>{row.label}</span>
+      <span className="flex items-baseline gap-1.5">
+        <span data-copy="figure" className="font-mono text-[18px] font-semibold leading-none tracking-[-0.03em] tabular-nums">
+          {fmtInt(row.monthVideos)}
+        </span>
+        <span className="text-[12px] font-medium text-muted-foreground">this month</span>
+      </span>
+      <Level row={row} className="block font-mono text-[11px] tabular-nums text-muted-foreground" />
+      {added != null ? (
+        <>
+          <span className="flex flex-col gap-[3px]">
+            <Bar pct={(added / top) * 100} color="var(--you)" />
+            <Bar pct={typical != null ? (typical / top) * 100 : 0} color="var(--neutral-seg)" />
+          </span>
+          <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+            <Added row={row} />
+            {typical != null ? ` · usually ${fmtInt(Math.round(typical))}` : ' · no usual share to compare it with'}
+          </span>
+        </>
+      ) : (
+        <span className="text-[11px] text-muted-foreground">
+          What this update added to it is not recorded here yet.
+        </span>
+      )}
+      {row.tag ? (
+        // A LEVEL AGAINST A LEVEL, NEVER A DIRECTION. "above typical" says this
+        // update put in more than an update of its size usually does; it says
+        // nothing about where the subject is headed, which is why the word is
+        // `typicalTag`'s and not `directionWord`'s.
+        //
+        // AND SO IT IS MARKED NOTHING (code review C7). It was marked
+        // `data-copy="verdict"` — the contract's node for words a `Verdict`
+        // (lib/reading/verdicts.ts) computed, and the one node rule (c) never
+        // checks — directly under a comment saying it is not one. This tag
+        // carries no band and no both-sides k/n; it is three fixed words
+        // (`typicalTag`), none of them in DIRECTION_WORDS, so unmarked it is
+        // CHECKED and it passes. An exemption that names nothing is a hole
+        // (AGENTS.md), and this one was exempting a word that needed no
+        // exemption.
+        <span className="inline-flex w-fit items-center rounded-full bg-inner px-2 py-px text-[10.5px] font-semibold text-muted-foreground">
+          {row.tag}
+        </span>
+      ) : null}
+    </div>
+  )
+}
+
+function Bar({ pct, color }: { pct: number; color: string }) {
+  return (
+    <span className="block h-1.5 w-full overflow-hidden rounded-full bg-inner">
+      <span className="block h-full rounded-full" style={{ width: `${Math.max(0, Math.min(100, pct))}%`, background: color }} />
+    </span>
+  )
+}
+
+/** The mock's two-swatch legend, saying what the second bar actually is. */
+function Legend({ rows }: { rows: readonly SubjectWeekRow[] }) {
+  const anyTypical = rows.some((r) => r.typical != null)
+  return (
+    <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-border/70 pt-2">
+      <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <span className="h-1.5 w-3.5 rounded-full" style={{ background: 'var(--you)' }} aria-hidden />
+        what this update added
+      </span>
+      {anyTypical ? (
+        <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span className="h-1.5 w-3.5 rounded-full" style={{ background: 'var(--neutral-seg)' }} aria-hidden />
+          what an update of its size usually adds — the subject’s month so far, scaled by this update’s own share of the month
+        </span>
+      ) : null}
+    </div>
+  )
+}
+
 /** The level, with the denominator it is a level of. A calibrated count on its
  *  own is a score, and this product shows no scores (copy contract rule (b)). */
-function Level({ row }: { row: SubjectWeekRow }) {
+function Level({ row, className }: { row: SubjectWeekRow; className?: string }) {
   return (
-    <span data-copy="level">
+    <span data-copy="level" className={className}>
       {fmtInt(row.monthVideos)} of {fmtInt(row.monthOf)} videos
       {row.monthOf > 0 ? ` · ${fmtPct((row.monthVideos / row.monthOf) * 100, 0)}` : ''}
     </span>
@@ -117,13 +243,16 @@ function Level({ row }: { row: SubjectWeekRow }) {
 /**
  * What THIS update put in.
  *
- * A COUNT, MARKED AS A VERDICT, AND NOT A DIRECTION. "+14 videos since the last
- * update" says what arrived; it does not say the subject is growing, because
- * one update against one update is two readings of an incompletely filled
- * month. The marker is there because the plus sign is movement vocabulary to a
- * reader's eye even when it is not to the scrubber's.
+ * A COUNT, AND NOT A DIRECTION. "+14 videos since the last update" says what
+ * arrived; it does not say the subject is growing, because one update against
+ * one update is two readings of an incompletely filled month.
  */
 function Added({ row }: { row: SubjectWeekRow }) {
   if (row.addedVideos == null) return null
-  return <span data-copy="verdict">+{fmtInt(row.addedVideos)} this update</span>
+  // MARKED NOTHING, for `typicalTag`'s reason (code review C7). This was a
+  // verdict node too, on the argument that a plus sign is movement vocabulary
+  // to a reader's eye — but the node's meaning in the contract is "a `Verdict`
+  // computed these words", and no Verdict computed this count. "+14 this
+  // update" holds no direction word, so checked it passes.
+  return <span>+{fmtInt(row.addedVideos)} this update</span>
 }

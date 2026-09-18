@@ -211,6 +211,24 @@ describe('buildUpdateSeries', () => {
     expect(point.days).toBe(30)
   })
 
+  it('carries every caveat with its KIND, and `note` is those joined', () => {
+    // Block D wave 2, design review F4. A surface that DRAWS the series has
+    // already put the quiet updates on the floor and counted them in its
+    // legend; without the kind it could only decide not to repeat that by
+    // matching the sentence's own words, which is a renderer guessing at the
+    // reading layer's statements.
+    const { runs, videosByRun } = weeklyRuns([11, 0, 13, 14])
+    const series = buildUpdateSeries({
+      runs, videosByRun, spans: new Map(), monthOf: new Map(),
+      windowless: 1, requested: 13, windowRead: 'absent',
+    })
+    expect(series.notes.map((n) => n.kind)).toEqual(['quiet', 'windowless', 'short', 'window_read'])
+    expect(series.note).toBe(series.notes.map((n) => n.text).join(' '))
+    expect(series.notes.find((n) => n.kind === 'quiet')!.text).toContain('found nothing at all')
+    // Dropping the one the picture makes leaves the three it does not.
+    expect(series.notes.filter((n) => n.kind !== 'quiet')).toHaveLength(3)
+  })
+
   it('excludes a run with no window and names it', () => {
     const { runs, videosByRun } = weeklyRuns([11, 12, 13])
     const series = buildUpdateSeries({

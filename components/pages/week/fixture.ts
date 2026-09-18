@@ -1,4 +1,5 @@
-import { LATER_LINE, PRIVACY_LINE, coverageLine, subjectLead, typicalContribution, typicalTag, type SubjectWeekRow, type WeekData, type WeekWindow } from '@/lib/pages/week'
+import { LATER_LINE, PRIVACY_LINE, coverageLine, subjectLead, subjectsNamedLine, typicalContribution, typicalTag, type RepliesBlock, type ReplyRow, type SubjectWeekRow, type WeekData, type WeekWindow } from '@/lib/pages/week'
+import { intentCounts } from '@/lib/content-tiles'
 import { ownSides, type PlaybookVideo } from '@/lib/pages/playbook'
 import { bandVerdict } from '@/lib/reading/verdicts'
 import { buildUpdateSeries, monthsOfWindow, type UpdateSeries } from '@/lib/reading/updates'
@@ -116,6 +117,68 @@ const THIN_PUBLISHED: PlaybookVideo[] = ownPublished(
   [['story', 3, 2.1], ['testimonial', 2, 1.4]],
   [['personal-story', 3], ['bold-claim', 1]],
 )
+
+// ---- §2 and §8's own rows (Block D wave 2) ------------------------------------
+//
+// SHAPED BY THE DIGEST'S OWN CAPS, NOT BY A GUESS. `rankEngageCandidates` takes
+// at most three of a CATEGORY and twelve in all across five categories, three
+// of which read as one intent ("buying"), so a full queue on a live tenant is
+// eleven or twelve rows with a fat buying column — which is what the Össur arm
+// below carries. The words are this file's own invented voices, as every quote
+// here is; the counts, the caps and the shape are the code's.
+//
+// The awareness rows are ranked separately and capped at three, and they carry
+// NO href by construction — `buildReplies` never calls `engageDeepLink` for a
+// misinformation row, so a fixture that gave one a link would be testing a
+// state the loader cannot produce.
+
+function reply(input: {
+  id: string
+  intent: ReplyRow['intent']
+  date: string
+  context: string
+  reason: string
+  platform: string
+  text: string
+  href?: string | null
+}): ReplyRow {
+  return {
+    id: input.id,
+    intent: input.intent,
+    date: input.date,
+    context: input.context,
+    reason: input.reason,
+    platform: input.platform,
+    quote: { ref: quoteRef.message(input.id), text: input.text },
+    href: input.intent === 'misinformation' ? null : (input.href ?? 'https://www.youtube.com/watch?v=abc&lc=x'),
+    insightId: `ins-${input.id}`,
+  }
+}
+
+function ossurReplies(window: WeekWindow): RepliesBlock {
+  const rows = [
+    reply({ id: 'c1', intent: 'buying', date: '2026-09-11', context: 'under your post · 41 likes', reason: 'Ready to buy', platform: 'tiktok', text: 'Where do I get fitted for one of these in Cape Town?' }),
+    reply({ id: 'c2', intent: 'buying', date: '2026-09-10', context: 'under a category video', reason: 'Considering a switch', platform: 'youtube', text: 'Moving off my current socket after the last refit — is the fitting covered?' }),
+    reply({ id: 'c3', intent: 'buying', date: '2026-09-09', context: 'under your post', reason: 'Buying trigger', platform: 'instagram', text: 'My liner finally gave in, so I am shopping again' }),
+    reply({ id: 'c4', intent: 'question', date: '2026-09-12', context: 'under a category video', reason: 'Question', platform: 'youtube', text: 'Does the warranty cover the liner as well as the socket?' }),
+    reply({ id: 'c5', intent: 'question', date: '2026-09-08', context: 'under @physiowithpriya’s post', reason: 'Question', platform: 'youtube', text: 'How long does a refit appointment usually take?' }),
+    reply({ id: 'c6', intent: 'objection', date: '2026-09-11', context: 'under a category video · 12 likes', reason: 'Objection', platform: 'reddit', text: 'Insurance covered nothing and the quote was more than my car' }),
+  ]
+  return {
+    rows,
+    counts: intentCounts(rows),
+    // `total` IS `rows.length`, BECAUSE THAT IS WHAT THE LOADER PRODUCES:
+    // `buildReplies` sets it off the rows it kept, so a fixture claiming
+    // twelve picked while carrying six would describe a state no run makes —
+    // and the proportion bar drawn over it would sum to half the queue.
+    total: rows.length,
+    flagged: [
+      reply({ id: 'c7', intent: 'misinformation', date: '2026-09-09', context: 'awareness only — never a reply prompt', reason: 'Misinformation', platform: 'reddit', text: 'These are all the same three factories with different stickers' }),
+    ],
+    window,
+    unread: null,
+  }
+}
 
 const DAY = 86_400_000
 
@@ -250,7 +313,15 @@ function ossurSubjects(): WeekData['subjects'] {
     subjectRow({ id: 's2', label: 'Price and cover', monthVideos: 27, monthOf: 96, addedVideos: 6, clientUpdateVideos: 14 }),
     subjectRow({ id: 's3', label: 'Durability', monthVideos: 19, monthOf: 96, addedVideos: 1, clientUpdateVideos: 14 }),
   ]
-  return { month: '2026-09-01', unread: null, rows, lead: subjectLead(rows, '2026-09-01') }
+  return {
+    month: '2026-09-01',
+    unread: null,
+    rows,
+    lead: subjectLead(rows, '2026-09-01'),
+    // Three subjects, named in one sitting — which is how they are named on
+    // both live tenants, and the arm the mock's own footer draws.
+    namedLine: subjectsNamedLine(['2026-08-19T09:12:00.000Z', '2026-08-19T09:14:00.000Z', '2026-08-19T09:15:00.000Z']),
+  }
 }
 
 export function weekFixture(): WeekData {
@@ -378,9 +449,9 @@ export function weekFixture(): WeekData {
       // figure, which sums to `windowComments` below — both sides carried, no
       // bare percentage anywhere.
       rows: [
-        { audience: 'industry-other', label: 'The category', gathered: 429, analysed: 360, platformMix: { youtube: 210, instagram: 85, tiktok: 45, reddit: 20 }, contribution: { videos: 144, of: 398 }, share: { k: 360, n: 508 }, comments: 3600 },
-        { audience: 'competitor:Ottobock', label: 'Ottobock', gathered: 137, analysed: 96, platformMix: { youtube: 52, instagram: 30, tiktok: 12, reddit: 2 }, contribution: { videos: 47, of: 118 }, share: { k: 96, n: 508 }, comments: 1100 },
-        { audience: 'client', label: 'Your own brand', gathered: 52, analysed: 52, platformMix: { youtube: 33, instagram: 12, tiktok: 7 }, contribution: { videos: 14, of: 96 }, share: { k: 52, n: 508 }, comments: 434 },
+        { audience: 'industry-other', label: 'The category', gathered: 429, analysed: 360, platformMix: { youtube: 210, instagram: 85, tiktok: 45, reddit: 20 }, contribution: { videos: 144, of: 398 }, trackedSince: null, share: { k: 360, n: 508 }, comments: 3600 },
+        { audience: 'competitor:Ottobock', label: 'Ottobock', gathered: 137, analysed: 96, platformMix: { youtube: 52, instagram: 30, tiktok: 12, reddit: 2 }, contribution: { videos: 47, of: 118 }, trackedSince: null, share: { k: 96, n: 508 }, comments: 1100 },
+        { audience: 'client', label: 'Your own brand', gathered: 52, analysed: 52, platformMix: { youtube: 33, instagram: 12, tiktok: 7 }, contribution: { videos: 14, of: 96 }, trackedSince: null, share: { k: 52, n: 508 }, comments: 434 },
       ],
       gathered: 618,
       analysed: 508,
@@ -424,6 +495,7 @@ export function weekFixture(): WeekData {
       quotesUnread: null,
       playbookHref: '/dashboard/market',
     },
+    replies: ossurReplies(OSSUR_WINDOW),
     sales: {
       window: { from: OSSUR_WINDOW.from, to: OSSUR_WINDOW.to },
       videos: 205,
@@ -569,8 +641,10 @@ export function thinFixture(): WeekData {
       rows: [],
       // NO ROWS MEANS NO LEAD, never "0 of 0 ran above typical": a sentence
       // counting comparisons nobody drew is the exact failure `unread` exists
-      // to keep this block out of.
+      // to keep this block out of. The naming line goes the same way: a footer
+      // counting zero subjects says "none recorded" twice.
       lead: null,
+      namedLine: null,
     },
     rising: {
       audience: 'industry-other',
@@ -592,9 +666,13 @@ export function thinFixture(): WeekData {
         // produces. The absent arm is `absentReadingFixture()` below, whole.
         // The three contributions add to the 394 the block states, and their
         // denominators to its 475.
-        { audience: 'industry-other', label: 'The category', gathered: 933, analysed: 150, platformMix: { youtube: 80, instagram: 40, tiktok: 25, reddit: 5 }, contribution: { videos: 300, of: 350 }, share: { k: 150, n: 253 }, comments: 6000 },
-        { audience: 'competitor:Freitag', label: 'Freitag', gathered: 138, analysed: 71, platformMix: { instagram: 45, tiktok: 20, youtube: 6 }, contribution: { videos: 60, of: 80 }, share: { k: 71, n: 253 }, comments: 2400 },
-        { audience: 'competitor:Cotopaxi', label: 'Cotopaxi', gathered: 27, analysed: 32, platformMix: { instagram: 20, tiktok: 12 }, contribution: { videos: 34, of: 45 }, share: { k: 32, n: 253 }, comments: 931 },
+        { audience: 'industry-other', label: 'The category', gathered: 933, analysed: 150, platformMix: { youtube: 80, instagram: 40, tiktok: 25, reddit: 5 }, contribution: { videos: 300, of: 350 }, trackedSince: null, share: { k: 150, n: 253 }, comments: 6000 },
+        { audience: 'competitor:Freitag', label: 'Freitag', gathered: 138, analysed: 71, platformMix: { instagram: 45, tiktok: 20, youtube: 6 }, contribution: { videos: 60, of: 80 }, trackedSince: null, share: { k: 71, n: 253 }, comments: 2400 },
+        { audience: 'competitor:Cotopaxi', label: 'Cotopaxi', gathered: 27, analysed: 32, platformMix: { instagram: 20, tiktok: 12 }, contribution: { videos: 34, of: 45 },
+          // THE ONE ROW WHOSE LINE STARTS LATE — the mock's "Poler since 3 Sep".
+          // `competitors.first_seen_at` (M1); every other row here is tracked
+          // from before the months this page compares and prints no start.
+          trackedSince: '2026-09-03T00:00:00.000Z', share: { k: 32, n: 253 }, comments: 931 },
       ],
       gathered: 1098,
       analysed: 253,
@@ -645,6 +723,11 @@ export function thinFixture(): WeekData {
       quotesUnread: 'Quotes are counted against your subjects once subjects are recorded for this workspace. Until then this update’s comments are read, grouped and counted — they are simply not yours to name.',
       playbookHref: '/dashboard/market',
     },
+    // SEALAND'S QUEUE IS EMPTY AND THAT IS A READING, not an absence: the
+    // digest ran over the days this update covered and nothing in them read as
+    // a question, an objection or somebody ready to buy. The block prints its
+    // own sentence for that, which is a different sentence from `unread`.
+    replies: { rows: [], counts: [], total: 0, flagged: [], window: SEALAND_WINDOW, unread: null },
     sales: {
       window: { from: SEALAND_WINDOW.from, to: SEALAND_WINDOW.to },
       videos: 655,

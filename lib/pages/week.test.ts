@@ -6,6 +6,7 @@ import { directionRe } from '../test/copy-contract'
 import {
   baselineFormingLine,
   baselineStartsWith,
+  audienceContributionLine,
   contributionLine,
   crossedIntoLine,
   coverageLine,
@@ -19,6 +20,7 @@ import {
   postCaption,
   refTargets,
   subjectLead,
+  subjectsNamedLine,
   typicalContribution,
   typicalTag,
   windowDays,
@@ -59,6 +61,23 @@ describe('the contribution line', () => {
     expect(contributionLine('2026-09-01', 394, 475)).toBe(
       'this update’s contribution to September so far: 394 of 475',
     )
+  })
+
+  it('names every audience on one line, and says nothing where nothing was read', () => {
+    // Design review F11: the restatement is per row and the line is one, so a
+    // row is one line and the bars read as a comparable column again.
+    const rows = [
+      { label: 'Your own brand', contribution: { videos: 14, of: 96 } },
+      { label: 'Ottobock', contribution: { videos: 47, of: 118 } },
+      { label: 'The category', contribution: null },
+    ]
+    expect(audienceContributionLine('2026-09-01', rows)).toBe(
+      'this update’s contribution to September so far, by audience: Your own brand 14 of 96 · Ottobock 47 of 118',
+    )
+    // Production today on both tenants: the windowed reading is not installed,
+    // so there is no contribution to state and the line is not drawn at all.
+    expect(audienceContributionLine('2026-09-01', [{ label: 'Your own brand', contribution: null }])).toBeNull()
+    expect(audienceContributionLine('2026-09-01', [])).toBeNull()
   })
 
   it('says so when the window reached back past the month', () => {
@@ -233,6 +252,31 @@ describe('the subjects lead', () => {
   it('speaks no direction word', () => {
     const lead = subjectLead([row('Comfort', 'above typical'), row('Price', 'below typical')], '2026-09-01')!
     expect(directionRe().test(lead)).toBe(false)
+  })
+})
+
+describe('when the subjects were named', () => {
+  it('names one date where they were named in one sitting', () => {
+    expect(subjectsNamedLine([
+      '2026-08-19T09:12:00.000Z', '2026-08-19T09:14:00.000Z', '2026-08-19T09:15:00.000Z',
+    ])).toBe('3 subjects named 19 Aug')
+  })
+
+  it('names the first where they were named on different days', () => {
+    // Six subjects named 19 Aug is the mock's line and the common case; a
+    // seventh named in September has no single naming date to share, and
+    // printing one would date three months of measurement to the wrong day.
+    expect(subjectsNamedLine(['2026-08-19T09:12:00.000Z', '2026-09-03T10:00:00.000Z']))
+      .toBe('2 subjects, the first named 19 Aug')
+  })
+
+  it('reads as one subject when there is one', () => {
+    expect(subjectsNamedLine(['2026-08-19T09:12:00.000Z'])).toBe('1 subject named 19 Aug')
+  })
+
+  it('is null where nothing carries a naming date', () => {
+    expect(subjectsNamedLine([])).toBeNull()
+    expect(subjectsNamedLine([null, null])).toBeNull()
   })
 })
 

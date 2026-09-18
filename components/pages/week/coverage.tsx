@@ -31,10 +31,20 @@ export const weekCoverage: Block<WeekData> = {
 
   render(data, mode = 'app') {
     return (
-      <BlockFrame title={weekCoverage.title} mode={mode}>
-        <Line mode={mode} strong>{data.coverage.line}</Line>
+      // NO TITLE ON THE PAGE (design review, nits). The artboard sets this
+      // bare on the page ground: 9.5px mono, two lines, no eyebrow, no tile —
+      // it is the footnote under everything and not a tenth answer. On paper
+      // and in an email it keeps its heading, because there it is a section of
+      // a document that has to be findable. `BlockFrame` with no `title` draws
+      // the block's chrome without a heading.
+      <BlockFrame title={mode === 'app' ? '' : weekCoverage.title} mode={mode}>
+        {/* THE ARTBOARD'S FOOTNOTE FACE. Its method note is 9.5px mono in two
+            lines with the "Prepared by" half in darker ink; these are the same
+            two lines and they take the same face, a little larger because they
+            sit inside a tile rather than under the page. */}
+        <Line mode={mode} strong mono>{data.coverage.line}</Line>
+        <Line mode={mode} mono>{data.coverage.privacy}</Line>
         <Line mode={mode}>{data.laterLine}</Line>
-        <Line mode={mode}>{data.coverage.privacy}</Line>
       </BlockFrame>
     )
   },
@@ -48,13 +58,14 @@ export const weekCoverage: Block<WeekData> = {
   },
 }
 
-function Line({ mode, strong, children }: { mode: 'app' | 'print' | 'email'; strong?: boolean; children: React.ReactNode }) {
+function Line({ mode, strong, mono, children }: { mode: 'app' | 'print' | 'email'; strong?: boolean; mono?: boolean; children: React.ReactNode }) {
   if (mode === 'email') {
     return (
-      <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: strong ? EMAIL.ink2 : EMAIL.muted, marginTop: 4 }}>
+      <div style={{ fontFamily: mono ? FONT.mono : FONT.sans, fontSize: 11, color: strong ? EMAIL.ink2 : EMAIL.muted, marginTop: 4 }}>
         {children}
       </div>
     )
   }
-  return <p className={strong ? 'm-0 text-[11.5px] text-secondary-foreground' : 'm-0 text-[11.5px] text-muted-foreground'}>{children}</p>
+  const face = mono ? 'font-mono text-[10.5px] leading-[1.45]' : 'text-[11.5px]'
+  return <p className={`m-0 ${face} ${strong ? 'text-secondary-foreground' : 'text-muted-foreground'}`}>{children}</p>
 }

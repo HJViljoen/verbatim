@@ -28,11 +28,24 @@ export interface BlockSegment {
  * · 261 videos (62%)" rather than "Positive · 261".
  */
 export function BlockProportion({
-  segments, of, mode = 'app',
+  segments, of, mode = 'app', legend = 'percent',
 }: {
   segments: readonly BlockSegment[]
   of: string
   mode?: RenderMode
+  /**
+   * What the legend prints beside each label (Block D wave 2, design review
+   * F14).
+   *
+   * A PERCENTAGE OF A SMALL SET IS NOISE. The default is the share, which is
+   * right for a partition of hundreds of videos — "Positive 62%". This week's
+   * reply queue is a partition of SIX picked comments, where "Buying signals
+   * 50% · Questions 33% · Objections 17%" reads as a score and loses the counts
+   * the artboard prints ("questions 7 · complaints 3 · wanting to buy 2"). A
+   * caller whose set is small asks for the counts instead; the bar is the same
+   * bar either way.
+   */
+  legend?: 'percent' | 'count'
 }) {
   const shown = segments.filter((s) => s.pct > 0)
   if (!shown.length) return null
@@ -45,7 +58,7 @@ export function BlockProportion({
           {shown.map((s) => (
             <span key={s.label} style={{ ...emailText.small, marginRight: 12, whiteSpace: 'nowrap' }}>
               <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 9999, background: tokenHex(s.color), marginRight: 6 }} />
-              {s.label} <span data-copy="figure">{s.pct}%</span>
+              {s.label} <span data-copy="figure">{legend === 'count' ? s.count : `${s.pct}%`}</span>
             </span>
           ))}
         </div>
@@ -69,7 +82,7 @@ export function BlockProportion({
         {shown.map((s) => (
           <span key={s.label} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <span className="size-2 rounded-full" style={{ background: s.color }} aria-hidden />
-            {s.label} <span data-copy="figure">{s.pct}%</span>
+            {s.label} <span data-copy="figure">{legend === 'count' ? s.count : `${s.pct}%`}</span>
           </span>
         ))}
       </div>
@@ -186,10 +199,17 @@ export interface BlockRankedRow {
  * the row is for.
  */
 export function BlockRanked({
-  rows, mode = 'app',
+  rows, mode = 'app', countWidth, barWidth,
 }: {
   rows: readonly BlockRankedRow[]
   mode?: RenderMode
+  /** Width of the app arm's count cell, in px (`RankedBar.countWidth`). The
+   *  email arm needs none: its count is a table cell that sizes itself. */
+  countWidth?: number
+  /** Width of the app arm's bar, in px. The default 110 is right in a
+   *  full-width tile and eats the label in a span-5 one, where the artboard's
+   *  own bar is 84. */
+  barWidth?: number
 }) {
   if (!rows.length) return null
 
@@ -222,6 +242,8 @@ export function BlockRanked({
           count={r.count != null ? <span data-copy="figure">{r.count}</span> : undefined}
           badge={r.badge}
           href={r.href}
+          countWidth={countWidth}
+          barWidth={barWidth}
           dot
         />
       ))}

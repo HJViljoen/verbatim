@@ -1,12 +1,13 @@
 import Link from 'next/link'
 import type { Block } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
+import { TileColumns } from '@/components/shell/page-grid'
 import { BlockQuote } from '@/components/blocks/quote'
 import { BlockRanked, type BlockRankedRow } from '@/components/blocks/bars'
 import { BlockStat } from '@/components/blocks/stat'
 import { forSalesEmpty, groupingLine, type ForSalesData, type SalesGroup, type SalesQuote } from '@/lib/blocks/for-sales'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fmtInt } from '@/lib/format'
+import { fmtInt, shortDate } from '@/lib/format'
 import type { FigureTable } from '@/lib/reading/verdicts'
 
 /**
@@ -46,21 +47,15 @@ export function forSalesBlock<D>(key: string, pick: (data: D) => ForSalesData): 
       const href = `${ctx.appUrl}${d.brief.href}`
       const of = d.videos != null ? `of ${fmtInt(d.videos)} videos this update` : 'this update'
 
-      return (
-        <BlockFrame
-          title={block.title}
-          question={block.question}
-          mode={mode}
-          meta={d.videos != null ? `${fmtInt(d.videos)} videos this update` : undefined}
-          footer={email
-            ? <a href={href} style={{ color: EMAIL.ink }}>{d.brief.label}</a>
-            : <Link href={href} className="hover:underline">{d.brief.label}</Link>}
-        >
-          {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
-
+      // THE ARTBOARD'S TWO COLUMNS: what they push back on, beside what they
+      // say in your favour and who is moving. The email arm stacks them — a
+      // two-column grid inside a 640px table is two columns Outlook lays out
+      // with Word.
+      const left = (
+        <div className={email ? undefined : 'flex min-w-0 flex-col gap-2.5'}>
           {d.objections.length > 0 ? (
             <Section title="The objections this update heard" mode={mode}>
-              <BlockRanked mode={mode} rows={rank(d.objections, d.videos)} />
+              <BlockRanked mode={mode} countWidth={80} barWidth={64} rows={rank(d.objections, d.videos)} />
               {d.videos == null ? <Note mode={mode}>{NO_DENOMINATOR}</Note> : null}
               <Note mode={mode}>{groupingLine(d.grouping)}</Note>
               <Note mode={mode}>Grounded answers to these sit in the sales brief.</Note>
@@ -68,6 +63,10 @@ export function forSalesBlock<D>(key: string, pick: (data: D) => ForSalesData): 
             </Section>
           ) : null}
 
+        </div>
+      )
+      const right = (
+        <div className={email ? undefined : 'flex min-w-0 flex-col gap-2.5'}>
           {d.praise.length > 0 ? (
             <Section title="A selling point, in their words" mode={mode}>
               <Quotes quotes={d.praise} mode={mode} />
@@ -90,22 +89,60 @@ export function forSalesBlock<D>(key: string, pick: (data: D) => ForSalesData): 
                   size="sm"
                   value={fmtInt(d.switchingTotal)}
                   unit={d.switchingTotal === 1 ? 'comment' : 'comments'}
+                  // AND IT WRAPS RATHER THAN CLIPPING (code review C5). `base`
+                  // renders inside `truncate`, and this base carries the
+                  // denominator the comment above defends printing: in the
+                  // right half of the artboard's two columns the string needs
+                  // 447px of 378, so a reader saw "— of 205 …" and the basis
+                  // was cut off the page. A denominator clipped away is the
+                  // measurement nobody made, arrived at by layout.
+                  baseWrap
                   base={`someone said they were moving between brands — ${of}${
                     d.switchingTotal > d.switching.length ? ` · ${fmtInt(d.switching.length)} below` : ''
                   }`}
                 />
               ) : null}
+              {/* WHICH WAY THE SWITCH RAN IS NOT RESOLVED, AND THE BLOCK SAYS
+                  SO. The artboard reads "2 this week, both toward Sealand".
+                  `SalesCitation` carries `category: 'switching_signal'` and an
+                  audience, and nothing anywhere reads a direction of travel out
+                  of the comment — so the count is printed and the direction is
+                  named as missing rather than guessed from whose video the
+                  comment sat under, which is where it was said, not where the
+                  commenter was going. */}
+              <Note mode={mode}>
+                Which way each switch ran — toward you or away — is not read from the comment, so it is not stated here.
+              </Note>
               <Quotes quotes={d.switching} mode={mode} />
             </Section>
           ) : null}
 
           {d.rivalComplaints.length > 0 ? (
             <Section title="What they complain about in a rival" mode={mode}>
-              <BlockRanked mode={mode} rows={rank(d.rivalComplaints, d.videos)} />
+              <BlockRanked mode={mode} countWidth={80} barWidth={64} rows={rank(d.rivalComplaints, d.videos)} />
               <Note mode={mode}>Counted under videos about that rival, never under yours.</Note>
               {d.videos == null && d.objections.length === 0 ? <Note mode={mode}>{NO_DENOMINATOR}</Note> : null}
             </Section>
           ) : null}
+        </div>
+      )
+
+      return (
+        <BlockFrame
+          title={block.title}
+          question={block.question}
+          mode={mode}
+          meta={d.videos != null ? `objections counted in ${fmtInt(d.videos)} videos this update` : undefined}
+          footer={email
+            ? <a href={href} style={{ color: EMAIL.ink }}>{d.brief.label}</a>
+            : <Link href={href} className="hover:underline">{d.brief.label}</Link>}
+          // THE MOCK'S "WEEK OF 21–27 SEP", in the slot it draws it in — with
+          // the noun refused (see `windowNote`). The days are the run's own
+          // frozen window, so this note and §4's meta are the same two dates.
+          footerNote={windowNote(d.window)}
+        >
+          {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
+          {email ? <>{left}{right}</> : <TileColumns of={2}>{left}{right}</TileColumns>}
         </BlockFrame>
       )
     },
@@ -143,6 +180,24 @@ export function forSalesBlock<D>(key: string, pick: (data: D) => ForSalesData): 
 }
 
 /**
+ * "21 – 27 Sep" — the days the section's counts are of, in the footer's own
+ * slot. Null where the update carries no window, because a footer naming days
+ * nobody read is worse than a footer with nothing in it.
+ *
+ * NO NOUN, AND THAT IS THE POINT (code review C2). This read "week of 21 –
+ * 27 Sep" until the wave-2 fix pass, and Sealand's newest update covers 11 Aug
+ * – 10 Sep: thirty days called a week, in the footer of the one page whose
+ * whole argument is that a week is not a period (AGENTS.md: "Sealand's newest
+ * update covers thirty days, not seven"). The dates alone are the honest form,
+ * and they are the same two dates This week's §4 meta and §5 meta print — the
+ * page's own `windowDays` writes them exactly this way.
+ */
+function windowNote(window: { from: string; to: string } | null): string | undefined {
+  if (!window) return undefined
+  return `${shortDate(window.from)} – ${shortDate(window.to)}`
+}
+
+/**
  * The sentence for a ranked count with nothing to be a count OF.
  *
  * `d.videos` is null wherever the windowed read is not available — which is
@@ -174,7 +229,10 @@ function rank(groups: readonly SalesGroup[], of: number | null): BlockRankedRow[
     pct: (g.videos / max) * 100,
     color: 'var(--cat)',
     count: of != null
-      ? <span data-copy="level">{fmtInt(g.videos)} of {fmtInt(of)} videos</span>
+      // "96 of 205" rather than "96 of 205 videos": the noun is on the block's
+      // own meta ("objections counted in 205 videos this update"), and a row
+      // cell that repeats it wraps to three lines in the artboard's column.
+      ? <span data-copy="level">{fmtInt(g.videos)} of {fmtInt(of)}</span>
       : fmtInt(g.videos),
   }))
 }

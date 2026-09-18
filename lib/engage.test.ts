@@ -48,6 +48,23 @@ describe('rankEngageCandidates', () => {
     expect(out[0].comment.commentDate).toBe('2026-08-05T00:00:00Z')
   })
 
+  it('drops a comment written after the window END, but only where a caller passes one', () => {
+    // A run's window is frozen at `open-run` and gather runs after it, so a
+    // comment written between `window_end` and the run completing is gathered
+    // and cited. This week states `[window_start, window_end)` as the rows'
+    // basis ("written 6 Sep – 13 Sep"), so it passes the closed half; Content
+    // makes no such claim and passes nothing, and its digest must not change.
+    const inside = cand({ commentDate: '2026-08-05T00:00:00Z' })
+    const after = cand({ commentDate: '2026-08-12T00:00:00Z' })
+    const closed = rankEngageCandidates([inside, after], { windowStart: WINDOW, windowEnd: '2026-08-09T00:00:00Z' })
+    expect(closed).toHaveLength(1)
+    expect(closed[0].comment.commentDate).toBe('2026-08-05T00:00:00Z')
+    // Half-open at the far end too: a comment written AT window_end is out.
+    expect(rankEngageCandidates([after], { windowStart: WINDOW, windowEnd: '2026-08-12T00:00:00Z' })).toHaveLength(0)
+    // And with no upper bound the old behaviour stands, unchanged.
+    expect(rankEngageCandidates([inside, after], { windowStart: WINDOW })).toHaveLength(2)
+  })
+
   it('category priority beats strength and likes — a viral question cannot outrank purchase intent', () => {
     const viral = cand({ category: 'question', strength: 9, likes: 6128 })
     const intent = cand({ category: 'purchase_intent', strength: 4, likes: 1 })

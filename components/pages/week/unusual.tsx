@@ -1,12 +1,14 @@
 import type { Block } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
+import { TileColumns } from '@/components/shell/page-grid'
+import { UpdateSeriesChart } from './series-chart'
 import { BlockQuote } from '@/components/blocks/quote'
 import { BlockStat } from '@/components/blocks/stat'
 import { TokenProse } from '@/components/blocks/prose'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, fmtPct, longMonth, monthName } from '@/lib/format'
 import { baselineFormingLine, contributionLine, flagFigures, type UnusualFlag, type WeekData } from '@/lib/pages/week'
-import { updateSeriesLine, type UpdateSeries } from '@/lib/reading/updates'
+import { updateSeriesHead, updateSeriesLine, type UpdateNote, type UpdateSeries } from '@/lib/reading/updates'
 import type { FigureTable } from '@/lib/reading/verdicts'
 
 // WK1 · Unusual this week (design §3 WK1, item 40; the mock's §1).
@@ -50,17 +52,24 @@ export const weekUnusual: Block<WeekData> = {
   render(data, mode = 'app') {
     const u = data.unusual
     const empty = weekUnusual.emptyState(data)
-
-    return (
-      <BlockFrame
-        title={weekUnusual.title}
-        question={weekUnusual.question}
-        mode={mode}
-        meta={u.setSize != null ? `${fmtInt(u.setSize)} objects watched · ${fmtInt(u.tested ?? 0)} testable` : undefined}
-      >
+    const email = mode === 'email'
+    // THE LEFT HALF OF THE MOCK'S §1: what each update brought in, drawn and
+    // then said in words. The words are printed in EVERY mode — an email
+    // client is no place for an SVG, and the legend is the half of a chart
+    // that carries the numbers anyway.
+    // THE CHART CARRIES THE LEGEND'S NUMBERS, so where it is drawn the words
+    // that repeat them are not printed (design review F4). `charted` is the
+    // exact condition `UpdateSeriesChart` renders under.
+    const charted = !email && u.series != null && u.series.points.length > 1
+    const left = (
+      <div className={email ? undefined : 'flex min-w-0 flex-col gap-2'}>
+        {charted ? <UpdateSeriesChart series={u.series!} /> : null}
+        <Series series={u.series} mode={mode} charted={charted} />
+      </div>
+    )
+    const right = (
+      <div className={email ? undefined : 'flex min-w-0 flex-col gap-2.5'}>
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
-
-        <Series series={u.series} mode={mode} />
 
         {u.state === 'baseline_forming' ? (
           <Line mode={mode}>{baselineFormingLine(u.baseline!, data.month)}</Line>
@@ -92,9 +101,25 @@ export const weekUnusual: Block<WeekData> = {
             {fmtInt(u.flaggedCount)} cleared the band this update; the {fmtInt(u.flags.length)} largest are printed.
           </Line>
         ) : null}
-        {u.state === 'flagged' && u.flaggedCount <= u.flags.length ? (
-          <Line mode={mode}>Nothing else was unusual this update.</Line>
-        ) : null}
+      </div>
+    )
+
+    return (
+      <BlockFrame
+        title={weekUnusual.title}
+        question={weekUnusual.question}
+        mode={mode}
+        meta={headerMeta(u, data.windowVideos)}
+        // THE MOCK'S HAIRLINE FOOTER, with its right-hand note. The left-hand
+        // "See the 38 videos behind this →" has no destination in this product:
+        // a flag's object is a KIND or a THEME, and no route lists the videos
+        // behind one. The evidence a reader can actually open is on the flag's
+        // own quotes, which carry their citation links.
+        footerNote={u.state === 'flagged' && u.flaggedCount <= u.flags.length
+          ? 'nothing else was unusual this update'
+          : undefined}
+      >
+        {email ? <>{left}{right}</> : <TileColumns of={2}>{left}{right}</TileColumns>}
       </BlockFrame>
     )
   },
@@ -123,14 +148,23 @@ export const weekUnusual: Block<WeekData> = {
     switch (u.state) {
       case 'flagged':
         return null
+      // THE SENTENCES SAY "UPDATE", AS THE QUESTION AND THE METAS DO (design
+      // review F8). The tile carried both clocks: the question asked about
+      // "this update", the footer said "nothing else was unusual this update",
+      // and these three still said "week" — on a page where Sealand's newest
+      // update covers thirty days, which is the exact confusion D6 exists to
+      // prevent. The block's TITLE stays the artboard's "Unusual this week",
+      // because that is what the page is called and the reader arrived by
+      // clicking it; what was measured is an update, and every sentence that
+      // states what was measured now says so.
       case 'nothing_unusual':
         return u.setSize != null
-          ? `Nothing unusual this week. Every one of the ${fmtInt(u.setSize)} objects this check watches read inside its usual band.`
-          : 'Nothing unusual this week. Everything this check watches read inside its usual band.'
+          ? `Nothing unusual in this update. Every one of the ${fmtInt(u.setSize)} objects this check watches read inside its usual band.`
+          : 'Nothing unusual in this update. Everything this check watches read inside its usual band.'
       case 'refused':
-        return u.note ?? 'This week was not compared with the months behind it.'
+        return u.note ?? 'This update was not compared with the months behind it.'
       case 'baseline_forming':
-        return 'This check compares a week with the three complete months behind it, and this workspace does not have three yet.'
+        return 'This check compares one update with the three complete months behind it, and this workspace does not have three yet.'
       case 'unreadable':
         // THE RECORD SAYS SOMETHING FIRED AND WE CANNOT SHOW IT. Every word
         // here is chosen against the sentence it replaces: "Nothing unusual
@@ -146,6 +180,28 @@ export const weekUnusual: Block<WeekData> = {
   },
 }
 
+/**
+ * The header's own line — the mock's "one theme cleared its band · of 312
+ * videos this week".
+ *
+ * BOTH HALVES ARE REAL OR NEITHER IS PRINTED. The count of what cleared comes
+ * off the check's own row; the denominator is the windowed read, which is not
+ * installed on either tenant today, so where it is absent the line states the
+ * count and the SET IT WAS DRAWN FROM instead of a denominator it does not
+ * have. "Objects watched · testable" is kept for every state but `flagged`,
+ * because on a quiet update that pair is the only evidence the check ran at all.
+ */
+function headerMeta(u: WeekData['unusual'], windowVideos: number | null): string | undefined {
+  const watched = u.setSize != null ? `${fmtInt(u.setSize)} objects watched · ${fmtInt(u.tested ?? 0)} testable` : undefined
+  if (u.state !== 'flagged' || u.flaggedCount === 0) return watched
+  const cleared = `${fmtInt(u.flaggedCount)} of ${fmtInt(u.tested ?? u.flaggedCount)} tested cleared its band`
+  // "· across 205 videos", NOT "· of 205 videos" (code review C10). The two
+  // halves have different denominators — the first counts OBJECTS the check
+  // tested, the second counts the VIDEOS the update covered — and joining two
+  // "of"s with a dot read as one count over two denominators.
+  return windowVideos != null ? `${cleared} · across ${fmtInt(windowVideos)} videos this update` : cleared
+}
+
 /** One flag, in full: the object, the week, the months behind it, the band,
  *  the n, and the explanation labelled as an interpretation. */
 function Flag({ flag, n, mode, figures }: { flag: UnusualFlag; n: number; mode: 'app' | 'print' | 'email'; figures: FigureTable }) {
@@ -156,26 +212,60 @@ function Flag({ flag, n, mode, figures }: { flag: UnusualFlag; n: number; mode: 
 
   return (
     <div className={email ? undefined : 'flex min-w-0 flex-col gap-2'} style={email ? { marginTop: n > 1 ? 14 : 0 } : undefined}>
+      {/* THE MOCK'S ONE-LINE ASSERTION, IN ITS SLOT AND IN THE HONEST FORM.
+          The artboard reads "“Zips failing after a year” is running at 3.1× its
+          usual rate, mostly under Freitag content." Both halves are refused:
+          a bare multiple is a movement claim with neither n nor band (D3), and
+          nothing decomposes a flag by the audience it sat under, so "mostly
+          under Freitag content" has no field at all. What the code can write is
+          the banded k-of-n — the level, the level behind it, the difference and
+          the band it had to clear — and it is written here, at the mock's size
+          and weight, as the block's lead.
+          SANS, NOT THE ARTBOARD'S SERIF. Serif is speech in this product
+          (P0's ruling, the in-app quote); a claim the code composed is not
+          speech. Recorded as a deviation. */}
+      <span
+        className={email ? undefined : 'text-[15px] font-medium leading-[1.35] tracking-[-0.005em] text-foreground [text-wrap:pretty]'}
+        style={email ? { fontFamily: FONT.sans, fontSize: 14, fontWeight: 600, lineHeight: 1.35, color: EMAIL.ink } : undefined}
+      >
+        {/* THE LABEL IS THE MODEL'S WORDS AND IS MARKED AS THE MODEL'S (code
+            review C6 / design review F9). `flag.label` is a `pass_b_theme`
+            string a reasoning model wrote, and the whole sentence used to be
+            ONE `data-copy="verdict"` span — the contract's widest exemption,
+            whose entire range rule (c) cuts out of the block-wide sweep. So a
+            register label reading "Concerns about declining quality" printed a
+            direction word in the page's lead sentence with nothing checking it,
+            and read as the product's own movement claim because the rest of the
+            span is one. The sibling block on this page has always done it
+            correctly (`rising.tsx`); the lead sentence now does too: the label
+            names its slot, the claim code composed stays a verdict, and the
+            span around them is marked nothing and is checked like any prose. */}
+        <span data-copy="subject" data-slot="pass_b_theme">{flag.label}</span>{' '}
+        <span data-copy="verdict">
+          ran at {fmtPct(weekPct, 1)} of this update against {fmtPct(basePct, 1)} across {months} — a difference of{' '}
+          {flag.changePts.toFixed(1)} points, on a band of {flag.bandPts.toFixed(1)}.
+        </span>
+      </span>
       <BlockStat
         mode={mode}
         size="lg"
         value={fmtInt(flag.week.k)}
         unit="videos this update"
-        level={{ word: flag.label, of: `of ${fmtInt(flag.week.n)} videos this update covered` }}
-        base={`${flag.denominator} · against ${fmtPct(basePct, 1)} across ${months}`}
+        // THE SAME LABEL, THE SAME MARKER. `BlockStat.level` takes a NODE for
+        // exactly this: rule (b) reads the level node's whole text, marked
+        // descendants included, so the "of N" is still enforced while the
+        // model's words carry their own slot.
+        level={{
+          word: <span data-copy="subject" data-slot="pass_b_theme">{flag.label}</span>,
+          of: `of ${fmtInt(flag.week.n)} videos this update covered`,
+        }}
+        // THE DENOMINATOR'S OWN QUALIFIER, AND NOTHING ELSE (design review F4).
+        // It used to end "· against 3.5% across Jun 2026, Jul 2026, Aug 2026",
+        // which is the second half of the claim line four lines above it and
+        // the second half of the model's opening sentence below it: one
+        // comparison, stated three times in 200px.
+        base={flag.denominator}
       />
-      {/* THE DIFFERENCE AND THE BAND IT CLEARED, INSIDE A VERDICT NODE. The
-          number is printed as points because that is what the comparison
-          measured; the band is printed beside it because a difference without
-          the width it had to clear is a claim without its evidence. */}
-      <span
-        data-copy="verdict"
-        className={email ? undefined : 'text-[12px] font-medium text-foreground'}
-        style={email ? { fontFamily: FONT.sans, fontSize: 12, fontWeight: 600, color: EMAIL.ink } : undefined}
-      >
-        {fmtPct(weekPct, 1)} this update against {fmtPct(basePct, 1)} before it — a difference of{' '}
-        {flag.changePts.toFixed(1)} points on a band of {flag.bandPts.toFixed(1)}
-      </span>
       {/* THE OTHER CAVEAT ABOUT THE SAME THREE MONTHS. `baseline_filling_months`
           says the baseline is still moving; `baseline_regime` says whether the
           three were read under one grouping at all, and the check reports the
@@ -244,14 +334,20 @@ function Interpretation({
     return (
       <div style={{ background: EMAIL.inner, borderRadius: 4, padding: '10px 12px', marginTop: 8 }}>
         <div style={{ fontFamily: FONT.sans, fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: EMAIL.muted }}>{label}</div>
-        <TokenProse body={body} figures={figures} mode={mode} model />
+        <TokenProse body={body} figures={figures} mode={mode} model figureFace="inherit" />
       </div>
     )
   }
   return (
     <div className="flex flex-col gap-1.5 rounded bg-muted/50 px-3 py-2.5">
       <span className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{label}</span>
-      <TokenProse body={body} figures={figures} mode={mode} model className="m-0 text-[12.5px] leading-relaxed" />
+      {/* THE FIGURES IN THE SENTENCE'S OWN FACE (design review F6). A mono
+          glyph is one advance wide whatever it is, so the decimal points in
+          "13.7%" and "3.5%" got a digit's worth of air on both sides — six
+          lines under a claim line that sets the same two numbers in sans and
+          reads correctly, one page printing one figure two ways. Weight marks
+          them instead; the contract's marker is unchanged. */}
+      <TokenProse body={body} figures={figures} mode={mode} model figureFace="inherit" className="m-0 text-[12.5px] leading-relaxed" />
     </div>
   )
 }
@@ -285,12 +381,18 @@ function Interpretation({
  * disagree. Where there is no contribution to state, the line says so rather
  * than leaving four window counts standing alone.
  */
-function Series({ series, mode }: { series: UpdateSeries | null; mode: 'app' | 'print' | 'email' }) {
+function Series({ series, mode, charted }: { series: UpdateSeries | null; mode: 'app' | 'print' | 'email'; charted: boolean }) {
   if (!series || series.points.length === 0) return null
   const newest = series.points[series.points.length - 1]
   return (
     <>
-      <Line mode={mode}>{updateSeriesLine(series)}</Line>
+      {/* WHERE THE CHART IS DRAWN, ITS LEGEND IS THIS SENTENCE (design review
+          F4): the legend prints the band, its "typical", and how many updates
+          found nothing, so printing `updateSeriesLine` and `series.note` under
+          it said the same two facts twice, two lines apart, in one column.
+          Where there is no chart — the email arm, and a series of one point —
+          these ARE the chart and they are printed in full. */}
+      <Line mode={mode}>{charted ? updateSeriesHead(series) : updateSeriesLine(series)}</Line>
       {/* THE AXIS SAYS WHAT A POINT IS. Thirteen deliveries at the dates those
           deliveries covered — a chart of our own cadence — and naming that on
           the axis is what keeps a reader from reading thirteen windows as
@@ -305,7 +407,14 @@ function Series({ series, mode }: { series: UpdateSeries | null; mode: 'app' | '
             This update’s contribution to its own month cannot be stated here, so every figure above is of the delivery’s own days alone.
           </Line>
         )}
-      {series.note ? <Line mode={mode}>{series.note}</Line> : null}
+      {/* EVERY CAVEAT EXCEPT THE ONE THE PICTURE ALREADY MADE (design review
+          F4). `notes` carries each with its kind; where the chart is drawn it
+          has already put the quiet updates on the floor and counted them in
+          its legend, so printing the `quiet` note under it said the same fact
+          twice, two lines apart. Every other kind — a windowless update, a
+          short series, no band, an absent windowed reading — is printed in
+          both arms, because nothing draws those. */}
+      {caveats(series, charted).map((n) => <Line key={n.kind + n.text} mode={mode}>{n.text}</Line>)}
     </>
   )
 }
@@ -315,6 +424,15 @@ function Line({ mode, children }: { mode: 'app' | 'print' | 'email'; children: R
     return <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 4 }}>{children}</div>
   }
   return <p className="m-0 text-[11.5px] text-muted-foreground">{children}</p>
+}
+
+/** The series' caveats a surface still has to say in words. */
+function caveats(series: UpdateSeries, charted: boolean): UpdateNote[] {
+  // `notes` is empty on a series built before the kinds existed — a frozen
+  // snapshot, a hand-made fixture — and `note` is then the only thing to
+  // print, so the joined string stands in as one unkinded caveat.
+  if (series.notes.length === 0) return series.note ? [{ kind: 'short', text: series.note }] : []
+  return charted ? series.notes.filter((n) => n.kind !== 'quiet') : series.notes
 }
 
 const pct = (k: number, n: number): number => (n > 0 ? (k / n) * 100 : 0)

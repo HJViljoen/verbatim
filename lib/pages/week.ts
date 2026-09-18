@@ -3,7 +3,11 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ForSalesData, SalesGroup, SalesGrouping, SalesQuote } from '../blocks/for-sales'
 import { chunk, mapWithLimit, MULTI_ROW_IN_CHUNK, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import { SALES_GROUPS_SHOWN, SALES_PRAISE_SHOWN, SALES_QUOTES_PER_GROUP, SALES_SWITCHING_SHOWN } from '../blocks/for-sales'
-import { perfVsMedian, pretty, type PerfMultiple } from '../content-tiles'
+import {
+  handleKey, intentCounts, perfVsMedian, pretty, roleByAccount, shapeInbox,
+  type InboxRow, type InboxSource, type Intent, type PerfMultiple,
+} from '../content-tiles'
+import { engageDeepLink, engageVocab, loadEngageCandidates, rankEngageCandidates, type EngageCandidate } from '../engage'
 import { citationLink } from '../evidence-cite'
 import { cap, fmtInt, longMonth, platformLabel, shortDate } from '../format'
 import { rowWindow } from '../pipeline/run-bookkeeping'
@@ -57,12 +61,23 @@ import type { FormatMatrix } from '../reading/formats'
 // reads it, a run with no window says so, and the window's own days are printed
 // on the page.
 //
-// SEVEN SECTIONS, NOT NINE, AND THE PAGE SAYS WHICH TWO ARE MISSING. The mock
-// draws nine; two of them — Worth a reply and Flagged for awareness — are the
+// NINE SECTIONS NOW, AND THE TWO THAT ARRIVED LAST ARE THE WORK QUEUE. The mock
+// draws nine; two of them — Worth a reply and Flagged for awareness — were the
 // Content page's reply inbox, and the design is explicit that the inbox moves
-// in Phase 2, in the same phase Content is switched off, "never a phase later,
-// because it is the content person's only work queue". Leaving them off with no
-// word would read as "there was nothing"; `LATER_LINE` names them and says when.
+// "never a phase later, because it is the content person's only work queue".
+// Block D wave 2 moved the READING here (`buildReplies` below) and the Content
+// page keeps its own copy until it retires: two readers of one digest for as
+// long as both pages exist, which is why both anchor on the same run and the
+// same candidates rather than each picking their own. `LATER_LINE` still names
+// what stays on Content, and it is now about the page rather than about these
+// two sections.
+//
+// AND THE ONE THING THIS COPY DOES DIFFERENTLY: it is dated by the RUN'S OWN
+// FROZEN WINDOW, not by `Date.now() - report_period`. Content computes its
+// freshness window off the clock at page load, so a comment is "in this week"
+// depending on when you open the page; this page's every other figure is of
+// `[window_start, window_end)` off the row, and a reply row dated any other way
+// would be the one count on the page a reader cannot check against the rest.
 //
 // WHAT DEGRADES, AND HOW. Five of this page's reads are on migrations applied
 // by hand in one window before R1 (§2's `month_subject_readings` and the
@@ -156,7 +171,20 @@ export const RIVAL_CAPTION_CHARS = 90
  * every month (the OV5 precedent).
  */
 export const LATER_LINE =
-  'Comments worth a reply, and the claims flagged for awareness, stay on the Content page until it retires — they are the only work queue there, and they move here with it.'
+  'Comments worth a reply, and the claims flagged for awareness, are read here and on the Content page until that page retires — one digest read twice, so the two can never disagree about what is worth answering.'
+
+/**
+ * Rows the reply block shows before the footer takes over.
+ *
+ * FOUR, the mock's own row count. The digest itself picks at most twelve
+ * (`rankEngageCandidates`' total cap, three per category), and `RepliesBlock.
+ * total` carries that number so "4 shown" never reads as "4 found".
+ */
+export const REPLIES_SHOWN = 4
+
+/** Awareness rows shown. Three, which is also the digest's own cap on the
+ *  misinformation category, so this is a display limit that never bites. */
+export const FLAGGED_SHOWN = 3
 
 // ---- the shapes --------------------------------------------------------------
 
@@ -330,6 +358,17 @@ export interface WeekSubjectsBlock {
    * the score this product does not print. Null where no row carries a tag.
    */
   lead: string | null
+  /**
+   * "six subjects named 19 Aug" — the mock's §3 footer note, off
+   * `subjects.named_at`.
+   *
+   * ONE DATE ONLY WHERE THERE IS ONE DATE. Six subjects named in one sitting is
+   * the common case and the mock's; subjects named on different days have no
+   * single naming date, and the line then says the first rather than picking
+   * one. Null where nothing is named, because a footer counting zero subjects
+   * on a block that has already said none are recorded says it twice.
+   */
+  namedLine: string | null
 }
 
 /** One theme rising in the month's reading. */
@@ -405,6 +444,18 @@ export interface AudienceRow {
    * windowed read is not available.
    */
   contribution: { videos: number; of: number } | null
+  /**
+   * When this rival's line STARTS — the mock's "Poler since 3 Sep".
+   *
+   * `competitors.first_seen_at` (M1), and printed only where it falls inside
+   * the months this page compares against: a rival tracked since April has the
+   * same history as everybody else on this table and saying so is noise, while
+   * a rival added three weeks ago has a shorter line than the rows above it and
+   * a reader comparing the two needs to know. Null on the client's own row, on
+   * the category, on a rival whose identity row is not there (M1 unapplied),
+   * and on one tracked from before the window this page reads.
+   */
+  trackedSince: string | null
   /**
    * This row's analysed videos over the update's own analysed total — the
    * mock's share bar (`week.camein.col.share`).
@@ -582,6 +633,58 @@ export interface WorkedBlock {
   unread: string | null
 }
 
+/**
+ * One comment worth answering — the mock's §2 row.
+ *
+ * A DATE, NEVER AN AGE. The Content page prints "3d", which is a distance from
+ * the clock at page load; every other figure on this page is dated by the days
+ * the update covered, and two clocks on one page is how "3d" comes to sit
+ * beside "6–13 Sep" meaning something else. `shortDate(date)` is the same form
+ * the quotes below it carry.
+ *
+ * THE REASON IS ON THE ROW. "Why it surfaced" was a link into a drawer on the
+ * Content page, so the tile showed a quote with no account of why this quote;
+ * the insight's own theme is one short string and it belongs beside the words
+ * it explains.
+ */
+export interface ReplyRow {
+  id: string
+  intent: Intent
+  /** The day the comment was written, ISO — the renderer prints it short. */
+  date: string | null
+  /** "under your post · 41 likes" / "under @handle’s post" — `contextLine`. */
+  context: string
+  /** The insight this comment was cited under, humanised: why it surfaced. */
+  reason: string
+  platform: string
+  /** The comment, as a ref-carrying quote: the freeze/resolve walk drops an
+   *  erased comment's whole row rather than leaving a citation over a gap. */
+  quote: Quote
+  /** Where a reply lands. Null on an awareness row by construction — a reply
+   *  under someone else's post is an argument, not an answer. */
+  href: string | null
+  insightId: string
+}
+
+/** §2 and §8: the work queue, and the claims that are not one. */
+export interface RepliesBlock {
+  /** The rows worth answering, intent-ordered — buying, question, objection. */
+  rows: ReplyRow[]
+  /** Chip counts over `rows`, in intent order, zero counts dropped. */
+  counts: { intent: Intent; count: number }[]
+  /** How many the digest picked in all. A CAP, not a level: the digest takes
+   *  at most three of a category and twelve in all, so this is never a share
+   *  of anything and is never printed with an "of N". */
+  total: number
+  /** The awareness tail — misinformation, no reply link, counted apart. */
+  flagged: ReplyRow[]
+  /** The days the rows are dated in — the run's own window, printed as the
+   *  block's basis. Null where the update carries no window. */
+  window: WeekWindow | null
+  /** Null where the digest was read; a sentence where it could not be. */
+  unread: string | null
+}
+
 export interface CoverageBlock {
   /** The one line at the foot of the page. */
   line: string
@@ -604,6 +707,9 @@ export interface WeekData {
   subjects: WeekSubjectsBlock
   rising: RisingBlock
   cameIn: CameInBlock
+  /** The reply inbox and the awareness flag — the mock's §2 and §8, read here
+   *  since Block D wave 2 and still read on Content until that page retires. */
+  replies: RepliesBlock
   sales: ForSalesData
   worked: WorkedBlock
   coverage: CoverageBlock
@@ -668,6 +774,35 @@ export function windowDays(w: WeekWindow | null): string | null {
  */
 export function contributionLine(month: string, videos: number, of: number): string {
   return `this update’s contribution to ${longMonth(month)} so far: ${fmtInt(videos)} of ${fmtInt(of)}`
+}
+
+/**
+ * Every audience's contribution to the month, on ONE line.
+ *
+ * "this update's contribution to September so far, by audience: Your brand
+ * 14 of 96 · Ottobock 47 of 118"
+ *
+ * THE RULE ON EVERY ROW, WITHOUT A LINE UNDER EVERY BAR (Block D wave 2,
+ * design review F11). Each row of §4's table states counts of a WINDOW, and a
+ * window is not a period, whoever's conversation it was — so each one is handed
+ * back to the month it fell in. That was printed under each bar, which made a
+ * row three lines, stopped the bars reading as a comparable column and wrapped
+ * mid-phrase in a 236px cell. Said once, in a line the whole table shares,
+ * every row is still restated and the column is a column again.
+ *
+ * Null where no row has a contribution — production today on both tenants,
+ * where the windowed reading is not installed and the block says so in full
+ * above the table.
+ */
+export function audienceContributionLine(
+  month: string,
+  rows: readonly { label: string; contribution: { videos: number; of: number } | null }[],
+): string | null {
+  const parts = rows
+    .filter((r) => r.contribution != null)
+    .map((r) => `${r.label} ${fmtInt(r.contribution!.videos)} of ${fmtInt(r.contribution!.of)}`)
+  if (parts.length === 0) return null
+  return `this update’s contribution to ${longMonth(month)} so far, by audience: ${parts.join(' · ')}`
 }
 
 /** "This update also covered 21 days of August." — printed only when the
@@ -812,6 +947,25 @@ function namesOf(labels: readonly string[]): string {
 
 /** A caption standing in for the title `videos` has no column for. One line,
  *  whitespace collapsed, cut on a word. */
+/**
+ * "six subjects named 19 Aug" — how long this page's subject rows have been
+ * measured at all.
+ *
+ * IT IS A NAMING DATE, NOT A START OF EVIDENCE (D14). `subjects.named_at` is
+ * the day somebody typed the subject into Settings, which is exactly what the
+ * mock claims; what it is NOT is the day the conversation about it started, and
+ * the line says "named" rather than "since" so the two cannot be read as one.
+ */
+export function subjectsNamedLine(namedAt: readonly (string | null)[]): string | null {
+  const dates = namedAt.filter((d): d is string => typeof d === 'string' && d.length > 0).sort()
+  if (dates.length === 0) return null
+  const noun = dates.length === 1 ? 'subject' : 'subjects'
+  const day = (iso: string) => iso.slice(0, 10)
+  return day(dates[0]) === day(dates[dates.length - 1])
+    ? `${fmtInt(dates.length)} ${noun} named ${shortDate(dates[0])}`
+    : `${fmtInt(dates.length)} ${noun}, the first named ${shortDate(dates[0])}`
+}
+
 export function postCaption(caption: string | null, chars: number = RIVAL_CAPTION_CHARS): string {
   const flat = (caption ?? '').replace(/\s+/g, ' ').trim()
   if (flat.length <= chars) return flat
@@ -1043,7 +1197,7 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
   // same labels or the same change log ask once.)
   const baseline = pooledBaseline(denominators, month, windowVideos ?? 0)
   const contributionRead = (monthWindowRead ?? windowRead)?.denominators ?? null
-  const [unusual, subjectsBlock, risingRead, cameIn, sales] = await Promise.all([
+  const [unusual, subjectsBlock, risingRead, cameIn, replies, sales] = await Promise.all([
     // ── §1 · unusual this week ───────────────────────────────────────────
     buildUnusual({
       supabase, clientId, check, flags, baseline, month, series,
@@ -1072,6 +1226,11 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
       contributionRead,
       contributionVideos, denominators, monthVideos, subjects, themedRunId,
     }),
+    // ── §2 · worth a reply, and §8 · flagged for awareness ───────────────
+    // In the wave with the others: it reads the corpus's current insights,
+    // their evidence and the comments behind them, and it takes no output of
+    // any section above it.
+    buildReplies({ supabase, clientId, runId: anchor.id, window, videos }),
     // ── §5 · for sales ───────────────────────────────────────────────────
     buildSales({ supabase, clientId, window, windowVideos, subjects }),
   ])
@@ -1109,6 +1268,7 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
     subjects: subjectsBlock,
     rising: risingRead.block,
     cameIn,
+    replies,
     sales,
     worked,
     coverage,
@@ -1120,6 +1280,136 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
     // point of merging them here rather than printing each set's own.
     notes: mergeSeriesNotes([...monthSet.series, ...risingRead.series]),
     laterLine: LATER_LINE,
+  }
+}
+
+// ---- §2 · worth a reply, and §8 · flagged for awareness -----------------------
+
+const REPLIES_UNREAD =
+  'The comments this update read could not be sorted into a reply queue just now, which is not the same as there being nothing to answer.'
+
+const REPLIES_NO_WINDOW =
+  'This update covered no window, so there are no days for a comment worth answering to have been written in.'
+
+/**
+ * The work queue, from the SAME digest the Content page reads.
+ *
+ * ONE PICK, TWO PAGES. `loadEngageCandidates` → `rankEngageCandidates` is
+ * exactly what `lib/pages/content.ts` calls, and both pages call it rather than
+ * one of them re-implementing "worth a reply". Until Content retires the digest
+ * is loaded twice per reader, which is a cost and not a risk: the pick is pure
+ * given its inputs, so two loads of one update cannot disagree.
+ *
+ * DATED BY THE RUN'S OWN WINDOW. Content's freshness cut is `Date.now() -
+ * report_period`, which moves while nobody does anything; this page hands
+ * `window.from` in, so a row is in the queue exactly when its comment was
+ * written inside the days this update covered — the same test §4's comment
+ * count and §1's series use. A run with no window has no such days and the
+ * block says so instead of falling back to the clock.
+ *
+ * THE AWARENESS ROWS ARE RANKED SEPARATELY AND CARRY NO LINK. Recommending a
+ * reply under someone else's post is an invitation to argue in public;
+ * `engageDeepLink` is not called for them, so the absence is structural and not
+ * a rendering choice.
+ */
+async function buildReplies(input: {
+  supabase: SupabaseClient
+  clientId: string
+  runId: string
+  window: WeekWindow | null
+  videos: readonly VideoRow[]
+}): Promise<RepliesBlock> {
+  const { supabase, clientId, runId, window } = input
+  const empty: RepliesBlock = { rows: [], counts: [], total: 0, flagged: [], window, unread: null }
+  if (!window) return { ...empty, unread: REPLIES_NO_WINDOW }
+
+  try {
+    const [candidates, configRes] = await Promise.all([
+      // BOUNDED BY THE RUN'S OWN WINDOW, which is the same cut
+      // `rankEngageCandidates` applies below — so the read returns the same
+      // digest off the comments of these days rather than off the corpus.
+      // This page is a second reader of a digest the Content page already
+      // loads whole, and until Content retires both run on every page view.
+      loadEngageCandidates(supabase, clientId, runId, { commentsSince: window.from }),
+      supabase.from('tracking_configs')
+        .select('own_handles, brand_keywords, competitor_keywords, industry_keywords')
+        .eq('client_id', clientId).maybeSingle(),
+    ])
+    const config = row<{
+      own_handles: Record<string, string> | null
+      brand_keywords: string[] | null
+      competitor_keywords: string[] | null
+      industry_keywords: string[] | null
+    }>(configRes, 'week.replyConfig')
+    const vocab = engageVocab([config?.brand_keywords, config?.competitor_keywords, config?.industry_keywords])
+    const ownHandles = new Set(
+      Object.values(config?.own_handles ?? {})
+        .filter((h): h is string => typeof h === 'string' && h.length > 0)
+        .map(handleKey),
+    )
+    const roles = roleByAccount(input.videos.map((v) => ({
+      // `VoiceVideo` takes the columns non-null; a video with no account is a
+      // video no role can be read off, and `roleByAccount` drops it itself.
+      account_name: v.account_name ?? '',
+      is_client: v.is_client === true,
+      is_competitor: v.is_competitor === true,
+      competitor_name: v.competitor_name,
+      views: v.views,
+    })))
+
+    // BOUNDED AT BOTH ENDS, because this block STATES a closed window as the
+    // rows' basis (code review C3). The rank has been bounded below only since
+    // the digest was written, which is right for Content — its cut is a moving
+    // clock and it claims no upper end. This page's footer says "written 6 Sep
+    // – 13 Sep" and the loader's own doc above says a row is in the queue
+    // exactly when its comment was written inside the days this update covered.
+    // A window is frozen at `open-run` and gather runs after it, so without the
+    // upper bound a comment written after `window_end` and gathered by this
+    // very run would be cited here carrying a date the footer does not cover.
+    const worthReplying = rankEngageCandidates(
+      candidates.filter((c) => c.category !== 'misinformation'),
+      { windowStart: window.from, windowEnd: window.to, vocab },
+    )
+    const awareness = rankEngageCandidates(
+      candidates.filter((c) => c.category === 'misinformation'),
+      { windowStart: window.from, windowEnd: window.to, perCategoryCap: FLAGGED_SHOWN, totalCap: FLAGGED_SHOWN, vocab },
+    )
+    // `now` is the window's END, not the clock: `shapeInbox` computes an age
+    // from it and this page prints a date instead, but a shape whose unused
+    // field is nonsense is a shape the next reader will trust.
+    const shaped = shapeInbox([...worthReplying, ...awareness], { now: window.to, ownHandles, roleByAccount: roles })
+    const all = shaped.map(toReplyRow)
+    const rowsOut = all.filter((r) => r.intent !== 'misinformation')
+    return {
+      rows: rowsOut,
+      counts: intentCounts(rowsOut),
+      total: rowsOut.length,
+      flagged: all.filter((r) => r.intent === 'misinformation').slice(0, FLAGGED_SHOWN),
+      window,
+      unread: null,
+    }
+  } catch (error) {
+    console.error(`[pages] week.replies: ${(error as { message?: string })?.message ?? String(error)}`)
+    return { ...empty, unread: REPLIES_UNREAD }
+  }
+}
+
+/** One shaped candidate as this page's row: a date where Content has an age,
+ *  and the insight's own theme as the reason, humanised here so the page, the
+ *  slide and the email print one string. */
+function toReplyRow(shaped: InboxRow<EngageCandidate & InboxSource>): ReplyRow {
+  const c = shaped.src
+  const link = c.category === 'misinformation' ? { href: null } : engageDeepLink(c.comment)
+  return {
+    id: c.comment.id,
+    intent: shaped.intent,
+    date: c.comment.commentDate,
+    context: shaped.context,
+    reason: cap(pretty(c.theme)),
+    platform: c.comment.platform,
+    quote: { ref: quoteRef.message(c.comment.id), text: cleanQuote(c.comment.text) },
+    href: link.href,
+    insightId: c.insightId,
   }
 }
 
@@ -1267,7 +1557,7 @@ async function buildSubjects(input: {
   clientUpdateVideos: number | null
 }): Promise<WeekSubjectsBlock> {
   const { reading, clientId, subjects, month, window } = input
-  const nothing = { rows: [], unread: SUBJECTS_UNREAD, month, lead: null }
+  const nothing = { rows: [], unread: SUBJECTS_UNREAD, month, lead: null, namedLine: null }
   if (subjects == null) return nothing
   if (subjects.length === 0) return nothing
 
@@ -1301,11 +1591,16 @@ async function buildSubjects(input: {
     })
     .sort((a, b) => b.monthVideos - a.monthVideos)
 
+  const active = subjects.filter((s) => s.status === 'active')
   return {
     rows: rowsOut,
     unread: rowsOut.length > 0 ? null : SUBJECTS_UNREAD,
     month,
     lead: subjectLead(rowsOut, month),
+    // The rows are the ACTIVE subjects — a proposed subject measures nothing
+    // (`loadActiveSubjects`' own filter) — so the count in the footer is a
+    // count of the rows above it and not of the table.
+    namedLine: subjectsNamedLine(active.map((s) => s.named_at)),
   }
 }
 
@@ -1524,7 +1819,7 @@ async function buildCameIn(input: {
   window: WeekWindow | null
   month: string
   videos: VideoRow[]
-  rivals: { name: string; retiredAt: string | null }[]
+  rivals: { name: string; retiredAt: string | null; firstSeenAt: string | null }[]
   windowRead: Awaited<ReturnType<typeof loadWindowReading>> | null
   /** The window clipped to the month, per audience — the contribution's
    *  numerator, and never a sum of month rows. */
@@ -1542,7 +1837,7 @@ async function buildCameIn(input: {
   const take = (audience: string): AudienceRow => {
     const held = byAudience.get(audience)
     if (held) return held
-    const made: AudienceRow = { audience, label: audienceLabel(audience), gathered: 0, analysed: 0, platformMix: {}, contribution: null, share: { k: 0, n: 0 }, comments: null }
+    const made: AudienceRow = { audience, label: audienceLabel(audience), gathered: 0, analysed: 0, platformMix: {}, contribution: null, trackedSince: null, share: { k: 0, n: 0 }, comments: null }
     byAudience.set(audience, made)
     return made
   }
@@ -1562,7 +1857,16 @@ async function buildCameIn(input: {
   // Null when the windowed read is not installed (M3) and 0 when it is and this
   // audience drew no comment in these days — a measurement, not a silence.
   const commentsBy = new Map((windowRead?.denominators ?? []).map((d) => [d.audience, d.comments ?? 0]))
+  // WHOSE LINE STARTS LATE, AND ONLY THOSE. A rival first seen before the
+  // months this page compares has the same history as every row above it.
+  const trackedFrom = backMonths(month, BASELINE_MONTHS)
+  const sinceBy = new Map(
+    rivals
+      .filter((r) => r.firstSeenAt != null && r.firstSeenAt.slice(0, 10) >= trackedFrom)
+      .map((r) => [rivalKey(r.name), r.firstSeenAt as string]),
+  )
   for (const rowOut of byAudience.values()) {
+    rowOut.trackedSince = sinceBy.get(rowOut.audience) ?? null
     if (windowRead?.denominators != null) rowOut.comments = commentsBy.get(rowOut.audience) ?? 0
     if (input.contributionRead == null) continue
     rowOut.contribution = {
@@ -1957,16 +2261,21 @@ function toWorkedRow(p: PerfMultiple): WorkedRow {
 async function loadRivals(
   supabase: SupabaseClient,
   clientId: string,
-): Promise<{ name: string; retiredAt: string | null }[]> {
+): Promise<{ name: string; retiredAt: string | null; firstSeenAt: string | null }[]> {
   try {
     const stored = await loadCompetitors(supabase, clientId)
-    if (stored.length > 0) return stored.map((r) => ({ name: r.name, retiredAt: r.retired_at }))
+    // `first_seen_at` IS THE IDENTITY ROW'S, NOT THE TRACKED LIST'S. The
+    // fallback below is the tracked list, which is a set of strings and knows
+    // no dates — so a workspace without M1 gets `null` and the table prints no
+    // start at all, rather than a date read off something that does not record
+    // one.
+    if (stored.length > 0) return stored.map((r) => ({ name: r.name, retiredAt: r.retired_at, firstSeenAt: r.first_seen_at }))
   } catch (error) {
     if (!isMissingCompetitors(error)) throw error
   }
   const res = await supabase.from('tracking_configs').select('competitor_names').eq('client_id', clientId).maybeSingle()
   const tc = row<{ competitor_names: string[] | null }>(res, 'week.rivals')
-  return (tc?.competitor_names ?? []).map((name) => ({ name, retiredAt: null }))
+  return (tc?.competitor_names ?? []).map((name) => ({ name, retiredAt: null, firstSeenAt: null }))
 }
 
 /**
