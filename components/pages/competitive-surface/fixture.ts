@@ -515,12 +515,17 @@ export function claimsReadFixture(): CompetitiveSurfaceData {
     ],
     handles: { youtube: '@ottobock', tiktok: '@ottobock', instagram: '@ottobock' },
   }
+  const ownClaims = [
+    ...rivalOwnClaims([input]),
+    ...base.ownClaims.filter((c) => c.audience !== audience),
+  ]
   return {
     ...base,
-    ownClaims: [
-      ...rivalOwnClaims([input]),
-      ...base.ownClaims.filter((c) => c.audience !== audience),
-    ],
+    ownClaims,
+    // THE READINESS ROWS ARE RECOMPUTED OVER THIS ARM'S OWN CENSUSES. They were
+    // inherited from the base fixture, so this state printed six of Ottobock's
+    // claims in the second tile and "is not printed here" in the fifth.
+    unlocks: { rows: competitiveUnlockRows(ownClaims) },
     saidAbout: buildSaidAbout(
       [{ name: 'Ottobock' }, { name: 'Rareform' }],
       (a) => (a === 'competitor:Ottobock' ? 42 : 0),

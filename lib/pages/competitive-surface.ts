@@ -515,12 +515,23 @@ export const QUESTIONS_SUBJECTS_NOTE =
  * digital director's. Where the accounts ARE configured, the inputs are not
  * what is missing — what is missing is the verbatim claims half, which is read
  * from the rival's own transcripts and is not printed from a tenant session,
- * and that is engineering's row to answer, not the client's to fix.
+ * and that is engineering's row to answer, not the client's to fix. And where
+ * the claims ARE in hand the row goes entirely: the tile has just printed them.
  */
 export function competitiveUnlockRows(ownClaims: readonly OwnPostCensus[] = []): CompetitiveUnlockRow[] {
   const watched = ownClaims.filter((c) => c.unread !== OWN_POSTS_NO_ACCOUNTS).length
-  const co4: CompetitiveUnlockRow =
-    watched === 0
+  // AND IT IS KEYED ON WHAT PRINTED, NOT ON WHAT IS CONFIGURED. Where a census
+  // carries claims, CO4's tile prints a rival's own sentences verbatim — and
+  // the readiness row five tiles below said, on the same screen, that they are
+  // "not printed here". Accounts being configured is not the same fact as
+  // claims having been read: the claims-read arm has both, and the app page
+  // today has the first without the second. A page may not claim a behaviour
+  // the code has just disproved, and that rule does not stop at the tile that
+  // disproved it.
+  const printed = ownClaims.some((c) => c.claims.length > 0)
+  const co4: CompetitiveUnlockRow | null = printed
+    ? null
+    : watched === 0
       ? {
           section: 'CO4',
           state: 'not tracked' as const,
@@ -551,7 +562,7 @@ export function competitiveUnlockRows(ownClaims: readonly OwnPostCensus[] = []):
   // is a measurement of our own naming. That is the finding identity this row
   // has always named.
   return [
-    co4,
+    ...(co4 ? [co4] : []),
     {
       section: 'CO6',
       state: 'not built yet' as const,

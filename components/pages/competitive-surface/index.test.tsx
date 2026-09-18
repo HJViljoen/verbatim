@@ -273,6 +273,20 @@ describe('the sections that are not built', () => {
     const text = renderText(competitiveUnlocks.render(data, 'app', ctx))
     expect(text).toContain('— not tracked · Your digital director')
   })
+
+  it('drops CO4 entirely on the arm where the claims DO print', () => {
+    // The row was keyed on whether accounts are CONFIGURED, which is a
+    // different fact from whether claims were read. In `claimsReadFixture` the
+    // second tile prints six of Ottobock's own claims verbatim and the fifth
+    // said, on the same screen, that they are "not printed here".
+    const data = claimsReadFixture()
+    expect(data.unlocks.rows.map((r) => r.section)).toEqual(['CO6'])
+    const page = renderText(competitiveUnlocks.render(data, 'app', ctx))
+    expect(page).not.toContain('is not printed here')
+    expect(page).not.toContain('What they say about themselves')
+    // And the tile it would have contradicted really does print them.
+    expect(renderText(competitiveOwnClaims.render(data, 'app', ctx))).toContain('Fitting takes one appointment')
+  })
 })
 
 describe('CO3 and CO7 · the data the tiles bind (Block D, D6)', () => {
