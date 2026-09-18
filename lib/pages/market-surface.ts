@@ -1548,3 +1548,50 @@ async function countAnalysedVideos(supabase: SupabaseClient, clientId: string): 
 
 /** The month a ledger row's first-made date falls in, in the reader's form. */
 export const madeInMonth = (firstMade: string): string => monthName(monthStartOf(firstMade))
+
+/**
+ * How long a piece of advice has been standing, in whole calendar months — the
+ * artboard's "3 months" under the month it was first raised.
+ *
+ * CALENDAR MONTHS, NOT DAYS DIVIDED BY THIRTY, and the ledger's own unit: the
+ * column beside it counts the months an identity was repeated in
+ * (`monthsMadeIn`), so an age counted any other way would make two adjacent
+ * cells two different clocks. Advice first raised this month has an age of
+ * zero and prints nothing — "0 months" under "September" is a reader doing
+ * arithmetic to learn what the cell above already says.
+ *
+ * NOT A PERIOD KEY. It is the distance between two dates the client can see on
+ * the row, not a reading of anything, so it takes the reading's own clock
+ * rather than a month table.
+ *
+ * Pure. Null where there is no age to state.
+ */
+export function ageInMonths(firstMade: string, readingAt: string): string | null {
+  if (!firstMade) return null
+  const from = new Date(`${monthStartOf(firstMade)}T00:00:00.000Z`)
+  const to = new Date(`${monthStartOf(readingAt.slice(0, 10))}T00:00:00.000Z`)
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return null
+  const months = (to.getUTCFullYear() - from.getUTCFullYear()) * 12 + (to.getUTCMonth() - from.getUTCMonth())
+  if (months <= 0) return null
+  return `${fmtInt(months)} ${months === 1 ? 'month' : 'months'}`
+}
+
+/**
+ * The repeat cell, in UPDATES (D9).
+ *
+ * `AdviceRow.timesMade` IS THE UPDATE COUNT and the word "updates" goes on it.
+ * The column used to print `monthsRepeated` — calendar months — with nothing
+ * saying so, which is the quieter of the two mistakes: a reader of "2 months"
+ * under a heading reading "Repeated" believes the advice came back in a second
+ * month, and on production's only repeat it came back three days later. So the
+ * updates lead, because that is what the number counts, and the months follow
+ * ONLY where there is more than one of them — the two facts are different and
+ * the cell states whichever it holds. "New" is the artboard's chip and is
+ * decided by the caller off the reading's own month, not here.
+ *
+ * Pure.
+ */
+export function repeatCell(row: Pick<AdviceRow, 'timesMade' | 'monthsRepeated'>): { updates: string; months: string | null } {
+  const updates = row.timesMade === 1 ? '1 update' : `${fmtInt(row.timesMade)} updates running`
+  return { updates, months: row.monthsRepeated > 1 ? `in ${fmtInt(row.monthsRepeated)} months` : null }
+}

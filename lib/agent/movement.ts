@@ -119,8 +119,14 @@ const side = (s: { month: string; k: number | null; n: number | null }): string 
  *  `re_read` at all), so they were sentences a maintainer could read as a
  *  warning the block already gives. A flag with no note is skipped in
  *  `movementLine`, so the day one of them does arrive it is silent, not a
- *  code. */
-const FLAG_NOTE: Partial<Record<VerdictFlag, string>> = {
+ *  code.
+ *
+ *  EXPORTED SO THERE IS ONE COPY (Block D wave 2). Market's ledger prints the
+ *  same caveat beside its "Afterwards" verdict — on today's corpus every frozen
+ *  month predates the clustering fingerprint, so `clustering_unknown` is on
+ *  nearly every comparison there is — and a second table of these sentences is
+ *  how a product comes to say two things about one flag. */
+export const FLAG_NOTE: Partial<Record<VerdictFlag, string>> = {
   clustering_changed: 'themes were re-grouped between these two months, so the two sides may not be like for like',
   clustering_unknown: 'we did not record how themes were grouped for these months, so the two sides may not be like for like',
   renamed: 'these two months are filed under two names for the same rival',

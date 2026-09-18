@@ -137,13 +137,62 @@ describe('MK1 · what we concluded', () => {
 })
 
 describe('MK2 · the ledger', () => {
-  it('shows what it was, when it was first made, the repeat count and the decision', () => {
+  it('draws the artboard’s seven columns, with the identity, the grounding and the afterwards', () => {
+    // CHANGED BY THE ARTBOARD PORT (wave 2). Four columns became seven: the #
+    // a person can say out loud, the evidence behind each row and what the
+    // conversation did after the client decided — the three tracks wave 1
+    // built the fields for. "What it was" became the artboard's
+    // "Recommendation", and "First made" its "First raised", stacked over the
+    // months the advice has been standing.
     const text = renderText(marketAdvice.render(marketFixture(), 'app', ctx))
-    expect(text).toContain('What it was')
-    expect(text).toContain('First made')
-    expect(text).toContain('28 Jun')
+    expect(text).toContain('Recommendation')
+    expect(text).toContain('First raised')
+    expect(text).toContain('Grounded in')
+    expect(text).toContain('Afterwards')
+    expect(text).toContain('Jun')
+    expect(text).toContain('3 months')   // the age, stacked under the month
     expect(text).toContain('Done')
-    expect(text).toContain('2 Sep')  // the row decided this month
+    expect(text).toContain('2 Sep')      // the row decided this month
+    expect(text).toContain('3 videos')   // grounded in, counted
+  })
+
+  it('counts the repeats in UPDATES, with the word updates on them', () => {
+    // D9: `timesMade` counts updates, and the column printed calendar months
+    // with nothing saying so. Production's only repeat came back three days
+    // later, which "2 months" reads as a second month.
+    const text = renderText(marketAdvice.render(marketFixture(), 'app', ctx))
+    expect(text).toContain('2 updates running')
+    expect(text).toContain('1 update')
+    expect(text).toContain('in 2 months')
+  })
+
+  it('never leaves the afterwards cell blank, and prints the clustering caveat beside the verdict', () => {
+    const text = renderText(marketAdvice.render(marketFixture(), 'app', ctx))
+    // The drawn comparison: both sides, both denominators, the band, and the
+    // badge — which refuses, so no magnitude travels with it (D2).
+    expect(text).toContain('21 of 130 videos in your audience')
+    expect(text).toContain('too few to compare')
+    expect(text).toContain('like for like')
+    // The two silences, each its own sentence rather than a dash.
+    expect(text).toContain('We start reading the month after you do.')
+    expect(text).not.toMatch(/Afterwards\s+—/)
+  })
+
+  it('says the evidence was replaced rather than printing zero videos behind a row', () => {
+    // Every cited `audience_insights` row of Sealand's twelve drawn rows has
+    // been pruned, so the column would otherwise read "0 videos" down the page.
+    const text = renderText(marketAdvice.render(unrecordedFixture(), 'app', ctx))
+    expect(text).toContain('evidence replaced')
+    expect(text).not.toContain('0 videos')
+  })
+
+  it('draws one row expanded, with its argument and its comment as separate nodes', () => {
+    const markup = render(marketAdvice.render(marketFixture(), 'app', ctx))
+    expect(markup).toContain('Why we keep raising it')
+    // The comment is its own node with its own ref — never a span inside the
+    // scrubbed argument, because a number in a quotation is still refused.
+    expect(markup).toContain('Wat gebeur as')
+    expect(renderText(markup)).toContain('Repair and warranty questions arrive as questions')
   })
 
   it('prints the status word on a row still marked New, where the parked page prints nothing', () => {
@@ -159,15 +208,20 @@ describe('MK2 · the ledger', () => {
     expect(text).not.toMatch(/quarter/i)
   })
 
-  it('says "twice, in one month" on the row and explains it once underneath', () => {
+  it('explains the within-month repeat once underneath, where the column now counts updates', () => {
     const text = renderText(marketAdvice.render(marketFixture(), 'app', ctx))
-    expect(text).toContain('twice, in one month')
     expect(text).toContain('inside one calendar month')
+    expect(text).toContain('Grounded in counts the videos behind a piece of advice')
   })
 
-  it('names the after-line as what is coming rather than leaving a blank column', () => {
-    const text = renderText(marketAdvice.render(marketFixture(), 'app', ctx))
-    expect(text).toContain('What the conversation did after you acted')
+  it('names the after-line only while no row on the page answers in that column', () => {
+    // The unlock named the ABSENCE of an Afterwards column. The column exists
+    // now, so the sentence prints where nothing has been read — production
+    // today — and not beside a table that answers.
+    expect(renderText(marketAdvice.render(unrecordedFixture(), 'app', ctx)))
+      .toContain('What the conversation did after you acted')
+    expect(renderText(marketAdvice.render(marketFixture(), 'app', ctx)))
+      .not.toContain('What the conversation did after you acted')
   })
 
   it('says when decisions are not being written down at all', () => {
@@ -198,9 +252,13 @@ describe('MK2 · the ledger', () => {
     expect(renderText(marketAdvice.render(data, 'app', ctx))).toContain('no longer holds')
   })
 
-  it('counts the rows it did not draw', () => {
+  it('counts the rows it did not draw, as the footer’s right-hand note', () => {
+    // The artboard's footer note is "Jul → Sep 2026", which D12 refuses: the
+    // denominator is every identity ever recommended and has no quarter. What
+    // the note can honestly say is how much of the ledger is on the page.
     const text = renderText(marketAdvice.render(marketFixture(), 'app', ctx))
-    expect(text).toContain('61 newer pieces of advice')
+    expect(text).toContain('12 oldest shown · 61 behind them')
+    expect(text).not.toMatch(/quarter/i)
   })
 })
 
