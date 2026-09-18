@@ -307,7 +307,13 @@ describe('what each page owes the reader', () => {
     const read = renderText(QUARTERLY_BLOCKS['quarterly.read'].render(data, 'app', ctx))
     expect(read).toContain('What is counted under it')
     expect(read).toContain('912 of 4,147')
-    expect(text).toContain('the three largest quarter readings are on page 2')
+    // AND THE POINTER NAMES A PAGE, NOT A NUMBER (D13). Only the print deck
+    // paginates; the share shell and the email have no page numbers at all,
+    // and the deck's own numbering moves when a snapshot omits a key.
+    expect(text).toContain('the three largest quarter readings are under Our read')
+    for (const mode of MODES) {
+      expect(renderText(QUARTERLY_BLOCKS['quarterly.category'].render(data, mode, ctx))).not.toMatch(/on page \d/)
+    }
   })
 
   it('never counts a comparison that cannot fail as an answered one', () => {

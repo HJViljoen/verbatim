@@ -255,7 +255,16 @@ export const quarterlyCategory: Block<QuarterlyData> = {
             mode={mode}
             label="Videos read this quarter"
             figure={<FigureCell mode={mode} value={fmtInt(c.quarterVolume.videos)} align="right" />}
-            note={`against ${fmtInt(c.quarterVolume.before)} in the quarter before it · the three largest quarter readings are on page 2`}
+            // THE POINTER NAMES A PAGE, NOT A PAGE NUMBER (D13). Only the
+            // print deck paginates (`quarterly-deck.tsx` numbers slides by
+            // block order); the share shell stacks eight sections with no
+            // numbers and the email has none at all, so "on page 2" printed
+            // a reference two of the three modes could not resolve. It was
+            // order-fragile as well: a snapshot whose `keys` omit
+            // `quarterly.read` renumbers the deck and moves the pointer
+            // silently. The page's own title resolves everywhere and does
+            // not move.
+            note={`against ${fmtInt(c.quarterVolume.before)} in the quarter before it · the three largest quarter readings are under ${QUARTER_PAGE_TITLE.read}`}
           />
         ) : null}
         {c.quarterNote ? <Note mode={mode}>{c.quarterNote}</Note> : null}
