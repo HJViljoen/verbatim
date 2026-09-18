@@ -100,10 +100,17 @@ describe('the weekly email', () => {
     expect(text).not.toMatch(/next update/i)
   })
 
-  it('leads with the frozen subject, so the inbox line and the artefact agree', () => {
+  // THE SUBJECT KEEPS THE TENANT AND THE HEADLINE DROPS IT. "Sealand:" is how
+  // a reader tells one client's report from another's in a mail list; inside
+  // the artefact the tenant is already on the date row and in the footer, and
+  // the artboard's headline does not open with it.
+  it('leads with the same claim as the inbox line, minus the tenant', () => {
     const data = snapshot()
     expect(data.subject).toBe('Sealand: Objections is unusual this week — 29 of 205 videos')
-    expect(words(data)).toContain(data.subject)
+    const text = words(data)
+    expect(text).toContain('Objections is unusual this week — 29 of 205 videos')
+    // The preheader carries the full subject; the masthead headline does not.
+    expect(text.split('Sealand: Objections').length - 1).toBe(1)
   })
 
   it('keeps the copy contract, and stays email-safe', () => {

@@ -729,7 +729,26 @@ export function weeklyFooterLines(input: {
  * workspace being told its week was quiet.
  */
 export function weeklySubject(company: string, check: WeekCheck): string {
-  const head = `${company}: your update`
+  return `${company}: ${weeklyHeadline(check)}`
+}
+
+/**
+ * The same sentence WITHOUT the tenant's name — what the artefact prints as its
+ * own heading (`weekly.headline`).
+ *
+ * THE TENANT BELONGS IN AN INBOX, NOT IN A HEADLINE. `weeklySubject` is read
+ * in a mail list where "Sealand:" is how a reader tells one client's report
+ * from another's, and it keeps it. The email's `h1` and the share page's
+ * heading are INSIDE the artefact, where the artboard puts the tenant at the
+ * right end of the date row and again in the footer — and the built masthead
+ * printed it a third time, as the first word of the headline, which the
+ * artboard's headline does not do.
+ *
+ * SIX STATES, SIX SENTENCES, and that is the whole point of the six — see
+ * `weeklySubject` above.
+ */
+export function weeklyHeadline(check: WeekCheck): string {
+  const head = 'Your update'
   switch (check.state) {
     case 'flagged': {
       // A flagged check with nothing printable is not "nothing unusual": the
@@ -743,10 +762,18 @@ export function weeklySubject(company: string, check: WeekCheck): string {
       // field supplies. A k OF n is the opposite case — it carries its own
       // denominator, which is the whole of what rule (b) asks — so the subject
       // may state it, and a reader can weigh the claim from the inbox.
-      const level = flag.weekN > 0 ? ` — ${fmtInt(flag.weekK)} of ${fmtInt(flag.weekN)} videos` : ''
+      //
+      // AND ONLY WHERE ONE FLAG IS NAMED. The level is `flags[0]`'s, so on a
+      // multi-flag check it read "Objections and 1 more are unusual this week
+      // — 29 of 205 videos": a count belonging to one of two named things,
+      // with the sentence not saying which. Two flags get the objects and no
+      // count, and the artefact's own §1 carries both flags in full.
+      const level = check.flags.length === 1 && flag.weekN > 0
+        ? ` — ${fmtInt(flag.weekK)} of ${fmtInt(flag.weekN)} videos`
+        : ''
       return check.flags.length === 1
-        ? `${company}: ${flag.label} is unusual ${inPeriod(check.noun)}${level}`
-        : `${company}: ${flag.label} and ${fmtInt(check.flags.length - 1)} more are unusual ${inPeriod(check.noun)}${level}`
+        ? `${flag.label} is unusual ${inPeriod(check.noun)}${level}`
+        : `${flag.label} and ${fmtInt(check.flags.length - 1)} more are unusual ${inPeriod(check.noun)}`
     }
     case 'nothing_unusual':
       return `${head} — nothing unusual ${inPeriod(check.noun)}`

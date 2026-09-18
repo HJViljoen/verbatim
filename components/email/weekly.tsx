@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-head-element, @next/next/no-page-custom-font -- an email document, not a page */
 import type { BlockContext } from '@/lib/blocks/types'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { WEEKLY_EMAIL_WIDTH, periodNounFor, weeklyDateLine, weeklyEyebrow, weeklyFooterLines, weeklyLinks, weeklyRuleFor } from '@/lib/reports/weekly'
+import { WEEKLY_EMAIL_WIDTH, periodNounFor, weeklyDateLine, weeklyEyebrow, weeklyFooterLines, weeklyHeadline, weeklyLinks, weeklyRuleFor } from '@/lib/reports/weekly'
 import type { WeeklySnapshotData } from '@/lib/reports/weekly-build'
 import { weeklyBlocksFor } from '@/components/blocks/weekly'
 import { Button, Hairline, text } from './primitives'
@@ -81,7 +81,14 @@ export function WeeklyEmail({ data, shareUrl, appUrl, attached, ctx, preheader }
                     <tr>
                       <td style={{ padding: '24px 28px 4px' }}>
                         <div style={text.eyebrow}>{weeklyEyebrow(data.reading.update.date)}</div>
-                        <div style={{ fontFamily: FONT.serif, fontSize: 23, fontWeight: 500, lineHeight: '1.24', color: EMAIL.ink, marginTop: 9 }}>{data.subject}</div>
+                        {/* THE HEADLINE, WITHOUT THE TENANT. `data.subject` is
+                            the INBOX's sentence and keeps "Sealand:" — that is
+                            how a reader tells one client's report from
+                            another's in a mail list. Inside the artefact the
+                            tenant is already at the right end of the date row
+                            below and again in the footer, and the artboard's
+                            own headline does not open with it. */}
+                        <div style={{ fontFamily: FONT.serif, fontSize: 23, fontWeight: 500, lineHeight: '1.24', color: EMAIL.ink, marginTop: 9 }}>{weeklyHeadline(data.reading.section1.check)}</div>
                         {/* TWO-ENDED, and the email arm cannot put two things
                             at opposite ends of a line any other way: no flex,
                             because Outlook lays out with Word. */}

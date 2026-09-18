@@ -19,6 +19,7 @@ import {
   levelOf,
   section1Figures,
   subjectsLead,
+  weeklyHeadline,
   weekCheck,
   weekSentence,
   weeklyPeriod,
@@ -86,11 +87,11 @@ describe('the arrangement', () => {
     expect(weeklyRuleFor('update')).toContain('This update is how much of it arrived since the last one.')
     expect(weeklyRuleFor('update')).not.toContain('The week is')
     expect(weeklySubject('Sealand', { state: 'baseline_forming', noun: 'update' } as never))
-      .toBe('Sealand: your update — this update’s check is still forming')
+      .toBe('Sealand: Your update — this update’s check is still forming')
     expect(weeklySubject('Sealand', { state: 'not_recorded', noun: 'update' } as never))
-      .toBe('Sealand: your update — this update’s check is not recorded yet')
+      .toBe('Sealand: Your update — this update’s check is not recorded yet')
     expect(weeklySubject('Össur', { state: 'not_recorded', noun: 'week' } as never))
-      .toBe('Össur: your update — the weekly check is not recorded yet')
+      .toBe('Össur: Your update — the weekly check is not recorded yet')
     expect(checkNotRecorded('update')).toContain('This update’s check')
 
     expect(WEEKLY_RULE).toContain('this month so far')
@@ -375,7 +376,7 @@ describe('what to call the window', () => {
 
   it('says the subject line in that word too', () => {
     const quiet = weekCheck({ state: 'nothing_unusual', flags: [], noun: 'update' })
-    expect(weeklySubject('Sealand', quiet)).toBe('Sealand: your update — nothing unusual in this update')
+    expect(weeklySubject('Sealand', quiet)).toBe('Sealand: Your update — nothing unusual in this update')
     const fired = weekCheck({ state: 'flagged', flags: [flag()], noun: 'update' })
     expect(weeklySubject('Sealand', fired)).toBe('Sealand: Objections is unusual in this update — 29 of 205 videos')
   })
@@ -419,5 +420,25 @@ describe('what the subject table adds up to', () => {
   it('prints no direction word', () => {
     const lead = subjectsLead([row('Durability', 'moved')])
     expect(`${lead?.level}${lead?.body}`).not.toMatch(/\b(grew|growing|rose|rising|above|climbed)\b/i)
+  })
+})
+
+// THE TENANT IS AN INBOX'S BUSINESS, NOT A HEADLINE'S. `weeklySubject` keeps
+// it — that is how a reader tells one client's report from another's in a mail
+// list — and the artefact's own heading drops it, because the artboard puts
+// the tenant at the right end of the date row and again in the footer.
+describe('the headline inside the artefact', () => {
+  it('is the subject line without the tenant', () => {
+    const fired = weekCheck({ state: 'flagged', flags: [flag()], flaggedCount: 1 })
+    expect(weeklyHeadline(fired)).toBe('Objections is unusual this week — 29 of 205 videos')
+    expect(weeklySubject('Sealand', fired)).toBe(`Sealand: ${weeklyHeadline(fired)}`)
+  })
+
+  // The level is `flags[0]`'s, so appending it to the multi-flag arm gave a
+  // count belonging to one of two named things without saying which.
+  it('drops the count when more than one thing is named', () => {
+    const two = weekCheck({ state: 'flagged', flags: [flag(), flag({ label: 'Price' })], flaggedCount: 2 })
+    expect(weeklyHeadline(two)).toBe('Objections and 1 more are unusual this week')
+    expect(weeklyHeadline(two)).not.toContain('of 205')
   })
 })
