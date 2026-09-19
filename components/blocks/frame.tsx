@@ -176,7 +176,9 @@ export function BlockFrame({
                   </tr>
                 </tbody>
               </table>
-              {question ? <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.muted, marginTop: 3 }}>{question}</div> : null}
+              {/* NO QUESTION ON PAPER OR IN AN INBOX (Block D wave 3, SH6).
+                  See the app arm below: counted across the seventeen
+                  artboards, every PRINTED one prints zero questions. */}
             </td>
           </tr>
           <tr><td>{children}</td></tr>
@@ -267,7 +269,18 @@ export function BlockFrame({
         {actions ? <span className="flex flex-none items-center gap-2">{actions}</span> : null}
       </header>
       ) : null}
-      {header && question ? <p className={cn('m-0 text-muted-foreground', big ? 'text-[11.5px]' : 'text-[12.5px]')}>{question}</p> : null}
+      {/* THE QUESTION IS A SCREEN DEVICE (Block D wave 3, SH6). The docblock
+          above justified it as "the mock's own device — every artboard prints
+          one", and that is true of the artboards a reader SCROLLS: Ask prints
+          6, Competitive 7, This week 5, Voice 4. Counted on the printed ones
+          it is zero, every time — MarketingBrief, SalesBrief, ContentBrief,
+          LeadershipBrief, WeeklyReport, MonthlyReport and QuarterlyReview all
+          print none. A sheet has a title and a framing note above it and an
+          inbox has a subject line; the question is what orients a reader who
+          arrived at a tile with no preamble. So it is drawn in `app` alone,
+          and a page that wants one on paper says it in the block's own words.
+          The per-page app-mode calls it leaves standing are M8 and MK11. */}
+      {header && question && mode === 'app' ? <p className="m-0 text-[12.5px] text-muted-foreground">{question}</p> : null}
       {heading && lead ? (
         <p className="m-0 font-serif text-[17px] font-medium leading-[1.35] tracking-[-0.005em] text-foreground [text-wrap:pretty]">{lead}</p>
       ) : null}

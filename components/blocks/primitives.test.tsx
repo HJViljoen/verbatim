@@ -35,7 +35,7 @@ const moved: Verdict = {
 const refused: Verdict = { ...moved, changePts: null, bandPts: null, state: 'refused', refusedReason: 'rename' }
 
 describe('BlockFrame', () => {
-  it('renders its title, question and footer in all three modes', () => {
+  it('renders its title, its meta and its footer in all three modes', () => {
     for (const mode of MODES) {
       const words = renderText(
         <BlockFrame mode={mode} title="Your subjects" question="What are people saying about the things you decided to be known for?" meta="September 2026" footer="Open Subjects">
@@ -43,10 +43,22 @@ describe('BlockFrame', () => {
         </BlockFrame>,
       )
       expect(words).toContain('Your subjects')
-      expect(words).toContain('What are people saying')
       expect(words).toContain('September 2026')
       expect(words).toContain('Open Subjects')
     }
+  })
+
+  it('prints the question on the SCREEN only (Block D wave 3, SH6)', () => {
+    // The docblock justified the question as "the mock's own device — every
+    // artboard prints one". Counted, every PRINTED artboard prints zero:
+    // MarketingBrief, SalesBrief, ContentBrief, LeadershipBrief,
+    // WeeklyReport, MonthlyReport and QuarterlyReview are 0 apiece, against
+    // Ask 6, Competitive 7, This week 5, Voice 4.
+    const q = 'What are people saying about the things you decided to be known for?'
+    const frame = (mode: RenderMode) => renderText(<BlockFrame mode={mode} title="Your subjects" question={q}><p>body</p></BlockFrame>)
+    expect(frame('app')).toContain(q)
+    expect(frame('print')).not.toContain(q)
+    expect(frame('email')).not.toContain(q)
   })
 
   // THE DEFAULT HEADER, BYTE FOR BYTE (the fix pass, E-monthly review
@@ -135,17 +147,18 @@ describe('BlockFrame', () => {
     assertEmailSafe(render(<BlockFrame mode="email" title="Rivals" footer="Open" footerNote="all-time"><span>x</span></BlockFrame>))
   })
 
-  it('sets the printed block heading and its question below the app, not above', () => {
+  it('sets the printed block heading below the app\'s, not above', () => {
     const paper = render(<BlockFrame mode="print" title="Rivals" question="Who holds the conversation?"><span>x</span></BlockFrame>)
     const screen = render(<BlockFrame mode="app" title="Rivals" question="Who holds the conversation?"><span>x</span></BlockFrame>)
     // A slide already carries a 15px section heading and a green-ruled
     // eyebrow above this one, at .902 zoom. It used to be 12px against the
     // app's 10.5px.
     expect(paper).toContain('text-[11px]')
-    expect(paper).toContain('text-[11.5px]')
     expect(paper).not.toContain('text-[12px]')
     expect(screen).toContain('text-[10.5px]')
+    // The question's own 11.5px print size went with the question (SH6).
     expect(screen).toContain('text-[12.5px]')
+    expect(paper).not.toContain('text-[11.5px]')
   })
 
   // `header={false}` (Block D wave 2, E-content) — ADDITIVE, default
@@ -156,7 +169,7 @@ describe('BlockFrame', () => {
   it('draws its own heading by default and drops it only when asked', () => {
     const withHeading = render(<BlockFrame mode="print" title="Rivals" question="Who holds it?" meta="September"><span>x</span></BlockFrame>)
     expect(markupText(withHeading)).toContain('Rivals')
-    expect(markupText(withHeading)).toContain('Who holds it?')
+    expect(markupText(withHeading)).toContain('September')
 
     const without = render(<BlockFrame mode="print" title="Rivals" question="Who holds it?" meta="September" footerNote="all-time"><span>x</span></BlockFrame>)
     expect(markupText(without)).toContain('Rivals')
