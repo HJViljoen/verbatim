@@ -286,6 +286,27 @@ describe('MR6 · one voice per subject', () => {
     expect(text).toContain('Recycled materials')
   })
 
+  // AND THE PAIR COMES APART ON A PHONE (the wave-3 review, finding [Minor]).
+  // A two-cell table is two cells at every width: at 375 the columns measured
+  // ~120px each and the Afrikaans quote set five serif-italic lines, its
+  // translation three and its cite three more. Two `align="left"` tables at a
+  // pixel width sit side by side while the column can hold both and stack when
+  // it cannot — and the pixel width is a floor, so it is checked against the
+  // phone the artefact is measured at: 264 + 60 of card padding + 40 of canvas
+  // gutter = 364 < 375 (scrollWidth measured 375 in all three states).
+  it('lets the voice pair stack on a phone', () => {
+    const data = monthlyFixture()
+    const markup = render(MONTHLY_BLOCKS['monthly.voices'].render(data, 'email', ctx))
+    expect((markup.match(/<table align="left"/g) ?? []).length).toBe(data.voices.rows.length)
+    expect(markup).not.toContain('width="50%"')
+    for (const width of markup.match(/width="(\d+)"/g) ?? []) {
+      expect(Number(width.replace(/\D/g, ''))).toBeLessThanOrEqual(375 - 60 - 40)
+    }
+    // One pair to a row, cleared after it, so a short quote never tucks under
+    // a tall one and the set reads as the artboard's grid.
+    expect((markup.match(/clear:both/g) ?? []).length).toBe(Math.ceil(data.voices.rows.length / 2))
+  })
+
   it('keeps a subject with no voice, and says which silence it is', () => {
     expect(renderText(block.render(monthlyFixture(), 'app', ctx)))
       .toContain('nothing was said about this one this month')
