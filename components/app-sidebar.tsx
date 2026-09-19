@@ -5,11 +5,12 @@ import {
   SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { LayoutDashboard, Target, MessageCircle, Swords, Play, FileText, Layers, CalendarDays, Sparkles, Settings, LogOut, LayoutTemplate } from "lucide-react"
+import { LogOut, type LucideIcon } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { signOut } from "@/app/login/actions"
 import { VerbatimMark } from "@/components/brand/mark"
+import { NAV_ICON, OLD_NAV_ICON, OLD_NAV_ICON_FALLBACK, STUDIO_ICON } from "@/components/nav-icons"
 import { STUDIO_HREF } from "@/lib/studio-visibility"
 import { OLD_PAGES, oldPageFor, oldPagesGroupLabel, surfaceForPath, surfacesIn, type NavKey } from "@/lib/nav"
 
@@ -22,34 +23,21 @@ import { OLD_PAGES, oldPageFor, oldPagesGroupLabel, surfaceForPath, surfacesIn, 
 // their pages from there, and the Studio is reached from Reports. Nothing was
 // orphaned by dropping them; WP16 rebuilds the Settings rail around them.
 
-const ICON: Record<NavKey, typeof LayoutDashboard> = {
-  overview: LayoutDashboard,
-  subjects: Layers,
-  voice: MessageCircle,
-  market: Target,
-  competitive: Swords,
-  week: CalendarDays,
-  ask: Sparkles,
-  reports: FileText,
-  settings: Settings,
-}
-
-// The parked pages keep the icons they had, so a reader recognises the page
-// they are being moved off.
-const OLD_ICON: Record<string, typeof LayoutDashboard> = {
-  "/dashboard/market-intel": Target,
-  "/dashboard/competitive-intel": Swords,
-  "/dashboard/videos": Play,
-}
+// THE ICONS ARE `components/nav-icons.ts` NOW, not this file. They were here,
+// and this file is `"use client"` and wired to the router, `next/link` and a
+// server action — so `scripts/wave2-shots.ts`, which photographs every ported
+// page beside its artboard, could not import them and drew nine grey squares
+// instead. The app has never been missing an icon; the shots have never had
+// one. Moved to a leaf so the harness draws what ships.
 
 // The Studio is not one of the nine and is not in any group list (2026-09-17,
 // from main). It arrives through the `studio` slot instead, for the reason the
 // operator group does: whether this session may see it depends on the session,
 // and resolving that is async. See lib/studio-visibility.ts and
 // components/studio-nav-loader.tsx.
-const STUDIO_ITEM = { href: STUDIO_HREF, label: "Studio", icon: LayoutTemplate }
+const STUDIO_ITEM = { href: STUDIO_HREF, label: "Studio", icon: STUDIO_ICON }
 
-type NavItem = { href: string; label: string; icon: typeof LayoutDashboard }
+type NavItem = { href: string; label: string; icon: LucideIcon }
 
 // Active = weight + a 2px green bar on the left (rule 1: green marks the active
 // page). No pill fill — the shadcn default paints bg-sidebar-accent on
@@ -104,10 +92,10 @@ export function AppSidebar({ header, ops, studio, tenant }: { header?: React.Rea
   // readable archive of every answer the workspace has — which is a page worth
   // a sidebar item, not a dead end.
   const active = surfaceForPath(pathname)
-  const item = (key: NavKey, href: string, label: string): NavItem => ({ href, label, icon: ICON[key] })
+  const item = (key: NavKey, href: string, label: string): NavItem => ({ href, label, icon: NAV_ICON[key] })
   const intelligence = surfacesIn("Intelligence").map((s) => item(s.key, s.href, s.label))
   const account = surfacesIn("Account").map((s) => item(s.key, s.href, s.label))
-  const oldPages: NavItem[] = OLD_PAGES.map((p) => ({ href: p.href, label: p.label, icon: OLD_ICON[p.href] ?? Play }))
+  const oldPages: NavItem[] = OLD_PAGES.map((p) => ({ href: p.href, label: p.label, icon: OLD_NAV_ICON[p.href] ?? OLD_NAV_ICON_FALLBACK }))
   const parked = oldPageFor(pathname)
 
   async function handleLogout() {

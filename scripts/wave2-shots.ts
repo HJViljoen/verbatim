@@ -15,6 +15,16 @@
 // shipped one's WIDTH and groups (components/app-sidebar.tsx is a client
 // component wired to the router), drawn as static markup — see
 // scripts/e-main-shot.ts, which this generalises.
+//
+// AND ITS ICONS ARE THE SHIPPED ONES. They were nine grey 16px squares
+// (`background:var(--muted)`) in every side-by-side shot of Block D, which
+// read as a missing feature: the app has rendered real lucide icons since it
+// had a sidebar (`components/app-sidebar.tsx`, `<item.icon className="size-4"`).
+// They could not be imported because that file is `"use client"` and wired to
+// the router and a server action, so the map moved to `components/nav-icons.ts`
+// — a leaf — and this script now renders the SAME icons for the SAME keys, in
+// `lib/nav.ts`'s own order. A shot that shows a defect the product does not
+// have costs a reviewer the same as one that hides a defect it does.
 
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'fs'
 import { join, resolve } from 'path'
@@ -22,6 +32,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import postcss from 'postcss'
 import tailwind from '@tailwindcss/postcss'
+import { LogOut } from 'lucide-react'
 import { withBrowser } from '../lib/render/chromium'
 
 import { OverviewPage } from '../components/pages/overview'
@@ -39,6 +50,8 @@ import { marketFixture } from '../components/pages/market-surface/fixture'
 import { competitiveFixture } from '../components/pages/competitive-surface/fixture'
 import { weekFixture } from '../components/pages/week/fixture'
 import { SidebarTenant } from '../components/sidebar-tenant-loader'
+import { NAV_ICON } from '../components/nav-icons'
+import { surfacesIn, type NavKey } from '../lib/nav'
 
 const args = process.argv.slice(2)
 const flag = (n: string, d: string) => { const i = args.indexOf(`--${n}`); return i >= 0 && args[i + 1] ? args[i + 1] : d }
@@ -50,8 +63,36 @@ const artboards = flag(
 
 const FONTS = 'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap'
 
-const NAV = ['Overview', 'Subjects', 'Voice', 'Market', 'Competitive', 'This week', 'Ask', 'Reports']
+// THE ROWS COME OFF `lib/nav.ts`, not a list retyped here — the labels and the
+// order are the one table's, which is what the app reads too. `NAV` used to be
+// that list by hand and is now derived, so a surface renamed in the table is
+// renamed in the shot.
+const NAV = surfacesIn('Intelligence').map((s) => ({ key: s.key, label: s.label }))
+const ACCOUNT = surfacesIn('Account').map((s) => ({ key: s.key, label: s.label }))
 const TENANT = renderToStaticMarkup(SidebarTenant({ brand: 'Sealand', role: 'admin' }))
+
+// The shipped row's icon, at the shipped size. `size-4` is 16px and the app
+// paints it `text-muted-foreground`, `text-foreground` on the active row —
+// which is what `Main.dc.html` draws (16 × 16, stroke-width 2, `#6E7378` and
+// `#26292C`). `currentColor` lets the row's own colour reach it, as the class
+// does in the app.
+const icon = (key: NavKey, active: boolean) =>
+  renderToStaticMarkup(
+    createElement(NAV_ICON[key], {
+      width: 16,
+      height: 16,
+      color: active ? 'var(--foreground)' : 'var(--muted-foreground)',
+      strokeWidth: 2,
+      'aria-hidden': true,
+    }),
+  )
+
+// Logout is the one row with no `NavKey`; it is the app's `LogOut`, drawn the
+// same way. Imported lazily here rather than added to the nav map, because it
+// is not a surface and `components/nav-icons.ts` holds surfaces.
+const LOGOUT_ICON = renderToStaticMarkup(
+  createElement(LogOut, { width: 16, height: 16, color: 'var(--muted-foreground)', strokeWidth: 2, 'aria-hidden': true }),
+)
 
 const sidebar = (active: string) => `
 <aside style="width:224px;flex:none;display:flex;flex-direction:column;background:var(--sidebar);box-shadow:var(--shadow-tile)">
@@ -61,20 +102,21 @@ const sidebar = (active: string) => `
   <nav style="display:flex;flex-direction:column;gap:4px;padding-top:8px">
     <div style="padding:0 14px">
       <div style="height:28px;display:flex;align-items:center;padding:0 10px;font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted-foreground)">Intelligence</div>
-      ${NAV.map((l) => `
-      <div style="position:relative;display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;border-radius:4.8px;font-size:14px;font-weight:${l === active ? 600 : 400};color:${l === active ? 'var(--foreground)' : 'var(--sidebar-foreground)'}">
-        ${l === active ? '<span style="position:absolute;left:-8px;top:8px;bottom:8px;width:2px;border-radius:9999px;background:var(--primary)"></span>' : ''}
-        <span style="width:16px;height:16px;border-radius:3px;background:var(--muted)"></span><span>${l}</span>
+      ${NAV.map((s) => `
+      <div style="position:relative;display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;border-radius:4.8px;font-size:14px;font-weight:${s.label === active ? 600 : 400};color:${s.label === active ? 'var(--foreground)' : 'var(--sidebar-foreground)'}">
+        ${s.label === active ? '<span style="position:absolute;left:-8px;top:8px;bottom:8px;width:2px;border-radius:9999px;background:var(--primary)"></span>' : ''}
+        ${icon(s.key, s.label === active)}<span>${s.label}</span>
       </div>`).join('')}
     </div>
     <div style="padding:0 14px">
       <div style="height:28px;display:flex;align-items:center;padding:0 10px;font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted-foreground)">Account</div>
-      <div style="display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;font-size:14px;color:var(--sidebar-foreground)"><span style="width:16px;height:16px;border-radius:3px;background:var(--muted)"></span><span>Settings</span></div>
+      ${ACCOUNT.map((s) => `
+      <div style="display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;font-size:14px;color:var(--sidebar-foreground)">${icon(s.key, false)}<span>${s.label}</span></div>`).join('')}
     </div>
   </nav>
   <div style="margin-top:auto;padding:0 14px 16px">
     ${TENANT}
-    <div style="display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;font-size:14px;color:var(--sidebar-foreground)"><span style="width:16px;height:16px;border-radius:3px;background:var(--muted)"></span><span>Logout</span></div>
+    <div style="display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;font-size:14px;color:var(--sidebar-foreground)">${LOGOUT_ICON}<span>Logout</span></div>
   </div>
 </aside>`
 
