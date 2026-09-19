@@ -324,6 +324,22 @@ describe('sales.p6 — the “Say this” sheet', () => {
     expect(words(sheet())).toContain('Counted as a kind of thing said')
   })
 
+  // …AND SAYS IT ON A SURFACE (wave 3, `sales`-9). With fewer than three
+  // scripted lines the reason sat as a naked eyebrow and a paragraph laid
+  // straight on the sheet beside a bordered card — the only bare column in the
+  // deck, and two thirds of this sheet's width. It takes the sibling card's
+  // padding on the tint this deck uses for apparatus, and not the card's
+  // border and white ground: it is the reason there is one answer, not a
+  // second answer.
+  it('draws the reason on the apparatus tint, not on bare paper', () => {
+    const w = sheet()
+    const i = w.indexOf('Why there is one of these')
+    expect(i).toBeGreaterThan(-1)
+    const panel = w.slice(w.lastIndexOf('<div', i), i)
+    expect(panel).toContain('rounded-lg bg-inner')
+    expect(panel).not.toContain('border-border bg-tile')
+  })
+
   it('is absent where no objection cleared the floor', () => {
     expect(sheetNamed(deck(salesBriefUnreadFixture()), 'Answers you can use')).toBe('')
   })

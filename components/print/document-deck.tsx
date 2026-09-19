@@ -1631,7 +1631,18 @@ function ScriptedPage({ data }: { data: DocumentSnapshotData }) {
         </div>
       ))}
       {lines.length < 3 && (
-        <div className="flex min-h-0 flex-col gap-2 self-start" style={{ gridColumn: `span ${3 - Math.min(lines.length, 3)}` }}>
+        // A NOTE IN A DECK OF CARDS IS STILL ON A CARD (wave 3, `sales`-9).
+        // With fewer than three scripted lines this column was a naked eyebrow
+        // and a paragraph laid straight on the sheet beside a bordered card —
+        // the only bare column in the whole deck, and on the sales brief it is
+        // two thirds of the sheet's width. It takes the sibling card's
+        // padding, on the TINT this deck already uses for apparatus ("Not
+        // settled this update"), and not the card's border and white ground:
+        // it is the reason there is one answer, not a second answer.
+        <div
+          className="flex min-h-0 flex-col gap-2 self-start rounded-lg bg-inner px-[22px] py-5"
+          style={{ gridColumn: `span ${3 - Math.min(lines.length, 3)}` }}
+        >
           <Eyebrow>Why there is one of these</Eyebrow>
           <p className={BODY_SM}>
             An objection is counted as a kind of thing said, and the register that names themes carries no kind. So this sheet has one row per month rather than one per objection, and it will have more the day a theme can be an objection.
