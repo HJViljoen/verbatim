@@ -179,8 +179,10 @@ const spanFor = (px: number): number =>
  * five fixture states, and the comment beside each says what it counts.
  */
 const HEIGHT: Record<string, (d: MarketSurfaceData) => number> = {
-  // Chrome, then one row of two-abreast cards per pair above the bar.
-  'market.conclusions': (d) => 120 + Math.ceil(d.conclusions.rows.filter((r) => r.tier !== 'archive').length / 2) * 137,
+  // Chrome, then one row of two-abreast cards per pair above the bar, then the
+  // population line that no longer sits behind the disclosure (two lines at
+  // 1280) and the disclosure's own summary.
+  'market.conclusions': (d) => 155 + Math.ceil(d.conclusions.rows.filter((r) => r.tier !== 'archive').length / 2) * 137,
   // Chrome + header, a table row each, a taller row wherever the Afterwards
   // cell holds a verdict (two months, the badge and the caveat), and the one
   // expanded row's argument and comment.
@@ -189,7 +191,9 @@ const HEIGHT: Record<string, (d: MarketSurfaceData) => number> = {
     if (rows.length === 0) return 150
     const verdicts = rows.filter((r) => r.afterwards?.state === 'reading').length
     const expanded = rows.some((r) => r.why || r.quote) ? 130 : 0
-    return 120 + rows.length * 80 + verdicts * 45 + expanded
+    // The chrome carries the population line as well as the summary now: it is
+    // outside the disclosure in every mode, so it is always drawn.
+    return 155 + rows.length * 80 + verdicts * 45 + expanded
   },
   // The card's parts, each counted: the lead figure and the floor, the claims
   // at up to three lines each, the hooks row, the subjects row and its basis, and a

@@ -435,22 +435,36 @@ describe('MK2 · the ledger', () => {
     expect(text).not.toMatch(/quarter/i)
   })
 
-  it('puts the derivation one press from the number, and prints it inline where nothing can be pressed', () => {
+  it('puts the METHOD one press from the number and leaves the population on the page', () => {
     // Three tiles ended in a wall of 11px grey prose that a reader's eye skips
-    // — which is the one thing a stated basis must not do. It is behind the
-    // page's own dotted-underline disclosure in `app` and INLINE in print and
-    // email, where there is nothing to press: a disclosure nobody can open is
-    // a basis that has been hidden.
+    // — which is the one thing a stated basis must not do — so the derivation
+    // is behind the page's own dotted-underline disclosure in `app` and INLINE
+    // in print and email, where there is nothing to press.
+    //
+    // WHAT MAY NOT GO BEHIND IT IS THE POPULATION. A shut `<details>` in the
+    // one mode a reader can act in left "157 of 1,699 videos behind it" and
+    // "3 videos" in the Grounded in column with nothing on screen naming what
+    // they are counted over — the D8 deviation this port made in order not to
+    // print the artboard's mixed denominator, unmade in `app` alone. The
+    // population line and the chip caveats print outside the disclosure in
+    // every mode; the method — how the rows are ordered, how the Repeated
+    // column counts — stays inside it.
     const app = render(marketAdvice.render(marketFixture(), 'app', ctx))
     expect(app).toContain('<details')
-    expect(app).toContain('How these columns count')
-    expect(renderText(marketAdvice.render(marketFixture(), 'app', ctx))).toContain('Grounded in counts the videos')
+    expect(app).toContain('How the Repeated column counts')
+    const outsideApp = (markup: string) => markup.replace(/<details[\s\S]*?<\/details>/g, ' ')
+    expect(markupOf(outsideApp(app))).toContain('Grounded in counts the videos')
     for (const mode of ['print', 'email'] as RenderMode[]) {
       const markup = render(marketAdvice.render(marketFixture(), mode, ctx))
       expect(markup).not.toContain('<details')
       expect(markupOf(markup)).toContain('Grounded in counts the videos')
     }
-    // Same rule on the other three blocks that carry one.
+    // The same rule on MK1: the corpus line and the "New" chip's caveat are on
+    // the page with the rows they qualify, not behind the press.
+    const mk1 = render(marketConclusions.render(marketFixture(), 'app', ctx))
+    expect(markupOf(outsideApp(mk1))).toContain('counted over everything we have read for you')
+    expect(markupOf(outsideApp(mk1))).toContain('New means no earlier month')
+    // Same disclosure shape on the other three blocks that carry one.
     for (const block of [marketConclusions, marketPlans, marketSayHear]) {
       expect(render(block.render(marketFixture(), 'app', ctx))).toContain('<details')
       expect(render(block.render(marketFixture(), 'print', ctx))).not.toContain('<details')

@@ -283,9 +283,23 @@ export const marketAdvice: Block<MarketSurfaceData> = {
             {state}
           </p>
         ) : null}
-        <Derivation mode={mode} label="How these columns count">
-          {GROUNDED_CORPUS_LINE} {a.repeatLine}
-          {anyFirstTime ? ` ${LEDGER_FIRST_TIME_LINE}` : ''}
+        {/* THE POPULATION STAYS ON THE PAGE, for the same reason it does one
+            block above: `GROUNDED_CORPUS_LINE` is what makes each "3 videos"
+            in the Grounded in column a share of something a reader can name,
+            and inside `Derivation` — a SHUT `<details>` in mode `app` — the
+            one mode a reader can act in named nothing. `LEDGER_FIRST_TIME_LINE`
+            rides with it because the amber "First time" chip is dated by the
+            UPDATE's clock against a page dated by the comment's, and that is
+            the one place on this page the two clocks meet. What stays behind
+            the disclosure is how the Repeated column counts. */}
+        <p
+          className={email ? undefined : 'm-0 text-[11px] leading-[1.35] text-muted-foreground'}
+          style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 } : undefined}
+        >
+          {GROUNDED_CORPUS_LINE}{anyFirstTime ? ` ${LEDGER_FIRST_TIME_LINE}` : ''}
+        </p>
+        <Derivation mode={mode} label="How the Repeated column counts">
+          {a.repeatLine}
         </Derivation>
       </div>
     )
