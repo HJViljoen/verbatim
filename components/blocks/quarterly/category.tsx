@@ -365,10 +365,18 @@ export const quarterlyCategory: Block<QuarterlyData> = {
     // label-and-figure lists and read beside each other, and the chart — the
     // tall one — keeps the width it needs underneath them.
     //
-    // AND THE CHART IS CAPPED. `CalendarLine` scales its viewBox uniformly to
-    // its container, so a WIDER column draws a TALLER chart: this same chart
-    // is 84px at 300 and 164px at 589. Capping it is what lets the aside take
-    // width without the chart eating what the rows need.
+    // AND THE CHART IS SCALED, NOT CAPPED. `CalendarLine` scales its viewBox
+    // uniformly to its container, so a WIDER box draws a TALLER chart — this
+    // same chart is 84px at 300 and 164px at 589. The first answer to that was
+    // `max-w-[300px]` inside a ~443px card, which bought the height back by
+    // leaving 45% of the card blank and bunching Jul, Aug and Sep into the left
+    // half of a plot with room for twice that.
+    //
+    // The scale factor is the INTRINSIC width (`width`), not the box: raising
+    // it from 330 to 490 draws the same 92-unit chart at the same ~83px on the
+    // sheet, across the whole card, with the type it was drawn at (10px at
+    // 443/490 is 9.0px, against 9.1px at 300/330 — measured, not estimated).
+    // The plot gains 143px of horizontal room and the page loses nothing.
     const aside = (
       <Column mode={mode} gap={10}>
         <Columns weights={[1, 1]} gap={18} mode={mode}>
@@ -379,8 +387,6 @@ export const quarterlyCategory: Block<QuarterlyData> = {
           <Eyebrow mode={mode}>Attention, month by month</Eyebrow>
           {panel.length > 0 ? (
             <Card mode={mode}>
-              {/* CAPPED, so a wider column does not draw a taller chart. */}
-              <div className={email ? undefined : 'w-full max-w-[300px]'}>
               <BlockCalendar
                 blockKey={`${quarterlyCategory.key}.attention`}
                 axis={c.attention?.axis ?? []}
@@ -388,7 +394,10 @@ export const quarterlyCategory: Block<QuarterlyData> = {
                 rules={panelRule(c)}
                 mode={mode}
                 height={92}
-                width={330}
+                // THE SCALE FACTOR, AND IT IS THE CARD'S OWN WIDTH. See above:
+                // 490 draws the chart across the whole card at the height 330
+                // drew it across two thirds of one.
+                width={490}
                 padL={40}
                 // THE GUTTER IS OFF (see `ChartEndings`): at 96px it cut
                 // "The category 41,200" to "The category 41,2" on the one
@@ -398,7 +407,6 @@ export const quarterlyCategory: Block<QuarterlyData> = {
                 format={(v) => fmtInt(v)}
                 label="comments under the panel's videos, month by month"
               />
-              </div>
               <ChartEndings series={panel} format={(v) => fmtInt(v)} mode={mode} />
               <div className={email ? undefined : 'flex flex-wrap items-center gap-2'}>
                 <BlockMovement verdict={c.attention?.verdict ?? null} unit="pts" mode={mode} />
