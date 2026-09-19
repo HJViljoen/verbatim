@@ -99,7 +99,10 @@ export const quarterlyCover: Block<QuarterlyData> = {
           question={quarterlyCover.question}
           mode={mode}
           meta={c.stamp}
-          footerNote={c.corpus}
+          // THE MIX, AND NOT THE COUNTS. `c.corpus` is the platform mix alone
+          // now; the counts it used to carry are page 2's, beside the argument
+          // that rests on them, and were printing verbatim on both sheets.
+          footerNote={c.corpus || undefined}
         >
           <div>
             <TokenProse body={c.body} figures={c.figures} mode={mode} />
@@ -134,7 +137,15 @@ export const quarterlyCover: Block<QuarterlyData> = {
         <div className="grid max-w-[860px] grid-cols-1 gap-4 lg:grid-cols-3">
           {c.stats.map((s) => <StatCard key={s.token} stat={s} mode={mode} />)}
         </div>
-        <Note mode={mode}>{c.corpus}</Note>
+        {/* THE MIX THE CORPUS WAS READ ON — the artboard's `qr.p1.footer`,
+            and page 1's alone. The counts that used to close this line
+            ("4,147 category videos read in Q3 2026 · 3 updates in September")
+            printed again, verbatim, as the first line of the card beside the
+            argument on the very next sheet. They are page 2's now
+            (`ReadPage.meta`); this sheet keeps the mix and its stamp. Nothing
+            prints where no mix was recorded: a guessed list is the one thing
+            this line may not be. */}
+        {c.corpus ? <Note mode={mode}>{c.corpus}</Note> : null}
       </section>
     )
   },

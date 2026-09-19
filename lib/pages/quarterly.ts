@@ -168,8 +168,15 @@ export interface CoverPage {
   /** "as at 28 Sep 2026 · September still filling · your 3rd monthly reading,
    *  the quarter view needs 6". */
   stamp: string
-  /** "TikTok, YouTube, Instagram, Reddit · 7,059 videos read". */
+  /** "TikTok 38% · YouTube 29% · Instagram 21% · Reddit 12%" — the mix the
+   *  corpus was read on, the artboard's `qr.p1.footer`. EMPTY where no mix
+   *  was recorded; the cover prints no footer rather than guessing one. */
   corpus: string
+  /** "4,147 category videos read in Q3 2026 · 3 updates in September" — how
+   *  much the quarter rests on. Composed with the cover because it is built
+   *  from the same window read, PRINTED on page 2, beside the argument that
+   *  rests on it (`ReadPage.meta`). It was on both sheets, verbatim. */
+  counts: string
 }
 
 export interface StandingAdvice {
@@ -1423,8 +1430,17 @@ function themeLabel(id: string, overview: OverviewData): string | null {
 }
 
 /**
- * "449 videos in September · 10 updates in Q3 2026" — what this quarter rests
- * on, in one line under the cover's figures.
+ * "449 videos in September · 10 updates in Q3 2026" — HOW MUCH this quarter
+ * rests on.
+ *
+ * THE PLATFORM HALF IS NOT HERE, AND THE SPLIT IS THE POINT. The whole line —
+ * the mix, the counts and the updates — was composed once and then printed
+ * twice, verbatim, on two consecutive sheets: under the cover's figures, and
+ * again as the first line of the card beside the argument on page 2, where
+ * `readingCounter` was joined to it and the cover's own stamp had already
+ * printed that too. The mix is the artboard's `qr.p1.footer` and stays on the
+ * cover; the counts belong beside the argument that rests on them, which is
+ * where page 2 puts them. Neither sheet now repeats the other.
  *
  * NOT `record.line`, which the method page already prints in full and which on
  * a workspace whose windowed reading is unapplied is a sentence about our own
@@ -1432,12 +1448,8 @@ function themeLabel(id: string, overview: OverviewData): string | null {
  * from months: where the window read could not be taken there is no quarter
  * count to print, and the line says the month instead of guessing one.
  */
-function corpusLine(overview: OverviewData, quarter: Quarter, quarterVideos: number | null, platforms: string): string {
+function corpusCounts(overview: OverviewData, quarter: Quarter, quarterVideos: number | null): string {
   const parts: string[] = []
-  // THE PLATFORMS THE CORPUS WAS READ ON, which the artboard puts first in
-  // this line and which page 7 was the only page to carry (`qr.p1.footer`).
-  // Empty where no platform mix was recorded — never a guessed list.
-  if (platforms) parts.push(platforms)
   if (quarterVideos != null) parts.push(`${fmtInt(quarterVideos)} category videos read in ${quarterLabel(quarter, false)}`)
   else if (overview.bar.videos != null) parts.push(`${fmtInt(overview.bar.videos)} videos in ${longMonth(overview.month)}`)
   if (overview.bar.updates > 0) parts.push(`${fmtInt(overview.bar.updates)} ${overview.bar.updates === 1 ? 'update' : 'updates'} in ${longMonth(overview.month)}`)
@@ -1662,7 +1674,12 @@ function buildCover(a: {
     ]
       .filter(Boolean)
       .join(' · '),
-    corpus: corpusLine(overview, a.quarter, quarterVideos, a.platforms),
+    // THE MIX, WHICH IS THE ARTBOARD'S `qr.p1.footer` AND PAGE 1'S ALONE.
+    // Empty where no platform mix was recorded — never a guessed list, and a
+    // cover with nothing to say about the mix prints no footer rather than a
+    // sentence about our own bookkeeping.
+    corpus: a.platforms,
+    counts: corpusCounts(overview, a.quarter, quarterVideos),
   }
 }
 
@@ -1708,10 +1725,10 @@ function buildRead(a: {
   }))
   return {
     interpretation,
-    meta: [
-      a.cover.corpus,
-      readingCounter(a.readings),
-    ].join(' · '),
+    // THE COUNTS AND THE COUNTER — never the cover's own line again. See
+    // `corpusCounts`: the platform mix stays on page 1 and this is the half
+    // that belongs beside the argument.
+    meta: [a.cover.counts, readingCounter(a.readings)].filter(Boolean).join(' · '),
     figures: a.cover.figures,
     verdicts: a.verdicts,
     quotes,

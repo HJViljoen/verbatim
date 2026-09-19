@@ -615,11 +615,34 @@ describe('the artboard port (Block D wave 2)', () => {
     // The artboard's own first half of this line — page 7 was the only page
     // carrying it.
     expect(t).toContain('TikTok 38%')
-    expect(t).toContain('4,147 category videos read in Q3 2026')
     // AND NOT the artboard's per-month split: the figure beside it is a
     // WINDOWED count of distinct videos, which three month counts do not add
     // to (D8). Printing them side by side invites exactly that addition.
     expect(t).not.toMatch(/Jul [\d,]+ · Aug [\d,]+ · Sep [\d,]+/)
+  })
+
+  it('qr.p1 / qr.p2.meta · the corpus line is not printed twice on two sheets', () => {
+    // It was. The whole line — mix, counts and updates — sat under the cover's
+    // figures AND, verbatim, as the first line of the card beside the argument
+    // on the very next sheet, where `readingCounter` was joined to it and the
+    // cover's own stamp two lines above had already printed that too.
+    const cover = text('quarterly.cover')
+    const read = text('quarterly.read')
+    // The counts are on the page that argues from them, once.
+    expect(read).toContain('4,147 category videos read in Q3 2026')
+    expect(cover).not.toContain('4,147 category videos read in Q3 2026')
+    // The mix is on the cover, once — the artboard's own `qr.p1.footer`.
+    expect(cover).toContain('TikTok 38%')
+    expect(read).not.toContain('TikTok 38%')
+  })
+
+  // Never a guessed list: a workspace with no recorded mix gets no footer at
+  // all rather than a sentence about our own bookkeeping.
+  it('qr.p1.footer · prints nothing where no platform mix was recorded', () => {
+    const forming = formingFixture()
+    expect(forming.cover.corpus).toBe('')
+    const t = renderText(QUARTERLY_BLOCKS['quarterly.cover'].render(forming, 'print', ctx))
+    expect(t).toContain(forming.cover.stamp)
   })
 
   it('qr.p1.cover · one h1 per document, and one gutter', () => {
