@@ -234,20 +234,36 @@ as $$
     select d.audience, count(distinct d.video_uuid) as dual_mention
     from dated d join dual on dual.id = d.video_uuid group by 1
   ),
+  -- THE WINDOW'S VIDEOS DRIVE THIS JOIN. `undated_per_video` used to start
+  -- from `public.comments` and join every comment of the tenant to every
+  -- analysed video, group the lot per video, and only then be narrowed by the
+  -- join below to the videos this window actually reads. The answer was right
+  -- and the work was the whole corpus: measured on production 2026-09-16,
+  -- Ossur is 45,316 comments of which 71 are undated and Sealand 26,100 of
+  -- which 67 — so every window read scanned tens of thousands of rows to
+  -- report about seventy. Driving from `dated` makes the scan the window's,
+  -- which is what makes a window read cheap enough to make several of.
+  window_videos as (
+    select distinct d.audience, d.video_uuid from dated d
+  ),
   undated_per_video as (
-    select v.id as video_uuid, count(*) as n
-    from public.comments c
-    join vid v on v.platform = c.platform and v.video_id = c.video_id
-    where c.client_id = p_client and c.comment_date is null
+    select wv.video_uuid, count(*) as n
+    from window_videos wv
+    join vid v on v.id = wv.video_uuid
+    join public.comments c
+      on c.client_id = p_client
+     and c.platform = v.platform
+     and c.video_id = v.video_id
+     and c.comment_date is null
     group by 1
   ),
   -- Recorded against the window's videos once, not once per month those videos
   -- occupy: "the videos this window reads also carry N comments nobody could
   -- date". Same sentence as the month row, one window instead of one month.
   undated as (
-    select s.audience, sum(u.n) as excluded_undated
-    from (select distinct d.audience, d.video_uuid from dated d) s
-    join undated_per_video u on u.video_uuid = s.video_uuid
+    select wv.audience, sum(u.n) as excluded_undated
+    from window_videos wv
+    join undated_per_video u on u.video_uuid = wv.video_uuid
     group by 1
   )
   select b.audience,
@@ -327,17 +343,28 @@ as $$
     join vid_all v on v.platform = ca.platform and v.video_id = ca.video_id and v.analysed
     where ca.comment_date >= p_from and ca.comment_date < p_to
   ),
+  -- THE WINDOW'S (THEME, VIDEO) PAIRS DRIVE THIS JOIN, for the reason given on
+  -- the denominator's copy of it: the pass used to fold every undated citation
+  -- the run's themes hold and was then narrowed to the pairs `cited` already
+  -- names. Same answer, the window's rows.
+  cited_videos as (
+    select distinct c.theme_id, c.audience, c.video_uuid from cited c
+  ),
   undated_per_video as (
-    select ca.theme_id, v.id as video_uuid, count(distinct ca.comment_id) as n
-    from cited_all ca
-    join vid_all v on v.platform = ca.platform and v.video_id = ca.video_id
-    where ca.comment_date is null
+    select cv.theme_id, cv.video_uuid, count(distinct ca.comment_id) as n
+    from cited_videos cv
+    join vid_all v on v.id = cv.video_uuid
+    join cited_all ca
+      on ca.theme_id = cv.theme_id
+     and ca.platform = v.platform
+     and ca.video_id = v.video_id
+     and ca.comment_date is null
     group by 1, 2
   ),
   undated as (
-    select s.theme_id, s.audience, sum(u.n) as n
-    from (select distinct c.theme_id, c.audience, c.video_uuid from cited c) s
-    join undated_per_video u on u.theme_id = s.theme_id and u.video_uuid = s.video_uuid
+    select cv.theme_id, cv.audience, sum(u.n) as n
+    from cited_videos cv
+    join undated_per_video u on u.theme_id = cv.theme_id and u.video_uuid = cv.video_uuid
     group by 1, 2
   ),
   oncam as (
