@@ -56,6 +56,19 @@ describe('palette contrast', () => {
     }
   })
 
+  it('reaches 4.5:1 inside the hero tile, where the tokens are re-pointed', () => {
+    // `[data-tile][data-hero]` turns the subtree's inks and grounds together,
+    // so a block drawn in `text-muted-foreground` on `bg-inner` inside the
+    // hero is still readable without the page knowing where it is.
+    const block = CSS.slice(CSS.indexOf('[data-tile][data-hero] {'))
+    const at = (name: string): string => (block.match(new RegExp(`\\n\\s*${name}:\\s*(#[0-9A-Fa-f]{6})\\s*;`)) as RegExpMatchArray)[1]
+    const hero = '#26292C'
+    for (const ink of ['--secondary-foreground', '--muted-foreground']) {
+      expect(contrast(at(ink), hero), `${ink} on the hero`).toBeGreaterThanOrEqual(4.5)
+      expect(contrast(at(ink), at('--inner')), `${ink} on the hero's inner block`).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
   it('knows the reading it was written to catch', () => {
     // The retired value, on the tint the ports put it inside.
     expect(contrast('#6E7378', '#F6F7F8')).toBeLessThan(4.5)

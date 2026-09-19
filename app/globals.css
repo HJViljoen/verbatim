@@ -269,6 +269,60 @@
   .vi-anim-ring:nth-of-type(4) { animation-delay: 0.24s; }
 }
 
+/* ── The hero tile's subtree (SH4) ───────────────────────────────────────────
+   The tile paints itself charcoal; everything INSIDE it is drawn by the page,
+   in `text-foreground`, `text-muted-foreground`, `bg-inner` and `border-border`
+   — every one of which is a light-surface value, so a hero whose ground had
+   turned and whose contents had not is dark ink on dark. Re-pointing the
+   tokens on the subtree turns all of them at once, which is what a token is
+   for, and means no page file has to know it is inside a hero.
+
+   THIS IS A FLOOR, NOT THE COMPOSITION. Which elements inside Overview's hero
+   want which weight is that page's own question (main's M3); this only
+   guarantees that none of them is invisible. Measured against the charcoal:
+   ink 12.6:1, the secondary 9.1:1, the muted 6.5:1, and on the inner block
+   10.3 / 7.4 / 5.4. */
+[data-tile][data-hero] {
+  --tile: var(--hero);
+  --card: var(--hero);
+  --popover: var(--hero);
+  --foreground: var(--hero-foreground);
+  --card-foreground: var(--hero-foreground);
+  --popover-foreground: var(--hero-foreground);
+  --secondary-foreground: #C9CCD0;
+  --muted-foreground: #A9AEB3;
+  --inner: #33373B;
+  --muted: #33373B;
+  --secondary: #33373B;
+  --border: #3E4347;
+  --input: #3E4347;
+  /* The data hues turn too, or they do not survive the ground: the product
+     green reads 3.4:1 on this charcoal and the red 3.3:1. These are the dark
+     palette's own counterparts, measured here at 6.2:1 and 4.9:1 on the tile
+     and 5.1:1 and 4.9:1 on its inner block — the same colours meaning the same
+     things, at a lightness this surface can carry. */
+  --primary: #2FBF85;
+  --primary-foreground: #0B1F16;
+  --positive: #2FBF85;
+  --you: #2FBF85;
+  --ring: #2FBF85;
+  --accent: #173B2D;
+  --accent-foreground: #7EDDB4;
+  --negative: #F08878;
+  --destructive: #F08878;
+  --warning: #E9BC55;
+  --mixed: #E9BC55;
+  --comp: #F58A4A;
+  --comp-2: #F7AE82;
+  --cat: #7C838B;
+  --neutral-seg: #3A3F45;
+  --chart-1: #ECEEF0;
+  --chart-2: #2FBF85;
+  --chart-3: #A9AEB3;
+  --chart-4: #7C838B;
+  --chart-5: #3A3F45;
+}
+
 /* ── The calendar line's type (components/charts/calendar-line.tsx) ──────────
    The chart is a viewBox scaled uniformly to its box, so every font-size in it
    is in VIEWBOX UNITS and shrinks with the container: an 880-unit drawing in a

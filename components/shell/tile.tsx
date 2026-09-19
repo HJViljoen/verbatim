@@ -96,6 +96,10 @@ export function Tile({
       // (app/globals.css §Print mode) — the xl: span classes do not fire in
       // Chrome's print media, whose width is the page box.
       data-tile=""
+      // The hero's subtree takes the inverted tokens (app/globals.css
+      // `[data-tile][data-hero]`), so a block inside it does not have to know
+      // it is inside one.
+      data-hero={isHero ? '' : undefined}
       data-col={col}
       data-row={row}
       style={{ '--vb-span': col } as React.CSSProperties}
