@@ -292,3 +292,12 @@ describe('overviewTiles · the objection tile names its population', () => {
     expect(tiles.some((t) => t.label === 'of 205 videos in the category\u2019s month carry pushing back')).toBe(true)
   })
 })
+
+describe('overviewTiles \u00b7 the switching tile keeps its basis and its audience', () => {
+  it('prints both, which its own type says are never omitted', () => {
+    const tiles = overviewTiles(doc({ reading: reading(), slideFigures: slideFigures() }))
+    const switching = tiles.find((t) => t.label.includes('a switch between brands'))
+    expect(switching?.label).toContain('counted in your own brand')
+    expect(switching?.label).toContain('dated by when each video was posted')
+  })
+})

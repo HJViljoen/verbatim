@@ -152,7 +152,7 @@ describe('the cover on a brief that is not the sales brief', () => {
     const read = overviewTiles(marketing({ slideFigures, figures: { conversations: { label: 'c', value: '2,359', kind: 'count' } } }))
     expect(read.map((t) => t.label)).toEqual([
       'September 2026 — No denominator recorded for this month. Nothing on this sheet is a share of a counted population until it is.',
-      'videos name a switch between brands · 64 of 120 toward you · 22 of 120 away',
+      'videos name a switch between brands · 64 of 120 toward you · 22 of 120 away · counted in your own brand, dated by when each video was posted',
       'of 205 videos in the category in September 2026 carry pushing back',
     ])
 

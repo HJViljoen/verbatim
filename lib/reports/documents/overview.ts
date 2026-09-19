@@ -265,10 +265,19 @@ export function overviewTiles(data: DocumentSnapshotData): OverviewTile[] {
   // tile read honestly: "12 · videos name a switch between brands · 7 toward
   // Sealand · 5 away". The lean carries its own "of N" because 7 of 12 and
   // 7 of 1,388 are different sentences.
+  // AND THE BASIS AND THE AUDIENCE TRAVEL WITH IT (fix pass).
+  // `SwitchingFigure.basis` is declared "Printed beside it, never omitted"
+  // (figures.ts) and `audience` is CLIENT_AUDIENCE — the brand's OWN posts — so
+  // a tile that printed neither put a count of videos "naming a switch between
+  // brands" on the first sheet a reader meets with nothing saying whose posts
+  // they are, or that this is the one figure in the package dated by the video
+  // rather than by the comment. The full card prints both
+  // (document-deck.tsx); the tile is the more prominent of the two and was the
+  // one that dropped them.
   const switchingTile: OverviewTile | null = switching
     ? {
         value: fmtInt(switching.pool),
-        label: `${switching.pool === 1 ? 'video names' : 'videos name'} a switch between brands · ${fmtInt(switching.toward.k)} of ${fmtInt(switching.pool)} toward you · ${fmtInt(switching.away.k)} of ${fmtInt(switching.pool)} away`,
+        label: `${switching.pool === 1 ? 'video names' : 'videos name'} a switch between brands · ${fmtInt(switching.toward.k)} of ${fmtInt(switching.pool)} toward you · ${fmtInt(switching.away.k)} of ${fmtInt(switching.pool)} away · counted in ${switching.audienceLabel}, ${switching.basis}`,
         verdict: switching.verdict,
         note: switching.unread,
         // The lean carries its own population, so the pair is a level.
