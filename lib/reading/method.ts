@@ -147,7 +147,17 @@ export function methodLines(inputs: RecordInputs, opts: MethodOptions = {}): Met
   const readingAt = opts.readingAt ?? inputs.readingAt
   const brand = opts.brand?.trim() || null
 
-  const preparedBy = `${brand ? `Prepared for ${brand} with Verbatim` : 'Prepared by Verbatim'} · ${fullDate(readingAt)}`
+  // EVERY ITEM TERMINATES, because `lines` is JOINED WITH A BARE SPACE by its
+  // consumers (`overview/record.tsx` renders `{method.join(' ')}`, and so does
+  // every other surface that prints the footnote as one paragraph). These two
+  // items did not, and the record column read
+  // "…with Verbatim · 18 Sep 2026 2,359 videos read in this window · … Reddit
+  // 12% Of everything we have ever read…" — two collisions in thirty words, and
+  // at 9.5px mono "18 Sep 2026 2,359" is one garbled number. `recordLines`
+  // terminates its items, which is why the left column was always clean. A
+  // consumer that prints ONE item on its own line (`footerNote={preparedBy}`)
+  // gets a full stop, which is what a footnote reads as anyway.
+  const preparedBy = `${brand ? `Prepared for ${brand} with Verbatim` : 'Prepared by Verbatim'} · ${fullDate(readingAt)}.`
 
   // COVERAGE IS THE WINDOW'S, and says so. It is the one figure here that is,
   // and a footnote whose five lines are on three clocks with only one of them
@@ -160,7 +170,7 @@ export function methodLines(inputs: RecordInputs, opts: MethodOptions = {}): Met
   } else {
     const videos = totalVideos(inputs.coverage)
     const mix = platformShareLine(totalPlatformMix(inputs.coverage))
-    coverage = `${fmtInt(videos)} video${videos === 1 ? '' : 's'} read in this window${mix ? ` · ${mix}` : ''}`
+    coverage = `${fmtInt(videos)} video${videos === 1 ? '' : 's'} read in this window${mix ? ` · ${mix}` : ''}.`
   }
 
   const r = inputs.readDepth
