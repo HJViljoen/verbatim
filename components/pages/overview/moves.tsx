@@ -279,6 +279,21 @@ export function seriesLabel(reading: MoveReading, audience: string): string {
  * denominator; the mock prints "themes you are not working on +0.4 per 100
  * videos", which is a synthetic control subtracted from the client side, and
  * nothing in this product computes one.
+ *
+ * AND EVERY ONE OF THOSE LEVELS PRINTS ITS "of N" (Block D wave 3, M5). This
+ * printed the share alone — "You 07/26 7.3% → 08/26 9.6% → 09/26 11.9%" — which
+ * is a run of six bare scores on a page whose stated rule is that a level
+ * without its denominator is a score and this product shows none. The
+ * denominators were on the object all along (`MoveSeries.points` is
+ * `{month, k, n, pct}`) and only `pct` was read; the sentence under the line
+ * says "read against 3 months", which says how many months and never what of.
+ * It escaped `assertCopyContract` because rule (b) inspects `data-copy="level"`
+ * nodes and the node carried no marker — so the marker goes on too, at the call
+ * site, and the rule applies to this line from here on.
+ *
+ * EACH SIDE'S DENOMINATOR IS ITS OWN AND MOVES BETWEEN MONTHS: your audience
+ * carried 82 videos in July and 84 in August, so one "of N" for the run would
+ * be a denominator the run does not have.
  */
 export function seriesLine(reading: MoveReading): string {
   // AN ARROWED RUN IS THE SAME CLAIM AS THE SPARKLINE (code review I4). This
@@ -300,7 +315,8 @@ export function seriesLine(reading: MoveReading): string {
       // they are not one run.
       const read = s.points.filter((p) => p.pct != null)
       const parts = read.map((p, i) => {
-        const label = `${p.month.slice(5, 7)}/${p.month.slice(2, 4)} ${p.pct}%`
+        const of = p.k != null && p.n != null ? ` ${fmtInt(p.k)} of ${fmtInt(p.n)}` : ''
+        const label = `${p.month.slice(5, 7)}/${p.month.slice(2, 4)} ${p.pct}%${of}`
         if (i === 0) return label
         const broke =
           !s.noClustering &&
@@ -353,7 +369,11 @@ function MoveBody({ row, reading, mode }: { row: MoveRow; reading: MoveReading |
               </span>
             ))}
           </span>
-          <span className={email ? undefined : 'font-mono text-[10.5px] tabular-nums text-muted-foreground'}>
+          {/* MARKED `level`, so rule (b) reaches it (Block D wave 3, M5). The
+              line is a run of banded LEVELS and it printed six bare shares;
+              unmarked, the copy contract's denominator rule never looked at
+              it. */}
+          <span data-copy="level" className={email ? undefined : 'font-mono text-[10.5px] tabular-nums text-muted-foreground'}>
             {seriesLine(reading)}
           </span>
           {/* D3: A CHART IS A DIRECTION CLAIM TOO. `chartNote` is why a line

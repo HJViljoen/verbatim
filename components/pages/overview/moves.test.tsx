@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 
 import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
-import { assertCopyContract } from '@/lib/test/copy-contract'
+import { assertCopyContract, copyNodes, copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { MOVES_UNLOCK } from '@/lib/pages/overview'
 import { CARD_CONFIRM_SLOT, REGIME_BREAK, claimText, movesMeta, overviewMoves, seriesLine } from './moves'
@@ -242,6 +242,26 @@ describe('OV5, ported to the artboard', () => {
     expect(line).toContain('The category')
     expect(line).toContain('Freitag')
     expect(line).not.toContain('per 100 videos')
+  })
+
+  // A LEVEL WITHOUT ITS "of N" IS A SCORE, and this line printed six of them
+  // (Block D wave 3, M5). The denominators were on the object the whole time —
+  // `MoveSeries.points` is `{month, k, n, pct}` — and only `pct` was read; the
+  // sentence under the line says "read against 3 months", which is how many
+  // months and never what of. Each month carries its OWN denominator, because
+  // each month has one.
+  it('prints every level in the run with its own denominator', () => {
+    const reading = overviewFixture().moves.readings[0]
+    const line = seriesLine(reading)
+    expect(line).toContain('07/26 7.3% 6 of 82')
+    expect(line).toContain('09/26 11.9% 10 of 84')
+    expect(line).toContain('07/26 9.1% 118 of 1,290')
+    // And the node is MARKED, so rule (b) reaches it from here on — it escaped
+    // the contract entirely while it carried no marker.
+    const markup = render(overviewMoves.render(overviewFixture(), 'app', ctx))
+    const level = copyNodes(markup).find((n) => n.kind === 'level' && n.text.includes('07/26'))
+    expect(level).toBeDefined()
+    expect(copyViolations(markup).filter((v) => v.rule === 'level-denominator')).toEqual([])
   })
 
   it('draws the arrows only where a LINE would be allowed, and marks a regime break', () => {
