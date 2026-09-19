@@ -65,8 +65,25 @@ import { Column, Columns, Eyebrow, Note, NotDrawn, Row, TableHead, TableRow } fr
 // exists to stop. The claim as SPOKEN travels as a quote with its own ref and
 // is printed; the paraphrase waits for its slot (E-competitive owns that edit).
 
-/** The mock's `1fr 78px 78px 88px`, as ratios. */
-const TEMPLATE = 'minmax(0,150fr) minmax(0,160fr) minmax(0,160fr) minmax(0,120fr)'
+/**
+ * The mock's `1fr 78px 78px 88px`, as ratios — RE-CUT SO THE CHANGE COLUMN CAN
+ * HOLD ITS WIDEST ANSWER.
+ *
+ * "comparison refused" is a real cell value on this table (`MovementBadge`'s
+ * NON_ANSWER, which is `whitespace-nowrap`), and it is 109px wide at the badge's
+ * own size. The previous cut gave the Change column 120fr of 590 — 66px on the
+ * sheet — so the badge painted 43px into the column beside it and the printed
+ * row read "comparison refuseCon" over "Comments per video", on six of the
+ * seven fixture states at 1440 and at 1024. A nowrap node in a track narrower
+ * than its own text does not clip on paper; it overprints.
+ *
+ * So the Change column is 170fr (~112px) and the month columns are 150fr each
+ * (~99px), which still takes two month cells per line and the newest month's
+ * "32,600 of 41,200" on one. The page's own columns widen with it (`Columns`
+ * below): the width comes from the sheet's other two panels rather than out of
+ * the month cells, which would have traded an overprint for a four-line cell.
+ */
+const TEMPLATE = 'minmax(0,120fr) minmax(0,150fr) minmax(0,150fr) minmax(0,170fr)'
 /** How many month cells the artboard draws per share. */
 const MONTH_CELLS = 4
 
@@ -449,12 +466,19 @@ export const quarterlyRivals: Block<QuarterlyData> = {
                   mode={mode}
                 />
               ))}
-              {/* ONE LINE PER DISTINCT REASON A BAND WAS NOT DRAWN, over the
-                  measures that actually carry that reason — composed from the
-                  rows rather than typed, so a measure that gains a band drops
-                  its sentence with it. */}
-              {[...new Set(r.headToHead.measures.flatMap((m) => [m.why, !m.verdict ? m.verdictWhy : null]).filter((w): w is string => !!w))]
-                .map((why) => <Note key={why} mode={mode}>{why}</Note>)}
+              {/* ONE PARAGRAPH OF REASONS, NOT FIVE ORPHAN LINES. Each reason
+                  is still distinct and still composed from the rows rather than
+                  typed — a measure that gains a band drops its sentence with it
+                  — but they are one run of prose under the table instead of one
+                  `Note` each. Five one-sentence notes cost four inter-note gaps
+                  and a short last line apiece: measured at this column's width,
+                  34px of a 561px sheet, which is the height the Change column
+                  next door needed to stop overprinting. They read as the rule
+                  they are, which is what a paragraph is for. */}
+              {(() => {
+                const why = [...new Set(r.headToHead.measures.flatMap((m) => [m.why, !m.verdict ? m.verdictWhy : null]).filter((w): w is string => !!w))]
+                return why.length > 0 ? <Note mode={mode}>{why.join(' ')}</Note> : null
+              })()}
               <Note mode={mode}>{r.headToHead.footerLine}</Note>
               <Note mode={mode}>{r.headToHead.excludedNote}</Note>
               {r.headToHead.unread ? <Note mode={mode}>{r.headToHead.unread}</Note> : null}
@@ -533,7 +557,13 @@ export const quarterlyRivals: Block<QuarterlyData> = {
     )
 
     return frame(
-      <Columns weights={[3.9, 5.6, 3]} gap={24} mode={mode}>
+      // 4.6 / 5 / 2.9, NOT 3.9 / 5.6 / 3. The standings table has four columns
+      // and the widest answer any of them prints is "comparison refused"; at
+      // 3.9 the table had 325px of track for a row needing ~112px of Change
+      // alone. The 0.7fr it gains comes off the head-to-head (0.6) and the
+      // questions (0.1), neither of which gains a line at its new width —
+      // measured, both columns stand where they stood.
+      <Columns weights={[4.6, 5, 2.9]} gap={24} mode={mode}>
         {standings}
         {h2h}
         {theirs}
