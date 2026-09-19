@@ -1748,14 +1748,23 @@ function NumbersCard({ data }: { data: DocumentSnapshotData }) {
   // marketing artboard names two more — "The unit" and "Languages" — and a
   // brief that lost them to a merge would be a brief whose basis got quieter.
   const extra = methodRows(data).filter(([k]) => !rows.some(([j]) => j === k))
+  // THE CARD IS SET FOR THE COLUMN IT IS IN (Block D wave 3b, `decks`). Eight
+  // rows, a four-sentence footnote and the delivery line, in five twelfths of
+  // a landscape sheet: at 130px of label gutter and 15.5px of value the card
+  // ran 45px past the bottom of the body and the footnote's last two sentences
+  // — the Reddit cap and the privacy rule — printed nowhere. 112px is what the
+  // longest label ("Held back") needs at this size, 14.5px is the deck's own
+  // next tier down and the artboard's own 13px printed, and the rows lose 2px
+  // of leading each. Nothing is dropped: the sheet prints what it always
+  // composed.
   return (
-    <div className={`${CARD} self-start px-6 py-5`}>
+    <div className={`${CARD} self-start px-5 py-4`}>
       <Eyebrow className="mb-3">This brief in numbers</Eyebrow>
-      <dl className="grid grid-cols-[130px_1fr] gap-x-4 gap-y-2.5">
+      <dl className="grid grid-cols-[112px_1fr] gap-x-4 gap-y-2">
         {[...rows, ...extra].map(([k, v]) => (
           <Fragment key={k}>
             <dt className="pt-[3px] font-mono text-[12px] uppercase tracking-[0.06em] text-muted-foreground">{k}</dt>
-            <dd className="text-[15.5px] leading-[1.4] text-foreground">{v}</dd>
+            <dd className="text-[14.5px] leading-[1.4] text-foreground">{v}</dd>
           </Fragment>
         ))}
       </dl>
@@ -1797,7 +1806,7 @@ function NumbersCard({ data }: { data: DocumentSnapshotData }) {
 function CannotTell({ data }: { data: DocumentSnapshotData }) {
   const c = data.slideFigures?.cannotTell ?? null
   return (
-    <div className="mt-auto flex flex-col gap-1.5 rounded-lg bg-inner px-[18px] py-3.5">
+    <div className="mt-auto flex flex-col gap-1 rounded-lg bg-inner px-4 py-3">
       <p className="font-mono text-[11.5px] uppercase tracking-[0.06em] text-muted-foreground">What this brief cannot tell you</p>
       <p className="text-[14px] leading-[1.4] text-secondary-foreground">{MOVE_PROMISE}</p>
       {/* `refusedSentence`, WHICH ALREADY NAMES EVERY REASON AND COUNTS THEM.
