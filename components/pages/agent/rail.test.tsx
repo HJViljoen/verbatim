@@ -76,6 +76,18 @@ describe('earlier questions', () => {
     expect(text).toContain('earliest 20 Aug')
   })
 
+  it('draws no footer at all where there is no list', () => {
+    // `Tile` renders the footer row if EITHER half is present, and the note
+    // was gated only on `earliest` — so the refused state drew a hairline and
+    // a lone right-aligned "earliest 28 Sep" with the left half empty, under a
+    // body already saying nothing else has been asked. Both halves are facts
+    // about a list; neither prints without one.
+    const empty = renderText(<EarlierQuestionsTile history={refused.history} />)
+    expect(empty).toContain('Nothing else has been asked')
+    expect(empty).not.toContain('earliest')
+    expect(empty).not.toContain('All questions')
+  })
+
   it('says so when it could not be read, and never draws an empty list', () => {
     expect(renderText(<EarlierQuestionsTile history={null} />)).toContain('could not be read')
   })

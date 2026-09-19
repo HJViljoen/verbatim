@@ -31,6 +31,9 @@ export const TRACKED_HREF = '/dashboard/settings'
  * question, when it was answered, and the one flag that is a fact.
  */
 export function EarlierQuestionsTile({ history, col = 12, row = 2 }: { history: AskHistory | null; col?: number; row?: number }) {
+  /** Whether this tile has a LIST — what both halves of the footer, and the
+   *  meta, are facts about. */
+  const drawn = Boolean(history && history.rows.length > 0)
   return (
     <Tile
       col={col}
@@ -51,10 +54,17 @@ export function EarlierQuestionsTile({ history, col = 12, row = 2 }: { history: 
       meta={history && history.rows.length > 0
         ? `${fmtInt(history.rows.length)} of ${fmtInt(history.held)}`
         : undefined}
-      footer={history && history.rows.length > 0 ? <Link href={history.href} className="hover:underline">All questions →</Link> : undefined}
+      footer={drawn ? <Link href={history!.href} className="hover:underline">All questions →</Link> : undefined}
       // D14: EARLIEST EVIDENCE, and the word says so. We do not know when this
       // workspace started asking; we know the oldest question we still hold.
-      footerNote={history?.earliest ? `earliest ${shortDate(history.earliest)}` : undefined}
+      //
+      // GATED ON THE SAME CONDITION AS THE FOOTER IT SITS IN. `Tile` draws the
+      // footer row if EITHER half is present, and the note was gated only on
+      // `earliest` — so in the refused state the tile drew a hairline and a
+      // lone mono "earliest 28 Sep" hard against the right edge, with the left
+      // half empty, under a body already saying nothing else has been asked. A
+      // note about a list is furniture where there is no list.
+      footerNote={drawn && history!.earliest ? `earliest ${shortDate(history!.earliest)}` : undefined}
       distribute="between"
     >
       {!history ? (

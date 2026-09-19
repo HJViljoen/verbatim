@@ -371,7 +371,9 @@ export function refusedFixture(over: Partial<AgentThreadData> = {}): AgentThread
     // ONE QUESTION AND NO PLAN, AND THE ONE QUESTION IS THIS ONE. A fresh
     // workspace's rail on a thread page: the only thread held is the one being
     // read, so the rows are empty while the month count is 1 — which is why the
-    // empty line says "nothing ELSE has been asked" (`EarlierQuestionsTile`).
+    // empty line says "nothing ELSE has been asked" (`EarlierQuestionsTile`),
+    // and why the footer is absent rather than a hairline with a lone
+    // right-aligned "earliest 28 Sep" against it.
     history: askHistory(HISTORY_ROWS.slice(0, 1), 3, 'th-1'),
     draws: askDraws(EMPTY_BASIS, null),
     bar: { question: surface('ask').question ?? '', context: askBasisLine(EMPTY_BASIS, { short: true }) },
