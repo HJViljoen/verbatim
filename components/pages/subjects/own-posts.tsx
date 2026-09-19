@@ -1,6 +1,6 @@
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { openLink } from '@/components/blocks/open-link'
-import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
+import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth } from '@/lib/format'
 import type { FigureTable } from '@/lib/reading/verdicts'
@@ -23,27 +23,46 @@ import type { SubjectsData } from '@/lib/pages/subjects'
 // spoken 2 · caption only 2" against a census of nine and invites the reader
 // to add them up; on the fixture they sum to five of nine, and on the live
 // tenant to five of seventeen, because the classifier names a hook on some
-// posts and not others. Every row therefore carries its own "of N" through
-// `FigureCell`, which is the same shape the kinds tile uses one tile over and
-// for the same reason.
+// posts and not others. Every row therefore carries its own "of N" — the same
+// shape the kinds tile uses one tile over and for the same reason.
+//
+// ON ONE LINE, THOUGH (fix pass). It carried it through `FigureCell`, which
+// STACKS the denominator under the figure — that is the artboards' table cell
+// and it is right in a table cell. In a 240px rail tile it made three hooks
+// cost six lines, with the right-aligned "of 9" hanging under each count where
+// it read as a second data row. The rule asks for the denominator, not for a
+// line of its own; the count and its "of N" sit beside each other here, in
+// `FigureCell`'s own markers so the copy contract reads the pair exactly as it
+// always has.
 
 /** One labelled count with its own denominator — a hook style, a format. */
 function CountRow({ label, k, n, mode }: { label: string; k: number; n: number; mode: RenderMode }) {
   const email = mode === 'email'
+  // `level` on the PAIR, `figure` on the value — `FigureCell`'s own contract,
+  // laid out in a row instead of a column.
+  const figure = email ? (
+    <span data-copy="level">
+      <span data-copy="figure" style={{ fontFamily: FONT.mono, fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: EMAIL.ink }}>{fmtInt(k)}</span>
+      <span style={{ fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.muted }}> of {fmtInt(n)}</span>
+    </span>
+  ) : (
+    <span data-copy="level" className="flex shrink-0 items-baseline gap-1">
+      <span data-copy="figure" className="font-mono text-[13px] font-semibold leading-none tabular-nums">{fmtInt(k)}</span>
+      <span className="font-mono text-[10.5px] tabular-nums text-muted-foreground">of {fmtInt(n)}</span>
+    </span>
+  )
   if (email) {
     return (
       <tr>
         <td style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink2, padding: '2px 0' }}>{label}</td>
-        <td align="right" style={{ padding: '2px 0' }}>
-          <FigureCell value={fmtInt(k)} of={`of ${fmtInt(n)}`} align="right" mode={mode} />
-        </td>
+        <td align="right" style={{ padding: '2px 0' }}>{figure}</td>
       </tr>
     )
   }
   return (
     <div className="flex items-baseline justify-between gap-2 text-[12.5px] text-secondary-foreground">
       <span className="min-w-0 truncate">{label}</span>
-      <FigureCell value={fmtInt(k)} of={`of ${fmtInt(n)}`} align="right" />
+      {figure}
     </div>
   )
 }

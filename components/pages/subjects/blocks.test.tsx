@@ -3,9 +3,10 @@ import { describe, expect, it } from 'vitest'
 import { blockAnswers, blockContext, figureConflicts, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
-import { render, renderText } from '@/lib/test/render'
+import { markupText, render, renderText } from '@/lib/test/render'
+import { fmtInt, fmtPct } from '@/lib/format'
 import { surface } from '@/lib/nav'
-import { layoutFor, SUBJECT_BLOCKS } from './index'
+import { layoutFor, SubjectsPage, SUBJECT_BLOCKS } from './index'
 import { subjectsList } from './list'
 import { subjectsOwnPosts } from './own-posts'
 import { subjectsSayHear } from './say-hear'
@@ -17,6 +18,8 @@ import { subjectsUnanswered } from './unanswered'
 import { calendarRulesFor } from '@/lib/charts/from-series'
 import { freezeQuotes } from '@/lib/renderables/quotes-freeze'
 import { gapBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
+import { SUBJECTS_NONE_NAMED } from '@/lib/reading/own-posts'
+import { voiceCite } from '@/lib/pages/subjects'
 import { candidatesFixture, refusedFixture, retiredRivalFixture, subjectsFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
@@ -78,7 +81,11 @@ describe('SU1 · the subjects list', () => {
     // (b)) and the pane one tile over prints "26 of 84 videos" in full.
     expect(text).toContain('26 of 84')
     expect(text).toContain('too few to compare')
-    expect(text).toContain('named 19 Aug 2026')
+    // THE DATE, WITHOUT THE VERB, on the 240px rail: "named 19 Aug 2026 ·
+    // Rename · Stop" wants ~212px of 188 and orphaned "Stop" onto a fourth
+    // line. The year stays; Settings, which is full width, keeps the verb.
+    expect(text).toContain('19 Aug 2026')
+    expect(text).not.toContain('named 19 Aug 2026')
   })
 
   it('groups a four-digit count like every other number on the page', () => {
@@ -323,6 +330,22 @@ describe('SU2 · the kind mix', () => {
     expect(text).not.toMatch(/\b(pain_point|purchase_intent|demographic_signal|switching_signal|feature_request|buying_trigger|misinformation)\b/)
   })
 
+  // THE BAR AND THE NUMBER AT THE END OF IT MEASURE THE SAME THING. The row
+  // used to ride the share on the label and end in the count — "Asking how it
+  // works 34%" ending in 472 on the category and in 29 on yours, the two bars
+  // within a few pixels of each other. The three DENOMINATORS stay apart on
+  // the audience line above each group, which is what keeps the bars readable
+  // against one scale.
+  it('labels a kind row with the share its bar draws, not with a count', () => {
+    const data = subjectsFixture()
+    const text = renderText(subjectsKinds.render(data, 'app', ctx))
+    const category = data.selected!.sides.find((s) => s.kind === 'category')!
+    const top = category.kinds.find((k) => k.pct != null && k.pct > 0)!
+    expect(text).toContain(`${top.label} ${fmtPct(top.pct!)}`)
+    expect(text).not.toContain(fmtInt(top.videos))
+    expect(text).toContain(`of ${fmtInt(category.n!)} videos`)
+  })
+
   // THE REDDIT READ MOVED TO THE FOOTER NOTE, where the mock puts it: a basis
   // in the mono face, not a body paragraph that reads as one of the block's
   // findings. The overlap caveat stays in the body, beside the shares it is
@@ -419,6 +442,28 @@ describe('SU2 · the voices', () => {
     const markup = render(subjectsVoices.render(subjectsFixture(), 'app', ctx))
     expect(markup).toContain('https://www.tiktok.com/@maker/video/7312345678901234567')
     expect(renderText(subjectsVoices.render(subjectsFixture(), 'app', ctx))).toContain('22 Sep · under a Freitag video')
+  })
+
+  // A GLYPH IS NOT AN ATTRIBUTION ON PAPER. The app draws a `PlatformIcon` and
+  // keeps the words platform-free; a brief is read as a PDF and on a share
+  // page, where there is nothing to hover and a 10px mark is decoration. Both
+  // the print and the email arms take the whole string from `voiceCite`, which
+  // is the ONE composer — the answer to three spellings of two platforms in
+  // one monthly report.
+  it('names the platform in words wherever it draws no mark', () => {
+    const data = subjectsFixture()
+    const voice = data.selected!.voices[0]
+    expect(voice.platform).toBe('tiktok')
+    expect(voiceCite(voice)).toBe(`TikTok · ${voice.cite}`)
+    for (const mode of ['print', 'email'] as const) {
+      const out = subjectsVoices.render(data, mode, ctx)
+      expect(renderText(out), mode).toContain(voiceCite(voice))
+      expect(render(out), mode).not.toContain('<svg')
+    }
+    // The app keeps the mark and the platform-free words.
+    const app = render(subjectsVoices.render(data, 'app', ctx))
+    expect(app).toContain('<svg')
+    expect(markupText(app)).not.toContain(voiceCite(voice))
   })
 
   // BOTH REFS PER VOICE, the paired frame included. `subjects` is a registered
@@ -562,6 +607,42 @@ describe('SU4 · your own posts', () => {
     expect(renderText(subjectsOwnPosts.render(refusedFixture(), 'app', ctx))).toContain('9 posts published')
   })
 
+  // ONE ANSWER PER SCREENFUL. The membership rows are read THROUGH the subject
+  // rows, so a set that cannot be read matched nothing — and the rail 200px
+  // above has already said the set cannot be read. Naming Durability here was
+  // the page contradicting itself in one screenful, on the one arm a real
+  // tenant sees.
+  //
+  // AND THE TILE SAYS NOTHING ABOUT THE SET, rather than saying the wrong
+  // thing about it: `SUBJECTS_NONE_NAMED` invites the reader to name one, and
+  // the rail has just removed the control that would. "We could not read it"
+  // is the rail's sentence and this tile lets it stand.
+  it('says nothing about the set where the set itself cannot be read', () => {
+    const data = refusedFixture()
+    expect(data.ownPosts?.subjects).toEqual([])
+    expect(data.ownPosts?.subjectsNote).toBeNull()
+    const text = renderText(subjectsOwnPosts.render(data, 'app', ctx))
+    expect(text).not.toContain('Durability')
+    expect(text).not.toContain('Recycled materials')
+    expect(text).not.toContain(SUBJECTS_NONE_NAMED)
+    expect(text).not.toContain('Subjects matched')
+    // The rest of the census is real and still prints.
+    expect(text).toContain('9 posts published')
+  })
+
+  // AND WHERE THE SET WAS READ AND IS EMPTY, THE SENTENCE IS STILL THERE —
+  // `subjectScope: null` vs `{ named: 0 }` is what tells the two apart, and
+  // `ownCensusWithClaims` decides between them (lib/reading/own-posts.test.ts
+  // covers all three notes). This is the block half: given the note, it prints
+  // it, under the eyebrow the mock draws.
+  it('says no subject is named where the set was read and is empty', () => {
+    const data = refusedFixture()
+    const readEmpty = { ...data, ownPosts: { ...data.ownPosts!, subjectsNote: SUBJECTS_NONE_NAMED } }
+    const text = renderText(subjectsOwnPosts.render(readEmpty, 'app', ctx))
+    expect(text).toContain('Subjects matched')
+    expect(text).toContain(SUBJECTS_NONE_NAMED)
+  })
+
   it('says the census is empty rather than printing a zero', () => {
     const data = subjectsFixture()
     const none = { ...data, ownPosts: null }
@@ -651,6 +732,27 @@ describe('the mock’s own shape, where the data allows it', () => {
     // exact .0 so a decimal column lines up, and `main`'s M13 moved the fixture's
     // September reading from 24.5 to 22. Take both.
     expect(text).toContain('Jul 17.0% → Aug 19.0% → Sep 22.0% in the category')
+  })
+
+  // THE THREE COLUMNS CLOSE ON ONE EDGE. The prior month prints where the
+  // column drew NO magnitude — it is the only way to see where a refused or
+  // unchanged side stood — and not where one was drawn, because "▲ 5.5 pts"
+  // IS the distance from that month. Printing both made column 3 wrap onto a
+  // fifth line and stand ~28px taller than its neighbours.
+  it('prints the prior month only where no change magnitude was drawn', () => {
+    const data = subjectsFixture()
+    const text = renderText(subjectsSubject.render(data, 'app', ctx))
+    const moved = data.selected!.sides.filter((s) => s.verdict?.state === 'moved')
+    const quiet = data.selected!.sides.filter((s) => s.verdict?.state !== 'moved' && s.previous?.pct != null)
+    expect(moved.map((s) => s.kind)).toEqual(['category'])
+    expect(quiet.map((s) => s.kind)).toEqual(['you', 'rival'])
+    // The two non-answers keep it, inline, right after the badge.
+    expect(text).toContain('too few to compare Aug 31%')
+    expect(text).toContain('no clear change Aug 43.7%')
+    // The category stated its magnitude, so the prior level is not repeated
+    // beside it — and is still on the tile, in the trail line above.
+    expect(text).not.toContain('growing, 3 months Aug')
+    expect(text).toContain('Jul 17% → Aug 19% → Sep 24.5% in the category')
   })
 
   it('names the axis the chart spans, and what the shading over it means', () => {
@@ -780,33 +882,44 @@ describe('the page’s own layout', () => {
 })
 
 // A brief borrows SU3 and SU-voices (SALES_MAP, CONTENT_MAP), and a brief is
-// read as a PDF and on a public share page. "Verbatim engineering" is a
-// readiness owner: right where a reader can open Settings › Readiness, an
-// internal label where they cannot. "Open the content brief →" resolves, for
-// such a reader, to a login wall.
+// read as a PDF and on a public share page. "Open the content brief →"
+// resolves, for such a reader, to a login wall.
+//
+// AND THE READINESS OWNER IS GONE FROM EVERY ARM, NOT JUST FROM PAPER. See the
+// vocabulary rule on `UNANSWERED_CLAIMS_UNREADABLE` (lib/pages/subjects.ts):
+// "— Verbatim engineering" names the team, which is a fact for
+// /dashboard/settings/readiness and a ticket anywhere else — and the app is
+// where the paying reader is. `lib/readiness/compute.ts` draws no row for the
+// claims ledger, so there is no page to name in its place either.
 describe('the Subjects blocks, read from outside the workspace', () => {
-  it('name the half they could not read without naming our own owner', () => {
+  it('name the half they could not read and never name our own owner', () => {
     const data = subjectsFixture()
-    const print = renderText(subjectsUnanswered.render(data, 'print', ctx))
-    const app = renderText(subjectsUnanswered.render(data, 'app', ctx))
-    expect(app).toContain('What your posts claim is not readable yet')
-    expect(app).toContain('Verbatim engineering')
-    expect(print).toContain('What your posts claim is not readable yet')
-    expect(print).not.toContain('Verbatim engineering')
+    for (const mode of MODES) {
+      const text = renderText(subjectsUnanswered.render(data, mode, ctx))
+      expect(text, mode).toContain('What your posts claim is not readable yet')
+      expect(text, mode).not.toContain('Verbatim engineering')
+    }
   })
 
-  // THE SAME RULE ON THE TWO NEW RAIL TILES. `refusedFixture` is production's
-  // state today, so this is the sentence a PDF and a `/r/<token>` page of the
-  // page as it stands would actually carry.
-  it('strip the readiness owner from the two rail tiles too', () => {
+  // THE SAME RULE ON SU5. `refusedFixture` is production's state today, so
+  // this is the sentence a reader in the app — and a PDF, and a `/r/<token>`
+  // page — of the page as it stands would actually carry.
+  //
+  // `subjects.ownposts` is NOT in this loop and the omission is deliberate:
+  // its sentence is `OWN_CLAIMS_UNREADABLE` in lib/reading/own-posts.ts, which
+  // this page reads and does not own, and it still carries the owner in its
+  // app arm. Its paper arm is asserted below, which is the guarantee that file
+  // makes today.
+  it('strips the readiness owner from SU5 in every arm', () => {
     const data = refusedFixture()
-    for (const block of [subjectsOwnPosts, subjectsSayHear]) {
-      const app = renderText(block.render(data, 'app', ctx))
-      const paper = renderText(block.render(data, 'print', ctx))
-      expect(app, block.key).toContain('Verbatim engineering')
-      expect(paper, block.key).toContain('not readable on this page yet')
-      expect(paper, block.key).not.toContain('Verbatim engineering')
+    for (const mode of MODES) {
+      const text = renderText(subjectsSayHear.render(data, mode, ctx))
+      expect(text, mode).toContain('there is no ledger to report')
+      expect(text, mode).not.toContain('Verbatim engineering')
     }
+    const paper = renderText(subjectsOwnPosts.render(data, 'print', ctx))
+    expect(paper).toContain('not readable on this page yet')
+    expect(paper).not.toContain('Verbatim engineering')
   })
 
   it('draw no in-app affordance on paper', () => {
@@ -873,6 +986,34 @@ describe('SU2 · the two-audience gap the pane carries', () => {
       for (const mode of MODES) {
         assertCopyContract(render(block.render(retiredRivalFixture(), mode, ctx)))
       }
+    }
+  })
+})
+
+// ---- the page, not the blocks ------------------------------------------------
+
+describe('the Subjects page', () => {
+  // D15's sentence belongs to the tile it qualifies — the artboard puts "27%
+  // of this month's videos are not in English" at the foot of VOICES ON
+  // DURABILITY and keeps it out of the page's own footer line. The method
+  // footnote arrived after commit 0894c90 ("the page says each of its
+  // sentences once") and printed it a second time, byte for byte, ~110px
+  // below, both inside one screenful at 1440.
+  it('says the language sentence once, on the tile that qualifies it', () => {
+    const data = subjectsFixture()
+    const language = data.method!.language!
+    const text = markupText(render(<SubjectsPage data={data} />))
+    expect(text.split(language).length - 1).toBe(1)
+  })
+
+  // AND THE REST OF THE FOOTNOTE SURVIVES. The filter drops one line, not the
+  // paragraph: a reader still gets who prepared it, what was read, the
+  // read-depth basis, the Reddit cap and the privacy line.
+  it('keeps every other method line in the footnote', () => {
+    const data = subjectsFixture()
+    const text = markupText(render(<SubjectsPage data={data} />))
+    for (const line of data.method!.lines.filter((l) => l !== data.method!.language)) {
+      expect(text).toContain(line)
     }
   })
 })

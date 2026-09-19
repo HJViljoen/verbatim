@@ -228,9 +228,23 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
               {/* THE DATE AND THE CONTROLS ON ONE LINE. A 240px rail carries
                   six of these; at `gap-x-2` with 12.5px separators the line
                   wrapped and every row cost three lines instead of two, which
-                  is two subjects' worth of tile. */}
+                  is two subjects' worth of tile.
+
+                  AND ON THE RAIL THE VERB GOES (fix pass). That was still not
+                  one line: measured at 1440 the row has 188px of room and
+                  "named 19 Aug 2026 · Rename · Stop" wants ~212, so every row
+                  read "named 19 Aug 2026 · Rename ·" / "Stop" — a dangling
+                  separator with the one irreversible control orphaned under
+                  it, at 1024 as well. The six characters of "named " are the
+                  cheapest thing on the line and the least load-bearing: the
+                  pane one tile over states "named 19 Aug 2026" in full above
+                  the subject it belongs to, the artboard's rail carries no
+                  date at all, and its tile footer prints the bare "19 Aug".
+                  The YEAR stays — `fullDate`'s own rule, two Augusts on one
+                  screen. Settings is a full-width section and keeps the
+                  verb. */}
               <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] text-muted-foreground">
-                <span className="font-mono">named {fullDate(r.namedAt)}</span>
+                <span className="font-mono">{variant === 'settings' ? `named ${fullDate(r.namedAt)}` : fullDate(r.namedAt)}</span>
                 {variant === 'settings' ? <span>· {r.because}</span> : null}
                 {r.status === 'retired' ? (
                   // A STOPPED SUBJECT IS MARKED AND CARRIES NO CONTROLS. It

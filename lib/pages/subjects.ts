@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import { chunk, mapWithLimit, READ_CONCURRENCY } from '../chunk'
-import { fmtInt, fmtPct, longMonth, monthName, shortDate } from '../format'
+import { chunk, mapWithLimit, MULTI_ROW_IN_CHUNK, READ_CONCURRENCY } from '../chunk'
+import { fmtInt, fmtPct, longMonth, monthName, platformLabel, shortDate } from '../format'
 import { cleanQuote, fetchQuoteCitationsByAudience, readsAsHeroQuote, type QuoteCitation } from '../quotes'
 import { citationLink } from '../evidence-cite'
 import type { EvidenceSource } from '../pipeline/pass-a'
@@ -128,7 +128,30 @@ export const UNANSWERED_BASIS =
   'Counted in the videos we have read on this subject over the period shown, each placed by the day it was posted — not by the calendar month the rest of this page reads. So these are counts, not shares, and carry no change.'
 
 /**
- * What SU3 says about the half of your posts it cannot read.
+ * THE READINESS OWNER IS NEVER THE CLIENT'S WORD — the vocabulary call, made
+ * once, here, because three surfaces were making it separately.
+ *
+ * "— Verbatim engineering" is an OWNER: the name of the team a not-yet-built
+ * half belongs to. It is the right fact on `/dashboard/settings/readiness`,
+ * where the row it belongs to is drawn and a reader can look at it. Anywhere
+ * else it is a ticket the client was handed, and it was being handed to them
+ * in the APP — which is where the paying reader is, not on the PDF the two
+ * `_OUTSIDE` twins were guarding.
+ *
+ * THE RULE (`OWN_POSTS_UNREADABLE`'s, design review nit 25, applied): the
+ * in-app sentence may name the PAGE where the state is recorded — "· Settings
+ * › Readiness" — and only where such a row actually exists. It never names the
+ * owner. And where no row exists the sentence names NEITHER: `lib/readiness/
+ * compute.ts` has no row for the claims ledger at all, so pointing a client at
+ * Readiness here would send them to a page that says nothing about it.
+ *
+ * SO THERE IS ONE SENTENCE PER STATE, not two. The `_OUTSIDE` twins existed
+ * only to strip the owner and are gone rather than left as aliases: an alias
+ * is an invitation to re-add the owner on one side of it. Competitive's
+ * "— not built yet · Verbatim engineering" (competitive-surface.ts) is the
+ * same call and takes the same answer.
+ *
+ * ---- what SU3 says about the half of your posts it cannot read -------------
  *
  * A question is "answered" here when one of your own posts is ABOUT it —
  * `videos.topics`. The other half of the evidence is what those posts CLAIM
@@ -140,13 +163,6 @@ export const UNANSWERED_BASIS =
  * as a zero.
  */
 export const UNANSWERED_CLAIMS_UNREADABLE =
-  'We match these against what your posts are about. What your posts claim is not readable yet — Verbatim engineering.'
-
-/** The same caveat WITHOUT the readiness owner, for a reader outside the
- *  workspace — a brief's PDF and its `/r/<token>` share page (WP19). The half
- *  we could not read is still named; only our internal owner is dropped, the
- *  same rule as OWN_POSTS_UNREADABLE_OUTSIDE. */
-export const UNANSWERED_CLAIMS_UNREADABLE_OUTSIDE =
   'We match these against what your posts are about. What your posts claim is not readable yet.'
 
 /**
@@ -158,15 +174,10 @@ export const UNANSWERED_CLAIMS_UNREADABLE_OUTSIDE =
  * the answer to a different question, on a tile that is not about posts, and
  * printed a second time by Your own posts one tile above. The unreadable half
  * is the same half; the sentence is this block's.
+ *
+ * And it carries no readiness owner either, for the reason above.
  */
 export const SAY_HEAR_CLAIMS_UNREADABLE =
-  'What your posts claim is not readable on this page yet, so there is no ledger to report — Verbatim engineering.'
-
-/** The same, without the readiness owner, for a reader outside the workspace —
- *  a PDF and its `/r/<token>` page. `Verbatim engineering` is an internal
- *  OWNER: it is a direction where a reader can open Settings › Readiness, and
- *  a leaked ticket where they cannot. */
-export const SAY_HEAR_CLAIMS_UNREADABLE_OUTSIDE =
   'What your posts claim is not readable on this page yet, so there is no ledger to report.'
 
 /** Reddit's own caveat wherever a question count leans on it (design §3 SU3). */
@@ -547,6 +558,31 @@ export function voicesMeta(shown: number, from: number, sampled: boolean): strin
     : `${fmtInt(shown)} of ${fmtInt(from)} · ${tail}`
 }
 
+/**
+ * A voice's WHOLE attribution, platform included — the one composer, for every
+ * surface that does not draw the glyph.
+ *
+ * `SubjectVoice.cite` is deliberately platform-free: the Subjects page draws a
+ * `PlatformIcon` in front of it, and leading the words with `m.platform` too
+ * printed the platform twice, once as a mark and once as a raw column value
+ * lower-cased at a client ("⟨glyph⟩ tiktok · 14 Sep"). That is right for the
+ * page and wrong everywhere else, and "everywhere else" then invented its own
+ * spelling: a reader of one monthly report met "TikTok · 14 Sep" in §1 (from
+ * `lib/pages/week.ts`, which composes `platformLabel` into the cite) and
+ * "tiktok · 14 Sep" and "instagram · 7 Sep" in §6, with "TikTok 38% ·
+ * Instagram 21%" in the footer — three spellings of two platforms in one
+ * artefact. On the brief deck the cite printed the GLYPH ALONE, and on paper,
+ * with no tooltip and nothing to hover, a 10px glyph is not an attribution:
+ * the artboard prints "Instagram · 7 Sep · under your post".
+ *
+ * So the rule is: a surface that draws the mark uses `voice.cite`; a surface
+ * that does not calls THIS, and never assembles the string itself.
+ * `platformLabel` is the product's one spelling of a platform's name.
+ */
+export function voiceCite(voice: Pick<SubjectVoice, 'cite' | 'platform'>): string {
+  return voice.platform ? `${platformLabel(voice.platform)} · ${voice.cite}` : voice.cite
+}
+
 /** Where a voice was heard, in the reader's words — never an audience key. */
 export function voiceFrom(audience: string): string {
   if (audience === CLIENT_AUDIENCE) return 'under a post of yours'
@@ -892,9 +928,13 @@ interface VideoRow {
   upload_date: string | null
 }
 
-/** Ids per `.in()` chunk. 120 uuids is ~4.4 KB of request line, half of
- *  PostgREST's usual 8 KiB cap — the size lib/quotes.ts and lib/pages/voice.ts
- *  already use for the same shape. */
+/** Ids per `.in()` chunk on a KEY column — one row per id. 120 uuids is ~4.4 KB
+ *  of request line, half of PostgREST's usual 8 KiB cap, and the size
+ *  lib/quotes.ts and lib/pages/voice.ts already use for the same shape.
+ *
+ *  NOT FOR A COLUMN THAT IS NOT A KEY. There the URL is not the binding
+ *  constraint — the ROW cap is, and `lib/chunk.ts` `MULTI_ROW_IN_CHUNK` is the
+ *  constant that says so. See `readByIds`'s `size`. */
 const ID_CHUNK = 120
 
 /**
@@ -907,13 +947,28 @@ const ID_CHUNK = 120
  * live insights today and Sealand 2,872, so a subject that is a third of the
  * corpus is already there. Chunks are disjoint by id and read in parallel, the
  * way the quote layer reads its own.
+ *
+ * AND THE CHUNK SIZE DEPENDS ON WHETHER THE COLUMN IS A KEY (perf review,
+ * `main`'s M21 in this file). `ID_CHUNK`'s 120 is sized against the URL, which
+ * is the right constraint when an id names ONE row. When it names many, the
+ * binding constraint is PostgREST's 1,000-row page: `audience_insights_current
+ * .in('source_video_id', …)` returns ~30 insights a video, so 120 videos is
+ * ~3,600 rows — and `selectAll` pages those SERIALLY, inside a chunk that was
+ * going to be one of several concurrent requests. `lib/chunk.ts`
+ * `MULTI_ROW_IN_CHUNK` is the constant for that case and carries the
+ * arithmetic; passing it here is four requests becoming three, each of which
+ * can overlap with its neighbours. Latency only — `selectAll` pages either
+ * way, so nothing was ever truncated.
  */
 async function readByIds<T>(
   ids: readonly string[],
   fetch: (part: string[]) => { range: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }> },
+  /** Ids per request. The default is the KEY-column size; a read whose `.in()`
+   *  column is not a key passes `MULTI_ROW_IN_CHUNK`. */
+  size: number = ID_CHUNK,
 ): Promise<T[]> {
   if (ids.length === 0) return []
-  const pages = await mapWithLimit(chunk([...ids], ID_CHUNK), READ_CONCURRENCY, (part) => selectAll<T>(() => fetch(part)))
+  const pages = await mapWithLimit(chunk([...ids], size), READ_CONCURRENCY, (part) => selectAll<T>(() => fetch(part)))
   return pages.flat()
 }
 
@@ -1111,12 +1166,24 @@ function monthDays(month: string): { from: string; to: string } {
  * `quote` column is not granted to `authenticated`, so a claim row arrives
  * without its words and the census carries no quote for it — withheld by a
  * policy, not missing.
+ *
+ * AND "NOT READ" IS NOT "NONE NAMED" (fix pass, SB1). `subjects` is NULL where
+ * the subject set itself could not be read — M4 unapplied, which is where both
+ * production tenants are today — and an empty ARRAY where it was read and is
+ * empty. Collapsed to one empty array they both produced
+ * `subjectScope: { named: 0 }`, so the census printed `SUBJECTS_NONE_NAMED`:
+ * "No subject is named yet ... name one and this starts counting", 200px under
+ * a rail saying "We cannot read the set from this page yet, so it cannot be
+ * added to or changed here" with the Add control removed. Two sentences, one
+ * screenful, and the one the client can act on is the false one. A census that
+ * cannot see the set says NOTHING about it and lets the rail answer.
  */
 export async function loadOwnPosts(
   supabase: SupabaseClient,
   clientId: string,
   month: string,
-  subjects: readonly Subject[],
+  /** The active subjects, or NULL where the set could not be read at all. */
+  subjects: readonly Subject[] | null,
   echoes: readonly ClaimEcho[] = [],
 ): Promise<OwnPostCensus> {
   const days = monthDays(month)
@@ -1170,7 +1237,7 @@ export async function loadOwnPosts(
   // on any of its seventeen September posts, so without this the tile would
   // read "about none of your subjects" when nothing has been analysed.
   let analysedPosts = 0
-  if (postIds.length > 0 && subjects.length > 0) {
+  if (postIds.length > 0 && subjects != null && subjects.length > 0) {
     const insights = await readByIds<{ id: string; source_video_id: string | null }>(postIds, (part) =>
       supabase
         .from('audience_insights_current')
@@ -1178,6 +1245,9 @@ export async function loadOwnPosts(
         .eq('client_id', clientId)
         .in('source_video_id', part)
         .order('id', { ascending: true }),
+      // NOT A KEY: ~30 insights a video, so the row cap binds long before the
+      // URL does. `readByIds`'s own note has the arithmetic.
+      MULTI_ROW_IN_CHUNK,
     )
     const videoOf = new Map(insights.map((i) => [i.id, i.source_video_id]))
     analysedPosts = new Set(insights.map((i) => i.source_video_id).filter((v): v is string => !!v)).size
@@ -1192,6 +1262,10 @@ export async function loadOwnPosts(
             .eq('member', true)
             .in('audience_insight_id', part)
             .order('audience_insight_id', { ascending: true }),
+        // NOR IS THIS ONE: an insight carries one membership row per named
+        // subject, and the set is 5-8 by design (SUBJECTS_MAX), so 120 ids sat
+        // within a few rows of the 1,000-row page boundary.
+        MULTI_ROW_IN_CHUNK,
       ).catch((error) => {
         if (isMissingSubjects(error)) return []
         throw error
@@ -1204,7 +1278,7 @@ export async function loadOwnPosts(
         held.add(vid)
         bySubject.set(r.subject_id, held)
       }
-      membership = subjects
+      membership = (subjects ?? [])
         .filter((s) => bySubject.has(s.id))
         .map((s) => ({ subjectId: s.id, label: s.name, videoIds: [...(bySubject.get(s.id) ?? [])] }))
     }
@@ -1222,7 +1296,8 @@ export async function loadOwnPosts(
     claims: claims.map((c) => ({ ...c, entity: CLIENT_AUDIENCE, quote: '' })),
     membership,
     echoes,
-    subjectScope: { named: subjects.length, analysedPosts },
+    // NULL, NOT `{ named: 0 }`, where the set is unreadable — see the header.
+    subjectScope: subjects == null ? null : { named: subjects.length, analysedPosts },
   }
   // `claims.length` is the ALL-TIME read, so "we read nothing at all" is what
   // marks the half as closed — never the month's own zero, which is a real
@@ -1447,7 +1522,10 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   // SU4 AND THE CLAIMS LEDGER RIDE WITH THE MONTH READS. Neither depends on
   // the selected subject and neither is on anything's critical path, so they
   // overlap the two reads that are.
-  const ownPostsAhead = loadOwnPosts(supabase, clientId, month, active)
+  // `subjectRows == null` is "the set could not be read", which the census
+  // must not report as "none is named" — the rail's own sentence answers that
+  // state and this tile stays quiet about the set.
+  const ownPostsAhead = loadOwnPosts(supabase, clientId, month, subjectRows == null ? null : active)
   const sayHearAhead = loadSayHear(supabase, clientId, latestRunId)
   ownPostsAhead.catch(() => {})
   sayHearAhead.catch(() => {})

@@ -303,11 +303,23 @@ export function SubjectsPage({
             in code, figures included, so there is no model value here to mark
             — `data-copy="figure"` on the whole paragraph claimed the block had
             marked something it had not. Unmarked, rule (c) still sweeps it. */}
+        {/* AND EACH SENTENCE ONCE, WHICH IS WHAT `methodLines` IS FOR (fix
+            pass). The language share is drawn by the voices tile — that is
+            where the artboard puts it, on the tile it qualifies — and the
+            footnote printed it again byte for byte about 110px below, both
+            inside one screenful at 1440. Commit 0894c90 was "the page says
+            each of its sentences once"; this footnote arrived afterwards and
+            brought the one it had already retired. The line is dropped HERE,
+            not on the tile: on paper and in an email a block travels alone and
+            has to carry its own basis, and this footnote is the app page's
+            only. */}
         {data.method ? (
           <p className="m-0 flex flex-col gap-0.5 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">
-            {data.method.lines.map((line, i) => (
-              <span key={i} className={i === 0 ? 'text-secondary-foreground' : undefined}>{line}</span>
-            ))}
+            {data.method.lines
+              .filter((line) => line !== data.method?.language)
+              .map((line, i) => (
+                <span key={i} className={i === 0 ? 'text-secondary-foreground' : undefined}>{line}</span>
+              ))}
           </p>
         ) : null}
       </PageFrame>

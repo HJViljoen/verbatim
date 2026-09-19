@@ -5,8 +5,8 @@ import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockQuote, BlockQuotes } from '@/components/blocks/quote'
 import { PlatformIcon } from '@/components/charts/platform-icon'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fmtInt, platformLabel } from '@/lib/format'
-import { voicesMeta, VOICES_SHOWN, type SubjectsData, type SubjectVoice } from '@/lib/pages/subjects'
+import { fmtInt } from '@/lib/format'
+import { voiceCite, voicesMeta, VOICES_SHOWN, type SubjectsData, type SubjectVoice } from '@/lib/pages/subjects'
 
 // SU2 · six voices on the subject (design §3 SU2, the mock's (c)).
 //
@@ -27,9 +27,15 @@ import { voicesMeta, VOICES_SHOWN, type SubjectsData, type SubjectVoice } from '
 // them out three across, which is what makes a set of voices scannable as a
 // SET. Two columns below `xl`, one on a phone.
 //
-// THE PLATFORM IS A GLYPH. The cite led with the platform lower-cased as stored
-// ("tiktok · 14 Sep"), which is a column value printed at a reader. The glyph
-// carries it and the words carry the date and the place.
+// THE PLATFORM IS A GLYPH — IN THE APP, WHERE THERE IS ONE. The cite led with
+// the platform lower-cased as stored ("tiktok · 14 Sep"), which is a column
+// value printed at a reader; the glyph carries it and the words carry the date
+// and the place. On PAPER it does not: a brief is read with no tooltip and
+// nothing to hover, and a 10px mark is decoration rather than an attribution —
+// the artboard prints "Instagram · 7 Sep · under your post". So the print and
+// email arms drop the mark and take the whole attribution from `voiceCite`,
+// which is the ONE composer of that string (lib/pages/subjects.ts) and the
+// answer to three spellings of two platforms inside one monthly report.
 //
 // AND THREE KINDS OF EVIDENCE READ AS THREE (`QuoteRow.source`, carried through
 // for the first time — the field has been scored since WP7 and only the picker
@@ -51,7 +57,9 @@ const SOURCE_FLAG: Record<string, string | null> = {
 /** One voice: its flag, the words, the on-screen pairing, the cite. */
 function Voice({ voice, mode }: { voice: SubjectVoice; mode: RenderMode }) {
   const flag = SOURCE_FLAG[voice.source] ?? null
-  const cite = (
+  const cite = mode === 'print' ? (
+    <span>{voiceCite(voice)}</span>
+  ) : (
     <span className="flex items-center gap-1.5">
       {voice.platform ? <PlatformIcon platform={voice.platform} className="shrink-0" /> : null}
       <span>{voice.cite}</span>
@@ -133,9 +141,9 @@ export const subjectsVoices: Block<SubjectsData> = {
             mode={mode}
             quotes={pane.voices.map((v) => {
               // NO GLYPH IN AN EMAIL — an inline SVG is the one thing Outlook
-              // will not draw — so the platform is a WORD here, properly cased
-              // (`platformLabel`), never the raw stored value.
-              const cite = v.platform ? `${platformLabel(v.platform)} · ${v.cite}` : v.cite
+              // will not draw — so the platform is a WORD here, through the
+              // one composer rather than assembled again in this file.
+              const cite = voiceCite(v)
               return {
                 quote: v.quote,
                 cite: v.href

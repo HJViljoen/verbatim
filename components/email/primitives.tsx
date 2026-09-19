@@ -167,8 +167,11 @@ export function Quote({ text: t, cite, lang, english }: { text: string; cite?: R
           <td width={2} style={{ background: EMAIL.border, fontSize: 1 }}>&nbsp;</td>
           <td style={{ padding: '2px 0 2px 10px' }}>
             <div style={{ fontFamily: FONT.serif, fontSize: 14, fontStyle: 'italic', lineHeight: '1.45', color: EMAIL.ink }}>“{t}”</div>
-            {note.english ? <div style={{ fontFamily: FONT.serif, fontSize: 13, lineHeight: '1.45', color: EMAIL.muted, marginTop: 4 }}>{note.english}</div> : null}
+            {/* LABEL, THEN THE RENDERING IT NAMES — `QuoteBlock`'s order, and
+                the artboards'. This renderer keeps its own markup and never
+                its own sequence. */}
             {label ? <div style={{ ...text.small, fontSize: 10.5, marginTop: 3 }}>{label}</div> : null}
+            {note.english ? <div style={{ fontFamily: FONT.serif, fontSize: 13, lineHeight: '1.45', color: EMAIL.muted, marginTop: 4 }}>{note.english}</div> : null}
             {cite ? <div style={{ ...text.small, fontSize: 11, marginTop: 3 }}>{cite}</div> : null}
           </td>
         </tr>

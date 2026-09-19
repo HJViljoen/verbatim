@@ -102,11 +102,13 @@ export const MACHINE_TRANSLATION_STAMP = 'machine translation'
  *  word it differently. They delegate the WORDS; the markup stays theirs. */
 export function translationLabel(note: { language: string | null; english: string | null }): string | null {
   if (!note.language) return null
-  // NOT "English below". Every arm renders quote, then the English, then this
-  // label — the app, print and email blocks here and the email primitive — so a
-  // reader met the English first and then a line pointing to it as being below.
-  // The label's job is to say the rendering is a machine's, and it says that
-  // without pointing anywhere.
+  // NOT "English below", AND IT NO LONGER NEEDS TO POINT ANYWHERE. Every arm
+  // now renders quote, LABEL, English (the app, print and email blocks here
+  // and the email primitive), which is the artboards' own order: the label
+  // introduces the rendering it names instead of trailing it. It used to sit
+  // under the English, so a reader met a machine translation first and was
+  // told what it was afterwards — and "English below" would then have pointed
+  // upwards. The label's job is to say the rendering is a machine's.
   return note.english
     ? `${note.language} · ${MACHINE_TRANSLATION_STAMP}`
     : `${note.language} · no English rendering yet`
@@ -136,17 +138,21 @@ export function QuoteBlock({ quote, mode = 'app', cite }: QuoteBlockProps): Reac
             <td width={2} style={{ background: EMAIL.border, fontSize: 1 }}>&nbsp;</td>
             <td style={{ padding: '2px 0 2px 10px' }}>
               <div data-copy="quote" style={{ fontFamily: FONT.serif, fontSize: 14, fontStyle: 'italic', lineHeight: '1.45', color: EMAIL.ink }}>“{quote.text}”</div>
-              {english && (
-                <div data-copy="quote" style={{ fontFamily: FONT.serif, fontSize: 13, lineHeight: '1.45', color: EMAIL.muted, marginTop: 4 }}>{english}</div>
-              )}
-              {/* `EMAIL.muted`, NOT `EMAIL.faint`, on the two lines below
-                  (Block D wave 3, SH10). #9AA0A6 is 2.64:1 on the card, and
-                  these are the translation label — "Afrikaans · machine
-                  translation", the one line telling a reader the English they
-                  just read is not what the commenter typed — and the cite,
-                  which is where a quote comes from. Both are apparatus. */}
+              {/* TWO SIDES OF THIS MERGE MEET HERE. `subjects` (SB8/SH12's email
+                  arm) puts the translation LABEL BEFORE the English, so a reader
+                  is told the rendering is a machine's before reading it; `shell`
+                  (SH10) moves the label and the cite off `EMAIL.faint`, which is
+                  2.64:1 on the card, and onto `EMAIL.muted`. Both hold: the order
+                  below is `subjects`', the colour on both apparatus lines is
+                  `shell`'s. The label and the cite are apparatus — one says the
+                  English is not what the commenter typed, the other says where
+                  the quote came from — and neither may be the quietest thing in
+                  the block. */}
               {label && (
                 <div style={{ fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.muted, marginTop: 3 }}>{label}</div>
+              )}
+              {english && (
+                <div data-copy="quote" style={{ fontFamily: FONT.serif, fontSize: 13, lineHeight: '1.45', color: EMAIL.muted, marginTop: 4 }}>{english}</div>
               )}
               {cite ? <div style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted, marginTop: 3 }}>{cite}</div> : null}
             </td>
@@ -179,10 +185,21 @@ export function QuoteBlock({ quote, mode = 'app', cite }: QuoteBlockProps): Reac
           movement. `directionHits` has skipped quoted spans since WP0 for the
           same reason; a rendered quote needed the marker to say so. */}
       <p data-copy="quote" className={big ? 'font-serif text-[15px] italic leading-[1.5] text-secondary-foreground' : 'font-serif text-[14px] italic leading-[1.375] text-foreground/85'}>“{quote.text}”</p>
+      {/* THE LABEL INTRODUCES THE ENGLISH, AS A PILL (Block D wave 3, SB8).
+          The artboards set "German · machine-translated" as a filled pill
+          BETWEEN the original and the rendering; the build set it as a bare
+          mono line UNDER the rendering, so a reader met a machine translation
+          before being told it was one, and the one piece of provenance on the
+          quote was the quietest thing in it. A pill is also what stops the
+          label reading as a third line of the quotation. */}
+      {label && (
+        <p className="m-0 mt-1.5">
+          <span className="inline-block rounded-full bg-inner px-2 py-0.5 font-mono text-[10.5px] text-muted-foreground">{label}</span>
+        </p>
+      )}
       {english && (
         <p data-copy="quote" className={big ? 'mt-2 max-w-[66ch] font-serif text-[13.5px] leading-[1.5] text-muted-foreground' : 'mt-1.5 font-serif text-[12.5px] leading-[1.375] text-muted-foreground'}>{english}</p>
       )}
-      {label && <p className="mt-1 font-mono text-[10.5px] text-muted-foreground">{label}</p>}
       {cite && <footer className="mt-1 font-mono text-[10.5px] text-muted-foreground">{cite}</footer>}
     </blockquote>
   )

@@ -54,24 +54,31 @@ function Audience({ side, brand, mode, max }: { side: SubjectSide; brand: string
           of {fmtInt(side.n ?? 0)} videos
         </span>
       </span>
-      {/* THE SHARE RIDES ON THE LABEL AND THE COUNT IS THE COUNT. `RankedBar`
-          gives the count a 28px column (it is built for one short token), and
-          "34% · 472" wrapped onto two lines in it — a number broken across a
-          line break is a number a reader has to reassemble. */}
+      {/* THE BAR MEASURES A SHARE, SO THE ROW IS LABELLED WITH THE SHARE (fix
+          pass). It used to ride the share on the LABEL and end the row in the
+          count: the category's "Asking how it works 34%" ended in 472 and
+          yours in 29, with the two bars within a few pixels of each other,
+          because the bar's length and the row's terminal number were measuring
+          two different things. A reader scans the number at the end of a bar.
+
+          Deviation 4 / D4 is what justifies ranked rows here instead of the
+          mock's segmented proportion bar — the kinds do not sum, so there is
+          no whole to divide. It does not justify a share-length with a
+          count-label. The artboard labels its kinds with percentages and no
+          counts, which is what this now does; the audience's own "of N videos"
+          is on the line directly above, so 34% of 1,388 is still recoverable
+          as the 472 it was.
+
+          `countWidth` because `RankedBar`'s default column is 28px — built for
+          a three-digit count — and "34.5%" needs ~35. */}
       <BlockRanked
         mode={mode}
+        countWidth={38}
         rows={shown.map((k) => ({
-          label: (
-            <>
-              {k.label}{' '}
-              <span data-copy="figure" className={email ? undefined : 'font-mono text-[11px] text-muted-foreground'}>
-                {fmtPct(k.pct ?? 0)}
-              </span>
-            </>
-          ),
+          label: k.label,
           pct: ((k.pct ?? 0) / max) * 100,
           color: side.color,
-          count: fmtInt(k.videos),
+          count: fmtPct(k.pct ?? 0),
         }))}
       />
     </div>
