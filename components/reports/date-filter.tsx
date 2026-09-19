@@ -27,8 +27,13 @@ export function ArchiveDateFilter({
 }) {
   const clearHref = `/dashboard/reports${Object.keys(hidden).length ? `?${new URLSearchParams(hidden).toString()}` : ''}`
   return (
-    <form method="get" action="/dashboard/reports" className="flex flex-col gap-1.5">
-      <div className="flex flex-wrap items-center gap-2">
+    /* ONE ROW, AND THE COUNT LINE IS IN IT. The form was a column of two — the
+       controls, then the item count under them — inside a stack of chrome that
+       was already three rows deep above the lists (see `ArchiveTile`). The
+       count wraps onto its own line when the row runs out of width, which is
+       what it did before at every width. */
+    <form method="get" action="/dashboard/reports" className="min-w-0">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
         {Object.entries(hidden).map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />)}
         <label className="font-mono text-[10.5px] text-muted-foreground" htmlFor="from">From</label>
         <input
@@ -44,8 +49,8 @@ export function ArchiveDateFilter({
         {(filter.from || filter.to) && (
           <Link href={clearHref} className="inline-flex h-[32px] items-center px-1 font-mono text-[10.5px] text-muted-foreground underline underline-offset-2">Clear</Link>
         )}
+        {line && <p className="m-0 basis-full font-mono text-[10.5px] text-muted-foreground lg:basis-auto">{line}</p>}
       </div>
-      {line && <p className="font-mono text-[10.5px] text-muted-foreground">{line}</p>}
     </form>
   )
 }

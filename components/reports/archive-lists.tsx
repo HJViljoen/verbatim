@@ -101,7 +101,15 @@ export function ArchiveTile({
 }) {
   return (
     <Tile col={col} row={row} eyebrow="The archive" meta={meta ?? undefined} footer={footer} footerNote={undefined}>
-      <div className="flex flex-wrap items-center gap-2">
+      {/* ONE ROW OF CHROME, NOT THREE (fix pass). The chips, the chip's own
+          count line, the From/To/Filter/Clear form and the filter's item count
+          were four stacked rows — two of them count lines, each individually
+          justified — sitting above lists of 5, 3 and 0 rows: the page's densest
+          chrome over its thinnest content, seven rows deep at 375. They are one
+          wrapping row now, so at a reading width the archive opens on its
+          lists. Nothing is dropped: below `sm` the row wraps exactly as it
+          stacked before. */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
         {presets.map((p) => (
           <Link
             key={p.key}
@@ -117,10 +125,9 @@ export function ArchiveTile({
             {p.label}
           </Link>
         ))}
+        {filter}
         {presetNote && <span className="ml-auto flex-none font-mono text-[11px] text-muted-foreground">{presetNote}</span>}
       </div>
-
-      {filter}
 
       <div className="grid min-h-0 grid-cols-1 gap-4 md:grid-cols-[1.25fr_1fr_0.75fr]">
         {columns.map((c) => (
