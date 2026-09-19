@@ -172,7 +172,14 @@ export function BlockFrame({
                     >
                       {title}
                     </td>
-                    {meta ? <td align="right" style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.faint }}>{meta}</td> : null}
+                    {/* `EMAIL.muted`, NOT `EMAIL.faint` (Block D wave 3,
+                        SH10). `#9AA0A6` is 2.64:1 on the card, and what this
+                        slot holds is "2 named", "attention share", "Apr – Sep",
+                        "2 dated", "4 named" — a section's count is how a reader
+                        knows what the section is OF, which is apparatus and not
+                        decoration. `#6E7378` is already the hex this arm uses
+                        everywhere else. */}
+                    {meta ? <td align="right" style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted }}>{meta}</td> : null}
                   </tr>
                 </tbody>
               </table>
