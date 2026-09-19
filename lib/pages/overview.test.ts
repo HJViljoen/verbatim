@@ -37,6 +37,7 @@ import {
   recordWindow,
   categoryAttentionVerdict,
   rivalsLead,
+  atThisPointLine,
   splitMovers,
   subjectsNote,
   type Mover,
@@ -186,6 +187,22 @@ describe('readingsCounter', () => {
   })
   it('says so rather than counting a zeroth reading', () => {
     expect(readingsCounter(0)).toBe('no monthly reading yet · the quarter view needs 6')
+  })
+})
+
+// The one fact OV0's tile carried alone, moved onto the soundness band when
+// the tile came off the app page (Block D wave 3, M7).
+describe('atThisPointLine', () => {
+  it('states the same point last month, where there is one', () => {
+    expect(atThisPointLine({ atLastMonth: 2044, atLastMonthKnown: true, daysIn: 18 }))
+      .toBe('2,044 at this point last month')
+  })
+  it('says nothing on a complete month — the comparison is not to a point in it', () => {
+    expect(atThisPointLine({ atLastMonth: 2044, atLastMonthKnown: true, daysIn: null })).toBeNull()
+  })
+  it('says nothing rather than a dash where nothing recorded the point', () => {
+    expect(atThisPointLine({ atLastMonth: null, atLastMonthKnown: false, daysIn: 18 })).toBeNull()
+    expect(atThisPointLine({ atLastMonth: null, atLastMonthKnown: true, daysIn: 18 })).toBeNull()
   })
 })
 

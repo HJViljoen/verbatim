@@ -9,7 +9,7 @@ import { SurfacePageBar } from '@/components/shell/page-bar'
 import { Tile, TileEmpty } from '@/components/shell/tile'
 import { fmtInt, shortDate } from '@/lib/format'
 import type { OverviewData } from '@/lib/pages/overview'
-import { sentLineForToken } from '@/lib/pages/overview'
+import { atThisPointLine, sentLineForToken } from '@/lib/pages/overview'
 import { overviewBar } from './bar'
 import { overviewSentence } from './sentence'
 import { overviewSubjects } from './subjects'
@@ -68,6 +68,29 @@ const ROWS: Record<string, number> = {
 const HERO = 'overview.sentence'
 
 /**
+ * The blocks the APP page draws as tiles — every one but OV0 (Block D wave 3,
+ * M7).
+ *
+ * `Main.dc.html` draws six sections and none of them is "This month so far".
+ * Two of that tile's four facts were already on this screen — the update count
+ * in the horizon range note (`horizonRange`), the month's videos in the
+ * soundness band — so it spent a 12-column, 156px tile plus its gap at the top
+ * of the page restating them, and the page's actual lead, "In one sentence",
+ * began under them. The one fact that is NOT elsewhere moves to the band, where
+ * a fact about how much has been read belongs (`atThisPointLine`).
+ *
+ * OV0 IS NOT REMOVED FROM `OVERVIEW_BLOCKS`, and that is why there are two
+ * lists. The registry is what the export module, the print slides, the monthly
+ * email and the brief section maps resolve `overview.bar` through — and a PDF
+ * sheet, a PNG and an email carry no page bar, no horizon pills and no band, so
+ * on those surfaces the tile is the only place any of the four facts appears
+ * and it keeps its slide (`page.tsx` `overviewSlides`). The duplication this
+ * drops is an APP duplication, which is what the finding measured.
+ */
+const NOT_TILED: ReadonlySet<string> = new Set([overviewBar.key])
+export const TILE_BLOCKS = OVERVIEW_BLOCKS.filter((b) => !NOT_TILED.has(b.key))
+
+/**
  * The app's context: RELATIVE links.
  *
  * `ctx.appUrl` is an absolute origin everywhere a link leaves the app — a PDF,
@@ -108,6 +131,21 @@ export function horizonRange(data: OverviewData): string | null {
  *  can never come to disagree about which words are in play. */
 export const OVERVIEW_LEGEND = [...THIRTEEN_WORDS, ...READER_FLAGS]
 
+/**
+ * The soundness band's sentence: the ramp counter, the record's own line, and
+ * the month against the same point in the one before it.
+ *
+ * COMPOSED HERE BECAUSE THE PAGE IS WHAT HOLDS ALL THREE. The counter is OV0's,
+ * the record line is `lib/reading/record.ts`'s, and the comparison is the one
+ * fact OV0's tile carried alone (M7) — none of the three owns the other two, and
+ * gluing any pair together in the loader is what put one sentence on this page
+ * three times (design review High 4, code review I7).
+ */
+export function bandLine(data: OverviewData): string {
+  const at = atThisPointLine(data.bar)
+  return [data.bar.counter, data.record.line, at].filter(Boolean).join(' · ')
+}
+
 export function OverviewPage({
   data,
   params = {},
@@ -135,7 +173,7 @@ export function OverviewPage({
     <ExportScope
       page="overview"
       params={params}
-      tiles={OVERVIEW_BLOCKS.map((b) => ({ key: b.key, title: b.title }))}
+      tiles={TILE_BLOCKS.map((b) => ({ key: b.key, title: b.title }))}
     >
       <PageFrame>
         <SurfacePageBar
@@ -159,7 +197,15 @@ export function OverviewPage({
           // record block's header meta both — so the same sentence appeared
           // three times down one page (design review High 4, code review I7).
           // Composed here because the page is what holds both halves.
-          record={{ line: `${data.bar.counter} · ${data.record.line}`, lines: data.record.lines }}
+          // AND THE ONE FACT OV0's TILE CARRIED ALONE (Block D wave 3, M7).
+          // "2,044 at this point last month" is the reading that makes a
+          // weekly figure unnecessary — a growing month shown growing against
+          // its own predecessor — and it is the only one of that tile's four
+          // facts this screen did not already state. Composed here, like the
+          // ramp counter above it, because the page is what holds both halves;
+          // null on a closed month and wherever nothing recorded the point, so
+          // the band never carries a dash.
+          record={{ line: bandLine(data), lines: data.record.lines }}
         >
           {/* THE TWO CONTROLS THE ARTBOARD PUTS AT THE RIGHT-HAND END, and the
               two `/dashboard` has never had (`main.bar.howtoread`,
@@ -183,7 +229,7 @@ export function OverviewPage({
             content-sized track costs the page nothing and the spans below stay
             meaningful under `xl`, where `Tile`'s own `min-h` is the floor. */}
         <PageGrid className="xl:auto-rows-auto">
-          {OVERVIEW_BLOCKS.map((block) => (
+          {TILE_BLOCKS.map((block) => (
             <Tile
               key={block.key}
               col={12}

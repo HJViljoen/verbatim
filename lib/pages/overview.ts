@@ -823,6 +823,33 @@ export function readingsCounter(readings: number): string {
 }
 
 /**
+ * "2,044 at this point last month" — the one fact OV0's tile carried that is
+ * nowhere else on the app surface (Block D wave 3, M7).
+ *
+ * WHY IT MOVED HERE. `Main.dc.html` draws six sections and none of them is
+ * "This month so far": the update count is already in the horizon range note
+ * and the month's video count is already in the soundness band, so two of that
+ * tile's four facts were on the screen twice and the tile itself cost 156px
+ * plus its gap at the top of the page. This is the residual — a growing month
+ * shown growing against its own predecessor, which is the reading that makes a
+ * weekly figure unnecessary — and the band is where a fact about how much has
+ * been read belongs.
+ *
+ * NULL, NEVER A ZERO OR A DASH, on all three of the honest absences: a month
+ * that is closed (the comparison is not to a point in it), a workspace with no
+ * recorded reading of last month at this point, and a last month that carried
+ * one and it was nothing. `fillingLine` states all three at length for the
+ * print sheet and the email, which have no band; this is the band's clause.
+ *
+ * Pure.
+ */
+export function atThisPointLine(bar: Pick<BarBlock, 'atLastMonth' | 'atLastMonthKnown' | 'daysIn'>): string | null {
+  if (bar.daysIn == null) return null
+  if (!bar.atLastMonthKnown || bar.atLastMonth == null) return null
+  return `${fmtInt(bar.atLastMonth)} at this point last month`
+}
+
+/**
  * A figure table key for one object.
  *
  * THE `o_` PREFIX IS LOad-BEARING. A key is substituted into prose by
