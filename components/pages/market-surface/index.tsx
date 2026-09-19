@@ -193,7 +193,19 @@ const HEIGHT: Record<string, (d: MarketSurfaceData) => number> = {
     const expanded = rows.some((r) => r.why || r.quote) ? 130 : 0
     // The chrome carries the population line as well as the summary now: it is
     // outside the disclosure in every mode, so it is always drawn.
-    return 155 + rows.length * 80 + verdicts * 45 + expanded
+    //
+    // AND `requestedLine`, WHICH THIS NEVER COUNTED (market V1). It is the
+    // sentence answering a link the reader followed from a sent digest
+    // (`?rec=<id>`), it is drawn outside the disclosure like the rest of the
+    // notes, and only the `deepLink` arm has it — which is how an estimate
+    // written against the other three arms came to leave it out. It costs
+    // nothing today: measured with scripts/tile-overflow.ts at 1440 and 1280,
+    // this tile clips by 0px on every one of the four arms, because the slack
+    // fix 3 was thought to have eaten came back with the merge. It is counted
+    // anyway, because "the clip is absorbed by something else's slack" is not
+    // a property an estimate may rely on.
+    const requested = d.advice.requestedLine ? 22 : 0
+    return 155 + rows.length * 80 + verdicts * 45 + expanded + requested
   },
   // The card's parts, each counted: the lead figure and the floor, the claims
   // at up to three lines each, the hooks row, the subjects row and its basis, and a
