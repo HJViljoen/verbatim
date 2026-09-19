@@ -11,10 +11,11 @@ import { fmtInt, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import {
-  ADVICE_UNRECORDED, GROUNDED_CORPUS_LINE, LEDGER_FIRST_TIME_LINE, adviceAnchor, ageInMonths, madeInMonth,
-  marketSurfaceHref, repeatCell,
+  ADVICE_AFTERWARDS_UNRECORDED, ADVICE_UNRECORDED, GROUNDED_CORPUS_LINE, LEDGER_FIRST_TIME_LINE,
+  adviceAnchor, ageInMonths, madeInMonth, marketSurfaceHref, repeatCell,
   type AdviceRow, type MarketSurfaceData,
 } from '@/lib/pages/market-surface'
+import type { Afterwards } from '@/lib/reading/afterwards'
 
 // MK2 · The advice, and what you decided — the ledger (design §3 MK2; ported to
 // the artboard, Block D wave 2).
@@ -91,9 +92,28 @@ import {
  *  takes what is left. */
 const TRACKS = ['w-[22px]', '', 'w-[88px]', 'w-[96px]', 'w-[176px]', 'w-[100px]', 'w-[240px]'] as const
 
-/** The artboard's dotted-underlined mono figure — a number a reader can see is
- *  counted rather than asserted. */
-const FIGURE = 'font-mono text-[11.5px] tabular-nums text-secondary-foreground underline decoration-muted-foreground decoration-dotted underline-offset-[3px]'
+/** The artboard's mono figure: a number a reader can see is counted rather
+ *  than asserted.
+ *
+ *  AND IT DOES NOT WEAR THE DOTTED UNDERLINE, which on this page is a promise.
+ *  MASTER rule 5 gives a quiet grey dotted underline to a claim with evidence
+ *  BEHIND it — "click → popover with count, platform split, two quotes, link to
+ *  the page" — and `components/claim-popover.tsx` states the rule in the same
+ *  words it is built to: "Nothing gets this treatment unless it can open — a
+ *  claim without evidence is plain text." The artboard draws the decoration on
+ *  a bare `<span>` because an artboard is a still; the spec's own §3.12 draws
+ *  the same ink as a `<button>` with a `role="dialog"` panel behind it.
+ *
+ *  This page's port took the still. Five of its most load-bearing counts —
+ *  "157 of 1,699 videos behind it", "2 of 1,699 videos behind it" and the three
+ *  grounding cells — carried the underline with no link, no handler and no
+ *  popover, on the same viewport where every Derivation summary wears it and
+ *  DOES open. So the decoration is spent on the thing that opens and nothing
+ *  else, and the figure keeps everything the artboard gives it that is not an
+ *  affordance: the mono face, the tabular figures, the 11.5px step and the
+ *  secondary ink. The day one of these counts has an evidence panel behind it,
+ *  the underline comes back with the panel and not before. */
+const FIGURE = 'font-mono text-[11.5px] tabular-nums text-secondary-foreground'
 
 function StatusCell({ row, mode }: { row: AdviceRow; mode: RenderMode }) {
   const decided = row.decidedAt ? shortDate(row.decidedAt) : null
@@ -159,12 +179,20 @@ function GroundedCell({ row, mode }: { row: AdviceRow; mode: RenderMode }) {
  * (copy contract, rule (c)).
  */
 function AfterwardsCell({ row, mode }: { row: AdviceRow; mode: RenderMode }) {
-  const a = row.afterwards
+  // A FROZEN ROW MAY NOT HAVE THE FIELD AT ALL, and this cell used to reach
+  // straight through it. `afterwards` is required and wave 1 added it, so a
+  // `report_snapshots` row whose `surfaces.market` froze before Block D
+  // arrives here with it absent — and `market.advice` is a named brief section
+  // at 017fc6e and at HEAD, so such a snapshot reaches this block by the
+  // ordinary path rather than by accident. `ADVICE_AFTERWARDS_UNRECORDED` is
+  // the fifth thing this column can say, and it is about our record.
+  const a: Afterwards | null = row.afterwards ?? null
   const email = mode === 'email'
-  if (a.state !== 'reading' || !a.verdict) {
+  if (a == null || a.state !== 'reading' || !a.verdict) {
+    const line = a?.line ?? ADVICE_AFTERWARDS_UNRECORDED
     return email
-      ? <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>{a.line}</span>
-      : <span className="text-[11.5px] leading-[1.35] text-muted-foreground">{a.line}</span>
+      ? <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>{line}</span>
+      : <span className="text-[11.5px] leading-[1.35] text-muted-foreground">{line}</span>
   }
   // EVERY FLAG THIS COMPARISON CARRIES, in the product's one wording for them
   // (`FLAG_NOTE`, lib/agent/movement.ts) — not a caveat this block chooses.
@@ -232,7 +260,7 @@ export const marketAdvice: Block<MarketSurfaceData> = {
     // named the absence of an Afterwards column; the column exists now, so the
     // sentence is printed only while no row on the page has a reading in it —
     // which is production today, and is the honest naming of that absence.
-    const anyReading = a.rows.some((r) => r.afterwards.state === 'reading')
+    const anyReading = a.rows.some((r) => r.afterwards?.state === 'reading')
     // The chip's basis, printed where a reader meets it rather than left in a
     // `title` no keyboard and no touch reaches.
     const anyFirstTime = a.rows.some((r) => r.firstMade.slice(0, 7) === data.month.slice(0, 7))
@@ -264,9 +292,23 @@ export const marketAdvice: Block<MarketSurfaceData> = {
             {state}
           </p>
         ) : null}
-        <Derivation mode={mode} label="How these columns count">
-          {GROUNDED_CORPUS_LINE} {a.repeatLine}
-          {anyFirstTime ? ` ${LEDGER_FIRST_TIME_LINE}` : ''}
+        {/* THE POPULATION STAYS ON THE PAGE, for the same reason it does one
+            block above: `GROUNDED_CORPUS_LINE` is what makes each "3 videos"
+            in the Grounded in column a share of something a reader can name,
+            and inside `Derivation` — a SHUT `<details>` in mode `app` — the
+            one mode a reader can act in named nothing. `LEDGER_FIRST_TIME_LINE`
+            rides with it because the amber "First time" chip is dated by the
+            UPDATE's clock against a page dated by the comment's, and that is
+            the one place on this page the two clocks meet. What stays behind
+            the disclosure is how the Repeated column counts. */}
+        <p
+          className={email ? undefined : 'm-0 text-[11px] leading-[1.35] text-muted-foreground'}
+          style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 } : undefined}
+        >
+          {GROUNDED_CORPUS_LINE}{anyFirstTime ? ` ${LEDGER_FIRST_TIME_LINE}` : ''}
+        </p>
+        <Derivation mode={mode} label="How the Repeated column counts">
+          {a.repeatLine}
         </Derivation>
       </div>
     )
@@ -330,7 +372,15 @@ export const marketAdvice: Block<MarketSurfaceData> = {
                     <th className="py-1 font-semibold">Afterwards</th>
                   </tr>
                 </thead>
-                <tbody className="align-middle">
+                {/* TOP-ALIGNED, WHICH IS WHAT LETS THE TABLE SCAN DOWN A
+                    COLUMN. `align-middle` centred every cell against the
+                    tallest one in its row, and the tallest is always
+                    Afterwards: row 1 runs six lines, so at 1440 its other six
+                    one-line cells floated ~80px below the sentence they belong
+                    to and a reader following "First raised" down the page met
+                    a stepped column. The artboard top-aligns its seven-track
+                    rows for the same reason. */}
+                <tbody className="align-top">
                   {a.rows.flatMap((row) => {
                     const age = ageInMonths(row.firstMade, data.readingAt)
                     const cells = (
@@ -391,7 +441,11 @@ export const marketAdvice: Block<MarketSurfaceData> = {
   // a claim the brief's own reading does not know about. Every other block in
   // the codebase that draws a `MovementBadge` declares them.
   verdicts(data): Verdict[] {
-    return data.advice.rows.map((r) => r.afterwards.verdict).filter((v): v is Verdict => v != null)
+    // `?.` FOR THE SAME FROZEN SNAPSHOT `AfterwardsCell` GUARDS, and this is
+    // the worse of the two sites: `verdicts()` is part of the renderable
+    // contract a brief's reading merge walks, so a missing field here threw
+    // before anything was drawn — the freeze/resolve spine, not only the page.
+    return data.advice.rows.map((r) => r.afterwards?.verdict).filter((v): v is Verdict => v != null)
   },
 
   // THE ONE COMMENT THIS BLOCK SHOWS, by the same choice the render makes —

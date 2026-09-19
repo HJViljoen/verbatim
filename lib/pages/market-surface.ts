@@ -20,6 +20,7 @@ import { freezeStateFor, monthStartOf } from '../reading/monthly'
 import type { MonthStatus } from '../reading/types'
 import type { Scope } from '../renderables/types'
 import { selectAll } from '../supabase-admin'
+import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import { isMissingSubjects, TABLE_MOVES, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
 import { MOVES_MASTHEAD, MOVES_UNLOCK, firstScoringMonth, loadMovesExtras, longMonth, recordWindow } from './overview'
 import type { MoveCandidate, MoveReading } from '../reading/moves'
@@ -550,6 +551,21 @@ export function repeatLine(rows: readonly AdviceRow[]): string {
  *  advice, and nothing marked Done has one yet. */
 export const ADVICE_UNLOCK =
   'What the conversation did after you acted arrives once a piece of advice you marked Done has two monthly readings behind it.'
+
+/**
+ * Said in the Afterwards column for a row that HAS no afterwards reading —
+ * which on a live page is impossible and in a frozen artefact is not.
+ *
+ * `AdviceRow.afterwards` is required and wave 1 added it; `market.advice` is a
+ * named brief section (`lib/reports/documents/sections.ts`, `ct.advice`) at
+ * 017fc6e and at HEAD, so a `report_snapshots` row whose `surfaces.market`
+ * froze before Block D reaches this block with the field simply absent. The
+ * cell then has nothing recorded, which is a different fact from every one of
+ * the four states `afterwardsFor` produces, and it says so rather than printing
+ * one of them. Same reasoning, same shape, as `MovesBlock.readings ?? []`.
+ */
+export const ADVICE_AFTERWARDS_UNRECORDED =
+  'This was saved before we recorded what happened afterwards, so there is nothing in this column for it — which is not the same as nothing having happened.'
 
 /** Said when the decision ledger itself could not be read. The statuses then
  *  come off `recommendations.status`, which the next update rewrites. */
@@ -1158,29 +1174,48 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
  *
  * BY ID, AND ONLY THE ONES THE LATEST RUN DOES NOT ALREADY HOLD. The loader
  * reads this update's `market_insights` anyway for MK1; a piece of advice first
- * made in June cites June's, which that read does not contain. One `.in()` over
- * the difference, bounded by the twelve rows the ledger draws — never a read
- * per row and never the whole table.
+ * made in June cites June's, which that read does not contain. Never a read per
+ * row and never the whole table.
+ *
+ * CHUNKED, THOUGH THE SET IS SMALL TODAY. This docstring used to argue the
+ * `.in()` safe because it is "bounded by the twelve rows the ledger draws"
+ * (`LEDGER_SHOWN`) — which is true and is a bound held somewhere else, one
+ * constant and one deep-linked row away from the read that depends on it. The
+ * PostgREST URL cap is measured, not theoretical (lib/chunk.ts: a `.in()` of
+ * 500 uuids works and 700 fails), so the read carries its own bound:
+ * `UUID_IN_CHUNK` over a key column, one row per id, the chunks out together
+ * because they are disjoint. Through `selectAll` for the reason `loadLabels`
+ * states — `UUID_IN_CHUNK` is shared and its own docstring invites raising it,
+ * and past 1,000 rows PostgREST truncates SILENTLY.
  *
  * Failure is degradation, not an error: a row whose evidence cannot be read
- * prints no grounding, which is what an unrecorded grounding prints too.
+ * prints no grounding, which is what an unrecorded grounding prints too. A
+ * failing chunk costs only its own ids, so the rest of the ledger still shows
+ * its grounding.
  */
 async function fetchOlderInsights(
   supabase: SupabaseClient,
   clientId: string,
   ids: readonly string[],
 ): Promise<{ id: string; evidence: InsightRow['evidence'] }[]> {
-  if (ids.length === 0) return []
-  const { data, error } = await supabase
-    .from('market_insights')
-    .select('id, evidence')
-    .eq('client_id', clientId)
-    .in('id', [...ids])
-  if (error) {
-    console.error(`[pages] market-surface.olderInsights: ${error.message}`)
-    return []
-  }
-  return (data ?? []) as { id: string; evidence: InsightRow['evidence'] }[]
+  const unique = [...new Set(ids)]
+  if (unique.length === 0) return []
+  const parts = await mapWithLimit(chunk(unique, UUID_IN_CHUNK), READ_CONCURRENCY, async (part) => {
+    try {
+      return await selectAll<{ id: string; evidence: InsightRow['evidence'] }>(() =>
+        supabase
+          .from('market_insights')
+          .select('id, evidence')
+          .eq('client_id', clientId)
+          .in('id', part)
+          .order('id', { ascending: true }),
+      )
+    } catch (error) {
+      console.error(`[pages] market-surface.olderInsights: ${error instanceof Error ? error.message : String(error)}`)
+      return []
+    }
+  })
+  return parts.flat()
 }
 
 /**

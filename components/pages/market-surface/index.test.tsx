@@ -8,7 +8,7 @@ import { ADVICE_REQUESTED_GONE } from '@/lib/pages/market-surface'
 import { MOVES_UNLOCK } from '@/lib/pages/overview'
 import { pageModule } from '@/components/pages/registry'
 import type { AdviceRow } from '@/lib/pages/market-surface'
-import { MARKET_BLOCKS, tileRows } from './index'
+import { MARKET_BLOCKS, startClasses, tileGrid, tileRows } from './index'
 import { marketConclusions } from './conclusions'
 import { marketAdvice } from './advice'
 import { marketCard } from './card'
@@ -179,14 +179,43 @@ describe('the tiles are as tall as what they draw', () => {
     expect(thin['market.advice']).toBe(2)
   })
 
-  it('gives the tiles that sit beside each other one height', () => {
-    // A per-tile span inside one grid line lets CSS grid flow the next tile up
-    // into the gap beside a short one, which reorders the page.
+  it('starts the tiles on a line together and lets each spend its own height', () => {
+    // A per-tile span used to be refused because CSS grid's auto-placement
+    // flows a later tile up into the gap beside a short one, which reorders
+    // the page. Auto-placement only moves a tile with no explicit position, so
+    // the start is PINNED instead: every tile on a grid line begins on the
+    // same row and in the artboard's own column, and its height is its own.
+    // That is what stops `market.unlocks` being handed 644px because
+    // `market.plans` sits beside it.
     for (const data of STATES) {
-      const rows = tileRows(data)
-      expect(rows['market.card']).toBe(rows['market.moves'])
-      expect(rows['market.sayhear']).toBe(rows['market.plans'])
-      expect(rows['market.plans']).toBe(rows['market.unlocks'])
+      const grid = tileGrid(data)
+      expect(grid['market.card'].rowStart).toBe(grid['market.moves'].rowStart)
+      expect(grid['market.sayhear'].rowStart).toBe(grid['market.plans'].rowStart)
+      expect(grid['market.plans'].rowStart).toBe(grid['market.unlocks'].rowStart)
+      // The artboard's columns, left to right, with no overlap.
+      expect(grid['market.card'].colStart).toBe(1)
+      expect(grid['market.moves'].colStart).toBe(6)
+      expect(grid['market.sayhear'].colStart).toBe(1)
+      expect(grid['market.plans'].colStart).toBe(5)
+      expect(grid['market.unlocks'].colStart).toBe(9)
+      expect(grid['market.ways'].colStart).toBe(1)
+      // The strip begins under the tallest of the three cards above it, so a
+      // ragged bottom edge inside a line cannot run a tile into the next one.
+      const narrow = ['market.sayhear', 'market.plans', 'market.unlocks']
+        .map((k) => grid[k].rowStart + grid[k].row)
+      expect(grid['market.ways'].rowStart).toBe(Math.max(...narrow))
+    }
+  })
+
+  it('gives every start a class Tailwind can see', () => {
+    // Class strings are written out in full, never interpolated (the rule
+    // components/shell/tile.tsx follows). A start the map has no entry for
+    // would silently fall back and stack two tiles in one column.
+    for (const data of [...STATES, twelveRowLedger()]) {
+      for (const place of Object.values(tileGrid(data))) {
+        const classes = startClasses(place)
+        expect(classes, JSON.stringify(place)).toBe(`xl:col-start-${place.colStart} xl:row-start-${place.rowStart}`)
+      }
     }
   })
 
@@ -196,6 +225,23 @@ describe('the tiles are as tall as what they draw', () => {
         expect(span, key).toBeGreaterThanOrEqual(2)
         expect(span, key).toBeLessThanOrEqual(12)
         expect(Number.isInteger(span)).toBe(true)
+      }
+    }
+  })
+
+  it('spends the dotted underline only on something that opens', () => {
+    // MASTER rule 5 makes the decoration a promise, and
+    // `components/claim-popover.tsx` states it: nothing gets this treatment
+    // unless it can open. Five counts wore it as a bare span — the two
+    // conclusion figures and the three grounding cells — on a page where every
+    // Derivation summary wears it and does open.
+    for (const block of MARKET_BLOCKS) {
+      for (const data of STATES) {
+        // Cut every pressable element whole — the decoration may sit on it or
+        // on a span inside it — and nothing decorated may be left over.
+        const markup = render(block.render(data, 'app', ctx))
+          .replace(/<(summary|button|a)\b[\s\S]*?<\/\1>/g, ' ')
+        expect(markup, `${block.key} decorates something that cannot be pressed`).not.toContain('decoration-dotted')
       }
     }
   })
@@ -381,6 +427,37 @@ describe('MK2 · the ledger', () => {
     expect(text).toContain('New')
   })
 
+  it('survives a snapshot frozen before the Afterwards column existed', () => {
+    // `market.advice` is a named brief section at 017fc6e and at HEAD, so a
+    // `report_snapshots` row whose `surfaces.market` froze before wave 1 built
+    // `AdviceRow.afterwards` reaches this block by the ordinary path. Three
+    // sites dereferenced the field unguarded, and `verdicts()` is the worse
+    // one: it is part of the renderable contract a brief's reading merge
+    // walks, so the artefact's READING threw before anything was drawn.
+    const base = marketFixture()
+    const frozen = {
+      ...base,
+      advice: {
+        ...base.advice,
+        rows: base.advice.rows.map((r) => {
+          const { afterwards: _gone, ...rest } = r
+          return rest as AdviceRow
+        }),
+      },
+    }
+    expect(() => marketAdvice.verdicts?.(frozen)).not.toThrow()
+    expect(marketAdvice.verdicts?.(frozen)).toEqual([])
+    for (const mode of MODES) {
+      const text = renderText(marketAdvice.render(frozen, mode, ctx))
+      // The fifth thing the column can say, and it is about our record — never
+      // one of the four sentences a reading produces, and never blank.
+      expect(text).toContain('This was saved before we recorded what happened afterwards')
+      expect(text).not.toContain('too few to compare')
+    }
+    // And the page still measures a box for it.
+    expect(tileRows(frozen)['market.advice']).toBeGreaterThanOrEqual(2)
+  })
+
   it('says how many of the whole ledger have been acted on, and never claims a quarter', () => {
     const text = renderText(marketAdvice.render(marketFixture(), 'app', ctx))
     // TWO, matching the two rows the fixture draws as Done. The count is over
@@ -389,22 +466,36 @@ describe('MK2 · the ledger', () => {
     expect(text).not.toMatch(/quarter/i)
   })
 
-  it('puts the derivation one press from the number, and prints it inline where nothing can be pressed', () => {
+  it('puts the METHOD one press from the number and leaves the population on the page', () => {
     // Three tiles ended in a wall of 11px grey prose that a reader's eye skips
-    // — which is the one thing a stated basis must not do. It is behind the
-    // page's own dotted-underline disclosure in `app` and INLINE in print and
-    // email, where there is nothing to press: a disclosure nobody can open is
-    // a basis that has been hidden.
+    // — which is the one thing a stated basis must not do — so the derivation
+    // is behind the page's own dotted-underline disclosure in `app` and INLINE
+    // in print and email, where there is nothing to press.
+    //
+    // WHAT MAY NOT GO BEHIND IT IS THE POPULATION. A shut `<details>` in the
+    // one mode a reader can act in left "157 of 1,699 videos behind it" and
+    // "3 videos" in the Grounded in column with nothing on screen naming what
+    // they are counted over — the D8 deviation this port made in order not to
+    // print the artboard's mixed denominator, unmade in `app` alone. The
+    // population line and the chip caveats print outside the disclosure in
+    // every mode; the method — how the rows are ordered, how the Repeated
+    // column counts — stays inside it.
     const app = render(marketAdvice.render(marketFixture(), 'app', ctx))
     expect(app).toContain('<details')
-    expect(app).toContain('How these columns count')
-    expect(renderText(marketAdvice.render(marketFixture(), 'app', ctx))).toContain('Grounded in counts the videos')
+    expect(app).toContain('How the Repeated column counts')
+    const outsideApp = (markup: string) => markup.replace(/<details[\s\S]*?<\/details>/g, ' ')
+    expect(markupOf(outsideApp(app))).toContain('Grounded in counts the videos')
     for (const mode of ['print', 'email'] as RenderMode[]) {
       const markup = render(marketAdvice.render(marketFixture(), mode, ctx))
       expect(markup).not.toContain('<details')
       expect(markupOf(markup)).toContain('Grounded in counts the videos')
     }
-    // Same rule on the other three blocks that carry one.
+    // The same rule on MK1: the corpus line and the "New" chip's caveat are on
+    // the page with the rows they qualify, not behind the press.
+    const mk1 = render(marketConclusions.render(marketFixture(), 'app', ctx))
+    expect(markupOf(outsideApp(mk1))).toContain('counted over everything we have read for you')
+    expect(markupOf(outsideApp(mk1))).toContain('New means no earlier month')
+    // Same disclosure shape on the other three blocks that carry one.
     for (const block of [marketConclusions, marketPlans, marketSayHear]) {
       expect(render(block.render(marketFixture(), 'app', ctx))).toContain('<details')
       expect(render(block.render(marketFixture(), 'print', ctx))).not.toContain('<details')
@@ -587,6 +678,27 @@ describe('MK5 · how a move is made', () => {
     // And paper still draws no control at all.
     expect(render(marketWays.render(marketFixture(), 'print', ctx))).not.toContain('<button')
   })
+
+  it('does not make the ways that write nothing the loudest thing on the row', () => {
+    // `LIVE` was the tile's own white inside a solid hairline — no fill at
+    // all — and `DEAD` was `bg-inner`, a filled grey slab, so the two ways
+    // that write NOTHING were the two heaviest objects on a row whose meta
+    // says "3 of 5 work today". And a flex column stretches its children, so
+    // the 260px the SENTENCE needs was spent on the BUTTON: the dead ways
+    // rendered 260px wide while the live ones shrank to their text.
+    const markup = render(marketWays.render(marketFixture(), 'app', ctx))
+    const dead = markup.match(/<button[^>]*disabled[^>]*class="([^"]*)"/)
+      ?? markup.match(/<button[^>]*class="([^"]*)"[^>]*disabled/)
+    expect(dead, 'no disabled control found').not.toBeNull()
+    expect(dead![1]).not.toContain('bg-inner')
+    expect(dead![1]).toContain('text-muted-foreground')
+    // Every slot sizes its control by the control's own label, the way the
+    // artboard's five `inline-flex` buttons do.
+    for (const slot of markup.match(/class="[^"]*max-w-\[260px\][^"]*"/g) ?? []) {
+      expect(slot, slot).toContain('items-start')
+    }
+    expect(markup).toContain('max-w-[260px]')
+  })
 })
 
 describe('MK5b · say vs hear', () => {
@@ -632,6 +744,15 @@ describe('MK3 · this month\u2019s card', () => {
     const text = renderText(marketCard.render(marketFixture(), 'app', ctx))
     expect(text).toMatch(/of 17 posts: a personal story 3/)
     expect(text).toMatch(/not classified 12$|not classified 12 /)
+    // AND THE SEPARATOR TRAILS ITS BUCKET. Carried on the front it landed at
+    // the START of the wrapped second line — "· a question 1 · not classified
+    // 12" — so no bucket's own span may begin with one, and the last carries
+    // none at all.
+    const markup = render(marketCard.render(marketFixture(), 'app', ctx))
+    const buckets = markup.match(/<span class="whitespace-nowrap">([^<]*)<\/span>/g) ?? []
+    expect(buckets.length).toBeGreaterThan(1)
+    for (const b of buckets) expect(b, b).not.toMatch(/>\s*·/)
+    expect(buckets[buckets.length - 1]).not.toContain('·')
     // The email arm printed "17 posts published · posts published in
     // September" — the label and the basis, which are the same words.
     const email = renderText(marketCard.render(marketFixture(), 'email', ctx))

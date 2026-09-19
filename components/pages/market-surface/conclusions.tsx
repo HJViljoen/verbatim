@@ -49,9 +49,29 @@ import type { ConclusionRow, MarketSurfaceData } from '@/lib/pages/market-surfac
 // what was adjudicated and what was not. The count beside them is code's and
 // stays `figure`.
 
-/** The artboard's dotted-underlined mono figure: a number a reader can see is
- *  counted rather than asserted. */
-const FIGURE = 'font-mono text-[11.5px] tabular-nums text-secondary-foreground underline decoration-muted-foreground decoration-dotted underline-offset-[3px]'
+/** The artboard's mono figure: a number a reader can see is counted rather
+ *  than asserted.
+ *
+ *  AND IT DOES NOT WEAR THE DOTTED UNDERLINE, which on this page is a promise.
+ *  MASTER rule 5 gives a quiet grey dotted underline to a claim with evidence
+ *  BEHIND it — "click → popover with count, platform split, two quotes, link to
+ *  the page" — and `components/claim-popover.tsx` states the rule in the same
+ *  words it is built to: "Nothing gets this treatment unless it can open — a
+ *  claim without evidence is plain text." The artboard draws the decoration on
+ *  a bare `<span>` because an artboard is a still; the spec's own §3.12 draws
+ *  the same ink as a `<button>` with a `role="dialog"` panel behind it.
+ *
+ *  This page's port took the still. Five of its most load-bearing counts —
+ *  "157 of 1,699 videos behind it", "2 of 1,699 videos behind it" and the three
+ *  grounding cells — carried the underline with no link, no handler and no
+ *  popover, on the same viewport where every Derivation summary wears it and
+ *  DOES open. So the decoration is spent on the thing that opens and nothing
+ *  else, and the figure keeps everything the artboard gives it that is not an
+ *  affordance: the mono face, the tabular figures, the 11.5px step and the
+ *  secondary ink. The day one of these counts has an evidence panel behind it,
+ *  the underline comes back with the panel and not before. */
+const FIGURE_FACE = 'font-mono text-[11.5px] tabular-nums'
+const FIGURE = `${FIGURE_FACE} text-secondary-foreground`
 
 function Row({ row, mode, appUrl, corpus }: { row: ConclusionRow; mode: RenderMode; appUrl: string; corpus: number | null }) {
   const email = mode === 'email'
@@ -62,15 +82,22 @@ function Row({ row, mode, appUrl, corpus }: { row: ConclusionRow; mode: RenderMo
   // page bar reading "September 2026" is a fraction of two populations.
   // `corpusLine` under the rows says which population this one is.
   // A COUNT OF NOTHING IS NOT A SHARE OF ANYTHING. "0 of 1,699 videos behind
-  // it" is a fraction whose numerator says the record is empty, printed in the
-  // dotted-underline of a measured figure and sitting beside a chip promising
-  // an early signal. The row says it in words instead, and `TierChip` drops
-  // its tint (never its label) for the same reason.
+  // it" is a fraction whose numerator says the record is empty, set in the mono
+  // of a measured figure and sitting beside a chip promising an early signal.
+  // The row says it in words instead, and `TierChip` drops its tint (never its
+  // label) for the same reason.
+  //
+  // AND IT IS SET IN THE FIGURE'S OWN FACE, because the two cards sit abreast
+  // and this slot is the grid's ONLY horizontal alignment. In sans against the
+  // other card's mono the pair read as two unrelated cards rather than as one
+  // comparison — a different family and a different rhythm on the one line
+  // that lines up. It keeps the muted ink, which is the difference that means
+  // something: a count, and an absence of one.
   const grounded = row.videos > 0
   const count = !grounded
     ? (
       <span
-        className={email ? undefined : 'text-[11.5px] text-muted-foreground'}
+        className={email ? undefined : `${FIGURE_FACE} text-muted-foreground`}
         style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}
       >
         no videos we can still count behind it
@@ -186,16 +213,30 @@ export const marketConclusions: Block<MarketSurfaceData> = {
               nobody can open would hide them. */}
           {!app ? below.map(row) : null}
         </div>
-        <Derivation mode={mode} label="How these are counted">
+        {/* THE POPULATION STAYS ON THE PAGE. `corpusLine` is what makes every
+            "157 of 1,699 videos behind it" on this block a fraction rather
+            than two numbers, and the fix pass put it inside `Derivation`,
+            which in mode `app` is a SHUT `<details>` — so the one mode a
+            reader can act in printed the numerator and the denominator with
+            nothing on screen saying what 1,699 is. That is the D8 deviation
+            this port made deliberately (the artboard's "305 of 1,388 category
+            videos" counts two different populations), and it only holds while
+            the sentence that replaces it is visible. `newLine` rides with it:
+            the amber chip above is a fact about OUR RECORD and reads as a
+            claim about the conversation without it.
+            What stays behind the disclosure is method — how the rows are
+            ordered — which is the thing a disclosure is for. */}
+        <p className={email ? undefined : 'm-0 text-[11px] leading-[1.35] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 6 } : undefined}>
+          {c.corpusLine} {c.newLine}
+        </p>
+        <Derivation mode={mode} label="How these are ordered">
           {/* THE SORT IS PRINTED, not implied. The design asks for tier and
               then the size of the MOVEMENT behind each conclusion, and the
               movement is not computable: a conclusion cites audience_insight
               ids and the monthly reading is keyed on theme_registry ids, with
               nothing joining the two. So the second key is the size of the
-              evidence, and a reader is told which one they are looking at.
-              `newLine` rides with them because the chip above is a fact about
-              our record and must not be read as one about the conversation. */}
-          Ordered by {c.sortedBy}. {c.corpusLine} {c.newLine}
+              evidence, and a reader is told which one they are looking at. */}
+          Ordered by {c.sortedBy}.
         </Derivation>
       </BlockFrame>
     )
