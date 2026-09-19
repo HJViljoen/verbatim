@@ -6,7 +6,7 @@ import { Slide } from '@/components/print/slide'
 import { Sparkline } from '@/components/charts/sparkline'
 import { CountBadge, MOVEMENT_WORDS, MovementBadge } from '@/components/delta-badge'
 import { FigureCell } from '@/components/blocks/frame'
-import { gapLine, sidePct, type Gap } from '@/lib/reading/gap'
+import { gapLevels, gapLine, sidePct, type Gap } from '@/lib/reading/gap'
 import { fullDate, monthName, round1, shortDate } from '@/lib/format'
 import { nextMonth } from '@/lib/reading/month-key'
 import { platformShareLine } from '@/lib/reading/method'
@@ -2231,7 +2231,26 @@ function SectionBody({ section, data, why = false, framing = true, title = false
  * and drawing a third bar from another figure would put a number on this card
  * that the sentence above it was not measured against.
  */
-export function GapCard({ gap }: { gap: Gap }) {
+/**
+ * AND THE WORD IS THE BLOCK'S, NOT THIS CARD'S (Block D wave 3b, `decks`;
+ * subjects finding 11, and `reports`'s "the heading names the body").
+ *
+ * This card is drawn by `sheetExtras` onto the sheet of the section that asked
+ * for it — `extras: 'gap'`, which today is `mk.subjects`, i.e.
+ * `overview.subjects` — so the block whose gap headline states this same gap
+ * is ALWAYS on the sheet with it, about 250px up. Two nodes said "too few to
+ * compare" about one subject on one page, and the second one was under a
+ * heading promising "the gap that matters".
+ *
+ * `saidBy` is MEASURED at the sheet rather than assumed: `sheetExtras` asks
+ * whether this sheet carries the block that prints the word, so a map that
+ * one day puts the card on a sheet of its own gets the whole sentence back.
+ * Where the block is there, the card prints the two LEVELS (`gapLevels`, the
+ * same composer the cover tile reads) and its heading names what it is showing
+ * instead of a gap the body then withdraws.
+ */
+export function GapCard({ gap, saidBy = false }: { gap: Gap; saidBy?: boolean }) {
+  const concluded = gap.state === 'apart' || gap.state === 'level'
   const basis = concludedBasisLine(gap)
   const sides = [gap.a, gap.b]
   const pcts = sides.map((s) => sidePct(s))
@@ -2246,11 +2265,16 @@ export function GapCard({ gap }: { gap: Gap }) {
   const carriesLevel = sides.some((side) => side.observed && sidePct(side) != null)
   return (
     <div className={`${CARD} flex flex-col gap-3 px-5 py-4`}>
-      <Eyebrow>The gap that matters</Eyebrow>
+      {/* A HEADING MAY NOT PROMISE WHAT ITS BODY WITHDRAWS (the rule `reports`
+          applied to the sales deck's rivals sheet, applied here). "The gap
+          that matters" over "too few to compare" is the same shape of
+          sentence; where the band drew no gap the card says what it IS
+          showing, which is the two sides' readings. */}
+      <Eyebrow>{concluded ? 'The gap that matters' : 'What the two sides read'}</Eyebrow>
       <p className={`m-0 ${BODY_SM}`}>
         <span className="font-medium">{gap.objectLabel}</span>
         {' — '}
-        <span {...(carriesLevel ? { 'data-copy': 'level' as const } : {})}>{gapLine(gap)}</span>
+        <span {...(carriesLevel ? { 'data-copy': 'level' as const } : {})}>{saidBy && !concluded ? gapLevels(gap) : gapLine(gap)}</span>
         {/* UNMARKED, and deliberately. `gapLine` is two levels and their
             banded difference, which is a `level` node; the basis line is a
             SECOND banded difference at an earlier window and carries no level
@@ -2285,6 +2309,11 @@ export function GapCard({ gap }: { gap: Gap }) {
   )
 }
 
+/** The block whose own gap headline states the lead gap's state — so the card
+ *  beside it does not state it a second time. A key, because that is what a
+ *  frozen section carries; the block itself is `overview.subjects`. */
+const GAP_SAID_BY = 'overview.subjects'
+
 /**
  * What the deck draws on a sheet BESIDE its blocks.
  *
@@ -2303,7 +2332,12 @@ function sheetExtras(sections: readonly DocBriefSection[], data: DocumentSnapsho
   if (!sections.some((s) => s.extras === 'gap')) return null
   const gap = leadGap(data.reading?.gaps)
   if (!gap) return null
-  return <div data-col="6" className="flex min-w-0 flex-col"><GapCard gap={gap} /></div>
+  // WHETHER THIS SHEET ALREADY SAYS WHAT THE BAND CONCLUDED. `overview.subjects`
+  // draws the gap headline for the same lead gap; where it is on the sheet the
+  // card prints the levels and not a second refusal. Asked of the sheet, not
+  // assumed of the map (subjects finding 11).
+  const saidBy = sections.some((s) => s.block === GAP_SAID_BY && s.empty == null)
+  return <div data-col="6" className="flex min-w-0 flex-col"><GapCard gap={gap} saidBy={saidBy} /></div>
 }
 
 /**

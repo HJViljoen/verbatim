@@ -111,8 +111,12 @@ export interface BriefReading {
    *  loaded (`readingsCounter`), never recomputed. */
   counter: string | null
   /**
-   * "Your side reads 'too few to compare' on 84 videos — the category column
-   * carries the month." (`content.p5.caveat`).
+   * "Your side carried 84 videos this month, too few for its column to
+   * answer — the category column carries the month." (`content.p5.caveat`).
+   *
+   * It stopped QUOTING the column's own refusal at Block D wave 3b (`decks`,
+   * subjects finding 11): `subjectsNote` fires exactly when every row is thin,
+   * which is exactly when every cell of the column already reads it.
    *
    * Overview composes this and no document has ever printed it, which is the
    * wrong way round: a reader of the PDF cannot see the column that carries

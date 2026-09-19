@@ -339,6 +339,50 @@ function levelOf(side: GapSide): string {
 }
 
 /**
+ * The earlier gap, printed ONLY where it concluded something (moved here from
+ * `lib/reports/documents/overview.ts` at Block D wave 3b, `decks`, when a
+ * second caller wanted it).
+ *
+ * `gapBasisLine` answers for every state, which is right for a caller that
+ * wants the earlier reading whatever it was. A surface that has ALREADY
+ * printed this reading's own refusal and then prints a second one beside it
+ * ("too few to compare. too few to compare in August") is saying a sentence
+ * about our bookkeeping twice — it tells a reader nothing about August that
+ * the line above has not told them about September. Where the earlier gap
+ * CONCLUDED something, it is new information and it prints.
+ *
+ * Pure.
+ */
+export function concludedBasisLine(gap: Gap): string | null {
+  return gap.basis && (gap.basis.state === 'apart' || gap.basis.state === 'level') ? gapBasisLine(gap) : null
+}
+
+/**
+ * THE TWO LEVELS ALONE, with no word for what the band concluded — "you 31% of
+ * 84 · Freitag 44% of 142" (Block D wave 3b, `decks`; subjects finding 11).
+ *
+ * A REFUSAL IS SAID ONCE ON A SHEET, BY THE NODE WHOSE CLAIM IT IS. Five nodes
+ * printed "too few to compare" about one side of one subject on one landscape
+ * sheet of the marketing brief — the gap headline, the earlier gap beside it,
+ * the table's own change column, the block's footer note and the deck's gap
+ * card — and none of them was wrong; they were one fact said five times, which
+ * reads to a client as five separate failures. The rule this restores is the
+ * one `gapTile` already wrote down for the cover ("AND THE WORD IS SAID
+ * ONCE"): the node that carries the NUMBER keeps the word, and the nodes
+ * beside it print the reading they have.
+ *
+ * So this is `gapLine`'s first half, exported once rather than rebuilt in two
+ * files — `gapTile` had it inline and the deck's gap card wanted the same
+ * string, and three hand-rolled spellings of two levels is how "31% of 84",
+ * "31.0% of 84" and "31% (84 videos)" reach one document.
+ *
+ * Pure.
+ */
+export function gapLevels(gap: Gap): string {
+  return `${levelOf(gap.a)} \u00b7 ${levelOf(gap.b)}`
+}
+
+/**
  * Did `gapLine` print a LEVEL — a share with the denominator it rests on?
  *
  * WHY A PREDICATE AND NOT A REGEX (the fix pass, E-monthly review [Minor]).
@@ -386,7 +430,7 @@ export interface GapLineOptions {
  * same" — and the two refusals print neither.
  */
 export function gapLine(gap: Gap, options: GapLineOptions = {}): string {
-  const sides = `${levelOf(gap.a)} · ${levelOf(gap.b)}`
+  const sides = gapLevels(gap)
   const body =
     gap.state === 'apart' && gap.gapPts != null && gap.bandPts != null
       ? `${sides} · ${pts(Math.abs(gap.gapPts))} points ${GAP_WORDS.apart} (band ${pts(gap.bandPts)})`

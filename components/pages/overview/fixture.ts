@@ -500,7 +500,7 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
       candidates: [],
       rivalLabel: 'Freitag',
       categoryLabel: 'The category',
-      note: 'Your side reads "too few to compare" on 84 videos — the category column carries the month.',
+      note: 'Your side carried 84 videos this month, too few for its column to answer — the category column carries the month.',
       // The earliest `subjects.named_at` on the rows — the artboard's
       // "six named 19 Aug".
       namedAt: '2026-08-19',

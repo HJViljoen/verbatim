@@ -179,8 +179,34 @@ describe('OV2, ported to the artboard', () => {
     const data = overviewFixture()
     const text = renderText(overviewSubjects.render(data, 'app', ctx))
     expect(text).toContain('Durability — you 31.0% of 84 · Freitag 44.0% of 142 · too few to compare')
-    expect(text).toContain('in August')
     expect(text).not.toContain('narrowed')
+  })
+
+  // A SECOND REFUSAL IS NOT PRINTED BESIDE THE FIRST (wave 3b, `decks`;
+  // subjects finding 11). The earlier month is a reading in its own right
+  // wherever it CONCLUDED something, and the headline prints it there; where
+  // it too was refused, saying so again tells a reader nothing about August
+  // that the words in front of them have not said about September.
+  it('prints the earlier month where it concluded something, and not where it refused too', () => {
+    const data = overviewFixture()
+    const gap = leadGap(data.subjects)!
+    const concluded = {
+      ...data,
+      subjects: {
+        ...data.subjects,
+        gaps: { ...data.subjects.gaps, [data.subjects.rows[0].id]: { ...gap, basis: { window: { kind: 'month' as const, from: '2026-08-01', to: '2026-09-01' }, gapPts: -19, bandPts: 11.2, state: 'apart' as const } } },
+      },
+    }
+    expect(renderText(overviewSubjects.render(concluded, 'app', ctx))).toContain('19 points apart in August')
+
+    const refused = {
+      ...data,
+      subjects: {
+        ...data.subjects,
+        gaps: { ...data.subjects.gaps, [data.subjects.rows[0].id]: { ...gap, basis: { window: { kind: 'month' as const, from: '2026-08-01', to: '2026-09-01' }, gapPts: null, bandPts: null, state: 'too_little_data' as const } } },
+      },
+    }
+    expect(renderText(overviewSubjects.render(refused, 'app', ctx))).not.toContain('in August')
   })
 
   it('takes the headline gap off the row the table leads with, never a second ranking', () => {
@@ -218,14 +244,17 @@ describe('OV2, ported to the artboard', () => {
     // `shrink-0` came off the slot in Block D wave 3 (SH5) — it was a clip
     // with no signal inside an overflow-hidden Tile — so the assertion is on
     // the slot's remaining signature rather than on the whole class string.
-    expect(markup).toContain('font-mono text-[11px] font-normal text-muted-foreground">Your side reads')
+    expect(markup).toContain('font-mono text-[11px] font-normal text-muted-foreground">Your side carried')
   })
 
-  it('prints the refusal in the headline where the rival was renamed', () => {
+  it('prints the refusal in the headline where the rival was renamed, once', () => {
     const text = renderText(overviewSubjects.render(renamedRivalFixture(), 'app', ctx))
     expect(text).toContain('comparison refused')
-    // …and the earlier month is refused with it, rather than printed beside it.
-    expect(text).toContain('comparison refused in August')
+    // …and ONCE (wave 3b, `decks`): the earlier month was refused for the same
+    // reason, so printing "comparison refused in August" beside it is the
+    // product stating its own bookkeeping twice about one rename.
+    expect(text).not.toContain('comparison refused in August')
+    expect(text.match(/comparison refused/g)?.length).toBe(1)
   })
 })
 

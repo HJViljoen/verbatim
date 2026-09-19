@@ -1286,11 +1286,20 @@ export function monthlySpanLabel(spark: readonly (number | null)[], months: read
 
 /** The subjects block's line about which column carries the month.
  *
- *  TYPOGRAPHIC QUOTES (Block D wave 3, M20). DESIGN.md: "Quotes use
- *  typographic quotes and apostrophes." This sentence is rendered three times
- *  — the block's footer note, the weekly email and the monthly one — in a
- *  serif face that sets straight ASCII marks as vertical ticks beside its own
- *  curly ones. */
+ *  IT NO LONGER QUOTES THE COLUMN'S OWN WORD (Block D wave 3b, `decks`;
+ *  subjects finding 11). This sentence fires exactly when EVERY row is thin —
+ *  which is exactly when every cell of the YOUR CHANGE column, two inches
+ *  above it, already reads "too few to compare" — so quoting the phrase back
+ *  made the note a second saying of the column rather than an account of it.
+ *  What the note has that the column has not is the COUNT and the recourse:
+ *  how many videos your side carried, and which column a reader should read
+ *  instead. It says those, and stops.
+ *
+ *  Rendered three times — the block's footer note, the weekly email and the
+ *  monthly one — so the quotation marks M20 made typographic are gone with the
+ *  quotation, in all three.
+ *
+ *  Pure. */
 export function subjectsNote(rows: readonly SubjectRow[]): string | null {
   if (rows.length === 0) return null
   const yourN = rows[0].you.n
@@ -1298,7 +1307,7 @@ export function subjectsNote(rows: readonly SubjectRow[]): string | null {
   if (!thin) return null
   return yourN == null
     ? 'Your own side carries no reading this month — the category column carries the month.'
-    : `Your side reads “too few to compare” on ${fmtInt(yourN)} videos — the category column carries the month.`
+    : `Your side carried ${fmtInt(yourN)} ${yourN === 1 ? 'video' : 'videos'} this month, too few for its column to answer — the category column carries the month.`
 }
 
 /** The "not a blank form" line (design §3 OV2, empty state). */
