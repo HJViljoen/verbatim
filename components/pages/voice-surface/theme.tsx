@@ -16,8 +16,8 @@ import { fmtInt, fmtPct, monthName } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { QuoteRef } from '@/lib/blocks/types'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
-import type { SpokenLine, ThemeBlock, VoiceSurfaceData } from '@/lib/pages/voice-surface'
-import { heardLine, reachAxisMax } from '@/lib/pages/voice-surface'
+import type { OnScreenLine, SpokenLine, ThemeBlock, VoiceSurfaceData } from '@/lib/pages/voice-surface'
+import { VOICES_WORD, earnedDirection, heardLine, reachAxisMax } from '@/lib/pages/voice-surface'
 
 // VO3 · A theme, in full (design §3 VO3; ported to the artboard, Block D
 // wave 2).
@@ -49,27 +49,58 @@ import { heardLine, reachAxisMax } from '@/lib/pages/voice-surface'
 // THE TITLE ROW CARRIES A PREVALENCE LEVEL, NOT A TIER CHIP (D11). The mock
 // puts "Strong evidence" beside the theme's name in the green tint. That word
 // is a CONCLUSION's tier (`lib/curation.ts gateTier`, printed by Market), and a
-// theme's month reading earns a different ladder — "Widespread · 130 of 1,388
-// videos". The chip's SHAPE is ported and its colour is not: the green does
+// theme's month reading earns a different ladder — "Recurring · 130 of 1,388
+// videos", the rung `prevalenceTier` assigns those two numbers. The chip's
+// SHAPE is ported and its colour is not: the green does
 // four jobs in this product and "a measurement exists" is not one of them.
-
-/** How much of the theme's name the chart's end label can hold — see
- *  `themeSeries`. Thirty characters of 11px sans is about 186 units, which
- *  with the reading beside it is what CHART_PAD reserves. Measured against the
- *  geometry, not chosen. */
-const CHART_LABEL = 30
 
 /** The month line's geometry in this block's right-hand column.
  *
  *  `CalendarLine` scales its viewBox uniformly to the box it is given, so the
  *  intrinsic width is really a TYPE SIZE: at 620 units in the ~560px column
- *  this block draws at 1440, the chart's 10px axis labels come out near 9px.
- *  `CHART_PAD` is the room reserved to the right of the last point for the end
- *  label, which is drawn outside the plot area and which the 180-unit default
- *  is far too small for — a theme's name is the model's words. */
+ *  this block draws at 1440, the chart's 10px axis labels come out near 9px. */
 const CHART_W = 620
 const CHART_H = 200
-const CHART_PAD = 260
+
+/** The most of `CHART_W` the end label may take. `padR` is drawn OUTSIDE the
+ *  plot, so every unit of it is a unit the line does not get. This was the
+ *  CHARGE — 260 of 620, 42% of the drawing, spent whatever the label said —
+ *  and it is the CEILING now: a name that needs all of it gets all of it and
+ *  nothing gets more. It is also exactly the room the longest theme name
+ *  either tenant carries needs, which is why it did not move: "Admiration for
+ *  personal resilience" with its reading is 255 units, and cutting the ceiling
+ *  to make the plot wider would put the ellipsis back. */
+const PAD_MAX = 260
+
+/** A character's advance in viewBox units at the size `CalendarLine` draws the
+ *  end label: 11px IBM Plex Sans for the name (~0.55em) and 11px IBM Plex Mono
+ *  for the reading beside it (0.6em, the face's fixed advance). */
+const SANS_UNIT = 6.05
+const MONO_UNIT = 6.6
+/** The gap the chart leaves between the last point and the label (`padR + 10`)
+ *  plus a character of slack at the end. */
+const LABEL_GUTTER = 16
+
+/**
+ * The room the end label actually needs, measured off the string that will be
+ * drawn (`CHART_PAD` was a flat 260 — 42% of the drawing, charged whatever the
+ * label said, so "Zips failing after a year" reserved exactly as much as
+ * "Admiration for personal resilience" and the plot came out ~340px against
+ * the artboard's ~395px).
+ */
+function chartPad(label: string, reading: string): number {
+  const want = Math.ceil(label.length * SANS_UNIT + (reading.length + 1) * MONO_UNIT) + LABEL_GUTTER
+  return Math.min(want, PAD_MAX)
+}
+
+/** How much of the theme's name the end label can hold: whatever fits in
+ *  `PAD_MAX` beside the reading, rather than a constant thirty. At 8.8% that
+ *  is 34 characters, which is "Admiration for personal resilience" whole —
+ *  the refused arm's only identifier, elided to "Admiration for personal
+ *  resil…" while the chart's legend is off. */
+function chartLabelMax(reading: string): number {
+  return Math.floor((PAD_MAX - LABEL_GUTTER - (reading.length + 1) * MONO_UNIT) / SANS_UNIT)
+}
 
 const MOOD_COLOR: Record<string, string> = {
   positive: 'var(--positive)',
@@ -108,11 +139,17 @@ function Line({ label, note, mode, children }: { label: string; note?: ReactNode
   )
 }
 
-/** "2 of 182 voices", or just "Voices" when there are none to count. */
+/** "2 of 182 voices", or just "Voices" when there are none to count.
+ *
+ *  `voices` IS THE BLOCK'S ONE WORD FOR `themes.evidence_count` (VOICES_WORD,
+ *  lib/pages/voice-surface.ts). The on-camera figure's basis prints the same
+ *  number — the loader assigns `quotesOf` and `onCameraOf` from that one
+ *  column — and called it "quotes" until wave 3. */
 function voicesLabel(t: ThemeBlock): string {
-  if (t.quotes.length === 0) return 'Voices'
-  if (t.quotesOf == null) return `${fmtInt(t.quotes.length)} ${t.quotes.length === 1 ? 'voice' : 'voices'}`
-  return `${fmtInt(t.quotes.length)} of ${fmtInt(t.quotesOf)} voices`
+  const cap = `${VOICES_WORD[0].toUpperCase()}${VOICES_WORD.slice(1)}`
+  if (t.quotes.length === 0) return cap
+  if (t.quotesOf == null) return `${fmtInt(t.quotes.length)} ${t.quotes.length === 1 ? 'voice' : VOICES_WORD}`
+  return `${fmtInt(t.quotes.length)} of ${fmtInt(t.quotesOf)} ${VOICES_WORD}`
 }
 
 /** The prior month's share of its OWN month, off the verdict's other side. */
@@ -125,8 +162,15 @@ function baselinePct(verdict: Verdict | null): number | null {
 /** The month that side was read in — the basis's `from`, never the clock. */
 const baselineMonth = (verdict: Verdict | null): string | null => verdict?.basis?.from ?? null
 
-/** The spoken line or the on-screen text, with where it came from. */
-function Said({ line, label, mode }: { line: SpokenLine; label: string; mode: RenderMode }) {
+/** The spoken line or the on-screen text, with where it came from.
+ *
+ *  BOTH SHAPES, ONE COMPONENT, and the difference is which of them can carry a
+ *  ref: the on-screen line is `videos.ocr_text` and travels as a `Quote` under
+ *  `t:<videos.id>`; the spoken line is `videos.transcript`, for which no ref
+ *  kind exists (see `SpokenLine`). The words are read off whichever the caller
+ *  passed and nothing else here changes. */
+function Said({ line, label, mode }: { line: SpokenLine | OnScreenLine; label: string; mode: RenderMode }) {
+  const text = 'quote' in line ? line.quote.text : line.text
   const cite = (
     <span className={mode === 'email' ? undefined : 'font-mono text-[10.5px] text-muted-foreground'} style={mode === 'email' ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}>
       {line.cite}
@@ -139,7 +183,7 @@ function Said({ line, label, mode }: { line: SpokenLine; label: string; mode: Re
           word this block would be claiming, and rule (c) does not spare
           unmarked markup. */}
       <span data-copy="quote" className={mode === 'email' ? undefined : 'text-[12.5px]'} style={mode === 'email' ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}>
-        “{line.text}”
+        “{text}”
       </span>{' '}
       {/* A DEAD LINK IS WORSE THAN NO LINK. A video with no public URL prints
           its provenance as words and is not wrapped in an anchor. */}
@@ -151,6 +195,19 @@ function Said({ line, label, mode }: { line: SpokenLine; label: string; mode: Re
   return <Line label={label} mode={mode}>{body}</Line>
 }
 
+/** The reading the chart prints after the name — the same string `format`
+ *  produces for the last point, which is the other half of what `padR` holds. */
+function chartReading(t: ThemeBlock): string {
+  const last = t.points.filter((p) => t.axis.includes(p.month)).at(-1)
+  return last?.pct == null ? '' : fmtPct(last.pct)
+}
+
+/** The series name as the chart will draw it, cut to what the pad can hold. */
+function chartLabel(t: ThemeBlock): string {
+  const max = chartLabelMax(chartReading(t))
+  return t.label.length > max ? `${t.label.slice(0, max - 1).trimEnd()}\u2026` : t.label
+}
+
 /** The theme's own monthly line — the share of this audience's videos, month by
  *  month, on a generated calendar so a month with no reading keeps its slot. */
 function themeSeries(t: ThemeBlock): CalendarSeries | null {
@@ -160,13 +217,14 @@ function themeSeries(t: ThemeBlock): CalendarSeries | null {
     // THE CHART'S LABEL IS SHORTENED AND THE BLOCK'S IS NOT, and the limit is
     // the drawing's own geometry rather than a taste: `CalendarLine` draws the
     // series name at the right-hand end of the line, OUTSIDE the plot area, in
-    // the 180 units `padR` reserves for it. At the 560-unit intrinsic width
-    // this column draws at, 180 units is about thirty characters of 11px sans;
-    // past that the name runs out of the tile, which is what Össur's
-    // "Admiration for personal resilience" did on the production render. The
-    // full label is the heading two lines above and the caption under the
-    // chart names every reading, so this one only has to identify the line.
-    label: t.label.length > CHART_LABEL ? `${t.label.slice(0, CHART_LABEL - 1).trimEnd()}…` : t.label,
+    // whatever `padR` reserves. The cut is now what actually FITS the room the
+    // pad is allowed (`chartLabelMax`) rather than a flat thirty characters —
+    // at 8.8% that is 34, so Össur's "Admiration for personal resilience"
+    // prints whole where it used to read "Admiration for personal resil…" as
+    // the only identifier on a chart whose legend is off. The full label is
+    // the heading two lines above and the caption under the chart names every
+    // reading, so this one only has to identify the line.
+    label: chartLabel(t),
     // The model's words, so the chart marks them (see CalendarSeries.labelSlot).
     labelSlot: 'pass_b_theme',
     color: 'var(--cat)',
@@ -320,7 +378,13 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
             // this month's videos, one line above a reach note that divides
             // this month's platform mix. Production printed those two together
             // and they contradicted each other.
-            base={<>of the {fmtInt(t.onCameraOf as number)} quotes behind this theme, counted over the whole update, not this month</>}
+            // AND IN THE BLOCK'S ONE WORD FOR THIS POPULATION (`VOICES_WORD`).
+            // `onCameraOf` and `quotesOf` are both `themes.evidence_count` —
+            // the loader assigns them from the same column, so they are always
+            // equal — and this line called them "quotes" while the heading
+            // three inches above called them "voices". The artboard's word is
+            // the heading's.
+            base={<>of the {fmtInt(t.onCameraOf as number)} {VOICES_WORD} behind this theme, counted over the whole update, not this month</>}
           />
         ) : null}
       </div>
@@ -362,9 +426,14 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
                 {level}
               </span>
             ) : null}
-            {t.direction ? (
+            {/* `earnedDirection`, NOT TRUTHINESS — VO2's rule, and the same
+                empty pill: 'flat' is `directionWord`'s answer for "three
+                readings exist and do not agree", the ABSENCE of a direction,
+                and this pill draws its own chrome around whatever
+                `DirectionWord` returns. */}
+            {earnedDirection(t.direction) ? (
               <span className={email ? undefined : 'inline-block rounded-full bg-inner px-2 py-0.5 text-[12px] font-medium'}>
-                <DirectionWord direction={t.direction} mode={mode} />
+                <DirectionWord direction={earnedDirection(t.direction)} mode={mode} />
               </span>
             ) : null}
             <BlockMovement verdict={t.verdict} unit="pts" mode={mode} />
@@ -422,15 +491,17 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
                 ) : null}
                 <Tone t={t} mode={mode} />
               </div>
-              {/* THE DRAWING KEEPS ITS DESIGNED SIZE BELOW THE BREAKPOINT.
-                  `CalendarLine` scales its viewBox uniformly to the box it is
-                  given, and 42% of that width is the pad the end label sits
-                  in — right in this 560px column, and at 1024, where the tile
-                  falls to one column and the chart stretches to ~900px, it is
-                  a 530×230 box with the plot in its left 58%. Capped at the
-                  width it was drawn for, it is the same chart rather than a
-                  mostly-empty box; the caption under it carries every month. */}
-              <div className="flex min-w-0 max-w-[560px] flex-col gap-1 xl:max-w-none">
+              {/* THE DRAWING FILLS ITS COLUMN AT EVERY WIDTH. It was capped at
+                  `max-w-[560px]` below `xl:` on the argument that the chart
+                  should keep the size it was drawn for — but the box was
+                  mostly empty because `padR` was charged flat at 42% of the
+                  width, and the cap then left the empty box LEFT-HUGGING in a
+                  865px tile at 1024 with a ~300px void beside it. With the pad
+                  measured off the label (`chartPad`) the plot is two-thirds of
+                  the drawing, so the honest answer is to let it have the
+                  column: `CalendarLine` scales its viewBox uniformly, which
+                  makes the type larger here, never smaller. */}
+              <div className="flex min-w-0 flex-col gap-1">
                 {series ? (
                   <Line label="Month by month" mode={mode}>
                     <BlockCalendar
@@ -442,7 +513,10 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
                       format={(v) => fmtPct(v)}
                       width={CHART_W}
                       height={CHART_H}
-                      padR={CHART_PAD}
+                      // MEASURED OFF THE LABEL, not charged flat. See
+                      // `chartPad`: a flat 260 of 620 was 42% of the drawing
+                      // whatever the name said.
+                      padR={chartPad(chartLabel(t), chartReading(t))}
                       // ONE NAME, TWICE, THE WAY THE ARTBOARD HAS IT: the
                       // block's heading and the label at the line's end. The
                       // legend was a third and a fourth rendering of the same
@@ -491,7 +565,7 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
                       {t.quoteOnScreen[i] ? (
                         <span className={email ? undefined : 'font-sans text-[11.5px] text-muted-foreground'}>
                           On-screen text on the same video:{' '}
-                          <span data-copy="quote" className={email ? undefined : 'text-secondary-foreground'}>{t.quoteOnScreen[i]}</span>
+                          <span data-copy="quote" className={email ? undefined : 'text-secondary-foreground'}>{t.quoteOnScreen[i]?.text}</span>
                         </span>
                       ) : null}
                       {/* THE ARTBOARD'S GLYPH BEFORE THE PLATFORM'S NAME.
@@ -619,7 +693,18 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
   },
 
   quotes(data): QuoteRef[] {
-    return data.theme.quotes.map((q) => q.ref)
+    const t = data.theme
+    // EVERY SET OF WORDS THIS BLOCK PRINTS, not just the six in the grid. The
+    // nested on-screen lines and the block-level one are a creator's own words
+    // and travel under `t:<videos.id>`; a block that declared only the comment
+    // quotes handed the quote-freeze walk a shorter list than it draws.
+    // `spoken` is absent because `videos.transcript` has no ref kind to be
+    // declared by — see `SpokenLine`.
+    return [
+      ...t.quotes.map((q) => q.ref),
+      ...t.quoteOnScreen.filter((q) => q != null).map((q) => (q as { ref: string }).ref),
+      ...(t.onScreen ? [t.onScreen.quote.ref] : []),
+    ]
   },
 
   emptyState(data) {

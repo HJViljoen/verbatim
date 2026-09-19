@@ -1,10 +1,12 @@
+import { prevalenceTier } from '@/lib/calibration'
+import { quoteRef } from '@/lib/renderables/quotes-freeze'
 import { horizonWindow } from '@/lib/reading/horizon'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '@/lib/rivals'
 import type { Verdict } from '@/lib/reading/verdicts'
 import type { MonthPoint } from '@/lib/reading/series'
 import type { Mover } from '@/lib/pages/overview'
 import type { VoiceSurfaceData } from '@/lib/pages/voice-surface'
-import { PERSONA_VIDEO_FLOOR, voiceSurfaceHref } from '@/lib/pages/voice-surface'
+import { PERSONA_VIDEO_FLOOR, onCameraScope, voiceSurfaceHref } from '@/lib/pages/voice-surface'
 import { methodFixture, methodRefusedFixture, methodRefusedRecordFixture, recordBandFixture } from '@/lib/test/method-fixture'
 import { moodShares } from '@/lib/reading/mood'
 
@@ -166,7 +168,17 @@ export function voiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurface
       k: 130,
       n: 1388,
       pct: 9.4,
-      prevalence: 'widespread',
+      // THE LADDER'S ANSWER, NOT A WORD TYPED BESIDE THE NUMBERS. Written by
+      // hand as `'widespread'`, the chip in the artboard's most prominent slot
+      // read "Widespread · 130 of 1,388 videos" — 9.4%, beside a glossary that
+      // defines Widespread as "at least 15%". `loadVoiceSurface` calls
+      // `prevalenceTier` and can never produce that pairing, so the title row
+      // had never been seen in its shipping state and this port's fidelity
+      // argument was made against a render production cannot reach. The fixture
+      // calls the function the loader calls, so the word and the counts cannot
+      // drift apart again — including in the refused arm, which spreads this
+      // object and re-cuts k and n (34 of 388 = 8.8%, also `recurring`).
+      prevalence: prevalenceTier(130, 1388),
       verdict: verdict(),
       direction: 'growing',
       firstHeard: '2026-07-01',
@@ -193,9 +205,16 @@ export function voiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurface
         }),
       },
       toneNote: null,
-      onCamera: '17 of the 120 quotes behind this theme were said on camera rather than typed — counted over the whole update, not over this month.',
+      // ONE POPULATION, ONE NUMBER. `onCameraOf` and `quotesOf` are both
+      // `themes.evidence_count` in the loader (voice-surface.ts, the same
+      // `themeRow.evidence_count` two lines apart), so they are ALWAYS equal;
+      // written as 120 against 182 the block printed two denominators for one
+      // population three inches apart, in a state no production read can
+      // reach. And the sentence comes from `onCameraScope` rather than being
+      // typed, so the fixture cannot say something the loader would not.
+      onCamera: onCameraScope(17, 182),
       onCameraSaid: 17,
-      onCameraOf: 120,
+      onCameraOf: 182,
       // SIX, WHICH IS WHAT `THEME_QUOTES` ALLOWS AND WHAT THE ARTBOARD DRAWS.
       // Three filled one row of the three-column grid, so the second row —
       // its gutter, its baseline against the cite block, and the height the
@@ -221,7 +240,18 @@ export function voiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurface
         'Instagram · 5 Sep · under a Cotopaxi post',
       ],
       quotePlatforms: ['tiktok', 'tiktok', null, 'youtube', 'reddit', 'instagram'],
-      quoteOnScreen: [null, '1 bag. 3 years. 0 regrets', null, null, 'Zip test: 400 cycles, no failure', null],
+      // THE VIDEO'S OWN WORDS, UNDER THE VIDEO'S OWN REF (`t:<videos.id>`).
+      // Written as bare strings these two sentences survived `freezeQuotes`
+      // untouched and uncollected, so a brief's stored surface carried a
+      // speaker's words and no ref by which the erasure sweep could find them.
+      quoteOnScreen: [
+        null,
+        { ref: quoteRef.onScreen('vid-2'), text: '1 bag. 3 years. 0 regrets' },
+        null,
+        null,
+        { ref: quoteRef.onScreen('vid-5'), text: 'Zip test: 400 cycles, no failure' },
+        null,
+      ],
       quotesOf: 182,
       // A DIFFERENT VIDEO FROM ANY THE QUOTES CAME OUT OF. Quote 2 is cited
       // "TikTok · 11 Sep · a category video, transcript" — an extract of that
@@ -382,6 +412,11 @@ export function refusedVoiceFixture(over: Partial<VoiceSurfaceData> = {}): Voice
       k: 34,
       n: 388,
       pct: 8.8,
+      // RE-CUT, NOT INHERITED. This arm replaces k and n and the tier is a
+      // function of both; spread from the month above it would be a word about
+      // a different reading. It happens to land on the same rung today, which
+      // is exactly why it has to be computed rather than assumed.
+      prevalence: prevalenceTier(34, 388),
       direction: null,
       // THE OPEN THEME IS THE ONE MOVER THIS MONTH HAS, so it carries that
       // row's verdict and that row's months. It inherited t1's — a +2.6 on the

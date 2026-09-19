@@ -307,11 +307,11 @@ describe('onCameraScope', () => {
     // line above "read from 0 of 2 videos". The first is the update's whole
     // evidence, the second this month's platform mix.
     expect(onCameraScope(1, 12))
-      .toBe('1 of the 12 quotes behind this theme was said on camera rather than typed — counted over the whole update, not over this month.')
+      .toBe('1 of the 12 voices behind this theme was said on camera rather than typed — counted over the whole update, not over this month.')
   })
 
   it('agrees with itself about more than one', () => {
-    expect(onCameraScope(17, 120)).toContain('17 of the 120 quotes behind this theme were said on camera')
+    expect(onCameraScope(17, 182)).toContain('17 of the 182 voices behind this theme were said on camera')
   })
 
   it('says nothing about a theme heard only in comments — a zero on every pane is noise', () => {
@@ -320,7 +320,7 @@ describe('onCameraScope', () => {
   })
 
   it('never claims more on camera than there is evidence', () => {
-    expect(onCameraScope(40, 12)).toContain('12 of the 12 quotes')
+    expect(onCameraScope(40, 12)).toContain('12 of the 12 voices')
   })
 })
 

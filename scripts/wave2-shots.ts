@@ -18,6 +18,7 @@
 
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'fs'
 import { join, resolve } from 'path'
+import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import postcss from 'postcss'
 import tailwind from '@tailwindcss/postcss'
@@ -25,7 +26,8 @@ import { withBrowser } from '../lib/render/chromium'
 
 import { OverviewPage } from '../components/pages/overview'
 import { SubjectsPage } from '../components/pages/subjects'
-import { VoiceSurfacePage } from '../components/pages/voice-surface'
+import { VOICE_LEGEND, VoiceSurfacePage } from '../components/pages/voice-surface'
+import { HowToRead } from '../components/how-to-read'
 import { MarketSurfacePage } from '../components/pages/market-surface'
 import { CompetitiveSurfacePage } from '../components/pages/competitive-surface'
 import { WeekPage } from '../components/pages/week'
@@ -111,7 +113,28 @@ interface Page { key: string; nav: string; artboard: string; markup: () => strin
 const PAGES: Page[] = [
   { key: 'overview', nav: 'Overview', artboard: 'Main.dc.html', markup: () => renderToStaticMarkup(OverviewPage({ data: overviewFixture() })) },
   { key: 'subjects', nav: 'Subjects', artboard: 'Subjects.dc.html', markup: () => renderToStaticMarkup(SubjectsPage({ data: subjectsFixture() })) },
-  { key: 'voice', nav: 'Voice', artboard: 'Voice.dc.html', markup: () => renderToStaticMarkup(VoiceSurfacePage({ data: voiceFixture() })) },
+  // VOICE TAKES ITS PAGE BAR'S RIGHT-HAND END FROM ITS CALLER, so the shot has
+  // to pass it or photograph a bar the app does not have. Every other page
+  // here mounts `HowToRead` inside its own component; Voice's route passes it
+  // in (see VoiceSurfacePage's `controls`), and this script passed nothing —
+  // so the one built control on that bar appeared in no wave-2 shot and every
+  // reader of the side-by-side scored the page bar as missing something the
+  // page has. `useSearchParams` returns null with no router mounted, which is
+  // the case the component is written for.
+  {
+    key: 'voice',
+    nav: 'Voice',
+    artboard: 'Voice.dc.html',
+    markup: () => renderToStaticMarkup(VoiceSurfacePage({
+      data: voiceFixture(),
+      // AS AN ELEMENT, NOT A CALL. `HowToRead` reads `useSearchParams`, and a
+      // hook only runs inside a render — called as a function here it throws
+      // "Invalid hook call". As an element `renderToStaticMarkup` runs it, and
+      // the hook returns null with no router mounted, which is the case the
+      // component is written for.
+      controls: createElement(HowToRead, { items: VOICE_LEGEND, basePath: '/dashboard/voice', anchor: 'voice' }),
+    })),
+  },
   { key: 'market', nav: 'Market', artboard: 'Market.dc.html', markup: () => renderToStaticMarkup(MarketSurfacePage({ data: marketFixture() })) },
   { key: 'competitive', nav: 'Competitive', artboard: 'Competitive.dc.html', markup: () => renderToStaticMarkup(CompetitiveSurfacePage({ data: competitiveFixture() })) },
   { key: 'week', nav: 'This week', artboard: 'ThisWeek.dc.html', markup: () => renderToStaticMarkup(WeekPage({ data: weekFixture() })) },

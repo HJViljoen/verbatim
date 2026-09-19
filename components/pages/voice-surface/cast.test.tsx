@@ -151,4 +151,15 @@ describe('voiceCast', () => {
   it('keeps its key, which is a stored contract', () => {
     expect(voiceCast.key).toBe('voice.cast')
   })
+
+  it('does not dress its floor sentence as a control', () => {
+    // It was `<Link href={`${ctx.appUrl}/dashboard/voice#cast`}>` and in the
+    // app `appUrl` is '' — a link to the page it is already on, wearing
+    // `hover:underline`, in a footer slot the same page also fills with two
+    // real links and an arrow. A sentence about how the reading was made is
+    // not a destination.
+    const markup = render(voiceCast.render(voiceFixture(), 'app', ctx))
+    expect(markup).toContain('A group is named only where at least')
+    expect(markup).not.toContain('/dashboard/voice#cast')
+  })
 })

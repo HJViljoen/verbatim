@@ -4,7 +4,7 @@ import { blockAnswers, figureConflicts, figureCount, mergeFigures, type RenderMo
 import { DIRECTION_WORDS_BY_READER } from '@/lib/config'
 import { copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
-import { VOICE_BLOCKS, VoiceSurfacePage, voiceContext } from './index'
+import { VOICE_BLOCKS, VoiceSurfacePage, voiceContext, voiceHorizonRange } from './index'
 import { refusedVoiceFixture, voiceFixture } from './fixture'
 import VoiceLoading from '@/app/dashboard/voice/loading'
 
@@ -130,14 +130,26 @@ describe('VoiceSurfacePage', () => {
     expect(text).not.toContain('27% of the comments read were not in English')
   })
 
-  it('says which months are drawn and which month the figures read', () => {
-    // The artboard prints the window beside its range pills ("1 Sep →
-    // 28 Sep"); the app's bar has no room beside four horizon pills and the
-    // legend, and the bar is main's file — so the window printed nowhere on
-    // the page at all. Month granularity, because the axis is dated by the
-    // comment.
+  it('prints the window in the page bar, where the artboard puts it', () => {
+    // It printed only in the method footnote, on the stated grounds that the
+    // bar has no room beside four horizon pills and the legend and that the
+    // bar is main's file. Measured at 1440 the pill row ends at x≈657 of an
+    // 1,180px bar — ~520px free — and `SurfacePageBar` has taken a `range`
+    // prop since wave 2. Neither half of that argument held.
+    expect(voiceHorizonRange(voiceFixture())).toBe('1 Jul → 30 Sep')
     const text = renderText(<VoiceSurfacePage data={voiceFixture()} params={{}} />)
-    expect(text).toContain('Months drawn: Jul 2026 to Sep 2026 · every figure above reads Sep 2026')
+    expect(text).toContain('1 Jul → 30 Sep')
+  })
+
+  it('says which month the figures read, once, and not the window twice', () => {
+    // The footnote used to carry the same span in month granularity. One span,
+    // two granularities, two inches apart is how a reader learns to stop
+    // reading both — so the footnote keeps only the fact the bar does not
+    // carry: the axis span and the month every figure reads are not the same
+    // thing.
+    const text = renderText(<VoiceSurfacePage data={voiceFixture()} params={{}} />)
+    expect(text).toContain('Every figure above reads Sep 2026')
+    expect(text).not.toContain('Months drawn')
   })
 
   it('says the workspace has been read at all before it says anything else', () => {

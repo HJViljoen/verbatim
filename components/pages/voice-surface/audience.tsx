@@ -133,7 +133,13 @@ function Row({ label, note, mode, children }: { label: string; note?: ReactNode;
     <div className="flex min-w-0 flex-col gap-1.5 border-t border-border/70 pt-2 first:border-0 first:pt-0 xl:flex-row xl:items-center xl:gap-3">
       {/* A HEADING, NOT A STYLED SPAN — the filter bar's four rows are four
           sections of the block and were unreachable to heading navigation. */}
-      <h3 className="m-0 w-[104px] flex-none text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">{label}</h3>
+      {/* THE 104px COLUMN IS PART OF THE ROW, so it goes when the row does.
+          `w-[104px] flex-none` was unconditional under a parent that only
+          becomes a row at `xl:`; below 1280 the heading was a 104px box in a
+          stacked column and three of the four labels wrapped mid-phrase
+          ("WHERE IT WAS / SAID"), four wasted lines on the block the page
+          opens with. No overflow, so nothing checking for one caught it. */}
+      <h3 className="m-0 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground xl:w-[104px] xl:flex-none">{label}</h3>
       <div className="min-w-0 flex-1">{children}</div>
       {note ? <span className="flex-none whitespace-nowrap font-mono text-[11px] tabular-nums text-muted-foreground">{note}</span> : null}
     </div>
@@ -157,11 +163,21 @@ export const voiceAudience: Block<VoiceSurfaceData> = {
     const of = a.videos != null ? `${fmtInt(a.videos)} videos in this audience · ${monthName(data.month)}` : null
 
     const kinds = a.kinds.length > 0 ? (
-      <div className={email ? undefined : 'flex flex-wrap items-center gap-1.5'}>
+      <div className={email ? undefined : 'flex flex-wrap items-center gap-x-4 gap-y-1'}>
         {a.kinds.map((k) => (
+          // NOT A PILL, BECAUSE IT IS NOT A CONTROL. These wore the audience
+          // pills' exact chrome — same height, radius, ring token, size and
+          // weight, in the same bar — and did nothing: a keyboard user tabbing
+          // the bar found the top row focusable and the next row silently not.
+          // The kind FILTER was deleted two paragraphs up on the rule that this
+          // product does not print controls that do not work; the same rule
+          // takes the appearance of one. So a kind reads as what it is, a
+          // reading of the month — the label with its share and count beside
+          // it, spaced like the platform mix on the row above rather than
+          // boxed.
           <span
             key={k.kind}
-            className={email ? undefined : 'inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[12px] font-medium text-secondary-foreground ring-1 ring-border'}
+            className={email ? undefined : 'inline-flex items-center gap-1.5 whitespace-nowrap text-[12px] text-secondary-foreground'}
             style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, marginRight: 10 } : undefined}
           >
             {k.label}{' '}

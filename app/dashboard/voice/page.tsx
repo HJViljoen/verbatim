@@ -1,9 +1,8 @@
 import { getSessionContext } from '@/lib/auth'
-import { READER_FLAGS, THIRTEEN_WORDS } from '@/lib/calibration'
 import { HowToRead } from '@/components/how-to-read'
 import { readingHandle } from '@/lib/reading/read'
 import { loadVoiceSurface, type VoiceSurfaceParams } from '@/lib/pages/voice-surface'
-import { VoiceSurfacePage } from '@/components/pages/voice-surface'
+import { VOICE_LEGEND, VoiceSurfacePage } from '@/components/pages/voice-surface'
 
 // Voice — "who is saying what in this category?" (Phase 1 WP13, design §3
 // VO1–VO4).
@@ -35,7 +34,7 @@ export default async function Page({ searchParams }: { searchParams?: Promise<Vo
     <VoiceSurfacePage
       data={data}
       params={sp}
-      controls={<HowToRead items={[...THIRTEEN_WORDS, ...READER_FLAGS]} basePath="/dashboard/voice" anchor="voice" />}
+      controls={<HowToRead items={VOICE_LEGEND} basePath="/dashboard/voice" anchor="voice" />}
     />
   )
 }

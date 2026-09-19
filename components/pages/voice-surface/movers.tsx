@@ -10,7 +10,7 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { Mover } from '@/lib/pages/overview'
 import type { VoiceSurfaceData } from '@/lib/pages/voice-surface'
-import { moversCoda, voiceSurfaceHref } from '@/lib/pages/voice-surface'
+import { earnedDirection, moversCoda, voiceSurfaceHref } from '@/lib/pages/voice-surface'
 
 // VO2 · What moved (design §3 VO2; ported to the artboard, Block D wave 2).
 //
@@ -100,7 +100,7 @@ function MoverRow({ mover, mode, ctx }: {
     return (
       <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '2px 0' }}>
         {name} {counts}{' '}
-        <BlockMovement verdict={mover.verdict} unit="pts" mode={mode} /> <DirectionWord direction={mover.direction} mode={mode} />
+        <BlockMovement verdict={mover.verdict} unit="pts" mode={mode} /> <DirectionWord direction={earnedDirection(mover.direction)} mode={mode} />
       </div>
     )
   }
@@ -114,11 +114,18 @@ function MoverRow({ mover, mode, ctx }: {
       <div className="flex items-center gap-2">
         {counts}
         <span className="ml-auto flex-none">
-          {mover.direction ? (
+          {earnedDirection(mover.direction) ? (
             // The mock's grey pill, carrying the word the product actually
             // earned — three consecutive readings in one clustering regime —
             // and never the mock's ordinal "3rd month" (D5).
-            <span className="inline-block rounded-full bg-inner px-2 py-0.5 text-[12px] font-medium"><DirectionWord direction={mover.direction} mode={mode} /></span>
+            //
+            // `earnedDirection`, NOT TRUTHINESS. `directionWord` answers
+            // 'flat' for "three readings exist and do not agree", which is the
+            // absence of a direction; gated on `mover.direction ?` this pill
+            // printed "flat, 3 months" beside a badge reading "no clear
+            // change", and once `DirectionWord` filters it (main's M4) the
+            // same gate would leave an empty grey pill standing here instead.
+            <span className="inline-block rounded-full bg-inner px-2 py-0.5 text-[12px] font-medium"><DirectionWord direction={earnedDirection(mover.direction)} mode={mode} /></span>
           ) : null}
         </span>
       </div>

@@ -174,4 +174,31 @@ describe('voiceAudience', () => {
   it('keeps its key, which is a stored contract', () => {
     expect(voiceAudience.key).toBe('voice.audience')
   })
+
+  it('drops the filter bar\u2019s label column when the bar stops being a row', () => {
+    // `w-[104px] flex-none` was unconditional under a parent that only flips to
+    // a row at `xl:`. Below 1280 three of the four labels wrapped mid-phrase
+    // ("WHERE IT WAS / SAID") inside a 104px box in a stacked column — four
+    // wasted lines, no overflow, nothing to catch it.
+    const markup = render(voiceAudience.render(voiceFixture(), 'app', ctx))
+    expect(markup).toContain('xl:w-[104px]')
+    // and never the unprefixed one: `xl:w-[104px]` is the fix, `w-[104px]`
+    // preceded by a space or a quote is the defect.
+    expect(markup).not.toMatch(/["\s]w-\[104px\]/)
+  })
+
+  it('does not dress the kind readings as controls', () => {
+    // They wore the audience pills' exact chrome — same height, radius, ring
+    // token, size and weight, in the same bar — and were not focusable and did
+    // nothing. A keyboard user tabbing the bar found the top row focusable and
+    // the next row silently not. The block's own header deleted the kind FILTER
+    // on the rule that this product does not print controls that do not work;
+    // the same rule takes the appearance of one.
+    const markup = render(voiceAudience.render(voiceFixture(), 'app', ctx))
+    const pills = markup.match(/rounded-full/g) ?? []
+    // Four audience pills and nothing else on this bar.
+    expect(pills).toHaveLength(voiceFixture().audience.options.length)
+    expect(markup).toContain('Asking how it works')
+    expect(markup).toContain('34% 472 of 1,388')
+  })
 })
