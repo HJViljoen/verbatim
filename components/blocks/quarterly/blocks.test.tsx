@@ -963,6 +963,29 @@ describe('the artboard port (Block D wave 2)', () => {
     expect(t).toContain('nothing here is held across two updates before it is printed')
   })
 
+  it('qr.p7.method · the record as four paragraphs, in order, with every word kept', () => {
+    // Thirteen free-standing lines a pixel apart, each one line long in a
+    // 674px column, read as a log beside the artboard's four paragraphs of
+    // method prose. Nothing is regrouped and nothing is reworded: the
+    // sentences are `recordLines`' own, in `recordLines`' own order.
+    const markup = render(QUARTERLY_BLOCKS['quarterly.method'].render(data, 'print', ctx))
+    const t = renderText(QUARTERLY_BLOCKS['quarterly.method'].render(data, 'print', ctx))
+    for (const line of data.method.lines) expect(t).toContain(line)
+    // In order, and each one exactly once.
+    let at = -1
+    for (const line of data.method.lines) {
+      const next = t.indexOf(line)
+      expect(next).toBeGreaterThan(at)
+      at = next
+      expect(t.split(line).length - 1).toBe(1)
+    }
+    // AND THEY SHARE PARAGRAPHS. Twelve sentences in four nodes means
+    // consecutive sentences sit inside one `<p>`, separated by a space.
+    expect(data.method.lines.length).toBeGreaterThan(4)
+    expect(markup).toContain(`${data.method.lines[0]} ${data.method.lines[1]}`)
+    for (const mode of MODES) assertCopyContract(render(QUARTERLY_BLOCKS['quarterly.method'].render(data, mode, ctx)))
+  })
+
   it('qr.p7.numbers · eight rows, with Sources, Held back and Languages among them', () => {
     const labels = data.method.numbers.map((r) => r.label)
     expect(labels).toContain('Sources')

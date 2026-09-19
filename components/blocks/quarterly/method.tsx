@@ -39,6 +39,24 @@ import { Card, Column, Columns, DefList, Eyebrow, Figure, Note, Row, Rule } from
 // it sparked, so under a Videos row of 7,059 the mock's label calls 11,840
 // comments 11,840 conversations.
 
+/** An ordered list of sentences as FOUR paragraphs, in order, as evenly as the
+ *  count allows — the artboard's four. Fewer than four sentences gives one
+ *  paragraph each and no empty ones. */
+function inFour(lines: readonly string[]): string[][] {
+  if (lines.length === 0) return []
+  const groups = Math.min(4, lines.length)
+  const out: string[][] = []
+  let taken = 0
+  for (let g = 0; g < groups; g++) {
+    // The remainder goes to the EARLIEST paragraphs, so the last one is never
+    // the long one and never a widow.
+    const size = Math.ceil((lines.length - taken) / (groups - g))
+    out.push(lines.slice(taken, taken + size))
+    taken += size
+  }
+  return out
+}
+
 export const quarterlyMethod: Block<QuarterlyData> = {
   key: 'quarterly.method',
   title: QUARTER_PAGE_TITLE.method,
@@ -63,9 +81,26 @@ export const quarterlyMethod: Block<QuarterlyData> = {
       <Column mode={mode} gap={6}>
         <Eyebrow mode={mode}>How this review was made</Eyebrow>
         <Note mode={mode} tone="body">{m.line}</Note>
-        {m.lines.map((line, n) => (
-          <Note key={n} mode={mode}>{line}</Note>
-        ))}
+        {/* FOUR PARAGRAPHS, WHICH IS WHAT THE ARTBOARD SETS — not thirteen
+            free-standing lines a pixel apart, which is what this read as: a
+            log, in a 674px column, each entry one line long with 100px of
+            unused measure beside it.
+
+            NOTHING IS REGROUPED AND NOTHING IS REWORDED. `recordLines` emits
+            its sentences in one fixed thematic order — what was delivered,
+            what was gathered, how deeply it was read, what changed, what we
+            could and could not say — and they are divided into four IN THAT
+            ORDER, as evenly as the count allows. A paragraph here is a
+            typographic grouping of an ordered list, not a claim that these
+            three facts belong together; every sentence still stands on its
+            own and still says its own basis. It is also SHORTER than the
+            stack it replaces: the same words set as prose lose twelve
+            inter-note margins and nine short last lines. */}
+        <div className={email ? undefined : 'flex flex-col gap-2'}>
+          {inFour(m.lines).map((para, n) => (
+            <Note key={n} mode={mode}>{para.join(' ')}</Note>
+          ))}
+        </div>
 
         <div className={email ? undefined : 'mt-1.5 flex flex-col gap-[3px]'}>
           <Eyebrow mode={mode}>The unusual-week check</Eyebrow>
