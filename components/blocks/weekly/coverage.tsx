@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import type { Block, RenderMode } from '@/lib/blocks/types'
+import type { Block } from '@/lib/blocks/types'
 import { BlockFrame } from '@/components/blocks/frame'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt } from '@/lib/format'

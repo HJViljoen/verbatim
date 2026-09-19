@@ -9,6 +9,7 @@ import { fmtInt, fmtPct } from '@/lib/format'
 import { inPeriod } from '@/lib/reports/weekly'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { WeeklyData } from '@/lib/pages/weekly'
+import type { Mover } from '@/lib/pages/overview'
 
 // WR5 · For content (design §3 WR section 5).
 //
@@ -28,12 +29,6 @@ import type { WeeklyData } from '@/lib/pages/weekly'
 // unchanged, so the queue a content person opens and the queue this section
 // names cannot disagree; when Phase 2 moves the inbox to This week, this
 // section follows it by changing one loader call.
-
-function Rail({ mode, children }: { mode: RenderMode; children: ReactNode }) {
-  return mode === 'email'
-    ? <div style={{ borderTop: `1px solid ${EMAIL.hairline}`, padding: '7px 0' }}>{children}</div>
-    : <div className="border-t border-border/70 py-1.5">{children}</div>
-}
 
 /**
  * The artboard's counted row: a title, a mono 16/600 figure at the right end,
@@ -81,15 +76,69 @@ function CountedRow({ title, value, note, mode, children }: {
   )
 }
 
+/**
+ * The movers, as ONE row of the section's own shape: the title on the left,
+ * each theme on its own line under it with its reading and its verdict at the
+ * right end, and the basis in the mono sub-line.
+ *
+ * `CountedRow` cannot draw it, because this row has no single figure — three
+ * themes have three readings — and inventing one would be a figure nobody
+ * measured. What it borrows is the ANATOMY: a 14px title, a mono 11px note,
+ * and every number at the right end of its line.
+ */
+function MoverRows({ movers, mode }: { movers: readonly Mover[]; mode: RenderMode }) {
+  const title = 'What moved most'
+  const note = `in the category ${movers.length === 1 ? 'this month' : 'this month, each against the band it cleared'}`
+  const line = (m: Mover) => {
+    const reading = (
+      <>
+        <span data-copy="figure">{m.pct == null ? `${fmtInt(m.k)} of ${fmtInt(m.n)}` : `${fmtPct(m.pct)} · ${fmtInt(m.k)} of ${fmtInt(m.n)}`}</span>{' '}
+        {/* `good="neutral"`, for the reason WR1's badge is: "Zips failing
+            after a year — +1.9 pts" is not good news because the number went
+            up, and the title over these rows is deliberately direction-free. */}
+        <BlockMovement verdict={m.verdict} unit="pts" mode={mode} good="neutral" />
+      </>
+    )
+    if (mode === 'email') {
+      return (
+        <table key={m.id} width="100%" role="presentation" cellPadding={0} cellSpacing={0} border={0} style={{ borderCollapse: 'collapse', borderSpacing: 0, marginTop: 5 }}>
+          <tbody>
+            <tr>
+              <td style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink }}>{m.label}</td>
+              <td align="right" style={{ whiteSpace: 'nowrap', paddingLeft: 14 }}>{reading}</td>
+            </tr>
+          </tbody>
+        </table>
+      )
+    }
+    return (
+      <div key={m.id} className="mt-1 flex items-baseline justify-between gap-3.5 text-[12.5px]">
+        <span className="min-w-0">{m.label}</span>
+        <span className="flex-none whitespace-nowrap">{reading}</span>
+      </div>
+    )
+  }
+  if (mode === 'email') {
+    return (
+      <div style={{ borderTop: `1px solid ${EMAIL.hairline}`, padding: '11px 0' }}>
+        <div style={{ fontFamily: FONT.sans, fontSize: 14, color: EMAIL.ink }}>{title}</div>
+        <div style={{ fontFamily: FONT.mono, fontSize: 11, lineHeight: 1.5, color: EMAIL.muted, marginTop: 5 }}>{note}</div>
+        {movers.map(line)}
+      </div>
+    )
+  }
+  return (
+    <div className="flex min-h-[44px] flex-col gap-1.5 border-t border-border/70 py-2.5">
+      <span className="text-[14px]">{title}</span>
+      <span className="font-mono text-[11px] leading-relaxed text-muted-foreground">{note}</span>
+      {movers.map(line)}
+    </div>
+  )
+}
+
 /** "1.8× over 24 of 402" — a multiple with the n it was read over, on either
  *  side of the head-to-head. */
 const multipleOf = (m: number): string => `${(Math.round(m * 10) / 10).toFixed(1)}×`
-
-function Eyebrow({ mode, children }: { mode: RenderMode; children: ReactNode }) {
-  return mode === 'email'
-    ? <div style={{ fontFamily: FONT.mono, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.5px', color: EMAIL.muted }}>{children}</div>
-    : <div className="font-mono text-[10.5px] uppercase tracking-[0.05em] text-muted-foreground">{children}</div>
-}
 
 function Note({ mode, children }: { mode: RenderMode; children: ReactNode }) {
   return mode === 'email'
@@ -160,17 +209,22 @@ export const weeklyContent: Block<WeeklyData> = {
               </>
             }
           >
+            {/* THE INTENT GOES ON THE CITE, NOT OVER THE QUOTE. It was a mono
+                uppercase eyebrow per quote — a fourth and fifth all-caps
+                eyebrow in a section the artefact gives one each. The cite is
+                already the product's own line about a quote (WR4's card makes
+                the same move with its row names), and "Question · under your
+                post · 41 likes" says the same thing in the row's own rhythm. */}
             {c.worthAReply.map((q, i) => (
               <div key={`${q.ref}:${i}`} style={mode === 'email' ? { marginTop: 6 } : undefined} className={mode === 'email' ? undefined : 'mt-1.5'}>
-                <Eyebrow mode={mode}>{q.intentLabel}</Eyebrow>
                 <BlockQuote
                   quote={q}
                   mode={mode}
                   cite={q.href
                     ? mode === 'email'
-                      ? <a href={q.href} style={{ color: EMAIL.link, textDecoration: 'none' }}>{q.context} →</a>
-                      : <a href={q.href} className="hover:underline">{q.context} →</a>
-                    : q.context}
+                      ? <a href={q.href} style={{ color: EMAIL.link, textDecoration: 'none' }}>{q.intentLabel} · {q.context} →</a>
+                      : <a href={q.href} className="hover:underline">{q.intentLabel} · {q.context} →</a>
+                    : `${q.intentLabel} · ${q.context}`}
                 />
               </div>
             ))}
@@ -179,29 +233,23 @@ export const weeklyContent: Block<WeeklyData> = {
           <Note mode={mode}>{c.worthAReplyNote}</Note>
         )}
 
+        {/* THE MOVERS, IN THE SECTION'S OWN ROW SHAPE (weekly.s5.rising).
+            They were a `Rail` holding a mono uppercase eyebrow over two
+            sentence rows with amber verdict pills mid-line — a second and
+            third row shape in a section the artboard draws as three of one,
+            and an extra all-caps eyebrow on an artefact that has one per
+            section. The artboard's middle row is "Rising now — wet commute ·
+            zips · 16-inch laptop fit" with a mono sub-line under it: a title
+            and a note, exactly like the two rows around it.
+
+            NOT "RISING NOW", which the design writes and the copy contract
+            refuses: a direction word in a heading is a claim made before any
+            row has earned one (rule (c); WP11 made the same change to OV3).
+            Each row still carries its own banded verdict in the badge, at the
+            right end where every other figure in this section sits, rather
+            than inline halfway through a sentence. */}
         {c.rising.length > 0 ? (
-          <Rail mode={mode}>
-            {/* NOT "RISING NOW", which the design writes and the copy contract
-                refuses: a direction word in a heading is a claim made before any
-                row has earned one (rule (c); WP11 made the same change to OV3).
-                The rows below each carry their own banded verdict, and the badge
-                is where a direction may be spoken. */}
-            <Eyebrow mode={mode}>What moved most · from this month’s reading</Eyebrow>
-            {c.rising.map((m) => (
-              <div
-                key={m.id}
-                style={mode === 'email' ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, marginTop: 3 } : undefined}
-                className={mode === 'email' ? undefined : 'mt-0.5 text-[12.5px]'}
-              >
-                {m.label} — <span data-copy="figure">{m.pct == null ? `${fmtInt(m.k)} of ${fmtInt(m.n)}` : `${fmtPct(m.pct)} · ${fmtInt(m.k)} of ${fmtInt(m.n)}`}</span>{' '}
-                {/* `good="neutral"`, for the reason WR1's badge is: "Zips
-                    failing after a year — +1.9 pts" is not good news because
-                    the number went up, and the heading over these rows is
-                    deliberately direction-free. */}
-                <BlockMovement verdict={m.verdict} unit="pts" mode={mode} good="neutral" />
-              </div>
-            ))}
-          </Rail>
+          <MoverRows movers={c.rising} mode={mode} />
         ) : (
           <Note mode={mode}>{c.risingNote}</Note>
         )}

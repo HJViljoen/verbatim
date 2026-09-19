@@ -651,7 +651,7 @@ describe('WR5 · for content', () => {
   it('names what is worth a reply, what is rising and what worked, each with its n', () => {
     const text = renderText(block.render(weeklyFixture(), 'app', ctx))
     expect(text).toContain('Does the strap come off?')
-    expect(text).toContain('What moved most · from this month’s reading')
+    expect(text).toContain('What moved most')
     // `t2`, not `t1`: §1's hero leads with "Will it survive a wet commute" and
     // §5 no longer repeats it (`risingMovers`).
     expect(text).toContain('5.1% · 71 of 1,388')
@@ -661,6 +661,23 @@ describe('WR5 · for content', () => {
     // printed the stored slug (`promotional`, and one day `trend-riding`) and a
     // multiple over an unstated population.
     expect(text).toContain('Talking head outperformed Commute POV')
+  })
+
+  // THREE ROWS OF ONE SHAPE, AND ONE ALL-CAPS EYEBROW IN THE SECTION. §5 drew
+  // a counted row, then a `Rail` with a mono uppercase eyebrow over sentence
+  // rows carrying amber verdict pills mid-line, then a second counted row —
+  // three shapes where the artboard draws three of one, and a fourth and
+  // fifth all-caps eyebrow on an artefact that has one per section. The
+  // rename to "What moved most" is rule (c) and is not the issue.
+  it('draws its three rows in one shape and spends no extra eyebrow', () => {
+    for (const mode of MODES) {
+      const markup = render(block.render(weeklyFixture(), mode, ctx))
+      // ONE uppercase node in the section, and it is the section's own
+      // heading — the artboard's rule, one eyebrow per section.
+      expect(markup.split('uppercase').length - 1, mode).toBe(1)
+      // The intent label is on the cite now, in the row's own rhythm.
+      expect(markupText(markup), mode).toContain('Question · under your post')
+    }
   })
 
   // §5 NEVER REPEATS §1's OBJECT. `headlineObject`'s third arm is literally
