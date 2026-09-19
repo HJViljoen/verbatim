@@ -4,7 +4,7 @@ import { CadenceSection, FREEZE_NOTE, SLOT_NOTE } from './cadence'
 import { CommunitiesSection } from './communities'
 import { rowMessage } from './community-controls'
 import { PlatformsSection } from './platforms'
-import { RivalsSection, RENAME_UNAVAILABLE } from './rivals'
+import { RivalsSection, NO_ACCOUNTS_SHORT, RENAME_UNAVAILABLE } from './rivals'
 import { renameNotice } from '@/app/dashboard/settings/rival-rename'
 import { RIVAL_REMOVED_PENDING } from '@/lib/settings/rivals-view'
 import { NEW_TERM_RULE, REVIEW_KEEP_NOTE, TermsSection } from './terms'
@@ -317,6 +317,35 @@ describe('the rivals section', () => {
     expect(tail.match(/<p /g)?.length ?? 0).toBe(1)
     expect(words).toContain('earliest evidence in our own data')
     expect(words).toContain('dated by the day the post went up')
+  })
+
+  it('says the account-less reason once, not once per rival', () => {
+    // ST12: `rivalState`'s account-less sentence is the same 52 characters on
+    // every rival with no handles — three copies down one column here, five
+    // where nothing is configured, each wrapping to three lines. The cell keeps
+    // the STATE; the consequence, which does not differ row to row, is a
+    // section note, exactly as the own-posts reason already is.
+    const why = 'No account is configured for this rival, so nothing they publish is read — add their accounts in Settings and this starts counting.'
+    const none = renderText(
+      <RivalsSection
+        rows={['Poler', 'Cotopaxi', 'Patagonia'].map((name) => rival({ name, ownPostsWhy: why }))}
+        names={['Poler', 'Cotopaxi', 'Patagonia']} month="2026-09-01" canEdit onAdd={() => null} onRemove={() => {}}
+      />,
+    )
+    // The state, three times — it is what the row is.
+    expect(none.split(NO_ACCOUNTS_SHORT).length - 1).toBe(3)
+    expect(none).not.toContain('no accounts configured — nothing they publish is being read')
+    // The consequence, once, in the section's one paragraph.
+    expect(none.split(why).length - 1).toBe(1)
+    // And where no month was passed there is no own-posts column to carry it,
+    // so the section says it in its own words rather than not at all.
+    const noMonth = renderText(
+      <RivalsSection
+        rows={['Poler', 'Cotopaxi'].map((name) => rival({ name }))}
+        names={['Poler', 'Cotopaxi']} month="2026-09-01" canEdit onAdd={() => null} onRemove={() => {}}
+      />,
+    )
+    expect(noMonth.split('nothing they publish is being read').length - 1).toBe(1)
   })
 
   it('keeps the capture-versus-read census and the earliest-evidence footnote', () => {

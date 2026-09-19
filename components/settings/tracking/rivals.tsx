@@ -118,7 +118,7 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
                 <span key="h" className="block">
                   <span className="inline-flex items-center gap-1.5 text-[12.5px] text-secondary-foreground">
                     <Dot tone={dropped || r.retiredAt ? 'none' : r.noAccounts ? 'watch' : r.read > 0 ? 'good' : 'watch'} />
-                    {dropped ? RIVAL_REMOVED_PENDING : rivalState(r)}
+                    {dropped ? RIVAL_REMOVED_PENDING : r.noAccounts && !r.retiredAt ? NO_ACCOUNTS_SHORT : rivalState(r)}
                   </span>
                   {r.perPlatform.length > 0 && (
                     <span className="mt-0.5 block font-mono text-[10.5px] text-muted-foreground">
@@ -211,6 +211,23 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
         notes={[
           HANDLE_FORMAT_CAVEAT,
           TRACKED_SINCE_NOTE,
+          // ST12: the reason, ONCE. `rivalState`'s account-less sentence is
+          // the same 52 characters on every rival with no handles — three
+          // copies down a `minmax(0,1fr)` column here, five on a workspace
+          // where nothing is configured, each wrapping to three lines. The
+          // section already moved the own-posts reason out on precisely this
+          // argument (the "— not read" cell above); the state cell was not
+          // given the same treatment. The cell keeps the STATE, which is what
+          // differs row to row.
+          //
+          // Where the own-posts column is drawn, the consequence is ALREADY
+          // here: `ownPostsWhy` is `OWN_POSTS_NO_ACCOUNTS` for exactly these
+          // rows and the spread below prints it once. This arm is for the
+          // caller that passed no month, where that column is not drawn and
+          // the sentence would otherwise go unsaid.
+          rows.some((r) => r.noAccounts && !r.retiredAt) && !rows.some((r) => r.ownPostsWhy)
+            ? 'Where no account is configured for a rival, nothing they publish is being read — only what a search finds.'
+            : null,
           rows.some((r) => r.ownPosts)
             ? `Own posts are dated by the day the post went up, which is a different clock from everything else on this page — ${rows.find((r) => r.ownPosts)?.ownPosts?.basis}.`
             : null,
@@ -224,6 +241,11 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
 /** What the action cell says where there is no identity to rename. Before M1
  *  every cell on the page is this one, and an empty cell would read as a
  *  missing control rather than an unshipped one. */
+/** What the state cell says for a rival with no accounts. The CONSEQUENCE —
+ *  that nothing they publish is read — is a `SectionNotes` sentence printed
+ *  once, because it is the same for every such row (ST12). */
+export const NO_ACCOUNTS_SHORT = 'no accounts configured'
+
 export const RENAME_UNAVAILABLE = 'renaming needs their identity, which has not shipped here yet'
 
 export const TRACKED_SINCE_NOTE =
