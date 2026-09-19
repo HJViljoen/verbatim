@@ -3,7 +3,7 @@ import { blockAnswers, blockContext, figureConflicts, mergeFigures, type RenderM
 import { EMAIL } from '@/lib/email/theme'
 import { fullDate } from '@/lib/format'
 import { assertCopyContract } from '@/lib/test/copy-contract'
-import { render, renderText } from '@/lib/test/render'
+import { markupText, render, renderText } from '@/lib/test/render'
 import { fmtInt, fmtPct } from '@/lib/format'
 import { sentFigureRows } from '@/lib/reports/sent-figures'
 import { MONTHLY_BLOCK_KEYS, MONTHLY_MOVES_UNLOCK } from '@/lib/reports/monthly'
@@ -427,6 +427,34 @@ describe('the five sections that are Overview’s', () => {
     expect(page).toContain(freeze)
     expect(artefact).toContain(freeze)
     for (const line of data.overview.record.lines) expect(artefact).toContain(line)
+  })
+
+  // THE ARTBOARD'S STRUCTURE, NOT ONE JOINED PARAGRAPH (the wave-3 review,
+  // finding [Important]). §8 printed `lines.join(' ')` at 11.5 and
+  // `footnote.join(' ')` at 11, both wholly muted: twelve facts in one
+  // five-line block, then seven lines more, with nothing marking where any of
+  // them starts — and the artefact's most important caveat ("this month stops
+  // moving on 31 Oct 2026") at the end of it in the smallest type on the page.
+  it('sets the record as one paragraph per fact, each led by its own figure', () => {
+    const data = monthlyFixture()
+    const record = data.overview.record
+    const markup = render(MONTHLY_BLOCKS['monthly.sound'].render(data, 'email', ctx))
+    // One paragraph per line, plus the freeze sentence, at the artboard's tier.
+    expect((markup.match(/font-size:13\.5px/g) ?? []).length).toBe(record.lines.length + 1)
+    expect(markup).not.toContain('font-size:11.5px')
+    // The lead is the sentence's own figure, in the ink, and never a rewording:
+    // "27% of what was said" leads on the figure alone.
+    expect(markup).toContain(`<span style="font-weight:600;color:${EMAIL.ink}">3 updates</span>`)
+    expect(markup).toContain(`<span style="font-weight:600;color:${EMAIL.ink}">2,359 videos</span>`)
+    expect(markup).toContain(`<span style="font-weight:600;color:${EMAIL.ink}">27%</span>`)
+    expect(markup).not.toContain('>27% of<')
+    // A sentence that opens on no figure gets no bold lead at all.
+    const nothing = record.lines.find((l) => l.startsWith('Nothing about'))!
+    expect(markup).toContain(`>${nothing}</div>`)
+    // And every word is still the composer's, whole.
+    for (const line of [...record.lines, freezeSentence(record.freezesOn)]) {
+      expect(markupText(markup)).toContain(line)
+    }
   })
 
   // A Block renders its own heading inside its own frame, so an adapter that
