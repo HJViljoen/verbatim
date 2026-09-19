@@ -183,12 +183,21 @@ export interface HeadToHeadInput {
 
 const round1 = (n: number): number => Math.round(n * 10) / 10
 
+// THE READER'S WORDS, NOT THE ANALYST'S (CO18). These three sentences are
+// client-facing — they print on Competitive and on the quarterly review, in all
+// three modes — and they said "a share of a population" and "a median of
+// per-video rates", which are the analyst's sentence about the measurement
+// rather than the reader's. `denominator` is sanctioned by GLOSSARY and these
+// were not; the same deck manages the same idea in the reader's words
+// ("a video with at least one analysed comment", document-deck.tsx:1402).
+// What each one has to carry is unchanged: WHY no band, and that both months
+// are printed in its place.
 const RATE_NOT_A_SHARE =
-  'Comments per video is a rate, not a share of a population, so no band is drawn over it — both months are printed instead.'
+  'Comments per video is an average, not a count out of a total, so no band is drawn over it — both months are printed instead.'
 const MEDIAN_NOT_A_SHARE =
-  'Engagement is a median of per-video rates, not a share of a population, so no band is drawn over it — both months are printed instead.'
+  'Engagement is the middle video’s rate, not a count out of a total, so no band is drawn over it — both months are printed instead.'
 const COUNT_NOT_A_SHARE =
-  'Posts published is a count with no denominator, so no band is drawn over it — both months are printed instead.'
+  'Posts published is a plain count with nothing to be out of, so no band is drawn over it — both months are printed instead.'
 
 const floorWhy = (floor: number): string =>
   `Under ${fmtInt(floor)} videos on a side, so no comparison is drawn.`

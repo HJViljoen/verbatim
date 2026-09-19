@@ -112,9 +112,15 @@ describe('headToHead · the five measures', () => {
       expect(m.rivalVerdict).toBeNull()
       expect(m.verdictWhy).toContain('no band is drawn over it')
     }
-    expect(rate.verdictWhy).toContain('rate')
-    expect(median.verdictWhy).toContain('median')
-    expect(posts.verdictWhy).toContain('count')
+    // CO18: each names what it IS, in the reader's words rather than the
+    // analyst's — "a share of a population" and "a median of per-video rates"
+    // were the analyst's sentence about the measurement.
+    expect(rate.verdictWhy).toContain('an average')
+    expect(median.verdictWhy).toContain('the middle video’s rate')
+    expect(posts.verdictWhy).toContain('a plain count')
+    for (const m of [rate, median, posts]) {
+      expect(m.verdictWhy).not.toMatch(/share of a population|per-video rates|denominator/)
+    }
   })
 
   it('prints the engagement figure with the videos it was read off, of the videos published', () => {

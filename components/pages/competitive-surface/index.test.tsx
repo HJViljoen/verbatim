@@ -497,9 +497,9 @@ describe('CO3 · head to head, then and now', () => {
 
   it('prints no magnitude on a rate, a median or a count — and says why (D2, D3)', () => {
     const text = renderText(competitiveHeadToHead.render(competitiveFixture(), 'app', ctx))
-    expect(text).toContain('Comments per video is a rate')
-    expect(text).toContain('Engagement is a median of per-video rates')
-    expect(text).toContain('Posts published is a count with no denominator')
+    expect(text).toContain('Comments per video is an average, not a count out of a total')
+    expect(text).toContain('Engagement is the middle video’s rate')
+    expect(text).toContain('Posts published is a plain count with nothing to be out of')
     // The mock prints "+2", "+0.2 pt" and "▼ 2" on exactly those three rows.
     expect(text).not.toMatch(/[▲▼]\s*(2|0\.2)\b/)
   })
