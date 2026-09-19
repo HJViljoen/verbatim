@@ -7,7 +7,8 @@ import type { Scope } from '../renderables/types'
 import { selectAll } from '../supabase-admin'
 import { monthStartOf, nextMonth } from './month-key'
 import { isMissingMonthlyReading, isMissingMonthTable } from './monthly'
-import { loadWindowReading, type ReadingHandle } from './read'
+import { type ReadingHandle } from './read'
+import { RPC_WINDOW_SPAN_DENOMINATORS } from './types'
 
 /**
  * The series This week draws its chart from — the last thirteen UPDATES
@@ -534,38 +535,58 @@ export async function loadUpdateSeries(scope: Scope, opts: UpdateSeriesOptions =
     windowless,
     requested,
     // A SPAN THAT ANSWERED NOTHING IS NOT AN EMPTY SPAN, AND A SPAN THAT COULD
-    // NOT BE READ IS NEITHER. `loadWindowReading` returns `denominators: null`
-    // when M3 is absent and `[]` when it is present and the days were quiet —
-    // the same distinction every reader on this page keeps — and a throw is a
-    // third thing again. `readSpans` carries all three up so the note says
-    // which happened rather than blaming the deployment for one failed call.
+    // NOT BE READ IS NEITHER. `window_span_denominators` returns a ZERO ROW for
+    // a span with nothing in it and no row at all for one it did not cover, a
+    // missing function is `absent` by name, and a throw is a third thing again
+    // — the same distinction every reader on this page keeps. `readSpans`
+    // carries all three up so the note says which happened rather than blaming
+    // the deployment for one failed call.
     windowRead: spanKeys.length === 0 ? 'read' : spanReads.probe,
   })
 }
 
 /**
- * The windowed read of every (update, month) span.
+ * The windowed read of every (update, month) span — ONE aggregation, not one
+ * per span.
  *
- * THE FIRST SPAN IS A PROBE AND THE OTHER TWENTY-FIVE ARE NOT SENT WHERE IT
- * ANSWERS NOTHING. M3 is applied by hand and is not applied on production
- * today, so `window_denominators` is a function PostgREST has never heard of:
- * every one of these calls comes back a 404, `loadWindowReading` swallows it by
- * name and answers `denominators: null`, and the page would have paid
- * twenty-six round trips for twenty-six identical silences on every load. One
- * serial call in the healthy case is the price of that; the rest go out
- * together behind it.
+ * WHY IT IS ONE CALL. Thirteen updates clipped to every calendar month they
+ * touch is thirteen to twenty-six spans, and each used to be its own
+ * `window_denominators`: a whole-corpus aggregation over `comments JOIN videos`
+ * differing from its neighbours in one date predicate, with the video set, the
+ * rival fold and the undated pass recomputed identically every time, twelve of
+ * them concurrently. The spans are contiguous slices of ONE axis, so
+ * `window_span_denominators` reads the rows once over [min(from), max(to)) and
+ * groups by span. Thirteen answers, one pass.
  *
- * ONE SPAN THAT FAILS LOSES ITS OWN POINT'S CONTRIBUTION AND NOBODY ELSE'S. A
- * rejection would take the whole chart down, and a chart of thirteen updates is
- * worth drawing with twelve contributions on it — as long as the thirteenth
- * prints no number rather than a zero.
+ * It was cheap only because the RPC is not applied yet: the probe below
+ * returned early and the other twenty-five were never sent. That was a
+ * deploy-state guard, not a cost control — the day M3 lands the fan-out arrives
+ * with no flag — which is why the shape changed rather than the guard.
  *
- * AND THE PROBE'S OWN ANSWER IS THREE-VALUED, because the note it drives is.
- * "The RPC does not exist here" is a fact about this deployment; "that call
- * errored" is a fact about one read of it. Folding them into one `null` had the
- * page tell a reader the windowed reading was not installed for their
- * workspace on the strength of a single blinked read.
+ * WHAT THAT COSTS, SAID PLAINLY. One call cannot half-fail, so a blink now
+ * loses every point's contribution where it used to lose one. The chart still
+ * draws — each point prints its own videos off `countVideosPerRun`, which is a
+ * separate read — and `windowRead: 'failed'` says in the note that no
+ * contribution is stated, which is the sentence thirteen separate failures
+ * would have produced anyway.
+ *
+ * THE ANSWER IS STILL THREE-VALUED, because the note it drives is. "The RPC
+ * does not exist here" is a fact about this deployment; "that call errored" is
+ * a fact about one read of it. Folding them into one `null` had the page tell a
+ * reader the windowed reading was not installed for their workspace on the
+ * strength of a single blinked read.
+ *
+ * A SPAN THAT ANSWERED ZERO IS NOT A SPAN THAT WENT UNREAD. The function
+ * returns a zero row for a span with nothing in it rather than no row, so a
+ * missing key here means the read did not cover it — which is the state
+ * `buildUpdateSeries` prints as no contribution rather than as 0 of N.
  */
+interface SpanRow {
+  span_key: string
+  videos: number | null
+  comments: number | null
+}
+
 async function readSpans(
   reading: ReadingHandle,
   clientId: string,
@@ -575,37 +596,32 @@ async function readSpans(
   probe: 'read' | 'absent' | 'failed'
 }> {
   if (spanKeys.length === 0) return { reads: [], probe: 'read' }
-  type SpanRead =
-    | { kind: 'read'; key: string; videos: number; comments: number }
-    | { kind: 'absent' }
-    | { kind: 'failed' }
-  const one = async (s: (typeof spanKeys)[number]): Promise<SpanRead> => {
-    try {
-      const read = await loadWindowReading(reading.client, clientId, { from: s.span.from, to: s.span.to })
-      // `denominators: null` is `loadWindowReading` having swallowed the 404 by
-      // name: the RPC does not exist here, which is a fact about the deployment.
-      if (read.denominators == null) return { kind: 'absent' }
-      return {
-        kind: 'read',
-        key: `${s.runId}::${s.month}`,
-        videos: read.denominators.reduce((t, d) => t + (d.videos ?? 0), 0),
-        comments: read.denominators.reduce((t, d) => t + (d.comments ?? 0), 0),
-      }
-    } catch (error) {
-      // A THROW IS NOT THE SAME SILENCE. A PostgREST that cannot load its
-      // schema cache throws where a missing function answers null, and calling
-      // that "not installed for this workspace" is a claim about our deployment
-      // made from one blinked read.
-      if (isMissingMonthlyReading(error)) return { kind: 'absent' }
-      console.error(`[reading] updates.span: ${(error as { message?: string })?.message ?? String(error)}`)
-      return { kind: 'failed' }
+  // `${runId}::${month}` is unique by construction: `spanKeys` is one entry per
+  // run per month that run's own window touches.
+  const asked = spanKeys.map((s) => ({ k: `${s.runId}::${s.month}`, f: s.span.from, t: s.span.to }))
+  try {
+    const rows = await selectAll<SpanRow>(() =>
+      reading.client
+        .rpc(RPC_WINDOW_SPAN_DENOMINATORS, { p_client: clientId, p_spans: asked })
+        .order('span_key', { ascending: true }),
+    )
+    const byKey = new Map(rows.map((r) => [r.span_key, r]))
+    return {
+      reads: asked.map((s) => {
+        const row = byKey.get(s.k)
+        return row ? { key: s.k, videos: row.videos ?? 0, comments: row.comments ?? 0 } : null
+      }),
+      probe: 'read',
     }
+  } catch (error) {
+    // A THROW IS NOT THE SAME SILENCE. A PostgREST that cannot load its schema
+    // cache throws where a missing function answers by name, and calling that
+    // "not installed for this workspace" is a claim about our deployment made
+    // from one blinked read.
+    if (isMissingMonthlyReading(error)) return { reads: [], probe: 'absent' }
+    console.error(`[reading] updates.spans: ${(error as { message?: string })?.message ?? String(error)}`)
+    return { reads: [], probe: 'failed' }
   }
-  const held = (r: SpanRead) => (r.kind === 'read' ? { key: r.key, videos: r.videos, comments: r.comments } : null)
-  const probe = await one(spanKeys[0])
-  if (probe.kind !== 'read') return { reads: [], probe: probe.kind }
-  const rest = await mapWithLimit(spanKeys.slice(1), READ_CONCURRENCY, one)
-  return { reads: [held(probe), ...rest.map(held)], probe: 'read' }
 }
 
 /**

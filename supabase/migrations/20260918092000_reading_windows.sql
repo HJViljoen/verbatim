@@ -285,6 +285,85 @@ comment on function public.window_denominators(uuid, timestamptz, timestamptz) i
 revoke all on function public.window_denominators(uuid, timestamptz, timestamptz) from public, anon, authenticated;
 grant execute on function public.window_denominators(uuid, timestamptz, timestamptz) to service_role;
 
+-- 1b. The same denominator, many spans, ONE aggregation ------------------------
+-- This week's chart is thirteen updates and each update's window is clipped to
+-- every calendar month it touches, so one load asks for thirteen to twenty-six
+-- windowed figures. Through `window_denominators` that is thirteen to
+-- twenty-six separate aggregations over `comments JOIN videos`, differing only
+-- in one date predicate: the `vid` CTE, the rival fold and the undated pass are
+-- recomputed identically every time, twelve of them concurrently, against the
+-- instance whose disk-IO budget a morning of window-function loops exhausted on
+-- 2026-09-16.
+--
+-- The spans are contiguous slices of ONE axis, so the rows are read once over
+-- [min(from), max(to)) and grouped by span. A comment dated in two overlapping
+-- spans is counted in both — that is what a span figure means, and it is why
+-- this is a LEFT JOIN on the span bounds rather than a `width_bucket`.
+--
+-- WHAT IT DELIBERATELY DOES NOT RETURN. No audience breakdown, no platform mix,
+-- no dual-mention and no undated column: `loadUpdateSeries` sums videos and
+-- comments across audiences and prints nothing else, and a per-audience
+-- `count(distinct video)` per span is the expensive half. A caller that wants
+-- the record's full denominator for one window calls `window_denominators`,
+-- which is still the one figure a page states in prose.
+--
+-- A SPAN WITH NOTHING IN IT COMES BACK AS A ZERO ROW, not as no row: the caller
+-- has to tell "this update found nothing" from "this span was never asked
+-- for", and a missing row would make those one.
+create or replace function public.window_span_denominators(
+  p_client uuid,
+  p_spans  jsonb
+)
+returns table (
+  span_key text,
+  videos   int,
+  comments int
+)
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  with spans as (
+    select s.k::text as span_key, s.f as from_ts, s.t as to_ts
+    from jsonb_to_recordset(coalesce(p_spans, '[]'::jsonb)) as s(k text, f timestamptz, t timestamptz)
+    where s.k is not null and s.f is not null and s.t is not null and s.f < s.t
+  ),
+  bounds as (
+    select min(from_ts) as lo, max(to_ts) as hi from spans
+  ),
+  vid as (
+    select v.id, v.platform, v.video_id
+    from public.videos v
+    where v.client_id = p_client
+      and v.analyzed_run_id is not null
+  ),
+  -- ONE pass over the axis. Same join and same half-open rule as
+  -- `window_denominators`' `dated`, minus the audience label, which nothing
+  -- here groups by.
+  dated as (
+    select v.id as video_uuid, c.id as comment_id, c.comment_date
+    from public.comments c
+    join vid v on v.platform = c.platform and v.video_id = c.video_id
+    where c.client_id = p_client
+      and c.comment_date >= (select lo from bounds)
+      and c.comment_date <  (select hi from bounds)
+  )
+  select s.span_key,
+         count(distinct d.video_uuid)::int,
+         count(distinct d.comment_id)::int
+  from spans s
+  left join dated d on d.comment_date >= s.from_ts and d.comment_date < s.to_ts
+  group by s.span_key
+  order by s.span_key
+$$;
+
+comment on function public.window_span_denominators(uuid, jsonb) is
+  'Many half-open windows, one aggregation: for each {k, f, t} in p_spans, the DISTINCT analysed videos carrying a comment dated in [f, t) and their comments, tenant-wide. Same join and same half-open rule as window_denominators, without the audience breakdown, the platform mix, the dual-mention count or the undated column — This week draws thirteen updates clipped to the months they touch and sums videos and comments across audiences, and asking window_denominators once per span recomputed the video set and the rival fold thirteen to twenty-six times. A span with nothing in it comes back as a zero row, never as no row.';
+
+revoke all on function public.window_span_denominators(uuid, jsonb) from public, anon, authenticated;
+grant execute on function public.window_span_denominators(uuid, jsonb) to service_role;
+
 -- 2. The window theme read -----------------------------------------------------
 -- One row per audience per theme for the whole window, under one run's
 -- clustering. Every rule is monthly_theme_readings' rule; see 20260915092000:384-401
