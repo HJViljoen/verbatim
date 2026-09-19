@@ -421,6 +421,11 @@ export async function updateCommunity(
   // URL; `subredditKey` is what was actually stored, and a log that quoted the
   // paste would not match the column it is the record of.
   const community = subredditLabel(subredditKey(name))
+  // "We stopped watching it" and "we will not watch it" are different
+  // sentences, and only one of them is true about a community discovery had
+  // merely PROPOSED — nothing was ever read from it, so there is nothing to
+  // stop. `was` is the state the entry was in before this edit.
+  const refused = kind === 'stop' && edit.was === 'candidate'
   await recordConfigChange(createAdminClient(), {
     clientId,
     surface: 'subreddits',
@@ -430,7 +435,9 @@ export async function updateCommunity(
     actor,
     note: kind === 'add'
       ? `${community} was added to the communities we watch.`
-      : `We stopped watching ${community}.`,
+      : refused
+        ? `${community} was proposed and turned down; it is not watched.`
+        : `We stopped watching ${community}.`,
     affects: { audiences: null, months: `[${month},${nextMonthStart})` },
   })
 
@@ -440,7 +447,9 @@ export async function updateCommunity(
     ok: true,
     message: kind === 'add'
       ? 'Saved. Your next update reads that community too.'
-      : 'Saved. Your next update stops reading that community — what we already read stays.',
+      : refused
+        ? 'Saved. We will not start reading that community.'
+        : 'Saved. Your next update stops reading that community — what we already read stays.',
   }
 }
 

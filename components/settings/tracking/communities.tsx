@@ -96,6 +96,7 @@ export function CommunitiesSection({
                   key="a"
                   name={r.key}
                   op={r.status === 'active' || r.status === 'candidate' ? 'stop' : 'add'}
+                  proposed={r.status === 'candidate'}
                   canEdit={canEdit}
                 />,
               ]}

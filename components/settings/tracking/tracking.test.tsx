@@ -226,6 +226,15 @@ describe('the communities section', () => {
     expect(words).toContain('Stop watching')
   })
 
+  it('does not say "stop" about a community nothing was ever read from', () => {
+    // ST9: r/frugal is a CANDIDATE — discovery found it and nobody chose it,
+    // and `activeSubreddits` reads 'active', so nothing has ever been gathered
+    // from it. The row offered "Stop watching", which both mis-named the act
+    // and failed in the pure layer ("You are not watching r/frugal.").
+    expect(words).toContain('Don’t watch it')
+    expect(words).toContain('proposed, and measured')
+  })
+
   it('keeps the copy contract', () => {
     assertCopyContract(section)
   })

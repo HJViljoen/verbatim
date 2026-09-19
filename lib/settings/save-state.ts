@@ -262,10 +262,23 @@ export function applySubredditEdit(
   entries: readonly SubredditEntry[],
   op: { kind: 'add' | 'stop'; name: string },
   now: string,
-): { next: SubredditEntry[]; change: PendingEdit } | { error: string } {
-  const active = entries.filter((e) => e.status === 'active').map((e) => e.name)
+): { next: SubredditEntry[]; change: PendingEdit; was: SubredditEntry['status'] | null } | { error: string } {
   const key = subredditKey(op.name)
   const existing = entries.find((e) => subredditKey(e.name) === key)
+  // WHAT "stop" ACTS ON IS WHAT WE WATCH OR HAVE PROPOSED. A candidate is a
+  // community discovery found and nobody chose; the table draws it with a "we
+  // found it" state and offers the control, and saying no to a proposal is a
+  // decision the client is entitled to make — it is the only thing that stops
+  // the probe promoting it into a paid search later. Reading the watching list
+  // as `status === 'active'` alone made that click return "You are not
+  // watching r/onebag." over a row that plainly says we found it, failing in
+  // the pure layer before any write.
+  //
+  // What "add" checks against is the ACTIVE list alone, because active is the
+  // list adding joins.
+  const watching = entries
+    .filter((e) => (op.kind === 'stop' ? e.status === 'active' || e.status === 'candidate' : e.status === 'active'))
+    .map((e) => e.name)
 
   if (op.kind === 'add' && existing?.status === 'rejected') {
     const probe = existing.probe
@@ -276,7 +289,7 @@ export function applySubredditEdit(
     }
   }
 
-  const result = subredditEdit(active, op)
+  const result = subredditEdit(watching, op)
   if ('error' in result) return result
 
   const next: SubredditEntry[] = op.kind === 'stop'
@@ -292,5 +305,8 @@ export function applySubredditEdit(
       })
       : [...entries, { name: key, status: 'active' as const, discovered_at: now }]
 
-  return { next, change: result.change }
+  // The state the entry was IN, so the caller can word its answer: "we stopped
+  // watching it" and "we will not watch it" are different sentences, and only
+  // one of them is true about a community nobody had started watching.
+  return { next, change: result.change, was: existing?.status ?? null }
 }

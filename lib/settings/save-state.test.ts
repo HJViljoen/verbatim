@@ -256,6 +256,31 @@ describe('applySubredditEdit', () => {
     expect(r.next[2]).toEqual({ name: 'buyitforlife', status: 'active', discovered_at: '2026-09-18' })
   })
 
+  it('lets the client turn down a community that was only ever proposed', () => {
+    // ST9: the table offers the control on a candidate row, but the watching
+    // list was built from `status === 'active'` alone — so the click returned
+    // "You are not watching r/frugal." over a row that plainly says we found
+    // it, failing in the pure layer before any write. Nothing is gathered from
+    // a candidate, so saying no to it is the only thing that stops the probe
+    // promoting it into a paid search later.
+    const proposed: SubredditEntry[] = [
+      { name: 'prosthetics', status: 'active', discovered_at: '2026-04-06' },
+      { name: 'frugal', status: 'candidate', discovered_at: '2026-08-11' },
+    ]
+    const r = applySubredditEdit(proposed, { kind: 'stop', name: 'r/frugal' }, '2026-09-18')
+    if ('error' in r) throw new Error(`expected an edit, got ${r.error}`)
+    expect(r.was).toBe('candidate')
+    expect(r.next[1]).toEqual({ name: 'frugal', status: 'stopped', discovered_at: '2026-08-11', stopped_at: '2026-09-18' })
+    // Demoted, never deleted, and out of the gather either way.
+    expect(activeSubreddits(r.next)).toEqual(['prosthetics'])
+    expect(knownSubreddits(r.next).has('frugal')).toBe(true)
+    // …and the caller can tell the two sentences apart: stopping something we
+    // WERE reading is a different answer from turning down a proposal.
+    const stoppingActive = applySubredditEdit(proposed, { kind: 'stop', name: 'r/prosthetics' }, '2026-09-18')
+    if ('error' in stoppingActive) throw new Error('expected an edit')
+    expect(stoppingActive.was).toBe('active')
+  })
+
   it('carries the pure validation’s refusal through unchanged', () => {
     expect(applySubredditEdit(entries, { kind: 'stop', name: 'r/onebag' }, '2026-09-18')).toEqual({
       error: 'You are not watching r/onebag.',
