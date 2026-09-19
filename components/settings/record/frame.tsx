@@ -116,17 +116,22 @@ export function StatCell({ figure, unit, caption }: { figure: ReactNode; unit?: 
   )
 }
 
-/** The artboard's dated pill. `ghost` is drawn for a date nothing has promised
- *  — and the record page draws none, because nothing in the product records
- *  when the next gather runs. */
-export function DatePill({ children, ghost = false }: { children: ReactNode; ghost?: boolean }) {
+/**
+ * The artboard's dated pill.
+ *
+ * ONE VARIANT, BECAUSE THERE IS ONE KIND OF DATE (Block D wave 3, RC11). It
+ * carried a `ghost` prop for the artboard's "next 4 Oct" pill — a date nothing
+ * has promised — and dropping that pill was correct, because nothing in the
+ * product records when the next gather runs. The prop and its `ring-1
+ * ring-border` branch had no caller and could not get one without the page
+ * first learning something it does not know. A variant kept for a feature we
+ * refused is a claim that the refusal is temporary; if the schedule ever
+ * becomes a thing the product holds, this comes back with the caller that
+ * needs it.
+ */
+export function DatePill({ children }: { children: ReactNode }) {
   return (
-    <span
-      className={cn(
-        'inline-flex items-center whitespace-nowrap rounded-full px-3 py-[5px] font-mono text-[11.5px]',
-        ghost ? 'text-muted-foreground ring-1 ring-border' : 'bg-inner text-secondary-foreground',
-      )}
-    >
+    <span className="inline-flex items-center whitespace-nowrap rounded-full bg-inner px-3 py-[5px] font-mono text-[11.5px] text-secondary-foreground">
       {children}
     </span>
   )
