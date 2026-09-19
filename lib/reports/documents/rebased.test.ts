@@ -36,7 +36,7 @@ const reading = (over: Partial<BriefReading> = {}): BriefReading => ({
   method: methodFixture('Ossur'),
   delivery: '23 updates since 6 April 2026 · longest gap 35 days · last on 27 September 2026',
   counter: 'your 3rd monthly reading · the quarter view needs 6',
-  hollow: 'Your side reads "too few to compare" on 84 videos — the category column carries the month.',
+  hollow: 'Your side reads “too few to compare” on 84 videos — the category column carries the month.',
   ...over,
 })
 

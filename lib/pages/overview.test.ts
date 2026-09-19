@@ -390,7 +390,7 @@ describe('subjectsNote', () => {
 
   it('names the video count your own side reads on when it cannot be compared', () => {
     expect(subjectsNote([row(84, null)])).toBe(
-      'Your side reads "too few to compare" on 84 videos — the category column carries the month.',
+      'Your side reads “too few to compare” on 84 videos — the category column carries the month.',
     )
   })
 

@@ -1268,7 +1268,13 @@ export function monthlySpanLabel(spark: readonly (number | null)[], months: read
   return `${short(read[0])} → ${short(read[read.length - 1])} · ${fmtInt(read.length)} readings`
 }
 
-/** The subjects block's line about which column carries the month. */
+/** The subjects block's line about which column carries the month.
+ *
+ *  TYPOGRAPHIC QUOTES (Block D wave 3, M20). DESIGN.md: "Quotes use
+ *  typographic quotes and apostrophes." This sentence is rendered three times
+ *  — the block's footer note, the weekly email and the monthly one — in a
+ *  serif face that sets straight ASCII marks as vertical ticks beside its own
+ *  curly ones. */
 export function subjectsNote(rows: readonly SubjectRow[]): string | null {
   if (rows.length === 0) return null
   const yourN = rows[0].you.n
@@ -1276,7 +1282,7 @@ export function subjectsNote(rows: readonly SubjectRow[]): string | null {
   if (!thin) return null
   return yourN == null
     ? 'Your own side carries no reading this month — the category column carries the month.'
-    : `Your side reads "too few to compare" on ${fmtInt(yourN)} videos — the category column carries the month.`
+    : `Your side reads “too few to compare” on ${fmtInt(yourN)} videos — the category column carries the month.`
 }
 
 /** The "not a blank form" line (design §3 OV2, empty state). */
