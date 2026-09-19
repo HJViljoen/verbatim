@@ -293,7 +293,7 @@ describe('untrackedNotes — the readiness NOTE rule (sales.p4.untracked)', () =
     // The SAME row is `partial`, so it is deliberately NOT a missing input:
     // the two functions answer two different questions about one row.
     expect(missingInputs(briefMap('sales_brief'), READINESS).map((m) => m.id)).not.toContain('rival-accounts')
-    expect(notes[0].sections).toEqual(['What they complain about with each rival'])
+    expect(notes[0].sections).toEqual(['Who is being talked about, rival by rival'])
     // THE RENDERED SENTENCE, not just the sections it names. The map took the
     // artboard's own titles in this wave — "By rival" became "What they
     // complain about with each rival" — and `untrackedSentence` splices a

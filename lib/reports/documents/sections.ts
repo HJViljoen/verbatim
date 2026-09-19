@@ -367,18 +367,22 @@ export const SALES_MAP: readonly BriefEntry[] = [
   }),
   block({
     id: 'sl.rivals', block: 'competitive.rivals', surface: 'competitive',
-    // THE ARTBOARD'S TITLE, AND AN EMPTY STATE THAT TELLS THE TRUTH UNDER IT.
-    // `competitive.rivals.figures()` returns `{}` and `rivalOwnClaims` is
-    // unbound — both inside `components/pages/competitive-surface/`, which
-    // E-competitive owns — so the sheet draws the rival selector, the reading
-    // behind each rival and the untracked note, and no complaint. A client
-    // reading a paid document met a heading promising per-rival complaints and
-    // a page delivering a picker; the title is the mock's and stays, and the
-    // framing and the pane now say what is actually on the sheet.
-    title: 'What they complain about with each rival', framing: 'Who is being talked about this month, and how much of the reading rests on each.',
+    // THE TITLE SAYS WHAT IS ON THE SHEET (fix pass). The first pass kept the
+    // artboard's "What they complain about with each rival" and put the
+    // confession in the pane — "so this sheet does not carry the complaints its
+    // title names" — which is the one place "the mock's LAYOUT stays and the
+    // honest form fills it" was applied to the wrong half. What the mock's
+    // title promised was the mock's ROWS, and the rows are what we have not
+    // got: `competitive.rivals.figures()` returns `{}` and `rivalOwnClaims` is
+    // unbound (both inside `components/pages/competitive-surface/`, which
+    // E-competitive owns), so the sheet draws the rival selector, the reading
+    // behind each rival and the untracked note. A heading may not promise what
+    // the body then withdraws; the heading names the body, and the pane still
+    // says what is NOT counted so a reader is not left to assume it is.
+    title: 'Who is being talked about, rival by rival', framing: 'Who is being talked about this month, and how much of the reading rests on each.',
     context: 'Rivals', eyebrow: 'Who is being talked about', pane: 'confidence',
     paneTitle: 'What is on this sheet',
-    paneLead: 'Who is being talked about, and how much of the month was read of each. What is said about a rival is not yet counted rival by rival, so this sheet does not carry the complaints its title names.',
+    paneLead: 'Who is being talked about, and how much of the month was read of each. What is SAID about a rival is not yet counted rival by rival, so there are no per-rival complaints on this sheet.',
     needs: ['months-of-history'],
     // `sales.p4.untracked` — the mock's readiness line. NOT a `needs`: this
     // block reads the category corpus either way, and refusing it would drop a

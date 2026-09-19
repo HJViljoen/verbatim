@@ -375,7 +375,7 @@ describe('the sales brief’s order is the artboard’s', () => {
     expect(titles).toContain('What they are pushing back on')
     const at = (t: string) => titles.findIndex((x) => x.startsWith(t))
     expect(at('What they are pushing back on')).toBeLessThan(at('What sells, in their words'))
-    expect(at('What sells, in their words')).toBeLessThan(at('What they complain about with each rival'))
+    expect(at('What sells, in their words')).toBeLessThan(at('Who is being talked about, rival by rival'))
     expect(at('Who is moving')).toBeLessThan(at('Answers you can use'))
     expect(at('Answers you can use')).toBeLessThan(at('About this brief'))
   })
@@ -478,7 +478,7 @@ describe('sales.p7 — the method sheet', () => {
 
 describe('the borrowed sheets carry the artboard’s chrome', () => {
   const objections = () => sheetNamed(deck(), 'What they are pushing back on')
-  const rivals = () => sheetNamed(deck(), 'What they complain about with each rival')
+  const rivals = () => sheetNamed(deck(), 'Who is being talked about, rival by rival')
 
   // `sales.p2.header`: the deck printed "{the whole title} · {the whole
   // stamp}" — the title repeated beside itself, and a 60-character stamp in a
@@ -558,7 +558,7 @@ describe('the borrowed sheets carry the artboard’s chrome', () => {
         reading: { ...salesBriefFixture().reading!, confidence: { word, why: 'why.' } },
         // The chart pane would draw its own primary-coloured marks; the rivals
         // sheet's pane is the confidence one and draws none.
-      })), 'What they complain about with each rival'))
+      })), 'Who is being talked about, rival by rival'))
     expect(of('reasonable')).toBeGreaterThan(of('partly'))
     expect(of('partly')).toBeGreaterThan(of('not yet'))
   })
@@ -607,15 +607,17 @@ describe('the borrowed sheets carry the artboard’s chrome', () => {
     expect(rivals()).not.toContain('mt-auto flex flex-col gap-1.5 border-t border-border pt-3')
   })
 
-  // THE SHEET SAYS WHAT IS ON IT. Its title is the artboard's — "What they
-  // complain about with each rival" — and the complaints are not built
-  // (`competitive.rivals.figures()` returns `{}`; E-competitive's file), so a
-  // client met a heading promising per-rival complaints and a page delivering
-  // a picker. The title stays; the empty state tells the truth under it.
+  // THE SHEET SAYS WHAT IS ON IT, AND SO DOES ITS HEADING. The artboard's
+  // title — "What they complain about with each rival" — promised the
+  // artboard's ROWS, and the complaints are not built
+  // (`competitive.rivals.figures()` returns `{}`; E-competitive's file), so the
+  // first pass kept the title and put the confession in the pane: a heading
+  // promising what the body two inches below withdrew. The heading names the
+  // body now, and the pane still says what is not counted.
   it('says on the rivals sheet what the rivals sheet does not carry', () => {
     const w = words(rivals())
     expect(w).toContain('not yet counted rival by rival')
-    expect(w).toContain('does not carry the complaints its title names')
+    expect(w).not.toContain('What they complain about with each rival')
   })
 
   // `sales.p4.untracked`: composed by `untrackedNotes` on every brief since
