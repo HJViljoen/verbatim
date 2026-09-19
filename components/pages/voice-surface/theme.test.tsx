@@ -176,12 +176,18 @@ describe('voiceTheme', () => {
     expect(text).not.toContain('quotes behind this theme')
   })
 
-  it('keeps the month-by-month drawing at the size it was drawn for below xl', () => {
-    // The chart scales uniformly to its box and 42% of its width is the pad
-    // the end label sits in. Below the breakpoint the tile is one column and
-    // the chart stretched to ~900px — a mostly-empty box with the plot in its
-    // left 58%.
-    expect(render(voiceTheme.render(voiceFixture(), 'app', ctx))).toContain('max-w-[560px]')
+  it('lets the month-by-month drawing fill its column, and measures the label pad', () => {
+    // The chart was capped at `max-w-[560px]` below xl because `padR` was
+    // charged flat at 42% of the width, so the box was mostly empty — and the
+    // cap then left that box LEFT-HUGGING in an 865px tile at 1024 with a
+    // ~300px void beside it. With the pad measured off the label the plot is
+    // two-thirds of the drawing, so it gets the column.
+    const markup = render(voiceTheme.render(voiceFixture(), 'app', ctx))
+    expect(markup).not.toContain('max-w-[560px]')
+    // "Will it survive a wet commute" + "9.4%": 224 units, not the flat 260 —
+    // 36 more units of plot than every label used to be charged.
+    expect(markup).toMatch(/viewBox="0 0 620 200"/)
+    expect(markup).toContain('<line x1="56" y1="170" x2="395"')
   })
 
   it('draws the reach bar in a fill separable from its own track', () => {
@@ -221,28 +227,38 @@ describe('voiceTheme', () => {
 
   it('prints the theme\u2019s name twice, the way the artboard does — not four times', () => {
     // Heading, chart legend, chart end label, caption: one string rendered
-    // four times, and the legend prints the SERIES label, which is the one
-    // shortened to thirty characters. The refused state showed
-    // "Admiration for personal resil…" twice with the full name two lines
-    // above. The legend is off; the one word it carried besides the name —
-    // "still filling" — is in the caption.
+    // four times, and the legend prints the SERIES label, which is the one the
+    // pad's width cuts. The refused state showed "Admiration for personal
+    // resil…" twice with the full name two lines above. The legend is off; the
+    // one word it carried besides the name — "still filling" — is in the
+    // caption.
     const markup = render(voiceTheme.render(refusedVoiceFixture(), 'app', ctx))
     // Minus the hover `<title>`s, which are a mouse-only tooltip and print
     // nowhere — the reason I2 moved the denominators into the caption.
     const visible = markup.replace(/<title[^>]*>[\s\S]*?<\/title>/g, '')
-    expect(visible.split('Admiration for personal resil…')).toHaveLength(2)
+    // TWICE ON THE SCREEN — the heading and the chart's end label — plus the
+    // svg's `aria-label`, which is the drawing's name for a reader who cannot
+    // see it and is not a third rendering.
+    expect(visible.split('Admiration for personal resilience')).toHaveLength(4)
+    expect(visible.split('aria-label="Admiration for personal resilience')).toHaveLength(2)
     expect(renderText(voiceTheme.render(refusedVoiceFixture(), 'app', ctx))).toContain('still filling')
   })
 
-  it('shortens only the CHART\u2019s copy of a long name, never the block\u2019s', () => {
-    // `CalendarLine` draws the series name outside the plot area, in the 180
-    // units padR reserves; past about thirty characters at this column's width
-    // it runs out of the tile, which is what Össur's theme did on production.
-    // The name itself is the heading two lines above.
-    const long = refusedVoiceFixture()
-    const text = draw(long)
+  it('cuts the CHART\u2019s copy of a name to what the pad can hold, and only then', () => {
+    // The cut was a flat thirty characters against a flat 260-unit pad, so
+    // Össur's "Admiration for personal resilience" — 34 characters, 255 units
+    // with its reading, INSIDE the room the pad already reserved — printed as
+    // "Admiration for personal resil…" and was the only identifier on a chart
+    // whose legend is off. The limit is now what fits.
+    const text = draw(refusedVoiceFixture())
     expect(text).toContain('Admiration for personal resilience')
-    expect(text).toContain('Admiration for personal resil…')
+    expect(text).not.toContain('Admiration for personal resil…')
+
+    // A name that genuinely does not fit still loses its tail rather than the
+    // tile: the ceiling is the ceiling.
+    const longer = refusedVoiceFixture()
+    longer.theme.label = 'Admiration for personal resilience and for the people around it'
+    expect(draw(longer)).toContain('\u2026')
   })
 
   it('says nothing about speech when no video carries any', () => {

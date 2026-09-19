@@ -54,23 +54,53 @@ import { VOICES_WORD, heardLine, reachAxisMax } from '@/lib/pages/voice-surface'
 // SHAPE is ported and its colour is not: the green does
 // four jobs in this product and "a measurement exists" is not one of them.
 
-/** How much of the theme's name the chart's end label can hold — see
- *  `themeSeries`. Thirty characters of 11px sans is about 186 units, which
- *  with the reading beside it is what CHART_PAD reserves. Measured against the
- *  geometry, not chosen. */
-const CHART_LABEL = 30
-
 /** The month line's geometry in this block's right-hand column.
  *
  *  `CalendarLine` scales its viewBox uniformly to the box it is given, so the
  *  intrinsic width is really a TYPE SIZE: at 620 units in the ~560px column
- *  this block draws at 1440, the chart's 10px axis labels come out near 9px.
- *  `CHART_PAD` is the room reserved to the right of the last point for the end
- *  label, which is drawn outside the plot area and which the 180-unit default
- *  is far too small for — a theme's name is the model's words. */
+ *  this block draws at 1440, the chart's 10px axis labels come out near 9px. */
 const CHART_W = 620
 const CHART_H = 200
-const CHART_PAD = 260
+
+/** The most of `CHART_W` the end label may take. `padR` is drawn OUTSIDE the
+ *  plot, so every unit of it is a unit the line does not get. This was the
+ *  CHARGE — 260 of 620, 42% of the drawing, spent whatever the label said —
+ *  and it is the CEILING now: a name that needs all of it gets all of it and
+ *  nothing gets more. It is also exactly the room the longest theme name
+ *  either tenant carries needs, which is why it did not move: "Admiration for
+ *  personal resilience" with its reading is 255 units, and cutting the ceiling
+ *  to make the plot wider would put the ellipsis back. */
+const PAD_MAX = 260
+
+/** A character's advance in viewBox units at the size `CalendarLine` draws the
+ *  end label: 11px IBM Plex Sans for the name (~0.55em) and 11px IBM Plex Mono
+ *  for the reading beside it (0.6em, the face's fixed advance). */
+const SANS_UNIT = 6.05
+const MONO_UNIT = 6.6
+/** The gap the chart leaves between the last point and the label (`padR + 10`)
+ *  plus a character of slack at the end. */
+const LABEL_GUTTER = 16
+
+/**
+ * The room the end label actually needs, measured off the string that will be
+ * drawn (`CHART_PAD` was a flat 260 — 42% of the drawing, charged whatever the
+ * label said, so "Zips failing after a year" reserved exactly as much as
+ * "Admiration for personal resilience" and the plot came out ~340px against
+ * the artboard's ~395px).
+ */
+function chartPad(label: string, reading: string): number {
+  const want = Math.ceil(label.length * SANS_UNIT + (reading.length + 1) * MONO_UNIT) + LABEL_GUTTER
+  return Math.min(want, PAD_MAX)
+}
+
+/** How much of the theme's name the end label can hold: whatever fits in
+ *  `PAD_MAX` beside the reading, rather than a constant thirty. At 8.8% that
+ *  is 34 characters, which is "Admiration for personal resilience" whole —
+ *  the refused arm's only identifier, elided to "Admiration for personal
+ *  resil…" while the chart's legend is off. */
+function chartLabelMax(reading: string): number {
+  return Math.floor((PAD_MAX - LABEL_GUTTER - (reading.length + 1) * MONO_UNIT) / SANS_UNIT)
+}
 
 const MOOD_COLOR: Record<string, string> = {
   positive: 'var(--positive)',
@@ -165,6 +195,19 @@ function Said({ line, label, mode }: { line: SpokenLine | OnScreenLine; label: s
   return <Line label={label} mode={mode}>{body}</Line>
 }
 
+/** The reading the chart prints after the name — the same string `format`
+ *  produces for the last point, which is the other half of what `padR` holds. */
+function chartReading(t: ThemeBlock): string {
+  const last = t.points.filter((p) => t.axis.includes(p.month)).at(-1)
+  return last?.pct == null ? '' : fmtPct(last.pct)
+}
+
+/** The series name as the chart will draw it, cut to what the pad can hold. */
+function chartLabel(t: ThemeBlock): string {
+  const max = chartLabelMax(chartReading(t))
+  return t.label.length > max ? `${t.label.slice(0, max - 1).trimEnd()}\u2026` : t.label
+}
+
 /** The theme's own monthly line — the share of this audience's videos, month by
  *  month, on a generated calendar so a month with no reading keeps its slot. */
 function themeSeries(t: ThemeBlock): CalendarSeries | null {
@@ -174,13 +217,14 @@ function themeSeries(t: ThemeBlock): CalendarSeries | null {
     // THE CHART'S LABEL IS SHORTENED AND THE BLOCK'S IS NOT, and the limit is
     // the drawing's own geometry rather than a taste: `CalendarLine` draws the
     // series name at the right-hand end of the line, OUTSIDE the plot area, in
-    // the 180 units `padR` reserves for it. At the 560-unit intrinsic width
-    // this column draws at, 180 units is about thirty characters of 11px sans;
-    // past that the name runs out of the tile, which is what Össur's
-    // "Admiration for personal resilience" did on the production render. The
-    // full label is the heading two lines above and the caption under the
-    // chart names every reading, so this one only has to identify the line.
-    label: t.label.length > CHART_LABEL ? `${t.label.slice(0, CHART_LABEL - 1).trimEnd()}…` : t.label,
+    // whatever `padR` reserves. The cut is now what actually FITS the room the
+    // pad is allowed (`chartLabelMax`) rather than a flat thirty characters —
+    // at 8.8% that is 34, so Össur's "Admiration for personal resilience"
+    // prints whole where it used to read "Admiration for personal resil…" as
+    // the only identifier on a chart whose legend is off. The full label is
+    // the heading two lines above and the caption under the chart names every
+    // reading, so this one only has to identify the line.
+    label: chartLabel(t),
     // The model's words, so the chart marks them (see CalendarSeries.labelSlot).
     labelSlot: 'pass_b_theme',
     color: 'var(--cat)',
@@ -442,15 +486,17 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
                 ) : null}
                 <Tone t={t} mode={mode} />
               </div>
-              {/* THE DRAWING KEEPS ITS DESIGNED SIZE BELOW THE BREAKPOINT.
-                  `CalendarLine` scales its viewBox uniformly to the box it is
-                  given, and 42% of that width is the pad the end label sits
-                  in — right in this 560px column, and at 1024, where the tile
-                  falls to one column and the chart stretches to ~900px, it is
-                  a 530×230 box with the plot in its left 58%. Capped at the
-                  width it was drawn for, it is the same chart rather than a
-                  mostly-empty box; the caption under it carries every month. */}
-              <div className="flex min-w-0 max-w-[560px] flex-col gap-1 xl:max-w-none">
+              {/* THE DRAWING FILLS ITS COLUMN AT EVERY WIDTH. It was capped at
+                  `max-w-[560px]` below `xl:` on the argument that the chart
+                  should keep the size it was drawn for — but the box was
+                  mostly empty because `padR` was charged flat at 42% of the
+                  width, and the cap then left the empty box LEFT-HUGGING in a
+                  865px tile at 1024 with a ~300px void beside it. With the pad
+                  measured off the label (`chartPad`) the plot is two-thirds of
+                  the drawing, so the honest answer is to let it have the
+                  column: `CalendarLine` scales its viewBox uniformly, which
+                  makes the type larger here, never smaller. */}
+              <div className="flex min-w-0 flex-col gap-1">
                 {series ? (
                   <Line label="Month by month" mode={mode}>
                     <BlockCalendar
@@ -462,7 +508,10 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
                       format={(v) => fmtPct(v)}
                       width={CHART_W}
                       height={CHART_H}
-                      padR={CHART_PAD}
+                      // MEASURED OFF THE LABEL, not charged flat. See
+                      // `chartPad`: a flat 260 of 620 was 42% of the drawing
+                      // whatever the name said.
+                      padR={chartPad(chartLabel(t), chartReading(t))}
                       // ONE NAME, TWICE, THE WAY THE ARTBOARD HAS IT: the
                       // block's heading and the label at the line's end. The
                       // legend was a third and a fourth rendering of the same
