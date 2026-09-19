@@ -8,15 +8,16 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { markupText, render } from '@/lib/test/render'
 import { REDDIT_CAP_LINE } from '@/lib/reading/method'
-import { BRIEF_UNIT, LABEL_RULE, LEAD_MIN_RATED, PLAYBOOK_EMPTY, PLAYBOOK_GONE, RECORD_GONE } from '@/lib/pages/content-brief'
+import { BRIEF_UNIT, DELIVERY_SCOPE, LABEL_RULE, LEAD_MIN_RATED, PLAYBOOK_EMPTY, PLAYBOOK_GONE, RECORD_GONE } from '@/lib/pages/content-brief'
 import { CONTENT_BRIEF_BLOCKS, contentMake, contentPlaybook, contentRecord } from './index'
-import { shownRows, toMake } from './make'
+import { ARGUMENT_CHARS, bound, GROUNDING_BASIS, shownRows, TITLE_CHARS, toMake } from './make'
 import { cellFigure, engagementAxis, engagementOrder, unreadNotes } from './playbook'
 import {
   contentBriefFixture,
   emptyContentBriefFixture,
   emptyLedger,
   ledgerWithDismissal,
+  longContentLedger,
   refusedContentBriefFixture,
   thinContentBriefFixture,
   unclassifiedContentBriefFixture,
@@ -47,6 +48,28 @@ describe('the content brief’s own blocks', () => {
     }
     for (const data of LEDGERS) {
       for (const mode of MODES) assertCopyContract(render(contentMake.render(data, mode, ctx)))
+    }
+  })
+
+  // THE THIN ARM SUPPRESSES ITS OWN HEADING TOO (design review 4). The empty
+  // branch of all three blocks omitted the `header={mode !== 'print'}` the
+  // filled branch passes, so on a printed sheet — whose <h1> is already the
+  // block's title and whose serif framing is already its question — the
+  // refused, empty and unclassified arms printed the title three times and the
+  // question twice before saying the one sentence they had.
+  it('prints no heading of its own on a printed sheet, filled or thin', () => {
+    // On the <h2> and not on the words: `RECORD_GONE` opens with the block's
+    // own title as a sentence ("The record behind this brief could not be
+    // read."), which is the one sentence the arm is there to say.
+    for (const block of CONTENT_BRIEF_BLOCKS) {
+      for (const data of STATES) {
+        expect(render(block.render(data, 'print', ctx))).not.toContain('<h2')
+      }
+      // And the app arm still draws it, because there is no slide above it.
+      expect(render(block.render(contentBriefFixture(), 'app', ctx))).toContain('<h2')
+    }
+    for (const data of LEDGERS) {
+      expect(render(contentMake.render(data, 'print', ctx))).not.toMatch(/<h2[^>]*>What to make/)
     }
   })
 
@@ -92,6 +115,16 @@ describe('content.playbook — the mock’s page 3', () => {
 
   it('names the clock every figure on it keeps (D9)', () => {
     expect(text).toContain('videos published in September')
+  })
+
+  // ONE NOUN FOR ONE OBJECT (design review 6). The legend said "757 posts"
+  // and the footer said "687 of The category's 757 … videos" on one sheet.
+  it('counts videos on every side of the legend, never posts', () => {
+    // "A Reddit post" stays: a Reddit thread is not a video, and that clause
+    // is about the platform object rather than about a count of the corpus.
+    expect(text.replace('A Reddit post carries', '')).not.toMatch(/\bposts?\b/)
+    expect(text).toMatch(/The category, [\d,]+ videos/)
+    expect(text).toMatch(/Össur, [\d,]+ videos/)
   })
 
   // A LINE THE ARTBOARD DOES NOT HAVE, PRINTED TWICE (design review 7). The
@@ -256,8 +289,16 @@ describe('content.playbook — a side nobody read', () => {
     expect(text.split(note).length - 1).toBe(1)
     // The side is still named — in the legend, with what it published — and it
     // is not a column head over four empty rows.
-    expect(text).toContain('Össur, 0 posts')
+    expect(text).toContain('Össur, 0 videos')
     expect(markup.match(/role="columnheader"/g)?.length ?? 0).toBe(4)
+    // A SWATCH IS THE KEY TO A SERIES THAT IS DRAWN (design review 12). The
+    // unread side kept a filled green dot for a column the table does not
+    // draw; it now carries a hollow ring and says the column is not there.
+    expect(text).toContain('Össur, 0 videos · no column drawn')
+    expect(markup).toContain('rounded-full border border-current')
+    // And a column no longer stretches to every pixel a dropped one freed.
+    expect(markup).toContain('minmax(0, 280px)')
+    expect(markup).not.toContain('minmax(0, 1fr)')
   })
 })
 
@@ -275,11 +316,40 @@ describe('content.record — the mock’s page 5', () => {
 
   it('carries the Reddit cap, which no brief has ever printed', () => {
     expect(text).toContain(REDDIT_CAP_LINE)
+    // AND IT TRAVELS WITH THE CARD (design review 10): it is the caveat that
+    // belongs to the numbers, and the email arm printed it nowhere at all.
+    expect(markupText(render(contentRecord.render(data, 'email', ctx)))).toContain(REDDIT_CAP_LINE)
+  })
+
+  // THE CARD ENDED AT 59% OF THE SHEET (design review 10). The two rows the
+  // artboard has and this card did not — Period and Conversations — are the two
+  // that say what the sheet's two delivery records are each counted over.
+  it('carries the window it read and the comments it read in it', () => {
+    expect(text).toContain('1 Sep 2026 → 18 Sep 2026 · 3 updates')
+    expect(text).toMatch(/Comments\s*[\d,]+ read in this reading/)
+    // "Comments", never "Conversations": AGENTS.md keeps that word on the
+    // legacy pages that still compute it, and a new reading surface draws from
+    // THIRTEEN_WORDS.
+    expect(text).not.toMatch(/conversations/i)
+    // The period's update count is the WINDOW's, which is the count the prose's
+    // own first sentence states — not the all-time one under it.
+    expect(text).toContain('3 updates delivered')
   })
 
   it('carries the delivery record and the reading counter, verbatim', () => {
     expect(text).toContain('4 updates since 6 Sep 2026 \u00b7 longest gap 7 days \u00b7 last on 27 Sep 2026')
     expect(text).toContain('your 3rd monthly reading · the quarter view needs 6')
+  })
+
+  // TWO DELIVERY RECORDS ON ONE SHEET, AND ONLY ONE OF THEM NAMED ITS SCOPE
+  // (design review 3). The prose's first sentence is window-scoped ("3 updates
+  // delivered, 1 Sep to 13 Sep 2026, longest gap 7 days.") and the mono tail is
+  // all-time ("4 updates since 6 Sep 2026 · … · last on 27 Sep 2026"); both end
+  // "longest gap 7 days", so they read as one statistic stated twice.
+  it('names the scope of the all-time delivery record it prints', () => {
+    expect(text).toContain(`${DELIVERY_SCOPE} \u00b7 4 updates since 6 Sep 2026`)
+    // And the window-scoped sentence is still the record's own, unrewritten.
+    expect(text).toContain('3 updates delivered, 1 Sep to 13 Sep 2026')
   })
 
   it('states the language share on its own basis, never as a fact about comments (D15)', () => {
@@ -355,6 +425,17 @@ describe('content.make — the mock’s page 2', () => {
     expect(text).toContain('Dismissed')
   })
 
+  // AND THE NEGATION IS NOT PAINTED IN RED (design review 9). MASTER.md lists
+  // Negative as "data only"; a card border, a mono label and a 17px/600
+  // headline are chrome, and the headline measured 4.49:1 on the tile.
+  it('spends no alarm colour on chrome — the words carry the negation', () => {
+    expect(markup).not.toContain('text-negative')
+    expect(markup).not.toContain('border-negative')
+    // The status chip keeps its tint: it is a datum, and the word on it is
+    // `text-foreground` at over 10:1.
+    expect(markup).toContain('bg-negative/15 text-foreground')
+  })
+
   // WORK ALREADY DONE IS NOT A THING TO MAKE (design review 2, code review 2).
   // The ledger is oldest-first and `acted_on` reads "Done", so the three oldest
   // rows won regardless of status and a client read two finished items as their
@@ -413,8 +494,77 @@ describe('content.make — the mock’s page 2', () => {
     expect(none).toContain('Advice lands with your next update.')
   })
 
+  // THE COUNT REACHES A PRINTED SHEET (design review 8). `header={mode !==
+  // 'print'}` drops the meta with the header row and DocumentCover prints only
+  // "{stamp} · {pages} pages", so "3 to make · 1 to stop" was computed and
+  // printed nowhere on the PDF while a comment in the file said otherwise.
+  it('prints its counts on the printed sheet, where the header row is gone', () => {
+    expect(text).toContain(`${toMake(data.advice.rows).length} to make · 1 to stop`)
+    // The ledger total is not in the note: it wrapped the footer to a second
+    // line, and `ct.advice` two slides on is a table of exactly that.
+    expect(text).not.toContain('64 in the ledger')
+    expect(markupText(render(contentMake.render(data, 'app', ctx)))).toContain('64 in the ledger')
+    // Still once: the app arm's header carries it and its note stays the month.
+    const app = markupText(render(contentMake.render(data, 'app', ctx)))
+    expect(app.match(/to make · 1 to stop/g)?.length ?? 0).toBe(1)
+  })
+
   it('says advice lands with the next update when the ledger is empty', () => {
     expect(blockAnswers(contentMake, emptyLedger()).empty).toBe('Advice lands with your next update.')
+  })
+
+  // NOTHING A CLIENT CAN READ TODAY IS CUT, AND NO CUT IS EVER MID-WORD
+  // (design review 1). The CSS clamps ended four of the model's arguments and
+  // a refusal sentence mid-word — "…we do not compare until 2 have been read.
+  // Sep 20…", two characters into a year — with the text recoverable nowhere
+  // in the document and a comment in the file asserting the opposite.
+  it('cuts nothing on the shipped reading, and never inside a word', () => {
+    expect(markup).not.toContain('line-clamp')
+    expect(text).not.toContain('\u2026')
+    for (const r of shownRows(data)) {
+      expect(bound(r.title, TITLE_CHARS)).toBe(r.title)
+      if (r.why) expect(bound(r.why, ARGUMENT_CHARS)).toBe(r.why)
+      // A commenter's own words and the refusal sentence are printed whole
+      // whatever their length: both appear on this page or nowhere.
+      if (r.quote?.text) expect(text).toContain(r.quote.text)
+      expect(text).toContain(r.afterwards.line)
+    }
+  })
+
+  it('bounds a long model string between words, never inside one', () => {
+    // The stress fixture is where a bound actually fires.
+    const long = markupText(render(contentMake.render(longContentLedger(), 'print', ctx)))
+    expect(long).toContain('\u2026')
+    // Every ellipsis follows a whole word — never a digit, never a hyphen or a
+    // comma left hanging off the cut.
+    for (const m of long.matchAll(/(.)\u2026/g)) expect(m[1]).toMatch(/[\p{L}\p{N}]/u)
+    // And a quote is still whole, however long it is.
+    for (const r of shownRows(longContentLedger())) {
+      if (r.quote?.text) expect(long).toContain(r.quote.text)
+    }
+    // The helper itself: at the budget, untouched; past it, a word boundary.
+    expect(bound('one two three', 13)).toBe('one two three')
+    // The cut that used to land two characters into a year now lands after
+            // "read", and the sentence's own full stop goes with it rather than
+            // printing ".…".
+    expect(bound('compare until 2 have been read. Sep 2026 itself', 34)).toBe('compare until 2 have been read\u2026')
+    // A single word longer than the budget is still not cut mid-glyph-run
+    // silently — it is cut, and the ellipsis says so.
+    expect(bound('antidisestablishmentarianism', 10)).toBe('antidisest\u2026')
+  })
+
+  // THE APP ARM BELOW `md` (design review 16). `md:grid-cols-4` put four cards
+  // in 768px — 161px of box against 198px of content — and a full-sentence
+  // `footerNote`, which BlockFrame makes `shrink-0` on purpose, forced the
+  // whole block to 653px at a 375px viewport.
+  it('ladders its columns from sm and lg, and keeps its basis in the slot that wraps', () => {
+    const app = render(contentMake.render(data, 'app', ctx))
+    expect(app).toContain('sm:grid-cols-2')
+    expect(app).toContain('lg:grid-cols-4')
+    expect(app).not.toContain('md:grid-cols-4')
+    // The basis sentence is in `footer` (min-w-0), not in the mono note.
+    expect(app).toMatch(/font-mono text-\[11px\] font-normal text-muted-foreground">September</)
+    expect(markupText(app)).toContain(GROUNDING_BASIS)
   })
 
   it('claims nothing about whether a comment was answered (D6)', () => {

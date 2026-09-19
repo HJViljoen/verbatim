@@ -18,7 +18,7 @@ import { deliveryRecord } from '../settings/delivery'
 import { loadUpdates } from '../settings/record-load'
 import { buildPlaybook, loadPlaybookVideos, type PlaybookBlock } from './playbook'
 import { readingsCounter } from './overview'
-import { fmtInt, fmtPct, longMonth } from '../format'
+import { fmtInt, fmtPct, fullDate, longMonth } from '../format'
 import { CLIENT_AUDIENCE } from '../rivals'
 import type { MonthStatus } from '../reading/types'
 import { freezeStateFor } from '../reading/monthly'
@@ -103,7 +103,9 @@ export interface RecordSlide {
   lines: string[]
   /** The same sentences, grouped into the artboard's four paragraphs. */
   paragraphs: string[]
-  /** "23 updates since 6 Apr 2026 · longest gap 35 days · last on 27 Sep 2026". */
+  /** "Every update we have delivered · 23 updates since 6 Apr 2026 · longest
+   *  gap 35 days · last on 27 Sep 2026" — `deliveryRecord`'s own sentence with
+   *  its SCOPE in front of it (`DELIVERY_SCOPE`). */
   delivery: string | null
   /** "your 3rd monthly reading · the quarter view needs 6". Null where the
    *  month tables have never been seeded here, which is not a zeroth reading. */
@@ -150,6 +152,49 @@ export const BRIEF_UNIT = 'A video with an analysed comment written in the month
  */
 export const LABEL_RULE =
   'Format and hook labels are assigned by a fixed rule from counted data, never worded by the AI.'
+
+/**
+ * The period row — the window this reading covers, and the updates inside it.
+ *
+ * THE ARTBOARD'S FIRST ROW, AND THE ONE THAT NAMES THE SCOPE (design review 10
+ * and 3). The card stopped at 59% of a 482px body while the prose column ran
+ * the full height, and the two rows the artboard has and this card did not —
+ * Period and Conversations — are exactly the two that say what the sheet's two
+ * delivery records are each counted over. `MethodPage` prints its own Period
+ * from `DocumentSnapshotData.method`; this one is built from `RecordInputs`,
+ * which is what this block has, and the two are the same window by
+ * construction (`monthRecordWindow`).
+ *
+ * `r.delivery` here is the WINDOW's delivery record — `loadRecordInputs` is
+ * handed the window — so the update count in this row is the prose's count and
+ * not the all-time one under it (`DELIVERY_SCOPE`).
+ */
+export function periodRow(r: RecordInputs): NumberRow {
+  const n = r.delivery.delivered
+  return {
+    label: 'Period',
+    value: `${fullDate(r.window.from)} \u2192 ${fullDate(r.window.to)} \u00b7 ${fmtInt(n)} ${n === 1 ? 'update' : 'updates'}`,
+    figure: true,
+  }
+}
+
+/**
+ * The comments row — the artboard's "Conversations", in the word this product
+ * uses for the thing.
+ *
+ * NOT "CONVERSATIONS". AGENTS.md keeps `conversations` on the legacy pages that
+ * still compute it, and a new reading surface draws its vocabulary from
+ * THIRTEEN_WORDS: a comment is a comment, and `video`'s own glossary entry says
+ * so out loud ("Comments are counted separately, as comments").
+ *
+ * Pooled across audiences exactly as `videosRow` pools videos, so the two rows
+ * are counted over the same set.
+ */
+export function commentsRow(r: RecordInputs): NumberRow | null {
+  if (r.coverage == null || r.coverage.length === 0) return null
+  const comments = r.coverage.reduce((n, c) => n + c.comments, 0)
+  return { label: 'Comments', value: `${fmtInt(comments)} read in this reading`, figure: true }
+}
 
 /** The language row, with its basis stated (D15). Null where no language was
  *  ever recorded — which is not "all English". */
@@ -226,7 +271,10 @@ export function videosRow(r: RecordInputs): NumberRow | null {
 export function numberRows(r: RecordInputs | null): NumberRow[] {
   const rows: NumberRow[] = [{ label: 'The unit', value: BRIEF_UNIT, figure: false }]
   if (!r) return rows
-  const maybe = [videosRow(r), sourcesRow(r), languageRow(r.language), instrumentRow(r), heldBackRow(r)]
+  // PERIOD AND COMMENTS LEAD (design review 10): the window this reading is of,
+  // then what was read in it, then what the reading is made of. The unit stays
+  // first because every row under it is counted in that unit.
+  const maybe = [periodRow(r), videosRow(r), commentsRow(r), sourcesRow(r), languageRow(r.language), instrumentRow(r), heldBackRow(r)]
   for (const row of maybe) if (row) rows.push(row)
   return rows
 }
@@ -241,6 +289,33 @@ export function numberRows(r: RecordInputs | null): NumberRow[] {
  * database — so a null one means the read THREW, and the only true reading of
  * that sentence was the one it could never have.
  */
+/**
+ * THE SCOPE OF THE MONO TAIL, SAID IN WORDS (design review 3).
+ *
+ * Two delivery records land on this sheet and neither named its scope. The
+ * prose's first sentence is `recordLines`', built over `monthRecordWindow` —
+ * "3 updates delivered, 1 Sep to 13 Sep 2026, longest gap 7 days." — and the
+ * mono tail 500px below it is `deliveryRecord` over EVERY update ever run: "4
+ * updates since 6 Sep 2026 · longest gap 7 days · last on 27 Sep 2026". Both
+ * end "longest gap 7 days", so they read as one statistic stated twice with
+ * two counts and two last dates; in production they differ by construction.
+ *
+ * The artboard names each one ("across four updates — 6, 13, 20 and 27
+ * September" in the prose, "Tracking since 6 Apr · 23 updates delivered" in
+ * the mono line). We name the one we compose. `deliveryRecord`'s own sentence
+ * is not rewritten — it belongs to Settings › The record, which prints it
+ * under a heading that already says what it is — so the scope is a prefix,
+ * and it is the scope the reader cannot infer from the dates alone.
+ *
+ * NOT "Tracking since" (D14): `DeliveryRecord` carries EARLIEST EVIDENCE, not
+ * a start date, and this sheet may not claim one.
+ */
+export const DELIVERY_SCOPE = 'Every update we have delivered'
+
+export function deliveryScoped(line: string | null): string | null {
+  return line ? `${DELIVERY_SCOPE} \u00b7 ${line}` : null
+}
+
 export const RECORD_GONE = 'The record behind this brief could not be read.'
 export const RECORD_UNREAD = 'The record behind this brief has not been read for this workspace yet.'
 
@@ -261,7 +336,7 @@ export function buildRecordSlide(input: {
     method: input.record ? methodLines(input.record) : null,
     lines: input.record ? recordLines(input.record) : [],
     paragraphs: input.record ? recordParagraphs(recordLines(input.record)) : [],
-    delivery: input.delivery,
+    delivery: deliveryScoped(input.delivery),
     counter: input.readings == null ? null : readingsCounter(input.readings),
     numbers: numberRows(input.record),
     videosRead: input.record?.coverage?.length ? totalVideos(input.record.coverage) : null,

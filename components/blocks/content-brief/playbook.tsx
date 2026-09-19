@@ -160,14 +160,36 @@ function Eyebrow({ children }: { children: ReactNode }) {
 
 /** Every side, INCLUDING one whose column is not drawn: the legend is what
  *  says a side exists and how much it published, which is the half of the
- *  answer a dropped column would otherwise take with it. */
+ *  answer a dropped column would otherwise take with it.
+ *
+ *  THE UNIT IS "VIDEOS", ON EVERY SIDE (design review 6). It said "posts" —
+ *  "The category, 757 posts" — while the footer of the same sheet said "Read
+ *  from 687 of The category's 757 … videos published in September": the same
+ *  757 objects in two nouns, 400px apart. AGENTS.md is explicit that a new
+ *  reading surface counts VIDEOS and draws its vocabulary from THIRTEEN_WORDS
+ *  plus the two READER_FLAGS; `post` is in neither list and `video` is the
+ *  unit. The artboard does print "posts", but only for the own and rival
+ *  ACCOUNTS — it calls the category "Category creators, 1,388 videos" — so
+ *  this is the one place the mock's own wording was extended past where the
+ *  mock uses it, and the rule the mock does not reach is the one that wins. */
 function Legend({ sides }: { sides: readonly FormatMatrixSide[] }) {
   return (
     <div className="flex flex-wrap items-center gap-4">
       {sides.map((s) => (
         <span key={s.audience} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          <span className="h-2 w-2 rounded-full" style={{ background: sideColour(s) }} aria-hidden />
-          {s.label}, {fmtInt(s.published)} {s.published === 1 ? 'post' : 'posts'}
+          {/* A SWATCH IS THE KEY TO A SERIES THAT IS DRAWN (design review 12).
+              The unread side keeps its place in the legend — that is what says
+              it exists and what it published — but it had a filled green dot
+              for a column the table does not draw, so the one thing a legend
+              is for pointed at nothing. It gets a hollow ring and says so; the
+              sentence explaining WHY is `unreadNotes`, once, for the slide. */}
+          <span
+            className={s.unread ? 'h-2 w-2 rounded-full border border-current' : 'h-2 w-2 rounded-full'}
+            style={s.unread ? undefined : { background: sideColour(s) }}
+            aria-hidden
+          />
+          {s.label}, {fmtInt(s.published)} {s.published === 1 ? 'video' : 'videos'}
+          {s.unread ? ' \u00b7 no column drawn' : ''}
         </span>
       ))}
     </div>
@@ -209,9 +231,16 @@ function Matrix({ matrix, heading, mode, legend = true }: { matrix: FormatMatrix
   const keys = matrix.keys.slice(0, limit)
   if (keys.length === 0 || sides.length === 0) return null
   const max = matrixMax(sides, keys)
-  const cols = `168px repeat(${sides.length}, minmax(0, 1fr))`
+  // A COLUMN IS CAPPED, BECAUSE A LONGER BAR ENCODES NOTHING MORE (design
+  // review 12). `1fr` let the surviving column take every pixel a dropped one
+  // freed: on the thin arm the category's Story bar ran about 1,450px and its
+  // figure sat roughly 1,400px from the row label, four rows the eye cannot
+  // track across. 280px is the width the three-column populated table already
+  // gives each side on a 1123px sheet, so the full table is unchanged and only
+  // the recomposing case is bounded.
+  const cols = `168px repeat(${sides.length}, minmax(0, 280px))`
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex min-w-0 flex-col gap-2">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <Eyebrow>{heading}</Eyebrow>
         {legend ? <Legend sides={matrix.sides} /> : null}
@@ -224,7 +253,14 @@ function Matrix({ matrix, heading, mode, legend = true }: { matrix: FormatMatrix
           the column names four lines above them. The numbers card next door has
           had `<dl>` since it was written; this is the same instinct applied
           evenly. */}
-      <div role="table" aria-label={`${heading}, ${matrix.basisLine}`} className="grid items-center gap-x-5 gap-y-[3px]" style={{ gridTemplateColumns: cols }}>
+      {/* THE ONE THING ALLOWED TO BE WIDER THAN THE PAGE, IN ITS OWN SCROLLER
+          (design review 16, AGENTS.md's responsive rule). The grid's label
+          column is a fixed 168px and every cell carries a bar and a 62px
+          figure, so below about 640px the table cannot shrink further without
+          the figures colliding — and the whole document was scrolling
+          horizontally instead of the table. */}
+      <div className="min-w-0 overflow-x-auto">
+      <div role="table" aria-label={`${heading}, ${matrix.basisLine}`} className="grid min-w-[420px] items-center gap-x-5 gap-y-[3px]" style={{ gridTemplateColumns: cols }}>
         <div role="row" className="contents">
           <ColumnHead>{heading === 'What gets made' ? 'Format' : 'Hook'}</ColumnHead>
           {sides.map((s) => <ColumnHead key={s.audience}>{s.label}</ColumnHead>)}
@@ -236,6 +272,7 @@ function Matrix({ matrix, heading, mode, legend = true }: { matrix: FormatMatrix
             ))}
           </Row>
         ))}
+      </div>
       </div>
     </div>
   )
@@ -299,7 +336,7 @@ function Engagement({ rows: all, mode, of, basisLine }: { rows: readonly FormatR
   if (rows.length === 0) return null
   const axis = engagementAxis(rows)
   return (
-    <div className="flex flex-col gap-2.5 rounded-md border border-border bg-tile px-4 py-3">
+    <div className="flex flex-col gap-2 rounded-md border border-border bg-tile px-4 py-2.5">
       <Eyebrow>Median engagement per format</Eyebrow>
       <div className="flex flex-col gap-1.5">
         {rows.map((r) => (
@@ -363,7 +400,9 @@ export const contentPlaybook: Block<ContentBriefData> = {
     const empty = contentPlaybook.emptyState(data)
     if (empty || !p) {
       return (
-        <BlockFrame title={contentPlaybook.title} question={contentPlaybook.question} mode={mode}>
+        // THE THIN ARM SUPPRESSES THE HEADER THE FILLED ARM DOES (design
+        // review 4) — see `contentMake`'s copy of this comment.
+        <BlockFrame title={contentPlaybook.title} question={contentPlaybook.question} mode={mode} header={mode !== 'print'}>
           <BlockEmpty mode={mode}>{empty ?? PLAYBOOK_GONE}</BlockEmpty>
         </BlockFrame>
       )
@@ -391,7 +430,17 @@ export const contentPlaybook: Block<ContentBriefData> = {
         // it three times.
         footer={moreLine(p) ? `${p.coverageLine} ${moreLine(p)}.` : p.coverageLine}
       >
-        <div className="flex min-w-0 flex-col gap-2.5">
+        {/* THE SHEET KEEPS REAL SLACK, NOT ONE PIXEL (design review 11). The
+            populated fixture rendered 536px into a 535px body — a margin of
+            NEGATIVE ONE inside an `overflow: hidden` box — and the takeaway
+            sentence above grew by up to a line when it started printing its
+            band beside each median (design review 7). Two changes buy it back:
+            the section gaps come down from 10px to 6px, which is the density
+            the artboard's own slide sets between a table, its takeaway and the
+            card under it, and the engagement card's padding comes in a step.
+            Measured after: 513px, so a takeaway that wraps to a second line
+            still fits. */}
+        <div className="flex min-w-0 flex-col gap-1.5">
           <Matrix matrix={p.formats} heading="What gets made" mode={mode} />
           {/* THE TAKEAWAY, COMPOSED IN CODE FROM THE TWO MEDIANS (D5). Two
               formats at one moment, each with the videos its median was read
@@ -402,7 +451,7 @@ export const contentPlaybook: Block<ContentBriefData> = {
               <span>{p.formats.conclusion}</span>
             </p>
           ) : null}
-          <div className="grid gap-x-10 gap-y-3 md:grid-cols-[7fr_5fr]">
+          <div className="grid gap-x-10 gap-y-3 lg:grid-cols-[7fr_5fr]">
             <Matrix matrix={p.hooks} heading="How they open" mode={mode} legend={false} />
             <Engagement rows={p.engagement} mode={mode} of={category?.of ?? 0} basisLine={p.basisLine} />
           </div>

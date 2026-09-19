@@ -1147,8 +1147,11 @@ describe('WK §6 · your own side, month to date (Block D, D6)', () => {
     // `ENGAGEMENT_MIN_VIDEOS` and one under it — so the column carries a median
     // in one cell and none in the other, both with their n. Wave 2 has to print
     // those two differently.
-    expect(sides.formats.sides[0].byKey['story']!.engagement).toEqual({ median: 2.1, n: 3 })
-    expect(sides.formats.sides[0].byKey['testimonial']!.engagement).toEqual({ median: null, n: 2 })
+    // `band: null` on both: a distribution-free median band needs the ranks to
+    // fall inside the sample, which is about eight rated videos (`medianBand`,
+    // Block D wave 3 / `content` finding 6).
+    expect(sides.formats.sides[0].byKey['story']!.engagement).toEqual({ median: 2.1, n: 3, band: null })
+    expect(sides.formats.sides[0].byKey['testimonial']!.engagement).toEqual({ median: null, n: 2, band: null })
     // …and the column was READ, which is what makes a "0 of 5" cell honest.
     expect(sides.formats.sides[0].unread).toBeNull()
   })

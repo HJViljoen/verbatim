@@ -42,7 +42,7 @@ function Eyebrow({ children }: { children: ReactNode }) {
   )
 }
 
-function Numbers({ rows, mode }: { rows: readonly NumberRow[]; mode: RenderMode }) {
+function Numbers({ rows, caveat, mode }: { rows: readonly NumberRow[]; caveat: string; mode: RenderMode }) {
   if (rows.length === 0) return null
   if (mode === 'email') {
     return (
@@ -53,6 +53,10 @@ function Numbers({ rows, mode }: { rows: readonly NumberRow[]; mode: RenderMode 
             <div style={{ fontFamily: FONT.sans, fontSize: 13, color: EMAIL.ink, marginTop: 2 }}>{r.value}</div>
           </div>
         ))}
+        {/* THE CAVEAT TRAVELS WITH THE CARD (design review 10). It used to be
+            a paragraph in the print arm's left column and nowhere at all in
+            the email arm, which printed neither it nor the label rule. */}
+        <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted, marginTop: 8 }}>{caveat}</div>
       </div>
     )
   }
@@ -76,6 +80,14 @@ function Numbers({ rows, mode }: { rows: readonly NumberRow[]; mode: RenderMode 
           </div>
         ))}
       </dl>
+      {/* THE ARTBOARD'S OWN CARD FOOTER — a ruled caveat under the rows
+          (design review 10). The card ended at 59% of a 482px body beside a
+          prose column running its full height, and the artboard's card carries
+          eight rows AND this caveat to about 90%. The Reddit cap is the caveat
+          that belongs to the NUMBERS — it is why an engagement figure has the
+          denominator it has — and it was a paragraph in the left column, which
+          is the column that had room to spare. */}
+      <p className="m-0 border-t border-border pt-2.5 text-[12.5px] leading-[1.45] text-muted-foreground">{caveat}</p>
     </div>
   )
 }
@@ -90,7 +102,9 @@ export const contentRecord: Block<ContentBriefData> = {
     const empty = contentRecord.emptyState(data)
     if (empty) {
       return (
-        <BlockFrame title={contentRecord.title} question={contentRecord.question} mode={mode}>
+        // THE THIN ARM SUPPRESSES THE HEADER THE FILLED ARM DOES (design
+        // review 4) — see `contentMake`'s copy of this comment.
+        <BlockFrame title={contentRecord.title} question={contentRecord.question} mode={mode} header={mode !== 'print'}>
           <BlockEmpty mode={mode}>{empty}</BlockEmpty>
         </BlockFrame>
       )
@@ -104,8 +118,10 @@ export const contentRecord: Block<ContentBriefData> = {
             {r.lines.map((l, i) => (
               <div key={i} style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink2, marginTop: 4 }}>{l}</div>
             ))}
-            <Numbers rows={r.numbers} mode={mode} />
-            {[r.method?.basis, r.method?.language, r.method?.redditCap, r.method?.privacy]
+            <Numbers rows={r.numbers} caveat={r.reddit} mode={mode} />
+            {/* NO `redditCap` IN THIS LIST — see the note on the app/print arm
+                below. The caveat under the numbers card IS the Reddit cap. */}
+            {[r.method?.basis, r.method?.language, r.method?.privacy]
               .filter((l): l is string => !!l)
               .map((l, i) => (
                 <div key={i} style={{ fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.muted, marginTop: 6 }}>{l}</div>
@@ -135,7 +151,7 @@ export const contentRecord: Block<ContentBriefData> = {
         // block keeps its own.
         footerNote={mode === 'print' ? undefined : r.method?.preparedBy}
       >
-        <div className="grid min-w-0 gap-x-12 gap-y-4 md:grid-cols-[7fr_5fr]">
+        <div className="grid min-w-0 gap-x-12 gap-y-4 lg:grid-cols-[7fr_5fr]">
           <div className="flex min-w-0 flex-col gap-2">
             <Eyebrow>How this brief was made</Eyebrow>
             {/* AS CLOSE TO THE ARTBOARD'S SCALE AS THIRTEEN SENTENCES FIT
@@ -158,7 +174,6 @@ export const contentRecord: Block<ContentBriefData> = {
               <p key={i} className="m-0 max-w-[76ch] text-[14.5px] leading-[1.5] text-foreground">{l}</p>
             ))}
             <p className="m-0 max-w-[76ch] text-[14px] leading-[1.5] text-muted-foreground">{r.labels}</p>
-            <p className="m-0 max-w-[76ch] text-[14px] leading-[1.5] text-muted-foreground">{r.reddit}</p>
             {tail.length > 0 ? (
               <div className="mt-auto flex flex-col gap-0.5">
                 {tail.map((l, i) => (
@@ -168,7 +183,7 @@ export const contentRecord: Block<ContentBriefData> = {
             ) : null}
           </div>
           <div className="flex min-w-0 flex-col gap-3">
-            <Numbers rows={r.numbers} mode={mode} />
+            <Numbers rows={r.numbers} caveat={r.reddit} mode={mode} />
             {/* THE METHOD FOOTNOTE, WHICH THIS SHEET IS NOW THE ONLY HOME FOR
                 (fix pass, reports-25). The content brief printed TWO
                 consecutive "How this brief was made" sheets — this one and the
@@ -181,9 +196,21 @@ export const contentRecord: Block<ContentBriefData> = {
                 slide's data since it was built and only `preparedBy` was read
                 off it. It sits under the numbers card, in the column that
                 stopped at 59% of the body. */}
+            {/* AND `redditCap` IS NOT IN THIS LIST, because `content` put the
+                same sentence where the artboard wants it. Both packages moved
+                REDDIT_CAP_LINE onto this one sheet from different directions:
+                `reports` brought the whole of `methodLines` here when
+                `CONTENT_MAP` dropped the deck's second method page, and
+                `content` made the cap the ruled caveat inside the numbers card
+                it qualifies. Kept together unfiltered, the sheet printed the
+                identical sentence twice — 12.5px inside the card and 10px in
+                the footnote under it — which is reports-18's own defect class
+                on the sheet reports-25 had just made the only method sheet.
+                `lib/pages/content-brief.ts:124` says this field is "printed
+                once under the card"; the card's caveat is that printing. */}
             {r.method && (
               <div className="flex flex-col gap-1">
-                {[r.method.basis, r.method.language, r.method.redditCap, r.method.privacy]
+                {[r.method.basis, r.method.language, r.method.privacy]
                   .filter((l): l is string => !!l)
                   .map((l, i) => (
                     <p key={i} className="m-0 font-mono text-[10px] leading-[1.45] text-muted-foreground">{l}</p>

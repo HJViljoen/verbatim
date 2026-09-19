@@ -43,6 +43,33 @@ import { madeInMonth } from '@/lib/pages/market-surface'
 //     (`page.meta.sure`); a ledger row has no confidence, and three dots with
 //     nothing behind them is the score this product does not show.
 //
+//   · THE "MAKE IT AS…" LINE, which is the last line of every artboard card
+//     ("Make it as a product-on-desk demo — median engagement 3.1% on TikTok
+//     (n=131)"). It is absent, and until now no rule said why, so it read as
+//     an oversight (design review 15). The rule is two facts, and either one
+//     alone is enough:
+//
+//       1. NOTHING IN THIS PRODUCT MAPS A PIECE OF ADVICE TO A FORMAT. A
+//          recommendation carries `type` — one of `RECOMMENDATION_TYPES`
+//          (`product`, `positioning_messaging`, `customer_experience`, …),
+//          which is what the advice is ABOUT — and never a `classified_type`,
+//          which is what a video IS. No join exists, no column holds one, and
+//          the only way to produce the sentence would be to let a model pick
+//          the format, which would put a fabricated label in front of a real
+//          median and make the whole line read as measured.
+//       2. AND THIS BLOCK COULD NOT REACH THE MEDIAN IF IT DID. `content.make`
+//          renders `MarketSurfaceData` — that is what lets it cost no second
+//          read — and the format medians are on `ContentBriefData`, the
+//          brief's own surface, two sections later. A block gets ONE surface
+//          (`lib/blocks/types.ts`); a block that quietly took two would be the
+//          second measurement of one month this whole layer exists to stop.
+//
+//     What the card ends with instead is Pass D-b's own argument for the
+//     advice, which is a sentence the product actually has. If the mapping is
+//     ever built — a recommendation that names the format it is advice about,
+//     written by the classifier's vocabulary rather than by a model — the line
+//     belongs here and the medians are one surface away.
+//
 //   · "8 answered last week · 4 ignored" and the reply rows. Nothing records
 //     whether a reply was sent (D6), and the inbox those rows come from is
 //     `lib/pages/content.ts`, which another package is moving this wave.
@@ -170,51 +197,120 @@ const STOP_HEAD = 'What not to make'
 const STOP_LABEL = 'Stop'
 
 /**
- * A CARD IS A FIXED BOX, SO ITS VARIABLE PROSE IS BOUNDED (design review 10).
+ * AND THE NEGATION IS NOT PAINTED IN RED (design review 9).
  *
- * The slide body is 563px with `overflow: hidden` (app/globals.css
- * `.vb-slide-body`) and `data-overflow` is only ever toggled inside the
- * document editor — never on the export path — so nothing signals a clip in a
- * PDF. Three of a card's strings are model-written and length-checked nowhere
- * in the product: the advice's title, the commenter's quote and Pass D-b's
- * argument. Measured on the fix pass's own stress fixture (`longContentLedger`,
- * every one of them at its worst), the row ran 179px past the sheet and the
- * bottom of a card went with it.
+ * The card carried `border-negative/40`, a `text-negative` mono eyebrow and a
+ * `text-negative` 17px/600 headline. `design-system/verbatim/MASTER.md:43`
+ * lists Negative `#DB3B2E` as **"data only"** and rule 2 at `:49` is "Colour =
+ * meaning, in data only" — a card border, a label and a headline are chrome,
+ * and spending the palette's one alarm colour on them leaves it meaning
+ * nothing where a measurement needs it. Measured on the tile, the headline was
+ * **4.49:1**, under AA for 17px/600, which is not large text.
  *
- * Clamped, each to the lines the artboard's own card gives it — except the
- * `afterwards` sentence, which is clamped at three because it is the one that
- * says why a comparison was REFUSED, and half of "we compare from 2" is a worse
- * sentence than none. A clamp is
- * VISIBLE — the ellipsis is on the page and the full string is in the element's
- * title — where a clip is not, and every clamped string is also printed in full
- * on the ledger section two slides earlier. The quote is clamped last and least
- * for the reason the file already gives: a commenter's own words are on this
- * page or nowhere.
+ * The artboard makes the same point with a neutral mono eyebrow and an
+ * all-black headline and gets the negation from the WORDS and the position.
+ * So do we: the words are `STOP_HEAD` and `STOP_LABEL`, the position is the
+ * band under the row rather than a fourth column in it, and the one place the
+ * negative tint survives is the `Chip` — which is a datum (the status the
+ * client set) and is the app-wide chip pattern.
  */
+
+/**
+ * A CARD IS A FIXED BOX, SO ITS VARIABLE PROSE IS BOUNDED — BUT NEVER BY A
+ * CSS CLAMP, AND NEVER THE QUOTE (design review 1).
+ *
+ * The slide body is a fixed height with `overflow: hidden` (app/globals.css
+ * `.vb-slide-body`) and three of a row's strings are model-written and
+ * length-checked nowhere in the product: the advice's title, the commenter's
+ * quote and Pass D-b's argument. That much was right. What was drawn was
+ * `line-clamp-2` / `line-clamp-3`, and the comment defending it claimed the
+ * full string was in the element's `title` and printed in full on the ledger
+ * section two slides earlier. BOTH ARE FALSE ON PAPER. A `title` does not
+ * exist in a PDF, and `market.advice` expands exactly ONE row
+ * (components/pages/market-surface/advice.tsx `expandedLineage`) — a row
+ * `toMake` does not draw. Rendered and diffed on the shipped fixture, every
+ * truncated argument and every truncated quote on this sheet appeared nowhere
+ * else in the brief, which breaks the rule written three lines away: a
+ * commenter's own words are on this page or nowhere.
+ *
+ * Measured on the shipped fixture, FOUR nodes were actually cut — mid-word
+ * every time, because a CSS clamp cuts at whatever glyph the line box ends on:
+ * "…and nobody in the c…", "…never on the ones that…", "…the half of that
+ * argument you ca…", and a refusal sentence at "…we do not compare until 2
+ * have been read. Sep 20…" — two characters into a year, so the sheet printed
+ * a fragment that reads as a date and lost the half that explains the refusal.
+ *
+ * So the rule is now by KIND, and two of the four are never cut at all:
+ *
+ *   · THE QUOTE is printed whole or not at all. It is the one string on the
+ *     card that exists nowhere else, and it is the speaker's.
+ *   · `afterwards.line` is printed whole. It is composed IN CODE
+ *     (lib/reading/afterwards.ts) from a bounded set of clauses, so it has a
+ *     ceiling already — and it is the sentence that says why a comparison was
+ *     refused, which is worth less than nothing in halves.
+ *   · THE ADVICE'S TITLE and PASS D-b's ARGUMENT are bounded by `bound`, in
+ *     code, at a WORD boundary. `recommendationSchema` puts no length on
+ *     either (lib/pipeline/schemas.ts), so something must; what changes is
+ *     that the cut lands between words, never inside one and never inside a
+ *     number or a date, and the ellipsis is real text that survives into a PDF.
+ *
+ * The budgets are set so that the SHIPPED reading is untouched — the longest
+ * title and the longest argument on it are well inside them, and
+ * `index.test.tsx` pins that — and only a genuinely long string is bounded.
+ * That is the bar the review set: nothing a client can read today is cut.
+ */
+
+/** Characters of Pass D-b's `title` a card prints before it bounds it. */
+export const TITLE_CHARS = 96
+/** Characters of Pass D-b's `reasoning` a card prints before it bounds it. */
+export const ARGUMENT_CHARS = 180
+
+/**
+ * A model string, cut between WORDS, with the cut on the page.
+ *
+ * Never inside a word, so a cut can never make a fragment that reads as
+ * something else — "Sep 20" out of "Sep 2026" is the case this was written
+ * for. The trailing punctuation of the surviving word goes with it, so the
+ * ellipsis is not "…word, …". Text at or under `max` comes back untouched and
+ * carries no ellipsis, which is what makes "was anything cut?" answerable by
+ * looking at the page.
+ */
+export function bound(text: string, max: number): string {
+  if (text.length <= max) return text
+  const cut = text.slice(0, max + 1)
+  const at = cut.lastIndexOf(' ')
+  const kept = at > 0 ? cut.slice(0, at) : text.slice(0, max)
+  return `${kept.replace(/[\s,;:.\u2014\u2013-]+$/u, '')}\u2026`
+}
+
 function Card({ row, n, mode }: { row: AdviceRow; n: number | null; mode: RenderMode }) {
   const stop = n == null
   return (
-    <div className={`flex min-w-0 flex-col gap-1 rounded-md border px-4 py-3 ${stop ? 'border-negative/40 bg-tile' : 'border-border bg-tile'}`}>
+    <div className="flex min-w-0 flex-col gap-1 rounded-md border border-border bg-tile px-4 py-3">
       <div className="flex items-center justify-between gap-2">
         {stop
-          ? <span className="font-mono text-[13px] font-medium uppercase tracking-[0.06em] text-negative">{STOP_LABEL}</span>
+          ? <span className="font-mono text-[13px] font-medium uppercase tracking-[0.06em] text-muted-foreground">{STOP_LABEL}</span>
           : <span className="font-mono text-[13px] font-medium tabular-nums text-primary">{String(n).padStart(2, '0')}</span>}
         <Chip tone={toneOf(row)}>{chipWord(row)}</Chip>
       </div>
       {/* THE ADVICE'S OWN WORDS, WRITTEN BY PASS D-b AND READ BACK OUT OF A
           COLUMN — the `stored` kind, naming the slot that adjudicated them
           (lib/test/copy-contract.ts). On the stop card they are the SUBJECT of
-          the headline rather than the headline. */}
+          the headline rather than the headline.
+          AND THE STOP HEADLINE IS 15px AGAINST THE CARDS' 17px (design review
+          5). The card is subordinate by design — it is what NOT to make on a
+          sheet about what to make — and after the colour came off it (design
+          review 9) type is what is left to say so. */}
       {stop ? (
         <>
-          <h3 className="m-0 text-[17px] font-semibold leading-[1.2] tracking-[-0.01em] text-negative">{STOP_HEAD}</h3>
+          <h3 className="m-0 text-[15px] font-semibold leading-[1.2] tracking-[-0.01em] text-foreground">{STOP_HEAD}</h3>
           <p
             data-copy="stored"
             data-slot="pass_d_b_recommendation"
             title={row.title}
-            className="m-0 line-clamp-3 text-[13px] font-normal leading-[1.3] text-secondary-foreground"
+            className="m-0 text-[13px] font-normal leading-[1.3] text-secondary-foreground"
           >
-            {row.title}
+            {bound(row.title, TITLE_CHARS)}
           </p>
         </>
       ) : (
@@ -222,33 +318,34 @@ function Card({ row, n, mode }: { row: AdviceRow; n: number | null; mode: Render
           data-copy="stored"
           data-slot="pass_d_b_recommendation"
           title={row.title}
-          className="m-0 line-clamp-2 text-[17px] font-semibold leading-[1.2] tracking-[-0.01em] text-foreground"
+          className="m-0 text-[17px] font-semibold leading-[1.2] tracking-[-0.01em] text-foreground"
         >
-          {row.title}
+          {bound(row.title, TITLE_CHARS)}
         </h3>
       )}
       <p className="m-0 font-mono text-[10.5px] leading-[1.35] text-muted-foreground">{provenance(row)}</p>
-      {row.grounded?.pruned ? <p className="m-0 line-clamp-2 text-[12px] leading-[1.4] text-muted-foreground">{row.grounded.line}</p> : null}
-      <div className="flex flex-col gap-1 rounded-md bg-inner px-3 py-2.5">
-        <p className="m-0 font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">What the conversation did after</p>
-        <Reading verdict={row.afterwards.verdict} mode={mode} />
-        <p className="m-0 line-clamp-3 text-[11.5px] leading-[1.4] text-secondary-foreground">{row.afterwards.line}</p>
-      </div>
-      {/* THE QUOTE BEFORE THE ARGUMENT, WHICH IS THE ARTBOARD'S ORDER AND THE
-          SAFER ONE. A card is a fixed box on a 1123 × 631 sheet and the last
-          thing in it is what a long row clips; the model's argument is also on
-          the ledger section two slides earlier, and a commenter's own words are
-          on this page or nowhere. */}
-      {row.quote ? (
-        <div className="[&_p]:line-clamp-2">
-          <BlockQuote quote={row.quote} mode={mode} />
+      {row.grounded?.pruned ? <p className="m-0 text-[12px] leading-[1.4] text-muted-foreground">{row.grounded.line}</p> : null}
+      {/* `mt-auto`, WHICH IS THE ARTBOARD'S OWN `margin-top:auto` ON ITS LAST
+          BLOCK (design review 5). The row is `items-stretch` now, so every card
+          is one height; a card whose row carries less than another's would
+          otherwise pool all of its white at the bottom and read as unfinished.
+          Pushed down, the evidence lands near a common baseline across the row
+          and the slack is one interior gap. */}
+      <div className="mt-auto flex flex-col gap-1 pt-1">
+        <div className="flex flex-col gap-1 rounded-md bg-inner px-3 py-2.5">
+          <p className="m-0 font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">What the conversation did after</p>
+          <Reading verdict={row.afterwards.verdict} mode={mode} />
+          <p className="m-0 text-[11.5px] leading-[1.4] text-secondary-foreground">{row.afterwards.line}</p>
         </div>
-      ) : null}
-      {row.why ? (
-        <p data-copy="stored" data-slot="pass_d_b_recommendation" title={row.why} className="m-0 line-clamp-2 text-[12px] leading-[1.4] text-secondary-foreground">
-          {row.why}
-        </p>
-      ) : null}
+        {/* THE QUOTE BEFORE THE ARGUMENT, WHICH IS THE ARTBOARD'S ORDER: a
+            commenter's own words are on this page or nowhere. */}
+        {row.quote ? <BlockQuote quote={row.quote} mode={mode} /> : null}
+        {row.why ? (
+          <p data-copy="stored" data-slot="pass_d_b_recommendation" title={row.why} className="m-0 text-[12px] leading-[1.4] text-secondary-foreground">
+            {bound(row.why, ARGUMENT_CHARS)}
+          </p>
+        ) : null}
+      </div>
     </div>
   )
 }
@@ -306,7 +403,15 @@ export const contentMake: Block<MarketSurfaceData> = {
     const empty = contentMake.emptyState(data)
     if (empty) {
       return (
-        <BlockFrame title={contentMake.title} question={contentMake.question} mode={mode}>
+        // `header={mode !== 'print'}` ON THIS ARM TOO (design review 4). The
+        // filled branch below suppresses the block's own <h2> on a printed
+        // sheet, because the slide already carries the same words as its <h1>
+        // and the question again as its serif framing. This branch did not, so
+        // every THIN arm — refused, empty, unclassified — printed the section
+        // title three times and its question twice, four lines apart, over
+        // ~900px of white. It is the fault `document-deck.tsx` was fixed for
+        // ("printed 'YOUR SUBJECTS' twice"), on the one arm not covered.
+        <BlockFrame title={contentMake.title} question={contentMake.question} mode={mode} header={mode !== 'print'}>
           <BlockEmpty mode={mode}>{empty}</BlockEmpty>
         </BlockFrame>
       )
@@ -314,8 +419,11 @@ export const contentMake: Block<MarketSurfaceData> = {
     const make = toMake(data.advice.rows)
     const stop = toStop(data.advice.rows)
     // THE COUNTS THE TITLE NO LONGER CLAIMS, where they can be recomputed from
-    // the rows actually drawn (design review 15).
-    const meta = `${fmtInt(make.length)} to make${stop ? ' · 1 to stop' : ''} · ${fmtInt(data.advice.total)} in the ledger`
+    // the rows actually drawn (design review 15) — the header's meta on the
+    // screen and in an email, the footer note on a printed sheet, which is
+    // where the header row does not exist (design review 8).
+    const counts = `${fmtInt(make.length)} to make${stop ? ' · 1 to stop' : ''}`
+    const meta = `${counts} · ${fmtInt(data.advice.total)} in the ledger`
 
     if (mode === 'email') {
       return (
@@ -335,24 +443,68 @@ export const contentMake: Block<MarketSurfaceData> = {
         mode={mode}
         header={mode !== 'print'}
         meta={meta}
-        footer={data.advice.actedLine}
-        footerNote={`${longMonth(data.month)} \u00b7 ${GROUNDING_BASIS}`}
+        // THE BASIS IS A SENTENCE, SO IT GOES IN THE SLOT THAT WRAPS (design
+        // review 16). `footerNote` is `shrink-0` by design — BlockFrame
+        // documents it as "the artboard's quiet mono note — the basis, the
+        // window, the population" — and a full sentence in it forced the whole
+        // block to 653px at a 375px viewport, which is the document scroll the
+        // finding measured. `footer` is the `min-w-0` half and is where the
+        // playbook block already puts its own long basis sentence.
+        footer={`${data.advice.actedLine} ${GROUNDING_BASIS}`}
+        // THE COUNT REACHES A PRINTED SHEET (design review 8). `header={mode
+        // !== 'print'}` drops the whole header row on a slide — the meta with
+        // it — and `DocumentCover` prints only "{stamp} · {pages} pages", so
+        // "3 to make · 1 to stop" was computed and printed NOWHERE on the PDF,
+        // while the comment on `contentMake.title` said it printed in both
+        // places. The artboard carries it on the cover and titles the sheet
+        // with it; a fixed title still may not claim a count, so the count
+        // goes where the printed sheet can carry it — the footer note, which
+        // is the one metadata slot a suppressed header does not take away. In
+        // the app and in an email the header row is drawn and already carries
+        // the same string, so the note stays the month.
+        // THE COUNTS AND NOT THE LEDGER TOTAL: the note is mono at 11px beside
+        // a full sentence, and the whole meta wrapped the footer to a second
+        // line, which is 6px this 535px sheet does not have. The total is what
+        // `ct.advice` — the ledger section two slides on — is a table of.
+        footerNote={mode === 'print' ? `${longMonth(data.month)} \u00b7 ${counts}` : longMonth(data.month)}
       >
         <div className="flex min-w-0 flex-col gap-3">
-          {/* ONE ROW, AND THE STOP CARD IS THE LAST COLUMN. The artboard puts
-              the three make cards on page 2 and the one stop card in page 4's
-              right pane; folded into one section they have to share a slide,
-              and a full-width stop card under three columns runs off the
-              sheet. Four columns keeps every card on the page at the mock's
-              own density, and the stop card keeps its own eyebrow. */}
-          {/* `items-start`, SO A CARD IS ITS OWN HEIGHT. Stretched, the row
-              was as tall as the fullest card and the thinnest — a row with no
-              reading, no quote and no argument yet — was a bordered box two
-              thirds white (design review 2's second half). The mock's three
-              cards are all full because the mock's three rows all carry
-              everything; ours do not, and a short card that ends where its
-              content ends says so. */}
-          <div className={`grid min-w-0 items-start gap-[18px] ${stop ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
+          {/* ONE ROW, ALL OF ONE HEIGHT, AND THE STOP CARD IS THE LAST
+              COLUMN (design review 5). The artboard puts the three make cards
+              on page 2 and the one stop card in page 4's right pane; folded
+              into one section they share a slide, and a full-width stop band
+              under three columns costs more height than the sheet has
+              (measured: three stretched cards 380px plus the shortest honest
+              band 138px, against a 477px budget once the footer and the unlock
+              line are paid for). So the four columns stay — and the two things
+              the finding is actually about are fixed where they live.
+
+              `items-start` made the row a four-step STAIRCASE: measured
+              197 · 466 · 300 · 483 in a 535px body, with card 01 — the only
+              undecided item, the reason the sheet exists — the shortest at 37%
+              of the row, and the negative card its tallest step. The row is
+              `items-stretch` now, which is the grid's default and the
+              artboard's; the earlier objection to it — that the thinnest card
+              became "a bordered box two thirds white" — is answered by
+              `mt-auto` INSIDE the card, which puts the evidence on a common
+              baseline, rather than by letting the row staircase. The row's
+              height is the tallest card's either way, so this costs nothing.
+
+              The hierarchy is fixed in the card: no colour on its chrome
+              (design review 9) and a 15px headline against the make cards'
+              17px, so the last column is quiet rather than the loudest object
+              on a sheet titled "What to make next".
+
+              THE LADDER IS sm/lg AND NOT md (design review 16). `md` is 768,
+              and four cards in 768px gave each 161px of box against 198px of
+              content — eight nodes overflowing their boxes — while at 375 the
+              document scrolled to 669px. Two columns from 640, the full row
+              from 1024, where the earlier render measured zero overflow; a
+              printed sheet renders at 1123 and takes the full row unchanged.
+              Not reachable on today's routes — `CONTENT_BRIEF_BLOCKS` is wired
+              only into print — but the Block contract declares an app arm and
+              the render tier exercises it. */}
+          <div className={`grid min-w-0 gap-[18px] sm:grid-cols-2 ${stop ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
             {make.map((r, i) => <Card key={r.lineageId} row={r} n={i + 1} mode={mode} />)}
             {stop ? <Card key={stop.lineageId} row={stop} n={null} mode={mode} /> : null}
           </div>
