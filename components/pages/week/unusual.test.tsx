@@ -349,6 +349,25 @@ describe('WK1 · unusual this week', () => {
 })
 
 describe('the thirteen-point chart (Block D wave 2)', () => {
+  it('ranks the lines under the chart instead of stacking eight of one size', () => {
+    // REVIEW W7. Four lines under the chart and four down the right column,
+    // all 11.5px muted, with the sentences that STATE a measurement at the
+    // same rank as the sentences that qualify one. Nothing is deleted — every
+    // one is a rule in force — but the two readings take reading rank and the
+    // apparatus becomes one paragraph.
+    const markup = render(weekUnusual.render(weekFixture(), 'app', ctx))
+    const muted = markup.match(/class="m-0 text-\[11\.5px\] text-muted-foreground"/g) ?? []
+    const reading = markup.match(/class="m-0 text-\[12px\] text-secondary-foreground"/g) ?? []
+    expect(reading.length).toBe(2)
+    expect(muted.length).toBe(2)
+    // And the joined paragraph still carries every sentence it used to.
+    const text = markupText(markup)
+    expect(text).toContain('each point is one delivery’s own days, never a month.')
+    expect(text).toContain('this update’s contribution to September so far: 205 of 449')
+    expect(text).toContain('Those months were not all read under one grouping')
+    expect(text).toContain('August had not finished when this was read')
+  })
+
   it('draws one point per update, zeroes included, and does not join them to the line', () => {
     const markup = render(weekUnusual.render(weekFixture(), 'app', ctx))
     const d = weekFixture()
