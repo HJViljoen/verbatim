@@ -596,16 +596,38 @@ describe('SU4 · your own posts', () => {
   })
 
   // ONE ANSWER PER SCREENFUL. The membership rows are read THROUGH the subject
-  // rows (`loadOwnPosts` only looks for them `if (subjects.length > 0)`), so a
-  // set that cannot be read matched nothing — and the rail 200px above has
-  // already said the set cannot be read. Naming Durability here was the page
-  // contradicting itself in one screenful, on the one arm a real tenant sees.
-  it('matches no subject where the set itself cannot be read', () => {
+  // rows, so a set that cannot be read matched nothing — and the rail 200px
+  // above has already said the set cannot be read. Naming Durability here was
+  // the page contradicting itself in one screenful, on the one arm a real
+  // tenant sees.
+  //
+  // AND THE TILE SAYS NOTHING ABOUT THE SET, rather than saying the wrong
+  // thing about it: `SUBJECTS_NONE_NAMED` invites the reader to name one, and
+  // the rail has just removed the control that would. "We could not read it"
+  // is the rail's sentence and this tile lets it stand.
+  it('says nothing about the set where the set itself cannot be read', () => {
     const data = refusedFixture()
     expect(data.ownPosts?.subjects).toEqual([])
+    expect(data.ownPosts?.subjectsNote).toBeNull()
     const text = renderText(subjectsOwnPosts.render(data, 'app', ctx))
     expect(text).not.toContain('Durability')
     expect(text).not.toContain('Recycled materials')
+    expect(text).not.toContain(SUBJECTS_NONE_NAMED)
+    expect(text).not.toContain('Subjects matched')
+    // The rest of the census is real and still prints.
+    expect(text).toContain('9 posts published')
+  })
+
+  // AND WHERE THE SET WAS READ AND IS EMPTY, THE SENTENCE IS STILL THERE —
+  // `subjectScope: null` vs `{ named: 0 }` is what tells the two apart, and
+  // `ownCensusWithClaims` decides between them (lib/reading/own-posts.test.ts
+  // covers all three notes). This is the block half: given the note, it prints
+  // it, under the eyebrow the mock draws.
+  it('says no subject is named where the set was read and is empty', () => {
+    const data = refusedFixture()
+    const readEmpty = { ...data, ownPosts: { ...data.ownPosts!, subjectsNote: SUBJECTS_NONE_NAMED } }
+    const text = renderText(subjectsOwnPosts.render(readEmpty, 'app', ctx))
+    expect(text).toContain('Subjects matched')
     expect(text).toContain(SUBJECTS_NONE_NAMED)
   })
 

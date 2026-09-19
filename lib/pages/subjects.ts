@@ -1166,12 +1166,24 @@ function monthDays(month: string): { from: string; to: string } {
  * `quote` column is not granted to `authenticated`, so a claim row arrives
  * without its words and the census carries no quote for it — withheld by a
  * policy, not missing.
+ *
+ * AND "NOT READ" IS NOT "NONE NAMED" (fix pass, SB1). `subjects` is NULL where
+ * the subject set itself could not be read — M4 unapplied, which is where both
+ * production tenants are today — and an empty ARRAY where it was read and is
+ * empty. Collapsed to one empty array they both produced
+ * `subjectScope: { named: 0 }`, so the census printed `SUBJECTS_NONE_NAMED`:
+ * "No subject is named yet ... name one and this starts counting", 200px under
+ * a rail saying "We cannot read the set from this page yet, so it cannot be
+ * added to or changed here" with the Add control removed. Two sentences, one
+ * screenful, and the one the client can act on is the false one. A census that
+ * cannot see the set says NOTHING about it and lets the rail answer.
  */
 export async function loadOwnPosts(
   supabase: SupabaseClient,
   clientId: string,
   month: string,
-  subjects: readonly Subject[],
+  /** The active subjects, or NULL where the set could not be read at all. */
+  subjects: readonly Subject[] | null,
   echoes: readonly ClaimEcho[] = [],
 ): Promise<OwnPostCensus> {
   const days = monthDays(month)
@@ -1225,7 +1237,7 @@ export async function loadOwnPosts(
   // on any of its seventeen September posts, so without this the tile would
   // read "about none of your subjects" when nothing has been analysed.
   let analysedPosts = 0
-  if (postIds.length > 0 && subjects.length > 0) {
+  if (postIds.length > 0 && subjects != null && subjects.length > 0) {
     const insights = await readByIds<{ id: string; source_video_id: string | null }>(postIds, (part) =>
       supabase
         .from('audience_insights_current')
@@ -1266,7 +1278,7 @@ export async function loadOwnPosts(
         held.add(vid)
         bySubject.set(r.subject_id, held)
       }
-      membership = subjects
+      membership = (subjects ?? [])
         .filter((s) => bySubject.has(s.id))
         .map((s) => ({ subjectId: s.id, label: s.name, videoIds: [...(bySubject.get(s.id) ?? [])] }))
     }
@@ -1284,7 +1296,8 @@ export async function loadOwnPosts(
     claims: claims.map((c) => ({ ...c, entity: CLIENT_AUDIENCE, quote: '' })),
     membership,
     echoes,
-    subjectScope: { named: subjects.length, analysedPosts },
+    // NULL, NOT `{ named: 0 }`, where the set is unreadable — see the header.
+    subjectScope: subjects == null ? null : { named: subjects.length, analysedPosts },
   }
   // `claims.length` is the ALL-TIME read, so "we read nothing at all" is what
   // marks the half as closed — never the month's own zero, which is a real
@@ -1509,7 +1522,10 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   // SU4 AND THE CLAIMS LEDGER RIDE WITH THE MONTH READS. Neither depends on
   // the selected subject and neither is on anything's critical path, so they
   // overlap the two reads that are.
-  const ownPostsAhead = loadOwnPosts(supabase, clientId, month, active)
+  // `subjectRows == null` is "the set could not be read", which the census
+  // must not report as "none is named" — the rail's own sentence answers that
+  // state and this tile stays quiet about the set.
+  const ownPostsAhead = loadOwnPosts(supabase, clientId, month, subjectRows == null ? null : active)
   const sayHearAhead = loadSayHear(supabase, clientId, latestRunId)
   ownPostsAhead.catch(() => {})
   sayHearAhead.catch(() => {})

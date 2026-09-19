@@ -246,15 +246,19 @@ function ownPostsInput(): OwnPostInput {
  * that state.
  *
  * AND THE SHAPE IS THE LOADER'S, NOT AN INVENTION. `loadOwnPosts` reads the
- * subject rows first and only goes looking for membership `if (subjects.length
- * > 0)`; with M4 unapplied `loadSubjectRows` answers empty, so `membership` is
- * `[]` and `subjectScope` is `{ named: 0, analysedPosts: 0 }` — which is what
- * makes `SUBJECTS_NONE_NAMED` the census's own sentence for this tenant. The
- * posts, the hooks, the formats and the claims half are untouched: `videos` is
- * tenant-readable whatever the month tables say.
+ * subject rows first and only goes looking for membership where it HAS a set;
+ * with M4 unapplied `loadSubjectRows` answers NULL, so `membership` is `[]` and
+ * `subjectScope` is `null` — "this census cannot see the set", which is not
+ * the same as "the set is empty". `SUBJECTS_NONE_NAMED` would be the wrong
+ * sentence here: it invites the reader to name one, 200px under a rail that
+ * has just said the set cannot be added to. The rail owns that state and this
+ * tile stays quiet about it.
+ *
+ * The posts, the hooks, the formats and the claims half are untouched:
+ * `videos` is tenant-readable whatever the month tables say.
  */
 function refusedOwnPostsInput(): OwnPostInput {
-  return { ...ownPostsInput(), membership: [], subjectScope: { named: 0, analysedPosts: 0 } }
+  return { ...ownPostsInput(), membership: [], subjectScope: null }
 }
 
 /** A rail row's own banded change, through the real `monthChange` — 84 videos
