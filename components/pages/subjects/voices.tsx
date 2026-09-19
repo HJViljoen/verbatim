@@ -153,9 +153,39 @@ export const subjectsVoices: Block<SubjectsData> = {
             })}
           />
         ) : (
+          // THREE ACROSS ON PAPER TOO, AND NOT ON A GRID (Block D wave 3b,
+          // `decks`).
+          //
+          // `xl:` never fires in print media — app/globals.css says so where
+          // `data-print-cols` is defined — so the sheet that is supposed to
+          // scan as a SET drew TWO columns and three rows, and 143px of the
+          // sales brief's fifth sheet went over the edge: one whole row of
+          // voices and the footnote saying they were machine-translated, off
+          // the bottom of a paid PDF.
+          //
+          // AND A GRID IS THE WRONG SHAPE FOR SIX CARDS OF DIFFERENT HEIGHTS.
+          // Every cell in a grid row is as tall as the tallest, so one voice
+          // carrying a machine translation and an on-screen pairing left two
+          // white cells beside it and pushed the next row down by its own
+          // height. Columns flow instead: each voice is kept whole
+          // (`break-inside: avoid`) and the three columns balance, which is
+          // what "three across" means on the artboard and is worth another 40
+          // pixels of the same sheet. The app keeps the grid — its column is
+          // wide, its cards are even, and a reading order that goes DOWN a
+          // column is right on paper and wrong under a scroll.
+          mode === 'print' ? (
+            <div className="min-w-0 [column-count:3] [column-gap:20px]">
+              {pane.voices.map((v) => (
+                <div key={v.quote.ref ?? v.cite} className="mb-3 break-inside-avoid">
+                  <Voice voice={v} mode={mode} />
+                </div>
+              ))}
+            </div>
+          ) : (
           <div className="grid min-w-0 grid-cols-1 items-start gap-x-5 gap-y-3 sm:grid-cols-2 xl:grid-cols-3">
             {pane.voices.map((v) => <Voice key={v.quote.ref ?? v.cite} voice={v} mode={mode} />)}
           </div>
+          )
         )}
       </BlockFrame>
     )

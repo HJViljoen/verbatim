@@ -450,6 +450,33 @@ describe('SU2 · the kind mix, on its own month', () => {
 })
 
 describe('SU2 · the voices', () => {
+  // THREE ACROSS ON PAPER, AND IN COLUMNS RATHER THAN ON A GRID (Block D wave
+  // 3b, `decks`). `xl:` never fires in print media, so the sheet that is
+  // supposed to scan as a SET drew two columns and three rows and cost the
+  // sales brief's fifth sheet 143px — one whole row of voices and the footnote
+  // saying they were machine-translated. And a grid row is as tall as its
+  // tallest cell, so one voice carrying a translation and an on-screen pairing
+  // left two white cells beside it; columns flow instead, each voice kept
+  // whole.
+  it('flows the voices in three columns on paper and keeps the grid on screen', () => {
+    const paper = render(subjectsVoices.render(subjectsFixture(), 'print', ctx))
+    expect(paper).toContain('[column-count:3]')
+    expect(paper).toContain('break-inside-avoid')
+    expect(paper).not.toContain('sm:grid-cols-2')
+
+    const app = render(subjectsVoices.render(subjectsFixture(), 'app', ctx))
+    expect(app).toContain('sm:grid-cols-2')
+    expect(app).toContain('xl:grid-cols-3')
+    expect(app).not.toContain('[column-count:3]')
+  })
+
+  // AND PAPER IS DENSER THAN THE SCREEN, NOT BIGGER — the rule
+  // components/blocks/frame.tsx states, applied to the card that was the
+  // loudest exception to it: 40px of side padding in a 190px column.
+  it('sets the printed quote card at the artboard’s own padding', () => {
+    expect(render(subjectsVoices.render(subjectsFixture(), 'print', ctx))).toContain('rounded-lg bg-inner px-4 py-2.5')
+  })
+
   it('shows the original and the English beneath it, labelled', () => {
     const text = renderText(subjectsVoices.render(subjectsFixture(), 'app', ctx))
     expect(text).toContain('Nach 14 Monaten ist der Reißverschluss hin')
