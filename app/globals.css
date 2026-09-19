@@ -103,7 +103,17 @@
   --card-foreground: #26292C;
   --popover-foreground: #26292C;
   --muted: #F6F7F8;
-  --muted-foreground: #6E7378;
+  /* #6E7378 UNTIL BLOCK D WAVE 3 (SH7). It reads 4.79:1 on white and passes,
+     which is why it went unnoticed for a year — and 4.46:1 on `--inner`
+     (#F6F7F8), which FAILS, and the Block D ports are what put large amounts
+     of muted text inside tints: Voice's three persona cards, its tone block
+     and flags row, fourteen nodes on Market including both quote glosses and
+     the verdict words, five on This week, the record's SaveStrip, Content's
+     make cards. Three points darker clears 4.5:1 on the tint (4.66:1) and
+     reads 5.0:1 on white; it is still the same cool grey, and it is a token
+     change rather than fourteen files each reaching for
+     `text-secondary-foreground`. */
+  --muted-foreground: #6B7075;
   --secondary: #F6F7F8;
   --secondary-foreground: #45494D;
 
