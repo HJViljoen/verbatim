@@ -744,6 +744,15 @@ describe('MK3 · this month\u2019s card', () => {
     const text = renderText(marketCard.render(marketFixture(), 'app', ctx))
     expect(text).toMatch(/of 17 posts: a personal story 3/)
     expect(text).toMatch(/not classified 12$|not classified 12 /)
+    // AND THE SEPARATOR TRAILS ITS BUCKET. Carried on the front it landed at
+    // the START of the wrapped second line — "· a question 1 · not classified
+    // 12" — so no bucket's own span may begin with one, and the last carries
+    // none at all.
+    const markup = render(marketCard.render(marketFixture(), 'app', ctx))
+    const buckets = markup.match(/<span class="whitespace-nowrap">([^<]*)<\/span>/g) ?? []
+    expect(buckets.length).toBeGreaterThan(1)
+    for (const b of buckets) expect(b, b).not.toMatch(/>\s*·/)
+    expect(buckets[buckets.length - 1]).not.toContain('·')
     // The email arm printed "17 posts published · posts published in
     // September" — the label and the basis, which are the same words.
     const email = renderText(marketCard.render(marketFixture(), 'email', ctx))

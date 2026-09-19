@@ -274,6 +274,14 @@ export const marketCard: Block<MarketSurfaceData> = {
                 // a hook. The denominator stays at the head of the line, which
                 // is what makes the whole node a level; each bucket is its own
                 // unbreakable span, and the unclassified one goes last.
+                //
+                // AND THE SEPARATOR TRAILS ITS OWN BUCKET RATHER THAN LEADING
+                // THE NEXT ONE. Carried on the front, the wrap put it at the
+                // START of the second line — "…a bold claim 1" over "· a
+                // question 1 · not classified 12" — a right-aligned line
+                // opening with a mid-sentence dot under a left-aligned label
+                // ~190px away. A separator belongs to the thing it follows, so
+                // it breaks after it.
                 <span
                   data-copy="level"
                   className="flex min-w-0 flex-wrap justify-end gap-x-2 gap-y-0.5 text-right font-mono text-[11.5px] leading-[1.35] tabular-nums text-secondary-foreground"
@@ -281,7 +289,7 @@ export const marketCard: Block<MarketSurfaceData> = {
                   <span className="whitespace-nowrap">of {fmtInt(posts)} posts:</span>
                   {hooks.map((h, i) => (
                     <span key={h.label} className="whitespace-nowrap">
-                      {i > 0 ? '· ' : ''}{h.label} {fmtInt(h.value.k)}
+                      {h.label} {fmtInt(h.value.k)}{i < hooks.length - 1 ? ' ·' : ''}
                     </span>
                   ))}
                 </span>
