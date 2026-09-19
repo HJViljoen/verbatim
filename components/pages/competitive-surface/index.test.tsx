@@ -763,8 +763,26 @@ describe('the page, as the artboard composes it', () => {
     // The artboard's arrow, with the year printed once on the end month — a
     // span that crosses a year boundary is ambiguous without it.
     expect(text).toContain('share of the tracked set · Jul → Sep 2026 · both denominators printed')
-    expect(text).toContain('Open the record →')
+    // AND IT NAMES WHERE IT GOES (CO13): the page bar's `HowSound` prints
+    // "the record →" ~500px above and opens the drawer over THIS page, while
+    // this one leaves for Settings. Two near-identical links, two
+    // destinations, one screen.
+    expect(text).toContain('Open the full record in Settings →')
+    expect(text).not.toMatch(/(?<!full )record →/)
     expect(text).toContain('no rank is printed')
+  })
+
+  it('carries the reader’s window into Voice, and not the rival (CO13)', () => {
+    // A bare `/dashboard/voice` landed a reader three months deep on Voice's
+    // default month — a different period from the tile they left. The horizon
+    // travels; `vs=` does not, because Voice has no rival selection.
+    const three = blockContext('', EMAIL, { horizon: 'last_3', vs: 'Ottobock' })
+    for (const block of [competitiveSaidAbout, competitiveQuestions]) {
+      const markup = render(block.render(claimsReadFixture(), 'app', three))
+      expect(markup).toContain('href="/dashboard/voice?horizon=last_3"')
+      expect(markup).not.toContain('href="/dashboard/voice"')
+      expect(markup).not.toContain('vs=Ottobock')
+    }
   })
 
   it('draws the charts on a one-month horizon too, with the attention share first', () => {

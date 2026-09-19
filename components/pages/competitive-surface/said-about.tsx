@@ -4,6 +4,7 @@ import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
 import { BlockQuote } from '@/components/blocks/quote'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt } from '@/lib/format'
+import { horizonHref } from '@/lib/shell/bar'
 import type { SaidAbout } from '@/lib/reading/own-posts'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { SAID_ABOUT_WITHHELD, SAID_ABOUT_WITHHELD_ALL, type CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
@@ -109,7 +110,7 @@ export const competitiveSaidAbout: Block<CompetitiveSurfaceData> = {
   title: 'Said about them, by others',
   question: 'What does everybody else say about each rival?',
 
-  render(data, mode = 'app') {
+  render(data, mode = 'app', ctx) {
     const groups = data.saidAbout
     const email = mode === 'email'
     const empty = competitiveSaidAbout.emptyState(data)
@@ -148,10 +149,15 @@ export const competitiveSaidAbout: Block<CompetitiveSurfaceData> = {
         // but the fact that this meta was already said better: the footer note
         // names the population, which is the thing this block most needs
         // stated, and "in videos about them" was a second, vaguer copy of it.
+        // THE LINK CARRIES THE READER'S WINDOW (CO13). It was a bare
+        // `/dashboard/voice`, so a reader three months deep landed on Voice's
+        // default month and read a different period than the tile they left.
+        // The rival does NOT travel: Voice has no rival selection, and a `vs=`
+        // it ignores is a parameter in the address bar that means nothing.
         footer={
           measured
             ? mode === 'app'
-              ? <Link href="/dashboard/voice" className="hover:underline">Hear these voices →</Link>
+              ? <Link href={`${ctx.appUrl}${horizonHref('/dashboard/voice', {}, data.horizon)}`} className="hover:underline">Hear these voices →</Link>
               : 'Hear these voices.'
             : undefined
         }

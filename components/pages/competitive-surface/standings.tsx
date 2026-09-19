@@ -445,13 +445,20 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
         // before they read a single row.
         meta={metaLine(s)}
         // A REAL FOOTER, AT LAST. `BlockFrame` has had the slot since WP10 and
-        // not one Competitive block passed one, so "Open the record →" lived
-        // only in the page bar's soundness band and the definition line was
+        // not one Competitive block passed one, so the definition line was
         // split across a meta and two body paragraphs.
+        //
+        // AND IT NAMES WHERE IT GOES, BECAUSE THE PAGE BAR'S LINK DOES NOT GO
+        // THERE. `HowSound` (components/shell/how-sound.tsx) prints "the record
+        // →" ~500px above this one and opens the DRAWER over this page
+        // (`/dashboard/competitive?detail=record`); this one leaves for the
+        // record page in Settings. Two near-identical links to two
+        // destinations on one screen is a reader clicking the wrong one, so
+        // this one says which.
         footer={
           mode === 'app'
-            ? <Link href="/dashboard/settings?detail=record" className="hover:underline">Open the record →</Link>
-            : 'Open the record.'
+            ? <Link href="/dashboard/settings?detail=record" className="hover:underline">Open the full record in Settings →</Link>
+            : 'Open the full record in Settings.'
         }
         footerNote="no rank is printed"
       >
