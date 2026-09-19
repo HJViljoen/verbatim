@@ -468,7 +468,26 @@ export const CONTENT_MAP: readonly BriefEntry[] = [
     title: 'The record behind this brief', framing: 'What was read, over what, and what was held back.',
     needs: [],
   }),
-  page('method'),
+  // AND NO SECOND METHOD SHEET AFTER IT (fix pass). `ct.record` and
+  // `page('method')` were consecutive, and both draw "How this brief was made":
+  // the same eyebrow, the same `grid-cols-[7fr_5fr]`, a numbers card each — and
+  // they disagreed, the record sheet saying "Videos: 2,359 carried conversation
+  // in this reading" where `NumbersCard` prints the per-audience list. A client
+  // got two method pages back to back with two answers for Videos.
+  //
+  // THE RECORD SHEET IS THE ONE THAT STAYS, because it is the artboard's
+  // (ContentBrief.dc.html slide 5) and because it prints eleven figures
+  // `MethodPage` does not — the update dates, the trailing median, the
+  // read-depth shares, the gate share, themes per video, the Reddit cap, the
+  // tracking change and the refusals, every one of them already returned by
+  // `loadRecordInputs`. What only `MethodPage` printed was `methodLines`
+  // (the basis, the language note, the Reddit cap, PRIVACY_LINE), and
+  // `record.tsx` now prints those under its numbers card, so nothing a client
+  // PDF has to carry is lost. `CONTENT_BRIEF.skeleton` drops its `method` page
+  // in the same breath, so the writer is not asked for a page nothing renders.
+  //
+  // THE OTHER THREE MAPS ARE UNTOUCHED: they have no record sheet, so
+  // `page('method')` is the only method sheet they have.
 ]
 
 /** The four maps, by the role that writes them. A custom brief keeps the

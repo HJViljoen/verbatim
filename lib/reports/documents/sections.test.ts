@@ -20,6 +20,7 @@ import {
   surfacesOf,
   untrackedNotes,
   untrackedSentence,
+  type BriefEntry,
   type ReadinessLike,
 } from './sections'
 
@@ -95,11 +96,31 @@ describe('the four section maps', () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 
-  it('every map ends on the method page and opens with the short read', () => {
+  // EVERY MAP OPENS WITH THE SHORT READ AND CLOSES ON HOW IT WAS MADE — and
+  // for three of the four that closing sheet is `page('method')`. The content
+  // brief's is `ct.record`, the artboard's own slide 5, which prints
+  // `methodLines` (PRIVACY_LINE included) plus eleven figures `MethodPage`
+  // does not; it had BOTH until the fix pass, two consecutive "How this brief
+  // was made" sheets disagreeing about Videos (reports-25).
+  it('every map ends on how the brief was made and opens with the short read', () => {
+    const closes: Record<string, BriefEntry> = {
+      content_brief: { kind: 'block', section: expect.objectContaining({ id: 'ct.record' }) as never },
+    }
     for (const role of DOCUMENT_ROLES) {
       const map = briefMap(role)
       expect(map[0]).toEqual({ kind: 'page', page: 'in_short' })
-      expect(map[map.length - 1]).toEqual({ kind: 'page', page: 'method' })
+      expect(map[map.length - 1]).toEqual(closes[role] ?? { kind: 'page', page: 'method' })
+    }
+  })
+
+  // And exactly one of the two, on every map: a brief may not print its method
+  // twice.
+  it('never draws two method sheets on one brief', () => {
+    for (const role of DOCUMENT_ROLES) {
+      const map = briefMap(role)
+      const methods = map.filter((e) => e.kind === 'page' && e.page === 'method').length
+      const records = sectionsOf(map).filter((s) => s.block === 'content.record').length
+      expect(methods + records, role).toBe(1)
     }
   })
 
