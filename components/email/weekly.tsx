@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-head-element, @next/next/no-page-custom-font -- an email document, not a page */
 import type { BlockContext } from '@/lib/blocks/types'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { WEEKLY_EMAIL_WIDTH, periodNounFor, weeklyDateLine, weeklyEyebrow, weeklyFooterLines, weeklyHeadline, weeklyLinks, weeklyRuleFor } from '@/lib/reports/weekly'
+import { WEEKLY_CANVAS_GUTTER, WEEKLY_CARD_WIDTH, periodNounFor, weeklyDateLine, weeklyEyebrow, weeklyFooterLines, weeklyHeadline, weeklyLinks, weeklyRuleFor } from '@/lib/reports/weekly'
 import { staleWeeklySnapshot, type WeeklySnapshotData } from '@/lib/reports/weekly-build'
 import { weeklyBlocksFor } from '@/components/blocks/weekly'
 import { Button, Hairline, text } from './primitives'
@@ -9,9 +9,10 @@ import { Button, Hairline, text } from './primitives'
 /**
  * The weekly report as an email (Phase 1 WP17, design §3 Artefact WR).
  *
- * 640 WIDE, against the digest's 600 — the mock's own width
- * (`mock-sealand/spec/artboards.md`). The digest keeps its 600; this is a
- * different artefact and the two are not made to agree by making one wrong.
+ * A 600 CARD ON A 640 CANVAS — the artboard's two widths, which this file had
+ * collapsed into one 640 on the card (`WEEKLY_CARD_WIDTH`, which carries the
+ * proof). The digest's card is 600 too; they agree because the design system
+ * says one thing, not because one was made to match the other.
  *
  * SIX SECTIONS, IN THE STORED ORDER, AND NONE OF THEM IS EVER DROPPED. The
  * digest drops a section whose tile returns null, for a reason its own comment
@@ -81,8 +82,8 @@ export function WeeklyEmail({ data, shareUrl, appUrl, attached, ctx, preheader }
         <table width="100%" {...presentation} style={{ borderCollapse: 'collapse', background: EMAIL.canvas }}>
           <tbody>
             <tr>
-              <td align="center" style={{ padding: '24px 12px' }}>
-                <table width="100%" {...presentation} style={{ borderCollapse: 'separate', maxWidth: WEEKLY_EMAIL_WIDTH, background: EMAIL.card, borderRadius: 6, border: `1px solid ${EMAIL.border}` }}>
+              <td align="center" style={{ padding: `${WEEKLY_CANVAS_GUTTER}px ${WEEKLY_CANVAS_GUTTER}px 24px` }}>
+                <table width="100%" {...presentation} style={{ borderCollapse: 'separate', maxWidth: WEEKLY_CARD_WIDTH, background: EMAIL.card, borderRadius: 6, border: `1px solid ${EMAIL.border}` }}>
                   <tbody>
                     <tr>
                       <td style={{ padding: '24px 28px 4px' }}>
@@ -199,8 +200,8 @@ function StaleWeekly({ title, line }: { title: string; line: string }) {
         <table width="100%" {...presentation} style={{ borderCollapse: 'collapse', background: EMAIL.canvas }}>
           <tbody>
             <tr>
-              <td align="center" style={{ padding: '24px 12px' }}>
-                <table width="100%" {...presentation} style={{ borderCollapse: 'separate', maxWidth: WEEKLY_EMAIL_WIDTH, background: EMAIL.card, borderRadius: 6, border: `1px solid ${EMAIL.border}` }}>
+              <td align="center" style={{ padding: `${WEEKLY_CANVAS_GUTTER}px ${WEEKLY_CANVAS_GUTTER}px 24px` }}>
+                <table width="100%" {...presentation} style={{ borderCollapse: 'separate', maxWidth: WEEKLY_CARD_WIDTH, background: EMAIL.card, borderRadius: 6, border: `1px solid ${EMAIL.border}` }}>
                   <tbody>
                     <tr>
                       <td style={{ padding: '24px 28px' }}>

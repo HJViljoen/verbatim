@@ -8,6 +8,8 @@ import {
   NOTHING_UNUSUAL,
   SENTENCE_FIGURES,
   WEEKLY_BLOCK_KEYS,
+  WEEKLY_CANVAS_GUTTER,
+  WEEKLY_CARD_WIDTH,
   WEEKLY_EMAIL_WIDTH,
   WEEKLY_RULE,
   weeklyRuleFor,
@@ -75,8 +77,10 @@ describe('the arrangement', () => {
     ])
   })
 
-  it('is 640 wide, the mock’s width', () => {
+  it('is a 600 card on the mock’s 640 canvas', () => {
     expect(WEEKLY_EMAIL_WIDTH).toBe(640)
+    expect(WEEKLY_CARD_WIDTH).toBe(600)
+    expect(WEEKLY_CARD_WIDTH + 2 * WEEKLY_CANVAS_GUTTER).toBe(WEEKLY_EMAIL_WIDTH)
   })
 
   it('prints the rule that keeps it honest, naming the month and the week', () => {
