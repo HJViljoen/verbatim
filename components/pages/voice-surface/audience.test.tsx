@@ -186,4 +186,19 @@ describe('voiceAudience', () => {
     // preceded by a space or a quote is the defect.
     expect(markup).not.toMatch(/["\s]w-\[104px\]/)
   })
+
+  it('does not dress the kind readings as controls', () => {
+    // They wore the audience pills' exact chrome — same height, radius, ring
+    // token, size and weight, in the same bar — and were not focusable and did
+    // nothing. A keyboard user tabbing the bar found the top row focusable and
+    // the next row silently not. The block's own header deleted the kind FILTER
+    // on the rule that this product does not print controls that do not work;
+    // the same rule takes the appearance of one.
+    const markup = render(voiceAudience.render(voiceFixture(), 'app', ctx))
+    const pills = markup.match(/rounded-full/g) ?? []
+    // Four audience pills and nothing else on this bar.
+    expect(pills).toHaveLength(voiceFixture().audience.options.length)
+    expect(markup).toContain('Asking how it works')
+    expect(markup).toContain('34% 472 of 1,388')
+  })
 })

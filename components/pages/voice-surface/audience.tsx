@@ -163,11 +163,21 @@ export const voiceAudience: Block<VoiceSurfaceData> = {
     const of = a.videos != null ? `${fmtInt(a.videos)} videos in this audience · ${monthName(data.month)}` : null
 
     const kinds = a.kinds.length > 0 ? (
-      <div className={email ? undefined : 'flex flex-wrap items-center gap-1.5'}>
+      <div className={email ? undefined : 'flex flex-wrap items-center gap-x-4 gap-y-1'}>
         {a.kinds.map((k) => (
+          // NOT A PILL, BECAUSE IT IS NOT A CONTROL. These wore the audience
+          // pills' exact chrome — same height, radius, ring token, size and
+          // weight, in the same bar — and did nothing: a keyboard user tabbing
+          // the bar found the top row focusable and the next row silently not.
+          // The kind FILTER was deleted two paragraphs up on the rule that this
+          // product does not print controls that do not work; the same rule
+          // takes the appearance of one. So a kind reads as what it is, a
+          // reading of the month — the label with its share and count beside
+          // it, spaced like the platform mix on the row above rather than
+          // boxed.
           <span
             key={k.kind}
-            className={email ? undefined : 'inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[12px] font-medium text-secondary-foreground ring-1 ring-border'}
+            className={email ? undefined : 'inline-flex items-center gap-1.5 whitespace-nowrap text-[12px] text-secondary-foreground'}
             style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, marginRight: 10 } : undefined}
           >
             {k.label}{' '}
