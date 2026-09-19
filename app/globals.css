@@ -44,6 +44,9 @@
   --color-neutral-seg: var(--neutral-seg);
   /* Inner block inside a tile (two-level nesting: tile with shadow → flat tinted block) */
   --color-inner: var(--inner);
+  /* The hero tile's ground — the ONE inverted surface in the app (SH4) */
+  --color-hero: var(--hero);
+  --color-hero-foreground: var(--hero-foreground);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -84,6 +87,16 @@
   --card: #FFFFFF;
   --popover: #FFFFFF;
   --inner: #F6F7F8;
+
+  /* THE HERO TILE IS DARK (Block D wave 3, SH4; Heinrich's ruling that the
+     artboard wins). `Main.dc.html` §1 paints the page's one-sentence tile
+     #26292C with #ECEEF0 ink; the build gave all three Tile variants the same
+     white ground and changed only gap and padding. It is a token rather than a
+     class because the tile's own chrome — the eyebrow, the meta, the footer
+     rule — has to invert with it, and because the unwired `.dark` block must
+     answer for it too (it paints its tiles #1B1D20, which is NOT this). */
+  --hero: #26292C;
+  --hero-foreground: #ECEEF0;
 
   /* Ink — charcoal, never black */
   --foreground: #26292C;
@@ -158,6 +171,10 @@
   --card: #1B1D20;
   --popover: #1B1D20;
   --inner: #22252A;
+  /* Lighter than the dark tile (#1B1D20), so the one inverted surface still
+     reads as lifted rather than as the same panel. */
+  --hero: #2E3237;
+  --hero-foreground: #ECEEF0;
   --foreground: #ECEEF0;
   --card-foreground: #ECEEF0;
   --popover-foreground: #ECEEF0;

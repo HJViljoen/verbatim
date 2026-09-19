@@ -36,6 +36,26 @@ describe('Tile, variant="hero"', () => {
     expect(render(<Tile col={7} row={3}><p>body</p></Tile>)).toContain('px-4 py-3.5')
   })
 
+  it('paints the artboard\'s charcoal ground, and inverts its own chrome with it (SH4)', () => {
+    const markup = render(<Tile col={7} row={3} variant="hero" eyebrow="In one sentence" meta="1,388 videos" lead={LEAD} footer="Open Subjects →" footerNote="all-time"><p>body</p></Tile>)
+    // Main.dc.html §1 is #26292C with #ECEEF0 ink; the build gave all three
+    // variants `bg-tile` and changed only gap and padding.
+    expect(markup).toContain('bg-hero')
+    expect(markup).toContain('text-hero-foreground')
+    expect(markup).not.toContain('bg-tile')
+    // An eyebrow at `secondary-foreground` (#45494D) on charcoal is unreadable,
+    // so the tile's own chrome turns with the ground.
+    expect(markup).not.toContain('text-secondary-foreground')
+    expect(markup).not.toContain('text-muted-foreground')
+  })
+
+  it('leaves every other variant on the white ground it always had', () => {
+    for (const markup of [render(<Tile col={5} row={2} eyebrow="x"><p>body</p></Tile>), render(<Tile col={12} row={1} variant="strip"><StripCell eyebrow="x">1</StripCell></Tile>)]) {
+      expect(markup).toContain('bg-tile')
+      expect(markup).not.toContain('bg-hero')
+    }
+  })
+
   // The trap this test exists to mark: `lead` is a hero-only slot and every
   // other variant drops it without a word.
   it('prints no lead on a tile that is not a hero', () => {
