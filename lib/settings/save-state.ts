@@ -144,6 +144,33 @@ export function saveState(input: SaveStateInput = {}): SaveState {
 // ---- The two Reddit write paths ---------------------------------------------
 
 /**
+ * The most communities a client may WATCH at once.
+ *
+ * THIS IS A COST CEILING, NOT A PREFERENCE. Every active community is a paid
+ * Apify search plus a comment scrape ON EVERY RUN, and the add arm is the one
+ * path to that spend with nothing above it: the discovery path bounds itself
+ * (`SUBREDDIT_TARGET_ACTIVE` 5, `SUBREDDIT_MAX_KNOWN` 20, three probes a run),
+ * and `tracking_configs_cost_ceilings_check` bounds every OTHER list on the row
+ * — industry_keywords, competitor_keywords, brand_keywords, competitor_names,
+ * report_emails — but until now not this one. Without a cap an admin types two
+ * hundred names into the add box (or POSTs `updateCommunity` two hundred times;
+ * it takes a bare `FormData`) and the next gather runs two hundred paid
+ * searches.
+ *
+ * Twelve, because it sits above anything a real client asks for and under
+ * anything that could hurt: production's larger tenant watches three, and
+ * discovery stops proposing at five. The number below it in the stack is the
+ * DATABASE's, not this one — 20260919090000 bounds the column itself, for the
+ * PATCH that never comes through this function.
+ *
+ * `SUBREDDIT_MAX_KNOWN` is deliberately NOT reused here. It ceilings how many
+ * communities we will ever PAY TO PROBE, a tenant is already at it, and reading
+ * it as "you may not name one more" would kill the control on the workspace
+ * that has the most use for it.
+ */
+export const WATCHED_COMMUNITY_CAP = 12
+
+/**
  * Stop watching a community, or add one.
  *
  * Pure validation and the change row it produces; the action calls
@@ -173,6 +200,11 @@ export function subredditEdit(
 
   if (op.kind === 'add') {
     if (has) return { error: `You are already watching ${subredditLabel(key)}.` }
+    if (folded.length >= WATCHED_COMMUNITY_CAP) {
+      return {
+        error: `${WATCHED_COMMUNITY_CAP} watched communities is the limit — every one of them is searched and read on every update. Stop watching one first.`,
+      }
+    }
     // Appended, not sorted in: the list's order is the order communities were
     // taken on, and re-sorting it on every add would rewrite the whole column
     // and make every diff in the log unreadable.
@@ -206,6 +238,17 @@ export function listWords(names: readonly string[]): string {
  * "stop watching" means to the gather. Re-adding a community the client once
  * stopped promotes the entry it already has rather than writing a second one.
  *
+ * AND A `rejected` COMMUNITY IS NOT RE-ADDED FROM HERE. `subredditEdit` is
+ * handed the ACTIVE names, so a rejected entry is not "has", the add arm is
+ * taken, `existing` is found and the entry was rewritten straight to 'active' —
+ * overwriting the paid relevance probe's own verdict, on a row whose "sampled
+ * 12 Sep: 3 of 40 on topic" line stays on screen beside the now-active state.
+ * `setSubredditStatuses` (lib/gather/subreddits.ts) says in as many words that
+ * a rejected community stays rejected because that verdict was paid for, and
+ * that overriding it is "a human overriding it, BY NAME" — an operator, not a
+ * browser. So this refuses, with the verdict in the sentence, and the way back
+ * is a re-probe.
+ *
  * AND THE DEMOTION IS `stopped`, NOT `rejected`. `rejected` is the relevance
  * probe's own verdict and Settings prints it to the client as "ruled out"
  * (`communityWords`) — so writing it here would tell a client that our probe
@@ -219,13 +262,36 @@ export function applySubredditEdit(
   entries: readonly SubredditEntry[],
   op: { kind: 'add' | 'stop'; name: string },
   now: string,
-): { next: SubredditEntry[]; change: PendingEdit } | { error: string } {
-  const active = entries.filter((e) => e.status === 'active').map((e) => e.name)
-  const result = subredditEdit(active, op)
-  if ('error' in result) return result
-
+): { next: SubredditEntry[]; change: PendingEdit; was: SubredditEntry['status'] | null } | { error: string } {
   const key = subredditKey(op.name)
   const existing = entries.find((e) => subredditKey(e.name) === key)
+  // WHAT "stop" ACTS ON IS WHAT WE WATCH OR HAVE PROPOSED. A candidate is a
+  // community discovery found and nobody chose; the table draws it with a "we
+  // found it" state and offers the control, and saying no to a proposal is a
+  // decision the client is entitled to make — it is the only thing that stops
+  // the probe promoting it into a paid search later. Reading the watching list
+  // as `status === 'active'` alone made that click return "You are not
+  // watching r/onebag." over a row that plainly says we found it, failing in
+  // the pure layer before any write.
+  //
+  // What "add" checks against is the ACTIVE list alone, because active is the
+  // list adding joins.
+  const watching = entries
+    .filter((e) => (op.kind === 'stop' ? e.status === 'active' || e.status === 'candidate' : e.status === 'active'))
+    .map((e) => e.name)
+
+  if (op.kind === 'add' && existing?.status === 'rejected') {
+    const probe = existing.probe
+    return {
+      error: probe
+        ? `We sampled ${subredditLabel(existing.name)} on ${probe.at} and ${probe.kept} of ${probe.sampled} posts were about your market, so it was ruled out. Ask us to look again rather than turning it back on over that.`
+        : `${subredditLabel(existing.name)} was ruled out by our relevance check. Ask us to look again rather than turning it back on over that.`,
+    }
+  }
+
+  const result = subredditEdit(watching, op)
+  if ('error' in result) return result
+
   const next: SubredditEntry[] = op.kind === 'stop'
     ? entries.map((e) => (subredditKey(e.name) === key ? { ...e, status: 'stopped' as const, stopped_at: now } : e))
     : existing
@@ -239,5 +305,8 @@ export function applySubredditEdit(
       })
       : [...entries, { name: key, status: 'active' as const, discovered_at: now }]
 
-  return { next, change: result.change }
+  // The state the entry was IN, so the caller can word its answer: "we stopped
+  // watching it" and "we will not watch it" are different sentences, and only
+  // one of them is true about a community nobody had started watching.
+  return { next, change: result.change, was: existing?.status ?? null }
 }

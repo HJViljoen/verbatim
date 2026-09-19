@@ -4,11 +4,12 @@ import { CadenceSection, FREEZE_NOTE, SLOT_NOTE } from './cadence'
 import { CommunitiesSection } from './communities'
 import { rowMessage } from './community-controls'
 import { PlatformsSection } from './platforms'
-import { RivalsSection, RENAME_UNAVAILABLE } from './rivals'
+import { RivalsSection, NO_ACCOUNTS_SHORT, RENAME_UNAVAILABLE } from './rivals'
+import { renameNotice } from '@/app/dashboard/settings/rival-rename'
 import { RIVAL_REMOVED_PENDING } from '@/lib/settings/rivals-view'
 import { NEW_TERM_RULE, REVIEW_KEEP_NOTE, TermsSection } from './terms'
 import { BREAK_NOT_RECORDED, BROKE_NOTHING, LastSaveStrip, NEVER_SAVED, SaveStateLine } from '../save-state-strip'
-import { gridIntrinsic } from '@/components/settings/chrome'
+import { gridIntrinsic, ICON_TARGET, ROW_CONTROL } from '@/components/settings/chrome'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import type { TermSummary } from '@/lib/keywords/value'
@@ -97,13 +98,19 @@ describe('the search terms section', () => {
     expect(words).toContain('in the set before we kept a record')
   })
 
-  it('gives a 20px remove icon a pressable target', () => {
-    // M5: a `size-3` glyph in `p-0.5` is roughly 20 x 20 on a page whose own
+  it('gives the remove icon a 44px target, not a 40px one', () => {
+    // M5: a `size-3` glyph in `p-0.5` is a 16px box on a page whose own
     // CONTROL constant is h-11 for everything else. The icon keeps its size
-    // and the pseudo element carries the target out to 44.
+    // and the pseudo element carries the target out.
+    //
+    // ST6: `after:-inset-3` is 12px around 16, which is FORTY, not 44 — and it
+    // was written out in three className strings that could drift apart. One
+    // constant now, at the inset that actually makes 44.
+    expect(ICON_TARGET).toContain('after:-inset-[14px]')
+    expect(ICON_TARGET).not.toContain('after:-inset-3')
     const markup = render(termsSection)
     const remove = markup.slice(markup.indexOf('aria-label="Remove Sealand"'))
-    expect(remove.slice(0, 400)).toContain('after:-inset-3')
+    expect(remove.slice(0, 400)).toContain('after:-inset-[14px]')
   })
 
   it('states what adding one does, beside the field that does it', () => {
@@ -115,9 +122,25 @@ describe('the search terms section', () => {
     // edge, so the row did not scan as sentence-then-action. And the strip
     // came from a server prop, so it stayed put after a removal — the one
     // control on it looked inert whether it had worked or not.
+    //
+    // ST7 finished it: the keep-note is the same 52 characters on every strip
+    // and it was a flex item sized by its own content, so it took 460px of a
+    // 716px row while the evidence beside it got 146. It prints ONCE now, under
+    // the list — after the last strip's control, not between a strip's evidence
+    // and its own.
     const markup = render(termsSection)
     const strip = markup.slice(markup.indexOf('Worth reviewing'))
-    expect(strip.indexOf(REVIEW_KEEP_NOTE)).toBeLessThan(strip.indexOf('Remove it'))
+    expect(strip.split(REVIEW_KEEP_NOTE).length - 1).toBe(1)
+    expect(strip.indexOf('Remove it')).toBeLessThan(strip.indexOf(REVIEW_KEEP_NOTE))
+    // Two flagged terms, still one note.
+    const two = render(
+      <TermsSection
+        terms={{ ...TERMS }} dates={{}} review={[term(), term({ key: 'freitag', keyword: 'Freitag', bucket: 'competitor' })]}
+        canEdit onAdd={() => null} onRemove={() => {}}
+      />,
+    )
+    expect(two.split('Remove it').length - 1).toBe(2)
+    expect(two.split(REVIEW_KEEP_NOTE).length - 1).toBe(1)
     const gone = renderText(
       <TermsSection
         terms={{ ...TERMS, industry_keywords: [] }}
@@ -225,6 +248,27 @@ describe('the communities section', () => {
     expect(words).toContain('Stop watching')
   })
 
+  it('does not say "stop" about a community nothing was ever read from', () => {
+    // ST9: r/frugal is a CANDIDATE — discovery found it and nobody chose it,
+    // and `activeSubreddits` reads 'active', so nothing has ever been gathered
+    // from it. The row offered "Stop watching", which both mis-named the act
+    // and failed in the pure layer ("You are not watching r/frugal.").
+    expect(words).toContain('Don’t watch it')
+    expect(words).toContain('proposed, and measured')
+  })
+
+  it('gives a row control the page’s own 44px height', () => {
+    // ST6: twelve "Stop watching" / "Watch it" controls rendered 78x17 and
+    // 45x17 in rows already 44-52px tall, on a page whose CONTROL constant is
+    // h-11 precisely so that 44 lives in one place. They keep the WORD — the
+    // artboard draws them as text at the row's right edge, not as twelve
+    // ringed boxes down a dense table — and take the height.
+    expect(ROW_CONTROL).toContain('min-h-11')
+    const markup = render(section)
+    const control = markup.slice(Math.max(0, markup.indexOf('Stop watching') - 600), markup.indexOf('Stop watching'))
+    expect(control).toContain('min-h-11')
+  })
+
   it('keeps the copy contract', () => {
     assertCopyContract(section)
   })
@@ -275,10 +319,61 @@ describe('the rivals section', () => {
     expect(words).toContain('dated by the day the post went up')
   })
 
+  it('says the account-less reason once, not once per rival', () => {
+    // ST12: `rivalState`'s account-less sentence is the same 52 characters on
+    // every rival with no handles — three copies down one column here, five
+    // where nothing is configured, each wrapping to three lines. The cell keeps
+    // the STATE; the consequence, which does not differ row to row, is a
+    // section note, exactly as the own-posts reason already is.
+    const why = 'No account is configured for this rival, so nothing they publish is read — add their accounts in Settings and this starts counting.'
+    const none = renderText(
+      <RivalsSection
+        rows={['Poler', 'Cotopaxi', 'Patagonia'].map((name) => rival({ name, ownPostsWhy: why }))}
+        names={['Poler', 'Cotopaxi', 'Patagonia']} month="2026-09-01" canEdit onAdd={() => null} onRemove={() => {}}
+      />,
+    )
+    // The state, three times — it is what the row is.
+    expect(none.split(NO_ACCOUNTS_SHORT).length - 1).toBe(3)
+    expect(none).not.toContain('no accounts configured — nothing they publish is being read')
+    // The consequence, once, in the section's one paragraph.
+    expect(none.split(why).length - 1).toBe(1)
+    // And where no month was passed there is no own-posts column to carry it,
+    // so the section says it in its own words rather than not at all.
+    const noMonth = renderText(
+      <RivalsSection
+        rows={['Poler', 'Cotopaxi'].map((name) => rival({ name }))}
+        names={['Poler', 'Cotopaxi']} month="2026-09-01" canEdit onAdd={() => null} onRemove={() => {}}
+      />,
+    )
+    expect(noMonth.split('nothing they publish is being read').length - 1).toBe(1)
+  })
+
   it('keeps the capture-versus-read census and the earliest-evidence footnote', () => {
     expect(words).toContain('28 captured, 0 read')
     expect(words).toContain('earliest evidence in our own data')
     expect(words).toContain('removing one is a break, not a zero')
+  })
+
+  it('keeps a rival’s Rename control after its own click, and spends a refusal with the row', () => {
+    // ST8: the control used to be REPLACED by the success message, and
+    // useActionState keeps its last result for the component's life — the
+    // action's revalidate re-renders the row but does not remount it, because
+    // the key is `r.identity.id` and a rename does not change it. So after one
+    // successful rename the Rename control was gone until a full reload. The
+    // same C4 rule as `rowMessage` in the cell next door, and the same shape.
+    expect(renameNotice('Freitag', null, { ok: false, message: '' })).toBeNull()
+    // Nothing was pressed on this row, so it owes nothing.
+    expect(renameNotice('Freitag', null, { ok: true, message: 'Renamed.' })).toBeNull()
+    // A refusal is about the name the reader pressed against.
+    expect(renameNotice('Freitag', 'Freitag', { ok: false, message: 'Could not rename: check the name.' }))
+      .toEqual({ text: 'Could not rename: check the name.', refused: true })
+    // …and once the row comes back under a new name it describes a state that
+    // no longer exists.
+    expect(renameNotice('Freitag AG', 'Freitag', { ok: false, message: 'Could not rename: check the name.' })).toBeNull()
+    // A SUCCESS stays: its sentence carries the count of posts rewritten and
+    // the name the frozen months stay under, and the row carries neither.
+    expect(renameNotice('Freitag AG', 'Freitag', { ok: true, message: 'Renamed. 412 stored posts now read as Freitag AG' }))
+      .toEqual({ text: 'Renamed. 412 stored posts now read as Freitag AG', refused: false })
   })
 
   it('shows a rival the reader has taken off as taken off, and offers the way back', () => {

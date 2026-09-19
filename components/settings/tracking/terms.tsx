@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { X } from 'lucide-react'
-import { CONTROL, Dot, FIELD, LabelRow, MonoNote, Section, SectionHead } from '@/components/settings/chrome'
+import { CONTROL, Dot, FIELD, ICON_TARGET, LabelRow, MonoNote, Section, SectionHead } from '@/components/settings/chrome'
 import { glossaryRule } from '@/lib/calibration'
 import type { TermSummary } from '@/lib/keywords/value'
 import { MAX_TERMS_PER_BUCKET } from '@/lib/onboarding-config'
@@ -130,7 +130,7 @@ export function TermsSection({ terms, dates, datesNote, review, canEdit, onAdd, 
                     onClick={() => { onRemove(b.key, t); setError(null) }}
                     disabled={!canEdit}
                     aria-label={`Remove ${t}`}
-                    className="relative cursor-pointer rounded-full p-0.5 text-muted-foreground transition-colors after:absolute after:-inset-3 after:content-[''] hover:bg-tile hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
+                    className={cn(ICON_TARGET, 'cursor-pointer rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-tile hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40')}
                   >
                     <X className="size-3" aria-hidden />
                   </button>
@@ -158,6 +158,15 @@ export function TermsSection({ terms, dates, datesNote, review, canEdit, onAdd, 
             {flagged.map((t) => (
               <ReviewStrip key={t.key} term={t} canEdit={canEdit} onDrop={() => onRemove(bucketOf(t.bucket), t.keyword)} />
             ))}
+            {/* ONCE, UNDER THE STRIPS — not once per strip (ST7). It is a
+                constant: the same 52 characters on every row, and inside the
+                strip it was a flex item sized by its own content, so it took
+                460px of a 716px row while the EVIDENCE beside it — the k of n
+                and the sentence that says why the term is flagged — was laid
+                out in 146px over three lines. A footnote that repeats cannot
+                outbid the thing it is a footnote to. Same argument the rivals
+                section already made for its own repeated sentence. */}
+            <MonoNote>{REVIEW_KEEP_NOTE}</MonoNote>
           </div>
         </LabelRow>
       )}
@@ -215,13 +224,12 @@ export function ReviewStrip({ term, canEdit, onDrop }: { term: TermSummary; canE
         <span className="font-mono font-medium tabular-nums">{term.found.toLocaleString('en-GB')}</span> found
         {term.because[0] ? ` — ${term.because[0]}` : ''}
       </span>
-      {/* The note first, the control at the strip's own right edge, so the row
-          scans as sentence-then-action the way the artboard's does (design
-          M7). Nothing here is a "Keep it": see the constant below. */}
-      <span className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-3">
-        <MonoNote className="min-w-0">{REVIEW_KEEP_NOTE}</MonoNote>
-        <button type="button" onClick={onDrop} disabled={!canEdit} className={cn(CONTROL, 'shrink-0')}>Remove it</button>
-      </span>
+      {/* Sentence, then action, on one line — which is what the artboard draws
+          and what M7 was after when it moved the control to the strip's own
+          right edge. What M7 left between them was the keep-note, and that is
+          now printed once under the list rather than on every strip (ST7).
+          Nothing here is a "Keep it": see the constant above. */}
+      <button type="button" onClick={onDrop} disabled={!canEdit} className={cn(CONTROL, 'ml-auto shrink-0')}>Remove it</button>
     </div>
   )
 }

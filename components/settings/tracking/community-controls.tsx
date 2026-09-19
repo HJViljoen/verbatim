@@ -3,7 +3,7 @@
 import { useActionState, useState } from 'react'
 import { updateCommunity } from '@/app/dashboard/settings/actions'
 import type { SettingsFormState } from '@/app/dashboard/settings/actions'
-import { CONTROL, FIELD, MonoNote } from '@/components/settings/chrome'
+import { CONTROL, FIELD, MonoNote, ROW_CONTROL } from '@/components/settings/chrome'
 import { cn } from '@/lib/utils'
 
 // `settings.reddit.col.action` and `settings.reddit.add` — the two Reddit
@@ -37,7 +37,7 @@ const idle: SettingsFormState = { ok: false, message: '' }
  *  the button, and it retires by itself: `firedFor` remembers which way the row
  *  pointed when the click went out, so when the server comes back with the row
  *  flipped, the message about the old state goes with it. */
-export function CommunityAction({ name, op, canEdit }: { name: string; op: 'add' | 'stop'; canEdit: boolean }) {
+export function CommunityAction({ name, op, proposed = false, canEdit }: { name: string; op: 'add' | 'stop'; proposed?: boolean; canEdit: boolean }) {
   const [state, dispatch, pending] = useActionState(updateCommunity, idle)
   const [firedFor, setFiredFor] = useState<'add' | 'stop' | null>(null)
   const message = rowMessage(op, firedFor, state.message)
@@ -54,9 +54,12 @@ export function CommunityAction({ name, op, canEdit }: { name: string; op: 'add'
           data.set('name', name)
           dispatch(data)
         }}
-        className="rounded-[3px] text-[12px] font-medium text-foreground transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+        className={ROW_CONTROL}
       >
-        {pending ? 'Saving…' : op === 'stop' ? 'Stop watching' : 'Watch it'}
+        {/* A PROPOSAL IS NOT A THING WE ARE WATCHING. A candidate is a
+            community discovery found and nobody chose, and nothing is read
+            from it — so the control that turns it down cannot say "stop". */}
+        {pending ? 'Saving…' : op === 'add' ? 'Watch it' : proposed ? 'Don’t watch it' : 'Stop watching'}
       </button>
       {message && (
         <span
