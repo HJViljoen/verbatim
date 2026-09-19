@@ -555,8 +555,12 @@ describe('the two-audience gap the quarter can actually carry', () => {
   })
 
   it('draws no gap where a column could not be drawn, and none at all with M3 unapplied', () => {
-    const price = quarterlyFixture().subjects.rows.find((r) => r.id === 's2')
-    expect(price?.gap ?? null).toBeNull()
+    // `s6` is the row whose own side was not read at all — the table went to
+    // six subjects in the fix pass and one of them carries the category
+    // column alone, which is the state this arm is about.
+    const unread = quarterlyFixture().subjects.rows.find((r) => r.id === 's6')
+    expect(unread).toBeTruthy()
+    expect(unread?.gap ?? null).toBeNull()
     expect(formingFixture().subjects.rows.every((r) => r.gap == null)).toBe(true)
   })
 })

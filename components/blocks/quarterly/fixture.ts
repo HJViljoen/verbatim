@@ -1,4 +1,5 @@
 import { blockAnswers } from '@/lib/blocks/types'
+import type { OverviewData } from '@/lib/pages/overview'
 import type { QuarterChecks, QuarterlyData, QuarterQuiet } from '@/lib/pages/quarterly'
 import { composeQuarterly } from '@/lib/pages/quarterly'
 import type { WindowReading } from '@/lib/reading/read'
@@ -8,7 +9,7 @@ import { searchPlanView, type DeckChangeLog, type SearchPlan } from '@/lib/setti
 import { QUARTERLY_SNAPSHOT_VERSION, type QuarterlySnapshotData } from '@/lib/reports/quarterly-build'
 import { QUARTERLY_BLOCK_KEYS, previousQuarter, quarterFor, quarterlySubject, quarterlyTitle } from '@/lib/reports/quarterly'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '@/lib/rivals'
-import { overviewFixture, refusedFixture } from '@/components/pages/overview/fixture'
+import { overviewFixture, refusedFixture, verdict } from '@/components/pages/overview/fixture'
 import { marketFixture, unrecordedFixture } from '@/components/pages/market-surface/fixture'
 import { competitiveFixture, unreadMonthsFixture } from '@/components/pages/competitive-surface/fixture'
 import { quarterlyBlocksFor } from './index'
@@ -54,13 +55,94 @@ const windowRead = (videos: number, comments: number): WindowReading => ({
   ],
 })
 
-/** The tenant's own subjects over the same window, on both sides — the mock's
- *  page 3, and the half of the artefact no test exercised. */
-const subjectWindow = (videos: number, share: number): SubjectWindowReading[] => [
-  { audience: INDUSTRY_AUDIENCE, subject_id: 's1', videos: Math.round(videos * share), comments: 0, platform_mix: {}, excluded_on_camera: 0, excluded_undated: 0 },
-  { audience: CLIENT_AUDIENCE, subject_id: 's1', videos: Math.round(videos * 0.06 * (share + 0.08)), comments: 0, platform_mix: {}, excluded_on_camera: 0, excluded_undated: 0 },
-  { audience: INDUSTRY_AUDIENCE, subject_id: 's2', videos: Math.round(videos * 0.27), comments: 0, platform_mix: {}, excluded_on_camera: 0, excluded_undated: 0 },
+/**
+ * The tenant's own subjects over the same window, on both sides — the mock's
+ * page 3, and the half of the artefact no test exercised.
+ *
+ * SIX SUBJECTS, WHICH IS WHAT THE SAME FIXTURE SAYS ON PAGE 8. The change log
+ * this file feeds the last sheet prints "Six subjects were named and
+ * confirmed" (`rowsAffected: 6`) while the window read carried two, so one
+ * artefact contradicted itself across two of its own pages — and page 3, the
+ * sheet whose whole purpose was to become the artboard's dense six-row table,
+ * had never been drawn at that density. The shares are the two real ones plus
+ * four that sit between them, and each subject's own side stays a DIFFERENT
+ * denominator from the category's.
+ */
+const SUBJECT_SHARES: readonly { id: string; share: number; yours: number | null }[] = [
+  { id: 's1', share: 0, yours: 0.08 },
+  { id: 's2', share: 0.27, yours: 0.05 },
+  { id: 's3', share: 0.19, yours: 0.11 },
+  { id: 's4', share: 0.14, yours: 0.02 },
+  { id: 's5', share: 0.09, yours: 0.06 },
+  // `yours: null` — THE SIDE NOBODY READ. One subject carries the category
+  // column and no "you" column, because that is a real state and because a
+  // table of six rows all of which compare is a fixture that never draws the
+  // arm `gapBetween` refuses on ("draws no gap where a column could not be
+  // drawn"). Before the table went to six, `s2` was that row by accident.
+  { id: 's6', share: 0.05, yours: null },
 ]
+
+const subjectWindow = (videos: number, share: number): SubjectWindowReading[] =>
+  SUBJECT_SHARES.flatMap((s) => {
+    // `s1` is the row the gap line and the chart are drawn from, so it keeps
+    // the share the caller passes; the rest carry their own.
+    const cat = s.id === 's1' ? share : s.share
+    const both: SubjectWindowReading[] = [
+      { audience: INDUSTRY_AUDIENCE, subject_id: s.id, videos: Math.round(videos * cat), comments: 0, platform_mix: {}, excluded_on_camera: 0, excluded_undated: 0 },
+    ]
+    if (s.yours != null) {
+      both.push({ audience: CLIENT_AUDIENCE, subject_id: s.id, videos: Math.round(videos * 0.06 * (cat + s.yours)), comments: 0, platform_mix: {}, excluded_on_camera: 0, excluded_undated: 0 })
+    }
+    return both
+  })
+
+/**
+ * The six subjects the change log says were named, as Overview's own rows.
+ *
+ * `buildSubjects` reads `overview.subjects.rows` for the labels and the month
+ * columns and `subjectWindow` for the quarter columns; a subject in one and
+ * not the other draws no row at all (`if (!was || !n || !priorN || !label)
+ * continue`). So the two lists are built together here, from one place.
+ */
+const SIX_SUBJECTS: readonly { id: string; label: string; you: [number, number]; rival: [number, number]; category: [number, number]; spark: number[] }[] = [
+  { id: 's3', label: 'Sizing and fit', you: [14, 84], rival: [31, 142], category: [241, 1388], spark: [15, 16, 16, 17, 17, 17] },
+  { id: 's4', label: 'Delivery and shipping', you: [9, 84], rival: [19, 142], category: [186, 1388], spark: [11, 12, 12, 13, 13, 13] },
+  { id: 's5', label: 'Repairs and warranty', you: [7, 84], rival: [12, 142], category: [118, 1388], spark: [7, 7, 8, 8, 8, 9] },
+  { id: 's6', label: 'Where the material comes from', you: [4, 84], rival: [8, 142], category: [69, 1388], spark: [4, 4, 4, 5, 5, 5] },
+]
+
+const SPARK_MONTHS = ['2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01']
+
+/** Overview's two rows plus the four above, with the quarter verdict each
+ *  needs on the category side — the side that has the n. */
+function sixSubjectRows(overview: OverviewData): OverviewData['subjects']['rows'] {
+  const extra = SIX_SUBJECTS.map((s) => ({
+    id: s.id,
+    label: s.label,
+    you: { k: s.you[0], n: s.you[1], pct: round1((s.you[0] / s.you[1]) * 100), verdict: null, observed: true },
+    rival: { k: s.rival[0], n: s.rival[1], pct: round1((s.rival[0] / s.rival[1]) * 100), verdict: null, observed: true },
+    category: {
+      k: s.category[0],
+      n: s.category[1],
+      pct: round1((s.category[0] / s.category[1]) * 100),
+      verdict: verdict({ objectKind: 'subject', objectId: s.id, objectLabel: s.label, value: { k: s.category[0], n: s.category[1] }, changePts: 0.8, bandPts: 2.1, state: 'no_clear_change' }),
+      observed: true,
+    },
+    direction: null,
+    spark: s.spark,
+    sparkMonths: SPARK_MONTHS,
+    categoryAtLastMonth: null,
+    href: `/dashboard/subjects?item=${s.id}`,
+  }))
+  return [...overview.subjects.rows, ...extra] as OverviewData['subjects']['rows']
+}
+
+const round1 = (v: number): number => Math.round(v * 10) / 10
+
+/** Overview, with the six subjects the change log names. */
+function withSixSubjects(overview: OverviewData): OverviewData {
+  return { ...overview, subjects: { ...overview.subjects, rows: sixSubjectRows(overview) } }
+}
 
 /** M3 unapplied: told apart from an empty read, exactly as the month series
  *  tells its silences apart. */
@@ -172,7 +254,7 @@ const record = (delivered: number, readingAt = NOW): RecordInputs => ({
 
 /** A quarter that reads on both sides. */
 export function quarterlyFixture(over: Partial<QuarterlyData> = {}): QuarterlyData {
-  const overview = overviewFixture()
+  const overview = withSixSubjects(overviewFixture())
   return {
     ...composeQuarterly({
       overview: { ...overview, bar: { ...overview.bar, readings: 8 } },
@@ -207,7 +289,7 @@ export function quarterlyFixture(over: Partial<QuarterlyData> = {}): QuarterlyDa
  * has to show both sides of that or only one arm is ever drawn.
  */
 export function subjectLeadFixture(): QuarterlyData {
-  const overview = overviewFixture()
+  const overview = withSixSubjects(overviewFixture())
   return composeQuarterly({
     overview: {
       ...overview,
@@ -256,7 +338,7 @@ export function formingFixture(): QuarterlyData {
 
 /** The quarter read after it closed. */
 export function closedFixture(): QuarterlyData {
-  const overview = overviewFixture()
+  const overview = withSixSubjects(overviewFixture())
   return composeQuarterly({
     overview: { ...overview, monthStatus: 'frozen', bar: { ...overview.bar, readings: 9 } },
     market: marketFixture(),
@@ -285,7 +367,7 @@ export function closedFixture(): QuarterlyData {
  * that prints a month figure says which month it is and that it falls outside.
  */
 export function afterQuarterFixture(): QuarterlyData {
-  const overview = overviewFixture()
+  const overview = withSixSubjects(overviewFixture())
   const AFTER = '2026-10-06T09:00:00.000Z'
   return composeQuarterly({
     overview: {
@@ -333,7 +415,7 @@ export function afterQuarterFixture(): QuarterlyData {
  * question nobody asked.
  */
 export function thinMonthFixture(): QuarterlyData {
-  const overview = overviewFixture()
+  const overview = withSixSubjects(overviewFixture())
   return composeQuarterly({
     overview: {
       ...overview,
@@ -379,7 +461,7 @@ export function thinMonthFixture(): QuarterlyData {
  * arm the card was written for, reached the way production reaches it.
  */
 export function thinQuarterFixture(): QuarterlyData {
-  const overview = overviewFixture()
+  const overview = withSixSubjects(overviewFixture())
   return composeQuarterly({
     overview: { ...overview, bar: { ...overview.bar, readings: 8 } },
     market: marketFixture(),
