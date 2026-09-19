@@ -4,7 +4,7 @@ import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, directionRe } from '@/lib/test/copy-contract'
 import { markupText as markupOf, render, renderText } from '@/lib/test/render'
-import { COMPETITIVE_BLOCKS, COMPETITIVE_TILES, GRID_ROWS, STACKED } from './index'
+import { COMPETITIVE_BLOCKS, COMPETITIVE_TILES, CompetitiveSurfacePage, GRID_ROWS, STACKED, emptyRow } from './index'
 import { PageGrid } from '@/components/shell/page-grid'
 import { Tile } from '@/components/shell/tile'
 import { H2H_NO_RIVAL, competitiveHeadToHead } from './head-to-head'
@@ -604,6 +604,22 @@ describe('CO5 · said about them, by others', () => {
     const refs = competitiveSaidAbout.quotes!(claimsReadFixture())
     expect(refs.length).toBeGreaterThan(0)
     for (const ref of refs) expect(ref.startsWith('k:')).toBe(true)
+  })
+})
+
+describe('the grid, on the arm every tenant sees (CO12)', () => {
+  it('gives a block with nothing to draw one row, not its artboard span', () => {
+    // `PageGrid` is `auto-rows-[minmax(116px,auto)]`, so `row-span-4` is a
+    // FLOOR of 4 × 116 + 3 × 16 = 512px whatever is in the tile — and until
+    // M3/M5 are applied the standings tile is the refusal: three lines of
+    // text, first thing on the page, in 512px of card (measured at 1440).
+    const degraded = unreadMonthsFixture()
+    expect(emptyRow(competitiveStandings, degraded)).toBe(true)
+    expect(emptyRow(competitiveStandings, competitiveFixture())).toBe(false)
+    const markup = render(<CompetitiveSurfacePage data={degraded} />)
+    // The standings tile asks for one row here and four on the reading.
+    expect(markup).toContain('xl:row-span-1')
+    expect(render(<CompetitiveSurfacePage data={competitiveFixture()} />)).toContain('xl:row-span-4')
   })
 })
 
