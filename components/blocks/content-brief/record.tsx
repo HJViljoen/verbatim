@@ -42,7 +42,7 @@ function Eyebrow({ children }: { children: ReactNode }) {
   )
 }
 
-function Numbers({ rows, mode }: { rows: readonly NumberRow[]; mode: RenderMode }) {
+function Numbers({ rows, caveat, mode }: { rows: readonly NumberRow[]; caveat: string; mode: RenderMode }) {
   if (rows.length === 0) return null
   if (mode === 'email') {
     return (
@@ -53,6 +53,10 @@ function Numbers({ rows, mode }: { rows: readonly NumberRow[]; mode: RenderMode 
             <div style={{ fontFamily: FONT.sans, fontSize: 13, color: EMAIL.ink, marginTop: 2 }}>{r.value}</div>
           </div>
         ))}
+        {/* THE CAVEAT TRAVELS WITH THE CARD (design review 10). It used to be
+            a paragraph in the print arm's left column and nowhere at all in
+            the email arm, which printed neither it nor the label rule. */}
+        <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted, marginTop: 8 }}>{caveat}</div>
       </div>
     )
   }
@@ -76,6 +80,14 @@ function Numbers({ rows, mode }: { rows: readonly NumberRow[]; mode: RenderMode 
           </div>
         ))}
       </dl>
+      {/* THE ARTBOARD'S OWN CARD FOOTER — a ruled caveat under the rows
+          (design review 10). The card ended at 59% of a 482px body beside a
+          prose column running its full height, and the artboard's card carries
+          eight rows AND this caveat to about 90%. The Reddit cap is the caveat
+          that belongs to the NUMBERS — it is why an engagement figure has the
+          denominator it has — and it was a paragraph in the left column, which
+          is the column that had room to spare. */}
+      <p className="m-0 border-t border-border pt-2.5 text-[12.5px] leading-[1.45] text-muted-foreground">{caveat}</p>
     </div>
   )
 }
@@ -106,7 +118,7 @@ export const contentRecord: Block<ContentBriefData> = {
             {r.lines.map((l, i) => (
               <div key={i} style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink2, marginTop: 4 }}>{l}</div>
             ))}
-            <Numbers rows={r.numbers} mode={mode} />
+            <Numbers rows={r.numbers} caveat={r.reddit} mode={mode} />
             {tail.map((l, i) => (
               <div key={i} style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted, marginTop: 6 }}>{l}</div>
             ))}
@@ -155,7 +167,6 @@ export const contentRecord: Block<ContentBriefData> = {
               <p key={i} className="m-0 max-w-[76ch] text-[14.5px] leading-[1.5] text-foreground">{l}</p>
             ))}
             <p className="m-0 max-w-[76ch] text-[14px] leading-[1.5] text-muted-foreground">{r.labels}</p>
-            <p className="m-0 max-w-[76ch] text-[14px] leading-[1.5] text-muted-foreground">{r.reddit}</p>
             {tail.length > 0 ? (
               <div className="mt-auto flex flex-col gap-0.5">
                 {tail.map((l, i) => (
@@ -164,7 +175,7 @@ export const contentRecord: Block<ContentBriefData> = {
               </div>
             ) : null}
           </div>
-          <Numbers rows={r.numbers} mode={mode} />
+          <Numbers rows={r.numbers} caveat={r.reddit} mode={mode} />
         </div>
       </BlockFrame>
     )

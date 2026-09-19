@@ -315,6 +315,24 @@ describe('content.record — the mock’s page 5', () => {
 
   it('carries the Reddit cap, which no brief has ever printed', () => {
     expect(text).toContain(REDDIT_CAP_LINE)
+    // AND IT TRAVELS WITH THE CARD (design review 10): it is the caveat that
+    // belongs to the numbers, and the email arm printed it nowhere at all.
+    expect(markupText(render(contentRecord.render(data, 'email', ctx)))).toContain(REDDIT_CAP_LINE)
+  })
+
+  // THE CARD ENDED AT 59% OF THE SHEET (design review 10). The two rows the
+  // artboard has and this card did not — Period and Conversations — are the two
+  // that say what the sheet's two delivery records are each counted over.
+  it('carries the window it read and the comments it read in it', () => {
+    expect(text).toContain('1 Sep 2026 → 18 Sep 2026 · 3 updates')
+    expect(text).toMatch(/Comments\s*[\d,]+ read in this reading/)
+    // "Comments", never "Conversations": AGENTS.md keeps that word on the
+    // legacy pages that still compute it, and a new reading surface draws from
+    // THIRTEEN_WORDS.
+    expect(text).not.toMatch(/conversations/i)
+    // The period's update count is the WINDOW's, which is the count the prose's
+    // own first sentence states — not the all-time one under it.
+    expect(text).toContain('3 updates delivered')
   })
 
   it('carries the delivery record and the reading counter, verbatim', () => {
