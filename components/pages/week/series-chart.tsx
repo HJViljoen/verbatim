@@ -33,9 +33,22 @@ import { updateBand, type UpdateSeries } from '@/lib/reading/updates'
 // (Heinrich, 2026-09-18): an update that found nothing is a week we did not
 // look, or did not look wide enough, and joining it to its neighbours with a
 // stroke asserts a reading nobody took. So the line is drawn in segments over
-// the updates that found something, and a quiet update is an OPEN RING on the
-// floor — a different mark, not a low value — with the legend's swatch the
-// same open ring rather than the dot every other point uses.
+// the updates that found something.
+//
+// AND THE QUIET UPDATE'S MARK LEAVES THE LINE (review W4). It was a
+// ringed-hollow circle at `y(0)` — the one non-solid token MASTER §3.9
+// allocates, already spent on the event marker, and already re-spent by
+// decision U on `CalendarLine`'s `below_floor` gutter ring. Two unrelated
+// facts on one mark across two charts a reader meets in one session. Worse,
+// it was drawn exactly ON the baseline while the legend said "drawn off the
+// line" — 7 of 13 points on the thin and absent arms. Decision U's resolution
+// applies here unchanged: THE CHANGE LEAVES THE DATA LINE. Every point that
+// found something stays a solid dot ringed in `--tile`; an update that found
+// nothing is a HOLLOW SQUARE in the gutter row 6px under the baseline —
+// `CalendarLine`'s `below_numerator` token, whose meaning ("this column's own
+// k is under the numerator floor") a k of zero is the strict case of. The
+// legend's swatch is that same square, and the sentence beside it is now
+// true.
 //
 // THE BAND IS A COUNT BAND IN VIDEOS. The other band in this block — a flag's
 // `bandPts` — is in percentage points, and two unlabelled bands on one block is
@@ -57,6 +70,10 @@ const LEFT = 40
 const RIGHT = 560
 const TOP = 20
 const FLOOR = 132
+// The gutter row, at decision U's own offset: axis furniture, under the
+// baseline, where a mark cannot be read as a value on the scale.
+const GUTTER = FLOOR + 6
+const QUIET = 6
 
 export function UpdateSeriesChart({ series }: { series: UpdateSeries }) {
   const points = series.points
@@ -132,29 +149,45 @@ export function UpdateSeriesChart({ series }: { series: UpdateSeries }) {
         ))}
         {points.map((p, i) => {
           const last = i === points.length - 1
-          const quiet = p.videos === 0
+          // AN UPDATE THAT FOUND NOTHING IS NOT A POINT ON THE SCALE. It is a
+          // hollow square in the gutter — a different mark in a different
+          // row, not the same dot at a low value and not the ringed-hollow
+          // circle the system reserves.
+          if (p.videos === 0) {
+            return (
+              <rect
+                key={p.runId}
+                x={x(i) - QUIET / 2}
+                y={GUTTER - QUIET / 2}
+                width={QUIET}
+                height={QUIET}
+                fill="var(--tile)"
+                stroke="var(--chart-1)"
+                strokeWidth={1.2}
+              >
+                <title>{`found nothing · the ${p.days} days to ${shortDate(p.window.to)}`}</title>
+              </rect>
+            )
+          }
           return (
             <circle
               key={p.runId}
               cx={x(i)}
               cy={y(p.videos)}
-              r={quiet ? 2.6 : last ? 3.4 : 2.2}
-              // AN OPEN RING FOR AN UPDATE THAT FOUND NOTHING: a different
-              // mark, which is what it is — not the same dot at a low value.
-              fill={quiet ? 'var(--tile)' : 'var(--chart-1)'}
-              stroke={quiet ? 'var(--chart-1)' : 'var(--tile)'}
-              strokeWidth={quiet ? 1.2 : last ? 1.5 : 1}
+              r={last ? 3.4 : 2.2}
+              fill="var(--chart-1)"
+              stroke="var(--tile)"
+              strokeWidth={last ? 1.5 : 1}
             >
-              <title>
-                {quiet
-                  ? `found nothing · the ${p.days} days to ${shortDate(p.window.to)}`
-                  : `${fmtInt(p.videos)} videos · the ${p.days} days to ${shortDate(p.window.to)}`}
-              </title>
+              <title>{`${fmtInt(p.videos)} videos · the ${p.days} days to ${shortDate(p.window.to)}`}</title>
             </circle>
           )
         })}
-        {/* THE NEWEST POINT, NAMED — it is the one the whole page is about. */}
-        <text x={RIGHT + 8} y={y(newest.videos) - 2} className="fill-foreground font-mono text-[11px] font-semibold">
+        {/* THE NEWEST POINT, NAMED — it is the one the whole page is about.
+            Where the newest update found nothing its mark is in the gutter, so
+            its label goes there too: a "0" floating on the baseline beside an
+            empty plot is a number with no mark under it. */}
+        <text x={RIGHT + 8} y={newest.videos === 0 ? GUTTER + 4 : y(newest.videos) - 2} className="fill-foreground font-mono text-[11px] font-semibold">
           {fmtInt(newest.videos)}
         </text>
         <text x={LEFT} y={FLOOR + 20} textAnchor="middle" className="fill-muted-foreground font-mono text-[10px]">{label(0)}</text>
@@ -183,9 +216,11 @@ export function UpdateSeriesChart({ series }: { series: UpdateSeries }) {
           </Key>
         )}
         {quiet > 0 ? (
-          // THE SWATCH IS THE MARK THE CHART DRAWS. It was the same filled dot
-          // as every other point, so it mapped to nothing a reader could find.
-          <Key swatch={<span className="size-2 rounded-full border" style={{ borderColor: 'var(--chart-1)', background: 'var(--tile)' }} />}>
+          // THE SWATCH IS THE MARK THE CHART DRAWS — now the gutter's hollow
+          // square, not a ring. It was the same filled dot as every other
+          // point, so it mapped to nothing a reader could find; then it was a
+          // ring, which mapped to a mark the system had already spent.
+          <Key swatch={<span className="size-2 border" style={{ borderColor: 'var(--chart-1)', background: 'var(--tile)' }} />}>
             {fmtInt(quiet)} of them found nothing at all, drawn off the line and left out of the range
           </Key>
         ) : null}

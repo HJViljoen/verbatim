@@ -110,13 +110,21 @@ export const weekUnusual: Block<WeekData> = {
         question={weekUnusual.question}
         mode={mode}
         meta={headerMeta(u, data.windowVideos)}
-        // THE MOCK'S HAIRLINE FOOTER, with its right-hand note. The left-hand
-        // "See the 38 videos behind this →" has no destination in this product:
-        // a flag's object is a KIND or a THEME, and no route lists the videos
-        // behind one. The evidence a reader can actually open is on the flag's
-        // own quotes, which carry their citation links.
-        footerNote={u.state === 'flagged' && u.flaggedCount <= u.flags.length
-          ? 'nothing else was unusual this update'
+        // THE MOCK'S HAIRLINE FOOTER, WITH ITS NOTE ON THE LEFT (review W8).
+        // The artboard's left-hand "See the 38 videos behind this →" has no
+        // destination in this product: a flag's object is a KIND or a THEME,
+        // and no route lists the videos behind one (deviation 5). The
+        // evidence a reader can actually open is on the flag's own quotes,
+        // which carry their citation links.
+        //
+        // BUT THE NOTE WAS STILL ON THE RIGHT, so the page's most important
+        // tile ended on a hairline with two thirds of nothing under it —
+        // drawing the frame of a slot that will never be filled, which is
+        // what makes a deliberate omission read as a missing feature. The
+        // note takes the left-hand slot instead, in its own quiet face, and
+        // the footer reads as a footer rather than as half of one.
+        footer={u.state === 'flagged' && u.flaggedCount <= u.flags.length
+          ? <FooterNote mode={mode}>nothing else was unusual this update</FooterNote>
           : undefined}
       >
         {email ? <>{left}{right}</> : <TileColumns of={2}>{left}{right}</TileColumns>}
@@ -266,29 +274,12 @@ function Flag({ flag, n, mode, figures }: { flag: UnusualFlag; n: number; mode: 
         // comparison, stated three times in 200px.
         base={flag.denominator}
       />
-      {/* THE OTHER CAVEAT ABOUT THE SAME THREE MONTHS. `baseline_filling_months`
-          says the baseline is still moving; `baseline_regime` says whether the
-          three were read under one grouping at all, and the check reports the
-          flag either way (decision L's posture, available to it because an
-          anomaly reading never speaks a direction word). Printing the first and
-          not the second told a reader the comparison would move without telling
-          them it may not be like for like. `not_grouped` is not a caveat — a
-          kind is a kind and has no grouping to be like-for-like about — and
-          `null` means the column is not there to ask. */}
-      {flag.baselineRegime === 'mixed' || flag.baselineRegime === 'unknown' ? (
-        <Line mode={mode}>
-          {flag.baselineRegime === 'mixed'
-            ? 'Those months were not all read under one grouping, so the comparison is not strictly like for like.'
-            : 'We cannot tell whether those months were read under one grouping, so the comparison may not be like for like.'}
-        </Line>
-      ) : null}
-
-      {flag.baselineFilling.length > 0 ? (
-        <Line mode={mode}>
-          {flag.baselineFilling.length === flag.baselineMonths.length
-            ? 'Every month behind it was still filling when this was read, so the comparison will move.'
-            : `${flag.baselineFilling.map(longMonth).join(' and ')} had not finished when this was read, so the comparison will move.`}
-        </Line>
+      {/* AND THEY ARE ONE PARAGRAPH, NOT TWO LINES (review W7): both qualify
+          the SAME comparison — the three months behind the flag — so stacking
+          them at equal rank under the figure they qualify read as two more
+          facts about the flag rather than as its small print. */}
+      {baselineCaveats(flag).length > 0 ? (
+        <Line mode={mode}>{baselineCaveats(flag).join(' ')}</Line>
       ) : null}
 
       {flag.sentences.length > 0 ? (
@@ -392,38 +383,104 @@ function Series({ series, mode, charted }: { series: UpdateSeries | null; mode: 
           it said the same two facts twice, two lines apart, in one column.
           Where there is no chart — the email arm, and a series of one point —
           these ARE the chart and they are printed in full. */}
-      <Line mode={mode}>{charted ? updateSeriesHead(series) : updateSeriesLine(series)}</Line>
-      {/* THE AXIS SAYS WHAT A POINT IS. Thirteen deliveries at the dates those
-          deliveries covered — a chart of our own cadence — and naming that on
-          the axis is what keeps a reader from reading thirteen windows as
-          thirteen periods. */}
-      <Line mode={mode}>{series.basis}; each point is one delivery’s own days, never a month</Line>
+      {/* THE TWO READINGS FIRST, AT READING RANK: what the newest update
+          found, and what it put into its month. */}
+      <Line mode={mode} rank="reading">{charted ? updateSeriesHead(series) : updateSeriesLine(series)}</Line>
       {newest.contribution.length > 0
         ? newest.contribution.map((c) => (
-          <Line key={c.month} mode={mode}>{contributionLine(c.month, c.videos, c.of)}</Line>
+          <Line key={c.month} mode={mode} rank="reading">{contributionLine(c.month, c.videos, c.of)}</Line>
         ))
         : (
-          <Line mode={mode}>
+          <Line mode={mode} rank="reading">
             This update’s contribution to its own month cannot be stated here, so every figure above is of the delivery’s own days alone.
           </Line>
         )}
-      {/* EVERY CAVEAT EXCEPT THE ONE THE PICTURE ALREADY MADE (design review
-          F4). `notes` carries each with its kind; where the chart is drawn it
-          has already put the quiet updates on the floor and counted them in
-          its legend, so printing the `quiet` note under it said the same fact
-          twice, two lines apart. Every other kind — a windowless update, a
-          short series, no band, an absent windowed reading — is printed in
-          both arms, because nothing draws those. */}
-      {caveats(series, charted).map((n) => <Line key={n.kind + n.text} mode={mode}>{n.text}</Line>)}
+      {/* THEN THE SMALL PRINT, AS ONE PARAGRAPH (review W7). The axis's own
+          words — thirteen deliveries at the dates those deliveries covered,
+          which is what keeps a reader from reading thirteen windows as
+          thirteen periods — and then EVERY CAVEAT EXCEPT THE ONE THE PICTURE
+          ALREADY MADE (design review F4). `notes` carries each with its kind;
+          where the chart is drawn it has already put the quiet updates in the
+          gutter and counted them in its legend, so printing the `quiet` note
+          under it said the same fact twice. Every other kind — a windowless
+          update, a short series, no band, an absent windowed reading — is
+          printed in both arms, because nothing draws those. Joined, not
+          stacked: they are one body of apparatus, and four paragraphs of it
+          read as four facts competing with the two above. */}
+      <Line mode={mode}>
+        {[`${series.basis}; each point is one delivery’s own days, never a month.`, ...caveats(series, charted).map((n) => n.text)].join(' ')}
+      </Line>
     </>
   )
 }
 
-function Line({ mode, children }: { mode: 'app' | 'print' | 'email'; children: React.ReactNode }) {
+/**
+ * A line under a reading, at one of TWO ranks (review W7).
+ *
+ * §1 stacked eight of these — four under the chart and four down the right
+ * column — all 11.5px, all `muted-foreground`, all the same weight, with the
+ * sentences that state a MEASUREMENT sitting at the same rank as the
+ * sentences that qualify one. The wave-2 pass (F4) removed the repetition; it
+ * did not rank what was left, and an unranked stack is a reader's problem
+ * whether or not every line in it is a rule in force. Every one of them is,
+ * and none is deleted here.
+ *
+ *   `reading`  a sentence that STATES something measured — what the newest
+ *              update found, what it contributed to its month. 12px, in the
+ *              secondary ink, because it is an answer.
+ *   `caveat`   the apparatus and its qualifications — what a point is, what
+ *              the series cannot say, whether the comparison is like for
+ *              like. 11.5px muted, and the adjacent ones are joined into ONE
+ *              paragraph rather than stacked as separate lines, because they
+ *              are one body of small print and four paragraphs of it reads as
+ *              four facts.
+ */
+/** The footer's note, in the LEFT slot — so it keeps its quiet face rather
+ *  than taking the footer's own 12px/500 link styling. */
+function FooterNote({ mode, children }: { mode: 'app' | 'print' | 'email'; children: React.ReactNode }) {
   if (mode === 'email') {
-    return <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 4 }}>{children}</div>
+    return <span style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted }}>{children}</span>
   }
-  return <p className="m-0 text-[11.5px] text-muted-foreground">{children}</p>
+  return <span className="font-mono text-[11px] font-normal text-muted-foreground">{children}</span>
+}
+
+function Line({ mode, rank = 'caveat', children }: { mode: 'app' | 'print' | 'email'; rank?: 'reading' | 'caveat'; children: React.ReactNode }) {
+  const reading = rank === 'reading'
+  if (mode === 'email') {
+    return (
+      <div style={{ fontFamily: FONT.sans, fontSize: reading ? 12 : 11.5, color: reading ? EMAIL.ink2 : EMAIL.muted, marginTop: 4 }}>
+        {children}
+      </div>
+    )
+  }
+  return <p className={reading ? 'm-0 text-[12px] text-secondary-foreground' : 'm-0 text-[11.5px] text-muted-foreground'}>{children}</p>
+}
+
+/**
+ * What the three months behind a flag cannot promise.
+ *
+ * `baseline_filling_months` says the baseline is still moving;
+ * `baseline_regime` says whether the three were read under one grouping at
+ * all, and the check reports the flag either way (decision L's posture,
+ * available to it because an anomaly reading never speaks a direction word).
+ * Printing the first and not the second told a reader the comparison would
+ * move without telling them it may not be like for like. `not_grouped` is not
+ * a caveat — a kind is a kind and has no grouping to be like-for-like about —
+ * and `null` means the column is not there to ask.
+ */
+function baselineCaveats(flag: UnusualFlag): string[] {
+  const out: string[] = []
+  if (flag.baselineRegime === 'mixed') {
+    out.push('Those months were not all read under one grouping, so the comparison is not strictly like for like.')
+  } else if (flag.baselineRegime === 'unknown') {
+    out.push('We cannot tell whether those months were read under one grouping, so the comparison may not be like for like.')
+  }
+  if (flag.baselineFilling.length > 0) {
+    out.push(flag.baselineFilling.length === flag.baselineMonths.length
+      ? 'Every month behind it was still filling when this was read, so the comparison will move.'
+      : `${flag.baselineFilling.map(longMonth).join(' and ')} had not finished when this was read, so the comparison will move.`)
+  }
+  return out
 }
 
 /** The series' caveats a surface still has to say in words. */

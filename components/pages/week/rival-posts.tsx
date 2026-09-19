@@ -29,8 +29,16 @@ import type { FigureTable } from '@/lib/reading/verdicts'
 // THE COMMENT COUNT IS WINDOW-DATED AND IS A COUNT UNDER THAT ONE POST. Not
 // `videos.comments_count`, which is the platform's own current number and
 // drifts upward between updates; not the rival's week, which nothing here
-// counted. The rule that picked the three is printed beside them, because
-// "three of ninety-four" picked two different ways is two different claims.
+// counted. The rule that picked the three is printed, because "three of
+// ninety-four" picked two different ways is two different claims.
+//
+// BUT THE RULE IS THE TILE'S, AND ONLY THE COUNTS ARE THE RIVAL'S (review
+// W6). It was a full sentence under every rival's rows — twice in one tile on
+// the thin arm — and a set of ONE has no "most", so a single-post rival read
+// "1 shown: the most commented on in these days of the 1 widest-reaching of
+// 27". The pick rule is one rule for every rival on the tile, so it is stated
+// once, under the header; what differs per rival is four numbers, and four
+// numbers is what each rival's foot now carries.
 
 export const weekRivalPosts: Block<WeekData> = {
   key: 'week.rival-posts',
@@ -58,6 +66,15 @@ export const weekRivalPosts: Block<WeekData> = {
         footerNote="what the audience asked is read per rival, not per post"
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
+        {/* THE PICK RULE, ONCE FOR THE TILE. Two stages, because on production
+            the widest-reaching posts carry no window comments at all
+            (Freitag's two 2.2M-view TikToks: zero). */}
+        {rivals.length > 0 ? (
+          <Rule mode={mode}>
+            Each rival’s posts are picked in two stages: the widest-reaching of what this update read, then
+            the most commented on of those in the days it covered.
+          </Rule>
+        ) : null}
         {rivals.length > 0 ? (
           <div className={email ? undefined : 'flex min-w-0 flex-col'}>
             {!email ? (
@@ -94,6 +111,14 @@ export const weekRivalPosts: Block<WeekData> = {
   },
 }
 
+/** The tile's one pick-rule sentence, in every mode. */
+function Rule({ mode, children }: { mode: 'app' | 'print' | 'email'; children: React.ReactNode }) {
+  if (mode === 'email') {
+    return <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginBottom: 4 }}>{children}</div>
+  }
+  return <p className="m-0 text-[11.5px] text-muted-foreground">{children}</p>
+}
+
 function Head({ children, right }: { children: React.ReactNode; right?: boolean }) {
   return (
     <span className={`text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground${right ? ' text-right' : ''}`}>
@@ -112,7 +137,7 @@ function RivalRow({ rival, mode }: { rival: RivalPosts; mode: 'app' | 'print' | 
   // ninety-four is a claim about three posts, and `postsTotal` beside it is
   // what keeps the two apart.
   const rule = rival.posts.length > 0
-    ? `${fmtInt(rival.posts.length)} shown: the most commented on in these days of the ${fmtInt(rival.postsConsidered)} widest-reaching of ${fmtInt(rival.postsTotal)}; ${fmtInt(rival.comments)} ${rival.comments === 1 ? 'comment' : 'comments'} under them in these days`
+    ? `${fmtInt(rival.posts.length)} shown · ${fmtInt(rival.postsConsidered)} of ${fmtInt(rival.postsTotal)} weighed by reach · ${fmtInt(rival.comments)} ${rival.comments === 1 ? 'comment' : 'comments'} under ${rival.posts.length === 1 ? 'it' : 'them'} in these days`
     : null
   // POSTS ABOUT THEM vs POSTS OF THEIRS, which is the pair this tile inherited
   // from §4 when it moved out of it. Össur has zero competitor-owned videos and
@@ -192,12 +217,15 @@ function RivalRow({ rival, mode }: { rival: RivalPosts; mode: 'app' | 'print' | 
           ) : <span />}
         </div>
       ))}
-      {/* THE RULE THAT PICKED THEM, UNDER THE POSTS IT PICKED. It is about the
-          set and not about any one row, so it sits at the foot of the rival's
-          rows rather than beside its name, where it used to push the first post
-          a row down. */}
+      {/* THE RIVAL'S OWN FOUR NUMBERS, UNDER THE POSTS THEY ARE ABOUT. They
+          are about the set and not about any one row, so they sit at the foot
+          of the rival's rows rather than beside its name, where they used to
+          push the first post a row down. The rule the numbers are of is the
+          tile's and is stated once, above. The same `pt-1.5` as a continued
+          post row, so a rival with one post and a rival with three space the
+          same way. */}
       {rule ? (
-        <div className="grid grid-cols-1 gap-1 xl:grid-cols-[170px_minmax(0,1fr)_88px] xl:gap-4">
+        <div className="grid grid-cols-1 gap-1 pt-1.5 xl:grid-cols-[170px_minmax(0,1fr)_88px] xl:gap-4">
           <span className="hidden xl:block" />
           <span className="font-mono text-[10.5px] leading-[1.35] text-muted-foreground xl:col-span-2">{rule}</span>
         </div>

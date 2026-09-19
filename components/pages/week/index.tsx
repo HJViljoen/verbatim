@@ -89,15 +89,40 @@ const COLS: Record<string, number> = {
  *  commonest laptop width after 1440. Below 1280 the grid stacks and tiles
  *  size to their content, so 1008 is the narrowest width at which a span can
  *  clip anything — which makes it the only width worth setting one against.
+ *
+ *  AND RE-MEASURED AT 1168 AND 1408 TOO (review W3), because a span set at the
+ *  narrowest width carries its slack at every wider one and the page reads
+ *  23% empty tile at 1440. Three things the re-measurement found, and only one
+ *  of them is a span:
+ *
+ *  (1) NO SPAN HERE CAN SHRINK AT 1440. Natural heights per tile on the
+ *      populated arm at 1168 are 518 · 451 · 312 · 417 · 306 · 426 · 459 ·
+ *      155 · 289, and one row fewer is 512 · 380 · 248 · 380 · 248 · 380 ·
+ *      380 · 116 · 248 — every tile is over its next span down. The slack is
+ *      the 116px ROW UNIT, which is deviation 17 and the shell's grid, not
+ *      this page's choice of how many of them to ask for.
+ *  (2) TWO SPANS WERE SHORT, and a clip costs more than white. §5's is now a
+ *      reading (`rivalPostsRows`) rather than a constant measured on a
+ *      one-rival tenant. §7's is not: at 1008 its populated content measures
+ *      11px over its box, but no node of it renders past the clip and its
+ *      bottom padding is not eaten, so nothing is lost and a fifth row would
+ *      buy 185px of white to fix a loss that does not happen.
+ *  (3) A PER-WIDTH SPAN IS NOT AVAILABLE FROM THIS FILE. `Tile` takes one
+ *      `row`, and a second span passed as `className` cannot win: Tailwind v4
+ *      emits arbitrary `min-[1440px]:` variants BEFORE the named breakpoints,
+ *      so `xl:row-span-5` beats `min-[1440px]:row-span-4` at 1440 (probed —
+ *      the rule lands at line 4890 of the sheet against the xl rule's 5623).
+ *      Registering a real breakpoint is `app/globals.css`, which this group
+ *      does not own; it would buy one row on one tile on two arms.
+ *
  *  The numbers below are `scrollHeight - clientHeight` per tile, per arm, at
  *  1008 and at 1216, zero everywhere. */
 const ROWS: Record<string, number> = {
   'week.unusual': 5,
   'week.reply': 4,
   'week.subjects': 3,
-  // `week.came-in` is not here: its span is a reading, not a constant — see
-  // `cameInRows`.
-  'week.rival-posts': 3,
+  // `week.came-in` and `week.rival-posts` are not here: their spans are a
+  // reading, not a constant — see `cameInRows` and `rivalPostsRows`.
   'week.worked': 4,
   'week.sales': 4,
   'week.flagged': 2,
@@ -120,7 +145,6 @@ const EMPTY_ROWS: Record<string, number> = {
   'week.unusual': 4,
   'week.reply': 1,
   'week.subjects': 2,
-  'week.rival-posts': 2,
   'week.worked': 3,
   'week.sales': 2,
   'week.flagged': 1,
@@ -171,8 +195,41 @@ function cameInRows(data: WeekData): number {
   return c.crossesInto != null || c.contribution == null || c.windowComments == null ? 5 : 4
 }
 
+/**
+ * The other block whose span is a reading — §5, and it was CLIPPING.
+ *
+ * `week.rival-posts` had one constant, 3, measured on a tenant with ONE
+ * tracked rival. A workspace tracking three draws three rival groups, and at
+ * 1008 that reading is 429px against a 3-row box of 380: on the thin and
+ * absent arms the tile's whole FOOTER — "Open Competitive →" and the note
+ * saying what the audience asked is read per rival — was 34px below the clip,
+ * at both 1280 and 1440, and had been (10px of it) before wave 3 touched the
+ * file. A block cannot hide the link out of itself.
+ *
+ * So the span is computed from the two things that actually drive the height:
+ * how many rivals there are, and how many post rows they carry between them
+ * (a rival with no post still draws one row, saying so). Measured in a 1008
+ * column over the sixteen shapes of 1–4 rivals × 0–3 posts, the natural height
+ * is `175 + 66·rivals + 25·(post rows − rivals) + 21·(rivals with a post)`,
+ * which reproduces the row count of all sixteen — 233 / 253 / 278 / 298 / 339
+ * / 388 / 364 / 424 / 499 / 458 / 538 / 638 px — and of the three fixture arms
+ * (populated 306 in a 3-row box, thin and absent 429 in a 4-row box). Widths
+ * 1008 and 1168 measure identically: this tile is full-width and its rows wrap
+ * the same way at both.
+ */
+function rivalPostsRows(data: WeekData): number {
+  const rivals = data.cameIn.rivals
+  if (rivals.length === 0) return 2
+  const postRows = rivals.reduce((t, r) => t + Math.max(1, r.posts.length), 0)
+  const withCounts = rivals.filter((r) => r.posts.length > 0).length
+  const height = 175 + 66 * rivals.length + 25 * (postRows - rivals.length) + 21 * withCounts
+  // N rows of the 116px unit, 16px apart, is `132N − 16` tall.
+  return Math.min(8, Math.max(2, Math.ceil((height + 16) / 132)))
+}
+
 function tileRows(key: string, data: WeekData): number {
   if (key === weekCameIn.key) return cameInRows(data)
+  if (key === weekRivalPosts.key) return rivalPostsRows(data)
   const full = ROWS[key] ?? 2
   const short = EMPTY_ROWS[key]
   if (short == null) return full

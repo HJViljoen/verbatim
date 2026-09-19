@@ -157,6 +157,24 @@ describe('WK §2 · this week in your subjects', () => {
     expect(text).not.toContain('since 19 Aug')
   })
 
+  it('draws every subject bar on ONE scale across the strip', () => {
+    // REVIEW W2. `top` was per column, so six bars of one unit under one
+    // shared legend sat on six scales: 8 added and 2.77 "usually" drew the
+    // same length, and 1 added drew longer than half of 4.5. The denominator
+    // is the strip's own tallest bar, over both series.
+    const d = weekFixture()
+    const rows = d.subjects.rows.map((r, i) => ({ ...r, addedVideos: i === 0 ? 8 : 1, typical: i === 0 ? 4 : 2 }))
+    const markup = render(weekSubjects.render({ ...d, subjects: { ...d.subjects, rows } }, 'app', ctx))
+    const widths = [...markup.matchAll(/width:\s*([\d.]+)%/g)].map((m) => Number(m[1]))
+    // The tallest bar is the first column's 8; every other length is its own
+    // value over that same 8 — 50%, 12.5%, 25% — and never over its own column.
+    expect(widths).toContain(100)
+    expect(widths).toContain(50)
+    expect(widths).toContain(12.5)
+    expect(widths).toContain(25)
+    expect(markupText(markup)).toContain('every bar on one scale')
+  })
+
   it('says subjects are not recorded rather than drawing an empty table', () => {
     const text = renderText(weekSubjects.render(thinFixture(), 'app', ctx))
     expect(text).toContain('No subjects are recorded for this workspace yet')
@@ -377,6 +395,30 @@ describe('WK §4 · what came in', () => {
     }
   })
 
+  it('draws no comments column where no row and no total has one', () => {
+    // REVIEW W1. `NotRecorded` was `whitespace-nowrap` in a fixed 64px track,
+    // so on the arm both tenants render today it printed over the Found
+    // column: "933not recorded", "138not recorded", "1,098not recorded". Where
+    // the reading is absent everywhere the column carries nothing, and the
+    // sentence under the table already states the absence in full.
+    const markup = render(weekCameIn.render(absentReadingFixture(), 'app', ctx))
+    expect(markup).not.toContain('xl:hidden">Comments</span>')
+    expect(markup).toContain('xl:grid-cols-[112px_minmax(0,1fr)_58px_50px]')
+    expect(markupText(markup)).toContain('Comments in these days are not recorded for this workspace yet.')
+  })
+
+  it('wraps a single absent cell inside its track rather than over its neighbour', () => {
+    // The MIXED arm: the table has a total, one row does not have its own
+    // count. The column stays — the total is a real number — and the two words
+    // wrap in the 64px track instead of running left into Found.
+    const d = weekFixture()
+    const data = { ...d, cameIn: { ...d.cameIn, rows: d.cameIn.rows.map((r, i) => (i === 0 ? { ...r, comments: null } : r)) } }
+    const markup = render(weekCameIn.render(data, 'app', ctx))
+    expect(markup).toContain('xl:grid-cols-[112px_minmax(0,1fr)_58px_50px_64px]')
+    expect(markup).toContain('not recorded')
+    expect(markup).not.toContain('whitespace-nowrap font-mono text-[10.5px] text-muted-foreground xl:block')
+  })
+
   it('says the comments are not recorded rather than printing a zero', () => {
     const d = weekFixture()
     const data = { ...d, cameIn: { ...d.cameIn, rows: d.cameIn.rows.map((r) => ({ ...r, comments: null })) } }
@@ -468,6 +510,37 @@ describe('WK §4 · what came in', () => {
 })
 
 describe('WK §2 · worth a reply', () => {
+  it('does not restate the chip in the column four columns away, and wraps what it does say', () => {
+    // REVIEW W9. Row four of the populated fixture is chipped "Question" and
+    // its "why it surfaced" column reads "Question" — a column restating its
+    // own row's chip. And the cell was `truncate` in a fixed 150px track, so
+    // anything past ~20 characters was cut to an ellipsis recoverable only
+    // through a `title` a printed page and a keyboard user never see.
+    const d = weekFixture()
+    const question = d.replies.rows.find((r) => r.intent === 'question')!
+    expect(question.reason).toBe('Question')
+    for (const mode of MODES) {
+      const markup = render(weekReply.render(d, mode, ctx))
+      const text = markupText(markup)
+      expect(text.match(/\bQuestion\b/g)?.length, mode).toBe(1)
+      if (mode !== 'email') {
+        expect(markup, mode).toContain('line-clamp-2')
+        expect(markup, mode).not.toContain('min-w-0 truncate text-[11.5px]')
+      }
+    }
+  })
+
+  it('carries the objection chip’s colour in its ring, not in its text', () => {
+    // REVIEW W5. `bg-negative/12 text-negative` is #DB3B2E on a 12% tint of
+    // itself — 3.78:1 at 11px/500, the one failing entry in a four-entry map.
+    // The tint and a ring carry the colour; the words are `foreground`.
+    const d = weekFixture()
+    const rows = d.replies.rows.map((r) => ({ ...r, intent: 'objection' as const }))
+    const markup = render(weekReply.render({ ...d, replies: { ...d.replies, rows } }, 'app', ctx))
+    expect(markup).toContain('bg-negative/12 text-foreground ring-1 ring-negative/45')
+    expect(markup).not.toContain('bg-negative/12 text-negative')
+  })
+
   it('dates every row by the day the comment was written, never by an age', () => {
     // D6/D9: Content prints "3d", measured from the clock at page load. Every
     // other figure on this page is dated by the days the update covered, and a
@@ -567,6 +640,26 @@ describe('WK §8 · flagged for awareness', () => {
 })
 
 describe('WK §5 · notable rival posts', () => {
+  it('never claims a "most" out of a set of one, and says the rule once per tile', () => {
+    // REVIEW W6. The pick sentence was printed per rival — twice in one tile
+    // on the thin arm — and a set of one has no most: a single-post rival read
+    // "1 shown: the most commented on in these days of the 1 widest-reaching
+    // of 27". The rule is the tile's and the numbers are the rival's.
+    for (const fixture of FIXTURES) {
+      for (const mode of MODES) {
+        const text = markupText(render(weekRivalPosts.render(fixture(), mode, ctx)))
+        if (!text.includes('widest-reaching')) continue
+        expect(text.match(/widest-reaching/g)?.length, mode).toBe(1)
+        expect(text.match(/most commented on/g)?.length, mode).toBe(1)
+      }
+    }
+    // The one-post rival prints four numbers and a singular "under it".
+    const d = weekFixture()
+    const one = d.cameIn.rivals.map((r) => ({ ...r, posts: r.posts.slice(0, 1), postsConsidered: 1, comments: r.posts[0]?.comments ?? 0 }))
+    const text = markupText(render(weekRivalPosts.render({ ...d, cameIn: { ...d.cameIn, rivals: one } }, 'app', ctx)))
+    expect(text).toContain('1 shown · 1 of 92 weighed by reach · 610 comments under it in these days')
+  })
+
   // THE TILE THE ROWS MOVED INTO (Block D wave 2, the mock's §5). Every
   // assertion below was written against §4, which built these rows inside
   // itself; the reading is the same `CameInBlock.rivals` and only the tile
@@ -593,8 +686,8 @@ describe('WK §5 · notable rival posts', () => {
     const first = rows[2] ?? ''
     expect(first).toContain('Ottobock')
     expect(first).toContain('YouTube')
-    // The pick rule is still printed, under the posts it picked.
-    expect(markupText(markup)).toContain('the most commented on in these days')
+    // The rival's own counts are still printed, under the posts they are of.
+    expect(markupText(markup)).toContain('2 shown · 2 of 92 weighed by reach')
   })
 
   it('states the by/about distinction, and why a zero is a zero', () => {
@@ -626,14 +719,16 @@ describe('WK §5 · notable rival posts', () => {
       // inbox has no table header to carry "Comments", so the email arm says
       // what the number is; the page's header row and meta say it once.
       expect(text, mode).toContain(mode === 'email' ? '610 comments under it in these days' : '610')
-      // THE RULE, SAID OUT LOUD. The pick is two stages — the widest-reaching
-      // few, then the most-commented of those — because on production the
-      // widest-reaching posts carry no window comments at all (Freitag's two
-      // 2.2M-view TikToks: zero). And the rival's comment figure is the sum
-      // over the posts NAMED; a bare total would be a claim about their week
-      // that nothing here counted.
-      expect(text, mode).toContain('2 shown: the most commented on in these days of the 2 widest-reaching of 92')
-      expect(text, mode).toContain('998 comments under them in these days')
+      // THE RULE, SAID OUT LOUD — ONCE FOR THE TILE (review W6). The pick is
+      // two stages, because on production the widest-reaching posts carry no
+      // window comments at all (Freitag's two 2.2M-view TikToks: zero). Every
+      // rival on the tile is picked by the same rule, so the rule is the
+      // tile's; what is the rival's is four numbers. And the rival's comment
+      // figure is the sum over the posts NAMED; a bare total would be a claim
+      // about their week that nothing here counted.
+      expect(text, mode).toContain('the widest-reaching of what this update read, then the most commented on of those')
+      expect(text.match(/widest-reaching/g)?.length, mode).toBe(1)
+      expect(text, mode).toContain('2 shown · 2 of 92 weighed by reach · 998 comments under them in these days')
     }
   })
 
@@ -980,8 +1075,30 @@ describe('the page', () => {
     expect(spans(weekFixture())).toEqual(['12x5', '12x4', '12x3', '12x4', '12x3', '5x4', '7x4', '12x2', '12x3'])
     // Sealand, and the arm both tenants render today: five of these blocks
     // stand on one sentence, and they take one or two rows rather than three.
-    expect(spans(thinFixture())).toEqual(['12x4', '12x1', '12x2', '12x5', '12x3', '5x3', '7x2', '12x1', '12x2'])
-    expect(spans(absentReadingFixture())).toEqual(['12x4', '12x1', '12x2', '12x5', '12x3', '5x3', '7x2', '12x1', '12x2'])
+    // §5 takes FOUR here and three on Össur (review W3, `rivalPostsRows`):
+    // three tracked rivals draw three rival groups, 429px at 1008 against a
+    // 3-row box of 380 — so the tile's own footer, "Open Competitive →" and
+    // the note beside it, rendered 34px below the clip on both arms.
+    expect(spans(thinFixture())).toEqual(['12x4', '12x1', '12x2', '12x5', '12x4', '5x3', '7x2', '12x1', '12x2'])
+    expect(spans(absentReadingFixture())).toEqual(['12x4', '12x1', '12x2', '12x5', '12x4', '5x3', '7x2', '12x1', '12x2'])
+  })
+
+  it('sizes §5 from its rivals and its post rows, not from a constant', () => {
+    // REVIEW W3. The sixteen shapes measured in a 1008 column — 1–4 rivals ×
+    // 0–3 posts — and the row each natural height needs. `rivalPostsRows`
+    // reproduces all sixteen; a constant 3 clipped every one of the last five.
+    const d = weekFixture()
+    const rival = d.cameIn.rivals[0]
+    const spanFor = (n: number, posts: number) => {
+      const rivals = Array.from({ length: n }, (_, i) => ({ ...rival, audience: `competitor:r${i}`, posts: rival.posts.slice(0, posts) }))
+      const markup = render(<WeekPage data={{ ...d, cameIn: { ...d.cameIn, rivals } }} />)
+      return Number([...markup.matchAll(/data-col="12" data-row="(\d+)"/g)][4][1])
+    }
+    // measured 233 253 278 / 298 339 388 / 364 424 499 / 458 538 638
+    expect([spanFor(1, 0), spanFor(1, 1), spanFor(1, 2)]).toEqual([2, 3, 3])
+    expect([spanFor(2, 0), spanFor(2, 1), spanFor(2, 2)]).toEqual([3, 3, 4])
+    expect([spanFor(3, 0), spanFor(3, 1), spanFor(3, 2)]).toEqual([3, 4, 4])
+    expect([spanFor(4, 0), spanFor(4, 1), spanFor(4, 2)]).toEqual([4, 5, 5])
   })
 
   it('takes no horizon and no soundness band — it is dated by the update', () => {

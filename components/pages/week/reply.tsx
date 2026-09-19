@@ -37,11 +37,20 @@ import type { FigureTable } from '@/lib/reading/verdicts'
 // comment was answered — and a footer that invents a reply history is the
 // clearest possible case of copy claiming behaviour the code does not have.
 
-/** The mock's chip colours, by intent — written out, never interpolated. */
+/** The mock's chip colours, by intent — written out, never interpolated.
+ *
+ * THE OBJECTION CHIP'S AMBER IS IN THE TINT AND THE RING, NOT IN THE TEXT
+ * (review W5). `bg-negative/12 text-negative` is `#DB3B2E` on a 12% tint of
+ * ITSELF — `#FBE7E6`, 3.78:1 at 11px/500, under AA and the only entry in this
+ * map that fails (buying is 5.40:1, misinformation is `bg-foreground/10`).
+ * The colour still has to signal, so it moves to the ring and the words go to
+ * `foreground`, which reads at 12.3:1 on that tint in light and 12.6:1 in
+ * dark. Same remedy as `components/pages/agent/marks.tsx`'s `InferencePill`,
+ * and the same one SH8 applies to the email verdict chips. */
 const CHIP: Record<Intent, string> = {
   buying: 'bg-accent text-accent-foreground',
   question: 'bg-inner text-muted-foreground',
-  objection: 'bg-negative/12 text-negative',
+  objection: 'bg-negative/12 text-foreground ring-1 ring-negative/45',
   misinformation: 'bg-foreground/10 text-foreground',
 }
 
@@ -163,10 +172,26 @@ function Lead({ counts, total, mode }: { counts: readonly { intent: Intent; coun
   )
 }
 
+/**
+ * Is the "why it surfaced" column saying what the chip four columns away
+ * already said?
+ *
+ * The reason is the insight's own Pass A theme, and one of the commonest
+ * things a model writes there is the kind itself — row four of the populated
+ * fixture is chipped "Question" and its reason column reads "Question". A
+ * column that restates its own row's chip is a column of nothing, and it is
+ * the column paying for the 150px the quote does not have.
+ */
+function echoesTheChip(row: ReplyRow): boolean {
+  const reason = row.reason.trim().toLowerCase().replace(/[.·]+$/, '')
+  return reason === INTENT_LABEL[row.intent].toLowerCase() || reason === INTENT_PLURAL[row.intent].toLowerCase()
+}
+
 /** One row — the mock's four columns: the kind, the comment, why it surfaced,
  *  and where a reply lands. */
 function Row({ row, mode }: { row: ReplyRow; mode: 'app' | 'print' | 'email' }) {
   const email = mode === 'email'
+  const echo = echoesTheChip(row)
   const cite = (
     <>
       {platformLabel(row.platform)}
@@ -181,9 +206,11 @@ function Row({ row, mode }: { row: ReplyRow; mode: 'app' | 'print' | 'email' }) 
           {INTENT_LABEL[row.intent]}
         </div>
         <BlockQuote quote={row.quote} cite={cite} mode={mode} />
-        <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 3 }}>
-          Why it surfaced: <span data-copy="stored" data-slot="pass_a_audience_insight">{row.reason}</span>
-        </div>
+        {echo ? null : (
+          <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 3 }}>
+            Why it surfaced: <span data-copy="stored" data-slot="pass_a_audience_insight">{row.reason}</span>
+          </div>
+        )}
       </div>
     )
   }
@@ -202,9 +229,25 @@ function Row({ row, mode }: { row: ReplyRow; mode: 'app' | 'print' | 'email' }) 
       </span>
       {/* WHY IT SURFACED, ON THE ROW AND NOT BEHIND A LINK. The words are the
           insight's own theme — a model's, written at Pass A and read back here,
-          so it is `stored` and names the call that wrote it. */}
-      <span className="min-w-0 truncate text-[11.5px] text-muted-foreground" title={row.reason}>
-        <span data-copy="stored" data-slot="pass_a_audience_insight">{row.reason}</span>
+          so it is `stored` and names the call that wrote it.
+
+          AND IT WRAPS RATHER THAN DISAPPEARING (review W9). The cell was
+          `truncate` in a fixed 150px track, so anything past ~20 characters
+          was cut to an ellipsis recoverable only through `title` — which a
+          printed page and a keyboard user never see, on the one column of
+          this row whose whole job is to explain the pick. Two lines inside
+          the track is what the track can hold; `title` stays for the rare
+          third. The artboard puts this behind a link for the same reason,
+          which is the one option this product does not have (no route lists
+          a pick's reasoning).
+
+          AND IT IS NOT DRAWN WHERE IT ECHOES THE CHIP — see
+          `echoesTheChip`. The column keeps its track either way, so the
+          table does not reflow around a quiet cell. */}
+      <span className="min-w-0 text-[11.5px] text-muted-foreground" title={echo ? undefined : row.reason}>
+        {echo ? null : (
+          <span data-copy="stored" data-slot="pass_a_audience_insight" className="line-clamp-2">{row.reason}</span>
+        )}
       </span>
       {/* A REPLY LINK ONLY WHERE A REPLY CAN LAND. The row keeps its column
           either way, so the table does not reflow around a missing link. */}
