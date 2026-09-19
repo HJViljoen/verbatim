@@ -5,6 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { directionRe } from '../test/copy-contract'
 import type { RecordInputs } from '../reading/record'
 import type { Verdict } from '../reading/verdicts'
+import { MOVEMENT_WORDS } from '../../components/delta-badge'
 import { RPC_WINDOW_DENOMINATORS, RPC_WINDOW_THEME_READINGS } from '../reading/types'
 import { quarterFor } from '../reports/quarterly'
 import {
@@ -223,7 +224,24 @@ describe('unsettledItems', () => {
     const [banded] = unsettledItems([verdict({ state: 'too_little_data', bandPts: 6.75 })])
     expect(banded.why).toBe('band ±6.8')
     const [unbanded] = unsettledItems([verdict({ state: 'too_little_data', bandPts: null })])
-    expect(unbanded.why).toBe('too few to compare')
+    expect(unbanded.why).toBe(MOVEMENT_WORDS.too_little_data)
+  })
+
+  // The badge's table is the ONE place a state token becomes words. This
+  // ternary was a second copy and it had drifted: `baseline_forming` read
+  // "not enough months behind it" where the table — and the Reports card that
+  // opens this review — read "not enough months yet". Same state, same
+  // session, one click apart.
+  it('takes every non-answer word from MOVEMENT_WORDS', () => {
+    for (const state of ['refused', 'baseline_forming'] as const) {
+      const [item] = unsettledItems([verdict({ state, bandPts: 3.4 })])
+      expect(item.why).toBe(MOVEMENT_WORDS[state])
+    }
+    // And the band, which is this reading's number and not the state's, still
+    // wins where the state is the thin one.
+    expect(unsettledItems([verdict({ state: 'too_little_data', bandPts: 3.4 })])[0].why).toBe('band ±3.4')
+    expect(unsettledItems([verdict({ state: 'baseline_forming', bandPts: 3.4 })])[0].why)
+      .toBe('not enough months yet')
   })
 
   it('prints both sides of the comparison with their denominators', () => {

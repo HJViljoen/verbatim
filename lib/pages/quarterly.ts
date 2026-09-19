@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import { MOVEMENT_WORDS } from '../../components/delta-badge'
 import { READER_FLAGS } from '../calibration'
 import { fmtInt, fmtPct, fullDate, longMonth, monthName, shortDate } from '../format'
 import type { Quote, Scope } from '../renderables/types'
@@ -855,14 +856,19 @@ export function unsettledItems(
     .slice(0, limit)
     .map((v) => ({
       title: `Whether ${v.objectLabel} moved${audienceSuffix(v.audience, options.side)}`,
+      // THE BADGE'S OWN TABLE, NOT A SECOND ONE. `MOVEMENT_WORDS`
+      // (components/delta-badge.tsx) is the ONE place a `VerdictState` token
+      // becomes words — its docblock says so — and this ternary was a second
+      // copy that had already drifted: it printed "not enough months behind
+      // it" for `baseline_forming` where the table, and the Reports card that
+      // OPENS this review (`reports-card/card.tsx:225`), print "not enough
+      // months yet". One state, one session, one click apart, two wordings.
+      // The band is the one thing the table cannot say, because it is this
+      // reading's number and not the state's.
       why:
-        v.state === 'refused'
-          ? 'comparison refused'
-          : v.state === 'baseline_forming'
-            ? 'not enough months behind it'
-            : v.bandPts != null
-              ? `band ±${Math.round(v.bandPts * 10) / 10}`
-              : 'too few to compare',
+        v.state === 'too_little_data' && v.bandPts != null
+          ? `band ±${Math.round(v.bandPts * 10) / 10}`
+          : MOVEMENT_WORDS[v.state as keyof typeof MOVEMENT_WORDS] ?? MOVEMENT_WORDS.too_little_data,
       body: `${v.objectLabel} read ${v.value.n > 0 ? `${fmtInt(v.value.k)} of ${fmtInt(v.value.n)} videos` : 'nothing we could count'} in this window${
         v.baseline ? `, against ${fmtInt(v.baseline.k)} of ${fmtInt(v.baseline.n)} before it` : ''
       }.`,
