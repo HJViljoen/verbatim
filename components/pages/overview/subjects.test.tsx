@@ -5,13 +5,28 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { gapBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
-import { leadGap, overviewSubjects, subjectsMeta } from './subjects'
+import { DirectionWord, leadGap, overviewSubjects, subjectsMeta } from './subjects'
 import { overviewFixture, refusedFixture, renamedRivalFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
 
 describe('OV2 · your subjects', () => {
+
+  // D5 / D11 (Block D wave 3, M4). `directionWord` answers `flat` when three
+  // readings exist and do not agree — the ABSENCE of a direction — and "flat"
+  // is not a word this product has (MOVEMENT_WORDS carries none). The guard was
+  // `if (!direction)`, so a subject with three readable months whose change sat
+  // inside its band printed the pill "flat, 3 months" beside a badge reading
+  // "no clear change": two non-answers, one dressed as a finding. This node is
+  // the shared one — the monthly and weekly emails, Voice and the leadership
+  // sheet all print through it.
+  it('prints nothing for `flat`, on every mode', () => {
+    for (const mode of MODES) {
+      expect(render(<DirectionWord direction="flat" mode={mode} />)).toBe('')
+      expect(render(<DirectionWord direction="growing" mode={mode} />)).toContain('growing')
+    }
+  })
   it('renders in all three modes and keeps the copy contract', () => {
     for (const data of [overviewFixture(), refusedFixture()]) {
       for (const mode of MODES) {

@@ -33,9 +33,24 @@ import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
  * is not read off a single comparison, and it is not the `RUN_INDEXED` word the
  * direction map gates. Marked `verdict` so the copy contract can see that the
  * word has a reading behind it (rule (c)).
+ *
+ * `flat` PRINTS NOTHING (Block D wave 3, M4). It is `directionWord`'s answer
+ * for "three readings exist and do not agree", which is the ABSENCE of a
+ * direction rather than a direction — and the word itself is one the product
+ * retired: `MOVEMENT_WORDS` does not carry it (mock-gap §6 D11). The guard was
+ * `if (!direction)`, which lets `Direction`'s third value straight through, and
+ * this is the SHARED node: Overview's subject rows and its movers, the monthly
+ * email, the weekly email, Voice's two mover surfaces and the leadership sheet
+ * all print through it, and both loaders hand it the raw value. The commonest
+ * outcome on a live tenant — three readable months whose change sits inside the
+ * band, the one `directionWord` exists to refuse — rendered a pill reading
+ * "flat, 3 months" beside a badge reading "no clear change": two non-answers,
+ * one of them dressed as a finding. The sibling written in the same wave
+ * (`pages/subjects/subject.tsx:63`) filters it and pins it; this is that guard,
+ * on the copy every other surface shares.
  */
 export function DirectionWord({ direction, mode = 'app' }: { direction: Direction | null; mode?: RenderMode }) {
-  if (!direction) return null
+  if (!direction || direction === 'flat') return null
   if (mode === 'email') {
     return <span data-copy="verdict" style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted }}>{direction}, 3 months</span>
   }
