@@ -102,7 +102,10 @@ describe('the weekly email', () => {
   })
 
   it('prints the update behind this one on the date row', () => {
-    expect(words(snapshot())).toContain('6 Sep – 13 Sep · previous update 5 Sep')
+    // The spaces inside each clause are no-break spaces, so the line can only
+    // wrap at the "·" — on a phone it wrapped inside "5 Sep". The reader sees
+    // the same words either way.
+    expect(words(snapshot()).replace(/\u00a0/g, ' ')).toContain('6 Sep – 13 Sep · previous update 5 Sep')
   })
 
   it('says there is no previous update rather than dropping the clause', () => {

@@ -161,9 +161,23 @@ function Row({ row, contribution, rivalLabel, share, mode, appUrl }: {
       <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} border={0} style={{ borderCollapse: 'collapse', borderSpacing: 0, marginTop: 14 }}>
         <tbody>
           <tr>
-            <td width={150} style={{ width: 150, verticalAlign: 'middle' }}>{label}</td>
+            {/* THE LABEL COLUMN IS A SHARE OF THE ROW, NOT 150 FIXED PIXELS.
+                150px + the 78px figure column + 24px of gutter is 252 of a
+                card whose content box is 544 on a desktop and 300 on a 390px
+                phone — so the bar, which is the only picture a subject row
+                has, was left 290px on one and 48px on the other. At 28% the
+                column is 152 at 600 (the artboard's own 150, to the pixel a
+                reader can see) and 84 on the phone, which gives the bar 114.
+                The label wraps to two lines there; a 48px bar is not a bar.
+
+                A PERCENTAGE BECAUSE THERE IS NO MEDIA QUERY TO BE HAD.
+                design-system.md §4 is "Tables and inline styles only — no
+                classes, no CSS variables, no flex/grid", and a media query
+                cannot be an inline style, so proportional columns are the
+                only responsive mechanism this artefact is allowed. */}
+            <td width="28%" style={{ width: '28%', verticalAlign: 'middle' }}>{label}</td>
             <td style={{ verticalAlign: 'middle', padding: '0 12px' }}><Bar share={share} mode={mode} /></td>
-            <td align="right" width={78} style={{ width: 78, verticalAlign: 'middle' }}>{figure}</td>
+            <td align="right" width={78} style={{ verticalAlign: 'middle' }}>{figure}</td>
           </tr>
           <tr>
             <td style={{ verticalAlign: 'top' }}><Contribution videos={contribution} mode={mode} /></td>

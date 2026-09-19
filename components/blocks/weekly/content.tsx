@@ -90,9 +90,14 @@ function MoverRows({ movers, mode }: { movers: readonly Mover[]; mode: RenderMod
   const title = 'What moved most'
   const note = `in the category ${movers.length === 1 ? 'this month' : 'this month, each against the band it cleared'}`
   const line = (m: Mover) => {
+    // THE READING IS UNBREAKABLE, THE ROW IS NOT. A share and its denominator
+    // may not be split across a line (`movers.tsx:291-305` made the trail
+    // points unbreakable for exactly this), but the BADGE may drop below
+    // them: nowrap on the whole cell set a ~300px floor under the card, which
+    // on a 320px screen is a horizontally scrolling email.
     const reading = (
       <>
-        <span data-copy="figure">{m.pct == null ? `${fmtInt(m.k)} of ${fmtInt(m.n)}` : `${fmtPct(m.pct)} · ${fmtInt(m.k)} of ${fmtInt(m.n)}`}</span>{' '}
+        <span data-copy="figure" style={{ whiteSpace: 'nowrap' }}>{m.pct == null ? `${fmtInt(m.k)} of ${fmtInt(m.n)}` : `${fmtPct(m.pct)} · ${fmtInt(m.k)} of ${fmtInt(m.n)}`}</span>{' '}
         {/* `good="neutral"`, for the reason WR1's badge is: "Zips failing
             after a year — +1.9 pts" is not good news because the number went
             up, and the title over these rows is deliberately direction-free. */}
@@ -105,16 +110,16 @@ function MoverRows({ movers, mode }: { movers: readonly Mover[]; mode: RenderMod
           <tbody>
             <tr>
               <td style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink }}>{m.label}</td>
-              <td align="right" style={{ whiteSpace: 'nowrap', paddingLeft: 14 }}>{reading}</td>
+              <td align="right" style={{ paddingLeft: 14 }}>{reading}</td>
             </tr>
           </tbody>
         </table>
       )
     }
     return (
-      <div key={m.id} className="mt-1 flex items-baseline justify-between gap-3.5 text-[12.5px]">
+      <div key={m.id} className="mt-1 flex flex-wrap items-baseline justify-between gap-x-3.5 text-[12.5px]">
         <span className="min-w-0">{m.label}</span>
-        <span className="flex-none whitespace-nowrap">{reading}</span>
+        <span className="flex-none">{reading}</span>
       </div>
     )
   }

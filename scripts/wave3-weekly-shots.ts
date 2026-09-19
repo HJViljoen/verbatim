@@ -29,6 +29,8 @@ const args = process.argv.slice(2)
 const flag = (n: string, d: string) => { const i = args.indexOf(`--${n}`); return i >= 0 && args[i + 1] ? args[i + 1] : d }
 const out = flag('out', 'scratch/wave3-weekly-shots')
 const tag = flag('tag', 'after')
+/** The viewport. 640 is the artboard's canvas; 390 and 320 are the phones. */
+const width = Number(flag('width', '640'))
 const artboards = flag(
   'artboards',
   '/Users/heinrichviljoen/Documents/Heinrich/Cold-Reviews/Verbatim-IA-Review-2026-09-13/mock-sealand/artboards',
@@ -88,14 +90,16 @@ async function main() {
 
   await withBrowser(async (page) => {
     // 640 = the artboard's own canvas, so the two images are one scale.
-    await page.setViewport({ width: 640, height: 1200, deviceScaleFactor: 1 })
+    await page.setViewport({ width, height: 1200, deviceScaleFactor: 1 })
     for (const s of STATES) {
       await page.goto(`file://${resolve(out, `${tag}-${s.key}.html`)}`, { waitUntil: 'networkidle0' })
-      writeFileSync(join(out, `${tag}-${s.key}.png`), await page.screenshot({ fullPage: true, type: 'png' }))
-      console.log(`${tag}-${s.key}.png`)
+      const name = width === 640 ? `${tag}-${s.key}` : `${tag}-${s.key}-${width}`
+      writeFileSync(join(out, `${name}.png`), await page.screenshot({ fullPage: true, type: 'png' }))
+      const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+      console.log(`${name}.png · horizontal overflow ${over}px`)
     }
     const art = join(artboards, 'WeeklyReport.dc.html')
-    if (!existsSync(art)) return
+    if (width !== 640 || !existsSync(art)) return
     await page.goto(`file://${art}`, { waitUntil: 'networkidle0' })
     writeFileSync(join(out, 'artboard-weekly.png'), await page.screenshot({ fullPage: true, type: 'png' }))
     const html = join(out, `side-by-side-${tag}-weekly.html`)

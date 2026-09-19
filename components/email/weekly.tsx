@@ -40,6 +40,7 @@ export interface WeeklyEmailProps {
 
 const presentation = { role: 'presentation', cellPadding: 0, cellSpacing: 0, border: 0 } as const
 
+
 export function WeeklyEmail({ data, shareUrl, appUrl, attached, ctx, preheader }: WeeklyEmailProps) {
   // A ROW AN OLDER BUILD WROTE IS A SENTENCE, NOT A STACK TRACE. `data.reading`
   // changed incompatibly in block D wave 2 and every line below dereferences
@@ -102,8 +103,13 @@ export function WeeklyEmail({ data, shareUrl, appUrl, attached, ctx, preheader }
                         <table width="100%" {...presentation} style={{ borderCollapse: 'collapse', marginTop: 9 }}>
                           <tbody>
                             <tr>
-                              <td style={{ ...text.mono, color: EMAIL.muted, fontSize: 12 }}>{weeklyDateLine(data.period, data.reading.update.previous)}</td>
-                              <td align="right" style={{ ...text.mono, color: EMAIL.muted, fontSize: 12, whiteSpace: 'nowrap' }}>{data.company}</td>
+                              {/* TOP-ALIGNED, BOTH. A `<td>` centres its
+                                  content by default, so when the left cell
+                                  wrapped to two lines on a phone the tenant
+                                  floated half a line below the date it sits
+                                  beside and read as a third, stray line. */}
+                              <td style={{ ...text.mono, color: EMAIL.muted, fontSize: 12, verticalAlign: 'top' }}>{weeklyDateLine(data.period, data.reading.update.previous)}</td>
+                              <td align="right" style={{ ...text.mono, color: EMAIL.muted, fontSize: 12, whiteSpace: 'nowrap', verticalAlign: 'top' }}>{data.company}</td>
                             </tr>
                           </tbody>
                         </table>

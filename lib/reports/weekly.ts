@@ -83,6 +83,7 @@ export const WEEKLY_CARD_WIDTH = 600
 /** The artboard's canvas padding, each side: 600 + 20 + 20 = 640. */
 export const WEEKLY_CANVAS_GUTTER = 20
 
+
 /**
  * What to call the window this report covers.
  *
@@ -636,7 +637,15 @@ export function weeklyEyebrow(updateDate: string | null): string {
  * nothing behind it to be read against.
  */
 export function weeklyDateLine(period: string, previous: string | null): string {
-  return `${period} · ${previous ? `previous update ${shortDate(previous)}` : 'no previous update'}`
+  // THE LINE BREAKS AT THE SEPARATOR OR NOT AT ALL. On a phone it does not fit
+  // beside the tenant, and the wrap landed inside "5 Sep" — so the masthead
+  // read "6 Sep – 13 Sep · previous update 5" over "Sep". Each clause is made
+  // unbreakable and the "·" is left the only place the line can break, which
+  // is where a reader would break it. Both clauses are bounded — a date range
+  // in `shortDate` and a fixed phrase — so neither can set a floor under the
+  // card the way a long unbreakable string would.
+  const clause = previous ? `previous update ${shortDate(previous)}` : 'no previous update'
+  return [period, clause].map((p) => p.replace(/ /g, '\u00a0')).join(' · ')
 }
 
 /**

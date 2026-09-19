@@ -363,6 +363,30 @@ describe('WR2 · where things stand', () => {
   })
 })
 
+describe('the artefact on a phone', () => {
+  // A PHONE, AND design-system.md §4 ALLOWS NO MEDIA QUERY TO FIX IT WITH
+  // ("Tables and inline styles only — no classes, no CSS variables, no
+  // flex/grid"), so the only responsive mechanism this artefact has is a
+  // proportional column. Measured at 390 on the populated fixture: the bar
+  // track goes 48px → 108px and at 320 22px → 58px, with the desktop card
+  // unchanged at 600 and the label column at 152 where it was 150.
+  it('sizes WR2’s label column by share of the row, not in fixed pixels', () => {
+    const markup = render(WEEKLY_BLOCKS['weekly.subjects'].render(weeklyFixture(), 'email', ctx))
+    expect(markup).toContain('width="28%"')
+    expect(markup).not.toContain('width:150px')
+  })
+
+  // AND NOTHING SETS A FLOOR UNDER THE CARD. `MoverRows` put `nowrap` on the
+  // whole right-hand cell, which held the card at ~356px — a horizontally
+  // scrolling email on a 320px screen. A share and its denominator still may
+  // not be split (`movers.tsx:291-305`); the badge may drop below them.
+  it('keeps a reading unbreakable and lets its badge wrap', () => {
+    const markup = render(WEEKLY_BLOCKS['weekly.content'].render(weeklyFixture(), 'email', ctx))
+    expect(markup).toContain('white-space:nowrap">5.1% · 71 of 1,388')
+    expect(markup).not.toContain('white-space:nowrap;padding-left:14px"><span data-copy="figure" style="white-space:nowrap">5.1%')
+  })
+})
+
 describe('WR3 · what came in this week', () => {
   const block = WEEKLY_BLOCKS['weekly.incoming']
 
