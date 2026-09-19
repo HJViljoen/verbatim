@@ -188,8 +188,15 @@ export function TrackingForm(props: TrackingFormProps) {
               {saving ? 'Saving…' : 'Save tracking changes'}
             </button>
             <button type="button" onClick={discard} disabled={saving || pending.length === 0} className={CONTROL}>Discard</button>
+            {/* A REFUSED SAVE IS AN ALERT (ST11). This is the one save on the
+                page; when it fails, the reader's edits are still unwritten and
+                they have to act. `role="status"` is a polite region, so a
+                refusal rendered `text-negative` reached a screen reader as an
+                update that could wait behind whatever else was speaking. Every
+                other refusal on this page is `role="alert"`, the community
+                control included. */}
             {state.message && !edited
-              ? <span className={`text-[12.5px] ${state.ok ? 'text-positive' : 'text-negative'}`} role="status">{state.message}</span>
+              ? <span className={`text-[12.5px] ${state.ok ? 'text-positive' : 'text-negative'}`} role={state.ok ? 'status' : 'alert'}>{state.message}</span>
               : <SaveStateLine state={save} />}
           </>
         ) : (
