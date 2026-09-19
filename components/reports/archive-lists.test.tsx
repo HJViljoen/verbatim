@@ -53,7 +53,7 @@ describe('the archive', () => {
     const text = renderText(tile([
       column(),
       column({ key: 'built', label: 'Built', meta: 'documents' }),
-      column({ key: 'exported', label: 'Exported', meta: 'pages and tiles', items: [], held: 0, empty: 'Nothing exported yet.' }),
+      column({ key: 'exported', label: 'Exported', meta: 'pages and cards', items: [], held: 0, empty: 'Nothing exported yet.' }),
     ]))
     expect(text).toContain('Sent')
     expect(text).toContain('Built')

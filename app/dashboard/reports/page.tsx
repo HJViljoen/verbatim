@@ -476,7 +476,11 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
     {
       key: 'exported',
       label: 'Exported',
-      meta: 'pages and tiles',
+      // "CARD", NOT "TILE". A tile is what the code calls the thing; a reader
+      // calls it a card, and "tile" is on the jargon list
+      // (lib/calibration.ts). `components/export-menu.tsx` still ships
+      // `aria-label="Export this tile"` — shell's to change.
+      meta: 'pages and cards',
       items: exports.map((e): ArchiveItem => ({
         id: e.id,
         title: e.title,
@@ -489,7 +493,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
       })),
       held: exports.length,
       cappedAt: reachOf('exported').cappedAt,
-      empty: emptyFor('exported', 'was exported', 'Nothing exported yet. Export any page or tile from its menu; the files collect here.'),
+      empty: emptyFor('exported', 'was exported', 'Nothing exported yet. Export any page or card from its menu; the files collect here.'),
     },
   ]
 
