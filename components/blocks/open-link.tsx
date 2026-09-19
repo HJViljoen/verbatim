@@ -22,7 +22,14 @@ import { EMAIL } from '@/lib/email/theme'
  */
 export function openLink(mode: RenderMode, href: string, label: ReactNode): ReactNode {
   if (mode === 'print') return null
+  // ONE NAVIGATION LINK STYLE PER ARTEFACT (Block D wave 3, SH24). This arm
+  // set the charcoal ink and never set `text-decoration`, so the six
+  // block-footer links ("Open This week →", "Open the sales brief →") rendered
+  // as default UNDERLINED dark links while every other link on the same email
+  // is `EMAIL.link` with no underline. The artboards have exactly one
+  // navigation link style; their only underlines are the dotted evidence
+  // underlines under figures, which mean something else entirely.
   return mode === 'email'
-    ? <a href={href} style={{ color: EMAIL.ink }}>{label}</a>
+    ? <a href={href} style={{ color: EMAIL.link, textDecoration: 'none' }}>{label}</a>
     : <Link href={href} className="hover:underline">{label}</Link>
 }

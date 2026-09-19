@@ -208,6 +208,12 @@ export function BlockFrame({
                 <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} border={0} style={{ borderCollapse: 'collapse', borderSpacing: 0 }}>
                   <tbody>
                     <tr>
+                      {/* `ink2` is the colour of the footer's own WORDS. The
+                          link inside it paints itself — `openLink`
+                          (components/blocks/open-link.tsx) is the one place
+                          the product's email link style is decided, and an
+                          `<a>` does not inherit either colour or underline
+                          from this cell in a mail client (SH24). */}
                       <td style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink2 }}>{footer}</td>
                       {footerNote ? <td align="right" style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted }}>{footerNote}</td> : null}
                     </tr>
