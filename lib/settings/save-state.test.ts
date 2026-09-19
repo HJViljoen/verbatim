@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { activeSubreddits, knownSubreddits } from '../gather/subreddits'
 import type { SubredditEntry } from '../gather/types'
 import { communityWords } from './communities'
-import { applySubredditEdit, NOTHING_PENDING, saveState, subredditEdit, type LastChange } from './save-state'
+import { applySubredditEdit, NOTHING_PENDING, saveState, subredditEdit, WATCHED_COMMUNITY_CAP, type LastChange } from './save-state'
 
 // The save-state strip (block D, D9). What these hold is the difference
 // between the two tenses and the difference between the two absences:
@@ -198,12 +198,55 @@ describe('applySubredditEdit', () => {
     })
   })
 
-  it('promotes an entry the probe once rejected, rather than writing a second one', () => {
-    const r = applySubredditEdit(entries, { kind: 'add', name: 'r/onebag' }, '2026-09-18')
-    expect('error' in r).toBe(false)
-    if ('error' in r) return
-    expect(r.next).toHaveLength(2)
-    expect(r.next[1]).toEqual({ name: 'onebag', status: 'active', discovered_at: '2026-05-02' })
+  it('refuses to turn a community the probe ruled out back on, and quotes the verdict', () => {
+    // ST4, and this test REPLACES one that asserted the opposite. The add arm
+    // is handed the ACTIVE names, so a rejected entry is not "has", `existing`
+    // is found, and the entry was rewritten straight to 'active' — overwriting
+    // a verdict that was paid for, on a row whose own "sampled … on topic"
+    // line stays on screen beside the now-active state. `setSubredditStatuses`
+    // says overriding that is a human doing it BY NAME: an operator, not a
+    // browser.
+    expect(applySubredditEdit(entries, { kind: 'add', name: 'r/onebag' }, '2026-09-18')).toEqual({
+      error: 'r/onebag was ruled out by our relevance check. Ask us to look again rather than turning it back on over that.',
+    })
+    // With a probe on the entry, the refusal IS the measurement, as k of n.
+    const probed: SubredditEntry[] = [
+      { name: 'frugal', status: 'rejected', discovered_at: '2026-08-11', probe: { sampled: 40, kept: 3, at: '2026-09-12' } },
+    ]
+    expect(applySubredditEdit(probed, { kind: 'add', name: 'r/frugal' }, '2026-09-18')).toEqual({
+      error: 'We sampled r/frugal on 2026-09-12 and 3 of 40 posts were about your market, so it was ruled out. Ask us to look again rather than turning it back on over that.',
+    })
+    // Nothing is written, so the entry keeps its verdict.
+    expect(probed[0].status).toBe('rejected')
+    // A community the CLIENT stopped is still theirs to take back: that is the
+    // whole reason `stopped` is not `rejected`.
+    const stopped: SubredditEntry[] = [{ name: 'frugal', status: 'stopped', discovered_at: '2026-08-11', stopped_at: '2026-09-01' }]
+    expect('error' in applySubredditEdit(stopped, { kind: 'add', name: 'r/frugal' }, '2026-09-18')).toBe(false)
+  })
+
+  it('caps how many communities a client can watch, because every one is paid for per run', () => {
+    // ST4: the add arm appended with no ceiling, and
+    // `tracking_configs_cost_ceilings_check` bounded every OTHER list on the
+    // row but not this one. An admin typing two hundred names into the add box
+    // (or POSTing `updateCommunity` two hundred times — it takes a bare
+    // FormData) bought two hundred paid Reddit searches on the next gather.
+    const watched: SubredditEntry[] = Array.from({ length: WATCHED_COMMUNITY_CAP }, (_, i) => ({
+      name: `community${i}`, status: 'active' as const, discovered_at: '2026-04-06',
+    }))
+    expect(applySubredditEdit(watched, { kind: 'add', name: 'r/BuyItForLife' }, '2026-09-18')).toEqual({
+      error: '12 watched communities is the limit — every one of them is searched and read on every update. Stop watching one first.',
+    })
+    // One below the cap still goes in, so the ceiling is a ceiling and not an
+    // off-by-one that closes the control a community early.
+    expect('error' in applySubredditEdit(watched.slice(0, -1), { kind: 'add', name: 'r/BuyItForLife' }, '2026-09-18')).toBe(false)
+    // Stopped entries do not count against it: they cost nothing per run, and
+    // they are records that are never deleted, so a client who has cycled
+    // thirty communities over a year is not locked out by their own history.
+    const mostlyStopped: SubredditEntry[] = [
+      ...Array.from({ length: 30 }, (_, i) => ({ name: `old${i}`, status: 'stopped' as const, discovered_at: '2026-04-06' })),
+      { name: 'prosthetics', status: 'active' as const, discovered_at: '2026-04-06' },
+    ]
+    expect('error' in applySubredditEdit(mostlyStopped, { kind: 'add', name: 'r/BuyItForLife' }, '2026-09-18')).toBe(false)
   })
 
   it('appends a community nothing has ever proposed, dated today', () => {
