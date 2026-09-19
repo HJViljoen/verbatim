@@ -227,9 +227,34 @@ function ownPostsInput(): OwnPostInput {
     ],
     // Three subjects named, four of the nine posts analysed — so the subject
     // half is a real match here and carries no note. On production today the
-    // same field is zero analysed posts and the census says so instead.
+    // same field is zero analysed posts and the census says so instead
+    // (`refusedOwnPostsInput` below is that reading).
     subjectScope: { named: 3, analysedPosts: 4 },
   }
+}
+
+/**
+ * The same census on a workspace whose SUBJECT SET cannot be read — which is
+ * the state `refusedFixture()` is the fixture for.
+ *
+ * WHY IT IS ITS OWN INPUT AND NOT THE POPULATED ONE. `refusedFixture` built
+ * its census from `ownPostsInput()`, whose membership names Durability and
+ * Recycled materials — so the rail said "Your subjects are not recorded for
+ * this workspace yet" and the tile 200px below it printed "SUBJECTS MATCHED ·
+ * Durability 3 of 9 · Recycled materials 1 of 9". One screenful, two answers,
+ * and the shot the package calls "the state production is in today" was not
+ * that state.
+ *
+ * AND THE SHAPE IS THE LOADER'S, NOT AN INVENTION. `loadOwnPosts` reads the
+ * subject rows first and only goes looking for membership `if (subjects.length
+ * > 0)`; with M4 unapplied `loadSubjectRows` answers empty, so `membership` is
+ * `[]` and `subjectScope` is `{ named: 0, analysedPosts: 0 }` — which is what
+ * makes `SUBJECTS_NONE_NAMED` the census's own sentence for this tenant. The
+ * posts, the hooks, the formats and the claims half are untouched: `videos` is
+ * tenant-readable whatever the month tables say.
+ */
+function refusedOwnPostsInput(): OwnPostInput {
+  return { ...ownPostsInput(), membership: [], subjectScope: { named: 0, analysedPosts: 0 } }
 }
 
 /** A rail row's own banded change, through the real `monthChange` — 84 videos
@@ -424,7 +449,12 @@ export function refusedFixture(over: Partial<SubjectsData> = {}): SubjectsData {
     // still knows what it published — and `video_claims` has no tenant policy
     // until M8, so the claims half is NAMED rather than drawn as zero. This is
     // the state production is in today and the state wave 2 is reviewed in.
-    ownPosts: ownCensusWithClaims(ownPostsInput(), false),
+    //
+    // AND THE SUBJECT HALF GOES WITH THE SET. The membership rows are read
+    // THROUGH the subject rows, so a set that cannot be read matches nothing —
+    // see `refusedOwnPostsInput`. Naming two subjects here contradicted the
+    // rail one tile up, on the one arm a real tenant sees.
+    ownPosts: ownCensusWithClaims(refusedOwnPostsInput(), false),
     sayHear: null,
     ...over,
   }

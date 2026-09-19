@@ -17,6 +17,7 @@ import { subjectsUnanswered } from './unanswered'
 import { calendarRulesFor } from '@/lib/charts/from-series'
 import { freezeQuotes } from '@/lib/renderables/quotes-freeze'
 import { gapBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
+import { SUBJECTS_NONE_NAMED } from '@/lib/reading/own-posts'
 import { candidatesFixture, refusedFixture, retiredRivalFixture, subjectsFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
@@ -548,6 +549,20 @@ describe('SU4 · your own posts', () => {
   it('survives M4 — `videos` is readable whatever the month tables say', () => {
     expect(subjectsOwnPosts.emptyState(refusedFixture())).toBeNull()
     expect(renderText(subjectsOwnPosts.render(refusedFixture(), 'app', ctx))).toContain('9 posts published')
+  })
+
+  // ONE ANSWER PER SCREENFUL. The membership rows are read THROUGH the subject
+  // rows (`loadOwnPosts` only looks for them `if (subjects.length > 0)`), so a
+  // set that cannot be read matched nothing — and the rail 200px above has
+  // already said the set cannot be read. Naming Durability here was the page
+  // contradicting itself in one screenful, on the one arm a real tenant sees.
+  it('matches no subject where the set itself cannot be read', () => {
+    const data = refusedFixture()
+    expect(data.ownPosts?.subjects).toEqual([])
+    const text = renderText(subjectsOwnPosts.render(data, 'app', ctx))
+    expect(text).not.toContain('Durability')
+    expect(text).not.toContain('Recycled materials')
+    expect(text).toContain(SUBJECTS_NONE_NAMED)
   })
 
   it('says the census is empty rather than printing a zero', () => {
