@@ -305,12 +305,20 @@ describe('the In-short sheet', () => {
     expect(markupText(sheet)).toContain('reasonable')
   })
 
-  // `mkt.p1.findings`: the artboard's right-hand pair on every row. NOT its
-  // "305 videos" — a finding is calibrated on conversations and strands, and
-  // the research spine produces no video count with a denominator for it.
+  // `mkt.p1.findings`: the artboard's right-hand pair on every row, and since
+  // wave 3 (`sales`-5) the artboard's NOUN as well. This read "305
+  // conversations" on the argument that the research spine produces no video
+  // count with a denominator for it — but "conversations" has no denominator
+  // either, and it has no definition anywhere on the deck: the numbers card
+  // defines COMMENTS, VIDEOS and THE UNIT and never this, so a reader could
+  // not tell whether 305 was a subset of 1,388. The count IS videos
+  // (`ResearchPoint.conversationCount`, "distinct source videos behind
+  // insightIds"), and "across N strands" is what keeps it honest about being
+  // summed per strand rather than deduplicated.
   it('gives each finding row its count and its confidence word', () => {
     const words = markupText(render(<DocumentDeck data={marketingDeckFixture()} date="28 Sep 2026" />))
-    expect(words).toContain('305 conversations')
+    expect(words).toContain('305 videos across')
+    expect(words).not.toContain('305 conversations')
     expect(words).toContain('solid')
     expect(words).toContain('reasonable')
   })

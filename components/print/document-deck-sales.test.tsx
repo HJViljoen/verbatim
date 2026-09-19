@@ -201,7 +201,7 @@ describe('the overview sheet, once the cover has taken the summary', () => {
     const t = words(w)
     expect(t).toContain('The objection to answer is longevity, not cost.')
     expect(t).toContain('page 3')
-    expect(t).toContain('1,388 conversations')
+    expect(t).toContain('1,388 videos across')
     expect(t).toContain('4 strands of the research')
     expect(t).toContain('confidence reasonable')
     expect(t).toContain('the category')
@@ -212,7 +212,7 @@ describe('the overview sheet, once the cover has taken the summary', () => {
   // cannot disagree and nothing is measured twice.
   it('reads the same counts the finding sheet prints', () => {
     const finding = words(sheetNamed(deck(), 'Finding 1'))
-    expect(finding).toContain('1,388 conversations · 4 strands of the research')
+    expect(finding).toContain('1,388 videos across 4 strands of the research')
   })
 
   it('still prints what the update did not settle', () => {

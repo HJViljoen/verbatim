@@ -643,8 +643,9 @@ function OverviewPage({ page, data, title, pages }: { page: DocPage; data: Docum
                     <p className="flex flex-wrap items-baseline gap-x-1.5 font-mono text-[12px] leading-[1.4] text-muted-foreground">
                       <span>
                         page <span className="tabular-nums text-foreground">{pageOf(c.id)}</span>
-                        {' · '}<span className="tabular-nums text-foreground">{fmtCount(c.conversations)}</span> conversations
-                        {' · '}<span className="tabular-nums text-foreground">{c.strands}</span> {c.strands === 1 ? 'strand' : 'strands'} of the research
+                        {/* VIDEOS, AND "ACROSS" (wave 3, `sales`-5). See `FindingPage`. */}
+                        {' · '}<span className="tabular-nums text-foreground">{fmtCount(c.conversations)}</span> videos across
+                        {' '}<span className="tabular-nums text-foreground">{c.strands}</span> {c.strands === 1 ? 'strand' : 'strands'} of the research
                         {' · '}confidence
                       </span>
                       {/* THE TIER KEEPS ITS COLOUR STEP (E-marketing's fix
@@ -771,8 +772,31 @@ function FindingPage({ page, figures, company, lens }: { page: DocPage; figures:
             card whose content fills it; the artboard's card is sized to its
             content and lets the SHEET carry the slack. */}
         <div className={`${CARD} flex min-h-0 flex-col gap-4 self-start px-6 py-5`}>
+          {/*
+            VIDEOS, AND "ACROSS" IS NOT DECORATION (wave 3, `sales`-5).
+            This printed "conversations", a word the deck never defines: the
+            numbers card two sheets on defines COMMENTS, VIDEOS and THE UNIT
+            and not this, and `lib/calibration.ts` GLOSSARY makes a
+            conversation the same unit as THE UNIT under a second name — so a
+            reader could not tell whether 305 was a subset of 1,388 or
+            something counted another way. AGENTS.md's rule for a new reading
+            surface is "videos", all four artboards count in videos, and the
+            number really is one: `meta.conversations` comes from `heardMeta`,
+            off `ResearchPoint.conversationCount`, whose own docstring is
+            "Distinct source videos behind `insightIds`".
+
+            WHAT "ACROSS" CARRIES. `heardMeta` SUMS that count over the
+            finding's strands, so a video cited by two strands is counted
+            twice and the figure is an upper bound on the distinct videos
+            behind the finding. "305 videos across 3 strands" is the true
+            shape of a per-strand tally, and it is `heardLine`'s own wording;
+            a bare "305 videos" would be a distinctness claim this number
+            cannot make. Deduplicating it means deduplicating in `heardMeta`
+            (lib/reports/documents/compose.ts), which is `reports`' file and
+            not a render-time fix.
+          */}
           <p className="font-mono text-[13.5px] text-muted-foreground">
-            <span className="text-foreground">{fmtCount(conversations)}</span> conversations · <span className="text-foreground">{strands}</span> strands of the research
+            <span className="text-foreground">{fmtCount(conversations)}</span> videos across <span className="text-foreground">{strands}</span> {strands === 1 ? 'strand' : 'strands'} of the research
           </p>
           {means?.text && (
             <div className="flex flex-col gap-2">
@@ -1024,7 +1048,10 @@ export function movementLines(data: DocumentSnapshotData): {
   if (d.conversations) {
     out.push({
       label: 'Volume',
-      value: `${fmtCount(d.conversations.now)} conversations, against ${fmtCount(d.conversations.prev)} last update`,
+      // COMMENTS (wave 3, `sales`-5). `run.conversations` is
+      // `run_summary.period_comments` — which is what `methodRows` calls it,
+      // four hundred lines down this same file.
+      value: `${fmtCount(d.conversations.now)} comments, against ${fmtCount(d.conversations.prev)} last update`,
       count: d.conversations.now - d.conversations.prev,
       good: 'neutral',
     })
@@ -1617,7 +1644,11 @@ function NumbersCard({ data }: { data: DocumentSnapshotData }) {
   const mix = r ? platformShareLine(r.platformMix) : ''
   const rows: [string, ReactNode][] = [
     ['Period', r ? r.stamp : m.period],
-    [r ? 'Comments' : 'Conversations', `${fmtCount(comments)} read${r ? ` in ${r.monthLabel}` : ''}`],
+    // 'Comments' EITHER WAY (wave 3, `sales`-5). Without a reading the value is
+    // `method.conversations`, which is `run_summary.period_comments` and which
+    // `methodRows` labels Comments unconditionally — so the no-reading arm was
+    // the same row under the one word this card's own "The unit" row refutes.
+    ['Comments', `${fmtCount(comments)} read${r ? ` in ${r.monthLabel}` : ''}`],
     [
       'Videos',
       r && r.denominators.length > 0
