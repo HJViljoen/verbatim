@@ -79,12 +79,32 @@ function StatRow({
   )
 }
 
-/** The artboard's tinted inner block with its pill — the one row in §3 a
- *  reader is meant to stop at. Two nesting levels, never a third. */
+/**
+ * The artboard's tinted inner block with its pill — the one row in §3 a reader
+ * is meant to stop at. Two nesting levels, never a third.
+ *
+ * ONE BLOCK, HOWEVER MANY THEMES ARE IN IT. It was rendered once PER new
+ * theme, so a week with three of them drew three identical full-width tinted
+ * bands one under the other, each with its own "New" pill, where the artboard
+ * draws exactly one. The stat row above already says how many there are and
+ * how many are shown ("5 themes heard for the first time · the 3 largest are
+ * below"); the pill's job is to mark the block, not to count it.
+ *
+ * AND THE PILL IS THE 20% TINT, NOT THE DATA HUE. It painted `EMAIL.mixed`
+ * (`#E6B03C`), which `spec/design-system.md` §2 lists under "data buckets —
+ * the only hues on a page besides the green": a value colour, spent on a label
+ * chip. The artboard's pill is `rgba(230,176,60,.20)` at the same 10px/500,
+ * 2px 7px, radius 10 — which is `EMAIL.mixedTint` exactly, the constant whose
+ * own comment calls it "the artboards' attention tint". It was also
+ * inconsistent inside one email: `BlockMovement`'s chips four inches up this
+ * page already use `mixedTint`, so two amber chips sat on one artefact, one
+ * tinted and one solid, and the solid one was the loudest pixel on a 6,500px
+ * scroll.
+ */
 function NewBlock({ mode, children }: { mode: RenderMode; children: ReactNode }) {
   const pill = mode === 'email'
-    ? <span style={{ display: 'inline-block', fontFamily: FONT.sans, fontSize: 10, fontWeight: 500, padding: '2px 7px', borderRadius: 10, whiteSpace: 'nowrap', background: EMAIL.mixed, color: EMAIL.ink }}>New</span>
-    : <span className="inline-block flex-none rounded-full bg-mixed px-[7px] py-[2px] text-[10px] font-medium leading-normal">New</span>
+    ? <span style={{ display: 'inline-block', fontFamily: FONT.sans, fontSize: 10, fontWeight: 500, padding: '2px 7px', borderRadius: 10, whiteSpace: 'nowrap', background: EMAIL.mixedTint, color: EMAIL.ink }}>New</span>
+    : <span className="inline-block flex-none rounded-full bg-mixed/20 px-[7px] py-[2px] text-[10px] font-medium leading-normal">New</span>
   if (mode === 'email') {
     return (
       <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} border={0} style={{ borderCollapse: 'collapse', borderSpacing: 0, background: EMAIL.inner, borderRadius: 6, marginTop: 8 }}>
@@ -101,6 +121,24 @@ function NewBlock({ mode, children }: { mode: RenderMode; children: ReactNode })
     <div className="mt-2 flex items-start gap-2.5 rounded-md bg-inner px-3.5 py-3">
       <span className="mt-[2px]">{pill}</span>
       <span className="min-w-0 text-[13.5px] leading-relaxed text-secondary-foreground">{children}</span>
+    </div>
+  )
+}
+
+/** One theme's sentence inside that block. Separated by a line rather than by
+ *  a second band, so the block stays one thing a reader stops at. */
+function NewTheme({ theme, mode }: { theme: { label: string; videos: number }; mode: RenderMode }) {
+  return (
+    <div
+      style={mode === 'email' ? { marginTop: 4 } : undefined}
+      className={mode === 'email' ? undefined : 'mt-1 first:mt-0'}
+    >
+      {/* The theme's own name — `pass_b_theme`, never scrubbed. */}
+      <strong data-copy="subject" data-slot="pass_b_theme">{theme.label}</strong> — heard for the first time in this update, in <span data-copy="figure">{fmtInt(theme.videos)}</span> {theme.videos === 1 ? 'video' : 'videos'}.
+      {/* NOT the mock's "26 of 1,388 category videos · first heard September":
+          that denominator is a MONTH figure attached to a count of THIS
+          UPDATE, which is two units in one sentence. The update's own count is
+          what this loader measured. */}
     </div>
   )
 }
@@ -214,16 +252,11 @@ export const weeklyIncoming: Block<WeeklyData> = {
           </div>
         ) : null}
 
-        {i.newThemes.map((t) => (
-          <NewBlock key={t.label} mode={mode}>
-            {/* The theme's own name — `pass_b_theme`, never scrubbed. */}
-            <strong data-copy="subject" data-slot="pass_b_theme">{t.label}</strong> — heard for the first time in this update, in <span data-copy="figure">{fmtInt(t.videos)}</span> {t.videos === 1 ? 'video' : 'videos'}.
-            {/* NOT the mock's "26 of 1,388 category videos · first heard
-                September": that denominator is a MONTH figure attached to a
-                count of THIS UPDATE, which is two units in one sentence. The
-                update's own count is what this loader measured. */}
+        {i.newThemes.length > 0 ? (
+          <NewBlock mode={mode}>
+            {i.newThemes.map((t) => <NewTheme key={t.label} theme={t} mode={mode} />)}
           </NewBlock>
-        ))}
+        ) : null}
 
         {i.rivalPosts.length > 0 ? (
           i.rivalPosts.map((p) => (

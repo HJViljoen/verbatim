@@ -339,6 +339,27 @@ describe('WR3 · what came in this week', () => {
     expect(text).toContain('the month so far holds 2,359 videos, dated by when people wrote')
   })
 
+  // ONE TINTED BAND, NOT ONE PER THEME, AND THE PILL IS THE 20% TINT.
+  // `NewBlock` was rendered per theme, so three new themes drew three
+  // identical full-width bands each with its own "New" pill where the artboard
+  // draws exactly one; and the pill painted `EMAIL.mixed` (#E6B03C), a data
+  // hue from design-system §2 spent on a label chip, where the artboard's is
+  // `rgba(230,176,60,.20)` — `EMAIL.mixedTint`, the same constant
+  // `BlockMovement`'s chips on this page already use.
+  it('draws one New block for however many themes are in it, in the tint', () => {
+    const data = weeklyFixture()
+    expect(data.incoming.newThemes.length).toBeGreaterThan(1)
+    const email = render(WEEKLY_BLOCKS['weekly.incoming'].render(data, 'email', ctx))
+    expect(email.split(EMAIL.mixedTint).length - 1).toBe(1)
+    expect(email).not.toContain(EMAIL.mixed.toLowerCase())
+    expect(email.split('>New<').length - 1).toBe(1)
+    const app = render(WEEKLY_BLOCKS['weekly.incoming'].render(data, 'app', ctx))
+    expect(app.split('bg-inner').length - 1).toBe(1)
+    expect(app).toContain('bg-mixed/20')
+    // Every theme is still in it.
+    for (const t of data.incoming.newThemes) expect(markupText(app)).toContain(t.label)
+  })
+
   // THE ARTBOARD'S BIG-NUMBER TIER (weekly.s3.counts). `text.figure` had been
   // defined since Stage 3 and used by nothing on this artefact, so four counts
   // collapsed into one 12.5px clause.
