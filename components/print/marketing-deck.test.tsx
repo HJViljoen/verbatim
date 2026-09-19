@@ -75,7 +75,7 @@ describe('the sheets', () => {
     expect(documentCoverSheet(data)).toBe(false)
     expect(documentViewerPages(data)).toBe(sheets(data).length)
     const html = render(<DocumentDeck data={data} date="28 Sep 2026" />)
-    expect(html).not.toContain('text-[58px]')
+    expect(html).not.toContain('data-sheet="cover"')
     expect(html).toContain('Marketing brief')
     expect(html).toContain('1 / 9')
   })

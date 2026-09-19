@@ -36,8 +36,8 @@ import type { FigureTable } from '@/lib/reports/types'
 // evidence on paper: the workings never reach this component.
 //
 // The pages (T6, 2026-08-31, second pass after Heinrich's read): a research
-// report composed to fill a landscape sheet. Type at 15–17px on the 1168px
-// body (about 11pt on paper), structured blocks with hairlines, pills for
+// report composed to fill a landscape sheet. Type on the ladder THE DECK'S
+// BODY TYPE sets out below, structured blocks with hairlines, pills for
 // audiences, bars for shares, a tinted inner block for the pull quote.
 // NO blurred shadow on paper: Chrome prints a box-shadow as a bitmap that
 // some PDF viewers draw as a grey slab (Heinrich's screenshots, 2026-08-30).
@@ -62,12 +62,34 @@ const CARD = 'rounded-lg border border-border bg-tile'
 // ContentBrief 12px ×43 and 13px ×17; LeadershipBrief 12px ×18 and 12.5px
 // ×12). A drawing is a measurement and a sentence about it is not, so the
 // drawings were followed. The page LEADS are untouched (the "In short"
-// summary at 17px, the section intros at 15–16px) — §5 names those too, and
-// the 15–17px nodes those artboards do carry are few and are the leads
-// themselves (SalesBrief: 11 at 15.5px, 9 at 15px, 3 at 17px, against 59 at
-// 12.5–13px). Only the body moved.
-const BODY = 'text-[13px] leading-[1.5] text-foreground'
-const BODY_SM = 'text-[12.5px] leading-[1.45] text-foreground'
+// summary, the section intros) — §5 names those too, and the large nodes
+// those artboards do carry are few and are the leads themselves.
+//
+// AND THE DRAWINGS WERE READ IN THE WRONG UNITS, WHICH IS WHY EVERY TIER MOVED
+// AGAIN (Block D wave 3, `sales`-1). An artboard sheet IS the page: it is laid
+// out at 1123px, which is 297mm at 96dpi, so every font-size in it is the size
+// the glyph PRINTS at. A deck sheet is not: `.vb-slide-body` lays the content
+// out at 1168px and applies `zoom: .902` (app/globals.css), so a size written
+// here prints at .902 × itself. Writing the artboard's 13px as 13px here
+// printed it at 11.73px — the whole deck set 9.8% under its own spec, which is
+// what the review measured (the build's tiers 8.57–11.73px against the
+// artboard's 9.5–15.5px, its figures 11.73px against 14px).
+//
+// So every tier in this file is the artboard's number divided by .902, and the
+// ladder here is the source side of that: 10.5 · 11.5 · 12 · 12.5 · 13.5 · 14 ·
+// 14.5 · 15 · 15.5 · 16 · 16.5 · 17 · 17.5 · 18.5 · 19 prints as 9.5 · 10.5 · 11 ·
+// 11.5 · 12 · 12.5 · 13 · 13.5 · 14 · 14.5 · 15 · 15.5 · 16 · 16.5 · 17. The
+// display sizes go the same way: 42px prints the artboard's 38px numeral and
+// 64.5px its 58px title. THE RULE, for anything added later: pick the size off
+// the artboard and divide by .902 — never paste the artboard's number in.
+//
+// What this does NOT settle is the 8pt floor `components/print/slide.tsx`
+// names. The artboard's own smallest tiers are 9.5px and 10px, which print at
+// 7.1pt and 7.5pt, so the floor and the spec disagree at the bottom of the
+// ladder. That is the same class of question as SH19 and it is Heinrich's, not
+// a fixer's: this pass puts the deck ON its spec and says where the spec sits.
+const BODY = 'text-[14.5px] leading-[1.5] text-foreground'
+const BODY_SM = 'text-[14px] leading-[1.45] text-foreground'
 
 /**
  * A caller's sentence with its `[[key]]` figures substituted (D13).
@@ -75,7 +97,7 @@ const BODY_SM = 'text-[12.5px] leading-[1.45] text-foreground'
  * THE FACE IS THE CALLER'S, AND IT IS MONO BY DEFAULT. Plex Mono is the
  * product's identity for a count and it is right wherever the number is the
  * element — a tile's value, a card's figure, a headline's count. Inside
- * RUNNING PROSE at 16px it is not: Plex Mono sets a comma in a full advance,
+ * RUNNING PROSE it is not: Plex Mono sets a comma in a full advance,
  * so "1,388" reads as three tokens in the middle of a sentence ("across 1 ,
  * 388 category videos" on the cover, measured against the artboard, which sets
  * the same figure in Plex Sans in its paragraph and in Plex Mono on its tile —
@@ -153,7 +175,7 @@ export function DeckSpark({ values, months, color = 'var(--primary)', width = 10
   const read = months.filter((_, i) => values[i] != null)
   if (read.length < 3) {
     return (
-      <p className="font-mono text-[10.5px] text-muted-foreground">
+      <p className="font-mono text-[11.5px] text-muted-foreground">
         {read.length === 0 ? 'no month reads'
           : read.length === 1 ? `${read[0]} only`
           : `${read[0]} → ${read[read.length - 1]} only`}
@@ -168,7 +190,7 @@ export function DeckSpark({ values, months, color = 'var(--primary)', width = 10
   // is what makes that true rather than intended. Unreachable from a caller
   // that hands over a series and its own months — which is the point.
   if (months.length !== values.length) {
-    return <p className="font-mono text-[10.5px] text-muted-foreground">the months and the readings do not line up</p>
+    return <p className="font-mono text-[11.5px] text-muted-foreground">the months and the readings do not line up</p>
   }
   return (
     <span className={`flex flex-col gap-1 ${className ?? ''}`}>
@@ -179,7 +201,7 @@ export function DeckSpark({ values, months, color = 'var(--primary)', width = 10
           ("Price 27%", "Durability 22%"). The value is printed only for a
           slot that carries a reading, because an end month with a gap in it
           is not a point on this line. */}
-      <span className="flex justify-between gap-2 font-mono text-[9.5px] text-muted-foreground">
+      <span className="flex justify-between gap-2 font-mono text-[10.5px] text-muted-foreground">
         <span>{months[0]}{endLabel(values[0], unit)}</span>
         <span>{months[months.length - 1]}{endLabel(values[values.length - 1], unit)}</span>
       </span>
@@ -195,7 +217,7 @@ const endLabel = (v: number | null | undefined, unit?: 'pct'): string =>
 /** An eyebrow: mono, uppercase, with a short rule in the accent. */
 function Eyebrow({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <p className={`flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground ${className}`}>
+    <p className={`flex items-center gap-2 font-mono text-[12px] uppercase tracking-[0.08em] text-muted-foreground ${className}`}>
       <span className="inline-block h-[2px] w-4 rounded-full bg-primary" aria-hidden />
       <span>{children}</span>
     </p>
@@ -209,7 +231,7 @@ function Pill({ tone, children }: { tone: 'you' | 'comp' | 'cat' | 'new' | 'plai
     : tone === 'new' ? 'bg-warning/20 text-foreground'
     : tone === 'plain' ? 'border border-border text-secondary-foreground'
     : 'bg-inner text-secondary-foreground'
-  return <span className={`inline-flex items-center rounded-full px-2.5 py-[3px] font-mono text-[11px] leading-none ${cls}`}>{children}</span>
+  return <span className={`inline-flex items-center rounded-full px-2.5 py-[3px] font-mono text-[12px] leading-none ${cls}`}>{children}</span>
 }
 
 function audiencePills(audiences: string, company: string) {
@@ -267,7 +289,7 @@ const footerStamp = (data: DocumentSnapshotData): string | null =>
 
 function BriefFooter({ company, date, stamp, note }: { company: string; date: string; stamp: string | null; note?: string | null }) {
   return (
-    <p className="truncate font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
+    <p className="truncate font-mono text-[10.5px] leading-[1.35] text-muted-foreground">
       <span className="text-secondary-foreground">Created by {company} with Verbatim</span>
       <span aria-hidden> · </span>
       <span>{stamp ?? date}</span>
@@ -297,21 +319,25 @@ function DocumentCover({ data, pages, contents, date }: {
   const summaryText = summary?.text ?? ''
   const stamp = data.reading ? `${data.reading.monthLabel} · ${data.company} · as at ${shortDate(data.reading.readingAt)}` : data.period
   return (
-    <section className="vb-slide">
+    // THE COVER SAYS SO. Three test files asked "is this the cover?" by
+    // grepping the markup for the title's font-size, which made a type pass
+    // (wave 3, `sales`-1) read as a missing cover sheet. A sheet declares what
+    // it is; a size is not an identity.
+    <section className="vb-slide" data-sheet="cover">
       <div className="vb-slide-body">
         <div className="grid h-full min-h-0 grid-cols-[7fr_5fr] items-center gap-x-12">
           <div className="flex flex-col gap-[18px]">
             <div className="flex flex-col gap-3.5">
               {/* VERTICAL, 3 × 48. The build drew it lying down. */}
               <span className="inline-block h-12 w-[3px] rounded-full bg-primary" aria-hidden />
-              <h1 className="max-w-[16ch] text-[58px] font-semibold leading-[1.05] tracking-[-0.025em] text-foreground [text-wrap:balance]">{data.title}</h1>
-              <p className="font-mono text-[13px] text-muted-foreground">
+              <h1 className="max-w-[16ch] text-[64.5px] font-semibold leading-[1.05] tracking-[-0.025em] text-foreground [text-wrap:balance]">{data.title}</h1>
+              <p className="font-mono text-[14.5px] text-muted-foreground">
                 {stamp} · {pages} {pages === 1 ? 'page' : 'pages'}
               </p>
             </div>
             {summary && summaryText && (
-              <BlockSlot block={summary} textClass="max-w-[66ch] text-[16px] leading-[1.5] text-foreground">
-                <Paragraphs text={summaryText} figures={data.figures} face="sans" className="max-w-[66ch] text-[16px] leading-[1.5] text-foreground" />
+              <BlockSlot block={summary} textClass="max-w-[66ch] text-[17.5px] leading-[1.5] text-foreground">
+                <Paragraphs text={summaryText} figures={data.figures} face="sans" className="max-w-[66ch] text-[17.5px] leading-[1.5] text-foreground" />
               </BlockSlot>
             )}
             {contents.length > 0 && (
@@ -319,8 +345,8 @@ function DocumentCover({ data, pages, contents, date }: {
                 <Eyebrow>In this brief</Eyebrow>
                 <ol className="flex flex-col gap-[5px]">
                   {contents.map((c) => (
-                    <li key={c.page} className="flex text-[14.5px] font-medium leading-[1.35] text-foreground">
-                      <span className="w-6 shrink-0 font-mono text-[13px] font-normal tabular-nums text-primary">{c.page}</span>
+                    <li key={c.page} className="flex text-[16px] font-medium leading-[1.35] text-foreground">
+                      <span className="w-6 shrink-0 font-mono text-[14.5px] font-normal tabular-nums text-primary">{c.page}</span>
                       <span>{c.title}</span>
                     </li>
                   ))}
@@ -338,7 +364,7 @@ function DocumentCover({ data, pages, contents, date }: {
           sheet with no page number and no "Created by". */}
       <footer className="flex shrink-0 items-baseline justify-between gap-4 border-t border-border/70 pt-1.5">
         <div className="min-w-0 flex-1"><BriefFooter company={data.company} date={date} stamp={footerStamp(data)} /></div>
-        <span className="shrink-0 font-mono text-[9.5px] text-muted-foreground">1 / {pages}</span>
+        <span className="shrink-0 font-mono text-[10.5px] text-muted-foreground">1 / {pages}</span>
       </footer>
     </section>
   )
@@ -416,22 +442,22 @@ function StatTile({ value, label, verdict, note, level = false, word = false }: 
       <>
         {/* A refusal at the artboard's numeral scale reads as a measurement
             (mock-gap §6 D2), so it is set as a sentence. */}
-        <p className="text-[19px] font-medium leading-[1.2] tracking-[-0.01em] text-secondary-foreground">{value}</p>
-        <p className="mt-2 text-[12.5px] leading-[1.35] text-muted-foreground">{label}</p>
+        <p className="text-[21px] font-medium leading-[1.2] tracking-[-0.01em] text-secondary-foreground">{value}</p>
+        <p className="mt-2 text-[14px] leading-[1.35] text-muted-foreground">{label}</p>
       </>
     )
     : (
       <>
-        <p data-copy="figure" className="font-mono text-[38px] font-medium leading-none tracking-[-0.02em] tabular-nums text-foreground">
+        <p data-copy="figure" className="font-mono text-[42px] font-medium leading-none tracking-[-0.02em] tabular-nums text-foreground">
           {/* The arrow is set in the SANS face at two thirds the numeral's
               size: IBM Plex Mono draws ▲ at the full advance width of a digit,
               so a 38px mono arrow is twice the artboard's and drags the figure
               beside it off the tile. */}
           {/^[\u25b2\u25bc]/.test(value)
-            ? <><span className="font-sans text-[24px] align-[0.06em]">{value.slice(0, 1)}</span>{value.slice(1)}</>
+            ? <><span className="font-sans text-[26.5px] align-[0.06em]">{value.slice(0, 1)}</span>{value.slice(1)}</>
             : value}
         </p>
-        <p className="mt-2 text-[12.5px] leading-[1.35] text-muted-foreground">{label}</p>
+        <p className="mt-2 text-[14px] leading-[1.35] text-muted-foreground">{label}</p>
       </>
     )
   return (
@@ -440,7 +466,7 @@ function StatTile({ value, label, verdict, note, level = false, word = false }: 
       {(verdict || note) && (
         <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
           {verdict ? <ClaimBadge verdict={verdict} unit="pts" /> : null}
-          {note ? <span className="text-[11.5px] leading-[1.35] text-muted-foreground">{note}</span> : null}
+          {note ? <span className="text-[12.5px] leading-[1.35] text-muted-foreground">{note}</span> : null}
         </div>
       )}
     </div>
@@ -504,8 +530,8 @@ function SheetTitle({ data, pages }: { data: DocumentSnapshotData; pages: number
   return (
     <div className="flex flex-col gap-2">
       <span className="inline-block h-[3px] w-14 rounded-full bg-primary" aria-hidden />
-      <h1 className="max-w-[24ch] text-[26px] font-semibold leading-[1.1] tracking-[-0.02em] text-foreground [text-wrap:balance]">{data.title}</h1>
-      <p className="font-mono text-[11px] text-muted-foreground">
+      <h1 className="max-w-[24ch] text-[29px] font-semibold leading-[1.1] tracking-[-0.02em] text-foreground [text-wrap:balance]">{data.title}</h1>
+      <p className="font-mono text-[12px] text-muted-foreground">
         {stamp} · {data.company} · {pages} {pages === 1 ? 'page' : 'pages'}
       </p>
     </div>
@@ -548,7 +574,7 @@ function OverviewPage({ page, data, title, pages }: { page: DocPage; data: Docum
         {!onCover && (
           <div className="flex flex-col gap-3">
             {!title && <Eyebrow>In short</Eyebrow>}
-            {summary?.text && <BlockSlot block={summary} textClass="max-w-[66ch] text-[17px] leading-[1.55] text-foreground"><Paragraphs text={summary.text} figures={f} className="max-w-[66ch] text-[17px] leading-[1.55] text-foreground" /></BlockSlot>}
+            {summary?.text && <BlockSlot block={summary} textClass="max-w-[66ch] text-[19px] leading-[1.55] text-foreground"><Paragraphs text={summary.text} figures={f} className="max-w-[66ch] text-[19px] leading-[1.55] text-foreground" /></BlockSlot>}
           </div>
         )}
         {findings.length > 0 && (
@@ -557,15 +583,15 @@ function OverviewPage({ page, data, title, pages }: { page: DocPage; data: Docum
             <ol className="flex flex-col gap-3.5">
               {findings.map((c, i) => (
                 <li key={c.id} className="flex items-baseline gap-4">
-                  <span className="w-6 shrink-0 font-mono text-[13px] tabular-nums text-primary">{i + 1}</span>
+                  <span className="w-6 shrink-0 font-mono text-[14.5px] tabular-nums text-primary">{i + 1}</span>
                   <div className="flex min-w-0 flex-col gap-1.5">
-                    <span className="text-[16px] font-medium leading-[1.4] text-foreground"><Figured text={c.headline} figures={f} /></span>
+                    <span className="text-[17.5px] font-medium leading-[1.4] text-foreground"><Figured text={c.headline} figures={f} /></span>
                     {/* THE EVIDENCE TRAVELS WITH THE HEADLINE. Every count here
                         is the finding page's own meta, already printed on its
                         sheet — the list indexes the argument rather than
                         restating it, and a sheet that was 85% white space on a
                         one-finding brief carries what it is a list OF. */}
-                    <p className="flex flex-wrap items-baseline gap-x-1.5 font-mono text-[11px] leading-[1.4] text-muted-foreground">
+                    <p className="flex flex-wrap items-baseline gap-x-1.5 font-mono text-[12px] leading-[1.4] text-muted-foreground">
                       <span>
                         page <span className="tabular-nums text-foreground">{pageOf(c.id)}</span>
                         {' · '}<span className="tabular-nums text-foreground">{fmtCount(c.conversations)}</span> conversations
@@ -587,7 +613,7 @@ function OverviewPage({ page, data, title, pages }: { page: DocPage; data: Docum
             </ol>
           </div>
         )}
-        <p className="mt-auto max-w-[70ch] text-[12px] leading-[1.45] text-muted-foreground">{CALIBRATION_NOTE}</p>
+        <p className="mt-auto max-w-[70ch] text-[13.5px] leading-[1.45] text-muted-foreground">{CALIBRATION_NOTE}</p>
       </div>
       <div className="flex min-h-0 flex-col gap-4">
         {/* THE TILES BELONG TO WHICHEVER SHEET CARRIES THE SUMMARY. They are
@@ -599,9 +625,9 @@ function OverviewPage({ page, data, title, pages }: { page: DocPage; data: Docum
         {notSure.length > 0 && (
           <div className="rounded-lg bg-inner px-5 py-4">
             <Eyebrow className="mb-2">Not settled this update</Eyebrow>
-            <BlockSlot block={notSureBlock!} textClass="text-[13px] leading-[1.45] text-secondary-foreground">
+            <BlockSlot block={notSureBlock!} textClass="text-[14.5px] leading-[1.45] text-secondary-foreground">
               <ul className="flex flex-col gap-1.5">
-                {notSure.slice(0, 3).map((x, i) => <li key={i} className="text-[13px] leading-[1.45] text-secondary-foreground">{x}</li>)}
+                {notSure.slice(0, 3).map((x, i) => <li key={i} className="text-[14.5px] leading-[1.45] text-secondary-foreground">{x}</li>)}
               </ul>
             </BlockSlot>
           </div>
@@ -674,7 +700,7 @@ function FindingPage({ page, figures, company, lens }: { page: DocPage; figures:
   return (
     <div className="flex h-full min-h-0 flex-col gap-5">
       <div className="flex items-end justify-between gap-8">
-        {headline && <BlockSlot block={headline} textClass="max-w-[30ch] text-[32px] font-semibold leading-[1.12] tracking-[-0.02em] text-foreground"><h2 className="max-w-[30ch] text-[32px] font-semibold leading-[1.12] tracking-[-0.02em] text-foreground [text-wrap:balance]"><Figured text={headline.text} figures={figures} /></h2></BlockSlot>}
+        {headline && <BlockSlot block={headline} textClass="max-w-[30ch] text-[35.5px] font-semibold leading-[1.12] tracking-[-0.02em] text-foreground"><h2 className="max-w-[30ch] text-[35.5px] font-semibold leading-[1.12] tracking-[-0.02em] text-foreground [text-wrap:balance]"><Figured text={headline.text} figures={figures} /></h2></BlockSlot>}
         <div className="flex shrink-0 flex-wrap justify-end gap-1.5 pb-1">
           {audiencePills(page.meta?.audiences ?? '', company)}
           {history && <Pill tone={history.startsWith('new') ? 'new' : 'plain'}>{history}</Pill>}
@@ -696,7 +722,7 @@ function FindingPage({ page, figures, company, lens }: { page: DocPage; figures:
             card whose content fills it; the artboard's card is sized to its
             content and lets the SHEET carry the slack. */}
         <div className={`${CARD} flex min-h-0 flex-col gap-4 self-start px-6 py-5`}>
-          <p className="font-mono text-[12px] text-muted-foreground">
+          <p className="font-mono text-[13.5px] text-muted-foreground">
             <span className="text-foreground">{fmtCount(conversations)}</span> conversations · <span className="text-foreground">{strands}</span> strands of the research
           </p>
           {means?.text && (
@@ -721,10 +747,10 @@ function FindingPage({ page, figures, company, lens }: { page: DocPage; figures:
             </div>
           )}
           <div className="mt-1 flex flex-col gap-1.5 border-t border-border pt-3">
-            <p className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+            <p className="flex items-center gap-2 font-mono text-[12px] uppercase tracking-[0.08em] text-muted-foreground">
               Confidence <ConfidenceDots sure={sureWord} /> <span className="normal-case tracking-normal text-foreground">{sureWord}</span>
             </p>
-            {sureNote && <p className="text-[12.5px] leading-[1.45] text-muted-foreground">{sureNote}</p>}
+            {sureNote && <p className="text-[14px] leading-[1.45] text-muted-foreground">{sureNote}</p>}
           </div>
         </div>
       </div>
@@ -743,9 +769,9 @@ function ShareStrip({ data, name }: { data: DocumentSnapshotData; name: string }
   const max = Math.max(you, them, 1)
   const row = (label: string, pct: number, cls: string) => (
     <div className="flex items-center gap-3">
-      <span className="w-[92px] shrink-0 truncate text-[13px] text-foreground">{label}</span>
+      <span className="w-[92px] shrink-0 truncate text-[14.5px] text-foreground">{label}</span>
       <span className="h-[10px] flex-1"><span className={`block h-full rounded-[3px] ${cls}`} style={{ width: `${Math.max(2, (pct / max) * 100)}%` }} /></span>
-      <span className="w-[52px] text-right font-mono text-[13px] tabular-nums text-foreground">{pct}%</span>
+      <span className="w-[52px] text-right font-mono text-[14.5px] tabular-nums text-foreground">{pct}%</span>
     </div>
   )
   return (
@@ -785,8 +811,8 @@ function CompetitorPage({ page, figures, data }: { page: DocPage; figures: Figur
     <div className="flex h-full min-h-0 flex-col gap-5">
       <div className="flex items-start justify-between gap-8">
         <div className="flex flex-col gap-1.5">
-          <h2 className="text-[32px] font-semibold leading-[1.1] tracking-[-0.02em] text-foreground">{name}</h2>
-          <p className="text-[14px] text-muted-foreground">As their own videos{aboutShown ? ', other people’s videos' : ''} and their audience tell it this update{page.meta?.thin === 'true' ? ', on few videos, read with care' : ''}.</p>
+          <h2 className="text-[35.5px] font-semibold leading-[1.1] tracking-[-0.02em] text-foreground">{name}</h2>
+          <p className="text-[15.5px] text-muted-foreground">As their own videos{aboutShown ? ', other people’s videos' : ''} and their audience tell it this update{page.meta?.thin === 'true' ? ', on few videos, read with care' : ''}.</p>
         </div>
         <ShareStrip data={data} name={name} />
       </div>
@@ -846,9 +872,9 @@ function StandingBars({ data, parties }: { data: DocumentSnapshotData; parties: 
       <div className="flex flex-col gap-2.5">
         {rows.map((r) => (
           <div key={r.name} className="flex items-center gap-3">
-            <span className="w-[120px] shrink-0 truncate text-[13.5px] text-foreground">{r.name}</span>
+            <span className="w-[120px] shrink-0 truncate text-[15px] text-foreground">{r.name}</span>
             <span className="h-[11px] flex-1"><span className={`block h-full rounded-[3px] ${r.you ? 'bg-you' : 'bg-comp'}`} style={{ width: `${Math.max(2, (r.pct / max) * 100)}%` }} /></span>
-            <span className="w-[54px] text-right font-mono text-[13.5px] tabular-nums text-foreground">{r.pct}%</span>
+            <span className="w-[54px] text-right font-mono text-[15px] tabular-nums text-foreground">{r.pct}%</span>
           </div>
         ))}
       </div>
@@ -973,7 +999,7 @@ export function movementLines(data: DocumentSnapshotData): {
  */
 export function MovementLine({ line }: { line: ReturnType<typeof movementLines>[number] }) {
   return (
-    <dd className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[13.5px] leading-[1.4] text-foreground">
+    <dd className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[15px] leading-[1.4] text-foreground">
       <span {...(line.copy ? { 'data-copy': line.copy } : {})}>{line.value}</span>
       {line.verdict ? <MovementBadge verdict={line.verdict} unit="pts" good={line.good} /> : null}
       {line.count != null ? <CountBadge delta={line.count} good={line.good} /> : null}
@@ -998,9 +1024,9 @@ function ConcernField({ meta }: { meta: string }) {
       <ul className="flex flex-col gap-2">
         {rows.map((r) => (
           <li key={r.label} className="flex items-center gap-4">
-            <span className="w-[46px] shrink-0 text-right font-mono text-[14px] tabular-nums text-foreground">{fmtCount(r.total)}</span>
+            <span className="w-[46px] shrink-0 text-right font-mono text-[15.5px] tabular-nums text-foreground">{fmtCount(r.total)}</span>
             <span className="h-[8px] w-[92px] shrink-0 rounded-[3px] bg-neutral-seg"><span className="block h-full rounded-[3px] bg-primary" style={{ width: `${Math.max(6, (r.total / max) * 100)}%` }} /></span>
-            <span className="flex-1 truncate text-[14.5px] text-foreground">{r.label}</span>
+            <span className="flex-1 truncate text-[16px] text-foreground">{r.label}</span>
             {r.trajectory && <span className="shrink-0"><Pill tone={r.trajectory.startsWith('new') ? 'new' : 'plain'}>{r.trajectory}</Pill></span>}
           </li>
         ))}
@@ -1013,7 +1039,7 @@ function StandingPage({ page, data }: { page: DocPage; data: DocumentSnapshotDat
   const block = page.blocks.find((b) => b.field === 'standing')
   const parties = parseMeta<string[]>(page.meta?.parties, []).filter((x) => typeof x === 'string' && x)
   const moved = movementLines(data)
-  const READ = 'text-[17px] leading-[1.55] text-foreground'
+  const READ = 'text-[19px] leading-[1.55] text-foreground'
   return (
     <div className="grid h-full min-h-0 grid-cols-[7fr_5fr] gap-x-12">
       <div className="flex min-h-0 flex-col gap-6">
@@ -1030,7 +1056,7 @@ function StandingPage({ page, data }: { page: DocPage; data: DocumentSnapshotDat
           <dl className="grid grid-cols-[64px_1fr] gap-x-4 gap-y-2.5">
             {moved.map((m) => (
               <Fragment key={m.label}>
-                <dt className="pt-[2px] font-mono text-[11px] uppercase tracking-[0.06em] text-muted-foreground">{m.label}</dt>
+                <dt className="pt-[2px] font-mono text-[12px] uppercase tracking-[0.06em] text-muted-foreground">{m.label}</dt>
                 <MovementLine line={m} />
               </Fragment>
             ))}
@@ -1055,7 +1081,7 @@ const VERDICT_WORD: Record<string, { word: string; tone: 'you' | 'comp' | 'new' 
 function SayHearPage({ page, figures, company }: { page: DocPage; figures: FigureTable; company: string }) {
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
-      <p className="max-w-[92ch] text-[15px] leading-[1.5] text-secondary-foreground">
+      <p className="max-w-[92ch] text-[16.5px] leading-[1.5] text-secondary-foreground">
         {`What ${company} says in its own videos, set against what the conversation does with it. The verdict is the analysis’s; the reading is the researcher’s.`}
       </p>
       <ul className="grid min-h-0 grid-cols-2 items-start gap-6">
@@ -1065,11 +1091,11 @@ function SayHearPage({ page, figures, company }: { page: DocPage; figures: Figur
           return (
             <li key={b.id} className={`${CARD} flex min-h-0 flex-col gap-3 px-7 py-5`}>
               <div className="flex items-start justify-between gap-4">
-                <p className="max-w-[40ch] font-serif text-[17px] italic leading-[1.4] text-foreground">&ldquo;{b.label}&rdquo;</p>
+                <p className="max-w-[40ch] font-serif text-[19px] italic leading-[1.4] text-foreground">&ldquo;{b.label}&rdquo;</p>
                 {verdict && <span className="shrink-0"><Pill tone={verdict.tone}>{verdict.word}</Pill></span>}
               </div>
               {theySay && (
-                <p className="border-l-2 border-border pl-3.5 text-[13.5px] leading-[1.45] text-secondary-foreground">{theySay}</p>
+                <p className="border-l-2 border-border pl-3.5 text-[15px] leading-[1.45] text-secondary-foreground">{theySay}</p>
               )}
               {b.text && <BlockSlot block={b} textClass={BODY}><Paragraphs text={b.text} figures={figures} className={BODY} /></BlockSlot>}
             </li>
@@ -1090,7 +1116,7 @@ function AskedPage({ page }: { page: DocPage }) {
   const items = block?.items ?? []
   return (
     <div className="flex h-full min-h-0 flex-col gap-5">
-      <p className="max-w-[86ch] text-[16px] leading-[1.5] text-secondary-foreground">
+      <p className="max-w-[86ch] text-[17.5px] leading-[1.5] text-secondary-foreground">
         Questions the conversation puts and does not settle. Each is asked in the audience&rsquo;s own framing, not the company&rsquo;s; the note says what is behind it.
       </p>
       {block && (
@@ -1100,9 +1126,9 @@ function AskedPage({ page }: { page: DocPage }) {
               const m = /^["“]?([^:"”]+)["”]?:\s*(.+)$/.exec(x)
               return (
                 <li key={i} className="flex gap-4">
-                  <span className="w-5 shrink-0 pt-[3px] font-mono text-[13px] tabular-nums text-primary">{i + 1}</span>
+                  <span className="w-5 shrink-0 pt-[3px] font-mono text-[14.5px] tabular-nums text-primary">{i + 1}</span>
                   <div className="flex flex-col gap-1">
-                    <p className="text-[16.5px] font-medium leading-[1.35] text-foreground">{m ? `${m[1].trim()}?`.replace(/\?\?$/, '?') : x}</p>
+                    <p className="text-[18.5px] font-medium leading-[1.35] text-foreground">{m ? `${m[1].trim()}?`.replace(/\?\?$/, '?') : x}</p>
                     {m && <p className={BODY_SM}>{m[2].replace(/^./, (c) => c.toUpperCase())}</p>}
                   </div>
                 </li>
@@ -1124,20 +1150,20 @@ function PersonaCard({ block, figures, lens }: { block: DocBlock; figures: Figur
   return (
     <div className={`${CARD} flex min-h-0 flex-col gap-3 px-7 py-5`}>
       <div className="flex flex-col gap-1.5">
-        <p className="text-[22px] font-semibold tracking-[-0.015em] text-foreground">{block.label}</p>
-        {one && <p className="font-serif text-[15px] italic leading-[1.5] text-secondary-foreground">{one}</p>}
+        <p className="text-[24.5px] font-semibold tracking-[-0.015em] text-foreground">{block.label}</p>
+        {one && <p className="font-serif text-[16.5px] italic leading-[1.5] text-secondary-foreground">{one}</p>}
       </div>
       <div className="flex flex-col gap-3">
         {rest.map((it, i) => (
           <div key={i} className="flex gap-4">
-            <p className="w-[104px] shrink-0 pt-[3px] font-mono text-[11px] uppercase leading-[1.3] tracking-[0.08em] text-muted-foreground">{PERSONA_LABELS[i + 1]}</p>
-            <p className="text-[13.5px] leading-[1.45] text-foreground">{it}</p>
+            <p className="w-[104px] shrink-0 pt-[3px] font-mono text-[12px] uppercase leading-[1.3] tracking-[0.08em] text-muted-foreground">{PERSONA_LABELS[i + 1]}</p>
+            <p className="text-[15px] leading-[1.45] text-foreground">{it}</p>
           </div>
         ))}
         {block.text && (
           <div className="flex gap-4 border-t border-border pt-3">
-            <p className="w-[104px] shrink-0 pt-[3px] font-mono text-[11px] uppercase tracking-[0.08em] text-primary">{lens.short}</p>
-            <BlockSlot block={block} textClass="text-[13.5px] font-medium leading-[1.45] text-foreground"><p className="text-[13.5px] font-medium leading-[1.45] text-foreground"><Figured text={block.text} figures={figures} /></p></BlockSlot>
+            <p className="w-[104px] shrink-0 pt-[3px] font-mono text-[12px] uppercase tracking-[0.08em] text-primary">{lens.short}</p>
+            <BlockSlot block={block} textClass="text-[15px] font-medium leading-[1.45] text-foreground"><p className="text-[15px] font-medium leading-[1.45] text-foreground"><Figured text={block.text} figures={figures} /></p></BlockSlot>
           </div>
         )}
       </div>
@@ -1160,14 +1186,14 @@ function LanguagePage({ page }: { page: DocPage }) {
   const items = careBlock?.items ?? []
   return (
     <div className="flex h-full min-h-0 flex-col gap-5">
-      <p className="max-w-[80ch] text-[16px] leading-[1.5] text-secondary-foreground">Words and claims the conversation pushes back on or contradicts. Each is a phrase a buyer will hear as a promise; the note says what the audience already knows about it.</p>
+      <p className="max-w-[80ch] text-[17.5px] leading-[1.5] text-secondary-foreground">Words and claims the conversation pushes back on or contradicts. Each is a phrase a buyer will hear as a promise; the note says what the audience already knows about it.</p>
       <BlockSlot block={careBlock!} textClass={BODY_SM}>
       <ul className="grid grid-cols-2 gap-5">
         {items.map((x, i) => {
           const m = /^["“]?([^:"”]+)["”]?:\s*(.+)$/.exec(x)
           return (
             <li key={i} className={`${CARD} flex flex-col gap-1.5 px-6 py-4`}>
-              <p className="flex items-center gap-2.5 text-[18px] font-semibold text-foreground">
+              <p className="flex items-center gap-2.5 text-[20px] font-semibold text-foreground">
                 <span className="inline-block h-[10px] w-[10px] shrink-0 rounded-full bg-warning" aria-hidden />
                 <span>{m ? m[1].trim() : x}</span>
               </p>
@@ -1229,8 +1255,8 @@ function SwitchingPage({ data }: { data: DocumentSnapshotData }) {
         <div className="flex items-end gap-6">
           <div className="flex min-w-0 flex-col gap-1.5">
             <span className="flex items-baseline gap-2">
-              <span data-copy="figure" className="font-mono text-[38px] font-medium leading-none tracking-[-0.02em] tabular-nums text-foreground">{fmtCount(f.pool)}</span>
-              <span className="text-[12px] font-medium text-muted-foreground">{f.pool === 1 ? 'video' : 'videos'}</span>
+              <span data-copy="figure" className="font-mono text-[42px] font-medium leading-none tracking-[-0.02em] tabular-nums text-foreground">{fmtCount(f.pool)}</span>
+              <span className="text-[13.5px] font-medium text-muted-foreground">{f.pool === 1 ? 'video' : 'videos'}</span>
             </span>
             {/* A COUNT, AND NO "of N" (D8). The artboard prints "12 of 1,388
                 category videos", which is a numerator over somebody else's
@@ -1240,7 +1266,7 @@ function SwitchingPage({ data }: { data: DocumentSnapshotData }) {
                 it is printed as the count it is and the population is named in
                 words. The SPLIT below has one — the pool itself — and carries
                 it. */}
-            <p className="text-[12.5px] text-muted-foreground">of {data.company}&rsquo;s own videos this month, and each of them also named a tracked rival</p>
+            <p className="text-[14px] text-muted-foreground">of {data.company}&rsquo;s own videos this month, and each of them also named a tracked rival</p>
           </div>
           {/* The badge, and nothing beside it. The mock writes "no earlier
               figure for this one"; the closed vocabulary's own word for that
@@ -1256,7 +1282,7 @@ function SwitchingPage({ data }: { data: DocumentSnapshotData }) {
             <span className="block h-full rounded-l-full bg-primary" style={{ width: `${pct(f.toward.k)}%` }} />
             <span className="block h-full rounded-r-full bg-negative" style={{ width: `${pct(f.away.k)}%` }} />
           </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-muted-foreground">
             {/* THE LEGEND IS NOT A DOTTED FIGURE. The artboard's dotted rule
                 marks a number whose denominator is spelled out beside it; in a
                 legend the "of 12" IS the sentence, and underlining it twice
@@ -1271,7 +1297,7 @@ function SwitchingPage({ data }: { data: DocumentSnapshotData }) {
               <span data-copy="level">Away from {data.company} <span className="font-mono tabular-nums text-foreground">{fmtCount(f.away.k)}</span> of <span className="font-mono tabular-nums text-foreground">{fmtCount(f.pool)}</span></span>
             </span>
           </div>
-          {f.unread && <p className="text-[12.5px] leading-[1.45] text-muted-foreground">{f.unread}</p>}
+          {f.unread && <p className="text-[14px] leading-[1.45] text-muted-foreground">{f.unread}</p>}
         </div>
 
         {/* THE BASIS SITS AT THE FOOT, where the artboard's confidence rail
@@ -1282,9 +1308,9 @@ function SwitchingPage({ data }: { data: DocumentSnapshotData }) {
         <div className="mt-auto flex flex-col gap-2 border-t border-border/70 pt-3">
           {/* THE BASIS, BESIDE THE NUMBER. A third clock on a month-stamped
               sheet, and a reader who is not told will read it as the month's. */}
-          <p className="text-[12.5px] leading-[1.45] text-muted-foreground">Counted over {f.audienceLabel}, {f.basis}.</p>
+          <p className="text-[14px] leading-[1.45] text-muted-foreground">Counted over {f.audienceLabel}, {f.basis}.</p>
           {/* The one thing the artboard asks for that nothing measured. */}
-          <p className="text-[12.5px] leading-[1.45] text-muted-foreground">
+          <p className="text-[14px] leading-[1.45] text-muted-foreground">
             Which way a video leaned is read from what was stored about the video, not from any one comment under it, so no quote on this sheet is labelled toward or away.
           </p>
         </div>
@@ -1292,7 +1318,7 @@ function SwitchingPage({ data }: { data: DocumentSnapshotData }) {
 
       <div className={`${CARD} flex min-h-0 flex-col gap-3.5 px-6 py-5`}>
         <Eyebrow>How to read these</Eyebrow>
-        <p className="font-mono text-[12px] leading-[1.5] text-muted-foreground">
+        <p className="font-mono text-[13.5px] leading-[1.5] text-muted-foreground">
           <span className="text-foreground">{fmtCount(f.toward.k)}</span> toward · <span className="text-foreground">{fmtCount(f.away.k)}</span> away · <span className="text-foreground">{fmtCount(f.neither.k)}</span> neither · <span className="text-foreground">{fmtCount(f.pool)}</span> in all
         </p>
         {data.slideFigures?.crosscheck && (
@@ -1303,7 +1329,7 @@ function SwitchingPage({ data }: { data: DocumentSnapshotData }) {
           {/* `measurement_changed` rides this figure by construction
               (figures.ts): `videos.sentiment` is the one production column two
               writers have written with two meanings. */}
-          <p className="text-[12.5px] leading-[1.45] text-muted-foreground">
+          <p className="text-[14px] leading-[1.45] text-muted-foreground">
             What was stored about each video. That column has been written by two different readings of tone, so the split is a lead rather than a rule.
           </p>
         </div>
@@ -1446,10 +1472,10 @@ function ScriptedPage({ data }: { data: DocumentSnapshotData }) {
   if (lines.length === 0) return null
   const list = (label: string, rows: { label: string; value: { k: number; n: number } }[]) => (
     <>
-      <p className="font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">{label}</p>
+      <p className="font-mono text-[11.5px] uppercase tracking-[0.06em] text-muted-foreground">{label}</p>
       <ul className="flex flex-col gap-[7px]">
         {rows.map((b, i) => (
-          <li key={i} className="flex gap-2.5 text-[13px] leading-[1.45] text-foreground">
+          <li key={i} className="flex gap-2.5 text-[14.5px] leading-[1.45] text-foreground">
             <span className="mt-[7px] inline-block h-[6px] w-[6px] shrink-0 rounded-full bg-primary" aria-hidden />
             <span>{b.label} — <Counted k={fmtCount(b.value.k)} n={fmtCount(b.value.n)} of="videos" /></span>
           </li>
@@ -1468,14 +1494,14 @@ function ScriptedPage({ data }: { data: DocumentSnapshotData }) {
       {lines.slice(0, 3).map((line, i) => (
         <div key={i} className={`${CARD} flex min-h-0 flex-col gap-3 px-[22px] py-5`}>
           <div className="flex flex-col gap-1">
-            <h2 className="text-[15.5px] font-semibold text-foreground">{line.objection.label}</h2>
-            <p className="text-[12.5px] text-muted-foreground">
+            <h2 className="text-[17px] font-semibold text-foreground">{line.objection.label}</h2>
+            <p className="text-[14px] text-muted-foreground">
               <Counted k={fmtCount(line.objection.value.k)} n={fmtCount(line.objection.value.n)} of="videos" />
             </p>
           </div>
-          <p className="font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">Say this</p>
+          <p className="font-mono text-[11.5px] uppercase tracking-[0.06em] text-muted-foreground">Say this</p>
           {line.say
-            ? <blockquote className="m-0 rounded-md bg-inner px-3.5 py-3 font-serif text-[14px] italic leading-[1.5] text-secondary-foreground">{line.say}</blockquote>
+            ? <blockquote className="m-0 rounded-md bg-inner px-3.5 py-3 font-serif text-[15.5px] italic leading-[1.5] text-secondary-foreground">{line.say}</blockquote>
             : <p className={BODY_SM}>No sentence has been written for this one yet. The counts under it are the reading; the line to say is not something this brief will make up.</p>}
           {line.because.length > 0 && list('Because', line.because)}
           {line.alsoRunning.length > 0 && list('Also running this month', line.alsoRunning)}
@@ -1487,7 +1513,7 @@ function ScriptedPage({ data }: { data: DocumentSnapshotData }) {
               <QuoteBlock quote={line.quote} mode="print" />
             </div>
           )}
-          <p className="border-t border-border pt-2.5 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">
+          <p className="border-t border-border pt-2.5 font-mono text-[11.5px] leading-[1.4] text-muted-foreground">
             {line.objection.source === 'kind'
               ? 'Counted as a kind of thing said, over the whole month — not as a theme of the register.'
               : 'Counted as a theme of the register.'}
@@ -1587,8 +1613,8 @@ function NumbersCard({ data }: { data: DocumentSnapshotData }) {
       <dl className="grid grid-cols-[130px_1fr] gap-x-4 gap-y-2.5">
         {[...rows, ...extra].map(([k, v]) => (
           <Fragment key={k}>
-            <dt className="pt-[3px] font-mono text-[11px] uppercase tracking-[0.06em] text-muted-foreground">{k}</dt>
-            <dd className="text-[14px] leading-[1.4] text-foreground">{v}</dd>
+            <dt className="pt-[3px] font-mono text-[12px] uppercase tracking-[0.06em] text-muted-foreground">{k}</dt>
+            <dd className="text-[15.5px] leading-[1.4] text-foreground">{v}</dd>
           </Fragment>
         ))}
       </dl>
@@ -1597,7 +1623,7 @@ function NumbersCard({ data }: { data: DocumentSnapshotData }) {
           on a different clock from the sheet they sit on, and `basis` is the
           clause that says which (D15). */}
       {data.reading?.method && (
-        <p className="mt-4 border-t border-border pt-3 font-mono text-[10.5px] leading-[1.5] text-muted-foreground">
+        <p className="mt-4 border-t border-border pt-3 font-mono text-[11.5px] leading-[1.5] text-muted-foreground">
           {[data.reading.method.basis, data.reading.method.language, data.reading.method.redditCap, data.reading.method.privacy]
             .filter(Boolean)
             .join(' ')}
@@ -1607,7 +1633,7 @@ function NumbersCard({ data }: { data: DocumentSnapshotData }) {
           a month reading: the delivery record is dated by the run, and says so
           in its own words (E-marketing, `mkt.p7.delivery`). */}
       {data.method.delivery && (
-        <p className="mt-3 border-t border-border pt-3 text-[12.5px] leading-[1.45] text-muted-foreground">{data.method.delivery}</p>
+        <p className="mt-3 border-t border-border pt-3 text-[14px] leading-[1.45] text-muted-foreground">{data.method.delivery}</p>
       )}
     </div>
   )
@@ -1631,16 +1657,16 @@ function CannotTell({ data }: { data: DocumentSnapshotData }) {
   const c = data.slideFigures?.cannotTell ?? null
   return (
     <div className="mt-auto flex flex-col gap-1.5 rounded-lg bg-inner px-[18px] py-3.5">
-      <p className="font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">What this brief cannot tell you</p>
-      <p className="text-[12.5px] leading-[1.4] text-secondary-foreground">{MOVE_PROMISE}</p>
+      <p className="font-mono text-[11.5px] uppercase tracking-[0.06em] text-muted-foreground">What this brief cannot tell you</p>
+      <p className="text-[14px] leading-[1.4] text-secondary-foreground">{MOVE_PROMISE}</p>
       {/* `refusedSentence`, WHICH ALREADY NAMES EVERY REASON AND COUNTS THEM.
           `CannotTell.items` is one line per refusal and on a page with two
           refusals of two reasons it restates the summary twice; the summary is
           the one that carries the count, so it is the one that prints. Both
           are built from `REFUSAL_WHY`, so neither can say anything the record
           does not. */}
-      {c && <p className="text-[12.5px] leading-[1.4] text-secondary-foreground">{c.line}</p>}
-      {!c && <p className="text-[12.5px] leading-[1.4] text-secondary-foreground">Which comparisons this reading refused is not recorded for this brief.</p>}
+      {c && <p className="text-[14px] leading-[1.4] text-secondary-foreground">{c.line}</p>}
+      {!c && <p className="text-[14px] leading-[1.4] text-secondary-foreground">Which comparisons this reading refused is not recorded for this brief.</p>}
     </div>
   )
 }
@@ -1793,10 +1819,10 @@ function SectionPane({ section, data, why }: {
   const confidence = data.reading?.confidence ?? null
   const rail = confidence && (
     <div className="flex flex-col gap-1.5 border-t border-border pt-3">
-      <p className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+      <p className="flex items-center gap-2 font-mono text-[12px] uppercase tracking-[0.08em] text-muted-foreground">
         Confidence <ConfidenceDots sure={confidence.word} /> <span className="normal-case tracking-normal text-foreground">{confidence.word}</span>
       </p>
-      {why && <p className="text-[12.5px] leading-[1.45] text-muted-foreground">{confidence.why}</p>}
+      {why && <p className="text-[14px] leading-[1.45] text-muted-foreground">{confidence.why}</p>}
     </div>
   )
   // THE CARD HUGS ITS CONTENT (`self-start`). It used to stretch to the full
@@ -1821,14 +1847,14 @@ function SectionPane({ section, data, why }: {
             {line!.series.map((serie) => (
               <div key={serie.label} className="flex flex-col gap-1.5">
                 <DeckSpark values={serie.points} months={line!.months.map(monthLabel)} width={300} height={120} className="w-full" unit={serie.unit} />
-                <p className="text-[11px] leading-[1.35] text-muted-foreground">{serie.label}</p>
+                <p className="text-[12px] leading-[1.35] text-muted-foreground">{serie.label}</p>
               </div>
             ))}
             {/* ONE SIDE, AND THE SHEET SAYS SO. The artboard draws two theme
                 series against each other; the tenant's own side carries no
                 month series on a subject row, which is a schema limitation and
                 not a missing render. */}
-            <p className="text-[11px] leading-[1.35] text-muted-foreground">
+            <p className="text-[12px] leading-[1.35] text-muted-foreground">
               One side. Your own audience carries no month-by-month series on a subject, so there is nothing to draw against this.
             </p>
           </div>
@@ -1838,7 +1864,7 @@ function SectionPane({ section, data, why }: {
           // dropped the second, so the card said four words and explained
           // none of them.
           <div className="flex flex-col gap-1.5">
-            <p className="font-mono text-[12px] text-foreground">{line?.label ?? 'no month reads'}</p>
+            <p className="font-mono text-[13.5px] text-foreground">{line?.label ?? 'no month reads'}</p>
             <p className={BODY_SM}>{line?.empty ?? 'No month series stands behind this sheet yet.'}</p>
           </div>
         )}
@@ -1857,7 +1883,7 @@ function SectionPane({ section, data, why }: {
       {section.paneLead
         ? <p className={BODY_SM}>{section.paneLead}</p>
         : data.reading && (
-          <p className="font-mono text-[12px] leading-[1.5] text-muted-foreground">
+          <p className="font-mono text-[13.5px] leading-[1.5] text-muted-foreground">
             {data.reading.denominators.map((d) => (
               <Fragment key={d.audience}>
                 <span className="text-foreground">{fmtCount(d.videos)}</span> {d.label}{' · '}
@@ -1934,7 +1960,7 @@ function SectionBody({ section, data, why = false, framing = true, title = false
     // of a column — and the contract's kinds are all about a model's words.
     // Marking it `stored` asked the scanner for a `data-slot` that does not
     // exist (measured: two violations on Össur's marketing brief).
-    ? <p className="m-0 text-[13px] leading-[1.5] text-muted-foreground">{paperEmpty(section) ?? 'This section could not be read for this month.'}</p>
+    ? <p className="m-0 text-[14.5px] leading-[1.5] text-muted-foreground">{paperEmpty(section) ?? 'This section could not be read for this month.'}</p>
     : block.render(surface as never, 'print', blockContext(appBaseUrl(), EMAIL))
   // THE FRAMING IS THE SLIDE'S NOTE WHERE THE SHEET HAS ONE TO SPARE, not a
   // paragraph inside the body: the artboard draws it as a serif italic line
@@ -1951,7 +1977,7 @@ function SectionBody({ section, data, why = false, framing = true, title = false
           one sentence, and on a shared sheet that sentence had nothing above
           it naming what it was about. */}
       {section.eyebrow ? <Eyebrow>{section.eyebrow}</Eyebrow> : title ? <Eyebrow>{section.title}</Eyebrow> : null}
-      {framing && section.framing && <p className="m-0 text-[12.5px] leading-[1.45] text-muted-foreground">{section.framing}</p>}
+      {framing && section.framing && <p className="m-0 text-[14px] leading-[1.45] text-muted-foreground">{section.framing}</p>}
       {body}
     </div>
   )
@@ -2018,7 +2044,7 @@ export function GapCard({ gap }: { gap: Gap }) {
           const pct = pcts[i]
           return (
             <div key={side.audience} className="flex items-center gap-3">
-              <span className="w-[104px] shrink-0 truncate text-[12.5px] text-foreground">{side.label}</span>
+              <span className="w-[104px] shrink-0 truncate text-[14px] text-foreground">{side.label}</span>
               <span className="h-[10px] flex-1">
                 <span
                   className={`block h-full rounded-[3px] ${i === 0 ? 'bg-you' : 'bg-comp'}`}
@@ -2028,7 +2054,7 @@ export function GapCard({ gap }: { gap: Gap }) {
               <span className="w-[104px] shrink-0">
                 {side.observed && pct != null
                   ? <FigureCell align="right" value={`${round1(pct)}%`} of={`${fmtCount(side.value.k)} of ${fmtCount(side.value.n)}`} />
-                  : <span className="block text-right font-mono text-[11px] text-muted-foreground">&mdash; not tracked</span>}
+                  : <span className="block text-right font-mono text-[12px] text-muted-foreground">&mdash; not tracked</span>}
               </span>
             </div>
           )

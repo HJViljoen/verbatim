@@ -348,8 +348,8 @@ describe('the sheet inside the deck', () => {
   it('replaces the cover, and takes no other slide with it', () => {
     const markup = render(<DocumentDeck data={LEAD} date="18 Sep 2026" />)
     const words = markupText(markup)
-    // The 58px cover is gone — it is the page a director had to turn past …
-    expect(markup).not.toContain('text-[58px]')
+    // The cover is gone — it is the page a director had to turn past …
+    expect(markup).not.toContain('data-sheet="cover"')
     // … and EVERY borrowed section still prints its own slide. The sheet packs
     // a fragment of four of them and those blocks carry more than the
     // fragment: the month's own reading and its anomaly line, the category's
@@ -378,7 +378,7 @@ describe('the sheet inside the deck', () => {
     expect(leadershipSheetData({ ...LEAD, surfaces: {} })).toBeNull()
     expect(leadershipSheetData({ ...LEAD, surfaces: undefined })).toBeNull()
     const markup = render(<DocumentDeck data={{ ...LEAD, template: 'market_brief' }} date="18 Sep 2026" />)
-    expect(markup).toContain('text-[58px]')
+    expect(markup).toContain('data-sheet="cover"')
   })
 
   // A STORED SNAPSHOT IS DATA, NOT A TYPE. `surfaces` has been frozen into
@@ -408,7 +408,7 @@ describe('the sheet inside the deck', () => {
     // the wave-1 fields — it is dropped above only to prove the predicate
     // reads each shape on its own, and no stored brief is missing it.)
     for (const pre of [noGaps, noReadings]) {
-      expect(render(<DocumentDeck data={pre} date="18 Sep 2026" />)).toContain('text-[58px]')
+      expect(render(<DocumentDeck data={pre} date="18 Sep 2026" />)).toContain('data-sheet="cover"')
     }
   })
 

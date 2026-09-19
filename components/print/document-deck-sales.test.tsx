@@ -66,7 +66,7 @@ describe('sales.p1 — the cover', () => {
   it('sets the cover paragraph’s figure in sans and the tile’s in mono', () => {
     const c = cover()
     expect(c).toContain('<span class="tabular-nums text-foreground">1,388</span>')
-    expect(c).toContain('font-mono text-[38px]')
+    expect(c).toContain('font-mono text-[42px]')
   })
 
   // …and exactly once in the document: the overview sheet gives it up rather
