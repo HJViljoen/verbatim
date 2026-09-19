@@ -170,10 +170,21 @@ export const LABEL_RULE =
  * not the all-time one under it (`DELIVERY_SCOPE`).
  */
 export function periodRow(r: RecordInputs): NumberRow {
-  const n = r.delivery.delivered
+  // "READ OVER", NOT "PERIOD", AND NO UPDATE COUNT (content, wave-3 merge).
+  // The sheet's prose says "3 updates delivered, 1 Sep to 13 Sep 2026" \u2014 a
+  // DELIVERY span, the first and last update inside the window \u2014 and this row
+  // carried "Period \u00b7 1 Sep 2026 \u2192 18 Sep 2026 \u00b7 3 updates", which is the
+  // WINDOW. Two date ranges about the same three updates, 300px apart, with
+  // the row labelled "Period" being the one that is NOT the delivery span: a
+  // reader who read both could only conclude that one of them was wrong.
+  //
+  // The row states the window and nothing else; the count stays in the prose,
+  // beside the dates it is actually counted over. "Period" was carrying the
+  // ambiguity \u2014 it is not one of THIRTEEN_WORDS either \u2014 and "read over" says
+  // which of the two spans this is.
   return {
-    label: 'Period',
-    value: `${fullDate(r.window.from)} \u2192 ${fullDate(r.window.to)} \u00b7 ${fmtInt(n)} ${n === 1 ? 'update' : 'updates'}`,
+    label: 'Read over',
+    value: `${fullDate(r.window.from)} \u2192 ${fullDate(r.window.to)}`,
     figure: true,
   }
 }

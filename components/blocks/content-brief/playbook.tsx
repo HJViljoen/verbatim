@@ -254,7 +254,7 @@ function Matrix({ matrix, heading, mode, legend = true }: { matrix: FormatMatrix
           had `<dl>` since it was written; this is the same instinct applied
           evenly. */}
       {/* THE ONE THING ALLOWED TO BE WIDER THAN THE PAGE, IN ITS OWN SCROLLER
-          (design review 16, AGENTS.md's responsive rule). The grid's label
+          (design review, "the app arm below `md`", and AGENTS.md's responsive rule). The grid's label
           column is a fixed 168px and every cell carries a bar and a 62px
           figure, so below about 640px the table cannot shrink further without
           the figures colliding — and the whole document was scrolling

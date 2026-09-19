@@ -325,14 +325,21 @@ describe('content.record — the mock’s page 5', () => {
   // artboard has and this card did not — Period and Conversations — are the two
   // that say what the sheet's two delivery records are each counted over.
   it('carries the window it read and the comments it read in it', () => {
-    expect(text).toContain('1 Sep 2026 → 18 Sep 2026 · 3 updates')
+    // THE WINDOW ROW STATES THE WINDOW AND NOTHING ELSE. It carried "· 3
+    // updates" beside these dates while the prose 300px above states the same
+    // three updates over the DELIVERY span (1 Sep to 13 Sep) — two ranges for
+    // one set of updates, the labelled one being the one that is not the
+    // delivery span.
+    expect(text).toContain('Read over')
+    expect(text).toContain('1 Sep 2026 → 18 Sep 2026')
+    expect(text).not.toContain('1 Sep 2026 → 18 Sep 2026 · 3 updates')
+    expect(text).not.toContain('Period')
     expect(text).toMatch(/Comments\s*[\d,]+ read in this reading/)
     // "Comments", never "Conversations": AGENTS.md keeps that word on the
     // legacy pages that still compute it, and a new reading surface draws from
     // THIRTEEN_WORDS.
     expect(text).not.toMatch(/conversations/i)
-    // The period's update count is the WINDOW's, which is the count the prose's
-    // own first sentence states — not the all-time one under it.
+    // And the count lives in the prose, beside the dates it is counted over.
     expect(text).toContain('3 updates delivered')
   })
 
@@ -553,7 +560,7 @@ describe('content.make — the mock’s page 2', () => {
     expect(bound('antidisestablishmentarianism', 10)).toBe('antidisest\u2026')
   })
 
-  // THE APP ARM BELOW `md` (design review 16). `md:grid-cols-4` put four cards
+  // THE APP ARM BELOW `md` (design review, the finding of that name). `md:grid-cols-4` put four cards
   // in 768px — 161px of box against 198px of content — and a full-sentence
   // `footerNote`, which BlockFrame makes `shrink-0` on purpose, forced the
   // whole block to 653px at a 375px viewport.

@@ -495,7 +495,7 @@ export const contentMake: Block<MarketSurfaceData> = {
               17px, so the last column is quiet rather than the loudest object
               on a sheet titled "What to make next".
 
-              THE LADDER IS sm/lg AND NOT md (design review 16). `md` is 768,
+              THE LADDER IS sm/lg AND NOT md (design review, "the app arm below `md`"). `md` is 768,
               and four cards in 768px gave each 161px of box against 198px of
               content — eight nodes overflowing their boxes — while at 375 the
               document scrolled to 669px. Two columns from 640, the full row
