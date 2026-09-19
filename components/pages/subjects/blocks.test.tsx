@@ -4,6 +4,7 @@ import { blockAnswers, blockContext, figureConflicts, type RenderMode } from '@/
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
 import { markupText, render, renderText } from '@/lib/test/render'
+import { fmtInt, fmtPct } from '@/lib/format'
 import { surface } from '@/lib/nav'
 import { layoutFor, SubjectsPage, SUBJECT_BLOCKS } from './index'
 import { subjectsList } from './list'
@@ -314,6 +315,22 @@ describe('SU2 · the kind mix', () => {
     // Reddit sentence, which is English — "the question-and-objection videos"
     // — and is the one place the word is the reader's rather than Pass A's.)
     expect(text).not.toMatch(/\b(pain_point|purchase_intent|demographic_signal|switching_signal|feature_request|buying_trigger|misinformation)\b/)
+  })
+
+  // THE BAR AND THE NUMBER AT THE END OF IT MEASURE THE SAME THING. The row
+  // used to ride the share on the label and end in the count — "Asking how it
+  // works 34%" ending in 472 on the category and in 29 on yours, the two bars
+  // within a few pixels of each other. The three DENOMINATORS stay apart on
+  // the audience line above each group, which is what keeps the bars readable
+  // against one scale.
+  it('labels a kind row with the share its bar draws, not with a count', () => {
+    const data = subjectsFixture()
+    const text = renderText(subjectsKinds.render(data, 'app', ctx))
+    const category = data.selected!.sides.find((s) => s.kind === 'category')!
+    const top = category.kinds.find((k) => k.pct != null && k.pct > 0)!
+    expect(text).toContain(`${top.label} ${fmtPct(top.pct!)}`)
+    expect(text).not.toContain(fmtInt(top.videos))
+    expect(text).toContain(`of ${fmtInt(category.n!)} videos`)
   })
 
   // THE REDDIT READ MOVED TO THE FOOTER NOTE, where the mock puts it: a basis
