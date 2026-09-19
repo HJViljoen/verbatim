@@ -167,7 +167,13 @@ describe('OV1, ported to the artboard', () => {
 
   it('puts the voices in their own column, behind a rule', () => {
     const markup = render(overviewSentence.render(overviewFixture(), 'app', ctx))
-    expect(markup).toContain('xl:grid-cols-2')
+    // A 400px RAIL, NOT AN EVEN SPLIT (SH15, wired here at the merge).
+    // `Main.dc.html` splits this hero `1fr 400px`: the reading takes the room
+    // it needs and the voices take the width their citations need. An even
+    // 584/584 wrapped the 17px serif sentence to two lines and left every
+    // citation tail in a ragged gutter.
+    expect(markup).toContain('xl:grid-cols-[minmax(0,1fr)_400px]')
+    expect(markup).not.toContain('xl:grid-cols-2')
     // The quote's rule is P0's green tint, which is the artboard's.
     expect(markup).toContain('border-l-2 border-primary/30')
   })

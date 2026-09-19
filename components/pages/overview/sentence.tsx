@@ -383,7 +383,17 @@ export const overviewSentence: Block<OverviewData> = {
           // the left, the month's voices behind a rule on the right. It
           // collapses to one stacked column under `xl`, where two comparisons
           // squeezed into half a phone are two unreadable comparisons.
-          <TileColumns of={2}>
+          //
+          // `rail={400}` IS `Main.dc.html`'s OWN SPLIT (SH15). An even 584/584
+          // is what `of={2}` means without it, and this pair is not a pair of
+          // equals: the left column is the month's reading and the right is the
+          // evidence behind it. At 584 the 17px serif sentence wrapped to two
+          // lines — most of this tile's 292px -> 459px growth against the
+          // artboard — while the voices column ran about 184px wider than its
+          // citations need and every tail ended in a ragged gutter. SH15 built
+          // the parameter for this caller and named it in its own commit; this
+          // is the caller.
+          <TileColumns of={2} rail={400}>
             {left}
             <div className="min-w-0 xl:pl-4">{voices}</div>
           </TileColumns>
