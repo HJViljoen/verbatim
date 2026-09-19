@@ -655,6 +655,28 @@ describe('the five sections that are Overview’s', () => {
     expect(drawn).toBeGreaterThan(0)
   })
 
+  // AND EVERY BAR STARTS AT THE SAME X (the wave-3 review, finding
+  // [Important]). A row that is its own `<table>` shares no column with the
+  // row above it: measured at 640 the three tracks were 81px each and began at
+  // x = 157, 210 and 169, and at 375 they were 36, 36 and 12px WIDE. A render
+  // test cannot measure a layout, so it pins the two causes — the rows are
+  // `<tr>`s of ONE table, and the bar's column is present on every row,
+  // including a row with no share to draw in it, because a row that skips a
+  // cell takes the column away from every row below it.
+  it('draws every rival’s row as a row of one table, so the bars share a baseline', () => {
+    for (const data of STATES) {
+      const rows = data.overview.rivals.rows
+      if (rows.length === 0) continue
+      const markup = render(MONTHLY_BLOCKS['monthly.rivals'].render(data, 'email', ctx))
+      // The bar's column, once per row — drawn or not.
+      expect((markup.match(/width="17%"/g) ?? []).length).toBe(rows.length)
+      // One dot cell a row, and the row's rule on its CELLS — it used to be
+      // the per-row table's own border, which is what made each row a table.
+      expect((markup.match(/<td width="8" style="border-top/g) ?? []).length).toBe(rows.length)
+      expect(markup).not.toMatch(/<table[^>]*border-top/)
+    }
+  })
+
   it('merge into one figure table with no key printed two ways', () => {
     const data = monthlyFixture()
     const merged = mergeFigures(ALL_MONTHLY_BLOCKS.map((b) => blockAnswers(b, data).figures))

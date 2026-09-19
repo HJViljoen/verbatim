@@ -68,9 +68,20 @@ export function monthlyRivalsEmail(data: OverviewData, ctx: BlockContext): React
       {r.lead ? (
         <div style={{ fontFamily: FONT.sans, fontSize: 15, lineHeight: '1.5', color: EMAIL.ink, marginTop: 6 }}>{r.lead}</div>
       ) : null}
-      <div style={{ marginTop: 8 }}>
-        {r.rows.map((row) => <Row key={row.audience} row={row} recorded={r.recorded} />)}
-      </div>
+      {/* ONE TABLE, SO THE ROWS SHARE THEIR COLUMNS (the wave-3 review,
+          finding [Important]). Each rival used to be its own `<table>`, and
+          two tables share nothing: measured at 640 the three bar tracks were
+          all 81px and started at x = 157, 210 and 169, and the attention
+          figures ended at three different x — so the section's one graphic,
+          whose whole job is comparison by eye, was drawn on three baselines.
+          A table's columns are the one thing an email lays out identically for
+          every row, so every rival is now two `<tr>`s of ONE table. See `Row`
+          for why the widths are percentages and not pixels. */}
+      <table width="100%" {...presentation} style={{ ...T, marginTop: 8 }}>
+        <tbody>
+          {r.rows.map((row) => <Row key={row.audience} row={row} recorded={r.recorded} />)}
+        </tbody>
+      </table>
       <div style={{ fontFamily: FONT.sans, fontSize: 11.5, lineHeight: '1.5', color: EMAIL.muted, marginTop: 8 }}>
         {r.caveat}
         {r.dualMention != null && r.dualMention > 0 ? (
@@ -102,6 +113,15 @@ export function monthlyRivalsEmail(data: OverviewData, ctx: BlockContext): React
  * own percentage of the track, so the bar and the figure beside it say the
  * same thing (deviation 24).
  *
+ * AND IT IS ONE TABLE FOR ALL SIX ROWS (the wave-3 review, finding
+ * [Important]). A bar drawn at its own share is only a chart if every bar
+ * starts at the same x, and a row that is its own `<table>` shares no column
+ * with the row above it: the tracks measured 81px each and began at x = 157,
+ * 210 and 169 at 640, and at 375 they were 36, 36 and 12px WIDE. So `Row`
+ * returns the two `<tr>`s and the section owns the table, and the bar cell is
+ * present on every row even where there is no track to draw in it — a row
+ * that omits a cell takes the column away from every row beneath it.
+ *
  * THE CONTENT LINE MOVED UNDER THE ROW (review finding [High]). Beside the
  * name it was a 264px box holding ~310px of words, so it wrapped and its badge
  * landed at the left margin — the exact ambiguity the comment there claimed to
@@ -116,14 +136,18 @@ function Row({ row, recorded }: { row: RivalRow; recorded: boolean }) {
     ? REFUSAL_WHY[row.attentionVerdict.refusedReason]
     : null
   const pct = row.attention?.pct ?? null
+  const rule = { borderTop: `1px solid ${EMAIL.hairline}` }
   return (
-    <table width="100%" {...presentation} style={{ ...T, borderTop: `1px solid ${EMAIL.hairline}` }}>
-      <tbody>
+    <>
         <tr>
-          <td width={8} style={{ width: 8, padding: '11px 10px 0 0', verticalAlign: 'top' }}>
+          <td width={8} style={{ ...rule, width: 8, padding: '11px 10px 0 0', verticalAlign: 'top' }}>
             <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 8, background: colour }} />
           </td>
-          <td style={{ padding: '9px 10px 9px 0', verticalAlign: 'top' }}>
+          {/* THE NAME TAKES THE SLACK — `width="100%"` is the email-table
+              equivalent of the artboard's `flex:1`, so the three cells after
+              it are as wide as their own content and no wider, in every row
+              alike. */}
+          <td style={{ ...rule, padding: '9px 10px 9px 0', verticalAlign: 'top' }}>
             <div style={{ fontFamily: FONT.sans, fontSize: 14, fontWeight: row.role === 'rival' ? 400 : 600, color: EMAIL.ink }}>
               {row.label}
               {row.role === 'client' ? <span style={{ fontWeight: 400, color: EMAIL.muted }}> (you)</span> : null}
@@ -131,11 +155,13 @@ function Row({ row, recorded }: { row: RivalRow; recorded: boolean }) {
             </div>
           </td>
           {/* THE BAR. A percentage width inside a fixed-height track, which is
-              the one bar shape every mail client draws the same way. It is
-              hidden where there is no share to draw rather than drawn empty:
-              an empty track beside "not observed" reads as a zero. */}
-          {pct != null ? (
-            <td width="17%" style={{ width: '17%', padding: '13px 10px 9px 0', verticalAlign: 'top' }}>
+              the one bar shape every mail client draws the same way. The TRACK
+              is hidden where there is no share to draw rather than drawn
+              empty — an empty track beside "not observed" reads as a zero —
+              but the CELL is always here, because a row that skips a column
+              takes the column away from every row below it. */}
+          <td width="17%" style={{ ...rule, width: '17%', padding: '13px 10px 9px 0', verticalAlign: 'top' }}>
+            {pct != null ? (
               <table width="100%" {...presentation} style={{ ...T, background: EMAIL.inner, borderRadius: 8 }}>
                 <tbody>
                   <tr>
@@ -145,9 +171,9 @@ function Row({ row, recorded }: { row: RivalRow; recorded: boolean }) {
                   </tr>
                 </tbody>
               </table>
-            </td>
-          ) : null}
-          <td align="right" style={{ padding: '9px 10px 9px 0', verticalAlign: 'top' }}>
+            ) : null}
+          </td>
+          <td align="right" style={{ ...rule, padding: '9px 10px 9px 0', verticalAlign: 'top' }}>
             {row.attention == null || row.attention.pct == null ? (
               <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>{recorded ? NOT_OBSERVED : NOT_RECORDED}</span>
             ) : (
@@ -166,7 +192,7 @@ function Row({ row, recorded }: { row: RivalRow; recorded: boolean }) {
               on a phone. The columns now take their content's width, and the
               artboard's proportions at 640 come from the bar, which is the
               only sized thing in the row. */}
-          <td align="right" style={{ padding: '9px 0', verticalAlign: 'top' }}>
+          <td align="right" style={{ ...rule, padding: '9px 0', verticalAlign: 'top' }}>
             <BlockMovement verdict={row.attentionVerdict} unit="pts" mode="email" />
             {/* THE REASON, IN THE OPEN. "Comparison refused" alone tells a
                 reader something is wrong without telling them what, and the
@@ -176,15 +202,14 @@ function Row({ row, recorded }: { row: RivalRow; recorded: boolean }) {
         </tr>
         <tr>
           <td />
-          <td colSpan={pct != null ? 4 : 3} style={{ padding: '0 0 9px', verticalAlign: 'top' }}>
+          <td colSpan={4} style={{ padding: '0 0 9px', verticalAlign: 'top' }}>
             <span style={{ fontFamily: FONT.mono, fontSize: 10.5, lineHeight: '1.6', color: EMAIL.muted }}>
               content share <Share share={row.content} recorded={recorded} />
             </span>
             {row.contentVerdict ? <span style={{ marginLeft: 6, display: 'inline-block' }}><BlockMovement verdict={row.contentVerdict} unit="pts" mode="email" /></span> : null}
           </td>
         </tr>
-      </tbody>
-    </table>
+    </>
   )
 }
 
