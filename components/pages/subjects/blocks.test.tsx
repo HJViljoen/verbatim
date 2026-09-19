@@ -19,6 +19,7 @@ import { calendarRulesFor } from '@/lib/charts/from-series'
 import { freezeQuotes } from '@/lib/renderables/quotes-freeze'
 import { gapBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
 import { SUBJECTS_NONE_NAMED } from '@/lib/reading/own-posts'
+import { voiceCite } from '@/lib/pages/subjects'
 import { candidatesFixture, refusedFixture, retiredRivalFixture, subjectsFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
@@ -429,6 +430,28 @@ describe('SU2 · the voices', () => {
     const markup = render(subjectsVoices.render(subjectsFixture(), 'app', ctx))
     expect(markup).toContain('https://www.tiktok.com/@maker/video/7312345678901234567')
     expect(renderText(subjectsVoices.render(subjectsFixture(), 'app', ctx))).toContain('22 Sep · under a Freitag video')
+  })
+
+  // A GLYPH IS NOT AN ATTRIBUTION ON PAPER. The app draws a `PlatformIcon` and
+  // keeps the words platform-free; a brief is read as a PDF and on a share
+  // page, where there is nothing to hover and a 10px mark is decoration. Both
+  // the print and the email arms take the whole string from `voiceCite`, which
+  // is the ONE composer — the answer to three spellings of two platforms in
+  // one monthly report.
+  it('names the platform in words wherever it draws no mark', () => {
+    const data = subjectsFixture()
+    const voice = data.selected!.voices[0]
+    expect(voice.platform).toBe('tiktok')
+    expect(voiceCite(voice)).toBe(`TikTok · ${voice.cite}`)
+    for (const mode of ['print', 'email'] as const) {
+      const out = subjectsVoices.render(data, mode, ctx)
+      expect(renderText(out), mode).toContain(voiceCite(voice))
+      expect(render(out), mode).not.toContain('<svg')
+    }
+    // The app keeps the mark and the platform-free words.
+    const app = render(subjectsVoices.render(data, 'app', ctx))
+    expect(app).toContain('<svg')
+    expect(markupText(app)).not.toContain(voiceCite(voice))
   })
 
   // BOTH REFS PER VOICE, the paired frame included. `subjects` is a registered

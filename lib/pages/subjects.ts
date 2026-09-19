@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { chunk, mapWithLimit, READ_CONCURRENCY } from '../chunk'
-import { fmtInt, fmtPct, longMonth, monthName, shortDate } from '../format'
+import { fmtInt, fmtPct, longMonth, monthName, platformLabel, shortDate } from '../format'
 import { cleanQuote, fetchQuoteCitationsByAudience, readsAsHeroQuote, type QuoteCitation } from '../quotes'
 import { citationLink } from '../evidence-cite'
 import type { EvidenceSource } from '../pipeline/pass-a'
@@ -556,6 +556,31 @@ export function voicesMeta(shown: number, from: number, sampled: boolean): strin
   return sampled
     ? `${fmtInt(shown)} shown, drawn from a sample of what was said on this subject · ${tail}`
     : `${fmtInt(shown)} of ${fmtInt(from)} · ${tail}`
+}
+
+/**
+ * A voice's WHOLE attribution, platform included — the one composer, for every
+ * surface that does not draw the glyph.
+ *
+ * `SubjectVoice.cite` is deliberately platform-free: the Subjects page draws a
+ * `PlatformIcon` in front of it, and leading the words with `m.platform` too
+ * printed the platform twice, once as a mark and once as a raw column value
+ * lower-cased at a client ("⟨glyph⟩ tiktok · 14 Sep"). That is right for the
+ * page and wrong everywhere else, and "everywhere else" then invented its own
+ * spelling: a reader of one monthly report met "TikTok · 14 Sep" in §1 (from
+ * `lib/pages/week.ts`, which composes `platformLabel` into the cite) and
+ * "tiktok · 14 Sep" and "instagram · 7 Sep" in §6, with "TikTok 38% ·
+ * Instagram 21%" in the footer — three spellings of two platforms in one
+ * artefact. On the brief deck the cite printed the GLYPH ALONE, and on paper,
+ * with no tooltip and nothing to hover, a 10px glyph is not an attribution:
+ * the artboard prints "Instagram · 7 Sep · under your post".
+ *
+ * So the rule is: a surface that draws the mark uses `voice.cite`; a surface
+ * that does not calls THIS, and never assembles the string itself.
+ * `platformLabel` is the product's one spelling of a platform's name.
+ */
+export function voiceCite(voice: Pick<SubjectVoice, 'cite' | 'platform'>): string {
+  return voice.platform ? `${platformLabel(voice.platform)} · ${voice.cite}` : voice.cite
 }
 
 /** Where a voice was heard, in the reader's words — never an audience key. */
