@@ -1005,7 +1005,34 @@ export function firstScoringMonth(declaredAt: string): string {
 /** One move, on one line (design §3 OV5, Phase 1). The month in the reader's
  *  form — "the October reading", as the design writes it, not "Oct 2026". */
 export function moveLine(move: Pick<Move, 'title' | 'declared_at'>): string {
-  return `${move.title} · tracked ${shortDate(move.declared_at)} · first scoring lands with the ${longMonth(firstScoringMonth(move.declared_at))} reading.`
+  return `${move.title} · tracked ${shortDate(move.declared_at)} · ${moveScoringClause(move.declared_at)}`
+}
+
+/** The third clause of `moveLine`, alone — so a surface that has already
+ *  printed the title and the date can print what is LEFT rather than the whole
+ *  sentence again (Block D wave 3, M9). */
+export function moveScoringClause(declaredAt: string): string {
+  return `first scoring lands with the ${longMonth(firstScoringMonth(declaredAt))} reading.`
+}
+
+/**
+ * The same clause as its own sentence — what an undated move's row says under a
+ * title and a date it has already printed (Block D wave 3, M9).
+ *
+ * OV5's row draws "{title}  declared 2 Sep" and then fell through to `row.line`
+ * where there was no reading, which is `moveLine` — "Track: Waterproofing ·
+ * tracked 2 Sep · first scoring lands with the October reading." So the title
+ * and the date appeared twice, one line apart, and on a fresh tenant that is
+ * every move on the block. The monthly email hit the same thing and strips the
+ * title prefix (`blocks/monthly/moves.tsx:86`); this row has printed the DATE
+ * as well, so what it needs is the residual rather than a prefix cut, composed
+ * from the same inputs instead of sliced out of the finished sentence.
+ *
+ * Pure.
+ */
+export function moveWaitingLine(declaredAt: string): string {
+  const clause = moveScoringClause(declaredAt)
+  return clause.charAt(0).toUpperCase() + clause.slice(1)
 }
 
 /** What OV5 says when nothing has been dated. */

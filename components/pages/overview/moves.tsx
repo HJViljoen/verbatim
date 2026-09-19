@@ -9,6 +9,7 @@ import { fmtInt, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { CardCount, MoveCandidate, MoveReading } from '@/lib/reading/moves'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
+import { moveWaitingLine } from '@/lib/pages/overview'
 import type { MoveRow, OverviewData } from '@/lib/pages/overview'
 
 // OV5 · What we are doing, and whether it is working (design §3 OV5; ported to
@@ -387,7 +388,15 @@ function MoveBody({ row, reading, mode }: { row: MoveRow; reading: MoveReading |
           ) : null}
         </>
       ) : (
-        <span className={email ? undefined : 'text-[12.5px] text-secondary-foreground'}>{row.line}</span>
+        // WHAT IS LEFT OF THE LINE, NOT THE LINE (Block D wave 3, M9). The row
+        // above has already printed the title and "declared 2 Sep"; `row.line`
+        // is `moveLine`, which is "Track: Waterproofing · tracked 2 Sep · first
+        // scoring lands with the October reading." — so the title and the date
+        // appeared twice, one line apart, on every move of a fresh tenant. The
+        // residual is composed from the same input rather than sliced out of
+        // the finished sentence (the monthly email cuts a title PREFIX, which
+        // is not enough here because this row prints the date too).
+        <span className={email ? undefined : 'text-[12.5px] text-secondary-foreground'}>{moveWaitingLine(row.declaredAt)}</span>
       )}
     </div>
   )

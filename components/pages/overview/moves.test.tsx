@@ -22,14 +22,22 @@ describe('OV5 · your moves', () => {
   })
 
   it('lists each dated move with the month its first score lands in', () => {
-    // BLOCK D WAVE 2: a move that HAS a reading now prints the reading (its
-    // banded comparison and every side's series) and a move that does not
-    // prints `moveLine`, which is the sentence naming the month its first score
-    // lands in. The fixture carries one of each, which is what the artboard
-    // draws.
+    // BLOCK D WAVE 2: a move that HAS a reading prints the reading (its banded
+    // comparison and every side's series) and a move that does not says which
+    // month its first score lands in. The fixture carries one of each, which is
+    // what the artboard draws.
+    //
+    // AND IT SAYS IT ONCE (Block D wave 3, M9). The row has already drawn the
+    // title and "declared 2 Sep"; falling through to `row.line` printed
+    // `moveLine` — "Track: Waterproofing · tracked 2 Sep · first scoring lands
+    // with the October reading." — so the title and the date appeared twice, one
+    // line apart, on every move of a fresh tenant.
     const text = renderText(overviewMoves.render(overviewFixture(), 'app', ctx))
-    expect(text).toContain('Track: Waterproofing · tracked 2 Sep')
-    expect(text).toContain('first scoring lands with the October reading')
+    expect(text).toContain('Track: Waterproofing declared 2 Sep')
+    expect(text).toContain('First scoring lands with the October reading.')
+    expect(text).not.toContain('Track: Waterproofing · tracked 2 Sep')
+    expect(text.match(/Track: Waterproofing/g)).toHaveLength(1)
+    expect(text.match(/2 Sep/g)).toHaveLength(1)
   })
 
   // BLOCK D · D2 CHANGED THIS SENTENCE AND THE REASON IS THE PACKAGE. The
