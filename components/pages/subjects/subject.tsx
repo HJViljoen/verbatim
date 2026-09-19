@@ -72,6 +72,28 @@ export function DirectionWord({ direction, mode = 'app' }: { direction: Directio
 }
 
 /**
+ * Does this column still owe its reader the month before?
+ *
+ * ONLY WHERE NO MAGNITUDE WAS DRAWN, which is the artboard's own rule and the
+ * fix for a row whose three columns did not close on one edge. Columns 1 and 2
+ * carry a NON-ANSWER — "too few to compare", "no clear change" — and for them
+ * the previous month's level is the only way to see where the side stood, so
+ * it prints, inline, and the column is four lines. Column 3 carries "▲ 5.5 pts
+ * · band 3.1" AND a "growing, 3 months" pill, and at 1440 "Aug 19%" no longer
+ * fit beside them: it wrapped onto a line of its own and made the third column
+ * ~28px taller than the two next to it — the same datum inline twice and
+ * stacked once, in one row, breaking the row's bottom edge.
+ *
+ * Nothing is lost by dropping it there. `▲ 5.5 pts` IS the distance from that
+ * month and the badge names the basis; the prior level beside a stated change
+ * is the same fact twice. The artboard's third column carries no prior-month
+ * figure for exactly this reason.
+ */
+function priorMonth(side: SubjectSide): boolean {
+  return side.previous?.pct != null && side.verdict?.state !== 'moved'
+}
+
+/**
  * One side's column: the level, its count, the change where one was drawn.
  *
  * TOP-ALIGNED, NOT CENTRED (fix pass). The three columns carry different
@@ -125,9 +147,9 @@ function Side({ side, brand, mode }: { side: SubjectSide; brand: string; mode: R
       <span className={email ? undefined : 'flex flex-wrap items-center gap-2'}>
         <BlockMovement verdict={side.verdict} unit="pts" mode={mode} />
         <DirectionWord direction={side.direction} mode={mode} />
-        {side.previous && side.previous.pct != null ? (
+        {priorMonth(side) ? (
           <span className={email ? undefined : 'whitespace-nowrap font-mono text-[11px] tabular-nums text-muted-foreground/80'} style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}>
-            {monthName(side.previous.month).split(' ')[0]} <span data-copy="figure">{fmtPct(side.previous.pct)}</span>
+            {monthName(side.previous!.month).split(' ')[0]} <span data-copy="figure">{fmtPct(side.previous!.pct!)}</span>
           </span>
         ) : null}
       </span>

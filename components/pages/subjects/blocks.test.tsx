@@ -653,6 +653,27 @@ describe('the mock’s own shape, where the data allows it', () => {
     expect(text).toContain('Jul 17% → Aug 19% → Sep 24.5% in the category')
   })
 
+  // THE THREE COLUMNS CLOSE ON ONE EDGE. The prior month prints where the
+  // column drew NO magnitude — it is the only way to see where a refused or
+  // unchanged side stood — and not where one was drawn, because "▲ 5.5 pts"
+  // IS the distance from that month. Printing both made column 3 wrap onto a
+  // fifth line and stand ~28px taller than its neighbours.
+  it('prints the prior month only where no change magnitude was drawn', () => {
+    const data = subjectsFixture()
+    const text = renderText(subjectsSubject.render(data, 'app', ctx))
+    const moved = data.selected!.sides.filter((s) => s.verdict?.state === 'moved')
+    const quiet = data.selected!.sides.filter((s) => s.verdict?.state !== 'moved' && s.previous?.pct != null)
+    expect(moved.map((s) => s.kind)).toEqual(['category'])
+    expect(quiet.map((s) => s.kind)).toEqual(['you', 'rival'])
+    // The two non-answers keep it, inline, right after the badge.
+    expect(text).toContain('too few to compare Aug 31%')
+    expect(text).toContain('no clear change Aug 43.7%')
+    // The category stated its magnitude, so the prior level is not repeated
+    // beside it — and is still on the tile, in the trail line above.
+    expect(text).not.toContain('growing, 3 months Aug')
+    expect(text).toContain('Jul 17% → Aug 19% → Sep 24.5% in the category')
+  })
+
   it('names the axis the chart spans, and what the shading over it means', () => {
     const text = renderText(subjectsLine.render(subjectsFixture(), 'app', ctx))
     expect(text).toContain('monthly · Apr → Sep 2026')
