@@ -1,4 +1,3 @@
-import Link from 'next/link'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import type { QuoteRef } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
@@ -169,12 +168,11 @@ export const voiceCast: Block<VoiceSurfaceData> = {
   title: 'Who is talking · current state',
   question: 'Who are the people behind these comments?',
 
-  render(data, mode = 'app', ctx) {
+  render(data, mode = 'app') {
     const c = data.cast
     const email = mode === 'email'
     const empty = voiceCast.emptyState(data)
     const masthead = castMasthead(c)
-    const href = `${ctx.appUrl}/dashboard/voice#cast`
 
     const frameProps = {
       title: voiceCast.title,
@@ -189,9 +187,18 @@ export const voiceCast: Block<VoiceSurfaceData> = {
       // is not one of the thirteen words either, so the line says the plain
       // thing instead.
       meta: c.population != null ? `read over ${fmtInt(c.population)} separate points people made` : undefined,
+      // A SENTENCE, IN EVERY MODE, BECAUSE IT IS ONE. This was
+      // `<Link href={`${ctx.appUrl}/dashboard/voice#cast`}>` — in the app
+      // `appUrl` is `''`, so the floor note was an anchor to the page it is
+      // already on, wearing `hover:underline` and pixel-identical to VO2's
+      // plain-text footer. Across one page the footer slot was then a real link
+      // with an arrow, a plain sentence, two real links, and an explanatory
+      // sentence that silently navigated nowhere and was discoverable by hover
+      // alone. Rule 7 asks the footer slot to mean one thing at a time; a
+      // statement of how the reading was made is not a destination.
       footer: email
         ? <span style={{ color: EMAIL.muted }}>{c.floorNote}</span>
-        : <Link href={href} className="hover:underline">{c.floorNote}</Link>,
+        : <span>{c.floorNote}</span>,
       // The artboard's right-hand footer note. NOT its left half — "No persona
       // 16% of category videos" is the remainder of a partition these groups do
       // not make, and `unnamedShare` was deleted for that reason.
