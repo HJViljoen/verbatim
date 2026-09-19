@@ -36,7 +36,21 @@ export function EarlierQuestionsTile({ history, col = 12, row = 2 }: { history: 
       col={col}
       row={row}
       eyebrow="Earlier questions"
-      meta={history ? `${fmtInt(history.thisMonth)} this month` : undefined}
+      // A FACT ABOUT THIS TILE, which is what every other meta on this page is.
+      // It printed `history.thisMonth` — every question asked in the wall-clock
+      // month, drawn or not — so on the fixture "3 this month" sat over rows
+      // dated 13 Sep · 6 Sep · 20 Aug: a reader counting September rows got
+      // two, and the August row read as if it were inside the count. On a
+      // thread page the two can NEVER agree, because the counted question the
+      // reader is looking at is the one deliberately not drawn. `held` is how
+      // many rows there were to draw from, so "3 of 12" says what the list is
+      // and what it is a list of; the month's asking is stated once on this
+      // page, by `NotAnsweredTile`'s budget line, which is the tile whose
+      // month it is. Absent rather than "0 of 0" where there is nothing to
+      // show — `NotAnsweredTile`'s own discipline, six lines from here.
+      meta={history && history.rows.length > 0
+        ? `${fmtInt(history.rows.length)} of ${fmtInt(history.held)}`
+        : undefined}
       footer={history && history.rows.length > 0 ? <Link href={history.href} className="hover:underline">All questions →</Link> : undefined}
       // D14: EARLIEST EVIDENCE, and the word says so. We do not know when this
       // workspace started asking; we know the oldest question we still hold.

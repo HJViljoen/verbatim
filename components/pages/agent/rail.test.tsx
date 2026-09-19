@@ -23,14 +23,22 @@ describe('earlier questions', () => {
     assertCopyContract(<EarlierQuestionsTile history={null} />)
   })
 
-  it('never lists the thread the reader is on, and still counts it', () => {
+  it('never lists the thread the reader is on, and leaves it out of the meta too', () => {
     // "Earlier questions" listed the OPEN thread as its first row, linking to
     // itself, 300px from the same question rendered at 15px in the answer tile
-    // beside it. It is excluded from the rows and kept in the month count: the
-    // reader did ask it, and the rail is a list of where else to go.
+    // beside it. The rail is a list of where ELSE to go, so the open thread is
+    // out of both halves of the tile.
     expect(text).not.toContain('Should our summer campaign lead')
-    expect(text).toContain('3 this month')
     expect(text).toContain('Is price fading, or just quieter?')
+  })
+
+  it('states the meta as a count of the tile, never of the month', () => {
+    // It printed `thisMonth` — every question asked in the wall-clock month,
+    // drawn or not — so "3 this month" sat over rows dated 13 Sep · 6 Sep ·
+    // 20 Aug. A reader counting September rows in the list got two. The meta
+    // now says what the list IS: three rows, of three there were to draw from.
+    expect(text).toContain('3 of 3')
+    expect(text).not.toContain('this month')
   })
 
   it('draws the newest three of what is left', () => {

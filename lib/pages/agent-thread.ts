@@ -10,7 +10,6 @@ import { row, rows as readRows } from './read'
 import { isMissingColumnError } from '../supabase-admin'
 import type { ClaimResult, Judgement, AskSummary } from '../ask/types'
 import { loadPlanChecks, PLAN_VERDICT_LABEL, type PlanCheckCard } from '../ask/plan-cards'
-import { monthStartIso } from '../ask/quota'
 import { JUDGEMENT_HEADING, NEAREST_HEADING, type AgentAnswer } from '../agent/types'
 import { askBasisLine, loadIndexFacts, type AskBasis } from '../agent/basis'
 import {
@@ -380,10 +379,22 @@ export interface AskHistoryRow {
 
 export interface AskHistory {
   rows: AskHistoryRow[]
-  /** Questions asked in the WALL-CLOCK month — the same clock the Ask budget is
-   *  on (`lib/ask/quota.ts`), and deliberately not the comment's: a question is
-   *  dated by the day it was asked. */
-  thisMonth: number
+  /**
+   * How many rows were HELD when the tile was drawn — the list `shown` caps,
+   * after the open thread is taken out. A fact about the tile, which is what
+   * its meta slot has to be.
+   *
+   * IT REPLACED A COUNT OF THE MONTH, and the difference is the defect. The
+   * meta used to be `thisMonth`: every question asked in the wall-clock month,
+   * drawn or not. On the fixture that printed "3 this month" over rows dated
+   * 13 Sep · 6 Sep · 20 Aug — a reader counting September rows in the list got
+   * two, and the August row looked as if it fell inside the count. On a thread
+   * page the two can never agree by construction, because the counted question
+   * the reader is looking at is the one deliberately not drawn. The month's
+   * asking is still stated on this page, once, by the tile whose month it is:
+   * `NotAnswered.line` ("3 of 40 questions asked this month").
+   */
+  held: number
   /**
    * The oldest question this workspace holds, or null.
    *
@@ -401,24 +412,22 @@ export const ASK_INDEX_HREF = '/dashboard/agent'
 /**
  * The history tile, from rows the loader fetched. Pure.
  *
- * `shown` caps the rail at the mock's three; `thisMonth` counts every row in
- * the wall-clock month whether or not it is drawn, because the meta is a count
- * of the month and not a count of the tile.
+ * `shown` caps the rail at the mock's three; `held` is how many rows there
+ * were to draw from, so the meta can say what the tile is showing OF what.
  *
  * `exclude` is THE THREAD THE READER IS ON. "Earlier questions" listed the open
  * thread as its first row, linking to itself, 300px from the same question
- * rendered at 15px in the answer tile beside it. The row is still COUNTED —
- * `thisMonth` is a count of the month and the reader did ask this one — it is
- * only not drawn as somewhere else to go.
+ * rendered at 15px in the answer tile beside it. It is taken out of `held` as
+ * well as out of `rows`: the tile is a list of where ELSE to go, and a
+ * denominator that counted the row it refuses to draw would be the same
+ * mismatch in smaller print.
  */
 export function askHistory(
   rows: readonly { threadId: string; title: string; askedAt: string; claimCrossed?: boolean | null }[],
-  now: Date = new Date(),
   shown = 3,
   exclude?: string | null,
 ): AskHistory {
   const ordered = [...rows].sort((a, b) => b.askedAt.localeCompare(a.askedAt))
-  const month = monthStartIso(now)
   const drawn = exclude ? ordered.filter((r) => r.threadId !== exclude) : ordered
   return {
     rows: drawn.slice(0, shown).map((r) => ({
@@ -430,7 +439,7 @@ export function askHistory(
       // behind it, which has nothing to cross.
       claimCrossed: r.claimCrossed === null ? null : r.claimCrossed === true,
     })),
-    thisMonth: ordered.filter((r) => r.askedAt >= month).length,
+    held: drawn.length,
     // The oldest row we HOLD, off the rows handed in. The loader reads the
     // oldest separately, because the rail's own list is capped and the oldest
     // of fifty is not the oldest of five hundred.
@@ -535,7 +544,6 @@ export async function loadAskHistory(
       // reads as "its claims held" (`AskHistoryRow.claimCrossed`).
       claimCrossed: !t.plan_check_id ? false : crossedByPlan.get(t.plan_check_id) ?? null,
     })),
-    new Date(),
     3,
     openThread,
   )
