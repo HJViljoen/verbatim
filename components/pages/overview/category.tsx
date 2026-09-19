@@ -245,6 +245,27 @@ export function moversLabel(c: CategoryBlock): string {
  *  and never a state word, because no comparison reached a state. */
 export const KIND_NOT_COMPARED = 'not compared'
 
+/**
+ * The attention chart's INTRINSIC box, which is not its rendered width.
+ *
+ * `CalendarLine` scales its viewBox uniformly into whatever container it is
+ * handed and sizes every label in viewBox units, so the intrinsic width is the
+ * scale factor and nothing else. This chart's container is the third of a
+ * `TileColumns of={3}` inside a 12-column tile — about 352px at 1440 — and the
+ * 880-unit default scaled the whole drawing to 0.40, which is a 10px axis label
+ * rendered at 4.0px (SH1 / M2).
+ *
+ * The pads are the artboard's own (`Main.dc.html` §3 draws `viewBox="0 0 300
+ * 88"`, plot from x=44, end labels at x=234): 44 on the left for the two y
+ * labels, and the gutter on the right wide enough for the whole end label —
+ * "The category 41,200" sets about 118 units at 11px, and `CalendarLine` draws
+ * it at `width - padR + 10` and clips it with nothing.
+ */
+const CHART_W = 352
+const CHART_H = 110
+const CHART_PAD_L = 44
+const CHART_PAD_R = 132
+
 export function categoryMeta(c: CategoryBlock): string | undefined {
   if (c.denominator == null) return undefined
   const basis = moversBasis(c)
@@ -420,6 +441,28 @@ export const overviewCategory: Block<OverviewData> = {
           // note, in the reader's own format; the caption says what the axis is
           // drawn over and stops there.
           caption={c.attention?.panel ? 'a fixed panel of accounts' : undefined}
+          // THE COLUMN SAYS HOW WIDE IT IS (Block D wave 3, M2 / SH1).
+          // `CalendarLine` emits its viewBox at `width="100%"` with every
+          // `fontSize` in viewBox UNITS, so the intrinsic width is the scale
+          // factor. This chart sits in the third of a `TileColumns of={3}`
+          // inside a 12-column tile — about 352px at 1440 — and took the
+          // 880-unit default, which is a uniform 0.40 downscale: the axis
+          // labels rendered at 4.0px, the re-freeze marker at 3.6px and the
+          // end label's own figure at 4.4px. A page whose rule is that a
+          // level without its "of N" is a score was printing the number
+          // illegibly.
+          //
+          // THE NUMBERS ARE THE ARTBOARD'S, not a guess. `Main.dc.html` §3
+          // draws this chart at `viewBox="0 0 300 88"` with its baseline at
+          // x1=44 and its end labels at x=234 — a 44-unit left pad and about
+          // 70 reserved on the right. Squared up to the column's real width
+          // and given a right gutter that fits the whole end label rather than
+          // the artboard's two stacked lines, that is 352 × 110. The caller-states-its-box precedent is
+          // `voice-surface/theme.tsx:443`.
+          width={CHART_W}
+          height={CHART_H}
+          padL={CHART_PAD_L}
+          padR={CHART_PAD_R}
         />
         {/* THE PANEL'S SIZE AND THE BANDED STEP, which are the two things the
             line has never said. A comment count is a number about a SET, and a
