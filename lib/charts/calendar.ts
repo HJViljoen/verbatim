@@ -150,6 +150,32 @@ export interface CalendarGeometry {
  * and reduce to `line-chart.tsx`'s own `y(v) = 12 + (height−30)·(1−frac)` for
  * its 150px box, so the two charts share a vertical rhythm.
  */
+/** The default gutters, named so the one caller that has to scale them —
+ *  `BlockCalendar` on paper — scales the same numbers this computes from. */
+export const CAL_PAD_L = 56
+export const CAL_PAD_R = 180
+
+/**
+ * THE PAPER FACTOR, and the CSS half of it is `--cal-p` in app/globals.css.
+ *
+ * A brief sheet lays its body out at `--vb-grid-w` and zooms it by `--vb-zoom`
+ * (.902), so a chart label aimed at "near 10px on the glass" lands at 9.0px —
+ * 6.8pt on a 297mm page, under the 8pt floor `components/print/slide.tsx`
+ * names. `--cal-p` multiplies the label sizes inside `.vb-slide-body` by this
+ * number; every font-size in a `CalendarLine` is in VIEWBOX UNITS, so the
+ * GUTTERS those labels are drawn into are measured in the same units and have
+ * to grow by the same factor or the type grows into the sheet's margin — which
+ * is what the first attempt photographed, with "The category 41,200" cut off
+ * at the right edge of the marketing brief's fourth sheet and the y-axis
+ * figure running past the left edge of its column.
+ *
+ * 1.32 is what the drawing's SMALLEST tier needs — `ts(9)`, the month and date
+ * ticks — to reach 10.67px printed. `lib/charts/calendar.test.ts` pins it
+ * against the stylesheet, because two halves of one correction written in two
+ * languages is exactly the pair that drifts.
+ */
+export const CAL_PAPER_K = 1.32
+
 export function calendarGeometry(args: {
   axis: readonly string[]
   width?: number
@@ -159,8 +185,8 @@ export function calendarGeometry(args: {
 }): CalendarGeometry {
   const width = args.width ?? 880
   const height = args.height ?? 210
-  const padL = args.padL ?? 56
-  const padR = args.padR ?? 180
+  const padL = args.padL ?? CAL_PAD_L
+  const padR = args.padR ?? CAL_PAD_R
   const axis = args.axis.map(monthStartOf)
   const innerW = Math.max(0, width - padL - padR)
   const n = axis.length

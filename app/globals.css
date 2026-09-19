@@ -336,23 +336,45 @@
    `min(2.6, …)` so an extreme column cannot blow the drawing apart, and the
    end label is capped lower again because it carries a caller's string in a
    fixed 170-unit gutter (a column too narrow for it passes endLabels={false}).
-   No hex here: the drift guard scans this file. */
+   No hex here: the drift guard scans this file.
+
+   AND A SHEET IS NOT GLASS (Block D wave 3b, `decks`). Every bucket above
+   aims the type at "near 10px ON THE GLASS", and a brief sheet then zooms the
+   whole body by `--vb-zoom` (.902), so the aim lands at 9.0px — 6.8pt on a
+   297mm page, under the 8pt floor components/print/slide.tsx names. `--cal-p`
+   is the paper factor and it is the ONLY thing the print rule sets: the
+   container query keeps computing the glass correction as `--cal-g` and
+   `--cal-k` is the product, so the two corrections compose instead of one
+   overwriting the other. 1.32 is what the SMALLEST tier in the drawing needs —
+   `ts(9)`, the month and date ticks — to reach 10.67px printed; the tiers
+   above clear it with room.
+
+   AND THE GUTTERS GROW WITH IT, WHICH IS NOT A CSS CHANGE. Every size here is
+   in VIEWBOX UNITS and the two gutters the labels are drawn into are measured
+   in those same units, so type lifted by `--cal-p` and gutters left alone is
+   type growing into the sheet's margin: at 1.32 with the pads untouched, "The
+   category 41,200" was cut off by the right edge of the marketing brief's
+   fourth sheet. `components/blocks/calendar.tsx` scales `padL` and `padR` by
+   `CAL_PAPER_K` on the print arm, which is this number, and
+   lib/charts/calendar.test.ts pins the two together. `--cal-ke`'s own cap
+   takes the factor for the same reason. */
 .vb-cal { container-type: inline-size; }
-.vb-cal svg { --cal-k: 1; --cal-ke: 1; }
+.vb-cal svg { --cal-p: 1; --cal-g: 1; --cal-k: calc(var(--cal-g) * var(--cal-p)); --cal-ke: min(calc(1.6 * var(--cal-p)), var(--cal-k)); }
+.vb-slide-body .vb-cal svg { --cal-p: 1.32; }
 @container (max-width: 820px) {
-  .vb-cal svg { --cal-k: min(2.6, max(1, var(--cal-w, 880) / 760)); --cal-ke: min(1.6, var(--cal-k)); }
+  .vb-cal svg { --cal-g: min(2.6, max(1, var(--cal-w, 880) / 760)); }
 }
 @container (max-width: 700px) {
-  .vb-cal svg { --cal-k: min(2.6, max(1, var(--cal-w, 880) / 640)); --cal-ke: min(1.6, var(--cal-k)); }
+  .vb-cal svg { --cal-g: min(2.6, max(1, var(--cal-w, 880) / 640)); }
 }
 @container (max-width: 580px) {
-  .vb-cal svg { --cal-k: min(2.6, max(1, var(--cal-w, 880) / 520)); --cal-ke: min(1.6, var(--cal-k)); }
+  .vb-cal svg { --cal-g: min(2.6, max(1, var(--cal-w, 880) / 520)); }
 }
 @container (max-width: 460px) {
-  .vb-cal svg { --cal-k: min(2.6, max(1, var(--cal-w, 880) / 400)); --cal-ke: min(1.6, var(--cal-k)); }
+  .vb-cal svg { --cal-g: min(2.6, max(1, var(--cal-w, 880) / 400)); }
 }
 @container (max-width: 340px) {
-  .vb-cal svg { --cal-k: min(2.6, max(1, var(--cal-w, 880) / 290)); --cal-ke: min(1.6, var(--cal-k)); }
+  .vb-cal svg { --cal-g: min(2.6, max(1, var(--cal-w, 880) / 290)); }
 }
 
 /* The below-floor gutter mark's radius (components/charts/calendar-line.tsx,
