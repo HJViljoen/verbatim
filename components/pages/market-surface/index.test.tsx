@@ -427,6 +427,37 @@ describe('MK2 · the ledger', () => {
     expect(text).toContain('New')
   })
 
+  it('survives a snapshot frozen before the Afterwards column existed', () => {
+    // `market.advice` is a named brief section at 017fc6e and at HEAD, so a
+    // `report_snapshots` row whose `surfaces.market` froze before wave 1 built
+    // `AdviceRow.afterwards` reaches this block by the ordinary path. Three
+    // sites dereferenced the field unguarded, and `verdicts()` is the worse
+    // one: it is part of the renderable contract a brief's reading merge
+    // walks, so the artefact's READING threw before anything was drawn.
+    const base = marketFixture()
+    const frozen = {
+      ...base,
+      advice: {
+        ...base.advice,
+        rows: base.advice.rows.map((r) => {
+          const { afterwards: _gone, ...rest } = r
+          return rest as AdviceRow
+        }),
+      },
+    }
+    expect(() => marketAdvice.verdicts?.(frozen)).not.toThrow()
+    expect(marketAdvice.verdicts?.(frozen)).toEqual([])
+    for (const mode of MODES) {
+      const text = renderText(marketAdvice.render(frozen, mode, ctx))
+      // The fifth thing the column can say, and it is about our record — never
+      // one of the four sentences a reading produces, and never blank.
+      expect(text).toContain('This was saved before we recorded what happened afterwards')
+      expect(text).not.toContain('too few to compare')
+    }
+    // And the page still measures a box for it.
+    expect(tileRows(frozen)['market.advice']).toBeGreaterThanOrEqual(2)
+  })
+
   it('says how many of the whole ledger have been acted on, and never claims a quarter', () => {
     const text = renderText(marketAdvice.render(marketFixture(), 'app', ctx))
     // TWO, matching the two rows the fixture draws as Done. The count is over

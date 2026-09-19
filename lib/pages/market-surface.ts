@@ -551,6 +551,21 @@ export function repeatLine(rows: readonly AdviceRow[]): string {
 export const ADVICE_UNLOCK =
   'What the conversation did after you acted arrives once a piece of advice you marked Done has two monthly readings behind it.'
 
+/**
+ * Said in the Afterwards column for a row that HAS no afterwards reading —
+ * which on a live page is impossible and in a frozen artefact is not.
+ *
+ * `AdviceRow.afterwards` is required and wave 1 added it; `market.advice` is a
+ * named brief section (`lib/reports/documents/sections.ts`, `ct.advice`) at
+ * 017fc6e and at HEAD, so a `report_snapshots` row whose `surfaces.market`
+ * froze before Block D reaches this block with the field simply absent. The
+ * cell then has nothing recorded, which is a different fact from every one of
+ * the four states `afterwardsFor` produces, and it says so rather than printing
+ * one of them. Same reasoning, same shape, as `MovesBlock.readings ?? []`.
+ */
+export const ADVICE_AFTERWARDS_UNRECORDED =
+  'This was saved before we recorded what happened afterwards, so there is nothing in this column for it — which is not the same as nothing having happened.'
+
 /** Said when the decision ledger itself could not be read. The statuses then
  *  come off `recommendations.status`, which the next update rewrites. */
 export const ADVICE_UNRECORDED =

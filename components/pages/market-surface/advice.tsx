@@ -11,10 +11,11 @@ import { fmtInt, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import {
-  ADVICE_UNRECORDED, GROUNDED_CORPUS_LINE, LEDGER_FIRST_TIME_LINE, adviceAnchor, ageInMonths, madeInMonth,
-  marketSurfaceHref, repeatCell,
+  ADVICE_AFTERWARDS_UNRECORDED, ADVICE_UNRECORDED, GROUNDED_CORPUS_LINE, LEDGER_FIRST_TIME_LINE,
+  adviceAnchor, ageInMonths, madeInMonth, marketSurfaceHref, repeatCell,
   type AdviceRow, type MarketSurfaceData,
 } from '@/lib/pages/market-surface'
+import type { Afterwards } from '@/lib/reading/afterwards'
 
 // MK2 · The advice, and what you decided — the ledger (design §3 MK2; ported to
 // the artboard, Block D wave 2).
@@ -178,12 +179,20 @@ function GroundedCell({ row, mode }: { row: AdviceRow; mode: RenderMode }) {
  * (copy contract, rule (c)).
  */
 function AfterwardsCell({ row, mode }: { row: AdviceRow; mode: RenderMode }) {
-  const a = row.afterwards
+  // A FROZEN ROW MAY NOT HAVE THE FIELD AT ALL, and this cell used to reach
+  // straight through it. `afterwards` is required and wave 1 added it, so a
+  // `report_snapshots` row whose `surfaces.market` froze before Block D
+  // arrives here with it absent — and `market.advice` is a named brief section
+  // at 017fc6e and at HEAD, so such a snapshot reaches this block by the
+  // ordinary path rather than by accident. `ADVICE_AFTERWARDS_UNRECORDED` is
+  // the fifth thing this column can say, and it is about our record.
+  const a: Afterwards | null = row.afterwards ?? null
   const email = mode === 'email'
-  if (a.state !== 'reading' || !a.verdict) {
+  if (a == null || a.state !== 'reading' || !a.verdict) {
+    const line = a?.line ?? ADVICE_AFTERWARDS_UNRECORDED
     return email
-      ? <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>{a.line}</span>
-      : <span className="text-[11.5px] leading-[1.35] text-muted-foreground">{a.line}</span>
+      ? <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>{line}</span>
+      : <span className="text-[11.5px] leading-[1.35] text-muted-foreground">{line}</span>
   }
   // EVERY FLAG THIS COMPARISON CARRIES, in the product's one wording for them
   // (`FLAG_NOTE`, lib/agent/movement.ts) — not a caveat this block chooses.
@@ -251,7 +260,7 @@ export const marketAdvice: Block<MarketSurfaceData> = {
     // named the absence of an Afterwards column; the column exists now, so the
     // sentence is printed only while no row on the page has a reading in it —
     // which is production today, and is the honest naming of that absence.
-    const anyReading = a.rows.some((r) => r.afterwards.state === 'reading')
+    const anyReading = a.rows.some((r) => r.afterwards?.state === 'reading')
     // The chip's basis, printed where a reader meets it rather than left in a
     // `title` no keyboard and no touch reaches.
     const anyFirstTime = a.rows.some((r) => r.firstMade.slice(0, 7) === data.month.slice(0, 7))
@@ -424,7 +433,11 @@ export const marketAdvice: Block<MarketSurfaceData> = {
   // a claim the brief's own reading does not know about. Every other block in
   // the codebase that draws a `MovementBadge` declares them.
   verdicts(data): Verdict[] {
-    return data.advice.rows.map((r) => r.afterwards.verdict).filter((v): v is Verdict => v != null)
+    // `?.` FOR THE SAME FROZEN SNAPSHOT `AfterwardsCell` GUARDS, and this is
+    // the worse of the two sites: `verdicts()` is part of the renderable
+    // contract a brief's reading merge walks, so a missing field here threw
+    // before anything was drawn — the freeze/resolve spine, not only the page.
+    return data.advice.rows.map((r) => r.afterwards?.verdict).filter((v): v is Verdict => v != null)
   },
 
   // THE ONE COMMENT THIS BLOCK SHOWS, by the same choice the render makes —
