@@ -39,13 +39,34 @@ import type { OverviewData } from '@/lib/pages/overview'
  * when this month stops moving. The split is the artboard's and it is also the
  * honest one: the left column is about the CORPUS and the right is about the
  * INSTRUMENT, and they are on different clocks.
+ *
+ * AND `coverage` IS THE LEFT COLUMN'S, SO THE RIGHT ONE DROPS IT (Block D wave
+ * 3, M14). `MethodLines.coverage` is "2,359 videos read in this window · TikTok
+ * 38% · YouTube 29% · …" and `recordLines` opens the left column with "2,359
+ * videos carried conversation in this window — TikTok 38% · YouTube 29% · …":
+ * the same count and the same mix, in two wordings, in two columns nine hundred
+ * pixels apart, with nothing telling a reader whether those are two measures or
+ * one. The artboard states the denominator once on the left and the platform
+ * mix once on the right, and it is the DENOMINATOR that is the corpus fact —
+ * so the left column keeps it and the footnote takes the four lines that are
+ * about the instrument. The named fields exist for exactly this
+ * (`lib/reading/method.ts` returns them beside `lines`), so this is a
+ * composition and never string surgery on a finished sentence.
+ *
+ * The read-depth basis still names the same total ("speech was read on 71% of
+ * 2,359 videos") and that repeat is deliberate and documented where it is
+ * composed: it is an ALL-TIME figure, and giving it a second wording is how a
+ * reader comes to believe it is a second measure.
  */
 export function recordColumns(data: OverviewData): { read: string[]; method: string[] } {
   const r = data.record
+  const m = data.method
   return {
     read: [...r.lines],
     method: [
-      ...(data.method?.lines ?? []),
+      ...(m ? [m.preparedBy, m.basis, m.language, m.redditCap, m.privacy] : []).filter(
+        (l): l is string => typeof l === 'string' && l.length > 0,
+      ),
       `This month stops moving on ${fullDate(r.freezesOn)}; until then every figure above may still change.`,
     ],
   }

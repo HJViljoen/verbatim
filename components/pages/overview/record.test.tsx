@@ -40,9 +40,22 @@ describe('OV6 · how sound is this month', () => {
     // composing them separately, which is how "27% not in English" came to mean
     // two different things on two pages.
     const data = overviewFixture()
-    const { method } = recordColumns(data)
-    for (const line of data.method?.lines ?? []) expect(method).toContain(line)
-    expect(data.method?.lines.length ?? 0).toBeGreaterThan(0)
+    const { method, read } = recordColumns(data)
+    const m = data.method!
+    for (const line of [m.preparedBy, m.basis, m.language, m.redditCap, m.privacy]) {
+      if (line) expect(method).toContain(line)
+    }
+    expect(m.lines.length).toBeGreaterThan(0)
+    // EXCEPT `coverage`, WHICH IS THE LEFT COLUMN'S (Block D wave 3, M14).
+    // "2,359 videos read in this window · TikTok 38% · …" and the left
+    // column's "2,359 videos carried conversation in this window — TikTok
+    // 38% · …" are the same count and the same mix in two wordings, nine
+    // hundred pixels apart, with nothing saying whether they are two measures
+    // or one. The denominator is a fact about the corpus, so the corpus column
+    // keeps it.
+    expect(method).not.toContain(m.coverage)
+    expect(read.join(' ')).toContain('2,359')
+    expect(method.join(' ')).not.toContain('TikTok')
   })
 
   it('states the basis of every figure that is not this month’s (D15)', () => {
