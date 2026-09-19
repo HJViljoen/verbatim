@@ -435,6 +435,17 @@ describe('the five sections that are Overview’s', () => {
   // five-line block, then seven lines more, with nothing marking where any of
   // them starts — and the artefact's most important caveat ("this month stops
   // moving on 31 Oct 2026") at the end of it in the smallest type on the page.
+  // AND "THE RECORD →" IS IN THE HEAD (the wave-3 review, finding [Minor]).
+  // Passed as the frame's footer it rendered bottom-left in a plain underline
+  // and §8's head was the only one on the page with nothing on its right; the
+  // artboard puts it top-right, opposite the mono eyebrow.
+  it('puts §8’s own link in the section head, not in a footer', () => {
+    const markup = render(MONTHLY_BLOCKS['monthly.sound'].render(monthlyFixture(), 'email', ctx))
+    const head = markup.slice(0, markup.indexOf('What is this reading made of'))
+    expect(head).toContain('the record →')
+    expect(markup.slice(markup.indexOf('What is this reading made of'))).not.toContain('the record →')
+  })
+
   it('sets the record as one paragraph per fact, each led by its own figure', () => {
     const data = monthlyFixture()
     const record = data.overview.record
@@ -653,8 +664,10 @@ describe('the five sections that are Overview’s', () => {
     for (const key of ['monthly.movers', 'monthly.subjects', 'monthly.rivals', 'monthly.sound'] as const) {
       const body = render(MONTHLY_BLOCKS[key].render(data, 'email', ctx))
         // The frame's own `meta` cell is a shared primitive and keeps the
-        // token; this is about what the block itself prints.
-        .replace(/<td align="right" style="font-family:[^"]*font-size:11px;color:#9AA0A6">[^<]*<\/td>/g, '')
+        // token; this is about what the block itself prints. (§8's meta holds
+        // a NODE — "the record →", which carries its own colour — so the cell
+        // is matched to its closing tag and not to its text.)
+        .replace(/<td align="right" style="font-family:[^"]*font-size:11px;color:#9AA0A6">[\s\S]*?<\/td>/g, '')
       expect(body).not.toContain(EMAIL.faint)
     }
   })

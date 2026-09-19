@@ -54,7 +54,18 @@ export function monthlySoundEmail(data: OverviewData, ctx: BlockContext): ReactN
       question={overviewRecord.question}
       mode="email"
       accent
-      footer={<a href={href} style={{ color: EMAIL.ink }}>the record →</a>}
+      // THE LINK IS IN THE HEAD, WHERE THE ARTBOARD PUTS IT (the wave-3
+      // review, finding [Minor]). Passed as the frame's FOOTER it rendered
+      // bottom-left in a plain underline, and §8's head was the only one on
+      // the page with nothing on its right — while the artboard draws "the
+      // record →" top-right of the section head, green 12/600, opposite the
+      // mono eyebrow. Deviation 18 explains why there is no second footer
+      // BUTTON, which is the right call and unchanged; nothing recorded that
+      // the link had left the header. `meta` is the frame's top-right slot and
+      // it takes a node, so the link carries its own type and colour — the
+      // cell's mono 11 faint is the shared primitive's and belongs to the
+      // counts and ranges the other seven sections put there.
+      meta={<a href={href} style={{ fontFamily: FONT.sans, fontSize: 12, fontWeight: 600, color: EMAIL.link, textDecoration: 'none' }}>the record →</a>}
     >
       {empty ? <BlockEmpty mode="email">{empty}</BlockEmpty> : null}
       {r.lines.map((line, i) => <Fact key={line} line={line} colour={EMAIL.ink2} gap={i === 0 ? 4 : 9} />)}
