@@ -468,6 +468,7 @@ export function AnswerTile({
   citations,
   basis,
   composer,
+  prevUpdateAt,
   row = 6,
 }: {
   turn: Turn
@@ -487,9 +488,25 @@ export function AnswerTile({
    * kind of test and probably a different kind of block".)
    */
   composer?: ReactNode
+  /**
+   * The update the turn BEFORE this one was answered against — `undefined` on
+   * the first turn of a thread, which always prints its basis.
+   *
+   * AS3 is per turn because turns can be answered against different updates,
+   * and on a thread answered inside one week they are not: `askBasisLine`
+   * composed the same two-line mono paragraph under every answer, five times
+   * on a five-turn thread. The line is a fact about WHICH update an answer
+   * rests on, so it is printed where it CHANGES — the first turn, and any turn
+   * whose update is not its predecessor's. A reader scrolling a thread sees
+   * the basis once, and sees it again exactly where it stopped being true.
+   * (The deck is untouched: `index.tsx`'s `Question` prints it on every slide
+   * because a slide can leave the building on its own.)
+   */
+  prevUpdateAt?: string | null
   row?: number
 }) {
   const answer = turn.answer
+  const basisChanged = turnIndex === 0 || prevUpdateAt === undefined || prevUpdateAt !== turn.updateAt
   // THIS TURN's best-evidenced finding, never the thread's first — see
   // `turnFindings`. A turn that measured nothing prints no footer rather than
   // another turn's figure.
@@ -565,10 +582,13 @@ export function AnswerTile({
           {/* AS3 under the answer it is about: which update it was answered
               against, and how much of the corpus could be searched when it was.
               Mono here as it is on the deck — it is metadata, and the eye
-              should skip it until it wants it. */}
-          <p className="m-0 font-mono text-[11px] leading-[1.45] text-muted-foreground">
-            {askBasisLine({ ...basis, updateAt: turn.updateAt }, { asked: true })}
-          </p>
+              should skip it until it wants it. Printed where it CHANGES; see
+              `prevUpdateAt`. */}
+          {basisChanged && (
+            <p className="m-0 font-mono text-[11px] leading-[1.45] text-muted-foreground">
+              {askBasisLine({ ...basis, updateAt: turn.updateAt }, { asked: true })}
+            </p>
+          )}
         </>
       ) : turn.prose ? (
         <p className="m-0 text-[15px] leading-[1.45] text-foreground">{turn.prose}</p>

@@ -167,6 +167,10 @@ export default async function AgentThreadPage({
               measure={data.measure}
               citations={data.citations}
               basis={data.basis}
+              // AS3 where it CHANGES, not under every answer — a five-turn
+              // thread answered inside one week printed the same two-line mono
+              // paragraph five times (`AnswerTile.prevUpdateAt`).
+              prevUpdateAt={i > 0 ? data.turns[i - 1].updateAt : undefined}
               row={ASK_TILE_ROW}
               composer={
                 i === data.turns.length - 1 ? (

@@ -232,6 +232,33 @@ describe('a follow-up prints its own turn’s figure', () => {
     expect(copyViolations(followUp)).toEqual([])
   })
 
+  it('prints AS3 where it changes and not under every turn', () => {
+    // A thread answered inside one week carries one `updateAt` on every turn,
+    // so the same two-line mono paragraph printed under each answer — five
+    // times on a five-turn thread. The line says WHICH update an answer rests
+    // on, so it belongs where that stops being true.
+    const same = renderText(
+      <AnswerTile
+        turn={thread.turns[1]} turnIndex={1} measure={thread.measure}
+        citations={thread.citations} basis={thread.basis}
+        prevUpdateAt={thread.turns[0].updateAt}
+      />,
+    )
+    expect(same).not.toContain('Answered against the update of')
+
+    // The first turn always states it, and so does a turn answered against a
+    // different update from the one before it.
+    expect(renderText(followUp)).toContain('Answered against the update of')
+    const moved = renderText(
+      <AnswerTile
+        turn={thread.turns[1]} turnIndex={1} measure={thread.measure}
+        citations={thread.citations} basis={thread.basis}
+        prevUpdateAt="2026-08-01T00:00:00.000Z"
+      />,
+    )
+    expect(moved).toContain('Answered against the update of')
+  })
+
   it('prints no footer at all where the turn measured nothing', () => {
     // A turn whose points rest on no theme the months carry: absent, not zero,
     // and never the neighbouring turn's figure.
