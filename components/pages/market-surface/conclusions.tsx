@@ -70,7 +70,8 @@ import type { ConclusionRow, MarketSurfaceData } from '@/lib/pages/market-surfac
  *  affordance: the mono face, the tabular figures, the 11.5px step and the
  *  secondary ink. The day one of these counts has an evidence panel behind it,
  *  the underline comes back with the panel and not before. */
-const FIGURE = 'font-mono text-[11.5px] tabular-nums text-secondary-foreground'
+const FIGURE_FACE = 'font-mono text-[11.5px] tabular-nums'
+const FIGURE = `${FIGURE_FACE} text-secondary-foreground`
 
 function Row({ row, mode, appUrl, corpus }: { row: ConclusionRow; mode: RenderMode; appUrl: string; corpus: number | null }) {
   const email = mode === 'email'
@@ -82,13 +83,21 @@ function Row({ row, mode, appUrl, corpus }: { row: ConclusionRow; mode: RenderMo
   // `corpusLine` under the rows says which population this one is.
   // A COUNT OF NOTHING IS NOT A SHARE OF ANYTHING. "0 of 1,699 videos behind
   // it" is a fraction whose numerator says the record is empty, set in the mono
-  // of a measured figure and sitting beside a chip promising an early signal. The row says it in words instead, and `TierChip` drops
-  // its tint (never its label) for the same reason.
+  // of a measured figure and sitting beside a chip promising an early signal.
+  // The row says it in words instead, and `TierChip` drops its tint (never its
+  // label) for the same reason.
+  //
+  // AND IT IS SET IN THE FIGURE'S OWN FACE, because the two cards sit abreast
+  // and this slot is the grid's ONLY horizontal alignment. In sans against the
+  // other card's mono the pair read as two unrelated cards rather than as one
+  // comparison — a different family and a different rhythm on the one line
+  // that lines up. It keeps the muted ink, which is the difference that means
+  // something: a count, and an absence of one.
   const grounded = row.videos > 0
   const count = !grounded
     ? (
       <span
-        className={email ? undefined : 'text-[11.5px] text-muted-foreground'}
+        className={email ? undefined : `${FIGURE_FACE} text-muted-foreground`}
         style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}
       >
         no videos we can still count behind it
