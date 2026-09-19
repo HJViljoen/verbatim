@@ -206,6 +206,10 @@ export function CalendarLine({
   if (!months.length || !series.length) return null
 
   const g = calendarGeometry({ axis: months, width, height, padL, padR })
+  // Five units lower than `calendarGeometry`'s own gutterY, which puts a 3.5r
+  // ring's top edge ON the baseline (SH14). The month labels sit at
+  // `g.labelY`, 23 units under the baseline, so there is room.
+  const gutterY = g.gutterY + 5
   const scale = valueScale(series, { zeroBase, top: g.top, baseline: g.baseline })
   // The same values `valueScale` measures its top from.
   const plotted: number[] = []
@@ -332,6 +336,19 @@ export function CalendarLine({
         })}
 
         <line x1={g.padL} y1={g.baseline} x2={g.padR} y2={g.baseline} stroke="var(--border)" strokeWidth={1} />
+        {/* THE GUTTER IS ITS OWN TRACK (Block D wave 3, SH14). A below-floor
+            month is a mark 6 units under the baseline, which at print scale is
+            ON the baseline: on the marketing sheet Sealand's six months read as
+            six hollow rings sitting at 0%, three inches under a table row
+            saying "31% · 26 of 84". The docblock argued the legend key
+            prevents that read; on paper there is no hover and the key is 9.5px
+            at the other end of the sheet, and it does not. So the marks move
+            down to a dashed rule of their own, which says "off the scale"
+            before any word does — the one thing a reader must take from them
+            is that nothing here is a reading. */}
+        {states.some((st) => st === 'below_floor' || st === 'below_numerator') ? (
+          <line x1={g.padL} y1={gutterY} x2={g.padR} y2={gutterY} stroke="var(--border)" strokeWidth={1} strokeDasharray="1 3" />
+        ) : null}
         <line x1={g.padL} y1={scale.y(scale.mid)} x2={g.padR} y2={scale.y(scale.mid)} stroke="var(--muted)" strokeWidth={1} />
         {/* TWO Y LABELS AND, WHERE ONE FITS, A THIRD (Block D wave 3, SH13 —
             it was two, and the reason is kept below because the amendment
@@ -384,6 +401,7 @@ export function CalendarLine({
             y={scale.y}
             format={format}
             padR={g.padR}
+            gutterY={gutterY}
             labelY={labelYs[i]}
             endLabel={endLabels}
           />
@@ -466,13 +484,16 @@ export function CalendarLine({
 /** One series: its segments, its points, its gutter marks, its filling bar and
  *  its end label. Split out so the chart body reads as a list of layers. */
 function SeriesMarks({
-  series, geometry: g, y, format, padR, labelY = null, endLabel = true,
+  series, geometry: g, y, format, padR, gutterY, labelY = null, endLabel = true,
 }: {
   series: CalendarSeries
   geometry: ReturnType<typeof calendarGeometry>
   y: (v: number) => number
   format: (v: number) => string
   padR: number
+  /** The gutter's own track, below the baseline (SH14) — the chart's, not
+   *  `calendarGeometry`'s, so every series marks the same line. */
+  gutterY: number
   /** Where the end label sits, de-collided against the other series by the
    *  chart (`spreadLabels`). Falls back to the point's own y. */
   labelY?: number | null
@@ -484,6 +505,7 @@ function SeriesMarks({
   const runs = lineSegments(points)
   const at = (p: CalendarPoint): number | null => g.x(p.month)
   const lastPlotted = runs.length ? runs[runs.length - 1][runs[runs.length - 1].length - 1] : null
+  const undrawn = undrawnNote(series)
   const end = lastPlotted != null ? points[lastPlotted] : null
   const endX = end ? at(end) : null
 
@@ -518,11 +540,11 @@ function SeriesMarks({
           // hollow month is the gap itself, and its column still answers.
           return (
             <g key={`m${i}`}>
-              {p.state === 'below_floor' && (
-                <circle cx={x} cy={g.gutterY} r={3.5} fill="var(--tile)" stroke={series.color} strokeWidth={1.5} />
+                {p.state === 'below_floor' && (
+                <circle cx={x} cy={gutterY} r={3.5} fill="var(--tile)" stroke={series.color} strokeWidth={1.5} />
               )}
               {p.state === 'below_numerator' && (
-                <rect x={x - 3} y={g.gutterY - 3} width={6} height={6} fill="var(--tile)" stroke={series.color} strokeWidth={1.5} />
+                <rect x={x - 3} y={gutterY - 3} width={6} height={6} fill="var(--tile)" stroke={series.color} strokeWidth={1.5} />
               )}
             </g>
           )
@@ -538,6 +560,16 @@ function SeriesMarks({
         )
       })}
 
+      {/* A SERIES WITH NO LINE SAYS SO ON THE PLOT (Block D wave 3, SH14).
+          Its only explanation was the legend key — 9.5px, at the other end of
+          a printed sheet, and absent entirely where a caller turned the legend
+          off — so a row of hollow rings under the zero rule read as six months
+          at zero. The words are `undrawnNote`'s, the same ones the key uses. */}
+      {endLabel && !end && undrawn ? (
+        <text x={padR + 10} y={gutterY + 3} style={tsEnd(9.5)} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">
+          {series.label}
+        </text>
+      ) : null}
       {endLabel && end && endX != null && end.value != null && (
         <text x={padR + 10} y={labelY ?? y(end.value) + 4} style={tsEnd(11)} fontWeight={600} fontFamily="var(--font-plex-sans), sans-serif" fill="var(--foreground)">
           {series.labelSlot ? <tspan data-copy="subject" data-slot={series.labelSlot}>{series.label}</tspan> : series.label}{' '}

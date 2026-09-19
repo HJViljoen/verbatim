@@ -78,17 +78,33 @@ describe('CalendarLine', () => {
 
   it('puts the below-floor month in the gutter under the baseline, never on the line', () => {
     const markup = render(CalendarLine({ axis: AXIS, series: [you] }))
-    // The mock's April token: r=3.5, surface fill, ringed in the entity colour,
-    // at baseline + 6 = 186.
-    expect(markup).toContain('cy="186"')
+    // The mock's April token: r=3.5, surface fill, ringed in the entity
+    // colour. It sat at baseline + 6 = 186, which at print scale is ON the
+    // baseline; Block D wave 3 (SH14) moved it to baseline + 11 and gave it a
+    // dashed track of its own, so "off the scale" is visible before any word.
+    expect(markup).toContain('cy="191"')
     expect(markup).toContain('r="3.5"')
+    expect(markup).toContain('stroke-dasharray="1 3"')
     expect(markup).toContain('too few videos this month to read against')
   })
 
   it('gives the below-numerator month its own token, not the below-floor one', () => {
     const markup = render(CalendarLine({ axis: AXIS, series: [rival] }))
-    expect(markup).toContain('<rect x="310.6" y="183" width="6" height="6" fill="var(--tile)" stroke="var(--comp)"')
+    expect(markup).toContain('<rect x="310.6" y="188" width="6" height="6" fill="var(--tile)" stroke="var(--comp)"')
     expect(markup).toContain('too few of this one to read')
+  })
+
+  it('names a series that has no line, on the plot and not only in the key (SH14)', () => {
+    // On the marketing sheet a wholly below-floor series read as six months
+    // at zero: its only explanation was a 9.5px legend note three inches away,
+    // and where a caller turns the legend off there was none at all.
+    const floored: CalendarSeries = {
+      label: 'Sealand',
+      color: 'var(--you)',
+      points: AXIS.map((m) => p(m, null, 'below_floor', { n: 22 })),
+    }
+    const markup = render(CalendarLine({ axis: AXIS, series: [floored], legend: false }))
+    expect(markup).toContain('>Sealand<')
   })
 
   it('hovers with k of n on every read month, one column answering for every line', () => {
