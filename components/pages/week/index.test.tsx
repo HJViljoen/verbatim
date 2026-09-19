@@ -377,6 +377,30 @@ describe('WK §4 · what came in', () => {
     }
   })
 
+  it('draws no comments column where no row and no total has one', () => {
+    // REVIEW W1. `NotRecorded` was `whitespace-nowrap` in a fixed 64px track,
+    // so on the arm both tenants render today it printed over the Found
+    // column: "933not recorded", "138not recorded", "1,098not recorded". Where
+    // the reading is absent everywhere the column carries nothing, and the
+    // sentence under the table already states the absence in full.
+    const markup = render(weekCameIn.render(absentReadingFixture(), 'app', ctx))
+    expect(markup).not.toContain('xl:hidden">Comments</span>')
+    expect(markup).toContain('xl:grid-cols-[112px_minmax(0,1fr)_58px_50px]')
+    expect(markupText(markup)).toContain('Comments in these days are not recorded for this workspace yet.')
+  })
+
+  it('wraps a single absent cell inside its track rather than over its neighbour', () => {
+    // The MIXED arm: the table has a total, one row does not have its own
+    // count. The column stays — the total is a real number — and the two words
+    // wrap in the 64px track instead of running left into Found.
+    const d = weekFixture()
+    const data = { ...d, cameIn: { ...d.cameIn, rows: d.cameIn.rows.map((r, i) => (i === 0 ? { ...r, comments: null } : r)) } }
+    const markup = render(weekCameIn.render(data, 'app', ctx))
+    expect(markup).toContain('xl:grid-cols-[112px_minmax(0,1fr)_58px_50px_64px]')
+    expect(markup).toContain('not recorded')
+    expect(markup).not.toContain('whitespace-nowrap font-mono text-[10.5px] text-muted-foreground xl:block')
+  })
+
   it('says the comments are not recorded rather than printing a zero', () => {
     const d = weekFixture()
     const data = { ...d, cameIn: { ...d.cameIn, rows: d.cameIn.rows.map((r) => ({ ...r, comments: null })) } }

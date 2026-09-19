@@ -225,17 +225,34 @@ function Audiences({ block, mode, month }: { block: CameInBlock; mode: 'app' | '
   const rowedComments = rows.every((r) => r.comments != null)
     ? rows.reduce((t, r) => t + (r.comments ?? 0), 0)
     : null
+  // A COLUMN WHOSE EVERY CELL WOULD READ "NOT RECORDED" IS NOT DRAWN, and the
+  // sentence under the table is what says so (review W1). `NotRecorded` was
+  // `whitespace-nowrap` in a FIXED 64px track — a fixed track does not give,
+  // so the words ran left out of their cell and printed over the Found column:
+  // measured on the absent arm at 1440 (which is what BOTH tenants render
+  // today, M3 being unapplied), the Found cell's right edge is x=750 and the
+  // text's left edge x=748, so the page read "933not recorded", "138not
+  // recorded", "27not recorded" and, on the total row, "1,098not recorded" —
+  // the update's own video count as one unparseable token. Where the reading
+  // is absent EVERYWHERE, the column carries nothing a reader can use and the
+  // sentence below already states the absence in full. Where it is absent for
+  // SOME rows only, the column stays (the total is a real number) and the two
+  // words wrap inside their track instead of overflowing it.
+  const anyComments = block.windowComments != null || rows.some((r) => r.comments != null)
+  const TRACKS = anyComments
+    ? 'xl:grid-cols-[112px_minmax(0,1fr)_58px_50px_64px]'
+    : 'xl:grid-cols-[112px_minmax(0,1fr)_58px_50px]'
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <div className="hidden items-end gap-2.5 border-b border-border/70 pb-1 xl:grid xl:grid-cols-[112px_minmax(0,1fr)_58px_50px_64px]">
+      <div className={`hidden items-end gap-2.5 border-b border-border/70 pb-1 xl:grid ${TRACKS}`}>
         <Head>Audience</Head>
         <Head>Share of this update</Head>
         <Head right>Analysed</Head>
         <Head right>Found</Head>
-        <Head right>Comments</Head>
+        {anyComments ? <Head right>Comments</Head> : null}
       </div>
       {rows.map((r) => (
-        <div key={r.audience} className="grid grid-cols-1 items-start gap-1 xl:grid-cols-[112px_minmax(0,1fr)_58px_50px_64px] xl:gap-2.5">
+        <div key={r.audience} className={`grid grid-cols-1 items-start gap-1 xl:gap-2.5 ${TRACKS}`}>
           <span className="flex min-w-0 items-center gap-1.5 text-[12.5px] font-medium">
             <span className="size-1.5 shrink-0 rounded-full" style={{ background: audienceColor(r.audience) }} aria-hidden />
             <span className="truncate" title={r.label}>{r.label}</span>
@@ -277,29 +294,33 @@ function Audiences({ block, mode, month }: { block: CameInBlock; mode: 'app' | '
           </span>
           <Cell label="Analysed"><FigureCell value={fmtInt(r.analysed)} align="right" mode={mode} /></Cell>
           <Cell label="Found"><FigureCell value={fmtInt(r.gathered)} align="right" mode={mode} /></Cell>
-          <Cell label="Comments">
-            {r.comments != null
-              ? <FigureCell value={fmtInt(r.comments)} align="right" mode={mode} />
-              : <NotRecorded />}
-          </Cell>
+          {anyComments ? (
+            <Cell label="Comments">
+              {r.comments != null
+                ? <FigureCell value={fmtInt(r.comments)} align="right" mode={mode} />
+                : <NotRecorded />}
+            </Cell>
+          ) : null}
         </div>
       ))}
       {/* THE MOCK'S TOTAL ROW. It adds the two video columns, which do add —
           they are counts of this update's own videos, split by audience — and
           the comments column only where every row carries one, because a
           partial sum is not a sum. */}
-      <div className="grid grid-cols-1 items-center gap-1 border-t border-border/70 pt-1.5 xl:grid-cols-[112px_minmax(0,1fr)_58px_50px_64px] xl:gap-2.5">
+      <div className={`grid grid-cols-1 items-center gap-1 border-t border-border/70 pt-1.5 xl:gap-2.5 ${TRACKS}`}>
         <span className="text-[12.5px] font-medium text-secondary-foreground">All audiences</span>
         <span className="font-mono text-[10.5px] text-muted-foreground">
           {block.window ? 'this update’s own videos, split by whose conversation they were' : ''}
         </span>
         <Cell label="Analysed"><FigureCell value={fmtInt(block.analysed)} align="right" mode={mode} /></Cell>
         <Cell label="Found"><FigureCell value={fmtInt(block.gathered)} align="right" mode={mode} /></Cell>
-        <Cell label="Comments">
-          {block.windowComments != null
-            ? <FigureCell value={fmtInt(block.windowComments)} align="right" mode={mode} />
-            : <NotRecorded />}
-        </Cell>
+        {anyComments ? (
+          <Cell label="Comments">
+            {block.windowComments != null
+              ? <FigureCell value={fmtInt(block.windowComments)} align="right" mode={mode} />
+              : <NotRecorded />}
+          </Cell>
+        ) : null}
       </div>
       {rowedComments != null && block.windowComments != null && rowedComments < block.windowComments ? (
         <span className="font-mono text-[10.5px] text-muted-foreground">
@@ -322,14 +343,19 @@ function Audiences({ block, mode, month }: { block: CameInBlock; mode: 'app' | '
   )
 }
 
-/** The comments cell where the windowed reading is absent. An em dash would
- *  read as a zero and a zero would be a measurement, so the words stay — set
- *  to one line (`whitespace-nowrap`), because at 56px "not recorded" wrapped
- *  in every cell of the absent arm and was the only two-line cell in the
- *  table (design review, nits). The column's own width is what gives, and the
- *  sentence under the table says the same thing in full. */
+/** The comments cell for a row whose count is absent while the table still
+ *  has one. An em dash would read as a zero and a zero would be a measurement,
+ *  so the words stay.
+ *
+ *  AND THEY WRAP (review W1). They were `whitespace-nowrap`, on the reasoning
+ *  that "the column's own width is what gives" — but the column is a FIXED
+ *  64px track and a fixed track gives nothing: the words ran out of their cell
+ *  and printed over the Found column's digits. Two lines of 10.5px mono inside
+ *  the track is the honest shape; it is why the table's leading edges are
+ *  `items-start`. Where NO row has a count the column is not drawn at all and
+ *  this never renders — see `anyComments`. */
 function NotRecorded() {
-  return <span className="whitespace-nowrap font-mono text-[10.5px] text-muted-foreground xl:block xl:text-right">not recorded</span>
+  return <span className="font-mono text-[10.5px] leading-[1.3] text-muted-foreground xl:block xl:text-right">not recorded</span>
 }
 
 /** Colour follows the ENTITY, never the rank: you green, a rival orange, the
