@@ -64,6 +64,12 @@ export function QuarterlyCardTile({
   const drawn = card.series.length > 0
   const max = Math.max(...card.series.map((s) => share(s.value.k, s.value.n)), 1)
   const baselineOf = (label: string) => card.rows.find((r) => r.label === label)?.verdict.baseline ?? null
+  // IS THERE A TICK ON THIS CARD AT ALL? Below `QUARTER_UNLOCKS_AT`
+  // `quarterChange` carries no baseline — correctly — so `baselineOf` is null
+  // on every row and the chart draws no marks. The legend keyed its second
+  // swatch on `series.length > 0` and therefore promised a mark that is
+  // nowhere on the card, in `formingCardFixture()`, which is production today.
+  const anyBaseline = card.series.some((s) => baselineOf(s.label) != null)
 
   return (
     <Tile
@@ -175,10 +181,12 @@ export function QuarterlyCardTile({
               <span className="size-2 rounded-full" style={{ background: 'var(--cat)' }} aria-hidden />
               bars: {card.quarter.label}, the category
             </span>
-            <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              <span className="h-2.5 w-0.5 rounded-[1px] bg-muted-foreground" aria-hidden />
-              the quarter before
-            </span>
+            {anyBaseline && (
+              <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <span className="h-2.5 w-0.5 rounded-[1px] bg-muted-foreground" aria-hidden />
+                the quarter before
+              </span>
+            )}
           </div>
         )}
         <p className="m-0 text-[12px] text-muted-foreground">

@@ -119,6 +119,19 @@ describe('the quarterly card', () => {
     expect(html).toContain('bg-warning/15 text-foreground ring-1 ring-warning/50')
   })
 
+  // A LEGEND KEYS WHAT IS DRAWN. Below the gate `quarterChange` carries no
+  // baseline, so no row has a tick — and the second swatch was drawn on
+  // `series.length > 0`, promising a mark nowhere on the card.
+  it('does not key a tick the chart has not drawn', () => {
+    // The legend's second swatch is the only `h-2.5 w-0.5` mark on the card;
+    // the tick on a bar is the same shape, `absolute`-positioned.
+    const forming = render(<QuarterlyCardTile card={formingCardFixture()} />)
+    expect(forming).toContain('bars: Q3 2026, the category')
+    expect(forming).not.toContain('h-2.5 w-0.5')
+    const full = render(<QuarterlyCardTile card={quarterlyCardFixture()} />)
+    expect(full).toContain('h-2.5 w-0.5 rounded-[1px] bg-muted-foreground')
+  })
+
   // The bars are levels beside each other, not a line through time: one
   // series, named, with the quarter before it marked as a tick.
   it('names the one series it draws rather than promising two', () => {
