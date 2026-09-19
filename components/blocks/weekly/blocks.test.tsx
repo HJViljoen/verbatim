@@ -22,6 +22,34 @@ describe('the six blocks', () => {
     }
   })
 
+  // THE CLIENT-FACING LANGUAGE BAN LIST, on the artefact that reaches a client
+  // without them opening anything (design-system/verbatim/MASTER.md:311,
+  // Redesign Spec §1: "no run, pass, gather, scraped, pipeline, corpus,
+  // run id"). `gathered` was the label of a 21px figure in WR3 and led WR6's
+  // record line, three prints on one email, while the page reading the SAME
+  // loader said "newly found" / "Found" / "videos this update found"
+  // (components/pages/week/came-in.tsx). One reading, two vocabularies.
+  //
+  // FOUR OF THE SEVEN, AND THE OMISSIONS ARE DELIBERATE. *run* and *pass* have
+  // innocent English on exactly this artefact — the hero sentence is
+  // "'Zips failing after a year' RAN at 3.1× its usual rate" — so a flat
+  // matcher on them would fail correct copy, which is how a guard stops being
+  // read. These four have no innocent use in a reading surface's words.
+  const BANNED = [/\bgather(s|ed|ing)?\b/i, /\bscraped\b/i, /\bpipelines?\b/i, /\bcorpus\b/i]
+
+  it('prints no word from the client-facing language ban list', () => {
+    for (const data of STATES) {
+      for (const block of weeklyBlocksFor()) {
+        for (const mode of MODES) {
+          const text = renderText(block.render(data, mode, ctx))
+          for (const re of BANNED) expect(text, `${block.key} · ${mode}`).not.toMatch(re)
+        }
+        const empty = block.emptyState(data)
+        if (empty) for (const re of BANNED) expect(empty, block.key).not.toMatch(re)
+      }
+    }
+  })
+
   // The status note pins `forSales` as a block over the SECTION alone, so This
   // week's own loader can hand it `{ sales }` without building a whole weekly
   // reading. Since block D wave 2 that section is `ForSalesData` — the counted
@@ -306,7 +334,7 @@ describe('WR3 · what came in this week', () => {
 
   it('states the update’s counts as a contribution to the month', () => {
     const text = renderText(block.render(weeklyFixture(), 'app', ctx))
-    expect(text).toContain('271 videos gathered')
+    expect(text).toContain('271 videos found')
     expect(text).toContain('264 analysed')
     expect(text).toContain('the month so far holds 2,359 videos, dated by when people wrote')
   })
@@ -612,7 +640,7 @@ describe('WR6 · coverage', () => {
   // the one `methodLines` line no reading surface has ever printed — is here.
   it('leads with this update’s videos, on the clock they are on', () => {
     for (const mode of MODES) {
-      expect(renderText(block.render(weeklyFixture(), mode, ctx))).toContain('271 videos gathered this week ·')
+      expect(renderText(block.render(weeklyFixture(), mode, ctx))).toContain('271 videos found this week ·')
     }
   })
 

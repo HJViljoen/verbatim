@@ -162,7 +162,17 @@ export const weeklyIncoming: Block<WeeklyData> = {
         <StatRow
           mode={mode}
           value={fmtInt(i.gathered)}
-          label={i.gathered === 1 ? 'video gathered' : 'videos gathered'}
+          // "FOUND", NEVER "GATHERED". *gather* is on the client-facing
+          // language ban list (design-system/verbatim/MASTER.md:311, Redesign
+          // Spec §1: no run, pass, gather, scraped, pipeline, corpus, run id)
+          // and this was its loudest instance in the product — a 21px figure's
+          // own label. The page reading the SAME loader already has the
+          // compliant word: `components/pages/week/came-in.tsx` prints "newly
+          // found", "Found" and "videos this update found". The artboard's
+          // label here is bare "videos"; "found" is kept because the sub-line
+          // beside it names the other clock, and the contrast between when we
+          // LOOKED and when people WROTE is the whole point of the row.
+          label={i.gathered === 1 ? 'video found' : 'videos found'}
           note={i.monthVideos != null ? `the month so far holds ${fmtInt(i.monthVideos)} videos, dated by when people wrote` : null}
         />
         <StatRow
@@ -273,7 +283,7 @@ export const weeklyIncoming: Block<WeeklyData> = {
     // the record and this block cannot disagree about them — and deliberately
     // NOT a share, because there is no honest denominator for one update.
     const out: FigureTable = {
-      update_videos: { value: data.incoming.gathered, unit: 'videos', label: 'videos this update gathered' },
+      update_videos: { value: data.incoming.gathered, unit: 'videos', label: 'videos this update found' },
     }
     if (data.incoming.monthVideos != null) {
       out.month_videos = { value: data.incoming.monthVideos, unit: 'videos', label: 'videos in the month so far' }
@@ -290,7 +300,7 @@ export const weeklyIncoming: Block<WeeklyData> = {
 
   emptyState(data) {
     return data.incoming.gathered === 0
-      ? 'This update gathered nothing — the section is here so the shape of the report does not change.'
+      ? 'This update found no videos in the days it covered — the section is here so the shape of the report does not change.'
       : null
   },
 }

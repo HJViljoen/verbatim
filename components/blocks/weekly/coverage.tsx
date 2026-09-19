@@ -74,7 +74,7 @@ export const weeklyCoverage: Block<WeeklyData> = {
             style={email ? { fontFamily: FONT.mono, fontSize: 11.5, color: EMAIL.ink2, lineHeight: 1.75 } : undefined}
             className={email ? undefined : 'font-mono text-[11.5px] leading-loose text-secondary-foreground'}
           >
-            <span data-copy="figure">{fmtInt(gathered)}</span> {gathered === 1 ? 'video' : 'videos'} gathered {inPeriod(data.section1.check.noun)} · {c.line}
+            <span data-copy="figure">{fmtInt(gathered)}</span> {gathered === 1 ? 'video' : 'videos'} found {inPeriod(data.section1.check.noun)} · {c.line}
           </div>
           {c.lines.map((l, i) => <Sentence key={i} mode={mode}>{l}</Sentence>)}
           {data.method ? <Sentence mode={mode}>{data.method.redditCap}</Sentence> : null}
