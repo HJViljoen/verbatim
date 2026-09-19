@@ -379,7 +379,13 @@ describe('the coverage grid', () => {
     // rows are cells of ONE grid — one container, one closing rule, and each
     // row's label and value are siblings in it rather than a box of their own.
     const markup = render(coverage)
-    expect(markup.match(/xl:grid-cols-\[186px_minmax\(0,1fr\)_186px_minmax\(0,1fr\)\]/g)).toHaveLength(1)
+    // RC10: two-up opens at 1440, the width the artboard is drawn at, and
+    // BOTH steps are arbitrary `min-[…]` variants — Tailwind sorts those ahead
+    // of the named breakpoints, so a `lg:` first step wins the cascade at 1440
+    // and the two-up grid never appears.
+    expect(markup.match(/min-\[1440px\]:grid-cols-\[186px_minmax\(0,1fr\)_186px_minmax\(0,1fr\)\]/g)).toHaveLength(1)
+    expect(markup.match(/min-\[1024px\]:grid-cols-\[186px_minmax\(0,1fr\)\]/g)).toHaveLength(1)
+    expect(markup).not.toContain('xl:grid-cols')
     expect(markup.match(/border-b border-border\/70/g)).toHaveLength(1)
     // One label cell per row, each opening its own hairline.
     expect(markup.match(/border-t border-border\/70 pt-3 font-mono/g)).toHaveLength(coverageRowsFixture().length)
