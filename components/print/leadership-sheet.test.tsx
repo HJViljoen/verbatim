@@ -184,6 +184,29 @@ describe('the leadership one-pager', () => {
     expect(words).toContain('305 of 1,388')
   })
 
+  // Thirty paired figures in five columns, laid out as `div`s on a grid: on
+  // the share link (`/r/<token>`, which is HTML) a screen reader reached them
+  // in reading order with nothing naming the column, so "44% · 62 of 142" was
+  // indistinguishable from the client's own share — and the legend dots are
+  // `aria-hidden`, so colour was the only thing telling the sides apart. The
+  // product's own subjects block ships a real table; the artboard's geometry
+  // rides on `display: grid` rows, unchanged.
+  it('draws the subjects table as a table, with a header for every column', () => {
+    const markup = render(sheet())
+    expect(markup).toContain('<table')
+    // Five columns, and the subject is the row's own header.
+    expect((markup.match(/role="columnheader"/g) ?? []).length).toBe(5)
+    expect((markup.match(/scope="col"/g) ?? []).length).toBe(5)
+    expect((markup.match(/role="rowheader"/g) ?? []).length).toBe(2)
+    expect((markup.match(/scope="row"/g) ?? []).length).toBe(2)
+    // `display` other than `table` strips the semantics a bare <table> would
+    // have given, which is why every role is written down.
+    expect(markup).toContain('role="table"')
+    expect((markup.match(/role="rowgroup"/g) ?? []).length).toBe(2)
+    // The geometry is the artboard's: the same five-column grid on every row.
+    expect((markup.match(/grid-cols-\[minmax\(0,112px\)_82px_120px_138px_minmax\(0,1fr\)\]/g) ?? []).length).toBe(3)
+  })
+
   // `.vb-slide-body` is a fixed height with `overflow: hidden`, so a sheet that
   // does not budget its rows is CUT rather than wrapped — silently, on a
   // client's PDF, where only the Studio editor's `data-overflow` notices. At

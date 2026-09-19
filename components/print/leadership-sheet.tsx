@@ -569,6 +569,19 @@ function Cell({ side }: { side: SideReading | null }) {
  * not in `MOVEMENT_WORDS`, and as a substitute for "no clear change" it is a
  * direction word off one banded comparison.
  *
+ * AND IT IS A TABLE, WITH THE ARTBOARD'S GEOMETRY ON ITS ROWS. Thirty paired
+ * figures in five columns were laid out as `div`s on a grid — so on the share
+ * link (`/r/<token>`, which is HTML) a screen reader reached them in reading
+ * order with nothing naming the column, and "44% · 62 of 142" was
+ * indistinguishable from the client's own share; the three legend dots are
+ * `aria-hidden`, so colour was the only thing telling the sides apart. The
+ * product's own subjects block ships a real `<table>` with `scope` on every
+ * header (components/pages/overview/subjects.tsx), and that is the pattern
+ * this is a regression against, not a house style. `display: grid` on the
+ * rows holds the artboard's columns EXACTLY as the divs did — the mock's
+ * layout is the spec and it is untouched — and the explicit `role`s are what
+ * keep the semantics a `display` other than `table` would otherwise strip.
+ *
  * AND IT IS CAPPED, BECAUSE THE SHEET HAS A HEIGHT AND `overflow: hidden`.
  * `SHEET_SUBJECT_ROWS` — see the constant.
  */
@@ -585,27 +598,31 @@ function SubjectsTable({ data }: { data: OverviewData }) {
       {s.rows.length === 0 ? (
         <p className={BODY}>{data.subjects.state === 'not_recorded' ? 'Your subjects are not recorded for this workspace yet.' : 'No subject carried a reading this month.'}</p>
       ) : (
-        <div className="flex flex-col">
-          <div className={`${COLS} border-b border-border pb-[5px] font-mono text-[9.5px] uppercase tracking-[0.06em] text-muted-foreground`}>
-            <span>Subject</span>
-            <span className="flex items-center gap-1.5"><Dot tone="you" />You{firstOf(s.rows, (r) => r.you)}</span>
-            <span className="flex min-w-0 items-center gap-1.5"><Dot tone="comp" /><span className="truncate">{s.rivalLabel ?? 'Lead rival'}{firstOf(s.rows, (r) => r.rival)}</span></span>
-            <span className="flex min-w-0 items-center gap-1.5"><Dot tone="cat" /><span className="truncate">{shortLabel(s.categoryLabel)}{firstOf(s.rows, (r) => r.category)}</span></span>
-            <span>{shortLabel(s.categoryLabel)} change</span>
-          </div>
-          {shown.map((r, i) => (
-            <div key={r.id} className={`${COLS} py-[2px] text-[12.5px] text-foreground ${i === shown.length - 1 ? '' : 'border-b border-border/70'}`}>
-              <span className="min-w-0 truncate">{r.label}</span>
-              <Cell side={r.you} />
-              <Cell side={r.rival} />
-              <Cell side={r.category} />
-              <span className="flex min-w-0 flex-wrap items-center gap-1.5">
-                <BlockMovement verdict={r.category.verdict} unit="pts" good="neutral" />
-                <DirectionWord direction={r.direction} />
-              </span>
-            </div>
-          ))}
-        </div>
+        <table role="table" className="block w-full border-collapse text-left">
+          <thead role="rowgroup" className="block">
+            <tr role="row" className={`${COLS} border-b border-border pb-[5px] font-mono text-[9.5px] font-normal uppercase tracking-[0.06em] text-muted-foreground`}>
+              <th role="columnheader" scope="col" className="font-normal">Subject</th>
+              <th role="columnheader" scope="col" className="flex items-center gap-1.5 font-normal"><Dot tone="you" />You{firstOf(s.rows, (r) => r.you)}</th>
+              <th role="columnheader" scope="col" className="flex min-w-0 items-center gap-1.5 font-normal"><Dot tone="comp" /><span className="truncate">{s.rivalLabel ?? 'Lead rival'}{firstOf(s.rows, (r) => r.rival)}</span></th>
+              <th role="columnheader" scope="col" className="flex min-w-0 items-center gap-1.5 font-normal"><Dot tone="cat" /><span className="truncate">{shortLabel(s.categoryLabel)}{firstOf(s.rows, (r) => r.category)}</span></th>
+              <th role="columnheader" scope="col" className="font-normal">{shortLabel(s.categoryLabel)} change</th>
+            </tr>
+          </thead>
+          <tbody role="rowgroup" className="block">
+            {shown.map((r, i) => (
+              <tr role="row" key={r.id} className={`${COLS} py-[2px] text-[12.5px] text-foreground ${i === shown.length - 1 ? '' : 'border-b border-border/70'}`}>
+                <th role="rowheader" scope="row" className="min-w-0 truncate font-normal">{r.label}</th>
+                <td role="cell"><Cell side={r.you} /></td>
+                <td role="cell"><Cell side={r.rival} /></td>
+                <td role="cell"><Cell side={r.category} /></td>
+                <td role="cell" className="flex min-w-0 flex-wrap items-center gap-1.5">
+                  <BlockMovement verdict={r.category.verdict} unit="pts" good="neutral" />
+                  <DirectionWord direction={r.direction} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
       {over > 0 ? <p className={TRAIL}>{moreLine(over, 'subject', 'Your subjects')}</p> : null}
       {/* The artboard sets the caveat 9.5px mono; the app sets it 11.5px sans.
