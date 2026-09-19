@@ -2304,8 +2304,15 @@ async function planPassABatches(clientId: string, runId: string, force: boolean,
  *     id. What class 3 protects is the insight ids stored ALONGSIDE them, which
  *     is what makes a saved answer's quotes hold.
  *
- *  c. `k:` / `h:` / `b:` refs read `video_claims`, a hero row and `run_summary`,
- *     none of which this step touches.
+ *  c. `k:` / `t:` / `h:` / `b:` refs read `video_claims`, `videos.ocr_text`, a
+ *     hero row and `run_summary`, none of which this step touches. `t:` is the
+ *     newest of them (Block D wave 2, lib/renderables/quotes-freeze.ts, written
+ *     by lib/pages/overview.ts's on-screen line) and is named here rather than
+ *     left to the reader because this arm is the answer to "is that all of
+ *     them": with `e:` and `p:` protected in class 4 and `c:` / `v:` / `m:` in
+ *     (b), these four close the ref set, so a kind absent from every arm reads
+ *     as an oversight whether or not it is one. A NEW REF KIND JOINS THIS LINE
+ *     OR A PROTECTED CLASS, NEVER NEITHER.
  *
  * A FIFTH protected class means re-opening this list and AGENTS.md, not
  * appending a set union to the code.
