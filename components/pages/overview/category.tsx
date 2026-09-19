@@ -387,7 +387,14 @@ export const overviewCategory: Block<OverviewData> = {
     )
 
     const mood = c.mood ? (
-      <>
+      // THE BAR IS CAPPED TOO, AND FOR A LOUDER REASON (Block D wave 3, M24).
+      // On the marketing sheet this block runs the full 1,088px of the page,
+      // so a four-segment bar at full chroma ran the width of the sheet,
+      // directly above the movers table the sheet is about — the loudest
+      // object on a page whose subject is somewhere else. The artboard draws it
+      // about 580px wide under its own heading. A cap, not a paler paint: the
+      // colours are the mood palette and they mean what they mean.
+      <div className={email ? undefined : 'flex max-w-[580px] flex-col'}>
         <BlockProportion
           mode={mode}
           of="videos"
@@ -404,7 +411,7 @@ export const overviewCategory: Block<OverviewData> = {
             </span>
           ) : null}
         </p>
-      </>
+      </div>
     ) : (
       <BlockEmpty mode={mode}>{c.moodNote ?? 'Nothing in this month has been judged yet.'}</BlockEmpty>
     )
