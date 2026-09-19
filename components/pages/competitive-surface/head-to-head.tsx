@@ -223,7 +223,13 @@ export const competitiveHeadToHead: Block<CompetitiveSurfaceData> = {
 
     // `Sep · Aug` — the mock's meta, and the two months the table is about.
     const meta = h ? `${monthName(h.month)} · ${monthName(prevMonth(h.month))}` : undefined
-    const note = email ? undefined : 'm-0 text-[11px] text-muted-foreground'
+    // THE STANDINGS' APRON REGISTER, NOT A SECOND ONE (CO15). These were
+    // 11.5px sans, full width, and on the populated fixture CO3's six reasons
+    // are the tile's largest block of text — sitting directly under the
+    // standings apron, which the previous pass moved to mono 10 for exactly
+    // that reason. Two aprons on one page in two registers reads as two kinds
+    // of statement; they are the same kind. Same words, one register.
+    const note = email ? undefined : 'm-0 font-mono text-[10px] leading-[1.45] text-muted-foreground'
     const noteStyle = email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted, marginTop: 4 } : undefined
     // NOT MARKED AS A LEVEL. `footerLine` has two forms — "42 videos of theirs
     // read in September, of 449 read in all." and "No month has been read for
