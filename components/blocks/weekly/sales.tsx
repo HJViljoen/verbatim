@@ -208,7 +208,6 @@ function nameRest(groups: readonly SalesGroup[], total: number | null): { head: 
 export const forSales: Block<{ sales: ForSalesData }> = {
   key: 'weekly.sales',
   title: 'For sales',
-  question: 'What are customers pushing back on, and what are they buying on?',
 
   render(data, mode = 'app', ctx) {
     const s = data.sales
@@ -220,7 +219,6 @@ export const forSales: Block<{ sales: ForSalesData }> = {
     const frame = (children: ReactNode) => (
       <BlockFrame
         title={forSales.title}
-        question={forSales.question}
         mode={mode}
         meta={s.videos != null ? `${fmtInt(s.videos)} videos in the window` : undefined}
         footer={mode === 'email'

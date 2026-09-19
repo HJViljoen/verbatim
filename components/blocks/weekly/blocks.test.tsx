@@ -50,6 +50,40 @@ describe('the six blocks', () => {
     }
   })
 
+  // NO PRINTED QUESTION, ON ANY BLOCK, IN ANY MODE. `BlockFrame` prints
+  // `Block.question` under the heading on a docblock claim that "every
+  // artboard prints one" — and every PRINTED artboard prints zero
+  // (WeeklyReport included). Six extra lines of narrator over six eyebrows is
+  // what mock-gap §7 calls "the single most repeated extra", against
+  // design-system.md §0 rule 8, "no explanatory micro-copy inside a tile".
+  // Declared nowhere rather than suppressed per mode, because the share page
+  // renders these same six in 'app' mode and IS this artefact.
+  //
+  // The six sentences by name rather than a bare `/\?/`: a commenter's own
+  // words may be a question ("Does the strap come off?") and rule (c)'s
+  // `quote` exemption exists because this artefact prints them.
+  const FORMER_QUESTIONS = [
+    'What is the state of the week, and does anything need me?',
+    'What is the state of this update, and does anything need me?',
+    'How are we seen on the things we chose to be known for?',
+    'What did this update actually read?',
+    'What are customers pushing back on, and what are they buying on?',
+    'Who should we answer, and what should we make?',
+    'How sound is this reading?',
+  ]
+
+  it('declares no question, so none is printed in any of the three modes', () => {
+    for (const block of weeklyBlocksFor()) {
+      expect(block.question, block.key).toBeUndefined()
+      for (const data of STATES) {
+        for (const mode of MODES) {
+          const text = renderText(block.render(data, mode, ctx))
+          for (const q of FORMER_QUESTIONS) expect(text, `${block.key} · ${mode}`).not.toContain(q)
+        }
+      }
+    }
+  })
+
   // The status note pins `forSales` as a block over the SECTION alone, so This
   // week's own loader can hand it `{ sales }` without building a whole weekly
   // reading. Since block D wave 2 that section is `ForSalesData` — the counted

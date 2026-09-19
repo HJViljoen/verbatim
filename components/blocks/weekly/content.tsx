@@ -100,7 +100,6 @@ function Note({ mode, children }: { mode: RenderMode; children: ReactNode }) {
 export const weeklyContent: Block<WeeklyData> = {
   key: 'weekly.content',
   title: 'For content',
-  question: 'Who should we answer, and what should we make?',
 
   render(data, mode = 'app', ctx) {
     const c = data.content
@@ -114,7 +113,6 @@ export const weeklyContent: Block<WeeklyData> = {
     const frame = (children: ReactNode) => (
       <BlockFrame
         title={weeklyContent.title}
-        question={weeklyContent.question}
         mode={mode}
         footer={mode === 'email'
           ? <a href={weekHref} style={{ color: EMAIL.ink }}>Open This week →</a>

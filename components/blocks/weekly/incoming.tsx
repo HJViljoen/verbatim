@@ -158,7 +158,6 @@ function Note({ mode, children }: { mode: RenderMode; children: ReactNode }) {
 export const weeklyIncoming: Block<WeeklyData> = {
   key: 'weekly.incoming',
   title: 'What came in this week',
-  question: 'What did this update actually read?',
 
   render(data, mode = 'app', ctx) {
     const i = data.incoming
@@ -172,7 +171,6 @@ export const weeklyIncoming: Block<WeeklyData> = {
         // The window's own word: Sealand's "week" is thirty days long, and the
         // masthead beside this heading prints the real dates.
         title={data.section1.check.noun === 'week' ? weeklyIncoming.title : 'What came in this update'}
-        question={weeklyIncoming.question}
         mode={mode}
         meta={weeklyPeriod(data.window, data.month)}
         footer={mode === 'email'

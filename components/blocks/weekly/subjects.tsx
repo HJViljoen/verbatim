@@ -203,7 +203,6 @@ export const weeklySubjects: Block<WeeklyData> = {
   // the rendered heading takes the window's own word — Sealand's is thirty
   // days long, so "this week" is not true of it (`periodNounFor`).
   title: 'Your subjects',
-  question: 'How are we seen on the things we chose to be known for?',
 
   render(data, mode = 'app', ctx) {
     const s = data.subjects
@@ -212,7 +211,6 @@ export const weeklySubjects: Block<WeeklyData> = {
     const frame = (children: ReactNode) => (
       <BlockFrame
         title={data.section1.check.noun === 'week' ? 'Your subjects this week' : 'Your subjects in this update'}
-        question={weeklySubjects.question}
         mode={mode}
         meta={s.rows.length > 0 ? `${fmtInt(s.rows.length)} named · month to date` : undefined}
         footer={mode === 'email'

@@ -65,7 +65,6 @@ import { inPeriod } from '@/lib/reports/weekly'
 export const weeklyCoverage: Block<WeeklyData> = {
   key: 'weekly.coverage',
   title: 'Coverage',
-  question: 'How sound is this reading?',
 
   render(data, mode = 'app', ctx) {
     const c = data.coverage
@@ -77,7 +76,6 @@ export const weeklyCoverage: Block<WeeklyData> = {
     return (
       <BlockFrame
         title={weeklyCoverage.title}
-        question={weeklyCoverage.question}
         mode={mode}
         meta={email
           ? <a href={href} style={{ color: EMAIL.link, textDecoration: 'none', fontFamily: FONT.sans, fontSize: 12, fontWeight: 600 }}>the record →</a>

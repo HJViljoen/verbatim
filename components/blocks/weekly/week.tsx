@@ -208,7 +208,6 @@ function Flag({ flag, index, mode, appUrl, noun }: { flag: WeekFlag; index: numb
 export const weeklyWeek: Block<WeeklyData> = {
   key: 'weekly.week',
   title: 'The week in one sentence',
-  question: 'What is the state of the week, and does anything need me?',
 
   render(data, mode = 'app', ctx) {
     const s = data.section1
@@ -220,7 +219,6 @@ export const weeklyWeek: Block<WeeklyData> = {
         // sees names the window this update actually covered, because Sealand's
         // is thirty days long and "the week" is not true of it.
         title={s.check.noun === 'week' ? weeklyWeek.title : 'The update in one sentence'}
-        question={s.check.noun === 'week' ? weeklyWeek.question : 'What is the state of this update, and does anything need me?'}
         mode={mode}
         // THE MOCK'S "n = 312 videos this week", IN THE HONEST FORM (D6): what
         // this update read, and the month it is a contribution to, side by
