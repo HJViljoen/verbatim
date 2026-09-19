@@ -196,6 +196,20 @@ describe('the ask box', () => {
     expect(text).toContain('2 untested')
   })
 
+  it('draws no chip for a verdict no claim earned', () => {
+    // All three rendered unconditionally, so a plan whose claims all held drew
+    // a red-tinted "0 contradicted" beside a grey "0 untested" — a negative
+    // tint firing where nothing is wrong. Absent rather than zero, which is
+    // what `NotAnsweredTile` and `askDraws` do six files from here.
+    const clean = box(agentFixture({
+      planChip: { ...measured.planChip!, summary: { supported: 9, contradicted: 0, untested: 0 } },
+    }))
+    const text = renderText(clean)
+    expect(text).toContain('9 supported')
+    expect(text).not.toContain('0 contradicted')
+    expect(text).not.toContain('0 untested')
+  })
+
   it('says what checking a plan does, rather than drawing a blank rail', () => {
     expect(renderText(box(refused))).toContain('No plan has been checked yet')
   })
