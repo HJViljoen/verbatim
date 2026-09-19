@@ -356,7 +356,15 @@ describe('the thirteen-point chart (Block D wave 2)', () => {
     // A point per update, and the zero deliveries are among them: three of
     // Össur's thirteen found nothing and are drawn on the floor rather than
     // dropped out of the chart.
-    expect(markup.match(/<circle/g)).toHaveLength(13)
+    // TEN CIRCLES AND THREE GUTTER SQUARES (review W4). The updates that found
+    // something are solid points on the line; the three that found nothing are
+    // `below_numerator`'s hollow square in the gutter row 6px under the
+    // baseline, which is decision U's rule applied here — the ringed-hollow
+    // circle is the one token MASTER §3.9 reserves and it stays unspent.
+    expect(markup.match(/<circle/g)).toHaveLength(10)
+    expect(markup.match(/<rect/g)).toHaveLength(4)
+    expect(markup).toContain('y="135"')
+    expect(markup).not.toContain('r="2.6"')
     expect(markup).toContain('<polyline')
     // AND THE LINE BREAKS AT EACH OF THEM (design review F5). One polyline over
     // every point dived to the floor and climbed back three times — a gather
@@ -365,8 +373,9 @@ describe('the thirteen-point chart (Block D wave 2)', () => {
     // two-or-more that found something are two: [94] alone draws no stroke,
     // [1, 462] does, and the six from 488 on do.
     expect(markup.match(/<polyline/g)).toHaveLength(2)
-    // The quiet updates are a different MARK, not the same dot at zero: an
-    // open ring, and the legend's swatch is the same ring.
+    // The quiet updates are a different MARK in a different ROW, not the same
+    // dot at zero and not the reserved ring; the legend's swatch is the same
+    // square, and its sentence ("drawn off the line") is now true of them.
     expect(markup).toContain('found nothing · the 7 days to 5 Jul')
     expect(markup).toContain('drawn off the line and left out of the range')
   })
@@ -416,7 +425,11 @@ describe('the thirteen-point chart (Block D wave 2)', () => {
     }
     const markup = render(weekUnusual.render(short, 'app', ctx))
     expect(markup).toContain('<svg')
-    expect(markup).not.toContain('<rect')
+    // THE BAND'S RECT, NOT EVERY RECT (review W4): the gutter's quiet-update
+    // squares are rects too, and they are a fact about a delivery rather than
+    // a claim about what is typical, so they are drawn either way.
+    expect(markup).not.toContain('fill="var(--inner)"')
+    expect(markup.match(/<rect/g)).toHaveLength(3)
     expect(markupText(markup)).toContain('too few updates behind it to say what is typical')
   })
 })
