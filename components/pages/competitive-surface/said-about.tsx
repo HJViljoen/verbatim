@@ -6,7 +6,7 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt } from '@/lib/format'
 import type { SaidAbout } from '@/lib/reading/own-posts'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import type { CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
+import { SAID_ABOUT_WITHHELD, SAID_ABOUT_WITHHELD_ALL, type CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
 
 // CO5 · Said about them, by others (the artboard's `grid-column: span 3`).
 //
@@ -113,6 +113,20 @@ export const competitiveSaidAbout: Block<CompetitiveSurfaceData> = {
     const groups = data.saidAbout
     const email = mode === 'email'
     const empty = competitiveSaidAbout.emptyState(data)
+    // EVERY ROW THE SAME SENTENCE IS ONE SENTENCE. `claimsFor` is null on every
+    // app load, so this block's entire content was the 26-word withheld line
+    // repeated once per rival — three verbatim copies here, five on a five-rival
+    // tenant — and the reader reads three findings until they notice the words
+    // are identical. The fact is about our permissions and not about any one
+    // rival, so it is said once, naming them all. Any other mix of states keeps
+    // the per-rival rows, because then the rows differ.
+    const withheld = groups.length > 0 && groups.every((g) => g.empty === SAID_ABOUT_WITHHELD(g.label))
+    // A FOOTER MAY NOT DESCRIBE NUMBERS THAT ARE NOT ON THE PAGE. "of each
+    // brand’s own videos" names the denominator of the "k of N" cells, and in
+    // the withheld state there are none: the note described a measurement the
+    // tile had just said it could not make, and the link offered to play voices
+    // the tile does not hold.
+    const measured = groups.some((g) => g.rows.length > 0)
 
     return (
       <BlockFrame
@@ -135,20 +149,31 @@ export const competitiveSaidAbout: Block<CompetitiveSurfaceData> = {
         // names the population, which is the thing this block most needs
         // stated, and "in videos about them" was a second, vaguer copy of it.
         footer={
-          mode === 'app'
-            ? <Link href="/dashboard/voice" className="hover:underline">Hear these voices →</Link>
-            : 'Hear these voices.'
+          measured
+            ? mode === 'app'
+              ? <Link href="/dashboard/voice" className="hover:underline">Hear these voices →</Link>
+              : 'Hear these voices.'
+            : undefined
         }
         // THE DENOMINATOR, NAMED IN THE FOOTER (D5). The artboard's own note
         // reads "counted, not quoted"; the thing this block most needs stated
         // is which population each "k of N" is a share of, because the mock got
         // that wrong on the same rows.
-        footerNote="of each brand’s own videos"
+        footerNote={measured ? 'of each brand’s own videos' : undefined}
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
-        <div className={email ? undefined : 'flex min-w-0 flex-col gap-2.5'}>
-          {groups.map((g) => <Group key={g.audience} group={g} mode={mode} />)}
-        </div>
+        {withheld ? (
+          <p
+            className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'}
+            style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}
+          >
+            {SAID_ABOUT_WITHHELD_ALL(groups.map((g) => g.label))}
+          </p>
+        ) : (
+          <div className={email ? undefined : 'flex min-w-0 flex-col gap-2.5'}>
+            {groups.map((g) => <Group key={g.audience} group={g} mode={mode} />)}
+          </div>
+        )}
       </BlockFrame>
     )
   },

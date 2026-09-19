@@ -928,6 +928,26 @@ export async function loadRivalOwnPosts(
 export const SAID_ABOUT_WITHHELD = (label: string): string =>
   `What others say about ${label} is read from those videos’ own transcripts, which are not open to this page — so this is not a silence we measured.`
 
+/** "Ottobock, Rareform or Patagonia" — a list a sentence can carry. */
+export const namesList = (labels: readonly string[]): string =>
+  labels.length <= 1
+    ? labels[0] ?? ''
+    : `${labels.slice(0, -1).join(', ')} or ${labels[labels.length - 1]}`
+
+/**
+ * THE SAME SILENCE, SAID ONCE.
+ *
+ * `claimsFor` is null on every app load (M8's policy is `entity = 'client'`),
+ * so every rival carried `SAID_ABOUT_WITHHELD` and the block rendered the same
+ * 26-word sentence once per rival — three verbatim copies on this page's own
+ * fixture, five on a five-rival tenant. Repetition is not emphasis: it reads as
+ * three findings until the reader notices the words are identical. The fact is
+ * about OUR permissions and not about any one rival, so it is one sentence
+ * naming them all.
+ */
+export const SAID_ABOUT_WITHHELD_ALL = (labels: readonly string[]): string =>
+  `What others say about ${namesList(labels)} is read from those videos’ own transcripts, which are not open to this page — so this is not a silence we measured.`
+
 /** Claims in hand and no month row to be a share of. */
 export const SAID_ABOUT_NO_DENOMINATOR = (label: string): string =>
   `No month has been read for ${label}, so what was said about them has nothing to be a share of.`

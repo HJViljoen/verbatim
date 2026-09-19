@@ -603,6 +603,28 @@ describe('CO5 · said about them, by others', () => {
   })
 })
 
+describe('CO5 · said about them (CO10)', () => {
+  it('says one withheld sentence for every rival, not one per rival', () => {
+    // `claimsFor` is null on every app load (M8's policy is `entity =
+    // 'client'`), so the block's entire content was the same 26-word sentence
+    // once per rival — three verbatim copies here, five on a five-rival tenant.
+    const text = renderText(competitiveSaidAbout.render(competitiveFixture(), 'app', ctx))
+    const copies = text.split('is not a silence we measured').length - 1
+    expect(copies).toBe(1)
+    for (const name of ['Ottobock', 'Rareform', 'Patagonia']) expect(text).toContain(name)
+    // And a footer may not describe the denominator of numbers that are not on
+    // the page, nor offer to play voices the tile does not hold.
+    expect(text).not.toContain('of each brand’s own videos')
+    expect(text).not.toContain('Hear these voices')
+  })
+
+  it('keeps the per-rival rows the moment the rows differ', () => {
+    const text = renderText(competitiveSaidAbout.render(claimsReadFixture(), 'app', ctx))
+    expect(text).toContain('of each brand’s own videos')
+    expect(text).toContain('Hear these voices')
+  })
+})
+
 describe('the page foot and the page bar are one record (CO8)', () => {
   it('states ONE language share, in the band and in the footnote', () => {
     // `ossurMethod()` overrode `coverage` only, so `language` stayed at the
@@ -844,8 +866,10 @@ describe('the page, as the artboard composes it', () => {
       const header = markup.slice(0, markup.indexOf('</header>'))
       expect(header).not.toContain('font-mono')
     }
-    // And what each said is still on the card, in its footer.
-    expect(renderText(competitiveSaidAbout.render(data, 'app', ctx))).toContain('of each brand’s own videos')
+    // And what each said is still on the card, in its footer — on the arm that
+    // HAS rows. The withheld arm drops the note on purpose (CO10): it names the
+    // denominator of "k of N" cells the tile has just said it cannot draw.
+    expect(renderText(competitiveSaidAbout.render(claimsReadFixture(), 'app', ctx))).toContain('of each brand’s own videos')
     expect(renderText(competitiveQuestions.render(data, 'app', ctx))).toContain('of the videos about Ottobock')
   })
 
