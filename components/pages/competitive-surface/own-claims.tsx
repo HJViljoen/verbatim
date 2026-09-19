@@ -5,7 +5,7 @@ import { BlockQuote } from '@/components/blocks/quote'
 import { TileBlock } from '@/components/shell/tile'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, shortDate } from '@/lib/format'
-import { OWN_POSTS_NO_ACCOUNTS, type ClaimEcho, type OwnClaimRow, type OwnPostCensus } from '@/lib/reading/own-posts'
+import { CENSUS_EMPTY, OWN_POSTS_NO_ACCOUNTS, type ClaimEcho, type OwnClaimRow, type OwnPostCensus } from '@/lib/reading/own-posts'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import type { CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
 
@@ -115,6 +115,20 @@ function Claim({ row, mode }: { row: OwnClaimRow; mode: RenderMode }) {
   )
 }
 
+/**
+ * THE SILENT CENSUS AS ONE SENTENCE (CO16).
+ *
+ * `CENSUS_EMPTY` reads "No post was published in this period — posts published
+ * in September.": "this period" and the clock label are the same fact said
+ * twice, the second appended as a fragment after a dash, in a card whose head
+ * already carries no basis on an absence. The basis IS the period, so it is
+ * said once, inside the sentence — and the sentence says the thing this arm
+ * exists to say and the no-account arm does not: we READ their accounts. The
+ * shared string is `lib/reading/own-posts.ts`'s and belongs to another package
+ * in this wave, so the substitution is made where the sentence is printed.
+ */
+const censusSilent = (basis: string): string => `We read their accounts and found no ${basis}.`
+
 /** One rival's census, or the reason there is not one. */
 function Census({ census, mode }: { census: OwnPostCensus; mode: RenderMode }) {
   const email = mode === 'email'
@@ -142,7 +156,7 @@ function Census({ census, mode }: { census: OwnPostCensus; mode: RenderMode }) {
   if (census.unread) {
     const line = (
       <p className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}>
-        {census.unread}
+        {census.unread === CENSUS_EMPTY(census.basis) ? censusSilent(census.basis) : census.unread}
         {census.unread === OWN_POSTS_NO_ACCOUNTS ? <> — {OWN_CLAIMS_OWNER}.</> : null}
       </p>
     )

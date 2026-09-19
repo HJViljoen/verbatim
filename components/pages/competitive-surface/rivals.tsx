@@ -38,7 +38,17 @@ function Option({ option, mode }: { option: RivalOption; mode: RenderMode }) {
     {option.name}
     <span className={email ? undefined : 'ml-1.5 text-[11px] font-normal text-muted-foreground'} style={email ? { color: EMAIL.muted } : undefined}>
       {state}{stamp}
-      {option.analysed != null && option.analysed > 0 ? <> · <span data-copy="figure">{fmtInt(option.analysed)}</span> of their videos read</> : null}
+      {/* THE BASIS IS PART OF THE FIGURE (D15), AND IT USED TO LIVE IN A
+          COMMENT. `countAnalysedByRival` has no date filter — it is a head
+          count over the whole corpus — while the words beside it ("read this
+          window", "nothing of theirs was read this window") are a WINDOW
+          state. So the pill read "Ottobock read this window · 319 of their
+          videos read" six hundred pixels above standings saying Ottobock is
+          42 of 449 for September, and 319 read as a contradiction of the
+          window figure rather than as a different measure. "in all" is the
+          head-to-head footer's own phrase for the same span ("of 449 read in
+          all"), so the page names one span one way. */}
+      {option.analysed != null && option.analysed > 0 ? <> · <span data-copy="figure">{fmtInt(option.analysed)}</span> of their videos read in all</> : null}
     </span>
   </>
 
@@ -111,8 +121,9 @@ export const competitiveRivals: Block<CompetitiveSurfaceData> = {
     )
   },
 
-  // NO FIGURES. "N of their videos read" is a count of the corpus, not a
-  // reading of a month; the shares are the standings' to declare.
+  // NO FIGURES. "N of their videos read in all" is a count of the corpus, not a
+  // reading of a month; the shares are the standings' to declare. The pill says
+  // that span out loud rather than leaving it here (D15).
   figures(): FigureTable {
     return {}
   },

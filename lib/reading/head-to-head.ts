@@ -183,12 +183,21 @@ export interface HeadToHeadInput {
 
 const round1 = (n: number): number => Math.round(n * 10) / 10
 
+// THE READER'S WORDS, NOT THE ANALYST'S (CO18). These three sentences are
+// client-facing — they print on Competitive and on the quarterly review, in all
+// three modes — and they said "a share of a population" and "a median of
+// per-video rates", which are the analyst's sentence about the measurement
+// rather than the reader's. `denominator` is sanctioned by GLOSSARY and these
+// were not; the same deck manages the same idea in the reader's words
+// ("a video with at least one analysed comment", document-deck.tsx:1402).
+// What each one has to carry is unchanged: WHY no band, and that both months
+// are printed in its place.
 const RATE_NOT_A_SHARE =
-  'Comments per video is a rate, not a share of a population, so no band is drawn over it — both months are printed instead.'
+  'Comments per video is an average, not a count out of a total, so no band is drawn over it — both months are printed instead.'
 const MEDIAN_NOT_A_SHARE =
-  'Engagement is a median of per-video rates, not a share of a population, so no band is drawn over it — both months are printed instead.'
+  'Engagement is the middle video’s rate, not a count out of a total, so no band is drawn over it — both months are printed instead.'
 const COUNT_NOT_A_SHARE =
-  'Posts published is a count with no denominator, so no band is drawn over it — both months are printed instead.'
+  'Posts published is a plain count with nothing to be out of, so no band is drawn over it — both months are printed instead.'
 
 const floorWhy = (floor: number): string =>
   `Under ${fmtInt(floor)} videos on a side, so no comparison is drawn.`
@@ -514,11 +523,30 @@ function postsMeasure(input: HeadToHeadInput, basisLine: string): FaceOffMeasure
     verdict: null,
     rivalVerdict: null,
     verdictWhy: COUNT_NOT_A_SHARE,
-    why:
-      you === null || them === null
-        ? 'Own posts are counted from the tracked accounts only, and one side’s accounts are not configured.'
-        : null,
+    // WHAT NULL ACTUALLY MEANS HERE, AND IT IS NOT "NOT CONFIGURED".
+    // `ownPosts` is null where NOTHING OWNED WAS READ IN EITHER MONTH
+    // (`buildHeadToHead`, lib/pages/playbook.ts, in its own words: "a rival
+    // whose accounts have never yielded a post is not a rival who published
+    // nothing"). Accounts being configured is a different fact and this
+    // function cannot see it — `OwnPostCensus.unread` is where that fact
+    // lives, on the own-post census. So the row said a client's digital
+    // director had failed to configure an account that is configured, which
+    // is a claim about their work made from a measurement that never looked.
+    // The sentence is position-free: this row is drawn on Competitive and on
+    // the quarterly review, where the census is not in the same place.
+    //
+    // It names the side, because "one side" leaves the reader to guess which.
+    why: postsWhy(input, you, them),
   }
+}
+
+/** Which side has no own-post reading, in the words the reading supports. */
+function postsWhy(input: HeadToHeadInput, you: FaceOffSide | null, them: FaceOffSide | null): string | null {
+  if (you !== null && them !== null) return null
+  const missing = [you === null ? input.you.label : null, them === null ? input.them.label : null].filter(
+    (l): l is string => l !== null,
+  )
+  return `No post on an account of ${missing.join(' or ')}’s was read in either month, so there is nothing to count for them — which is not the same as having no account configured, and says nothing about whether one is.`
 }
 
 function sideWhy(input: HeadToHeadInput, you: FaceOffSide | null, them: FaceOffSide | null): string | null {

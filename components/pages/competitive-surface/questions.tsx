@@ -3,6 +3,7 @@ import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockQuote } from '@/components/blocks/quote'
 import { fmtInt, platformLabel } from '@/lib/format'
+import { horizonHref } from '@/lib/shell/bar'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { mixLine, type CompetitiveSurfaceData, type QuestionRow } from '@/lib/pages/competitive-surface'
@@ -77,7 +78,7 @@ export const competitiveQuestions: Block<CompetitiveSurfaceData> = {
   title: 'What the category asks under their content',
   question: 'What do people want to know when they meet this rival?',
 
-  render(data, mode = 'app') {
+  render(data, mode = 'app', ctx) {
     const q = data.questions
     const email = mode === 'email'
     const empty = competitiveQuestions.emptyState(data)
@@ -100,9 +101,13 @@ export const competitiveQuestions: Block<CompetitiveSurfaceData> = {
         // the rows are OF has been the block's summary sentence and never its
         // footnote, so a reader scanning the tile's edges saw no denominator
         // at all.
+        // THE SAME WINDOW THE TILE WAS READ IN (CO13), and not the rival: a
+        // bare `/dashboard/voice` landed a reader three months deep on Voice's
+        // default month, and Voice has no rival selection for `vs=` to mean
+        // anything to.
         footer={
           mode === 'app'
-            ? <Link href="/dashboard/voice" className="hover:underline">Hear these voices →</Link>
+            ? <Link href={`${ctx.appUrl}${horizonHref('/dashboard/voice', {}, data.horizon)}`} className="hover:underline">Hear these voices →</Link>
             : 'Hear these voices.'
         }
         footerNote={q.rival ? `of the videos about ${q.rival}` : undefined}

@@ -112,9 +112,15 @@ describe('headToHead · the five measures', () => {
       expect(m.rivalVerdict).toBeNull()
       expect(m.verdictWhy).toContain('no band is drawn over it')
     }
-    expect(rate.verdictWhy).toContain('rate')
-    expect(median.verdictWhy).toContain('median')
-    expect(posts.verdictWhy).toContain('count')
+    // CO18: each names what it IS, in the reader's words rather than the
+    // analyst's — "a share of a population" and "a median of per-video rates"
+    // were the analyst's sentence about the measurement.
+    expect(rate.verdictWhy).toContain('an average')
+    expect(median.verdictWhy).toContain('the middle video’s rate')
+    expect(posts.verdictWhy).toContain('a plain count')
+    for (const m of [rate, median, posts]) {
+      expect(m.verdictWhy).not.toMatch(/share of a population|per-video rates|denominator/)
+    }
   })
 
   it('prints the engagement figure with the videos it was read off, of the videos published', () => {
@@ -136,6 +142,23 @@ describe('headToHead · the five measures', () => {
     expect(posts.you!.value).toEqual({ k: 9, n: 0 })
     expect(posts.you!.pct).toBeNull()
     expect(posts.you!.text).toBe('9')
+  })
+
+  it('says what a null own-post count MEANS, and never that an account is missing', () => {
+    // `ownPosts` is null where nothing owned was read in either month
+    // (`buildHeadToHead`'s own rule). Whether an account is CONFIGURED is a
+    // different fact, held on the census and invisible here — so the row used
+    // to tell a reader their digital director had failed to configure an
+    // account that is configured. It names the side, and it is position-free
+    // because the same row is drawn on the quarterly review.
+    const quiet = h2h({ them: side({ ...FREITAG, ownPosts: null, ownPostsPrev: null }) })
+    const posts = quiet.measures.find((m) => m.key === 'posts')!
+    expect(posts.them).toBeNull()
+    expect(posts.why).toContain('Freitag')
+    expect(posts.why).toContain('was read in either month')
+    expect(posts.why).not.toMatch(/not configured/)
+    expect(posts.why).not.toMatch(/one side/)
+    expect(h2h().measures.find((m) => m.key === 'posts')!.why).toBeNull()
   })
 
   it('draws no verdict when both sides are under the floor, and names the floor', () => {

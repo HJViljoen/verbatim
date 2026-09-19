@@ -118,22 +118,33 @@ function Change({ verdict, observed, prevMonthLabel, mode }: {
  * per cell, filled to that cell's own percentage, in the ENTITY's colour and
  * never the rank's (`components/charts/ranked-bar.tsx`'s own rule).
  *
- * AND IT IS DRAWN AGAINST THE COLUMN'S LARGEST ROW, NOT AGAINST 100%. The
- * artboard's bar fills its column because the mock's shares are 6–39%; on a
- * real tenant they are 1–9% beside one remainder at 93%, so a track filled to
- * the absolute percentage drew 2.7px for 4.2% and floored 1.3% to the same 2%
- * several other rows got — a line of specks costing ~72px of table width,
- * twice. The number beside it is the absolute one and carries its own "k of N";
- * the bar is the comparison BETWEEN the rows of its column, which is the only
- * thing a 64px track can actually show, and `BAR_BASIS` says so under the
- * table. `Medians` in the playbook has drawn its bars this way since it
- * landed.
+ * AND IT IS DRAWN AGAINST THE LARGEST BRAND ROW, NOT AGAINST 100% AND NOT
+ * AGAINST THE REMAINDER. The artboard's bar fills its column because the mock's
+ * shares are 6–39%; on a real tenant they are 1–9% beside one remainder at 93%,
+ * so a track filled to the absolute percentage drew 2.7px for 4.2% and floored
+ * 1.3% to the same 2% several other rows got.
  *
- * No bar where there is no reading. `NOT_OBSERVED` is a brand absent from the
- * month, and an empty track beside it reads as a measured zero.
+ * SCALING TO EVERY ROW DID NOT FIX THAT, BECAUSE THE REMAINDER IS EVERY ROW.
+ * `topOf` reduced over "The rest of the category" too, so the scale stayed 93%
+ * (comments) and 86.4% (videos) and the specks stayed specks: measured on this
+ * page's own fixture at 1440, Össur's 1.3% drew 1.27px — on the `Math.max(2, …)`
+ * floor, and indistinguishable from `NOT_OBSERVED`, which draws no bar at all —
+ * and Ottobock's 5.7% drew 3.92px. The same rule that keeps the remainder out of
+ * the lines (`CATEGORY_NOT_DRAWN`) keeps it out of the scale: it is the
+ * remainder of the month, not a brand, and at its size every brand bar sits on
+ * the floor beside it. Against the largest BRAND share the same two rows draw
+ * 14.6px and 64px.
+ *
+ * SO THE REMAINDER'S OWN ROW DRAWS NO BAR. It is not on the scale the other
+ * bars are on, and a full track beside it would say it is — the column's own
+ * comparison is between the brands. Its share is printed beside it, with its own
+ * "k of N", exactly as before: no row is dropped and no denominator changes.
+ *
+ * No bar where there is no reading either. `NOT_OBSERVED` is a brand absent from
+ * the month, and an empty track beside it reads as a measured zero.
  */
 export const BAR_BASIS =
-  'Each bar is drawn against the largest share in its own column, never against 100% — the percentage beside it is the share itself.'
+  'Each bar is drawn against the largest brand share in its own column, never against 100% — the percentage beside it is the share itself. The rest of the category carries no bar: it is the remainder of the month, not a brand, and at its size every other bar sits on the floor beside it.'
 
 function Share({ share, role, top, mode }: { share: StandingShare | null; role: StandingRow['role']; top: number; mode: RenderMode }) {
   if (share == null || share.pct == null) {
@@ -146,6 +157,7 @@ function Share({ share, role, top, mode }: { share: StandingShare | null; role: 
     <span data-copy="figure">{fmtInt(share.k)} of {fmtInt(share.n)}</span>
   </>
   if (mode === 'email') return <span style={{ fontFamily: FONT.mono, fontSize: 12, color: EMAIL.ink }}>{body}</span>
+  if (role === 'category') return <span className="font-mono text-[12px] tabular-nums">{body}</span>
   return (
     <span className="flex items-center gap-2">
       <span className="h-1.5 w-[64px] shrink-0 overflow-hidden rounded-full bg-inner" aria-hidden>
@@ -199,13 +211,25 @@ function ChartPane({
         legend={false}
         // `height` IS THE viewBox'S, NOT A PIXEL HEIGHT — the SVG is emitted
         // `width:100%` with `height:auto`, so this prop sets an ASPECT RATIO of
-        // `height / 880`. The previous comment here claimed 168 "buys the block
-        // 42px", which is not a mechanism the code has: at 1440 this tile gives
-        // each chart a 674px pane, and 168/880 of that rendered the chart 107px
-        // tall against the artboard's 196; dropping from 210 saved 27px, not
-        // 42. 256 is the number that renders 196 in a 674px pane, measured with
-        // the repo's own Chromium rather than reasoned about.
-        height={256}
+        // `height / 880`.
+        //
+        // THE PANE IS 562px, NOT 674, AND THE NUMBER HERE WAS FITTED TO THE
+        // WRONG ONE. Measured with the repo's own Chromium against this page's
+        // populated fixture at 1440: the tile's inner width is 1136px and the
+        // pair is `lg:grid-cols-2` with a 12px gap, so each pane is 562.0px —
+        // two 674px panes have never fitted, and `height={256}` rendered
+        // 163.5px against the artboard's 196. 307 is the number that renders
+        // 196 in a 562px pane (196 / 562 × 880 = 306.9), re-measured after the
+        // change rather than reasoned about.
+        //
+        // THE TYPE SCALE IS NOT THIS CALLER'S TO FIX, AND THIS COMMENT MAY NOT
+        // PRETEND OTHERWISE. `CalendarLine` sizes every label in viewBox units,
+        // so the rendered type is `fontSize × pane / 880` — 6.4px for the axis
+        // and 5.7px for a rule label in a 562px pane, 4.0px at 1024. Widening
+        // the pane is the only lever a caller has and it is not enough; the
+        // primitive is `components/charts/calendar-line.tsx` and belongs to
+        // another package in this wave (shell SH1). Nothing here hides that.
+        height={307}
         format={(v) => fmtPct(v)}
         label={label}
         id={chartId([chartKey, ...series.map((x) => x.label), axis[0], axis[axis.length - 1]])}
@@ -312,9 +336,12 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
     const empty = competitiveStandings.emptyState(data)
     const rules: CalendarRule[] = s.rules.map((r) => ({ month: r.month, label: r.label, kind: 'tracking_change' as const }))
     const latest = s.denominators[s.denominators.length - 1] ?? null
-    // The largest share in each column — what its bars are drawn against.
+    // The largest BRAND share in each column — what its bars are drawn against.
+    // The category row is the month's remainder and is left out of the scale
+    // for the same reason it is left out of the lines: at 86–93% it puts every
+    // brand bar on the 2% floor. See `BAR_BASIS`.
     const topOf = (pick: (r: StandingRow) => StandingShare | null): number =>
-      s.rows.reduce((m, r) => Math.max(m, pick(r)?.pct ?? 0), 0)
+      s.rows.reduce((m, r) => (r.role === 'category' ? m : Math.max(m, pick(r)?.pct ?? 0)), 0)
     const topContent = topOf((r) => r.content)
     const topAttention = topOf((r) => r.attention)
 
@@ -380,12 +407,22 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
             {s.rules.map((r) => r.text).join(' ')}
           </p>
         ) : null}
+        {/* THE UNLOCK EXPLAINS THE TABLE'S RIGHT-HAND COLUMN, SO IT WAITS FOR
+            THE TABLE TOO. `ATTENTION_UNLOCK` ends "…so the right-hand share is
+            of the comments we kept", and it rendered ungated while the two
+            sentences above it were already gated on `hasTable` — so the
+            degraded tile said there are no standings to draw and then
+            explained that table's right-hand column. The unlock is a real
+            absence and still prints wherever there is a share for it to be
+            about; where there is not, it is describing nothing. */}
+        {hasTable ? (
         <p
           className={apron}
           style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 } : undefined}
         >
           {s.unlock}
         </p>
+        ) : null}
       </div>
     )
 
@@ -408,13 +445,20 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
         // before they read a single row.
         meta={metaLine(s)}
         // A REAL FOOTER, AT LAST. `BlockFrame` has had the slot since WP10 and
-        // not one Competitive block passed one, so "Open the record →" lived
-        // only in the page bar's soundness band and the definition line was
+        // not one Competitive block passed one, so the definition line was
         // split across a meta and two body paragraphs.
+        //
+        // AND IT NAMES WHERE IT GOES, BECAUSE THE PAGE BAR'S LINK DOES NOT GO
+        // THERE. `HowSound` (components/shell/how-sound.tsx) prints "the record
+        // →" ~500px above this one and opens the DRAWER over this page
+        // (`/dashboard/competitive?detail=record`); this one leaves for the
+        // record page in Settings. Two near-identical links to two
+        // destinations on one screen is a reader clicking the wrong one, so
+        // this one says which.
         footer={
           mode === 'app'
-            ? <Link href="/dashboard/settings?detail=record" className="hover:underline">Open the record →</Link>
-            : 'Open the record.'
+            ? <Link href="/dashboard/settings?detail=record" className="hover:underline">Open the full record in Settings →</Link>
+            : 'Open the full record in Settings.'
         }
         footerNote="no rank is printed"
       >

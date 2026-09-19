@@ -99,8 +99,28 @@ const SPAN: Record<string, { col: number; row: number }> = {
  * meaning as the MINIMUM height a tile claims (which is what holds the
  * artboard's rhythm when a state is short); they stop being a ceiling. Nothing
  * outside this page changes.
+ *
+ * AND A SHORT TILE IS NO LONGER STRETCHED TO ITS ROW-MATE'S FLOOR. A grid item
+ * defaults to `align-self: stretch`, so the three tiles in a row all took the
+ * height of the tallest and the surplus became WHITE INSIDE A CARD: measured to
+ * the block footer at 1440 on the populated fixture, CO4 carried 305px of a
+ * 656px tile, CO5 208px and CO6 376px — 889px of empty card on one screen. It
+ * is the artboard's own device, and the artboard fills those tiles; this page,
+ * in the state it ships in, does not. At 1024 the same tiles have 20px of
+ * surplus because the grid is one stacked column and every tile takes its own
+ * height, which is exactly what `items-start` asks for above `xl`. The row
+ * BAND is unchanged — it is still as tall as its tallest member, so the
+ * artboard's rhythm and the page's total height are what they were — but the
+ * air now falls on the page ground where there is nothing to read, instead of
+ * inside a card that looks like it lost its content.
  */
-export const GRID_ROWS = 'xl:auto-rows-[minmax(116px,auto)]'
+export const GRID_ROWS = 'xl:auto-rows-[minmax(116px,auto)] xl:items-start'
+
+/** Has this block nothing to draw? `emptyState` is every block's own answer and
+ *  the one the block itself renders (`BlockEmpty`), so the tile and the block
+ *  cannot disagree about which arm is on screen. */
+export const emptyRow = (block: Block<CompetitiveSurfaceData>, data: CompetitiveSurfaceData): boolean =>
+  Boolean(block.emptyState?.(data))
 
 /** Below `xl` the grid is one stacked column and `Tile`'s `MIN_H` still applies
  *  a height derived from the row span — at 1024 that is 776px of tile under a
@@ -183,13 +203,22 @@ export function CompetitiveSurfacePage({
         <PageGrid className={GRID_ROWS}>
           {COMPETITIVE_TILES.map((block) => {
             const span = SPAN[block.key] ?? { col: 12, row: 2 }
+            // A REFUSAL DOES NOT CLAIM FOUR ROWS. `PageGrid` is
+            // `auto-rows-[minmax(116px,auto)]`, so a `row-span-4` tile has a
+            // FLOOR of 4 × 116 + 3 × 16 = 512px whatever is in it — and until
+            // M3/M5 are applied every tenant's standings tile is the refusal,
+            // three lines of text, first thing on the page: measured at 1440,
+            // 512px of tile under 120px of content. The span is the artboard's
+            // rhythm for a tile that HAS a reading; a tile that has just said
+            // it has none takes one row and lets its own content size it.
+            const row = emptyRow(block, data) ? 1 : span.row
             // NO `distribute`: every tile has exactly ONE child — the block's
             // own `<section>` — so `justify-between` had nothing to spread and
             // the prop read as a fix that was never applied. What actually puts
             // a footer on the floor is the block filling the tile (`h-full` on
             // its own `BlockFrame`), which is where each block now does it.
             return (
-              <Tile key={block.key} col={span.col} row={span.row} exportKey={block.key} className={STACKED}>
+              <Tile key={block.key} col={span.col} row={row} exportKey={block.key} className={STACKED}>
                 {block.render(data, 'app', ctx)}
               </Tile>
             )

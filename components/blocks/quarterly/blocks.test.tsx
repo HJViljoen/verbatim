@@ -831,9 +831,13 @@ describe('the artboard port (Block D wave 2)', () => {
   it('qr.p5.h2h · five measures, and three of them say why no band was drawn', () => {
     const t = text('quarterly.rivals')
     expect(t).toContain('Head to head, then and now')
-    expect(t).toContain('Comments per video is a rate, not a share of a population')
-    expect(t).toContain('Engagement is a median of per-video rates')
-    expect(t).toContain('Posts published is a count with no denominator')
+    // CO18: the reader's words, not the analyst's — "a share of a population"
+    // and "a median of per-video rates" were the analyst's sentence about the
+    // measurement. What each has to carry is unchanged: why no band, and that
+    // both months print in its place.
+    expect(t).toContain('Comments per video is an average, not a count out of a total')
+    expect(t).toContain('Engagement is the middle video’s rate')
+    expect(t).toContain('Posts published is a plain count with nothing to be out of')
     // And the Reddit exclusion note the engagement rows need.
     expect(t).toContain('Reddit is excluded from every engagement figure')
   })

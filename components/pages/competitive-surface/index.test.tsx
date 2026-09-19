@@ -4,13 +4,14 @@ import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, directionRe } from '@/lib/test/copy-contract'
 import { markupText as markupOf, render, renderText } from '@/lib/test/render'
-import { COMPETITIVE_BLOCKS, COMPETITIVE_TILES, GRID_ROWS, STACKED } from './index'
+import { COMPETITIVE_BLOCKS, COMPETITIVE_TILES, CompetitiveSurfacePage, GRID_ROWS, STACKED, emptyRow } from './index'
 import { PageGrid } from '@/components/shell/page-grid'
 import { Tile } from '@/components/shell/tile'
 import { H2H_NO_RIVAL, competitiveHeadToHead } from './head-to-head'
 import { OWN_CLAIMS_OWNER, competitiveOwnClaims, trackedLine } from './own-claims'
 import { competitiveSaidAbout } from './said-about'
 import { PLAYBOOK_NO_READING, competitivePlaybook } from './playbook'
+import { LEAD_MIN_RATED } from '@/lib/pages/content-brief'
 import { competitiveRivals } from './rivals'
 import { competitiveStandings } from './standings'
 import { competitiveQuestions } from './questions'
@@ -68,7 +69,10 @@ describe('CO1 · the rival selection', () => {
     // zero, and that is a different sentence from "never read".
     const text = renderText(competitiveRivals.render(quietRivalFixture(), 'app', ctx))
     expect(text).toContain('nothing of theirs was read this window')
-    expect(text).toContain('1 of their videos read')
+    // AND THE COUNT CARRIES ITS SPAN. `countAnalysedByRival` has no date
+    // filter, so this is the whole corpus beside a WINDOW state — "in all" is
+    // what stops 319 reading as a contradiction of the standings' 42 of 449.
+    expect(text).toContain('1 of their videos read in all')
   })
 
   it('says a rival you stopped tracking cannot be listed yet', () => {
@@ -142,17 +146,36 @@ describe('CO2 · the standings', () => {
     expect(markup.indexOf('Comments, on last month')).toBeLessThan(markup.indexOf('Videos, on last month'))
   })
 
-  it('draws each bar against its own column, and says so', () => {
-    // A track filled to the ABSOLUTE percentage drew 2.7px for 4.2% and floored
-    // 1.3% to the same 2% several other rows got, because on a real tenant the
-    // shares are 1–9% beside one remainder at 93%. The figure beside the bar
-    // is the absolute one and carries its own "k of N".
+  it('draws each bar against the largest BRAND in its column, and says so', () => {
+    // A track filled to the ABSOLUTE percentage drew 2.7px for 4.2%; scaling to
+    // every row did not fix it, because the remainder IS every row — at 93% the
+    // scale stayed the remainder's and 1.3% drew 1.27px, on the 2% floor and
+    // indistinguishable from `NOT_OBSERVED`, which draws no bar at all. The
+    // scale is the largest brand share; the figure beside the bar is still the
+    // absolute one and still carries its own "k of N".
     const markup = render(competitiveStandings.render(competitiveFixture(), 'app', ctx))
     const rows = competitiveFixture().standings.rows
-    const top = Math.max(...rows.map((r) => r.content?.pct ?? 0))
-    const you = rows.find((r) => r.role === 'client')!.content!.pct!
+    const brands = rows.filter((r) => r.role !== 'category')
+    const top = Math.max(...brands.map((r) => r.content?.pct ?? 0))
+    const you = brands.find((r) => r.role === 'client')!.content!.pct!
     expect(markup).toContain(`width:${(you / top) * 100}%`)
-    expect(renderText(markup)).toContain('drawn against the largest share in its own column')
+    expect(renderText(markup)).toContain('drawn against the largest brand share in its own column')
+  })
+
+  it('draws NO bar on the remainder row, which is not on the brands’ scale', () => {
+    // "The rest of the category" is the month's remainder, not a brand. It is
+    // out of the scale for the same reason `CATEGORY_NOT_DRAWN` keeps it out of
+    // the lines, so a full track beside it would say it is on a scale it is not
+    // on. Its share and its "k of N" are unchanged.
+    const markup = render(competitiveStandings.render(competitiveFixture(), 'app', ctx))
+    const rows = competitiveFixture().standings.rows
+    const rest = rows.find((r) => r.role === 'category')!
+    const text = renderText(markup)
+    expect(text).toContain(rest.label)
+    expect(text).toContain('86.4%')
+    // Two brand rows × two columns, and not one more.
+    expect(markup.match(/w-\[64px\]/g)?.length).toBe(4)
+    expect(text).toContain('The rest of the category carries no bar')
   })
 
   it('counts a brand’s months read by ONE rule, in both cells that print it', () => {
@@ -215,12 +238,16 @@ describe('CO2 · the standings', () => {
     const text = renderText(competitiveStandings.render(unreadMonthsFixture(), 'app', ctx))
     expect(text).not.toContain('the comments we kept on the right')
     expect(text).not.toContain('beside this table')
-    // The ones that are true with or without a row stay.
-    expect(text).toContain('The attention index')
-    // And the surface reading still prints both.
+    // AND THE UNLOCK IS ONE OF THEM (CO11). `ATTENTION_UNLOCK` ends "…so the
+    // right-hand share is of the comments we kept" — it explains the table's
+    // right-hand column, so a tile that has just said there are no standings
+    // to draw may not go on to explain them.
+    expect(text).not.toContain('The attention index')
+    // And the surface reading still prints all of them.
     const read = renderText(competitiveStandings.render(competitiveFixture(), 'app', ctx))
     expect(read).toContain('the comments we kept on the right')
     expect(read).toContain('beside this table')
+    expect(read).toContain('The attention index')
   })
 
   it('refuses in words when no month has been read', () => {
@@ -312,7 +339,14 @@ describe('the sections that are not built', () => {
   // on.
   it('names the two sections still missing, and no longer the two that landed', () => {
     const text = renderText(competitiveUnlocks.render(competitiveFixture(), 'app', ctx))
-    expect(text).toContain('What they say about themselves')
+    // AND IT NAMES THE MISSING HALF, NOT THE MOUNTED TILE (CO14). The row read
+    // "What they say about themselves", byte-identical to the CO4 eyebrow two
+    // tiles above — drawn, populated, working — under "Not on this page yet"
+    // and a badge reading "not built yet · Verbatim engineering".
+    expect(text).toContain('What they claim in their own posts')
+    expect(text).not.toContain('What they say about themselves')
+    expect(renderText(competitiveOwnClaims.render(competitiveFixture(), 'app', ctx)))
+      .toContain('What they say about themselves')
     expect(text).toContain('Findings, with recurrence')
     expect(text).not.toContain('Head to head, then and now')
     expect(text).not.toContain('How the category makes content')
@@ -463,9 +497,9 @@ describe('CO3 · head to head, then and now', () => {
 
   it('prints no magnitude on a rate, a median or a count — and says why (D2, D3)', () => {
     const text = renderText(competitiveHeadToHead.render(competitiveFixture(), 'app', ctx))
-    expect(text).toContain('Comments per video is a rate')
-    expect(text).toContain('Engagement is a median of per-video rates')
-    expect(text).toContain('Posts published is a count with no denominator')
+    expect(text).toContain('Comments per video is an average, not a count out of a total')
+    expect(text).toContain('Engagement is the middle video’s rate')
+    expect(text).toContain('Posts published is a plain count with nothing to be out of')
     // The mock prints "+2", "+0.2 pt" and "▼ 2" on exactly those three rows.
     expect(text).not.toMatch(/[▲▼]\s*(2|0\.2)\b/)
   })
@@ -507,7 +541,12 @@ describe('CO4 · what they say about themselves', () => {
   it('draws three distinct absences and not one of them is a zero', () => {
     const text = renderText(competitiveOwnClaims.render(competitiveFixture(), 'app', ctx))
     // configured and silent …
-    expect(text).toContain('No post was published in this period')
+    // ONE CLOCK, ONE SENTENCE (CO16). `CENSUS_EMPTY` says "in this period" and
+    // then appends the clock label as a fragment after a dash — the same fact
+    // twice — and never says the thing that distinguishes this absence from
+    // the one below it: we READ their accounts.
+    expect(text).toContain('We read their accounts and found no posts published in September.')
+    expect(text).not.toContain('in this period')
     // … no account configured at all, with the owner and NO date (D14) …
     expect(text).toContain('No account is configured for this rival')
     expect(text).toContain(OWN_CLAIMS_OWNER)
@@ -580,7 +619,77 @@ describe('CO5 · said about them, by others', () => {
   })
 })
 
+describe('the grid, on the arm every tenant sees (CO12)', () => {
+  it('gives a block with nothing to draw one row, not its artboard span', () => {
+    // `PageGrid` is `auto-rows-[minmax(116px,auto)]`, so `row-span-4` is a
+    // FLOOR of 4 × 116 + 3 × 16 = 512px whatever is in the tile — and until
+    // M3/M5 are applied the standings tile is the refusal: three lines of
+    // text, first thing on the page, in 512px of card (measured at 1440).
+    const degraded = unreadMonthsFixture()
+    expect(emptyRow(competitiveStandings, degraded)).toBe(true)
+    expect(emptyRow(competitiveStandings, competitiveFixture())).toBe(false)
+    const markup = render(<CompetitiveSurfacePage data={degraded} />)
+    // The standings tile asks for one row here and four on the reading.
+    expect(markup).toContain('xl:row-span-1')
+    expect(render(<CompetitiveSurfacePage data={competitiveFixture()} />)).toContain('xl:row-span-4')
+  })
+})
+
+describe('CO5 · said about them (CO10)', () => {
+  it('says one withheld sentence for every rival, not one per rival', () => {
+    // `claimsFor` is null on every app load (M8's policy is `entity =
+    // 'client'`), so the block's entire content was the same 26-word sentence
+    // once per rival — three verbatim copies here, five on a five-rival tenant.
+    const text = renderText(competitiveSaidAbout.render(competitiveFixture(), 'app', ctx))
+    const copies = text.split('is not a silence we measured').length - 1
+    expect(copies).toBe(1)
+    for (const name of ['Ottobock', 'Rareform', 'Patagonia']) expect(text).toContain(name)
+    // And a footer may not describe the denominator of numbers that are not on
+    // the page, nor offer to play voices the tile does not hold.
+    expect(text).not.toContain('of each brand’s own videos')
+    expect(text).not.toContain('Hear these voices')
+  })
+
+  it('keeps the per-rival rows the moment the rows differ', () => {
+    const text = renderText(competitiveSaidAbout.render(claimsReadFixture(), 'app', ctx))
+    expect(text).toContain('of each brand’s own videos')
+    expect(text).toContain('Hear these voices')
+  })
+})
+
+describe('the page foot and the page bar are one record (CO8)', () => {
+  it('states ONE language share, in the band and in the footnote', () => {
+    // `ossurMethod()` overrode `coverage` only, so `language` stayed at the
+    // shared Sealand default while the band was hand-written: the bar said
+    // "34% of what was said on camera was not in English" and the foot, 2,500px
+    // below, said "27% — 474 of 1,755". Both halves derive from one `lang`
+    // record in production and cannot disagree; the fixture may not either.
+    const data = competitiveFixture()
+    const share = /(\d+(?:\.\d+)?)% of what was said on camera was not in English/
+    const band = data.record.line.match(share)
+    const foot = data.method!.language!.match(share)
+    expect(band).toBeTruthy()
+    expect(foot).toBeTruthy()
+    expect(band![1]).toBe(foot![1])
+  })
+})
+
 describe('CO7 · how the category makes content', () => {
+  it('floors the conclusion it promotes, as the content brief does (CO6)', () => {
+    // `matrixConclusion` defaults `leadMinRated` to 0, and this page's
+    // `buildPlaybook` call passed nothing — so the tile's takeaway was
+    // "Review ran at 3.7% against Story at 3.4% — measured over 4 and 206",
+    // the exact sentence quoted at lib/reading/formats.ts:373-375 as the
+    // finding `leadMinRated` was added to fix. One product, one corpus: the
+    // loader and this fixture now pass `LEAD_MIN_RATED`, which is
+    // `COMPETITIVE_MIN_VIDEOS` — "never rest a finding on one".
+    const conclusion = competitiveFixture().playbook!.formats.conclusion!
+    const ns = [...conclusion.matchAll(/measured over ([\d,]+) and ([\d,]+)/g)][0]
+    expect(ns).toBeTruthy()
+    for (const n of [ns[1], ns[2]]) expect(Number(n.replace(/,/g, ''))).toBeGreaterThanOrEqual(LEAD_MIN_RATED)
+    expect(conclusion).not.toContain('measured over 4 and 206')
+  })
+
   it('prints the classified n beside the published one, per column (D6)', () => {
     const text = renderText(competitivePlaybook.render(competitiveFixture(), 'app', ctx))
     // The format legend, per side …
@@ -666,8 +775,26 @@ describe('the page, as the artboard composes it', () => {
     // The artboard's arrow, with the year printed once on the end month — a
     // span that crosses a year boundary is ambiguous without it.
     expect(text).toContain('share of the tracked set · Jul → Sep 2026 · both denominators printed')
-    expect(text).toContain('Open the record →')
+    // AND IT NAMES WHERE IT GOES (CO13): the page bar's `HowSound` prints
+    // "the record →" ~500px above and opens the drawer over THIS page, while
+    // this one leaves for Settings. Two near-identical links, two
+    // destinations, one screen.
+    expect(text).toContain('Open the full record in Settings →')
+    expect(text).not.toMatch(/(?<!full )record →/)
     expect(text).toContain('no rank is printed')
+  })
+
+  it('carries the reader’s window into Voice, and not the rival (CO13)', () => {
+    // A bare `/dashboard/voice` landed a reader three months deep on Voice's
+    // default month — a different period from the tile they left. The horizon
+    // travels; `vs=` does not, because Voice has no rival selection.
+    const three = blockContext('', EMAIL, { horizon: 'last_3', vs: 'Ottobock' })
+    for (const block of [competitiveSaidAbout, competitiveQuestions]) {
+      const markup = render(block.render(claimsReadFixture(), 'app', three))
+      expect(markup).toContain('href="/dashboard/voice?horizon=last_3"')
+      expect(markup).not.toContain('href="/dashboard/voice"')
+      expect(markup).not.toContain('vs=Ottobock')
+    }
   })
 
   it('draws the charts on a one-month horizon too, with the attention share first', () => {
@@ -789,8 +916,10 @@ describe('the page, as the artboard composes it', () => {
       const header = markup.slice(0, markup.indexOf('</header>'))
       expect(header).not.toContain('font-mono')
     }
-    // And what each said is still on the card, in its footer.
-    expect(renderText(competitiveSaidAbout.render(data, 'app', ctx))).toContain('of each brand’s own videos')
+    // And what each said is still on the card, in its footer — on the arm that
+    // HAS rows. The withheld arm drops the note on purpose (CO10): it names the
+    // denominator of "k of N" cells the tile has just said it cannot draw.
+    expect(renderText(competitiveSaidAbout.render(claimsReadFixture(), 'app', ctx))).toContain('of each brand’s own videos')
     expect(renderText(competitiveQuestions.render(data, 'app', ctx))).toContain('of the videos about Ottobock')
   })
 

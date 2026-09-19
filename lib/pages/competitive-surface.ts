@@ -14,6 +14,10 @@ import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, ty
 import { buildStandings, type StandingRow } from '../reading/standings'
 import type { HeadToHead } from '../reading/head-to-head'
 import { buildHeadToHead, buildPlaybook, loadPlaybookVideos, type PlaybookBlock } from './playbook'
+// THE FLOOR THE CONTENT BRIEF ALREADY RESTS ITS CONCLUSION ON. Imported rather
+// than re-derived from `COMPETITIVE_MIN_VIDEOS` so the two surfaces cannot
+// drift into two answers about the same sentence.
+import { LEAD_MIN_RATED } from './content-brief'
 import type { MonthStatus, PlatformMix } from '../reading/types'
 import type { Verdict } from '../reading/verdicts'
 // D3 · own posts, own claims and what the rivals say. This module's own two
@@ -30,6 +34,7 @@ import { CLIENT_AUDIENCE, isMissingCompetitors, loadCompetitors, rivalKey, stitc
 import type { Quote, Scope } from '../renderables/types'
 import { quoteRef } from '../renderables/quotes-freeze'
 import { selectAll } from '../supabase-admin'
+import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import { isMissingSubjects, TABLE_SUBJECTS } from '../subjects/types'
 import { recordWindow } from './overview'
 import { row } from './read'
@@ -559,7 +564,16 @@ export function competitiveUnlockRows(ownClaims: readonly OwnPostCensus[] = []):
       : {
           section: 'CO4',
           state: 'not built yet' as const,
-          title: 'What they say about themselves',
+          // THE ROW NAMES THE MISSING HALF, NOT THE TILE THAT IS MOUNTED. This
+          // read "What they say about themselves" — byte-identical to the CO4
+          // eyebrow two tiles above, which is drawn, populated, and by this
+          // arm's own definition working — under a heading saying "Not on this
+          // page yet" and a badge reading "not built yet · Verbatim
+          // engineering". A readiness row is a list of what is ABSENT, and the
+          // absent thing here is the claims, which is what the line has always
+          // said. The other arm keeps the tile's name because there the tile
+          // genuinely has nothing: no account is configured anywhere.
+          title: 'What they claim in their own posts',
           line: 'What each rival published this month is above. What they CLAIM in it is read from their own transcripts and is not printed here — putting a rival’s words on this page is a decision to take, not a gap to fill.',
           owner: 'Verbatim engineering',
         }
@@ -734,7 +748,16 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
   // is read off them.
   const ownClaims = await ownClaimsAhead
   const playbookVideos = await playbookAhead
-  const playbook = playbookVideos ? buildPlaybook({ month, brand, rival: selected?.name ?? null, videos: playbookVideos }) : null
+  // THE CONCLUSION IS FLOORED HERE TOO (CO6). `matrixConclusion` defaults its
+  // `leadMinRated` to 0, so this call promoted the exact sentence the option
+  // was added to stop: "Review ran at 3.7% against Story at 3.4% — measured
+  // over 4 and 206 of The category's 687…", a 0.3-point gap between n=4 and
+  // n=206 printed as the page's takeaway, quoted as the finding at
+  // lib/reading/formats.ts:373-375. `content-brief.ts` passed `LEAD_MIN_RATED`
+  // and this did not, so one product floored one copy of one sentence.
+  const playbook = playbookVideos
+    ? buildPlaybook({ month, brand, rival: selected?.name ?? null, videos: playbookVideos, conclusionMinRated: LEAD_MIN_RATED })
+    : null
   const headToHead =
     playbookVideos && selected
       ? buildHeadToHead({
@@ -913,6 +936,26 @@ export async function loadRivalOwnPosts(
 /** Nobody read them, and the page says which silence that is. */
 export const SAID_ABOUT_WITHHELD = (label: string): string =>
   `What others say about ${label} is read from those videos’ own transcripts, which are not open to this page — so this is not a silence we measured.`
+
+/** "Ottobock, Rareform or Patagonia" — a list a sentence can carry. */
+export const namesList = (labels: readonly string[]): string =>
+  labels.length <= 1
+    ? labels[0] ?? ''
+    : `${labels.slice(0, -1).join(', ')} or ${labels[labels.length - 1]}`
+
+/**
+ * THE SAME SILENCE, SAID ONCE.
+ *
+ * `claimsFor` is null on every app load (M8's policy is `entity = 'client'`),
+ * so every rival carried `SAID_ABOUT_WITHHELD` and the block rendered the same
+ * 26-word sentence once per rival — three verbatim copies on this page's own
+ * fixture, five on a five-rival tenant. Repetition is not emphasis: it reads as
+ * three findings until the reader notices the words are identical. The fact is
+ * about OUR permissions and not about any one rival, so it is one sentence
+ * naming them all.
+ */
+export const SAID_ABOUT_WITHHELD_ALL = (labels: readonly string[]): string =>
+  `What others say about ${namesList(labels)} is read from those videos’ own transcripts, which are not open to this page — so this is not a silence we measured.`
 
 /** Claims in hand and no month row to be a share of. */
 export const SAID_ABOUT_NO_DENOMINATOR = (label: string): string =>
@@ -1419,24 +1462,50 @@ async function buildQuestions(input: QuestionInputs): Promise<QuestionsBlock> {
   }
 }
 
-/** Comment dates by id, chunked to stay under the PostgREST URL cap. Read on
- *  the reading client with the tenant re-asserted: a date is not a reading and
- *  needs no policy of its own, but a read that could cross a tenant is a read
- *  that names its tenant. */
+/**
+ * Comment dates by id, chunked to stay under the PostgREST URL cap. Read on
+ * the reading client with the tenant re-asserted: a date is not a reading and
+ * needs no policy of its own, but a read that could cross a tenant is a read
+ * that names its tenant.
+ *
+ * THE CHUNKS GO OUT TOGETHER, AND THEY USED NOT TO. This was a hand-rolled
+ * `for` loop with an `await` in its body at 120 ids a chunk — the only read in
+ * the Phase 1 diff that did, against `lib/chunk.ts`'s four named chunked
+ * readers and its own measurement (32 concurrent 100-id reads of `comments` in
+ * 382ms against 6,714ms one at a time). A rival with 1,200 cited comments is
+ * ten chunks, and on this instance a round trip costs 180–800ms whatever it
+ * carries, so that was 1.8–8s of pure serial wait added to a loader measured
+ * at 1.6–4.6s — on every Competitive load, inside every `loadQuarterly`, and
+ * inside every `loadBriefReading` that names the surface, so three times in
+ * one document build.
+ *
+ * `comments.id` IS A KEY COLUMN, one row per id, and nothing downstream reads
+ * the order (the answer is a Map), so the size is `UUID_IN_CHUNK` and not the
+ * pinned 120: half the largest `.in()` proven to work, measured 16 September.
+ * `selectAll` pages each chunk, which is what keeps raising that constant a
+ * performance decision rather than a correctness one.
+ *
+ * A FAILED CHUNK IS STILL NON-FATAL. The loop logged and continued, and a
+ * missing date is already a state every caller handles (the comment is in no
+ * month). `mapWithLimit` rejects on the first failure like `Promise.all`, so
+ * the catch is INSIDE the mapped function: one chunk that fails costs its own
+ * dates and not the page.
+ */
 async function commentDates(client: SupabaseClient, clientId: string, ids: readonly string[]): Promise<Map<string, string>> {
+  const parts = chunk([...new Set(ids)], UUID_IN_CHUNK)
+  const pages = await mapWithLimit(parts, READ_CONCURRENCY, async (part) => {
+    try {
+      return await selectAll<{ id: string; comment_date: string | null }>(() =>
+        client.from('comments').select('id, comment_date').eq('client_id', clientId).in('id', part),
+      )
+    } catch (error) {
+      console.error(`[pages] competitive-surface.commentDates: ${(error as { message?: string })?.message ?? String(error)}`)
+      return []
+    }
+  })
   const out = new Map<string, string>()
-  const unique = [...new Set(ids)]
-  for (let i = 0; i < unique.length; i += 120) {
-    const chunk = unique.slice(i, i + 120)
-    const { data, error } = await client
-      .from('comments').select('id, comment_date').eq('client_id', clientId).in('id', chunk)
-    if (error) {
-      console.error(`[pages] competitive-surface.commentDates: ${error.message}`)
-      continue
-    }
-    for (const r of (data ?? []) as { id: string; comment_date: string | null }[]) {
-      if (r.comment_date) out.set(r.id, r.comment_date)
-    }
+  for (const r of pages.flat()) {
+    if (r.comment_date) out.set(r.id, r.comment_date)
   }
   return out
 }
