@@ -121,14 +121,21 @@ export function Tile({
       )}
     >
       {!isStrip && (eyebrow || meta || exportKey) && (
-        <header className="relative flex items-baseline justify-between gap-2">
+        /* THE HEADER AND THE FOOTER WRAP (Block D wave 3, SH5). The meta was
+           `shrink-0 whitespace-nowrap` against a `truncate` eyebrow, so at 375
+           the Reports archive's 62-char delivery meta squeezed `THE ARCHIVE`
+           to ZERO WIDTH and the footer read "quotes carry" — with
+           `scrollWidth === clientWidth` in both cases, so the
+           no-horizontal-scroll check passed over a header with no title in it.
+           A slot that will not fit takes its own line instead. */
+        <header className="relative flex flex-wrap items-baseline justify-between gap-2">
           {eyebrow ? (
             <h2 className={cn('truncate text-[10.5px] font-semibold uppercase tracking-[0.06em]', isHero ? 'text-hero-foreground/75' : 'text-secondary-foreground')}>
               {eyebrow}
             </h2>
           ) : <span />}
           {meta && (
-            <span className={cn('shrink-0 whitespace-nowrap font-mono text-[11px]', isHero ? 'text-hero-foreground/70' : 'text-muted-foreground', exportKey && 'group-hover/tile:mr-6 group-focus-within/tile:mr-6')}>
+            <span className={cn('min-w-0 font-mono text-[11px]', isHero ? 'text-hero-foreground/70' : 'text-muted-foreground', exportKey && 'group-hover/tile:mr-6 group-focus-within/tile:mr-6')}>
               {meta}
             </span>
           )}
@@ -145,12 +152,12 @@ export function Tile({
       )}
       {!isStrip && (footer || footerNote) && (
         <footer className={cn(
-          'mt-auto flex items-center justify-between gap-2 border-t pt-2 text-[12px] font-medium',
+          'mt-auto flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-t pt-2 text-[12px] font-medium',
           isHero ? 'border-hero-foreground/20 bg-hero text-hero-foreground' : 'border-border/70 bg-tile text-foreground',
           hoverable ? 'static' : 'relative z-[1]',
         )}>
           <span className="min-w-0 truncate [&_a:hover]:underline">{footer}</span>
-          {footerNote && <span className={cn('shrink-0 font-mono text-[11px] font-normal', isHero ? 'text-hero-foreground/70' : 'text-muted-foreground')}>{footerNote}</span>}
+          {footerNote && <span className={cn('min-w-0 font-mono text-[11px] font-normal', isHero ? 'text-hero-foreground/70' : 'text-muted-foreground')}>{footerNote}</span>}
         </footer>
       )}
     </section>

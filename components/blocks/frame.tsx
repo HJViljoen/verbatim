@@ -229,12 +229,19 @@ export function BlockFrame({
           test on that string is updated with this reason. `heading` wins over
           `accent` where a caller passes both: a 20px heading with a 2px rule
           before it is neither of the two things the artboards draw. */}
+      {/* AND IT WRAPS RATHER THAN CRUSHES (Block D wave 3, SH5) — the rule the
+          FOOTER already follows, applied to the header. `meta` was
+          `flex-none whitespace-nowrap`, so at 768 Competitive's standings meta
+          (455px in a 472px pane) took its width out of the title, which wrapped
+          to three lines and was cut mid-phrase. With `flex-wrap` the meta
+          drops to its own line instead, and a header that already fits is
+          unchanged apart from the class. */}
       {header ? (
-      <header className={cn('flex gap-2', heading ? 'items-center justify-between gap-4' : 'items-baseline justify-between')}>
+      <header className={cn('flex flex-wrap gap-2', heading ? 'items-center justify-between gap-4' : 'items-baseline justify-between')}>
         {heading ? (
           <span className="flex min-w-0 items-baseline gap-2.5">
             <h2 className="m-0 whitespace-nowrap text-[20px] font-semibold tracking-[-0.01em] text-foreground">{title}</h2>
-            {meta ? <span className="flex-none whitespace-nowrap font-mono text-[11px] text-muted-foreground">{meta}</span> : null}
+            {meta ? <span className="min-w-0 font-mono text-[11px] text-muted-foreground">{meta}</span> : null}
           </span>
         ) : (
           <>
@@ -254,7 +261,7 @@ export function BlockFrame({
               {accent ? <span aria-hidden className="inline-block h-[2px] w-4 flex-none rounded-full bg-positive" /> : null}
               {title}
             </h2>
-            {meta ? <span className="flex-none whitespace-nowrap font-mono text-[11px] text-muted-foreground">{meta}</span> : null}
+            {meta ? <span className="min-w-0 font-mono text-[11px] text-muted-foreground">{meta}</span> : null}
           </>
         )}
         {actions ? <span className="flex flex-none items-center gap-2">{actions}</span> : null}
@@ -276,7 +283,13 @@ export function BlockFrame({
               than wrap its link asks for that — `truncateFooter` — and every
               block that has not asked keeps the wrap it has always had. */}
           <span className={cn('min-w-0', truncateFooter && 'truncate')}>{footer}</span>
-          {footerNote ? <span className="shrink-0 font-mono text-[11px] font-normal text-muted-foreground">{footerNote}</span> : null}
+          {/* `shrink-0` inside an `overflow-hidden` Tile is a clip with no
+              signal: Overview's rivals note measures 825px against 768 and
+              lost its closing "41 did this month." — and `scrollWidth ===
+              clientWidth` throughout, so the no-horizontal-scroll check passed
+              over it. The footer already wraps; the note now wraps INSIDE its
+              line too. */}
+          {footerNote ? <span className="min-w-0 font-mono text-[11px] font-normal text-muted-foreground">{footerNote}</span> : null}
         </footer>
       ) : null}
     </section>

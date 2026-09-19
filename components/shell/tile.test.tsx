@@ -101,6 +101,22 @@ describe('Tile chrome', () => {
     expect(words).toContain('all-time')
   })
 
+  it('lets a slot that will not fit take its own line, rather than crushing the one beside it (SH5)', () => {
+    const markup = render(
+      <Tile col={4} row={2} eyebrow="THE ARCHIVE" meta="delivered every Monday · next on 5 Oct · 14 in the archive" footer="Open the archive →" footerNote="quotes carry their own links">
+        <p>body</p>
+      </Tile>,
+    )
+    // The meta was `shrink-0 whitespace-nowrap` against a `truncate` eyebrow,
+    // so at 375 the 62-char delivery meta squeezed `THE ARCHIVE` to zero width
+    // — with scrollWidth === clientWidth, so nothing flagged it.
+    expect(markup).not.toContain('shrink-0 whitespace-nowrap')
+    expect(markup.slice(0, markup.indexOf('</header>'))).toContain('flex-wrap')
+    const footer = markup.slice(markup.indexOf('<footer'))
+    expect(footer).toContain('flex-wrap')
+    expect(footer).not.toContain('shrink-0')
+  })
+
   it('keeps its size when it is empty — the grid never collapses', () => {
     const markup = render(<Tile col={5} row={2} eyebrow="Audience sentiment"><TileEmpty>Counted with the first update.</TileEmpty></Tile>)
     expect(markup).toContain('min-h-[248px]')

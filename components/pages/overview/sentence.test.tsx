@@ -156,7 +156,10 @@ describe('OV1, ported to the artboard', () => {
     const markup = render(overviewSentence.render(overviewFixture(), 'app', ctx))
     // `BlockFrame.footerNote` — the right-hand mono slot P0 built and nothing
     // used. Six of Main's footer notes were body paragraphs or absent.
-    expect(markup).toContain('shrink-0 font-mono text-[11px] font-normal text-muted-foreground">September 2026 · still filling')
+    // `shrink-0` came off the slot in Block D wave 3 (SH5) — it was a clip
+    // with no signal inside an overflow-hidden Tile — so the assertion is on
+    // the slot's remaining signature rather than on the whole class string.
+    expect(markup).toContain('font-mono text-[11px] font-normal text-muted-foreground">September 2026 · still filling')
   })
 
   it('prints the video’s own on-screen text as a sibling of the quote, never inside it', () => {
