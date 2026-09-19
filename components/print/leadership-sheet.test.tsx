@@ -10,7 +10,8 @@ import { documentSlides } from '@/lib/reports/documents/compose'
 import { documentViewerPages } from '@/lib/reports/viewer'
 import type { DocumentSnapshotData } from '@/lib/reports/documents/types'
 import { DocumentDeck } from './document-deck'
-import { LeadershipSheet, isLeadershipOverview, leadGap, leadSubject, leadershipSheetData } from './leadership-sheet'
+import { provenanceLine } from '@/components/pages/overview/sentence'
+import { LeadershipSheet, isLeadershipOverview, leadGap, leadSubject, leadershipSheetData, sheetSubjectRows } from './leadership-sheet'
 
 // The leadership one-pager (Block D wave 2, E-leadership).
 //
@@ -163,10 +164,14 @@ describe('the leadership one-pager', () => {
   // mock-gap §6 D12. The product refuses the quarter framing deliberately:
   // the decisions were not dated inside the quarter, so the ratio is the whole
   // ledger's and `actedTally` is the one sentence for it.
-  it('prints the whole-ledger acted-on ratio, never a quarter', () => {
+  it('prints the whole-ledger acted-on ratio, never a quarter, and prints it once', () => {
     const words = renderText(sheet())
     expect(words).toContain('every piece of advice this product has ever given you')
     expect(words).not.toContain('this quarter')
+    // The eyebrow carried the same ratio, unscoped, forty pixels above the
+    // sentence that scopes it. The artboard prints it once.
+    expect(words.match(/1 of 64/g) ?? []).toHaveLength(1)
+    expect(words).not.toContain('acted on 1 of 64 Push')
   })
 
   // The mock's change column carries a muted stand-alone "flat". It is not in
@@ -181,6 +186,29 @@ describe('the leadership one-pager', () => {
     // … and the cell keeps its own "of N", which is what rule (b) reads.
     expect(words).toContain('26 of 84')
     expect(words).toContain('305 of 1,388')
+  })
+
+  // Thirty paired figures in five columns, laid out as `div`s on a grid: on
+  // the share link (`/r/<token>`, which is HTML) a screen reader reached them
+  // in reading order with nothing naming the column, so "44% · 62 of 142" was
+  // indistinguishable from the client's own share — and the legend dots are
+  // `aria-hidden`, so colour was the only thing telling the sides apart. The
+  // product's own subjects block ships a real table; the artboard's geometry
+  // rides on `display: grid` rows, unchanged.
+  it('draws the subjects table as a table, with a header for every column', () => {
+    const markup = render(sheet())
+    expect(markup).toContain('<table')
+    // Five columns, and the subject is the row's own header.
+    expect((markup.match(/role="columnheader"/g) ?? []).length).toBe(5)
+    expect((markup.match(/scope="col"/g) ?? []).length).toBe(5)
+    expect((markup.match(/role="rowheader"/g) ?? []).length).toBe(2)
+    expect((markup.match(/scope="row"/g) ?? []).length).toBe(2)
+    // `display` other than `table` strips the semantics a bare <table> would
+    // have given, which is why every role is written down.
+    expect(markup).toContain('role="table"')
+    expect((markup.match(/role="rowgroup"/g) ?? []).length).toBe(2)
+    // The geometry is the artboard's: the same five-column grid on every row.
+    expect((markup.match(/grid-cols-\[minmax\(0,112px\)_82px_120px_138px_minmax\(0,1fr\)\]/g) ?? []).length).toBe(3)
   })
 
   // `.vb-slide-body` is a fixed height with `overflow: hidden`, so a sheet that
@@ -203,14 +231,37 @@ describe('the leadership one-pager', () => {
 
   it('budgets its subject rows, and says how many it did not show', () => {
     const words = renderText(sheet(eightRows()))
-    expect(words).toContain('Subject 5')
-    expect(words).not.toContain('Subject 6')
+    expect(words).toContain('Subject 4')
+    expect(words).not.toContain('Subject 5')
     // The count it did not show, and the page in the document that shows them
     // all — the sheet absorbs no section, so "Your subjects" really follows.
-    expect(words).toContain('3 more subjects, on “Your subjects”.')
+    expect(words).toContain('4 more subjects, on “Your subjects”.')
     // … and the two things the overflow used to eat are still on the sheet.
     expect(words).toContain('the category column carries the month')
     expect(words).toContain('Our read')
+  })
+
+  // A budget that counts rows alone is not a budget: the truncation line only
+  // exists BECAUSE the table truncated, and the caveat prints under it either
+  // way. At the artboard's own six subjects the body ran 24px past its
+  // `overflow: hidden` box and ate exactly those two lines — silently, on a
+  // client's PDF. The arithmetic is measured; see the constants.
+  it('charges the lines under the table to the same budget as the rows', () => {
+    // 41px a row, 18px a mono line, 201px to spend.
+    expect(sheetSubjectRows(3, 0)).toBe(3)
+    expect(sheetSubjectRows(4, 1)).toBe(4)
+    // Six subjects and a caveat: four rows, the caveat and the truncation line
+    // (164 + 18 + 18 = 200) — one row fewer than the rows alone would allow.
+    expect(sheetSubjectRows(6, 1)).toBe(4)
+    expect(sheetSubjectRows(8, 1)).toBe(4)
+    // Truncating is what costs the extra line, so a table that shows every row
+    // it has is charged for the caveat alone.
+    expect(sheetSubjectRows(4, 0)).toBe(4)
+    // A caveat that ever wrapped to a second line is counted here, and pays
+    // for itself in rows rather than in a silent clip.
+    expect(sheetSubjectRows(6, 3)).toBe(3)
+    // It never returns nothing: one row and the count is still a table.
+    expect(sheetSubjectRows(6, 12)).toBe(1)
   })
 
   it('says how many moves it did not show, rather than slicing in silence', () => {
@@ -281,6 +332,32 @@ describe('the leadership one-pager', () => {
   it('names where the whole record is, before anything a clamp could eat', () => {
     const words = renderText(sheet())
     expect(words).toMatch(/Coverage · in full on “How this was read” ·/)
+  })
+
+  // The sheet and the "The month" slide are drawn from the SAME frozen
+  // Overview, so a provenance the sheet composes itself is a second answer to
+  // one question. It hard-coded "How many videos it is grounded in is not
+  // recorded on this reading." off a comment saying `LedgerRow` carried
+  // neither `timesMade` nor `grounding` — both have been on the row since
+  // wave 1, and page 3 of the same PDF printed the count the sheet denied.
+  it('reads the recommendation’s provenance off the row, in the page’s own words', () => {
+    const data = overviewFixture()
+    const words = renderText(sheet(data))
+    const prov = provenanceLine(data.sentence.ledger!)!
+    expect(words).toContain(prov.slice(1))
+    expect(words).toContain('repeated across 3 updates')
+    expect(words).toContain(data.sentence.ledger!.grounding!.line)
+    expect(words).not.toContain('is not recorded on this reading')
+    // D14 and D9: the date is earliest evidence, not a start date, and an
+    // update count keeps the word "update" in it so it cannot read as a period.
+    expect(words).not.toContain('First raised')
+  })
+
+  it('says so plainly when the row carries no provenance at all', () => {
+    const base = overviewFixture()
+    const ledger = { ...base.sentence.ledger!, monthsOld: null, timesMade: 1, grounding: null }
+    const words = renderText(sheet({ ...base, sentence: { ...base.sentence, ledger } }))
+    expect(words).toContain('First on record in this reading.')
   })
 
   it('names the recommendation as stored model prose, with its slot', () => {

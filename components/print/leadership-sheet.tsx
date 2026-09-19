@@ -4,6 +4,7 @@ import { BlockMovement } from '@/components/blocks/movement'
 import { FigureCell } from '@/components/blocks/frame'
 import { TokenProse } from '@/components/blocks/prose'
 import { Sparkline } from '@/components/charts/sparkline'
+import { provenanceLine } from '@/components/pages/overview/sentence'
 import { DirectionWord } from '@/components/pages/overview/subjects'
 import { DeckFooter } from '@/components/print/report-deck'
 import { Slide } from '@/components/print/slide'
@@ -24,8 +25,30 @@ import { INTERPRETATION_LABEL } from '@/lib/prose/interpret'
  * a read and a two-line coverage footer — about eight information units on one
  * sheet. The built brief drew one unit per slide at a markedly larger scale.
  * This is the re-pack: one `Slide`, the artboard's `5fr 3.5fr 3.5fr` figure row
- * over its `7fr 5fr` split, at the artboard's own 12.5px body and 9.5px mono
- * trails.
+ * over its `7fr 5fr` split, declaring the artboard's own 12.5px body and
+ * 9.5px mono trails.
+ *
+ * DECLARING THEM IS NOT PRINTING THEM, AND THE DIFFERENCE IS 10%. Everything
+ * inside `.vb-slide-body` is laid out at `--vb-grid-w` (1168px) and zoomed to
+ * `--vb-zoom` (0.902) to fit the 297mm sheet, and the artboard is not: the
+ * artboard IS 1123px wide. So the declared sizes land ~10% under the spec —
+ * measured through `lib/render/chromium`, a 9.5px trail renders 8.57px on a
+ * 1122.5px page, which is 6.4pt, where the artboard's same 9.5px is 7.1pt and
+ * its 12.5px body is 9.4pt against this sheet's 8.5pt.
+ *
+ * IT IS NOT THIS SHEET'S TO FIX, AND THE FIX HERE WOULD COST THE TABLE. The
+ * zoom is on `.vb-slide-body` in app/globals.css, so EVERY deck sheet in the
+ * product prints 10% under its artboard — sales, marketing, content and the
+ * quarterly are bound into the same PDFs and set their micro-type at the same
+ * 9.5px. `slide.tsx:60` and `report-deck.tsx:30` name 6.4pt as below the 8pt
+ * print floor and bump the two elements that live OUTSIDE the zoom (the page
+ * number and the deck footer) to 11px; inside the zoom, 8pt would mean 11.8px
+ * declared, which is the body size, and even the artboard's own 7.1pt is only
+ * 10.5px. Measured, that one pixel takes 25px off the subjects block and drops
+ * the table from four rows to three at every density a caveat prints — half
+ * the table, for 0.7pt. The lever that would fix it for every sheet at once is
+ * `--vb-grid-w` / `--vb-zoom`; that is shell's, and one sheet diverging from
+ * the four it ships beside would be worse than the deviation.
  *
  * IT REPLACES THE 58px COVER AND NOTHING ELSE. The mock has no cover slide and
  * the port removes it — it is a page a director had to turn past. What it does
@@ -104,7 +127,7 @@ function Eyebrow({ children, meta }: { children: ReactNode; meta?: ReactNode }) 
  * route and the share link do not, and an operator cannot fix it anyway,
  * because the row count is a Settings outcome.
  *
- * Five, not the artboard's six, because the cell is not the artboard's. The
+ * Fewer than the artboard's six, because the cell is not the artboard's. The
  * mock brackets the count beside the share ("31% (26)") on one line; rule (b)
  * wants the level's own evidence, so `FigureCell` stacks "31%" over "26 of 84"
  * and each row costs about double. The honest cell buys the table half its
@@ -114,11 +137,50 @@ function Eyebrow({ children, meta }: { children: ReactNode; meta?: ReactNode }) 
  * here is print the count it did not show and name the page that shows them
  * all, which is the product's convention everywhere else.
  *
- * MEASURED, not guessed: eight rows of the Overview fixture rendered through
- * `lib/render/chromium` at the deck's own zoom, the body box read off the DOM.
- * See status/E-leadership.md, "Fix pass".
+ * AND A BUDGET FOR ROWS ALONE IS NOT A BUDGET. A flat five counted the rows
+ * and not the two lines the table prints UNDERNEATH them — the truncation
+ * line, which only exists BECAUSE the table truncated, and the caveat. At the
+ * artboard's own six subjects the body ran 24px past its box and the DOM
+ * reported exactly two clipped nodes: "1 more subject, on “Your subjects”."
+ * sliced through the x-height and the caveat gone entirely. So the two things
+ * the package added to stop the table lying were the first two things the
+ * sheet ate, in silence, on a client's PDF. `sheetSubjectRows` counts them.
+ *
+ * MEASURED, not guessed: rendered through `lib/render/chromium` at 1123px in
+ * the repo's own `.vb-print` wrapper, one row at a time from one subject to
+ * eight, with and without a caveat, and `.vb-slide-body`'s own box read off
+ * the DOM. A row costs 41px, each mono line under the table 18px, and the
+ * block has 201px to spend once the figure cards and the recommendation above
+ * it have taken theirs. The worst reachable case — four rows, a caveat and a
+ * truncation line — clears the box by 4px measured.
  */
-export const SHEET_SUBJECT_ROWS = 5
+const SUBJECT_ROW_PX = 41
+const SUBJECTS_TRAIL_PX = 18
+const SUBJECTS_BUDGET_PX = 201
+
+/** The artboard's own row count, and the most this will ever show. The
+ *  arithmetic decides everything below it. */
+export const SHEET_SUBJECT_ROWS = 6
+
+/**
+ * How many of `total` subject rows fit, once the lines under the table are
+ * paid for.
+ *
+ * `trailLines` is what the table prints below itself WITHOUT truncating: the
+ * caveat, today. `subjectsNote` (lib/pages/overview.ts) is one of two fixed
+ * sentences, each one line at this column's width — if it ever becomes a
+ * paragraph, its second line is counted here and nowhere else. The truncation
+ * line is not passed in, because whether it prints depends on the answer: it
+ * is charged only to the counts that cause it.
+ */
+export function sheetSubjectRows(total: number, trailLines: number): number {
+  for (let n = Math.min(total, SHEET_SUBJECT_ROWS); n > 1; n--) {
+    const trails = trailLines + (n < total ? 1 : 0)
+    if (SUBJECT_ROW_PX * n + SUBJECTS_TRAIL_PX * trails <= SUBJECTS_BUDGET_PX) return n
+  }
+  return 1
+}
+
 /** The same budget for the right column's move cards, which are ~90px each. */
 export const SHEET_MOVE_CARDS = 2
 
@@ -490,13 +552,27 @@ function SubjectCard({ row, categoryLabel }: { row: SubjectRow | null; categoryL
  * `overview/sentence.tsx` argued for this exact string. The meta beside it is
  * code's and stays under rule (c).
  *
- * WHAT IS NOT HERE AND WHY. The mock also prints "repeated 3 updates running",
- * "Grounded in 412 videos" and an afterwards line. All three exist — as
- * `AdviceRow.timesMade`, `groundingFor` and `afterwardsFor` — on Market's
- * ledger row, and `LedgerRow` (lib/pages/overview.ts) carries none of them.
- * The leadership brief does not borrow the Market surface, and adding it is a
- * whole page loader's worth of reads for three fields. The sentence says what
- * is and is not on the row rather than leaving the reader to assume.
+ * THE PROVENANCE IS THE PAGE'S OWN, NOT A SECOND ONE. `provenanceLine`
+ * (components/pages/overview/sentence.tsx) is the one composition of the three
+ * clauses the mock asks for — "first on record 3 months ago · repeated across
+ * 3 updates · 412 videos behind it" — and this sheet PRINTS THAT STRING. It
+ * had to: an earlier draft hard-coded "How many videos it is grounded in is
+ * not recorded on this reading." off a comment claiming `LedgerRow` carried
+ * neither `timesMade` nor `grounding`, and both have been on the row since
+ * wave 1 (lib/pages/overview.ts). The sheet and the "The month" slide are
+ * drawn from THE SAME frozen object, so the sheet was denying, on page 1, a
+ * count page 3 of the same PDF printed — and the half a director would act on
+ * was the one that read as an admission of a gap that does not exist. Reading
+ * the row is also what keeps the two pages' WORDS in step: D14's "first on
+ * record" (a date is earliest evidence, never a start date) and D9's "repeated
+ * across N updates" (an update count is the run clock's bookkeeping and keeps
+ * the word "update" in it) are decided once, there.
+ *
+ * WHAT IS STILL NOT HERE. The mock's afterwards line — what the conversation
+ * did after the decision — is `afterwardsFor` on MARKET's ledger row, and
+ * `LedgerRow` genuinely does not carry it. The mono line beside the status chip
+ * names the ledger as the place it is read, rather than leaving a reader to
+ * assume it was not measured.
  */
 function Decide({ ledger, company }: { ledger: LedgerRow | null; company: string }) {
   if (!ledger) {
@@ -507,14 +583,17 @@ function Decide({ ledger, company }: { ledger: LedgerRow | null; company: string
       </div>
     )
   }
-  const age = ledger.monthsOld != null && ledger.monthsOld > 0
-    ? `First raised ${ledger.monthsOld} ${ledger.monthsOld === 1 ? 'month' : 'months'} ago.`
-    : 'First raised in this reading.'
+  // Capitalised and stopped, and NOT re-joined: the clauses and their order
+  // are `provenanceLine`'s, so the sheet cannot come to say the slide does not.
+  const provenance = provenanceLine(ledger)
+  const age = provenance
+    ? `${provenance.charAt(0).toUpperCase()}${provenance.slice(1)}${/[.!?]$/.test(provenance) ? '' : '.'}`
+    : 'First on record in this reading.'
   return (
     <div className="flex shrink-0 flex-col gap-1.5">
       <Eyebrow>The one thing to decide</Eyebrow>
       <h3 data-copy="stored" data-slot="pass_d_b_recommendation" className="m-0 text-[17px] font-semibold leading-[1.25] tracking-[-0.01em] text-foreground">{ledger.title}</h3>
-      <p className={BODY}>{age} How many videos it is grounded in is not recorded on this reading.</p>
+      <p className={BODY}>{age}</p>
       <div className="flex items-center gap-2.5">
         <Chip tone={ledger.decidedAt ? 'good' : 'plain'}>
           {ledger.decidedAt ? `${ledger.statusLabel} · ${shortDate(ledger.decidedAt)}` : `${ledger.statusLabel} · no decision recorded`}
@@ -551,12 +630,25 @@ function Cell({ side }: { side: SideReading | null }) {
  * not in `MOVEMENT_WORDS`, and as a substitute for "no clear change" it is a
  * direction word off one banded comparison.
  *
+ * AND IT IS A TABLE, WITH THE ARTBOARD'S GEOMETRY ON ITS ROWS. Thirty paired
+ * figures in five columns were laid out as `div`s on a grid — so on the share
+ * link (`/r/<token>`, which is HTML) a screen reader reached them in reading
+ * order with nothing naming the column, and "44% · 62 of 142" was
+ * indistinguishable from the client's own share; the three legend dots are
+ * `aria-hidden`, so colour was the only thing telling the sides apart. The
+ * product's own subjects block ships a real `<table>` with `scope` on every
+ * header (components/pages/overview/subjects.tsx), and that is the pattern
+ * this is a regression against, not a house style. `display: grid` on the
+ * rows holds the artboard's columns EXACTLY as the divs did — the mock's
+ * layout is the spec and it is untouched — and the explicit `role`s are what
+ * keep the semantics a `display` other than `table` would otherwise strip.
+ *
  * AND IT IS CAPPED, BECAUSE THE SHEET HAS A HEIGHT AND `overflow: hidden`.
- * `SHEET_SUBJECT_ROWS` — see the constant.
+ * `sheetSubjectRows` — see the budget above it.
  */
 function SubjectsTable({ data }: { data: OverviewData }) {
   const s = data.subjects
-  const shown = s.rows.slice(0, SHEET_SUBJECT_ROWS)
+  const shown = s.rows.slice(0, sheetSubjectRows(s.rows.length, s.note ? 1 : 0))
   const over = s.rows.length - shown.length
   const COLS = 'grid grid-cols-[minmax(0,112px)_82px_120px_138px_minmax(0,1fr)] items-center gap-x-2'
   return (
@@ -567,27 +659,31 @@ function SubjectsTable({ data }: { data: OverviewData }) {
       {s.rows.length === 0 ? (
         <p className={BODY}>{data.subjects.state === 'not_recorded' ? 'Your subjects are not recorded for this workspace yet.' : 'No subject carried a reading this month.'}</p>
       ) : (
-        <div className="flex flex-col">
-          <div className={`${COLS} border-b border-border pb-[5px] font-mono text-[9.5px] uppercase tracking-[0.06em] text-muted-foreground`}>
-            <span>Subject</span>
-            <span className="flex items-center gap-1.5"><Dot tone="you" />You{firstOf(s.rows, (r) => r.you)}</span>
-            <span className="flex min-w-0 items-center gap-1.5"><Dot tone="comp" /><span className="truncate">{s.rivalLabel ?? 'Lead rival'}{firstOf(s.rows, (r) => r.rival)}</span></span>
-            <span className="flex min-w-0 items-center gap-1.5"><Dot tone="cat" /><span className="truncate">{shortLabel(s.categoryLabel)}{firstOf(s.rows, (r) => r.category)}</span></span>
-            <span>{shortLabel(s.categoryLabel)} change</span>
-          </div>
-          {shown.map((r, i) => (
-            <div key={r.id} className={`${COLS} py-[2px] text-[12.5px] text-foreground ${i === shown.length - 1 ? '' : 'border-b border-border/70'}`}>
-              <span className="min-w-0 truncate">{r.label}</span>
-              <Cell side={r.you} />
-              <Cell side={r.rival} />
-              <Cell side={r.category} />
-              <span className="flex min-w-0 flex-wrap items-center gap-1.5">
-                <BlockMovement verdict={r.category.verdict} unit="pts" good="neutral" />
-                <DirectionWord direction={r.direction} />
-              </span>
-            </div>
-          ))}
-        </div>
+        <table role="table" className="block w-full border-collapse text-left">
+          <thead role="rowgroup" className="block">
+            <tr role="row" className={`${COLS} border-b border-border pb-[5px] font-mono text-[9.5px] font-normal uppercase tracking-[0.06em] text-muted-foreground`}>
+              <th role="columnheader" scope="col" className="font-normal">Subject</th>
+              <th role="columnheader" scope="col" className="flex items-center gap-1.5 font-normal"><Dot tone="you" />You{firstOf(s.rows, (r) => r.you)}</th>
+              <th role="columnheader" scope="col" className="flex min-w-0 items-center gap-1.5 font-normal"><Dot tone="comp" /><span className="truncate">{s.rivalLabel ?? 'Lead rival'}{firstOf(s.rows, (r) => r.rival)}</span></th>
+              <th role="columnheader" scope="col" className="flex min-w-0 items-center gap-1.5 font-normal"><Dot tone="cat" /><span className="truncate">{shortLabel(s.categoryLabel)}{firstOf(s.rows, (r) => r.category)}</span></th>
+              <th role="columnheader" scope="col" className="font-normal">{shortLabel(s.categoryLabel)} change</th>
+            </tr>
+          </thead>
+          <tbody role="rowgroup" className="block">
+            {shown.map((r, i) => (
+              <tr role="row" key={r.id} className={`${COLS} py-[2px] text-[12.5px] text-foreground ${i === shown.length - 1 ? '' : 'border-b border-border/70'}`}>
+                <th role="rowheader" scope="row" className="min-w-0 truncate font-normal">{r.label}</th>
+                <td role="cell"><Cell side={r.you} /></td>
+                <td role="cell"><Cell side={r.rival} /></td>
+                <td role="cell"><Cell side={r.category} /></td>
+                <td role="cell" className="flex min-w-0 flex-wrap items-center gap-1.5">
+                  <BlockMovement verdict={r.category.verdict} unit="pts" good="neutral" />
+                  <DirectionWord direction={r.direction} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       )}
       {over > 0 ? <p className={TRAIL}>{moreLine(over, 'subject', 'Your subjects')}</p> : null}
       {/* The artboard sets the caveat 9.5px mono; the app sets it 11.5px sans.
@@ -637,12 +733,17 @@ function Moves({ data }: { data: OverviewData }) {
   const over = m.readings.length - shown.length
   return (
     <div className="flex shrink-0 flex-col gap-2">
-      {/* The artboard's meta is four words ("you acted on 2 of 5 this
-          quarter") and `actedTally`'s sentence is twenty, because the twenty
-          are what make the ratio readable — it is the WHOLE ledger and not a
-          quarter (D12). The count goes in the eyebrow at the artboard's length
-          and the scoping sentence under the cards, so neither is truncated. */}
-      <Eyebrow meta={m.acted ? `acted on ${m.acted.decided} of ${m.acted.of}` : undefined}>Your moves</Eyebrow>
+      {/* THE RATIO IS PRINTED ONCE, WHERE IT IS SCOPED. The artboard's meta is
+          four words ("you acted on 2 of 5 this quarter") and `actedTally`'s
+          sentence is twenty, because the twenty are what make the ratio
+          readable — it is the WHOLE ledger and not a quarter (D12). Splitting
+          it put "1 of 64" in the eyebrow and "You have acted on 1 of 64 —
+          every piece of advice this product has ever given you." under the
+          cards, forty pixels apart in one column, with one line of prose
+          between them on the refused sheet: the same ratio twice, and the
+          eyebrow's half was the half with no scope on it. The artboard prints
+          it once, so the sentence keeps it. */}
+      <Eyebrow>Your moves</Eyebrow>
       {shown.length === 0 ? (
         <p className={BODY}>{m.empty ?? m.unlock}</p>
       ) : (
@@ -760,14 +861,28 @@ const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'obj
  * A STORED SNAPSHOT IS DATA, NOT A TYPE. `surfaces` is typed
  * `Record<string, unknown>` (lib/reports/documents/types.ts) precisely because
  * it is whatever the loader wrote on the day the brief was built, and this
- * sheet reads fields that did not exist for most of the life of that column:
- * `subjects.gaps` and `moves.readings` / `moves.acted` landed in Block D
- * wave 1 on 2026-09-18, while `surfaces` has been frozen into documents since
- * 2026-08-30. Every leadership brief built in that window has an Overview
- * WITHOUT them — and a bare cast plus `Object.values(overview.subjects.gaps)`
- * is a `TypeError` inside a server component, which takes the whole document
- * down on the share link, the in-app viewer, the Studio preview and the PDF
- * route rather than degrading one sheet.
+ * sheet reads fields younger than the column: `subjects.gaps` and
+ * `moves.readings` / `moves.acted` landed in Block D wave 1 on 2026-09-18
+ * (4cf5dd12), and `surfaces` itself entered `DocumentSnapshotData` at
+ * 88ffc246 on 2026-09-16. A bare cast plus
+ * `Object.values(overview.subjects.gaps)` is a `TypeError` inside a server
+ * component, which takes the whole document down on the share link, the
+ * in-app viewer, the Studio preview and the PDF route rather than degrading
+ * one sheet.
+ *
+ * AND THE WINDOW IS BRANCH-ONLY, WHICH IS THE OPPOSITE OF WHAT THIS DOCBLOCK
+ * USED TO SAY. It claimed `surfaces` "has been frozen into leadership briefs
+ * since 2026-08-30" and that "every brief built in that window has an Overview
+ * without them" — nineteen days of PRODUCTION briefs. What is dated 2026-08-30
+ * is `DocumentSnapshotData` itself (2a5c8ce6, on `main`); the `surfaces` KEY is
+ * 88ffc246, which `git merge-base --is-ancestor 88ffc246 main` says is not on
+ * `main`, and `git grep surfaces main -- lib/reports components/print` returns
+ * nothing. NO DEPLOYED BUILD HAS EVER WRITTEN A `surfaces` KEY. Every stored
+ * brief in production reaches this predicate with `surfaces` undefined and is
+ * refused at the first line, which is exactly right — the guard stays. What
+ * was wrong was the record of why, on a repo whose first rule is that the code
+ * is the record, and it is the sentence the next reader would have used to
+ * judge how urgent the same shape is elsewhere.
  *
  * The precedent is `isWeeklyData` (lib/reports/viewer.ts), added for exactly
  * this failure — "the cast below handed `deckSlides` a snapshot with no

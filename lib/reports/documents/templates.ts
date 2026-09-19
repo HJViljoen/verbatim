@@ -131,9 +131,18 @@ export const SALES_BRIEF: DocumentTemplate = {
 
 // ── leadership ─────────────────────────────────────────────────────────────
 
+/**
+ * THE NAME IS THE ARTBOARD'S. `LeadershipBrief.dc.html` heads the sheet
+ * "Leadership one-pager · September 2026", mock-gap §3.15 files `lead.title`
+ * as a difference, and Heinrich's ruling is that wording follows the mock —
+ * so the product defaults to the spec's words rather than relying on an
+ * operator to retitle. The KEY, the role and every stored snapshot's own
+ * `title` are untouched: `key: 'leadership_brief'` is the identity a brief was
+ * built under and a rename here can never reach an artefact already frozen.
+ */
 export const LEADERSHIP_BRIEF: DocumentTemplate = {
   key: 'leadership_brief',
-  name: 'Leadership brief',
+  name: 'Leadership one-pager',
   audience: 'leadership',
   description: 'Three readings of what the market is saying, what moved since last time, and where the company stands against the names it is measured against. Short on purpose: the pages a board member will actually read.',
   role:
