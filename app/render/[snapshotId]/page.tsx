@@ -10,13 +10,13 @@ import { PrintTile } from '@/components/print/print-tile'
 import { ReportDeck } from '@/components/print/report-deck'
 import { DocumentDeck } from '@/components/print/document-deck'
 import { isDocumentData } from '@/lib/reports/documents/types'
-import { isWeeklyData } from '@/lib/reports/weekly-build'
-import { isMonthlyData } from '@/lib/reports/monthly-build'
+import { isWeeklyData, staleWeeklySnapshot } from '@/lib/reports/weekly-build'
+import { isMonthlyData, staleMonthlySnapshot } from '@/lib/reports/monthly-build'
 import { WeeklyDeck } from '@/components/print/weekly-deck'
 import { MonthlyDeck } from '@/components/print/monthly-deck'
 import { weeklyBlocksFor } from '@/components/blocks/weekly'
 import { monthlyBlocksFor } from '@/components/blocks/monthly'
-import { isQuarterlyData } from '@/lib/reports/quarterly-build'
+import { isQuarterlyData, staleQuarterlySnapshot } from '@/lib/reports/quarterly-build'
 import { QuarterlyDeck } from '@/components/print/quarterly-deck'
 import { quarterlyBlocksFor } from '@/components/blocks/quarterly'
 import { blockContext } from '@/lib/blocks/types'
@@ -60,6 +60,16 @@ export default async function RenderPage({
     // there is no page module to look one up in.
     if (isWeeklyData(data)) {
       if (token.tileKey) {
+        // THE TILE ARM ASKS THE SAME QUESTION THE DECK DOES (quarterly, wave-3
+        // merge). The deck below calls its artefact's stale check first, so a
+        // stored row this build can no longer draw is a sentence a reader can
+        // act on; this arm went straight to `block.render(data.reading, …)`
+        // and a v1 row threw inside a server component — `r.ownPosts.filter`
+        // on a reading that has no `ownPosts`. All three artefacts had the
+        // identical hole, because all three `is*Data` predicates match on
+        // `kind` alone, on purpose.
+        const stale = staleWeeklySnapshot(data)
+        if (stale) return <PrintRoot style={style}><PrintTile><p className="m-0 text-[13px] text-muted-foreground">{stale}</p></PrintTile></PrintRoot>
         const block = weeklyBlocksFor([token.tileKey])[0]
         if (!block) notFound()
         return (
@@ -78,6 +88,16 @@ export default async function RenderPage({
     // shape and the same rule as the weekly one.
     if (isMonthlyData(data)) {
       if (token.tileKey) {
+        // THE TILE ARM ASKS THE SAME QUESTION THE DECK DOES (quarterly, wave-3
+        // merge). The deck below calls its artefact's stale check first, so a
+        // stored row this build can no longer draw is a sentence a reader can
+        // act on; this arm went straight to `block.render(data.reading, …)`
+        // and a v1 row threw inside a server component — `r.ownPosts.filter`
+        // on a reading that has no `ownPosts`. All three artefacts had the
+        // identical hole, because all three `is*Data` predicates match on
+        // `kind` alone, on purpose.
+        const stale = staleMonthlySnapshot(data)
+        if (stale) return <PrintRoot style={style}><PrintTile><p className="m-0 text-[13px] text-muted-foreground">{stale}</p></PrintTile></PrintRoot>
         const block = monthlyBlocksFor([token.tileKey])[0]
         if (!block) notFound()
         return (
@@ -97,6 +117,16 @@ export default async function RenderPage({
     // report's is, and the block renders itself.
     if (isQuarterlyData(data)) {
       if (token.tileKey) {
+        // THE TILE ARM ASKS THE SAME QUESTION THE DECK DOES (quarterly, wave-3
+        // merge). The deck below calls its artefact's stale check first, so a
+        // stored row this build can no longer draw is a sentence a reader can
+        // act on; this arm went straight to `block.render(data.reading, …)`
+        // and a v1 row threw inside a server component — `r.ownPosts.filter`
+        // on a reading that has no `ownPosts`. All three artefacts had the
+        // identical hole, because all three `is*Data` predicates match on
+        // `kind` alone, on purpose.
+        const stale = staleQuarterlySnapshot(data)
+        if (stale) return <PrintRoot style={style}><PrintTile><p className="m-0 text-[13px] text-muted-foreground">{stale}</p></PrintTile></PrintRoot>
         const block = quarterlyBlocksFor([token.tileKey])[0]
         if (!block) notFound()
         return (

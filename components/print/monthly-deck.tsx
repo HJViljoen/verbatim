@@ -5,6 +5,7 @@ import { appBaseUrl } from '@/lib/site'
 import { monthlyRuleFor, readingCaveat } from '@/lib/reports/monthly'
 import type { MonthlySnapshotData } from '@/lib/reports/monthly-build'
 import { monthlyBlocksFor } from '@/components/blocks/monthly'
+import { staleMonthlySnapshot } from '@/lib/reports/monthly-build'
 import { Slide } from './slide'
 import { STALE_ARTEFACT_LINE } from '@/lib/reports/stale'
 
@@ -27,7 +28,8 @@ const fmtDate = (d: Date) => fullDate(d.toISOString())
 
 export function MonthlyDeck({ data, date = fmtDate(new Date()) }: { data: MonthlySnapshotData; date?: string }) {
   const ctx = blockContext(appBaseUrl(), EMAIL)
-  const blocks = monthlyBlocksFor(data.keys)
+  const stale = staleMonthlySnapshot(data)
+  const blocks = stale ? [] : monthlyBlocksFor(data.keys)
   // THE RULE ON EVERY SHEET. A reader of a PDF has no masthead to scroll back
   // to, which is the same reason the method note is on every slide of a report.
   //
@@ -48,10 +50,14 @@ export function MonthlyDeck({ data, date = fmtDate(new Date()) }: { data: Monthl
       </>
     ),
   }
-  if (blocks.length === 0) {
+  // TWO WAYS A STORED MONTHLY ROW IS UNDRAWABLE, and this knew one of them:
+  // no key resolved, which is a row whose KEYS moved on. `staleMonthlySnapshot`
+  // is the other — a row whose reading SHAPE moved on — and it is the sibling
+  // of the check the weekly and quarterly decks have always made first.
+  if (stale || blocks.length === 0) {
     return (
       <Slide title={data.subject} chrome={chrome} page={1} pages={1} layout="single">
-        <p className="m-0 text-[13px] text-muted-foreground">{STALE_ARTEFACT_LINE}</p>
+        <p className="m-0 text-[13px] text-muted-foreground">{stale ?? STALE_ARTEFACT_LINE}</p>
       </Slide>
     )
   }

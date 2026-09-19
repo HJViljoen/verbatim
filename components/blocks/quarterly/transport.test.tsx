@@ -5,7 +5,7 @@ import { assertCopyContract } from '@/lib/test/copy-contract'
 import { QUARTERLY_RULE, QUARTERLY_BLOCK_KEYS } from '@/lib/reports/quarterly'
 import { isQuarterlyData } from '@/lib/reports/quarterly-build'
 import { renderQuarterlyEmail, QUARTERLY_IMAGE_BLOCKS } from '@/lib/email/quarterly'
-import { QUARTERLY_EMAIL_KEYS, QUARTERLY_EMAIL_WIDTH } from '@/components/email/quarterly'
+import { QUARTERLY_CANVAS_GUTTER, QUARTERLY_CARD_WIDTH, QUARTERLY_EMAIL_KEYS, QUARTERLY_EMAIL_WIDTH } from '@/components/email/quarterly'
 import { QuarterlyDeck } from '@/components/print/quarterly-deck'
 import { QuarterlyShareShell } from '@/components/share/quarterly-share-shell'
 import { closedFixture, formingFixture, quarterlySnapshotFixture } from './fixture'
@@ -140,7 +140,15 @@ describe('the email', () => {
   })
 
   it('is table markup at the artefact width, with no class and no CSS variable', () => {
-    expect(email.html).toContain(String(QUARTERLY_EMAIL_WIDTH))
+    // THE CARD IS 600 ON A 20px GUTTER, and 640 is their sum. This asserted
+    // the sum and the card carried it, so every measured line ran 40px longer
+    // than the column the type ramp was set for — `monthly` and `weekly` both
+    // split theirs and weekly's docblock hands this one over by name. The
+    // markup carries the two; `QUARTERLY_EMAIL_WIDTH` is still the outer
+    // figure and is still what this artefact is 640 wide by.
+    expect(QUARTERLY_EMAIL_WIDTH).toBe(640)
+    expect(email.html).toContain(`max-width:${QUARTERLY_CARD_WIDTH}px`)
+    expect(email.html).toContain(`padding:${QUARTERLY_CANVAS_GUTTER}px ${QUARTERLY_CANVAS_GUTTER}px 24px`)
     expect(email.html).not.toMatch(/class="/)
     expect(email.html).not.toMatch(/var\(--/)
     expect(email.html).not.toMatch(/display:\s*(flex|grid)/)

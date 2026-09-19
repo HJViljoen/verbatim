@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isMonthlyData, withBriefShareLink, type MonthlySnapshotData } from './monthly-build'
+import { MONTHLY_SNAPSHOT_VERSION, isMonthlyData, staleMonthlySnapshot, withBriefShareLink, type MonthlySnapshotData } from './monthly-build'
 import { isWeeklyData } from './weekly-build'
 import { isDocumentData } from './documents/types'
 import { isMissingReadingColumns } from './reading-stamp'
@@ -121,5 +121,34 @@ describe('the brief’s share link, resolved on the send', () => {
     expect(expired.reading.brief?.href).toBe('/dashboard/reports?view=snap-1')
     const none = await withBriefShareLink(admin([]), 'c1', data({ brief: null }))
     expect(none.reading.brief).toBeNull()
+  })
+})
+
+describe('staleMonthlySnapshot', () => {
+  const snapshot = (version: number) => ({ version } as Parameters<typeof staleMonthlySnapshot>[0])
+
+  // THE SIBLING OF `staleWeeklySnapshot` AND `staleQuarterlySnapshot`, added at
+  // the wave-3 merge. This module had the `version` field and no constant, so
+  // `monthly-deck.tsx` inferred staleness from "no key resolved" — which
+  // catches a row whose KEYS moved on and not one whose reading SHAPE did —
+  // and the single-tile arm of `app/render/[snapshotId]` had no check at all
+  // and rendered a stored row straight into a block.
+  it('is null at the version this build writes, and a sentence below it', () => {
+    expect(staleMonthlySnapshot(snapshot(MONTHLY_SNAPSHOT_VERSION))).toBeNull()
+    expect(staleMonthlySnapshot(snapshot(MONTHLY_SNAPSHOT_VERSION - 1))).toContain('older version of Verbatim')
+  })
+
+  // And a bump is the only thing that may make an existing row stale, so the
+  // constant is pinned: it changes in a diff that says why, never by accident.
+  it('writes version 1 today', () => {
+    expect(MONTHLY_SNAPSHOT_VERSION).toBe(1)
+  })
+
+  // `isMonthlyData` still matches on `kind` alone, deliberately: telling a
+  // monthly artefact from an arranged report is one question and telling a
+  // readable one from a stale one is another. The arranged-report path reads
+  // `data.sections` and would throw on a monthly row of ANY version.
+  it('does not fold the version into the type predicate', () => {
+    expect(isMonthlyData({ kind: 'monthly', version: 99 })).toBe(true)
   })
 })

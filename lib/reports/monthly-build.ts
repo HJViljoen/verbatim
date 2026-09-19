@@ -7,6 +7,7 @@ import { loadMonthly } from '../pages/monthly'
 import { readingHandle } from '../reading/read'
 import { MONTHLY_BLOCK_KEYS, monthlyPeriod, type MonthlyBlockKey } from './monthly'
 import { stampSnapshotReading } from './reading-stamp'
+import { STALE_ARTEFACT_LINE } from './stale'
 import { FIGURE_AUDIENCE, sentFigureRows, writeSentFigures, type SentFigureRow } from './sent-figures'
 
 /**
@@ -63,6 +64,30 @@ export function isMonthlyData(data: unknown): data is MonthlySnapshotData {
   return Boolean(data) && typeof data === 'object' && (data as { kind?: unknown }).kind === 'monthly'
 }
 
+/**
+ * The shape `data.reading` is stored in. The sibling of
+ * `WEEKLY_SNAPSHOT_VERSION` and `QUARTERLY_SNAPSHOT_VERSION`, and it exists
+ * for the same reason: `isMonthlyData` matches on `kind` alone — deliberately,
+ * because telling a monthly artefact from an arranged report is one question
+ * and telling a readable one from a stale one is another — so nothing else
+ * stops a row this build cannot draw reaching a block.
+ *
+ * This module had the field and no constant, which is why `monthly-deck.tsx`
+ * had to infer staleness from "no key resolved". That catches a row whose KEYS
+ * moved on and not a row whose reading SHAPE did, and it was never available
+ * to the single-tile arm of `app/render/[snapshotId]`, which resolves one key
+ * and renders it.
+ */
+export const MONTHLY_SNAPSHOT_VERSION = 1
+
+/** The one line to print instead of a monthly artefact this build cannot
+ *  draw, or null when it can. Every renderer of a stored monthly reading asks
+ *  this FIRST, so an older row is a sentence a reader can act on rather than a
+ *  TypeError inside a server component. */
+export function staleMonthlySnapshot(data: MonthlySnapshotData): string | null {
+  return data.version === MONTHLY_SNAPSHOT_VERSION ? null : STALE_ARTEFACT_LINE
+}
+
 export class MonthlyEmptyError extends Error {}
 
 /** What the caller hands back off the blocks, per key. Computed by the caller
@@ -106,7 +131,7 @@ export async function snapshotMonthly(args: {
   const verdicts = answers.flatMap((a) => a.verdicts)
 
   const data: MonthlySnapshotData = {
-    version: 1,
+    version: MONTHLY_SNAPSHOT_VERSION,
     kind: 'monthly',
     company,
     title: `${company} · the month`,
