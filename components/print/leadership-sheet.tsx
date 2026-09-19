@@ -4,6 +4,7 @@ import { BlockMovement } from '@/components/blocks/movement'
 import { FigureCell } from '@/components/blocks/frame'
 import { TokenProse } from '@/components/blocks/prose'
 import { Sparkline } from '@/components/charts/sparkline'
+import { provenanceLine } from '@/components/pages/overview/sentence'
 import { DirectionWord } from '@/components/pages/overview/subjects'
 import { DeckFooter } from '@/components/print/report-deck'
 import { Slide } from '@/components/print/slide'
@@ -490,13 +491,27 @@ function SubjectCard({ row, categoryLabel }: { row: SubjectRow | null; categoryL
  * `overview/sentence.tsx` argued for this exact string. The meta beside it is
  * code's and stays under rule (c).
  *
- * WHAT IS NOT HERE AND WHY. The mock also prints "repeated 3 updates running",
- * "Grounded in 412 videos" and an afterwards line. All three exist — as
- * `AdviceRow.timesMade`, `groundingFor` and `afterwardsFor` — on Market's
- * ledger row, and `LedgerRow` (lib/pages/overview.ts) carries none of them.
- * The leadership brief does not borrow the Market surface, and adding it is a
- * whole page loader's worth of reads for three fields. The sentence says what
- * is and is not on the row rather than leaving the reader to assume.
+ * THE PROVENANCE IS THE PAGE'S OWN, NOT A SECOND ONE. `provenanceLine`
+ * (components/pages/overview/sentence.tsx) is the one composition of the three
+ * clauses the mock asks for — "first on record 3 months ago · repeated across
+ * 3 updates · 412 videos behind it" — and this sheet PRINTS THAT STRING. It
+ * had to: an earlier draft hard-coded "How many videos it is grounded in is
+ * not recorded on this reading." off a comment claiming `LedgerRow` carried
+ * neither `timesMade` nor `grounding`, and both have been on the row since
+ * wave 1 (lib/pages/overview.ts). The sheet and the "The month" slide are
+ * drawn from THE SAME frozen object, so the sheet was denying, on page 1, a
+ * count page 3 of the same PDF printed — and the half a director would act on
+ * was the one that read as an admission of a gap that does not exist. Reading
+ * the row is also what keeps the two pages' WORDS in step: D14's "first on
+ * record" (a date is earliest evidence, never a start date) and D9's "repeated
+ * across N updates" (an update count is the run clock's bookkeeping and keeps
+ * the word "update" in it) are decided once, there.
+ *
+ * WHAT IS STILL NOT HERE. The mock's afterwards line — what the conversation
+ * did after the decision — is `afterwardsFor` on MARKET's ledger row, and
+ * `LedgerRow` genuinely does not carry it. The mono line beside the status chip
+ * names the ledger as the place it is read, rather than leaving a reader to
+ * assume it was not measured.
  */
 function Decide({ ledger, company }: { ledger: LedgerRow | null; company: string }) {
   if (!ledger) {
@@ -507,14 +522,17 @@ function Decide({ ledger, company }: { ledger: LedgerRow | null; company: string
       </div>
     )
   }
-  const age = ledger.monthsOld != null && ledger.monthsOld > 0
-    ? `First raised ${ledger.monthsOld} ${ledger.monthsOld === 1 ? 'month' : 'months'} ago.`
-    : 'First raised in this reading.'
+  // Capitalised and stopped, and NOT re-joined: the clauses and their order
+  // are `provenanceLine`'s, so the sheet cannot come to say the slide does not.
+  const provenance = provenanceLine(ledger)
+  const age = provenance
+    ? `${provenance.charAt(0).toUpperCase()}${provenance.slice(1)}${/[.!?]$/.test(provenance) ? '' : '.'}`
+    : 'First on record in this reading.'
   return (
     <div className="flex shrink-0 flex-col gap-1.5">
       <Eyebrow>The one thing to decide</Eyebrow>
       <h3 data-copy="stored" data-slot="pass_d_b_recommendation" className="m-0 text-[17px] font-semibold leading-[1.25] tracking-[-0.01em] text-foreground">{ledger.title}</h3>
-      <p className={BODY}>{age} How many videos it is grounded in is not recorded on this reading.</p>
+      <p className={BODY}>{age}</p>
       <div className="flex items-center gap-2.5">
         <Chip tone={ledger.decidedAt ? 'good' : 'plain'}>
           {ledger.decidedAt ? `${ledger.statusLabel} · ${shortDate(ledger.decidedAt)}` : `${ledger.statusLabel} · no decision recorded`}

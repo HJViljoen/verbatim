@@ -10,6 +10,7 @@ import { documentSlides } from '@/lib/reports/documents/compose'
 import { documentViewerPages } from '@/lib/reports/viewer'
 import type { DocumentSnapshotData } from '@/lib/reports/documents/types'
 import { DocumentDeck } from './document-deck'
+import { provenanceLine } from '@/components/pages/overview/sentence'
 import { LeadershipSheet, isLeadershipOverview, leadGap, leadSubject, leadershipSheetData } from './leadership-sheet'
 
 // The leadership one-pager (Block D wave 2, E-leadership).
@@ -281,6 +282,32 @@ describe('the leadership one-pager', () => {
   it('names where the whole record is, before anything a clamp could eat', () => {
     const words = renderText(sheet())
     expect(words).toMatch(/Coverage · in full on “How this was read” ·/)
+  })
+
+  // The sheet and the "The month" slide are drawn from the SAME frozen
+  // Overview, so a provenance the sheet composes itself is a second answer to
+  // one question. It hard-coded "How many videos it is grounded in is not
+  // recorded on this reading." off a comment saying `LedgerRow` carried
+  // neither `timesMade` nor `grounding` — both have been on the row since
+  // wave 1, and page 3 of the same PDF printed the count the sheet denied.
+  it('reads the recommendation’s provenance off the row, in the page’s own words', () => {
+    const data = overviewFixture()
+    const words = renderText(sheet(data))
+    const prov = provenanceLine(data.sentence.ledger!)!
+    expect(words).toContain(prov.slice(1))
+    expect(words).toContain('repeated across 3 updates')
+    expect(words).toContain(data.sentence.ledger!.grounding!.line)
+    expect(words).not.toContain('is not recorded on this reading')
+    // D14 and D9: the date is earliest evidence, not a start date, and an
+    // update count keeps the word "update" in it so it cannot read as a period.
+    expect(words).not.toContain('First raised')
+  })
+
+  it('says so plainly when the row carries no provenance at all', () => {
+    const base = overviewFixture()
+    const ledger = { ...base.sentence.ledger!, monthsOld: null, timesMade: 1, grounding: null }
+    const words = renderText(sheet({ ...base, sentence: { ...base.sentence, ledger } }))
+    expect(words).toContain('First on record in this reading.')
   })
 
   it('names the recommendation as stored model prose, with its slot', () => {
