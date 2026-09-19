@@ -363,7 +363,9 @@ export const contentPlaybook: Block<ContentBriefData> = {
     const empty = contentPlaybook.emptyState(data)
     if (empty || !p) {
       return (
-        <BlockFrame title={contentPlaybook.title} question={contentPlaybook.question} mode={mode}>
+        // THE THIN ARM SUPPRESSES THE HEADER THE FILLED ARM DOES (design
+        // review 4) — see `contentMake`'s copy of this comment.
+        <BlockFrame title={contentPlaybook.title} question={contentPlaybook.question} mode={mode} header={mode !== 'print'}>
           <BlockEmpty mode={mode}>{empty ?? PLAYBOOK_GONE}</BlockEmpty>
         </BlockFrame>
       )

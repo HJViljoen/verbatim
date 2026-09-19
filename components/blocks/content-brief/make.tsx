@@ -306,7 +306,15 @@ export const contentMake: Block<MarketSurfaceData> = {
     const empty = contentMake.emptyState(data)
     if (empty) {
       return (
-        <BlockFrame title={contentMake.title} question={contentMake.question} mode={mode}>
+        // `header={mode !== 'print'}` ON THIS ARM TOO (design review 4). The
+        // filled branch below suppresses the block's own <h2> on a printed
+        // sheet, because the slide already carries the same words as its <h1>
+        // and the question again as its serif framing. This branch did not, so
+        // every THIN arm — refused, empty, unclassified — printed the section
+        // title three times and its question twice, four lines apart, over
+        // ~900px of white. It is the fault `document-deck.tsx` was fixed for
+        // ("printed 'YOUR SUBJECTS' twice"), on the one arm not covered.
+        <BlockFrame title={contentMake.title} question={contentMake.question} mode={mode} header={mode !== 'print'}>
           <BlockEmpty mode={mode}>{empty}</BlockEmpty>
         </BlockFrame>
       )

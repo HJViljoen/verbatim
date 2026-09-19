@@ -50,6 +50,28 @@ describe('the content brief’s own blocks', () => {
     }
   })
 
+  // THE THIN ARM SUPPRESSES ITS OWN HEADING TOO (design review 4). The empty
+  // branch of all three blocks omitted the `header={mode !== 'print'}` the
+  // filled branch passes, so on a printed sheet — whose <h1> is already the
+  // block's title and whose serif framing is already its question — the
+  // refused, empty and unclassified arms printed the title three times and the
+  // question twice before saying the one sentence they had.
+  it('prints no heading of its own on a printed sheet, filled or thin', () => {
+    // On the <h2> and not on the words: `RECORD_GONE` opens with the block's
+    // own title as a sentence ("The record behind this brief could not be
+    // read."), which is the one sentence the arm is there to say.
+    for (const block of CONTENT_BRIEF_BLOCKS) {
+      for (const data of STATES) {
+        expect(render(block.render(data, 'print', ctx))).not.toContain('<h2')
+      }
+      // And the app arm still draws it, because there is no slide above it.
+      expect(render(block.render(contentBriefFixture(), 'app', ctx))).toContain('<h2')
+    }
+    for (const data of LEDGERS) {
+      expect(render(contentMake.render(data, 'print', ctx))).not.toMatch(/<h2[^>]*>What to make/)
+    }
+  })
+
   it('is email-safe: tables, no classes, no CSS variables', () => {
     for (const block of CONTENT_BRIEF_BLOCKS) {
       const markup = render(block.render(contentBriefFixture(), 'email', ctx))

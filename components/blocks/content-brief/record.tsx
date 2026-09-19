@@ -90,7 +90,9 @@ export const contentRecord: Block<ContentBriefData> = {
     const empty = contentRecord.emptyState(data)
     if (empty) {
       return (
-        <BlockFrame title={contentRecord.title} question={contentRecord.question} mode={mode}>
+        // THE THIN ARM SUPPRESSES THE HEADER THE FILLED ARM DOES (design
+        // review 4) — see `contentMake`'s copy of this comment.
+        <BlockFrame title={contentRecord.title} question={contentRecord.question} mode={mode} header={mode !== 'print'}>
           <BlockEmpty mode={mode}>{empty}</BlockEmpty>
         </BlockFrame>
       )
