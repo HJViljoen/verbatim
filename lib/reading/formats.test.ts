@@ -7,7 +7,9 @@ import {
   belowMedian,
   formatMatrix,
   formatReading,
+  bandsSeparate,
   labelInSentence,
+  medianBand,
   matrixConclusion,
   type FormatVideo,
 } from './formats'
@@ -112,7 +114,7 @@ describe('formatReading · the published clock', () => {
     // carry a rate, so the median is theirs — 2.1, not the 98 the two capped
     // Reddit threads would have dragged it to.
     expect(head.value).toEqual({ k: 5, n: 12 })
-    expect(head.engagement).toEqual({ median: 2.1, n: 3 })
+    expect(head.engagement).toEqual({ median: 2.1, n: 3, band: null })
     expect(r.excluded).toContain('Reddit')
     expect(r.excludedNote).toBe(EXCLUDED_NOTE)
     expect(r.excludedNote).toContain('40')
@@ -123,7 +125,7 @@ describe('formatReading · the published clock', () => {
     expect(r.median.value).toBe(3.4)
     expect(r.median.n).toBe(9)
     const desk = r.rows.find((x) => x.key === 'product-on-desk')!
-    expect(desk.engagement).toEqual({ median: 3.4, n: 5 })
+    expect(desk.engagement).toMatchObject({ median: 3.4, n: 5 })
     expect(desk.multiple).toBe(1)
   })
 
@@ -134,12 +136,12 @@ describe('formatReading · the published clock', () => {
     expect(ENGAGEMENT_MIN_VIDEOS).toBe(3)
     const pov = reading(OWN).rows.find((x) => x.key === 'commute-pov')!
     expect(pov.value).toEqual({ k: 2, n: 9 })
-    expect(pov.engagement).toEqual({ median: null, n: 2 })
+    expect(pov.engagement).toEqual({ median: null, n: 2, band: null })
     expect(pov.multiple).toBeNull()
 
     const third = reading([...OWN, vid({ id: 'own-pov-2', classified_type: 'commute-pov', engagement_rate: 6.8 })])
     const atFloor = third.rows.find((x) => x.key === 'commute-pov')!
-    expect(atFloor.engagement).toEqual({ median: 6.4, n: 3 })
+    expect(atFloor.engagement).toEqual({ median: 6.4, n: 3, band: null })
     expect(atFloor.multiple).toBe(1.8)
   })
 
@@ -274,7 +276,11 @@ describe('formatMatrix · three audiences, one table', () => {
       // "the category’s", not "The category’s": `audienceLabel` is a column
       // heading in Title Case and this is the middle of a sentence
       // (`labelInSentence`, design review 14).
-      'review ran at 9.7% against story at 3.4% — measured over 4 and 40 of the category’s 144 classified videos published in September.',
+      // AND IT ONLY RANKS WHAT IT SEPARATES (design review 7). `review` is read
+      // off FOUR rated videos, which is under the n a distribution-free median
+      // band exists at, so the verb is "and" and the sentence says why.
+      'review ran at 9.7% and story at 3.4% — measured over 4 and 40 of the category’s 144 classified videos published in September.' +
+        ' Too few rated videos on one side for a range, so this reading does not separate them.',
     )
     // …and "what not to make" reaches past the table too. The category's own
     // median video runs at 2.9%; promotional is third by count and tutorial
@@ -293,6 +299,34 @@ describe('formatMatrix · three audiences, one table', () => {
     const thin = reading([vid({ id: 'x', classified_type: 'unboxing', engagement_rate: 2 })])
     expect(matrixConclusion([thin])).toBeNull()
     expect(formatMatrix([thin]).conclusion).toBeNull()
+  })
+
+  // A BAND BESIDE THE MAGNITUDE, AND NO RANK WITHOUT ONE (design review 7).
+  it('bands a median from order statistics and refuses to rank what overlaps', () => {
+    // n < 8: the 95% distribution-free interval is the whole sample, so there
+    // is no band and no rank.
+    expect(medianBand([1, 2, 3])).toBeNull()
+    expect(medianBand([1, 2, 3, 4, 5, 6, 7])).toBeNull()
+    // n = 10: ranks 2 and 9 of the sorted sample.
+    const ten = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    expect(medianBand(ten)).toEqual({ low: 2, high: 9 })
+    expect(bandsSeparate({ low: 2, high: 9 }, { low: 10, high: 12 })).toBe(true)
+    expect(bandsSeparate({ low: 2, high: 9 }, { low: 8, high: 12 })).toBe(false)
+    // A missing band on either side is not separation.
+    expect(bandsSeparate(null, { low: 8, high: 12 })).toBe(false)
+
+    // And the sentence follows the band, not the gap: two groups whose
+    // intervals overlap are stated with "and" and told they do not separate.
+    const rate = (key: string, values: number[]) =>
+      values.map((e, i) => vid({ id: `${key}-${i}`, classified_type: key, engagement_rate: e }))
+    const spread = reading([
+      ...rate('story', [1, 2, 3, 3, 3, 4, 4, 5, 6, 9]),
+      ...rate('review', [1, 2, 3, 3, 4, 4, 4, 5, 7, 9]),
+    ], { audienceLabel: 'The category' })
+    const overlapping = matrixConclusion([spread]) ?? ''
+    expect(overlapping).toContain('The two ranges overlap, so this reading does not separate them.')
+    expect(overlapping).not.toContain('against review')
+    expect(overlapping).toMatch(/\d+–\d+% against \d+–\d+%/)
   })
 
   // A COLUMN HEADING IS NOT A NOUN PHRASE (design review 14).
@@ -322,7 +356,7 @@ describe('belowMedian · the honest inverse of the playbook', () => {
   it('returns the formats running under the audience’s own median, worst first', () => {
     const rows = belowMedian(reading(BELOW))
     expect(rows.map((r) => r.key)).toEqual(['talking-head'])
-    expect(rows[0].engagement).toEqual({ median: 2.1, n: 3 })
+    expect(rows[0].engagement).toEqual({ median: 2.1, n: 3, band: null })
     expect(rows[0].value).toEqual({ k: 3, n: 7 })
   })
 

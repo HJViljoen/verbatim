@@ -81,9 +81,10 @@ export interface FormatRow {
   value: Counted
   pct: number | null
   /** Median engagement rate of this group, as the column stores it (3.8 = 3.8%),
-   *  with the videos it was measured over. Null below
-   *  `ENGAGEMENT_MIN_VIDEOS`, where `n` still carries the real count. */
-  engagement: { median: number | null; n: number }
+   *  with the videos it was measured over, and the BAND around it. Null below
+   *  `ENGAGEMENT_MIN_VIDEOS`, where `n` still carries the real count;
+   *  `band` is null wherever `medianBand` declines (see it). */
+  engagement: { median: number | null; n: number; band: { low: number; high: number } | null }
   /** That median against the audience's own median video. Null where either is. */
   multiple: number | null
 }
@@ -138,6 +139,55 @@ export interface FormatInput {
 }
 
 const round1 = (n: number): number => Math.round(n * 10) / 10
+
+/**
+ * The band around a median, from ORDER STATISTICS — no distribution assumed.
+ *
+ * `matrixConclusion` states one format's median against another's, and the
+ * product's rule for every comparison it prints is that the band sits beside
+ * the magnitude so the claim is checkable (AGENTS.md). A median has no standard
+ * error you can write down without the values, but it has an exact
+ * distribution-free interval: the number of observations below the true median
+ * is Binomial(n, ½), so the interval between the order statistics at ranks
+ *
+ *     ⌈n/2 − z·√n / 2⌉  and  ⌈n/2 + z·√n / 2⌉
+ *
+ * covers it at about `z`'s confidence. z = 1.96 here, the same 95% the rest of
+ * the reading layer bands at.
+ *
+ * NULL WHERE THE INTERVAL IS THE WHOLE SAMPLE. Below about eight rated videos
+ * the two ranks fall on the smallest and largest observation, so the "band" is
+ * the sample range — it excludes nothing, carries no information, and reads on
+ * the page as if it did. The guard is therefore that the interval must leave at
+ * least the extreme order statistic out on each side (`lo >= 2 && hi <= n - 1`),
+ * not merely that the ranks are in bounds. A row with no band keeps its median
+ * and its n and is never RANKED against another row, which is the honest answer
+ * for a group of four videos.
+ *
+ * The values are the group's own rates, so the band is in the same unit as the
+ * median and rounds the same way.
+ */
+export function medianBand(values: readonly number[], z = 1.96): { low: number; high: number } | null {
+  const n = values.length
+  if (n < 2) return null
+  const half = (z * Math.sqrt(n)) / 2
+  const lo = Math.ceil(n / 2 - half)
+  const hi = Math.ceil(n / 2 + half)
+  if (lo < 2 || hi > n - 1) return null
+  const sorted = [...values].sort((a, b) => a - b)
+  return { low: round1(sorted[lo - 1]), high: round1(sorted[hi - 1]) }
+}
+
+/** Do two bands leave daylight between them? Null on either side is NOT
+ *  separation — a row with no band has not been measured finely enough to be
+ *  ranked against anything. */
+export function bandsSeparate(
+  a: { low: number; high: number } | null,
+  b: { low: number; high: number } | null,
+): boolean {
+  if (!a || !b) return false
+  return a.low > b.high || b.low > a.high
+}
 
 const inMonth = (uploadDate: string | null, month: string): boolean => {
   if (!uploadDate) return false
@@ -240,7 +290,11 @@ export function formatReading(input: FormatInput): FormatReading {
         label: label(value),
         value: { k: g.k, n: of },
         pct: of > 0 ? round1((g.k / of) * 100) : null,
-        engagement: { median: groupMedian === null ? null : round1(groupMedian), n: g.rates.length },
+        engagement: {
+          median: groupMedian === null ? null : round1(groupMedian),
+          n: g.rates.length,
+          band: groupMedian === null ? null : medianBand(g.rates),
+        },
         multiple:
           groupMedian !== null && audienceMedian !== null && audienceMedian > 0
             ? round1(groupMedian / audienceMedian)
@@ -385,6 +439,23 @@ export function formatMatrix(
  * claim that either is going anywhere, and the only word that may say so is
  * `directionWord`'s, over three consecutive readings. Null unless the widest
  * reading has two rows that both carry a median.
+ *
+ * AND IT ONLY RANKS WHAT IT CAN SEPARATE (design review 7). The n-floor below
+ * moved this sentence from "rests on 4 videos" to "rests on nothing
+ * measurable": on the shipped reading it printed "Story ran at 3.4% against
+ * Entertainment at 3.1% — measured over 206 and 39", two medians 0.3 points
+ * apart, one read over 39 videos, promoted to the one bulleted line on the
+ * sheet with nothing saying the gap is inside the noise. Every other comparison
+ * this product prints carries the band beside the magnitude so the claim is
+ * checkable (AGENTS.md), and this one carried an n and no band at all.
+ *
+ * So the band is computed (`medianBand`, distribution-free, off the group's own
+ * rates) and PRINTED, and the verb changes with it: where the two bands leave
+ * daylight between them the sentence ranks ("ran at X against Y"), and where
+ * they overlap it states both and says the reading does not separate them.
+ * "against" is not a direction word and neither is "separate" — nothing here
+ * claims either format is going anywhere; what changes is whether the sentence
+ * claims one is ahead.
  */
 export function matrixConclusion(
   readings: readonly FormatReading[],
@@ -406,13 +477,40 @@ export function matrixConclusion(
   const floor = options.leadMinRated ?? 0
   const rated = widest.rows.filter((r) => r.engagement.median !== null && r.engagement.n >= floor)
   if (rated.length < 2) return null
-  const best = [...rated].sort((a, b) => (b.engagement.median ?? 0) - (a.engagement.median ?? 0))[0]
-  const next = [...rated].sort((a, b) => (b.engagement.median ?? 0) - (a.engagement.median ?? 0))[1]
+  const ranked = [...rated].sort((a, b) => (b.engagement.median ?? 0) - (a.engagement.median ?? 0))
+  const best = ranked[0]
+  const next = ranked[1]
+  const drawn = best.engagement.band != null && next.engagement.band != null
+  const separate = bandsSeparate(best.engagement.band, next.engagement.band)
+  // The verb carries the claim: "against" ranks, "and" does not.
+  const head = `${best.label} ran at ${best.engagement.median}% ${separate ? 'against' : 'and'} ` +
+    `${next.label} at ${next.engagement.median}%`
+  // THE CLAUSE IS PRINTED WHERE IT SAYS SOMETHING. A band that has collapsed on
+  // its median — every rated video in the group at one rate — is a true band
+  // and separates as one, but written out it reads "3.4% against 3.1%" one
+  // clause after the sentence has already said 3.4% and 3.1%. So the clause
+  // appears where at least one side is a real range; the SEPARATION rule above
+  // is unconditional either way.
+  const bands = drawn && [best, next].some((r) => r.engagement.band!.low !== r.engagement.band!.high)
+    ? `${bandOf(best)} against ${bandOf(next)}, `
+    : ''
+  const tail = separate
+    ? ''
+    : drawn
+      ? ' The two ranges overlap, so this reading does not separate them.'
+      : ' Too few rated videos on one side for a range, so this reading does not separate them.'
   return (
-    `${best.label} ran at ${best.engagement.median}% against ${next.label} at ${next.engagement.median}% ` +
-    `— measured over ${fmtInt(best.engagement.n)} and ${fmtInt(next.engagement.n)} of ${labelInSentence(widest.audienceLabel)}’s ` +
-    `${fmtInt(widest.of)} classified ${widest.basisLine}.`
+    `${head} — ${bands}measured over ${fmtInt(best.engagement.n)} and ${fmtInt(next.engagement.n)} ` +
+    `of ${labelInSentence(widest.audienceLabel)}’s ${fmtInt(widest.of)} classified ${widest.basisLine}.${tail}`
   )
+}
+
+/** "3.3\u20133.5%" — a band, in the median's own unit. A band that has
+ *  collapsed on one rate is written as that rate, never as "3.4\u20133.4%". */
+function bandOf(row: FormatRow): string {
+  const b = row.engagement.band
+  if (!b) return ''
+  return b.low === b.high ? `${b.low}%` : `${b.low}\u2013${b.high}%`
 }
 
 /**

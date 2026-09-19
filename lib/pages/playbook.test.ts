@@ -180,7 +180,7 @@ describe('buildPlaybook · CO7', () => {
         ...run('category', 3, { classified_type: 'story', engagement_rate: 88, platform: 'reddit' }),
       ],
     })
-    expect(p.formats.sides[0].byKey['story']!.engagement).toEqual({ median: 2, n: 3 })
+    expect(p.formats.sides[0].byKey['story']!.engagement).toEqual({ median: 2, n: 3, band: null })
     expect(p.formats.sides[0].byKey['story']!.value).toEqual({ k: 6, n: 6 })
     expect(p.excludedNote).toContain('capped at 40')
   })
