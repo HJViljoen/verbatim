@@ -68,7 +68,10 @@ describe('CO1 · the rival selection', () => {
     // zero, and that is a different sentence from "never read".
     const text = renderText(competitiveRivals.render(quietRivalFixture(), 'app', ctx))
     expect(text).toContain('nothing of theirs was read this window')
-    expect(text).toContain('1 of their videos read')
+    // AND THE COUNT CARRIES ITS SPAN. `countAnalysedByRival` has no date
+    // filter, so this is the whole corpus beside a WINDOW state — "in all" is
+    // what stops 319 reading as a contradiction of the standings' 42 of 449.
+    expect(text).toContain('1 of their videos read in all')
   })
 
   it('says a rival you stopped tracking cannot be listed yet', () => {
