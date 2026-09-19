@@ -25,8 +25,30 @@ import { INTERPRETATION_LABEL } from '@/lib/prose/interpret'
  * a read and a two-line coverage footer — about eight information units on one
  * sheet. The built brief drew one unit per slide at a markedly larger scale.
  * This is the re-pack: one `Slide`, the artboard's `5fr 3.5fr 3.5fr` figure row
- * over its `7fr 5fr` split, at the artboard's own 12.5px body and 9.5px mono
- * trails.
+ * over its `7fr 5fr` split, declaring the artboard's own 12.5px body and
+ * 9.5px mono trails.
+ *
+ * DECLARING THEM IS NOT PRINTING THEM, AND THE DIFFERENCE IS 10%. Everything
+ * inside `.vb-slide-body` is laid out at `--vb-grid-w` (1168px) and zoomed to
+ * `--vb-zoom` (0.902) to fit the 297mm sheet, and the artboard is not: the
+ * artboard IS 1123px wide. So the declared sizes land ~10% under the spec —
+ * measured through `lib/render/chromium`, a 9.5px trail renders 8.57px on a
+ * 1122.5px page, which is 6.4pt, where the artboard's same 9.5px is 7.1pt and
+ * its 12.5px body is 9.4pt against this sheet's 8.5pt.
+ *
+ * IT IS NOT THIS SHEET'S TO FIX, AND THE FIX HERE WOULD COST THE TABLE. The
+ * zoom is on `.vb-slide-body` in app/globals.css, so EVERY deck sheet in the
+ * product prints 10% under its artboard — sales, marketing, content and the
+ * quarterly are bound into the same PDFs and set their micro-type at the same
+ * 9.5px. `slide.tsx:60` and `report-deck.tsx:30` name 6.4pt as below the 8pt
+ * print floor and bump the two elements that live OUTSIDE the zoom (the page
+ * number and the deck footer) to 11px; inside the zoom, 8pt would mean 11.8px
+ * declared, which is the body size, and even the artboard's own 7.1pt is only
+ * 10.5px. Measured, that one pixel takes 25px off the subjects block and drops
+ * the table from four rows to three at every density a caveat prints — half
+ * the table, for 0.7pt. The lever that would fix it for every sheet at once is
+ * `--vb-grid-w` / `--vb-zoom`; that is shell's, and one sheet diverging from
+ * the four it ships beside would be worse than the deviation.
  *
  * IT REPLACES THE 58px COVER AND NOTHING ELSE. The mock has no cover slide and
  * the port removes it — it is a page a director had to turn past. What it does
