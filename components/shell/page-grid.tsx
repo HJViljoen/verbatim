@@ -86,14 +86,47 @@ const BARE: Record<2 | 3, string> = {
   3: 'xl:grid-cols-3',
 }
 
-export function TileColumns({ of, rule = true, children, className }: { of: 2 | 3; rule?: boolean; children: ReactNode; className?: string }) {
+/**
+ * TWO COLUMNS THAT ARE NOT THE SAME WIDTH (Block D wave 3, SH15).
+ *
+ * `of={2}` rendered `xl:grid-cols-2` and nothing else, so Overview's hero
+ * split 584/584 where `Main.dc.html` sets `1fr 400px`. The consequence is not
+ * cosmetic: the artboard's hero sentence sets on ONE line and the build's
+ * wrapped to two — most of that tile's 292px → 459px growth — while the voices
+ * column ran 184px wider than it needs and every citation tail ended in a
+ * ragged gutter. A column pair where one side is a reading and the other is
+ * its evidence is not a pair of equals, and the primitive had no way to say so.
+ *
+ * A FIXED SET OF WIDTHS, NOT A NUMBER. Tailwind v4's scanner reads class
+ * strings literally, so an interpolated `xl:grid-cols-[1fr_${n}px]` compiles
+ * to nothing; and three widths is what the artboards actually use. The rail is
+ * the LAST column and only on `of={2}`, because a three-column layout with one
+ * fixed side is a different composition and no artboard draws one. Every
+ * existing caller passes no rail and is unchanged.
+ */
+const RAIL: Record<320 | 360 | 400, { ruled: string; bare: string }> = {
+  320: { ruled: 'xl:grid-cols-[minmax(0,1fr)_320px] xl:[&>*:not(:nth-child(2n+1))]:border-l', bare: 'xl:grid-cols-[minmax(0,1fr)_320px]' },
+  360: { ruled: 'xl:grid-cols-[minmax(0,1fr)_360px] xl:[&>*:not(:nth-child(2n+1))]:border-l', bare: 'xl:grid-cols-[minmax(0,1fr)_360px]' },
+  400: { ruled: 'xl:grid-cols-[minmax(0,1fr)_400px] xl:[&>*:not(:nth-child(2n+1))]:border-l', bare: 'xl:grid-cols-[minmax(0,1fr)_400px]' },
+}
+
+export function TileColumns({ of, rule = true, rail, children, className }: {
+  of: 2 | 3
+  rule?: boolean
+  /** The LAST column's fixed width above xl, in px — `Main.dc.html`'s
+   *  `1fr 400px`. Two-column only; ignored with a reason on `of={3}`. */
+  rail?: 320 | 360 | 400
+  children: ReactNode
+  className?: string
+}) {
+  const sized = of === 2 && rail ? RAIL[rail] : null
   return (
     <div
       className={cn(
         'grid min-w-0 grid-cols-1 gap-4',
         rule
-          ? cn('divide-y divide-border/70 xl:divide-y-0 xl:[&>*]:border-border/70', COLUMNS[of])
-          : BARE[of],
+          ? cn('divide-y divide-border/70 xl:divide-y-0 xl:[&>*]:border-border/70', sized ? sized.ruled : COLUMNS[of])
+          : (sized ? sized.bare : BARE[of]),
         className,
       )}
     >

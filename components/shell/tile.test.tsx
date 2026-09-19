@@ -170,6 +170,24 @@ describe('TileColumns', () => {
     expect(render(<TileColumns of={3}><div>a</div><div>b</div><div>c</div><div>d</div></TileColumns>)).toContain('nth-child(3n+1)')
   })
 
+  it('gives the last column a fixed width when the artboard sets one (SH15)', () => {
+    // Main.dc.html's hero is `1fr 400px`; `of={2}` could only say 584/584, and
+    // the artboard's hero sentence sets on one line where the build's wrapped.
+    const markup = render(<TileColumns of={2} rail={400}><div>reading</div><div>voices</div></TileColumns>)
+    expect(markup).toContain('xl:grid-cols-[minmax(0,1fr)_400px]')
+    expect(markup).not.toContain('xl:grid-cols-2')
+    // The rule between the columns survives the sizing.
+    expect(markup).toContain('nth-child(2n+1))]:border-l')
+    expect(render(<TileColumns of={2} rail={400} rule={false}><div>a</div><div>b</div></TileColumns>)).not.toContain('border-l')
+  })
+
+  it('leaves every caller that asks for no rail exactly as it was', () => {
+    expect(render(<TileColumns of={2}><div>a</div><div>b</div></TileColumns>)).toContain('xl:grid-cols-2')
+    // A three-column layout with one fixed side is a composition no artboard
+    // draws, so the rail is two-column only.
+    expect(render(<TileColumns of={3} rail={400}><div>a</div><div>b</div><div>c</div></TileColumns>)).toContain('xl:grid-cols-3')
+  })
+
   it('takes a caller class without losing its own', () => {
     const markup = render(<TileColumns of={2} className="items-start"><div>a</div><div>b</div></TileColumns>)
     expect(markup).toContain('items-start')
