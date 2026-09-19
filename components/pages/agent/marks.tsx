@@ -79,14 +79,34 @@ export function DirectionWord({ direction }: { direction: Direction | null | und
   )
 }
 
-/** A verdict chip on a plan claim — the three words `PLAN_VERDICT_LABEL`
- *  already fixes, in the sentiment tints §3.6 assigns them. */
+/**
+ * A verdict chip on a plan claim — the three words `PLAN_VERDICT_LABEL`
+ * already fixes, in the sentiment tints §3.6 assigns them.
+ *
+ * THE RED IS IN THE TINT AND THE RING, NOT IN THE TEXT — the fix
+ * `InferencePill` argues twenty lines below, in the colour it had not been
+ * applied to. `bg-negative/12 text-negative` is `#DB3B2E` on `#FBE7E6`:
+ * **3.78:1** at 12px against a 4.5:1 floor, and it renders on the plan rail of
+ * both routes in every populated shot ("1 contradicted"). Moving the words to
+ * `foreground` takes it to 12.3:1 light and 12.6:1 dark, and the ring keeps the
+ * colour doing the signalling — exactly the trade the amber pill made when
+ * `bg-warning/15 text-warning` measured 1.9:1.
+ *
+ * `supported` is untouched: `accent-foreground` on `accent` is 5.4:1 light and
+ * 7.6:1 dark, which clears the floor, and it is the one chip here whose ink IS
+ * legible. `untested` keeps `bg-inner text-muted-foreground` (4.46:1) because
+ * that pair is app-wide — fourteen other call sites and `lib/ui-colors.ts` —
+ * and moving it here alone would make this file the one place the product's
+ * quiet grey means something different. Same answer, and the same reason, as
+ * the `--warning-foreground` token `InferencePill` refers to whoever owns
+ * `app/globals.css`.
+ */
 export function ClaimChip({ tone, children }: { tone: 'supported' | 'contradicted' | 'untested'; children: ReactNode }) {
   const cls =
     tone === 'supported'
       ? 'bg-accent text-accent-foreground'
       : tone === 'contradicted'
-        ? 'bg-negative/12 text-negative'
+        ? 'bg-negative/12 text-foreground ring-1 ring-negative/50'
         : 'bg-inner text-muted-foreground'
   return (
     <span className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2 py-px text-[12px] font-medium ${cls}`}>
