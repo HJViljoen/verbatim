@@ -483,8 +483,13 @@ export const CONTENT_MAP: readonly BriefEntry[] = [
   // `loadRecordInputs`. What only `MethodPage` printed was `methodLines`
   // (the basis, the language note, the Reddit cap, PRIVACY_LINE), and
   // `record.tsx` now prints those under its numbers card, so nothing a client
-  // PDF has to carry is lost. `CONTENT_BRIEF.skeleton` drops its `method` page
-  // in the same breath, so the writer is not asked for a page nothing renders.
+  // PDF has to carry is lost. `CONTENT_BRIEF.skeleton` KEEPS its `method` page
+  // and templates.ts:221-234 says why: the skeleton is the fallback walk, used
+  // by a custom brief and by any brief built where the reading could not be
+  // loaded at all, and in that state `ct.record` does not exist — so dropping
+  // it there would leave one reachable content brief with no method sheet.
+  // (This sentence said the opposite until the wave-3 merge, reports R3; the
+  // code and templates.ts were right and this was the stray.)
   //
   // THE OTHER THREE MAPS ARE UNTOUCHED: they have no record sheet, so
   // `page('method')` is the only method sheet they have.

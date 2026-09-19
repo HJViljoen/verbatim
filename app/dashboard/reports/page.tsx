@@ -21,6 +21,7 @@ import { StudioCard } from '@/components/reports/studio-card'
 import { QuarterlyAbsentTile, QuarterlyCardTile } from '@/components/blocks/reports-card/card'
 import { ArchiveDateFilter } from '@/components/reports/date-filter'
 import { loadQuarterlyCard } from '@/lib/pages/reports-card'
+import { PRIVACY_LINE } from '@/lib/reading/method'
 import { readingHandle } from '@/lib/reading/read'
 import { catalogueChips } from '@/lib/reports/catalogue'
 import { UPDATES_UNREAD_LINE, activePreset, loadReportsPageContext, presetLine } from '@/lib/reports/page-context'
@@ -673,16 +674,25 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
           // a reader take an unread record for an empty one.
           presetNote={chosen ? presetLine(chosen) : ctx.updatesUnread ? UPDATES_UNREAD_LINE : null}
           filter={filter}
-          // PRINTED ONCE ON THE SCREEN. `PRIVACY_LINE` is the last line of
-          // `methodLines`, which this page prints in full at the foot (the
-          // method footnote below), so the archive's own footer said the same
-          // sentence 60px above it. The footer copy predates that footnote.
-          // It is also the copy that clips at 375, so dropping it closes both.
+          // PRINTED ONCE ON THE SCREEN, AND NEVER ZERO TIMES (reports-18, as
+          // amended by R1). `PRIVACY_LINE` is the last line of `methodLines`,
+          // which this page prints in full at the foot, so the archive's own
+          // footer said the same sentence 60px above it and dropping it here
+          // also closed the copy that clips at 375.
+          //
+          // But the footnote is `{ctx.method && ...}`, and
+          // `lib/reports/page-context.ts:236-240` returns `method: null` on
+          // ANY `loadRecordInputs` throw — a fresh database, a failed record
+          // read. In that state reports-18 took the count from one to zero:
+          // no method footnote, and no sentence anywhere on the page telling a
+          // reader what a share link exposes. It prints here exactly when the
+          // footnote cannot.
           footer={
             <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <span className="text-[12px] text-muted-foreground">
                 Share links are created on an item below.
               </span>
+              {!ctx.method && <span className="text-[12px] text-muted-foreground">{PRIVACY_LINE}</span>}
             </span>
           }
         />
