@@ -68,6 +68,33 @@ describe('the sheets', () => {
     expect(text).toContain('The same subjects month by month, on the axis each side was read on.')
   })
 
+  // A SHEET NAMES ITSELF ONCE (wave 3, `sales`-2). `MARKETING_MAP` titles three
+  // sheets with the words their leading block also prints through `BlockFrame`,
+  // so each opened with an `<h1>`, a serif framing line and then a caps eyebrow
+  // saying the `<h1>` again. The line that survives is the block's, because it
+  // is the one carrying the meta beside it; the month that rode the header's
+  // context slot is on the footer stamp of every sheet.
+  it('says a sheet\u2019s title once where its block prints the same words', () => {
+    const slides = render(<DocumentDeck data={marketingDeckFixture()} date="28 Sep 2026" />)
+      .split('<section class="vb-slide"').slice(1)
+    const carrying = (meta: string) => slides.find((x) => markupText(x).includes(meta)) ?? ''
+    for (const [title, meta] of [
+      ['Your subjects', '2 named 19 Aug'],
+      ['Rivals', 'both shares of a frozen panel of accounts'],
+      ['Your moves', '2 declared'],
+    ] as const) {
+      const sheet = carrying(meta)
+      expect(sheet).not.toBe('')
+      // The block's header is the one that stayed \u2014 it brought its meta \u2026
+      expect(markupText(sheet)).toContain(meta)
+      // \u2026 and the words are printed once on the sheet, not twice.
+      expect(markupText(sheet).split(title).length - 1).toBe(1)
+      expect(sheet).not.toContain('<h1')
+    }
+    // A sheet whose block says something else keeps its own header.
+    expect(carrying('1,388 category videos this month')).toContain('<h1')
+  })
+
   // `mkt.p1.title`: the artboard opens on content with a page title and one
   // mono context line, not on a landscape sheet carrying a 58px title.
   it('folds the cover onto the In-short sheet, and both paginators agree', () => {

@@ -1941,6 +1941,33 @@ export function paperEmpty(section: Pick<DocBriefSection, 'block' | 'empty'>): s
   return PAPER_EMPTY.find((x) => x.block === section.block && x.screen === section.empty)?.paper ?? section.empty
 }
 
+/**
+ * Whether the sheet's own title is about to be said again, one line lower, by
+ * the first block on it (wave 3, `sales`-2).
+ *
+ * `MARKETING_MAP` titles three sheets with the words their leading block also
+ * prints through `BlockFrame` — "Your subjects", "Rivals", "Your moves" — so
+ * the sheet opened with an `<h1>`, a serif framing line, and then a caps
+ * eyebrow saying the `<h1>` over again, before a line of meta and a question.
+ * The line that survives is the block's, because it is the one that carries
+ * the meta beside it ("2 named 19 Aug · share of videos where the subject came
+ * up"); the slide's carries only the words. The month that rode the header's
+ * context slot is on `BriefFooter`'s stamp on every sheet, so nothing else is
+ * lost.
+ *
+ * THE COMPARISON IS THE BLOCK'S DECLARED TITLE, not the rendered markup: a
+ * block states its heading on the contract (`Block.title`) precisely so a
+ * surface can ask without reading what it drew.
+ */
+function sheetRenamesItself(sections: DocBriefSection[], title: string, data: DocumentSnapshotData): boolean {
+  const first = sections[0]
+  if (!first || first.empty != null) return false
+  if ((data.surfaces ?? {})[first.surface] == null) return false
+  const block = blocksFor(first.surface as BriefSurface)?.find((b) => b.key === first.block)
+  const norm = (x: string) => x.trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  return !!block && norm(block.title) === norm(title)
+}
+
 /** One borrowed section's body. `why` (E-sales) says whether this sheet
  *  prints the sentence behind the confidence word; `framing` / `title`
  *  (E-marketing) are for a sheet that carries more than one section, where the
@@ -1954,7 +1981,11 @@ function SectionBody({ section, data, why = false, framing = true, title = false
 }) {
   const surface = (data.surfaces ?? {})[section.surface]
   const block = blocksFor(section.surface as BriefSurface)?.find((b) => b.key === section.block)
-  const body = section.empty != null || !block || surface == null
+  // WHETHER THE BLOCK ITSELF IS ABOUT TO DRAW ITS OWN HEADER. A filled block
+  // renders through `BlockFrame`, which prints the block's title and its meta;
+  // an unfilled one draws a single sentence and names nothing.
+  const filled = section.empty == null && !!block && surface != null
+  const body = !filled
     // NO `data-copy` MARKER. These words are the product's own — composed in
     // code from a readiness row, not written by a model and not read back out
     // of a column — and the contract's kinds are all about a model's words.
@@ -1976,6 +2007,15 @@ function SectionBody({ section, data, why = false, framing = true, title = false
           its own `BlockFrame` title; a section that could not be filled prints
           one sentence, and on a shared sheet that sentence had nothing above
           it naming what it was about. */}
+      {/* THE EYEBROW STAYS, AND IT IS THE ARTBOARD'S (wave 3, `sales`-2). The
+          review reads it as the surplus label in the stack of six; photographed
+          against the drawing it is the opposite — SalesBrief.dc.html's
+          objections sheet is `<h1>`, then "— MOST HEARD FIRST" in exactly this
+          treatment, then the rows, and the eyebrow is the only thing on it that
+          says what the ORDER of a list of counted rows is. The labels with no
+          artboard anywhere are `BlockFrame`'s title, its meta line and its
+          question, which this file cannot suppress through the Block contract:
+          a block renders its own frame. That half is SH6's and SH5's. */}
       {section.eyebrow ? <Eyebrow>{section.eyebrow}</Eyebrow> : title ? <Eyebrow>{section.title}</Eyebrow> : null}
       {framing && section.framing && <p className="m-0 text-[14px] leading-[1.45] text-muted-foreground">{section.framing}</p>}
       {body}
@@ -2193,6 +2233,7 @@ export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: Docum
               pages={pages}
               layout="grid"
               flow
+              header={!sheetRenamesItself(sections, s.title, data)}
               note={s.title === UNFILLED_SHEET ? UNFILLED_FRAMING : sections[0].framing}
             >
               {sections.map((sec, j) => <SheetSection key={sec.id} section={sec} data={data} framing={j > 0} />)}
@@ -2213,6 +2254,13 @@ export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: Docum
               page={n(i)}
               pages={pages}
               layout="single"
+              // …and the same on a sheet of one section (`sales`-2): the
+              // marketing brief's Rivals and Your-moves sheets are titled with
+              // the words their block prints. Only where the header would say
+              // NOTHING else — a section with its own `context` ("Objections ·
+              // September 2026") states where the sheet sits in the document,
+              // which is not on the footer and is not the block's to say.
+              header={!!section.context || !sheetRenamesItself([section], section.title, data)}
               note={section.framing}
             >
               {/* The framing is the slide's note on a sheet of its own, so the
