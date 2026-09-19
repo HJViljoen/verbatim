@@ -2573,8 +2573,28 @@ async function loadGrounding(
   const cited = [...new Set(rec.based_on?.insight_ids ?? [])]
   if (cited.length === 0) return null
   try {
-    const miRes = await supabase.from('market_insights').select('id, evidence').eq('client_id', clientId).in('id', cited)
-    const insights = rows<{ id: string; evidence: { supporting_theme_ids?: string[] } | null }>(miRes, 'overview.ledgerInsights')
+    // CHUNKED, BECAUSE `based_on.insight_ids` IS A STORED ARRAY OF UNBOUNDED
+    // LENGTH (Block D wave 3, M22). `lib/chunk.ts:17-24` records the measured
+    // cap: an `.in()` succeeds at 500 uuids and answers "Bad Request" at 700.
+    // Pass D-b, which WRITES this array, chunks the union of exactly these ids
+    // at 200 (`inngest/functions/pipeline.ts:2341`) — so the writer treats it
+    // as unbounded and the reader did not. A 400 here does not throw: `rows()`
+    // logs it and returns [], which lands in `groundingFor` as zero resolved
+    // evidence and prints the PRUNED sentence, so a failed read would read on
+    // the page as a recommendation whose evidence is gone.
+    //
+    // `UUID_IN_CHUNK`, not `MULTI_ROW_IN_CHUNK`: `id` is the key of
+    // `market_insights`, so a chunk returns at most one row per id and the URL
+    // is the only binding cap. The second hop is already chunked inside
+    // `fetchInsightsByIds`.
+    const insights = (
+      await mapWithLimit(chunk(cited, UUID_IN_CHUNK), READ_CONCURRENCY, async (ids) =>
+        rows<{ id: string; evidence: { supporting_theme_ids?: string[] } | null }>(
+          await supabase.from('market_insights').select('id, evidence').eq('client_id', clientId).in('id', ids),
+          'overview.ledgerInsights',
+        ),
+      )
+    ).flat()
     const audienceIds = [...new Set(insights.flatMap((mi) => mi.evidence?.supporting_theme_ids ?? []))]
     const audienceRows = audienceIds.length > 0
       ? await fetchInsightsByIds<{ id: string; theme: string | null; source_video_id: string | null }>(
