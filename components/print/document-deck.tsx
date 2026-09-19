@@ -287,9 +287,19 @@ function audiencePills(audiences: string, company: string) {
 const footerStamp = (data: DocumentSnapshotData): string | null =>
   data.reading ? briefStampShort(data.reading) : null
 
+/* 11px, AND IT IS NOT ON THE BODY'S SCALE (wave 3, `sales`-3). This paragraph
+   and the cover's page number are the only two nodes in this file that render
+   OUTSIDE `.vb-slide-body`, in the slide's own footer row, so `zoom: .902`
+   never touches them and the divisor the rest of the deck's type carries does
+   not apply here: 11px prints 11px, which is 8.25pt and the only tier on the
+   sheet that clears the floor `components/print/slide.tsx:60-63` names.
+   The 9.5 -> 11 pass landed on `DeckFooter` (report-deck.tsx), which a brief
+   never renders, and not on this — although slide.tsx says in a comment that
+   the two move together. They do now: the stamp and the "1 / 11" beside it are
+   one baseline and one size. */
 function BriefFooter({ company, date, stamp, note }: { company: string; date: string; stamp: string | null; note?: string | null }) {
   return (
-    <p className="truncate font-mono text-[10.5px] leading-[1.35] text-muted-foreground">
+    <p className="truncate font-mono text-[11px] leading-[1.35] text-muted-foreground">
       <span className="text-secondary-foreground">Created by {company} with Verbatim</span>
       <span aria-hidden> · </span>
       <span>{stamp ?? date}</span>
@@ -364,7 +374,9 @@ function DocumentCover({ data, pages, contents, date }: {
           sheet with no page number and no "Created by". */}
       <footer className="flex shrink-0 items-baseline justify-between gap-4 border-t border-border/70 pt-1.5">
         <div className="min-w-0 flex-1"><BriefFooter company={data.company} date={date} stamp={footerStamp(data)} /></div>
-        <span className="shrink-0 font-mono text-[10.5px] text-muted-foreground">1 / {pages}</span>
+        {/* The same 11px as every other sheet's page number, which `Slide`
+            sets; the cover draws its own footer and had drifted below it. */}
+        <span className="shrink-0 font-mono text-[11px] text-muted-foreground">1 / {pages}</span>
       </footer>
     </section>
   )
