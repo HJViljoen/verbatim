@@ -37,6 +37,7 @@ import {
 import { monthlyLineLabel } from '../../pages/overview'
 import { CLIENT_AUDIENCE } from '../../rivals'
 import { selectAll } from '../../supabase-admin'
+import { STALE_SECTION_LINE } from '../stale'
 import { fold } from '../../gather/util'
 import type { DocBriefSection, DocumentRole, DocumentSlideFigures } from './types'
 
@@ -474,7 +475,10 @@ export function briefSections(
         ? 'This section could not be read for this month.'
         : block
           ? block.emptyState(data as never)
-          : 'This section names a block this build does not know how to draw.'
+          // NOT "a block this build does not know how to draw": both words are
+          // on the jargon list, and this sentence is printed on a client's
+          // PDF. One wording for the whole product (lib/reports/stale.ts).
+          : STALE_SECTION_LINE
     // The sheet's own layout, frozen with it: a stored artefact renders the
     // sheet it was built as, not the sheet today's map would build — so
     // pagination (`sheet` / `span` / `extras`, E-marketing) travels with the

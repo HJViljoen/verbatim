@@ -6,6 +6,7 @@ import { periodNounFor, weeklyRuleFor } from '@/lib/reports/weekly'
 import { staleWeeklySnapshot, type WeeklySnapshotData } from '@/lib/reports/weekly-build'
 import { weeklyBlocksFor } from '@/components/blocks/weekly'
 import { Slide } from './slide'
+import { STALE_ARTEFACT_LINE } from '@/lib/reports/stale'
 
 // The weekly report on paper (Phase 1 WP17).
 //
@@ -50,7 +51,7 @@ export function WeeklyDeck({ data, date = fmtDate(new Date()) }: { data: WeeklyS
   if (blocks.length === 0) {
     return (
       <Slide title={data.subject} chrome={chrome} page={1} pages={1} layout="single">
-        <p className="m-0 text-[13px] text-muted-foreground">{stale ?? 'This report names no section this build knows how to draw.'}</p>
+        <p className="m-0 text-[13px] text-muted-foreground">{stale ?? STALE_ARTEFACT_LINE}</p>
       </Slide>
     )
   }

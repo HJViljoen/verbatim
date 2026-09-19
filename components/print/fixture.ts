@@ -11,6 +11,7 @@ import { competitiveFixture } from '@/components/pages/competitive-surface/fixtu
 import { subjectsFixture } from '@/components/pages/subjects/fixture'
 import { methodFixture } from '@/lib/test/method-fixture'
 import { briefSections } from '@/lib/reports/documents/load-reading'
+import { STALE_SECTION_LINE } from '@/lib/reports/stale'
 import { SALES_MAP } from '@/lib/reports/documents/sections'
 import { overviewFixture, refusedFixture as refusedOverview } from '@/components/pages/overview/fixture'
 import { marketFixture } from '@/components/pages/market-surface/fixture'
@@ -345,7 +346,7 @@ function sections(surfaces: Record<string, unknown>): DocBriefSection[] {
       ? 'This section could not be read for this month.'
       : block
         ? block.emptyState(data as never)
-        : 'This section names a block this build does not know how to draw.'
+        : STALE_SECTION_LINE
     return {
       id: s.id, block: s.block, surface: s.surface, title: s.title, framing: s.framing, empty,
       ...(s.sheet ? { sheet: s.sheet } : {}),

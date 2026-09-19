@@ -6,6 +6,7 @@ import type { WeeklyData } from '../pages/weekly'
 import { loadWeekly } from '../pages/weekly'
 import { readingHandle } from '../reading/read'
 import { WEEKLY_BLOCK_KEYS, weeklyPeriod, weeklySubject, type WeeklyBlockKey } from './weekly'
+import { STALE_ARTEFACT_LINE } from './stale'
 
 /**
  * Freezing the weekly report (Phase 1 WP17).
@@ -100,7 +101,7 @@ export function isWeeklyData(data: unknown): data is WeeklySnapshotData {
 export function staleWeeklySnapshot(data: WeeklySnapshotData): string | null {
   return data.version === WEEKLY_SNAPSHOT_VERSION
     ? null
-    : 'This update was built by an older version of Verbatim and cannot be redrawn here. The next scheduled update will be readable.'
+    : STALE_ARTEFACT_LINE
 }
 
 export class WeeklyEmptyError extends Error {}
