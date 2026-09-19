@@ -79,7 +79,11 @@ describe('SU1 · the subjects list', () => {
     // (b)) and the pane one tile over prints "26 of 84 videos" in full.
     expect(text).toContain('26 of 84')
     expect(text).toContain('too few to compare')
-    expect(text).toContain('named 19 Aug 2026')
+    // THE DATE, WITHOUT THE VERB, on the 240px rail: "named 19 Aug 2026 ·
+    // Rename · Stop" wants ~212px of 188 and orphaned "Stop" onto a fourth
+    // line. The year stays; Settings, which is full width, keeps the verb.
+    expect(text).toContain('19 Aug 2026')
+    expect(text).not.toContain('named 19 Aug 2026')
   })
 
   it('groups a four-digit count like every other number on the page', () => {
