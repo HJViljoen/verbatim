@@ -734,6 +734,31 @@ describe('the mock’s own shape, where the data allows it', () => {
     expect(text).toContain('Jul 17.0% → Aug 19.0% → Sep 22.0% in the category')
   })
 
+  // AND THE OTHER HALF OF THE SAME RULE. The fixture no longer carries a
+  // `moved` side, so the negative case — a column that DID draw a magnitude and
+  // must not repeat the month behind it — is exercised against a side pushed
+  // over its own band. Without this the rule is only half tested, and the half
+  // that is missing is the one that made column 3 wrap onto a fifth line.
+  it('does NOT repeat the prior month beside a column that drew its magnitude', () => {
+    const data = subjectsFixture()
+    const rival = data.selected!.sides.find((s) => s.kind === 'rival')!
+    const moved = {
+      ...data,
+      selected: {
+        ...data.selected!,
+        sides: data.selected!.sides.map((s) =>
+          s.kind === 'rival' ? { ...s, verdict: { ...s.verdict!, state: 'moved' as const, changePts: 5.5, bandPts: 2.1 } } : s,
+        ),
+      },
+    }
+    expect(rival.previous?.pct).toBe(43.7)
+    const text = renderText(subjectsSubject.render(moved, 'app', ctx))
+    expect(text).toContain('▲ 5.5 pts')
+    expect(text).not.toContain('▲ 5.5 pts · band ±2.1 pts Aug 43.7%')
+    // The two that still refuse keep theirs.
+    expect(text).toContain('too few to compare Aug 31.0%')
+  })
+
   // THE THREE COLUMNS CLOSE ON ONE EDGE. The prior month prints where the
   // column drew NO magnitude — it is the only way to see where a refused or
   // unchanged side stood — and not where one was drawn, because "▲ 5.5 pts"
@@ -744,15 +769,22 @@ describe('the mock’s own shape, where the data allows it', () => {
     const text = renderText(subjectsSubject.render(data, 'app', ctx))
     const moved = data.selected!.sides.filter((s) => s.verdict?.state === 'moved')
     const quiet = data.selected!.sides.filter((s) => s.verdict?.state !== 'moved' && s.previous?.pct != null)
-    expect(moved.map((s) => s.kind)).toEqual(['category'])
-    expect(quiet.map((s) => s.kind)).toEqual(['you', 'rival'])
-    // The two non-answers keep it, inline, right after the badge.
-    expect(text).toContain('too few to compare Aug 31%')
-    expect(text).toContain('no clear change Aug 43.7%')
-    // The category stated its magnitude, so the prior level is not repeated
-    // beside it — and is still on the tile, in the trail line above.
-    expect(text).not.toContain('growing, 3 months Aug')
-    expect(text).toContain('Jul 17% → Aug 19% → Sep 24.5% in the category')
+    // RE-BASED BY THE MERGE, and the rule under test is unchanged. M13 moved
+    // the fixture's September category reading from 24.5 to 22, which makes the
+    // category's step 3.0 points against a band of +/-3.1 — so its verdict is
+    // `no_clear_change` where it was `moved`, and NO side on this tile states a
+    // magnitude any more. The assertion that the two lists partition the sides
+    // is what carries the rule; which side falls where is the fixture's to say.
+    expect(moved.map((s) => s.kind)).toEqual([])
+    expect(quiet.map((s) => s.kind)).toEqual(['you', 'rival', 'category'])
+    // All three non-answers keep the prior month, inline, right after the badge.
+    // `lib`'s fmtPct keeps an exact .0; `shell`'s SH18 puts the change and the
+    // band beside `no_clear_change`, and this merge's R2 keeps them off
+    // `too_little_data`, where the band can be a floor rather than a margin.
+    expect(text).toContain('too few to compare Aug 31.0%')
+    expect(text).toContain('no clear change · ±0 pts · band ±11.8 pts Aug 43.7%')
+    expect(text).toContain('no clear change · +3 pts · band ±3.1 pts growing, 3rd month Aug 19.0%')
+    expect(text).toContain('Jul 17.0% → Aug 19.0% → Sep 22.0% in the category')
   })
 
   it('names the axis the chart spans, and what the shading over it means', () => {
