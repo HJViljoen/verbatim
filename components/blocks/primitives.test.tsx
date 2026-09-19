@@ -48,6 +48,15 @@ describe('BlockFrame', () => {
     }
   })
 
+  it('heads each email section with a full-bleed rule, not only its footer (SH11)', () => {
+    const markup = render(<BlockFrame mode="email" title="Your subjects" footer="Open Subjects"><p>body</p></BlockFrame>)
+    const header = markup.slice(0, markup.indexOf('Your subjects'))
+    expect(header).toContain(`border-top:1px solid ${EMAIL.hairline}`)
+    // The footer keeps its own rule; the point is that there are now two and
+    // the upper one belongs to the section rather than to "Open Subjects →".
+    expect(markup.slice(markup.indexOf('Open Subjects') - 400)).toContain(EMAIL.hairline)
+  })
+
   it('prints the question on the SCREEN only (Block D wave 3, SH6)', () => {
     // The docblock justified the question as "the mock's own device — every
     // artboard prints one". Counted, every PRINTED artboard prints zero:

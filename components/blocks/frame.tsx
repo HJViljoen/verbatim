@@ -149,7 +149,17 @@ export function BlockFrame({
       <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} border={0} style={{ borderCollapse: 'collapse', borderSpacing: 0, marginTop: 22 }}>
         <tbody>
           <tr>
-            <td style={{ padding: '0 0 6px' }}>
+            {/* A RULE ABOVE THE HEADER, NOT BELOW THE BODY (Block D wave 3,
+                SH11). The block's only hairline was on the FOOTER row, inside
+                the block, and sections were separated by `marginTop: 22`
+                alone — so the one rule on the artefact read as belonging to
+                "Open This week →" and the section boundary read as nothing at
+                all. Every artboard heads each section with a full-bleed
+                hairline, and that device is what makes a 6,500px scroll
+                legible as six sections rather than as one column of text. The
+                first section wears one too: under the masthead it is the line
+                that says the reading has started. */}
+            <td style={{ padding: '14px 0 6px', borderTop: `1px solid ${EMAIL.hairline}` }}>
               <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} border={0} style={{ borderCollapse: 'collapse', borderSpacing: 0 }}>
                 <tbody>
                   <tr>
