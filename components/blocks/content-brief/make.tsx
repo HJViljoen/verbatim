@@ -43,6 +43,33 @@ import { madeInMonth } from '@/lib/pages/market-surface'
 //     (`page.meta.sure`); a ledger row has no confidence, and three dots with
 //     nothing behind them is the score this product does not show.
 //
+//   · THE "MAKE IT AS…" LINE, which is the last line of every artboard card
+//     ("Make it as a product-on-desk demo — median engagement 3.1% on TikTok
+//     (n=131)"). It is absent, and until now no rule said why, so it read as
+//     an oversight (design review 15). The rule is two facts, and either one
+//     alone is enough:
+//
+//       1. NOTHING IN THIS PRODUCT MAPS A PIECE OF ADVICE TO A FORMAT. A
+//          recommendation carries `type` — one of `RECOMMENDATION_TYPES`
+//          (`product`, `positioning_messaging`, `customer_experience`, …),
+//          which is what the advice is ABOUT — and never a `classified_type`,
+//          which is what a video IS. No join exists, no column holds one, and
+//          the only way to produce the sentence would be to let a model pick
+//          the format, which would put a fabricated label in front of a real
+//          median and make the whole line read as measured.
+//       2. AND THIS BLOCK COULD NOT REACH THE MEDIAN IF IT DID. `content.make`
+//          renders `MarketSurfaceData` — that is what lets it cost no second
+//          read — and the format medians are on `ContentBriefData`, the
+//          brief's own surface, two sections later. A block gets ONE surface
+//          (`lib/blocks/types.ts`); a block that quietly took two would be the
+//          second measurement of one month this whole layer exists to stop.
+//
+//     What the card ends with instead is Pass D-b's own argument for the
+//     advice, which is a sentence the product actually has. If the mapping is
+//     ever built — a recommendation that names the format it is advice about,
+//     written by the classifier's vocabulary rather than by a model — the line
+//     belongs here and the medians are one surface away.
+//
 //   · "8 answered last week · 4 ignored" and the reply rows. Nothing records
 //     whether a reply was sent (D6), and the inbox those rows come from is
 //     `lib/pages/content.ts`, which another package is moving this wave.
