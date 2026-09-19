@@ -211,7 +211,7 @@ describe('OV5, ported to the artboard', () => {
     // its own badge.
     const text = renderText(overviewMoves.render(overviewFixture(), 'app', ctx))
     expect(text).toContain('your audience too few to compare')
-    expect(text).toContain('the category ▲ 3 pts · band 1.9')
+    expect(text).toContain('the category ▲ 3 pts · band ±1.9 pts')
   })
 
   it('keeps the button’s slot with an honest sentence in it, and names no date', () => {

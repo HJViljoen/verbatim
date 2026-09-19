@@ -86,9 +86,36 @@ const REFUSED_WHY = REFUSAL_WHY
 const NON_ANSWER = 'text-xs font-medium text-muted-foreground'
 const MOVED = 'text-xs font-semibold'
 
-/** A muted non-answer. Never coloured, never arrowed. */
-function NonAnswer({ word, title }: { word: string; title: string }) {
-  return <span className={NON_ANSWER} title={title}>{word}</span>
+/** The band, as the artboard writes it: "band ±2.1", with the unit the change
+ *  carries (Block D wave 3, SH18). The magnitude printed its unit and the band
+ *  did not, and the ± — which is the whole reason a band is not a threshold —
+ *  lived in a `title`. */
+function band(value: number, unit?: string): string {
+  return `band ±${Math.abs(value).toLocaleString('en-US')}${unit ? ` ${unit}` : ''}`
+}
+
+/**
+ * A muted non-answer. Never coloured, never arrowed.
+ *
+ * AND IT PRINTS WHAT IT REFUSED (Block D wave 3, SH18). The change and the
+ * band were in the `title` alone, so the six "no clear change" cells on the
+ * Competitive standings were six unexplained refusals in print, on a keyboard
+ * and to a screen reader — which also undercut the defence for keeping both
+ * change columns. A refusal a reader can check is a measurement; one they
+ * cannot is an assertion. Where there is nothing to show — a comparison
+ * refused for a bookkeeping break, or a reading with no two sides — the word
+ * stands alone, as it did.
+ */
+function NonAnswer({ word, title, change, bandPts, unit }: { word: string; title: string; change?: number | null; bandPts?: number | null; unit?: string }) {
+  const showable = change != null && bandPts != null
+  return (
+    <span className={NON_ANSWER} title={title}>
+      {word}
+      {showable ? (
+        <span className="font-normal"> · {change > 0 ? '+' : change < 0 ? '−' : '±'}{Math.abs(change).toLocaleString('en-US')}{unit ? ` ${unit}` : ''} · {band(bandPts, unit)}</span>
+      ) : null}
+    </span>
+  )
 }
 
 /** An arrowed movement, coloured on the caller's favourability axis.
@@ -100,7 +127,7 @@ function NonAnswer({ word, title }: { word: string; title: string }) {
  *  the movement in muted ink: it moved, and we are not saying whether that is
  *  good. The default stays `up`, which is what every call site meant before
  *  the axis existed. */
-function Moved({ change, unit, band, title, good = 'up' }: { change: number; unit?: string; band?: number | null; title: string; good?: Good }) {
+function Moved({ change, unit, band: bandPts, title, good = 'up' }: { change: number; unit?: string; band?: number | null; title: string; good?: Good }) {
   const fav = favourability(change, good)
   return (
     <span title={title} className={`${MOVED} ${fav === null ? 'text-muted-foreground' : fav ? 'text-positive' : 'text-negative'}`}>
@@ -109,7 +136,7 @@ function Moved({ change, unit, band, title, good = 'up' }: { change: number; uni
           comment says "this product never prints a change without the band it
           cleared" — and on a printed page, in an email, and for anyone not
           using a mouse, a `title` attribute is not printed at all. */}
-      {band != null ? <span className="font-normal text-muted-foreground"> · band {Math.abs(band).toLocaleString('en-US')}</span> : null}
+      {bandPts != null ? <span className="font-normal text-muted-foreground"> · {band(bandPts, unit)}</span> : null}
     </span>
   )
 }
@@ -131,19 +158,24 @@ function Moved({ change, unit, band, title, good = 'up' }: { change: number; uni
 export function MovementBadge({ verdict, unit, good = 'up' }: { verdict: Verdict | DeltaVerdict | null | undefined; unit?: string; good?: Good }) {
   if (!verdict) return null
   const change = 'changePts' in verdict ? verdict.changePts : verdict.change
-  const band = 'bandPts' in verdict ? verdict.bandPts : verdict.band
+  const bandPts = 'bandPts' in verdict ? verdict.bandPts : verdict.band
   if (verdict.state === 'moved' && change != null) {
-    return <Moved change={change} unit={unit} band={band} good={good} title={band != null ? `moved beyond the ${band} pt margin of this measurement` : 'moved'} />
+    return <Moved change={change} unit={unit} band={bandPts} good={good} title={bandPts != null ? `moved beyond the ${bandPts} pt margin of this measurement` : 'moved'} />
   }
   const why = 'refusedReason' in verdict && verdict.refusedReason ? REFUSED_WHY[verdict.refusedReason] : null
-  const inside = change != null && band != null
-    ? `moved ${change > 0 ? '+' : ''}${change}${unit ? ` ${unit}` : ''}, inside the ${band} pt margin of this measurement`
+  const inside = change != null && bandPts != null
+    ? `moved ${change > 0 ? '+' : ''}${change}${unit ? ` ${unit}` : ''}, inside the ${bandPts} pt margin of this measurement`
     : 'not enough on both sides to compare yet'
   // `moved` with no change is incoherent — nothing in lib/reading/verdicts.ts
   // can produce it — so it reads as the thin answer rather than as a movement
   // with no number, which is the only safe way for it to be wrong.
   const word = verdict.state === 'moved' ? MOVEMENT_WORDS.too_little_data : MOVEMENT_WORDS[verdict.state]
-  return <NonAnswer word={word} title={why ?? inside} />
+  // A REFUSAL SHOWS NO NUMBERS. `refused` is a break in our own bookkeeping —
+  // the figure exists and saying it moved would be a claim about the record,
+  // not about the conversation — so printing a change beside the word would be
+  // the claim the state exists to withhold.
+  const refused = verdict.state === 'refused'
+  return <NonAnswer word={word} title={why ?? inside} change={refused ? null : change} bandPts={refused ? null : bandPts} unit={unit} />
 }
 
 /**

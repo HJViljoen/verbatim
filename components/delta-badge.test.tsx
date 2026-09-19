@@ -65,14 +65,21 @@ describe('MovementBadge', () => {
   it("still takes the band's own three-state DeltaVerdict", () => {
     // THE BAND IS PRINTED, NOT HOVERED: a `title` is invisible in print and in
     // email, and this product never prints a change without the band it cleared.
-    expect(renderText(<MovementBadge verdict={{ state: 'moved', change: 4.1, band: 2 }} unit="pts" />)).toBe('▲ 4.1 pts · band 2')
+    expect(renderText(<MovementBadge verdict={{ state: 'moved', change: 4.1, band: 2 }} unit="pts" />)).toBe('▲ 4.1 pts · band ±2 pts')
     expect(renderText(<MovementBadge verdict={{ state: 'moved', changePts: 4.1, bandPts: null } as never} unit="pts" />)).toBe('▲ 4.1 pts')
-    expect(renderText(<MovementBadge verdict={{ state: 'no_clear_change', change: 0.4, band: 2 }} />)).toBe('no clear change')
+    // AND THE NON-ANSWER PRINTS WHAT IT REFUSED (Block D wave 3, SH18). The
+    // change and the band were in the `title` alone, so six "no clear change"
+    // cells on the Competitive standings were six unexplained refusals in
+    // print, on a keyboard and to a screen reader.
+    expect(renderText(<MovementBadge verdict={{ state: 'no_clear_change', change: 0.4, band: 2 }} />)).toBe('no clear change · +0.4 · band ±2')
+    // A refusal is a break in our own bookkeeping, not a reading, so it shows
+    // no numbers at all.
+    expect(renderText(<MovementBadge verdict={{ state: 'refused', changePts: 0.4, bandPts: 2, refusedReason: 'rename' } as never} />)).toBe('comparison refused')
     // P0 item 6 / mock-gap §6 D11: the thin-reading word is "too few to
     // compare" — the phrase GLOSSARY.change, the agent, the quarterly and the
     // overview note already used. Asserted against the table, so the day it
     // moves again it moves in one place.
-    expect(renderText(<MovementBadge verdict={{ state: 'too_little_data', change: 0, band: 2 }} />)).toBe(MOVEMENT_WORDS.too_little_data)
+    expect(renderText(<MovementBadge verdict={{ state: 'too_little_data', change: 0, band: 2 }} />)).toBe(`${MOVEMENT_WORDS.too_little_data} · ±0 · band ±2`)
     expect(MOVEMENT_WORDS.too_little_data).toBe('too few to compare')
   })
 

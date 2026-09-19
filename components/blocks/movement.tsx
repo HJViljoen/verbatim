@@ -137,7 +137,10 @@ export function BlockMovement({
   return (
     <span data-copy="verdict" style={chip(fav === null ? 'noted' : fav ? 'up' : 'down')}>
       {change > 0 ? '+' : '−'}{Math.abs(change).toLocaleString('en-US')}{unit ? ` ${unit}` : ''}
-      {band != null ? ` · band ${Math.abs(band).toLocaleString('en-US')}` : ''}
+      {/* "band ±2.1 pts", the artboard's own wording and the screen arm's
+          (SH18): the ± is the whole reason a band is not a threshold, and the
+          band carries the unit the change carries. */}
+      {band != null ? ` · band ±${Math.abs(band).toLocaleString('en-US')}${unit ? ` ${unit}` : ''}` : ''}
     </span>
   )
 }

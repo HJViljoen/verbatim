@@ -329,7 +329,7 @@ describe('BlockMovement', () => {
     assertEmailSafe(markup)
     expect(markup).not.toContain('▲')
     // The band rides in the email arm too — it used to be dropped entirely here.
-    expect(markupText(markup)).toBe('+6.9 pts · band 2.4')
+    expect(markupText(markup)).toBe('+6.9 pts · band ±2.4 pts')
     expect(markup).toContain(EMAIL.greenTint)
   })
 
