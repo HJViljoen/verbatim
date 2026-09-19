@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import { chunk, mapWithLimit, READ_CONCURRENCY } from '../chunk'
+import { chunk, mapWithLimit, MULTI_ROW_IN_CHUNK, READ_CONCURRENCY } from '../chunk'
 import { fmtInt, fmtPct, longMonth, monthName, platformLabel, shortDate } from '../format'
 import { cleanQuote, fetchQuoteCitationsByAudience, readsAsHeroQuote, type QuoteCitation } from '../quotes'
 import { citationLink } from '../evidence-cite'
@@ -928,9 +928,13 @@ interface VideoRow {
   upload_date: string | null
 }
 
-/** Ids per `.in()` chunk. 120 uuids is ~4.4 KB of request line, half of
- *  PostgREST's usual 8 KiB cap — the size lib/quotes.ts and lib/pages/voice.ts
- *  already use for the same shape. */
+/** Ids per `.in()` chunk on a KEY column — one row per id. 120 uuids is ~4.4 KB
+ *  of request line, half of PostgREST's usual 8 KiB cap, and the size
+ *  lib/quotes.ts and lib/pages/voice.ts already use for the same shape.
+ *
+ *  NOT FOR A COLUMN THAT IS NOT A KEY. There the URL is not the binding
+ *  constraint — the ROW cap is, and `lib/chunk.ts` `MULTI_ROW_IN_CHUNK` is the
+ *  constant that says so. See `readByIds`'s `size`. */
 const ID_CHUNK = 120
 
 /**
@@ -943,13 +947,28 @@ const ID_CHUNK = 120
  * live insights today and Sealand 2,872, so a subject that is a third of the
  * corpus is already there. Chunks are disjoint by id and read in parallel, the
  * way the quote layer reads its own.
+ *
+ * AND THE CHUNK SIZE DEPENDS ON WHETHER THE COLUMN IS A KEY (perf review,
+ * `main`'s M21 in this file). `ID_CHUNK`'s 120 is sized against the URL, which
+ * is the right constraint when an id names ONE row. When it names many, the
+ * binding constraint is PostgREST's 1,000-row page: `audience_insights_current
+ * .in('source_video_id', …)` returns ~30 insights a video, so 120 videos is
+ * ~3,600 rows — and `selectAll` pages those SERIALLY, inside a chunk that was
+ * going to be one of several concurrent requests. `lib/chunk.ts`
+ * `MULTI_ROW_IN_CHUNK` is the constant for that case and carries the
+ * arithmetic; passing it here is four requests becoming three, each of which
+ * can overlap with its neighbours. Latency only — `selectAll` pages either
+ * way, so nothing was ever truncated.
  */
 async function readByIds<T>(
   ids: readonly string[],
   fetch: (part: string[]) => { range: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }> },
+  /** Ids per request. The default is the KEY-column size; a read whose `.in()`
+   *  column is not a key passes `MULTI_ROW_IN_CHUNK`. */
+  size: number = ID_CHUNK,
 ): Promise<T[]> {
   if (ids.length === 0) return []
-  const pages = await mapWithLimit(chunk([...ids], ID_CHUNK), READ_CONCURRENCY, (part) => selectAll<T>(() => fetch(part)))
+  const pages = await mapWithLimit(chunk([...ids], size), READ_CONCURRENCY, (part) => selectAll<T>(() => fetch(part)))
   return pages.flat()
 }
 
@@ -1214,6 +1233,9 @@ export async function loadOwnPosts(
         .eq('client_id', clientId)
         .in('source_video_id', part)
         .order('id', { ascending: true }),
+      // NOT A KEY: ~30 insights a video, so the row cap binds long before the
+      // URL does. `readByIds`'s own note has the arithmetic.
+      MULTI_ROW_IN_CHUNK,
     )
     const videoOf = new Map(insights.map((i) => [i.id, i.source_video_id]))
     analysedPosts = new Set(insights.map((i) => i.source_video_id).filter((v): v is string => !!v)).size
@@ -1228,6 +1250,10 @@ export async function loadOwnPosts(
             .eq('member', true)
             .in('audience_insight_id', part)
             .order('audience_insight_id', { ascending: true }),
+        // NOR IS THIS ONE: an insight carries one membership row per named
+        // subject, and the set is 5-8 by design (SUBJECTS_MAX), so 120 ids sat
+        // within a few rows of the 1,000-row page boundary.
+        MULTI_ROW_IN_CHUNK,
       ).catch((error) => {
         if (isMissingSubjects(error)) return []
         throw error
