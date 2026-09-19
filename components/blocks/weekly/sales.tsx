@@ -170,10 +170,24 @@ function Note({ mode, children }: { mode: RenderMode; children: ReactNode }) {
  *
  * "DATED IN THE WINDOW", NOT "THIS UPDATE". `ForSalesData.videos` is
  * `window_denominators` summed over the update's window — videos dated by the
- * COMMENT — while WR3's "271 videos gathered" three inches up is dated by when
- * we LOOKED. Both said "this update" and a reader had no way to tell that they
+ * COMMENT — while WR3's "271 videos found" three inches up is dated by when we
+ * LOOKED. Both said "this update" and a reader had no way to tell that they
  * are different measures of different things, which is exactly the confusion
  * the two-clocks note in WR3 exists to prevent.
+ *
+ * SAID ONCE PER SECTION, ON THE ROW THAT LEADS IT. Every counted row called
+ * this, and the frame's `meta` said "205 videos in the window" over them, and
+ * the rival row's basis is a full sentence of its own: the same denominator
+ * three times in a section eight lines tall, in 11px mono, which is the
+ * metadata face — and a wrapped three-line mono paragraph reads as a fault
+ * rather than as apparatus. The artboard's §4 sub-lines are one short line
+ * each ("videos this week"), its meta is "this week", and the n is nowhere
+ * repeated.
+ *
+ * So the first row carries the "of N" — it is the row a reader meets, and its
+ * sub-line is the one marked `data-copy="level"`, which is rule (b) satisfied
+ * where the level actually is — and every row under it states its own basis
+ * against the same n, unrepeated.
  */
 const denominatorOf = (videos: number | null, what: string): string =>
   videos == null ? what : `${what} · of ${fmtInt(videos)} videos dated in the window`
@@ -220,11 +234,16 @@ export const forSales: Block<{ sales: ForSalesData }> = {
       <BlockFrame
         title={forSales.title}
         mode={mode}
-        meta={s.videos != null ? `${fmtInt(s.videos)} videos in the window` : undefined}
+        // THE ARTBOARD'S META IS THE PERIOD ("this week"), NOT THE n. This
+        // said "205 videos in the window" over three rows whose sub-lines
+        // each said "of 205 videos dated in the window" — the section's own
+        // denominator, three times in eight lines. The n is stated once, on
+        // the leading row, where it is also the level node.
+        meta={s.window ? `${shortDate(s.window.from)} – ${shortDate(s.window.to)}` : undefined}
         footer={mode === 'email'
           ? <a href={briefHref} style={{ color: EMAIL.ink }}>{s.brief.label}</a>
           : <Link href={briefHref} className="hover:underline">{s.brief.label}</Link>}
-        footerNote={s.window ? `${shortDate(s.window.from)} – ${shortDate(s.window.to)}` : undefined}
+
       >
         {children}
       </BlockFrame>
@@ -269,8 +288,12 @@ export const forSales: Block<{ sales: ForSalesData }> = {
             // citations whose audience is `competitor:*` — drawn from the same
             // pool as the row above, not beside it — so two adjacent counts
             // over one n invited a reader to add them together.
-            of={denominatorOf(s.videos, 'videos under that rival’s content, never under yours — and inside the count above')}
-            denominated={s.videos != null}
+            // NO "of N" HERE, AND SO NOT A LEVEL. The n is the row above's
+            // and is printed there; this line's job is to say which pool
+            // these videos come from and that they are not a second count to
+            // be added to the first.
+            of="under that rival’s content, never under yours — and inside the count above"
+            denominated={false}
             last={s.switchingTotal == null}
           />
         ) : null}

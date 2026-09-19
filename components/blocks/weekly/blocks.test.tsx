@@ -612,6 +612,24 @@ describe('WR4 · for sales', () => {
     expect(blockAnswers(block, weeklyFixture()).quotes).toEqual(['e:3', 'e:2', 'e:9'])
   })
 
+  // THE SECTION'S DENOMINATOR, ONCE. Every counted row called `denominatorOf`,
+  // the frame's meta said "205 videos in the window" over them, and the rival
+  // row's basis is a sentence of its own — the same n three times in a section
+  // eight lines tall, at 11px mono, where a wrapped three-line mono paragraph
+  // reads as a fault. The artboard repeats it nowhere. It is now on the
+  // leading row alone, which is also the row whose sub-line is the level node,
+  // so rule (b) is satisfied where the level actually is.
+  it('states the section’s denominator once, on the row that leads it', () => {
+    for (const mode of MODES) {
+      const markup = render(block.render(weeklyFixture(), mode, ctx))
+      const text = markupText(markup)
+      expect(text.split('of 205 videos').length - 1, mode).toBe(1)
+      expect(text, mode).not.toContain('205 videos in the window')
+      // And the level still carries its evidence.
+      expect(copyViolations(markup).filter((v) => v.rule === 'level-denominator'), mode).toEqual([])
+    }
+  })
+
   // EACH QUOTE SAYS WHICH ROW IT IS FROM. The card pooled praise, the top
   // objection and a switch under one fixed heading, so "Beautiful, but I
   // cannot justify that for a bag" printed three lines under "IN THE
