@@ -101,7 +101,14 @@ export default async function AgentThreadPage({
       <ExportScope page="agent" params={{ thread: id }} tiles={[]}>
         <AskShell context={data.bar.context} record={record} params={sp}>
           {back}
-          <Tile col={12} row={6} eyebrow="The plan check" meta={data.method.period}>
+          {/* `ASK_TILE_ROW`, like every other tile on this surface. `row` is a
+              `MIN_H[n]` floor at every width below `xl` and an inert span at
+              and above it (`surface.tsx:ASK_TILE_ROW` argues the whole rule),
+              so `row={6}` forced `min-h-[776px]` under a document split that
+              is its own height, and `row={2}` forced `min-h-[248px]` under a
+              two-sentence empty state — about 190px of white under ~60px of
+              text at 1024. These are the two branches H8 did not visit. */}
+          <Tile col={12} row={ASK_TILE_ROW} eyebrow="The plan check" meta={data.method.period}>
             {/* AS3, as the exported deck carries it: what this document was
                 CHECKED against. A document thread has no answer to hang it
                 under, which is how the screen and the deck both came to leave
@@ -137,7 +144,7 @@ export default async function AgentThreadPage({
       <ExportScope page="agent" params={{ thread: id }} tiles={[]}>
         <AskShell context={data.bar.context} record={record} params={sp}>
           <AskColumns rail={rail}>
-            <Tile col={12} row={2} eyebrow="The plan check" meta="nothing saved">
+            <Tile col={12} row={ASK_TILE_ROW} eyebrow="The plan check" meta="nothing saved">
               <TileEmpty>
                 Nothing was saved against this document. Either nothing in it read as a claim about customers or the
                 market, or the check failed on our side before it finished. It still counted as one of this
