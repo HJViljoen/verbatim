@@ -34,11 +34,15 @@ describe('the settings rail', () => {
         counts={{ tracking: { value: '21', unit: 'search terms' }, reports: { value: '5', unit: 'schedules' } }}
       >x</SettingsFrame>,
     )
-    // M4: the figure is what the 224px rail has room for; the unit travels as
-    // the accessible name, because "5 schedules" beside "Reports and
-    // recipients" truncated the label rather than the count.
-    expect(markup).toContain('>21<')
+    // M4, per row since RC9: the unit is drawn where the ROW holds it, and
+    // the full phrase is the accessible name either way. "21 search terms"
+    // beside "Tracking" is 113px of a 200px row and prints; "5 schedules"
+    // beside "Reports and recipients" is what printed "Reports and recipi…",
+    // so that one is still the bare figure.
+    expect(markup).toContain('>21 search terms<')
+    expect(markup).toContain('>5<')
     expect(markup).toContain('aria-label="5 schedules"')
+    expect(markup).toContain('aria-label="21 search terms"')
     expect(markup).toContain('Reports and recipients')
     // Nothing invented for the five with no count — a count nobody loaded must
     // not become a zero.

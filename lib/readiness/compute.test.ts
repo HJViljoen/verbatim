@@ -713,7 +713,7 @@ describe('the change record', () => {
     const row = find(computeReadiness(inputs), 'change-record')
     expect(row.status).toBe('exists')
     expect(row.detail).toBe('33 changes recorded · last on 13 Sep 2026.')
-    expect(row.notes[0]).toContain('No change was recorded before 2026-07-01')
+    expect(row.notes[0]).toContain('No change was recorded before 1 Jul 2026')
   })
 
   // The reconstruction writes 91 backdated rows across the two workspaces
@@ -737,7 +737,7 @@ describe('the change record', () => {
     const row = find(computeReadiness(inputs), 'change-record')
     expect(row.status).toBe('exists')
     expect(row.detail).toBe('2 changes recorded · last on 17 Sep 2026. 33 earlier entries reconstructed from what each update searched.')
-    expect(row.notes[0]).toContain('No change was recorded before 2026-09-17')
+    expect(row.notes[0]).toContain('No change was recorded before 17 Sep 2026')
   })
 })
 

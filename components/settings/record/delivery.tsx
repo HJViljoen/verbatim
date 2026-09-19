@@ -42,7 +42,16 @@ export function DeliveryBlock({
       {stats.length === 0 ? (
         <p className="m-0 text-[12.5px] text-muted-foreground">{record.line}</p>
       ) : (
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        /* FOUR ABREAST AT `lg`, NOT `md` (Block D wave 3, RC2). `md` is
+           exactly where the app's 224px sidebar and SettingsFrame's own 224px
+           rail both arrive, so the four cells opened in a 240px pane: measured
+           cell widths 768 → 48px, 820 → 61px, 900 → 81px, 1024 → 112px, and a
+           24px mono "27 Sep" needs 82px. The figures painted over their
+           neighbours — a crop showed "22 updates" with the next cell's 24px
+           "5" printed on top of the "s". Two-up below `lg` gives every cell
+           half the pane, which is 120px at the narrowest width this page is
+           drawn at. */
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {stats.map((s) => (
             <StatCell key={s.id} figure={s.figure} unit={s.unit} caption={s.caption} />
           ))}

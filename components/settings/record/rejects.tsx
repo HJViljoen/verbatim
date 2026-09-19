@@ -124,10 +124,22 @@ export function RejectLogBlock({
         </div>
       )}
 
-      <p className="m-0 text-[12px] text-muted-foreground">
-        Saying so files it for a person to look at — it does not re-run the gather, and it does not change a month
-        already read.
-      </p>
+      {/* THE SENTENCE BELONGS TO THE CONTROL, AND ONLY PRINTS WHERE THE
+          CONTROL DOES (Block D wave 3, RC7). It was rendered unconditionally,
+          outside the branch that draws the rows and their buttons, so it was
+          read in two of the block's three states by someone who has no button
+          to press: a member — the M8 default for anyone who is not owner or
+          admin — read "saying so files it" with every row withheld, and a
+          workspace with nothing set aside read "Nothing has been set aside
+          yet." followed immediately by instructions for saying otherwise. The
+          `control` half of the guard matters too: the prop is optional, and a
+          caller that draws the rows without it draws no button either. */}
+      {!withheld && rows.length > 0 && control ? (
+        <p className="m-0 text-[12px] text-muted-foreground">
+          Saying so files it for a person to look at — it does not re-run the gather, and it does not change a month
+          already read.
+        </p>
+      ) : null}
 
       {byTerm.length > 0 ? (
         <div className="flex flex-col gap-2 pt-1">

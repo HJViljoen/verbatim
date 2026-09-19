@@ -353,7 +353,8 @@ describe('buildSeries · labels', () => {
     expect(none.notes[0].kind).toBe('no_change_record_before')
     expect(none.notes[0].text).toContain('No configuration change has been recorded yet')
     const some = buildSeries({ axis, audience: 'x', denominators: [], changeLogFrom: '2026-09-15T08:00:00.000Z' })
-    expect(some.notes[0].text).toContain('2026-09-15')
+    // RC6: the boundary dates itself in the reader's form, never the store's.
+    expect(some.notes[0].text).toContain('15 Sep 2026')
   })
 
   it('marks a thin month against its own trailing median, and leaves a normal one alone', () => {

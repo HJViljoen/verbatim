@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { PageFrame, PageBar } from '@/components/shell/page-grid'
-import { SETTINGS_SUBPAGES, type RailCounts, type SettingsSection } from '@/lib/settings/rail'
+import { SETTINGS_SUBPAGES, railCountText, type RailCounts, type SettingsSection } from '@/lib/settings/rail'
 import { cn } from '@/lib/utils'
 
 // The settings area (Phase 1 WP16, design item 29, revision 3): a rail of
@@ -112,12 +112,18 @@ export function SettingsFrame({
               >
                 <span className="min-w-0 flex-1 truncate">{s.label}</span>
                 {count != null && (
+                  /* THE UNIT IS DRAWN WHERE THE ROW HOLDS IT (Block D wave 3,
+                     RC9, `lib/settings/rail.ts`). This printed `count.value`
+                     alone on every row, for a reason that only applies to a
+                     row too narrow for both — and the one row that reason was
+                     written about carries no count at all. The full phrase
+                     stays the accessible name and the tooltip either way. */
                   <span
-                    className="shrink-0 font-mono text-[10.5px] tabular-nums text-muted-foreground"
+                    className="shrink-0 whitespace-nowrap font-mono text-[10.5px] tabular-nums text-muted-foreground"
                     aria-label={`${count.value} ${count.unit}`}
                     title={`${count.value} ${count.unit}`}
                   >
-                    {count.value}
+                    {railCountText(count, s.label)}
                   </span>
                 )}
               </Link>

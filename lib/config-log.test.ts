@@ -585,9 +585,14 @@ describe('changeLogBoundary — inference must never read as record', () => {
     expect(changeLogBoundary(null)).toContain('a label, not a record')
   })
 
-  it('names the day the record begins', () => {
+  it('names the day the record begins, in the reader’s form', () => {
+    // RC6: it was `slice(0, 10)`, which put the one machine-form date on the
+    // record page inside the sentence that explains the record to its reader.
+    // The year is not decoration — the readiness page prints this line beside
+    // dates four years apart.
     const line = changeLogBoundary('2026-09-15T08:12:03.400Z')
-    expect(line).toContain('2026-09-15')
+    expect(line).toContain('15 Sep 2026')
+    expect(line).not.toMatch(/\d{4}-\d{2}-\d{2}/)
     expect(line).not.toContain('08:12')
     expect(line).toContain('a label, not a record')
   })

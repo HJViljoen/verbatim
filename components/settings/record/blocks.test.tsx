@@ -3,12 +3,13 @@ import { describe, expect, it } from 'vitest'
 import { AppealControl } from '@/app/dashboard/settings/record/appeal-control'
 import { APPEAL_ASK, APPEAL_FILED } from '@/app/dashboard/settings/record/appeal-copy'
 import { assertCopyContract } from '@/lib/test/copy-contract'
+import { changeLogBoundary } from '@/lib/config-log'
 import { render, renderText } from '@/lib/test/render'
 
 import { ChangeLogBlock } from './change-log'
 import { CoverageBlock } from './coverage'
 import { DeliveryBlock } from './delivery'
-import { RecordHeader, SaveStrip, ScopeStatement } from './header'
+import { NO_EXPORT_WHY, RecordHeader, SaveStrip, ScopeStatement } from './header'
 import { RejectLogBlock } from './rejects'
 import {
   changeLogFixture, changeMetaFixture, coverageRowsFixture, deliveryFixture,
@@ -40,7 +41,13 @@ const changeLog = (
     log={changeLogFixture()}
     rows={20}
     meta={changeMetaFixture()}
-    boundary="a change breaks a series; the old line is kept"
+    // THE ROUTE'S OWN SENTENCE, NOT A STAND-IN (Block D wave 3, RC1). This was
+    // a 45-character fragment the route never produces; the value
+    // `record/page.tsx` actually passes is `changeLogBoundary`, 133 characters
+    // — 838px on one mono line — and the header held it at `shrink-0`, so the
+    // section overflowed the content pane at every width below 1440 and the
+    // review surface could not see it.
+    boundary={changeLogBoundary(changeLogFixture().firstLoggedAt)}
     showing={null}
     now="2026-09-28T09:00:00.000Z"
   />
@@ -84,6 +91,19 @@ describe('the delivery block', () => {
     expect(text).toContain('27 Sep')
     // Four 24px mono figures, one per cell.
     expect(render(delivery).match(/text-\[24px\]/g)).toHaveLength(4)
+  })
+
+  it('opens its four-abreast grid and its 172px gutter at lg, where the rails have stopped taking the pane', () => {
+    // RC2. `md` is exactly where the app's 224px sidebar and SettingsFrame's
+    // own 224px rail both arrive, so at a 768px viewport the pane is 240px:
+    // measured stat-cell widths were 48px at 768 and 61px at 820, against the
+    // 82px a 24px mono "27 Sep" needs, and the figures painted over their
+    // neighbours. At `lg` the same cells are 112px and up.
+    const markup = render(delivery)
+    expect(markup).toContain('lg:grid-cols-4')
+    expect(markup).not.toContain('md:grid-cols-4')
+    expect(markup).toContain('lg:grid-cols-[172px_minmax(0,1fr)]')
+    expect(markup).not.toContain('md:grid-cols-[172px_minmax(0,1fr)]')
   })
 
   it('never claims a start date it does not hold, and never promises a next update', () => {
@@ -218,6 +238,31 @@ describe('the change log', () => {
     expect(text).not.toContain('Poler')
   })
 
+  it('lets both prose cells break, so the reconstructed actor stays inside its track', () => {
+    // RC3. `minmax(0, 0.5fr)` stops the track demanding width; it does not
+    // stop the content escaping it. "Reconstructed, not recorded" leads with
+    // an unbreakable 85px word in a 53px track at 1024, where the document
+    // genuinely scrolled 8px. Both cells now carry `break-words`; before, only
+    // "What it breaks" did.
+    expect(render(changeLog).match(/min-w-0 break-words text-\[12\.5px\]/g)).toHaveLength(
+      (changeLogFixture().recorded.length + changeLogFixture().prehistory.length) * 2,
+    )
+  })
+
+  it('prints the boundary the route passes, and lets it wrap', () => {
+    // RC1: the header note is the one node on this page that carried a whole
+    // sentence in a `shrink-0` flex item. A flex item that cannot shrink
+    // cannot wrap, so the 133-character boundary was 838px wide inside a
+    // 752px pane at 1280 and a 240px pane at 768 — the document's own
+    // `scrollWidth` was 1342 at four widths. Nothing here can measure a
+    // layout; what it CAN pin is that the class which made it impossible is
+    // gone and that the review surface prints the route's sentence.
+    const text = renderText(changeLog)
+    expect(text).toContain('No change was recorded before')
+    expect(text).toContain('a label, not a record')
+    expect(render(changeLog)).not.toContain('md:shrink-0')
+  })
+
   it('keeps the copy contract', () => {
     assertCopyContract(changeLog)
   })
@@ -252,6 +297,32 @@ describe('the reject log', () => {
     // a readiness probe, so a feedback loop is a claim the code does not carry
     // (design review finding 3, code review finding 3).
     expect(text).not.toContain('train the gate')
+  })
+
+  it('keeps the note beside the control, and not on the two states that have none', () => {
+    // RC7. A member (the M8 default for anyone who is not owner or admin) read
+    // "saying so files it" with every row withheld, and an empty workspace
+    // read "Nothing has been set aside yet." followed by it.
+    const withheld = renderText(
+      <RejectLogBlock
+        rows={rejectRowsFixture()} summary={gateSummaryFixture()} unjudged={null}
+        byTerm={[]} byPlatform={[]} basis={null}
+        withheld="The posts themselves are shown to owners and admins only."
+        control={(r) => <AppealControl filed={r.appealed ? APPEAL_FILED : null} />}
+      />,
+    )
+    expect(withheld).toContain('owners and admins only')
+    expect(withheld).not.toContain('files it for a person to look at')
+
+    const empty = renderText(
+      <RejectLogBlock
+        rows={[]} summary={gateSummaryFixture()} unjudged={null}
+        byTerm={[]} byPlatform={[]} basis={null}
+        control={(r) => <AppealControl filed={r.appealed ? APPEAL_FILED : null} />}
+      />,
+    )
+    expect(empty).toContain('Nothing has been set aside yet')
+    expect(empty).not.toContain('files it for a person to look at')
   })
 
   it('says the record is not open rather than printing a confident nothing', () => {
@@ -308,7 +379,13 @@ describe('the coverage grid', () => {
     // rows are cells of ONE grid — one container, one closing rule, and each
     // row's label and value are siblings in it rather than a box of their own.
     const markup = render(coverage)
-    expect(markup.match(/xl:grid-cols-\[186px_minmax\(0,1fr\)_186px_minmax\(0,1fr\)\]/g)).toHaveLength(1)
+    // RC10: two-up opens at 1440, the width the artboard is drawn at, and
+    // BOTH steps are arbitrary `min-[…]` variants — Tailwind sorts those ahead
+    // of the named breakpoints, so a `lg:` first step wins the cascade at 1440
+    // and the two-up grid never appears.
+    expect(markup.match(/min-\[1440px\]:grid-cols-\[186px_minmax\(0,1fr\)_186px_minmax\(0,1fr\)\]/g)).toHaveLength(1)
+    expect(markup.match(/min-\[1024px\]:grid-cols-\[186px_minmax\(0,1fr\)\]/g)).toHaveLength(1)
+    expect(markup).not.toContain('xl:grid-cols')
     expect(markup.match(/border-b border-border\/70/g)).toHaveLength(1)
     // One label cell per row, each opening its own hairline.
     expect(markup.match(/border-t border-border\/70 pt-3 font-mono/g)).toHaveLength(coverageRowsFixture().length)
@@ -398,14 +475,18 @@ describe('the page’s own chrome', () => {
   })
 
   it('says why there is no Export button rather than drawing one that produces nothing', () => {
+    // THE ROUTE'S OWN SENTENCE (RC4). This asserted on a stand-in of its own,
+    // which is how "a registered page" and "page module" — the export route's
+    // internals — survived a copy lens on a passing test and reached a client
+    // as visible body text.
     const text = renderText(
-      <ScopeStatement
-        text="Sealand — what this reading covers."
-        why="Settings has no registered page module, so the record exports as text rather than as a file."
-      />,
+      <ScopeStatement text="Sealand — what this reading covers." why={NO_EXPORT_WHY} />,
     )
-    expect(text).toContain('no registered page module')
+    expect(text).toContain('no file to download')
     expect(text).toContain('what this reading covers')
+    for (const word of ['page module', 'registered page', 'registry', 'renderable', 'module']) {
+      expect(text).not.toContain(word)
+    }
   })
 
   it('keeps the copy contract', () => {

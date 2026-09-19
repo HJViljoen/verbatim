@@ -54,14 +54,43 @@ export function CoverageBlock({
 }) {
   return (
     <RecordSection title={title} meta={meta}>
-      {/* THREE STATES, AND THE WIDEST IS THE ARTBOARD'S. Stacked on a phone;
-          label beside value from `lg`, where the pane is about 744px; two pairs
-          abreast from `xl`, where the pane is about 1000px and each value
-          column is ~278px — the artboard's own 274. Two-up any narrower gives
-          the values 150px each and wraps the bases to five lines, which is the
-          thing the grid exists to stop. Every value track is `minmax(0,1fr)`,
-          so no width can starve one to zero. */}
-      <div className="grid grid-cols-1 gap-x-4 border-b border-border/70 lg:grid-cols-[186px_minmax(0,1fr)] xl:grid-cols-[186px_minmax(0,1fr)_186px_minmax(0,1fr)]">
+      {/* THREE STATES, AND THE WIDEST IS THE ARTBOARD'S, AT THE ARTBOARD'S
+          WIDTH (Block D wave 3, RC10). Stacked on a phone; label beside value
+          from `lg`; two pairs abreast from 1440, which is where the artboard
+          is drawn and where the arithmetic actually holds.
+
+          It used to be `xl`, on a comment that claimed the pane there is about
+          1000px and each value column ~278px. Measured `grid-template-columns`
+          with the populated fixture inside the settings shell, and counting
+          the wrapped lines of every basis:
+
+            1440 → 186 246 186 246 · longest basis 4 lines, 20 in all
+            1366 → 186 209 186 209 · longest basis 5 lines, 26 in all
+            1280 → 186 166 186 166 · longest basis 6 lines, 30 in all
+            1024 → 186 294 (one-up) · longest basis 4 lines, 19 in all
+
+          — so the comment's own failure condition ("wraps the bases to five
+          lines") was already met at 1366 and exceeded at 1280, 16px above the
+          width it named as the threshold. At 1280 "Relevance gate" ran to six
+          lines beside about 200px of vertical void.
+
+          One-up is not a degraded state: at 1024 it measures BETTER than
+          two-up does at 1280 (4 lines against 6, 19 against 30). So the pair
+          of columns is drawn where the artboard draws it and nowhere it does
+          not fit — after, 1366 reads 186 636 with a longest basis of 2 lines
+          and 10 in all, and 1280 reads 186 550 with 2 and 11. Every value
+          track is `minmax(0,1fr)`, so no width can starve one to zero.
+
+          `min-[1024px]:` RATHER THAN `lg:`, AND IT IS NOT A STYLE CHOICE.
+          Tailwind sorts an arbitrary `min-[…]` variant BEFORE the named
+          breakpoints, so `lg:grid-cols-…` is emitted later in the sheet, wins
+          the cascade at equal specificity, and the two-up grid silently never
+          appears — measured: the 1440 rule was generated correctly and the
+          grid still computed to `186px 710px`. Both steps are written the same
+          way so they sort against each other by width. Do not "tidy" the first
+          one back to `lg:` without re-measuring `grid-template-columns` at
+          1440. */}
+      <div className="grid grid-cols-1 gap-x-4 border-b border-border/70 min-[1024px]:grid-cols-[186px_minmax(0,1fr)] min-[1440px]:grid-cols-[186px_minmax(0,1fr)_186px_minmax(0,1fr)]">
         {rows.map((row, i) => (
           <Row key={row.id} row={row} right={i % 2 === 1} />
         ))}
@@ -70,8 +99,8 @@ export function CoverageBlock({
             are two columns to close. */}
         {rows.length % 2 === 1 ? (
           <>
-            <span className="hidden xl:block" />
-            <span className="hidden xl:block" />
+            <span className="hidden min-[1440px]:block" />
+            <span className="hidden min-[1440px]:block" />
           </>
         ) : null}
       </div>
@@ -86,7 +115,7 @@ export function CoverageBlock({
  * One row, as two cells of the parent grid — never a box of its own, which is
  * what would put the hairline back inside a column.
  *
- * `right` is which column the pair lands in at `xl`, and it buys one thing: the
+ * `right` is which column the pair lands in at 1440, and it buys one thing: the
  * artboard's 40px gutter between the two halves, which is this grid's 16px
  * column gap plus 24px of padding on the second label.
  */
@@ -94,7 +123,7 @@ function Row({ row, right }: { row: RecordRow; right: boolean }) {
   return (
     <>
       <span
-        className={`border-t border-border/70 pt-3 font-mono text-[10.5px] uppercase leading-[1.5] tracking-[0.06em] text-muted-foreground lg:min-h-[52px] lg:pb-2 lg:pt-[11px] ${right ? 'xl:pl-6' : ''}`}
+        className={`border-t border-border/70 pt-3 font-mono text-[10.5px] uppercase leading-[1.5] tracking-[0.06em] text-muted-foreground lg:min-h-[52px] lg:pb-2 lg:pt-[11px] ${right ? 'min-[1440px]:pl-6' : ''}`}
       >
         {row.label}
       </span>

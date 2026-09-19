@@ -44,7 +44,22 @@ export function RecordSection({
       <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h3 className="m-0 shrink-0 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">{title}</h3>
         {meta ? <span className="min-w-0 font-mono text-[11px] text-muted-foreground">{meta}</span> : null}
-        {note ? <span className="font-mono text-[10.5px] text-muted-foreground md:ml-auto md:shrink-0">{note}</span> : null}
+        {/* THE NOTE MAY NEVER BE WIDER THAN THE PANE (Block D wave 3, RC1). It
+            was `md:shrink-0`, which is right for the artboard's note — a
+            45-character fragment — and wrong for the only note the route
+            actually produces: `changeLogBoundary` is a 133-character SENTENCE,
+            838px on one mono line at 10.5px, and `shrink-0` held it at that
+            width. Measured before: pane-right vs note-right 1280 → 1256/1342,
+            1024 → 1000/1342, 768 → 744/1342, and the document's own
+            `scrollWidth` was 1342 at four widths, inside a pane the shell sets
+            `overflow-hidden`. Shrinking is what lets the text wrap, so the note
+            now shrinks: where the whole sentence fits beside the meta it still
+            sits on the baseline at the far right (the artboard's layout, and
+            what 1440 does); where it does not it takes its own flex line and
+            wraps inside the pane. `md:ml-auto` stays, because an auto margin
+            absorbs free space where there is some and nothing where the item
+            fills its line. */}
+        {note ? <span className="min-w-0 font-mono text-[10.5px] leading-[1.45] text-muted-foreground md:ml-auto">{note}</span> : null}
       </header>
       {children}
     </section>
@@ -54,12 +69,21 @@ export function RecordSection({
 /**
  * The 172px label gutter the artboard uses for "This month" and "Monthly
  * readings": a label and its sub-count on the left, the content on the right.
- * It stacks under the gutter width on a phone, where a 172px column would take
- * nearly half the screen.
+ * It stacks under the gutter width, where a 172px column would take nearly
+ * half of what is left.
+ *
+ * THE GUTTER OPENS AT `lg`, NOT `md` (Block D wave 3, RC2). `md` is exactly
+ * where BOTH 224px rails arrive — the app's (`components/ui/sidebar.tsx`) and
+ * SettingsFrame's own — so at a 768px viewport the content pane is 240px and
+ * the row was splitting it 172 │ 24 │ 44. The September date pills stacked one
+ * per line in a 44px column beside a 172px label. Measured pane / content
+ * column: 768 → 240/44, 820 → 292/96, 900 → 372/176, 1024 → 496/300. The
+ * change log (`change-log.tsx`) and the coverage grid (`coverage.tsx`) in this
+ * same package already moved to `lg` for precisely this reason.
  */
 export function LabelRow({ label, sub, children }: { label: ReactNode; sub?: ReactNode; children: ReactNode }) {
   return (
-    <div className="grid grid-cols-1 items-start gap-y-1.5 md:grid-cols-[172px_minmax(0,1fr)] md:gap-x-6">
+    <div className="grid grid-cols-1 items-start gap-y-1.5 lg:grid-cols-[172px_minmax(0,1fr)] lg:gap-x-6">
       <div className="flex flex-col gap-px pt-px">
         <span className="text-[12.5px] font-medium">{label}</span>
         {sub ? <span className="font-mono text-[10.5px] text-muted-foreground">{sub}</span> : null}
@@ -92,17 +116,22 @@ export function StatCell({ figure, unit, caption }: { figure: ReactNode; unit?: 
   )
 }
 
-/** The artboard's dated pill. `ghost` is drawn for a date nothing has promised
- *  — and the record page draws none, because nothing in the product records
- *  when the next gather runs. */
-export function DatePill({ children, ghost = false }: { children: ReactNode; ghost?: boolean }) {
+/**
+ * The artboard's dated pill.
+ *
+ * ONE VARIANT, BECAUSE THERE IS ONE KIND OF DATE (Block D wave 3, RC11). It
+ * carried a `ghost` prop for the artboard's "next 4 Oct" pill — a date nothing
+ * has promised — and dropping that pill was correct, because nothing in the
+ * product records when the next gather runs. The prop and its `ring-1
+ * ring-border` branch had no caller and could not get one without the page
+ * first learning something it does not know. A variant kept for a feature we
+ * refused is a claim that the refusal is temporary; if the schedule ever
+ * becomes a thing the product holds, this comes back with the caller that
+ * needs it.
+ */
+export function DatePill({ children }: { children: ReactNode }) {
   return (
-    <span
-      className={cn(
-        'inline-flex items-center whitespace-nowrap rounded-full px-3 py-[5px] font-mono text-[11.5px]',
-        ghost ? 'text-muted-foreground ring-1 ring-border' : 'bg-inner text-secondary-foreground',
-      )}
-    >
+    <span className="inline-flex items-center whitespace-nowrap rounded-full bg-inner px-3 py-[5px] font-mono text-[11.5px] text-secondary-foreground">
       {children}
     </span>
   )

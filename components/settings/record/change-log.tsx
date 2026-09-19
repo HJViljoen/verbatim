@@ -121,8 +121,18 @@ function ChangeRow({ change, now }: { change: ClientChange; now: string }) {
           </span>
         ) : null}
       </span>
-      <span className="min-w-0 text-[12.5px] text-muted-foreground">{change.breaks}</span>
-      <span className="min-w-0 text-[12.5px] text-secondary-foreground">{change.who}</span>
+      <span className="min-w-0 break-words text-[12.5px] text-muted-foreground">{change.breaks}</span>
+      {/* BREAKS LIKE ITS SIBLING (Block D wave 3, RC3). `minmax(0, 0.5fr)`
+          stops the TRACK demanding width; it does not stop the CONTENT
+          escaping it. The prehistory rows' actor is "Reconstructed, not
+          recorded", whose first token is an unbreakable 85px word, and this
+          cell had no `break-words` where the one beside it did: measured on
+          the 0.5fr track, 1024 → track 53px and 32px of overflow, with the
+          document's `scrollWidth` 1032 against a `clientWidth` of 1024; 1100 →
+          21px over; 1220 → 3px over; 1280 and up clean. In the shell the word
+          was clipped with no indication, on the one row whose whole purpose is
+          to say the entry was inferred rather than recorded. */}
+      <span className="min-w-0 break-words text-[12.5px] text-secondary-foreground">{change.who}</span>
     </div>
   )
 }

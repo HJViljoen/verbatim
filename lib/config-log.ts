@@ -1,4 +1,5 @@
 import { dbSafeJson, dbSafeText } from './db-text'
+import { fullDate } from './format'
 import { isMissingColumnError } from './supabase-admin'
 
 // The configuration change log (Phase 0, design item 16).
@@ -603,13 +604,24 @@ export function isMissingConfigLog(error: unknown): boolean {
 
 // ---- The boundary -----------------------------------------------------------
 
-/** The sentence that has to appear wherever this log is read. Everything before
- *  the first real entry is inference from what each update searched — gather
- *  granular, with blind windows of 35 days (Össur) and 39 days (Sealand) where
- *  a change made and undone leaves nothing at all. */
+/**
+ * The sentence that has to appear wherever this log is read. Everything before
+ * the first real entry is inference from what each update searched — gather
+ * granular, with blind windows of 35 days (Össur) and 39 days (Sealand) where
+ * a change made and undone leaves nothing at all.
+ *
+ * THE DATE IS THE READER'S, NOT THE STORE'S (Block D wave 3, RC6). It was
+ * `firstLoggedAt.slice(0, 10)`, so the one machine-form date on Settings › The
+ * record was in the sentence that explains the record to its reader — "No
+ * change was recorded before 2026-04-06" beside a page whose every other date
+ * is a short form, and beside a change log that grew a whole
+ * `ClientChange.dateShort` field to get there. `fullDate` and not `shortDate`
+ * because this line is read on the readiness page too, which dates things four
+ * years apart on one screen: "6 Apr" beside "6 Apr" is two different Aprils.
+ */
 export function changeLogBoundary(firstLoggedAt: string | null | undefined): string {
   if (!firstLoggedAt) {
     return 'No configuration change has been recorded yet. Anything shown before the first one is reconstructed from what each update searched — a label, not a record.'
   }
-  return `No change was recorded before ${firstLoggedAt.slice(0, 10)}. Entries before it are reconstructed from what each update searched — a label, not a record.`
+  return `No change was recorded before ${fullDate(firstLoggedAt)}. Entries before it are reconstructed from what each update searched — a label, not a record.`
 }
