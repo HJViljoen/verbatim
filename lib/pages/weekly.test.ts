@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { thinUpdate } from '../reading/anomaly'
-import { checkStateOf, headlineObject, humanTheme, RISING_NOW, WORTH_A_REPLY } from './weekly'
+import { checkStateOf, headlineObject, humanTheme, risingMovers, RISING_NOW, WORTH_A_REPLY } from './weekly'
+import type { Mover } from './overview'
 import type { OverviewData, SideReading, SubjectRow } from './overview'
 
 const side = (over: Partial<SideReading> = {}): SideReading => ({ k: 65, n: 271, pct: 24, verdict: null, observed: true, ...over })
@@ -203,4 +204,44 @@ describe('the sizes the design names', () => {
   // it are `lib/blocks/for-sales.ts`'s — SALES_GROUPS_SHOWN,
   // SALES_QUOTES_PER_GROUP, SALES_SWITCHING_SHOWN, SALES_PRAISE_SHOWN — and
   // they are pinned where they live, once, rather than twice.
+})
+
+describe('risingMovers', () => {
+  const mover = (id: string, pct: number): Mover =>
+    ({ id, label: id, k: pct, n: 100, pct, verdict: null, direction: null, isNew: false, spark: [], sparkMonths: [], firstHeard: null }) as unknown as Mover
+
+  const growing = [mover('t1', 9.4), mover('t2', 5.1), mover('t3', 4.2), mover('t4', 3.3)]
+
+  /** The two fields `risingMovers` reads, as a `CategoryBlock`. The block has
+   *  thirteen more and none of them reach this function. */
+  const cat = (rows = growing) =>
+    overview({ category: { growing: rows, fading: [], moversNote: null } as unknown as OverviewData['category'] })
+
+  // §1's object is `headlineObject`, whose third arm IS `category.growing`, and
+  // §5's rows are `category.growing`'s top few. Nothing excluded the first from
+  // the second, so whenever the lead was a category mover — the common case —
+  // the artefact stated it twice, at 17.5px near the top and again near the
+  // foot, same object, same share, same denominator.
+  it('drops the object the hero sentence led with', () => {
+    expect(risingMovers(cat(), 't1').map((m) => m.id)).toEqual(['t2', 't3', 't4'])
+  })
+
+  // The filter comes BEFORE the slice, so dropping the lead promotes the next
+  // mover rather than leaving §5 a row short.
+  it('still prints three, promoting the next mover', () => {
+    expect(risingMovers(cat(), 't1')).toHaveLength(RISING_NOW)
+    expect(risingMovers(cat(), null).map((m) => m.id)).toEqual(['t1', 't2', 't3'])
+  })
+
+  // BY ID, NEVER BY LABEL: a registry id is the stable identity and a label
+  // churns ~88% run to run (AGENTS.md), so matching on the printed words would
+  // silently stop excluding anything the first time a model reworded a theme.
+  it('matches on identity, not on the words', () => {
+    const renamed = [{ ...growing[0], label: 'Wet commute survival' }, ...growing.slice(1)]
+    expect(risingMovers(cat(renamed), 't1').map((m) => m.id)).toEqual(['t2', 't3', 't4'])
+  })
+
+  it('leaves a lead that is not a category mover alone', () => {
+    expect(risingMovers(cat(), 'durability').map((m) => m.id)).toEqual(['t1', 't2', 't3'])
+  })
 })

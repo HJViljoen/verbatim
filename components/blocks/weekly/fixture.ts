@@ -1,4 +1,4 @@
-import type { WeeklyData } from '@/lib/pages/weekly'
+import { risingMovers, type WeeklyData } from '@/lib/pages/weekly'
 import type { WeekFlag } from '@/lib/reports/weekly'
 import { weekCheck, weekSentence } from '@/lib/reports/weekly'
 import { overviewFixture, refusedFixture } from '@/components/pages/overview/fixture'
@@ -172,7 +172,10 @@ function base(overview = overviewFixture()): WeeklyData {
         { label: 'objection', count: 3 },
         { label: 'buying signal', count: 2 },
       ],
-      rising: overview.category.growing,
+      // THROUGH THE LOADER'S OWN FUNCTION, with §1's lead object — so the
+      // fixture cannot show a shape `buildContent` would never produce. §1's
+      // sentence leads with `t1`, so §5 draws the movers that are not it.
+      rising: risingMovers(overview, 't1'),
       risingNote: null,
       format: { label: 'Talking head', multiple: 2.4, videos: 31, of: 402 },
       runnerUp: { label: 'Commute POV', multiple: 1.8, videos: 24 },
@@ -258,7 +261,7 @@ export function formingFixture(over: Partial<WeeklyData> = {}): WeeklyData {
       worthAReplyNote: 'Nothing is waiting for a reply from this update.',
       surfaced: null,
       surfacedCounts: [],
-      rising: overview.category.growing,
+      rising: risingMovers(overview, 't1'),
       risingNote: overview.category.moversNote,
       format: null,
       runnerUp: null,

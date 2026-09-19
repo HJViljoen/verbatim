@@ -600,13 +600,30 @@ describe('WR5 · for content', () => {
     const text = renderText(block.render(weeklyFixture(), 'app', ctx))
     expect(text).toContain('Does the strap come off?')
     expect(text).toContain('What moved most · from this month’s reading')
-    expect(text).toContain('9.4% · 130 of 1,388')
+    // `t2`, not `t1`: §1's hero leads with "Will it survive a wet commute" and
+    // §5 no longer repeats it (`risingMovers`).
+    expect(text).toContain('5.1% · 71 of 1,388')
     // Run-indexed, unlike everything above it in this block, and the line has
     // to say so under a masthead that reads "this month so far".
     // THE LABEL IS THE READER'S WORD AND THE MULTIPLE PRINTS ITS n. The block
     // printed the stored slug (`promotional`, and one day `trend-riding`) and a
     // multiple over an unstated population.
     expect(text).toContain('Talking head outperformed Commute POV')
+  })
+
+  // §5 NEVER REPEATS §1's OBJECT. `headlineObject`'s third arm is literally
+  // `category.growing`, and §5's rows are `category.growing`'s top few — so
+  // whenever the lead object was a category mover, which is the common case,
+  // the artefact stated it twice: the 17.5px hero line at the top and a
+  // supporting row near the foot, same object, same share, same denominator.
+  // The artboard's §5 names three themes §1 does not.
+  it('does not name in “what moved most” the object the hero sentence led with', () => {
+    const data = weeklyFixture()
+    const hero = markupText(render(WEEKLY_BLOCKS['weekly.week'].render(data, 'app', ctx)))
+    expect(hero).toContain('Will it survive a wet commute')
+    for (const m of data.content.rising) expect(hero).not.toContain(m.label)
+    // And the row it would have taken is replaced, not left as a gap.
+    expect(data.content.rising.map((m) => m.id)).toEqual(['t2'])
   })
 
   // THE ARTBOARD'S COUNTED ROWS (block D wave 2). Three quote rails and no

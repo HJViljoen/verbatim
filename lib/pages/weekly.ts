@@ -541,7 +541,10 @@ export async function loadWeekly(scope: Scope): Promise<WeeklyData | null> {
   ])
 
   // ── section 5 ───────────────────────────────────────────────────────────
-  const content = buildContent(contentRaw, overview)
+  // §5 NEVER REPEATS §1's OBJECT. `head` is the hero sentence's subject and
+  // `category.growing` is where §5's rows come from; nothing kept the same
+  // theme out of both until this argument existed.
+  const content = buildContent(contentRaw, overview, head?.objectId ?? null)
 
   return {
     brand: overview.brand,
@@ -1027,14 +1030,53 @@ const INTENT_LABEL: Record<string, string> = {
   misinformation: 'Something wrong',
 }
 
+/**
+ * §5's movers, MINUS THE OBJECT §1 ALREADY LED WITH.
+ *
+ * Nothing excluded the hero's object from this list, and the two are drawn
+ * from overlapping pools: §1's is `headlineObject(overview)` — chosen from the
+ * strongest verdicts, whose third arm is literally `category.growing` — and
+ * these are `category.growing`'s top rows. So whenever the lead object is a
+ * category mover, which is the common case and is what the populated fixture
+ * does, the artefact stated it twice: the 17.5px hero line at the top and a
+ * supporting row near the foot, same object, same share, same denominator. The
+ * artboard's §5 names three themes §1 does not.
+ *
+ * BY ID, NEVER BY LABEL. A registry id is the stable identity and a label
+ * churns ~88% run to run (AGENTS.md); matching on the printed words would
+ * silently stop excluding anything the first time a reasoning model reworded a
+ * theme.
+ *
+ * The slice comes AFTER the filter, so §5 still prints its three: the list it
+ * draws from is longer than the three it shows, and dropping the lead promotes
+ * the next mover rather than leaving a gap.
+ */
+export function risingMovers(overview: OverviewData, leadObjectId: string | null): Mover[] {
+  return overview.category.growing
+    .filter((m) => leadObjectId == null || m.id !== leadObjectId)
+    .slice(0, RISING_NOW)
+}
+
 function buildContent(
   content: Awaited<ReturnType<typeof loadContent>> | { empty: true },
   overview: OverviewData,
+  /** The object §1's sentence led with, so §5 does not repeat it. */
+  leadObjectId: string | null,
 ): ForContentBlock {
   const weekHref = '/dashboard/week'
   const briefHref = '/dashboard/reports'
-  const rising = overview.category.growing.slice(0, RISING_NOW)
-  const risingNote = overview.category.moversNote ?? (rising.length > 0 ? null : 'No theme in the category cleared its band this month.')
+  const rising = risingMovers(overview, leadObjectId)
+  // AND THE EMPTY NOTE HAS TO KNOW WHY IT IS EMPTY. "No theme cleared its
+  // band" is false where one did and this section dropped it as the hero's;
+  // the two sentences are about different things and a reader acts on them
+  // differently.
+  const risingNote =
+    overview.category.moversNote ??
+    (rising.length > 0
+      ? null
+      : overview.category.growing.length > 0
+        ? 'The one theme that cleared its band this month is the one above.'
+        : 'No theme in the category cleared its band this month.')
   if (isContentEmpty(content as never)) {
     return {
       worthAReply: [],
