@@ -99,7 +99,19 @@ export function MonthlyEmail({ data, shareUrl, appUrl, attached, ctx, preheader 
                             AND THE WORDS ARE THE SNAPSHOT'S OWN STAMP, never
                             recomposed here: `data.period` is what the deck and
                             the share page print. */}
-                        <div style={{ ...text.eyebrow, color: EMAIL.muted, lineHeight: '1.45' }}>
+                        {/* AND IT WRAPS AS A HANGING INDENT (the wave-3
+                            review, finding [Minor]). The rule is 30px plus
+                            10px of margin at the head of the line box, so the
+                            eyebrow's second line — "31 OCT 2026", the freeze
+                            date the artboard does not print at all — began at
+                            x = 0 directly UNDER the rule rather than under the
+                            words it continues, which reads as a mistake rather
+                            than as a wrap. 40px of padding pulled back by 40px
+                            of indent puts the rule where it was and every line
+                            after the first under the first line's text.
+                            Deviation 19 records that it wraps; this is the
+                            shape of the wrap, and it costs no word. */}
+                        <div style={{ ...text.eyebrow, color: EMAIL.muted, lineHeight: '1.45', paddingLeft: 40, textIndent: -40 }}>
                           <span style={{ display: 'inline-block', width: 30, height: 3, borderRadius: 2, background: EMAIL.green, verticalAlign: 'middle', marginRight: 10, fontSize: 0, lineHeight: 0 }} />
                           {monthlyEyebrow(data.period)}
                         </div>

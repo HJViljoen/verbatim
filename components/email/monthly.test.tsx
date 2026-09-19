@@ -69,6 +69,16 @@ describe('the monthly email', () => {
   // a table cell in CSS 2.1 and Outlook lays out with Word — and this test
   // asserted that string, so it read as pinning a frame that nothing pinned.
   // The card's 600 is the only width that binds; the gutter makes it 640.
+  // THE EYEBROW WRAPS AS A HANGING INDENT (the wave-3 review, finding
+  // [Minor]). The green rule is 30px + 10px of margin at the head of the line
+  // box, so the wrapped remainder — "31 OCT 2026", the freeze date the
+  // artboard does not print — started at x = 0 directly under the rule instead
+  // of under the words it continues. Measured at 640: the second line moves
+  // from x = 51 to x = 91, the first line's own text edge.
+  it('hangs the masthead eyebrow’s second line under its first', () => {
+    expect(body(snapshot())).toContain('padding-left:40px;text-indent:-40px')
+  })
+
   it('is a 600 card inside the mock’s 640 frame', () => {
     expect(MONTHLY_EMAIL_WIDTH).toBe(640)
     expect(MONTHLY_CARD_WIDTH).toBe(600)
