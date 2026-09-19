@@ -28,7 +28,7 @@ import { UPDATES_UNREAD_LINE, activePreset, loadReportsPageContext, presetLine }
 import { fmtBytes } from '@/lib/reports/files'
 import { shortDate } from '@/lib/format'
 import { surface } from '@/lib/nav'
-import { SENT_FIGURES_NOTE, dateFilterLine, emptyGroupLine, hasDateFilter, listCap, parseDateFilter, printedFigures, readingLine, readingStampOf, sentFigures, withinDates, type ListReach, type StoredFigures } from '@/lib/reports/archive'
+import { PAUSED_SEND_LINE, SENT_FIGURES_NOTE, dateFilterLine, emptyGroupLine, hasDateFilter, listCap, parseDateFilter, printedFigures, readingLine, readingStampOf, sentFigures, withinDates, type ListReach, type StoredFigures } from '@/lib/reports/archive'
 import { BRIEFS_META, BRIEF_CARDS, cadenceWord, cardSending, briefLabel, briefMonthChip, briefReader, briefStamp, briefWhat, type BriefCard } from '@/lib/reports/briefs'
 import { loadReportsPage } from '@/lib/settings/reports-load'
 import { isArtefact } from '@/lib/settings/artefacts'
@@ -258,6 +258,9 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   // list loads, weighed against the head count. Null means it searched
   // everything, which is the only state in which "Never built" is a fact.
   const briefPoolCappedAt = listCap([{ total: builtTotal.count, cap: LIST_CAP.built }])
+  // Read once and used twice: the cards' `sending` gate and the Sent list's
+  // empty line are the same fact about this workspace.
+  const paused = (schedules?.period ?? null) === 'paused'
   const cards: BriefCard[] = BRIEF_CARDS.map(({ role, artefact }) => {
     const latest = everyBuild.find((b) => b.template === role) ?? null
     const reportRow = documentReports.find((r) => r.template_key === role) ?? null
@@ -438,9 +441,17 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
       // from — two different facts, and the all-time head count is neither.
       held: sentItems.length,
       cappedAt: reachOf('sent').cappedAt,
-      empty: emptyFor('sent', 'was sent', studio
-        ? 'Nothing sent yet. Each report in the Studio sends after the next update; the first lands then.'
-        : 'Nothing sent yet. Your updates are set up by Verbatim and send after the next update; the first lands then.'),
+      // A PAUSED WORKSPACE IS PROMISED NOTHING. Both invitations below name a
+      // next update, and `report_period = 'paused'` means there is none —
+      // `schedule-due.ts` matches nothing against it. The fact is already in
+      // this render (`schedules?.period`, read for `cardSending` above), so
+      // the page said one thing about delivery and Settings two clicks away
+      // said the opposite.
+      empty: emptyFor('sent', 'was sent', paused
+        ? PAUSED_SEND_LINE
+        : studio
+          ? 'Nothing sent yet. Each report in the Studio sends after the next update; the first lands then.'
+          : 'Nothing sent yet. Your updates are set up by Verbatim and send after the next update; the first lands then.'),
     },
     {
       key: 'built',

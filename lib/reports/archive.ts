@@ -167,6 +167,22 @@ export function dateFilterLine(filter: DateFilter, shown: number, total: number,
  * Where the cap hides something the pane says what was looked at instead; where
  * the list could not be read at all it says that and counts nothing.
  */
+/**
+ * What an empty Sent list says where the workspace is PAUSED.
+ *
+ * THE INVITATION PROMISED A SEND THAT CANNOT ARRIVE. "Nothing sent yet. Your
+ * updates … send after the next update; the first lands then" is what a tenant
+ * with no sends reads, and `tracking_configs.report_period = 'paused'` is a
+ * live production value on three tenants — `schedule-due.ts` matches nothing
+ * against it, so there IS no next update. Settings two clicks away says
+ * "Paused. Updates are not being sent. Contact us to start them again."; this
+ * is the same fact in the same words, on the page that was contradicting it.
+ * `cardSending` already reads `period` and does the right thing with it, off
+ * the same read.
+ */
+export const PAUSED_SEND_LINE =
+  'Nothing sent yet, and updates are paused for this workspace, so nothing is being sent. Contact us to start them again.'
+
 export function emptyGroupLine(args: {
   /** The group's own verb: "was sent", "was built", "was exported". */
   verb: string
