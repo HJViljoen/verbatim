@@ -66,7 +66,7 @@ describe('sales.p1 — the cover', () => {
   it('sets the cover paragraph’s figure in sans and the tile’s in mono', () => {
     const c = cover()
     expect(c).toContain('<span class="tabular-nums text-foreground">1,388</span>')
-    expect(c).toContain('font-mono text-[38px]')
+    expect(c).toContain('font-mono text-[42px]')
   })
 
   // …and exactly once in the document: the overview sheet gives it up rather
@@ -203,23 +203,27 @@ describe('the overview sheet, once the cover has taken the summary', () => {
   // 1123 × 631 sheet — about 85% of it nothing on a one-finding month. The
   // list is worth having and is not the cover's (the cover indexes PAGES,
   // this indexes the argument), so it carries what it is a list of.
-  it('carries each finding’s evidence, its sheet and its audiences', () => {
+  it('carries each finding’s evidence and the sheet it is argued on', () => {
     const w = sheet()
     const t = words(w)
     expect(t).toContain('The objection to answer is longevity, not cost.')
     expect(t).toContain('page 3')
-    expect(t).toContain('1,388 conversations')
+    expect(t).toContain('1,388 videos across')
     expect(t).toContain('4 strands of the research')
     expect(t).toContain('confidence reasonable')
-    expect(t).toContain('the category')
-    expect(t).toContain('Sealand’s audience')
+    // …AND NOT THE AUDIENCES (wave 3, `sales`-6). The list's own rule is that
+    // it indexes the argument rather than restating it, and the pills are
+    // drawn beside the headline on the sheet `page 3` points at. Keeping a
+    // second row of them per finding is what put the sheet's last sentence
+    // past the bottom of the body once the title took the artboard's size.
+    expect(words(sheetNamed(deck(), 'Finding 1'))).toContain('Sealand’s audience')
   })
 
   // Every count on the row is the finding page's own meta, so the two sheets
   // cannot disagree and nothing is measured twice.
   it('reads the same counts the finding sheet prints', () => {
     const finding = words(sheetNamed(deck(), 'Finding 1'))
-    expect(finding).toContain('1,388 conversations · 4 strands of the research')
+    expect(finding).toContain('1,388 videos across 4 strands of the research')
   })
 
   it('still prints what the update did not settle', () => {
@@ -325,6 +329,22 @@ describe('sales.p6 — the “Say this” sheet', () => {
   it('says why there is one row', () => {
     expect(words(sheet())).toContain('the register that names themes carries no kind')
     expect(words(sheet())).toContain('Counted as a kind of thing said')
+  })
+
+  // …AND SAYS IT ON A SURFACE (wave 3, `sales`-9). With fewer than three
+  // scripted lines the reason sat as a naked eyebrow and a paragraph laid
+  // straight on the sheet beside a bordered card — the only bare column in the
+  // deck, and two thirds of this sheet's width. It takes the sibling card's
+  // padding on the tint this deck uses for apparatus, and not the card's
+  // border and white ground: it is the reason there is one answer, not a
+  // second answer.
+  it('draws the reason on the apparatus tint, not on bare paper', () => {
+    const w = sheet()
+    const i = w.indexOf('Why there is one of these')
+    expect(i).toBeGreaterThan(-1)
+    const panel = w.slice(w.lastIndexOf('<div', i), i)
+    expect(panel).toContain('rounded-lg bg-inner')
+    expect(panel).not.toContain('border-border bg-tile')
   })
 
   it('is absent where no objection cleared the floor', () => {
@@ -511,6 +531,20 @@ describe('the borrowed sheets carry the artboard’s chrome', () => {
       expect(w).toContain(`${context} · September 2026`)
       expect(w).not.toContain(`${title} · September 2026`)
     }
+  })
+
+  // AND THE LANGUAGE SHEET FRAMES ITSELF THE SAME WAY (wave 3, `sales`-8). It
+  // was the one sheet in the deck with different chrome: a 16px sans paragraph
+  // as the first element of its BODY where every other sheet uses the serif
+  // italic `Slide.note`. Between the numbers card and the switching sheet it
+  // read as a page out of another document, and saying it cost a row of cards.
+  it('frames the language sheet as a slide note, not as a body paragraph', () => {
+    const sheet = sheetNamed(deck(), 'Language to handle with care')
+    expect(sheet).toContain('vb-slide-note')
+    const note = /<p class="vb-slide-note[^"]*">([\s\S]*?)<\/p>/.exec(sheet)?.[1] ?? ''
+    expect(words(note)).toContain('Words and claims the conversation pushes back on')
+    // \u2026and the body opens on the cards, not on the sentence.
+    expect(sheet).not.toContain('text-[17.5px] leading-[1.5] text-secondary-foreground')
   })
 
   // The framing is the slide's serif note, which is what the artboard draws;

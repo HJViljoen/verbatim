@@ -68,6 +68,52 @@ describe('the sheets', () => {
     expect(text).toContain('The same subjects month by month, on the axis each side was read on.')
   })
 
+  // THE DOCUMENT'S NAME IS THE LARGEST THING ON ITS FIRST SHEET (wave 3,
+  // `sales`-4). It set at 26px beside stat numerals at 38 \u2014 its own name at
+  // .68 of a figure it prints three of. The artboard draws this block and the
+  // sales cover's title block identically, so they are now one set of sizes,
+  // and the mono line under it is the SHORT context, not the sixty-character
+  // reading stamp that wrapped it onto two lines.
+  it('sets the brief\u2019s name above every figure on the sheet', () => {
+    const html = render(<DocumentDeck data={marketingDeckFixture()} date="28 Sep 2026" />)
+    const first = html.split('<section class="vb-slide"')[1] ?? ''
+    expect(first).toContain('text-[64.5px]')
+    expect(first).toContain('font-mono text-[42px]')
+    // 64.5 and 42 print 58 and 38 under the body's .902 zoom \u2014 the artboard's
+    // own two numbers, and the ratio that gives the sheet a focal point.
+    expect(64.5 * 0.902).toBeCloseTo(58, 0)
+    expect(42 * 0.902).toBeCloseTo(38, 0)
+    expect(markupText(first)).toContain('September 2026 \u00b7 Sealand \u00b7 as at 28 Sep \u00b7 9 pages')
+    expect(markupText(first)).not.toContain('still filling until 30 Oct 2026 \u00b7 Sealand')
+  })
+
+  // A SHEET NAMES ITSELF ONCE (wave 3, `sales`-2). `MARKETING_MAP` titles three
+  // sheets with the words their leading block also prints through `BlockFrame`,
+  // so each opened with an `<h1>`, a serif framing line and then a caps eyebrow
+  // saying the `<h1>` again. The line that survives is the block's, because it
+  // is the one carrying the meta beside it; the month that rode the header's
+  // context slot is on the footer stamp of every sheet.
+  it('says a sheet\u2019s title once where its block prints the same words', () => {
+    const slides = render(<DocumentDeck data={marketingDeckFixture()} date="28 Sep 2026" />)
+      .split('<section class="vb-slide"').slice(1)
+    const carrying = (meta: string) => slides.find((x) => markupText(x).includes(meta)) ?? ''
+    for (const [title, meta] of [
+      ['Your subjects', '2 named 19 Aug'],
+      ['Rivals', 'both shares of a frozen panel of accounts'],
+      ['Your moves', '2 declared'],
+    ] as const) {
+      const sheet = carrying(meta)
+      expect(sheet).not.toBe('')
+      // The block's header is the one that stayed \u2014 it brought its meta \u2026
+      expect(markupText(sheet)).toContain(meta)
+      // \u2026 and the words are printed once on the sheet, not twice.
+      expect(markupText(sheet).split(title).length - 1).toBe(1)
+      expect(sheet).not.toContain('<h1')
+    }
+    // A sheet whose block says something else keeps its own header.
+    expect(carrying('1,388 category videos this month')).toContain('<h1')
+  })
+
   // `mkt.p1.title`: the artboard opens on content with a page title and one
   // mono context line, not on a landscape sheet carrying a 58px title.
   it('folds the cover onto the In-short sheet, and both paginators agree', () => {
@@ -75,7 +121,7 @@ describe('the sheets', () => {
     expect(documentCoverSheet(data)).toBe(false)
     expect(documentViewerPages(data)).toBe(sheets(data).length)
     const html = render(<DocumentDeck data={data} date="28 Sep 2026" />)
-    expect(html).not.toContain('text-[58px]')
+    expect(html).not.toContain('data-sheet="cover"')
     expect(html).toContain('Marketing brief')
     expect(html).toContain('1 / 9')
   })
@@ -237,11 +283,16 @@ describe('the In-short sheet', () => {
   // EVERY CALIBRATED WORD ON THE SHEET IS IN THE SENTENCE (fix pass). The note
   // listed the five movement words and stopped, two lines above finding rows
   // carrying chips reading `solid` and `reasonable` — assigned by
-  // `calibrateSure` from counted conversations and strands, calibrated by
-  // exactly the definition the sentence uses.
+  // `calibrateSure` from counted videos and strands, calibrated by exactly the
+  // definition the sentence uses.
   it('names the evidence words its own finding rows print', () => {
     // Every word `calibrateSure` can assign is in the sentence.
     for (const sure of Object.keys(SURE_WORDS)) expect(CALIBRATION_NOTE).toContain(sure)
+    // AND ONE UNIT IN THE BASIS CLAUSE (wave 3, `sales`-6). It named "counted
+    // videos and the conversations behind each finding" — two names for one
+    // thing, on the sentence whose job is to make the vocabulary checkable.
+    expect(CALIBRATION_NOTE).toContain('from counted videos, never worded by the model')
+    expect(CALIBRATION_NOTE).not.toContain('conversations')
     // And the chips are on the same sheet as the sentence: the In-short page.
     const sheet = markupText(render(<DocumentDeck data={marketingDeckFixture()} date="28 Sep 2026" />)).split('1 / 9')[0]
     expect(sheet).toContain('solid')
@@ -259,12 +310,20 @@ describe('the In-short sheet', () => {
     expect(markupText(sheet)).toContain('reasonable')
   })
 
-  // `mkt.p1.findings`: the artboard's right-hand pair on every row. NOT its
-  // "305 videos" — a finding is calibrated on conversations and strands, and
-  // the research spine produces no video count with a denominator for it.
+  // `mkt.p1.findings`: the artboard's right-hand pair on every row, and since
+  // wave 3 (`sales`-5) the artboard's NOUN as well. This read "305
+  // conversations" on the argument that the research spine produces no video
+  // count with a denominator for it — but "conversations" has no denominator
+  // either, and it has no definition anywhere on the deck: the numbers card
+  // defines COMMENTS, VIDEOS and THE UNIT and never this, so a reader could
+  // not tell whether 305 was a subset of 1,388. The count IS videos
+  // (`ResearchPoint.conversationCount`, "distinct source videos behind
+  // insightIds"), and "across N strands" is what keeps it honest about being
+  // summed per strand rather than deduplicated.
   it('gives each finding row its count and its confidence word', () => {
     const words = markupText(render(<DocumentDeck data={marketingDeckFixture()} date="28 Sep 2026" />))
-    expect(words).toContain('305 conversations')
+    expect(words).toContain('305 videos across')
+    expect(words).not.toContain('305 conversations')
     expect(words).toContain('solid')
     expect(words).toContain('reasonable')
   })
