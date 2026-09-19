@@ -2,7 +2,7 @@ import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { fullDate } from '@/lib/format'
 import { QUARTERLY_RULE } from '@/lib/reports/quarterly'
-import type { QuarterlySnapshotData } from '@/lib/reports/quarterly-build'
+import { staleQuarterlySnapshot, type QuarterlySnapshotData } from '@/lib/reports/quarterly-build'
 import { quarterlyBlocksFor } from '@/components/blocks/quarterly'
 import { LinkGuard } from './link-guard'
 
@@ -19,6 +19,19 @@ import { LinkGuard } from './link-guard'
 
 export function QuarterlyShareShell({ data, appUrl }: { data: QuarterlySnapshotData; appUrl: string }) {
   const ctx = blockContext(appUrl, EMAIL)
+  // Asked before anything dereferences `data.reading`, whose shape changed
+  // incompatibly in block D (`QUARTERLY_SNAPSHOT_VERSION`). A share link is
+  // opened by someone with no account and no support channel, so the one
+  // thing it may never be is a stack trace.
+  const stale = staleQuarterlySnapshot(data)
+  if (stale) {
+    return (
+      <div className="mx-auto flex w-full max-w-[880px] flex-col gap-3 px-4 py-8 md:px-6">
+        <h1 className="m-0 font-serif text-[30px] font-medium leading-[1.15]">{data.title}</h1>
+        <p className="m-0 text-[13.5px] leading-[1.6] text-muted-foreground">{stale}</p>
+      </div>
+    )
+  }
   return (
     <LinkGuard appUrl={appUrl}>
       <div className="mx-auto flex w-full max-w-[880px] flex-col gap-8 px-4 py-8 md:px-6">

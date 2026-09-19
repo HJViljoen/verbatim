@@ -65,8 +65,25 @@ import { Column, Columns, Eyebrow, Note, NotDrawn, Row, TableHead, TableRow } fr
 // exists to stop. The claim as SPOKEN travels as a quote with its own ref and
 // is printed; the paraphrase waits for its slot (E-competitive owns that edit).
 
-/** The mock's `1fr 78px 78px 88px`, as ratios. */
-const TEMPLATE = 'minmax(0,150fr) minmax(0,160fr) minmax(0,160fr) minmax(0,120fr)'
+/**
+ * The mock's `1fr 78px 78px 88px`, as ratios — RE-CUT SO THE CHANGE COLUMN CAN
+ * HOLD ITS WIDEST ANSWER.
+ *
+ * "comparison refused" is a real cell value on this table (`MovementBadge`'s
+ * NON_ANSWER, which is `whitespace-nowrap`), and it is 109px wide at the badge's
+ * own size. The previous cut gave the Change column 120fr of 590 — 66px on the
+ * sheet — so the badge painted 43px into the column beside it and the printed
+ * row read "comparison refuseCon" over "Comments per video", on six of the
+ * seven fixture states at 1440 and at 1024. A nowrap node in a track narrower
+ * than its own text does not clip on paper; it overprints.
+ *
+ * So the Change column is 170fr (~112px) and the month columns are 150fr each
+ * (~99px), which still takes two month cells per line and the newest month's
+ * "32,600 of 41,200" on one. The page's own columns widen with it (`Columns`
+ * below): the width comes from the sheet's other two panels rather than out of
+ * the month cells, which would have traded an overprint for a four-line cell.
+ */
+const TEMPLATE = 'minmax(0,120fr) minmax(0,150fr) minmax(0,150fr) minmax(0,170fr)'
 /** How many month cells the artboard draws per share. */
 const MONTH_CELLS = 4
 
@@ -144,7 +161,7 @@ function MonthCells({ months, values, newest, newestLabel, share, recorded, mode
         ))}
       </span>
       {share && share.pct != null ? (
-        <span data-copy="figure" className="whitespace-nowrap font-mono text-[9.5px] leading-[1.2] text-muted-foreground">
+        <span data-copy="figure" className="whitespace-nowrap font-mono text-[10.5px] leading-[1.2] text-muted-foreground">
           {fmtInt(share.k)} of {fmtInt(share.n)}
         </span>
       ) : null}
@@ -189,7 +206,7 @@ function FaceOff({ m, basis, mode }: { m: FaceOffMeasure; basis: string | null; 
             stated clock: the line above it is the one it is read on, which is
             how a dated table is read, and it is the rule this block already
             follows for why a band was not drawn. */}
-        {basis ? <span className={email ? undefined : 'font-mono text-[9.5px] leading-[1.35] text-muted-foreground'}>{basis}</span> : null}
+        {basis ? <span className={email ? undefined : 'font-mono text-[10.5px] leading-[1.3] text-muted-foreground'}>{basis}</span> : null}
         {/* WHY A ROW DREW NO BAND IS SAID ONCE, UNDER THE TABLE, AND NOT
             FOUR TIMES INSIDE IT. Three of the five measures never can carry one
             — a rate, a median and a count are not proportions — and the three
@@ -229,7 +246,15 @@ export const quarterlyRivals: Block<QuarterlyData> = {
         // Competitive surface's own read and can be a different month: it
         // headed this sheet "Sep 2026" while every other page said October.
         meta={r.monthLabel}
-        footerNote={r.standings ? r.standings.denominatorLine : undefined}
+        // NO `footerNote`. The corpus sentence used to be spent here, which is
+        // the block frame's LAST child on a sheet whose columns already fill
+        // it: measured at 1440 and at 1024 on six of the seven fixture states,
+        // the frame footer's box landed 7px below `.vb-slide-body`'s 561px
+        // bottom and the page printed a hairline with nothing under it. The
+        // sentence is under the table it is about now (below), which is both
+        // where "the videos on the left" names something and inside the column
+        // that can carry it; the footer slot costs the sheet 36px it does not
+        // have.
       >
         {children}
       </BlockFrame>
@@ -357,16 +382,27 @@ export const quarterlyRivals: Block<QuarterlyData> = {
             <Note mode={mode}>{r.standings.precedence}</Note>
           ) : null}
           {r.standings?.caveat ? <Note mode={mode}>{r.standings.caveat}</Note> : null}
-          {/* THE CORPUS CAVEAT, UNDER THE TABLE IT IS ABOUT. `r.caveat` reads
-              "…the videos on the left, the comments we kept on the right",
-              which names THESE two columns — and it was printed at the foot
-              of the questions column three columns away, where "left" and
-              "right" name nothing and where it was the row that column lost
-              off the bottom of the sheet. It is the sentence this block's own
-              header calls the one the page must say once, because a share of
-              what we looked for read as a share of the category is the worst
-              misreading this product can produce; it says it here. */}
-          {r.caveat ? <Note mode={mode}>{r.caveat}</Note> : null}
+          {/* THE CORPUS CAVEAT, UNDER THE TABLE IT IS ABOUT, AND IT IS THIS
+              BLOCK THAT PRINTS IT.
+
+              `standings.denominatorLine` is `CORPUS_DENOMINATOR_LINE` — "Both
+              shares are of what our search plan found and we read this month —
+              the videos on the left, the comments we kept on the right" —
+              which names THESE two columns and nothing else on the sheet. It
+              was passed to the frame's `footerNote` and printed at the bottom
+              of the whole block, where "left" and "right" name nothing and
+              where it was the leaf that fell off the bottom of the page on six
+              of the seven fixture states.
+
+              It is the sentence this block's own header calls the one the page
+              must say once, because a share of what we looked for read as a
+              share of the category is the worst misreading this product can
+              produce; it says it here. `r.caveat` is the SAME claim from the
+              Overview block's own composition and is empty on every populated
+              reading, so it is printed only where it says something this line
+              does not. */}
+          {r.standings?.denominatorLine ? <Note mode={mode}>{r.standings.denominatorLine}</Note> : null}
+          {r.caveat && r.caveat !== r.standings?.denominatorLine ? <Note mode={mode}>{r.caveat}</Note> : null}
         </div>
 
         <div className={email ? undefined : 'mt-1 flex flex-col gap-[2px]'}>
@@ -419,8 +455,8 @@ export const quarterlyRivals: Block<QuarterlyData> = {
               </Note>
               <div className={email ? undefined : 'grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)] gap-x-2 border-b border-border pb-1'}>
                 <span />
-                <span className={email ? undefined : 'text-[10px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground'}>You</span>
-                <span className={email ? undefined : 'text-[10px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground'}>{r.headToHead.rivalLabel}</span>
+                <span className={email ? undefined : 'text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground'}>You</span>
+                <span className={email ? undefined : 'text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground'}>{r.headToHead.rivalLabel}</span>
               </div>
               {r.headToHead.measures.map((m, i) => (
                 <FaceOff
@@ -430,12 +466,19 @@ export const quarterlyRivals: Block<QuarterlyData> = {
                   mode={mode}
                 />
               ))}
-              {/* ONE LINE PER DISTINCT REASON A BAND WAS NOT DRAWN, over the
-                  measures that actually carry that reason — composed from the
-                  rows rather than typed, so a measure that gains a band drops
-                  its sentence with it. */}
-              {[...new Set(r.headToHead.measures.flatMap((m) => [m.why, !m.verdict ? m.verdictWhy : null]).filter((w): w is string => !!w))]
-                .map((why) => <Note key={why} mode={mode}>{why}</Note>)}
+              {/* ONE PARAGRAPH OF REASONS, NOT FIVE ORPHAN LINES. Each reason
+                  is still distinct and still composed from the rows rather than
+                  typed — a measure that gains a band drops its sentence with it
+                  — but they are one run of prose under the table instead of one
+                  `Note` each. Five one-sentence notes cost four inter-note gaps
+                  and a short last line apiece: measured at this column's width,
+                  34px of a 561px sheet, which is the height the Change column
+                  next door needed to stop overprinting. They read as the rule
+                  they are, which is what a paragraph is for. */}
+              {(() => {
+                const why = [...new Set(r.headToHead.measures.flatMap((m) => [m.why, !m.verdict ? m.verdictWhy : null]).filter((w): w is string => !!w))]
+                return why.length > 0 ? <Note mode={mode}>{why.join(' ')}</Note> : null
+              })()}
               <Note mode={mode}>{r.headToHead.footerLine}</Note>
               <Note mode={mode}>{r.headToHead.excludedNote}</Note>
               {r.headToHead.unread ? <Note mode={mode}>{r.headToHead.unread}</Note> : null}
@@ -514,7 +557,13 @@ export const quarterlyRivals: Block<QuarterlyData> = {
     )
 
     return frame(
-      <Columns weights={[3.9, 5.6, 3]} gap={24} mode={mode}>
+      // 4.6 / 5 / 2.9, NOT 3.9 / 5.6 / 3. The standings table has four columns
+      // and the widest answer any of them prints is "comparison refused"; at
+      // 3.9 the table had 325px of track for a row needing ~112px of Change
+      // alone. The 0.7fr it gains comes off the head-to-head (0.6) and the
+      // questions (0.1), neither of which gains a line at its new width —
+      // measured, both columns stand where they stood.
+      <Columns weights={[4.6, 5, 2.9]} gap={24} mode={mode}>
         {standings}
         {h2h}
         {theirs}

@@ -13,7 +13,7 @@ import { monthlyLineLabel, type Mover } from '@/lib/pages/overview'
 import { hasQuote } from '@/lib/renderables/quotes-freeze'
 import type { CategoryPage, QuarterlyData, QuarterMover } from '@/lib/pages/quarterly'
 import { QUARTER_PAGE_QUESTION, QUARTER_PAGE_TITLE } from '@/lib/reports/quarterly'
-import { Card, ChartEndings, Chip, Column, Columns, Eyebrow, Line, Note } from './parts'
+import { Card, ChartEndings, Chip, Column, Columns, Eyebrow, Line, Note, Partition, Swatch } from './parts'
 
 // QR4 · What the category talked about (mock page 4).
 //
@@ -56,6 +56,17 @@ import { Card, ChartEndings, Chip, Column, Columns, Eyebrow, Line, Note } from '
 // wave 2), the month series under each row, the two READER_FLAGS as their own
 // tinted block, the quote, and the mood's four rows with "of N judged" — Mixed
 // included, which the mock folds away (D15).
+
+/** The four moods' colours — the SAME table `components/pages/overview/
+ *  category.tsx` draws, so the bar on the deck and the bar in the app cannot
+ *  paint one mood two colours. `mixed` is on it, because the fourth segment is
+ *  what D15 asks for. */
+const MOOD_COLOR: Record<string, string> = {
+  positive: 'var(--positive)',
+  mixed: 'var(--mixed)',
+  neutral: 'var(--neutral-seg)',
+  negative: 'var(--negative)',
+}
 
 /** A theme's label is the MODEL's words (`pass_b_theme`, policy 'none'), so it
  *  is marked and its slot is named — that is what buys the rule-(c) exemption,
@@ -129,7 +140,7 @@ function MoverRow({ mover, mode }: { mover: QuarterMover; mode: RenderMode }) {
         ) : null}
       </div>
       {months ? (
-        <span data-copy="figure" className={email ? undefined : 'font-mono text-[10px] text-muted-foreground'}>
+        <span data-copy="figure" className={email ? undefined : 'font-mono text-[10.5px] text-muted-foreground'}>
           {months}{!drawn && label ? ` · ${label}` : ''}
           {mover.firstHeard ? ` · first read ${monthName(mover.firstHeard)}` : ''}
         </span>
@@ -188,21 +199,47 @@ export const quarterlyCategory: Block<QuarterlyData> = {
     // moved most · Nothing moved clearly this month. · Nothing this artefact
     // follows has stopped being said. · Nothing moved clearly this month."
     const anyMover = c.growing.length + c.fading.length > 0
+    // THE DISTINGUISHING WORD COMES FIRST, AND THE QUALIFIER IS SAID ONCE.
+    // "Cleared their band · a larger share than last month" and "…a smaller
+    // share…" are byte-identical until the FIFTH word, and at 10.5px uppercase
+    // in a 1fr track both wrapped to two lines — so the only token telling the
+    // two columns apart sat mid-line-one of a two-line all-caps block, on the
+    // deck's tightest sheet, at two lines a column. The refusal of GROWING /
+    // FADING is right and traced (D5); nothing asked for a seven-word heading.
+    // "Larger share than last month" opens on the word that distinguishes it,
+    // sets on one line, and the band — which is what both headings were
+    // carrying — is stated once beside the section they are both under, where
+    // it costs no line at all.
+    const moverHead = (word: 'Larger' | 'Smaller') =>
+      `${word} share than last month`
     const movers = (
       <Column mode={mode} gap={10}>
-        <Eyebrow mode={mode}>What moved most</Eyebrow>
+        {/* A SPAN, NOT A `Note`. `Eyebrow` is a `<p>`, and a `<p>` inside a
+            `<p>` is closed by the parser before it opens — the aside came out
+            as a sibling on its own line and cost the sheet 24px instead of
+            nothing. */}
+        <Eyebrow
+          mode={mode}
+          aside={
+            mode === 'email'
+              ? <span style={{ textTransform: 'none', letterSpacing: 0 }}>each cleared its own band</span>
+              : <span className="font-sans text-[11px] normal-case tracking-normal text-muted-foreground">each cleared its own band</span>
+          }
+        >
+          What moved most
+        </Eyebrow>
         {anyMover ? (
           <Columns weights={[1, 1]} gap={24} mode={mode}>
             <Column mode={mode} gap={8}>
               <span className={email ? undefined : 'text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground'}>
-                Cleared their band · a larger share than last month
+                {moverHead('Larger')}
               </span>
               {c.growing.map((m) => <MoverRow key={m.id} mover={m} mode={mode} />)}
               {c.growing.length === 0 ? <Note mode={mode}>Nothing took a larger share than last month.</Note> : null}
             </Column>
             <Column mode={mode} gap={8}>
               <span className={email ? undefined : 'text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground'}>
-                Cleared their band · a smaller share than last month
+                {moverHead('Smaller')}
               </span>
               {c.fading.map((m) => <MoverRow key={m.id} mover={m} mode={mode} />)}
               {c.fading.length === 0 ? <Note mode={mode}>Nothing took a smaller share than last month.</Note> : null}
@@ -320,16 +357,39 @@ export const quarterlyCategory: Block<QuarterlyData> = {
         </div>
     )
 
+    // D15, NOT D4 — AND D15 LICENSES THE BAR.
+    //
+    // The partition bar was dropped from the mood citing the KIND rule: kinds
+    // are independent shares of one denominator and a video carries several at
+    // once, so the per-kind counts run to 175–228% of their denominator and a
+    // printed mix invites summing (D4). None of that reaches the mood. A video
+    // is judged once, and 61% + 1.8% + 19.2% + 18% is exactly 100% of ONE
+    // denominator — which is what a partition bar is for.
+    //
+    // The rule that governs the mood is D15 (a basis that must travel with its
+    // figure), and its stated honest alternative is "print the fourth mood
+    // segment, the overlap note and the stated basis". The build already prints
+    // all three; what it dropped was the one artboard element D15 licenses.
+    //
+    // The bar carries no legend of its own: the four rows under it are the
+    // legend, each with its swatch, its label, its share and its "of N judged"
+    // (see `Partition`).
     const moodBlock = (
         <div className={email ? undefined : 'flex flex-col gap-2'}>
           <Eyebrow mode={mode}>Mood</Eyebrow>
           {c.mood ? (
             <>
+              <Partition
+                mode={mode}
+                segments={c.mood.shares
+                  .filter((m) => m.pct != null)
+                  .map((m) => ({ label: m.label, pct: m.pct as number, color: MOOD_COLOR[m.mood] ?? 'var(--neutral-seg)' }))}
+              />
               {c.mood.shares.map((m) => (
                 <Line
                   key={m.mood}
                   mode={mode}
-                  label={m.label}
+                  label={<><Swatch color={MOOD_COLOR[m.mood] ?? 'var(--neutral-seg)'} mode={mode} />{m.label}</>}
                   figure={
                     <FigureCell
                       mode={mode}
@@ -365,10 +425,18 @@ export const quarterlyCategory: Block<QuarterlyData> = {
     // label-and-figure lists and read beside each other, and the chart — the
     // tall one — keeps the width it needs underneath them.
     //
-    // AND THE CHART IS CAPPED. `CalendarLine` scales its viewBox uniformly to
-    // its container, so a WIDER column draws a TALLER chart: this same chart
-    // is 84px at 300 and 164px at 589. Capping it is what lets the aside take
-    // width without the chart eating what the rows need.
+    // AND THE CHART IS SCALED, NOT CAPPED. `CalendarLine` scales its viewBox
+    // uniformly to its container, so a WIDER box draws a TALLER chart — this
+    // same chart is 84px at 300 and 164px at 589. The first answer to that was
+    // `max-w-[300px]` inside a ~443px card, which bought the height back by
+    // leaving 45% of the card blank and bunching Jul, Aug and Sep into the left
+    // half of a plot with room for twice that.
+    //
+    // The scale factor is the INTRINSIC width (`width`), not the box: raising
+    // it from 330 to 490 draws the same 92-unit chart at the same ~83px on the
+    // sheet, across the whole card, with the type it was drawn at (10px at
+    // 443/490 is 9.0px, against 9.1px at 300/330 — measured, not estimated).
+    // The plot gains 143px of horizontal room and the page loses nothing.
     const aside = (
       <Column mode={mode} gap={10}>
         <Columns weights={[1, 1]} gap={18} mode={mode}>
@@ -379,16 +447,22 @@ export const quarterlyCategory: Block<QuarterlyData> = {
           <Eyebrow mode={mode}>Attention, month by month</Eyebrow>
           {panel.length > 0 ? (
             <Card mode={mode}>
-              {/* CAPPED, so a wider column does not draw a taller chart. */}
-              <div className={email ? undefined : 'w-full max-w-[300px]'}>
               <BlockCalendar
                 blockKey={`${quarterlyCategory.key}.attention`}
                 axis={c.attention?.axis ?? []}
                 series={panel}
                 rules={panelRule(c)}
                 mode={mode}
-                height={92}
-                width={330}
+                // 76, NOT 92 — 15px, and it is what the mood bar next door is
+                // drawn with. A panel line across the whole 443px card at 69px
+                // is the artboard's own proportion for this chart; at 92 units
+                // the plot stood 83px tall over six months of a flat series,
+                // and this sheet does not have 15px to spend on the difference.
+                height={76}
+                // THE SCALE FACTOR, AND IT IS THE CARD'S OWN WIDTH. See above:
+                // 490 draws the chart across the whole card at the height 330
+                // drew it across two thirds of one.
+                width={490}
                 padL={40}
                 // THE GUTTER IS OFF (see `ChartEndings`): at 96px it cut
                 // "The category 41,200" to "The category 41,2" on the one
@@ -398,7 +472,6 @@ export const quarterlyCategory: Block<QuarterlyData> = {
                 format={(v) => fmtInt(v)}
                 label="comments under the panel's videos, month by month"
               />
-              </div>
               <ChartEndings series={panel} format={(v) => fmtInt(v)} mode={mode} />
               <div className={email ? undefined : 'flex flex-wrap items-center gap-2'}>
                 <BlockMovement verdict={c.attention?.verdict ?? null} unit="pts" mode={mode} />

@@ -555,8 +555,12 @@ describe('the two-audience gap the quarter can actually carry', () => {
   })
 
   it('draws no gap where a column could not be drawn, and none at all with M3 unapplied', () => {
-    const price = quarterlyFixture().subjects.rows.find((r) => r.id === 's2')
-    expect(price?.gap ?? null).toBeNull()
+    // `s6` is the row whose own side was not read at all — the table went to
+    // six subjects in the fix pass and one of them carries the category
+    // column alone, which is the state this arm is about.
+    const unread = quarterlyFixture().subjects.rows.find((r) => r.id === 's6')
+    expect(unread).toBeTruthy()
+    expect(unread?.gap ?? null).toBeNull()
     expect(formingFixture().subjects.rows.every((r) => r.gap == null)).toBe(true)
   })
 })
@@ -611,11 +615,47 @@ describe('the artboard port (Block D wave 2)', () => {
     // The artboard's own first half of this line — page 7 was the only page
     // carrying it.
     expect(t).toContain('TikTok 38%')
-    expect(t).toContain('4,147 category videos read in Q3 2026')
     // AND NOT the artboard's per-month split: the figure beside it is a
     // WINDOWED count of distinct videos, which three month counts do not add
     // to (D8). Printing them side by side invites exactly that addition.
     expect(t).not.toMatch(/Jul [\d,]+ · Aug [\d,]+ · Sep [\d,]+/)
+  })
+
+  it('qr.p1 / qr.p2.meta · the corpus line is not printed twice on two sheets', () => {
+    // It was. The whole line — mix, counts and updates — sat under the cover's
+    // figures AND, verbatim, as the first line of the card beside the argument
+    // on the very next sheet, where `readingCounter` was joined to it and the
+    // cover's own stamp two lines above had already printed that too.
+    const cover = text('quarterly.cover')
+    const read = text('quarterly.read')
+    // The counts are on the page that argues from them, once.
+    expect(read).toContain('4,147 category videos read in Q3 2026')
+    expect(cover).not.toContain('4,147 category videos read in Q3 2026')
+    // The mix is on the cover, once — the artboard's own `qr.p1.footer`.
+    expect(cover).toContain('TikTok 38%')
+    expect(read).not.toContain('TikTok 38%')
+  })
+
+  // Never a guessed list: a workspace with no recorded mix gets no footer at
+  // all rather than a sentence about our own bookkeeping.
+  it('qr.p1.footer · prints nothing where no platform mix was recorded', () => {
+    const forming = formingFixture()
+    expect(forming.cover.corpus).toBe('')
+    const t = renderText(QUARTERLY_BLOCKS['quarterly.cover'].render(forming, 'print', ctx))
+    expect(t).toContain(forming.cover.stamp)
+  })
+
+  it('qr.p1.stats · one magnitude in the display slot, its denominator under it', () => {
+    // The 28px mono slot held a derived difference ("8.1 pts"), a raw count
+    // ("41,200") and a LEVEL ("912 of 4,147") at one size, so the cover's
+    // largest type did not read as one measure stated three times. A level is
+    // set the way the whole product sets one: the magnitude, then the "of N"
+    // under it — and the PAIR is still the level node rule (b) reads.
+    const markup = render(QUARTERLY_BLOCKS['quarterly.cover'].render(data, 'print', ctx))
+    expect(markup).toMatch(/text-\[28px\][^>]*>912</)
+    expect(markup).toMatch(/data-copy="level"[\s\S]{0,400}of 4,147/)
+    expect(markup).not.toMatch(/text-\[28px\][^>]*>912 of 4,147</)
+    for (const mode of MODES) assertCopyContract(render(QUARTERLY_BLOCKS['quarterly.cover'].render(data, mode, ctx)))
   })
 
   it('qr.p1.cover · one h1 per document, and one gutter', () => {
@@ -740,8 +780,16 @@ describe('the artboard port (Block D wave 2)', () => {
 
   it('qr.p4.movers · two banded arms, no direction word in a heading', () => {
     const t = text('quarterly.category')
-    expect(t).toContain('Cleared their band · a larger share than last month')
-    expect(t).toContain('Cleared their band · a smaller share than last month')
+    // THE DISTINGUISHING WORD FIRST. The two headings used to be identical
+    // until their fifth word and both wrapped to two lines in a 1fr track.
+    expect(t).toContain('Larger share than last month')
+    expect(t).toContain('Smaller share than last month')
+    // And the band — what "Cleared their band ·" was carrying — is still on
+    // the sheet, said once, beside the section both columns sit under.
+    expect(t).toContain('each cleared its own band')
+    // Still no direction word in either heading (D5).
+    expect(t).not.toContain('Growing')
+    expect(t).not.toContain('Fading')
     // The months a mover's own series carried, WITH THE UNIT — the same share
     // the FigureCell two rows up prints — and the first month it was read.
     expect(t).toContain('Jul 5.1% · Aug 6.8% · Sep 9.4%')
@@ -790,6 +838,23 @@ describe('the artboard port (Block D wave 2)', () => {
     const t = text('quarterly.category')
     expect(t).toContain('Mixed')
     expect(t).toContain('20 of 1,112 judged')
+  })
+
+  it('qr.p4.mood · the partition bar D15 licenses, with its legend in the rows', () => {
+    // A video is judged ONCE and the four shares are 100% of one denominator,
+    // so D4 — which is about kinds, whose counts run to 175–228% of theirs —
+    // never reached the mood. D15 governs it and licenses the bar.
+    const markup = render(QUARTERLY_BLOCKS['quarterly.category'].render(data, 'print', ctx))
+    // Four segments, one per mood, `mixed` among them.
+    expect(markup).toContain('var(--mixed)')
+    expect(markup).toContain('var(--positive)')
+    expect(markup).toContain('var(--negative)')
+    expect(markup).toContain('var(--neutral-seg)')
+    // IDENTITY IS NEVER COLOUR ALONE. The bar carries no legend of its own
+    // because the four rows under it are the legend — so every colour in the
+    // bar is also beside a label. Four swatches in the bar, four in the rows.
+    expect((markup.match(/var\(--mixed\)/g) ?? []).length).toBe(2)
+    for (const mode of MODES) assertCopyContract(render(QUARTERLY_BLOCKS['quarterly.category'].render(data, mode, ctx)))
   })
 
   it('qr.p5.col.* · the month cells, and the refusal’s reason in print', () => {
@@ -900,6 +965,29 @@ describe('the artboard port (Block D wave 2)', () => {
     // The floor, in the card's own words, and the hold it does not have.
     expect(t).toContain('at least 1 real comment stands behind it')
     expect(t).toContain('nothing here is held across two updates before it is printed')
+  })
+
+  it('qr.p7.method · the record as four paragraphs, in order, with every word kept', () => {
+    // Thirteen free-standing lines a pixel apart, each one line long in a
+    // 674px column, read as a log beside the artboard's four paragraphs of
+    // method prose. Nothing is regrouped and nothing is reworded: the
+    // sentences are `recordLines`' own, in `recordLines`' own order.
+    const markup = render(QUARTERLY_BLOCKS['quarterly.method'].render(data, 'print', ctx))
+    const t = renderText(QUARTERLY_BLOCKS['quarterly.method'].render(data, 'print', ctx))
+    for (const line of data.method.lines) expect(t).toContain(line)
+    // In order, and each one exactly once.
+    let at = -1
+    for (const line of data.method.lines) {
+      const next = t.indexOf(line)
+      expect(next).toBeGreaterThan(at)
+      at = next
+      expect(t.split(line).length - 1).toBe(1)
+    }
+    // AND THEY SHARE PARAGRAPHS. Twelve sentences in four nodes means
+    // consecutive sentences sit inside one `<p>`, separated by a space.
+    expect(data.method.lines.length).toBeGreaterThan(4)
+    expect(markup).toContain(`${data.method.lines[0]} ${data.method.lines[1]}`)
+    for (const mode of MODES) assertCopyContract(render(QUARTERLY_BLOCKS['quarterly.method'].render(data, mode, ctx)))
   })
 
   it('qr.p7.numbers · eight rows, with Sources, Held back and Languages among them', () => {
