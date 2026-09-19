@@ -82,8 +82,8 @@ describe('OV3 · what the category is saying', () => {
 
   it('keeps every direction word inside a verdict node', () => {
     const markup = render(overviewCategory.render(overviewFixture(), 'app', ctx))
-    expect(markup).toContain('growing, 3 months')
-    expect(markup).toContain('fading, 3 months')
+    expect(markup).toContain('growing, 3rd month')
+    expect(markup).toContain('fading, 3rd month')
     expect(copyViolations(markup).filter((v) => v.rule === 'direction-word')).toEqual([])
   })
 

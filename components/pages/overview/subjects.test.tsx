@@ -50,7 +50,7 @@ describe('OV2 · your subjects', () => {
 
   it('prints a direction word only inside a verdict node', () => {
     const markup = render(overviewSubjects.render(overviewFixture(), 'app', ctx))
-    expect(markup).toContain('growing, 3 months')
+    expect(markup).toContain('growing, 3rd month')
     // The contract's rule (c) is what proves it: no direction word survives
     // outside a verdict node.
     expect(copyViolations(markup).filter((v) => v.rule === 'direction-word')).toEqual([])
