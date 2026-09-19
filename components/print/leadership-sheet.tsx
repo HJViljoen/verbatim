@@ -105,7 +105,7 @@ function Eyebrow({ children, meta }: { children: ReactNode; meta?: ReactNode }) 
  * route and the share link do not, and an operator cannot fix it anyway,
  * because the row count is a Settings outcome.
  *
- * Five, not the artboard's six, because the cell is not the artboard's. The
+ * Fewer than the artboard's six, because the cell is not the artboard's. The
  * mock brackets the count beside the share ("31% (26)") on one line; rule (b)
  * wants the level's own evidence, so `FigureCell` stacks "31%" over "26 of 84"
  * and each row costs about double. The honest cell buys the table half its
@@ -115,11 +115,50 @@ function Eyebrow({ children, meta }: { children: ReactNode; meta?: ReactNode }) 
  * here is print the count it did not show and name the page that shows them
  * all, which is the product's convention everywhere else.
  *
- * MEASURED, not guessed: eight rows of the Overview fixture rendered through
- * `lib/render/chromium` at the deck's own zoom, the body box read off the DOM.
- * See status/E-leadership.md, "Fix pass".
+ * AND A BUDGET FOR ROWS ALONE IS NOT A BUDGET. A flat five counted the rows
+ * and not the two lines the table prints UNDERNEATH them — the truncation
+ * line, which only exists BECAUSE the table truncated, and the caveat. At the
+ * artboard's own six subjects the body ran 24px past its box and the DOM
+ * reported exactly two clipped nodes: "1 more subject, on “Your subjects”."
+ * sliced through the x-height and the caveat gone entirely. So the two things
+ * the package added to stop the table lying were the first two things the
+ * sheet ate, in silence, on a client's PDF. `sheetSubjectRows` counts them.
+ *
+ * MEASURED, not guessed: rendered through `lib/render/chromium` at 1123px in
+ * the repo's own `.vb-print` wrapper, one row at a time from one subject to
+ * eight, with and without a caveat, and `.vb-slide-body`'s own box read off
+ * the DOM. A row costs 41px, each mono line under the table 18px, and the
+ * block has 201px to spend once the figure cards and the recommendation above
+ * it have taken theirs. The worst reachable case — four rows, a caveat and a
+ * truncation line — clears the box by 4px measured.
  */
-export const SHEET_SUBJECT_ROWS = 5
+const SUBJECT_ROW_PX = 41
+const SUBJECTS_TRAIL_PX = 18
+const SUBJECTS_BUDGET_PX = 201
+
+/** The artboard's own row count, and the most this will ever show. The
+ *  arithmetic decides everything below it. */
+export const SHEET_SUBJECT_ROWS = 6
+
+/**
+ * How many of `total` subject rows fit, once the lines under the table are
+ * paid for.
+ *
+ * `trailLines` is what the table prints below itself WITHOUT truncating: the
+ * caveat, today. `subjectsNote` (lib/pages/overview.ts) is one of two fixed
+ * sentences, each one line at this column's width — if it ever becomes a
+ * paragraph, its second line is counted here and nowhere else. The truncation
+ * line is not passed in, because whether it prints depends on the answer: it
+ * is charged only to the counts that cause it.
+ */
+export function sheetSubjectRows(total: number, trailLines: number): number {
+  for (let n = Math.min(total, SHEET_SUBJECT_ROWS); n > 1; n--) {
+    const trails = trailLines + (n < total ? 1 : 0)
+    if (SUBJECT_ROW_PX * n + SUBJECTS_TRAIL_PX * trails <= SUBJECTS_BUDGET_PX) return n
+  }
+  return 1
+}
+
 /** The same budget for the right column's move cards, which are ~90px each. */
 export const SHEET_MOVE_CARDS = 2
 
@@ -583,11 +622,11 @@ function Cell({ side }: { side: SideReading | null }) {
  * keep the semantics a `display` other than `table` would otherwise strip.
  *
  * AND IT IS CAPPED, BECAUSE THE SHEET HAS A HEIGHT AND `overflow: hidden`.
- * `SHEET_SUBJECT_ROWS` — see the constant.
+ * `sheetSubjectRows` — see the budget above it.
  */
 function SubjectsTable({ data }: { data: OverviewData }) {
   const s = data.subjects
-  const shown = s.rows.slice(0, SHEET_SUBJECT_ROWS)
+  const shown = s.rows.slice(0, sheetSubjectRows(s.rows.length, s.note ? 1 : 0))
   const over = s.rows.length - shown.length
   const COLS = 'grid grid-cols-[minmax(0,112px)_82px_120px_138px_minmax(0,1fr)] items-center gap-x-2'
   return (

@@ -11,7 +11,7 @@ import { documentViewerPages } from '@/lib/reports/viewer'
 import type { DocumentSnapshotData } from '@/lib/reports/documents/types'
 import { DocumentDeck } from './document-deck'
 import { provenanceLine } from '@/components/pages/overview/sentence'
-import { LeadershipSheet, isLeadershipOverview, leadGap, leadSubject, leadershipSheetData } from './leadership-sheet'
+import { LeadershipSheet, isLeadershipOverview, leadGap, leadSubject, leadershipSheetData, sheetSubjectRows } from './leadership-sheet'
 
 // The leadership one-pager (Block D wave 2, E-leadership).
 //
@@ -227,14 +227,37 @@ describe('the leadership one-pager', () => {
 
   it('budgets its subject rows, and says how many it did not show', () => {
     const words = renderText(sheet(eightRows()))
-    expect(words).toContain('Subject 5')
-    expect(words).not.toContain('Subject 6')
+    expect(words).toContain('Subject 4')
+    expect(words).not.toContain('Subject 5')
     // The count it did not show, and the page in the document that shows them
     // all — the sheet absorbs no section, so "Your subjects" really follows.
-    expect(words).toContain('3 more subjects, on “Your subjects”.')
+    expect(words).toContain('4 more subjects, on “Your subjects”.')
     // … and the two things the overflow used to eat are still on the sheet.
     expect(words).toContain('the category column carries the month')
     expect(words).toContain('Our read')
+  })
+
+  // A budget that counts rows alone is not a budget: the truncation line only
+  // exists BECAUSE the table truncated, and the caveat prints under it either
+  // way. At the artboard's own six subjects the body ran 24px past its
+  // `overflow: hidden` box and ate exactly those two lines — silently, on a
+  // client's PDF. The arithmetic is measured; see the constants.
+  it('charges the lines under the table to the same budget as the rows', () => {
+    // 41px a row, 18px a mono line, 201px to spend.
+    expect(sheetSubjectRows(3, 0)).toBe(3)
+    expect(sheetSubjectRows(4, 1)).toBe(4)
+    // Six subjects and a caveat: four rows, the caveat and the truncation line
+    // (164 + 18 + 18 = 200) — one row fewer than the rows alone would allow.
+    expect(sheetSubjectRows(6, 1)).toBe(4)
+    expect(sheetSubjectRows(8, 1)).toBe(4)
+    // Truncating is what costs the extra line, so a table that shows every row
+    // it has is charged for the caveat alone.
+    expect(sheetSubjectRows(4, 0)).toBe(4)
+    // A caveat that ever wrapped to a second line is counted here, and pays
+    // for itself in rows rather than in a silent clip.
+    expect(sheetSubjectRows(6, 3)).toBe(3)
+    // It never returns nothing: one row and the count is still a table.
+    expect(sheetSubjectRows(6, 12)).toBe(1)
   })
 
   it('says how many moves it did not show, rather than slicing in silence', () => {
