@@ -378,18 +378,25 @@
   page-break-after: always;
 }
 .vb-slide:last-child { break-after: auto; page-break-after: auto; }
-/* The slide body: laid out at the app's width, zoomed to fit the page. */
+/* The slide body: laid out at the app's width, zoomed to fit the page.
+   IT IS MEASURED, NOT BUDGETED (Block D wave 3, SH3). The height used to be
+   arithmetic — the page minus its padding, minus the header, minus a LITERAL
+   30px for the footer — and the footer is a method note whose coverage line
+   wraps: 51px on the populated leadership sheet, 21px where it does not wrap.
+   So the sheet with the longest note was the one given the least room for it,
+   and `overflow: hidden` took the difference silently, on the PDF, the in-app
+   viewer and /r/<token> alike. `.vb-slide` is already a flex column, so the
+   body takes the height that is actually LEFT after the header, the optional
+   framing note and the footer have been laid out at whatever height they
+   turned out to be — which is the same measurement, made by the layout
+   engine instead of by a constant that has to be kept in step with a
+   component. The framing note's own subtraction goes with it. */
 .vb-slide-body {
   width: var(--vb-grid-w);
-  height: calc((167mm - 14mm - 24px - 8px - 30px - 8px) / var(--vb-zoom));
+  flex: 1 1 0;
   zoom: var(--vb-zoom);
   min-height: 0;
   overflow: hidden;
-}
-/* A framing note (Report Studio) is one 18px line plus its gap; the body
-   gives that up so the footer stays on the slide. */
-.vb-slide[data-note] .vb-slide-body {
-  height: calc((167mm - 14mm - 24px - 8px - 18px - 8px - 30px - 8px) / var(--vb-zoom));
 }
 .vb-print-grid {
   display: grid;

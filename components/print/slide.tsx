@@ -13,6 +13,29 @@ export interface SlideChrome {
   footer: ReactNode
 }
 
+/**
+ * THE EXPORT PATH MARKS ITS OWN CLIPPED SHEETS (Block D wave 3, SH3).
+ *
+ * `.vb-slide-body` is `overflow: hidden` over a fixed box, and the only thing
+ * that ever set `data-overflow` was the Studio's editor
+ * (`components/documents/document-editor.tsx`), which runs on one screen an
+ * operator may never open. So the PDF, the in-app viewer and `/r/<token>` all
+ * shipped a clipped sheet with no ellipsis, no outline and no warning — the
+ * mechanism behind thirteen clipped sheets across four artefacts.
+ *
+ * The same measurement, emitted by every sheet and run ONCE — the guard is in
+ * the script rather than in a `page === 1`, because page 1 of a brief is a
+ * `CoverSlide` and never reaches this component — and run after the fonts
+ * settle, because a font swap is what changes a line count. It only sets the attribute: `scripts/document-smoke.ts` already looks
+ * for `.vb-slide[data-overflow]`, and the visible outline stays scoped to
+ * `.vb-editing` in app/globals.css, so a client's PDF gains a fact about
+ * itself and not a yellow box.
+ *
+ * It contains no word `lib/test/copy-contract.ts` polices — deliberately, and
+ * a reader editing it should keep it that way.
+ */
+const MEASURE = `(function(){if(window.__vbSlideMeasure){return}window.__vbSlideMeasure=1;var m=function(){var s=document.querySelectorAll('.vb-slide');for(var i=0;i<s.length;i++){var b=s[i].querySelector('.vb-slide-body');if(b){s[i].toggleAttribute('data-overflow',b.scrollHeight>b.clientHeight+2)}}document.documentElement.setAttribute('data-slides-measured','')};if(document.fonts&&document.fonts.ready){document.fonts.ready.then(function(){requestAnimationFrame(m)})}else{requestAnimationFrame(m)}})()`
+
 export function Slide({
   title, chrome, page, pages, layout = 'grid', flow = false, header = true, note, children, className,
 }: {
@@ -39,6 +62,7 @@ export function Slide({
   const hasNote = Boolean(note && note.trim())
   return (
     <section className={cn('vb-slide', className)} data-note={hasNote ? '' : undefined}>
+      <script dangerouslySetInnerHTML={{ __html: MEASURE }} />
       {header && (
         <header className="flex shrink-0 items-baseline justify-between gap-4">
           <h1 className="truncate text-[15px] font-semibold tracking-[-0.01em] text-foreground">{title}</h1>
