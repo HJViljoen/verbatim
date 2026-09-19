@@ -51,6 +51,18 @@ export const weekSubjects: Block<WeekData> = {
     const empty = weekSubjects.emptyState(data)
     const href = `${ctx.appUrl}/dashboard/subjects`
     const max = Math.max(1, ...s.rows.map((r) => r.monthVideos))
+    // ONE SCALE ACROSS THE STRIP, NOT ONE PER COLUMN (review W2). `top` was
+    // `Math.max(1, added, typical)` INSIDE each column, so six bars of one
+    // unit under one shared legend were drawn on six different scales:
+    // measured on the populated fixture at 1440, Comfort's 8 added drew 368px
+    // while Durability's 2.77 "usually" drew 351px, and Durability's 1 added
+    // drew 127px against Comfort's 4.52 "usually" at 208px — 1 longer than
+    // half of 4.5. A six-across row under one legend is an invitation to
+    // compare across it, which is exactly what the artboard's §3 does. So the
+    // denominator is the strip's own tallest bar, computed once here over both
+    // series, and the comment below is now true of the row as well as of the
+    // column.
+    const barTop = Math.max(1, ...s.rows.flatMap((r) => [r.addedVideos ?? 0, r.typical ?? 0]))
 
     return (
       <BlockFrame
@@ -101,7 +113,7 @@ export const weekSubjects: Block<WeekData> = {
             : (
               <>
                 <div className={`grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3 ${STRIP_COLUMNS[Math.min(s.rows.length, 6)] ?? 'xl:grid-cols-6'}`}>
-                  {s.rows.map((r) => <Column key={r.id} row={r} />)}
+                  {s.rows.map((r) => <Column key={r.id} row={r} top={barTop} />)}
                 </div>
                 <Legend rows={s.rows} />
               </>
@@ -141,16 +153,18 @@ const STRIP_COLUMNS: Record<number, string> = {
   4: 'xl:grid-cols-4', 5: 'xl:grid-cols-5', 6: 'xl:grid-cols-6',
 }
 
-/** One of the mock's six columns. */
-function Column({ row }: { row: SubjectWeekRow }) {
+/** One of the mock's six columns. `top` is the STRIP's tallest bar, not this
+ *  column's — see `barTop`. */
+function Column({ row, top }: { row: SubjectWeekRow; top: number }) {
   // BOTH BARS ARE THE SAME UNIT ON THE SAME SCALE — videos this update added,
-  // measured and expected. The mock's pair is this week against a typical week,
-  // which needs a history nothing holds; this pair is a contribution against
-  // the contribution an update of this size usually makes to this subject, and
-  // both sides come off the same two reads.
+  // measured and expected — AND SO IS EVERY OTHER COLUMN'S PAIR. The mock's
+  // pair is this week against a typical week, which needs a history nothing
+  // holds; this pair is a contribution against the contribution an update of
+  // this size usually makes to this subject, and both sides come off the same
+  // two reads. The scale is the strip's, so a longer bar anywhere in the row
+  // means more videos.
   const added = row.addedVideos
   const typical = row.typical
-  const top = Math.max(1, added ?? 0, typical ?? 0)
   return (
     <div className="flex min-w-0 flex-col gap-1.5 border-border/70 xl:border-l xl:pl-4 xl:first:border-l-0 xl:first:pl-0">
       {/* The subject's own name is the client's words, typed into Settings —
@@ -225,6 +239,13 @@ function Legend({ rows }: { rows: readonly SubjectWeekRow[] }) {
           what an update of its size usually adds — the subject’s month so far, scaled by this update’s own share of the month
         </span>
       ) : null}
+      {/* AND WHAT THE LENGTHS ARE AGAINST (review W2). A legend shared by six
+          columns has to say that the six are comparable, or a reader is left
+          to assume it — which is what made the per-column scale a silent
+          error rather than a visible one. */}
+      <span className="text-[11px] text-muted-foreground">
+        every bar on one scale, so a longer bar anywhere in the row is more videos
+      </span>
     </div>
   )
 }

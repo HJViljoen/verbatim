@@ -157,6 +157,24 @@ describe('WK §2 · this week in your subjects', () => {
     expect(text).not.toContain('since 19 Aug')
   })
 
+  it('draws every subject bar on ONE scale across the strip', () => {
+    // REVIEW W2. `top` was per column, so six bars of one unit under one
+    // shared legend sat on six scales: 8 added and 2.77 "usually" drew the
+    // same length, and 1 added drew longer than half of 4.5. The denominator
+    // is the strip's own tallest bar, over both series.
+    const d = weekFixture()
+    const rows = d.subjects.rows.map((r, i) => ({ ...r, addedVideos: i === 0 ? 8 : 1, typical: i === 0 ? 4 : 2 }))
+    const markup = render(weekSubjects.render({ ...d, subjects: { ...d.subjects, rows } }, 'app', ctx))
+    const widths = [...markup.matchAll(/width:\s*([\d.]+)%/g)].map((m) => Number(m[1]))
+    // The tallest bar is the first column's 8; every other length is its own
+    // value over that same 8 — 50%, 12.5%, 25% — and never over its own column.
+    expect(widths).toContain(100)
+    expect(widths).toContain(50)
+    expect(widths).toContain(12.5)
+    expect(widths).toContain(25)
+    expect(markupText(markup)).toContain('every bar on one scale')
+  })
+
   it('says subjects are not recorded rather than drawing an empty table', () => {
     const text = renderText(weekSubjects.render(thinFixture(), 'app', ctx))
     expect(text).toContain('No subjects are recorded for this workspace yet')
