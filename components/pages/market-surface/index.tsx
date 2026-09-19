@@ -108,7 +108,7 @@ const COLS: Record<string, number> = {
   'market.ways': 12,
 }
 
-// ── how tall each tile is ─────────────────────────────────────────────────────
+// ── how tall each tile is, and where it starts ────────────────────────────────
 //
 // A TILE IS A FIXED BOX AND ITS CONTENT IS NOT, WHICH IS ONE DECISION SEEN FROM
 // TWO ENDS. `Tile` is `overflow-hidden` over an `N × 116px` grid area at ≥xl:
@@ -134,10 +134,29 @@ const COLS: Record<string, number> = {
 // up. The estimate errs HIGH by design: a row of slack is 132px of white and a
 // row short is a table with its bottom cut off.
 //
-// AND A GRID ROW IS ONE HEIGHT. The tiles that sit beside each other take the
-// TALLEST of their own estimates, so the grid stays rectangular: a per-tile
-// span in one row lets CSS grid's auto-placement flow the next tile into the
-// gap beside a short one, which reorders the page.
+// AND EVERY TILE NOW SPENDS ITS OWN SLACK, NOT ITS NEIGHBOUR'S. The first cut
+// of this rule gave every tile on a grid line the TALLEST estimate on that
+// line, to keep CSS grid's auto-placement from flowing a later tile up into the
+// gap beside a short one. Measured at 1440 on the populated fixture that cost
+// 1,407px of white inside 4,888px of tile — a third of the page — and its worst
+// case was not the fixture but the arm production is in: `market.unlocks` draws
+// ~200px of ink and was handed a 644px box because `market.plans` sits beside
+// it, and Say vs hear ran 54% blank for the same reason.
+//
+// THE REORDERING THAT JUSTIFIED IT CANNOT HAPPEN ONCE THE START IS PINNED.
+// Auto-placement only moves a tile that has no explicit position; `Tile` set
+// `xl:col-span-N` / `xl:row-span-N` and never a col-start or a row-start, so
+// every tile was auto-placed and the argument held. `tileGrid` now hands each
+// tile the column AND the row it begins on — the artboard's own grid, written
+// down — so the layout is fixed by the page rather than by whichever tile
+// happens to be tallest, and a per-tile height is free. The artboard does the
+// same thing with no arithmetic at all: `repeat(12, minmax(0, 1fr))` and no
+// `auto-rows`, so each of its rows is as tall as its own tallest card.
+//
+// A LINE STILL SHARES ITS ROW START, so the three narrow cards begin level with
+// each other and `market.ways` begins under all three; what they no longer
+// share is their BOTTOM. A ragged bottom edge inside one grid line is the cost,
+// and it is 600px of white cheaper than the alternative.
 const ROW_UNIT = 116
 const ROW_GAP = 16
 const spanFor = (px: number): number =>
@@ -168,7 +187,7 @@ const HEIGHT: Record<string, (d: MarketSurfaceData) => number> = {
   'market.advice': (d) => {
     const rows = d.advice.rows
     if (rows.length === 0) return 150
-    const verdicts = rows.filter((r) => r.afterwards.state === 'reading').length
+    const verdicts = rows.filter((r) => r.afterwards?.state === 'reading').length
     const expanded = rows.some((r) => r.why || r.quote) ? 130 : 0
     return 120 + rows.length * 80 + verdicts * 45 + expanded
   },
@@ -213,27 +232,79 @@ const HEIGHT: Record<string, (d: MarketSurfaceData) => number> = {
   },
 }
 
-/** The grid rows of this page, in order: the two full-width readings, then the
- *  artboard's moves row, the three narrow cards, and the button strip. Tiles
- *  named on one line share its height. */
-const GRID_ROWS: readonly (readonly string[])[] = [
-  ['market.conclusions'],
-  ['market.advice'],
-  ['market.card', 'market.moves'],
-  ['market.sayhear', 'market.plans', 'market.unlocks'],
-  ['market.ways'],
+/** The page's two grids, each as its own lines of tile keys, in order: the two
+ *  full-width readings; then the artboard's moves row, the three narrow cards,
+ *  and the button strip. Tiles named on one line START on the same grid row —
+ *  they no longer END on the same one. */
+const GRIDS: readonly (readonly (readonly string[])[])[] = [
+  [['market.conclusions'], ['market.advice']],
+  [
+    ['market.card', 'market.moves'],
+    ['market.sayhear', 'market.plans', 'market.unlocks'],
+    ['market.ways'],
+  ],
 ]
 
-/** How tall each block's tile is, in the grid's 116px row units — computed from
- *  the data it is about to draw. Exported so the rule is testable without a
- *  browser. */
-export function tileRows(data: MarketSurfaceData): Record<string, number> {
-  const out: Record<string, number> = {}
-  for (const line of GRID_ROWS) {
-    const span = Math.max(...line.map((key) => spanFor(HEIGHT[key]?.(data) ?? 248)))
-    for (const key of line) out[key] = span
+/** The grid lines of the moves grid, kept exported-shaped for the test that
+ *  reads which tiles sit beside which. */
+export const GRID_ROWS: readonly (readonly string[])[] = GRIDS.flat()
+
+/** Where a tile sits and how big it is: the artboard's column, the column it
+ *  starts in, its own height in 116px row units, and the row its line starts
+ *  on. Exported so the rule is testable without a browser. */
+export interface TilePlacement { col: number; colStart: number; row: number; rowStart: number }
+
+export function tileGrid(data: MarketSurfaceData): Record<string, TilePlacement> {
+  const out: Record<string, TilePlacement> = {}
+  for (const grid of GRIDS) {
+    let rowStart = 1
+    for (const line of grid) {
+      let colStart = 1
+      let tallest = 2
+      for (const key of line) {
+        const col = COLS[key] ?? 12
+        const row = spanFor(HEIGHT[key]?.(data) ?? 248)
+        out[key] = { col, colStart, row, rowStart }
+        colStart += col
+        tallest = Math.max(tallest, row)
+      }
+      rowStart += tallest
+    }
   }
   return out
+}
+
+/** How tall each block's tile is, in the grid's 116px row units — computed from
+ *  the data it is about to draw. */
+export function tileRows(data: MarketSurfaceData): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const [key, place] of Object.entries(tileGrid(data))) out[key] = place.row
+  return out
+}
+
+// THE START CLASSES ARE WRITTEN OUT IN FULL, never interpolated, so Tailwind
+// v4's scanner sees them — the rule `components/shell/tile.tsx` follows for its
+// own span maps. Rows run past twelve because a row start is CUMULATIVE: the
+// ledger alone can ask for eleven units, so `market.ways` can begin on row 25.
+const COL_START: Record<number, string> = {
+  1: 'xl:col-start-1', 2: 'xl:col-start-2', 3: 'xl:col-start-3', 4: 'xl:col-start-4',
+  5: 'xl:col-start-5', 6: 'xl:col-start-6', 7: 'xl:col-start-7', 8: 'xl:col-start-8',
+  9: 'xl:col-start-9', 10: 'xl:col-start-10', 11: 'xl:col-start-11', 12: 'xl:col-start-12',
+}
+const ROW_START: Record<number, string> = {
+  1: 'xl:row-start-1', 2: 'xl:row-start-2', 3: 'xl:row-start-3', 4: 'xl:row-start-4',
+  5: 'xl:row-start-5', 6: 'xl:row-start-6', 7: 'xl:row-start-7', 8: 'xl:row-start-8',
+  9: 'xl:row-start-9', 10: 'xl:row-start-10', 11: 'xl:row-start-11', 12: 'xl:row-start-12',
+  13: 'xl:row-start-13', 14: 'xl:row-start-14', 15: 'xl:row-start-15', 16: 'xl:row-start-16',
+  17: 'xl:row-start-17', 18: 'xl:row-start-18', 19: 'xl:row-start-19', 20: 'xl:row-start-20',
+  21: 'xl:row-start-21', 22: 'xl:row-start-22', 23: 'xl:row-start-23', 24: 'xl:row-start-24',
+  25: 'xl:row-start-25', 26: 'xl:row-start-26',
+}
+
+/** The two start classes for one tile — nothing below xl, where the page is a
+ *  single stacked column and a pinned column would make one. */
+export function startClasses(place: TilePlacement): string {
+  return `${COL_START[place.colStart] ?? 'xl:col-start-1'} ${ROW_START[place.rowStart] ?? 'xl:row-start-auto'}`
 }
 
 /** The words this page is measured against, for "How to read this page". Every
@@ -269,17 +340,21 @@ export function MarketSurfacePage({
   }
 
   const ctx = marketContext(params)
-  const rows = tileRows(data)
-  const tile = (block: Block<MarketSurfaceData>) => (
-    <Tile
-      key={block.key}
-      col={COLS[block.key] ?? 12}
-      row={rows[block.key] ?? 2}
-      distribute="between"
-    >
-      {block.render(data, 'app', ctx)}
-    </Tile>
-  )
+  const grid = tileGrid(data)
+  const tile = (block: Block<MarketSurfaceData>) => {
+    const place = grid[block.key] ?? { col: COLS[block.key] ?? 12, colStart: 1, row: 2, rowStart: 1 }
+    return (
+      <Tile
+        key={block.key}
+        col={place.col}
+        row={place.row}
+        className={startClasses(place)}
+        distribute="between"
+      >
+        {block.render(data, 'app', ctx)}
+      </Tile>
+    )
+  }
   // The masthead's two clauses: the promise, then the limit on it, quiet.
   const [promise, ...rest] = data.masthead.split(/(?<=\.)\s+/)
 

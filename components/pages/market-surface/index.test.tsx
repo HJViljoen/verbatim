@@ -8,7 +8,7 @@ import { ADVICE_REQUESTED_GONE } from '@/lib/pages/market-surface'
 import { MOVES_UNLOCK } from '@/lib/pages/overview'
 import { pageModule } from '@/components/pages/registry'
 import type { AdviceRow } from '@/lib/pages/market-surface'
-import { MARKET_BLOCKS, tileRows } from './index'
+import { MARKET_BLOCKS, startClasses, tileGrid, tileRows } from './index'
 import { marketConclusions } from './conclusions'
 import { marketAdvice } from './advice'
 import { marketCard } from './card'
@@ -179,14 +179,43 @@ describe('the tiles are as tall as what they draw', () => {
     expect(thin['market.advice']).toBe(2)
   })
 
-  it('gives the tiles that sit beside each other one height', () => {
-    // A per-tile span inside one grid line lets CSS grid flow the next tile up
-    // into the gap beside a short one, which reorders the page.
+  it('starts the tiles on a line together and lets each spend its own height', () => {
+    // A per-tile span used to be refused because CSS grid's auto-placement
+    // flows a later tile up into the gap beside a short one, which reorders
+    // the page. Auto-placement only moves a tile with no explicit position, so
+    // the start is PINNED instead: every tile on a grid line begins on the
+    // same row and in the artboard's own column, and its height is its own.
+    // That is what stops `market.unlocks` being handed 644px because
+    // `market.plans` sits beside it.
     for (const data of STATES) {
-      const rows = tileRows(data)
-      expect(rows['market.card']).toBe(rows['market.moves'])
-      expect(rows['market.sayhear']).toBe(rows['market.plans'])
-      expect(rows['market.plans']).toBe(rows['market.unlocks'])
+      const grid = tileGrid(data)
+      expect(grid['market.card'].rowStart).toBe(grid['market.moves'].rowStart)
+      expect(grid['market.sayhear'].rowStart).toBe(grid['market.plans'].rowStart)
+      expect(grid['market.plans'].rowStart).toBe(grid['market.unlocks'].rowStart)
+      // The artboard's columns, left to right, with no overlap.
+      expect(grid['market.card'].colStart).toBe(1)
+      expect(grid['market.moves'].colStart).toBe(6)
+      expect(grid['market.sayhear'].colStart).toBe(1)
+      expect(grid['market.plans'].colStart).toBe(5)
+      expect(grid['market.unlocks'].colStart).toBe(9)
+      expect(grid['market.ways'].colStart).toBe(1)
+      // The strip begins under the tallest of the three cards above it, so a
+      // ragged bottom edge inside a line cannot run a tile into the next one.
+      const narrow = ['market.sayhear', 'market.plans', 'market.unlocks']
+        .map((k) => grid[k].rowStart + grid[k].row)
+      expect(grid['market.ways'].rowStart).toBe(Math.max(...narrow))
+    }
+  })
+
+  it('gives every start a class Tailwind can see', () => {
+    // Class strings are written out in full, never interpolated (the rule
+    // components/shell/tile.tsx follows). A start the map has no entry for
+    // would silently fall back and stack two tiles in one column.
+    for (const data of [...STATES, twelveRowLedger()]) {
+      for (const place of Object.values(tileGrid(data))) {
+        const classes = startClasses(place)
+        expect(classes, JSON.stringify(place)).toBe(`xl:col-start-${place.colStart} xl:row-start-${place.rowStart}`)
+      }
     }
   })
 
