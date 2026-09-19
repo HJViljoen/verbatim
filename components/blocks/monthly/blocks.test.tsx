@@ -480,9 +480,17 @@ describe('the five sections that are Overview’s', () => {
     expect(markup).toContain(`<span style="font-weight:600;color:${EMAIL.ink}">2,359 videos</span>`)
     expect(markup).toContain(`<span style="font-weight:600;color:${EMAIL.ink}">27%</span>`)
     expect(markup).not.toContain('>27% of<')
-    // A sentence that opens on no figure gets no bold lead at all.
-    const nothing = record.lines.find((l) => l.startsWith('Nothing about'))!
-    expect(markup).toContain(`>${nothing}</div>`)
+    // A sentence that opens on no figure gets no bold lead at all. This named
+    // one such line by its opening words — "Nothing about what we track changed
+    // in this window" — which the fixture stopped producing when `lib` put the
+    // record through `recordBandFixture` and the real composers: the composed
+    // record has one tracking change in the window, so `recordLines` writes the
+    // other branch and `find` returned undefined. Assert the RULE over every
+    // line the rule covers instead of naming one sentence, which is also the
+    // stronger test and cannot be re-based out from under itself again.
+    const noFigure = record.lines.filter((l) => !/^\d/.test(l))
+    expect(noFigure.length).toBeGreaterThan(1)
+    for (const line of noFigure) expect(markup).toContain(`>${line}</div>`)
     // And every word is still the composer's, whole.
     for (const line of [...record.lines, freezeSentence(record.freezesOn)]) {
       expect(markupText(markup)).toContain(line)

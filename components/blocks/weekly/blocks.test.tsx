@@ -448,8 +448,15 @@ describe('WR3 · what came in this week', () => {
     expect(email).not.toContain(EMAIL.mixed.toLowerCase())
     expect(email.split('>New<').length - 1).toBe(1)
     const app = render(WEEKLY_BLOCKS['weekly.incoming'].render(data, 'app', ctx))
-    expect(app.split('bg-inner').length - 1).toBe(1)
-    expect(app).toContain('bg-mixed/20')
+    // COUNT THE BAND, NOT THE TOKEN. This read `app.split('bg-inner')`, which
+    // was one node when it was written and is two now: `subjects`' SB8 sets the
+    // translation label as a `rounded-full bg-inner` pill inside `QuoteBlock`,
+    // and this block renders quotes. `bg-inner` is a ground half the product
+    // uses; the thing under test is that there is ONE New band, so match the
+    // band's own shape and its "New" pill, the way the email arm above does.
+    expect(app.split('rounded-md bg-inner').length - 1).toBe(1)
+    expect(app.split('>New<').length - 1).toBe(1)
+    expect(app.split('bg-mixed/20').length - 1).toBe(1)
     // Every theme is still in it.
     for (const t of data.incoming.newThemes) expect(markupText(app)).toContain(t.label)
   })
