@@ -52,9 +52,37 @@ export const WEEKLY_BLOCK_KEYS = [
 
 export type WeeklyBlockKey = (typeof WEEKLY_BLOCK_KEYS)[number]
 
-/** The mock's width (`mock-sealand/spec/artboards.md`), against the digest's
- *  shipped 600. The digest keeps its own width; this is the weekly report's. */
+/** The artefact's FRAME — the canvas the card sits on
+ *  (`mock-sealand/spec/artboards.md`: "640px for emails"). */
 export const WEEKLY_EMAIL_WIDTH = 640
+
+/**
+ * The CARD inside that frame, and it is the only width that binds.
+ *
+ * TWO NUMBERS, NOT ONE, AND THIS FILE HAD COLLAPSED THEM. `WEEKLY_EMAIL_WIDTH`
+ * was applied as `maxWidth` on the white card, commented "the mock's width
+ * (spec/artboards.md)" — and that file's line 39 says the opposite of what the
+ * comment claimed: "Root element: fixed width matching the frame (1440px for
+ * app pages, 640px for emails)". 640 is the CANVAS. The artboard proves it in
+ * one file: `WeeklyReport.dc.html` draws `width:640px` on the outer `#F6F7F8`
+ * element with 20px of padding and `width:600px` on the white card inside it —
+ * exactly one of each. `spec/design-system.md` §4 opens "600px card on a
+ * #F6F7F8 canvas".
+ *
+ * NOT COSMETIC. Every measured line ran 40px longer than the column the type
+ * ramp was set for, which is where the mono metadata lines that wrap on the
+ * built artefact and not on the artboard came from.
+ *
+ * THE MONTHLY REPORT ALREADY SPLIT ITS TWO (`MONTHLY_CARD_WIDTH` /
+ * `MONTHLY_CANVAS_GUTTER`, block D wave 2) and this file is the sibling that
+ * did not. `QUARTERLY_EMAIL_WIDTH` (`components/email/quarterly.tsx`) still
+ * carries the 640 on its card and is that group's to move.
+ */
+export const WEEKLY_CARD_WIDTH = 600
+
+/** The artboard's canvas padding, each side: 600 + 20 + 20 = 640. */
+export const WEEKLY_CANVAS_GUTTER = 20
+
 
 /**
  * What to call the window this report covers.
@@ -609,7 +637,15 @@ export function weeklyEyebrow(updateDate: string | null): string {
  * nothing behind it to be read against.
  */
 export function weeklyDateLine(period: string, previous: string | null): string {
-  return `${period} · ${previous ? `previous update ${shortDate(previous)}` : 'no previous update'}`
+  // THE LINE BREAKS AT THE SEPARATOR OR NOT AT ALL. On a phone it does not fit
+  // beside the tenant, and the wrap landed inside "5 Sep" — so the masthead
+  // read "6 Sep – 13 Sep · previous update 5" over "Sep". Each clause is made
+  // unbreakable and the "·" is left the only place the line can break, which
+  // is where a reader would break it. Both clauses are bounded — a date range
+  // in `shortDate` and a fixed phrase — so neither can set a floor under the
+  // card the way a long unbreakable string would.
+  const clause = previous ? `previous update ${shortDate(previous)}` : 'no previous update'
+  return [period, clause].map((p) => p.replace(/ /g, '\u00a0')).join(' · ')
 }
 
 /**

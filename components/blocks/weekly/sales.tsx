@@ -115,22 +115,45 @@ function CountedRow({
   )
 }
 
-/** The mock's shaded card: the customers' own words, with their provenance. */
-function WordsCard({ quotes, mode }: { quotes: readonly SalesQuote[]; mode: RenderMode }) {
+/**
+ * The mock's shaded card: the customers' own words, with their provenance.
+ *
+ * AND EACH ONE SAYS WHICH ROW IT BELONGS TO. The card was handed
+ * `[...praise, ...objection, ...switching]` under one fixed heading, so the
+ * populated state printed a piece of praise, then "Beautiful, but I cannot
+ * justify that for a bag" — an objection, three lines under a heading a reader
+ * takes as an endorsement — then a switch, with nothing in the box saying
+ * which was which; and the switching ROW above it promises "· 1 below" and
+ * pointed into a box of three. The artboard's card says which one it is in its
+ * own heading ("IN THE CUSTOMERS' WORDS — NEVER LEAKED") over a single quote,
+ * which is a thing an artboard can do and a build cannot: that phrase is an
+ * echo of that particular sentence, not a label any loader computes.
+ *
+ * So the row name goes where the provenance already is — on the quote's own
+ * cite, which is the one line under each quote that is the product's words
+ * about it rather than the commenter's. "Praise · TikTok · 11 Sep · creator
+ * video" is the same shape the rest of the artefact cites in, one field
+ * longer, and it answers the only question the pooled box could not.
+ */
+function WordsCard({ rows, mode }: { rows: readonly { label: string; quotes: readonly SalesQuote[] }[]; mode: RenderMode }) {
+  const quotes = rows.flatMap((r) => r.quotes.map((q) => ({ q, label: r.label })))
   if (quotes.length === 0) return null
   const label = 'In the customers’ words'
+  const body = quotes.map(({ q, label: kind }, i) => (
+    <BlockQuote key={i} quote={q.quote} cite={`${kind} · ${q.cite}`} mode={mode} />
+  ))
   if (mode === 'email') {
     return (
       <div style={{ background: EMAIL.inner, borderRadius: 6, padding: '14px 16px', marginTop: 14 }}>
         <div style={{ fontFamily: FONT.sans, fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: EMAIL.muted }}>{label}</div>
-        {quotes.map((q, i) => <BlockQuote key={i} quote={q.quote} cite={q.cite} mode={mode} />)}
+        {body}
       </div>
     )
   }
   return (
     <div className="mt-3.5 flex min-w-0 flex-col gap-2 rounded-md bg-inner px-4 py-3.5">
       <span className="text-[12px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{label}</span>
-      {quotes.map((q, i) => <BlockQuote key={i} quote={q.quote} cite={q.cite} mode={mode} />)}
+      {body}
     </div>
   )
 }
@@ -147,10 +170,24 @@ function Note({ mode, children }: { mode: RenderMode; children: ReactNode }) {
  *
  * "DATED IN THE WINDOW", NOT "THIS UPDATE". `ForSalesData.videos` is
  * `window_denominators` summed over the update's window — videos dated by the
- * COMMENT — while WR3's "271 videos gathered" three inches up is dated by when
- * we LOOKED. Both said "this update" and a reader had no way to tell that they
+ * COMMENT — while WR3's "271 videos found" three inches up is dated by when we
+ * LOOKED. Both said "this update" and a reader had no way to tell that they
  * are different measures of different things, which is exactly the confusion
  * the two-clocks note in WR3 exists to prevent.
+ *
+ * SAID ONCE PER SECTION, ON THE ROW THAT LEADS IT. Every counted row called
+ * this, and the frame's `meta` said "205 videos in the window" over them, and
+ * the rival row's basis is a full sentence of its own: the same denominator
+ * three times in a section eight lines tall, in 11px mono, which is the
+ * metadata face — and a wrapped three-line mono paragraph reads as a fault
+ * rather than as apparatus. The artboard's §4 sub-lines are one short line
+ * each ("videos this week"), its meta is "this week", and the n is nowhere
+ * repeated.
+ *
+ * So the first row carries the "of N" — it is the row a reader meets, and its
+ * sub-line is the one marked `data-copy="level"`, which is rule (b) satisfied
+ * where the level actually is — and every row under it states its own basis
+ * against the same n, unrepeated.
  */
 const denominatorOf = (videos: number | null, what: string): string =>
   videos == null ? what : `${what} · of ${fmtInt(videos)} videos dated in the window`
@@ -185,7 +222,6 @@ function nameRest(groups: readonly SalesGroup[], total: number | null): { head: 
 export const forSales: Block<{ sales: ForSalesData }> = {
   key: 'weekly.sales',
   title: 'For sales',
-  question: 'What are customers pushing back on, and what are they buying on?',
 
   render(data, mode = 'app', ctx) {
     const s = data.sales
@@ -197,13 +233,17 @@ export const forSales: Block<{ sales: ForSalesData }> = {
     const frame = (children: ReactNode) => (
       <BlockFrame
         title={forSales.title}
-        question={forSales.question}
         mode={mode}
-        meta={s.videos != null ? `${fmtInt(s.videos)} videos in the window` : undefined}
+        // THE ARTBOARD'S META IS THE PERIOD ("this week"), NOT THE n. This
+        // said "205 videos in the window" over three rows whose sub-lines
+        // each said "of 205 videos dated in the window" — the section's own
+        // denominator, three times in eight lines. The n is stated once, on
+        // the leading row, where it is also the level node.
+        meta={s.window ? `${shortDate(s.window.from)} – ${shortDate(s.window.to)}` : undefined}
         footer={mode === 'email'
           ? <a href={briefHref} style={{ color: EMAIL.ink }}>{s.brief.label}</a>
           : <Link href={briefHref} className="hover:underline">{s.brief.label}</Link>}
-        footerNote={s.window ? `${shortDate(s.window.from)} – ${shortDate(s.window.to)}` : undefined}
+
       >
         {children}
       </BlockFrame>
@@ -248,8 +288,12 @@ export const forSales: Block<{ sales: ForSalesData }> = {
             // citations whose audience is `competitor:*` — drawn from the same
             // pool as the row above, not beside it — so two adjacent counts
             // over one n invited a reader to add them together.
-            of={denominatorOf(s.videos, 'videos under that rival’s content, never under yours — and inside the count above')}
-            denominated={s.videos != null}
+            // NO "of N" HERE, AND SO NOT A LEVEL. The n is the row above's
+            // and is printed there; this line's job is to say which pool
+            // these videos come from and that they are not a second count to
+            // be added to the first.
+            of="under that rival’s content, never under yours — and inside the count above"
+            denominated={false}
             last={s.switchingTotal == null}
           />
         ) : null}
@@ -275,8 +319,27 @@ export const forSales: Block<{ sales: ForSalesData }> = {
             the card was handed praise and the top objection only, so the
             clause pointed at nothing. They are the one row whose DIRECTION the
             product refuses to resolve, which makes the commenter's own
-            sentence the most useful thing §4 can hand a salesperson. */}
-        <WordsCard quotes={[...s.praise, ...(top?.quotes.slice(0, 1) ?? []), ...s.switching]} mode={mode} />
+            sentence the most useful thing §4 can hand a salesperson.
+
+            EACH UNDER ITS OWN ROW NAME. Three kinds of sentence in one box
+            with one heading is what made "Beautiful, but I cannot justify that
+            for a bag" read as praise; the objection's name is the row's own
+            label, so the box and the rows above it use one vocabulary. */}
+        <WordsCard
+          mode={mode}
+          rows={[
+            { label: 'Praise', quotes: s.praise },
+            // "Objection", NOT the group's label. A cite is a plain string and
+            // the block has no way to mark it; the group's label is a MODEL's
+            // words whenever `grouping` is 'theme' (`named()`, ten lines up),
+            // and rule (c) sweeps unmarked markup — "Concerns about declining
+            // quality" is a real label off the register. The row directly
+            // above names the objection in a node that IS marked, so the kind
+            // word is all this line has to carry.
+            { label: 'Objection', quotes: top?.quotes.slice(0, 1) ?? [] },
+            { label: 'Moving between brands', quotes: s.switching },
+          ]}
+        />
 
         {s.videos == null ? <Note mode={mode}>{NO_DENOMINATOR}</Note> : null}
         <Note mode={mode}>{groupingLine(s.grouping)}</Note>

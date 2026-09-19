@@ -3,7 +3,7 @@ import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { markupText, render } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
-import { WEEKLY_BLOCK_KEYS, WEEKLY_EMAIL_WIDTH, WEEKLY_RULE, weeklySubject } from '@/lib/reports/weekly'
+import { WEEKLY_BLOCK_KEYS, WEEKLY_CANVAS_GUTTER, WEEKLY_CARD_WIDTH, WEEKLY_EMAIL_WIDTH, WEEKLY_RULE, weeklySubject } from '@/lib/reports/weekly'
 import { WEEKLY_SNAPSHOT_VERSION, isWeeklyData, staleWeeklySnapshot, type WeeklySnapshotData } from '@/lib/reports/weekly-build'
 import { formingFixture, quietFixture, thinFixture, weeklyFixture } from '@/components/blocks/weekly/fixture'
 import { WeeklyEmail } from './weekly'
@@ -35,9 +35,19 @@ const body = (data: WeeklySnapshotData) =>
 const words = (data: WeeklySnapshotData) => markupText(body(data))
 
 describe('the weekly email', () => {
-  it('is 640 wide, the mock’s width, against the digest’s 600', () => {
+  // TWO WIDTHS, AND THE CARD IS THE ONE THAT BINDS. The artboard's outer
+  // element is 640 with 20px of canvas padding, so the white card is 600 —
+  // which the design system states in so many words (§4, "600px card on a
+  // #F6F7F8 canvas"). The 640 stays a real number because it is the artefact's
+  // geometry; the arithmetic is what this asserts, rather than a `max-width`
+  // on a centring `<td>`, where max-width is not honoured in CSS 2.1 and is
+  // ignored outright by Outlook's Word renderer.
+  it('is a 600 card inside the mock’s 640 frame', () => {
     expect(WEEKLY_EMAIL_WIDTH).toBe(640)
-    expect(body(snapshot())).toContain('max-width:640px')
+    expect(WEEKLY_CARD_WIDTH).toBe(600)
+    expect(WEEKLY_CARD_WIDTH + 2 * WEEKLY_CANVAS_GUTTER).toBe(WEEKLY_EMAIL_WIDTH)
+    expect(body(snapshot())).toContain('max-width:600px')
+    expect(body(snapshot())).not.toContain('max-width:640px')
   })
 
   it('prints all six sections, in the stored order, on every state', () => {
@@ -63,6 +73,17 @@ describe('the weekly email', () => {
     expect(text.split(WEEKLY_RULE).length - 1).toBe(1)
   })
 
+  // THE LEAN IS FOR SPEECH. The masthead rule was the artefact's only
+  // non-speech italic — sans italic 12px muted — where every other italic here
+  // is a commenter's words in serif (`BlockQuote`). DESIGN.md: "Italic is
+  // semantic, never decorative", the rule `coverage.tsx` already quotes as its
+  // reason for not reprinting this sentence at the foot.
+  it('sets the masthead rule upright — italic on this artefact means a voice', () => {
+    const markup = body(snapshot())
+    const rule = markup.slice(markup.indexOf(WEEKLY_RULE) - 400, markup.indexOf(WEEKLY_RULE))
+    expect(rule).not.toContain('font-style:italic')
+  })
+
   it('stamps the reading date, which M9 will read back out of `data`', () => {
     // In the product's own date form, never raw ISO beside "6 Sep - 13 Sep".
     // It sits in the footer's provenance line now, where the artboard keeps
@@ -81,7 +102,10 @@ describe('the weekly email', () => {
   })
 
   it('prints the update behind this one on the date row', () => {
-    expect(words(snapshot())).toContain('6 Sep – 13 Sep · previous update 5 Sep')
+    // The spaces inside each clause are no-break spaces, so the line can only
+    // wrap at the "·" — on a phone it wrapped inside "5 Sep". The reader sees
+    // the same words either way.
+    expect(words(snapshot()).replace(/\u00a0/g, ' ')).toContain('6 Sep – 13 Sep · previous update 5 Sep')
   })
 
   it('says there is no previous update rather than dropping the clause', () => {

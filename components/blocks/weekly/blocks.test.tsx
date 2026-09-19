@@ -22,6 +22,68 @@ describe('the six blocks', () => {
     }
   })
 
+  // THE CLIENT-FACING LANGUAGE BAN LIST, on the artefact that reaches a client
+  // without them opening anything (design-system/verbatim/MASTER.md:311,
+  // Redesign Spec §1: "no run, pass, gather, scraped, pipeline, corpus,
+  // run id"). `gathered` was the label of a 21px figure in WR3 and led WR6's
+  // record line, three prints on one email, while the page reading the SAME
+  // loader said "newly found" / "Found" / "videos this update found"
+  // (components/pages/week/came-in.tsx). One reading, two vocabularies.
+  //
+  // FOUR OF THE SEVEN, AND THE OMISSIONS ARE DELIBERATE. *run* and *pass* have
+  // innocent English on exactly this artefact — the hero sentence is
+  // "'Zips failing after a year' RAN at 3.1× its usual rate" — so a flat
+  // matcher on them would fail correct copy, which is how a guard stops being
+  // read. These four have no innocent use in a reading surface's words.
+  const BANNED = [/\bgather(s|ed|ing)?\b/i, /\bscraped\b/i, /\bpipelines?\b/i, /\bcorpus\b/i]
+
+  it('prints no word from the client-facing language ban list', () => {
+    for (const data of STATES) {
+      for (const block of weeklyBlocksFor()) {
+        for (const mode of MODES) {
+          const text = renderText(block.render(data, mode, ctx))
+          for (const re of BANNED) expect(text, `${block.key} · ${mode}`).not.toMatch(re)
+        }
+        const empty = block.emptyState(data)
+        if (empty) for (const re of BANNED) expect(empty, block.key).not.toMatch(re)
+      }
+    }
+  })
+
+  // NO PRINTED QUESTION, ON ANY BLOCK, IN ANY MODE. `BlockFrame` prints
+  // `Block.question` under the heading on a docblock claim that "every
+  // artboard prints one" — and every PRINTED artboard prints zero
+  // (WeeklyReport included). Six extra lines of narrator over six eyebrows is
+  // what mock-gap §7 calls "the single most repeated extra", against
+  // design-system.md §0 rule 8, "no explanatory micro-copy inside a tile".
+  // Declared nowhere rather than suppressed per mode, because the share page
+  // renders these same six in 'app' mode and IS this artefact.
+  //
+  // The six sentences by name rather than a bare `/\?/`: a commenter's own
+  // words may be a question ("Does the strap come off?") and rule (c)'s
+  // `quote` exemption exists because this artefact prints them.
+  const FORMER_QUESTIONS = [
+    'What is the state of the week, and does anything need me?',
+    'What is the state of this update, and does anything need me?',
+    'How are we seen on the things we chose to be known for?',
+    'What did this update actually read?',
+    'What are customers pushing back on, and what are they buying on?',
+    'Who should we answer, and what should we make?',
+    'How sound is this reading?',
+  ]
+
+  it('declares no question, so none is printed in any of the three modes', () => {
+    for (const block of weeklyBlocksFor()) {
+      expect(block.question, block.key).toBeUndefined()
+      for (const data of STATES) {
+        for (const mode of MODES) {
+          const text = renderText(block.render(data, mode, ctx))
+          for (const q of FORMER_QUESTIONS) expect(text, `${block.key} · ${mode}`).not.toContain(q)
+        }
+      }
+    }
+  })
+
   // The status note pins `forSales` as a block over the SECTION alone, so This
   // week's own loader can hand it `{ sales }` without building a whole weekly
   // reading. Since block D wave 2 that section is `ForSalesData` — the counted
@@ -301,14 +363,95 @@ describe('WR2 · where things stand', () => {
   })
 })
 
+describe('the artefact on a phone', () => {
+  // A PHONE, AND design-system.md §4 ALLOWS NO MEDIA QUERY TO FIX IT WITH
+  // ("Tables and inline styles only — no classes, no CSS variables, no
+  // flex/grid"), so the only responsive mechanism this artefact has is a
+  // proportional column. Measured at 390 on the populated fixture: the bar
+  // track goes 48px → 108px and at 320 22px → 58px, with the desktop card
+  // unchanged at 600 and the label column at 152 where it was 150.
+  it('sizes WR2’s label column by share of the row, not in fixed pixels', () => {
+    const markup = render(WEEKLY_BLOCKS['weekly.subjects'].render(weeklyFixture(), 'email', ctx))
+    expect(markup).toContain('width="28%"')
+    expect(markup).not.toContain('width:150px')
+  })
+
+  // AND NOTHING SETS A FLOOR UNDER THE CARD. `MoverRows` put `nowrap` on the
+  // whole right-hand cell, which held the card at ~356px — a horizontally
+  // scrolling email on a 320px screen. A share and its denominator still may
+  // not be split (`movers.tsx:291-305`); the badge may drop below them.
+  it('keeps a reading unbreakable and lets its badge wrap', () => {
+    const markup = render(WEEKLY_BLOCKS['weekly.content'].render(weeklyFixture(), 'email', ctx))
+    expect(markup).toContain('white-space:nowrap">5.1% · 71 of 1,388')
+    expect(markup).not.toContain('white-space:nowrap;padding-left:14px"><span data-copy="figure" style="white-space:nowrap">5.1%')
+  })
+})
+
 describe('WR3 · what came in this week', () => {
   const block = WEEKLY_BLOCKS['weekly.incoming']
 
   it('states the update’s counts as a contribution to the month', () => {
     const text = renderText(block.render(weeklyFixture(), 'app', ctx))
-    expect(text).toContain('271 videos gathered')
+    expect(text).toContain('271 videos found')
     expect(text).toContain('264 analysed')
     expect(text).toContain('the month so far holds 2,359 videos, dated by when people wrote')
+  })
+
+  // THE COUNTS OPEN TO THEIR EVIDENCE (weekly.s3.counts). `StatRow` rendered a
+  // plain `<span data-copy="figure">`, so the four biggest numbers on the
+  // artefact went nowhere and the only clickable thing in §3 was the block's
+  // own footer. The artboard makes each figure that HAS a destination an `<a>`
+  // with a dotted evidence underline (312, 2,960, 41) and leaves "3 new
+  // themes" — which has no such page — a plain span.
+  it('opens its counts to This week, and only the counts something lists', () => {
+    const data = weeklyFixture()
+    for (const mode of ['app', 'email'] as RenderMode[]) {
+      const markup = render(WEEKLY_BLOCKS['weekly.incoming'].render(data, mode, ctx))
+      // 271, 264 and 41 each open; the theme count does not; plus the block's
+      // own footer link — four, not five and not one.
+      expect(markup.split('dashboard/week').length - 1, mode).toBe(4)
+      for (const v of ['271', '264', '41']) {
+        expect(markup, `${v} · ${mode}`).toMatch(
+          new RegExp(`<a[^>]*dashboard/week[^>]*>(<span[^>]*>)?${v}<`),
+        )
+      }
+      // The theme count is a plain figure — nothing lists the themes.
+      expect(markup, mode).toMatch(/<span data-copy="figure"[^>]*>5</)
+    }
+  })
+
+  // NO DOOR ON A DASH, and none on paper. Where a count is not recorded there
+  // is nothing behind the figure to open; and a dotted underline in a PDF is
+  // decoration on something a reader cannot click, which is the rule
+  // `claim-popover.tsx` states and `market`'s figures gave theirs up for.
+  it('draws no evidence affordance in print, and none on an unrecorded count', () => {
+    expect(render(WEEKLY_BLOCKS['weekly.incoming'].render(weeklyFixture(), 'print', ctx)))
+      .not.toContain('decoration-dotted')
+    const forming = render(WEEKLY_BLOCKS['weekly.incoming'].render(formingFixture(), 'app', ctx))
+    // Its `analysed` and `quotesTotal` are both null, so the only count that
+    // opens is "videos found" — that link plus the footer's.
+    expect(forming.split('dashboard/week').length - 1).toBe(2)
+  })
+
+  // ONE TINTED BAND, NOT ONE PER THEME, AND THE PILL IS THE 20% TINT.
+  // `NewBlock` was rendered per theme, so three new themes drew three
+  // identical full-width bands each with its own "New" pill where the artboard
+  // draws exactly one; and the pill painted `EMAIL.mixed` (#E6B03C), a data
+  // hue from design-system §2 spent on a label chip, where the artboard's is
+  // `rgba(230,176,60,.20)` — `EMAIL.mixedTint`, the same constant
+  // `BlockMovement`'s chips on this page already use.
+  it('draws one New block for however many themes are in it, in the tint', () => {
+    const data = weeklyFixture()
+    expect(data.incoming.newThemes.length).toBeGreaterThan(1)
+    const email = render(WEEKLY_BLOCKS['weekly.incoming'].render(data, 'email', ctx))
+    expect(email.split(EMAIL.mixedTint).length - 1).toBe(1)
+    expect(email).not.toContain(EMAIL.mixed.toLowerCase())
+    expect(email.split('>New<').length - 1).toBe(1)
+    const app = render(WEEKLY_BLOCKS['weekly.incoming'].render(data, 'app', ctx))
+    expect(app.split('bg-inner').length - 1).toBe(1)
+    expect(app).toContain('bg-mixed/20')
+    // Every theme is still in it.
+    for (const t of data.incoming.newThemes) expect(markupText(app)).toContain(t.label)
   })
 
   // THE ARTBOARD'S BIG-NUMBER TIER (weekly.s3.counts). `text.figure` had been
@@ -528,6 +671,38 @@ describe('WR4 · for sales', () => {
     expect(Object.keys(figures)).toEqual(['sales_videos', 'objection_1_videos', 'objection_2_videos', 'objection_3_videos', 'switching_comments'])
     expect(blockAnswers(block, weeklyFixture()).quotes).toEqual(['e:3', 'e:2', 'e:9'])
   })
+
+  // THE SECTION'S DENOMINATOR, ONCE. Every counted row called `denominatorOf`,
+  // the frame's meta said "205 videos in the window" over them, and the rival
+  // row's basis is a sentence of its own — the same n three times in a section
+  // eight lines tall, at 11px mono, where a wrapped three-line mono paragraph
+  // reads as a fault. The artboard repeats it nowhere. It is now on the
+  // leading row alone, which is also the row whose sub-line is the level node,
+  // so rule (b) is satisfied where the level actually is.
+  it('states the section’s denominator once, on the row that leads it', () => {
+    for (const mode of MODES) {
+      const markup = render(block.render(weeklyFixture(), mode, ctx))
+      const text = markupText(markup)
+      expect(text.split('of 205 videos').length - 1, mode).toBe(1)
+      expect(text, mode).not.toContain('205 videos in the window')
+      // And the level still carries its evidence.
+      expect(copyViolations(markup).filter((v) => v.rule === 'level-denominator'), mode).toEqual([])
+    }
+  })
+
+  // EACH QUOTE SAYS WHICH ROW IT IS FROM. The card pooled praise, the top
+  // objection and a switch under one fixed heading, so "Beautiful, but I
+  // cannot justify that for a bag" printed three lines under "IN THE
+  // CUSTOMERS' WORDS" and read as an endorsement — while the switching row
+  // above promised "· 1 below" and pointed into a box of three.
+  it('names the row each quote in the words card came from', () => {
+    for (const mode of MODES) {
+      const text = renderText(WEEKLY_BLOCKS['weekly.sales'].render(weeklyFixture(), mode, ctx))
+      expect(text, mode).toContain('Praise ·')
+      expect(text, mode).toContain('Objection ·')
+      expect(text, mode).toContain('Moving between brands ·')
+    }
+  })
 })
 
 describe('WR5 · for content', () => {
@@ -536,14 +711,48 @@ describe('WR5 · for content', () => {
   it('names what is worth a reply, what is rising and what worked, each with its n', () => {
     const text = renderText(block.render(weeklyFixture(), 'app', ctx))
     expect(text).toContain('Does the strap come off?')
-    expect(text).toContain('What moved most · from this month’s reading')
-    expect(text).toContain('9.4% · 130 of 1,388')
+    expect(text).toContain('What moved most')
+    // `t2`, not `t1`: §1's hero leads with "Will it survive a wet commute" and
+    // §5 no longer repeats it (`risingMovers`).
+    expect(text).toContain('5.1% · 71 of 1,388')
     // Run-indexed, unlike everything above it in this block, and the line has
     // to say so under a masthead that reads "this month so far".
     // THE LABEL IS THE READER'S WORD AND THE MULTIPLE PRINTS ITS n. The block
     // printed the stored slug (`promotional`, and one day `trend-riding`) and a
     // multiple over an unstated population.
     expect(text).toContain('Talking head outperformed Commute POV')
+  })
+
+  // THREE ROWS OF ONE SHAPE, AND ONE ALL-CAPS EYEBROW IN THE SECTION. §5 drew
+  // a counted row, then a `Rail` with a mono uppercase eyebrow over sentence
+  // rows carrying amber verdict pills mid-line, then a second counted row —
+  // three shapes where the artboard draws three of one, and a fourth and
+  // fifth all-caps eyebrow on an artefact that has one per section. The
+  // rename to "What moved most" is rule (c) and is not the issue.
+  it('draws its three rows in one shape and spends no extra eyebrow', () => {
+    for (const mode of MODES) {
+      const markup = render(block.render(weeklyFixture(), mode, ctx))
+      // ONE uppercase node in the section, and it is the section's own
+      // heading — the artboard's rule, one eyebrow per section.
+      expect(markup.split('uppercase').length - 1, mode).toBe(1)
+      // The intent label is on the cite now, in the row's own rhythm.
+      expect(markupText(markup), mode).toContain('Question · under your post')
+    }
+  })
+
+  // §5 NEVER REPEATS §1's OBJECT. `headlineObject`'s third arm is literally
+  // `category.growing`, and §5's rows are `category.growing`'s top few — so
+  // whenever the lead object was a category mover, which is the common case,
+  // the artefact stated it twice: the 17.5px hero line at the top and a
+  // supporting row near the foot, same object, same share, same denominator.
+  // The artboard's §5 names three themes §1 does not.
+  it('does not name in “what moved most” the object the hero sentence led with', () => {
+    const data = weeklyFixture()
+    const hero = markupText(render(WEEKLY_BLOCKS['weekly.week'].render(data, 'app', ctx)))
+    expect(hero).toContain('Will it survive a wet commute')
+    for (const m of data.content.rising) expect(hero).not.toContain(m.label)
+    // And the row it would have taken is replaced, not left as a gap.
+    expect(data.content.rising.map((m) => m.id)).toEqual(['t2'])
   })
 
   // THE ARTBOARD'S COUNTED ROWS (block D wave 2). Three quote rails and no
@@ -601,10 +810,43 @@ describe('WR5 · for content', () => {
 describe('WR6 · coverage', () => {
   const block = WEEKLY_BLOCKS['weekly.coverage']
 
-  it('prints the record’s own line and every refusal it already carries', () => {
-    const text = renderText(block.render(weeklyFixture(), 'app', ctx))
+  // ONE LINE, AND THE LINE IS THE WHOLE SECTION. The header says "Coverage, in
+  // one line" and the block printed `c.line`, then every sentence of
+  // `recordLines` (six on this fixture), then the Reddit cap — eight blocks of
+  // text under a heading that promises one. The artboard's §6 is the mono line
+  // and the link grid. The sentences are one click away, behind the "the
+  // record →" link in this block's own header.
+  it('prints the record in one line, and nothing under it', () => {
+    const markup = render(block.render(weeklyFixture(), 'app', ctx))
+    const text = markupText(markup)
     expect(text).toContain('2,359 videos')
-    expect(text).toContain('comparisons were refused')
+    // The record's own prose, which OV6 and the monthly §8 print and this
+    // artefact must not: any one of these sentences means `lines` is back.
+    expect(text).not.toContain('carried conversation in this window')
+    expect(text).not.toContain('Of everything we have ever read for you')
+    expect(text).not.toContain('Reading as at')
+    expect(text).not.toContain('Reddit comments are capped at')
+  })
+
+  // THE REFUSALS STAY PRINTED, ON THE LINE, where the artboard ends it
+  // ("· 2 comparisons refused"). A refusal is a real answer (AGENTS.md); what
+  // moved is that the REASONS are behind the record link rather than in a
+  // sentence of their own among four others.
+  it('ends the line with the comparisons this artefact refused', () => {
+    for (const mode of MODES) {
+      expect(renderText(block.render(weeklyFixture(), mode, ctx)), mode).toContain('2 comparisons refused')
+    }
+  })
+
+  // NULL IS NOT ZERO, and zero is not a sentence. A `report_snapshots` row
+  // frozen before the field existed cannot say the number and says nothing
+  // rather than claiming none were refused.
+  it('says nothing about refusals where it cannot count them, and where there are none', () => {
+    const data = weeklyFixture()
+    for (const refused of [null, 0]) {
+      const text = renderText(block.render({ ...data, coverage: { ...data.coverage, refused } }, 'app', ctx))
+      expect(text, String(refused)).not.toContain('refused')
+    }
   })
 
   // THE ARTBOARD'S §6 (block D wave 2): the update's own videos lead the line,
@@ -612,13 +854,8 @@ describe('WR6 · coverage', () => {
   // the one `methodLines` line no reading surface has ever printed — is here.
   it('leads with this update’s videos, on the clock they are on', () => {
     for (const mode of MODES) {
-      expect(renderText(block.render(weeklyFixture(), mode, ctx))).toContain('271 videos gathered this week ·')
+      expect(renderText(block.render(weeklyFixture(), mode, ctx))).toContain('271 videos found this week ·')
     }
-  })
-
-  it('prints the Reddit cap, which no reading surface printed before', () => {
-    expect(renderText(block.render(weeklyFixture(), 'app', ctx)))
-      .toContain('Reddit comments are capped at')
   })
 
   // AND IT DOES NOT REPRINT THE RULE. The same 26 italic words were drawn

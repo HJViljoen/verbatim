@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-head-element, @next/next/no-page-custom-font -- an email document, not a page */
 import type { BlockContext } from '@/lib/blocks/types'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { WEEKLY_EMAIL_WIDTH, periodNounFor, weeklyDateLine, weeklyEyebrow, weeklyFooterLines, weeklyHeadline, weeklyLinks, weeklyRuleFor } from '@/lib/reports/weekly'
+import { WEEKLY_CANVAS_GUTTER, WEEKLY_CARD_WIDTH, periodNounFor, weeklyDateLine, weeklyEyebrow, weeklyFooterLines, weeklyHeadline, weeklyLinks, weeklyRuleFor } from '@/lib/reports/weekly'
 import { staleWeeklySnapshot, type WeeklySnapshotData } from '@/lib/reports/weekly-build'
 import { weeklyBlocksFor } from '@/components/blocks/weekly'
 import { Button, Hairline, text } from './primitives'
@@ -9,9 +9,10 @@ import { Button, Hairline, text } from './primitives'
 /**
  * The weekly report as an email (Phase 1 WP17, design §3 Artefact WR).
  *
- * 640 WIDE, against the digest's 600 — the mock's own width
- * (`mock-sealand/spec/artboards.md`). The digest keeps its 600; this is a
- * different artefact and the two are not made to agree by making one wrong.
+ * A 600 CARD ON A 640 CANVAS — the artboard's two widths, which this file had
+ * collapsed into one 640 on the card (`WEEKLY_CARD_WIDTH`, which carries the
+ * proof). The digest's card is 600 too; they agree because the design system
+ * says one thing, not because one was made to match the other.
  *
  * SIX SECTIONS, IN THE STORED ORDER, AND NONE OF THEM IS EVER DROPPED. The
  * digest drops a section whose tile returns null, for a reason its own comment
@@ -38,6 +39,7 @@ export interface WeeklyEmailProps {
 }
 
 const presentation = { role: 'presentation', cellPadding: 0, cellSpacing: 0, border: 0 } as const
+
 
 export function WeeklyEmail({ data, shareUrl, appUrl, attached, ctx, preheader }: WeeklyEmailProps) {
   // A ROW AN OLDER BUILD WROTE IS A SENTENCE, NOT A STACK TRACE. `data.reading`
@@ -81,8 +83,8 @@ export function WeeklyEmail({ data, shareUrl, appUrl, attached, ctx, preheader }
         <table width="100%" {...presentation} style={{ borderCollapse: 'collapse', background: EMAIL.canvas }}>
           <tbody>
             <tr>
-              <td align="center" style={{ padding: '24px 12px' }}>
-                <table width="100%" {...presentation} style={{ borderCollapse: 'separate', maxWidth: WEEKLY_EMAIL_WIDTH, background: EMAIL.card, borderRadius: 6, border: `1px solid ${EMAIL.border}` }}>
+              <td align="center" style={{ padding: `${WEEKLY_CANVAS_GUTTER}px ${WEEKLY_CANVAS_GUTTER}px 24px` }}>
+                <table width="100%" {...presentation} style={{ borderCollapse: 'separate', maxWidth: WEEKLY_CARD_WIDTH, background: EMAIL.card, borderRadius: 6, border: `1px solid ${EMAIL.border}` }}>
                   <tbody>
                     <tr>
                       <td style={{ padding: '24px 28px 4px' }}>
@@ -101,12 +103,27 @@ export function WeeklyEmail({ data, shareUrl, appUrl, attached, ctx, preheader }
                         <table width="100%" {...presentation} style={{ borderCollapse: 'collapse', marginTop: 9 }}>
                           <tbody>
                             <tr>
-                              <td style={{ ...text.mono, color: EMAIL.muted, fontSize: 12 }}>{weeklyDateLine(data.period, data.reading.update.previous)}</td>
-                              <td align="right" style={{ ...text.mono, color: EMAIL.muted, fontSize: 12, whiteSpace: 'nowrap' }}>{data.company}</td>
+                              {/* TOP-ALIGNED, BOTH. A `<td>` centres its
+                                  content by default, so when the left cell
+                                  wrapped to two lines on a phone the tenant
+                                  floated half a line below the date it sits
+                                  beside and read as a third, stray line. */}
+                              <td style={{ ...text.mono, color: EMAIL.muted, fontSize: 12, verticalAlign: 'top' }}>{weeklyDateLine(data.period, data.reading.update.previous)}</td>
+                              <td align="right" style={{ ...text.mono, color: EMAIL.muted, fontSize: 12, whiteSpace: 'nowrap', verticalAlign: 'top' }}>{data.company}</td>
                             </tr>
                           </tbody>
                         </table>
-                        <div style={{ ...text.small, fontStyle: 'italic', marginTop: 10 }}>{weeklyRuleFor(periodNounFor(data.reading.window))}</div>
+                        {/* THE RULE, AND NOT IN A BORROWED FACE. It was sans
+                            italic at 12px — the artefact's ONLY non-speech
+                            italic, where every other lean on this page is a
+                            commenter's words in serif italic (`BlockQuote`).
+                            DESIGN.md: "Italic is semantic, never decorative",
+                            and `coverage.tsx` quotes that exact rule as its
+                            reason for not reprinting this sentence at the
+                            foot. The identity reserves the lean for speech;
+                            the sentence stays where a reader meets their first
+                            number, in the muted ink it already had. */}
+                        <div style={{ ...text.small, marginTop: 10 }}>{weeklyRuleFor(periodNounFor(data.reading.window))}</div>
                       </td>
                     </tr>
                     <tr>
@@ -199,8 +216,8 @@ function StaleWeekly({ title, line }: { title: string; line: string }) {
         <table width="100%" {...presentation} style={{ borderCollapse: 'collapse', background: EMAIL.canvas }}>
           <tbody>
             <tr>
-              <td align="center" style={{ padding: '24px 12px' }}>
-                <table width="100%" {...presentation} style={{ borderCollapse: 'separate', maxWidth: WEEKLY_EMAIL_WIDTH, background: EMAIL.card, borderRadius: 6, border: `1px solid ${EMAIL.border}` }}>
+              <td align="center" style={{ padding: `${WEEKLY_CANVAS_GUTTER}px ${WEEKLY_CANVAS_GUTTER}px 24px` }}>
+                <table width="100%" {...presentation} style={{ borderCollapse: 'separate', maxWidth: WEEKLY_CARD_WIDTH, background: EMAIL.card, borderRadius: 6, border: `1px solid ${EMAIL.border}` }}>
                   <tbody>
                     <tr>
                       <td style={{ padding: '24px 28px' }}>

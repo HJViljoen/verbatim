@@ -43,21 +43,43 @@ import { weeklyPeriod } from '@/lib/reports/weekly'
  * and the first row states it: the month these videos fall into.
  */
 function StatRow({
-  value, label, note, last = false, mode,
+  value, label, note, href, last = false, mode,
 }: {
   value: string
   label: string
   note?: ReactNode
+  /**
+   * Where the videos behind this count are listed, or undefined where nothing
+   * lists them.
+   *
+   * THE COUNT IS THE DOOR (weekly.s3.counts). In the artboard every stat
+   * figure that HAS somewhere to go is an `<a>` with a dotted evidence
+   * underline — 312, 2,960 and 41 — and "3 new themes", which has no such
+   * page, is a plain span. The build rendered all four as plain spans, so the
+   * four biggest numbers on the artefact went nowhere and the only clickable
+   * thing in §3 was the block's own footer.
+   *
+   * THE DOTTED UNDERLINE IS SPENT ONLY ON SOMETHING THAT OPENS, which is the
+   * rule `claim-popover.tsx` states and the reason `market`'s figures gave
+   * theirs up this same wave: an artboard is a still and can draw the ink
+   * without the behaviour. Here the behaviour is real — these are links — so
+   * the ink is earned, and it is visually distinct from the green action links
+   * on purpose: this is evidence, not navigation.
+   */
+  href?: string
   last?: boolean
   mode: RenderMode
 }) {
   if (mode === 'email') {
+    const figure = <span data-copy="figure" style={{ ...text.figure, fontSize: 21 }}>{value}</span>
     return (
       <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} border={0} style={{ borderCollapse: 'collapse', borderSpacing: 0, borderBottom: last ? undefined : `1px solid ${EMAIL.hairline}` }}>
         <tbody>
           <tr>
             <td width={74} style={{ width: 74, padding: '9px 14px 9px 0', verticalAlign: 'top' }}>
-              <span data-copy="figure" style={{ ...text.figure, fontSize: 21 }}>{value}</span>
+              {href
+                ? <a href={href} style={{ color: EMAIL.ink, textDecoration: 'underline', textDecorationStyle: 'dotted', textDecorationThickness: 1, textUnderlineOffset: 4, textDecorationColor: EMAIL.muted }}>{figure}</a>
+                : figure}
             </td>
             <td style={{ padding: '9px 0', verticalAlign: 'top' }}>
               <div style={{ fontFamily: FONT.sans, fontSize: 14, color: EMAIL.ink2 }}>{label}</div>
@@ -68,9 +90,16 @@ function StatRow({
       </table>
     )
   }
+  const FIGURE = 'w-[74px] flex-none font-mono text-[21px] font-semibold leading-none tracking-[-0.02em] tabular-nums'
+  // PRINT IS NOT A BROWSER. A dotted underline on paper is decoration on
+  // something a reader cannot open, which is the rule this file quotes above;
+  // the print arm keeps the figure and drops the affordance.
+  const figure = href && mode === 'app'
+    ? <a href={href} data-copy="figure" className={`${FIGURE} underline decoration-dotted decoration-muted-foreground decoration-1 underline-offset-4`}>{value}</a>
+    : <span data-copy="figure" className={FIGURE}>{value}</span>
   return (
     <div className={`flex min-h-[44px] items-baseline gap-3.5 py-2 ${last ? '' : 'border-b border-border/70'}`}>
-      <span data-copy="figure" className="w-[74px] flex-none font-mono text-[21px] font-semibold leading-none tracking-[-0.02em] tabular-nums">{value}</span>
+      {figure}
       <span className="min-w-0">
         <span className="block text-[14px] text-secondary-foreground">{label}</span>
         {note ? <span className="mt-0.5 block font-mono text-[11px] leading-snug text-muted-foreground">{note}</span> : null}
@@ -79,12 +108,32 @@ function StatRow({
   )
 }
 
-/** The artboard's tinted inner block with its pill — the one row in §3 a
- *  reader is meant to stop at. Two nesting levels, never a third. */
+/**
+ * The artboard's tinted inner block with its pill — the one row in §3 a reader
+ * is meant to stop at. Two nesting levels, never a third.
+ *
+ * ONE BLOCK, HOWEVER MANY THEMES ARE IN IT. It was rendered once PER new
+ * theme, so a week with three of them drew three identical full-width tinted
+ * bands one under the other, each with its own "New" pill, where the artboard
+ * draws exactly one. The stat row above already says how many there are and
+ * how many are shown ("5 themes heard for the first time · the 3 largest are
+ * below"); the pill's job is to mark the block, not to count it.
+ *
+ * AND THE PILL IS THE 20% TINT, NOT THE DATA HUE. It painted `EMAIL.mixed`
+ * (`#E6B03C`), which `spec/design-system.md` §2 lists under "data buckets —
+ * the only hues on a page besides the green": a value colour, spent on a label
+ * chip. The artboard's pill is `rgba(230,176,60,.20)` at the same 10px/500,
+ * 2px 7px, radius 10 — which is `EMAIL.mixedTint` exactly, the constant whose
+ * own comment calls it "the artboards' attention tint". It was also
+ * inconsistent inside one email: `BlockMovement`'s chips four inches up this
+ * page already use `mixedTint`, so two amber chips sat on one artefact, one
+ * tinted and one solid, and the solid one was the loudest pixel on a 6,500px
+ * scroll.
+ */
 function NewBlock({ mode, children }: { mode: RenderMode; children: ReactNode }) {
   const pill = mode === 'email'
-    ? <span style={{ display: 'inline-block', fontFamily: FONT.sans, fontSize: 10, fontWeight: 500, padding: '2px 7px', borderRadius: 10, whiteSpace: 'nowrap', background: EMAIL.mixed, color: EMAIL.ink }}>New</span>
-    : <span className="inline-block flex-none rounded-full bg-mixed px-[7px] py-[2px] text-[10px] font-medium leading-normal">New</span>
+    ? <span style={{ display: 'inline-block', fontFamily: FONT.sans, fontSize: 10, fontWeight: 500, padding: '2px 7px', borderRadius: 10, whiteSpace: 'nowrap', background: EMAIL.mixedTint, color: EMAIL.ink }}>New</span>
+    : <span className="inline-block flex-none rounded-full bg-mixed/20 px-[7px] py-[2px] text-[10px] font-medium leading-normal">New</span>
   if (mode === 'email') {
     return (
       <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} border={0} style={{ borderCollapse: 'collapse', borderSpacing: 0, background: EMAIL.inner, borderRadius: 6, marginTop: 8 }}>
@@ -105,6 +154,24 @@ function NewBlock({ mode, children }: { mode: RenderMode; children: ReactNode })
   )
 }
 
+/** One theme's sentence inside that block. Separated by a line rather than by
+ *  a second band, so the block stays one thing a reader stops at. */
+function NewTheme({ theme, mode }: { theme: { label: string; videos: number }; mode: RenderMode }) {
+  return (
+    <div
+      style={mode === 'email' ? { marginTop: 4 } : undefined}
+      className={mode === 'email' ? undefined : 'mt-1 first:mt-0'}
+    >
+      {/* The theme's own name — `pass_b_theme`, never scrubbed. */}
+      <strong data-copy="subject" data-slot="pass_b_theme">{theme.label}</strong> — heard for the first time in this update, in <span data-copy="figure">{fmtInt(theme.videos)}</span> {theme.videos === 1 ? 'video' : 'videos'}.
+      {/* NOT the mock's "26 of 1,388 category videos · first heard September":
+          that denominator is a MONTH figure attached to a count of THIS
+          UPDATE, which is two units in one sentence. The update's own count is
+          what this loader measured. */}
+    </div>
+  )
+}
+
 function Line({ mode, children }: { mode: RenderMode; children: ReactNode }) {
   return mode === 'email'
     ? <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '4px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>{children}</div>
@@ -120,7 +187,6 @@ function Note({ mode, children }: { mode: RenderMode; children: ReactNode }) {
 export const weeklyIncoming: Block<WeeklyData> = {
   key: 'weekly.incoming',
   title: 'What came in this week',
-  question: 'What did this update actually read?',
 
   render(data, mode = 'app', ctx) {
     const i = data.incoming
@@ -134,7 +200,6 @@ export const weeklyIncoming: Block<WeeklyData> = {
         // The window's own word: Sealand's "week" is thirty days long, and the
         // masthead beside this heading prints the real dates.
         title={data.section1.check.noun === 'week' ? weeklyIncoming.title : 'What came in this update'}
-        question={weeklyIncoming.question}
         mode={mode}
         meta={weeklyPeriod(data.window, data.month)}
         footer={mode === 'email'
@@ -159,14 +224,35 @@ export const weeklyIncoming: Block<WeeklyData> = {
             LOOKED, and the month counts by when people WROTE, so Össur's 618
             gathered sit beside a month of 449 and neither is inside the
             other. The sub-line says which is which. */}
+        {/* AND THE COUNTS ARE THE DOORS TO THEIR EVIDENCE. This week's "What
+            came in" is the surface that itemises all three — analysed and
+            newly found per audience, and the comments new on your subjects —
+            so the three counts it can account for carry it and "themes heard
+            for the first time" does not, which is exactly the artboard's own
+            split (312, 2,960 and 41 are `<a>`; "3 new themes" is a span). */}
         <StatRow
           mode={mode}
+          href={weekHref}
           value={fmtInt(i.gathered)}
-          label={i.gathered === 1 ? 'video gathered' : 'videos gathered'}
+          // "FOUND", NEVER "GATHERED". *gather* is on the client-facing
+          // language ban list (design-system/verbatim/MASTER.md:311, Redesign
+          // Spec §1: no run, pass, gather, scraped, pipeline, corpus, run id)
+          // and this was its loudest instance in the product — a 21px figure's
+          // own label. The page reading the SAME loader already has the
+          // compliant word: `components/pages/week/came-in.tsx` prints "newly
+          // found", "Found" and "videos this update found". The artboard's
+          // label here is bare "videos"; "found" is kept because the sub-line
+          // beside it names the other clock, and the contrast between when we
+          // LOOKED and when people WROTE is the whole point of the row.
+          label={i.gathered === 1 ? 'video found' : 'videos found'}
           note={i.monthVideos != null ? `the month so far holds ${fmtInt(i.monthVideos)} videos, dated by when people wrote` : null}
         />
         <StatRow
           mode={mode}
+          // NO DOOR ON A DASH. Where the count is not recorded there is
+          // nothing behind the figure to open, and a link on "—" promises a
+          // page that would answer the question the dash exists to refuse.
+          href={i.analysed != null ? weekHref : undefined}
           value={i.analysed != null ? fmtInt(i.analysed) : '—'}
           label={i.analysed != null ? 'analysed' : 'how many were analysed is not recorded for this update'}
         />
@@ -191,6 +277,7 @@ export const weeklyIncoming: Block<WeeklyData> = {
         <StatRow
           mode={mode}
           last
+          href={i.quotesTotal != null ? weekHref : undefined}
           value={i.quotesTotal != null ? fmtInt(i.quotesTotal) : '—'}
           label={i.quotesTotal === 1 ? 'new comment on your subjects' : 'new comments on your subjects'}
           note={i.quotesTotal == null ? i.quotesNote : null}
@@ -204,16 +291,11 @@ export const weeklyIncoming: Block<WeeklyData> = {
           </div>
         ) : null}
 
-        {i.newThemes.map((t) => (
-          <NewBlock key={t.label} mode={mode}>
-            {/* The theme's own name — `pass_b_theme`, never scrubbed. */}
-            <strong data-copy="subject" data-slot="pass_b_theme">{t.label}</strong> — heard for the first time in this update, in <span data-copy="figure">{fmtInt(t.videos)}</span> {t.videos === 1 ? 'video' : 'videos'}.
-            {/* NOT the mock's "26 of 1,388 category videos · first heard
-                September": that denominator is a MONTH figure attached to a
-                count of THIS UPDATE, which is two units in one sentence. The
-                update's own count is what this loader measured. */}
+        {i.newThemes.length > 0 ? (
+          <NewBlock mode={mode}>
+            {i.newThemes.map((t) => <NewTheme key={t.label} theme={t} mode={mode} />)}
           </NewBlock>
-        ))}
+        ) : null}
 
         {i.rivalPosts.length > 0 ? (
           i.rivalPosts.map((p) => (
@@ -273,7 +355,7 @@ export const weeklyIncoming: Block<WeeklyData> = {
     // the record and this block cannot disagree about them — and deliberately
     // NOT a share, because there is no honest denominator for one update.
     const out: FigureTable = {
-      update_videos: { value: data.incoming.gathered, unit: 'videos', label: 'videos this update gathered' },
+      update_videos: { value: data.incoming.gathered, unit: 'videos', label: 'videos this update found' },
     }
     if (data.incoming.monthVideos != null) {
       out.month_videos = { value: data.incoming.monthVideos, unit: 'videos', label: 'videos in the month so far' }
@@ -290,7 +372,7 @@ export const weeklyIncoming: Block<WeeklyData> = {
 
   emptyState(data) {
     return data.incoming.gathered === 0
-      ? 'This update gathered nothing — the section is here so the shape of the report does not change.'
+      ? 'This update found no videos in the days it covered — the section is here so the shape of the report does not change.'
       : null
   },
 }
