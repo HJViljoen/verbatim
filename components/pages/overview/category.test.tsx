@@ -35,6 +35,24 @@ describe('OV3 · what the category is saying', () => {
     expect(Number(end?.[1])).toBeLessThanOrEqual(232)
   })
 
+  // A FROZEN ARTEFACT PREDATES A REQUIRED FIELD (Block D wave 3, M6).
+  // `CategoryBlock.quiet` is new and required in Block D, and `overview
+  // .category` was already named by a section map at 017fc6e — so the brief
+  // deck hands a snapshot built then to this block today with a bare
+  // `as never`. `c.quiet.length` on it threw inside a SERVER COMPONENT, which
+  // takes the share link, the viewer, the Studio preview and the PDF route
+  // rather than one tile.
+  it('renders a stored surface that predates `quiet`, in every mode', () => {
+    for (const mode of MODES) {
+      const data = overviewFixture()
+      const category = { ...data.category } as Record<string, unknown>
+      delete category.quiet
+      const stale = { ...data, category: category as unknown as typeof data.category }
+      expect(() => render(overviewCategory.render(stale, mode, ctx))).not.toThrow()
+      expect(renderText(overviewCategory.render(stale, mode, ctx))).toContain('No longer being said')
+    }
+  })
+
   it('prints the four lines with their headings', () => {
     const text = renderText(overviewCategory.render(overviewFixture(), 'app', ctx))
     for (const heading of ['Kind of thing said', 'What moved most', 'Mood', 'Attention']) {

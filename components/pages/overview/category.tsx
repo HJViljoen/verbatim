@@ -399,9 +399,22 @@ export const overviewCategory: Block<OverviewData> = {
     // (lib/calibration.ts), off the register's own dormancy rule — so it
     // carries no verdict, no change and no word for which way anything went.
     // "Last heard" is a month, which is a fact about the record.
-    const quiet = c.quiet.length > 0 ? (
+    //
+    // `?? []` BECAUSE A FROZEN ARTEFACT PREDATES THE FIELD (Block D wave 3,
+    // M6). `CategoryBlock.quiet` is new AND required in Block D — 017fc6e's
+    // `lib/pages/overview.ts` has neither the field nor `QuietTheme` — and
+    // `overview.category` was already named by a section map at 017fc6e, so
+    // `document-deck.tsx:1929` hands a snapshot built THEN to this block today
+    // with a bare `as never`. Measured: a deck fixture with `category.quiet`
+    // removed throws `Cannot read properties of undefined (reading 'length')`,
+    // and a throw in a server component takes `/r/<token>`, the in-app viewer,
+    // the Studio preview and the PDF route — not one tile. Both reads are
+    // guarded, on the precedent already in tree at
+    // `blocks/quarterly/category.tsx:223` and at `moves.tsx`'s `readings ?? []`.
+    const quietRows = c.quiet ?? []
+    const quiet = quietRows.length > 0 ? (
       <div className={email ? undefined : 'flex flex-col gap-1'}>
-        {c.quiet.map((q) => (
+        {quietRows.map((q) => (
           <div key={q.id} className={email ? undefined : 'flex items-center gap-2 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '2px 0' } : undefined}>
             <span data-copy="subject" data-slot="pass_b_theme" className={email ? undefined : 'min-w-0 flex-1 truncate'}>{q.label}</span>
             <span data-copy="verdict" className={email ? undefined : 'text-[11px] text-secondary-foreground'}>
