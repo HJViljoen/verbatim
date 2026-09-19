@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest'
 import { blockAnswers, blockContext, figureConflicts, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
-import { render, renderText } from '@/lib/test/render'
+import { markupText, render, renderText } from '@/lib/test/render'
 import { surface } from '@/lib/nav'
-import { layoutFor, SUBJECT_BLOCKS } from './index'
+import { layoutFor, SubjectsPage, SUBJECT_BLOCKS } from './index'
 import { subjectsList } from './list'
 import { subjectsOwnPosts } from './own-posts'
 import { subjectsSayHear } from './say-hear'
@@ -884,6 +884,34 @@ describe('SU2 · the two-audience gap the pane carries', () => {
       for (const mode of MODES) {
         assertCopyContract(render(block.render(retiredRivalFixture(), mode, ctx)))
       }
+    }
+  })
+})
+
+// ---- the page, not the blocks ------------------------------------------------
+
+describe('the Subjects page', () => {
+  // D15's sentence belongs to the tile it qualifies — the artboard puts "27%
+  // of this month's videos are not in English" at the foot of VOICES ON
+  // DURABILITY and keeps it out of the page's own footer line. The method
+  // footnote arrived after commit 0894c90 ("the page says each of its
+  // sentences once") and printed it a second time, byte for byte, ~110px
+  // below, both inside one screenful at 1440.
+  it('says the language sentence once, on the tile that qualifies it', () => {
+    const data = subjectsFixture()
+    const language = data.method!.language!
+    const text = markupText(render(<SubjectsPage data={data} />))
+    expect(text.split(language).length - 1).toBe(1)
+  })
+
+  // AND THE REST OF THE FOOTNOTE SURVIVES. The filter drops one line, not the
+  // paragraph: a reader still gets who prepared it, what was read, the
+  // read-depth basis, the Reddit cap and the privacy line.
+  it('keeps every other method line in the footnote', () => {
+    const data = subjectsFixture()
+    const text = markupText(render(<SubjectsPage data={data} />))
+    for (const line of data.method!.lines.filter((l) => l !== data.method!.language)) {
+      expect(text).toContain(line)
     }
   })
 })
