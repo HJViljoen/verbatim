@@ -259,7 +259,7 @@ export function bound(text: string, max: number): string {
 function Card({ row, n, mode }: { row: AdviceRow; n: number | null; mode: RenderMode }) {
   const stop = n == null
   return (
-    <div className={`flex min-w-0 flex-col gap-1 rounded-md border px-4 py-3 border-border bg-tile`}>
+    <div className="flex min-w-0 flex-col gap-1 rounded-md border border-border bg-tile px-4 py-3">
       <div className="flex items-center justify-between gap-2">
         {stop
           ? <span className="font-mono text-[13px] font-medium uppercase tracking-[0.06em] text-muted-foreground">{STOP_LABEL}</span>
@@ -269,10 +269,14 @@ function Card({ row, n, mode }: { row: AdviceRow; n: number | null; mode: Render
       {/* THE ADVICE'S OWN WORDS, WRITTEN BY PASS D-b AND READ BACK OUT OF A
           COLUMN — the `stored` kind, naming the slot that adjudicated them
           (lib/test/copy-contract.ts). On the stop card they are the SUBJECT of
-          the headline rather than the headline. */}
+          the headline rather than the headline.
+          AND THE STOP HEADLINE IS 15px AGAINST THE CARDS' 17px (design review
+          5). The card is subordinate by design — it is what NOT to make on a
+          sheet about what to make — and after the colour came off it (design
+          review 9) type is what is left to say so. */}
       {stop ? (
         <>
-          <h3 className="m-0 text-[17px] font-semibold leading-[1.2] tracking-[-0.01em] text-foreground">{STOP_HEAD}</h3>
+          <h3 className="m-0 text-[15px] font-semibold leading-[1.2] tracking-[-0.01em] text-foreground">{STOP_HEAD}</h3>
           <p
             data-copy="stored"
             data-slot="pass_d_b_recommendation"
@@ -294,22 +298,27 @@ function Card({ row, n, mode }: { row: AdviceRow; n: number | null; mode: Render
       )}
       <p className="m-0 font-mono text-[10.5px] leading-[1.35] text-muted-foreground">{provenance(row)}</p>
       {row.grounded?.pruned ? <p className="m-0 text-[12px] leading-[1.4] text-muted-foreground">{row.grounded.line}</p> : null}
-      <div className="flex flex-col gap-1 rounded-md bg-inner px-3 py-2.5">
-        <p className="m-0 font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">What the conversation did after</p>
-        <Reading verdict={row.afterwards.verdict} mode={mode} />
-        <p className="m-0 text-[11.5px] leading-[1.4] text-secondary-foreground">{row.afterwards.line}</p>
+      {/* `mt-auto`, WHICH IS THE ARTBOARD'S OWN `margin-top:auto` ON ITS LAST
+          BLOCK (design review 5). The row is `items-stretch` now, so every card
+          is one height; a card whose row carries less than another's would
+          otherwise pool all of its white at the bottom and read as unfinished.
+          Pushed down, the evidence lands near a common baseline across the row
+          and the slack is one interior gap. */}
+      <div className="mt-auto flex flex-col gap-1 pt-1">
+        <div className="flex flex-col gap-1 rounded-md bg-inner px-3 py-2.5">
+          <p className="m-0 font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">What the conversation did after</p>
+          <Reading verdict={row.afterwards.verdict} mode={mode} />
+          <p className="m-0 text-[11.5px] leading-[1.4] text-secondary-foreground">{row.afterwards.line}</p>
+        </div>
+        {/* THE QUOTE BEFORE THE ARGUMENT, WHICH IS THE ARTBOARD'S ORDER: a
+            commenter's own words are on this page or nowhere. */}
+        {row.quote ? <BlockQuote quote={row.quote} mode={mode} /> : null}
+        {row.why ? (
+          <p data-copy="stored" data-slot="pass_d_b_recommendation" title={row.why} className="m-0 text-[12px] leading-[1.4] text-secondary-foreground">
+            {bound(row.why, ARGUMENT_CHARS)}
+          </p>
+        ) : null}
       </div>
-      {/* THE QUOTE BEFORE THE ARGUMENT, WHICH IS THE ARTBOARD'S ORDER AND THE
-          SAFER ONE. A card is a fixed box on a 1123 × 631 sheet and the last
-          thing in it is what a long row clips; the model's argument is also on
-          the ledger section two slides earlier, and a commenter's own words are
-          on this page or nowhere. */}
-      {row.quote ? <BlockQuote quote={row.quote} mode={mode} /> : null}
-      {row.why ? (
-        <p data-copy="stored" data-slot="pass_d_b_recommendation" title={row.why} className="m-0 text-[12px] leading-[1.4] text-secondary-foreground">
-          {bound(row.why, ARGUMENT_CHARS)}
-        </p>
-      ) : null}
     </div>
   )
 }
@@ -408,20 +417,34 @@ export const contentMake: Block<MarketSurfaceData> = {
         footerNote={`${longMonth(data.month)} \u00b7 ${GROUNDING_BASIS}`}
       >
         <div className="flex min-w-0 flex-col gap-3">
-          {/* ONE ROW, AND THE STOP CARD IS THE LAST COLUMN. The artboard puts
-              the three make cards on page 2 and the one stop card in page 4's
-              right pane; folded into one section they have to share a slide,
-              and a full-width stop card under three columns runs off the
-              sheet. Four columns keeps every card on the page at the mock's
-              own density, and the stop card keeps its own eyebrow. */}
-          {/* `items-start`, SO A CARD IS ITS OWN HEIGHT. Stretched, the row
-              was as tall as the fullest card and the thinnest — a row with no
-              reading, no quote and no argument yet — was a bordered box two
-              thirds white (design review 2's second half). The mock's three
-              cards are all full because the mock's three rows all carry
-              everything; ours do not, and a short card that ends where its
-              content ends says so. */}
-          <div className={`grid min-w-0 items-start gap-[18px] ${stop ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
+          {/* ONE ROW, ALL OF ONE HEIGHT, AND THE STOP CARD IS THE LAST
+              COLUMN (design review 5). The artboard puts the three make cards
+              on page 2 and the one stop card in page 4's right pane; folded
+              into one section they share a slide, and a full-width stop band
+              under three columns costs more height than the sheet has
+              (measured: three stretched cards 380px plus the shortest honest
+              band 138px, against a 477px budget once the footer and the unlock
+              line are paid for). So the four columns stay — and the two things
+              the finding is actually about are fixed where they live.
+
+              `items-start` made the row a four-step STAIRCASE: measured
+              197 · 466 · 300 · 483 in a 535px body, with card 01 — the only
+              undecided item, the reason the sheet exists — the shortest at 37%
+              of the row, and the negative card its tallest step. The row is
+              `items-stretch` now, which is the grid's default and the
+              artboard's; the earlier objection to it — that the thinnest card
+              became "a bordered box two thirds white" — is answered by
+              `mt-auto` INSIDE the card, which puts the evidence on a common
+              baseline, rather than by letting the row staircase. The row's
+              height is the tallest card's either way, so this costs nothing.
+
+              The hierarchy is fixed in the card: no colour on its chrome
+              (design review 9) and a 15px headline against the make cards'
+              17px, so the last column is quiet rather than the loudest object
+              on a sheet titled "What to make next".
+
+              */}
+          <div className={`grid min-w-0 gap-[18px] ${stop ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
             {make.map((r, i) => <Card key={r.lineageId} row={r} n={i + 1} mode={mode} />)}
             {stop ? <Card key={stop.lineageId} row={stop} n={null} mode={mode} /> : null}
           </div>
