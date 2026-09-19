@@ -217,13 +217,29 @@ export const OWN_POSTS_UNREADABLE_OUTSIDE = '— not tracked · their own posts 
 export const OWN_POSTS_NO_ACCOUNTS =
   'No account is configured for this rival, so nothing they publish is read — add their accounts in Settings and this starts counting.'
 
-/** What the client's own census says while `video_claims` is closed to a
- *  tenant session. The half we DID read is named; so is the half we did not. */
+/**
+ * What the client's own census says while `video_claims` is closed to a tenant
+ * session. The half we DID read is named; so is the half we did not.
+ *
+ * ONE SENTENCE, AND IT NAMES NO OWNER (subjects R1, taking the call
+ * lib/pages/subjects.ts:131-153 already made for the two constants that
+ * package owned). This ended "— Verbatim engineering", a READINESS OWNER: the
+ * right fact on /dashboard/settings/readiness, where the row it belongs to is
+ * drawn and a reader can look at it, and a ticket handed to the client
+ * anywhere else. There was an `_OUTSIDE` twin to strip it, but the block
+ * swapped only on `mode === 'print'`, so the owner went on printing in the APP
+ * arm — which is where the paying reader is, and which is the state both
+ * production tenants are in today.
+ *
+ * `OWN_POSTS_UNREADABLE`'s rule, applied: the in-app sentence may name the
+ * PAGE where the state is recorded, and only where such a row exists. There is
+ * no `lib/readiness/compute.ts` row for the claims ledger at all, so this one
+ * names neither the owner nor a page that says nothing about it — which leaves
+ * the two twins saying the same words, and the twin is gone rather than kept
+ * as an alias. An alias is an invitation to re-add the owner on one side of
+ * it.
+ */
 export const OWN_CLAIMS_UNREADABLE =
-  'These are the posts you published. What those posts claim is not readable on this page yet — Verbatim engineering.'
-
-/** The same, without the internal owner. */
-export const OWN_CLAIMS_UNREADABLE_OUTSIDE =
   'These are the posts you published. What those posts claim is not readable on this page yet.'
 
 /** A rival's claims are never a tenant's to read in full sentences (M8's
@@ -545,8 +561,10 @@ export function saidAbout(input: {
 /** The client's own census, with the claims half named when it could not be
  *  read. `read` is false where `video_claims` came back closed rather than
  *  empty — see `OwnPostCensus.claimsNote`. */
-export function ownCensusWithClaims(input: OwnPostInput, read: boolean, outside = false): OwnPostCensus {
+export function ownCensusWithClaims(input: OwnPostInput, read: boolean): OwnPostCensus {
   const census = ownPostCensus(input)
   if (read || census.unread != null) return census
-  return { ...census, claims: [], claimsNote: outside ? OWN_CLAIMS_UNREADABLE_OUTSIDE : OWN_CLAIMS_UNREADABLE }
+  // No `outside` arm: there is one sentence for this state and it is safe
+  // everywhere, which is what removing the owner bought.
+  return { ...census, claims: [], claimsNote: OWN_CLAIMS_UNREADABLE }
 }

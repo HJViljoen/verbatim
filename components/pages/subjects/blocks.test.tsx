@@ -937,21 +937,23 @@ describe('the Subjects blocks, read from outside the workspace', () => {
   // this is the sentence a reader in the app — and a PDF, and a `/r/<token>`
   // page — of the page as it stands would actually carry.
   //
-  // `subjects.ownposts` is NOT in this loop and the omission is deliberate:
-  // its sentence is `OWN_CLAIMS_UNREADABLE` in lib/reading/own-posts.ts, which
-  // this page reads and does not own, and it still carries the owner in its
-  // app arm. Its paper arm is asserted below, which is the guarantee that file
-  // makes today.
-  it('strips the readiness owner from SU5 in every arm', () => {
+  // `subjects.ownposts` IS IN THIS LOOP NOW (R1, at the wave-3 merge). It was
+  // left out deliberately, because its sentence is `OWN_CLAIMS_UNREADABLE` in
+  // lib/reading/own-posts.ts — a file this page reads and does not own — and
+  // that constant still carried the owner in its app arm, guarded only on
+  // paper. The merge took the owner off the constant itself, so the guarantee
+  // is now the same one every other arm on this page makes.
+  it('strips the readiness owner from SU5 and SU3 in every arm', () => {
     const data = refusedFixture()
     for (const mode of MODES) {
       const text = renderText(subjectsSayHear.render(data, mode, ctx))
       expect(text, mode).toContain('there is no ledger to report')
       expect(text, mode).not.toContain('Verbatim engineering')
+
+      const own = renderText(subjectsOwnPosts.render(data, mode, ctx))
+      expect(own, mode).toContain('not readable on this page yet')
+      expect(own, mode).not.toContain('Verbatim engineering')
     }
-    const paper = renderText(subjectsOwnPosts.render(data, 'print', ctx))
-    expect(paper).toContain('not readable on this page yet')
-    expect(paper).not.toContain('Verbatim engineering')
   })
 
   it('draw no in-app affordance on paper', () => {

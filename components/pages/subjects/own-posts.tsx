@@ -4,7 +4,7 @@ import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth } from '@/lib/format'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import { OWN_CLAIMS_UNREADABLE, OWN_CLAIMS_UNREADABLE_OUTSIDE, type OwnPostCensus } from '@/lib/reading/own-posts'
+import { type OwnPostCensus } from '@/lib/reading/own-posts'
 import type { SubjectsData } from '@/lib/pages/subjects'
 
 // The mock's second rail tile — "Your own posts" (`subjects.ownposts.*`, three
@@ -170,16 +170,13 @@ export const subjectsOwnPosts: Block<SubjectsData> = {
           </Group>
         ) : null}
 
-        {/* THE SAME HALF, WITHOUT OUR OWN OWNER OUTSIDE THE APP. `Verbatim
-            engineering` is a readiness owner; on paper and on a share page
-            there is no Settings › Readiness to open and it reads as a leaked
-            ticket. `OWN_CLAIMS_UNREADABLE_OUTSIDE` has existed since wave 1
-            and nothing referenced it. */}
-        {c.claimsNote ? (
-          <BlockEmpty mode={mode}>
-            {mode === 'print' && c.claimsNote === OWN_CLAIMS_UNREADABLE ? OWN_CLAIMS_UNREADABLE_OUTSIDE : c.claimsNote}
-          </BlockEmpty>
-        ) : null}
+        {/* THE SAME HALF, IN ONE SENTENCE FOR EVERY ARM (subjects R1). This
+            swapped to an `_OUTSIDE` twin on `mode === 'print'` alone, to keep
+            the readiness owner `Verbatim engineering` off paper and off a
+            share page — but the APP arm is where the paying reader is, and it
+            went on printing there. The owner is off the sentence itself now,
+            so there is nothing left to swap. */}
+        {c.claimsNote ? <BlockEmpty mode={mode}>{c.claimsNote}</BlockEmpty> : null}
       </BlockFrame>
     )
   },
