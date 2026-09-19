@@ -150,7 +150,7 @@ function Paragraphs({ text, figures, className, face }: { text: string; figures:
  * fixed templates calls this today. It is the seam D-brief (P13–P17) binds
  * when the quarterly's and the leadership one-pager's charts land.
  */
-export function DeckSpark({ values, months, color = 'var(--primary)', width = 104, height = 22, className, unit }: {
+export function DeckSpark({ values, months, color = 'var(--primary)', width = 104, height = 22, className, unit, zeroBase = false, rule = false }: {
   values: (number | null)[]
   /** The months these points are, in order — the printed page's only axis. */
   months: string[]
@@ -169,6 +169,15 @@ export function DeckSpark({ values, months, color = 'var(--primary)', width = 10
    *  magnitude a printed line has no hover to ask for. Absent prints the
    *  months alone, which is what every caller did before. */
   unit?: 'pct'
+  /** Pull the floor to zero and draw the hairline that says where it is
+   *  (SH22). Off by default, because at 104 x 22 this is a sparkline inside a
+   *  row of text and an axis rule under it is noise. A chart that IS the
+   *  element turns both on: normalised to its own min and max, an 18% -> 20%
+   *  series draws as a full-pane 45 degree climb, which is a much louder claim
+   *  than "Jun 18% -> Sep 20%" in a document whose premise is that a change is
+   *  not called until it clears a band. */
+  zeroBase?: boolean
+  rule?: boolean
 }) {
   // The months that carried a reading, in order. A slot with no reading is not
   // a month this line can name.
@@ -194,7 +203,7 @@ export function DeckSpark({ values, months, color = 'var(--primary)', width = 10
   }
   return (
     <span className={`flex flex-col gap-1 ${className ?? ''}`}>
-      <Sparkline values={values} color={color} width={width} height={height} animate={false} endDot className={className} />
+      <Sparkline values={values} color={color} width={width} height={height} animate={false} endDot className={className} zeroBase={zeroBase} rule={rule} />
       {/* BOTH ENDS, WITH THEIR VALUE WHERE THERE IS ONE. A printed line has no
           hover and a shape with two month names under it and no magnitude
           anywhere is decoration — the artboard labels both endpoints
@@ -1997,7 +2006,10 @@ function SectionPane({ section, data, why }: {
           <div className="flex flex-col gap-2.5">
             {line!.series.map((serie) => (
               <div key={serie.label} className="flex flex-col gap-1.5">
-                <DeckSpark values={serie.points} months={line!.months.map(monthLabel)} width={300} height={120} className="w-full" unit={serie.unit} />
+                {/* THE ONE CHART THAT IS THE ELEMENT, so it takes SH22's
+                    floor and its rule (wired at the wave-3 merge; SH22 named
+                    this caller and shipped with none). */}
+                <DeckSpark values={serie.points} months={line!.months.map(monthLabel)} width={300} height={120} className="w-full" unit={serie.unit} zeroBase rule />
                 <p className="text-[12px] leading-[1.35] text-muted-foreground">{serie.label}</p>
               </div>
             ))}

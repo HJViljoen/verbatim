@@ -5,7 +5,8 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { gapBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
-import { DirectionWord, leadGap, overviewSubjects, subjectsMeta } from './subjects'
+import { DirectionWord, leadGap, overviewSubjects, sparkDomain, subjectsMeta } from './subjects'
+import { monthlyLineLabel } from '@/lib/pages/overview'
 import { overviewFixture, refusedFixture, renamedRivalFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
@@ -225,5 +226,34 @@ describe('OV2, ported to the artboard', () => {
     expect(text).toContain('comparison refused')
     // …and the earlier month is refused with it, rather than printed beside it.
     expect(text).toContain('comparison refused in August')
+  })
+})
+
+// SH22's COLUMN SCALE, WIRED (wave-3 merge). `Sparkline` normalises to the min
+// and max of what IT is handed, so each row filled its own box and +3.2pts and
+// −3.1pts drew at the same amplitude — the one thing a column of lines beside a
+// column of names is for. SH22 built `domain` for this caller by name and
+// shipped with it unwired.
+describe('the monthly-line column shares one scale', () => {
+  it('spans zero to the highest reading any drawn row carries', () => {
+    const rows = overviewFixture().subjects.rows
+    const d = sparkDomain(rows)
+    expect(d?.[0]).toBe(0)
+    const drawn = rows.filter((r) => !monthlyLineLabel(r.spark, r.sparkMonths))
+    const highest = Math.max(...drawn.flatMap((r) => r.spark).filter((v): v is number => v != null))
+    expect(d?.[1]).toBe(highest)
+  })
+
+  it('shares nothing when there is no column to be comparable within', () => {
+    const rows = overviewFixture().subjects.rows
+    expect(sparkDomain([])).toBeUndefined()
+    expect(sparkDomain(rows.slice(0, 1))).toBeUndefined()
+  })
+
+  // And the drawn line takes the floor and the hairline that says where it is,
+  // so a row that barely moved does not read as one that climbed.
+  it('draws the zero floor and its rule on the row line', () => {
+    const markup = render(overviewSubjects.render(overviewFixture(), 'app', ctx))
+    expect(markup).toContain('stroke="var(--border)"')
   })
 })

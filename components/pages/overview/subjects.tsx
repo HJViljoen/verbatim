@@ -171,7 +171,33 @@ function GapHeadline({ gap, mode }: { gap: Gap; mode: RenderMode }) {
   return <TileBlock className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 py-1.5">{body}</TileBlock>
 }
 
-function Row({ row, mode, appUrl = '', sentLine = null }: { row: SubjectRow; mode: RenderMode; appUrl?: string; sentLine?: string | null }) {
+/**
+ * THE COLUMN OF LINES SHARES ONE SCALE (SH22, wired here at the wave-3 merge).
+ *
+ * `Sparkline` normalises to the min and max of what IT is handed, so each row
+ * became the full height of its own box: Durability's +3.2pts and Price's
+ * −3.1pts drew at the same amplitude and the rows could not be compared by
+ * eye, which is the one thing a column of sparklines beside a column of names
+ * is for. SH22 built `domain` for exactly this and said so — "Overview's
+ * subjects column and the sales deck's `DeckSpark` are the two callers the
+ * finding names, and they are `main`'s and `sales`'" — and shipped with
+ * neither wired.
+ *
+ * NULL WHERE THERE IS NOTHING TO SHARE. One drawn row has no column to be
+ * comparable within, and a shared scale over a single line is just that line's
+ * own scale with extra steps. The floor is pulled to zero because these are
+ * shares of a denominator and zero is where that axis starts; the top is the
+ * highest reading any row carries, so the tallest line fills the box and every
+ * other one is read against it.
+ */
+export function sparkDomain(rows: readonly SubjectRow[]): [number, number] | undefined {
+  const drawn = rows.filter((r) => !monthlyLineLabel(r.spark, r.sparkMonths))
+  if (drawn.length < 2) return undefined
+  const values = drawn.flatMap((r) => r.spark).filter((v): v is number => v != null)
+  return values.length ? [0, Math.max(...values)] : undefined
+}
+
+function Row({ row, mode, appUrl = '', sentLine = null, domain }: { row: SubjectRow; mode: RenderMode; appUrl?: string; sentLine?: string | null; domain?: [number, number] }) {
   return (
     // THE HAIRLINE BETWEEN ROWS (design review Medium 17). The artboard rules
     // its rows and the port dropped it, while the rows themselves are ragged —
@@ -223,7 +249,7 @@ function Row({ row, mode, appUrl = '', sentLine = null }: { row: SubjectRow; mod
           // the one shape on this page a reader cannot date. The artboard
           // captions every line it draws.
           <span className="flex flex-col gap-0.5">
-            <Sparkline values={row.spark} color="var(--cat)" width={72} height={20} animate={false} />
+            <Sparkline values={row.spark} color="var(--cat)" width={72} height={20} animate={false} domain={domain} zeroBase rule />
             <span className="font-mono text-[10.5px] text-muted-foreground">{monthlySpanLabel(row.spark, row.sparkMonths)}</span>
           </span>
         )}
@@ -345,7 +371,7 @@ export const overviewSubjects: Block<OverviewData> = {
               </tr>
             </thead>
             <tbody className="align-top">
-              {s.rows.map((r) => <Row key={r.id} row={r} mode={mode} appUrl={ctx.appUrl} sentLine={sentLineFor(data.sent, INDUSTRY_AUDIENCE, 'subject', r.id, r.category.pct)} />)}
+              {s.rows.map((r) => <Row key={r.id} row={r} mode={mode} appUrl={ctx.appUrl} sentLine={sentLineFor(data.sent, INDUSTRY_AUDIENCE, 'subject', r.id, r.category.pct)} domain={sparkDomain(s.rows)} />)}
             </tbody>
           </table>
         </div>
