@@ -31,7 +31,10 @@ describe('OV3 · what the category is saying', () => {
     expect(view?.[2]).toBe('110')
     // And the end label sits INSIDE the box: it is drawn at
     // `width - padR + 10` and clipped by nothing.
-    const end = /<text x="(\d+(?:\.\d+)?)" y="[^"]*" font-size="11" font-weight="600"/.exec(markup)
+    // SH1 moved the end label's size off the `font-size` ATTRIBUTE and into a
+    // `style="font-size:calc(11px * var(--cal-ke, 1))"` so it scales with the
+    // container; the anchor is now the weight, which SH1 left alone.
+    const end = /<text x="(\d+(?:\.\d+)?)" y="[^"]*" style="font-size:calc\(11px[^"]*" font-weight="600"/.exec(markup)
     expect(Number(end?.[1])).toBeLessThanOrEqual(232)
   })
 
