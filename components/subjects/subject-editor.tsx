@@ -188,8 +188,15 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
                 // videos" and carry no comparison at all — a level with no
                 // statement about whether it moved, on the one tile a reader
                 // scans six of.
-                <span className="flex items-baseline gap-1.5">
-                  <span data-copy="level" className={cls.meta}>
+                <span className="flex min-w-0 items-baseline gap-1.5">
+                  {/* THE LEVEL NEVER BREAKS (shell R3). It is the badge that
+                      may truncate in this 224px rail, never the count: a level
+                      without its "of N" is a score, which this product does not
+                      show, and "26 / of / 84" across three lines is that rule
+                      failing quietly. The badge's own row is `min-w-0 truncate`
+                      below, so the flex line has a shrinkable member and this
+                      one does not have to be it. */}
+                  <span data-copy="level" className={`${cls.meta} flex-none whitespace-nowrap`}>
                     {fmtInt(r.level.k)} of {fmtInt(r.level.n)}
                   </span>
                   {r.verdict ? (
