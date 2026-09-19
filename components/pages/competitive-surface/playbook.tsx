@@ -3,7 +3,7 @@ import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, fmtPct } from '@/lib/format'
-import type { FormatMatrix, FormatMatrixSide, FormatRow } from '@/lib/reading/formats'
+import { ENGAGEMENT_MIN_VIDEOS, type FormatMatrix, type FormatMatrixSide, type FormatRow } from '@/lib/reading/formats'
 import type { PlaybookBlock } from '@/lib/pages/playbook'
 import { playbookFigures } from '@/lib/pages/playbook'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '@/lib/rivals'
@@ -164,7 +164,13 @@ function Matrix({
   }
 
   return (
-    <div className="flex min-w-0 flex-col gap-1.5">
+    // THE COLUMN FILLS ITS CELL AND ITS NOTE SITS ON THE FLOOR (CO17). The
+    // three tables carry 8, 9 and 7 rows, so their legends and coverage notes
+    // ended at three different heights — measured at y≈2830 / 2890 / 2760 —
+    // and the artboard aligns all three on one baseline. The ROWS keep their
+    // own count (a table may not invent a row to square a page); what is
+    // aligned is the note under each, which is what a reader scans across.
+    <div className="flex min-w-0 flex-col gap-1.5 xl:h-full">
       <div className={`${grid} border-b border-border/70 pb-1.5`}>
         <span className={HEAD}>{label}</span>
         <span className={HEAD}>{lead.label}</span>
@@ -195,11 +201,13 @@ function Matrix({
           (687 · 84 · 124 here) were printed over the hook table, whose own are
           647 · 81 · 118. A legend that names a bigger population than the
           table under it is the defect (D6) this tile exists to end. */}
-      <Legend sides={matrix.sides} mode={mode} />
-      {/* A COLUMN NEVER READ PRINTS A SENTENCE, NOT A ZERO. */}
-      {matrix.sides.filter((s) => s.unread).map((s) => (
-        <p key={s.audience} className="m-0 font-mono text-[10px] leading-[1.35] text-muted-foreground">{s.unread}</p>
-      ))}
+      <div className="flex min-w-0 flex-col gap-1.5 xl:mt-auto xl:pt-1.5">
+        <Legend sides={matrix.sides} mode={mode} />
+        {/* A COLUMN NEVER READ PRINTS A SENTENCE, NOT A ZERO. */}
+        {matrix.sides.filter((s) => s.unread).map((s) => (
+          <p key={s.audience} className="m-0 font-mono text-[10px] leading-[1.35] text-muted-foreground">{s.unread}</p>
+        ))}
+      </div>
     </div>
   )
 }
@@ -226,7 +234,7 @@ function Medians({ rows, mode }: { rows: readonly FormatRow[]; mode: RenderMode 
   }
 
   return (
-    <div className="flex min-w-0 flex-col gap-1.5">
+    <div className="flex min-w-0 flex-col gap-1.5 xl:h-full">
       <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,176px)] items-center border-b border-border/70 pb-1.5">
         <span className={`${HEAD} whitespace-nowrap`}>Median engagement</span>
         {/* NOT "Category · TikTok". The median is read across every platform
@@ -244,6 +252,15 @@ function Medians({ rows, mode }: { rows: readonly FormatRow[]; mode: RenderMode 
           </span>
         </div>
       ))}
+      {/* THE THIRD COLUMN'S OWN NOTE, ON THE OTHER TWO'S BASELINE (CO17). It
+          had none — the two matrices carry a legend and a coverage sentence
+          and this ended on its last row — and what it was missing is the one
+          thing this column needs stated: a median is not read off one video.
+          `ENGAGEMENT_MIN_VIDEOS` is the floor every row here cleared, and the
+          n beside each row says how far past it that row is. */}
+      <p className="m-0 font-mono text-[10px] leading-[1.35] text-muted-foreground xl:mt-auto xl:pt-1.5">
+        Every format here was read off at least <span data-copy="figure">{fmtInt(ENGAGEMENT_MIN_VIDEOS)}</span> rated videos; the n beside each median is how many.
+      </p>
     </div>
   )
 }
