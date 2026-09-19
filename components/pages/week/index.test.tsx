@@ -510,6 +510,17 @@ describe('WK §4 · what came in', () => {
 })
 
 describe('WK §2 · worth a reply', () => {
+  it('carries the objection chip’s colour in its ring, not in its text', () => {
+    // REVIEW W5. `bg-negative/12 text-negative` is #DB3B2E on a 12% tint of
+    // itself — 3.78:1 at 11px/500, the one failing entry in a four-entry map.
+    // The tint and a ring carry the colour; the words are `foreground`.
+    const d = weekFixture()
+    const rows = d.replies.rows.map((r) => ({ ...r, intent: 'objection' as const }))
+    const markup = render(weekReply.render({ ...d, replies: { ...d.replies, rows } }, 'app', ctx))
+    expect(markup).toContain('bg-negative/12 text-foreground ring-1 ring-negative/45')
+    expect(markup).not.toContain('bg-negative/12 text-negative')
+  })
+
   it('dates every row by the day the comment was written, never by an age', () => {
     // D6/D9: Content prints "3d", measured from the clock at page load. Every
     // other figure on this page is dated by the days the update covered, and a

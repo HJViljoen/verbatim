@@ -37,11 +37,20 @@ import type { FigureTable } from '@/lib/reading/verdicts'
 // comment was answered — and a footer that invents a reply history is the
 // clearest possible case of copy claiming behaviour the code does not have.
 
-/** The mock's chip colours, by intent — written out, never interpolated. */
+/** The mock's chip colours, by intent — written out, never interpolated.
+ *
+ * THE OBJECTION CHIP'S AMBER IS IN THE TINT AND THE RING, NOT IN THE TEXT
+ * (review W5). `bg-negative/12 text-negative` is `#DB3B2E` on a 12% tint of
+ * ITSELF — `#FBE7E6`, 3.78:1 at 11px/500, under AA and the only entry in this
+ * map that fails (buying is 5.40:1, misinformation is `bg-foreground/10`).
+ * The colour still has to signal, so it moves to the ring and the words go to
+ * `foreground`, which reads at 12.3:1 on that tint in light and 12.6:1 in
+ * dark. Same remedy as `components/pages/agent/marks.tsx`'s `InferencePill`,
+ * and the same one SH8 applies to the email verdict chips. */
 const CHIP: Record<Intent, string> = {
   buying: 'bg-accent text-accent-foreground',
   question: 'bg-inner text-muted-foreground',
-  objection: 'bg-negative/12 text-negative',
+  objection: 'bg-negative/12 text-foreground ring-1 ring-negative/45',
   misinformation: 'bg-foreground/10 text-foreground',
 }
 
