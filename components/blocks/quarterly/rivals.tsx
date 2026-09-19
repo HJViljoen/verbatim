@@ -229,7 +229,15 @@ export const quarterlyRivals: Block<QuarterlyData> = {
         // Competitive surface's own read and can be a different month: it
         // headed this sheet "Sep 2026" while every other page said October.
         meta={r.monthLabel}
-        footerNote={r.standings ? r.standings.denominatorLine : undefined}
+        // NO `footerNote`. The corpus sentence used to be spent here, which is
+        // the block frame's LAST child on a sheet whose columns already fill
+        // it: measured at 1440 and at 1024 on six of the seven fixture states,
+        // the frame footer's box landed 7px below `.vb-slide-body`'s 561px
+        // bottom and the page printed a hairline with nothing under it. The
+        // sentence is under the table it is about now (below), which is both
+        // where "the videos on the left" names something and inside the column
+        // that can carry it; the footer slot costs the sheet 36px it does not
+        // have.
       >
         {children}
       </BlockFrame>
@@ -357,16 +365,27 @@ export const quarterlyRivals: Block<QuarterlyData> = {
             <Note mode={mode}>{r.standings.precedence}</Note>
           ) : null}
           {r.standings?.caveat ? <Note mode={mode}>{r.standings.caveat}</Note> : null}
-          {/* THE CORPUS CAVEAT, UNDER THE TABLE IT IS ABOUT. `r.caveat` reads
-              "…the videos on the left, the comments we kept on the right",
-              which names THESE two columns — and it was printed at the foot
-              of the questions column three columns away, where "left" and
-              "right" name nothing and where it was the row that column lost
-              off the bottom of the sheet. It is the sentence this block's own
-              header calls the one the page must say once, because a share of
-              what we looked for read as a share of the category is the worst
-              misreading this product can produce; it says it here. */}
-          {r.caveat ? <Note mode={mode}>{r.caveat}</Note> : null}
+          {/* THE CORPUS CAVEAT, UNDER THE TABLE IT IS ABOUT, AND IT IS THIS
+              BLOCK THAT PRINTS IT.
+
+              `standings.denominatorLine` is `CORPUS_DENOMINATOR_LINE` — "Both
+              shares are of what our search plan found and we read this month —
+              the videos on the left, the comments we kept on the right" —
+              which names THESE two columns and nothing else on the sheet. It
+              was passed to the frame's `footerNote` and printed at the bottom
+              of the whole block, where "left" and "right" name nothing and
+              where it was the leaf that fell off the bottom of the page on six
+              of the seven fixture states.
+
+              It is the sentence this block's own header calls the one the page
+              must say once, because a share of what we looked for read as a
+              share of the category is the worst misreading this product can
+              produce; it says it here. `r.caveat` is the SAME claim from the
+              Overview block's own composition and is empty on every populated
+              reading, so it is printed only where it says something this line
+              does not. */}
+          {r.standings?.denominatorLine ? <Note mode={mode}>{r.standings.denominatorLine}</Note> : null}
+          {r.caveat && r.caveat !== r.standings?.denominatorLine ? <Note mode={mode}>{r.caveat}</Note> : null}
         </div>
 
         <div className={email ? undefined : 'mt-1 flex flex-col gap-[2px]'}>
