@@ -94,13 +94,27 @@ describe('the measurement half', () => {
     expect(text).toContain(MOVEMENT_WORDS.too_little_data)
   })
 
-  it('prints every plotted month as a figure a reader can check', () => {
+  it('prints every plotted month with its own denominator', () => {
     // The shared CalendarLine labels the baseline and one midline, so in a
     // 104px box the only labelled gridline sits BELOW the data: the axis says
     // 0% and 5% and the line ends at 9.4%. Changing the axis is a change to
     // `components/charts/*`, which all six surfaces draw through. The trail is
-    // the months themselves, in order, as figures.
-    expect(text).toContain('Jul 5.1% → Aug 6.8% → Sep 9.4%')
+    // the months themselves, in order.
+    //
+    // EACH WITH ITS "of N". It printed "Jul 5.1% → Aug 6.8% → Sep 9.4%" —
+    // three levels and no denominator between them — inside one
+    // `data-copy="figure"` node, so rule (b) never inspected it. The chart's
+    // end label carries a denominator for the newest month alone.
+    expect(text).toContain('Jul 5.1% (71 of 1,400) → Aug 6.8% (99 of 1,455) → Sep 9.4% (130 of 1,388)')
+  })
+
+  it('marks each month of the trail as the level it is', () => {
+    // A `figure` is a number code computed; these are levels, and rule (b)
+    // only reads a node it has been told is one. A month that could not be
+    // read prints a dash and stays a `figure`, because it states no level.
+    const markup = render(tile(measured))
+    expect(markup).toContain('<span data-copy="level" class="whitespace-nowrap">Jul 5.1% (71 of 1,400)</span>')
+    expect(copyViolations(tile(measured))).toEqual([])
   })
 
   it('names what the figures are figures OF, rather than dropping a bare label', () => {

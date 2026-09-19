@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { Fragment, type ReactNode } from 'react'
 import Link from 'next/link'
 import { CalendarLine } from '@/components/charts/calendar-line'
 import { BlockMovement } from '@/components/blocks/movement'
@@ -212,21 +212,46 @@ function FindingChart({ f }: { f: FindingMeasure }) {
  * Changing the axis would be a change to `components/charts/*` and
  * `lib/charts/calendar.ts`, which every reading surface draws through — one
  * surface with a different axis from the other five is worse than this. So the
- * plotted values are printed, in order, as figures: every month on the line,
- * with its own number, in the reader's own words. `MeasuredPoint.pct` is null
- * for a month that could not be read, and a null prints as a dash rather than
- * as a zero.
+ * plotted values are printed, in order: every month on the line, with its own
+ * number, in the reader's own words. `MeasuredPoint.pct` is null for a month
+ * that could not be read, and a null prints as a dash rather than as a zero.
+ *
+ * AND EACH MONTH CARRIES ITS OWN DENOMINATOR, which is the whole reason
+ * `MeasuredPoint` has one ("its monthly series WITH denominators",
+ * `lib/agent/measure.ts:86`). It printed `Jul 5.1% → Aug 6.8% → Sep 9.4%` —
+ * three levels, no "of N" between them — and the chart's end label carries the
+ * denominator for the newest month only. A level without its "of N" is a
+ * score, which this product does not show, and marking the run
+ * `data-copy="figure"` meant rule (b) never looked: a `figure` is a number
+ * code computed, and these are levels.
+ *
+ * So each month is its OWN node: `level` where it has a counted pair, which
+ * rule (b) then inspects and which carries the pair inside one node the way
+ * `FindingLevel` does; `figure` for a month that could not be read, whose text
+ * is a dash and states no level at all. The separators sit outside both, so
+ * neither node's text is something the contract has to reason about.
  */
 function MonthTrail({ f }: { f: FindingMeasure }) {
   const months = f.series.filter((p) => f.chart.axis.includes(p.month))
   if (months.length === 0) return null
   return (
     <p className="m-0 font-mono text-[10px] leading-[1.4] text-muted-foreground">
-      <span data-copy="figure">
-        {months
-          .map((p) => `${monthName(p.month).split(' ')[0]} ${p.pct == null ? '—' : `${p.pct}%`}`)
-          .join(' → ')}
-      </span>
+      {months.map((p, i) => {
+        const when = monthName(p.month).split(' ')[0]
+        const read = p.pct != null && p.k != null && p.n != null
+        return (
+          <Fragment key={p.month}>
+            {i > 0 ? ' → ' : null}
+            {read ? (
+              <span data-copy="level" className="whitespace-nowrap">
+                {when} {p.pct}% ({fmtInt(p.k as number)} of {fmtInt(p.n as number)})
+              </span>
+            ) : (
+              <span data-copy="figure" className="whitespace-nowrap">{when} —</span>
+            )}
+          </Fragment>
+        )
+      })}
     </p>
   )
 }
