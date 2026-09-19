@@ -3,7 +3,7 @@
 import { useActionState, useState } from 'react'
 import { updateCommunity } from '@/app/dashboard/settings/actions'
 import type { SettingsFormState } from '@/app/dashboard/settings/actions'
-import { CONTROL, FIELD, MonoNote } from '@/components/settings/chrome'
+import { CONTROL, FIELD, MonoNote, ROW_CONTROL } from '@/components/settings/chrome'
 import { cn } from '@/lib/utils'
 
 // `settings.reddit.col.action` and `settings.reddit.add` — the two Reddit
@@ -54,7 +54,7 @@ export function CommunityAction({ name, op, proposed = false, canEdit }: { name:
           data.set('name', name)
           dispatch(data)
         }}
-        className="rounded-[3px] text-[12px] font-medium text-foreground transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+        className={ROW_CONTROL}
       >
         {/* A PROPOSAL IS NOT A THING WE ARE WATCHING. A candidate is a
             community discovery found and nobody chose, and nothing is read

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { X } from 'lucide-react'
 import { RIVALS_PRESENT } from '@/app/dashboard/settings/constants'
 import { RivalRename } from '@/app/dashboard/settings/rival-rename'
-import { CONTROL, Dot, Figure, FIELD, GridRow, GridTable, MonoNote, Section, SectionHead, SectionNotes } from '@/components/settings/chrome'
+import { CONTROL, Dot, Figure, FIELD, GridRow, GridTable, ICON_TARGET, MonoNote, Section, SectionHead, SectionNotes } from '@/components/settings/chrome'
 import { monthName, platformLabel, shortDate } from '@/lib/format'
 import { HANDLE_FORMAT_CAVEAT } from '@/lib/provisioning'
 import { isNewRival, rivalRefusalNote, rivalState, rivalsMeta, RIVAL_BREAK_RULE, RIVAL_REMOVED_PENDING, type RivalRow } from '@/lib/settings/rivals-view'
@@ -102,7 +102,7 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
                       type="button"
                       onClick={() => onRemove(r.name)}
                       aria-label={`Stop tracking ${r.name}`}
-                      className="relative cursor-pointer rounded-full p-0.5 text-muted-foreground transition-colors after:absolute after:-inset-3 after:content-[''] hover:bg-inner hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      className={cn(ICON_TARGET, 'cursor-pointer rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-inner hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring')}
                     >
                       <X className="size-3" aria-hidden />
                     </button>
@@ -170,7 +170,7 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
                     type="button"
                     onClick={() => onRemove(name)}
                     aria-label={`Remove ${name}`}
-                    className="relative cursor-pointer rounded-full p-0.5 text-muted-foreground transition-colors after:absolute after:-inset-3 after:content-[''] hover:bg-inner hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    className={cn(ICON_TARGET, 'cursor-pointer rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-inner hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring')}
                   >
                     <X className="size-3" aria-hidden />
                   </button>

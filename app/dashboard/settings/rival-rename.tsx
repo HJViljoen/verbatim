@@ -1,6 +1,9 @@
 'use client'
 
 import { useActionState, useState } from 'react'
+
+import { cn } from '@/lib/utils'
+import { ROW_CONTROL } from '@/components/settings/chrome'
 import { renameTrackedRival, type RenameState } from './rivals-actions'
 
 // Rename a rival, from the rivals table. Closed until asked for: renaming is
@@ -77,7 +80,7 @@ export function RivalRename({ id, name }: { id: string; name: string }) {
         <button
           type="button"
           onClick={() => { setDraft(name); setFiredFor(null); setOpen(true) }}
-          className="shrink-0 rounded-[3px] text-[11.5px] font-medium text-secondary-foreground transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          className={cn(ROW_CONTROL, 'shrink-0 text-[11.5px] text-secondary-foreground hover:text-foreground')}
         >
           Rename
         </button>

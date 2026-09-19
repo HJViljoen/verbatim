@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { X } from 'lucide-react'
-import { CONTROL, Dot, FIELD, LabelRow, MonoNote, Section, SectionHead } from '@/components/settings/chrome'
+import { CONTROL, Dot, FIELD, ICON_TARGET, LabelRow, MonoNote, Section, SectionHead } from '@/components/settings/chrome'
 import { glossaryRule } from '@/lib/calibration'
 import type { TermSummary } from '@/lib/keywords/value'
 import { MAX_TERMS_PER_BUCKET } from '@/lib/onboarding-config'
@@ -130,7 +130,7 @@ export function TermsSection({ terms, dates, datesNote, review, canEdit, onAdd, 
                     onClick={() => { onRemove(b.key, t); setError(null) }}
                     disabled={!canEdit}
                     aria-label={`Remove ${t}`}
-                    className="relative cursor-pointer rounded-full p-0.5 text-muted-foreground transition-colors after:absolute after:-inset-3 after:content-[''] hover:bg-tile hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
+                    className={cn(ICON_TARGET, 'cursor-pointer rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-tile hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40')}
                   >
                     <X className="size-3" aria-hidden />
                   </button>

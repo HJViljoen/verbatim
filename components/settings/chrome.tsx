@@ -220,6 +220,34 @@ export function SectionNotes({ notes }: { notes: readonly ReactNode[] }) {
   )
 }
 
+/**
+ * A control that reads as TEXT inside a table row, at the same 44px target.
+ *
+ * The page has one control height and `CONTROL` holds it, but the two in-row
+ * controls — "Stop watching" / "Watch it" on a community and "Rename" on a
+ * rival — are not boxes: the artboard draws them as a word at the row's right
+ * edge, and giving them `CONTROL`'s filled-edge box would put seventeen ringed
+ * buttons down a table whose whole point is density. So they keep the word and
+ * take the HEIGHT: seventeen of them rendered 17px tall in rows already 44-52px
+ * high, which is a target under every floor this system has and under the one
+ * `CONTROL` exists to state (ST6).
+ *
+ * `min-h-11` rather than `h-11`, because a message may wrap under one.
+ */
+export const ROW_CONTROL =
+  'inline-flex min-h-11 items-center rounded-[3px] text-[12px] font-medium text-foreground transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50'
+
+/**
+ * The target around a bare icon, as a pseudo-element, so the glyph keeps its
+ * size and the pressable box does not.
+ *
+ * The × on a chip and on a rival row is a `size-3` glyph in `p-0.5` — a 16px
+ * box — and `after:-inset-3` carried that to 40, not 44: twelve pixels around
+ * sixteen is forty. Fourteen is the number that makes it 44, and it lives here
+ * rather than in three className strings that drifted (ST6).
+ */
+export const ICON_TARGET = 'relative after:absolute after:-inset-[14px] after:content-[\'\']'
+
 /** The artboard's control height and edge, in one place. A control that can be
  *  pressed carries a hairline ring; nothing on this page is a filled button
  *  except the one save. */

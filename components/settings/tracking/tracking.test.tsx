@@ -9,7 +9,7 @@ import { renameNotice } from '@/app/dashboard/settings/rival-rename'
 import { RIVAL_REMOVED_PENDING } from '@/lib/settings/rivals-view'
 import { NEW_TERM_RULE, REVIEW_KEEP_NOTE, TermsSection } from './terms'
 import { BREAK_NOT_RECORDED, BROKE_NOTHING, LastSaveStrip, NEVER_SAVED, SaveStateLine } from '../save-state-strip'
-import { gridIntrinsic } from '@/components/settings/chrome'
+import { gridIntrinsic, ICON_TARGET, ROW_CONTROL } from '@/components/settings/chrome'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import type { TermSummary } from '@/lib/keywords/value'
@@ -98,13 +98,19 @@ describe('the search terms section', () => {
     expect(words).toContain('in the set before we kept a record')
   })
 
-  it('gives a 20px remove icon a pressable target', () => {
-    // M5: a `size-3` glyph in `p-0.5` is roughly 20 x 20 on a page whose own
+  it('gives the remove icon a 44px target, not a 40px one', () => {
+    // M5: a `size-3` glyph in `p-0.5` is a 16px box on a page whose own
     // CONTROL constant is h-11 for everything else. The icon keeps its size
-    // and the pseudo element carries the target out to 44.
+    // and the pseudo element carries the target out.
+    //
+    // ST6: `after:-inset-3` is 12px around 16, which is FORTY, not 44 — and it
+    // was written out in three className strings that could drift apart. One
+    // constant now, at the inset that actually makes 44.
+    expect(ICON_TARGET).toContain('after:-inset-[14px]')
+    expect(ICON_TARGET).not.toContain('after:-inset-3')
     const markup = render(termsSection)
     const remove = markup.slice(markup.indexOf('aria-label="Remove Sealand"'))
-    expect(remove.slice(0, 400)).toContain('after:-inset-3')
+    expect(remove.slice(0, 400)).toContain('after:-inset-[14px]')
   })
 
   it('states what adding one does, beside the field that does it', () => {
@@ -249,6 +255,18 @@ describe('the communities section', () => {
     // and failed in the pure layer ("You are not watching r/frugal.").
     expect(words).toContain('Don’t watch it')
     expect(words).toContain('proposed, and measured')
+  })
+
+  it('gives a row control the page’s own 44px height', () => {
+    // ST6: twelve "Stop watching" / "Watch it" controls rendered 78x17 and
+    // 45x17 in rows already 44-52px tall, on a page whose CONTROL constant is
+    // h-11 precisely so that 44 lives in one place. They keep the WORD — the
+    // artboard draws them as text at the row's right edge, not as twelve
+    // ringed boxes down a dense table — and take the height.
+    expect(ROW_CONTROL).toContain('min-h-11')
+    const markup = render(section)
+    const control = markup.slice(Math.max(0, markup.indexOf('Stop watching') - 600), markup.indexOf('Stop watching'))
+    expect(control).toContain('min-h-11')
   })
 
   it('keeps the copy contract', () => {
