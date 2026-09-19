@@ -10,6 +10,9 @@ import { inheritedStatus, isMissingRecDecisions, REC_DECISIONS_TABLE, type RecDe
 import { methodLines, type MethodLines } from '../reading/method'
 import { PLAN_EMPTY, loadPlanChecks, type PlanCheckCard } from '../ask/plan-cards'
 import { scrubProse } from '../prose/scrub'
+// The client-facing half of the readiness vocabulary — what a surface says
+// where the readiness page names the team. See `CLOSED_BY_US`'s own docblock.
+import { CLOSED_BY_US } from '../readiness/types'
 import { afterwardsFor, groundingFor, type Afterwards, type Grounding } from '../reading/afterwards'
 import { recurrenceOf, type Recurrence } from '../reading/head-to-head'
 import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordInputs } from '../reading/record'
@@ -330,7 +333,17 @@ export interface UnlockRow {
   section: string
   title: string
   line: string
-  owner: string
+  /**
+   * WHO THE READER CAN GO TO, and null where that is nobody they can go to —
+   * Competitive's `CompetitiveUnlockRow.closes`, same field, same reason, and
+   * the two renderers print it the same way.
+   *
+   * It was `owner` and carried "Verbatim engineering", a readiness OWNER on a
+   * paying reader's page (`CLOSED_BY_US`, lib/readiness/types.ts). Null means
+   * the row is ours, and the row's `line` then ends in the sentence that says
+   * what closes it.
+   */
+  closes: string | null
 }
 
 export interface UnlocksBlock {
@@ -763,8 +776,14 @@ export function unlockRows(plansChecked = 0): UnlockRow[] {
       // row here, so this row names the confirming rather than the card.
       section: 'MK3',
       title: 'Confirming this month’s card',
-      line: 'The card is read above — everything you published this month, how much of it drew enough comment to read, and the claims you made in it. Turning it into a move in one press is what is missing.',
-      owner: 'Verbatim engineering',
+      // AND THE OWNER IS OFF THE CLIENT'S PAGE (the vocabulary ruling). The
+      // renderer printed "— not built yet · Verbatim engineering" under this
+      // row: an internal team name in front of the paying reader, with no link
+      // and nothing they could do with it. The row keeps the WP19 shape the
+      // briefs have used since — what is missing, then what closes it — and
+      // the sentence is `CLOSED_BY_US`'s, not a second wording of it.
+      line: `The card is read above — everything you published this month, how much of it drew enough comment to read, and the claims you made in it. Turning it into a move in one press is what is missing. ${CLOSED_BY_US.engineering}`,
+      closes: null,
     },
   ]
   // MK6 LEAVES THIS LIST WHEN IT HAS SOMETHING TO SHOW. The row's own sentence
@@ -780,7 +799,10 @@ export function unlockRows(plansChecked = 0): UnlockRow[] {
       section: 'MK6',
       title: 'Plans re-checked',
       line: 'Upload a campaign brief on Ask and it is re-read against every update — each claim supported, contradicted or untested, with what moved since you uploaded it.',
-      owner: 'You, on Ask',
+      // UNTOUCHED BY THE RULING: "You, on Ask" is the reader and a page of
+      // theirs, which is the client branch of WP19's split — the act, named
+      // where they do it. The ruling is about OUR queue names.
+      closes: 'You, on Ask',
     })
   }
   return rows

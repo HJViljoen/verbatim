@@ -5,6 +5,9 @@ import { CONFIG_CHANGES_TABLE, isMissingConfigLog, isTrackingChange, type Config
 import { COMPETITIVE_MIN_VIDEOS } from '../config'
 import { fmtInt, monthName, platformLabel } from '../format'
 import { fetchQuoteCitationsByAudience } from '../quotes'
+// The client-facing half of the readiness vocabulary — what a surface says
+// where the readiness page names the team. See `CLOSED_BY_US`'s own docblock.
+import { CLOSED_BY_US } from '../readiness/types'
 import { attentionTotals, type AttentionRow } from '../reading/attention'
 import { horizonWindow, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
 import { freezeStateFor, monthStartOf } from '../reading/monthly'
@@ -225,7 +228,22 @@ export interface CompetitiveUnlockRow {
   section: string
   title: string
   line: string
-  owner: string
+  /**
+   * WHO THE READER CAN GO TO, and null where that is nobody they can go to.
+   *
+   * THE FIELD WAS `owner` AND CARRIED "Verbatim engineering" — a readiness
+   * OWNER, which is the right fact on /dashboard/settings/readiness and an
+   * internal team name in the middle of a client's page (see `CLOSED_BY_US`,
+   * lib/readiness/types.ts). Renamed rather than re-valued, because a field
+   * called `owner` is an invitation to put an owner back in it — the same
+   * reason subjects R1 deleted the `_OUTSIDE` twin instead of aliasing it.
+   *
+   * Null means the row is OURS. It is not an omission: the row's own `line`
+   * then ends in the WP19 sentence that says what closes it, so the reader is
+   * told, in words they can act on or not act on, rather than handed a queue
+   * name.
+   */
+  closes: string | null
   /** Which silence this is. ST1's "— not tracked" is for a section whose
    *  INPUTS are not configured; "— not built yet" is Market's word for a
    *  section whose inputs are here and whose code is not. */
@@ -559,7 +577,12 @@ export function competitiveUnlockRows(ownClaims: readonly OwnPostCensus[] = []):
           state: 'not tracked' as const,
           title: 'What they say about themselves',
           line: 'The rival’s own-post claims, verbatim, beside what their audience says on the same subject. Their accounts are not configured, and a rival’s claims may only be read from videos they posted themselves.',
-          owner: 'Your digital director',
+          // THIS ONE STILL NAMES SOMEBODY, and the ruling does not touch it: a
+          // digital director is a person on the READER's side of the desk,
+          // which is the client branch of the same WP19 split ("This one is
+          // yours to close"). What the ruling forbids is handing the client
+          // one of OUR queue names.
+          closes: 'Your digital director',
         }
       : {
           section: 'CO4',
@@ -574,8 +597,21 @@ export function competitiveUnlockRows(ownClaims: readonly OwnPostCensus[] = []):
           // said. The other arm keeps the tile's name because there the tile
           // genuinely has nothing: no account is configured anywhere.
           title: 'What they claim in their own posts',
-          line: 'What each rival published this month is above. What they CLAIM in it is read from their own transcripts and is not printed here — putting a rival’s words on this page is a decision to take, not a gap to fill.',
-          owner: 'Verbatim engineering',
+          // AND THE OWNER IS OFF THE CLIENT'S PAGE. The badge under this row
+          // read "— not built yet · Verbatim engineering": an internal team
+          // name on a paying reader's screen, with no link and nothing they
+          // could do with it (the ruling, and `CLOSED_BY_US` in
+          // lib/readiness/types.ts).
+          //
+          // IT IS NOT `CLOSED_BY_US.engineering`, THOUGH, AND THAT MATTERS.
+          // That sentence promises a build — "We are building it" — and this
+          // row's own line says the opposite one clause earlier: printing a
+          // rival's words is a decision to take, not a gap to fill. Nobody is
+          // building this. So the row takes the SHAPE of the WP19 split (what
+          // is missing, then what closes it, in the line itself) with the act
+          // this row actually has: a decision, ours, undated.
+          line: 'What each rival published this month is above. What they CLAIM in it is read from their own transcripts and is not printed here — putting a rival’s words on this page is a decision to take, not a gap to fill. Nothing in your workspace is holding it up: the decision is ours, and this section appears here the day we take it.',
+          closes: null,
         }
   // CO3 AND CO7 CAME OUT IN THE COMMIT THAT MOUNTED THEM (Block D wave 2,
   // E-competitive; wave 1's standing instruction). Both now draw on the page
@@ -598,8 +634,11 @@ export function competitiveUnlockRows(ownClaims: readonly OwnPostCensus[] = []):
       section: 'CO6',
       state: 'not built yet' as const,
       title: 'Findings, with recurrence',
-      line: 'Cross-brand findings with “seen in 4 of the last 6 months”, which needs a finding identity that survives an update.',
-      owner: 'Verbatim engineering',
+      // THE WP19 SENTENCE, VERBATIM, where "Verbatim engineering" stood. This
+      // one IS being built, so it takes the promise the briefs have made since
+      // WP19 rather than a second wording of it.
+      line: `Cross-brand findings with “seen in 4 of the last 6 months”, which needs a finding identity that survives an update. ${CLOSED_BY_US.engineering}`,
+      closes: null,
     },
   ]
 }

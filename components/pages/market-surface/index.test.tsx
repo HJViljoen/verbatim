@@ -17,6 +17,7 @@ import { marketPlans } from './plans'
 import { marketSayHear } from './sayhear'
 import { marketWays } from './ways'
 import { marketUnlocks } from './unlocks'
+import { CLOSED_BY_US, OWNER_LABEL } from '@/lib/readiness/types'
 import { deepLinkFixture, firstUpdateFixture, marketFixture, unrecordedFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
@@ -876,7 +877,7 @@ describe('MK4 · a move, read', () => {
 })
 
 describe('the sections that are not built', () => {
-  it('names MK3 with an owner and no invented date', () => {
+  it('names MK3, says what closes it, and invents no date', () => {
     const text = renderText(marketUnlocks.render(marketFixture(), 'app', ctx))
     // THE CARD IS BUILT; THE PRESS IS NOT — so the row that is listed here as
     // missing names the confirming, not the card (Phase 1 D2 fix pass). MK6 is
@@ -884,8 +885,22 @@ describe('the sections that are not built', () => {
     // that row — the test below owns it.
     expect(text).toContain('Confirming this month’s card')
     expect(text).toContain('The card is read above')
-    expect(text).toContain('Verbatim engineering')
     expect(text).not.toMatch(/by \d{1,2} \w+/)
+    // AND THE OWNER IS OFF THE PAGE (the vocabulary ruling; see `CLOSED_BY_US`,
+    // lib/readiness/types.ts). This line asserted that "Verbatim engineering"
+    // PRINTS, and it was right about what the code did and wrong about what a
+    // client may be handed: an internal team name, no link, nothing to act on,
+    // on a page they pay for. What replaces it is the WP19 split every brief
+    // has printed since — what is missing, then what closes it.
+    expect(text).toContain(CLOSED_BY_US.engineering)
+    for (const mode of MODES) {
+      const t = renderText(marketUnlocks.render(marketFixture(), mode, ctx))
+      expect(t, mode).not.toContain(OWNER_LABEL.engineering)
+      expect(t, mode).not.toContain(OWNER_LABEL.ops)
+    }
+    // MK6 is the row that still names somebody, and they are on the reader's
+    // side of the desk — which is WP19's client branch, not an owner.
+    expect(renderText(marketUnlocks.render(unrecordedFixture(), 'app', ctx))).toContain('You, on Ask')
   })
 
   // MK6 IS NAMED ONLY WHERE IT IS ABSENT (D4). A workspace with a checked plan

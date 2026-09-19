@@ -17,6 +17,7 @@ import { competitiveStandings } from './standings'
 import { competitiveQuestions } from './questions'
 import { buildSaidAbout, competitiveUnlockRows } from '@/lib/pages/competitive-surface'
 import { competitiveUnlocks } from './unlocks'
+import { CLOSED_BY_US, OWNER_LABEL } from '@/lib/readiness/types'
 import { claimsReadFixture, competitiveFixture, oneMonthFixture, quietRivalFixture, unreadMonthsFixture, unreadRivalFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
@@ -354,7 +355,28 @@ describe('the sections that are not built', () => {
     expect(text).toContain('Findings, with recurrence')
     expect(text).not.toContain('Head to head, then and now')
     expect(text).not.toContain('How the category makes content')
-    expect(text).toContain('Verbatim engineering')
+  })
+
+  // THE READINESS OWNER IS NOT THE CLIENT'S WORD (the vocabulary ruling; see
+  // `CLOSED_BY_US`, lib/readiness/types.ts). This test asserted the opposite —
+  // that "Verbatim engineering" PRINTS — and it was right about what the code
+  // did and wrong about what a client may be handed: an internal team name,
+  // with no link, nothing saying what it would do and nothing to act on, in
+  // the middle of a page they pay for. What replaces it is the WP19 split
+  // every brief has printed since: what is missing, then what closes it.
+  it('never hands the reader one of our queue names, in any mode', () => {
+    for (const mode of MODES) {
+      const text = renderText(competitiveUnlocks.render(competitiveFixture(), mode, ctx))
+      expect(text, mode).not.toContain(OWNER_LABEL.engineering)
+      expect(text, mode).not.toContain(OWNER_LABEL.ops)
+      // And the row still answers "so who moves next?" — CO6 with the
+      // promise, CO4 with the decision its own line says this is.
+      expect(text, mode).toContain(CLOSED_BY_US.engineering)
+      expect(text, mode).toContain('the decision is ours')
+    }
+    // The one row that DOES name somebody names them on the reader's side.
+    const untracked = competitiveFixture({ unlocks: { rows: competitiveUnlockRows([]) } })
+    expect(renderText(competitiveUnlocks.render(untracked, 'app', ctx))).toContain('Your digital director')
   })
 
   it('never says a rival is not tracked on a page that has just counted their posts', () => {

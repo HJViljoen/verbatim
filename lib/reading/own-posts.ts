@@ -211,6 +211,34 @@ export const OWN_POSTS_UNREADABLE = '— not tracked · their own posts are not 
  *  and a `/r/<token>` share page, which is what WP19 put it in front of. */
 export const OWN_POSTS_UNREADABLE_OUTSIDE = '— not tracked · their own posts are not readable yet'
 
+/**
+ * This week's clause for the same shelf, and it is NOT the two above — read
+ * the verbs.
+ *
+ * "not READABLE yet" is a policy: `video_claims` is closed to a tenant session
+ * until M8, so the half exists and we may not print it. "not READ yet" is a
+ * measurement: `ownPostsUnread` (lib/pages/week.ts) asks whether this
+ * workspace has EVER captured a post of this rival's, and a rival with none is
+ * a rival nothing is being read from. Össur has 92 posts about Ottobock and
+ * zero of Ottobock's own. Two different facts, so two different sentences, and
+ * a shared constant between them would make one of the two pages lie.
+ *
+ * THEY LIVE HERE ANYWAY, beside the pair they are nearly, so the next reader
+ * meets the distinction rather than discovering it. And they follow the same
+ * rule those two follow (design review nit 25, subjects R1, and the vocabulary
+ * ruling this pair was written for): this clause ended "— Verbatim
+ * engineering", a readiness OWNER — the right fact on the Readiness page and
+ * an internal team name on a paying reader's screen anywhere else. The in-app
+ * clause names the PAGE, which exists: `rivalAccounts` is the first row
+ * lib/readiness/compute.ts draws, and it separates configured from captured
+ * from read, which is exactly what this clause reports.
+ */
+export const OWN_POSTS_UNREAD = 'their own posts are not read yet · Settings › Readiness'
+
+/** The same measurement for a reader outside the workspace, who has no
+ *  Settings to open — This week is printed and emailed as well as read. */
+export const OWN_POSTS_UNREAD_OUTSIDE = 'their own posts are not read yet'
+
 /** A rival that is named and has no account configured anywhere. Nothing they
  *  publish is read, so there is no census to take — which is a different
  *  sentence from "we read them and found nothing". */
