@@ -153,6 +153,32 @@ export function basisLineFor(month: string): string {
 }
 
 /**
+ * An `audienceLabel` INSIDE a sentence rather than over a column.
+ *
+ * `lib/reading/afterwards.ts:57` already names the distinction this module was
+ * failing to keep: `audienceLabel` is "a column heading in Title Case ('The
+ * category')" and reads wrong mid-sentence — `matrixConclusion` printed
+ * "measured over 206 and 39 of **The category's** 687 classified videos".
+ * `audiencePhrase` is not the answer here: it turns `client` into "your
+ * audience" and a rival into "X's audience", and these sentences are about
+ * videos a side PUBLISHED, not about the people talking under them.
+ *
+ * So the whole fix is the definite article, which is the only Title Case a
+ * column heading carries that a sentence does not want: "The category" becomes
+ * "the category" and every brand keeps its capital. A brand that really begins
+ * with one — "The North Face" — reads correctly mid-sentence too. A label that
+ * OPENS a sentence (`unreadLine`) is left alone, because there Title Case is
+ * the sentence case.
+ *
+ * Exported because the other sentence with this defect is `coverageLine`
+ * (`lib/pages/playbook.ts`, the competitive group's file): "Read from 687 of
+ * The category's 757".
+ */
+export function labelInSentence(label: string): string {
+  return label.startsWith('The ') ? `the ${label.slice(4)}` : label
+}
+
+/**
  * One audience's formats (or hooks) for one month, on the published clock.
  *
  * Rows are one per stored value, each with its own k of the classified n, its
@@ -384,7 +410,7 @@ export function matrixConclusion(
   const next = [...rated].sort((a, b) => (b.engagement.median ?? 0) - (a.engagement.median ?? 0))[1]
   return (
     `${best.label} ran at ${best.engagement.median}% against ${next.label} at ${next.engagement.median}% ` +
-    `— measured over ${fmtInt(best.engagement.n)} and ${fmtInt(next.engagement.n)} of ${widest.audienceLabel}’s ` +
+    `— measured over ${fmtInt(best.engagement.n)} and ${fmtInt(next.engagement.n)} of ${labelInSentence(widest.audienceLabel)}’s ` +
     `${fmtInt(widest.of)} classified ${widest.basisLine}.`
   )
 }

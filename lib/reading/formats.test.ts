@@ -7,6 +7,7 @@ import {
   belowMedian,
   formatMatrix,
   formatReading,
+  labelInSentence,
   matrixConclusion,
   type FormatVideo,
 } from './formats'
@@ -233,7 +234,9 @@ describe('formatMatrix · three audiences, one table', () => {
     const m = formatMatrix([category, own, rival])
     expect(m.conclusion).toContain('5.2%')
     expect(m.conclusion).toContain('3.8%')
-    expect(m.conclusion).toContain('The category')
+    // `the category's`, mid-sentence (design review 14 / `labelInSentence`).
+    expect(m.conclusion).toContain('of the category’s')
+    expect(m.conclusion).not.toContain('The category')
     expect(directionRe().test(m.conclusion ?? '')).toBe(false)
   })
 
@@ -268,7 +271,10 @@ describe('formatMatrix · three audiences, one table', () => {
     // The two highest MEDIANS, not the two biggest columns — and `review` is
     // named although the table never prints its row.
     expect(m.conclusion).toBe(
-      'review ran at 9.7% against story at 3.4% — measured over 4 and 40 of The category’s 144 classified videos published in September.',
+      // "the category’s", not "The category’s": `audienceLabel` is a column
+      // heading in Title Case and this is the middle of a sentence
+      // (`labelInSentence`, design review 14).
+      'review ran at 9.7% against story at 3.4% — measured over 4 and 40 of the category’s 144 classified videos published in September.',
     )
     // …and "what not to make" reaches past the table too. The category's own
     // median video runs at 2.9%; promotional is third by count and tutorial
@@ -287,6 +293,16 @@ describe('formatMatrix · three audiences, one table', () => {
     const thin = reading([vid({ id: 'x', classified_type: 'unboxing', engagement_rate: 2 })])
     expect(matrixConclusion([thin])).toBeNull()
     expect(formatMatrix([thin]).conclusion).toBeNull()
+  })
+
+  // A COLUMN HEADING IS NOT A NOUN PHRASE (design review 14).
+  it('drops the column heading’s article when the label is inside a sentence', () => {
+    expect(labelInSentence('The category')).toBe('the category')
+    expect(labelInSentence('Össur')).toBe('Össur')
+    expect(labelInSentence('The North Face')).toBe('the North Face')
+    // And a label that OPENS a sentence keeps its capital: `unreadLine` is
+    // sentence-initial, so Title Case is sentence case there.
+    expect(reading([], { audienceLabel: 'The category' }).unread).toMatch(/^The category published nothing/)
   })
 })
 
