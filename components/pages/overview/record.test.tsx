@@ -4,7 +4,7 @@ import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
-import { overviewRecord, recordColumns } from './record'
+import { overviewRecord, readLabel, recordColumns } from './record'
 import { overviewFixture, refusedFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
@@ -30,8 +30,15 @@ describe('OV6 · how sound is this month', () => {
     // clocks, which is why they are two paragraphs and not one.
     const markup = render(overviewRecord.render(overviewFixture(), 'app', ctx))
     expect(markup).toContain('xl:grid-cols-2')
-    expect(markup).toContain('What was read:')
-    expect(markup).toContain('How it was read, and what would not compare:')
+    // THE LEFT LEAD-IN IS THE MOCK'S (Block D wave 3, M18): `Main.dc.html` §6
+    // opens "September so far:" and this column IS the month's record. The
+    // right one is not, because the content is not the mock's — the artboard's
+    // "Changes, refusals and delivery" is all on the LEFT here — and it drops
+    // the clause that described the other column.
+    expect(markup).toContain('September 2026 so far:')
+    expect(markup).toContain('How it was read:')
+    expect(markup).not.toContain('and what would not compare:')
+    expect(readLabel({ ...overviewFixture(), monthStatus: 'frozen' })).toBe('September 2026:')
   })
 
   it('binds methodLines rather than re-deriving the five facts', () => {
@@ -40,9 +47,22 @@ describe('OV6 · how sound is this month', () => {
     // composing them separately, which is how "27% not in English" came to mean
     // two different things on two pages.
     const data = overviewFixture()
-    const { method } = recordColumns(data)
-    for (const line of data.method?.lines ?? []) expect(method).toContain(line)
-    expect(data.method?.lines.length ?? 0).toBeGreaterThan(0)
+    const { method, read } = recordColumns(data)
+    const m = data.method!
+    for (const line of [m.preparedBy, m.basis, m.language, m.redditCap, m.privacy]) {
+      if (line) expect(method).toContain(line)
+    }
+    expect(m.lines.length).toBeGreaterThan(0)
+    // EXCEPT `coverage`, WHICH IS THE LEFT COLUMN'S (Block D wave 3, M14).
+    // "2,359 videos read in this window · TikTok 38% · …" and the left
+    // column's "2,359 videos carried conversation in this window — TikTok
+    // 38% · …" are the same count and the same mix in two wordings, nine
+    // hundred pixels apart, with nothing saying whether they are two measures
+    // or one. The denominator is a fact about the corpus, so the corpus column
+    // keeps it.
+    expect(method).not.toContain(m.coverage)
+    expect(read.join(' ')).toContain('2,359')
+    expect(method.join(' ')).not.toContain('TikTok')
   })
 
   it('states the basis of every figure that is not this month’s (D15)', () => {
@@ -70,7 +90,7 @@ describe('OV6 · how sound is this month', () => {
     // so the link's position in the markup is the fact to pin.
     const markup = render(overviewRecord.render(overviewFixture(), 'app', ctx))
     const link = markup.indexOf('the record →')
-    const body = markup.indexOf('What was read:')
+    const body = markup.indexOf('September 2026 so far:')
     expect(link).toBeGreaterThan(-1)
     expect(body).toBeGreaterThan(-1)
     expect(link).toBeLessThan(body)

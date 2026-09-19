@@ -4,13 +4,36 @@ import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
-import { brandLabel, caveatLine, overviewRivals } from './rivals'
+import { brandLabel, caveatLine, overviewRivals, rowInk } from './rivals'
 import { overviewFixture, refusedFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
 
 describe('OV4 · rivals', () => {
+
+  // WHICH ROW IS YOURS IS THE FIRST THING A READER LOOKS FOR (Block D wave 3,
+  // M15). "(you)" at the end of a label was the only marker, and on a tenant
+  // whose own name sorts between two rivals that is one row of six with nothing
+  // to catch the eye. The artboard draws a 6px dot in the entity's own ink
+  // before every name and sets the client's at 600 on the inner ground.
+  it('marks each row with its entity ink, and the client row with weight', () => {
+    const data = overviewFixture()
+    const markup = render(overviewRivals.render(data, 'app', ctx))
+    expect(markup).toContain('var(--you)')
+    expect(markup).toContain('var(--comp)')
+    expect(markup).toContain('var(--cat)')
+    expect(markup).toContain('bg-inner')
+    // The ink is by ROLE first, then by place among the rivals.
+    const rows = data.rivals.rows
+    const client = rows.find((r) => r.role === 'client')!
+    expect(rowInk(rows, client)).toBe('var(--you)')
+    const rivals = rows.filter((r) => r.role === 'rival')
+    expect(rowInk(rows, rivals[0])).toBe('var(--comp)')
+    if (rivals[1]) expect(rowInk(rows, rivals[1])).not.toBe('var(--comp)')
+    // And the dot never speaks: the name beside it is what the row is read by.
+    expect(markup).toContain('aria-hidden')
+  })
   it('renders in all three modes and keeps the copy contract', () => {
     for (const data of [overviewFixture(), refusedFixture()]) {
       for (const mode of MODES) {

@@ -7,12 +7,12 @@ import { BlockMovement } from '@/components/blocks/movement'
 import { Sparkline } from '@/components/charts/sparkline'
 import { fmtInt, fmtPct, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import type { Direction } from '@/lib/reading/bands'
+import { DIRECTION_RUN, type Direction } from '@/lib/reading/bands'
 import { gapBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
 import { TileBlock } from '@/components/shell/tile'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { OverviewData, SideReading, SubjectRow } from '@/lib/pages/overview'
-import { candidateLine, monthlyLineLabel, sentLineFor } from '@/lib/pages/overview'
+import { candidateLine, monthlyLineLabel, monthlySpanLabel, sentLineFor } from '@/lib/pages/overview'
 import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
 
 // OV2 · Your subjects — the hero (design §3 OV2).
@@ -33,14 +33,53 @@ import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
  * is not read off a single comparison, and it is not the `RUN_INDEXED` word the
  * direction map gates. Marked `verdict` so the copy contract can see that the
  * word has a reading behind it (rule (c)).
+ *
+ * `flat` PRINTS NOTHING (Block D wave 3, M4). It is `directionWord`'s answer
+ * for "three readings exist and do not agree", which is the ABSENCE of a
+ * direction rather than a direction — and the word itself is one the product
+ * retired: `MOVEMENT_WORDS` does not carry it (mock-gap §6 D11). The guard was
+ * `if (!direction)`, which lets `Direction`'s third value straight through, and
+ * this is the SHARED node: Overview's subject rows and its movers, the monthly
+ * email, the weekly email, Voice's two mover surfaces and the leadership sheet
+ * all print through it, and both loaders hand it the raw value. The commonest
+ * outcome on a live tenant — three readable months whose change sits inside the
+ * band, the one `directionWord` exists to refuse — rendered a pill reading
+ * "flat, 3 months" beside a badge reading "no clear change": two non-answers,
+ * one of them dressed as a finding. The sibling written in the same wave
+ * (`pages/subjects/subject.tsx:63`) filters it and pins it; this is that guard,
+ * on the copy every other surface shares.
  */
 export function DirectionWord({ direction, mode = 'app' }: { direction: Direction | null; mode?: RenderMode }) {
-  if (!direction) return null
+  if (!direction || direction === 'flat') return null
+  const words = `${direction}, ${DIRECTION_RUN_LABEL}`
   if (mode === 'email') {
-    return <span data-copy="verdict" style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted }}>{direction}, 3 months</span>
+    return <span data-copy="verdict" style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted }}>{words}</span>
   }
-  return <span data-copy="verdict" className="text-[11px] text-muted-foreground">{direction}, 3 months</span>
+  return <span data-copy="verdict" className="text-[11px] text-muted-foreground">{words}</span>
 }
+
+/**
+ * "3rd month" — the artboard's own tail on the direction word (Block D wave 3,
+ * M19).
+ *
+ * Both forms are honest: the word is earned over `DIRECTION_RUN` consecutive
+ * monthly readings, so "3 months" is how many and "3rd month" is which one this
+ * is. The ruling is that wording follows the mock, and every one of the twelve
+ * artboards that prints the word prints it this way — twenty-seven times, with
+ * no instance of "3 months" anywhere.
+ *
+ * DERIVED FROM `DIRECTION_RUN`, not typed. The run is the rule
+ * (lib/reading/bands.ts) and `directionWord` answers over exactly that many
+ * months; a hard-coded "3" here is a second copy of it, and the one thing this
+ * label may never do is name a run length the word was not earned over.
+ */
+const ORDINAL = ['th', 'st', 'nd', 'rd'] as const
+const DIRECTION_RUN_LABEL = (() => {
+  const n = DIRECTION_RUN
+  const tens = n % 100
+  const suffix = tens >= 11 && tens <= 13 ? 'th' : ORDINAL[n % 10] ?? 'th'
+  return `${n}${suffix} month`
+})()
 
 /** One side's level: the share and the count it rests on, or the honest
  *  absence. Never a 0% for a side nothing was read for. */
@@ -200,7 +239,16 @@ function Row({ row, mode, appUrl = '', sentLine = null }: { row: SubjectRow; mod
         {monthlyLineLabel(row.spark, row.sparkMonths) ? (
           <span className="font-mono text-[10.5px] text-muted-foreground">{monthlyLineLabel(row.spark, row.sparkMonths)}</span>
         ) : (
-          <Sparkline values={row.spark} color="var(--cat)" width={72} height={20} animate={false} />
+          // AND A DRAWN LINE SAYS WHICH MONTHS IT IS OF (Block D wave 3, M16).
+          // The months were printed INSTEAD of the line — that is the refusal
+          // above — never beside it, so a three-reading row drew a 72×20
+          // normalised line with no axis, no dates and no denominator, which is
+          // the one shape on this page a reader cannot date. The artboard
+          // captions every line it draws.
+          <span className="flex flex-col gap-0.5">
+            <Sparkline values={row.spark} color="var(--cat)" width={72} height={20} animate={false} />
+            <span className="font-mono text-[10.5px] text-muted-foreground">{monthlySpanLabel(row.spark, row.sparkMonths)}</span>
+          </span>
         )}
       </td>
     </tr>
@@ -237,7 +285,15 @@ export const overviewSubjects: Block<OverviewData> = {
     const frame = (children: ReactNode) => (
       <BlockFrame
         title={overviewSubjects.title}
-        question={overviewSubjects.question}
+        // THE PAGE PRINTS ONE QUESTION, IN THE PAGE BAR (Block D wave 3, M8).
+        // Parsed from `Main.dc.html`: all six blocks go straight from
+        // `</header>` into their content grid, and the artboard's only question
+        // is "What is this month's reading?" in the bar — which
+        // `SurfacePageBar` already prints (`lib/nav.ts`, `page-bar.tsx:65`).
+        // Six sub-lines under six eyebrows cost about 156px and put a second
+        // narrator over every tile. The block keeps its `question` field, which
+        // is its contract with the reader and what the nav and the legend read;
+        // what stops is drawing it a second time inside the block.
         mode={mode}
         meta={subjectsMeta(s)}
         footer={footer}

@@ -179,8 +179,8 @@ describe('SU2 · the subject in full', () => {
     expect(text).toContain('26 of 84 videos')
     expect(text).toContain('43.7%')
     expect(text).toContain('62 of 142 videos')
-    expect(text).toContain('24.5%')
-    expect(text).toContain('340 of 1,388 videos')
+    expect(text).toContain('22%')
+    expect(text).toContain('305 of 1,388 videos')
   })
 
   it('refuses your own side’s change and answers the category’s, and says which in one sentence', () => {
@@ -245,7 +245,17 @@ describe('SU2 · the subject in full', () => {
     const { figures, verdicts } = blockAnswers(subjectsSubject, subjectsFixture())
     expect(Object.keys(figures)).toHaveLength(6)
     expect(verdicts).toHaveLength(3)
-    expect(verdicts.filter((v) => v.state === 'moved')).toHaveLength(1)
+    // NONE OF THE THREE MOVED, AND THAT IS THE BAND DOING ITS JOB (Block D
+    // wave 3, M13). September is 305 of 1,388 — the artboard's own figure —
+    // against August's 264 of 1,388: a 3.0-point step against a band of ±3.1,
+    // which is no clear change. The artboard's cell says "▲ 3 pts"; the
+    // product's own band refuses it, and the direction word over three months
+    // (Jul 17% → Sep 22%) is what the row earns instead. The fixture carried
+    // 340 here, which cleared the band at 5.5 pts and put "24.5% of 1,388" on
+    // the marketing sheet eighty pixels under an Overview row reading "22% of
+    // 1,388" — one measure, one month, one sheet, two numbers.
+    expect(verdicts.filter((v) => v.state === 'moved')).toHaveLength(0)
+    expect(verdicts.filter((v) => v.state === 'no_clear_change')).toHaveLength(2)
   })
 
   it('says "no reading yet" where the audience was read and this subject was not in it', () => {
@@ -635,7 +645,10 @@ describe('the mock’s own shape, where the data allows it', () => {
 
   it('states the category’s last three levels as levels, dated, and claims no direction from them', () => {
     const text = renderText(subjectsSubject.render(subjectsFixture(), 'app', ctx))
-    expect(text).toContain('Jul 17.0% → Aug 19.0% → Sep 24.5% in the category')
+    // Both sides of this merge touched this line: `lib`'s fmtPct now keeps an
+    // exact .0 so a decimal column lines up, and `main`'s M13 moved the fixture's
+    // September reading from 24.5 to 22. Take both.
+    expect(text).toContain('Jul 17.0% → Aug 19.0% → Sep 22.0% in the category')
   })
 
   it('names the axis the chart spans, and what the shading over it means', () => {

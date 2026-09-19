@@ -5,7 +5,7 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { NUMBER_BUDGET, RIVAL_FIGURES_MAX, type OverviewData, type RivalRow, type SubjectRow } from '@/lib/pages/overview'
-import { OVERVIEW_BLOCKS, OVERVIEW_LEGEND, OverviewPage, horizonRange } from './index'
+import { OVERVIEW_BLOCKS, OVERVIEW_LEGEND, OverviewPage, TILE_BLOCKS, horizonRange } from './index'
 import { overviewPage } from './page'
 import { SidebarTenant } from '@/components/sidebar-tenant-loader'
 import { THIRTEEN_WORDS, READER_FLAGS } from '@/lib/calibration'
@@ -148,12 +148,42 @@ describe('the 30-number budget', () => {
 })
 
 describe('the Overview page', () => {
-  it('draws the page bar, the seven tiles and nothing else', () => {
+  // SIX, NOT SEVEN — the artboard's own count (Block D wave 3, M7).
+  // `Main.dc.html` draws six sections and none of them is "This month so far":
+  // OV0's update count is already in the horizon range note and its video count
+  // already in the soundness band, so the tile spent 156px plus its gap
+  // restating two facts and pushed the page's lead below them. The block keeps
+  // its place in `OVERVIEW_BLOCKS` for the print slide, the email and the brief
+  // section maps, which carry no bar and no band.
+  it('draws the page bar, the artboard\u2019s six tiles and nothing else', () => {
     const markup = render(<OverviewPage data={overviewFixture()} />)
     expect(markup).toContain('Overview')
     expect(markup).toContain('still filling')
-    expect((markup.match(/data-tile=""/g) ?? []).length).toBe(7)
+    expect((markup.match(/data-tile=""/g) ?? []).length).toBe(6)
+    expect(markup).not.toContain('This month so far')
+    // And the one fact that tile carried alone is on the band.
+    expect(renderText(<OverviewPage data={overviewFixture()} />)).toContain('2,044 at this point last month')
     assertCopyContract(markup)
+  })
+
+  // ONE QUESTION, IN THE PAGE BAR (Block D wave 3, M8). Parsed from
+  // `Main.dc.html`: all six blocks go straight from `</header>` into their
+  // content grid, and the artboard's only question is the bar's. Six sub-lines
+  // under six eyebrows cost about 156px and put a second narrator over every
+  // tile. The blocks keep their `question` field — it is their contract with
+  // the reader, and the nav and the legend read it — and stop drawing it.
+  it('prints one question, and it is the page bar\u2019s', () => {
+    const text = renderText(<OverviewPage data={overviewFixture()} />)
+    expect(text).toContain('What is this month\u2019s reading?')
+    for (const block of TILE_BLOCKS) {
+      expect(block.question, block.key).toBeTruthy()
+      expect(text, block.key).not.toContain(block.question as string)
+    }
+  })
+
+  it('keeps OV0 in the registry, because a PDF and an email have no band', () => {
+    expect(OVERVIEW_BLOCKS.map((b) => b.key)).toContain('overview.bar')
+    expect(TILE_BLOCKS.map((b) => b.key)).not.toContain('overview.bar')
   })
 
   it('links inside the app relatively, so a page change is not a page load', () => {

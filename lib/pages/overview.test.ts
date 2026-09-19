@@ -37,6 +37,8 @@ import {
   recordWindow,
   categoryAttentionVerdict,
   rivalsLead,
+  monthlySpanLabel,
+  atThisPointLine,
   splitMovers,
   subjectsNote,
   type Mover,
@@ -189,6 +191,40 @@ describe('readingsCounter', () => {
   })
 })
 
+// The one fact OV0's tile carried alone, moved onto the soundness band when
+// the tile came off the app page (Block D wave 3, M7).
+describe('atThisPointLine', () => {
+  it('states the same point last month, where there is one', () => {
+    expect(atThisPointLine({ atLastMonth: 2044, atLastMonthKnown: true, daysIn: 18 }))
+      .toBe('2,044 at this point last month')
+  })
+  it('says nothing on a complete month — the comparison is not to a point in it', () => {
+    expect(atThisPointLine({ atLastMonth: 2044, atLastMonthKnown: true, daysIn: null })).toBeNull()
+  })
+  it('says nothing rather than a dash where nothing recorded the point', () => {
+    expect(atThisPointLine({ atLastMonth: null, atLastMonthKnown: false, daysIn: 18 })).toBeNull()
+    expect(atThisPointLine({ atLastMonth: null, atLastMonthKnown: true, daysIn: 18 })).toBeNull()
+  })
+})
+
+// The caption under a line that IS drawn (Block D wave 3, M16). Its sibling
+// `monthlyLineLabel` is the REFUSAL, printed instead of a line; this is what a
+// drawn line says about itself, and the two are the same either/or.
+describe('monthlySpanLabel', () => {
+  const months = ['2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01']
+  it('names the span and what the line rests on', () => {
+    expect(monthlySpanLabel([null, 18, 19, 20, 21, 22], months)).toBe('May → Sep · 5 readings')
+    expect(monthlySpanLabel([null, null, null, 20, 21, 22], months)).toBe('Jul → Sep · 3 readings')
+  })
+  it('says nothing where the refusal answers instead — never both', () => {
+    for (const spark of [[null, null, null, null, 21, 22], [null, null, null, null, null, 22], [null, null, null, null, null, null]]) {
+      expect(monthlySpanLabel(spark, months)).toBeNull()
+      expect(monthlyLineLabel(spark, months)).not.toBeNull()
+    }
+    expect(monthlyLineLabel([null, 18, 19, 20, 21, 22], months)).toBeNull()
+  })
+})
+
 describe('headline', () => {
   it('names the single largest banded change and leaves its figures as tokens', () => {
     const h = headline({ verdicts: [moved('t1', 'Durability', 5.4), moved('t2', 'Price', -2.1)] })
@@ -327,7 +363,7 @@ describe('monthlyLineLabel', () => {
   it('names the two months instead of drawing a slope through them', () => {
     // Sparkline normalises to the values it is handed, so 19.0 → 19.2 draws the
     // same climb as 5 → 40. The mock prints this label instead.
-    expect(monthlyLineLabel([null, null, 19, 19.2], months)).toBe('Aug \u2192 Sep only')
+    expect(monthlyLineLabel([null, null, 19, 19.2], months)).toBe('Aug → Sep only')
   })
   it('names the one month it has', () => {
     expect(monthlyLineLabel([null, null, null, 19.2], months)).toBe('Sep only')
@@ -354,7 +390,7 @@ describe('subjectsNote', () => {
 
   it('names the video count your own side reads on when it cannot be compared', () => {
     expect(subjectsNote([row(84, null)])).toBe(
-      'Your side reads "too few to compare" on 84 videos — the category column carries the month.',
+      'Your side reads “too few to compare” on 84 videos — the category column carries the month.',
     )
   })
 
@@ -877,8 +913,13 @@ describe('rivalsLead', () => {
 
   it('counts the rivals that moved and names them — no magnitude, no direction', () => {
     const lead = rivalsLead([row('Freitag', v('moved')), row('Patagonia', v('no_clear_change'))]) as string
-    expect(lead).toContain('Freitag is the one rival whose share of attention moved beyond its band')
-    expect(lead).toContain('of 2 compared')
+    // THE COUNT LEADS (Block D wave 3, M26): it used to trail the finished
+    // sentence as a bare ", of 2 compared", which is not a clause anybody
+    // would say — and on a tenant tracking one rival it read "of 1 compared".
+    expect(lead).toBe(
+      'Of the 2 rivals compared, Freitag is the one whose share of attention moved beyond its band this month'
+      + ' \u2014 the change and the band are on each row.',
+    )
     // The mock's "took 3 points" and "slipped 2" are both refused: a magnitude
     // is printed by the badge with its band, and `slipped` is a direction word
     // no reader's flag earns.
@@ -887,13 +928,16 @@ describe('rivalsLead', () => {
 
   it('says so when nothing moved, and counts what was compared', () => {
     expect(rivalsLead([row('Freitag', v('no_clear_change')), row('Poler', v('no_clear_change'))]))
-      .toBe('No rival’s share of attention moved beyond its band this month, of 2 compared.')
+      .toBe('Of the 2 rivals compared, no rival’s share of attention moved beyond its band this month.')
+    // And a single compared rival is "the one rival", never "of 1 compared".
+    expect(rivalsLead([row('Freitag', v('no_clear_change'))]))
+      .toBe('Of the one rival compared, no rival’s share of attention moved beyond its band this month.')
   })
 
   it('tells "nothing moved" from "nothing could be compared"', () => {
     const lead = rivalsLead([row('Freitag', v('too_little_data')), row('Poler', v('refused', { refusedReason: 'tracking_change' }))]) as string
     expect(lead).toContain('could be compared')
-    expect(lead).not.toContain('moved beyond its band this month, of')
+    expect(lead).not.toContain('moved beyond its band this month')
   })
 
   it('says a rival is no longer tracked rather than naming it as a current one', () => {
@@ -903,12 +947,14 @@ describe('rivalsLead', () => {
     // or it claims a brand we stopped watching moved this month.
     const retired = { ...row('Poler', v('moved')), retiredAt: '2026-09-09' }
     const lead = rivalsLead([row('Freitag', v('no_clear_change')), retired]) as string
-    expect(lead).toContain('Poler (tracked until 9 Sep) is the one rival')
+    expect(lead).toContain('Poler (tracked until 9 Sep) is the one whose share of attention moved')
   })
 
   it('joins several names without an Oxford list of one', () => {
     const lead = rivalsLead([row('Freitag', v('moved')), row('Poler', v('moved')), row('Topo', v('moved'))]) as string
-    expect(lead).toContain('Freitag, Poler and Topo are the 3 rivals')
+    // AND THE PLURAL AGREES: three brands do not share one band (M26).
+    expect(lead).toContain('Freitag, Poler and Topo are the 3 whose shares of attention moved beyond their bands')
+    expect(lead).toContain('Of the 3 rivals compared,')
   })
 })
 

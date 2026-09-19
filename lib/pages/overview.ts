@@ -60,7 +60,7 @@ import { buildStandings, type StandingRow } from '../reading/standings'
 import type { MonthStatus } from '../reading/types'
 import { isAnswer, type FigureTable, type Verdict } from '../reading/verdicts'
 import { isMissingSubjects, MOVE_PROMISE, RPC_WINDOW_SUBJECT_READINGS, TABLE_MOVES, TABLE_SUBJECT_MEMBERSHIPS, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
-import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
+import { chunk, mapWithLimit, MULTI_ROW_IN_CHUNK, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import { selectAll } from '../supabase-admin'
 import { row, rows } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
@@ -823,6 +823,33 @@ export function readingsCounter(readings: number): string {
 }
 
 /**
+ * "2,044 at this point last month" — the one fact OV0's tile carried that is
+ * nowhere else on the app surface (Block D wave 3, M7).
+ *
+ * WHY IT MOVED HERE. `Main.dc.html` draws six sections and none of them is
+ * "This month so far": the update count is already in the horizon range note
+ * and the month's video count is already in the soundness band, so two of that
+ * tile's four facts were on the screen twice and the tile itself cost 156px
+ * plus its gap at the top of the page. This is the residual — a growing month
+ * shown growing against its own predecessor, which is the reading that makes a
+ * weekly figure unnecessary — and the band is where a fact about how much has
+ * been read belongs.
+ *
+ * NULL, NEVER A ZERO OR A DASH, on all three of the honest absences: a month
+ * that is closed (the comparison is not to a point in it), a workspace with no
+ * recorded reading of last month at this point, and a last month that carried
+ * one and it was nothing. `fillingLine` states all three at length for the
+ * print sheet and the email, which have no band; this is the band's clause.
+ *
+ * Pure.
+ */
+export function atThisPointLine(bar: Pick<BarBlock, 'atLastMonth' | 'atLastMonthKnown' | 'daysIn'>): string | null {
+  if (bar.daysIn == null) return null
+  if (!bar.atLastMonthKnown || bar.atLastMonth == null) return null
+  return `${fmtInt(bar.atLastMonth)} at this point last month`
+}
+
+/**
  * A figure table key for one object.
  *
  * THE `o_` PREFIX IS LOad-BEARING. A key is substituted into prose by
@@ -978,7 +1005,34 @@ export function firstScoringMonth(declaredAt: string): string {
 /** One move, on one line (design §3 OV5, Phase 1). The month in the reader's
  *  form — "the October reading", as the design writes it, not "Oct 2026". */
 export function moveLine(move: Pick<Move, 'title' | 'declared_at'>): string {
-  return `${move.title} · tracked ${shortDate(move.declared_at)} · first scoring lands with the ${longMonth(firstScoringMonth(move.declared_at))} reading.`
+  return `${move.title} · tracked ${shortDate(move.declared_at)} · ${moveScoringClause(move.declared_at)}`
+}
+
+/** The third clause of `moveLine`, alone — so a surface that has already
+ *  printed the title and the date can print what is LEFT rather than the whole
+ *  sentence again (Block D wave 3, M9). */
+export function moveScoringClause(declaredAt: string): string {
+  return `first scoring lands with the ${longMonth(firstScoringMonth(declaredAt))} reading.`
+}
+
+/**
+ * The same clause as its own sentence — what an undated move's row says under a
+ * title and a date it has already printed (Block D wave 3, M9).
+ *
+ * OV5's row draws "{title}  declared 2 Sep" and then fell through to `row.line`
+ * where there was no reading, which is `moveLine` — "Track: Waterproofing ·
+ * tracked 2 Sep · first scoring lands with the October reading." So the title
+ * and the date appeared twice, one line apart, and on a fresh tenant that is
+ * every move on the block. The monthly email hit the same thing and strips the
+ * title prefix (`blocks/monthly/moves.tsx:86`); this row has printed the DATE
+ * as well, so what it needs is the residual rather than a prefix cut, composed
+ * from the same inputs instead of sliced out of the finished sentence.
+ *
+ * Pure.
+ */
+export function moveWaitingLine(declaredAt: string): string {
+  const clause = moveScoringClause(declaredAt)
+  return clause.charAt(0).toUpperCase() + clause.slice(1)
 }
 
 /** What OV5 says when nothing has been dated. */
@@ -1121,9 +1175,20 @@ export function rivalsLead(rows: readonly RivalRow[]): string | null {
   if (answered.length === 0) {
     return `No rival\u2019s attention could be compared with the month before against its band; the ${rivals.length === 1 ? 'one row' : `${rivals.length} rows`} below say why.`
   }
+  // THE COUNT LEADS THE SENTENCE (Block D wave 3, M26). It used to trail it
+  // as ", of 1 compared — the change and the band are on each row.", which is
+  // a clause nobody would say: a bare "of N compared" hung off the end of a
+  // finished sentence, and on a tenant tracking one rival it read "of 1
+  // compared". Every fact is the same — a count with names, no magnitude and
+  // no direction word — and the population the count is of now stands before
+  // the claim it qualifies, which is where a reader needs it. This is the
+  // monthly email's only 15px lead sentence.
+  const compared = answered.length === 1
+    ? 'Of the one rival compared'
+    : `Of the ${answered.length} rivals compared`
   const moved = answered.filter((r) => (r.attentionVerdict as Verdict).state === 'moved')
   if (moved.length === 0) {
-    return `No rival\u2019s share of attention moved beyond its band this month, of ${answered.length} compared.`
+    return `${compared}, no rival\u2019s share of attention moved beyond its band this month.`
   }
   // A RETIRED RIVAL IS NAMED AS A RETIRED RIVAL. `buildStandings` deliberately
   // keeps a rival dropped from the tracked list on the table — its months are
@@ -1137,7 +1202,12 @@ export function rivalsLead(rows: readonly RivalRow[]): string | null {
     : names.length === 2
       ? `${names[0]} and ${names[1]}`
       : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
-  return `${who} ${names.length === 1 ? 'is the one rival' : `are the ${names.length} rivals`} whose share of attention moved beyond its band this month, of ${answered.length} compared \u2014 the change and the band are on each row.`
+  // AND THE PLURAL AGREES. "are the 2 rivals whose share of attention moved
+  // beyond ITS band" gave two brands one share and one band between them.
+  const claim = names.length === 1
+    ? `${who} is the one whose share of attention moved beyond its band this month`
+    : `${who} are the ${names.length} whose shares of attention moved beyond their bands this month`
+  return `${compared}, ${claim} \u2014 the change and the band are on each row.`
 }
 
 /**
@@ -1185,7 +1255,42 @@ export function monthlyLineLabel(spark: readonly (number | null)[], months: read
   return read.length === 1 ? `${short(read[0])} only` : `${short(read[0])} → ${short(read[read.length - 1])} only`
 }
 
-/** The subjects block's line about which column carries the month. */
+/**
+ * The caption under a line that IS drawn: which months it spans, and how many
+ * readings it rests on (Block D wave 3, M16).
+ *
+ * THE MONTHS WERE PRINTED INSTEAD OF THE LINE, NEVER BESIDE IT.
+ * `monthlyLineLabel` is the refusal — what the column says when there are too
+ * few readings to draw anything — so a row with three or more drew a 72×20
+ * sparkline and nothing at all saying which months were under it. The artboard
+ * captions every one it draws ("May → Sep · Apr below floor", "Jul → Sep ·
+ * three readings"), and a normalised line with no axis and no dates is the one
+ * shape on this page a reader cannot date.
+ *
+ * THE SECOND CLAUSE IS THE COUNT AND NOT THE MOCK'S "below floor", because this
+ * input cannot tell the two absences apart: `spark` is `(number | null)[]`, and
+ * a null is a month with no reading whether it was hollow or under the floor.
+ * The count says what the line rests on, which is the part a reader can act on.
+ *
+ * Null wherever `monthlyLineLabel` answers instead — the two are the same
+ * either/or, so a column can never print both.
+ *
+ * Pure.
+ */
+export function monthlySpanLabel(spark: readonly (number | null)[], months: readonly string[]): string | null {
+  const read = months.filter((_, i) => spark[i] != null)
+  if (read.length < 3) return null
+  const short = (m: string) => monthName(m).split(' ')[0]
+  return `${short(read[0])} → ${short(read[read.length - 1])} · ${fmtInt(read.length)} readings`
+}
+
+/** The subjects block's line about which column carries the month.
+ *
+ *  TYPOGRAPHIC QUOTES (Block D wave 3, M20). DESIGN.md: "Quotes use
+ *  typographic quotes and apostrophes." This sentence is rendered three times
+ *  — the block's footer note, the weekly email and the monthly one — in a
+ *  serif face that sets straight ASCII marks as vertical ticks beside its own
+ *  curly ones. */
 export function subjectsNote(rows: readonly SubjectRow[]): string | null {
   if (rows.length === 0) return null
   const yourN = rows[0].you.n
@@ -1193,7 +1298,7 @@ export function subjectsNote(rows: readonly SubjectRow[]): string | null {
   if (!thin) return null
   return yourN == null
     ? 'Your own side carries no reading this month — the category column carries the month.'
-    : `Your side reads "too few to compare" on ${fmtInt(yourN)} videos — the category column carries the month.`
+    : `Your side reads “too few to compare” on ${fmtInt(yourN)} videos — the category column carries the month.`
 }
 
 /** The "not a blank form" line (design §3 OV2, empty state). */
@@ -1980,7 +2085,15 @@ async function loadOwnSubjectMatches(
   if (videoIds.length === 0) return { matches: new Map(), failed: false }
   let insights: { id: string; source_video_id: string }[]
   try {
-    const pages = await mapWithLimit(chunk([...videoIds], UUID_IN_CHUNK), READ_CONCURRENCY, (ids) =>
+    // `MULTI_ROW_IN_CHUNK`, BECAUSE `source_video_id` IS NOT A KEY HERE (Block
+    // D wave 3, M21). `lib/chunk.ts` states the rule: ids per chunk should be
+    // about 1,000 / rows-per-id, not the URL's 250, because PostgREST answers
+    // at most a thousand rows a request and `selectAll` pages the rest
+    // SERIALLY, inside a chunk that was meant to be one of several concurrent
+    // requests. A video carries about thirty insights, so 250 videos is ~7,500
+    // rows — eight serial pages in one chunk, where 100 is three, and the
+    // three overlap with the next chunk's.
+    const pages = await mapWithLimit(chunk([...videoIds], MULTI_ROW_IN_CHUNK), READ_CONCURRENCY, (ids) =>
       selectAll<{ id: string; source_video_id: string }>(() =>
         supabase
           .from('audience_insights_current')
@@ -2001,7 +2114,13 @@ async function loadOwnSubjectMatches(
     // AND THIS ONE IS NOT BOUNDED BY THE POST COUNT — it chunks INSIGHT ids,
     // which a month of posts can carry many of, so the ceiling is doing real
     // work here rather than describing one chunk.
-    const pages = await mapWithLimit(chunk([...videoOf.keys()], UUID_IN_CHUNK), READ_CONCURRENCY, (ids) =>
+    //
+    // `MULTI_ROW_IN_CHUNK` for the same reason as the read above (Block D wave
+    // 3, M21): `subject_memberships` is keyed
+    // (client_id, subject_id, audience_insight_id), so one insight id names one
+    // row per named subject — five to eight on a live tenant, which is the
+    // "few tens of rows per id" shape `lib/chunk.ts` sizes this constant for.
+    const pages = await mapWithLimit(chunk([...videoOf.keys()], MULTI_ROW_IN_CHUNK), READ_CONCURRENCY, (ids) =>
       selectAll<{ subject_id: string; audience_insight_id: string }>(() =>
         supabase
           .from(TABLE_SUBJECT_MEMBERSHIPS)
@@ -2470,8 +2589,28 @@ async function loadGrounding(
   const cited = [...new Set(rec.based_on?.insight_ids ?? [])]
   if (cited.length === 0) return null
   try {
-    const miRes = await supabase.from('market_insights').select('id, evidence').eq('client_id', clientId).in('id', cited)
-    const insights = rows<{ id: string; evidence: { supporting_theme_ids?: string[] } | null }>(miRes, 'overview.ledgerInsights')
+    // CHUNKED, BECAUSE `based_on.insight_ids` IS A STORED ARRAY OF UNBOUNDED
+    // LENGTH (Block D wave 3, M22). `lib/chunk.ts:17-24` records the measured
+    // cap: an `.in()` succeeds at 500 uuids and answers "Bad Request" at 700.
+    // Pass D-b, which WRITES this array, chunks the union of exactly these ids
+    // at 200 (`inngest/functions/pipeline.ts:2341`) — so the writer treats it
+    // as unbounded and the reader did not. A 400 here does not throw: `rows()`
+    // logs it and returns [], which lands in `groundingFor` as zero resolved
+    // evidence and prints the PRUNED sentence, so a failed read would read on
+    // the page as a recommendation whose evidence is gone.
+    //
+    // `UUID_IN_CHUNK`, not `MULTI_ROW_IN_CHUNK`: `id` is the key of
+    // `market_insights`, so a chunk returns at most one row per id and the URL
+    // is the only binding cap. The second hop is already chunked inside
+    // `fetchInsightsByIds`.
+    const insights = (
+      await mapWithLimit(chunk(cited, UUID_IN_CHUNK), READ_CONCURRENCY, async (ids) =>
+        rows<{ id: string; evidence: { supporting_theme_ids?: string[] } | null }>(
+          await supabase.from('market_insights').select('id, evidence').eq('client_id', clientId).in('id', ids),
+          'overview.ledgerInsights',
+        ),
+      )
+    ).flat()
     const audienceIds = [...new Set(insights.flatMap((mi) => mi.evidence?.supporting_theme_ids ?? []))]
     const audienceRows = audienceIds.length > 0
       ? await fetchInsightsByIds<{ id: string; theme: string | null; source_video_id: string | null }>(

@@ -56,8 +56,19 @@ export function voicesLabel(shown: number): string {
 export function voicesFromLine(shown: number, from: number): string | null {
   const pool = Math.max(from, shown)
   // "chosen from 37 the month's videos carried" was ungrammatical, directly
-  // under "TWO VOICES" in the page's lead block (design review High 10).
-  return pool > shown ? `chosen from the ${fmtInt(pool)} the month’s videos carried` : null
+  // under "TWO VOICES" in the page's lead block (design review High 10). The
+  // fix inserted a definite article and left the collision (Block D wave 3,
+  // M10): "the 37 the month's videos carried" is two "the"-phrases with a zero
+  // relative pronoun between a bare numeral and a possessive, set at 11px mono
+  // as the second thing the eye reaches in the lead tile. The numeral needs its
+  // NOUN — the relative clause is fine once there is something for it to
+  // qualify — and the noun is the one the heading above it already uses.
+  //
+  // NOT DELETED, although the artboard prints "TWO VOICES" and nothing else:
+  // the count is disposition #18's point, that a reader can see two were CHOSEN
+  // and not that two were all there was. The heading is the mock's and the
+  // count keeps its own line under it.
+  return pool > shown ? `chosen from the ${fmtInt(pool)} voices this month’s videos carried` : null
 }
 
 /**
@@ -136,7 +147,15 @@ function VoiceRow({ voice, mode }: { voice: Voice; mode: RenderMode }) {
   const onScreen = onScreenLine ? (
     mode === 'email'
       ? <div data-copy="quote" style={{ fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.ink2, marginTop: 3 }}>on-screen text on the same video: “{onScreenLine}”</div>
-      : <span data-copy="quote" className="block font-mono text-[10.5px] text-secondary-foreground">on-screen text on the same video: “{onScreenLine}”</span>
+      // AND IT SITS IN THE QUOTE'S OWN TEXT COLUMN (Block D wave 3, M17).
+      // `QuoteBlock` indents its words past a 2px rule and 12px of padding;
+      // this line was a sibling at the container's indent, level with the
+      // eyebrow, so a scanner reading down the voices column saw two quotes
+      // and then a loose unattributed sentence. `pl-[14px]` puts it under the
+      // words it belongs beside. It takes no rule of its own, which is the
+      // point: it is attached to the VIDEO and it is not inside the
+      // blockquote, because the speaker is a different one.
+      : <span data-copy="quote" className="block pl-[14px] font-mono text-[10.5px] text-secondary-foreground">on-screen text on the same video: “{onScreenLine}”</span>
   ) : null
   if (mode === 'email') {
     return <div><BlockQuote quote={voice.quote} cite={cite} mode={mode} />{onScreen}</div>
@@ -173,6 +192,22 @@ export const overviewSentence: Block<OverviewData> = {
           body={s.body}
           figures={s.figures}
           mode={mode}
+          // THE FIGURES TAKE THE SENTENCE'S OWN FACE (Block D wave 3, M1).
+          // `TokenProse` DERIVES the face from `size` — `inherit` in a hero,
+          // `mono` in a body sentence — and this caller hand-rolls the serif
+          // ramp through `className` rather than passing `size`. So `hero` was
+          // false, the face fell to `mono`, and every substituted figure
+          // rendered `font-mono tabular-nums` inside a 17px IBM Plex Serif
+          // line: "9 . 4%" and "1 , 388", which is the exact defect that
+          // prop's own docblock names.
+          //
+          // `size="hero"` IS NOT THE FIX HERE. `size` also drives the EMAIL
+          // arm, where `hero` means the MonthlyReport artboard's 23px serif —
+          // and this block's email arm is the 13.5px sans one, which the
+          // monthly report composes around. So the face is stated directly,
+          // the way This week's two hand-rolled heroes state it
+          // (week/unusual.tsx:337,350).
+          figureFace="inherit"
           // AND A MEASURE (design review Medium 19). With no voices column
           // beside it — the refused state, which is what production is in
           // today — the sentence ran the tile's full 1,150px at 17px serif,
@@ -323,7 +358,15 @@ export const overviewSentence: Block<OverviewData> = {
     return (
       <BlockFrame
         title={overviewSentence.title}
-        question={overviewSentence.question}
+        // THE PAGE PRINTS ONE QUESTION, IN THE PAGE BAR (Block D wave 3, M8).
+        // Parsed from `Main.dc.html`: all six blocks go straight from
+        // `</header>` into their content grid, and the artboard's only question
+        // is "What is this month's reading?" in the bar — which
+        // `SurfacePageBar` already prints (`lib/nav.ts`, `page-bar.tsx:65`).
+        // Six sub-lines under six eyebrows cost about 156px and put a second
+        // narrator over every tile. The block keeps its `question` field, which
+        // is its contract with the reader and what the nav and the legend read;
+        // what stops is drawing it a second time inside the block.
         mode={mode}
         // "update of 13 Sep" — the last update this month, and NOT the mock's
         // "next 4 Oct" beside it (D14): the next update's date is a promise,

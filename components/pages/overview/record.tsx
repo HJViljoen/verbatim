@@ -2,7 +2,7 @@ import type { Block } from '@/lib/blocks/types'
 import { BlockFrame } from '@/components/blocks/frame'
 import { openLink } from '@/components/blocks/open-link'
 import { TileColumns } from '@/components/shell/page-grid'
-import { fullDate } from '@/lib/format'
+import { fullDate, longMonth } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import type { OverviewData } from '@/lib/pages/overview'
@@ -39,17 +39,68 @@ import type { OverviewData } from '@/lib/pages/overview'
  * when this month stops moving. The split is the artboard's and it is also the
  * honest one: the left column is about the CORPUS and the right is about the
  * INSTRUMENT, and they are on different clocks.
+ *
+ * AND `coverage` IS THE LEFT COLUMN'S, SO THE RIGHT ONE DROPS IT (Block D wave
+ * 3, M14). `MethodLines.coverage` is "2,359 videos read in this window · TikTok
+ * 38% · YouTube 29% · …" and `recordLines` opens the left column with "2,359
+ * videos carried conversation in this window — TikTok 38% · YouTube 29% · …":
+ * the same count and the same mix, in two wordings, in two columns nine hundred
+ * pixels apart, with nothing telling a reader whether those are two measures or
+ * one. The artboard states the denominator once on the left and the platform
+ * mix once on the right, and it is the DENOMINATOR that is the corpus fact —
+ * so the left column keeps it and the footnote takes the four lines that are
+ * about the instrument. The named fields exist for exactly this
+ * (`lib/reading/method.ts` returns them beside `lines`), so this is a
+ * composition and never string surgery on a finished sentence.
+ *
+ * The read-depth basis still names the same total ("speech was read on 71% of
+ * 2,359 videos") and that repeat is deliberate and documented where it is
+ * composed: it is an ALL-TIME figure, and giving it a second wording is how a
+ * reader comes to believe it is a second measure.
  */
 export function recordColumns(data: OverviewData): { read: string[]; method: string[] } {
   const r = data.record
+  const m = data.method
   return {
     read: [...r.lines],
     method: [
-      ...(data.method?.lines ?? []),
+      ...(m ? [m.preparedBy, m.basis, m.language, m.redditCap, m.privacy] : []).filter(
+        (l): l is string => typeof l === 'string' && l.length > 0,
+      ),
       `This month stops moving on ${fullDate(r.freezesOn)}; until then every figure above may still change.`,
     ],
   }
 }
+
+/**
+ * The two columns' lead-ins (Block D wave 3, M18).
+ *
+ * THE LEFT ONE IS THE MOCK'S, because the content matches it. `Main.dc.html` §6
+ * opens its first paragraph "September so far:" and this column IS the month's
+ * record — the updates delivered into it, the videos read, what would not
+ * compare in it, and the date it stops moving. The build wrote "What was read:"
+ * with no rule cited, and the ruling is that wording follows the mock. The
+ * month comes off the data, and "so far" only while the month is still filling:
+ * a frozen month is not still going.
+ *
+ * THE RIGHT ONE IS NOT THE MOCK'S, and that is a content difference rather than
+ * a preference. The artboard's second paragraph is "Changes, refusals and
+ * delivery:" and carries the tracking change, the refusals, the platform mix
+ * and the delivery record — all of which this build states in the LEFT column,
+ * because they are facts about the corpus. What stands here is the method
+ * footnote: read depth, the language basis, the Reddit cap, the privacy line.
+ * Borrowing the mock's label for it would be a copy claim the content
+ * contradicts.
+ *
+ * What DID go is "and what would not compare", which described the other
+ * column: the refusals are on the left, and this column has never held one.
+ */
+export function readLabel(data: OverviewData): string {
+  const label = `${longMonth(data.month)} ${data.month.slice(0, 4)}`
+  return data.monthStatus === 'filling' ? `${label} so far:` : `${label}:`
+}
+
+export const METHOD_LABEL = 'How it was read:'
 
 export const overviewRecord: Block<OverviewData> = {
   key: 'overview.record',
@@ -72,7 +123,15 @@ export const overviewRecord: Block<OverviewData> = {
     return (
       <BlockFrame
         title={overviewRecord.title}
-        question={overviewRecord.question}
+        // THE PAGE PRINTS ONE QUESTION, IN THE PAGE BAR (Block D wave 3, M8).
+        // Parsed from `Main.dc.html`: all six blocks go straight from
+        // `</header>` into their content grid, and the artboard's only question
+        // is "What is this month's reading?" in the bar — which
+        // `SurfacePageBar` already prints (`lib/nav.ts`, `page-bar.tsx:65`).
+        // Six sub-lines under six eyebrows cost about 156px and put a second
+        // narrator over every tile. The block keeps its `question` field, which
+        // is its contract with the reader and what the nav and the legend read;
+        // what stops is drawing it a second time inside the block.
         mode={mode}
         // NO META HERE, AND THAT IS THE FIX (design review Blocker 2 / High 3,
         // code review I3). This passed `r.line` — the ~180-character soundness
@@ -120,10 +179,10 @@ export const overviewRecord: Block<OverviewData> = {
         ) : null}
         <TileColumns of={2}>
           <p className="m-0 font-mono text-[9.5px] leading-[1.45] tabular-nums text-muted-foreground">
-            <span className="text-secondary-foreground">What was read: </span>{read.join(' ')}
+            <span className="text-secondary-foreground">{readLabel(data)} </span>{read.join(' ')}
           </p>
           <p className="m-0 font-mono text-[9.5px] leading-[1.45] tabular-nums text-muted-foreground xl:pl-4">
-            <span className="text-secondary-foreground">How it was read, and what would not compare: </span>{method.join(' ')}
+            <span className="text-secondary-foreground">{METHOD_LABEL} </span>{method.join(' ')}
           </p>
         </TileColumns>
       </BlockFrame>

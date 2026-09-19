@@ -296,7 +296,7 @@ describe('WR2 · where things stand', () => {
 
   it('prints a direction word only inside a verdict node', () => {
     const markup = render(block.render(weeklyFixture(), 'app', ctx))
-    expect(markup).toContain('growing, 3 months')
+    expect(markup).toContain('growing, 3rd month')
     expect(copyViolations(markup).filter((v) => v.rule === 'direction-word')).toEqual([])
   })
 })

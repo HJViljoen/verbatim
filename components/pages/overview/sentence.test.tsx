@@ -4,7 +4,7 @@ import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, copyNodes } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
-import { overviewSentence, provenanceLine } from './sentence'
+import { overviewSentence, provenanceLine, voicesFromLine } from './sentence'
 import { overviewFixture, prunedLedgerFixture, refusedFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
@@ -36,6 +36,19 @@ describe('OV1 · in one sentence', () => {
     }
   })
 
+  // A BARE NUMERAL NEEDS ITS NOUN (Block D wave 3, M10). "chosen from the 37
+  // the month's videos carried" is two "the"-phrases with a zero relative
+  // pronoun between a numeral and a possessive, set at 11px mono as the second
+  // thing the eye reaches in the lead tile. The count stays — disposition #18's
+  // point is that a reader can see two were CHOSEN and not that two were all
+  // there was — and it is the heading's own noun that makes the clause read.
+  it('names what the two voices were chosen from, in a sentence', () => {
+    expect(voicesFromLine(2, 37)).toBe('chosen from the 37 voices this month’s videos carried')
+    // Nothing to say where the pool is the shown set.
+    expect(voicesFromLine(2, 2)).toBeNull()
+    expect(voicesFromLine(2, 1)).toBeNull()
+  })
+
   it('writes the figures into the sentence and marks them as code’s', () => {
     const node = overviewSentence.render(overviewFixture(), 'app', ctx)
     const markup = render(node)
@@ -45,6 +58,21 @@ describe('OV1 · in one sentence', () => {
     expect(markup).not.toContain('[[t1_share]]')
     const figures = copyNodes(markup).filter((n) => n.kind === 'figure')
     expect(figures.map((f) => f.text)).toContain('9.4%')
+  })
+
+  // A MONO GLYPH IS ONE ADVANCE WIDE WHATEVER IT IS, so tabular mono inside a
+  // 17px serif line sets "9.4%" as "9 . 4%" and "1,388" as "1 , 388" — the
+  // defect `TokenProse`'s own docblock names. It reached this hero because the
+  // block hand-rolls the serif through `className`, so the face rule never saw
+  // a hero and fell to its body default (Block D wave 3, M1).
+  it('sets the hero sentence’s figures in the sentence’s own face, never mono', () => {
+    const markup = render(overviewSentence.render(overviewFixture(), 'app', ctx))
+    const hero = markup.slice(markup.indexOf('font-serif'))
+    const at = hero.indexOf('data-copy="figure"')
+    expect(at).toBeGreaterThan(-1)
+    const figure = hero.slice(at, at + 120)
+    expect(figure).not.toContain('font-mono')
+    expect(figure).toContain('font-semibold')
   })
 
   it('marks the model’s read as prose, and code’s sentence as neither', () => {

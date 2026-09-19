@@ -9,6 +9,7 @@ import { fmtInt, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { CardCount, MoveCandidate, MoveReading } from '@/lib/reading/moves'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
+import { moveWaitingLine } from '@/lib/pages/overview'
 import type { MoveRow, OverviewData } from '@/lib/pages/overview'
 
 // OV5 · What we are doing, and whether it is working (design §3 OV5; ported to
@@ -52,6 +53,24 @@ export const CARD_CLAIM_MAX = 96
  */
 export const CARD_CONFIRM_SLOT =
   'Every count above is real. Turning them into a move is a button this page does not have yet, so nothing here counts as one until you say so.'
+
+/**
+ * The same sentence on PAPER (Block D wave 3, M25).
+ *
+ * A PDF SHEET MAY NOT TALK ABOUT A BUTTON. The sales and marketing briefs
+ * borrow this card onto a printed sheet and onto `/r/<token>`, where "a button
+ * this page does not have yet" is a sentence about a control the reader has no
+ * page to look for — the rule `MONTHLY_MOVES_EMPTY` was written under, and the
+ * rule E-marketing already applied to three app-only controls. This is the
+ * fourth.
+ *
+ * THE HONESTY SURVIVES THE CLAUSE. What the sentence is FOR is the second half
+ * — that a count is not a move until the reader says it is — and that is true
+ * on paper and in an inbox as much as in the app. Only the clause about the
+ * control goes.
+ */
+export const CARD_CONFIRM_OFF_APP =
+  'Every count above is real. Nothing here counts as a move until you say so.'
 
 export function claimText(claim: string): string {
   const t = claim.replace(/\s+/g, ' ').trim()
@@ -255,7 +274,7 @@ function Card({ card, mode }: { card: MoveCandidate; mode: RenderMode }) {
         className={email ? undefined : 'mt-auto text-[11px] text-muted-foreground'}
         style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}
       >
-        {card.unread ?? CARD_CONFIRM_SLOT}
+        {card.unread ?? (mode === 'app' ? CARD_CONFIRM_SLOT : CARD_CONFIRM_OFF_APP)}
       </span>
     </>
   )
@@ -279,6 +298,21 @@ export function seriesLabel(reading: MoveReading, audience: string): string {
  * denominator; the mock prints "themes you are not working on +0.4 per 100
  * videos", which is a synthetic control subtracted from the client side, and
  * nothing in this product computes one.
+ *
+ * AND EVERY ONE OF THOSE LEVELS PRINTS ITS "of N" (Block D wave 3, M5). This
+ * printed the share alone — "You 07/26 7.3% → 08/26 9.6% → 09/26 11.9%" — which
+ * is a run of six bare scores on a page whose stated rule is that a level
+ * without its denominator is a score and this product shows none. The
+ * denominators were on the object all along (`MoveSeries.points` is
+ * `{month, k, n, pct}`) and only `pct` was read; the sentence under the line
+ * says "read against 3 months", which says how many months and never what of.
+ * It escaped `assertCopyContract` because rule (b) inspects `data-copy="level"`
+ * nodes and the node carried no marker — so the marker goes on too, at the call
+ * site, and the rule applies to this line from here on.
+ *
+ * EACH SIDE'S DENOMINATOR IS ITS OWN AND MOVES BETWEEN MONTHS: your audience
+ * carried 82 videos in July and 84 in August, so one "of N" for the run would
+ * be a denominator the run does not have.
  */
 export function seriesLine(reading: MoveReading): string {
   // AN ARROWED RUN IS THE SAME CLAIM AS THE SPARKLINE (code review I4). This
@@ -300,7 +334,8 @@ export function seriesLine(reading: MoveReading): string {
       // they are not one run.
       const read = s.points.filter((p) => p.pct != null)
       const parts = read.map((p, i) => {
-        const label = `${p.month.slice(5, 7)}/${p.month.slice(2, 4)} ${p.pct}%`
+        const of = p.k != null && p.n != null ? ` ${fmtInt(p.k)} of ${fmtInt(p.n)}` : ''
+        const label = `${p.month.slice(5, 7)}/${p.month.slice(2, 4)} ${p.pct}%${of}`
         if (i === 0) return label
         const broke =
           !s.noClustering &&
@@ -353,7 +388,11 @@ function MoveBody({ row, reading, mode }: { row: MoveRow; reading: MoveReading |
               </span>
             ))}
           </span>
-          <span className={email ? undefined : 'font-mono text-[10.5px] tabular-nums text-muted-foreground'}>
+          {/* MARKED `level`, so rule (b) reaches it (Block D wave 3, M5). The
+              line is a run of banded LEVELS and it printed six bare shares;
+              unmarked, the copy contract's denominator rule never looked at
+              it. */}
+          <span data-copy="level" className={email ? undefined : 'font-mono text-[10.5px] tabular-nums text-muted-foreground'}>
             {seriesLine(reading)}
           </span>
           {/* D3: A CHART IS A DIRECTION CLAIM TOO. `chartNote` is why a line
@@ -367,7 +406,15 @@ function MoveBody({ row, reading, mode }: { row: MoveRow; reading: MoveReading |
           ) : null}
         </>
       ) : (
-        <span className={email ? undefined : 'text-[12.5px] text-secondary-foreground'}>{row.line}</span>
+        // WHAT IS LEFT OF THE LINE, NOT THE LINE (Block D wave 3, M9). The row
+        // above has already printed the title and "declared 2 Sep"; `row.line`
+        // is `moveLine`, which is "Track: Waterproofing · tracked 2 Sep · first
+        // scoring lands with the October reading." — so the title and the date
+        // appeared twice, one line apart, on every move of a fresh tenant. The
+        // residual is composed from the same input rather than sliced out of
+        // the finished sentence (the monthly email cuts a title PREFIX, which
+        // is not enough here because this row prints the date too).
+        <span className={email ? undefined : 'text-[12.5px] text-secondary-foreground'}>{moveWaitingLine(row.declaredAt)}</span>
       )}
     </div>
   )
@@ -424,7 +471,15 @@ export const overviewMoves: Block<OverviewData> = {
     return (
       <BlockFrame
         title={overviewMoves.title}
-        question={overviewMoves.question}
+        // THE PAGE PRINTS ONE QUESTION, IN THE PAGE BAR (Block D wave 3, M8).
+        // Parsed from `Main.dc.html`: all six blocks go straight from
+        // `</header>` into their content grid, and the artboard's only question
+        // is "What is this month's reading?" in the bar — which
+        // `SurfacePageBar` already prints (`lib/nav.ts`, `page-bar.tsx:65`).
+        // Six sub-lines under six eyebrows cost about 156px and put a second
+        // narrator over every tile. The block keeps its `question` field, which
+        // is its contract with the reader and what the nav and the legend read;
+        // what stops is drawing it a second time inside the block.
         mode={mode}
         meta={movesMeta(m)}
         footer={openLink(mode, href, 'Open Market →')}

@@ -386,7 +386,14 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
       direction: 'growing',
       spark: [null, 18, 19, 20, 21, 22],
       sparkMonths: ['2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01', REAL_MONTH],
-      categoryAtLastMonth: { k: 264, n: 1290, pct: 20.5 },
+      // AND THE BASELINE THE VERDICT BESIDE IT WAS DRAWN AGAINST (Block D
+      // wave 3, M13). This read 264 of 1,290 — 20.5% — beside a change column
+      // printing "▲ 3.2 pts · band 2.1", so a reader who subtracted the row's
+      // own two levels got 22 − 20.5 = 1.5 against a band of ±2.1, which is no
+      // clear change: the verdict refuted by the sheet built to be checked.
+      // The artboard's cell is "▲ 3 pts", so the verdict stands and the
+      // baseline is the one it was drawn from.
+      categoryAtLastMonth: { k: 243, n: 1290, pct: 18.8 },
       href: '/dashboard/subjects?item=s1',
     },
     {

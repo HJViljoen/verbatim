@@ -2,10 +2,10 @@ import { describe, it, expect } from 'vitest'
 
 import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
-import { assertCopyContract } from '@/lib/test/copy-contract'
+import { assertCopyContract, copyNodes, copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { MOVES_UNLOCK } from '@/lib/pages/overview'
-import { CARD_CONFIRM_SLOT, REGIME_BREAK, claimText, movesMeta, overviewMoves, seriesLine } from './moves'
+import { CARD_CONFIRM_OFF_APP, CARD_CONFIRM_SLOT, REGIME_BREAK, claimText, movesMeta, overviewMoves, seriesLine } from './moves'
 import { overviewRecord } from './record'
 import { overviewFixture, refusedFixture } from './fixture'
 
@@ -13,6 +13,22 @@ const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
 
 describe('OV5 · your moves', () => {
+
+  // A PDF SHEET MAY NOT TALK ABOUT A BUTTON (Block D wave 3, M25). The sales
+  // and marketing briefs borrow this card onto a printed sheet and onto
+  // `/r/<token>`, where "a button this page does not have yet" names a control
+  // the reader has no page to look for. What the sentence is FOR — that a
+  // count is not a move until the reader says it is — is true on paper too, so
+  // only the clause about the control goes.
+  it('does not name a control the reader cannot press, off the app', () => {
+    const app = renderText(overviewMoves.render(overviewFixture(), 'app', ctx))
+    expect(app).toContain(CARD_CONFIRM_SLOT)
+    for (const mode of ['print', 'email'] as const) {
+      const text = renderText(overviewMoves.render(overviewFixture(), mode, ctx))
+      expect(text, mode).not.toContain('button this page does not have')
+      expect(text, mode).toContain(CARD_CONFIRM_OFF_APP)
+    }
+  })
   it('renders in all three modes and keeps the copy contract', () => {
     for (const data of [overviewFixture(), refusedFixture()]) {
       for (const mode of MODES) {
@@ -22,14 +38,22 @@ describe('OV5 · your moves', () => {
   })
 
   it('lists each dated move with the month its first score lands in', () => {
-    // BLOCK D WAVE 2: a move that HAS a reading now prints the reading (its
-    // banded comparison and every side's series) and a move that does not
-    // prints `moveLine`, which is the sentence naming the month its first score
-    // lands in. The fixture carries one of each, which is what the artboard
-    // draws.
+    // BLOCK D WAVE 2: a move that HAS a reading prints the reading (its banded
+    // comparison and every side's series) and a move that does not says which
+    // month its first score lands in. The fixture carries one of each, which is
+    // what the artboard draws.
+    //
+    // AND IT SAYS IT ONCE (Block D wave 3, M9). The row has already drawn the
+    // title and "declared 2 Sep"; falling through to `row.line` printed
+    // `moveLine` — "Track: Waterproofing · tracked 2 Sep · first scoring lands
+    // with the October reading." — so the title and the date appeared twice, one
+    // line apart, on every move of a fresh tenant.
     const text = renderText(overviewMoves.render(overviewFixture(), 'app', ctx))
-    expect(text).toContain('Track: Waterproofing · tracked 2 Sep')
-    expect(text).toContain('first scoring lands with the October reading')
+    expect(text).toContain('Track: Waterproofing declared 2 Sep')
+    expect(text).toContain('First scoring lands with the October reading.')
+    expect(text).not.toContain('Track: Waterproofing · tracked 2 Sep')
+    expect(text.match(/Track: Waterproofing/g)).toHaveLength(1)
+    expect(text.match(/2 Sep/g)).toHaveLength(1)
   })
 
   // BLOCK D · D2 CHANGED THIS SENTENCE AND THE REASON IS THE PACKAGE. The
@@ -242,6 +266,26 @@ describe('OV5, ported to the artboard', () => {
     expect(line).toContain('The category')
     expect(line).toContain('Freitag')
     expect(line).not.toContain('per 100 videos')
+  })
+
+  // A LEVEL WITHOUT ITS "of N" IS A SCORE, and this line printed six of them
+  // (Block D wave 3, M5). The denominators were on the object the whole time —
+  // `MoveSeries.points` is `{month, k, n, pct}` — and only `pct` was read; the
+  // sentence under the line says "read against 3 months", which is how many
+  // months and never what of. Each month carries its OWN denominator, because
+  // each month has one.
+  it('prints every level in the run with its own denominator', () => {
+    const reading = overviewFixture().moves.readings[0]
+    const line = seriesLine(reading)
+    expect(line).toContain('07/26 7.3% 6 of 82')
+    expect(line).toContain('09/26 11.9% 10 of 84')
+    expect(line).toContain('07/26 9.1% 118 of 1,290')
+    // And the node is MARKED, so rule (b) reaches it from here on — it escaped
+    // the contract entirely while it carried no marker.
+    const markup = render(overviewMoves.render(overviewFixture(), 'app', ctx))
+    const level = copyNodes(markup).find((n) => n.kind === 'level' && n.text.includes('07/26'))
+    expect(level).toBeDefined()
+    expect(copyViolations(markup).filter((v) => v.rule === 'level-denominator')).toEqual([])
   })
 
   it('draws the arrows only where a LINE would be allowed, and marks a regime break', () => {

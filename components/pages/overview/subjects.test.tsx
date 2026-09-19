@@ -5,13 +5,28 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { gapBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
-import { leadGap, overviewSubjects, subjectsMeta } from './subjects'
+import { DirectionWord, leadGap, overviewSubjects, subjectsMeta } from './subjects'
 import { overviewFixture, refusedFixture, renamedRivalFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
 
 describe('OV2 · your subjects', () => {
+
+  // D5 / D11 (Block D wave 3, M4). `directionWord` answers `flat` when three
+  // readings exist and do not agree — the ABSENCE of a direction — and "flat"
+  // is not a word this product has (MOVEMENT_WORDS carries none). The guard was
+  // `if (!direction)`, so a subject with three readable months whose change sat
+  // inside its band printed the pill "flat, 3 months" beside a badge reading
+  // "no clear change": two non-answers, one dressed as a finding. This node is
+  // the shared one — the monthly and weekly emails, Voice and the leadership
+  // sheet all print through it.
+  it('prints nothing for `flat`, on every mode', () => {
+    for (const mode of MODES) {
+      expect(render(<DirectionWord direction="flat" mode={mode} />)).toBe('')
+      expect(render(<DirectionWord direction="growing" mode={mode} />)).toContain('growing')
+    }
+  })
   it('renders in all three modes and keeps the copy contract', () => {
     for (const data of [overviewFixture(), refusedFixture()]) {
       for (const mode of MODES) {
@@ -35,7 +50,7 @@ describe('OV2 · your subjects', () => {
 
   it('prints a direction word only inside a verdict node', () => {
     const markup = render(overviewSubjects.render(overviewFixture(), 'app', ctx))
-    expect(markup).toContain('growing, 3 months')
+    expect(markup).toContain('growing, 3rd month')
     // The contract's rule (c) is what proves it: no direction word survives
     // outside a verdict node.
     expect(copyViolations(markup).filter((v) => v.rule === 'direction-word')).toEqual([])
@@ -97,7 +112,12 @@ describe('OV2 · your subjects', () => {
       const text = renderText(overviewSubjects.render(overviewFixture(), mode, ctx))
       // The two figures are separated (design review Medium 18): they ran
       // together with no separator, which reads as one number gone wrong.
-      expect(text, mode).toContain('at this point last month 20.5% · 264 of 1,290')
+      // AND THE FIGURE IS THE VERDICT'S OWN BASELINE (Block D wave 3, M13):
+      // 22 − 18.8 = 3.2, which is what the change column beside it prints. At
+      // 20.5% a reader who subtracted the row's own two levels got 1.5 pts
+      // against a band of ±2.1 — the verdict refuted by the sheet built to be
+      // checked.
+      expect(text, mode).toContain('at this point last month 18.8% · 243 of 1,290')
     }
   })
 })

@@ -19,6 +19,40 @@ describe('OV3 · what the category is saying', () => {
     }
   })
 
+  // `CalendarLine` sizes every label in VIEWBOX UNITS and scales its drawing
+  // uniformly into its container, so the intrinsic width is the scale factor.
+  // In the third of a `TileColumns of={3}` — about 352px at 1440 — the 880-unit
+  // default is a 0.40 downscale: a 10px axis label at 4.0px and the end label's
+  // own figure at 4.4px (Block D wave 3, M2 / SH1).
+  it('draws the attention chart at its column’s own width, not the 880 default', () => {
+    const markup = render(overviewCategory.render(overviewFixture(), 'app', ctx))
+    const view = /viewBox="0 0 (\d+) (\d+)"/.exec(markup)
+    expect(view?.[1]).toBe('352')
+    expect(view?.[2]).toBe('110')
+    // And the end label sits INSIDE the box: it is drawn at
+    // `width - padR + 10` and clipped by nothing.
+    const end = /<text x="(\d+(?:\.\d+)?)" y="[^"]*" font-size="11" font-weight="600"/.exec(markup)
+    expect(Number(end?.[1])).toBeLessThanOrEqual(232)
+  })
+
+  // A FROZEN ARTEFACT PREDATES A REQUIRED FIELD (Block D wave 3, M6).
+  // `CategoryBlock.quiet` is new and required in Block D, and `overview
+  // .category` was already named by a section map at 017fc6e — so the brief
+  // deck hands a snapshot built then to this block today with a bare
+  // `as never`. `c.quiet.length` on it threw inside a SERVER COMPONENT, which
+  // takes the share link, the viewer, the Studio preview and the PDF route
+  // rather than one tile.
+  it('renders a stored surface that predates `quiet`, in every mode', () => {
+    for (const mode of MODES) {
+      const data = overviewFixture()
+      const category = { ...data.category } as Record<string, unknown>
+      delete category.quiet
+      const stale = { ...data, category: category as unknown as typeof data.category }
+      expect(() => render(overviewCategory.render(stale, mode, ctx))).not.toThrow()
+      expect(renderText(overviewCategory.render(stale, mode, ctx))).toContain('No longer being said')
+    }
+  })
+
   it('prints the four lines with their headings', () => {
     const text = renderText(overviewCategory.render(overviewFixture(), 'app', ctx))
     for (const heading of ['Kind of thing said', 'What moved most', 'Mood', 'Attention']) {
@@ -48,8 +82,8 @@ describe('OV3 · what the category is saying', () => {
 
   it('keeps every direction word inside a verdict node', () => {
     const markup = render(overviewCategory.render(overviewFixture(), 'app', ctx))
-    expect(markup).toContain('growing, 3 months')
-    expect(markup).toContain('fading, 3 months')
+    expect(markup).toContain('growing, 3rd month')
+    expect(markup).toContain('fading, 3rd month')
     expect(copyViolations(markup).filter((v) => v.rule === 'direction-word')).toEqual([])
   })
 
