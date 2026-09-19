@@ -116,9 +116,25 @@ describe('the search terms section', () => {
     // edge, so the row did not scan as sentence-then-action. And the strip
     // came from a server prop, so it stayed put after a removal — the one
     // control on it looked inert whether it had worked or not.
+    //
+    // ST7 finished it: the keep-note is the same 52 characters on every strip
+    // and it was a flex item sized by its own content, so it took 460px of a
+    // 716px row while the evidence beside it got 146. It prints ONCE now, under
+    // the list — after the last strip's control, not between a strip's evidence
+    // and its own.
     const markup = render(termsSection)
     const strip = markup.slice(markup.indexOf('Worth reviewing'))
-    expect(strip.indexOf(REVIEW_KEEP_NOTE)).toBeLessThan(strip.indexOf('Remove it'))
+    expect(strip.split(REVIEW_KEEP_NOTE).length - 1).toBe(1)
+    expect(strip.indexOf('Remove it')).toBeLessThan(strip.indexOf(REVIEW_KEEP_NOTE))
+    // Two flagged terms, still one note.
+    const two = render(
+      <TermsSection
+        terms={{ ...TERMS }} dates={{}} review={[term(), term({ key: 'freitag', keyword: 'Freitag', bucket: 'competitor' })]}
+        canEdit onAdd={() => null} onRemove={() => {}}
+      />,
+    )
+    expect(two.split('Remove it').length - 1).toBe(2)
+    expect(two.split(REVIEW_KEEP_NOTE).length - 1).toBe(1)
     const gone = renderText(
       <TermsSection
         terms={{ ...TERMS, industry_keywords: [] }}
