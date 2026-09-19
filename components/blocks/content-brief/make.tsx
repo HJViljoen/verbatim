@@ -170,6 +170,25 @@ const STOP_HEAD = 'What not to make'
 const STOP_LABEL = 'Stop'
 
 /**
+ * AND THE NEGATION IS NOT PAINTED IN RED (design review 9).
+ *
+ * The card carried `border-negative/40`, a `text-negative` mono eyebrow and a
+ * `text-negative` 17px/600 headline. `design-system/verbatim/MASTER.md:43`
+ * lists Negative `#DB3B2E` as **"data only"** and rule 2 at `:49` is "Colour =
+ * meaning, in data only" — a card border, a label and a headline are chrome,
+ * and spending the palette's one alarm colour on them leaves it meaning
+ * nothing where a measurement needs it. Measured on the tile, the headline was
+ * **4.49:1**, under AA for 17px/600, which is not large text.
+ *
+ * The artboard makes the same point with a neutral mono eyebrow and an
+ * all-black headline and gets the negation from the WORDS and the position.
+ * So do we: the words are `STOP_HEAD` and `STOP_LABEL`, the position is the
+ * band under the row rather than a fourth column in it, and the one place the
+ * negative tint survives is the `Chip` — which is a datum (the status the
+ * client set) and is the app-wide chip pattern.
+ */
+
+/**
  * A CARD IS A FIXED BOX, SO ITS VARIABLE PROSE IS BOUNDED (design review 10).
  *
  * The slide body is 563px with `overflow: hidden` (app/globals.css
@@ -194,10 +213,10 @@ const STOP_LABEL = 'Stop'
 function Card({ row, n, mode }: { row: AdviceRow; n: number | null; mode: RenderMode }) {
   const stop = n == null
   return (
-    <div className={`flex min-w-0 flex-col gap-1 rounded-md border px-4 py-3 ${stop ? 'border-negative/40 bg-tile' : 'border-border bg-tile'}`}>
+    <div className={`flex min-w-0 flex-col gap-1 rounded-md border px-4 py-3 border-border bg-tile`}>
       <div className="flex items-center justify-between gap-2">
         {stop
-          ? <span className="font-mono text-[13px] font-medium uppercase tracking-[0.06em] text-negative">{STOP_LABEL}</span>
+          ? <span className="font-mono text-[13px] font-medium uppercase tracking-[0.06em] text-muted-foreground">{STOP_LABEL}</span>
           : <span className="font-mono text-[13px] font-medium tabular-nums text-primary">{String(n).padStart(2, '0')}</span>}
         <Chip tone={toneOf(row)}>{chipWord(row)}</Chip>
       </div>
@@ -207,7 +226,7 @@ function Card({ row, n, mode }: { row: AdviceRow; n: number | null; mode: Render
           the headline rather than the headline. */}
       {stop ? (
         <>
-          <h3 className="m-0 text-[17px] font-semibold leading-[1.2] tracking-[-0.01em] text-negative">{STOP_HEAD}</h3>
+          <h3 className="m-0 text-[17px] font-semibold leading-[1.2] tracking-[-0.01em] text-foreground">{STOP_HEAD}</h3>
           <p
             data-copy="stored"
             data-slot="pass_d_b_recommendation"

@@ -424,6 +424,17 @@ describe('content.make — the mock’s page 2', () => {
     expect(text).toContain('Dismissed')
   })
 
+  // AND THE NEGATION IS NOT PAINTED IN RED (design review 9). MASTER.md lists
+  // Negative as "data only"; a card border, a mono label and a 17px/600
+  // headline are chrome, and the headline measured 4.49:1 on the tile.
+  it('spends no alarm colour on chrome — the words carry the negation', () => {
+    expect(markup).not.toContain('text-negative')
+    expect(markup).not.toContain('border-negative')
+    // The status chip keeps its tint: it is a datum, and the word on it is
+    // `text-foreground` at over 10:1.
+    expect(markup).toContain('bg-negative/15 text-foreground')
+  })
+
   // WORK ALREADY DONE IS NOT A THING TO MAKE (design review 2, code review 2).
   // The ledger is oldest-first and `acted_on` reads "Done", so the three oldest
   // rows won regardless of status and a client read two finished items as their
