@@ -87,6 +87,19 @@ export function EnhancedTable({ children, filterPlaceholder = 'Filter rows…', 
             type="search"
             value={q}
             onChange={(e) => { setQ(e.target.value); applyFilter(e.target.value) }}
+            // ENTER NEVER LEAVES THIS BOX. The filter is applied on every
+            // keystroke, so Enter has nothing of its own to do — but a lone
+            // text input inside a <form> is submitted by it, and this wrapper
+            // is dropped into pages that have one. On Settings › Tracking the
+            // term record sits inside the sub-page's single
+            // <form action={saveTracking}>, so filtering for "eco" and
+            // pressing Enter committed every unsaved term, rival and cadence
+            // edit, stamped an actor, fired the audit trigger and moved the
+            // "last saved" date the page prints in three places. Every other
+            // text input on that page guards Enter deliberately; this one
+            // arrived with a shared component and was not re-checked when the
+            // section moved inside the form.
+            onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault() }}
             placeholder={filterPlaceholder}
             aria-label={filterPlaceholder.replace(/…$/, '')}
             className="h-8 w-full rounded-[4px] bg-inner pl-8 pr-2 text-[12.5px] text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
