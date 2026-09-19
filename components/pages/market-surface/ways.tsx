@@ -36,15 +36,39 @@ import { AcceptAdviceButton } from './accept-button'
 
 /** The artboard's button shape: 44px, rounded 6, green for the one primary. */
 const BUTTON = 'inline-flex h-[44px] items-center gap-2 rounded-md px-4 text-[13px] font-medium'
+/**
+ * A WAY THAT WORKS IS THE HEAVIER CONTROL, WHICH IS THE WAY ROUND THIS ROW HAD
+ * IT BACKWARDS.
+ *
+ * `LIVE` was `bg-tile` — the tile's own white, so no fill at all — inside a
+ * solid hairline, and `DEAD` was `bg-inner`: a filled grey slab. Rendered at
+ * 1440 the two ways that write NOTHING were the two loudest objects on a row
+ * whose meta says "3 of 5 work today", and the row said the opposite of its own
+ * sentence. A disabled control has to be visible (it is the count of ways in,
+ * and it carries the sentence saying why it cannot be pressed) and it may not
+ * be the emphasis.
+ *
+ * So the fill comes off the dead one and its hairline goes to 60%: the live
+ * control is the artboard's white-with-a-hairline and the dead one is the same
+ * outline, quieter, in muted ink. Tokens only — no new tone.
+ */
 const LIVE = `${BUTTON} bg-tile text-foreground ring-1 ring-border transition-colors hover:bg-inner`
-const DEAD = `${BUTTON} cursor-not-allowed bg-inner text-muted-foreground ring-1 ring-border/70`
+const DEAD = `${BUTTON} cursor-not-allowed bg-transparent text-muted-foreground ring-1 ring-border/60`
 
 /** One way's slot. THE NOTE IS CAPPED BY ITS SLOT, NEVER BY ITSELF: a
  *  `max-w-[240px]` on the note alone is wider than most of these buttons, so at
  *  1440 the sentence belonging to "Confirm this month's card" ran under "Track
  *  this" as well and a reader could not tell which sentence explained which
- *  control. The cap belongs to the column. */
-const SLOT = 'flex min-w-0 max-w-[260px] flex-col gap-1'
+ *  control. The cap belongs to the column.
+ *
+ *  AND THE CONTROL IS SIZED BY ITS LABEL, NEVER BY THE NOTE UNDER IT. A flex
+ *  column stretches its children, so the 260px the SENTENCE needs was spent on
+ *  the BUTTON: the two dead ways rendered as 260×44 slabs while the two live
+ *  ones, whose notes are shorter, shrank to 90px and 114px. The artboard sizes
+ *  every one of its five by its own text (`inline-flex`, `padding: 0 16px`), so
+ *  `items-start` does here what `inline-flex` does there and the cap goes on
+ *  applying to the column the note wraps in. */
+const SLOT = 'flex min-w-0 max-w-[260px] flex-col items-start gap-1'
 
 function Way({ way, mode, appUrl }: { way: WayRow; mode: RenderMode; appUrl: string }) {
   const email = mode === 'email'

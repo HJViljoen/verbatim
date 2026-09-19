@@ -226,8 +226,11 @@ const HEIGHT: Record<string, (d: MarketSurfaceData) => number> = {
   },
   // One block per section that is not built, each with its owner.
   'market.unlocks': (d) => 105 + d.unlocks.rows.length * 95,
-  // Two lines of 44px slots at 1440, and under each the sentence a dead way
-  // now prints for itself.
+  // TWO LINES OF 44px SLOTS AT 1280, ONE AT 1440, and under each the sentence a
+  // dead way now prints for itself. Measured: the five slots want 1,024px and
+  // the grid gives 1,136 at 1440 and 976 at 1280, so the row is 126px wide-open
+  // and 180–199px at the narrow end. The box is budgeted for the narrow end,
+  // which is this table's stated rule.
   'market.ways': (d) => {
     const ways = d.ways.ways
     const lines = Math.max(1, Math.ceil(ways.length / 4))

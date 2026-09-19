@@ -647,6 +647,27 @@ describe('MK5 · how a move is made', () => {
     // And paper still draws no control at all.
     expect(render(marketWays.render(marketFixture(), 'print', ctx))).not.toContain('<button')
   })
+
+  it('does not make the ways that write nothing the loudest thing on the row', () => {
+    // `LIVE` was the tile's own white inside a solid hairline — no fill at
+    // all — and `DEAD` was `bg-inner`, a filled grey slab, so the two ways
+    // that write NOTHING were the two heaviest objects on a row whose meta
+    // says "3 of 5 work today". And a flex column stretches its children, so
+    // the 260px the SENTENCE needs was spent on the BUTTON: the dead ways
+    // rendered 260px wide while the live ones shrank to their text.
+    const markup = render(marketWays.render(marketFixture(), 'app', ctx))
+    const dead = markup.match(/<button[^>]*disabled[^>]*class="([^"]*)"/)
+      ?? markup.match(/<button[^>]*class="([^"]*)"[^>]*disabled/)
+    expect(dead, 'no disabled control found').not.toBeNull()
+    expect(dead![1]).not.toContain('bg-inner')
+    expect(dead![1]).toContain('text-muted-foreground')
+    // Every slot sizes its control by the control's own label, the way the
+    // artboard's five `inline-flex` buttons do.
+    for (const slot of markup.match(/class="[^"]*max-w-\[260px\][^"]*"/g) ?? []) {
+      expect(slot, slot).toContain('items-start')
+    }
+    expect(markup).toContain('max-w-[260px]')
+  })
 })
 
 describe('MK5b · say vs hear', () => {
