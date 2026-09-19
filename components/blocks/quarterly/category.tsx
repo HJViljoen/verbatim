@@ -188,21 +188,47 @@ export const quarterlyCategory: Block<QuarterlyData> = {
     // moved most · Nothing moved clearly this month. · Nothing this artefact
     // follows has stopped being said. · Nothing moved clearly this month."
     const anyMover = c.growing.length + c.fading.length > 0
+    // THE DISTINGUISHING WORD COMES FIRST, AND THE QUALIFIER IS SAID ONCE.
+    // "Cleared their band · a larger share than last month" and "…a smaller
+    // share…" are byte-identical until the FIFTH word, and at 10.5px uppercase
+    // in a 1fr track both wrapped to two lines — so the only token telling the
+    // two columns apart sat mid-line-one of a two-line all-caps block, on the
+    // deck's tightest sheet, at two lines a column. The refusal of GROWING /
+    // FADING is right and traced (D5); nothing asked for a seven-word heading.
+    // "Larger share than last month" opens on the word that distinguishes it,
+    // sets on one line, and the band — which is what both headings were
+    // carrying — is stated once beside the section they are both under, where
+    // it costs no line at all.
+    const moverHead = (word: 'Larger' | 'Smaller') =>
+      `${word} share than last month`
     const movers = (
       <Column mode={mode} gap={10}>
-        <Eyebrow mode={mode}>What moved most</Eyebrow>
+        {/* A SPAN, NOT A `Note`. `Eyebrow` is a `<p>`, and a `<p>` inside a
+            `<p>` is closed by the parser before it opens — the aside came out
+            as a sibling on its own line and cost the sheet 24px instead of
+            nothing. */}
+        <Eyebrow
+          mode={mode}
+          aside={
+            mode === 'email'
+              ? <span style={{ textTransform: 'none', letterSpacing: 0 }}>each cleared its own band</span>
+              : <span className="font-sans text-[10px] normal-case tracking-normal text-muted-foreground">each cleared its own band</span>
+          }
+        >
+          What moved most
+        </Eyebrow>
         {anyMover ? (
           <Columns weights={[1, 1]} gap={24} mode={mode}>
             <Column mode={mode} gap={8}>
               <span className={email ? undefined : 'text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground'}>
-                Cleared their band · a larger share than last month
+                {moverHead('Larger')}
               </span>
               {c.growing.map((m) => <MoverRow key={m.id} mover={m} mode={mode} />)}
               {c.growing.length === 0 ? <Note mode={mode}>Nothing took a larger share than last month.</Note> : null}
             </Column>
             <Column mode={mode} gap={8}>
               <span className={email ? undefined : 'text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground'}>
-                Cleared their band · a smaller share than last month
+                {moverHead('Smaller')}
               </span>
               {c.fading.map((m) => <MoverRow key={m.id} mover={m} mode={mode} />)}
               {c.fading.length === 0 ? <Note mode={mode}>Nothing took a smaller share than last month.</Note> : null}

@@ -744,8 +744,16 @@ describe('the artboard port (Block D wave 2)', () => {
 
   it('qr.p4.movers · two banded arms, no direction word in a heading', () => {
     const t = text('quarterly.category')
-    expect(t).toContain('Cleared their band · a larger share than last month')
-    expect(t).toContain('Cleared their band · a smaller share than last month')
+    // THE DISTINGUISHING WORD FIRST. The two headings used to be identical
+    // until their fifth word and both wrapped to two lines in a 1fr track.
+    expect(t).toContain('Larger share than last month')
+    expect(t).toContain('Smaller share than last month')
+    // And the band — what "Cleared their band ·" was carrying — is still on
+    // the sheet, said once, beside the section both columns sit under.
+    expect(t).toContain('each cleared its own band')
+    // Still no direction word in either heading (D5).
+    expect(t).not.toContain('Growing')
+    expect(t).not.toContain('Fading')
     // The months a mover's own series carried, WITH THE UNIT — the same share
     // the FigureCell two rows up prints — and the first month it was read.
     expect(t).toContain('Jul 5.1% · Aug 6.8% · Sep 9.4%')
