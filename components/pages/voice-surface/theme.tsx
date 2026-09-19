@@ -16,7 +16,7 @@ import { fmtInt, fmtPct, monthName } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { QuoteRef } from '@/lib/blocks/types'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
-import type { SpokenLine, ThemeBlock, VoiceSurfaceData } from '@/lib/pages/voice-surface'
+import type { OnScreenLine, SpokenLine, ThemeBlock, VoiceSurfaceData } from '@/lib/pages/voice-surface'
 import { VOICES_WORD, heardLine, reachAxisMax } from '@/lib/pages/voice-surface'
 
 // VO3 · A theme, in full (design §3 VO3; ported to the artboard, Block D
@@ -132,8 +132,15 @@ function baselinePct(verdict: Verdict | null): number | null {
 /** The month that side was read in — the basis's `from`, never the clock. */
 const baselineMonth = (verdict: Verdict | null): string | null => verdict?.basis?.from ?? null
 
-/** The spoken line or the on-screen text, with where it came from. */
-function Said({ line, label, mode }: { line: SpokenLine; label: string; mode: RenderMode }) {
+/** The spoken line or the on-screen text, with where it came from.
+ *
+ *  BOTH SHAPES, ONE COMPONENT, and the difference is which of them can carry a
+ *  ref: the on-screen line is `videos.ocr_text` and travels as a `Quote` under
+ *  `t:<videos.id>`; the spoken line is `videos.transcript`, for which no ref
+ *  kind exists (see `SpokenLine`). The words are read off whichever the caller
+ *  passed and nothing else here changes. */
+function Said({ line, label, mode }: { line: SpokenLine | OnScreenLine; label: string; mode: RenderMode }) {
+  const text = 'quote' in line ? line.quote.text : line.text
   const cite = (
     <span className={mode === 'email' ? undefined : 'font-mono text-[10.5px] text-muted-foreground'} style={mode === 'email' ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}>
       {line.cite}
@@ -146,7 +153,7 @@ function Said({ line, label, mode }: { line: SpokenLine; label: string; mode: Re
           word this block would be claiming, and rule (c) does not spare
           unmarked markup. */}
       <span data-copy="quote" className={mode === 'email' ? undefined : 'text-[12.5px]'} style={mode === 'email' ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}>
-        “{line.text}”
+        “{text}”
       </span>{' '}
       {/* A DEAD LINK IS WORSE THAN NO LINK. A video with no public URL prints
           its provenance as words and is not wrapped in an anchor. */}
@@ -504,7 +511,7 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
                       {t.quoteOnScreen[i] ? (
                         <span className={email ? undefined : 'font-sans text-[11.5px] text-muted-foreground'}>
                           On-screen text on the same video:{' '}
-                          <span data-copy="quote" className={email ? undefined : 'text-secondary-foreground'}>{t.quoteOnScreen[i]}</span>
+                          <span data-copy="quote" className={email ? undefined : 'text-secondary-foreground'}>{t.quoteOnScreen[i]?.text}</span>
                         </span>
                       ) : null}
                       {/* THE ARTBOARD'S GLYPH BEFORE THE PLATFORM'S NAME.
@@ -632,7 +639,18 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
   },
 
   quotes(data): QuoteRef[] {
-    return data.theme.quotes.map((q) => q.ref)
+    const t = data.theme
+    // EVERY SET OF WORDS THIS BLOCK PRINTS, not just the six in the grid. The
+    // nested on-screen lines and the block-level one are a creator's own words
+    // and travel under `t:<videos.id>`; a block that declared only the comment
+    // quotes handed the quote-freeze walk a shorter list than it draws.
+    // `spoken` is absent because `videos.transcript` has no ref kind to be
+    // declared by — see `SpokenLine`.
+    return [
+      ...t.quotes.map((q) => q.ref),
+      ...t.quoteOnScreen.filter((q) => q != null).map((q) => (q as { ref: string }).ref),
+      ...(t.onScreen ? [t.onScreen.quote.ref] : []),
+    ]
   },
 
   emptyState(data) {

@@ -32,6 +32,7 @@ import { selectAll } from '../supabase-admin'
 import {
   firstHeardThisMonth,
   longMonth,
+  onScreenQuote,
   recordWindow,
   splitMovers,
   type Mover,
@@ -220,9 +221,44 @@ export interface MoversBlock {
   rereadNote: string | null
 }
 
+/**
+ * The head of a supporting video's TRANSCRIPT, with where it came from.
+ *
+ * THE WORDS ARE BARE AND THAT IS A KNOWN HOLE, not an oversight. Everything
+ * else a surface prints of a third party's speech travels as a `Quote` whose
+ * `ref` the freeze empties and the erasure sweep searches
+ * (lib/renderables/quotes-freeze.ts). `videos.transcript` has no ref kind:
+ * `t:` resolves `videos.ocr_text`, `k:` a `video_claims` row and `v:` a
+ * COMMENTER's excerpt on the video — resolving a transcript under any of them
+ * would hand back different words in the speaker's place, which is the exact
+ * failure `k:`'s and `t:`'s own docblocks refuse. Closing it means a SIXTH ref
+ * kind, and AGENTS.md reserves that: a new kind joins `citedEvidenceIds`'s arm
+ * (c) or a protected class, never neither, and both live in
+ * `inngest/functions/pipeline.ts` — `pipeline`'s file, not this group's. Block
+ * D wave 3 fixed the two OCR fields beside this one and handed this third to
+ * them. Until then `loadVoiceSurface`'s output reaching `report_snapshots.data`
+ * (through `lib/reports/documents/load-reading.ts` → `composeDocument` →
+ * `createSnapshot`) carries this sentence as words.
+ *
+ * `OnScreenLine` below is the same line drawn from `videos.ocr_text`, and it
+ * DOES carry a ref, which is why the two shapes are not one.
+ */
 export interface SpokenLine {
-  /** What was said, or what was on the screen. */
+  /** What was said. */
   text: string
+  /** Platform · date · what kind of video it was. */
+  cite: string
+  href: string | null
+}
+
+/** The same line drawn from `videos.ocr_text` — the creator's own words burnt
+ *  into the frame — carried as a freezable quote under `t:<videos.id>`, the
+ *  kind `quoteRef.onScreen` builds and `lib/quotes.ts` resolves off the video
+ *  row. A video the retention sweep removes stops resolving and the line
+ *  disappears from a re-rendered export, which is the whole reason it travels
+ *  as a ref rather than as a string. */
+export interface OnScreenLine {
+  quote: Quote
   /** Platform · date · what kind of video it was. */
   cite: string
   href: string | null
@@ -327,8 +363,17 @@ export interface ThemeBlock {
   /** The on-screen text of the video a quote was written under, nested with
    *  that quote and no other (the artboard's "On-screen text on the same
    *  video"). One entry per quote, null where the video carries none or did not
-   *  resolve. Parallel to `quotes`, exactly as `quoteCites` is. */
-  quoteOnScreen: (string | null)[]
+   *  resolve. Parallel to `quotes`, exactly as `quoteCites` is.
+   *
+   *  A QUOTE, NOT A STRING, and the difference is the whole ref spine. These
+   *  are a creator's own words off `videos.ocr_text`; written as bare strings
+   *  they were neither emptied by `freezeQuotes` nor collected into
+   *  `report_snapshots.evidence_ids`, so a brief's stored surface carried the
+   *  sentences themselves, served them from `/r/<token>`, and — no ref having
+   *  been collected — kept serving them after the row they came from was
+   *  erased. Overview took the same fix in wave 2 (`onScreenQuote`, `t:`);
+   *  Voice was left out of it. */
+  quoteOnScreen: (Quote | null)[]
   /** How many quotes the theme has behind it at all — `themes.evidence_count`,
    *  the same n the on-camera line divides. Null where the run carries no theme
    *  row for this registry entry. The block prints "2 of 182 voices" with it,
@@ -338,7 +383,7 @@ export interface ThemeBlock {
   quotesOf: number | null
   /** The spoken line and the on-screen text behind the strongest evidence. */
   spoken: SpokenLine | null
-  onScreen: SpokenLine | null
+  onScreen: OnScreenLine | null
   /** Cited evidence that describes who the commenters are — counted, never
    *  quoted (the standing rule). */
   withheld: number
@@ -1570,14 +1615,14 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
   let quotes: Quote[] = []
   let quoteCites: string[] = []
   let quotePlatforms: (string | null)[] = []
-  let quoteOnScreen: (string | null)[] = []
+  let quoteOnScreen: (Quote | null)[] = []
   let quotesOf: number | null = null
   let withheld = 0
   let onCamera: string | null = null
   let onCameraSaid: number | null = null
   let onCameraOf: number | null = null
   let spoken: SpokenLine | null = null
-  let onScreen: SpokenLine | null = null
+  let onScreen: OnScreenLine | null = null
   let description = input.registry?.description ?? null
 
   if (input.themedRunId) {
@@ -1655,7 +1700,7 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
       const seen = new Set<string>()
       const cites: string[] = []
       const platforms: (string | null)[] = []
-      const nested: (string | null)[] = []
+      const nested: (Quote | null)[] = []
       const out: Quote[] = []
       /** The videos a quote was drawn out of the TRANSCRIPT of — the other
        *  half of the said-once rule below. */
@@ -1673,8 +1718,14 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
         // The mock nests the video's own on-screen text under the quote taken
         // from that video. Only that quote: the same words under a quote from
         // a different video would be a caption about someone else's post.
+        // A QUOTE UNDER THE VIDEO'S OWN REF, never a bare string: these are
+        // the creator's words and a stored artefact holds ids, not words
+        // (lib/renderables/quotes-freeze.ts). `onScreenQuote` is Overview's,
+        // and it returns null without a video uuid to build the `t:` ref from
+        // — a line with no ref is a line the freeze cannot empty and the
+        // erasure sweep cannot find.
         const ocr = video && ev.source !== 'ocr' ? (video.ocr_text ?? '').trim() : ''
-        nested.push(ocr ? firstSentences(ocr) : null)
+        nested.push(ocr ? onScreenQuote(video?.id, firstSentences(ocr)) : null)
       }
       quotes = out
       quoteCites = cites
@@ -1707,8 +1758,9 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
       }
       const withOcr = supporting.find((v) => (v.ocr_text ?? '').trim().length > 0)
       if (withOcr) {
-        onScreen = {
-          text: firstSentences(withOcr.ocr_text as string),
+        const line = onScreenQuote(withOcr.id, firstSentences(withOcr.ocr_text as string))
+        onScreen = line && {
+          quote: line,
           cite: [platformLabel(withOcr.platform), withOcr.upload_date ? shortDate(withOcr.upload_date) : null, kindOf(withOcr)]
             .filter(Boolean).join(' · '),
           href: withOcr.video_url,
@@ -1718,7 +1770,7 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
         // print it twice — once attached to the video it belongs to and once
         // loose at the foot of the block, reading as a second piece of
         // evidence. The transcript half is above.
-        if (quoteOnScreen.some((t) => t === onScreen?.text)) onScreen = null
+        if (quoteOnScreen.some((q) => q?.text === onScreen?.quote.text)) onScreen = null
       }
     }
   }

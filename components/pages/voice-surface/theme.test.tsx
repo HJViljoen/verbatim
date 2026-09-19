@@ -352,7 +352,12 @@ describe('voiceTheme', () => {
   })
 
   it('hands its quotes up as refs, so a snapshot freezes ids and not words', () => {
-    expect(blockAnswers(voiceTheme, voiceFixture()).quotes).toEqual(['e:1', 'e:2', 'e:3', 'e:4', 'e:5', 'e:6'])
+    // EVERY SET OF WORDS THE BLOCK DRAWS. The six comment quotes, and the two
+    // on-screen lines nested under them — a creator's own words off
+    // `videos.ocr_text`, which travel under `t:<videos.id>` and were bare
+    // strings until wave 3, neither frozen nor collected nor erasable.
+    expect(blockAnswers(voiceTheme, voiceFixture()).quotes)
+      .toEqual(['e:1', 'e:2', 'e:3', 'e:4', 'e:5', 'e:6', 't:vid-2', 't:vid-5'])
   })
 
   it('says which of the two silences it is when nothing can be opened', () => {

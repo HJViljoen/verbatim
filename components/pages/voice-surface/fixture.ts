@@ -1,4 +1,5 @@
 import { prevalenceTier } from '@/lib/calibration'
+import { quoteRef } from '@/lib/renderables/quotes-freeze'
 import { horizonWindow } from '@/lib/reading/horizon'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '@/lib/rivals'
 import type { Verdict } from '@/lib/reading/verdicts'
@@ -239,7 +240,18 @@ export function voiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurface
         'Instagram · 5 Sep · under a Cotopaxi post',
       ],
       quotePlatforms: ['tiktok', 'tiktok', null, 'youtube', 'reddit', 'instagram'],
-      quoteOnScreen: [null, '1 bag. 3 years. 0 regrets', null, null, 'Zip test: 400 cycles, no failure', null],
+      // THE VIDEO'S OWN WORDS, UNDER THE VIDEO'S OWN REF (`t:<videos.id>`).
+      // Written as bare strings these two sentences survived `freezeQuotes`
+      // untouched and uncollected, so a brief's stored surface carried a
+      // speaker's words and no ref by which the erasure sweep could find them.
+      quoteOnScreen: [
+        null,
+        { ref: quoteRef.onScreen('vid-2'), text: '1 bag. 3 years. 0 regrets' },
+        null,
+        null,
+        { ref: quoteRef.onScreen('vid-5'), text: 'Zip test: 400 cycles, no failure' },
+        null,
+      ],
       quotesOf: 182,
       // A DIFFERENT VIDEO FROM ANY THE QUOTES CAME OUT OF. Quote 2 is cited
       // "TikTok · 11 Sep · a category video, transcript" — an extract of that
