@@ -372,7 +372,15 @@ export const marketAdvice: Block<MarketSurfaceData> = {
                     <th className="py-1 font-semibold">Afterwards</th>
                   </tr>
                 </thead>
-                <tbody className="align-middle">
+                {/* TOP-ALIGNED, WHICH IS WHAT LETS THE TABLE SCAN DOWN A
+                    COLUMN. `align-middle` centred every cell against the
+                    tallest one in its row, and the tallest is always
+                    Afterwards: row 1 runs six lines, so at 1440 its other six
+                    one-line cells floated ~80px below the sentence they belong
+                    to and a reader following "First raised" down the page met
+                    a stepped column. The artboard top-aligns its seven-track
+                    rows for the same reason. */}
+                <tbody className="align-top">
                   {a.rows.flatMap((row) => {
                     const age = ageInMonths(row.firstMade, data.readingAt)
                     const cells = (
