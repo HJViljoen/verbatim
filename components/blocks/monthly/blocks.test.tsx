@@ -3,7 +3,7 @@ import { blockAnswers, blockContext, figureConflicts, mergeFigures, type RenderM
 import { EMAIL } from '@/lib/email/theme'
 import { fullDate } from '@/lib/format'
 import { assertCopyContract } from '@/lib/test/copy-contract'
-import { render, renderText } from '@/lib/test/render'
+import { markupText, render, renderText } from '@/lib/test/render'
 import { fmtInt, fmtPct } from '@/lib/format'
 import { sentFigureRows } from '@/lib/reports/sent-figures'
 import { MONTHLY_BLOCK_KEYS, MONTHLY_MOVES_UNLOCK } from '@/lib/reports/monthly'
@@ -195,12 +195,18 @@ describe('MR3 · what moved', () => {
   // fell between "9.4% of" and "1,388" — a share on one line and what it is a
   // share of on the next, which is the denominator rule broken by other means.
   // The arrows are where the line may break.
-  it('never breaks a point of the trail in half', () => {
+  // AND THE ARROW RIDES WITH THE POINT BEFORE IT (the wave-3 review, finding
+  // [Important]). As a bare text node between two unbreakable boxes the
+  // separator offered a break on BOTH sides, so at 375 a six-point trail set
+  // as eleven lines, five of them a lone "→". The box is the point plus its
+  // arrow; the space after it is the only break.
+  it('never breaks a point of the trail in half, or an arrow off its point', () => {
     for (const mode of MODES) {
       const markup = render(block.render(monthlyFixture(), mode, ctx))
-      for (const point of ['Apr 3.1% of 1,204', 'Sep 9.4% of 1,388', 'Apr —']) {
+      for (const point of ['Apr 3.1% of 1,204 →', 'Sep 9.4% of 1,388', 'Apr — →']) {
         expect(markup).toContain(`<span style="white-space:nowrap">${point}</span>`)
       }
+      expect(markup).not.toContain('</span> → <span')
     }
   })
 
@@ -278,6 +284,27 @@ describe('MR6 · one voice per subject', () => {
     expect(text).toContain('Durability')
     expect(text).toContain('Three winters on the bike')
     expect(text).toContain('Recycled materials')
+  })
+
+  // AND THE PAIR COMES APART ON A PHONE (the wave-3 review, finding [Minor]).
+  // A two-cell table is two cells at every width: at 375 the columns measured
+  // ~120px each and the Afrikaans quote set five serif-italic lines, its
+  // translation three and its cite three more. Two `align="left"` tables at a
+  // pixel width sit side by side while the column can hold both and stack when
+  // it cannot — and the pixel width is a floor, so it is checked against the
+  // phone the artefact is measured at: 264 + 60 of card padding + 40 of canvas
+  // gutter = 364 < 375 (scrollWidth measured 375 in all three states).
+  it('lets the voice pair stack on a phone', () => {
+    const data = monthlyFixture()
+    const markup = render(MONTHLY_BLOCKS['monthly.voices'].render(data, 'email', ctx))
+    expect((markup.match(/<table align="left"/g) ?? []).length).toBe(data.voices.rows.length)
+    expect(markup).not.toContain('width="50%"')
+    for (const width of markup.match(/width="(\d+)"/g) ?? []) {
+      expect(Number(width.replace(/\D/g, ''))).toBeLessThanOrEqual(375 - 60 - 40)
+    }
+    // One pair to a row, cleared after it, so a short quote never tucks under
+    // a tall one and the set reads as the artboard's grid.
+    expect((markup.match(/clear:both/g) ?? []).length).toBe(Math.ceil(data.voices.rows.length / 2))
   })
 
   it('keeps a subject with no voice, and says which silence it is', () => {
@@ -423,6 +450,45 @@ describe('the five sections that are Overview’s', () => {
     for (const line of data.overview.record.lines) expect(artefact).toContain(line)
   })
 
+  // THE ARTBOARD'S STRUCTURE, NOT ONE JOINED PARAGRAPH (the wave-3 review,
+  // finding [Important]). §8 printed `lines.join(' ')` at 11.5 and
+  // `footnote.join(' ')` at 11, both wholly muted: twelve facts in one
+  // five-line block, then seven lines more, with nothing marking where any of
+  // them starts — and the artefact's most important caveat ("this month stops
+  // moving on 31 Oct 2026") at the end of it in the smallest type on the page.
+  // AND "THE RECORD →" IS IN THE HEAD (the wave-3 review, finding [Minor]).
+  // Passed as the frame's footer it rendered bottom-left in a plain underline
+  // and §8's head was the only one on the page with nothing on its right; the
+  // artboard puts it top-right, opposite the mono eyebrow.
+  it('puts §8’s own link in the section head, not in a footer', () => {
+    const markup = render(MONTHLY_BLOCKS['monthly.sound'].render(monthlyFixture(), 'email', ctx))
+    const head = markup.slice(0, markup.indexOf('What is this reading made of'))
+    expect(head).toContain('the record →')
+    expect(markup.slice(markup.indexOf('What is this reading made of'))).not.toContain('the record →')
+  })
+
+  it('sets the record as one paragraph per fact, each led by its own figure', () => {
+    const data = monthlyFixture()
+    const record = data.overview.record
+    const markup = render(MONTHLY_BLOCKS['monthly.sound'].render(data, 'email', ctx))
+    // One paragraph per line, plus the freeze sentence, at the artboard's tier.
+    expect((markup.match(/font-size:13\.5px/g) ?? []).length).toBe(record.lines.length + 1)
+    expect(markup).not.toContain('font-size:11.5px')
+    // The lead is the sentence's own figure, in the ink, and never a rewording:
+    // "27% of what was said" leads on the figure alone.
+    expect(markup).toContain(`<span style="font-weight:600;color:${EMAIL.ink}">3 updates</span>`)
+    expect(markup).toContain(`<span style="font-weight:600;color:${EMAIL.ink}">2,359 videos</span>`)
+    expect(markup).toContain(`<span style="font-weight:600;color:${EMAIL.ink}">27%</span>`)
+    expect(markup).not.toContain('>27% of<')
+    // A sentence that opens on no figure gets no bold lead at all.
+    const nothing = record.lines.find((l) => l.startsWith('Nothing about'))!
+    expect(markup).toContain(`>${nothing}</div>`)
+    // And every word is still the composer's, whole.
+    for (const line of [...record.lines, freezeSentence(record.freezesOn)]) {
+      expect(markupText(markup)).toContain(line)
+    }
+  })
+
   // A Block renders its own heading inside its own frame, so an adapter that
   // renamed one would print the new name on the deck's sheet and the old one
   // three lines under it. The page's heading travels, and the month is said
@@ -540,6 +606,21 @@ describe('the five sections that are Overview’s', () => {
     expect(text).toContain('Cotopaxi — nothing was raised under their content this month.')
   })
 
+  // AND THE VERDICTS ARE A COLUMN TOO (the wave-3 review, finding [Minor]).
+  // Right-aligned in an auto-width cell, both the composition AND the x
+  // changed row to row — Durability's verdicts began at x ≈ 176 and Price's at
+  // x ≈ 327 — so a row with no reading for your own side was indistinguishable
+  // from a row that is indented differently. Measured after: both begin at
+  // x = 341 at 640, and the column is a percentage, so on a phone it grows
+  // rather than painting over the row (scrollWidth 375, unchanged).
+  it('keeps every subject’s verdicts in one right-hand column', () => {
+    for (const data of STATES) {
+      const markup = render(MONTHLY_BLOCKS['monthly.subjects'].render(data, 'email', ctx))
+      expect(markup).not.toMatch(/<td align="right"[^>]*vertical-align:baseline/)
+      expect((markup.match(/<td width="48%"/g) ?? []).length).toBe(data.overview.subjects.rows.length)
+    }
+  })
+
   it('prints both sides of a subject as a column, each with its own "of N"', () => {
     const data = monthlyFixture()
     const text = renderText(MONTHLY_BLOCKS['monthly.subjects'].render(data, 'email', ctx))
@@ -604,8 +685,10 @@ describe('the five sections that are Overview’s', () => {
     for (const key of ['monthly.movers', 'monthly.subjects', 'monthly.rivals', 'monthly.sound'] as const) {
       const body = render(MONTHLY_BLOCKS[key].render(data, 'email', ctx))
         // The frame's own `meta` cell is a shared primitive and keeps the
-        // token; this is about what the block itself prints.
-        .replace(/<td align="right" style="font-family:[^"]*font-size:11px;color:#9AA0A6">[^<]*<\/td>/g, '')
+        // token; this is about what the block itself prints. (§8's meta holds
+        // a NODE — "the record →", which carries its own colour — so the cell
+        // is matched to its closing tag and not to its text.)
+        .replace(/<td align="right" style="font-family:[^"]*font-size:11px;color:#9AA0A6">[\s\S]*?<\/td>/g, '')
       expect(body).not.toContain(EMAIL.faint)
     }
   })
@@ -634,6 +717,12 @@ describe('the five sections that are Overview’s', () => {
     const many = at(1, 64)
     expect(many).toContain('width:1.5625%')
     expect(many).not.toMatch(/width:14px/)
+    // AND THE TRACK IS FAINT (the wave-3 review, finding [Important]). Drawn
+    // on the segment grey, 1 of 64 was a 208px #CDD2D7 bar with a 3px green
+    // fill in it: a picture that says "done" beside a figure that says 1.6%.
+    // The unfilled remainder of a scale bar is not a countable segment.
+    expect(many).not.toContain(EMAIL.neutralSeg)
+    expect(many).toContain(`background:${EMAIL.border}`)
   })
 
   // THE SECTION'S ONE GRAPHIC (review finding [High]). The artboard's rival row
@@ -653,6 +742,28 @@ describe('the five sections that are Overview’s', () => {
       expect(markup).toContain(`width:${Math.max(2, Math.min(100, pct))}%`)
     }
     expect(drawn).toBeGreaterThan(0)
+  })
+
+  // AND EVERY BAR STARTS AT THE SAME X (the wave-3 review, finding
+  // [Important]). A row that is its own `<table>` shares no column with the
+  // row above it: measured at 640 the three tracks were 81px each and began at
+  // x = 157, 210 and 169, and at 375 they were 36, 36 and 12px WIDE. A render
+  // test cannot measure a layout, so it pins the two causes — the rows are
+  // `<tr>`s of ONE table, and the bar's column is present on every row,
+  // including a row with no share to draw in it, because a row that skips a
+  // cell takes the column away from every row below it.
+  it('draws every rival’s row as a row of one table, so the bars share a baseline', () => {
+    for (const data of STATES) {
+      const rows = data.overview.rivals.rows
+      if (rows.length === 0) continue
+      const markup = render(MONTHLY_BLOCKS['monthly.rivals'].render(data, 'email', ctx))
+      // The bar's column, once per row — drawn or not.
+      expect((markup.match(/width="17%"/g) ?? []).length).toBe(rows.length)
+      // One dot cell a row, and the row's rule on its CELLS — it used to be
+      // the per-row table's own border, which is what made each row a table.
+      expect((markup.match(/<td width="8" style="border-top/g) ?? []).length).toBe(rows.length)
+      expect(markup).not.toMatch(/<table[^>]*border-top/)
+    }
   })
 
   it('merge into one figure table with no key printed two ways', () => {

@@ -200,7 +200,22 @@ function SubjectBlock({ row, sentLine }: { row: SubjectRow; sentLine: string | n
                       direction word), and the cell wraps between them: one
                       line at 640, two or three on a phone, the same words in
                       the same order. */}
-                  <td align="right" style={{ paddingLeft: 10, verticalAlign: 'baseline' }}>
+                  {/* AND THE VERDICTS ARE A COLUMN, NOT A RAGGED RIGHT EDGE
+                      (the wave-3 review, finding [Minor]). Right-aligned in an
+                      auto-width cell, the composition AND the x changed row to
+                      row: Durability began "you [too few to compare] the
+                      category [+3.2 pts · band 2.1] growing, 3 months" at
+                      x ≈ 176 and Price began "the category [−3.1 pts]…" at
+                      x ≈ 327, so a reader could not tell a row with no reading
+                      for their own side from a row that is simply indented
+                      differently. The artboard keeps the delta and the pill in
+                      a fixed right-hand column; this is that column — a
+                      percentage rather than a pixel width, so where the chips
+                      need more than 48% (a phone) the column takes it instead
+                      of painting over the row, and every row starts its
+                      verdicts at one x, where the LABEL says which side is
+                      missing. */}
+                  <td width="48%" style={{ width: '48%', paddingLeft: 10, verticalAlign: 'baseline' }}>
                     {/* A SIDE'S LABEL ONLY WHERE THAT SIDE HAS AN ANSWER. A
                         bare "you" with nothing after it — which is what a null
                         verdict left behind — reads as a truncated sentence, and

@@ -10,6 +10,19 @@ import type { FigureTable } from '@/lib/reading/verdicts'
 import type { MonthlyData, SubjectVoiceRow } from '@/lib/pages/monthly'
 import { presentation, T } from './email-table'
 
+/** Half the 600 card's 540 of content — the width at which two voices sit side
+ *  by side, and the width ONE of them keeps when they stack.
+ *
+ *  It is also this block's floor, which is why it is 264 and not 276: a pixel
+ *  width inside an auto-layout table is that table's minimum, so the number
+ *  here sets the narrowest phone the artefact still fits on. 264 + 60 of card
+ *  padding + 40 of canvas gutter = 364, inside the 375 the whole artefact is
+ *  measured at; two of them (528) sit inside 540 with the gutter taken out of
+ *  the left one's own cell, so a stacked pair starts both quotes at the same
+ *  margin. */
+const VOICE_CELL = 264
+const VOICE_GUTTER = 24
+
 /**
  * MR6 · One voice per subject (Phase 1 WP18; the mock's section 6, new in
  * Heinrich's revision 6).
@@ -70,23 +83,55 @@ export const monthlyVoices: Block<MonthlyData> = {
     // grid, so the rows are paired into a two-cell table — and an odd last row
     // keeps its own cell rather than stretching across both, so the left column
     // stays a column.
+    //
+    // AND THE PAIR COMES APART ON A PHONE (the wave-3 review, finding
+    // [Minor]). A two-cell table is two cells at every width: at 375 the
+    // columns measured ~120px each, so the Afrikaans quote set five
+    // serif-italic lines, its translation three and its cite three more, on
+    // the surface a monthly report is opened on most — while every other block
+    // on this artefact is already full width there. An email has no media
+    // query we could rely on (nothing in this product ships one, and a class
+    // is the one thing a block's markup may not carry), so the pair is two
+    // `align="left"` tables at a PIXEL width with `max-width:100%`: side by
+    // side while the column they sit in can hold both, stacked and full width
+    // when it cannot. Word lays out `align` and ignores `max-width`, so
+    // Outlook — always 600 wide — keeps the artboard's grid.
+    //
+    // THEY ARE PAIRED AND NOT POURED. Floating all six would tuck a short
+    // third quote under a tall first one and the set would read as a
+    // staircase; one pair to a row, cleared after, keeps the rows the
+    // artboard's.
     if (email) {
       const pairs: SubjectVoiceRow[][] = []
       for (let i = 0; i < v.rows.length; i += 2) pairs.push(v.rows.slice(i, i + 2))
       return frame(
-        <table width="100%" {...presentation} style={{ ...T, tableLayout: 'fixed' }}>
-          <tbody>
-            {pairs.map((pair) => (
-              <tr key={pair[0].subjectId}>
-                {[0, 1].map((i) => (
-                  <td key={i} width="50%" style={{ verticalAlign: 'top', paddingRight: i === 0 ? 12 : 0, paddingLeft: i === 0 ? 0 : 12 }}>
-                    {pair[i] ? <Row row={pair[i]} mode={mode} appUrl={ctx.appUrl} /> : null}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>,
+        <div>
+          {pairs.map((pair) => (
+            <div key={pair[0].subjectId}>
+              {pair.map((row, i) => (
+                <table
+                  key={row.subjectId}
+                  align="left"
+                  width={VOICE_CELL}
+                  {...presentation}
+                  style={{ ...T, width: VOICE_CELL, maxWidth: '100%' }}
+                >
+                  <tbody>
+                    <tr>
+                      <td style={{ verticalAlign: 'top', paddingRight: i === 0 ? VOICE_GUTTER : 0 }}>
+                        <Row row={row} mode={mode} appUrl={ctx.appUrl} />
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              ))}
+              {/* The gutter is the LEFT cell's padding, so a stacked pair
+                  starts both its quotes at the same margin; this clears the
+                  pair so the next one starts its own row. */}
+              <div style={{ clear: 'both', fontSize: 0, lineHeight: 0 }}>&nbsp;</div>
+            </div>
+          ))}
+        </div>,
       )
     }
     // TWO COLUMNS ON SCREEN AND PAPER, one on a phone — the mock's grid, which
