@@ -47,6 +47,21 @@ describe('OV1 · in one sentence', () => {
     expect(figures.map((f) => f.text)).toContain('9.4%')
   })
 
+  // A MONO GLYPH IS ONE ADVANCE WIDE WHATEVER IT IS, so tabular mono inside a
+  // 17px serif line sets "9.4%" as "9 . 4%" and "1,388" as "1 , 388" — the
+  // defect `TokenProse`'s own docblock names. It reached this hero because the
+  // block hand-rolls the serif through `className`, so the face rule never saw
+  // a hero and fell to its body default (Block D wave 3, M1).
+  it('sets the hero sentence’s figures in the sentence’s own face, never mono', () => {
+    const markup = render(overviewSentence.render(overviewFixture(), 'app', ctx))
+    const hero = markup.slice(markup.indexOf('font-serif'))
+    const at = hero.indexOf('data-copy="figure"')
+    expect(at).toBeGreaterThan(-1)
+    const figure = hero.slice(at, at + 120)
+    expect(figure).not.toContain('font-mono')
+    expect(figure).toContain('font-semibold')
+  })
+
   it('marks the model’s read as prose, and code’s sentence as neither', () => {
     const nodes = copyNodes(render(overviewSentence.render(overviewFixture(), 'app', ctx)))
     const prose = nodes.filter((n) => n.kind === 'prose')

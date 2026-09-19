@@ -173,6 +173,22 @@ export const overviewSentence: Block<OverviewData> = {
           body={s.body}
           figures={s.figures}
           mode={mode}
+          // THE FIGURES TAKE THE SENTENCE'S OWN FACE (Block D wave 3, M1).
+          // `TokenProse` DERIVES the face from `size` — `inherit` in a hero,
+          // `mono` in a body sentence — and this caller hand-rolls the serif
+          // ramp through `className` rather than passing `size`. So `hero` was
+          // false, the face fell to `mono`, and every substituted figure
+          // rendered `font-mono tabular-nums` inside a 17px IBM Plex Serif
+          // line: "9 . 4%" and "1 , 388", which is the exact defect that
+          // prop's own docblock names.
+          //
+          // `size="hero"` IS NOT THE FIX HERE. `size` also drives the EMAIL
+          // arm, where `hero` means the MonthlyReport artboard's 23px serif —
+          // and this block's email arm is the 13.5px sans one, which the
+          // monthly report composes around. So the face is stated directly,
+          // the way This week's two hand-rolled heroes state it
+          // (week/unusual.tsx:337,350).
+          figureFace="inherit"
           // AND A MEASURE (design review Medium 19). With no voices column
           // beside it — the refused state, which is what production is in
           // today — the sentence ran the tile's full 1,150px at 17px serif,
