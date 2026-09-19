@@ -183,7 +183,13 @@ export function BriefCards({
  * hold and truncating it is how the warning would be lost.
  */
 function BriefActions({ card, studio, basePath }: { card: BriefCard; studio: boolean; basePath: string }) {
-  const link = 'whitespace-nowrap text-[12px] font-medium underline underline-offset-2'
+  // 32px OF TARGET, WHICH IS WHAT M7 GAVE THE ARCHIVE'S INPUTS. These nine
+  // links were 17px high — the most-used controls on the page and the smallest
+  // thing on it, on a page that had four target sizes after M7 raised one of
+  // them. `inline-flex h-8 items-center` keeps the row one line and the text at
+  // 12px; only the hit area grows, and `-my-1` keeps the footer's own height
+  // where it was.
+  const link = 'inline-flex h-8 -my-1 items-center whitespace-nowrap text-[12px] font-medium underline underline-offset-2'
   return (
     <span className="flex min-w-0 flex-nowrap items-center gap-x-3 overflow-hidden">
       {card.latest && (

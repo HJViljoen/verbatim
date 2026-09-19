@@ -85,7 +85,9 @@ export function QuarterlyCardTile({
       meta={`${card.quarter.label} · ${monthSpan(card.quarter.from, card.quarter.to)}`}
       distribute="between"
       className="xl:min-h-[248px]"
-      footer={<Link href={card.href} className="underline underline-offset-2">See what it will cover</Link>}
+      // 32px OF TARGET (M7's floor for this page): this was a 15px line, the
+      // card's only control.
+      footer={<Link href={card.href} className="inline-flex h-8 -my-1 items-center underline underline-offset-2">See what it will cover</Link>}
       // `quarterGateSentence` verbatim — the artefact's own gate, on the card
       // that advertises it, so the two cannot come to say different numbers —
       // BUT ONLY WHERE THE GATE IS WHAT BITES. Printed unconditionally it made
@@ -292,7 +294,7 @@ export function QuarterlyAbsentTile({ col = 7, row = 2 }: { col?: number; row?: 
       meta="not yet"
       distribute="between"
       className="xl:min-h-[248px]"
-      footer={<Link href="/dashboard/settings" className="underline underline-offset-2">Name a subject in Settings</Link>}
+      footer={<Link href="/dashboard/settings" className="inline-flex h-8 -my-1 items-center underline underline-offset-2">Name a subject in Settings</Link>}
     >
       <p className="m-0 text-[12.5px] leading-[1.45] text-foreground">
         The quarterly review reads the subjects you track, and none is confirmed for this workspace yet — so there is no
