@@ -39,6 +39,21 @@ describe('Slide', () => {
     for (const w of DIRECTION_WORDS) expect(script.toLowerCase()).not.toContain(w)
   })
 
+  it('clamps its title and its framing note to two lines instead of cutting one short (SH23)', () => {
+    const markup = render(slide({ note: 'A framing note the operator wrote in Report Studio, long enough to run past one line of a 297mm sheet.' }))
+    expect(markup).not.toContain('truncate')
+    expect(markup.match(/line-clamp-2/g) ?? []).toHaveLength(2)
+  })
+
+  it('puts the page number on the footer\'s LAST line, not its first', () => {
+    // It was `items-baseline`, so on the populated leadership sheet — whose
+    // method note runs to three lines and 42px — "1 / 8" floated about 30px
+    // above the footer's bottom and read as a stray.
+    const footer = render(slide()).match(/<footer[^>]*>/)?.[0] ?? ''
+    expect(footer).toContain('items-end')
+    expect(footer).not.toContain('items-baseline')
+  })
+
   it('budgets the body off the MEASURED footer rather than a literal 30px', () => {
     // The footer is a method note whose coverage line wraps — 51px on the
     // populated leadership sheet against the 30px the height formula reserved.

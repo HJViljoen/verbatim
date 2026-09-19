@@ -63,14 +63,22 @@ export function Slide({
   return (
     <section className={cn('vb-slide', className)} data-note={hasNote ? '' : undefined}>
       <script dangerouslySetInnerHTML={{ __html: MEASURE }} />
+      {/* TWO LINES, NOT ONE CUT SHORT (Block D wave 3, SH23). The `<h1>` and
+          the framing note were `truncate`, on a sheet whose only output is a
+          PDF: a section title clipped mid-word is clipped for good, and the
+          only thing that noticed was the Studio editor's `.vb-editing`
+          outline. `line-clamp-2` gives each of them a second line and keeps
+          the ellipsis where a third would start, so the loss is both rarer and
+          visible when it happens. The body gives up the height, which since
+          SH3 it measures rather than budgets. */}
       {header && (
         <header className="flex shrink-0 items-baseline justify-between gap-4">
-          <h1 className="truncate text-[15px] font-semibold tracking-[-0.01em] text-foreground">{title}</h1>
+          <h1 className="line-clamp-2 min-w-0 text-[15px] font-semibold tracking-[-0.01em] text-foreground">{title}</h1>
           <span className="shrink-0 font-mono text-[10.5px] text-muted-foreground">{chrome.context}</span>
         </header>
       )}
       {hasNote && (
-        <p className="vb-slide-note truncate font-serif text-[12.5px] italic leading-[18px] text-secondary-foreground">{note}</p>
+        <p className="vb-slide-note line-clamp-2 font-serif text-[12.5px] italic leading-[18px] text-secondary-foreground">{note}</p>
       )}
       <div className="vb-slide-body">
         {layout === 'grid' ? (
@@ -79,7 +87,13 @@ export function Slide({
           <div className="flex h-full min-h-0 flex-col">{children}</div>
         )}
       </div>
-      <footer className="flex shrink-0 items-baseline justify-between gap-4 border-t border-border/70 pt-1.5">
+      {/* THE PAGE NUMBER SITS ON THE FOOTER'S LAST LINE (SH23). It was
+          `items-baseline`, which pins it to the FIRST line of whatever is
+          beside it: on the populated leadership sheet, whose method note runs
+          to three lines and 42px, "1 / 8" floated about 30px above the
+          footer's bottom and read as a stray mark in the middle of the sheet.
+          `items-end` puts it where a page number belongs. */}
+      <footer className="flex shrink-0 items-end justify-between gap-4 border-t border-border/70 pt-1.5">
         <div className="min-w-0 flex-1">{chrome.footer}</div>
         {/* 11px, not 9.5px: under the sheet's .902 zoom a 9.5px numeral sets
             at about 6.4pt on a 297mm page, below the 8pt most print work holds
