@@ -640,6 +640,26 @@ describe('WK §8 · flagged for awareness', () => {
 })
 
 describe('WK §5 · notable rival posts', () => {
+  it('never claims a "most" out of a set of one, and says the rule once per tile', () => {
+    // REVIEW W6. The pick sentence was printed per rival — twice in one tile
+    // on the thin arm — and a set of one has no most: a single-post rival read
+    // "1 shown: the most commented on in these days of the 1 widest-reaching
+    // of 27". The rule is the tile's and the numbers are the rival's.
+    for (const fixture of FIXTURES) {
+      for (const mode of MODES) {
+        const text = markupText(render(weekRivalPosts.render(fixture(), mode, ctx)))
+        if (!text.includes('widest-reaching')) continue
+        expect(text.match(/widest-reaching/g)?.length, mode).toBe(1)
+        expect(text.match(/most commented on/g)?.length, mode).toBe(1)
+      }
+    }
+    // The one-post rival prints four numbers and a singular "under it".
+    const d = weekFixture()
+    const one = d.cameIn.rivals.map((r) => ({ ...r, posts: r.posts.slice(0, 1), postsConsidered: 1, comments: r.posts[0]?.comments ?? 0 }))
+    const text = markupText(render(weekRivalPosts.render({ ...d, cameIn: { ...d.cameIn, rivals: one } }, 'app', ctx)))
+    expect(text).toContain('1 shown · 1 of 92 weighed by reach · 610 comments under it in these days')
+  })
+
   // THE TILE THE ROWS MOVED INTO (Block D wave 2, the mock's §5). Every
   // assertion below was written against §4, which built these rows inside
   // itself; the reading is the same `CameInBlock.rivals` and only the tile
@@ -666,8 +686,8 @@ describe('WK §5 · notable rival posts', () => {
     const first = rows[2] ?? ''
     expect(first).toContain('Ottobock')
     expect(first).toContain('YouTube')
-    // The pick rule is still printed, under the posts it picked.
-    expect(markupText(markup)).toContain('the most commented on in these days')
+    // The rival's own counts are still printed, under the posts they are of.
+    expect(markupText(markup)).toContain('2 shown · 2 of 92 weighed by reach')
   })
 
   it('states the by/about distinction, and why a zero is a zero', () => {
@@ -699,14 +719,16 @@ describe('WK §5 · notable rival posts', () => {
       // inbox has no table header to carry "Comments", so the email arm says
       // what the number is; the page's header row and meta say it once.
       expect(text, mode).toContain(mode === 'email' ? '610 comments under it in these days' : '610')
-      // THE RULE, SAID OUT LOUD. The pick is two stages — the widest-reaching
-      // few, then the most-commented of those — because on production the
-      // widest-reaching posts carry no window comments at all (Freitag's two
-      // 2.2M-view TikToks: zero). And the rival's comment figure is the sum
-      // over the posts NAMED; a bare total would be a claim about their week
-      // that nothing here counted.
-      expect(text, mode).toContain('2 shown: the most commented on in these days of the 2 widest-reaching of 92')
-      expect(text, mode).toContain('998 comments under them in these days')
+      // THE RULE, SAID OUT LOUD — ONCE FOR THE TILE (review W6). The pick is
+      // two stages, because on production the widest-reaching posts carry no
+      // window comments at all (Freitag's two 2.2M-view TikToks: zero). Every
+      // rival on the tile is picked by the same rule, so the rule is the
+      // tile's; what is the rival's is four numbers. And the rival's comment
+      // figure is the sum over the posts NAMED; a bare total would be a claim
+      // about their week that nothing here counted.
+      expect(text, mode).toContain('the widest-reaching of what this update read, then the most commented on of those')
+      expect(text.match(/widest-reaching/g)?.length, mode).toBe(1)
+      expect(text, mode).toContain('2 shown · 2 of 92 weighed by reach · 998 comments under them in these days')
     }
   })
 
