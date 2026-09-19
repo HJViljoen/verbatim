@@ -179,7 +179,9 @@ describe('SU2 · the subject in full', () => {
     expect(text).toContain('26 of 84 videos')
     expect(text).toContain('43.7%')
     expect(text).toContain('62 of 142 videos')
-    expect(text).toContain('22%')
+    // `lib`'s fmtPct keeps an exact .0 so a decimal column lines up, so M13's
+    // re-based category reading prints as 22.0%, not 22%.
+    expect(text).toContain('22.0%')
     expect(text).toContain('305 of 1,388 videos')
   })
 
