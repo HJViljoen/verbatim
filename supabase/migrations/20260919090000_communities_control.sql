@@ -1,0 +1,39 @@
+-- ST3 · the two Reddit controls on Settings › Tracking: the grant that makes
+-- them work for a paying client.
+--
+-- WHY THE CONTROL IS DEAD FOR EVERY CLIENT AND GREEN FOR EVERY OPERATOR.
+--
+-- `updateCommunity` (app/dashboard/settings/actions.ts) writes
+-- `tracking_configs.subreddits` through `session.supabase`, which for a tenant
+-- member runs as `authenticated` — `lib/auth.ts` swaps to the admin client
+-- only while a PLATFORM ADMIN is viewing someone else's workspace.
+-- 20260820120000_lock_the_money.sql revoked table-wide UPDATE and re-granted
+-- five columns; 20260911140000 added `exclude_terms` and 20260915091000 added
+-- `last_actor`. `subreddits` is in none of them.
+--
+-- Measured against production 2026-09-19, one query on
+-- information_schema.column_privileges:
+--
+--   authenticated  competitor_names, exclude_terms, last_actor, report_day,
+--                  report_emails, report_period, updated_at        (7)
+--   anon           all 19 columns
+--
+-- So an owner pressing "Stop watching" gets 42501, the action returns "Could
+-- not save that. Try again…", nothing is written, and the `config_changes`
+-- row the action would have logged is never reached — the failure leaves no
+-- record either. The identical click from a platform admin SUCCEEDS, because
+-- `applyOperatorView` has already swapped to the service role. The control
+-- tests green for every operator and is dead for every paying client.
+--
+-- ONE COLUMN, NOT A WIDER CLIENT. The obvious fix — swapping the action to
+-- `createAdminClient()` — would hand a browser-driven action the service role
+-- and re-open the lock T0-2 closed. The column privilege is the narrow fix:
+-- `subreddits` and nothing else, and the RLS UPDATE policy still scopes it to
+-- the caller's own tenant.
+grant update (subreddits) on public.tracking_configs to authenticated;
+
+-- And `anon` loses what it was never meant to have (carried item C2). Inert
+-- today — RLS is on and both policies name {authenticated} — and inert is not
+-- a reason to hold UPDATE on nineteen cost columns, including the five
+-- 20260820120000 went out of its way to take off `authenticated`.
+revoke update on public.tracking_configs from anon;
