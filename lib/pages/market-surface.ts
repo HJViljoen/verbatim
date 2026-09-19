@@ -20,6 +20,7 @@ import { freezeStateFor, monthStartOf } from '../reading/monthly'
 import type { MonthStatus } from '../reading/types'
 import type { Scope } from '../renderables/types'
 import { selectAll } from '../supabase-admin'
+import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import { isMissingSubjects, TABLE_MOVES, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
 import { MOVES_MASTHEAD, MOVES_UNLOCK, firstScoringMonth, loadMovesExtras, longMonth, recordWindow } from './overview'
 import type { MoveCandidate, MoveReading } from '../reading/moves'
@@ -1173,29 +1174,48 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
  *
  * BY ID, AND ONLY THE ONES THE LATEST RUN DOES NOT ALREADY HOLD. The loader
  * reads this update's `market_insights` anyway for MK1; a piece of advice first
- * made in June cites June's, which that read does not contain. One `.in()` over
- * the difference, bounded by the twelve rows the ledger draws — never a read
- * per row and never the whole table.
+ * made in June cites June's, which that read does not contain. Never a read per
+ * row and never the whole table.
+ *
+ * CHUNKED, THOUGH THE SET IS SMALL TODAY. This docstring used to argue the
+ * `.in()` safe because it is "bounded by the twelve rows the ledger draws"
+ * (`LEDGER_SHOWN`) — which is true and is a bound held somewhere else, one
+ * constant and one deep-linked row away from the read that depends on it. The
+ * PostgREST URL cap is measured, not theoretical (lib/chunk.ts: a `.in()` of
+ * 500 uuids works and 700 fails), so the read carries its own bound:
+ * `UUID_IN_CHUNK` over a key column, one row per id, the chunks out together
+ * because they are disjoint. Through `selectAll` for the reason `loadLabels`
+ * states — `UUID_IN_CHUNK` is shared and its own docstring invites raising it,
+ * and past 1,000 rows PostgREST truncates SILENTLY.
  *
  * Failure is degradation, not an error: a row whose evidence cannot be read
- * prints no grounding, which is what an unrecorded grounding prints too.
+ * prints no grounding, which is what an unrecorded grounding prints too. A
+ * failing chunk costs only its own ids, so the rest of the ledger still shows
+ * its grounding.
  */
 async function fetchOlderInsights(
   supabase: SupabaseClient,
   clientId: string,
   ids: readonly string[],
 ): Promise<{ id: string; evidence: InsightRow['evidence'] }[]> {
-  if (ids.length === 0) return []
-  const { data, error } = await supabase
-    .from('market_insights')
-    .select('id, evidence')
-    .eq('client_id', clientId)
-    .in('id', [...ids])
-  if (error) {
-    console.error(`[pages] market-surface.olderInsights: ${error.message}`)
-    return []
-  }
-  return (data ?? []) as { id: string; evidence: InsightRow['evidence'] }[]
+  const unique = [...new Set(ids)]
+  if (unique.length === 0) return []
+  const parts = await mapWithLimit(chunk(unique, UUID_IN_CHUNK), READ_CONCURRENCY, async (part) => {
+    try {
+      return await selectAll<{ id: string; evidence: InsightRow['evidence'] }>(() =>
+        supabase
+          .from('market_insights')
+          .select('id, evidence')
+          .eq('client_id', clientId)
+          .in('id', part)
+          .order('id', { ascending: true }),
+      )
+    } catch (error) {
+      console.error(`[pages] market-surface.olderInsights: ${error instanceof Error ? error.message : String(error)}`)
+      return []
+    }
+  })
+  return parts.flat()
 }
 
 /**
