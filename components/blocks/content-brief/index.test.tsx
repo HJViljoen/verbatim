@@ -10,13 +10,14 @@ import { markupText, render } from '@/lib/test/render'
 import { REDDIT_CAP_LINE } from '@/lib/reading/method'
 import { BRIEF_UNIT, DELIVERY_SCOPE, LABEL_RULE, LEAD_MIN_RATED, PLAYBOOK_EMPTY, PLAYBOOK_GONE, RECORD_GONE } from '@/lib/pages/content-brief'
 import { CONTENT_BRIEF_BLOCKS, contentMake, contentPlaybook, contentRecord } from './index'
-import { shownRows, toMake } from './make'
+import { ARGUMENT_CHARS, bound, shownRows, TITLE_CHARS, toMake } from './make'
 import { cellFigure, engagementAxis, engagementOrder, unreadNotes } from './playbook'
 import {
   contentBriefFixture,
   emptyContentBriefFixture,
   emptyLedger,
   ledgerWithDismissal,
+  longContentLedger,
   refusedContentBriefFixture,
   thinContentBriefFixture,
   unclassifiedContentBriefFixture,
@@ -495,6 +496,46 @@ describe('content.make — the mock’s page 2', () => {
 
   it('says advice lands with the next update when the ledger is empty', () => {
     expect(blockAnswers(contentMake, emptyLedger()).empty).toBe('Advice lands with your next update.')
+  })
+
+  // NOTHING A CLIENT CAN READ TODAY IS CUT, AND NO CUT IS EVER MID-WORD
+  // (design review 1). The CSS clamps ended four of the model's arguments and
+  // a refusal sentence mid-word — "…we do not compare until 2 have been read.
+  // Sep 20…", two characters into a year — with the text recoverable nowhere
+  // in the document and a comment in the file asserting the opposite.
+  it('cuts nothing on the shipped reading, and never inside a word', () => {
+    expect(markup).not.toContain('line-clamp')
+    expect(text).not.toContain('\u2026')
+    for (const r of shownRows(data)) {
+      expect(bound(r.title, TITLE_CHARS)).toBe(r.title)
+      if (r.why) expect(bound(r.why, ARGUMENT_CHARS)).toBe(r.why)
+      // A commenter's own words and the refusal sentence are printed whole
+      // whatever their length: both appear on this page or nowhere.
+      if (r.quote?.text) expect(text).toContain(r.quote.text)
+      expect(text).toContain(r.afterwards.line)
+    }
+  })
+
+  it('bounds a long model string between words, never inside one', () => {
+    // The stress fixture is where a bound actually fires.
+    const long = markupText(render(contentMake.render(longContentLedger(), 'print', ctx)))
+    expect(long).toContain('\u2026')
+    // Every ellipsis follows a whole word — never a digit, never a hyphen or a
+    // comma left hanging off the cut.
+    for (const m of long.matchAll(/(.)\u2026/g)) expect(m[1]).toMatch(/[\p{L}\p{N}]/u)
+    // And a quote is still whole, however long it is.
+    for (const r of shownRows(longContentLedger())) {
+      if (r.quote?.text) expect(long).toContain(r.quote.text)
+    }
+    // The helper itself: at the budget, untouched; past it, a word boundary.
+    expect(bound('one two three', 13)).toBe('one two three')
+    // The cut that used to land two characters into a year now lands after
+            // "read", and the sentence's own full stop goes with it rather than
+            // printing ".…".
+    expect(bound('compare until 2 have been read. Sep 2026 itself', 34)).toBe('compare until 2 have been read\u2026')
+    // A single word longer than the budget is still not cut mid-glyph-run
+    // silently — it is cut, and the ellipsis says so.
+    expect(bound('antidisestablishmentarianism', 10)).toBe('antidisest\u2026')
   })
 
   it('claims nothing about whether a comment was answered (D6)', () => {

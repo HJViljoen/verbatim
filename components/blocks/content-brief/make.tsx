@@ -189,27 +189,73 @@ const STOP_LABEL = 'Stop'
  */
 
 /**
- * A CARD IS A FIXED BOX, SO ITS VARIABLE PROSE IS BOUNDED (design review 10).
+ * A CARD IS A FIXED BOX, SO ITS VARIABLE PROSE IS BOUNDED — BUT NEVER BY A
+ * CSS CLAMP, AND NEVER THE QUOTE (design review 1).
  *
- * The slide body is 563px with `overflow: hidden` (app/globals.css
- * `.vb-slide-body`) and `data-overflow` is only ever toggled inside the
- * document editor — never on the export path — so nothing signals a clip in a
- * PDF. Three of a card's strings are model-written and length-checked nowhere
- * in the product: the advice's title, the commenter's quote and Pass D-b's
- * argument. Measured on the fix pass's own stress fixture (`longContentLedger`,
- * every one of them at its worst), the row ran 179px past the sheet and the
- * bottom of a card went with it.
+ * The slide body is a fixed height with `overflow: hidden` (app/globals.css
+ * `.vb-slide-body`) and three of a row's strings are model-written and
+ * length-checked nowhere in the product: the advice's title, the commenter's
+ * quote and Pass D-b's argument. That much was right. What was drawn was
+ * `line-clamp-2` / `line-clamp-3`, and the comment defending it claimed the
+ * full string was in the element's `title` and printed in full on the ledger
+ * section two slides earlier. BOTH ARE FALSE ON PAPER. A `title` does not
+ * exist in a PDF, and `market.advice` expands exactly ONE row
+ * (components/pages/market-surface/advice.tsx `expandedLineage`) — a row
+ * `toMake` does not draw. Rendered and diffed on the shipped fixture, every
+ * truncated argument and every truncated quote on this sheet appeared nowhere
+ * else in the brief, which breaks the rule written three lines away: a
+ * commenter's own words are on this page or nowhere.
  *
- * Clamped, each to the lines the artboard's own card gives it — except the
- * `afterwards` sentence, which is clamped at three because it is the one that
- * says why a comparison was REFUSED, and half of "we compare from 2" is a worse
- * sentence than none. A clamp is
- * VISIBLE — the ellipsis is on the page and the full string is in the element's
- * title — where a clip is not, and every clamped string is also printed in full
- * on the ledger section two slides earlier. The quote is clamped last and least
- * for the reason the file already gives: a commenter's own words are on this
- * page or nowhere.
+ * Measured on the shipped fixture, FOUR nodes were actually cut — mid-word
+ * every time, because a CSS clamp cuts at whatever glyph the line box ends on:
+ * "…and nobody in the c…", "…never on the ones that…", "…the half of that
+ * argument you ca…", and a refusal sentence at "…we do not compare until 2
+ * have been read. Sep 20…" — two characters into a year, so the sheet printed
+ * a fragment that reads as a date and lost the half that explains the refusal.
+ *
+ * So the rule is now by KIND, and two of the four are never cut at all:
+ *
+ *   · THE QUOTE is printed whole or not at all. It is the one string on the
+ *     card that exists nowhere else, and it is the speaker's.
+ *   · `afterwards.line` is printed whole. It is composed IN CODE
+ *     (lib/reading/afterwards.ts) from a bounded set of clauses, so it has a
+ *     ceiling already — and it is the sentence that says why a comparison was
+ *     refused, which is worth less than nothing in halves.
+ *   · THE ADVICE'S TITLE and PASS D-b's ARGUMENT are bounded by `bound`, in
+ *     code, at a WORD boundary. `recommendationSchema` puts no length on
+ *     either (lib/pipeline/schemas.ts), so something must; what changes is
+ *     that the cut lands between words, never inside one and never inside a
+ *     number or a date, and the ellipsis is real text that survives into a PDF.
+ *
+ * The budgets are set so that the SHIPPED reading is untouched — the longest
+ * title and the longest argument on it are well inside them, and
+ * `index.test.tsx` pins that — and only a genuinely long string is bounded.
+ * That is the bar the review set: nothing a client can read today is cut.
  */
+
+/** Characters of Pass D-b's `title` a card prints before it bounds it. */
+export const TITLE_CHARS = 96
+/** Characters of Pass D-b's `reasoning` a card prints before it bounds it. */
+export const ARGUMENT_CHARS = 180
+
+/**
+ * A model string, cut between WORDS, with the cut on the page.
+ *
+ * Never inside a word, so a cut can never make a fragment that reads as
+ * something else — "Sep 20" out of "Sep 2026" is the case this was written
+ * for. The trailing punctuation of the surviving word goes with it, so the
+ * ellipsis is not "…word, …". Text at or under `max` comes back untouched and
+ * carries no ellipsis, which is what makes "was anything cut?" answerable by
+ * looking at the page.
+ */
+export function bound(text: string, max: number): string {
+  if (text.length <= max) return text
+  const cut = text.slice(0, max + 1)
+  const at = cut.lastIndexOf(' ')
+  const kept = at > 0 ? cut.slice(0, at) : text.slice(0, max)
+  return `${kept.replace(/[\s,;:.\u2014\u2013-]+$/u, '')}\u2026`
+}
+
 function Card({ row, n, mode }: { row: AdviceRow; n: number | null; mode: RenderMode }) {
   const stop = n == null
   return (
@@ -231,9 +277,9 @@ function Card({ row, n, mode }: { row: AdviceRow; n: number | null; mode: Render
             data-copy="stored"
             data-slot="pass_d_b_recommendation"
             title={row.title}
-            className="m-0 line-clamp-3 text-[13px] font-normal leading-[1.3] text-secondary-foreground"
+            className="m-0 text-[13px] font-normal leading-[1.3] text-secondary-foreground"
           >
-            {row.title}
+            {bound(row.title, TITLE_CHARS)}
           </p>
         </>
       ) : (
@@ -241,31 +287,27 @@ function Card({ row, n, mode }: { row: AdviceRow; n: number | null; mode: Render
           data-copy="stored"
           data-slot="pass_d_b_recommendation"
           title={row.title}
-          className="m-0 line-clamp-2 text-[17px] font-semibold leading-[1.2] tracking-[-0.01em] text-foreground"
+          className="m-0 text-[17px] font-semibold leading-[1.2] tracking-[-0.01em] text-foreground"
         >
-          {row.title}
+          {bound(row.title, TITLE_CHARS)}
         </h3>
       )}
       <p className="m-0 font-mono text-[10.5px] leading-[1.35] text-muted-foreground">{provenance(row)}</p>
-      {row.grounded?.pruned ? <p className="m-0 line-clamp-2 text-[12px] leading-[1.4] text-muted-foreground">{row.grounded.line}</p> : null}
+      {row.grounded?.pruned ? <p className="m-0 text-[12px] leading-[1.4] text-muted-foreground">{row.grounded.line}</p> : null}
       <div className="flex flex-col gap-1 rounded-md bg-inner px-3 py-2.5">
         <p className="m-0 font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">What the conversation did after</p>
         <Reading verdict={row.afterwards.verdict} mode={mode} />
-        <p className="m-0 line-clamp-3 text-[11.5px] leading-[1.4] text-secondary-foreground">{row.afterwards.line}</p>
+        <p className="m-0 text-[11.5px] leading-[1.4] text-secondary-foreground">{row.afterwards.line}</p>
       </div>
       {/* THE QUOTE BEFORE THE ARGUMENT, WHICH IS THE ARTBOARD'S ORDER AND THE
           SAFER ONE. A card is a fixed box on a 1123 × 631 sheet and the last
           thing in it is what a long row clips; the model's argument is also on
           the ledger section two slides earlier, and a commenter's own words are
           on this page or nowhere. */}
-      {row.quote ? (
-        <div className="[&_p]:line-clamp-2">
-          <BlockQuote quote={row.quote} mode={mode} />
-        </div>
-      ) : null}
+      {row.quote ? <BlockQuote quote={row.quote} mode={mode} /> : null}
       {row.why ? (
-        <p data-copy="stored" data-slot="pass_d_b_recommendation" title={row.why} className="m-0 line-clamp-2 text-[12px] leading-[1.4] text-secondary-foreground">
-          {row.why}
+        <p data-copy="stored" data-slot="pass_d_b_recommendation" title={row.why} className="m-0 text-[12px] leading-[1.4] text-secondary-foreground">
+          {bound(row.why, ARGUMENT_CHARS)}
         </p>
       ) : null}
     </div>
