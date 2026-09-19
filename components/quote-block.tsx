@@ -176,9 +176,17 @@ export function QuoteBlock({ quote, mode = 'app', cite }: QuoteBlockProps): Reac
   // ruling; this is not a word, it is the one typographic distinction the
   // product makes between what we say and what a person said, and the mock
   // asks for it in two voices. Everything else in §3.15 is adopted.
+  // AND PAPER IS DENSER THAN THE SCREEN, NOT BIGGER (Block D wave 3b, `decks`
+  // — `components/blocks/frame.tsx` states the rule and this card was the
+  // loudest exception to it). `px-5 py-3.5` is 40px of side padding in a
+  // column that is 190px wide once a brief sheet lays its voices out three
+  // across, which is 21% of the measure spent on the card rather than on the
+  // words, and 28px of vertical padding per card over six cards. 16/10 is the
+  // artboard's own quote card at the deck's scale; the app arm is untouched,
+  // because a screen has the room and this is the one place the two differ.
   const big = mode === 'print'
   return (
-    <blockquote className={big ? 'max-w-[66ch] rounded-lg bg-inner px-5 py-3.5' : 'border-l-2 border-primary/30 pl-3'}>
+    <blockquote className={big ? 'max-w-[66ch] rounded-lg bg-inner px-4 py-2.5' : 'border-l-2 border-primary/30 pl-3'}>
       {/* THE SPEAKER'S WORDS, MARKED AS THEIRS. See the `quote` kind in
           lib/test/copy-contract.ts: rule (c) is about what the PRODUCT claims,
           and a customer who writes "I'm a double below knee" is not claiming a
@@ -196,7 +204,7 @@ export function QuoteBlock({ quote, mode = 'app', cite }: QuoteBlockProps): Reac
         <p className="m-0 mt-1.5">
           {/* THE PILL NEEDS A GROUND IT IS NOT (subjects R2). `bg-inner` is the
               pill's fill AND, on paper, the blockquote's own — `big` sets
-              `rounded-lg bg-inner px-5 py-3.5` five lines up — so on a printed
+              `rounded-lg bg-inner px-4 py-2.5` a few lines up — so on a printed
               sheet the pill read as a bare mono line on identical ground and
               the artboard's filled chip was not there at all. On paper it
               takes `bg-tile`, the card the quote sits on, which is the one

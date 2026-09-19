@@ -164,7 +164,7 @@ describe('the in-app arm', () => {
 
   it('leaves paper alone — a printed quote sits in a tinted block, not on a rule', () => {
     const paper = render(<QuoteBlock quote={es} mode="print" />)
-    expect(paper).toContain('rounded-lg bg-inner px-5 py-3.5')
+    expect(paper).toContain('rounded-lg bg-inner px-4 py-2.5')
     expect(paper).not.toContain('border-primary/30')
   })
 

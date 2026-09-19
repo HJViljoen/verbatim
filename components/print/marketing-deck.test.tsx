@@ -228,15 +228,24 @@ describe('the gap card is keyed on the section that asked for it', () => {
     }
   }
 
+  // THE CARD IS FOUND BY ITS BODY, NOT BY ITS HEADING (wave 3b, `decks`). On
+  // this fixture the band drew no gap, so the heading is "What the two sides
+  // read" — a heading may not promise what its body withdraws — and the row
+  // of bars is what says the card is there.
+  const bars = (markup: string) => markup.split('rounded-[3px]').length - 1
+
   it('draws on a renamed sheet, because the flag travels with the section', () => {
-    const text = markupText(render(<DocumentDeck data={withSheet('Where we stand on our subjects')} date="28 Sep 2026" />))
-    expect(text).toContain('The gap that matters')
+    const markup = render(<DocumentDeck data={withSheet('Where we stand on our subjects')} date="28 Sep 2026" />)
+    expect(markupText(markup)).toContain('What the two sides read')
+    expect(bars(markup)).toBe(2)
   })
 
   it('draws on no sheet whose sections did not ask for it', () => {
     const data = marketingDeckFixture()
     const stripped = { ...data, sections: data.sections!.map(({ extras: _extras, ...rest }) => rest) }
-    expect(markupText(render(<DocumentDeck data={stripped} date="28 Sep 2026" />))).not.toContain('The gap that matters')
+    const markup = render(<DocumentDeck data={stripped} date="28 Sep 2026" />)
+    expect(markupText(markup)).not.toContain('What the two sides read')
+    expect(markupText(markup)).not.toContain('The gap that matters')
   })
 })
 
@@ -337,10 +346,37 @@ describe('the gap card', () => {
   // it, so the earlier gap prints as its own dated, banded reading instead.
   it('prints both sides with their k, their n and the band — and never "narrowed"', () => {
     const words = markupText(render(<GapCard gap={gap()} />))
-    expect(words).toContain('The gap that matters')
     expect(words).toContain('of 84')
     expect(words).toContain('of 142')
     expect(words).not.toContain('narrowed')
+  })
+
+  // A HEADING MAY NOT PROMISE WHAT ITS BODY WITHDRAWS (wave 3b, `decks`;
+  // subjects finding 11, and `reports`'s ruling on the sales deck's rivals
+  // sheet). "The gap that matters" is earned by a band that concluded one.
+  it('names its own body — the artboard heading only where a gap was drawn', () => {
+    const drawn = markupText(render(<GapCard gap={{ ...gap(), state: 'apart', gapPts: 12.7, bandPts: 6.1 }} />))
+    expect(drawn).toContain('The gap that matters')
+    const refused = markupText(render(<GapCard gap={gap()} />))
+    expect(refused).toContain('What the two sides read')
+    expect(refused).not.toContain('The gap that matters')
+  })
+
+  // AND THE WORD IS SAID ONCE ON THE SHEET (subjects finding 11). `saidBy` is
+  // what the sheet answers when it carries `overview.subjects`, whose own gap
+  // headline states the same refusal about the same subject 250px up.
+  it('drops the state word where the block on its sheet already said it', () => {
+    const beside = markupText(render(<GapCard gap={gap()} saidBy />))
+    expect(beside).toContain('you 31.0% of 84')
+    expect(beside).toContain('Freitag 44.0% of 142')
+    expect(beside).not.toContain('too few to compare')
+    // Alone on a sheet it says the whole sentence.
+    expect(markupText(render(<GapCard gap={gap()} />))).toContain('too few to compare')
+    // And a gap that CONCLUDED something keeps its magnitude and band either
+    // way: the rule is about a refusal said twice, not about withholding an
+    // answer.
+    const concluded = { ...gap(), state: 'apart' as const, gapPts: 12.7, bandPts: 6.1 }
+    expect(markupText(render(<GapCard gap={concluded} saidBy />))).toContain('points apart')
   })
 
   it('draws the two sides the gap was measured between, and no third', () => {

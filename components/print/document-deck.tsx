@@ -6,7 +6,7 @@ import { Slide } from '@/components/print/slide'
 import { Sparkline } from '@/components/charts/sparkline'
 import { CountBadge, MOVEMENT_WORDS, MovementBadge } from '@/components/delta-badge'
 import { FigureCell } from '@/components/blocks/frame'
-import { gapLine, sidePct, type Gap } from '@/lib/reading/gap'
+import { gapLevels, gapLine, sidePct, type Gap } from '@/lib/reading/gap'
 import { fullDate, monthName, round1, shortDate } from '@/lib/format'
 import { nextMonth } from '@/lib/reading/month-key'
 import { platformShareLine } from '@/lib/reading/method'
@@ -399,7 +399,16 @@ function DocumentCover({ data, pages, contents, date }: {
             )}
           </div>
           <div className="flex flex-col gap-4">
-            {tiles.map((t, i) => <StatTile key={i} value={t.value} label={t.label} verdict={t.verdict} note={t.note} level={t.level} />)}
+            {/* `word` TOO, AND IT IS THE HALF THAT MATTERS (Block D wave 3b,
+                `decks`; `reports`-16). The overview sheet passed it and the
+                cover did not, so the SAME tile — `gapTile`'s, the one whose
+                value is "too few to compare" or "comparison refused" — set as
+                a sentence on sheet 2 and at the 42px mono numeral on sheet 1.
+                A refusal typeset as a figure reads as a measurement (mock-gap
+                §6 D2), and the cover is the sheet a reader meets first. Five
+                fields where there were four; the tile composes them all and
+                neither caller may pick. */}
+            {tiles.map((t, i) => <StatTile key={i} value={t.value} label={t.label} verdict={t.verdict} note={t.note} level={t.level} word={t.word} />)}
           </div>
         </div>
       </div>
@@ -1748,14 +1757,23 @@ function NumbersCard({ data }: { data: DocumentSnapshotData }) {
   // marketing artboard names two more — "The unit" and "Languages" — and a
   // brief that lost them to a merge would be a brief whose basis got quieter.
   const extra = methodRows(data).filter(([k]) => !rows.some(([j]) => j === k))
+  // THE CARD IS SET FOR THE COLUMN IT IS IN (Block D wave 3b, `decks`). Eight
+  // rows, a four-sentence footnote and the delivery line, in five twelfths of
+  // a landscape sheet: at 130px of label gutter and 15.5px of value the card
+  // ran 45px past the bottom of the body and the footnote's last two sentences
+  // — the Reddit cap and the privacy rule — printed nowhere. 112px is what the
+  // longest label ("Held back") needs at this size, 14.5px is the deck's own
+  // next tier down and the artboard's own 13px printed, and the rows lose 2px
+  // of leading each. Nothing is dropped: the sheet prints what it always
+  // composed.
   return (
-    <div className={`${CARD} self-start px-6 py-5`}>
+    <div className={`${CARD} self-start px-5 py-4`}>
       <Eyebrow className="mb-3">This brief in numbers</Eyebrow>
-      <dl className="grid grid-cols-[130px_1fr] gap-x-4 gap-y-2.5">
+      <dl className="grid grid-cols-[112px_1fr] gap-x-4 gap-y-2">
         {[...rows, ...extra].map(([k, v]) => (
           <Fragment key={k}>
             <dt className="pt-[3px] font-mono text-[12px] uppercase tracking-[0.06em] text-muted-foreground">{k}</dt>
-            <dd className="text-[15.5px] leading-[1.4] text-foreground">{v}</dd>
+            <dd className="text-[14.5px] leading-[1.4] text-foreground">{v}</dd>
           </Fragment>
         ))}
       </dl>
@@ -1797,7 +1815,7 @@ function NumbersCard({ data }: { data: DocumentSnapshotData }) {
 function CannotTell({ data }: { data: DocumentSnapshotData }) {
   const c = data.slideFigures?.cannotTell ?? null
   return (
-    <div className="mt-auto flex flex-col gap-1.5 rounded-lg bg-inner px-[18px] py-3.5">
+    <div className="mt-auto flex flex-col gap-1 rounded-lg bg-inner px-4 py-3">
       <p className="font-mono text-[11.5px] uppercase tracking-[0.06em] text-muted-foreground">What this brief cannot tell you</p>
       <p className="text-[14px] leading-[1.4] text-secondary-foreground">{MOVE_PROMISE}</p>
       {/* `refusedSentence`, WHICH ALREADY NAMES EVERY REASON AND COUNTS THEM.
@@ -2213,7 +2231,26 @@ function SectionBody({ section, data, why = false, framing = true, title = false
  * and drawing a third bar from another figure would put a number on this card
  * that the sentence above it was not measured against.
  */
-export function GapCard({ gap }: { gap: Gap }) {
+/**
+ * AND THE WORD IS THE BLOCK'S, NOT THIS CARD'S (Block D wave 3b, `decks`;
+ * subjects finding 11, and `reports`'s "the heading names the body").
+ *
+ * This card is drawn by `sheetExtras` onto the sheet of the section that asked
+ * for it — `extras: 'gap'`, which today is `mk.subjects`, i.e.
+ * `overview.subjects` — so the block whose gap headline states this same gap
+ * is ALWAYS on the sheet with it, about 250px up. Two nodes said "too few to
+ * compare" about one subject on one page, and the second one was under a
+ * heading promising "the gap that matters".
+ *
+ * `saidBy` is MEASURED at the sheet rather than assumed: `sheetExtras` asks
+ * whether this sheet carries the block that prints the word, so a map that
+ * one day puts the card on a sheet of its own gets the whole sentence back.
+ * Where the block is there, the card prints the two LEVELS (`gapLevels`, the
+ * same composer the cover tile reads) and its heading names what it is showing
+ * instead of a gap the body then withdraws.
+ */
+export function GapCard({ gap, saidBy = false }: { gap: Gap; saidBy?: boolean }) {
+  const concluded = gap.state === 'apart' || gap.state === 'level'
   const basis = concludedBasisLine(gap)
   const sides = [gap.a, gap.b]
   const pcts = sides.map((s) => sidePct(s))
@@ -2228,11 +2265,16 @@ export function GapCard({ gap }: { gap: Gap }) {
   const carriesLevel = sides.some((side) => side.observed && sidePct(side) != null)
   return (
     <div className={`${CARD} flex flex-col gap-3 px-5 py-4`}>
-      <Eyebrow>The gap that matters</Eyebrow>
+      {/* A HEADING MAY NOT PROMISE WHAT ITS BODY WITHDRAWS (the rule `reports`
+          applied to the sales deck's rivals sheet, applied here). "The gap
+          that matters" over "too few to compare" is the same shape of
+          sentence; where the band drew no gap the card says what it IS
+          showing, which is the two sides' readings. */}
+      <Eyebrow>{concluded ? 'The gap that matters' : 'What the two sides read'}</Eyebrow>
       <p className={`m-0 ${BODY_SM}`}>
         <span className="font-medium">{gap.objectLabel}</span>
         {' — '}
-        <span {...(carriesLevel ? { 'data-copy': 'level' as const } : {})}>{gapLine(gap)}</span>
+        <span {...(carriesLevel ? { 'data-copy': 'level' as const } : {})}>{saidBy && !concluded ? gapLevels(gap) : gapLine(gap)}</span>
         {/* UNMARKED, and deliberately. `gapLine` is two levels and their
             banded difference, which is a `level` node; the basis line is a
             SECOND banded difference at an earlier window and carries no level
@@ -2267,6 +2309,11 @@ export function GapCard({ gap }: { gap: Gap }) {
   )
 }
 
+/** The block whose own gap headline states the lead gap's state — so the card
+ *  beside it does not state it a second time. A key, because that is what a
+ *  frozen section carries; the block itself is `overview.subjects`. */
+const GAP_SAID_BY = 'overview.subjects'
+
 /**
  * What the deck draws on a sheet BESIDE its blocks.
  *
@@ -2285,7 +2332,12 @@ function sheetExtras(sections: readonly DocBriefSection[], data: DocumentSnapsho
   if (!sections.some((s) => s.extras === 'gap')) return null
   const gap = leadGap(data.reading?.gaps)
   if (!gap) return null
-  return <div data-col="6" className="flex min-w-0 flex-col"><GapCard gap={gap} /></div>
+  // WHETHER THIS SHEET ALREADY SAYS WHAT THE BAND CONCLUDED. `overview.subjects`
+  // draws the gap headline for the same lead gap; where it is on the sheet the
+  // card prints the levels and not a second refusal. Asked of the sheet, not
+  // assumed of the map (subjects finding 11).
+  const saidBy = sections.some((s) => s.block === GAP_SAID_BY && s.empty == null)
+  return <div data-col="6" className="flex min-w-0 flex-col"><GapCard gap={gap} saidBy={saidBy} /></div>
 }
 
 /**

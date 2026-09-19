@@ -94,9 +94,14 @@ describe('gapTile', () => {
   // `gapLine` that still says something — and a level prints its "of N".
   it('carries both sides’ levels with their denominators, and "not tracked" for a side that carried no row', () => {
     const tile = gapTile(gap({ state: 'level', gapPts: 1, b: side({ audience: 'industry-other', label: 'the category', observed: false, pct: null, value: { k: 0, n: 0 } }) }))
-    expect(tile.label).toContain('you 31% of 84')
+    // ONE DECIMAL, BECAUSE `gapLevels` IS THE ONE COMPOSER NOW (wave 3b,
+    // `decks`). The tile built this string by hand with `round1` while the gap
+    // headline beside it printed `fmtPct`'s exact tenth, so one gap read "31%"
+    // on the cover and "31.0%" on the sheet. Same function, same string.
+    expect(tile.label).toContain('you 31.0% of 84')
     expect(tile.label).toContain('the category — not tracked')
-    expect(tile.label).not.toContain('0%')
+    // A side nothing was read for never prints a share, least of all a zero.
+    expect(tile.label).not.toContain('the category 0')
   })
 
   it('prints the earlier reading only where the earlier reading concluded something', () => {

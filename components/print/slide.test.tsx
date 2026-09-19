@@ -64,3 +64,48 @@ describe('Slide', () => {
     expect(CSS).not.toContain('.vb-slide[data-note] .vb-slide-body')
   })
 })
+
+// ── the 8pt floor (Block D wave 3b, `decks`; `reports`-14, `sales`-1) ────────
+//
+// This file names a floor of 8pt and, until this wave, applied it to one glyph.
+// 1123px IS 297mm, so a point on a brief sheet is 1123 / (297/25.4 × 72) px and
+// 8pt is 10.67px. Two things follow, and both are asserted rather than
+// commented: the nodes INSIDE `.vb-slide-body` are zoomed by `--vb-zoom`, so
+// the floor there is a CSS rule that lifts the app's small tiers; the two nodes
+// OUTSIDE it — this header's context and the footer's page number — are not
+// zoomed, so they carry their own size and it has to clear the floor on its own.
+describe('the 8pt print floor', () => {
+  const PT = 1123 / ((297 / 25.4) * 72)
+  const zoom = Number(CSS.match(/--vb-zoom:\s*([0-9.]+)/)![1])
+
+  it('lifts every app tier under the floor, inside the body where the zoom is', () => {
+    const rule = CSS.match(/((?:\.vb-slide-body \.text-\\\[[0-9.\\]+px\\\]:not\(svg \*\),?\s*)+)\{\s*font-size:\s*([0-9.]+)px/)
+    expect(rule).not.toBeNull()
+    const lifted = Number(rule![2])
+    // The tier it lifts TO clears the floor, and it is a tier the app already
+    // has rather than a size invented for paper.
+    expect((lifted * zoom) / PT).toBeGreaterThanOrEqual(8)
+    // Every tier the app uses below that is named. A tier left out is a node
+    // that silently keeps printing at 6–7pt.
+    const named = [...rule![1].matchAll(/text-\\\[([0-9.\\]+)px\\\]/g)].map((m) => Number(m[1].replace(/\\/g, '')))
+    for (const tier of [9, 9.5, 10, 10.5, 11, 11.5]) {
+      expect((tier * zoom) / PT).toBeLessThan(8)
+      expect(named).toContain(tier)
+    }
+  })
+
+  it('leaves the chart type to the chart, and says so', () => {
+    // A font-size inside a `CalendarLine` is in VIEWBOX UNITS, so rewriting it
+    // would resize the drawing rather than the type; `--cal-p` is that half and
+    // lib/charts/calendar.test.ts pins it. The rule must therefore EXCLUDE svg.
+    expect(CSS).toContain(':not(svg *)')
+  })
+
+  it('clears the floor on the two nodes the zoom never reaches', () => {
+    const markup = render(slide())
+    // The header's context and the footer's page number, both 11px unzoomed.
+    expect((11 * 1) / PT).toBeGreaterThanOrEqual(8)
+    expect(markup).toContain('font-mono text-[11px] text-muted-foreground">Sealand · 28 Sep 2026')
+    expect(markup).toContain('font-mono text-[11px] text-muted-foreground">3 / 8')
+  })
+})

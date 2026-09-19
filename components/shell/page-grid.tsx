@@ -122,6 +122,32 @@ export function TileColumns({ of, rule = true, rail, children, className }: {
   const sized = of === 2 && rail ? RAIL[rail] : null
   return (
     <div
+      // PAPER GETS THE COLUMNS THE SCREEN GETS (Block D wave 3b, `decks`;
+      // `reports`-1 and -13).
+      //
+      // EVERY COLUMN IN THIS PRIMITIVE IS AN `xl:` COLUMN, and app/globals.css
+      // says in as many words why that is not enough: "the grid is addressed by
+      // data-col / data-row, not xl: classes — Chrome prints in `print` media
+      // where width queries see a page box that measures under the lg (1024px)
+      // and xl breakpoints … Anything that must be multi-column on paper says
+      // so without a breakpoint prefix." This primitive never said so. So on
+      // paper `TileColumns` collapsed to `grid-cols-1` and every block built on
+      // it drew as ONE very wide stack: Overview's category block put its three
+      // columns — kinds, mood, movers — one under another down a 1,054px sheet
+      // and handed its attention chart the full width, which `CalendarLine`
+      // scales uniformly, so a 352 × 110 viewBox drew 329px tall and pushed the
+      // panel note, the Reddit caveat and the whole ATTENTION section off the
+      // bottom of the sheet (528px lost, measured). That is the mechanism
+      // behind "half-empty sheets in the same document as sheets that clip".
+      //
+      // THE ATTRIBUTES, NOT A SECOND SET OF CLASSES. `data-print-cols` is the
+      // house mechanism and its rules are already in app/globals.css;
+      // `data-print-rule` is this primitive's own, and carries the two halves
+      // the `xl:` classes carry on screen — the leading-edge rule and the
+      // stacked divider it replaces. A grid drawn with `rule={false}` emits no
+      // divider and no rule attribute, so the two stay in step by construction.
+      data-print-cols={sized ? 'rail' : of}
+      data-print-rule={rule ? of : undefined}
       className={cn(
         'grid min-w-0 grid-cols-1 gap-4',
         rule

@@ -309,6 +309,28 @@ describe('SU2 · the monthly line', () => {
   it('says what is not recorded rather than drawing an empty axis', () => {
     expect(subjectsLine.emptyState(refusedFixture())).toBe('Your subjects are not recorded for this workspace yet.')
   })
+
+  // ON PAPER THE END LABELS COME OFF AND THE READINGS PRINT UNDER THE CHART
+  // (Block D wave 3b, `decks`). `CalendarLine` draws an end label at
+  // `width - padR + 10` and clips it with nothing; on the marketing brief this
+  // block takes six of twelve columns and "The category 22.0% of 1,388" ran
+  // under the gap card beside it, losing the denominator — the one part of an
+  // end label that may not go missing. `endLabels` is the contract's own
+  // remedy and `endReadings` is the sentence it asks for.
+  it('turns the end labels off on paper and prints the last reading under the chart', () => {
+    const paper = render(subjectsLine.render(subjectsFixture(), 'print', ctx))
+    const app = render(subjectsLine.render(subjectsFixture(), 'app', ctx))
+    // The gutter label is a bold sans <text> with the series name in it; the
+    // app draws one and paper does not.
+    expect(app).toContain('font-weight="600"')
+    expect(paper).not.toContain('font-weight="600"')
+    // And nothing is lost: every side's last reading, with its month and its
+    // denominator, in the block's own type.
+    const words = renderText(paper)
+    expect(words).toContain('of 84')
+    expect(words).toContain('of 1,388')
+    expect(paper).toContain('data-copy="level"')
+  })
 })
 
 describe('SU2 · the kind mix', () => {
@@ -428,6 +450,33 @@ describe('SU2 · the kind mix, on its own month', () => {
 })
 
 describe('SU2 · the voices', () => {
+  // THREE ACROSS ON PAPER, AND IN COLUMNS RATHER THAN ON A GRID (Block D wave
+  // 3b, `decks`). `xl:` never fires in print media, so the sheet that is
+  // supposed to scan as a SET drew two columns and three rows and cost the
+  // sales brief's fifth sheet 143px — one whole row of voices and the footnote
+  // saying they were machine-translated. And a grid row is as tall as its
+  // tallest cell, so one voice carrying a translation and an on-screen pairing
+  // left two white cells beside it; columns flow instead, each voice kept
+  // whole.
+  it('flows the voices in three columns on paper and keeps the grid on screen', () => {
+    const paper = render(subjectsVoices.render(subjectsFixture(), 'print', ctx))
+    expect(paper).toContain('[column-count:3]')
+    expect(paper).toContain('break-inside-avoid')
+    expect(paper).not.toContain('sm:grid-cols-2')
+
+    const app = render(subjectsVoices.render(subjectsFixture(), 'app', ctx))
+    expect(app).toContain('sm:grid-cols-2')
+    expect(app).toContain('xl:grid-cols-3')
+    expect(app).not.toContain('[column-count:3]')
+  })
+
+  // AND PAPER IS DENSER THAN THE SCREEN, NOT BIGGER — the rule
+  // components/blocks/frame.tsx states, applied to the card that was the
+  // loudest exception to it: 40px of side padding in a 190px column.
+  it('sets the printed quote card at the artboard’s own padding', () => {
+    expect(render(subjectsVoices.render(subjectsFixture(), 'print', ctx))).toContain('rounded-lg bg-inner px-4 py-2.5')
+  })
+
   it('shows the original and the English beneath it, labelled', () => {
     const text = renderText(subjectsVoices.render(subjectsFixture(), 'app', ctx))
     expect(text).toContain('Nach 14 Monaten ist der Reißverschluss hin')

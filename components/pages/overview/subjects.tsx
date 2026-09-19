@@ -8,7 +8,7 @@ import { Sparkline } from '@/components/charts/sparkline'
 import { fmtInt, fmtPct, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { DIRECTION_RUN_LABEL, type Direction } from '@/lib/reading/bands'
-import { gapBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
+import { concludedBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
 import { TileBlock } from '@/components/shell/tile'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { OverviewData, SideReading, SubjectRow } from '@/lib/pages/overview'
@@ -146,8 +146,38 @@ export function leadGap(s: OverviewData['subjects']): Gap | null {
   return null
 }
 
+/**
+ * A REFUSAL IS SAID ONCE, BY THE NODE WHOSE CLAIM IT IS (Block D wave 3b,
+ * `decks`; subjects finding 11).
+ *
+ * One landscape sheet of the marketing brief printed "too few to compare" five
+ * times about one side of one subject — this headline, the earlier gap beside
+ * it, the table's own YOUR CHANGE column, the block's footer note and the
+ * deck's gap card. None of them was wrong. They are one fact — your own
+ * audience carried 84 videos, under the floor, so nothing about your side can
+ * be compared this month — said five times in five registers, which reads to a
+ * client as five separate failures.
+ *
+ * The rule, and it is the one `gapTile` already wrote down for the cover:
+ *
+ *   THIS headline keeps the word, because it is the node that carries the
+ *   NUMBERS the refusal is about — both levels and both denominators.
+ *   THE BASIS drops it: `concludedBasisLine` prints the earlier gap only where
+ *   it concluded something, so a second refusal never stands beside the first.
+ *   THE FOOTER NOTE stops quoting it (`subjectsNote`, lib/pages/overview.ts) —
+ *   it says the count and which column carries the month, which is what it is
+ *   for.
+ *   THE DECK'S CARD drops it (`GapCard`, components/print/document-deck.tsx)
+ *   and names its own body instead of promising a gap it then withdraws.
+ *
+ * THE TABLE'S COLUMN KEEPS ITS WORD and that is deliberate: a cell is the
+ * ROW's own answer, one per subject, and a table of seven columns with an
+ * empty one is a worse lie than a word a reader can scan down. The review
+ * counted it among the five; it is the one of the five that is not a second
+ * saying of anything — every other row on the table states its own.
+ */
 function GapHeadline({ gap, mode }: { gap: Gap; mode: RenderMode }) {
-  const basis = gapBasisLine(gap)
+  const basis = concludedBasisLine(gap)
   const body = (
     <>
       <span className={mode === 'email' ? undefined : 'text-[12.5px] font-medium'}>

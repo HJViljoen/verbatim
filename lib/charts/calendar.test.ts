@@ -1,6 +1,9 @@
+import { readFileSync } from 'fs'
+import { join } from 'path'
 import { describe, expect, it } from 'vitest'
 import {
-  axisLabels, calendarGeometry, chartId, collapseRules, columnTitle, hoverTitle, lastReading,
+  axisLabels, CAL_PAD_L, CAL_PAD_R, CAL_PAPER_K,
+  calendarGeometry, chartId, collapseRules, columnTitle, hoverTitle, lastReading,
   legendEveryMonth, legendMonths, legendStates, undrawnNote,
   lineSegments, monthColumns, niceMid, spanOf, spreadLabels, stateNote, valueScale,
   type CalendarPoint, type CalendarSeries,
@@ -380,5 +383,41 @@ describe('chartId', () => {
 
   it('is a usable SVG id', () => {
     expect(chartId(['You — 31%'])).toMatch(/^cal[0-9a-z]+$/)
+  })
+})
+
+// ── the paper factor's two halves ───────────────────────────────────────────
+//
+// `CAL_PAPER_K` and `--cal-p` are one correction written in two languages —
+// the gutters in TypeScript (components/blocks/calendar.tsx, which scales
+// `padL` and `padR` on the print arm) and the type in CSS (app/globals.css,
+// inside `.vb-slide-body`). Type lifted without its gutter is type growing off
+// the edge of the sheet, which is what the first attempt photographed. Two
+// halves of one number in two files is exactly the pair that drifts, so the
+// stylesheet is read and compared.
+describe('CAL_PAPER_K', () => {
+  const css = readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8')
+
+  it('is the number app/globals.css sets --cal-p to inside .vb-slide-body', () => {
+    const rule = css.match(/\.vb-slide-body \.vb-cal svg \{[^}]*--cal-p:\s*([0-9.]+)/)
+    expect(rule).not.toBeNull()
+    expect(Number(rule![1])).toBe(CAL_PAPER_K)
+  })
+
+  it('lifts the drawing’s smallest tier over the 8pt floor a brief sheet prints at', () => {
+    // 1123px IS 297mm, so a point is 1123 / (297 / 25.4 * 72) px; the slide
+    // body is zoomed by --vb-zoom, and the smallest tier in `CalendarLine` is
+    // `ts(9)` — the month and date ticks.
+    const pt = 1123 / ((297 / 25.4) * 72)
+    const zoom = Number(css.match(/--vb-zoom:\s*([0-9.]+)/)![1])
+    expect(9 * CAL_PAPER_K * zoom / pt).toBeGreaterThanOrEqual(8)
+    // And it is not more than the floor needs: at one tier lower it would be
+    // growing the drawing for its own sake.
+    expect(9 * (CAL_PAPER_K - 0.1) * zoom / pt).toBeLessThan(8)
+  })
+
+  it('keeps the geometry defaults the gutters are scaled from', () => {
+    expect(calendarGeometry({ axis: monthAxis('2026-04-01', '2026-09-01') }).padL).toBe(CAL_PAD_L)
+    expect(CAL_PAD_R).toBe(180)
   })
 })

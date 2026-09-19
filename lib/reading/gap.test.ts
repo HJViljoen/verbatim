@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { directionRe } from '../test/copy-contract'
 import {
+  concludedBasisLine,
   GAP_WORDS,
   gapBasisLine,
   gapBetween,
   gapDirection,
   gapFigures,
+  gapLevels,
   gapLine,
   gapPrintsLevel,
   inheritRefusal,
@@ -523,5 +525,59 @@ describe('inheritRefusal — the refusal a gap takes from the readings beside it
 
   it('says a side refused even where none of them said why, so the caller can draw nothing', () => {
     expect(inheritRefusal([refused(), answered])).toEqual({ refused: true, reason: null })
+  })
+})
+
+// ── the two levels alone (Block D wave 3b, `decks`; subjects finding 11) ────
+describe('gapLevels', () => {
+  const gapAt = (over: Partial<Parameters<typeof gapBetween>[0]> = {}) =>
+    gapBetween({ ...durability, a: side(), b: them(), window: SEP, ...over })
+
+  it('is `gapLine` without the word the band earned', () => {
+    const gap = gapAt()
+    expect(gapLevels(gap)).toBe('you 31.0% of 84 · Freitag 43.7% of 142')
+    expect(gapLine(gap)).toContain(gapLevels(gap))
+    expect(gapLevels(gap)).not.toContain(GAP_WORDS.too_little_data)
+  })
+
+  // ONE COMPOSER, because three hand-rolled spellings of two levels is how
+  // "31% of 84", "31.0% of 84" and "31% (84 videos)" reach one document.
+  it('tells an audience nothing was read for apart from one that carried no row', () => {
+    const unread = gapAt({ b: them({ observed: false, pct: null, value: { k: 0, n: 0 } }) })
+    expect(gapLevels(unread)).toContain('Freitag — not tracked')
+    expect(gapLevels(unread)).not.toContain('Freitag 0')
+    const noRow = gapAt({ b: them({ observed: true, pct: null, value: { k: 0, n: 0 } }) })
+    expect(gapLevels(noRow)).toContain('Freitag — no reading')
+  })
+})
+
+// ── the earlier gap, only where it concluded something ─────────────────────
+//
+// Moved here from lib/reports/documents/overview.ts when a second caller
+// wanted it. `gapBasisLine` answers for every state; a surface that has ALREADY
+// printed this reading's refusal and then prints a second one beside it ("too
+// few to compare. too few to compare in August") states its own bookkeeping
+// twice and tells a reader nothing about August.
+describe('concludedBasisLine', () => {
+  const withBasis = (basis: Partial<GapReading>) => ({
+    ...gapBetween({ ...durability, a: side(), b: them(), window: SEP }),
+    basis: { window: JUN, gapPts: -19, bandPts: 8.1, state: 'apart' as const, ...basis } as GapReading,
+  })
+
+  it('prints an earlier gap that concluded, with its own band and its own month', () => {
+    const line = concludedBasisLine(withBasis({}))!
+    expect(line).toContain('19')
+    expect(line).toContain('June')
+    expect(line).toBe(gapBasisLine(withBasis({})))
+  })
+
+  it('prints nothing where the earlier reading refused too', () => {
+    for (const state of ['too_little_data', 'refused'] as const) {
+      expect(concludedBasisLine(withBasis({ state, gapPts: null, bandPts: null }))).toBeNull()
+    }
+  })
+
+  it('prints a `level` basis, which is an answer', () => {
+    expect(concludedBasisLine(withBasis({ state: 'level', gapPts: 1, bandPts: 6 }))).toContain(GAP_WORDS.level)
   })
 })

@@ -388,10 +388,15 @@ describe('subjectsNote', () => {
     href: '#',
   })
 
-  it('names the video count your own side reads on when it cannot be compared', () => {
+  // AND IT DOES NOT QUOTE THE COLUMN'S OWN WORD BACK (wave 3b, `decks`;
+  // subjects finding 11). This line fires exactly when every row is thin,
+  // which is exactly when every cell of the YOUR CHANGE column already reads
+  // it; what the note adds is the count and which column to read instead.
+  it('names the video count your own side reads on, without re-quoting the column', () => {
     expect(subjectsNote([row(84, null)])).toBe(
-      'Your side reads “too few to compare” on 84 videos — the category column carries the month.',
+      'Your side carried 84 videos this month, too few for its column to answer — the category column carries the month.',
     )
+    expect(subjectsNote([row(84, null)])).not.toContain('too few to compare')
   })
 
   it('says nothing when a side did clear its band', () => {

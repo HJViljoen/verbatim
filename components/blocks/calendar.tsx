@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import type { BlockContext, RenderMode } from '@/lib/blocks/types'
 import { CalendarLine } from '@/components/charts/calendar-line'
 import type { CalendarBand, CalendarRule, CalendarSeries } from '@/lib/charts/calendar'
-import { chartId, STATE_SHORT } from '@/lib/charts/calendar'
+import { CAL_PAD_L, CAL_PAD_R, CAL_PAPER_K, chartId, STATE_SHORT } from '@/lib/charts/calendar'
 import { monthName } from '@/lib/format'
 import { EMAIL, FONT, tokenHex } from '@/lib/email/theme'
 
@@ -97,6 +97,21 @@ export function BlockCalendar({
   if (!axis.length || !series.length) return null
 
   if (mode !== 'email') {
+    // THE GUTTERS GROW WITH THE TYPE THEY HOLD (Block D wave 3b, `decks`;
+    // `reports`-14). A brief sheet zooms its body by .902, so this chart's own
+    // labels print at 6.2–7.6pt — under the 8pt floor
+    // `components/print/slide.tsx` names — and app/globals.css lifts them by
+    // `--cal-p` inside `.vb-slide-body`. Every font-size in the drawing is in
+    // VIEWBOX UNITS and both gutters are measured in those same units, so a
+    // factor applied to one and not the other is type growing into the sheet's
+    // margin: at 1.32 with the gutters left alone, "The category 41,200" was
+    // cut off by the right edge of the marketing brief's fourth sheet and
+    // "28,170" ran past the left edge of its column. The PLOT gives up the
+    // difference, which on paper is the cheaper of the two — a narrower line a
+    // reader can read against an axis they cannot.
+    const paper = mode === 'print'
+    const gutterL = paper ? Math.round((padL ?? CAL_PAD_L) * CAL_PAPER_K) : padL
+    const gutterR = paper ? Math.round((padR ?? CAL_PAD_R) * CAL_PAPER_K) : padR
     return (
       <CalendarLine
         axis={axis}
@@ -109,8 +124,8 @@ export function BlockCalendar({
         label={label}
         height={height}
         width={width}
-        padL={padL}
-        padR={padR}
+        padL={gutterL}
+        padR={gutterR}
         endLabels={endLabels}
         {...(legend === undefined ? {} : { legend })}
         // The block key alone is not an identity: it is stripped of its

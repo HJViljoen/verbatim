@@ -1,4 +1,4 @@
-import { GAP_WORDS, gapBasisLine, gapLine, sidePct, type Gap } from '../../reading/gap'
+import { concludedBasisLine, GAP_WORDS, gapLevels, gapLine, type Gap } from '../../reading/gap'
 import { fmtInt, round1 } from '../../format'
 import { denominatorLine } from './reading'
 import type { Verdict } from '../../reading/verdicts'
@@ -91,34 +91,20 @@ export function leadGap(gaps: readonly Gap[] | undefined): Gap | null {
  * printed only where it CONCLUDED something: a second refusal beside the first
  * is a sentence about our bookkeeping twice over.
  */
-/**
- * The earlier gap, printed ONLY where it concluded something.
- *
- * `gapBasisLine` answers for every state, which is right for a caller that
- * wants the earlier reading whatever it was. A brief prints the current
- * reading's own refusal already, and a second refusal beside it ("too few to
- * compare. too few to compare in August") is a sentence about our bookkeeping
- * said twice — it tells a reader nothing about August that the line above it
- * has not told them about September.
- */
-export function concludedBasisLine(gap: Gap): string | null {
-  return gap.basis && (gap.basis.state === 'apart' || gap.basis.state === 'level') ? gapBasisLine(gap) : null
-}
+export { concludedBasisLine }
 
 export function gapTile(gap: Gap): OverviewTile {
   const basis = concludedBasisLine(gap)
   if (gap.state === 'apart' && gap.gapPts != null) {
     return { value: `${round1(Math.abs(gap.gapPts))} pts`, label: `${gap.objectLabel} — ${gapLine(gap)}${basis ? `. ${basis}` : ''}` }
   }
-  const levels = [gap.a, gap.b]
-    .map((side) => {
-      const pct = sidePct(side)
-      return side.observed && pct != null
-        ? `${side.label} ${round1(pct)}% of ${fmtInt(side.value.n)}`
-        : `${side.label} — not tracked`
-    })
-    .join(' · ')
-  return { value: GAP_WORDS[gap.state], label: `${gap.objectLabel} — ${levels}${basis ? `. ${basis}` : ''}`, word: true }
+  // THROUGH `gapLevels`, NOT A FOURTH SPELLING OF IT (Block D wave 3b,
+  // `decks`). This composed the two levels by hand and got "— not tracked" for
+  // both silences where `levelOf` distinguishes an audience nothing was read
+  // for from one that was read and carried no row — the distinction
+  // `GapSide.observed` and `sidePct` exist to make, spelled two ways in two
+  // files. One composer, and the deck's gap card reads the same one.
+  return { value: GAP_WORDS[gap.state], label: `${gap.objectLabel} — ${gapLevels(gap)}${basis ? `. ${basis}` : ''}`, word: true }
 }
 
 /**
