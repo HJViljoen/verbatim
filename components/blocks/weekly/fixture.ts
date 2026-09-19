@@ -179,7 +179,7 @@ function base(overview = overviewFixture()): WeeklyData {
       weekHref: '/dashboard/week',
       briefHref: '/dashboard/reports',
     },
-    coverage: { line: overview.record.line, lines: overview.record.lines, href: '/dashboard/settings' },
+    coverage: { line: overview.record.line, refused: 2, href: '/dashboard/settings' },
   }
 }
 
@@ -263,7 +263,7 @@ export function formingFixture(over: Partial<WeeklyData> = {}): WeeklyData {
       format: null,
       runnerUp: null,
     },
-    coverage: { line: overview.record.line, lines: overview.record.lines, href: '/dashboard/settings' },
+    coverage: { line: overview.record.line, refused: 0, href: '/dashboard/settings' },
     ...over,
   }
 }

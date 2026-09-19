@@ -35,18 +35,32 @@ import { inPeriod } from '@/lib/reports/weekly'
 //     arrangement is known (`weeklyLinks`, lib/reports/weekly.ts) and drawn by
 //     components/email/weekly.tsx. A link to a section a stored arrangement
 //     dropped is a promise about a report that was not sent;
-//   · THE REDDIT CAP, from `methodLines` — the one of its five lines no
-//     reading surface has ever printed, and the one a reader counting Reddit
-//     posts most needs. The other four are already on this artefact: coverage
-//     and the read-depth basis inside the record's own lines, prepared-by and
-//     the privacy sentence in the footer;
 //   · AND THE RULE IS NOT REPEATED AT THE FOOT. See the render.
-
-function Sentence({ mode, children }: { mode: RenderMode; children: React.ReactNode }) {
-  return mode === 'email'
-    ? <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 4 }}>{children}</div>
-    : <p className="m-0 mt-1 text-[11.5px] text-muted-foreground">{children}</p>
-}
+//
+// WHAT WAVE 3 TOOK BACK OUT: EVERYTHING BUT THE LINE.
+//
+// The header says "Coverage, in one line" and the block printed `c.line` AND
+// every sentence of `recordLines` under it — six on the fixture — AND the
+// Reddit cap under those: eight blocks of text under a heading that promises
+// one. The artboard's §6 is the mono line and the link grid, nothing else, and
+// mock-gap §5 names this exactly ("adds four-to-five extra record lines").
+//
+// NOTHING IS LOST, BECAUSE THE DOOR IS IN THE HEADER. "the record →" sits
+// opposite the label and opens the page whose whole job is those sentences —
+// every one of them, with the rows and the bases the email had no room for.
+// The Reddit cap goes back to `methodLines`' other four, all of which are
+// reachable the same way.
+//
+// AND THE REFUSALS COME ONTO THE LINE, which is where the artboard puts them
+// ("· 2 comparisons refused"). A refusal is a real answer and it stays
+// printed; the REASONS are behind the link with the rest of the record. The
+// count is this artefact's own (`CoverageBlock.refused`), not Overview's.
+//
+// IT ALSO ENDS TWO THIRDS OF A DUPLICATION. `record.ts` states the platform
+// mix inside `line` and again inside `lines` (`lib`-5), and the email footer
+// states a third, different and correct one for this update's own videos —
+// three sets of percentages for four platforms, ten lines apart, with nothing
+// saying why. Two of the three are now gone from this artefact.
 
 export const weeklyCoverage: Block<WeeklyData> = {
   key: 'weekly.coverage',
@@ -75,9 +89,15 @@ export const weeklyCoverage: Block<WeeklyData> = {
             className={email ? undefined : 'font-mono text-[11.5px] leading-loose text-secondary-foreground'}
           >
             <span data-copy="figure">{fmtInt(gathered)}</span> {gathered === 1 ? 'video' : 'videos'} found {inPeriod(data.section1.check.noun)} · {c.line}
+            {/* THE REFUSALS, ON THE LINE — the artboard's own closing clause.
+                Null is not zero: a stored artefact frozen before the field
+                existed cannot say the number, and it says nothing rather than
+                claiming none were refused. Zero is printed as nothing too, for
+                the ordinary reason a "0 comparisons refused" is noise. */}
+            {c.refused != null && c.refused > 0
+              ? <> · <span data-copy="figure">{fmtInt(c.refused)}</span> {c.refused === 1 ? 'comparison' : 'comparisons'} refused</>
+              : null}
           </div>
-          {c.lines.map((l, i) => <Sentence key={i} mode={mode}>{l}</Sentence>)}
-          {data.method ? <Sentence mode={mode}>{data.method.redditCap}</Sentence> : null}
           {/* THE RULE IS NOT REPRINTED HERE. It was drawn under the masthead
               and again at the foot of this block — the same 26 italic words
               twice in one 640px email, and seven times in the print deck's

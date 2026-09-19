@@ -629,10 +629,43 @@ describe('WR5 · for content', () => {
 describe('WR6 · coverage', () => {
   const block = WEEKLY_BLOCKS['weekly.coverage']
 
-  it('prints the record’s own line and every refusal it already carries', () => {
-    const text = renderText(block.render(weeklyFixture(), 'app', ctx))
+  // ONE LINE, AND THE LINE IS THE WHOLE SECTION. The header says "Coverage, in
+  // one line" and the block printed `c.line`, then every sentence of
+  // `recordLines` (six on this fixture), then the Reddit cap — eight blocks of
+  // text under a heading that promises one. The artboard's §6 is the mono line
+  // and the link grid. The sentences are one click away, behind the "the
+  // record →" link in this block's own header.
+  it('prints the record in one line, and nothing under it', () => {
+    const markup = render(block.render(weeklyFixture(), 'app', ctx))
+    const text = markupText(markup)
     expect(text).toContain('2,359 videos')
-    expect(text).toContain('comparisons were refused')
+    // The record's own prose, which OV6 and the monthly §8 print and this
+    // artefact must not: any one of these sentences means `lines` is back.
+    expect(text).not.toContain('carried conversation in this window')
+    expect(text).not.toContain('Of everything we have ever read for you')
+    expect(text).not.toContain('Reading as at')
+    expect(text).not.toContain('Reddit comments are capped at')
+  })
+
+  // THE REFUSALS STAY PRINTED, ON THE LINE, where the artboard ends it
+  // ("· 2 comparisons refused"). A refusal is a real answer (AGENTS.md); what
+  // moved is that the REASONS are behind the record link rather than in a
+  // sentence of their own among four others.
+  it('ends the line with the comparisons this artefact refused', () => {
+    for (const mode of MODES) {
+      expect(renderText(block.render(weeklyFixture(), mode, ctx)), mode).toContain('2 comparisons refused')
+    }
+  })
+
+  // NULL IS NOT ZERO, and zero is not a sentence. A `report_snapshots` row
+  // frozen before the field existed cannot say the number and says nothing
+  // rather than claiming none were refused.
+  it('says nothing about refusals where it cannot count them, and where there are none', () => {
+    const data = weeklyFixture()
+    for (const refused of [null, 0]) {
+      const text = renderText(block.render({ ...data, coverage: { ...data.coverage, refused } }, 'app', ctx))
+      expect(text, String(refused)).not.toContain('refused')
+    }
   })
 
   // THE ARTBOARD'S §6 (block D wave 2): the update's own videos lead the line,
@@ -642,11 +675,6 @@ describe('WR6 · coverage', () => {
     for (const mode of MODES) {
       expect(renderText(block.render(weeklyFixture(), mode, ctx))).toContain('271 videos found this week ·')
     }
-  })
-
-  it('prints the Reddit cap, which no reading surface printed before', () => {
-    expect(renderText(block.render(weeklyFixture(), 'app', ctx)))
-      .toContain('Reddit comments are capped at')
   })
 
   // AND IT DOES NOT REPRINT THE RULE. The same 26 italic words were drawn
