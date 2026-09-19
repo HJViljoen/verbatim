@@ -60,7 +60,7 @@ import { buildStandings, type StandingRow } from '../reading/standings'
 import type { MonthStatus } from '../reading/types'
 import { isAnswer, type FigureTable, type Verdict } from '../reading/verdicts'
 import { isMissingSubjects, MOVE_PROMISE, RPC_WINDOW_SUBJECT_READINGS, TABLE_MOVES, TABLE_SUBJECT_MEMBERSHIPS, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
-import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
+import { chunk, mapWithLimit, MULTI_ROW_IN_CHUNK, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import { selectAll } from '../supabase-admin'
 import { row, rows } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
@@ -2069,7 +2069,15 @@ async function loadOwnSubjectMatches(
   if (videoIds.length === 0) return { matches: new Map(), failed: false }
   let insights: { id: string; source_video_id: string }[]
   try {
-    const pages = await mapWithLimit(chunk([...videoIds], UUID_IN_CHUNK), READ_CONCURRENCY, (ids) =>
+    // `MULTI_ROW_IN_CHUNK`, BECAUSE `source_video_id` IS NOT A KEY HERE (Block
+    // D wave 3, M21). `lib/chunk.ts` states the rule: ids per chunk should be
+    // about 1,000 / rows-per-id, not the URL's 250, because PostgREST answers
+    // at most a thousand rows a request and `selectAll` pages the rest
+    // SERIALLY, inside a chunk that was meant to be one of several concurrent
+    // requests. A video carries about thirty insights, so 250 videos is ~7,500
+    // rows — eight serial pages in one chunk, where 100 is three, and the
+    // three overlap with the next chunk's.
+    const pages = await mapWithLimit(chunk([...videoIds], MULTI_ROW_IN_CHUNK), READ_CONCURRENCY, (ids) =>
       selectAll<{ id: string; source_video_id: string }>(() =>
         supabase
           .from('audience_insights_current')
@@ -2090,7 +2098,13 @@ async function loadOwnSubjectMatches(
     // AND THIS ONE IS NOT BOUNDED BY THE POST COUNT — it chunks INSIGHT ids,
     // which a month of posts can carry many of, so the ceiling is doing real
     // work here rather than describing one chunk.
-    const pages = await mapWithLimit(chunk([...videoOf.keys()], UUID_IN_CHUNK), READ_CONCURRENCY, (ids) =>
+    //
+    // `MULTI_ROW_IN_CHUNK` for the same reason as the read above (Block D wave
+    // 3, M21): `subject_memberships` is keyed
+    // (client_id, subject_id, audience_insight_id), so one insight id names one
+    // row per named subject — five to eight on a live tenant, which is the
+    // "few tens of rows per id" shape `lib/chunk.ts` sizes this constant for.
+    const pages = await mapWithLimit(chunk([...videoOf.keys()], MULTI_ROW_IN_CHUNK), READ_CONCURRENCY, (ids) =>
       selectAll<{ subject_id: string; audience_insight_id: string }>(() =>
         supabase
           .from(TABLE_SUBJECT_MEMBERSHIPS)
