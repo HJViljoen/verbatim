@@ -336,7 +336,7 @@ function Engagement({ rows: all, mode, of, basisLine }: { rows: readonly FormatR
   if (rows.length === 0) return null
   const axis = engagementAxis(rows)
   return (
-    <div className="flex flex-col gap-2.5 rounded-md border border-border bg-tile px-4 py-3">
+    <div className="flex flex-col gap-2 rounded-md border border-border bg-tile px-4 py-2.5">
       <Eyebrow>Median engagement per format</Eyebrow>
       <div className="flex flex-col gap-1.5">
         {rows.map((r) => (
@@ -430,7 +430,17 @@ export const contentPlaybook: Block<ContentBriefData> = {
         // it three times.
         footer={moreLine(p) ? `${p.coverageLine} ${moreLine(p)}.` : p.coverageLine}
       >
-        <div className="flex min-w-0 flex-col gap-2.5">
+        {/* THE SHEET KEEPS REAL SLACK, NOT ONE PIXEL (design review 11). The
+            populated fixture rendered 536px into a 535px body — a margin of
+            NEGATIVE ONE inside an `overflow: hidden` box — and the takeaway
+            sentence above grew by up to a line when it started printing its
+            band beside each median (design review 7). Two changes buy it back:
+            the section gaps come down from 10px to 6px, which is the density
+            the artboard's own slide sets between a table, its takeaway and the
+            card under it, and the engagement card's padding comes in a step.
+            Measured after: 513px, so a takeaway that wraps to a second line
+            still fits. */}
+        <div className="flex min-w-0 flex-col gap-1.5">
           <Matrix matrix={p.formats} heading="What gets made" mode={mode} />
           {/* THE TAKEAWAY, COMPOSED IN CODE FROM THE TWO MEDIANS (D5). Two
               formats at one moment, each with the videos its median was read
