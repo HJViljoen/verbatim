@@ -510,6 +510,26 @@ describe('WK §4 · what came in', () => {
 })
 
 describe('WK §2 · worth a reply', () => {
+  it('does not restate the chip in the column four columns away, and wraps what it does say', () => {
+    // REVIEW W9. Row four of the populated fixture is chipped "Question" and
+    // its "why it surfaced" column reads "Question" — a column restating its
+    // own row's chip. And the cell was `truncate` in a fixed 150px track, so
+    // anything past ~20 characters was cut to an ellipsis recoverable only
+    // through a `title` a printed page and a keyboard user never see.
+    const d = weekFixture()
+    const question = d.replies.rows.find((r) => r.intent === 'question')!
+    expect(question.reason).toBe('Question')
+    for (const mode of MODES) {
+      const markup = render(weekReply.render(d, mode, ctx))
+      const text = markupText(markup)
+      expect(text.match(/\bQuestion\b/g)?.length, mode).toBe(1)
+      if (mode !== 'email') {
+        expect(markup, mode).toContain('line-clamp-2')
+        expect(markup, mode).not.toContain('min-w-0 truncate text-[11.5px]')
+      }
+    }
+  })
+
   it('carries the objection chip’s colour in its ring, not in its text', () => {
     // REVIEW W5. `bg-negative/12 text-negative` is #DB3B2E on a 12% tint of
     // itself — 3.78:1 at 11px/500, the one failing entry in a four-entry map.
