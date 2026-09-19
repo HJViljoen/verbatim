@@ -299,6 +299,32 @@ describe('the reject log', () => {
     expect(text).not.toContain('train the gate')
   })
 
+  it('keeps the note beside the control, and not on the two states that have none', () => {
+    // RC7. A member (the M8 default for anyone who is not owner or admin) read
+    // "saying so files it" with every row withheld, and an empty workspace
+    // read "Nothing has been set aside yet." followed by it.
+    const withheld = renderText(
+      <RejectLogBlock
+        rows={rejectRowsFixture()} summary={gateSummaryFixture()} unjudged={null}
+        byTerm={[]} byPlatform={[]} basis={null}
+        withheld="The posts themselves are shown to owners and admins only."
+        control={(r) => <AppealControl filed={r.appealed ? APPEAL_FILED : null} />}
+      />,
+    )
+    expect(withheld).toContain('owners and admins only')
+    expect(withheld).not.toContain('files it for a person to look at')
+
+    const empty = renderText(
+      <RejectLogBlock
+        rows={[]} summary={gateSummaryFixture()} unjudged={null}
+        byTerm={[]} byPlatform={[]} basis={null}
+        control={(r) => <AppealControl filed={r.appealed ? APPEAL_FILED : null} />}
+      />,
+    )
+    expect(empty).toContain('Nothing has been set aside yet')
+    expect(empty).not.toContain('files it for a person to look at')
+  })
+
   it('says the record is not open rather than printing a confident nothing', () => {
     const text = renderText(
       <RejectLogBlock
