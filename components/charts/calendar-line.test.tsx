@@ -56,6 +56,52 @@ const chart = (extra: Partial<Parameters<typeof CalendarLine>[0]> = {}) =>
     ...extra,
   })
 
+describe('Sparkline, shared scales (SH22)', () => {
+  const rise: (number | null)[] = [18, 18.6, 19.2, 20]
+  const fall: (number | null)[] = [20, 19.2, 18.6, 18]
+
+  it('draws a rise and a fall at the same amplitude when each normalises to itself', () => {
+    // The defect, pinned: Durability's +3.2pts and Price's −3.1pts drew
+    // identically on Overview's subjects column.
+    const a = render(Sparkline({ values: rise }))
+    const b = render(Sparkline({ values: [40, 40.6, 41.2, 42] }))
+    const pts = (m: string) => (m.match(/points="([^"]+)"/) ?? [])[1]
+    expect(pts(a)).toBe(pts(b))
+  })
+
+  it('puts two rows on one scale when they are given one', () => {
+    const a = render(Sparkline({ values: rise, domain: [0, 50] }))
+    const b = render(Sparkline({ values: [40, 40.6, 41.2, 42], domain: [0, 50] }))
+    const pts = (m: string) => (m.match(/points="([^"]+)"/) ?? [])[1]
+    expect(pts(a)).not.toBe(pts(b))
+  })
+
+  it('reads a two-point rise as a two-point rise once the floor is zero', () => {
+    const own = render(Sparkline({ values: rise }))
+    const zeroed = render(Sparkline({ values: rise, zeroBase: true }))
+    const span = (m: string) => {
+      const ys = ((m.match(/points="([^"]+)"/) ?? [])[1] ?? '').split(' ').map((c) => Number(c.split(',')[1]))
+      return Math.max(...ys) - Math.min(...ys)
+    }
+    expect(span(zeroed)).toBeLessThan(span(own) / 4)
+  })
+
+  it('mirrors a fall against a rise on one scale, and draws its floor on request', () => {
+    const domain: [number, number] = [0, 25]
+    const up = render(Sparkline({ values: rise, domain }))
+    const down = render(Sparkline({ values: fall, domain }))
+    expect(up).not.toBe(down)
+    expect(render(Sparkline({ values: rise, domain, rule: true }))).toContain('stroke="var(--border)"')
+    expect(render(Sparkline({ values: rise, domain }))).not.toContain('stroke="var(--border)"')
+  })
+
+  it('clamps a value outside the given scale into the box rather than past it', () => {
+    const markup = render(Sparkline({ values: [5, 80], domain: [0, 20], height: 26 }))
+    const ys = ((markup.match(/points="([^"]+)"/) ?? [])[1] ?? '').split(' ').map((c) => Number(c.split(',')[1]))
+    for (const y of ys) expect(y).toBeGreaterThanOrEqual(3)
+  })
+})
+
 describe('CalendarLine', () => {
   it('renders without a React error and keeps the copy contract', () => {
     const markup = render(chart())
