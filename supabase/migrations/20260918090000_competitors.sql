@@ -467,9 +467,19 @@ grant execute on function public.rename_rival(uuid, uuid, text, jsonb, daterange
 -- Post-apply checks (run by hand, read-only):
 --   select name, slug, first_seen_at::date, retired_at::date from public.competitors
 --     join public.clients cl on cl.id = client_id order by cl.company_name, name;
---     -- Össur: Ottobock. Sealand: Cotopaxi, Freitag, Patagonia (retired
---     -- 2026-09-09), Poler (retired), Rareform, Topo Designs (retired).
---   select count(*) from public.competitors;                                     -- 7
+--     -- THE NAMES AND THE COUNT BELOW WERE TRUE ON 2026-09-16 AND ARE NOT A
+--     -- CHECK. Both tracked lists were edited on 17 September — Sealand now
+--     -- tracks seven, Patagonia among them, so Patagonia is TRACKED and not
+--     -- retired and the backfill's evidence arms add whatever else they find
+--     -- (Topo Designs and Poler at least): about ten rows with one or two
+--     -- retired, not seven with three. Any Settings edit before the deploy
+--     -- moves it again. THE CHECK IS THE RECONCILIATION, not the total —
+--     -- every name in tracking_configs.competitor_names present with
+--     -- retired_at null, every extra row retired and accountable, none
+--     -- 'unknown'. A count equal to the tracked list ALONE is a failure: it
+--     -- means the evidence arms found nothing and the erased set is missing.
+--     -- docs/deploy-checklist.md §M1 carries it in full.
+--   select count(*) from public.competitors;                                     -- about 10
 --   select count(*) from information_schema.table_privileges
 --     where table_name = 'competitors' and grantee = 'service_role'
 --       and privilege_type in ('DELETE','TRUNCATE');                             -- 0

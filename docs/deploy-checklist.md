@@ -302,9 +302,17 @@ policies, constraints with `pg_get_constraintdef`, columns, RLS flags and every
 table/column/routine grant — 3,784 rows) taken before and after: **byte-identical.**
 They are idempotent. Re-running one after a partial failure is safe.
 
+**One nuance, so nobody reads a diff as a failure.** On a dump that also
+carries `pg_attribute.attacl` the SECOND application reorders one aclitem
+array — `plan_checks.notice`'s `authenticated` and `service_role` swap places.
+An ACL is a set, the privileges are identical, and a THIRD application diffs
+empty on a 15,261-row catalogue including tables, functions and policies. The
+"byte-identical" above holds for the 3,784-row dump as taken; a wider dump
+shows that one reordering and nothing else.
+
 **The thirteen PRE-BASELINE files (dated on or before 2026-08-09) are NOT
 re-applied** — a different thirteen, and the collision is unlucky rather than
-meaningful — — the
+meaningful — the
 baseline supersedes them and says so in its own header. Two of them fail over
 it (`20260629090000_phase5_invitations.sql`: `relation "invitations" already
 exists`; `20260808120000_transcript_evidence.sql`: `constraint
@@ -366,12 +374,23 @@ to prevent. Reconcile:
 select name, slug, first_seen_at, retired_at from public.competitors order by client_id, name;
 ```
 against `select client_id, competitor_names from public.tracking_configs;`.
-The three `retired_at` rows must be Patagonia, Topo Designs and Poler. A fourth
-retired row, or one under another name, is the backfill picking up a sentinel —
-check it is not `unknown` (the migration excludes that one deliberately). More
-than seven rows is a rival the evidence names and this note did not; read it
-before you move on, because a name here is what a frozen month's `audience`
-string will be reconciled against for the rest of the product's life.
+
+**Expect one or two `retired_at` rows, and Patagonia is not one of them.** On
+the 17 September lists Patagonia is TRACKED, so it must come back with
+`retired_at` NULL; the retired rows are the names the evidence arms find that
+the tracked lists no longer carry — Topo Designs and Poler as at 2026-09-18.
+A retired row under a name neither list accounts for is the backfill picking up
+a sentinel: check it is not `unknown` (the migration excludes that one
+deliberately). **Rows beyond the reconciliation are a rival the evidence names
+and this note did not**; read each one before you move on, because a name here
+is what a frozen month's `audience` string will be reconciled against for the
+rest of the product's life.
+
+*(This paragraph said "the three `retired_at` rows must be Patagonia, Topo
+Designs and Poler" and "more than seven rows is a rival the evidence names"
+until the wave-3b merge. Both were the 2026-09-16 lists, both contradicted the
+correction twenty lines above, and an operator reading only the bottom of this
+section would have flagged a correct backfill as wrong.)*
 
 **M2 · `20260918091000_theme_key.sql`**
 ```sql
@@ -847,14 +866,31 @@ summarised rather than listed; every file's are in its own verification query.
 | M11 | — | — | — | — | — | — | grants only — 900 catalogue rows removed on eleven tables |
 | M12 | — | — | — | — | — | — | grants + the restated `tracking_configs_cost_ceilings_check` |
 
-**M9.1 adds NOTHING to a database M9 has already touched, measured.** The
-catalogue dump around it is empty in both directions — M9 carries the same
-`add column if not exists notice` and the column-level grants M9.1 issues are
-already covered by `plan_checks`' table-level ACL there. It is still not
-skippable: on a freshly built cluster from `schema-baseline.sql` alone (zero
-grant statements) `notice` is unreadable to `authenticated` without it, and it
-costs one idempotent ALTER. The zero delta is what makes M9.1's own
-verification query the column ACL and not the column.
+**M9.1 adds nothing M9 has not already created, and exactly one thing M9 has
+not already granted.** The catalogue dump around it is empty for tables, views,
+functions, triggers, policies, constraints and columns — M9 carries the same
+`add column if not exists notice`, so the column itself does not move. **The
+column ACL does**, and a dump has to carry `pg_attribute.attacl` to see it:
+`plan_checks.notice` goes from `null` to
+`{authenticated=r/postgres,service_role=arw/postgres}`.
+`information_schema.column_privileges` does not move at all, which is why a
+dump built on that view reads the whole migration as a no-op. Measured on the
+§2 cluster — the one built from `schema-baseline.sql`, which carries zero grant
+statements — and not on production, where the migration's own head says the two
+statements change nothing because `plan_checks` already holds table-level
+grants and `attacl` is null on every column. **The §2 delta and the production
+delta are different questions and this is the §2 answer.**
+
+That one row is the point rather than an embarrassment: M9.1's own verification
+query asks for the column ACL (`col_acl = true`), and that expectation can only
+hold BECAUSE the delta is non-empty. A truly empty M9.1 would be a migration
+whose check passes without it. It is also not skippable on a freshly built
+cluster from `schema-baseline.sql` alone (zero grant statements), where
+`notice` is unreadable to `authenticated` without it, and it costs one
+idempotent ALTER.
+
+*(This paragraph said the delta was "empty in both directions" until the
+wave-3b merge, which is false on any dump carrying `pg_attribute.attacl`.)*
 
 **No Phase 1 migration creates a view.** The `*_current` views
 (`audience_insights_current`, `language_samples_current`) are August's and
@@ -1417,7 +1453,7 @@ The first Sunday after the deploy, in this order:
 | What went wrong | What you do |
 |---|---|
 | **The code is bad, the migrations are fine** | Revert the merge on `main` (`git revert -m 1 <merge sha>`), push, wait for READY, `curl -X PUT …/api/inngest`. **The migrations stay.** They are additive — new tables, new columns, new functions, new triggers — **except for four grant tightenings and one new CHECK, none of which a code revert needs undone**: M2 revokes write grants on `themes`, `theme_registry` and `theme_observations` from `authenticated` and `anon`; M8 does the same on `gate_verdicts` and `video_claims`; M9 on `plan_checks` and `plan_check_evaluations`; and **M12 revokes UPDATE on `tracking_configs` from `anon`** — inert under RLS, which names only `{authenticated}` on both policies, so Phase 0's Settings page is unaffected. M12 also WIDENS one thing, `authenticated`'s UPDATE on `tracking_configs.subreddits`, which a revert leaves granted and which Phase 0 has no page that writes; and it adds the three `subreddits` arms to `tracking_configs_cost_ceilings_check`, which Phase 0's discovery path cannot breach (it converges at 20 known against a bound of 100, and 5 active against 20). Every writer of those tables on `main` goes through the service role (`lib/readiness/load.ts`, `lib/gather/gate-verdicts.ts`), and the tenant SELECTs are re-granted in the same statement — so Phase 0's code loses nothing. Checked, so that nobody has to check it at 22:00. The rest of the case is the easy one, and it is the one you are most likely to be in. |
-| **A migration failed halfway** | Re-run the same file. They are idempotent (`if not exists` throughout; all thirteen re-applied over themselves on a clean PostgreSQL 17.11 cluster on 2026-09-19 with 0 errors and a byte-identical catalogue diff). Do not hand-patch the half-applied state. |
+| **A migration failed halfway** | Re-run the same file. They are idempotent (`if not exists` throughout; all thirteen re-applied over themselves on a clean PostgreSQL 17.11 cluster with 0 errors and a byte-identical catalogue diff — bar one aclitem reordering on a wider dump, see §2). Do not hand-patch the half-applied state. |
 | **A migration applied and you want it gone** | You mostly do not. Dropping `month_subject_readings` or `month_evidence_refs` destroys the one-shot's output and it cannot be recreated. If a table genuinely must go, it goes by name and by hand, and the seed for that tenant is spent regardless. |
 | **The one-shot ran wrong** | **There is no rollback.** `month_reading_frozen_guard` refuses the UPDATE and `month_reading_delete_guard` refuses the DELETE, which is the whole point. The 201 audience-months keep whatever the shot wrote. This is why step 5.4 has a dry run and four things to read in it. |
 | **Recipients went out too early** | Clear `report_schedules.recipients` in Settings. An email already sent is sent. |
