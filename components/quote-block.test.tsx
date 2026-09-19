@@ -62,6 +62,16 @@ describe.each(MODES)('QuoteBlock in %s mode', (mode) => {
     expect(text).toContain('Spanish')
   })
 
+  // THE LABEL INTRODUCES THE RENDERING IT NAMES — the artboards' order, in
+  // every arm. It used to trail the English, so a reader met a machine
+  // translation and was told what it was afterwards, and the one piece of
+  // provenance on the quote was the last thing in it.
+  it('puts the label between the original and the English, never after it', () => {
+    const text = renderText(<QuoteBlock quote={es} mode={mode} />)
+    expect(text.indexOf(es.text)).toBeLessThan(text.indexOf(MACHINE_TRANSLATION_STAMP))
+    expect(text.indexOf(MACHINE_TRANSLATION_STAMP)).toBeLessThan(text.indexOf(es.english))
+  })
+
   it('says the rendering is missing rather than saying nothing', () => {
     const text = renderText(<QuoteBlock quote={{ text: es.text, lang: 'es', english: null }} mode={mode} />)
     expect(text).toContain('no English rendering yet')
