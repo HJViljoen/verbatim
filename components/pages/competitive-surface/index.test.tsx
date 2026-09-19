@@ -142,17 +142,36 @@ describe('CO2 · the standings', () => {
     expect(markup.indexOf('Comments, on last month')).toBeLessThan(markup.indexOf('Videos, on last month'))
   })
 
-  it('draws each bar against its own column, and says so', () => {
-    // A track filled to the ABSOLUTE percentage drew 2.7px for 4.2% and floored
-    // 1.3% to the same 2% several other rows got, because on a real tenant the
-    // shares are 1–9% beside one remainder at 93%. The figure beside the bar
-    // is the absolute one and carries its own "k of N".
+  it('draws each bar against the largest BRAND in its column, and says so', () => {
+    // A track filled to the ABSOLUTE percentage drew 2.7px for 4.2%; scaling to
+    // every row did not fix it, because the remainder IS every row — at 93% the
+    // scale stayed the remainder's and 1.3% drew 1.27px, on the 2% floor and
+    // indistinguishable from `NOT_OBSERVED`, which draws no bar at all. The
+    // scale is the largest brand share; the figure beside the bar is still the
+    // absolute one and still carries its own "k of N".
     const markup = render(competitiveStandings.render(competitiveFixture(), 'app', ctx))
     const rows = competitiveFixture().standings.rows
-    const top = Math.max(...rows.map((r) => r.content?.pct ?? 0))
-    const you = rows.find((r) => r.role === 'client')!.content!.pct!
+    const brands = rows.filter((r) => r.role !== 'category')
+    const top = Math.max(...brands.map((r) => r.content?.pct ?? 0))
+    const you = brands.find((r) => r.role === 'client')!.content!.pct!
     expect(markup).toContain(`width:${(you / top) * 100}%`)
-    expect(renderText(markup)).toContain('drawn against the largest share in its own column')
+    expect(renderText(markup)).toContain('drawn against the largest brand share in its own column')
+  })
+
+  it('draws NO bar on the remainder row, which is not on the brands’ scale', () => {
+    // "The rest of the category" is the month's remainder, not a brand. It is
+    // out of the scale for the same reason `CATEGORY_NOT_DRAWN` keeps it out of
+    // the lines, so a full track beside it would say it is on a scale it is not
+    // on. Its share and its "k of N" are unchanged.
+    const markup = render(competitiveStandings.render(competitiveFixture(), 'app', ctx))
+    const rows = competitiveFixture().standings.rows
+    const rest = rows.find((r) => r.role === 'category')!
+    const text = renderText(markup)
+    expect(text).toContain(rest.label)
+    expect(text).toContain('86.4%')
+    // Two brand rows × two columns, and not one more.
+    expect(markup.match(/w-\[64px\]/g)?.length).toBe(4)
+    expect(text).toContain('The rest of the category carries no bar')
   })
 
   it('counts a brand’s months read by ONE rule, in both cells that print it', () => {

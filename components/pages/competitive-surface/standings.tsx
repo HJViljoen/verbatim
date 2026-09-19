@@ -118,22 +118,33 @@ function Change({ verdict, observed, prevMonthLabel, mode }: {
  * per cell, filled to that cell's own percentage, in the ENTITY's colour and
  * never the rank's (`components/charts/ranked-bar.tsx`'s own rule).
  *
- * AND IT IS DRAWN AGAINST THE COLUMN'S LARGEST ROW, NOT AGAINST 100%. The
- * artboard's bar fills its column because the mock's shares are 6–39%; on a
- * real tenant they are 1–9% beside one remainder at 93%, so a track filled to
- * the absolute percentage drew 2.7px for 4.2% and floored 1.3% to the same 2%
- * several other rows got — a line of specks costing ~72px of table width,
- * twice. The number beside it is the absolute one and carries its own "k of N";
- * the bar is the comparison BETWEEN the rows of its column, which is the only
- * thing a 64px track can actually show, and `BAR_BASIS` says so under the
- * table. `Medians` in the playbook has drawn its bars this way since it
- * landed.
+ * AND IT IS DRAWN AGAINST THE LARGEST BRAND ROW, NOT AGAINST 100% AND NOT
+ * AGAINST THE REMAINDER. The artboard's bar fills its column because the mock's
+ * shares are 6–39%; on a real tenant they are 1–9% beside one remainder at 93%,
+ * so a track filled to the absolute percentage drew 2.7px for 4.2% and floored
+ * 1.3% to the same 2% several other rows got.
  *
- * No bar where there is no reading. `NOT_OBSERVED` is a brand absent from the
- * month, and an empty track beside it reads as a measured zero.
+ * SCALING TO EVERY ROW DID NOT FIX THAT, BECAUSE THE REMAINDER IS EVERY ROW.
+ * `topOf` reduced over "The rest of the category" too, so the scale stayed 93%
+ * (comments) and 86.4% (videos) and the specks stayed specks: measured on this
+ * page's own fixture at 1440, Össur's 1.3% drew 1.27px — on the `Math.max(2, …)`
+ * floor, and indistinguishable from `NOT_OBSERVED`, which draws no bar at all —
+ * and Ottobock's 5.7% drew 3.92px. The same rule that keeps the remainder out of
+ * the lines (`CATEGORY_NOT_DRAWN`) keeps it out of the scale: it is the
+ * remainder of the month, not a brand, and at its size every brand bar sits on
+ * the floor beside it. Against the largest BRAND share the same two rows draw
+ * 14.6px and 64px.
+ *
+ * SO THE REMAINDER'S OWN ROW DRAWS NO BAR. It is not on the scale the other
+ * bars are on, and a full track beside it would say it is — the column's own
+ * comparison is between the brands. Its share is printed beside it, with its own
+ * "k of N", exactly as before: no row is dropped and no denominator changes.
+ *
+ * No bar where there is no reading either. `NOT_OBSERVED` is a brand absent from
+ * the month, and an empty track beside it reads as a measured zero.
  */
 export const BAR_BASIS =
-  'Each bar is drawn against the largest share in its own column, never against 100% — the percentage beside it is the share itself.'
+  'Each bar is drawn against the largest brand share in its own column, never against 100% — the percentage beside it is the share itself. The rest of the category carries no bar: it is the remainder of the month, not a brand, and at its size every other bar sits on the floor beside it.'
 
 function Share({ share, role, top, mode }: { share: StandingShare | null; role: StandingRow['role']; top: number; mode: RenderMode }) {
   if (share == null || share.pct == null) {
@@ -146,6 +157,7 @@ function Share({ share, role, top, mode }: { share: StandingShare | null; role: 
     <span data-copy="figure">{fmtInt(share.k)} of {fmtInt(share.n)}</span>
   </>
   if (mode === 'email') return <span style={{ fontFamily: FONT.mono, fontSize: 12, color: EMAIL.ink }}>{body}</span>
+  if (role === 'category') return <span className="font-mono text-[12px] tabular-nums">{body}</span>
   return (
     <span className="flex items-center gap-2">
       <span className="h-1.5 w-[64px] shrink-0 overflow-hidden rounded-full bg-inner" aria-hidden>
@@ -324,9 +336,12 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
     const empty = competitiveStandings.emptyState(data)
     const rules: CalendarRule[] = s.rules.map((r) => ({ month: r.month, label: r.label, kind: 'tracking_change' as const }))
     const latest = s.denominators[s.denominators.length - 1] ?? null
-    // The largest share in each column — what its bars are drawn against.
+    // The largest BRAND share in each column — what its bars are drawn against.
+    // The category row is the month's remainder and is left out of the scale
+    // for the same reason it is left out of the lines: at 86–93% it puts every
+    // brand bar on the 2% floor. See `BAR_BASIS`.
     const topOf = (pick: (r: StandingRow) => StandingShare | null): number =>
-      s.rows.reduce((m, r) => Math.max(m, pick(r)?.pct ?? 0), 0)
+      s.rows.reduce((m, r) => (r.role === 'category' ? m : Math.max(m, pick(r)?.pct ?? 0)), 0)
     const topContent = topOf((r) => r.content)
     const topAttention = topOf((r) => r.attention)
 
