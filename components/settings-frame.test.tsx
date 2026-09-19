@@ -45,6 +45,18 @@ describe('the settings rail', () => {
     expect(markup).not.toContain('>0<')
   })
 
+  it('gives its seven links a focus ring, and its eyebrow full-strength ink (SH16)', () => {
+    const markup = render(<SettingsFrame active="record" title="Settings">x</SettingsFrame>)
+    // Every other control on these pages sets one; the links that ARE the
+    // area's navigation fell back to the UA outline, on a rounded tinted row.
+    expect(markup.match(/focus-visible:ring-2/g)).toHaveLength(SETTINGS_SUBPAGES.length)
+    // The eyebrow was `text-muted-foreground/80` — #8B8F93, 3.26:1 — on the
+    // label that says what the rail is, across nine routes.
+    expect(markup).not.toContain('text-muted-foreground/80')
+    // The artboard's 40px row height is the mock's and stays.
+    expect(markup).toContain('min-h-10')
+  })
+
   it('keeps Billing under the Team and billing entry rather than giving it its own', () => {
     const entry = SETTINGS_SUBPAGES.find((s) => s.key === 'team')!
     expect(entry.href).toBe('/dashboard/team')
