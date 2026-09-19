@@ -451,6 +451,25 @@
 .vb-print [data-print-cols="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .vb-print [data-print-cols="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .vb-print [data-print-cols="4"] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+/* `TileColumns({ of: 2, rail })` on paper — PROPORTIONAL, NOT THE PIXEL RAIL.
+   On screen the rail is `1fr 400px` of the app's 1168px grid (SH15); a brief
+   sheet lays out at that same 1168, so the pixels would be right at full width
+   and wrong the moment a section takes half a sheet — a 400px rail in a 568px
+   column leaves 168px for the reading. 1.85 : 1 is 752 : 400, the same split,
+   at whatever width the column turns out to be. */
+.vb-print [data-print-cols="rail"] { grid-template-columns: minmax(0, 1.85fr) minmax(0, 1fr); }
+/* The two halves `TileColumns`'s own `xl:` classes carry on screen, for the
+   print media where `xl:` does not fire: the stacked divider goes (the columns
+   are side by side now, so a rule between them is a rule across the middle of
+   the sheet) and the rule returns to the leading edge of every column but the
+   first, with the 16px its callers pad by at `xl:`. Emitted by a RULED grid
+   only, so the divider and its replacement cannot drift apart. */
+.vb-print [data-print-rule] > :not(:last-child) { border-bottom-width: 0; }
+.vb-print [data-print-rule="2"] > *:not(:nth-child(2n+1)),
+.vb-print [data-print-rule="3"] > *:not(:nth-child(3n+1)) {
+  border-left: 1px solid var(--border);
+  padding-left: 16px;
+}
 .vb-print [data-print-contents] { display: contents; }
 /* The Studio preview: the same deck on screen, slides stacked and lifted. */
 .vb-preview { background: transparent; }

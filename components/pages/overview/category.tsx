@@ -309,7 +309,17 @@ export const overviewCategory: Block<OverviewData> = {
         <div className={email ? undefined : 'flex max-w-[440px] flex-col gap-1.5'}>
           {c.kinds.map((k) => (
             <span key={k.kind} className={email ? undefined : 'flex items-center gap-2 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, marginRight: 10 } : undefined}>
-              <span className={email ? undefined : 'min-w-0 flex-1 truncate'}>{k.label}</span>
+              {/* AND IT WRAPS RATHER THAN TRUNCATES (Block D wave 3b, `decks`).
+                  M23's cap answered the stretch this row had on paper while
+                  `TileColumns` was below its `xl` breakpoint; the columns are
+                  real on paper now, so the row is the block's own ~340px and
+                  `truncate` cut "Praise" to "Prai…" on the marketing brief's
+                  fourth sheet. `MoverRow` two hundred lines up made exactly
+                  this call for exactly this reason — the row wraps instead,
+                  "which is the honest answer at a third of the width" — and a
+                  kind's label is two words where a theme's is a sentence, so
+                  the wrap costs at most one line. */}
+              <span className={email ? undefined : 'min-w-0 flex-1'}>{k.label}</span>
               <span className={email ? undefined : 'w-[104px] shrink-0'}>
                 <FigureCell
                   mode={mode}
