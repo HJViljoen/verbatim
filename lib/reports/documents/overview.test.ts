@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 
 import { concludedBasisLine, gapTile, leadGap, leadVerdict, overviewTiles, verdictTile } from './overview'
+import { cannotTell, scriptedLines, switchingFigure } from './figures'
 import type { Gap, GapSide } from '../../reading/gap'
 import type { Verdict } from '../../reading/verdicts'
 import type { DocumentSnapshotData } from './types'
@@ -215,7 +216,22 @@ describe('overviewTiles', () => {
 
   it('drops a tile it cannot fill rather than printing an empty one', () => {
     expect(overviewTiles(doc({ reading: reading() }))).toHaveLength(1)
-    expect(overviewTiles(doc({ reading: reading({ denominators: [] }) }))).toHaveLength(0)
+  })
+
+  // A ZERO IS NOT A BASIS. `documentFigures` sets `f.conversations` from the
+  // reading's own denominators whenever a reading exists, so the old fallback
+  // could only ever re-print the zero that sent it there: the first tile of the
+  // first sheet read "0 · comments read", with no month named.
+  it('refuses the basis, in words, where the month has no denominators', () => {
+    const tiles = overviewTiles(doc({
+      reading: reading({ denominators: [] }),
+      figures: { conversations: { label: 'comments read in September 2026', value: '0', kind: 'count' } },
+    }))
+    expect(tiles).toHaveLength(1)
+    expect(tiles[0].value).toBe('not read yet')
+    expect(tiles[0].word).toBe(true)
+    expect(tiles[0].label).toContain('September 2026')
+    expect(tiles[0].label).toContain('No denominator recorded for this month.')
   })
 
   // WITHOUT A READING nothing changes: the update's own three, exactly as they
@@ -234,5 +250,54 @@ describe('overviewTiles', () => {
     expect(tiles.map((t) => t.value)).toEqual(['3,270', '2.8%', '69.4%'])
     expect(tiles[0].label).toBe('conversations read this update, on 469 videos')
     expect(tiles[1].label).toContain('Ottobock 9%')
+  })
+})
+
+// The two slide tiles E-sales added, and what each of them was printing
+// without (fix pass).
+const slideFigures = (over: Partial<NonNullable<DocumentSnapshotData['slideFigures']>> = {}) => ({
+  cannotTell: cannotTell([]),
+  switching: switchingFigure({
+    window: WINDOW,
+    audience: 'client',
+    audienceLabel: 'your own brand',
+    videos: [{ id: 'v1', sentiment: 'positive' }, { id: 'v2', sentiment: 'negative' }],
+    basis: 'dated by when each video was posted, not by when the conversation under it happened',
+  }),
+  crosscheck: null,
+  scripted: scriptedLines({
+    figures: {},
+    lines: [{
+      objection: { label: 'Pushing back', registryId: null, source: 'kind' as const, value: { k: 28, n: 205 } },
+      because: [],
+    }],
+  }),
+  line: null,
+  untracked: [],
+  ...over,
+})
+
+describe('overviewTiles · the objection tile names its population', () => {
+  it('is the CATEGORY\u2019s month, which is not the reading\u2019s video count', () => {
+    const tiles = overviewTiles(doc({ reading: reading(), slideFigures: slideFigures() }))
+    const objection = tiles.find((t) => t.label.includes('pushing back'))
+    expect(objection?.value).toBe('28')
+    // The sheet's own footer says "1,388 videos in the category"; the tile now
+    // says which 205 it means.
+    expect(objection?.label).toBe('of 205 videos in the category in September 2026 carry pushing back')
+  })
+
+  it('names the audience alone where the brief has no monthly reading', () => {
+    const tiles = overviewTiles(doc({ slideFigures: slideFigures() }))
+    expect(tiles.some((t) => t.label === 'of 205 videos in the category\u2019s month carry pushing back')).toBe(true)
+  })
+})
+
+describe('overviewTiles \u00b7 the switching tile keeps its basis and its audience', () => {
+  it('prints both, which its own type says are never omitted', () => {
+    const tiles = overviewTiles(doc({ reading: reading(), slideFigures: slideFigures() }))
+    const switching = tiles.find((t) => t.label.includes('a switch between brands'))
+    expect(switching?.label).toContain('counted in your own brand')
+    expect(switching?.label).toContain('dated by when each video was posted')
   })
 })

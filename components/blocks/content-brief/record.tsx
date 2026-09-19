@@ -105,6 +105,11 @@ export const contentRecord: Block<ContentBriefData> = {
               <div key={i} style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink2, marginTop: 4 }}>{l}</div>
             ))}
             <Numbers rows={r.numbers} mode={mode} />
+            {[r.method?.basis, r.method?.language, r.method?.redditCap, r.method?.privacy]
+              .filter((l): l is string => !!l)
+              .map((l, i) => (
+                <div key={i} style={{ fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.muted, marginTop: 6 }}>{l}</div>
+              ))}
             {tail.map((l, i) => (
               <div key={i} style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted, marginTop: 6 }}>{l}</div>
             ))}
@@ -162,7 +167,30 @@ export const contentRecord: Block<ContentBriefData> = {
               </div>
             ) : null}
           </div>
-          <Numbers rows={r.numbers} mode={mode} />
+          <div className="flex min-w-0 flex-col gap-3">
+            <Numbers rows={r.numbers} mode={mode} />
+            {/* THE METHOD FOOTNOTE, WHICH THIS SHEET IS NOW THE ONLY HOME FOR
+                (fix pass, reports-25). The content brief printed TWO
+                consecutive "How this brief was made" sheets — this one and the
+                deck's `MethodPage` — with the same eyebrow, the same
+                `grid-cols-[7fr_5fr]` and a numbers card each, disagreeing about
+                Videos. `CONTENT_MAP` drops the second, which is the artboard's
+                own shape; what only the second printed was `methodLines` —
+                the basis, the language note, the Reddit cap and PRIVACY_LINE —
+                and a client PDF may not lose those. `r.method` has been on this
+                slide's data since it was built and only `preparedBy` was read
+                off it. It sits under the numbers card, in the column that
+                stopped at 59% of the body. */}
+            {r.method && (
+              <div className="flex flex-col gap-1">
+                {[r.method.basis, r.method.language, r.method.redditCap, r.method.privacy]
+                  .filter((l): l is string => !!l)
+                  .map((l, i) => (
+                    <p key={i} className="m-0 font-mono text-[10px] leading-[1.45] text-muted-foreground">{l}</p>
+                  ))}
+              </div>
+            )}
+          </div>
         </div>
       </BlockFrame>
     )

@@ -128,6 +128,29 @@ describe('cadenceWord', () => {
   })
 })
 
+// ONE FACT ABOUT THE WORKSPACE, SAID ONCE. With no `brief:*` schedule — the
+// shipped state — `deliveryLine` returns the identical sentence for all three
+// cards, which rendered as two mono lines × three cards between the only parts
+// of the cards that differ.
+describe('the delivery sentence', () => {
+  const three = [card({ role: 'sales_brief' }), card({ role: 'market_brief' }), card({ role: 'content_brief' })]
+
+  it('is printed once for the row where all three say the same thing', () => {
+    const text = renderText(<BriefCards cards={three.map((c) => ({ ...c, cadence: null }))} />)
+    expect(text.match(/Not on a schedule/g) ?? []).toHaveLength(1)
+  })
+
+  it('stays on the card where it is that brief\u2019s own fact', () => {
+    const text = renderText(<BriefCards cards={[
+      three[0],
+      { ...three[1], cadence: null },
+      three[2],
+    ]} />)
+    expect(text.match(/Not on a schedule/g) ?? []).toHaveLength(1)
+    expect(text.match(/nobody receives this yet/g) ?? []).toHaveLength(2)
+  })
+})
+
 describe('the card', () => {
   // WHEN IT READ MOVED TO THE FOOTER AND THE MONTH TO THE CHIP (Block D wave
   // 2). The artboard's card puts a mono month top-right and a mono stamp in

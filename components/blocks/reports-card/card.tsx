@@ -2,7 +2,6 @@ import Link from 'next/link'
 
 import { FigureCell } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
-import { MOVEMENT_WORDS } from '@/components/delta-badge'
 import { Tile } from '@/components/shell/tile'
 import { fmtInt, fmtPct, longMonth } from '@/lib/format'
 import type { QuarterlyCard } from '@/lib/pages/reports-card'
@@ -64,6 +63,13 @@ export function QuarterlyCardTile({
   const drawn = card.series.length > 0
   const max = Math.max(...card.series.map((s) => share(s.value.k, s.value.n)), 1)
   const baselineOf = (label: string) => card.rows.find((r) => r.label === label)?.verdict.baseline ?? null
+  // IS THERE A TICK ON THIS CARD AT ALL? Below `QUARTER_UNLOCKS_AT`
+  // `quarterChange` carries no baseline — correctly — so `baselineOf` is null
+  // on every row and the chart draws no marks. The legend keyed its second
+  // swatch on `series.length > 0` and therefore promised a mark that is
+  // nowhere on the card, in `formingCardFixture()`, which is production today.
+  const anyBaseline = card.series.some((s) => baselineOf(s.label) != null)
+  const pill = pillWord(card.readings, drawn)
 
   return (
     <Tile
@@ -78,7 +84,9 @@ export function QuarterlyCardTile({
       meta={`${card.quarter.label} · ${monthSpan(card.quarter.from, card.quarter.to)}`}
       distribute="between"
       className="xl:min-h-[248px]"
-      footer={<Link href={card.href} className="underline underline-offset-2">See what it will cover</Link>}
+      // 32px OF TARGET (M7's floor for this page): this was a 15px line, the
+      // card's only control.
+      footer={<Link href={card.href} className="inline-flex h-8 -my-1 items-center underline underline-offset-2">See what it will cover</Link>}
       // `quarterGateSentence` verbatim — the artefact's own gate, on the card
       // that advertises it, so the two cannot come to say different numbers —
       // BUT ONLY WHERE THE GATE IS WHAT BITES. Printed unconditionally it made
@@ -89,13 +97,25 @@ export function QuarterlyCardTile({
       footerNote={drawn && !unlocked ? card.gate : undefined}
     >
       <div className="flex flex-col items-start gap-1.5 sm:flex-row sm:items-center sm:gap-2.5">
+        {pill && (
+        /* THE AMBER IS IN THE TINT AND THE RING, NOT IN THE TEXT.
+            `bg-warning/15 text-warning` is #E6B03C on a 15% tint of itself —
+            sampled off this very render at (230,176,60) on (251,243,226),
+            1.79:1, under even the 3:1 large-text floor — and it carried the
+            pill in the state `loadQuarterlyCard` lands both live workspaces
+            in. The remedy is `components/pages/agent/marks.tsx`'s, which ships
+            in this same tree: the colour still signals, through a stronger
+            ring, and the words go to `foreground`. The real fix is a
+            `--warning-foreground` token dark enough to carry text, which is a
+            palette change and belongs to whoever owns `app/globals.css`. */
         <span
           className={`inline-block flex-none whitespace-nowrap rounded-full px-2 py-0.5 text-[12px] font-medium ${
-            drawn && unlocked ? 'bg-inner text-secondary-foreground' : 'bg-warning/15 text-warning'
+            drawn && unlocked ? 'bg-inner text-secondary-foreground' : 'bg-warning/15 text-foreground ring-1 ring-warning/50'
           }`}
         >
-          {pillWord(card.readings, drawn)}
+          {pill}
         </span>
+        )}
         <span className="min-w-0 text-[12.5px] text-foreground">
           {card.quarter.label} set against the quarter before it, and built with the first update after it closes.
         </span>
@@ -130,8 +150,20 @@ export function QuarterlyCardTile({
                     <span className="w-[104px] flex-none">
                       <FigureCell value={fmtPct(pct, 1)} of={`${fmtInt(s.value.k)} of ${fmtInt(s.value.n)}`} align="right" />
                     </span>
+                    {/* `good="neutral"` — THE SERIES IS THE CATEGORY'S AND THE
+                        COLOURS ARE THE CLIENT'S. `CARD_AUDIENCE` is
+                        `INDUSTRY_AUDIENCE` and every row label ends "· the
+                        category", so with the prop's default (`'up'`) a rise
+                        in the wider category's attention printed in
+                        `--positive` — the token DESIGN.md reserves for "you,
+                        gaining" — and a fall would have printed red. That is a
+                        valence claim about somebody else's number.
+                        `movement.tsx` records that the prop was added because
+                        the leadership one-pager printed a rise in the
+                        category's attention to Price in red; this call site was
+                        never updated. */}
                     <span className="flex w-[132px] flex-none justify-end text-right">
-                      <BlockMovement verdict={verdict} unit="pts" />
+                      <BlockMovement verdict={verdict} unit="pts" good="neutral" />
                     </span>
                   </span>
                 </div>
@@ -153,10 +185,12 @@ export function QuarterlyCardTile({
               <span className="size-2 rounded-full" style={{ background: 'var(--cat)' }} aria-hidden />
               bars: {card.quarter.label}, the category
             </span>
-            <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              <span className="h-2.5 w-0.5 rounded-[1px] bg-muted-foreground" aria-hidden />
-              the quarter before
-            </span>
+            {anyBaseline && (
+              <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <span className="h-2.5 w-0.5 rounded-[1px] bg-muted-foreground" aria-hidden />
+                the quarter before
+              </span>
+            )}
           </div>
         )}
         <p className="m-0 text-[12px] text-muted-foreground">
@@ -220,9 +254,17 @@ export function readingWord(readings: number): string {
  * which. "not enough months yet" there sends a reader off to wait for months
  * that will not, on their own, change anything.
  */
-export function pillWord(readings: number, drawn: boolean): string {
+export function pillWord(readings: number, drawn: boolean): string | null {
   if (!drawn) return 'nothing to compare yet'
-  return quarterUnlocked(readings) ? `${readingWord(readings)} stand behind it` : MOVEMENT_WORDS.baseline_forming
+  // AND BELOW THE GATE IT SAYS NOTHING, because the rows have already said it.
+  // Every `quarterChange` answers `baseline_forming` below `QUARTER_UNLOCKS_AT`,
+  // so the pill printed "not enough months yet" and then the verdict column
+  // printed it once per row — four times on one card, and the pill is the
+  // loudest of the four, in the state Sealand is in. The footnote carries the
+  // gate sentence in that state (`card.gate`, which names the count), so
+  // nothing is lost by dropping the pill and the card gains its quietest
+  // reading of its own worst case.
+  return quarterUnlocked(readings) ? `${readingWord(readings)} stand behind it` : null
 }
 
 
@@ -251,7 +293,7 @@ export function QuarterlyAbsentTile({ col = 7, row = 2 }: { col?: number; row?: 
       meta="not yet"
       distribute="between"
       className="xl:min-h-[248px]"
-      footer={<Link href="/dashboard/settings" className="underline underline-offset-2">Name a subject in Settings</Link>}
+      footer={<Link href="/dashboard/settings" className="inline-flex h-8 -my-1 items-center underline underline-offset-2">Name a subject in Settings</Link>}
     >
       <p className="m-0 text-[12.5px] leading-[1.45] text-foreground">
         The quarterly review reads the subjects you track, and none is confirmed for this workspace yet — so there is no

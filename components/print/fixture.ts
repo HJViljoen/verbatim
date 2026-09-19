@@ -11,6 +11,7 @@ import { competitiveFixture } from '@/components/pages/competitive-surface/fixtu
 import { subjectsFixture } from '@/components/pages/subjects/fixture'
 import { methodFixture } from '@/lib/test/method-fixture'
 import { briefSections } from '@/lib/reports/documents/load-reading'
+import { STALE_SECTION_LINE } from '@/lib/reports/stale'
 import { SALES_MAP } from '@/lib/reports/documents/sections'
 import { overviewFixture, refusedFixture as refusedOverview } from '@/components/pages/overview/fixture'
 import { marketFixture } from '@/components/pages/market-surface/fixture'
@@ -299,10 +300,56 @@ export const salesBriefThinFixture = (over: Partial<DocumentSnapshotData> = {}):
 export const salesBriefUnreadFixture = (over: Partial<DocumentSnapshotData> = {}): DocumentSnapshotData =>
   base({ slideFigures: FIGURES.unread(), ...over })
 
-/** A brief built before wave 2: no slide figures at all. What every stored
- *  Sales brief on production is, and it has to keep rendering. */
-export const salesBriefLegacyFixture = (over: Partial<DocumentSnapshotData> = {}): DocumentSnapshotData =>
-  base({ slideFigures: null, ...over })
+/**
+ * A brief built before wave 2. What every stored Sales brief on production
+ * is — and it has to keep rendering.
+ *
+ * IT HAS TO BE THE SHAPE, NOT A FLAG (fix pass). This was `base({ slideFigures:
+ * null })`, which is today's snapshot with one field nulled: it kept `reading`,
+ * `sections`, `surfaces`, `layout` and a `method` carrying `dropped`,
+ * `findingsBelow`, `findingsHeld`, `languages` and `delivery`. `main`'s
+ * `DocumentSnapshotData` has NONE of those — the whole of item 43 and both wave
+ * 2 packages added them — so the one fixture named for backward compatibility
+ * did not carry the shape production writes, and the deck's handling of a
+ * missing `surfaces` was untested by the only test that was supposed to test
+ * it. A true `main`-shape snapshot was constructed by hand and renders, so this
+ * is missing coverage rather than a live bug; it is also precisely the coverage
+ * that reaches the sheets built out of `surfaces`.
+ *
+ * Every field is DELETED here rather than set to null or undefined, because a
+ * stored row has no key at all and `'x' in data` is a different question from
+ * `data.x == null`.
+ */
+export const salesBriefLegacyFixture = (over: Partial<DocumentSnapshotData> = {}): DocumentSnapshotData => {
+  const {
+    reading: _reading, sections: _sections, surfaces: _surfaces, layout: _layout,
+    slideFigures: _slideFigures, method, ...rest
+  } = base({ slideFigures: null })
+  const {
+    dropped: _dropped, findingsBelow: _below, findingsHeld: _held,
+    languages: _languages, delivery: _delivery, ...mainMethod
+  } = method
+  return {
+    ...rest,
+    // AND THE FIGURES ARE THE UPDATE'S, WHICH IS WHAT `documentFigures` WROTE
+    // BEFORE ITEM 43: `conversations` / `videos` / `client_videos` /
+    // `competitor_videos` / `positive_pct` / `<rival>_share_pct`, and a period
+    // string that is a RUN's date. A legacy fixture carrying the month's
+    // figure table would send `overviewTiles` down its no-reading branch with
+    // month-shaped figures, which is a shape nothing has ever stored.
+    period: 'Update of 28 Sep 2026',
+    figures: {
+      conversations: { label: 'conversations', value: '2,359', kind: 'count' },
+      videos: { label: 'videos', value: '1,388', kind: 'count' },
+      client_videos: { label: 'Sealand videos', value: '84', kind: 'count' },
+      competitor_videos: { label: 'competitor videos', value: '356', kind: 'count' },
+      positive_pct: { label: 'positive share of judged conversations', value: '31.4%', kind: 'pct' },
+      client_share_pct: { label: 'Sealand share of tracked conversation', value: '6.1%', kind: 'pct' },
+    },
+    method: mainMethod,
+    ...over,
+  }
+}
 
 // THE MARKETING BRIEF AS A DECK (package E-marketing, wave 2).
 //
@@ -345,7 +392,7 @@ function sections(surfaces: Record<string, unknown>): DocBriefSection[] {
       ? 'This section could not be read for this month.'
       : block
         ? block.emptyState(data as never)
-        : 'This section names a block this build does not know how to draw.'
+        : STALE_SECTION_LINE
     return {
       id: s.id, block: s.block, surface: s.surface, title: s.title, framing: s.framing, empty,
       ...(s.sheet ? { sheet: s.sheet } : {}),

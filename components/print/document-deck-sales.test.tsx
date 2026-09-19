@@ -107,7 +107,7 @@ describe('sales.p1 — the cover', () => {
     // measures come first (see `overviewTiles`).
     expect(w).toContain('2,359 comments read in September 2026, on 1,388 videos in the category')
     expect(w).toContain('120 videos name a switch between brands')
-    expect(w).toContain('28 of 205 videos carry')
+    expect(w).toContain('28 of 205 videos in the category in September 2026 carry')
   })
 
   // The badge row is the artboard's third line, and it is a Verdict rather
@@ -172,14 +172,21 @@ describe('sales.p1 — the cover', () => {
   // Every Sales brief stored on production predates wave 2 and has no slide
   // figures at all. A stored artefact must keep rendering what it rendered.
   it('renders a brief built before the slide figures existed', () => {
-    const w = words(sheets(deck(salesBriefLegacyFixture()))[0])
+    const data = salesBriefLegacyFixture()
+    // IT IS THE SHAPE, NOT A FLAG. `main`'s `DocumentSnapshotData` has none of
+    // these keys at all, and a stored row has no key rather than a null one.
+    for (const key of ['reading', 'sections', 'surfaces', 'layout', 'slideFigures']) {
+      expect(key in data).toBe(false)
+    }
+    for (const key of ['dropped', 'findingsBelow', 'findingsHeld', 'languages', 'delivery']) {
+      expect(key in data.method).toBe(false)
+    }
+    const w = words(sheets(deck(data))[0])
     expect(w).toContain('Sales brief')
-    // MERGE, BLOCK D WAVE 2: the basis tile now NAMES THE MONTH and the
-    // population the videos are of — E-marketing's wording for the same
-    // figure, which is the same number with the two facts a reader needs
-    // beside it. It is also the LAST of the three now, because the two
-    // measures come first (see `overviewTiles`).
-    expect(w).toContain('2,359 comments read in September 2026, on 1,388 videos in the category')
+    // Its tiles are the UPDATE's three, which is what `documentFigures` wrote
+    // before item 43 and what every stored brief carries.
+    expect(w).toContain('2,359 conversations read this update, on 1,388 videos')
+    expect(w).toContain("Sealand's share of tracked conversation")
     expect(w).not.toContain('name a switch between brands')
   })
 })
@@ -375,7 +382,7 @@ describe('the sales brief’s order is the artboard’s', () => {
     expect(titles).toContain('What they are pushing back on')
     const at = (t: string) => titles.findIndex((x) => x.startsWith(t))
     expect(at('What they are pushing back on')).toBeLessThan(at('What sells, in their words'))
-    expect(at('What sells, in their words')).toBeLessThan(at('What they complain about with each rival'))
+    expect(at('What sells, in their words')).toBeLessThan(at('Who is being talked about, rival by rival'))
     expect(at('Who is moving')).toBeLessThan(at('Answers you can use'))
     expect(at('Answers you can use')).toBeLessThan(at('About this brief'))
   })
@@ -478,7 +485,7 @@ describe('sales.p7 — the method sheet', () => {
 
 describe('the borrowed sheets carry the artboard’s chrome', () => {
   const objections = () => sheetNamed(deck(), 'What they are pushing back on')
-  const rivals = () => sheetNamed(deck(), 'What they complain about with each rival')
+  const rivals = () => sheetNamed(deck(), 'Who is being talked about, rival by rival')
 
   // `sales.p2.header`: the deck printed "{the whole title} · {the whole
   // stamp}" — the title repeated beside itself, and a 60-character stamp in a
@@ -558,7 +565,7 @@ describe('the borrowed sheets carry the artboard’s chrome', () => {
         reading: { ...salesBriefFixture().reading!, confidence: { word, why: 'why.' } },
         // The chart pane would draw its own primary-coloured marks; the rivals
         // sheet's pane is the confidence one and draws none.
-      })), 'What they complain about with each rival'))
+      })), 'Who is being talked about, rival by rival'))
     expect(of('reasonable')).toBeGreaterThan(of('partly'))
     expect(of('partly')).toBeGreaterThan(of('not yet'))
   })
@@ -607,15 +614,17 @@ describe('the borrowed sheets carry the artboard’s chrome', () => {
     expect(rivals()).not.toContain('mt-auto flex flex-col gap-1.5 border-t border-border pt-3')
   })
 
-  // THE SHEET SAYS WHAT IS ON IT. Its title is the artboard's — "What they
-  // complain about with each rival" — and the complaints are not built
-  // (`competitive.rivals.figures()` returns `{}`; E-competitive's file), so a
-  // client met a heading promising per-rival complaints and a page delivering
-  // a picker. The title stays; the empty state tells the truth under it.
+  // THE SHEET SAYS WHAT IS ON IT, AND SO DOES ITS HEADING. The artboard's
+  // title — "What they complain about with each rival" — promised the
+  // artboard's ROWS, and the complaints are not built
+  // (`competitive.rivals.figures()` returns `{}`; E-competitive's file), so the
+  // first pass kept the title and put the confession in the pane: a heading
+  // promising what the body two inches below withdrew. The heading names the
+  // body now, and the pane still says what is not counted.
   it('says on the rivals sheet what the rivals sheet does not carry', () => {
     const w = words(rivals())
     expect(w).toContain('not yet counted rival by rival')
-    expect(w).toContain('does not carry the complaints its title names')
+    expect(w).not.toContain('What they complain about with each rival')
   })
 
   // `sales.p4.untracked`: composed by `untrackedNotes` on every brief since

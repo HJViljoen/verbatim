@@ -1,5 +1,6 @@
 import { GAP_WORDS, gapBasisLine, gapLine, sidePct, type Gap } from '../../reading/gap'
 import { fmtInt, round1 } from '../../format'
+import { denominatorLine } from './reading'
 import type { Verdict } from '../../reading/verdicts'
 import type { DocumentSnapshotData } from './types'
 
@@ -239,6 +240,21 @@ export const slugOf = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g
  * movement claim over a comment count under a fixed panel, which has no
  * denominator and therefore no band (D7).
  */
+/**
+ * What a KIND's denominator is, in the reader's words.
+ *
+ * `month_kind_readings` counts every kind over the category audience's videos
+ * for ONE month, so the population is the category's month and nothing else —
+ * never the whole reading's video count, which is what a brief's footers and
+ * its method card print. Where the reading names the category the label is the
+ * reading's own; otherwise the audience's standing name.
+ */
+function objectionPopulation(r: DocumentSnapshotData['reading']): string {
+  const category = r?.denominators.find((d) => d.audience === 'industry-other') ?? null
+  const label = category?.label ?? 'the category'
+  return r ? `videos in ${label} in ${r.monthLabel}` : `videos in ${label}\u2019s month`
+}
+
 export function overviewTiles(data: DocumentSnapshotData): OverviewTile[] {
   const f = data.figures
   const r = data.reading
@@ -249,10 +265,19 @@ export function overviewTiles(data: DocumentSnapshotData): OverviewTile[] {
   // tile read honestly: "12 · videos name a switch between brands · 7 toward
   // Sealand · 5 away". The lean carries its own "of N" because 7 of 12 and
   // 7 of 1,388 are different sentences.
+  // AND THE BASIS AND THE AUDIENCE TRAVEL WITH IT (fix pass).
+  // `SwitchingFigure.basis` is declared "Printed beside it, never omitted"
+  // (figures.ts) and `audience` is CLIENT_AUDIENCE — the brand's OWN posts — so
+  // a tile that printed neither put a count of videos "naming a switch between
+  // brands" on the first sheet a reader meets with nothing saying whose posts
+  // they are, or that this is the one figure in the package dated by the video
+  // rather than by the comment. The full card prints both
+  // (document-deck.tsx); the tile is the more prominent of the two and was the
+  // one that dropped them.
   const switchingTile: OverviewTile | null = switching
     ? {
         value: fmtInt(switching.pool),
-        label: `${switching.pool === 1 ? 'video names' : 'videos name'} a switch between brands · ${fmtInt(switching.toward.k)} of ${fmtInt(switching.pool)} toward you · ${fmtInt(switching.away.k)} of ${fmtInt(switching.pool)} away`,
+        label: `${switching.pool === 1 ? 'video names' : 'videos name'} a switch between brands · ${fmtInt(switching.toward.k)} of ${fmtInt(switching.pool)} toward you · ${fmtInt(switching.away.k)} of ${fmtInt(switching.pool)} away · counted in ${switching.audienceLabel}, ${switching.basis}`,
         verdict: switching.verdict,
         note: switching.unread,
         // The lean carries its own population, so the pair is a level.
@@ -262,10 +287,21 @@ export function overviewTiles(data: DocumentSnapshotData): OverviewTile[] {
   // The objection, with the population it is a share of. No badge: a kind's
   // level carries no banded comparison on this corpus, and the artboard's
   // "▼ 3 pts · fading, 3rd month" is exactly the claim nothing measured.
+  //
+  // AND THE POPULATION IS NAMED, NOT IMPLIED (fix pass). An objection is a
+  // KIND, counted by `month_kind_readings` over ONE denominator — the CATEGORY
+  // audience's videos in the month this brief reads — and the label emitted
+  // the integer alone: "28 · of 205 videos carry pushing back", on a sheet
+  // whose own footer says "1,388 videos in the category". A reader could
+  // compute 13.7% or 2.0% and had nothing anywhere in the document to choose
+  // between them, which defeats the "of N" rule from inside it. The crosscheck
+  // line already states the rule in as many words ("Two populations, two
+  // denominators — read them side by side"); this is the tile that states it
+  // first saying which one it is.
   const objectionTile: OverviewTile | null = objection && objection.value.n > 0
     ? {
         value: fmtInt(objection.value.k),
-        label: `of ${fmtInt(objection.value.n)} videos carry ${objection.label.toLowerCase()}`,
+        label: `of ${fmtInt(objection.value.n)} ${objectionPopulation(r)} carry ${objection.label.toLowerCase()}`,
         level: true,
       }
     : null
@@ -276,21 +312,32 @@ export function overviewTiles(data: DocumentSnapshotData): OverviewTile[] {
     const category = r.denominators.find((d) => d.audience === 'industry-other') ?? r.denominators[0] ?? null
     const comments = r.denominators.reduce((n, d) => n + d.comments, 0)
     // THE BASIS: the comments the month was read on, which is the one number
-    // the others are shares of. Off the month's own denominators where they
-    // have been written, and off the update's figure where they have not — a
-    // reading whose denominators are unwritten is the state every reader has
-    // to survive, and it must not cost the sheet its basis tile.
+    // the others are shares of. Off the month's own denominators.
+    //
+    // AND WHERE THEY ARE UNWRITTEN IT REFUSES, IT DOES NOT PRINT A ZERO (fix
+    // pass). The fallback here read `f.conversations` and called it the
+    // update's figure — but `documentFigures` sets `f.conversations` from
+    // `commentsRead(r.denominators)` on EVERY branch where a reading exists
+    // (compose.ts), so on the one path this arm is reachable on it is the
+    // reading's own count, which is the zero that sent us here. The first tile
+    // of the first sheet of a brief read "0 · comments read", with no month
+    // named and nothing saying the month had not been read — a zero standing
+    // in for a refusal, on the sheet a client meets first. Reachable now:
+    // `denominatorsOf` answers `[]` whenever `record.coverage` is null or
+    // empty, which is a fresh database, a `loadRecordInputs` that threw, and
+    // any window wider than one month. The refusal is set as a WORD, for the
+    // same reason `gapTile`'s is (mock-gap §6 D2): a refusal typeset as a
+    // numeral reads as a measurement.
     const basis: OverviewTile | null = comments > 0
       ? {
           value: fmtInt(comments),
           label: `comments read in ${r.monthLabel}${category ? `, on ${fmtInt(category.videos)} videos in ${category.label}` : ''}`,
         }
-      : f.conversations
-        ? {
-            value: f.conversations.value,
-            label: `comments read${f.videos ? `, on ${f.videos.value} videos` : ''}`,
-          }
-        : null
+      : {
+          value: 'not read yet',
+          label: `${r.monthLabel} — ${denominatorLine(r.denominators)} Nothing on this sheet is a share of a counted population until it is.`,
+          word: true,
+        }
     // The order is the merge's decision — see the header. A concluded gap and
     // a banded change lead where the month earned them; the basis follows;
     // E-sales's two measures fill whatever is left.

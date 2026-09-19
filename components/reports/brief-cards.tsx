@@ -50,6 +50,19 @@ export function BriefCards({
   studio?: boolean
   basePath?: string
 }) {
+  // ONE FACT ABOUT THE WORKSPACE, SAID ONCE (fix pass). `deliveryLine` is a
+  // statement about this workspace's SCHEDULES, and with no `brief:*` schedule
+  // — the shipped state, and both live workspaces — it returns the identical
+  // 106-character sentence for all three cards. Rendered, that was two mono
+  // lines × three cards, the largest block of body copy in the row, identical
+  // in all three and sitting between the only parts of the cards that differ;
+  // the artboard has no slot for it at all. Deviation 3 argues the fact must
+  // not be lost, which it is not — it moves to the section head, beside the
+  // other sentence about the row as a whole. Where the three DIFFER each card
+  // keeps its own, because then it is a fact about that brief.
+  const lines = cards.map((c) => deliveryLine(c))
+  const shared = lines.length > 1 && lines.every((l) => l === lines[0]) ? lines[0] : null
+
   return (
     <>
       {/* THE SECTION'S OWN HEAD, AND THE FOURTH BRIEF'S LINE IS PART OF IT.
@@ -63,6 +76,9 @@ export function BriefCards({
           {meta && <span className="font-mono text-[11px] text-muted-foreground">{meta}</span>}
         </div>
         <p className="m-0 max-w-[92ch] text-[11.5px] leading-[1.45] text-muted-foreground">{LEADERSHIP_LINE}</p>
+        {shared && (
+          <p className="m-0 max-w-[92ch] font-mono text-[10.5px] leading-[1.45] text-muted-foreground">{shared}</p>
+        )}
       </div>
 
       {/* The artboard's cards are `min-height:248px` and GROW; `PageGrid`'s
@@ -73,8 +89,15 @@ export function BriefCards({
           so at 1024 the three cards went full width and each figure row became
           label-left / value-right across ~950px of nothing. The artboard's
           density is the three-up card; two-up from `md` keeps it until the
-          page's own twelve columns take over. */}
-      <PageGrid className="md:grid-cols-2 xl:auto-rows-min">
+          page's own twelve columns take over.
+          AND THREE-UP FROM `lg`, BECAUSE TWO COLUMNS ORPHAN THE THIRD. There
+          are exactly three cards: at 1024 `md:grid-cols-2` drew 2 + 1, a
+          half-width empty cell above two full-width tiles, which is the
+          loudest thing in the row and says nothing. Three-up at 1024 is about
+          240px a card against the artboard's 262px at 1440 — the same card,
+          slightly narrower — and the row reads as one row at every width above
+          `md`. */}
+      <PageGrid className="md:grid-cols-2 lg:grid-cols-3 xl:auto-rows-min">
         {cards.map((c) => (
           <Tile
             key={c.role}
@@ -96,9 +119,12 @@ export function BriefCards({
               )}
               {/* The build has this and the mock has no slot for it, and it is
                   the answer the page exists to give on both live workspaces:
-                  "nobody receives this yet". It stays, in mono, above the
-                  figures. */}
-              <p className="m-0 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">{deliveryLine(c)}</p>
+                  "nobody receives this yet". It stays, in mono — on the card
+                  where it is this brief's own fact, and in the section head
+                  where it is the same sentence for all three. */}
+              {!shared && (
+                <p className="m-0 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">{deliveryLine(c)}</p>
+              )}
               {c.pdf?.stale && (
                 <p className="m-0 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">{STALE_PDF_LINE}</p>
               )}
@@ -157,7 +183,13 @@ export function BriefCards({
  * hold and truncating it is how the warning would be lost.
  */
 function BriefActions({ card, studio, basePath }: { card: BriefCard; studio: boolean; basePath: string }) {
-  const link = 'whitespace-nowrap text-[12px] font-medium underline underline-offset-2'
+  // 32px OF TARGET, WHICH IS WHAT M7 GAVE THE ARCHIVE'S INPUTS. These nine
+  // links were 17px high — the most-used controls on the page and the smallest
+  // thing on it, on a page that had four target sizes after M7 raised one of
+  // them. `inline-flex h-8 items-center` keeps the row one line and the text at
+  // 12px; only the hit area grows, and `-my-1` keeps the footer's own height
+  // where it was.
+  const link = 'inline-flex h-8 -my-1 items-center whitespace-nowrap text-[12px] font-medium underline underline-offset-2'
   return (
     <span className="flex min-w-0 flex-nowrap items-center gap-x-3 overflow-hidden">
       {card.latest && (

@@ -218,6 +218,14 @@ export const CONTENT_BRIEF: DocumentTemplate = {
   },
   readerNoun: 'the content team',
   writtenFor: 'the people who make the content',
+  // THE `method` PAGE STAYS IN THE SKELETON AND IS NOT IN `CONTENT_MAP`
+  // (fix pass, reports-25). The map is what a brief with a reading paginates
+  // off, and the content brief's method sheet there is `ct.record`, the
+  // artboard's own; the SKELETON is the fallback walk, used by a custom brief
+  // and by any brief built where the reading could not be loaded at all
+  // (compose.ts), and in that state `ct.record` does not exist — so dropping
+  // it here would leave one reachable content brief with no method sheet and
+  // no PRIVACY_LINE at all.
   skeleton: [
     { kind: 'in_short' },
     { kind: 'finding', repeat: 'findings' },

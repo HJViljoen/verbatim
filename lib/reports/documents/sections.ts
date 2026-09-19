@@ -367,18 +367,22 @@ export const SALES_MAP: readonly BriefEntry[] = [
   }),
   block({
     id: 'sl.rivals', block: 'competitive.rivals', surface: 'competitive',
-    // THE ARTBOARD'S TITLE, AND AN EMPTY STATE THAT TELLS THE TRUTH UNDER IT.
-    // `competitive.rivals.figures()` returns `{}` and `rivalOwnClaims` is
-    // unbound — both inside `components/pages/competitive-surface/`, which
-    // E-competitive owns — so the sheet draws the rival selector, the reading
-    // behind each rival and the untracked note, and no complaint. A client
-    // reading a paid document met a heading promising per-rival complaints and
-    // a page delivering a picker; the title is the mock's and stays, and the
-    // framing and the pane now say what is actually on the sheet.
-    title: 'What they complain about with each rival', framing: 'Who is being talked about this month, and how much of the reading rests on each.',
+    // THE TITLE SAYS WHAT IS ON THE SHEET (fix pass). The first pass kept the
+    // artboard's "What they complain about with each rival" and put the
+    // confession in the pane — "so this sheet does not carry the complaints its
+    // title names" — which is the one place "the mock's LAYOUT stays and the
+    // honest form fills it" was applied to the wrong half. What the mock's
+    // title promised was the mock's ROWS, and the rows are what we have not
+    // got: `competitive.rivals.figures()` returns `{}` and `rivalOwnClaims` is
+    // unbound (both inside `components/pages/competitive-surface/`, which
+    // E-competitive owns), so the sheet draws the rival selector, the reading
+    // behind each rival and the untracked note. A heading may not promise what
+    // the body then withdraws; the heading names the body, and the pane still
+    // says what is NOT counted so a reader is not left to assume it is.
+    title: 'Who is being talked about, rival by rival', framing: 'Who is being talked about this month, and how much of the reading rests on each.',
     context: 'Rivals', eyebrow: 'Who is being talked about', pane: 'confidence',
     paneTitle: 'What is on this sheet',
-    paneLead: 'Who is being talked about, and how much of the month was read of each. What is said about a rival is not yet counted rival by rival, so this sheet does not carry the complaints its title names.',
+    paneLead: 'Who is being talked about, and how much of the month was read of each. What is SAID about a rival is not yet counted rival by rival, so there are no per-rival complaints on this sheet.',
     needs: ['months-of-history'],
     // `sales.p4.untracked` — the mock's readiness line. NOT a `needs`: this
     // block reads the category corpus either way, and refusing it would drop a
@@ -464,7 +468,26 @@ export const CONTENT_MAP: readonly BriefEntry[] = [
     title: 'The record behind this brief', framing: 'What was read, over what, and what was held back.',
     needs: [],
   }),
-  page('method'),
+  // AND NO SECOND METHOD SHEET AFTER IT (fix pass). `ct.record` and
+  // `page('method')` were consecutive, and both draw "How this brief was made":
+  // the same eyebrow, the same `grid-cols-[7fr_5fr]`, a numbers card each — and
+  // they disagreed, the record sheet saying "Videos: 2,359 carried conversation
+  // in this reading" where `NumbersCard` prints the per-audience list. A client
+  // got two method pages back to back with two answers for Videos.
+  //
+  // THE RECORD SHEET IS THE ONE THAT STAYS, because it is the artboard's
+  // (ContentBrief.dc.html slide 5) and because it prints eleven figures
+  // `MethodPage` does not — the update dates, the trailing median, the
+  // read-depth shares, the gate share, themes per video, the Reddit cap, the
+  // tracking change and the refusals, every one of them already returned by
+  // `loadRecordInputs`. What only `MethodPage` printed was `methodLines`
+  // (the basis, the language note, the Reddit cap, PRIVACY_LINE), and
+  // `record.tsx` now prints those under its numbers card, so nothing a client
+  // PDF has to carry is lost. `CONTENT_BRIEF.skeleton` drops its `method` page
+  // in the same breath, so the writer is not asked for a page nothing renders.
+  //
+  // THE OTHER THREE MAPS ARE UNTOUCHED: they have no record sheet, so
+  // `page('method')` is the only method sheet they have.
 ]
 
 /** The four maps, by the role that writes them. A custom brief keeps the

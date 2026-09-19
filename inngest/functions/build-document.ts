@@ -70,7 +70,9 @@ export const buildDocument = inngest.createFunction(
     const write = await step.run('write', async () => {
       const admin = createAdminClient()
       const ctx = await buildContext(admin, buildId).catch(terminal)
-      return writeStep(admin, ctx, { answers: research.answers, costUsd: research.costUsd, readingAt: research.readingAt }).catch(terminal)
+      // `research.brief` is the month this build already read (`ResearchOut.brief`):
+      // carried, not read again. The step ids and their order are untouched.
+      return writeStep(admin, ctx, { answers: research.answers, costUsd: research.costUsd, readingAt: research.readingAt, brief: research.brief }).catch(terminal)
     })
 
     const check = await step.run('check', async () => {
@@ -84,7 +86,7 @@ export const buildDocument = inngest.createFunction(
       const ctx = await buildContext(admin, buildId).catch(terminal)
       const costUsd = research.costUsd + write.costUsd + check.costUsd
       const timings = { ...research.timings, ...write.timings, ...check.timings }
-      return freezeStep(admin, ctx, { answers: research.answers, written: check.written, check, costUsd, timings, readingAt: research.readingAt }).catch(terminal)
+      return freezeStep(admin, ctx, { answers: research.answers, written: check.written, check, costUsd, timings, readingAt: research.readingAt, reading: research.brief }).catch(terminal)
     })
 
     const render = await step.run('render', async () => {

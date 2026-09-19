@@ -24,6 +24,9 @@ describe('the quarterly card', () => {
   it('prints the gate word on every row below six readings, and no arrow', () => {
     const text = renderText(<QuarterlyCardTile card={formingCardFixture()} />)
     expect(text).toContain(MOVEMENT_WORDS.baseline_forming)
+    // Three rows and no pill: the count is the rows', and the card says it
+    // once per row rather than four times in all.
+    expect(text.match(new RegExp(MOVEMENT_WORDS.baseline_forming, 'g')) ?? []).toHaveLength(3)
     expect(text).not.toContain('▲')
     expect(text).not.toContain('▼')
   })
@@ -110,6 +113,28 @@ describe('the quarterly card', () => {
     expect(text).toContain('July 2026')
   })
 
+  // THE PILL'S AMBER IS IN THE TINT AND THE RING. `bg-warning/15 text-warning`
+  // is 1.79:1 — the colour on a 15% tint of itself — and it carried the pill in
+  // the state both live workspaces are in.
+  it('does not set the state pill in warning ON warning', () => {
+    const html = render(<QuarterlyCardTile card={unreadCardFixture()} />)
+    expect(html).not.toContain('bg-warning/15 text-warning')
+    expect(html).toContain('bg-warning/15 text-foreground ring-1 ring-warning/50')
+  })
+
+  // A LEGEND KEYS WHAT IS DRAWN. Below the gate `quarterChange` carries no
+  // baseline, so no row has a tick — and the second swatch was drawn on
+  // `series.length > 0`, promising a mark nowhere on the card.
+  it('does not key a tick the chart has not drawn', () => {
+    // The legend's second swatch is the only `h-2.5 w-0.5` mark on the card;
+    // the tick on a bar is the same shape, `absolute`-positioned.
+    const forming = render(<QuarterlyCardTile card={formingCardFixture()} />)
+    expect(forming).toContain('bars: Q3 2026, the category')
+    expect(forming).not.toContain('h-2.5 w-0.5')
+    const full = render(<QuarterlyCardTile card={quarterlyCardFixture()} />)
+    expect(full).toContain('h-2.5 w-0.5 rounded-[1px] bg-muted-foreground')
+  })
+
   // The bars are levels beside each other, not a line through time: one
   // series, named, with the quarter before it marked as a tick.
   it('names the one series it draws rather than promising two', () => {
@@ -160,8 +185,11 @@ describe('pillWord', () => {
     expect(pillWord(12, true)).toBe('12 monthly readings stand behind it')
   })
 
-  it('is the gate word below the gate, and the cause where nothing was drawn', () => {
-    expect(pillWord(3, true)).toBe(MOVEMENT_WORDS.baseline_forming)
+  // SAID ONCE. Below the gate every row's badge already reads "not enough
+  // months yet" and the footnote carries the gate sentence, so a pill saying it
+  // a fourth time is the loudest thing on the card in the state Sealand is in.
+  it('says nothing below the gate, where the rows have already said it', () => {
+    expect(pillWord(3, true)).toBeNull()
     expect(pillWord(3, false)).toBe('nothing to compare yet')
     expect(pillWord(9, false)).toBe('nothing to compare yet')
   })

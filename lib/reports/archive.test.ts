@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   dateFilterLine,
   hasDateFilter,
+  PAUSED_SEND_LINE,
   emptyGroupLine,
   listCap,
   parseDateFilter,
@@ -148,6 +149,15 @@ describe('emptyGroupLine', () => {
 
   it('invites where the archive really is empty', () => {
     expect(emptyGroupLine({ ...args, filtered: false, reach: {} })).toBe(invite)
+  })
+
+  // The invitation is the CALLER's, and a paused workspace gets a different
+  // one: `report_period = 'paused'` matches nothing in `schedule-due.ts`, so
+  // "the first lands then" names an update that is not coming.
+  it('carries the paused workspace\u2019s own sentence, which promises no send', () => {
+    expect(emptyGroupLine({ verb: 'was sent', invite: PAUSED_SEND_LINE, filtered: false, reach: {} })).toBe(PAUSED_SEND_LINE)
+    expect(PAUSED_SEND_LINE).not.toContain('lands')
+    expect(PAUSED_SEND_LINE).toContain('paused')
   })
 
   it('says only what the filter looked at where a cap hides rows', () => {

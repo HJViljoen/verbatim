@@ -21,6 +21,7 @@ import type { MonthLabel } from '@/lib/reading/series'
 import { MonthlyDeck } from '@/components/print/monthly-deck'
 import { MonthlyShareShell } from '@/components/share/monthly-share-shell'
 import { MonthlyEmail } from './monthly'
+import { STALE_ARTEFACT_LINE } from '@/lib/reports/stale'
 
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
 
@@ -232,7 +233,10 @@ describe('the monthly report on paper', () => {
 
   it('says so on its own sheet when it knows none of the stored keys', () => {
     const markup = render(<MonthlyDeck data={snapshot(monthlyFixture(), { keys: [] })} date="16 Sep 2026" />)
-    expect(markupText(markup)).toContain('This report names no section this build knows how to draw.')
+    // In the client's words, not the developer's: "build" and "block" are on
+    // the jargon list and this sheet is a client's PDF (reports-6).
+    expect(markupText(markup)).toContain(STALE_ARTEFACT_LINE)
+    expect(markupText(markup)).not.toContain('this build')
   })
 })
 

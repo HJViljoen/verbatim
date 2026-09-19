@@ -101,7 +101,15 @@ export function ArchiveTile({
 }) {
   return (
     <Tile col={col} row={row} eyebrow="The archive" meta={meta ?? undefined} footer={footer} footerNote={undefined}>
-      <div className="flex flex-wrap items-center gap-2">
+      {/* ONE ROW OF CHROME, NOT THREE (fix pass). The chips, the chip's own
+          count line, the From/To/Filter/Clear form and the filter's item count
+          were four stacked rows — two of them count lines, each individually
+          justified — sitting above lists of 5, 3 and 0 rows: the page's densest
+          chrome over its thinnest content, seven rows deep at 375. They are one
+          wrapping row now, so at a reading width the archive opens on its
+          lists. Nothing is dropped: below `sm` the row wraps exactly as it
+          stacked before. */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
         {presets.map((p) => (
           <Link
             key={p.key}
@@ -117,10 +125,9 @@ export function ArchiveTile({
             {p.label}
           </Link>
         ))}
+        {filter}
         {presetNote && <span className="ml-auto flex-none font-mono text-[11px] text-muted-foreground">{presetNote}</span>}
       </div>
-
-      {filter}
 
       <div className="grid min-h-0 grid-cols-1 gap-4 md:grid-cols-[1.25fr_1fr_0.75fr]">
         {columns.map((c) => (
@@ -194,9 +201,20 @@ function ArchiveRow({ item, last }: { item: ArchiveItem; last: boolean }) {
             `readingLine` — "September 2026 (still filling) · read as at 12 Sep
             2026 · PDF" — and `truncate` cut it at "read as at…", which is the
             only place the READING date appears on that row. Two lines, then
-            clipped: the stamp beside it is one date and this is the other. */}
+            clipped: the stamp beside it is one date and this is the other.
+
+            AND TWO LINES IS NOT ENOUGH BELOW ~1100. The Built column is the
+            narrowest of the three (`0.75fr` of a 12-column tile) — about 320px
+            at a 1024 viewport — where that same string needs three lines, so
+            the clamp cut at "September 2026 (still filling) · read as at…" and
+            took the reading date with it. The `28 Sep` stamp beside it is the
+            BUILD date, a different fact, so the reading date was unrecoverable
+            from the row: the exact loss the clamp was added to prevent, one
+            breakpoint down from where it was measured. Three lines holds it at
+            every width the archive is drawn at, and a row is 48px high with
+            room for them. */}
         {item.meta && (
-          <span className={cn('line-clamp-2 font-mono text-[11px]', item.failed ? 'text-negative' : 'text-muted-foreground')}>
+          <span className={cn('line-clamp-3 font-mono text-[11px]', item.failed ? 'text-negative' : 'text-muted-foreground')}>
             {item.meta}
           </span>
         )}
