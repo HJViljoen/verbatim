@@ -2,8 +2,7 @@ import type { ReactNode } from 'react'
 import type { Block, BlockContext } from '@/lib/blocks/types'
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
-import { horizonDates } from '@/lib/reading/horizon'
-import { monthName } from '@/lib/format'
+import { monthName, shortDate } from '@/lib/format'
 import { PageFrame, PageGrid } from '@/components/shell/page-grid'
 import { SurfacePageBar } from '@/components/shell/page-bar'
 import { Tile, TileEmpty } from '@/components/shell/tile'
@@ -79,6 +78,38 @@ export function voiceContext(params: Record<string, string | undefined> = {}): B
 }
 
 /**
+ * "1 Jul → 30 Sep" — the window the horizon pills resolve to, for the page bar.
+ *
+ * THE ARTBOARD PUTS IT THERE AND SO DOES `SurfacePageBar`. `PageBarProps.range`
+ * has existed since wave 2 (`main.bar.horizon.range`) and Voice passed nothing
+ * to it, printing the window only in the method footnote on the stated grounds
+ * that "the app's bar has no room beside four horizon pills and the legend, and
+ * the bar is main's file". Measured at 1440 the pill row ends at x≈657 of an
+ * 1,180px bar — ~520px free, and the range is rendered by the bar's own
+ * component, so neither half of that argument held.
+ *
+ * DAY GRANULARITY, which is the artboard's and Overview's. The footnote's
+ * "Months drawn" was month granularity on the argument that the axis is dated
+ * by the comment; that sentence goes with this one landing, because the same
+ * span printed twice in two granularities is how a reader learns to stop
+ * reading both.
+ *
+ * NO UPDATE COUNT. Overview's range leads with "3 updates" off `bar.updates`;
+ * `VoiceSurfaceData` holds no such field — the delivery record reaches this
+ * page only as composed sentences — and inventing one here would be a second
+ * count of the updates beside the band's own.
+ */
+export function voiceHorizonRange(data: VoiceSurfaceData): string | null {
+  const w = data.window
+  if (!w.from || !w.to) return null
+  // The window is half-open `[from, to)`: the last day a reading covers is the
+  // day before `to`, and printing `to` itself would date the range one day into
+  // a month the page has not read.
+  const lastDay = new Date(new Date(w.to).getTime() - 24 * 60 * 60 * 1000).toISOString()
+  return `${shortDate(w.from)} → ${shortDate(lastDay)}`
+}
+
+/**
  * `controls` IS THE ROUTE'S, NOT THE PAGE'S, and that is deliberate.
  *
  * The artboard's page bar carries a "How to read this page" pill, which is
@@ -121,6 +152,7 @@ export function VoiceSurfacePage({
       <SurfacePageBar
         nav="voice"
         params={params}
+        range={voiceHorizonRange(data)}
         context={{ brand: data.brand, month: data.month, status: data.monthStatus, readingAt: data.readingAt }}
         record={{ line: data.record.line, lines: data.record.lines }}
       >
@@ -151,18 +183,15 @@ export function VoiceSurfacePage({
           the module was written to end. */}
       {data.method ? (
         <p data-copy="figure" className="m-0 flex flex-col gap-0.5 pt-1 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
-          {/* THE WINDOW THIS PAGE IS A READING OF, WHICH PRINTED NOWHERE. The
-              artboard puts it beside the range pills ("1 Sep → 28 Sep"); the
-              app's page bar has no room for it beside four horizon pills and
-              the legend, and the bar is `main`'s file. So the footnote says
-              it, in the unit the reading is drawn in: `horizonDates` is month
-              granularity on purpose — the axis is dated by the comment and a
-              day would imply a precision the freeze line does not have — and
-              the month every figure above is a reading OF is named beside it,
-              because the two are not the same span. */}
-          <span>
-            {`Months drawn: ${horizonDates(data.window)} · every figure above reads ${monthName(data.month)}`}
-          </span>
+          {/* WHICH MONTH EVERY FIGURE ABOVE IS A READING OF — and that alone.
+              This line used to carry the window too ("Months drawn: July to
+              September"), because the window printed nowhere else on the page.
+              It prints in the page bar now, in the artboard's own place and
+              the artboard's own day granularity (`voiceHorizonRange`), so what
+              is left here is the fact the bar does NOT carry: the span the
+              axis is drawn over and the month the figures read are not the
+              same thing. */}
+          <span>{`Every figure above reads ${monthName(data.month)}`}</span>
           {data.method.lines.map((line) => <span key={line}>{line}</span>)}
         </p>
       ) : null}
