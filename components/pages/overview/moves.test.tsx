@@ -5,7 +5,7 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, copyNodes, copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { MOVES_UNLOCK } from '@/lib/pages/overview'
-import { CARD_CONFIRM_SLOT, REGIME_BREAK, claimText, movesMeta, overviewMoves, seriesLine } from './moves'
+import { CARD_CONFIRM_OFF_APP, CARD_CONFIRM_SLOT, REGIME_BREAK, claimText, movesMeta, overviewMoves, seriesLine } from './moves'
 import { overviewRecord } from './record'
 import { overviewFixture, refusedFixture } from './fixture'
 
@@ -13,6 +13,22 @@ const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
 
 describe('OV5 · your moves', () => {
+
+  // A PDF SHEET MAY NOT TALK ABOUT A BUTTON (Block D wave 3, M25). The sales
+  // and marketing briefs borrow this card onto a printed sheet and onto
+  // `/r/<token>`, where "a button this page does not have yet" names a control
+  // the reader has no page to look for. What the sentence is FOR — that a
+  // count is not a move until the reader says it is — is true on paper too, so
+  // only the clause about the control goes.
+  it('does not name a control the reader cannot press, off the app', () => {
+    const app = renderText(overviewMoves.render(overviewFixture(), 'app', ctx))
+    expect(app).toContain(CARD_CONFIRM_SLOT)
+    for (const mode of ['print', 'email'] as const) {
+      const text = renderText(overviewMoves.render(overviewFixture(), mode, ctx))
+      expect(text, mode).not.toContain('button this page does not have')
+      expect(text, mode).toContain(CARD_CONFIRM_OFF_APP)
+    }
+  })
   it('renders in all three modes and keeps the copy contract', () => {
     for (const data of [overviewFixture(), refusedFixture()]) {
       for (const mode of MODES) {

@@ -54,6 +54,24 @@ export const CARD_CLAIM_MAX = 96
 export const CARD_CONFIRM_SLOT =
   'Every count above is real. Turning them into a move is a button this page does not have yet, so nothing here counts as one until you say so.'
 
+/**
+ * The same sentence on PAPER (Block D wave 3, M25).
+ *
+ * A PDF SHEET MAY NOT TALK ABOUT A BUTTON. The sales and marketing briefs
+ * borrow this card onto a printed sheet and onto `/r/<token>`, where "a button
+ * this page does not have yet" is a sentence about a control the reader has no
+ * page to look for — the rule `MONTHLY_MOVES_EMPTY` was written under, and the
+ * rule E-marketing already applied to three app-only controls. This is the
+ * fourth.
+ *
+ * THE HONESTY SURVIVES THE CLAUSE. What the sentence is FOR is the second half
+ * — that a count is not a move until the reader says it is — and that is true
+ * on paper and in an inbox as much as in the app. Only the clause about the
+ * control goes.
+ */
+export const CARD_CONFIRM_OFF_APP =
+  'Every count above is real. Nothing here counts as a move until you say so.'
+
 export function claimText(claim: string): string {
   const t = claim.replace(/\s+/g, ' ').trim()
   return t.length <= CARD_CLAIM_MAX ? t : `${t.slice(0, CARD_CLAIM_MAX - 1).trimEnd()}…`
@@ -256,7 +274,7 @@ function Card({ card, mode }: { card: MoveCandidate; mode: RenderMode }) {
         className={email ? undefined : 'mt-auto text-[11px] text-muted-foreground'}
         style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}
       >
-        {card.unread ?? CARD_CONFIRM_SLOT}
+        {card.unread ?? (mode === 'app' ? CARD_CONFIRM_SLOT : CARD_CONFIRM_OFF_APP)}
       </span>
     </>
   )
