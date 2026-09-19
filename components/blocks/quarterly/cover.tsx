@@ -92,17 +92,21 @@ function StatCard({ stat, mode }: { stat: CoverStat; mode: RenderMode }) {
       </table>
     )
   }
-  // FIVE ROWS, ON EVERY CARD, WHETHER OR NOT IT HAS SOMETHING FOR ONE.
+  // FIVE ROWS, AT THE SAME HEIGHTS, ON EVERY CARD.
   //
   // The three cards ran to six lines, four and three, and every row below the
   // first sat at a different height across the three — the value, then a badge
   // on two of them, then a label of one or two lines, then a caption, then a
   // second dated reading on one. The artboard's three sit on one line. So the
-  // rows are declared once and the cards share them: the badge row and the
+  // rows are declared once and every card uses them: the display row is 44px
+  // whether or not the figure carries an "of N" under it, the badge row and the
   // basis row hold their height where a card has nothing for them, and the
-  // label reserves the two lines the longest of the three takes.
+  // label reserves the two lines the longest of the three takes. A grid is per
+  // card, so a row that sizes to its own content puts the card with the taller
+  // figure half a line out of step with the two beside it — which is the defect
+  // in the small.
   return (
-    <div className="grid min-w-0 grid-rows-[auto_18px_auto_auto_auto] content-start rounded-md border border-border bg-tile px-5 py-4">
+    <div className="grid min-w-0 grid-rows-[44px_18px_auto_auto_auto] content-start rounded-md border border-border bg-tile px-5 py-4">
       {figure ? (
         <span data-copy={of ? 'level' : 'figure'} className="flex flex-col">
           <span className="font-mono text-[28px] font-medium leading-none tracking-[-0.02em] tabular-nums">{head}</span>
