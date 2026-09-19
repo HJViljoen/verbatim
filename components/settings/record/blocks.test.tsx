@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { AppealControl } from '@/app/dashboard/settings/record/appeal-control'
 import { APPEAL_ASK, APPEAL_FILED } from '@/app/dashboard/settings/record/appeal-copy'
 import { assertCopyContract } from '@/lib/test/copy-contract'
+import { changeLogBoundary } from '@/lib/config-log'
 import { render, renderText } from '@/lib/test/render'
 
 import { ChangeLogBlock } from './change-log'
@@ -40,7 +41,13 @@ const changeLog = (
     log={changeLogFixture()}
     rows={20}
     meta={changeMetaFixture()}
-    boundary="a change breaks a series; the old line is kept"
+    // THE ROUTE'S OWN SENTENCE, NOT A STAND-IN (Block D wave 3, RC1). This was
+    // a 45-character fragment the route never produces; the value
+    // `record/page.tsx` actually passes is `changeLogBoundary`, 133 characters
+    // — 838px on one mono line — and the header held it at `shrink-0`, so the
+    // section overflowed the content pane at every width below 1440 and the
+    // review surface could not see it.
+    boundary={changeLogBoundary(changeLogFixture().firstLoggedAt)}
     showing={null}
     now="2026-09-28T09:00:00.000Z"
   />
@@ -216,6 +223,20 @@ describe('the change log', () => {
     )
     expect(text).toContain('can record a configuration change yet')
     expect(text).not.toContain('Poler')
+  })
+
+  it('prints the boundary the route passes, and lets it wrap', () => {
+    // RC1: the header note is the one node on this page that carried a whole
+    // sentence in a `shrink-0` flex item. A flex item that cannot shrink
+    // cannot wrap, so the 133-character boundary was 838px wide inside a
+    // 752px pane at 1280 and a 240px pane at 768 — the document's own
+    // `scrollWidth` was 1342 at four widths. Nothing here can measure a
+    // layout; what it CAN pin is that the class which made it impossible is
+    // gone and that the review surface prints the route's sentence.
+    const text = renderText(changeLog)
+    expect(text).toContain('No change was recorded before')
+    expect(text).toContain('a label, not a record')
+    expect(render(changeLog)).not.toContain('md:shrink-0')
   })
 
   it('keeps the copy contract', () => {

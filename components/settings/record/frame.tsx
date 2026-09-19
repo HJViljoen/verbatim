@@ -44,7 +44,22 @@ export function RecordSection({
       <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h3 className="m-0 shrink-0 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">{title}</h3>
         {meta ? <span className="min-w-0 font-mono text-[11px] text-muted-foreground">{meta}</span> : null}
-        {note ? <span className="font-mono text-[10.5px] text-muted-foreground md:ml-auto md:shrink-0">{note}</span> : null}
+        {/* THE NOTE MAY NEVER BE WIDER THAN THE PANE (Block D wave 3, RC1). It
+            was `md:shrink-0`, which is right for the artboard's note — a
+            45-character fragment — and wrong for the only note the route
+            actually produces: `changeLogBoundary` is a 133-character SENTENCE,
+            838px on one mono line at 10.5px, and `shrink-0` held it at that
+            width. Measured before: pane-right vs note-right 1280 → 1256/1342,
+            1024 → 1000/1342, 768 → 744/1342, and the document's own
+            `scrollWidth` was 1342 at four widths, inside a pane the shell sets
+            `overflow-hidden`. Shrinking is what lets the text wrap, so the note
+            now shrinks: where the whole sentence fits beside the meta it still
+            sits on the baseline at the far right (the artboard's layout, and
+            what 1440 does); where it does not it takes its own flex line and
+            wraps inside the pane. `md:ml-auto` stays, because an auto margin
+            absorbs free space where there is some and nothing where the item
+            fills its line. */}
+        {note ? <span className="min-w-0 font-mono text-[10.5px] leading-[1.45] text-muted-foreground md:ml-auto">{note}</span> : null}
       </header>
       {children}
     </section>
