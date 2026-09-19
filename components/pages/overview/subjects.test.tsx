@@ -112,7 +112,12 @@ describe('OV2 · your subjects', () => {
       const text = renderText(overviewSubjects.render(overviewFixture(), mode, ctx))
       // The two figures are separated (design review Medium 18): they ran
       // together with no separator, which reads as one number gone wrong.
-      expect(text, mode).toContain('at this point last month 20.5% · 264 of 1,290')
+      // AND THE FIGURE IS THE VERDICT'S OWN BASELINE (Block D wave 3, M13):
+      // 22 − 18.8 = 3.2, which is what the change column beside it prints. At
+      // 20.5% a reader who subtracted the row's own two levels got 1.5 pts
+      // against a band of ±2.1 — the verdict refuted by the sheet built to be
+      // checked.
+      expect(text, mode).toContain('at this point last month 18.8% · 243 of 1,290')
     }
   })
 })

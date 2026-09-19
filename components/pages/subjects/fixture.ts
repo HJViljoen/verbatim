@@ -84,9 +84,18 @@ function sidesAndSeries(retiredAt: string | null = null) {
     add(m, INDUSTRY_AUDIENCE, 1388)
   }
 
+  // SEPTEMBER IS 305, WHICH IS WHAT THE ARTBOARDS SAY (Block D wave 3, M13,
+  // by agreement with the `subjects` package — this constant only).
+  // `Subjects.dc.html` prints "22%" over "305 of 1,388 videos" on the Durability
+  // row AND "Category 22% of 1,388" on its own chart's end label;
+  // `Main.dc.html` and `MarketingBrief.dc.html` print the same pair, eight
+  // times on the brief. At 340 the chart read 24.5% of 1,388 eighty pixels
+  // under an Overview row reading 22% of 1,388 — the same measure, the same
+  // month, the same sheet, two numbers — on the one artefact built to be
+  // checked.
   const catK: Record<string, number> = {
     '2026-04-01': 160, '2026-05-01': 190, '2026-06-01': 214,
-    '2026-07-01': 236, '2026-08-01': 264, [MONTH]: 340,
+    '2026-07-01': 236, '2026-08-01': 264, [MONTH]: 305,
   }
   const readings = (audience: string, k: (m: string) => number): NumeratorPoint[] =>
     AXIS.map((m) => ({ month: m, audience, videos: k(m), comments: k(m) * 3, run_id: 'r1' }))
