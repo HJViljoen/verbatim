@@ -1227,10 +1227,8 @@ function AskedPage({ page }: { page: DocPage }) {
   const block = page.blocks.find((b) => b.field === 'asked')
   const items = block?.items ?? []
   return (
+    // The framing is `PAGE_NOTE.asked`.
     <div className="flex h-full min-h-0 flex-col gap-5">
-      <p className="max-w-[86ch] text-[17.5px] leading-[1.5] text-secondary-foreground">
-        Questions the conversation puts and does not settle. Each is asked in the audience&rsquo;s own framing, not the company&rsquo;s; the note says what is behind it.
-      </p>
       {block && (
         <BlockSlot block={block} textClass={BODY_SM}>
           <ol className="grid grid-cols-2 gap-x-8 gap-y-4">
@@ -1297,8 +1295,8 @@ function LanguagePage({ page }: { page: DocPage }) {
   const careBlock = page.blocks.find((b) => b.field === 'care')
   const items = careBlock?.items ?? []
   return (
+    // The framing is `PAGE_NOTE.language`, so the body starts at the cards.
     <div className="flex h-full min-h-0 flex-col gap-5">
-      <p className="max-w-[80ch] text-[17.5px] leading-[1.5] text-secondary-foreground">Words and claims the conversation pushes back on or contradicts. Each is a phrase a buyer will hear as a promise; the note says what the audience already knows about it.</p>
       <BlockSlot block={careBlock!} textClass={BODY_SM}>
       <ul className="grid grid-cols-2 gap-5">
         {items.map((x, i) => {
@@ -1866,9 +1864,28 @@ const PAGE_CONTEXT: Partial<Record<DocPage['kind'], string>> = {
   method: 'Method',
 }
 
+/**
+ * A WRITTEN PAGE'S FRAMING IS THE SLIDE'S NOTE (wave 3, `sales`-8).
+ *
+ * Every sheet in this deck frames itself the same way — the serif italic line
+ * `Slide.note` prints under the title, which is what the artboards draw and
+ * what `DocumentDeck` hoists a borrowed section's `framing` into. Three
+ * written pages did it differently, with a 16–17px sans paragraph as the FIRST
+ * ELEMENT OF THE BODY: between the numbers card and the switching sheet the
+ * language sheet read as a page out of a different document, and saying it
+ * cost the sheet a row of its own data. A written page's framing belongs here,
+ * beside the two that were already here, and the body starts at the content.
+ *
+ * Two of the three are here. `say_hear`'s framing names the COMPANY, so it is
+ * not a constant and cannot be an entry in a record of strings; it keeps its
+ * paragraph until this map takes a function, and it is the only sheet in the
+ * deck that still frames itself in its body.
+ */
 const PAGE_NOTE: Partial<Record<DocPage['kind'], string>> = {
   switching: 'The videos that name both you and a rival, and which way each of them leaned — a small number, printed as it stands.',
   scripted: 'The sentence to say is a writer\u2019s; every figure under it is counted.',
+  language: 'Words and claims the conversation pushes back on or contradicts. Each is a phrase a buyer will hear as a promise; the note says what the audience already knows about it.',
+  asked: 'Questions the conversation puts and does not settle. Each is asked in the audience\u2019s own framing, not the company\u2019s; the note says what is behind it.',
 }
 
 /** The lens the document was written under. Older snapshots (before

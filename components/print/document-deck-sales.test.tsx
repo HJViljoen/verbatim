@@ -510,6 +510,20 @@ describe('the borrowed sheets carry the artboard’s chrome', () => {
     }
   })
 
+  // AND THE LANGUAGE SHEET FRAMES ITSELF THE SAME WAY (wave 3, `sales`-8). It
+  // was the one sheet in the deck with different chrome: a 16px sans paragraph
+  // as the first element of its BODY where every other sheet uses the serif
+  // italic `Slide.note`. Between the numbers card and the switching sheet it
+  // read as a page out of another document, and saying it cost a row of cards.
+  it('frames the language sheet as a slide note, not as a body paragraph', () => {
+    const sheet = sheetNamed(deck(), 'Language to handle with care')
+    expect(sheet).toContain('vb-slide-note')
+    const note = /<p class="vb-slide-note[^"]*">([\s\S]*?)<\/p>/.exec(sheet)?.[1] ?? ''
+    expect(words(note)).toContain('Words and claims the conversation pushes back on')
+    // \u2026and the body opens on the cards, not on the sentence.
+    expect(sheet).not.toContain('text-[17.5px] leading-[1.5] text-secondary-foreground')
+  })
+
   // The framing is the slide's serif note, which is what the artboard draws;
   // the green-ruled eyebrow says what the ORDER of the rows is, which a list
   // of counted rows will not tell a reader itself.
