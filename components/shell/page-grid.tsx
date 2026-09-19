@@ -143,9 +143,18 @@ export function PageBar({
 }: { title: ReactNode; context?: ReactNode; subtitle?: ReactNode; children?: ReactNode }) {
   return (
     <div className="flex shrink-0 flex-col gap-0.5">
-      <div className="flex h-8 items-center gap-3">
+      {/* THE CONTEXT WRAPS (Block D wave 3, SH17). It was `truncate`, with no
+          wrap fallback, and it is the line that says what the page's numbers
+          are OF: at 1024 This week read "update of 13 Sep · previous 6 …",
+          losing the other half of every comparison the page makes; Reports
+          read "…reading as at 2…"; Competitive at 768 read "Össur ·
+          September 20…". `components/shell/how-sound.tsx` already answers this
+          the right way — the band takes the lines it needs — and the bar is
+          the same kind of sentence. `min-h-8` rather than `h-8`, so a bar that
+          fits on one line is exactly what it was. */}
+      <div className="flex min-h-8 flex-wrap items-center gap-x-3 gap-y-1">
         <h1 className="text-[17px] font-semibold tracking-[-0.01em]">{title}</h1>
-        {context && <span className="truncate font-mono text-[11.5px] text-muted-foreground">{context}</span>}
+        {context && <span className="min-w-0 font-mono text-[11.5px] leading-[1.4] text-muted-foreground">{context}</span>}
         {children && <div className="ml-auto flex shrink-0 items-center gap-2">{children}</div>}
       </div>
       {subtitle && <p className="text-[12.5px] text-muted-foreground">{subtitle}</p>}

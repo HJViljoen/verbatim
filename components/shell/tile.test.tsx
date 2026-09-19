@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { Tile, TileBlock, StripCell, TileEmpty } from './tile'
-import { PageGrid, TileColumns } from './page-grid'
+import { PageBar, PageGrid, TileColumns } from './page-grid'
 
 // The grid's unit, tested at the level it is a promise: what a tile PRINTS.
 //
@@ -192,6 +192,18 @@ describe('TileColumns', () => {
     const markup = render(<TileColumns of={2} className="items-start"><div>a</div><div>b</div></TileColumns>)
     expect(markup).toContain('items-start')
     expect(markup).toContain('xl:grid-cols-2')
+  })
+})
+
+describe('PageBar', () => {
+  it('wraps its context line instead of truncating it (SH17)', () => {
+    const markup = render(<PageBar title="This week" context="update of 13 Sep · previous 6 Sep · Össur · September 2026">x</PageBar>)
+    // It is the line that says what the page's numbers are OF, and `truncate`
+    // with no wrap fallback lost the other half of every comparison at 1024.
+    expect(markup).not.toContain('truncate')
+    expect(markup).toContain('flex-wrap')
+    // A bar that fits on one line is exactly what it was.
+    expect(markup).toContain('min-h-8')
   })
 })
 
