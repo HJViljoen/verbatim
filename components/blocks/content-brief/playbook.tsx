@@ -160,14 +160,25 @@ function Eyebrow({ children }: { children: ReactNode }) {
 
 /** Every side, INCLUDING one whose column is not drawn: the legend is what
  *  says a side exists and how much it published, which is the half of the
- *  answer a dropped column would otherwise take with it. */
+ *  answer a dropped column would otherwise take with it.
+ *
+ *  THE UNIT IS "VIDEOS", ON EVERY SIDE (design review 6). It said "posts" —
+ *  "The category, 757 posts" — while the footer of the same sheet said "Read
+ *  from 687 of The category's 757 … videos published in September": the same
+ *  757 objects in two nouns, 400px apart. AGENTS.md is explicit that a new
+ *  reading surface counts VIDEOS and draws its vocabulary from THIRTEEN_WORDS
+ *  plus the two READER_FLAGS; `post` is in neither list and `video` is the
+ *  unit. The artboard does print "posts", but only for the own and rival
+ *  ACCOUNTS — it calls the category "Category creators, 1,388 videos" — so
+ *  this is the one place the mock's own wording was extended past where the
+ *  mock uses it, and the rule the mock does not reach is the one that wins. */
 function Legend({ sides }: { sides: readonly FormatMatrixSide[] }) {
   return (
     <div className="flex flex-wrap items-center gap-4">
       {sides.map((s) => (
         <span key={s.audience} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
           <span className="h-2 w-2 rounded-full" style={{ background: sideColour(s) }} aria-hidden />
-          {s.label}, {fmtInt(s.published)} {s.published === 1 ? 'post' : 'posts'}
+          {s.label}, {fmtInt(s.published)} {s.published === 1 ? 'video' : 'videos'}
         </span>
       ))}
     </div>

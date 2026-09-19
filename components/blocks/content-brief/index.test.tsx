@@ -116,6 +116,16 @@ describe('content.playbook — the mock’s page 3', () => {
     expect(text).toContain('videos published in September')
   })
 
+  // ONE NOUN FOR ONE OBJECT (design review 6). The legend said "757 posts"
+  // and the footer said "687 of The category's 757 … videos" on one sheet.
+  it('counts videos on every side of the legend, never posts', () => {
+    // "A Reddit post" stays: a Reddit thread is not a video, and that clause
+    // is about the platform object rather than about a count of the corpus.
+    expect(text.replace('A Reddit post carries', '')).not.toMatch(/\bposts?\b/)
+    expect(text).toMatch(/The category, [\d,]+ videos/)
+    expect(text).toMatch(/Össur, [\d,]+ videos/)
+  })
+
   // A LINE THE ARTBOARD DOES NOT HAVE, PRINTED TWICE (design review 7). The
   // suppressed heading re-emitted its meta as a stray "September" under a slide
   // header that already reads "Content brief · September 2026", and the footer
@@ -278,7 +288,7 @@ describe('content.playbook — a side nobody read', () => {
     expect(text.split(note).length - 1).toBe(1)
     // The side is still named — in the legend, with what it published — and it
     // is not a column head over four empty rows.
-    expect(text).toContain('Össur, 0 posts')
+    expect(text).toContain('Össur, 0 videos')
     expect(markup.match(/role="columnheader"/g)?.length ?? 0).toBe(4)
   })
 })
