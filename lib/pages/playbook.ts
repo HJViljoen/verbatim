@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { isAudienceSentiment } from '../competitive-tiles'
 import { median } from '../content-tiles'
 import { fmtInt, longMonth } from '../format'
-import { EXCLUDED_NOTE, ENGAGEMENT_EXCLUDED, belowMedian, formatMatrix, formatReading, type FormatMatrix, type FormatRow, type FormatVideo } from '../reading/formats'
+import { EXCLUDED_NOTE, ENGAGEMENT_EXCLUDED, belowMedian, formatMatrix, formatReading, labelInSentence, type FormatMatrix, type FormatRow, type FormatVideo } from '../reading/formats'
 import { headToHead, type HeadToHead, type HeadToHeadSide } from '../reading/head-to-head'
 import type { FigureTable } from '../reading/verdicts'
 import { monthStartOf, nextMonth, prevMonth } from '../reading/month-key'
@@ -190,7 +190,13 @@ export function coverageLine(
    *  denominator. */
   key?: 'format' | 'hook',
 ): string {
-  const parts = readings.map((r) => `${fmtInt(r.of)} of ${r.audienceLabel}’s ${fmtInt(r.published)}`)
+  // MID-SENTENCE, SO THE LABEL IS LOWERED (content-13). `labelInSentence`
+  // landed in lib/reading/formats.ts for exactly this second sentence and its
+  // docblock names this function by name; the takeaway took it and this did
+  // not, so the same sheet printed "of the category's 687" in one line and
+  // "Read from 687 of The category's 757" in the other. A brand that really
+  // begins with "The" — "The North Face" — keeps its capital.
+  const parts = readings.map((r) => `${fmtInt(r.of)} of ${labelInSentence(r.audienceLabel)}’s ${fmtInt(r.published)}`)
   const what = key ? `, for their ${key}` : ''
   return `Read from ${parts.join(' · ')} videos published in ${longMonth(month)}${what}.`
 }

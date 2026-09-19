@@ -78,7 +78,7 @@ describe('buildPlaybook · CO7', () => {
     // DENOMINATOR. `FormatReading.of` counts the videos carrying a value for
     // THIS key, so one line under both tables overstated the hook table's.
     expect(p.coverageLine).toBe(
-      'Read from 60 of The category’s 72 · 9 of Össur’s 14 · 13 of Ottobock’s 13 videos published in September, for their format.',
+      'Read from 60 of the category’s 72 · 9 of Össur’s 14 · 13 of Ottobock’s 13 videos published in September, for their format.',
     )
     expect(p.hookCoverageLine).toContain('for their hook.')
   })
@@ -285,7 +285,7 @@ describe('buildHeadToHead · CO3', () => {
 describe('coverageLine', () => {
   it('prints both numbers per column, so the classified gap is visible', () => {
     expect(coverageLine([{ audienceLabel: 'The category', of: 569, published: 1388 }], '2026-09-01')).toBe(
-      'Read from 569 of The category’s 1,388 videos published in September.',
+      'Read from 569 of the category’s 1,388 videos published in September.',
     )
   })
 })

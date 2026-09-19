@@ -434,7 +434,7 @@ describe('CO3 and CO7 · the data the tiles bind (Block D, D6)', () => {
       }
     }
     expect(data.playbook!.basisLine).toBe('videos published in September')
-    expect(data.playbook!.coverageLine).toContain('687 of The category’s 757')
+    expect(data.playbook!.coverageLine).toContain('687 of the category’s 757')
     for (const m of data.headToHead!.measures) expect(m.basisLine).toContain('September')
   })
 
@@ -701,7 +701,7 @@ describe('CO7 · how the category makes content', () => {
     expect(text).toContain('84 of 109')
     expect(text).toContain('124 of 145')
     // … and the coverage line under the tables, naming both again in words.
-    expect(text).toContain('687 of The category’s 757')
+    expect(text).toContain('687 of the category’s 757')
     // Never the mock's "read from all 1,388 category videos".
     expect(text).not.toContain('read from all')
   })
@@ -716,7 +716,7 @@ describe('CO7 · how the category makes content', () => {
     expect(p.formats.sides.map((s) => s.of)).not.toEqual(p.hooks.sides.map((s) => s.of))
     const text = renderText(competitivePlaybook.render(competitiveFixture(), 'app', ctx))
     expect(text).toContain('647 of 757')
-    expect(text).toContain('647 of The category’s 757')
+    expect(text).toContain('647 of the category’s 757')
     expect(text).toContain('for their format.')
     expect(text).toContain('for their hook.')
   })
