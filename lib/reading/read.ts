@@ -634,6 +634,83 @@ export interface WindowReading {
 }
 
 /**
+ * The window denominator, read ONCE per (tenant, window) per request.
+ *
+ * WHY IT HAS TO BE MEMOISED HERE RATHER THAN AT A CALLER. `loadRecordInputs`
+ * is called from SEVEN places inside one `loadBriefReading` — Overview,
+ * Subjects, Voice, Market, Competitive, the content brief and
+ * `documents/load-reading.ts` — every one with a byte-identical window and the
+ * one client the handle built. Each of those was its own `window_denominators`
+ * aggregation over `comments JOIN videos`, and `loadSignals` re-runs the set
+ * per build step, so ONE document build asked the same question of the same
+ * rows twenty-one times. Memoising at `loadCoverage` would fix the record's
+ * seven and leave `week.ts`, `weekly.ts`, `quarterly.ts`, `reports-card.ts`
+ * and `tracking-load.ts` each paying their own; memoising the RPC itself fixes
+ * every caller, present and future, and the key names every argument the
+ * function takes, so no answer changes.
+ *
+ * THE NULL IS MEMOISED TOO, on purpose. `denominators: null` means "M3 is not
+ * applied here" — a fact about the deployment, not about one read — and it is
+ * the answer a page gets on every one of those seven calls today, at the cost
+ * of seven 404s. A THROW is not memoised: `memoRead` evicts a rejection, so a
+ * PostgREST that blinked costs the caller that met it and not the whole page.
+ *
+ * WHAT THE CALLER GETS IS NOT THIS ARRAY. `loadWindowReading` filters the rows
+ * into a new array for every caller, so no caller ever holds the memoised one;
+ * the ROW objects are shared, and the reading layer treats them as readonly
+ * (`loadCoverage` maps into its own shape, `readSpans` reduces). A caller that
+ * sorted these in place would sort them for the next block too.
+ */
+function readWindowDenominators(
+  client: SupabaseClient,
+  clientId: string,
+  from: string,
+  to: string,
+): Promise<WindowDenominator[] | null> {
+  return memoRead(client, `reading:window-denominators:${clientId}:${from}:${to}`, async () => {
+    try {
+      return await selectAll<WindowDenominator>(() =>
+        client
+          .rpc(RPC_WINDOW_DENOMINATORS, { p_client: clientId, p_from: from, p_to: to })
+          .order('audience', { ascending: true }),
+      )
+    } catch (error) {
+      if (!isMissingMonthlyReading(error)) throw error
+      return null
+    }
+  })
+}
+
+/** The window theme read, memoised on the same rule and the same key plus the
+ *  clustering: two windows under two runs are two questions. */
+function readWindowThemes(
+  client: SupabaseClient,
+  clientId: string,
+  runId: string,
+  from: string,
+  to: string,
+): Promise<WindowThemeReading[] | null> {
+  return memoRead(client, `reading:window-themes:${clientId}:${runId}:${from}:${to}`, async () => {
+    try {
+      return await selectAll<WindowThemeReading>(() =>
+        client
+          .rpc(RPC_WINDOW_THEME_READINGS, {
+            p_client: clientId,
+            p_run: runId,
+            p_from: from,
+            p_to: to,
+          })
+          .order('audience', { ascending: true })
+          .order('theme_id', { ascending: true }),
+      )
+    } catch (error) {
+      if (!isMissingMonthlyReading(error)) throw error
+      return null
+    }
+  })
+}
+
+/**
  * The one windowed figure a page states in prose.
  *
  * Not a sum of month rows, ever: `videos` is a count of DISTINCT videos and a
@@ -652,35 +729,11 @@ export async function loadWindowReading(
   const audiences = options.audiences ? new Set(options.audiences) : null
   const objectIds = options.objectIds ? new Set(options.objectIds) : null
 
-  let denominators: WindowDenominator[] | null = null
-  try {
-    denominators = await selectAll<WindowDenominator>(() =>
-      client
-        .rpc(RPC_WINDOW_DENOMINATORS, { p_client: clientId, p_from: options.from, p_to: options.to })
-        .order('audience', { ascending: true }),
-    )
-  } catch (error) {
-    if (!isMissingMonthlyReading(error)) throw error
-  }
+  const denominators = await readWindowDenominators(client, clientId, options.from, options.to)
 
-  let themes: WindowThemeReading[] | null = null
-  if (options.runId) {
-    try {
-      themes = await selectAll<WindowThemeReading>(() =>
-        client
-          .rpc(RPC_WINDOW_THEME_READINGS, {
-            p_client: clientId,
-            p_run: options.runId,
-            p_from: options.from,
-            p_to: options.to,
-          })
-          .order('audience', { ascending: true })
-          .order('theme_id', { ascending: true }),
-      )
-    } catch (error) {
-      if (!isMissingMonthlyReading(error)) throw error
-    }
-  }
+  const themes = options.runId
+    ? await readWindowThemes(client, clientId, options.runId, options.from, options.to)
+    : null
 
   return {
     denominators: denominators
