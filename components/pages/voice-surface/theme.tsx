@@ -17,7 +17,7 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 import type { QuoteRef } from '@/lib/blocks/types'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { OnScreenLine, SpokenLine, ThemeBlock, VoiceSurfaceData } from '@/lib/pages/voice-surface'
-import { VOICES_WORD, heardLine, reachAxisMax } from '@/lib/pages/voice-surface'
+import { VOICES_WORD, earnedDirection, heardLine, reachAxisMax } from '@/lib/pages/voice-surface'
 
 // VO3 · A theme, in full (design §3 VO3; ported to the artboard, Block D
 // wave 2).
@@ -426,9 +426,14 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
                 {level}
               </span>
             ) : null}
-            {t.direction ? (
+            {/* `earnedDirection`, NOT TRUTHINESS — VO2's rule, and the same
+                empty pill: 'flat' is `directionWord`'s answer for "three
+                readings exist and do not agree", the ABSENCE of a direction,
+                and this pill draws its own chrome around whatever
+                `DirectionWord` returns. */}
+            {earnedDirection(t.direction) ? (
               <span className={email ? undefined : 'inline-block rounded-full bg-inner px-2 py-0.5 text-[12px] font-medium'}>
-                <DirectionWord direction={t.direction} mode={mode} />
+                <DirectionWord direction={earnedDirection(t.direction)} mode={mode} />
               </span>
             ) : null}
             <BlockMovement verdict={t.verdict} unit="pts" mode={mode} />

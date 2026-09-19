@@ -178,4 +178,24 @@ describe('voiceMovers', () => {
   it('keeps its key, which is a stored contract', () => {
     expect(voiceMovers.key).toBe('voice.moved')
   })
+
+  it('prints no pill for a \u2018flat\u2019 direction, which is the absence of one', () => {
+    // `directionWord` answers 'flat' for "three readings exist and do not
+    // agree" — a word `MOVEMENT_WORDS` does not carry. Gated on truthiness the
+    // grey pill printed "flat, 3 months" beside a badge reading "no clear
+    // change": two non-answers, one dressed as a finding. And once
+    // `DirectionWord` filters it (main's M4) the same gate leaves an EMPTY
+    // grey pill, which is why this guard is at the call site.
+    const base = voiceFixture()
+    const flat = {
+      ...base,
+      movers: { ...base.movers, growing: base.movers.growing.map((m) => ({ ...m, direction: 'flat' as const })) },
+    }
+    const markup = render(voiceMovers.render(flat, 'app', ctx))
+    expect(markup).not.toContain('flat')
+    // No empty pill left behind either.
+    expect(markup).not.toMatch(/rounded-full bg-inner px-2 py-0\.5 text-\[12px\] font-medium"><\/span>/)
+    // And a real direction still prints.
+    expect(render(voiceMovers.render(base, 'app', ctx))).toContain('growing, 3 months')
+  })
 })

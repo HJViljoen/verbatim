@@ -783,6 +783,28 @@ export function heardLine(input: {
 export const VOICES_WORD = 'voices'
 
 /**
+ * Whether a direction is a WORD, or the absence of one.
+ *
+ * `directionWord` (lib/reading/bands.ts) answers `'flat'` for "three readings
+ * exist and do not agree" — the absence of a direction, and a word
+ * `MOVEMENT_WORDS` does not carry. `DirectionWord` guards only on null, so
+ * "flat, 3 months" reached four surfaces, and the commonest outcome — a theme
+ * whose change sits inside its band — rendered a grey pill saying "flat,
+ * 3 months" beside a badge saying "no clear change": two non-answers, one of
+ * them dressed as a finding.
+ *
+ * `main`'s M4 filters it inside `DirectionWord` itself. This exists because
+ * Voice's two outer pills gate on `direction ?` TRUTHINESS and draw their own
+ * chrome, so that filter alone leaves an empty `rounded-full bg-inner` pill
+ * standing here with nothing in it. The predicate is shared by both call
+ * sites rather than written twice, and it is deliberately NOT applied in the
+ * loader: `flat` is a true answer about the series and the data should carry
+ * it — what may not happen is a reader being shown it as a direction.
+ */
+export const earnedDirection = (direction: Direction | null | undefined): Direction | null =>
+  direction && direction !== 'flat' ? direction : null
+
+/**
  * "1 of the 12 voices behind this theme was said on camera rather than typed —
  * over the whole update, not this month."
  *

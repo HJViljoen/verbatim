@@ -391,4 +391,16 @@ describe('voiceTheme', () => {
   it('keeps its key, which is a stored contract', () => {
     expect(voiceTheme.key).toBe('voice.theme')
   })
+
+  it('prints no direction pill for \u2018flat\u2019, and leaves no empty pill behind', () => {
+    // VO2's rule at VO3's call site. Both outer pills gate on truthiness and
+    // draw their own chrome, so `main`'s M4 filter inside `DirectionWord`
+    // alone would leave an empty grey pill standing on this title row.
+    const base = voiceFixture()
+    const flat = { ...base, theme: { ...base.theme, direction: 'flat' as const } }
+    const markup = render(voiceTheme.render(flat, 'app', ctx))
+    expect(markup).not.toContain('flat')
+    expect(markup).not.toMatch(/rounded-full bg-inner px-2 py-0\.5 text-\[12px\] font-medium"><\/span>/)
+    expect(render(voiceTheme.render(base, 'app', ctx))).toContain('growing, 3 months')
+  })
 })
