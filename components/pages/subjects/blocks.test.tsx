@@ -200,7 +200,7 @@ describe('SU2 · the subject in full', () => {
 
   it('prints a direction word only inside a verdict node', () => {
     const markup = render(subjectsSubject.render(subjectsFixture(), 'app', ctx))
-    expect(markup).toContain('growing, 3 months')
+    expect(markup).toContain('growing, 3rd month')
     expect(copyViolations(markup).filter((v) => v.rule === 'direction-word')).toEqual([])
   })
 
@@ -722,7 +722,7 @@ describe('the mock’s own shape, where the data allows it', () => {
   it('prints no "flat" anywhere, and still prints a direction the category earned', () => {
     const markup = render(subjectsSubject.render(subjectsFixture(), 'app', ctx))
     expect(markup).not.toContain('flat')
-    expect(markup).toContain('growing, 3 months')
+    expect(markup).toContain('growing, 3rd month')
     expect(copyViolations(markup).filter((v) => v.rule === 'direction-word')).toEqual([])
   })
 

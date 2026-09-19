@@ -301,6 +301,34 @@ export function thinMonth(
  *  was already wrong about. */
 export const DIRECTION_RUN = 3
 
+/**
+ * "3rd month" — the tail every artboard prints after the direction word
+ * (Block D wave 3, M19).
+ *
+ * Both forms are honest: the word is earned over `DIRECTION_RUN` consecutive
+ * monthly readings, so "3 months" is how many and "3rd month" is which one
+ * this is. The ruling is that wording follows the mock, and every one of the
+ * twelve artboards that prints the word prints it this way — twenty-seven
+ * times, with no instance of "3 months" anywhere.
+ *
+ * DERIVED FROM `DIRECTION_RUN`, never typed: a hard-coded "3" beside the word
+ * is a second copy of the rule, and the one thing this label may never do is
+ * name a run length the word was not earned over.
+ *
+ * It lives HERE, beside the run, because there are two `DirectionWord` nodes
+ * in the product — `components/pages/overview/subjects.tsx` (shared by
+ * Overview's rows and movers, both emails, Voice and the leadership sheet) and
+ * `components/pages/subjects/subject.tsx` (local to the Subjects page) — and
+ * M19 moved only the first. Two copies of this string is how one page went on
+ * saying "3 months" after the product had stopped.
+ */
+const ORDINAL_SUFFIX = ['th', 'st', 'nd', 'rd'] as const
+export const DIRECTION_RUN_LABEL = ((n: number) => {
+  const tens = n % 100
+  const suffix = tens >= 11 && tens <= 13 ? 'th' : ORDINAL_SUFFIX[n % 10] ?? 'th'
+  return `${n}${suffix} month`
+})(DIRECTION_RUN)
+
 export type Direction = 'growing' | 'fading' | 'flat'
 
 export interface DirectionInput {

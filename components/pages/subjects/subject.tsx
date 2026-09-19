@@ -9,7 +9,7 @@ import { TileColumns } from '@/components/shell/page-grid'
 import { TrackThisSubject } from '@/components/subjects/track-this'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, fmtPct, fullDate, monthName } from '@/lib/format'
-import type { Direction } from '@/lib/reading/bands'
+import { DIRECTION_RUN_LABEL, type Direction } from '@/lib/reading/bands'
 import { gapBasisLine, gapLine } from '@/lib/reading/gap'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import { sideCaption, sideEyebrow, sideFigures, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
@@ -62,11 +62,11 @@ import { sideCaption, sideEyebrow, sideFigures, type SubjectSide, type SubjectsD
 export function DirectionWord({ direction, mode = 'app' }: { direction: Direction | null; mode?: RenderMode }) {
   if (!direction || direction === 'flat') return null
   if (mode === 'email') {
-    return <span data-copy="verdict" style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted }}>{direction}, 3 months</span>
+    return <span data-copy="verdict" style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted }}>{direction}, {DIRECTION_RUN_LABEL}</span>
   }
   return (
     <span data-copy="verdict" className="inline-block whitespace-nowrap rounded-full bg-inner px-2 py-0.5 text-[12px] font-medium text-muted-foreground">
-      {direction}, 3 months
+      {direction}, {DIRECTION_RUN_LABEL}
     </span>
   )
 }
