@@ -214,6 +214,78 @@ function namesFor(chains: RenameChains, audience: string): string[] {
 }
 
 /**
+ * The stored denominator rows for one axis, read ONCE per request.
+ *
+ * WHY THE MILLISECONDS DO NOT DEFEAT IT. Overview, Subjects, Voice and
+ * Competitive each open with the same whole-history ask — `{from: '2019-01-01',
+ * to: readingAt}` — and each computes its own `readingAt` off the clock, so the
+ * four arguments differ by a few milliseconds and a naive memo would miss every
+ * time. It does not matter here: `loadMonthSeries` has already folded both ends
+ * through `monthStartOf` before this is called, so four instants inside one
+ * request are one pair of month bounds and one key. (The proper fix is still to
+ * thread ONE reading instant through `Scope`, the way `steps.ts` threads the
+ * build clock — that lives in the page loaders, and this makes the read cost
+ * one round trip either way.)
+ *
+ * The OPTIONS the four callers differ on — `updatesByMonth`, `firstRunMonth` —
+ * are not in the key because they are not in the query: they decide whether
+ * `loadUpdates` runs and what `buildSeries` is told, never which rows come
+ * back.
+ *
+ * THE SUBSTRATE IS PART OF THE ANSWER, so it is memoised with the rows rather
+ * than recomputed: the tenant-wide "is there any row at all" probe below is a
+ * second round trip that four callers were each paying on a fresh workspace.
+ * A throw that is not a missing table still propagates and `memoRead` evicts it.
+ *
+ * The rows are handed to every caller as ONE array — `MonthSeriesSet
+ * .denominators` is this array — and `buildSeries` takes them
+ * `readonly DenominatorPoint[]`. A caller that sorted them in place would sort
+ * them for the next block too; the reading layer does not, and a new one must
+ * not start.
+ */
+async function readStoredDenominators(
+  client: SupabaseClient,
+  clientId: string,
+  from: string,
+  to: string,
+  audiences: readonly string[] | null,
+): Promise<{ rows: StoredDenominator[]; substrate: Substrate }> {
+  const key = `reading:months:denominators:${clientId}:${from}:${to}:${audiences ? idsKey(audiences) : '*'}`
+  return memoRead(client, key, async () => {
+    let substrate: Substrate = 'seeded'
+    let rows: StoredDenominator[] = []
+    try {
+      rows = await selectAll<StoredDenominator>(() => {
+        let q = client
+          .from(TABLE_DENOMINATORS)
+          .select('*')
+          .eq('client_id', clientId)
+          .gte('month', from)
+          .lte('month', to)
+        if (audiences) q = q.in('audience', audiences)
+        return q.order('month', { ascending: true }).order('audience', { ascending: true })
+      })
+    } catch (error) {
+      if (!isMissingMonthlyReading(error)) throw error
+      substrate = 'missing'
+    }
+
+    // Nothing in the window is not nothing at all: ask the tenant-wide question
+    // before deciding which silence this is. One row is enough to answer it.
+    if (substrate === 'seeded' && rows.length === 0) {
+      const probe = await client.from(TABLE_DENOMINATORS).select('month').eq('client_id', clientId).limit(1)
+      if (probe.error) {
+        if (!isMissingMonthlyReading(probe.error)) throw new Error(`${TABLE_DENOMINATORS} probe: ${probe.error.message}`)
+        substrate = 'missing'
+      } else if ((probe.data ?? []).length === 0) {
+        substrate = 'not_seeded'
+      }
+    }
+    return { rows, substrate }
+  })
+}
+
+/**
  * The stored months for one axis, one set of audiences and one set of objects.
  *
  * Paged with `selectAll` on a UNIQUE order — each table's primary key minus the
@@ -309,35 +381,9 @@ export async function loadMonthSeries(
       : null
   numeratorsAhead?.catch(() => {})
 
-  let substrate: Substrate = 'seeded'
-  let denominators: StoredDenominator[] = []
-  try {
-    denominators = await selectAll<StoredDenominator>(() => {
-      let q = client
-        .from(TABLE_DENOMINATORS)
-        .select('*')
-        .eq('client_id', clientId)
-        .gte('month', from)
-        .lte('month', to)
-      if (audiences) q = q.in('audience', audiences)
-      return q.order('month', { ascending: true }).order('audience', { ascending: true })
-    })
-  } catch (error) {
-    if (!isMissingMonthlyReading(error)) throw error
-    substrate = 'missing'
-  }
-
-  // Nothing in the window is not nothing at all: ask the tenant-wide question
-  // before deciding which silence this is. One row is enough to answer it.
-  if (substrate === 'seeded' && denominators.length === 0) {
-    const probe = await client.from(TABLE_DENOMINATORS).select('month').eq('client_id', clientId).limit(1)
-    if (probe.error) {
-      if (!isMissingMonthlyReading(probe.error)) throw new Error(`${TABLE_DENOMINATORS} probe: ${probe.error.message}`)
-      substrate = 'missing'
-    } else if ((probe.data ?? []).length === 0) {
-      substrate = 'not_seeded'
-    }
-  }
+  const read = await readStoredDenominators(client, clientId, from, to, audiences)
+  const substrate: Substrate = read.substrate
+  const denominators: StoredDenominator[] = read.rows
 
   const numerators: StoredNumerator[] = []
   // THE NUMERATOR HAS ITS OWN SUBSTRATE, and telling it apart from silence is
