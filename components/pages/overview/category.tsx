@@ -292,7 +292,21 @@ export const overviewCategory: Block<OverviewData> = {
     // independent share of one population and never a slice of a whole.
     const kinds = c.kinds.length > 0 ? (
       <>
-        <div className={email ? undefined : 'flex flex-col gap-1.5'}>
+        {/* THE ROW IS CAPPED, SO A LABEL AND ITS FIGURE STAY TOGETHER (Block D
+            wave 3, M23). The row is a `min-w-0 flex-1 truncate` label beside a
+            fixed 104px cell, which is right in this block's own ~378px column
+            and right in the artboard's ~470px one. On the marketing sheet the
+            block runs the full 1,088px of the page and `TileColumns` is below
+            its `xl` breakpoint, so every line stretches and the label sat about
+            850px from the figure it belongs to — a reader tracks across dead
+            paper to pair them.
+            A CAP AND NOT A BAR. `BlockProportion` is imported here for the mood
+            row and is the wrong shape for this one: it draws a PARTITION, and
+            kinds overlap (measured 175%–228% across one denominator), so each
+            row is an independent share of one population and never a slice of a
+            whole — which is the sentence directly above this one. The cap is
+            the artboard's own column, so nothing changes in the app. */}
+        <div className={email ? undefined : 'flex max-w-[440px] flex-col gap-1.5'}>
           {c.kinds.map((k) => (
             <span key={k.kind} className={email ? undefined : 'flex items-center gap-2 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, marginRight: 10 } : undefined}>
               <span className={email ? undefined : 'min-w-0 flex-1 truncate'}>{k.label}</span>
