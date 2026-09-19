@@ -186,6 +186,13 @@ export const WATCHED_COMMUNITY_CAP = 12
 export function subredditEdit(
   current: readonly string[],
   op: { kind: 'add' | 'stop'; name: string },
+  /** The names the RECORD's before/after sides are drawn from, when that is a
+   *  narrower list than the one membership is tested against (settings V2).
+   *  `applySubredditEdit` widens `current` with `candidate` entries so a stop
+   *  can turn a proposal down; a candidate has never been watched, so it may
+   *  not appear in a config_changes row describing what we watch. Defaults to
+   *  `current`, which is the case where the two lists are the same. */
+  forLog: readonly string[] = current,
 ): { next: string[]; change: PendingEdit } | { error: string } {
   const key = subredditKey(op.name)
   if (!key) {
@@ -196,6 +203,7 @@ export function subredditEdit(
     }
   }
   const folded = current.map((c) => subredditKey(c)).filter(Boolean)
+  const logged = forLog.map((c) => subredditKey(c)).filter(Boolean)
   const has = folded.includes(key)
 
   if (op.kind === 'add') {
@@ -209,12 +217,32 @@ export function subredditEdit(
     // taken on, and re-sorting it on every add would rewrite the whole column
     // and make every diff in the log unreadable.
     const next = [...folded, key]
-    return { next, change: { field: 'Communities', from: listWords(folded), to: listWords(next) } }
+    return { next, change: change(logged, key, 'add') }
   }
 
   if (!has) return { error: `You are not watching ${subredditLabel(key)}.` }
   const next = folded.filter((c) => c !== key)
-  return { next, change: { field: 'Communities', from: listWords(folded), to: listWords(next) } }
+  return { next, change: change(logged, key, 'stop') }
+}
+
+/**
+ * The record's two sides, drawn from the WATCHED list alone (settings V2).
+ *
+ * `next` above is the membership list the caller goes on to apply, and for a
+ * stop that list is widened with `candidate` entries so a proposal can be
+ * turned down. The config_changes row is a different question — it says what
+ * we watch — so it is built here from `logged` instead, and stopping a
+ * candidate comes out with both sides EQUAL: nothing about what we watch
+ * changed, and `actions.ts` already carries the decision in the row's note
+ * ("... was proposed and turned down; it is not watched"). Before this, that
+ * stop wrote `before: "r/prosthetics, r/bagsonbags, r/frugal" -> after:
+ * "r/bagsonbags, r/frugal"`, naming a candidate as something we had been
+ * watching — and contradicting the Communities list an ADD writes on the same
+ * page, which has never included candidates.
+ */
+function change(logged: readonly string[], key: string, kind: 'add' | 'stop'): PendingEdit {
+  const to = kind === 'add' ? [...logged, key] : logged.filter((c) => c !== key)
+  return { field: 'Communities', from: listWords(logged), to: listWords(to) }
 }
 
 /** What a before/after side reads as in the log. The same rule `renderSide`
@@ -289,7 +317,11 @@ export function applySubredditEdit(
     }
   }
 
-  const result = subredditEdit(watching, op)
+  // The widened list is the MEMBERSHIP test; the record's sides come from the
+  // active names alone (V2). A candidate has never been watched, so it may not
+  // appear in a row describing what we watch.
+  const active = entries.filter((e) => e.status === 'active').map((e) => e.name)
+  const result = subredditEdit(watching, op, active)
   if ('error' in result) return result
 
   const next: SubredditEntry[] = op.kind === 'stop'

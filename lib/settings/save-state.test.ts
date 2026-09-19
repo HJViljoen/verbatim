@@ -286,4 +286,43 @@ describe('applySubredditEdit', () => {
       error: 'You are not watching r/onebag.',
     })
   })
+
+  // THE RECORD'S SIDES ARE THE WATCHED LIST, NEVER THE WIDENED ONE (V2).
+  // ST9 widened the membership list with `candidate` entries so a proposal can
+  // be turned down, and the config_changes row was built from that same list —
+  // so a stop named a community we had never watched as one we had, and
+  // contradicted the Communities list an ADD writes on the same page.
+  const withCandidate: SubredditEntry[] = [
+    { name: 'prosthetics', status: 'active', discovered_at: '2026-04-06' },
+    { name: 'bagsonbags', status: 'active', discovered_at: '2026-05-02' },
+    { name: 'frugal', status: 'candidate', discovered_at: '2026-09-01' },
+  ]
+
+  it('keeps a candidate out of the record when an ACTIVE community is stopped', () => {
+    const r = applySubredditEdit(withCandidate, { kind: 'stop', name: 'r/prosthetics' }, '2026-09-18')
+    if ('error' in r) throw new Error('expected an edit')
+    expect(r.change.from).toBe('r/prosthetics, r/bagsonbags')
+    expect(r.change.to).toBe('r/bagsonbags')
+    // The widened list is still the membership test, so the candidate survives
+    // the edit untouched.
+    expect(r.next.find((e) => e.name === 'frugal')?.status).toBe('candidate')
+  })
+
+  it('records a turned-down proposal as no change to what we watch', () => {
+    const r = applySubredditEdit(withCandidate, { kind: 'stop', name: 'r/frugal' }, '2026-09-18')
+    if ('error' in r) throw new Error('expected an edit')
+    // Both sides equal: turning a proposal down does not change the watched
+    // list. `was` is what lets actions.ts word the row's note as a refusal.
+    expect(r.change.from).toBe('r/prosthetics, r/bagsonbags')
+    expect(r.change.to).toBe('r/prosthetics, r/bagsonbags')
+    expect(r.was).toBe('candidate')
+    expect(r.next.find((e) => e.name === 'frugal')?.status).toBe('stopped')
+  })
+
+  it('an add names the active list on both sides, as it always did', () => {
+    const r = applySubredditEdit(withCandidate, { kind: 'add', name: 'r/onebag' }, '2026-09-18')
+    if ('error' in r) throw new Error('expected an edit')
+    expect(r.change.from).toBe('r/prosthetics, r/bagsonbags')
+    expect(r.change.to).toBe('r/prosthetics, r/bagsonbags, r/onebag')
+  })
 })
