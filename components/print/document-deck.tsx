@@ -353,7 +353,15 @@ function DocumentCover({ data, pages, contents, date }: {
     <section className="vb-slide" data-sheet="cover">
       <div className="vb-slide-body">
         <div className="grid h-full min-h-0 grid-cols-[7fr_5fr] items-center gap-x-12">
-          <div className="flex flex-col gap-[18px]">
+          {/* 16px, NOT THE ARTBOARD'S 18 (wave 3, `sales`-1). Everything else
+              on this sheet is the drawing's number, and at 18 the column ran
+              566px inside a 563px body once the type went onto the artboard's
+              scale — because the contents list has TEN entries where the
+              artboard's has six (the deck runs eleven sheets against the
+              artboard's seven, `reports`-13). Two pixels of gap is the
+              cheapest thing on the sheet to spend and the only one a reader
+              cannot see; the real fix is the sheet count. */}
+          <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-3.5">
               {/* VERTICAL, 3 × 48. The build drew it lying down. */}
               <span className="inline-block h-12 w-[3px] rounded-full bg-primary" aria-hidden />
@@ -1671,7 +1679,14 @@ function NumbersCard({ data }: { data: DocumentSnapshotData }) {
   const dropped = m.dropped ?? null
   const mix = r ? platformShareLine(r.platformMix) : ''
   const rows: [string, ReactNode][] = [
-    ['Period', r ? r.stamp : m.period],
+    // THE SAME PERIOD ROW `methodRows` SETTLED, 170 LINES UP (wave 3). `stamp`
+    // is the long form — "September 2026 · reading as at 28 September 2026 ·
+    // still filling until 30 October 2026" — which is three lines in a 130px
+    // gutter card, and every clause of it is already on this sheet: the
+    // reading instant rides the footer stamp and the first method paragraph,
+    // and the freeze date is the row's own last clause. A period row says what
+    // period the reading covers, and that ends when the month ends.
+    ['Period', r ? `${shortDate(r.month)} – ${fullDate(monthLastDay(r.month))}${r.monthStatus === 'filling' ? ' · still filling' : ''}` : m.period],
     // 'Comments' EITHER WAY (wave 3, `sales`-5). Without a reading the value is
     // `method.conversations`, which is `run_summary.period_comments` and which
     // `methodRows` labels Comments unconditionally — so the no-reading arm was
