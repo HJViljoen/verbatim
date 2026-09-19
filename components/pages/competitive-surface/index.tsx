@@ -99,8 +99,22 @@ const SPAN: Record<string, { col: number; row: number }> = {
  * meaning as the MINIMUM height a tile claims (which is what holds the
  * artboard's rhythm when a state is short); they stop being a ceiling. Nothing
  * outside this page changes.
+ *
+ * AND A SHORT TILE IS NO LONGER STRETCHED TO ITS ROW-MATE'S FLOOR. A grid item
+ * defaults to `align-self: stretch`, so the three tiles in a row all took the
+ * height of the tallest and the surplus became WHITE INSIDE A CARD: measured to
+ * the block footer at 1440 on the populated fixture, CO4 carried 305px of a
+ * 656px tile, CO5 208px and CO6 376px — 889px of empty card on one screen. It
+ * is the artboard's own device, and the artboard fills those tiles; this page,
+ * in the state it ships in, does not. At 1024 the same tiles have 20px of
+ * surplus because the grid is one stacked column and every tile takes its own
+ * height, which is exactly what `items-start` asks for above `xl`. The row
+ * BAND is unchanged — it is still as tall as its tallest member, so the
+ * artboard's rhythm and the page's total height are what they were — but the
+ * air now falls on the page ground where there is nothing to read, instead of
+ * inside a card that looks like it lost its content.
  */
-export const GRID_ROWS = 'xl:auto-rows-[minmax(116px,auto)]'
+export const GRID_ROWS = 'xl:auto-rows-[minmax(116px,auto)] xl:items-start'
 
 /** Below `xl` the grid is one stacked column and `Tile`'s `MIN_H` still applies
  *  a height derived from the row span — at 1024 that is 776px of tile under a
