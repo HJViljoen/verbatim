@@ -335,6 +335,8 @@ export function CalendarLine({
           return span ? bandRect(span, `band${i}`, `url(#${hatch})`, b.label) : null
         })}
 
+        <FillingBars months={months} series={series} geometry={g} y={scale.y} />
+
         <line x1={g.padL} y1={g.baseline} x2={g.padR} y2={g.baseline} stroke="var(--border)" strokeWidth={1} />
         {/* THE GUTTER IS ITS OWN TRACK (Block D wave 3, SH14). A below-floor
             month is a mark 6 units under the baseline, which at print scale is
@@ -552,8 +554,12 @@ function SeriesMarks({
         const isEnd = i === lastPlotted
         return (
           <g key={`m${i}`}>
-            {p.state === 'filling' && (
-              <FillingBar x={x} value={p.value} atLastMonth={p.atLastMonth ?? null} y={y} baseline={g.baseline} slot={g.slot} format={format} padR={padR} />
+            {/* THE BAR IS THE CHART'S, NOT THE SERIES' (Block D wave 3,
+                SH21) — see `FillingBars`. The tick is the series': "what this
+                same month read at this point last month" is a reading, and two
+                series filling together have two of them. */}
+            {p.state === 'filling' && p.atLastMonth != null && (
+              <LastMonthTick x={x} atLastMonth={p.atLastMonth} y={y} slot={g.slot} format={format} padR={padR} />
             )}
             <circle cx={x} cy={y(p.value)} r={isEnd ? 3.4 : 2.2} fill={series.color} stroke="var(--tile)" strokeWidth={isEnd ? 1.5 : 1} />
           </g>
@@ -582,9 +588,9 @@ function SeriesMarks({
 }
 
 /**
- * The still-filling month: a part-height bar under its point, and — where the
- * caller actually computed it — a tick at what the same month read at this
- * point last month.
+ * The still-filling month: a part-height bar under the newest reading, and —
+ * where the caller actually computed it — a tick at what the same month read
+ * at this point last month.
  *
  * The bar is the affordance item 6 asks for and §3.9 forbids ("no filled
  * areas"); it is part of the amendment. It is the ONE filled shape on the
@@ -594,53 +600,93 @@ function SeriesMarks({
  * entity's own colour, so on a chart where a rival held the only visible point
  * the newest month rendered as a solid peach column running the full plot
  * height — the loudest coloured shape on the page, encoding "incomplete" and
- * reading as the rival's ink. Two series filling in the same month drew two
- * overlapping colours for one fact. It takes the neutral token every other
- * piece of furniture on this chart takes (the dated rules, the midline), so
- * the coloured inks on the plot belong to the data alone.
+ * reading as the rival's ink. It takes the neutral token every other piece of
+ * furniture on this chart takes (the dated rules, the midline), so the
+ * coloured inks on the plot belong to the data alone.
+ *
+ * SO IT IS PAINTED ONCE PER MONTH, NOT ONCE PER SERIES (Block D wave 3,
+ * SH21). It was drawn inside `SeriesMarks`, so two filling series painted the
+ * September column TWICE below the lower of the two points and once above:
+ * sampled RGB (240,241,241) above y≈690 and (226,228,228) below, a false
+ * horizontal step landing exactly on one category's end point, inside a shape
+ * whose only meaning is "this month is not finished". One bar per month, from
+ * the HIGHEST filling reading down to the baseline, is the whole of what the
+ * shape has to say.
+ *
+ * AND IT IS CLAMPED INSIDE THE PLOT. The filling month is by construction the
+ * last one, whose x IS the plot's right edge, so half the bar hung outside it
+ * — which on Voice, where the caller turns the legend off, read as a clipped
+ * band rather than as a column. It is pulled in by its own half-width.
  */
 const FILLING_INK = 'var(--muted-foreground)'
 
-function FillingBar({
-  x, value, atLastMonth, y, baseline, slot, format, padR,
+function FillingBars({
+  months, series, geometry: g, y,
+}: {
+  months: readonly string[]
+  series: readonly CalendarSeries[]
+  geometry: ReturnType<typeof calendarGeometry>
+  y: (v: number) => number
+}) {
+  const tops = new Map<number, number>()
+  for (const s of series) {
+    for (const p of s.points) {
+      if (p.state !== 'filling' || p.value == null) continue
+      const i = months.indexOf(p.month)
+      if (i < 0) continue
+      const top = y(p.value)
+      const held = tops.get(i)
+      if (held == null || top < held) tops.set(i, top)
+    }
+  }
+  if (tops.size === 0) return null
+  const w = Math.max(6, Math.min(18, g.slot * 0.36))
+  return (
+    <g>
+      {[...tops].map(([i, top]) => {
+        const x = Math.min(Math.max(g.xAt(i), g.padL + w / 2), g.padR - w / 2)
+        return (
+          <rect key={`fill${i}`} x={x - w / 2} y={top} width={w} height={Math.max(0, g.baseline - top)} fill={FILLING_INK} opacity={0.1}>
+            <title>Still filling — this month is still taking comments</title>
+          </rect>
+        )
+      })}
+    </g>
+  )
+}
+
+/** What the same month read at this point LAST month — a reading, so it stays
+ *  with its series. */
+function LastMonthTick({
+  x, atLastMonth, y, slot, format, padR,
 }: {
   x: number
-  value: number
-  atLastMonth: number | null
+  atLastMonth: number
   y: (v: number) => number
-  baseline: number
   slot: number
   format: (v: number) => string
   padR: number
 }) {
   const w = Math.max(6, Math.min(18, slot * 0.36))
-  const top = y(value)
   return (
     <g>
-      <rect x={x - w / 2} y={top} width={w} height={Math.max(0, baseline - top)} fill={FILLING_INK} opacity={0.1}>
-        <title>Still filling — this month is still taking comments</title>
-      </rect>
-      {atLastMonth != null && (
-        <g>
-          <line x1={x - w} y1={y(atLastMonth)} x2={x + w} y2={y(atLastMonth)} stroke="var(--muted-foreground)" strokeWidth={1} strokeDasharray="3 2">
-            <title>{`At this point last month: ${format(atLastMonth)}`}</title>
-          </line>
-          {/* The filling month is the LAST one, so the label usually has no
-              room to its right and goes to the left of the bar instead — and it
-              sits BELOW the tick, because the tick is by definition close to
-              this month's own point and a label on its line reads over it. */}
-          <text
-            x={x + w + 6 < padR ? x + w + 6 : x - w - 6}
-            y={y(atLastMonth) + 13}
-            textAnchor={x + w + 6 < padR ? 'start' : 'end'}
-            style={ts(9)}
-            fontFamily="var(--font-plex-mono), monospace"
-            fill="var(--muted-foreground)"
-          >
-            at this point last month
-          </text>
-        </g>
-      )}
+      <line x1={x - w} y1={y(atLastMonth)} x2={x + w} y2={y(atLastMonth)} stroke="var(--muted-foreground)" strokeWidth={1} strokeDasharray="3 2">
+        <title>{`At this point last month: ${format(atLastMonth)}`}</title>
+      </line>
+      {/* The filling month is the LAST one, so the label usually has no room
+          to its right and goes to the left of the tick instead — and it sits
+          BELOW it, because the tick is by definition close to this month's own
+          point and a label on its line reads over it. */}
+      <text
+        x={x + w + 6 < padR ? x + w + 6 : x - w - 6}
+        y={y(atLastMonth) + 13}
+        textAnchor={x + w + 6 < padR ? 'start' : 'end'}
+        style={ts(9)}
+        fontFamily="var(--font-plex-mono), monospace"
+        fill="var(--muted-foreground)"
+      >
+        at this point last month
+      </text>
     </g>
   )
 }

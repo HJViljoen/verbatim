@@ -267,6 +267,31 @@ describe('CalendarLine', () => {
     expect(niceTop(Number.NaN, 10)).toBeNull()
   })
 
+  it('paints the filling month ONCE, however many series are filling (SH21)', () => {
+    // It was drawn inside SeriesMarks, so two filling series painted September
+    // twice below the lower point and once above — a false horizontal step
+    // landing on one series' end point, inside a shape whose only meaning is
+    // "this month is not finished".
+    const alsoFilling: CalendarSeries = {
+      label: 'Freitag',
+      color: 'var(--comp)',
+      points: AXIS.map((m, i) => p(m, 20 + i, m === '2026-09-01' ? 'filling' : 'read')),
+    }
+    const markup = render(CalendarLine({ axis: AXIS, series: [you, alsoFilling] }))
+    expect(markup.match(/Still filling/g) ?? []).toHaveLength(1)
+  })
+
+  it('keeps the filling bar inside the plot rather than half off its edge', () => {
+    // The filling month is by construction the last one, whose x IS the plot's
+    // right edge — on Voice, with the legend off, that read as a clipped band.
+    const markup = render(CalendarLine({ axis: AXIS, series: [you], legend: false }))
+    const bar = markup.match(/<rect x="([0-9.]+)" y="[0-9.]+" width="([0-9.]+)"[^>]*opacity="0.1"/)
+    expect(bar).not.toBeNull()
+    const [x, w] = [Number((bar as RegExpMatchArray)[1]), Number((bar as RegExpMatchArray)[2])]
+    // padR in viewBox terms is width - padR = 880 - 180 = 700.
+    expect(x + w).toBeLessThanOrEqual(700)
+  })
+
   it('renders nothing rather than an empty box when there is no axis or no series', () => {
     expect(CalendarLine({ axis: [], series: [you] })).toBeNull()
     expect(CalendarLine({ axis: AXIS, series: [] })).toBeNull()
