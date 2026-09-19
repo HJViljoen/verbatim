@@ -166,6 +166,21 @@ describe('the Overview page', () => {
     assertCopyContract(markup)
   })
 
+  // ONE QUESTION, IN THE PAGE BAR (Block D wave 3, M8). Parsed from
+  // `Main.dc.html`: all six blocks go straight from `</header>` into their
+  // content grid, and the artboard's only question is the bar's. Six sub-lines
+  // under six eyebrows cost about 156px and put a second narrator over every
+  // tile. The blocks keep their `question` field — it is their contract with
+  // the reader, and the nav and the legend read it — and stop drawing it.
+  it('prints one question, and it is the page bar\u2019s', () => {
+    const text = renderText(<OverviewPage data={overviewFixture()} />)
+    expect(text).toContain('What is this month\u2019s reading?')
+    for (const block of TILE_BLOCKS) {
+      expect(block.question, block.key).toBeTruthy()
+      expect(text, block.key).not.toContain(block.question as string)
+    }
+  })
+
   it('keeps OV0 in the registry, because a PDF and an email have no band', () => {
     expect(OVERVIEW_BLOCKS.map((b) => b.key)).toContain('overview.bar')
     expect(TILE_BLOCKS.map((b) => b.key)).not.toContain('overview.bar')

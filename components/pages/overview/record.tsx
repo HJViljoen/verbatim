@@ -72,7 +72,15 @@ export const overviewRecord: Block<OverviewData> = {
     return (
       <BlockFrame
         title={overviewRecord.title}
-        question={overviewRecord.question}
+        // THE PAGE PRINTS ONE QUESTION, IN THE PAGE BAR (Block D wave 3, M8).
+        // Parsed from `Main.dc.html`: all six blocks go straight from
+        // `</header>` into their content grid, and the artboard's only question
+        // is "What is this month's reading?" in the bar — which
+        // `SurfacePageBar` already prints (`lib/nav.ts`, `page-bar.tsx:65`).
+        // Six sub-lines under six eyebrows cost about 156px and put a second
+        // narrator over every tile. The block keeps its `question` field, which
+        // is its contract with the reader and what the nav and the legend read;
+        // what stops is drawing it a second time inside the block.
         mode={mode}
         // NO META HERE, AND THAT IS THE FIX (design review Blocker 2 / High 3,
         // code review I3). This passed `r.line` — the ~180-character soundness

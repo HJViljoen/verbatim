@@ -339,7 +339,15 @@ export const overviewSentence: Block<OverviewData> = {
     return (
       <BlockFrame
         title={overviewSentence.title}
-        question={overviewSentence.question}
+        // THE PAGE PRINTS ONE QUESTION, IN THE PAGE BAR (Block D wave 3, M8).
+        // Parsed from `Main.dc.html`: all six blocks go straight from
+        // `</header>` into their content grid, and the artboard's only question
+        // is "What is this month's reading?" in the bar — which
+        // `SurfacePageBar` already prints (`lib/nav.ts`, `page-bar.tsx:65`).
+        // Six sub-lines under six eyebrows cost about 156px and put a second
+        // narrator over every tile. The block keeps its `question` field, which
+        // is its contract with the reader and what the nav and the legend read;
+        // what stops is drawing it a second time inside the block.
         mode={mode}
         // "update of 13 Sep" — the last update this month, and NOT the mock's
         // "next 4 Oct" beside it (D14): the next update's date is a promise,
