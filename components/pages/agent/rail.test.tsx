@@ -89,7 +89,7 @@ describe('earlier questions', () => {
 
 describe('what an answer draws on', () => {
   const tile = (d: ReturnType<typeof agentFixture>) => (
-    <DrawsTile draws={d.draws} recordHref={d.record!.href} asAt={d.basis.lastEmbeddedAt ? '15 Sep' : null} />
+    <DrawsTile draws={d.draws} asAt={d.basis.lastEmbeddedAt ? '15 Sep' : null} />
   )
 
   it('keeps the copy contract in both states', () => {
@@ -104,13 +104,16 @@ describe('what an answer draws on', () => {
     expect(text).toContain('as at 15 Sep')
   })
 
-  it('opens the record, which is where the rows it does not print live', () => {
+  it('carries no second door to the record', () => {
     // Four rows, not the mock's five: updates-this-month, videos, languages and
     // tracking changes need `loadRecordInputs`' eight tenant-wide reads on every
-    // page load. `hasRecord` admits Ask so the drawer can be opened from here.
+    // page load, and the drawer is where they live. It is opened from the
+    // record BAND, which `AskShell` mounts under the page bar on both routes —
+    // one control, not two ~400px apart both opening the same three lines this
+    // tile already prints in the open.
     const markup = render(tile(measured))
-    expect(markup).toContain('detail=record')
-    expect(renderText(tile(measured))).toContain('The record →')
+    expect(markup).not.toContain('detail=record')
+    expect(renderText(tile(measured))).not.toContain('The record →')
     // Stated ONCE, in the Updates row whose term names it — not again as a
     // footer note that is present on one route and absent on the other.
     const text = renderText(tile(measured))

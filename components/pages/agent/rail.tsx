@@ -105,15 +105,23 @@ export function EarlierQuestionsTile({ history, col = 12, row = 2 }: { history: 
  * The count is stated once, in the row whose term names it, and the tile reads
  * the same on both routes.
  *
- * The footer is the record: `lib/nav.ts:hasRecord` admits Ask (D-record, wave 1) precisely so
- * the drawer can be opened from here, and the drawer is where updates-this-
- * month, the video count, the language mix and the tracking changes live.
+ * AND NO "THE RECORD →" EITHER, WHICH IS THE ONE THIS TILE LOST. The footer
+ * used to carry it, on the argument that `lib/nav.ts:hasRecord` admits Ask
+ * (D-record, wave 1) precisely so the drawer can be opened from here. It can —
+ * from the record BAND, which `AskShell` mounts under the page bar on both
+ * routes for exactly that reason, and which is the product-wide door to the
+ * same drawer. Two doors to one drawer, ~400px apart on a thread at 1440, with
+ * the drawer's three lines being the three rows this tile already prints in
+ * the open: the band at y≈97 read "How sound is this: 23 updates delivered.
+ * the record →" and this tile at y≈513 read "UPDATES 23 delivered … The record
+ * →". The artboard states the basis in the bar and again in DRAWS — two
+ * statements, one control — so the tile keeps its four facts and gives the
+ * control up.
  */
 export function DrawsTile({
-  draws, recordHref, asAt, col = 12, row = 2,
+  draws, asAt, col = 12, row = 2,
 }: {
   draws: readonly AskDrawRow[]
-  recordHref: string | null
   /** The artboard's "as at 28 Sep" — when the index these facts describe was
    *  last written. Null leaves the slot empty rather than dating it today. */
   asAt?: string | null
@@ -131,7 +139,6 @@ export function DrawsTile({
       // this one left it blank; the fact is already in the Indexed row, so the
       // meta names WHEN rather than inventing a second one.
       meta={asAt ?? undefined}
-      footer={recordHref ? <Link href={recordHref} className="hover:underline">The record →</Link> : undefined}
       distribute="between"
     >
       <dl className="m-0 grid grid-cols-[84px_1fr] gap-x-3 gap-y-2.5">

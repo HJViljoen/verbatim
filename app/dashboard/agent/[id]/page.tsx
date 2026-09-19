@@ -9,7 +9,7 @@ import { Tile, TileEmpty } from '@/components/shell/tile'
 import { canAsk } from '@/lib/agent/access'
 import { askBasisLine, nothingSearchable } from '@/lib/agent/basis'
 import { shortDate } from '@/lib/format'
-import { askRecordHref, loadAgentThread } from '@/lib/pages/agent-thread'
+import { loadAgentThread } from '@/lib/pages/agent-thread'
 import { AgentComposer } from '@/components/agent-composer'
 import { AnswerTile } from '@/components/pages/agent/answer'
 import { AskBoxTile } from '@/components/pages/agent/ask-box'
@@ -72,7 +72,6 @@ export default async function AgentThreadPage({
       <EarlierQuestionsTile history={data.history} row={ASK_TILE_ROW} />
       <DrawsTile
         draws={data.draws}
-        recordHref={data.record?.href ?? askRecordHref(id)}
         asAt={data.basis.lastEmbeddedAt ? shortDate(data.basis.lastEmbeddedAt) : null}
         row={ASK_TILE_ROW}
       />

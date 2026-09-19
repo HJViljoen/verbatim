@@ -5,7 +5,7 @@ import { canAsk } from '@/lib/agent/access'
 import { askBasisLine, loadAskBasis, nothingSearchable } from '@/lib/agent/basis'
 import { loadNotAnswered } from '@/lib/agent/measure'
 import { loadPlanChecks, type PlanCheckCard } from '@/lib/ask/plan-cards'
-import { askDraws, askPlanChip, askRecordHref, askRecordLines, loadAskHistory } from '@/lib/pages/agent-thread'
+import { askDraws, askPlanChip, askRecordLines, loadAskHistory } from '@/lib/pages/agent-thread'
 import { AgentComposer } from '@/components/agent-composer'
 import { AskBoxTile } from '@/components/pages/agent/ask-box'
 import { DrawsTile, EarlierQuestionsTile, NotAnsweredTile } from '@/components/pages/agent/rail'
@@ -97,7 +97,6 @@ export default async function AgentPage({
             <EarlierQuestionsTile history={history} col={4} row={ASK_TILE_ROW} />
             <DrawsTile
               draws={askDraws(basis, delivered)}
-              recordHref={askRecordHref()}
               asAt={basis.lastEmbeddedAt ? shortDate(basis.lastEmbeddedAt) : null}
               col={4}
               row={ASK_TILE_ROW}
