@@ -82,7 +82,27 @@ export function SaveStrip({ state, note }: { state: SaveState; note?: string | n
  * the export pipeline's tiles are readings. A button that produced nothing
  * would be worse than a block that can be selected and pasted, so the record
  * exports as text and the page states the reason in one sentence.
+ *
+ * THAT SENTENCE IS NOT WRITTEN IN THE IMPLEMENTER'S NOUNS (Block D wave 3,
+ * RC4). It used to read "Export renders a registered page, and Settings has no
+ * page module", and `ScopeStatement` renders `why` as a visible `<p>`, not a
+ * tooltip — so a client read "a registered page" and "page module", which are
+ * the export route's internals and this file's business, not theirs. mock-gap
+ * element 21 asks the page to SAY WHY there is no export button; it does not
+ * ask it to say so in our nouns. The paragraph above is where the mechanism
+ * belongs.
  */
+
+/**
+ * The sentence the page prints where the artboard draws "Export the record".
+ *
+ * Exported so the route and the render tier say the same thing: the tier used
+ * to assert on a stand-in of its own ("no registered page module"), which is
+ * how the jargon survived a copy lens on a passing test.
+ */
+export const NO_EXPORT_WHY =
+  'There is no file to download here — what we turn into a document are the reading pages, and this is a settings page. So the record is printed below instead, to select and paste.'
+
 export function ScopeStatement({ text, why }: { text: string; why: ReactNode }) {
   return (
     <div className="flex flex-col gap-2">

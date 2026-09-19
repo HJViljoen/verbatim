@@ -3,7 +3,7 @@ import { ChangeLogBlock } from '@/components/settings/record/change-log'
 import { CoverageBlock } from '@/components/settings/record/coverage'
 import { DeliveryBlock } from '@/components/settings/record/delivery'
 import { RecordFooter, RecordSection } from '@/components/settings/record/frame'
-import { RecordHeader, SaveStrip, ScopeStatement } from '@/components/settings/record/header'
+import { NO_EXPORT_WHY, RecordHeader, SaveStrip, ScopeStatement } from '@/components/settings/record/header'
 import { RejectLogBlock } from '@/components/settings/record/rejects'
 import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { changeLogBoundary } from '@/lib/config-log'
@@ -209,7 +209,7 @@ export default async function SettingsRecordPage() {
         <RecordSection title="What this covers, and what it does not" meta="select it and paste">
           <ScopeStatement
             text={scopeStatement(tenant, lines, nowIso)}
-            why="Export renders a registered page, and Settings has no page module — so the record is exported as text you can select and paste rather than as a file a button would fail to produce."
+            why={NO_EXPORT_WHY}
           />
         </RecordSection>
 

@@ -9,7 +9,7 @@ import { render, renderText } from '@/lib/test/render'
 import { ChangeLogBlock } from './change-log'
 import { CoverageBlock } from './coverage'
 import { DeliveryBlock } from './delivery'
-import { RecordHeader, SaveStrip, ScopeStatement } from './header'
+import { NO_EXPORT_WHY, RecordHeader, SaveStrip, ScopeStatement } from './header'
 import { RejectLogBlock } from './rejects'
 import {
   changeLogFixture, changeMetaFixture, coverageRowsFixture, deliveryFixture,
@@ -443,14 +443,18 @@ describe('the page’s own chrome', () => {
   })
 
   it('says why there is no Export button rather than drawing one that produces nothing', () => {
+    // THE ROUTE'S OWN SENTENCE (RC4). This asserted on a stand-in of its own,
+    // which is how "a registered page" and "page module" — the export route's
+    // internals — survived a copy lens on a passing test and reached a client
+    // as visible body text.
     const text = renderText(
-      <ScopeStatement
-        text="Sealand — what this reading covers."
-        why="Settings has no registered page module, so the record exports as text rather than as a file."
-      />,
+      <ScopeStatement text="Sealand — what this reading covers." why={NO_EXPORT_WHY} />,
     )
-    expect(text).toContain('no registered page module')
+    expect(text).toContain('no file to download')
     expect(text).toContain('what this reading covers')
+    for (const word of ['page module', 'registered page', 'registry', 'renderable', 'module']) {
+      expect(text).not.toContain(word)
+    }
   })
 
   it('keeps the copy contract', () => {
