@@ -25,7 +25,7 @@ import type { RefusedReason } from '@/lib/reading/verdicts'
 import { claimEcho, ownCensusWithClaims, type OwnPostInput } from '@/lib/reading/own-posts'
 import { claimCounts } from '@/lib/market-tiles'
 import type { Subject } from '@/lib/subjects/types'
-import { methodFixture, methodRefusedFixture } from '@/lib/test/method-fixture'
+import { methodFixture, methodRecordFixture, methodRefusedFixture, recordBandFixture } from '@/lib/test/method-fixture'
 
 // The Subjects page's block fixtures (Phase 1 WP12).
 //
@@ -395,8 +395,13 @@ export function subjectsFixture(over: Partial<SubjectsData> = {}): SubjectsData 
       ...Array.from({ length: 8 }, () => ({ audience: 'silent' })),
     ]),
     record: {
-      line: '4 updates · 2,359 videos · TikTok, YouTube, Instagram, Reddit',
-      lines: ['4 updates delivered in this window.', 'Nothing was refused on this page.'],
+      // THROUGH THE REAL COMPOSERS. The band was hand-written as "4 updates ·
+      // 2,359 videos · TikTok, YouTube, Instagram, Reddit" — a shape
+      // `howSoundLine` has never produced, three facts where the composer
+      // carries five, silently dropping the not-in-English share and the
+      // tracking-change count that this same page states verbatim 1,600px
+      // lower. One record, one composer, one band.
+      ...recordBandFixture(methodRecordFixture()),
     },
     method: methodFixture(),
     ...over,

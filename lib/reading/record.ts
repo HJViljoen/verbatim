@@ -930,13 +930,22 @@ export function howSoundLine(input: RecordInputs): string {
   const parts: string[] = []
   parts.push(plural(input.delivery.delivered, 'update'))
 
+  // THE PLATFORM MIX IS THE RECORD'S, NOT THE BAND'S — it is said ONCE, and
+  // `recordLines` is where. This line used to carry "(TikTok 896 · YouTube 684
+  // · Instagram 497 · Reddit 282)" and `recordLines` then said "2,359 videos
+  // carried conversation in this window — TikTok 896 · …" one sentence later,
+  // so every surface that prints both (Overview's bar above its record block,
+  // the weekly report's WR6) stated the same four platforms twice ten lines
+  // apart — and on the weekly the footer then states a THIRD mix, the update's
+  // own, with nothing saying why the percentages differ. A reader given one
+  // figure twice reads them as two measures.
+  //
+  // It also costs the band its width: with the mix, one sentence is ~150
+  // characters against the artboard's ~110, so the bar wrapped to two rows of
+  // 11px mono and orphaned the record link onto a third.
   if (input.coverage == null) parts.push('coverage not recorded yet')
   else if (input.coverage.length === 0) parts.push('nothing read in this window')
-  else {
-    const videos = totalVideos(input.coverage)
-    const mix = platformMixLine(totalPlatformMix(input.coverage))
-    parts.push(mix ? `${plural(videos, 'video')} (${mix})` : plural(videos, 'video'))
-  }
+  else parts.push(plural(totalVideos(input.coverage), 'video'))
 
   const lang = input.language
   if (lang.analysed > 0) {

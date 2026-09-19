@@ -30,6 +30,7 @@ import {
   RPC_THEME_READINGS,
   RPC_WINDOW_DENOMINATORS,
   RPC_WINDOW_KIND_READINGS,
+  RPC_WINDOW_SPAN_DENOMINATORS,
   RPC_WINDOW_SUBJECT_READINGS,
   RPC_WINDOW_THEME_READINGS,
   TABLE_AUDIENCE_STATS,
@@ -487,6 +488,11 @@ const MONTHLY_READING_OBJECTS = [
   RPC_DENOMINATORS,
   RPC_THEME_READINGS,
   RPC_WINDOW_DENOMINATORS,
+  // NOT covered by RPC_WINDOW_DENOMINATORS above: the test is `includes`, and
+  // 'window_span_denominators' does not contain 'window_denominators'. A name
+  // missing from this list is a 404 that reaches a page as a throw instead of
+  // as "the windowed reading is not installed here".
+  RPC_WINDOW_SPAN_DENOMINATORS,
   RPC_WINDOW_THEME_READINGS,
   RPC_SUBJECT_READINGS,
   RPC_WINDOW_SUBJECT_READINGS,

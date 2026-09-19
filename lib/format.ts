@@ -39,10 +39,30 @@ export function fmtCompact(n: number): string {
 
 export const round1 = (n: number) => Math.round(n * 10) / 10
 
-/** 85.1 → "85.1%", 16 → "16%". One decimal max, trailing .0 dropped. */
+/**
+ * 85.1 → "85.1%", 16 → "16.0%", `fmtPct(16, 0)` → "16%".
+ *
+ * ONE DECIMAL MEANS ONE DECIMAL, INCLUDING AN EXACT .0. This used to
+ * interpolate `round1(n)`, so a value landing on x.0 silently lost its decimal
+ * while its neighbours kept theirs, on lines that are read across: Voice's tone
+ * legend printed "Warm 61% · Both ways 10% · Matter-of-fact 11% · Cold 18.1%"
+ * on one tabular-nums row, and the movers row printed "3%" (42/1,388 =
+ * 3.0259%) directly under "9.4%" and "5.1%" — where the artboard prints
+ * "3.0%". Tabular figures line up on the decimal point; a column where one
+ * cell has no point does not.
+ *
+ * A CALLER THAT WANTS NO DECIMAL ASKS FOR NONE. `decimals: 0` is the whole
+ * mechanism and it is what every surface printing whole percentages already
+ * passes (`record.ts` and `method.ts`'s `share`, the competitive sentiment
+ * row, the quarterly's method figures). `lib/reports/figures.ts` picks per
+ * value with `n % 1 === 0 ? 0 : 1`, which is a deliberate mixed column and
+ * still gets exactly what it asks for.
+ */
 export function fmtPct(n: number, decimals: 0 | 1 = 1): string {
-  const v = decimals === 0 ? Math.round(n) : round1(n)
-  return `${v}%`
+  if (decimals === 0) return `${Math.round(n)}%`
+  // `toFixed(1)` rather than `round1` + interpolation: the point of this branch
+  // is that the decimal is always there, and `${3}` is "3".
+  return `${round1(n).toFixed(1)}%`
 }
 
 /** Signed delta: +2.3 → "+2.3 pt", -53 → "−53", 0 → "±0". Unit optional. */

@@ -111,15 +111,15 @@ describe('voiceAudience', () => {
 
   it('prints the platform mix largest first, with its share, and omits what the month did not carry', () => {
     const text = draw()
-    expect(text).toContain('TikTok 38% 528')
-    expect(text).toContain('Reddit 12% 166')
+    expect(text).toContain('TikTok 38.0% 528')
+    expect(text).toContain('Reddit 12.0% 166')
     expect(text.indexOf('TikTok')).toBeLessThan(text.indexOf('Reddit'))
   })
 
   it('prints the kind ladder with each share against the one denominator', () => {
     const text = draw()
-    expect(text).toContain('Asking how it works 34% 472 of 1,388')
-    expect(text).toContain('Saying it worked 28% 389 of 1,388')
+    expect(text).toContain('Asking how it works 34.0% 472 of 1,388')
+    expect(text).toContain('Saying it worked 28.0% 389 of 1,388')
     // D4: the mock's bare "questions 34%" beside five others reads as a
     // partition, and the kinds do not partition anything — so every pill
     // carries its own count, INSIDE the pill. That is what makes the row's own
@@ -145,7 +145,7 @@ describe('voiceAudience', () => {
 
   it('says the replies figure with its own n and its own caveat', () => {
     const text = draw()
-    expect(text).toContain('21% of this month’s comments were replies to another comment — 1,972 of 9,397')
+    expect(text).toContain('21.0% of this month’s comments were replies to another comment — 1,972 of 9,397')
     expect(text).toContain('Counted across every audience')
   })
 

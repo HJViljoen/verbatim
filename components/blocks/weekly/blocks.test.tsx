@@ -224,8 +224,8 @@ describe('WR2 · where things stand', () => {
   it('prints every side as a level with its count', () => {
     for (const mode of MODES) {
       const text = renderText(block.render(weeklyFixture(), mode, ctx))
-      expect(text, mode).toContain('31% 26 of 84')
-      expect(text, mode).toContain('22% 305 of 1,388')
+      expect(text, mode).toContain('31.0% 26 of 84')
+      expect(text, mode).toContain('22.0% 305 of 1,388')
     }
   })
 

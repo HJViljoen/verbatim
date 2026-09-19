@@ -565,13 +565,13 @@ describe('how much was read', () => {
   it('excludes Reddit from the denominator and dates the set-aside record', () => {
     const row = find(computeReadiness(ossur()), 'read-depth')
     expect(row.status).toBe('partial')
-    expect(row.detail).toBe('Speech read on 798 of 1,596 videos (50%), translated 208 (13%), on-screen text 269 (16.9%) · Reddit excluded.')
+    expect(row.detail).toBe('Speech read on 798 of 1,596 videos (50.0%), translated 208 (13.0%), on-screen text 269 (16.9%) · Reddit excluded.')
     expect(row.notes[0]).toBe('38.2% of what was looked at was set aside — recorded only from 23 Aug 2026, so no month before that can show it.')
   })
 
   it('reads the trial workspace’s own shares', () => {
     expect(find(computeReadiness(sealand()), 'read-depth').detail)
-      .toBe('Speech read on 630 of 1,010 videos (62.4%), translated 139 (13.8%), on-screen text 333 (33%) · Reddit excluded.')
+      .toBe('Speech read on 630 of 1,010 videos (62.4%), translated 139 (13.8%), on-screen text 333 (33.0%) · Reddit excluded.')
   })
 
   it('is in place only when the set-aside record reaches back past the first update', () => {

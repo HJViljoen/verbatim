@@ -351,7 +351,7 @@ describe('the masthead', () => {
 
 describe('levelOf', () => {
   it('never prints a share without the count under it', () => {
-    expect(levelOf(65, 271)).toBe('24% · 65 of 271')
+    expect(levelOf(65, 271)).toBe('24.0% · 65 of 271')
     expect(levelOf(3, 0)).toBe('3 videos')
   })
 })

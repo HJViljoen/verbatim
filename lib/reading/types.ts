@@ -292,6 +292,14 @@ export const RPC_THEME_READINGS = 'monthly_theme_readings'
  *  window rather than a month. Service-role only, like the month pair. */
 export const RPC_WINDOW_DENOMINATORS = 'window_denominators'
 export const RPC_WINDOW_THEME_READINGS = 'window_theme_readings'
+/** MANY windows, ONE aggregation. This week's chart clips thirteen update
+ *  windows to every month they touch, so it asks for thirteen to twenty-six
+ *  windowed figures at once; through `window_denominators` that is thirteen to
+ *  twenty-six whole-corpus aggregations differing in one date predicate. This
+ *  takes the spans as `[{k, f, t}]` and groups one pass over
+ *  [min(f), max(t)) by span. It returns videos and comments only — no
+ *  audience, no mix — because that is what a cadence chart prints. */
+export const RPC_WINDOW_SPAN_DENOMINATORS = 'window_span_denominators'
 export const TABLE_DENOMINATORS = MONTH_DENOMINATOR_TABLE.table
 export const TABLE_THEME_READINGS = MONTH_THEME_TABLE.table
 /** M4's sibling. Named here, beside the others, because the freeze contract is

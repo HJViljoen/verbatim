@@ -46,18 +46,24 @@ describe('platformShareLine', () => {
 describe('methodLines', () => {
   it('composes every line, in print order', () => {
     const m = methodLines(inputs(), { brand: 'Sealand' })
-    expect(m.preparedBy).toBe('Prepared for Sealand with Verbatim · 15 Sep 2026')
+    expect(m.preparedBy).toBe('Prepared for Sealand with Verbatim · 15 Sep 2026.')
     expect(m.lines).toEqual([m.preparedBy, m.coverage, m.basis, m.language, m.redditCap, m.privacy])
     for (const line of m.lines) expect(line.length).toBeGreaterThan(0)
+    // EVERY ITEM TERMINATES. The consumers join `lines` with a bare space, so
+    // an item without a full stop runs into the next one: "18 Sep 2026 2,359
+    // videos read in this window" is one garbled number at 9.5px mono. Two of
+    // these six had no terminator.
+    for (const line of m.lines) expect(line.endsWith('.')).toBe(true)
+    expect(m.lines.join(' ')).not.toMatch(/2026 [0-9]/)
   })
 
   it('names Verbatim alone when no workspace is given', () => {
-    expect(methodLines(inputs()).preparedBy).toBe('Prepared by Verbatim · 15 Sep 2026')
+    expect(methodLines(inputs()).preparedBy).toBe('Prepared by Verbatim · 15 Sep 2026.')
   })
 
   it('states the coverage as the WINDOW’s, with the mix as shares', () => {
     const m = methodLines(inputs())
-    expect(m.coverage).toBe('394 videos read in this window · YouTube 45% · TikTok 35% · Instagram 17% · Reddit 3%')
+    expect(m.coverage).toBe('394 videos read in this window · YouTube 45% · TikTok 35% · Instagram 17% · Reddit 3%.')
   })
 
   it('reads the reading date off the record, and takes an override', () => {

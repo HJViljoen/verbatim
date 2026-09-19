@@ -234,20 +234,36 @@ as $$
     select d.audience, count(distinct d.video_uuid) as dual_mention
     from dated d join dual on dual.id = d.video_uuid group by 1
   ),
+  -- THE WINDOW'S VIDEOS DRIVE THIS JOIN. `undated_per_video` used to start
+  -- from `public.comments` and join every comment of the tenant to every
+  -- analysed video, group the lot per video, and only then be narrowed by the
+  -- join below to the videos this window actually reads. The answer was right
+  -- and the work was the whole corpus: measured on production 2026-09-16,
+  -- Ossur is 45,316 comments of which 71 are undated and Sealand 26,100 of
+  -- which 67 — so every window read scanned tens of thousands of rows to
+  -- report about seventy. Driving from `dated` makes the scan the window's,
+  -- which is what makes a window read cheap enough to make several of.
+  window_videos as (
+    select distinct d.audience, d.video_uuid from dated d
+  ),
   undated_per_video as (
-    select v.id as video_uuid, count(*) as n
-    from public.comments c
-    join vid v on v.platform = c.platform and v.video_id = c.video_id
-    where c.client_id = p_client and c.comment_date is null
+    select wv.video_uuid, count(*) as n
+    from window_videos wv
+    join vid v on v.id = wv.video_uuid
+    join public.comments c
+      on c.client_id = p_client
+     and c.platform = v.platform
+     and c.video_id = v.video_id
+     and c.comment_date is null
     group by 1
   ),
   -- Recorded against the window's videos once, not once per month those videos
   -- occupy: "the videos this window reads also carry N comments nobody could
   -- date". Same sentence as the month row, one window instead of one month.
   undated as (
-    select s.audience, sum(u.n) as excluded_undated
-    from (select distinct d.audience, d.video_uuid from dated d) s
-    join undated_per_video u on u.video_uuid = s.video_uuid
+    select wv.audience, sum(u.n) as excluded_undated
+    from window_videos wv
+    join undated_per_video u on u.video_uuid = wv.video_uuid
     group by 1
   )
   select b.audience,
@@ -268,6 +284,85 @@ comment on function public.window_denominators(uuid, timestamptz, timestamptz) i
 
 revoke all on function public.window_denominators(uuid, timestamptz, timestamptz) from public, anon, authenticated;
 grant execute on function public.window_denominators(uuid, timestamptz, timestamptz) to service_role;
+
+-- 1b. The same denominator, many spans, ONE aggregation ------------------------
+-- This week's chart is thirteen updates and each update's window is clipped to
+-- every calendar month it touches, so one load asks for thirteen to twenty-six
+-- windowed figures. Through `window_denominators` that is thirteen to
+-- twenty-six separate aggregations over `comments JOIN videos`, differing only
+-- in one date predicate: the `vid` CTE, the rival fold and the undated pass are
+-- recomputed identically every time, twelve of them concurrently, against the
+-- instance whose disk-IO budget a morning of window-function loops exhausted on
+-- 2026-09-16.
+--
+-- The spans are contiguous slices of ONE axis, so the rows are read once over
+-- [min(from), max(to)) and grouped by span. A comment dated in two overlapping
+-- spans is counted in both — that is what a span figure means, and it is why
+-- this is a LEFT JOIN on the span bounds rather than a `width_bucket`.
+--
+-- WHAT IT DELIBERATELY DOES NOT RETURN. No audience breakdown, no platform mix,
+-- no dual-mention and no undated column: `loadUpdateSeries` sums videos and
+-- comments across audiences and prints nothing else, and a per-audience
+-- `count(distinct video)` per span is the expensive half. A caller that wants
+-- the record's full denominator for one window calls `window_denominators`,
+-- which is still the one figure a page states in prose.
+--
+-- A SPAN WITH NOTHING IN IT COMES BACK AS A ZERO ROW, not as no row: the caller
+-- has to tell "this update found nothing" from "this span was never asked
+-- for", and a missing row would make those one.
+create or replace function public.window_span_denominators(
+  p_client uuid,
+  p_spans  jsonb
+)
+returns table (
+  span_key text,
+  videos   int,
+  comments int
+)
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  with spans as (
+    select s.k::text as span_key, s.f as from_ts, s.t as to_ts
+    from jsonb_to_recordset(coalesce(p_spans, '[]'::jsonb)) as s(k text, f timestamptz, t timestamptz)
+    where s.k is not null and s.f is not null and s.t is not null and s.f < s.t
+  ),
+  bounds as (
+    select min(from_ts) as lo, max(to_ts) as hi from spans
+  ),
+  vid as (
+    select v.id, v.platform, v.video_id
+    from public.videos v
+    where v.client_id = p_client
+      and v.analyzed_run_id is not null
+  ),
+  -- ONE pass over the axis. Same join and same half-open rule as
+  -- `window_denominators`' `dated`, minus the audience label, which nothing
+  -- here groups by.
+  dated as (
+    select v.id as video_uuid, c.id as comment_id, c.comment_date
+    from public.comments c
+    join vid v on v.platform = c.platform and v.video_id = c.video_id
+    where c.client_id = p_client
+      and c.comment_date >= (select lo from bounds)
+      and c.comment_date <  (select hi from bounds)
+  )
+  select s.span_key,
+         count(distinct d.video_uuid)::int,
+         count(distinct d.comment_id)::int
+  from spans s
+  left join dated d on d.comment_date >= s.from_ts and d.comment_date < s.to_ts
+  group by s.span_key
+  order by s.span_key
+$$;
+
+comment on function public.window_span_denominators(uuid, jsonb) is
+  'Many half-open windows, one aggregation: for each {k, f, t} in p_spans, the DISTINCT analysed videos carrying a comment dated in [f, t) and their comments, tenant-wide. Same join and same half-open rule as window_denominators, without the audience breakdown, the platform mix, the dual-mention count or the undated column — This week draws thirteen updates clipped to the months they touch and sums videos and comments across audiences, and asking window_denominators once per span recomputed the video set and the rival fold thirteen to twenty-six times. A span with nothing in it comes back as a zero row, never as no row.';
+
+revoke all on function public.window_span_denominators(uuid, jsonb) from public, anon, authenticated;
+grant execute on function public.window_span_denominators(uuid, jsonb) to service_role;
 
 -- 2. The window theme read -----------------------------------------------------
 -- One row per audience per theme for the whole window, under one run's
@@ -327,17 +422,28 @@ as $$
     join vid_all v on v.platform = ca.platform and v.video_id = ca.video_id and v.analysed
     where ca.comment_date >= p_from and ca.comment_date < p_to
   ),
+  -- THE WINDOW'S (THEME, VIDEO) PAIRS DRIVE THIS JOIN, for the reason given on
+  -- the denominator's copy of it: the pass used to fold every undated citation
+  -- the run's themes hold and was then narrowed to the pairs `cited` already
+  -- names. Same answer, the window's rows.
+  cited_videos as (
+    select distinct c.theme_id, c.audience, c.video_uuid from cited c
+  ),
   undated_per_video as (
-    select ca.theme_id, v.id as video_uuid, count(distinct ca.comment_id) as n
-    from cited_all ca
-    join vid_all v on v.platform = ca.platform and v.video_id = ca.video_id
-    where ca.comment_date is null
+    select cv.theme_id, cv.video_uuid, count(distinct ca.comment_id) as n
+    from cited_videos cv
+    join vid_all v on v.id = cv.video_uuid
+    join cited_all ca
+      on ca.theme_id = cv.theme_id
+     and ca.platform = v.platform
+     and ca.video_id = v.video_id
+     and ca.comment_date is null
     group by 1, 2
   ),
   undated as (
-    select s.theme_id, s.audience, sum(u.n) as n
-    from (select distinct c.theme_id, c.audience, c.video_uuid from cited c) s
-    join undated_per_video u on u.theme_id = s.theme_id and u.video_uuid = s.video_uuid
+    select cv.theme_id, cv.audience, sum(u.n) as n
+    from cited_videos cv
+    join undated_per_video u on u.theme_id = cv.theme_id and u.video_uuid = cv.video_uuid
     group by 1, 2
   ),
   oncam as (

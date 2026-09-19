@@ -233,12 +233,12 @@ describe('gapLine', () => {
       b: them({ value: { k: 186, n: 426 }, pct: 43.7 }),
       window: SEP,
     })
-    expect(gapLine(gap)).toBe('you 31% of 252 · Freitag 43.7% of 426 · 12.7 points apart (band 7.6)')
+    expect(gapLine(gap)).toBe('you 31.0% of 252 · Freitag 43.7% of 426 · 12.7 points apart (band 7.6)')
   })
 
   it('states no magnitude beside a word that refuses the comparison (D2)', () => {
     const thin = gapBetween({ ...durability, a: side(), b: them(), window: SEP })
-    expect(gapLine(thin)).toBe('you 31% of 84 · Freitag 43.7% of 142 · too few to compare')
+    expect(gapLine(thin)).toBe('you 31.0% of 84 · Freitag 43.7% of 142 · too few to compare')
     expect(gapLine(thin)).not.toMatch(/\d+(\.\d)? points/)
   })
 
@@ -264,18 +264,18 @@ describe('gapLine', () => {
       window: { kind: 'quarter', from: '2026-07-01', to: '2026-10-01' },
     })
     expect(gapLine(quarter, { period: true })).toBe(
-      'The quarter from July 2026 · you 31% of 252 · Freitag 43.7% of 426 · 12.7 points apart (band 7.6)',
+      'The quarter from July 2026 · you 31.0% of 252 · Freitag 43.7% of 426 · 12.7 points apart (band 7.6)',
     )
     // And it is opt-in: a surface whose other figures are of the same window
     // prints the bare sentence, exactly as before.
-    expect(gapLine(quarter)).toBe('you 31% of 252 · Freitag 43.7% of 426 · 12.7 points apart (band 7.6)')
+    expect(gapLine(quarter)).toBe('you 31.0% of 252 · Freitag 43.7% of 426 · 12.7 points apart (band 7.6)')
     expect(gapLine(quarter, {})).toBe(gapLine(quarter))
   })
 
   it('names a month window the same way', () => {
     const thin = gapBetween({ ...durability, a: side(), b: them(), window: SEP })
     expect(gapLine(thin, { period: true })).toBe(
-      'September 2026 · you 31% of 84 · Freitag 43.7% of 142 · too few to compare',
+      'September 2026 · you 31.0% of 84 · Freitag 43.7% of 142 · too few to compare',
     )
   })
 

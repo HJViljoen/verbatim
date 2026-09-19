@@ -175,7 +175,7 @@ describe('SU1 · the subjects list', () => {
 describe('SU2 · the subject in full', () => {
   it('prints every side as a level with its count', () => {
     const text = renderText(subjectsSubject.render(subjectsFixture(), 'app', ctx))
-    expect(text).toContain('31%')
+    expect(text).toContain('31.0%')
     expect(text).toContain('26 of 84 videos')
     expect(text).toContain('43.7%')
     expect(text).toContain('62 of 142 videos')
@@ -607,7 +607,7 @@ describe('the mock’s own shape, where the data allows it', () => {
   it('leads the pane with the banded gap and never with "narrowed"', () => {
     const text = renderText(subjectsSubject.render(subjectsFixture(), 'app', ctx))
     // D1: both levels with both denominators, and the refusal the band earned.
-    expect(text).toContain('Durability — You 31% of 84 · Freitag 43.7% of 142 · too few to compare')
+    expect(text).toContain('Durability — You 31.0% of 84 · Freitag 43.7% of 142 · too few to compare')
     expect(text).not.toContain('narrowed')
   })
 
@@ -635,7 +635,7 @@ describe('the mock’s own shape, where the data allows it', () => {
 
   it('states the category’s last three levels as levels, dated, and claims no direction from them', () => {
     const text = renderText(subjectsSubject.render(subjectsFixture(), 'app', ctx))
-    expect(text).toContain('Jul 17% → Aug 19% → Sep 24.5% in the category')
+    expect(text).toContain('Jul 17.0% → Aug 19.0% → Sep 24.5% in the category')
   })
 
   it('names the axis the chart spans, and what the shading over it means', () => {
@@ -823,7 +823,7 @@ describe('SU2 · the two-audience gap the pane carries', () => {
   it('reads the mock’s own month as too few to compare, with both levels intact', () => {
     const gap = subjectsFixture().selected!.gap as Gap
     expect(gap.state).toBe('too_little_data')
-    expect(gapLine(gap)).toBe('You 31% of 84 · Freitag 43.7% of 142 · too few to compare')
+    expect(gapLine(gap)).toBe('You 31.0% of 84 · Freitag 43.7% of 142 · too few to compare')
   })
 
   it('refuses the difference outright once the rival is retired — the tracked set moved', () => {
@@ -835,7 +835,7 @@ describe('SU2 · the two-audience gap the pane carries', () => {
     // on the earlier one.
     // The side names itself stopped — the fixture now carries the rival's own
     // `retiredAt`, not just a refusal reason.
-    expect(gapLine(gap)).toBe('You 31% of 84 · Freitag — stopped 43.7% of 142 · comparison refused')
+    expect(gapLine(gap)).toBe('You 31.0% of 84 · Freitag — stopped 43.7% of 142 · comparison refused')
     expect(gapBasisLine(gap)).toBe('comparison refused in August')
   })
 

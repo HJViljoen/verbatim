@@ -22,9 +22,9 @@ describe('OV2 · your subjects', () => {
 
   it('prints every side as a level with its count', () => {
     const text = renderText(overviewSubjects.render(overviewFixture(), 'app', ctx))
-    expect(text).toContain('31% 26 of 84')
-    expect(text).toContain('44% 62 of 142')
-    expect(text).toContain('22% 305 of 1,388')
+    expect(text).toContain('31.0% 26 of 84')
+    expect(text).toContain('44.0% 62 of 142')
+    expect(text).toContain('22.0% 305 of 1,388')
   })
 
   it('bands the category and refuses your own side, without hiding it', () => {
@@ -125,7 +125,7 @@ describe('the two-audience gap OV2 carries', () => {
     expect(gap.refusedReason).toBe('rename')
     expect(gap.gapPts).toBeNull()
     const line = gapLine(gap)
-    expect(line).toBe('you 31% of 84 · Freitag 44% of 142 · comparison refused')
+    expect(line).toBe('you 31.0% of 84 · Freitag 44.0% of 142 · comparison refused')
     // And the refusal travels to the earlier month rather than printing beside it.
     expect(gapBasisLine(gap)).toBe('comparison refused in August')
   })
@@ -141,9 +141,9 @@ describe('the two-audience gap OV2 carries', () => {
     const text = renderText(overviewSubjects.render(data, 'app', ctx))
     const line = gapLine(data.subjects.gaps.s1 as Gap)
     // The row prints "44% 62 of 142"; the gapline prints "Freitag 44% of 142".
-    expect(text).toContain('44% 62 of 142')
-    expect(line).toContain('Freitag 44% of 142')
-    expect(line).toContain('you 31% of 84')
+    expect(text).toContain('44.0% 62 of 142')
+    expect(line).toContain('Freitag 44.0% of 142')
+    expect(line).toContain('you 31.0% of 84')
   })
 })
 
@@ -157,7 +157,7 @@ describe('OV2, ported to the artboard', () => {
     // month as its own dated reading. "narrowed" is not built.
     const data = overviewFixture()
     const text = renderText(overviewSubjects.render(data, 'app', ctx))
-    expect(text).toContain('Durability — you 31% of 84 · Freitag 44% of 142 · too few to compare')
+    expect(text).toContain('Durability — you 31.0% of 84 · Freitag 44.0% of 142 · too few to compare')
     expect(text).toContain('in August')
     expect(text).not.toContain('narrowed')
   })

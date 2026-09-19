@@ -76,7 +76,7 @@ describe('the line a live surface draws beside its own figure', () => {
   it('names the date and what that artefact read', () => {
     const sent = sentMonthOf([stored()])
     expect(sentLineFor(sent, INDUSTRY_AUDIENCE, 'subject', 's1', 22))
-      .toBe('the report of 1 Sep read 19% · 264 of 1,290')
+      .toBe('the report of 1 Sep read 19.0% · 264 of 1,290')
   })
 
   it('says nothing where the figure has not moved', () => {
@@ -131,7 +131,7 @@ describe('OV2 · the subject rows', () => {
     const data = withSent([stored()])
     for (const mode of ['app', 'email'] as const) {
       expect(renderText(overviewSubjects.render(data, mode, ctx)))
-        .toContain('the report of 1 Sep read 19% · 264 of 1,290')
+        .toContain('the report of 1 Sep read 19.0% · 264 of 1,290')
     }
   })
 
