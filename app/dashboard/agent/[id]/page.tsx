@@ -57,6 +57,18 @@ export default async function AgentThreadPage({
         .map(({ i }) => ({ key: `agent.answer:${i}`, title: data.turns.length > 1 ? `Answer ${i + 1}` : 'The answer' }))
     : []
 
+  /**
+   * ONE WAY BACK PER SCREEN, and this is not it wherever the rail is.
+   *
+   * "← All questions" here and "All questions →" in the history tile
+   * (`rail.tsx`) are two controls with the same name and the same destination,
+   * ~230px apart at 1440, pointing opposite ways. The artboard draws no back
+   * link at all and gives the history tile the only one. So the rail's is the
+   * one that stays — it sits under the list of what those questions ARE, which
+   * is what makes it worth following — and this one is drawn ONLY on the
+   * document branch below, which composes no rail and would otherwise strand a
+   * reader on a plan check with nothing to leave by.
+   */
   const back = (
     <Link
       href="/dashboard/agent"
@@ -124,7 +136,6 @@ export default async function AgentThreadPage({
     return (
       <ExportScope page="agent" params={{ thread: id }} tiles={[]}>
         <AskShell context={data.bar.context} record={record} params={sp}>
-          {back}
           <AskColumns rail={rail}>
             <Tile col={12} row={2} eyebrow="The plan check" meta="nothing saved">
               <TileEmpty>
@@ -142,7 +153,6 @@ export default async function AgentThreadPage({
   return (
     <ExportScope page="agent" params={{ thread: id }} tiles={exportTiles}>
       <AskShell context={data.bar.context} record={record} params={sp}>
-        {back}
         <AskColumns rail={rail}>
           {/* THE ASK BOX STAYS ABOVE THE ANSWER, as the artboard draws it: a
               reader with an answer in front of them is one keystroke from the
