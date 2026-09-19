@@ -107,7 +107,7 @@ describe('sales.p1 — the cover', () => {
     // measures come first (see `overviewTiles`).
     expect(w).toContain('2,359 comments read in September 2026, on 1,388 videos in the category')
     expect(w).toContain('120 videos name a switch between brands')
-    expect(w).toContain('28 of 205 videos carry')
+    expect(w).toContain('28 of 205 videos in the category in September 2026 carry')
   })
 
   // The badge row is the artboard's third line, and it is a Verdict rather

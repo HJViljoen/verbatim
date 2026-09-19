@@ -153,7 +153,7 @@ describe('the cover on a brief that is not the sales brief', () => {
     expect(read.map((t) => t.label)).toEqual([
       'September 2026 — No denominator recorded for this month. Nothing on this sheet is a share of a counted population until it is.',
       'videos name a switch between brands · 64 of 120 toward you · 22 of 120 away',
-      'of 205 videos carry pushing back',
+      'of 205 videos in the category in September 2026 carry pushing back',
     ])
 
     const legacy = overviewTiles(marketing({
@@ -166,7 +166,7 @@ describe('the cover on a brief that is not the sales brief', () => {
       },
     }))
     expect(legacy).toHaveLength(3)
-    expect(legacy.map((t) => t.label)).not.toContain('of 205 videos carry pushing back')
+    expect(legacy.map((t) => t.label)).not.toContain('of 205 videos in the category\u2019s month carry pushing back')
   })
 })
 

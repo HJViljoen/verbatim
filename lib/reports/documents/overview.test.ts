@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 
 import { concludedBasisLine, gapTile, leadGap, leadVerdict, overviewTiles, verdictTile } from './overview'
+import { cannotTell, scriptedLines, switchingFigure } from './figures'
 import type { Gap, GapSide } from '../../reading/gap'
 import type { Verdict } from '../../reading/verdicts'
 import type { DocumentSnapshotData } from './types'
@@ -249,5 +250,45 @@ describe('overviewTiles', () => {
     expect(tiles.map((t) => t.value)).toEqual(['3,270', '2.8%', '69.4%'])
     expect(tiles[0].label).toBe('conversations read this update, on 469 videos')
     expect(tiles[1].label).toContain('Ottobock 9%')
+  })
+})
+
+// The two slide tiles E-sales added, and what each of them was printing
+// without (fix pass).
+const slideFigures = (over: Partial<NonNullable<DocumentSnapshotData['slideFigures']>> = {}) => ({
+  cannotTell: cannotTell([]),
+  switching: switchingFigure({
+    window: WINDOW,
+    audience: 'client',
+    audienceLabel: 'your own brand',
+    videos: [{ id: 'v1', sentiment: 'positive' }, { id: 'v2', sentiment: 'negative' }],
+    basis: 'dated by when each video was posted, not by when the conversation under it happened',
+  }),
+  crosscheck: null,
+  scripted: scriptedLines({
+    figures: {},
+    lines: [{
+      objection: { label: 'Pushing back', registryId: null, source: 'kind' as const, value: { k: 28, n: 205 } },
+      because: [],
+    }],
+  }),
+  line: null,
+  untracked: [],
+  ...over,
+})
+
+describe('overviewTiles · the objection tile names its population', () => {
+  it('is the CATEGORY\u2019s month, which is not the reading\u2019s video count', () => {
+    const tiles = overviewTiles(doc({ reading: reading(), slideFigures: slideFigures() }))
+    const objection = tiles.find((t) => t.label.includes('pushing back'))
+    expect(objection?.value).toBe('28')
+    // The sheet's own footer says "1,388 videos in the category"; the tile now
+    // says which 205 it means.
+    expect(objection?.label).toBe('of 205 videos in the category in September 2026 carry pushing back')
+  })
+
+  it('names the audience alone where the brief has no monthly reading', () => {
+    const tiles = overviewTiles(doc({ slideFigures: slideFigures() }))
+    expect(tiles.some((t) => t.label === 'of 205 videos in the category\u2019s month carry pushing back')).toBe(true)
   })
 })

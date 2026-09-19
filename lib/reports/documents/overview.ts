@@ -240,6 +240,21 @@ export const slugOf = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g
  * movement claim over a comment count under a fixed panel, which has no
  * denominator and therefore no band (D7).
  */
+/**
+ * What a KIND's denominator is, in the reader's words.
+ *
+ * `month_kind_readings` counts every kind over the category audience's videos
+ * for ONE month, so the population is the category's month and nothing else —
+ * never the whole reading's video count, which is what a brief's footers and
+ * its method card print. Where the reading names the category the label is the
+ * reading's own; otherwise the audience's standing name.
+ */
+function objectionPopulation(r: DocumentSnapshotData['reading']): string {
+  const category = r?.denominators.find((d) => d.audience === 'industry-other') ?? null
+  const label = category?.label ?? 'the category'
+  return r ? `videos in ${label} in ${r.monthLabel}` : `videos in ${label}\u2019s month`
+}
+
 export function overviewTiles(data: DocumentSnapshotData): OverviewTile[] {
   const f = data.figures
   const r = data.reading
@@ -263,10 +278,21 @@ export function overviewTiles(data: DocumentSnapshotData): OverviewTile[] {
   // The objection, with the population it is a share of. No badge: a kind's
   // level carries no banded comparison on this corpus, and the artboard's
   // "▼ 3 pts · fading, 3rd month" is exactly the claim nothing measured.
+  //
+  // AND THE POPULATION IS NAMED, NOT IMPLIED (fix pass). An objection is a
+  // KIND, counted by `month_kind_readings` over ONE denominator — the CATEGORY
+  // audience's videos in the month this brief reads — and the label emitted
+  // the integer alone: "28 · of 205 videos carry pushing back", on a sheet
+  // whose own footer says "1,388 videos in the category". A reader could
+  // compute 13.7% or 2.0% and had nothing anywhere in the document to choose
+  // between them, which defeats the "of N" rule from inside it. The crosscheck
+  // line already states the rule in as many words ("Two populations, two
+  // denominators — read them side by side"); this is the tile that states it
+  // first saying which one it is.
   const objectionTile: OverviewTile | null = objection && objection.value.n > 0
     ? {
         value: fmtInt(objection.value.k),
-        label: `of ${fmtInt(objection.value.n)} videos carry ${objection.label.toLowerCase()}`,
+        label: `of ${fmtInt(objection.value.n)} ${objectionPopulation(r)} carry ${objection.label.toLowerCase()}`,
         level: true,
       }
     : null
