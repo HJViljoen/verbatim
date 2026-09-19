@@ -139,9 +139,18 @@ function ownClaimsFixture() {
 //
 // WHAT IS REPRODUCED EXACTLY: September published 757 / 109 / 145 by audience,
 // classified 687 / 84 / 124, hooks 647 / 81 / 118, each format's own count and
-// its own measured median, the judged and positive counts, and Ottobock's own
-// accounts yielding ZERO posts in either month while Össur's yielded 29 in
-// August and 8 in September.
+// its own measured median, the judged and positive counts, and Össur's own
+// accounts yielding 29 posts in August and 8 in September.
+//
+// OTTOBOCK'S OWN POSTS ARE CO4'S FIVE, AND THEY HAVE TO BE. `ownClaimsFixture`
+// gives Ottobock a real September census — five posts, three of them over the
+// comment floor — and this array gave the same rival `owned: 0` in both months,
+// so `buildHeadToHead` read `ownPosts: null` and CO3 printed "one side's
+// accounts are not configured" two tiles from CO4's "5 posts · 3 of 5 drew at
+// least 5 comments". Nothing in the code binds the two reads; in production
+// both come off `videos.source` and cannot disagree, so the fixture may not
+// either. Five in September and the one August post CO4's census excludes by
+// date, which is what makes CO3's "then" column real.
 //
 // WHAT IS NEAR AND NOT EXACT, AND WHY — stated because a fixture comment that
 // claims a figure it does not build is worse than no comment. Production's
@@ -157,9 +166,9 @@ function ownClaimsFixture() {
 //   · the classified n is well under the published one on every side (84 of
 //     109 on the client's own), which is the gap mock-gap D6 says the artboard
 //     hides by printing "read from all 1,388 category videos";
-//   · the rival's own-post count is not zero, it is UNRECORDED — no video of
-//     Ottobock's has ever come in through an owned account — so the row prints
-//     a reason and not a false zero;
+//   · the own-post counts are the CENSUS's, not a second answer to it — CO3's
+//     row and CO4's tile are read off one fact in production and off one
+//     `owned` count here, so the page cannot print two of them;
 //   · September's judged counts are 5 and 19, far under any band's floor, so
 //     the positive-share row refuses a comparison on live data. An invented
 //     fixture would have handed it 71 and 126 and never exercised the refusal.
@@ -221,7 +230,9 @@ const SEPTEMBER: AudienceSpec[] = [
       ['personal-story', 48], ['bold-claim', 34], ['demonstration', 13], ['question', 13],
       ['listicle', 7], ['statistic', 2], ['shock-value', 1],
     ],
-    judged: 19, positive: 17, owned: 0, source: 'competitor_owned',
+    // FIVE, MATCHING CO4's SEPTEMBER CENSUS (`ownClaimsFixture`). See the
+    // header: one fact, read twice on one screen, may not have two answers.
+    judged: 19, positive: 17, owned: 5, source: 'competitor_owned',
   },
 ]
 
@@ -230,7 +241,9 @@ const SEPTEMBER: AudienceSpec[] = [
 const AUGUST: AudienceSpec[] = [
   { audience: 'industry-other', published: 1681, formats: [['story', 1387, 2.7, 1387]], hooks: [], judged: 538, positive: 439, owned: 0, source: 'owned' },
   { audience: 'client', published: 112, formats: [['story', 73, 2.7, 73]], hooks: [], judged: 11, positive: 9, owned: 29, source: 'owned' },
-  { audience: 'competitor:Ottobock', published: 247, formats: [['story', 222, 2.8, 222]], hooks: [], judged: 48, positive: 42, owned: 0, source: 'competitor_owned' },
+  // ONE, which is the August post `ownClaimsFixture` carries and excludes from
+  // September's census by date — so CO3's "then" column has the same origin.
+  { audience: 'competitor:Ottobock', published: 247, formats: [['story', 222, 2.8, 222]], hooks: [], judged: 48, positive: 42, owned: 1, source: 'competitor_owned' },
 ]
 
 /** One audience's month, expanded into the rows the loader reads. Each format's
