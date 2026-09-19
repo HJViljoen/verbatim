@@ -483,6 +483,25 @@ export function scrubAnswer(raw: string, measure: AnswerMeasure, allow: readonly
 }
 
 /**
+ * THE SENTINEL `magnitudeWords` COUNTS, AS AN ESCAPE — never as a literal.
+ *
+ * It was written straight into the source, twice (the replacement string and
+ * the regex that counted it), so this file held two raw U+0000 bytes at offsets
+ * 24132 and 24160. `file(1)` reported it as "data" and every byte-oriented tool
+ * treated it as binary: `grep -n "FindingMeasure" lib/agent/measure.ts`
+ * returned NOTHING although the interface is declared at line 82, and ripgrep
+ * skipped the file silently. Any repo-wide audit missed this file with no
+ * error — including the direction-word and "of N" sweeps of the Block D review,
+ * which had to be redone in Python — on the file holding the measurement layer
+ * of the one reader whose direction flag is true.
+ *
+ * The character is unchanged, so the count is unchanged; only its spelling is.
+ * `split().length - 1` replaces the regex so the sentinel appears exactly once
+ * in the file and nothing has to escape it a second time.
+ */
+const MARK = '\u0000'
+
+/**
  * Magnitude words the model typed outside a quotation — counted, not deleted.
  *
  * The count is the whole point: `scrubAnswer` turns the strip off, so without
@@ -490,8 +509,8 @@ export function scrubAnswer(raw: string, measure: AnswerMeasure, allow: readonly
  * until a reader found it.
  */
 export function magnitudeWords(raw: string): number {
-  const marked = replaceOutsideQuotes(raw ?? '', MAGNITUDE_RE, ' ')
-  return (marked.match(/ /g) ?? []).length
+  const marked = replaceOutsideQuotes(raw ?? '', MAGNITUDE_RE, MARK)
+  return marked.split(MARK).length - 1
 }
 
 /** An answer's prose, as the page gets it. */
