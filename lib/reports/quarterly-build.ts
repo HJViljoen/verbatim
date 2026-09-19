@@ -38,8 +38,39 @@ import {
  * schedule runner an Inngest function fetches.
  */
 
+/**
+ * THE SHAPE OF A STORED QUARTERLY READING, AND WHY IT IS 2.
+ *
+ * `QuarterlyData` changed INCOMPATIBLY in block D. `lib/pages/quarterly.ts`
+ * gained REQUIRED fields that every renderer of a stored snapshot now
+ * dereferences — `CoverStat.kind`, `ReadPage.meta`/`.flags`,
+ * `SubjectQuarterRow.rival`/`.spark`/`.sparkMonths`/`.gap`,
+ * `SubjectsPage.rivalLabel`/`.line`/`.quotes`, `CategoryPage.quiet`/
+ * `.quietNote`/`.quotes`/`.reddit`, `RivalsPage.ownPosts`/`.saidAbout`/
+ * `.headToHead`/`.questionsRival`, `StandingAdvice.grounded` — and four of
+ * them THROW rather than render thin: `subjects.quotes`, `category.quotes`,
+ * `rivals.ownPosts` and `rivals.saidAbout` are each read with `.filter` or
+ * `.map` three components into a server render.
+ *
+ * `version: 1` asserted a compatibility that no longer holds. Unlike
+ * `weekly-build.ts`, THIS FILE EXISTED BEFORE THE BRANCH, so a v1 row can
+ * already sit in `report_snapshots` — and every path that reads one (the
+ * viewer, `/r/<token>`, the PDF route, the "email as sent" re-render) would
+ * hand a paying reader a stack trace. `staleQuarterlySnapshot` is what turns
+ * that into a sentence, and the three renderers ask it before anything
+ * dereferences `data.reading`.
+ *
+ * The weekly package closed the identical defect in the same wave (1bff3082);
+ * this is that fix, on the artefact where the row can actually exist.
+ */
+export const QUARTERLY_SNAPSHOT_VERSION = 2
+
 export interface QuarterlySnapshotData {
-  version: 1
+  /** `number`, not the literal: the callers that narrow with `isQuarterlyData`
+   *  hold a `ReportSnapshotData` (whose `version` is the literal 1), and a
+   *  second literal here collapses that intersection to `never` at every one
+   *  of them. `staleQuarterlySnapshot` is what actually checks the value. */
+  version: number
   /** What tells a quarterly artefact from a weekly one, a document or an
    *  arranged report. */
   kind: 'quarterly'
@@ -67,8 +98,31 @@ export interface QuarterlySnapshotData {
   subject: string
 }
 
+/**
+ * `isQuarterlyData` deliberately still matches on `kind` ALONE. The branches
+ * that ask it (lib/reports/viewer.ts, app/r/[token]) fall through to the
+ * arranged-report path, which reads `data.sections` and would throw on a
+ * quarterly row of ANY version. Telling a quarterly artefact from a report is
+ * one question; telling a readable one from a stale one is another, and it is
+ * the one below.
+ */
 export function isQuarterlyData(data: unknown): data is QuarterlySnapshotData {
   return Boolean(data) && typeof data === 'object' && (data as { kind?: unknown }).kind === 'quarterly'
+}
+
+/**
+ * The one line to print instead of a quarterly review this build cannot
+ * redraw, or null when it can.
+ *
+ * WHAT IT IS FOR is above, on `QUARTERLY_SNAPSHOT_VERSION`. The three
+ * renderers of a stored quarterly reading — the deck, the share page and the
+ * email — ask this FIRST, so an older row is a sentence a reader can act on
+ * rather than a TypeError inside a server component.
+ */
+export function staleQuarterlySnapshot(data: QuarterlySnapshotData): string | null {
+  return data.version === QUARTERLY_SNAPSHOT_VERSION
+    ? null
+    : 'This review was built by an older version of Verbatim and cannot be redrawn here. The next scheduled review will be readable.'
 }
 
 export class QuarterlyEmptyError extends Error {}
@@ -109,7 +163,7 @@ export async function snapshotQuarterly(args: {
   const keys: QuarterlyBlockKey[] = known.length > 0 ? known : [...QUARTERLY_BLOCK_KEYS]
   const company = args.company || reading.brand
   const data: QuarterlySnapshotData = {
-    version: 1,
+    version: QUARTERLY_SNAPSHOT_VERSION,
     kind: 'quarterly',
     company,
     title: quarterlyTitle(company, reading.quarter),

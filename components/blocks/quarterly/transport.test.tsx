@@ -35,7 +35,21 @@ describe('the deck', () => {
 
   it('says so rather than throwing when it knows none of the stored keys', () => {
     const text = renderText(<QuarterlyDeck data={{ ...snapshot, keys: [] }} date="16 Sep 2026" />)
-    expect(text).toContain('names no page this build knows how to draw')
+    expect(text).toContain('None of this review’s sections can be drawn here')
+    // IN THE READER'S WORDS. This sheet goes to a client's board; "this build"
+    // and "block" are the calibration's own pipeline jargon, and the
+    // calibrated sentence for the neighbouring fact sits in the same
+    // expression (`staleQuarterlySnapshot`).
+    expect(text).not.toContain('this build')
+  })
+
+  it('prints a sentence, not a stack trace, over a snapshot written before block D', () => {
+    // `quarterly-build.ts` existed at 017fc6e, so a v1 row can be in
+    // `report_snapshots` — and `reading.rivals.saidAbout` is `.filter`ed three
+    // components in. The deck asks before it dereferences anything.
+    const text = renderText(<QuarterlyDeck data={{ ...snapshot, version: 1 }} date="16 Sep 2026" />)
+    expect(text).toContain('older version of Verbatim')
+    expect(text).not.toContain(snapshot.reading.cover.stamp)
   })
 
   it('keeps the copy contract on every state', () => {
@@ -53,6 +67,14 @@ describe('the share link', () => {
     expect(text).toContain('quoted voices read live')
     assertCopyContract(render(<QuarterlyShareShell data={snapshot} appUrl={APP} />))
   })
+
+  // A share link is opened by someone with no account and no support channel.
+  it('answers a pre-block-D snapshot with the sentence, and still names the review', () => {
+    const text = renderText(<QuarterlyShareShell data={{ ...snapshot, version: 1 }} appUrl={APP} />)
+    expect(text).toContain(snapshot.title)
+    expect(text).toContain('older version of Verbatim')
+    expect(text).not.toContain(QUARTERLY_RULE)
+  })
 })
 
 describe('the email', () => {
@@ -60,6 +82,17 @@ describe('the email', () => {
 
   it('takes its subject from the frozen reading, not from the clock', () => {
     expect(email.subject).toBe(snapshot.subject)
+  })
+
+  // An email cannot be recalled: a send over a row this build cannot redraw
+  // carries the sentence and the link rather than failing the render.
+  it('carries the sentence and no pages over a pre-block-D snapshot', () => {
+    const old = renderQuarterlyEmail({ data: { ...snapshot, version: 1 }, shareUrl: `${APP}/r/tok`, appUrl: APP, attached: true })
+    expect(old.subject).toBe(snapshot.subject)
+    expect(old.html).toContain('older version of Verbatim')
+    expect(old.html).toContain('Open the full review')
+    expect(old.html).not.toContain('The PDF is attached.')
+    expect(old.html).not.toContain(snapshot.reading.cover.stamp)
   })
 
   it('carries the cover and the read, and says where the other six are', () => {

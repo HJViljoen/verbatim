@@ -3,7 +3,7 @@ import type { BlockContext } from '@/lib/blocks/types'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fullDate } from '@/lib/format'
 import { QUARTERLY_RULE, QUARTER_PAGE_IN_SENTENCE, quarterPageKindOf } from '@/lib/reports/quarterly'
-import type { QuarterlySnapshotData } from '@/lib/reports/quarterly-build'
+import { staleQuarterlySnapshot, type QuarterlySnapshotData } from '@/lib/reports/quarterly-build'
 import { quarterlyBlocksFor } from '@/components/blocks/quarterly'
 import { Button, Hairline, text } from './primitives'
 
@@ -63,7 +63,12 @@ function pageNames(keys: readonly string[]): string[] {
 }
 
 export function QuarterlyEmail({ data, shareUrl, appUrl, attached, ctx, preheader }: QuarterlyEmailProps) {
-  const carried = data.keys.filter((k) => QUARTERLY_EMAIL_KEYS.includes(k))
+  // Asked before anything dereferences `data.reading`, whose shape changed
+  // incompatibly in block D (`QUARTERLY_SNAPSHOT_VERSION`). An email cannot be
+  // recalled, so a send over a row this build cannot redraw carries the
+  // sentence and the link rather than failing the render.
+  const stale = staleQuarterlySnapshot(data)
+  const carried = stale ? [] : data.keys.filter((k) => QUARTERLY_EMAIL_KEYS.includes(k))
   const blocks = quarterlyBlocksFor(carried)
   // NAMED, NOT COUNTED FROM THE FRONT. "the first {n} pages" is true only of an
   // arrangement that happens to store the cover and the read first; one that
@@ -75,7 +80,7 @@ export function QuarterlyEmail({ data, shareUrl, appUrl, attached, ctx, preheade
   // fixed text, so a four-key arrangement read "the other 1 — your subjects,
   // the category, the rivals, your moves, how the quarter was read and what we
   // could not settle — are in the review itself."
-  const heldNames = pageNames(data.keys.filter((k) => !QUARTERLY_EMAIL_KEYS.includes(k)))
+  const heldNames = stale ? [] : pageNames(data.keys.filter((k) => !QUARTERLY_EMAIL_KEYS.includes(k)))
   const held = heldNames.length
   return (
     <html lang="en">
@@ -104,6 +109,7 @@ export function QuarterlyEmail({ data, shareUrl, appUrl, attached, ctx, preheade
                     </tr>
                     <tr>
                       <td style={{ padding: '0 28px 8px' }}>
+                        {stale ? <div style={text.small}>{stale}</div> : null}
                         {blocks.map((block) => (
                           <div key={block.key}>{block.render(data.reading, 'email', ctx)}</div>
                         ))}
@@ -117,8 +123,8 @@ export function QuarterlyEmail({ data, shareUrl, appUrl, attached, ctx, preheade
                           <Button href={`${appUrl}/dashboard`}>Open Verbatim</Button>
                         </div>
                         <div style={{ ...text.small, marginTop: 12 }}>
-                          {attached ? 'The PDF is attached. ' : ''}
-                          {held > 0
+                          {attached && !stale ? 'The PDF is attached. ' : ''}
+                          {stale ? '' : held > 0
                             ? `This note carries ${carriedNames.length ? andList(carriedNames) : 'none of the review’s pages'}; ${
                                 held === 1 ? 'the other one' : `the other ${held}`
                               } — ${andList(heldNames)} — ${held === 1 ? 'is' : 'are'} in the review itself.`

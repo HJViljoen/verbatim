@@ -2,7 +2,7 @@ import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { fullDate } from '@/lib/format'
 import { QUARTERLY_RULE } from '@/lib/reports/quarterly'
-import type { QuarterlySnapshotData } from '@/lib/reports/quarterly-build'
+import { staleQuarterlySnapshot, type QuarterlySnapshotData } from '@/lib/reports/quarterly-build'
 import { quarterlyBlocksFor } from '@/components/blocks/quarterly'
 import { Slide } from './slide'
 
@@ -27,7 +27,10 @@ const fmtDate = (d: Date) => fullDate(d.toISOString())
 
 export function QuarterlyDeck({ data, date = fmtDate(new Date()) }: { data: QuarterlySnapshotData; date?: string }) {
   const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
-  const blocks = quarterlyBlocksFor(data.keys)
+  // Asked before anything dereferences `data.reading`, whose shape changed
+  // incompatibly in block D (`QUARTERLY_SNAPSHOT_VERSION`).
+  const stale = staleQuarterlySnapshot(data)
+  const blocks = stale ? [] : quarterlyBlocksFor(data.keys)
   const chrome = {
     context: `${data.company} · ${data.period} · reading as at ${fullDate(data.readingAt)}`,
     // TWO LINES, NOT ONE, BECAUSE THE SECOND SENTENCE IS THE GATE. The weekly
@@ -47,7 +50,14 @@ export function QuarterlyDeck({ data, date = fmtDate(new Date()) }: { data: Quar
   if (blocks.length === 0) {
     return (
       <Slide title={data.title} chrome={chrome} page={1} pages={1} layout="single">
-        <p className="m-0 text-[13px] text-muted-foreground">This review names no page this build knows how to draw.</p>
+        {/* THE PRODUCT'S OWN WORDS, NOT THE DEVELOPER'S. "this build" and
+            "page" are the calibration's pipeline jargon, on the one surface
+            that goes to a client's board — and the calibrated sentence for
+            the neighbouring fact is right beside it in `stale`. One reader,
+            one sheet, one voice, whichever check tripped. */}
+        <p className="m-0 text-[13px] text-muted-foreground">
+          {stale ?? 'None of this review’s sections can be drawn here. The next scheduled review will be readable.'}
+        </p>
       </Slide>
     )
   }

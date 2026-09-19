@@ -5,7 +5,7 @@ import type { WindowReading } from '@/lib/reading/read'
 import type { RecordInputs } from '@/lib/reading/record'
 import type { SubjectWindowReading } from '@/lib/subjects/types'
 import { searchPlanView, type DeckChangeLog, type SearchPlan } from '@/lib/settings/deck-record'
-import type { QuarterlySnapshotData } from '@/lib/reports/quarterly-build'
+import { QUARTERLY_SNAPSHOT_VERSION, type QuarterlySnapshotData } from '@/lib/reports/quarterly-build'
 import { QUARTERLY_BLOCK_KEYS, previousQuarter, quarterFor, quarterlySubject, quarterlyTitle } from '@/lib/reports/quarterly'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '@/lib/rivals'
 import { overviewFixture, refusedFixture } from '@/components/pages/overview/fixture'
@@ -409,7 +409,7 @@ export function thinQuarterFixture(): QuarterlyData {
 export function quarterlySnapshotFixture(reading: QuarterlyData = quarterlyFixture()): QuarterlySnapshotData {
   const company = reading.brand
   return {
-    version: 1,
+    version: QUARTERLY_SNAPSHOT_VERSION,
     kind: 'quarterly',
     company,
     title: quarterlyTitle(company, reading.quarter),
