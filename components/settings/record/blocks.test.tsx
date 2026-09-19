@@ -238,6 +238,17 @@ describe('the change log', () => {
     expect(text).not.toContain('Poler')
   })
 
+  it('lets both prose cells break, so the reconstructed actor stays inside its track', () => {
+    // RC3. `minmax(0, 0.5fr)` stops the track demanding width; it does not
+    // stop the content escaping it. "Reconstructed, not recorded" leads with
+    // an unbreakable 85px word in a 53px track at 1024, where the document
+    // genuinely scrolled 8px. Both cells now carry `break-words`; before, only
+    // "What it breaks" did.
+    expect(render(changeLog).match(/min-w-0 break-words text-\[12\.5px\]/g)).toHaveLength(
+      (changeLogFixture().recorded.length + changeLogFixture().prehistory.length) * 2,
+    )
+  })
+
   it('prints the boundary the route passes, and lets it wrap', () => {
     // RC1: the header note is the one node on this page that carried a whole
     // sentence in a `shrink-0` flex item. A flex item that cannot shrink
