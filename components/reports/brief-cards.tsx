@@ -89,8 +89,15 @@ export function BriefCards({
           so at 1024 the three cards went full width and each figure row became
           label-left / value-right across ~950px of nothing. The artboard's
           density is the three-up card; two-up from `md` keeps it until the
-          page's own twelve columns take over. */}
-      <PageGrid className="md:grid-cols-2 xl:auto-rows-min">
+          page's own twelve columns take over.
+          AND THREE-UP FROM `lg`, BECAUSE TWO COLUMNS ORPHAN THE THIRD. There
+          are exactly three cards: at 1024 `md:grid-cols-2` drew 2 + 1, a
+          half-width empty cell above two full-width tiles, which is the
+          loudest thing in the row and says nothing. Three-up at 1024 is about
+          240px a card against the artboard's 262px at 1440 — the same card,
+          slightly narrower — and the row reads as one row at every width above
+          `md`. */}
+      <PageGrid className="md:grid-cols-2 lg:grid-cols-3 xl:auto-rows-min">
         {cards.map((c) => (
           <Tile
             key={c.role}
