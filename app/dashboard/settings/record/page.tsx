@@ -166,7 +166,12 @@ export default async function SettingsRecordPage() {
           unavailable={
             inputs.changes.available
               ? null
-              : 'Nothing in the product can record a configuration change yet. When that ships, every change from that day on is written down here as it happens.'
+              // NOT "WHEN THAT SHIPS" (Block D wave 3, RC5): release
+              // vocabulary on a client settings page written otherwise in
+              // careful plain English. The claim itself stands —
+              // `inputs.changes.available` is false only where `loadChanges`
+              // probes a missing `config_changes` table.
+              : 'Nothing here can record a configuration change yet. From the first day it can, every change is written down as it happens.'
           }
         />
 
@@ -176,7 +181,10 @@ export default async function SettingsRecordPage() {
           unavailable={
             inputs.gate.available
               ? null
-              : 'We do not yet show you what was set aside. The record exists; opening it to you is a change we have not shipped.'
+              // Same rule as the change log's sentence above (RC5): what is
+              // true is that the record exists and is not open here yet, and
+              // that is what it says.
+              : 'We do not yet show you what was set aside. The record exists; it is not open to you here yet.'
           }
           unjudged={
             totals.unjudged > 0
