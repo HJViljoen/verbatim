@@ -133,12 +133,38 @@ export const FLAG_NOTE: Partial<Record<VerdictFlag, string>> = {
   thin: 'that month is thin against this audience’s own year',
 }
 
+/**
+ * The reader's word for each `VerdictState`, in the prompt.
+ *
+ * ONE VOCABULARY, AND THIS TABLE WAS A FIFTH. `MOVEMENT_WORDS`
+ * (components/delta-badge.tsx) is the product's one table for these tokens —
+ * its own docstring is about having retired two badges and five movement
+ * vocabularies to get there — and this one disagreed with it twice:
+ * `baseline_forming` read "not enough history to compare yet" against "not
+ * enough months yet", and `refused` read "not comparable" against "comparison
+ * refused". That is not academic here: `renderMovement` below tells the model
+ * to say these words back, and Ask's answer is client-facing, so a reader could
+ * be told in one week that a comparison is "not comparable" by the agent and
+ * "comparison refused" by every badge on every other surface. `FLAG_NOTE` six
+ * lines above was exported precisely to stop this ("a second table of these
+ * sentences is how a product comes to say two things about one flag").
+ *
+ * REPEATED RATHER THAN IMPORTED, for the reason `lib/reading/gap.ts:GAP_WORDS`
+ * already gives about the same two phrases: a lib module may not depend on
+ * `components`, and importing a badge to get five words would be the wrong
+ * dependency. `lib/agent/movement.test.ts` pins the two tables equal, so the
+ * copy stays one copy without the import.
+ *
+ * `moved` is this table's own: `MOVEMENT_WORDS` excludes it because a MOVED
+ * verdict is printed as an arrow and a magnitude rather than a word, and the
+ * prompt needs a word.
+ */
 const STATE_NOTE: Record<string, string> = {
   moved: 'moved',
   no_clear_change: 'no clear change',
   too_little_data: 'too few to compare',
-  baseline_forming: 'not enough history to compare yet',
-  refused: 'not comparable',
+  baseline_forming: 'not enough months yet',
+  refused: 'comparison refused',
 }
 
 /** One line of the block. Pure, and the only place a verdict becomes words. */
@@ -188,10 +214,11 @@ export function renderMovement(readings: readonly MovementReading[]): string {
     'line below carries its own verdict, decided in code against a band.',
     ...readings.map(movementLine),
     'You may name a direction ONLY where a line says growing, fading or flat, and',
-    'only in those words. Where a line says "too few to compare" or "not',
-    'comparable", say plainly that those months cannot be compared and answer what',
-    'the conversation says now. Never work out a direction from the numbers',
-    'yourself, and never describe a month that is still filling as a finished one.',
+    'only in those words. Where a line says "too few to compare", "comparison',
+    'refused" or "not enough months yet", say plainly that those months cannot be',
+    'compared and answer what the conversation says now.',
+    'Never work out a direction from the numbers yourself,',
+    'and never describe a month that is still filling as a finished one.',
   ].join('\n')
 }
 
