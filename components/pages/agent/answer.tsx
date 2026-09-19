@@ -124,6 +124,30 @@ function OwnSide({ f }: { f: FindingMeasure }) {
 }
 
 /**
+ * THE CHART'S BOX — the one rule that makes a finding survive a narrow screen.
+ *
+ * It was `w-[380px] shrink-0` inside a row that could not wrap, beside a
+ * `min-w-0 flex-1` prose column, so the sentence got whatever 380px left over.
+ * Measured on the populated fixture: at 768 (sidebar on, tile 496px) the prose
+ * column was ~46px and rendered one short word per line — "The / wet- /
+ * commute / question / is / the / one no / tracked / brand / answers / on /
+ * camera" — and at 390 the SVG painted OVER the words while `Tile`'s
+ * `overflow-hidden` cut the end label to "The category 9.4", a level with its
+ * denominator gone, which is the one thing this page may not print. Neither
+ * width showed a scrollbar, so an overflow probe reported the page clean.
+ *
+ * `basis-[380px]` is the width the chart ASKS for and `grow-0` stops it taking
+ * more; the default `flex-shrink: 1` with `min-w-0` is what lets it come down
+ * to the tile's width on a phone, where `CalendarLine`'s SVG is already
+ * `width="100%"` over a viewBox and so scales rather than clips. Paired with
+ * the row's `flex-wrap` and the prose column's `basis-[16rem]`, the chart drops
+ * BELOW the sentence the moment the two cannot both be had — and the chart is
+ * the right one to move, because `MonthTrail` under it prints the same months
+ * as figures.
+ */
+const CHART_BOX = 'min-w-0 basis-[380px] grow-0'
+
+/**
  * The finding's chart.
  *
  * D3: a chart is a direction claim too, so a line is drawn only where there is
@@ -139,7 +163,7 @@ function FindingChart({ f }: { f: FindingMeasure }) {
   const readable = values.filter((v) => v != null).length
   if (label) {
     return (
-      <div className="flex w-[380px] shrink-0 flex-col justify-center gap-1">
+      <div className={`flex flex-col justify-center gap-1 ${CHART_BOX}`}>
         <p className="m-0 font-mono text-[11px] text-muted-foreground">{label}</p>
         <p className="m-0 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
           {readable === 0
@@ -150,7 +174,7 @@ function FindingChart({ f }: { f: FindingMeasure }) {
     )
   }
   return (
-    <div className="flex w-[380px] shrink-0 flex-col gap-1">
+    <div className={`flex flex-col gap-1 ${CHART_BOX}`}>
       <CalendarLine
         axis={f.chart.axis}
         series={[f.chart.line]}
@@ -241,11 +265,15 @@ function Finding({
 }) {
   const f = measure?.findings.find((x) => x.findingId === findingKey(turnIndex, point.id)) ?? null
   return (
-    <div className="flex items-start gap-3">
+    // WRAPS, AND THE PROSE HAS A FLOOR — see `CHART_BOX`. `basis-[16rem]` is
+    // the hypothetical size the wrap is decided on: with `flex-1` (basis 0) the
+    // line always "fitted" and the sentence was squeezed to whatever the chart
+    // left over.
+    <div className="flex flex-wrap items-start gap-3">
       <span className="w-3.5 shrink-0 font-mono text-[12px] font-semibold leading-[1.5] text-primary tabular-nums">
         {index + 1}
       </span>
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+      <div className="flex min-w-0 grow basis-[16rem] flex-col gap-1.5">
         {/* A REPLACED POINT IS MUTED, not hidden: its own sentence named a
             figure nothing measured, the text here is the product's reading in
             its place, and the quotes it rested on are untouched. */}
