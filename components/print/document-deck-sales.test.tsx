@@ -196,7 +196,7 @@ describe('the overview sheet, once the cover has taken the summary', () => {
   // 1123 × 631 sheet — about 85% of it nothing on a one-finding month. The
   // list is worth having and is not the cover's (the cover indexes PAGES,
   // this indexes the argument), so it carries what it is a list of.
-  it('carries each finding’s evidence, its sheet and its audiences', () => {
+  it('carries each finding’s evidence and the sheet it is argued on', () => {
     const w = sheet()
     const t = words(w)
     expect(t).toContain('The objection to answer is longevity, not cost.')
@@ -204,8 +204,12 @@ describe('the overview sheet, once the cover has taken the summary', () => {
     expect(t).toContain('1,388 videos across')
     expect(t).toContain('4 strands of the research')
     expect(t).toContain('confidence reasonable')
-    expect(t).toContain('the category')
-    expect(t).toContain('Sealand’s audience')
+    // …AND NOT THE AUDIENCES (wave 3, `sales`-6). The list's own rule is that
+    // it indexes the argument rather than restating it, and the pills are
+    // drawn beside the headline on the sheet `page 3` points at. Keeping a
+    // second row of them per finding is what put the sheet's last sentence
+    // past the bottom of the body once the title took the artboard's size.
+    expect(words(sheetNamed(deck(), 'Finding 1'))).toContain('Sealand’s audience')
   })
 
   // Every count on the row is the finding page's own meta, so the two sheets

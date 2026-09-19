@@ -283,11 +283,16 @@ describe('the In-short sheet', () => {
   // EVERY CALIBRATED WORD ON THE SHEET IS IN THE SENTENCE (fix pass). The note
   // listed the five movement words and stopped, two lines above finding rows
   // carrying chips reading `solid` and `reasonable` — assigned by
-  // `calibrateSure` from counted conversations and strands, calibrated by
-  // exactly the definition the sentence uses.
+  // `calibrateSure` from counted videos and strands, calibrated by exactly the
+  // definition the sentence uses.
   it('names the evidence words its own finding rows print', () => {
     // Every word `calibrateSure` can assign is in the sentence.
     for (const sure of Object.keys(SURE_WORDS)) expect(CALIBRATION_NOTE).toContain(sure)
+    // AND ONE UNIT IN THE BASIS CLAUSE (wave 3, `sales`-6). It named "counted
+    // videos and the conversations behind each finding" — two names for one
+    // thing, on the sentence whose job is to make the vocabulary checkable.
+    expect(CALIBRATION_NOTE).toContain('from counted videos, never worded by the model')
+    expect(CALIBRATION_NOTE).not.toContain('conversations')
     // And the chips are on the same sheet as the sentence: the In-short page.
     const sheet = markupText(render(<DocumentDeck data={marketingDeckFixture()} date="28 Sep 2026" />)).split('1 / 9')[0]
     expect(sheet).toContain('solid')

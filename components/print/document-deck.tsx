@@ -515,14 +515,27 @@ function StatTile({ value, label, verdict, note, level = false, word = false }: 
  * movement words and stopped, two lines above finding rows carrying chips that
  * read `solid` and `reasonable` — calibrated words by exactly the definition
  * this sentence uses, assigned by `calibrateSure` (lib/reports/documents/
- * scrub.ts) from distinct conversations and independent strands. On the one
- * sheet whose job is to make the vocabulary checkable, two of its own words
- * were unlisted; the artboard's version names its evidence words as well.
- * The basis clause names both measures, because the two tiers are not counted
- * off the same thing.
+ * scrub.ts) from videos and independent strands. On the one sheet whose job is
+ * to make the vocabulary checkable, two of its own words were unlisted; the
+ * artboard's version names its evidence words as well.
+ *
+ * AND THE BASIS CLAUSE NAMES ONE UNIT (wave 3, `sales`-6). It read "from
+ * counted videos and the conversations behind each finding", which is two
+ * names for one thing on the one sentence whose job is to make the vocabulary
+ * checkable — the reader has to already know they are not two inputs. They
+ * are not: `calibrateSure` counts `ResearchPoint.conversationCount`, which is
+ * distinct source VIDEOS, and the strands they came from. The artboard's own
+ * version of this sentence says "from counted videos" and stops, and so does
+ * this one.
+ *
+ * "NEVER WORDED BY THE MODEL" STAYS, although "the model" is in neither
+ * THIRTEEN_WORDS nor GLOSSARY. The artboard writes those five words verbatim,
+ * Heinrich's ruling is that the wording follows the mock, and the sentence has
+ * no other way to say the thing a reader of a machine-written PDF most needs
+ * told. Adding "the model" to the glossary is `lib`'s call, not a render fix.
  */
 export const CALIBRATION_NOTE =
-  'Every calibrated word here — up, down, no clear change, too few to compare, comparison refused, and a finding’s solid, reasonable or thin — is assigned by a fixed rule from counted videos and the conversations behind each finding, never worded by the model.'
+  'Every calibrated word here — up, down, no clear change, too few to compare, comparison refused, and a finding’s solid, reasonable or thin — is assigned by a fixed rule from counted videos, never worded by the model.'
 
 /**
  * WHAT THIS SHEET WAS READ FROM, along the foot (`mkt.p1.title`'s corpus line).
@@ -656,14 +669,29 @@ function OverviewPage({ page, data, title, pages }: { page: DocPage; data: Docum
                           the mock's. */}
                       <Pill tone={c.sure === 'solid' ? 'you' : c.sure === 'reasonable' ? 'new' : 'plain'}>{c.sure}</Pill>
                     </p>
-                    <span className="flex flex-wrap gap-1.5">{audiencePills(c.audiences, data.company)}</span>
+                    {/* AND NOT THE AUDIENCES, HERE (wave 3, `sales`-6). This
+                        list's own rule, three comments up, is that it INDEXES
+                        the argument rather than restating it — and every
+                        finding's audience pills are drawn again beside its
+                        headline on the sheet the row's page number points at
+                        (`FindingPage`). The artboard's version of this list is
+                        a number, a headline, a count and an evidence chip, and
+                        a second row of pills per finding is what put the
+                        sheet's last sentence past the bottom of the body once
+                        the title took the size the artboard draws it at. */}
                   </div>
                 </li>
               ))}
             </ol>
           </div>
         )}
-        <p className="mt-auto max-w-[70ch] text-[13.5px] leading-[1.45] text-muted-foreground">{CALIBRATION_NOTE}</p>
+        {/* NO MEASURE CAP ON THE LAST LINE OF THE SHEET (wave 3, `sales`-6).
+            `max-w-[70ch]` is a reading measure for running prose and this is
+            one sentence of apparatus at the foot of a column 600px wide: the
+            cap held it to 462px and cost it a third line, which was the line
+            that fell off the bottom of the body. The artboard sets the same
+            sentence across the whole column, in two. */}
+        <p className="mt-auto text-[13.5px] leading-[1.45] text-muted-foreground">{CALIBRATION_NOTE}</p>
       </div>
       <div className="flex min-h-0 flex-col gap-4">
         {/* THE TILES BELONG TO WHICHEVER SHEET CARRIES THE SUMMARY. They are
