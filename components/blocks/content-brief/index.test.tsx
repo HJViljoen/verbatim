@@ -10,7 +10,7 @@ import { markupText, render } from '@/lib/test/render'
 import { REDDIT_CAP_LINE } from '@/lib/reading/method'
 import { BRIEF_UNIT, DELIVERY_SCOPE, LABEL_RULE, LEAD_MIN_RATED, PLAYBOOK_EMPTY, PLAYBOOK_GONE, RECORD_GONE } from '@/lib/pages/content-brief'
 import { CONTENT_BRIEF_BLOCKS, contentMake, contentPlaybook, contentRecord } from './index'
-import { ARGUMENT_CHARS, bound, shownRows, TITLE_CHARS, toMake } from './make'
+import { ARGUMENT_CHARS, bound, GROUNDING_BASIS, shownRows, TITLE_CHARS, toMake } from './make'
 import { cellFigure, engagementAxis, engagementOrder, unreadNotes } from './playbook'
 import {
   contentBriefFixture,
@@ -536,6 +536,20 @@ describe('content.make — the mock’s page 2', () => {
     // A single word longer than the budget is still not cut mid-glyph-run
     // silently — it is cut, and the ellipsis says so.
     expect(bound('antidisestablishmentarianism', 10)).toBe('antidisest\u2026')
+  })
+
+  // THE APP ARM BELOW `md` (design review 16). `md:grid-cols-4` put four cards
+  // in 768px — 161px of box against 198px of content — and a full-sentence
+  // `footerNote`, which BlockFrame makes `shrink-0` on purpose, forced the
+  // whole block to 653px at a 375px viewport.
+  it('ladders its columns from sm and lg, and keeps its basis in the slot that wraps', () => {
+    const app = render(contentMake.render(data, 'app', ctx))
+    expect(app).toContain('sm:grid-cols-2')
+    expect(app).toContain('lg:grid-cols-4')
+    expect(app).not.toContain('md:grid-cols-4')
+    // The basis sentence is in `footer` (min-w-0), not in the mono note.
+    expect(app).toMatch(/font-mono text-\[11px\] font-normal text-muted-foreground">September</)
+    expect(markupText(app)).toContain(GROUNDING_BASIS)
   })
 
   it('claims nothing about whether a comment was answered (D6)', () => {

@@ -413,8 +413,15 @@ export const contentMake: Block<MarketSurfaceData> = {
         mode={mode}
         header={mode !== 'print'}
         meta={meta}
-        footer={data.advice.actedLine}
-        footerNote={`${longMonth(data.month)} \u00b7 ${GROUNDING_BASIS}`}
+        // THE BASIS IS A SENTENCE, SO IT GOES IN THE SLOT THAT WRAPS (design
+        // review 16). `footerNote` is `shrink-0` by design — BlockFrame
+        // documents it as "the artboard's quiet mono note — the basis, the
+        // window, the population" — and a full sentence in it forced the whole
+        // block to 653px at a 375px viewport, which is the document scroll the
+        // finding measured. `footer` is the `min-w-0` half and is where the
+        // playbook block already puts its own long basis sentence.
+        footer={`${data.advice.actedLine} ${GROUNDING_BASIS}`}
+        footerNote={longMonth(data.month)}
       >
         <div className="flex min-w-0 flex-col gap-3">
           {/* ONE ROW, ALL OF ONE HEIGHT, AND THE STOP CARD IS THE LAST
@@ -443,8 +450,16 @@ export const contentMake: Block<MarketSurfaceData> = {
               17px, so the last column is quiet rather than the loudest object
               on a sheet titled "What to make next".
 
-              */}
-          <div className={`grid min-w-0 gap-[18px] ${stop ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
+              THE LADDER IS sm/lg AND NOT md (design review 16). `md` is 768,
+              and four cards in 768px gave each 161px of box against 198px of
+              content — eight nodes overflowing their boxes — while at 375 the
+              document scrolled to 669px. Two columns from 640, the full row
+              from 1024, where the earlier render measured zero overflow; a
+              printed sheet renders at 1123 and takes the full row unchanged.
+              Not reachable on today's routes — `CONTENT_BRIEF_BLOCKS` is wired
+              only into print — but the Block contract declares an app arm and
+              the render tier exercises it. */}
+          <div className={`grid min-w-0 gap-[18px] sm:grid-cols-2 ${stop ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
             {make.map((r, i) => <Card key={r.lineageId} row={r} n={i + 1} mode={mode} />)}
             {stop ? <Card key={stop.lineageId} row={stop} n={null} mode={mode} /> : null}
           </div>

@@ -144,7 +144,7 @@ export const contentRecord: Block<ContentBriefData> = {
         // block keeps its own.
         footerNote={mode === 'print' ? undefined : r.method?.preparedBy}
       >
-        <div className="grid min-w-0 gap-x-12 gap-y-4 md:grid-cols-[7fr_5fr]">
+        <div className="grid min-w-0 gap-x-12 gap-y-4 lg:grid-cols-[7fr_5fr]">
           <div className="flex min-w-0 flex-col gap-2">
             <Eyebrow>How this brief was made</Eyebrow>
             {/* AS CLOSE TO THE ARTBOARD'S SCALE AS THIRTEEN SENTENCES FIT

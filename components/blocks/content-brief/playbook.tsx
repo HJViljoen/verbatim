@@ -240,7 +240,7 @@ function Matrix({ matrix, heading, mode, legend = true }: { matrix: FormatMatrix
   // the recomposing case is bounded.
   const cols = `168px repeat(${sides.length}, minmax(0, 280px))`
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex min-w-0 flex-col gap-2">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <Eyebrow>{heading}</Eyebrow>
         {legend ? <Legend sides={matrix.sides} /> : null}
@@ -253,7 +253,14 @@ function Matrix({ matrix, heading, mode, legend = true }: { matrix: FormatMatrix
           the column names four lines above them. The numbers card next door has
           had `<dl>` since it was written; this is the same instinct applied
           evenly. */}
-      <div role="table" aria-label={`${heading}, ${matrix.basisLine}`} className="grid items-center gap-x-5 gap-y-[3px]" style={{ gridTemplateColumns: cols }}>
+      {/* THE ONE THING ALLOWED TO BE WIDER THAN THE PAGE, IN ITS OWN SCROLLER
+          (design review 16, AGENTS.md's responsive rule). The grid's label
+          column is a fixed 168px and every cell carries a bar and a 62px
+          figure, so below about 640px the table cannot shrink further without
+          the figures colliding — and the whole document was scrolling
+          horizontally instead of the table. */}
+      <div className="min-w-0 overflow-x-auto">
+      <div role="table" aria-label={`${heading}, ${matrix.basisLine}`} className="grid min-w-[420px] items-center gap-x-5 gap-y-[3px]" style={{ gridTemplateColumns: cols }}>
         <div role="row" className="contents">
           <ColumnHead>{heading === 'What gets made' ? 'Format' : 'Hook'}</ColumnHead>
           {sides.map((s) => <ColumnHead key={s.audience}>{s.label}</ColumnHead>)}
@@ -265,6 +272,7 @@ function Matrix({ matrix, heading, mode, legend = true }: { matrix: FormatMatrix
             ))}
           </Row>
         ))}
+      </div>
       </div>
     </div>
   )
@@ -433,7 +441,7 @@ export const contentPlaybook: Block<ContentBriefData> = {
               <span>{p.formats.conclusion}</span>
             </p>
           ) : null}
-          <div className="grid gap-x-10 gap-y-3 md:grid-cols-[7fr_5fr]">
+          <div className="grid gap-x-10 gap-y-3 lg:grid-cols-[7fr_5fr]">
             <Matrix matrix={p.hooks} heading="How they open" mode={mode} legend={false} />
             <Engagement rows={p.engagement} mode={mode} of={category?.of ?? 0} basisLine={p.basisLine} />
           </div>
