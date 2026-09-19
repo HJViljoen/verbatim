@@ -68,6 +68,38 @@ export function TrackingForm(props: TrackingFormProps) {
     exclude_terms: cleanTerms(props.terms.exclude_terms),
   }))
   const [names, setNames] = useState<string[]>(() => [...props.names])
+  // THE TRACKED LIST RE-SEEDS WHEN THE SERVER'S DOES (settings ST8 / V1).
+  //
+  // `names` is the list this form will POST, seeded once by a lazy initialiser.
+  // A rename is the one operation that rewrites that same list WITHOUT going
+  // through this form: `renameRival` is a single `rename_rival` RPC that moves
+  // `competitors.name`, rewrites `tracking_configs.competitor_names` and its
+  // handles, and writes the `config_changes` row — then the page revalidates
+  // and `props.names` and every `r.name` come back renamed while this state
+  // still held the old string. Two things followed, and both are this one bug:
+  //
+  //   ST8  `dropped = !r.retiredAt && !names.includes(r.name)` went true the
+  //        instant the rename succeeded, so the row it renamed greyed out, said
+  //        "taken off here, not yet saved", and swapped its Rename control for
+  //        "Put it back" — the control gone after its own click.
+  //   V1   the section then rendered a phantom "Freitag · added here, not yet
+  //        saved" row carrying `<input name="competitor_names" value="Freitag">`
+  //        while the renamed row emitted none, so "Save tracking changes"
+  //        posted the OLD name and wrote `tracking_configs.competitor_names`
+  //        back over a rename `competitors` had already logged.
+  //
+  // Compared by CONTENT, not identity: a server component hands down a new
+  // array every render, and an identity check would clobber a reader's unsaved
+  // edits on any re-render at all. When the content does differ the server has
+  // changed the list under this form, and its list is the one that is true —
+  // an unsaved local edit at that moment is against a list that no longer
+  // exists, which is exactly what `discard()` already says about stale edits.
+  const serverNames = props.names.join('\u0000')
+  const [seededFrom, setSeededFrom] = useState(serverNames)
+  if (serverNames !== seededFrom) {
+    setSeededFrom(serverNames)
+    setNames([...props.names])
+  }
   const [period, setPeriod] = useState(props.period)
   const [day, setDay] = useState(props.day)
   // useActionState keeps its last result forever, so "Saved." would sit under a
