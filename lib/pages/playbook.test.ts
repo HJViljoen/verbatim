@@ -230,7 +230,12 @@ describe('buildHeadToHead · CO3', () => {
     // Ottobock's accounts have never yielded a post — a zero there would tell a
     // paying client their rival went quiet, so the side is null with a reason.
     expect(posts.them).toBeNull()
-    expect(posts.why).toContain('tracked accounts only')
+    // AND THE SENTENCE SAYS WHAT WAS MEASURED, NOT WHO FAILED TO CONFIGURE
+    // AN ACCOUNT (CO4). Null here is "nothing owned was read in either month";
+    // whether an account exists is the census's fact, not this one's.
+    expect(posts.why).toContain('Ottobock')
+    expect(posts.why).toContain('was read in either month')
+    expect(posts.why).not.toMatch(/not configured/)
   })
 
   it('counts only audience-family sentiment, never how a video framed itself', () => {

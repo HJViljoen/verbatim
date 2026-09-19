@@ -138,6 +138,23 @@ describe('headToHead · the five measures', () => {
     expect(posts.you!.text).toBe('9')
   })
 
+  it('says what a null own-post count MEANS, and never that an account is missing', () => {
+    // `ownPosts` is null where nothing owned was read in either month
+    // (`buildHeadToHead`'s own rule). Whether an account is CONFIGURED is a
+    // different fact, held on the census and invisible here — so the row used
+    // to tell a reader their digital director had failed to configure an
+    // account that is configured. It names the side, and it is position-free
+    // because the same row is drawn on the quarterly review.
+    const quiet = h2h({ them: side({ ...FREITAG, ownPosts: null, ownPostsPrev: null }) })
+    const posts = quiet.measures.find((m) => m.key === 'posts')!
+    expect(posts.them).toBeNull()
+    expect(posts.why).toContain('Freitag')
+    expect(posts.why).toContain('was read in either month')
+    expect(posts.why).not.toMatch(/not configured/)
+    expect(posts.why).not.toMatch(/one side/)
+    expect(h2h().measures.find((m) => m.key === 'posts')!.why).toBeNull()
+  })
+
   it('draws no verdict when both sides are under the floor, and names the floor', () => {
     const thin = (s: HeadToHeadSide): HeadToHeadSide => ({
       ...s,

@@ -514,11 +514,30 @@ function postsMeasure(input: HeadToHeadInput, basisLine: string): FaceOffMeasure
     verdict: null,
     rivalVerdict: null,
     verdictWhy: COUNT_NOT_A_SHARE,
-    why:
-      you === null || them === null
-        ? 'Own posts are counted from the tracked accounts only, and one side’s accounts are not configured.'
-        : null,
+    // WHAT NULL ACTUALLY MEANS HERE, AND IT IS NOT "NOT CONFIGURED".
+    // `ownPosts` is null where NOTHING OWNED WAS READ IN EITHER MONTH
+    // (`buildHeadToHead`, lib/pages/playbook.ts, in its own words: "a rival
+    // whose accounts have never yielded a post is not a rival who published
+    // nothing"). Accounts being configured is a different fact and this
+    // function cannot see it — `OwnPostCensus.unread` is where that fact
+    // lives, on the own-post census. So the row said a client's digital
+    // director had failed to configure an account that is configured, which
+    // is a claim about their work made from a measurement that never looked.
+    // The sentence is position-free: this row is drawn on Competitive and on
+    // the quarterly review, where the census is not in the same place.
+    //
+    // It names the side, because "one side" leaves the reader to guess which.
+    why: postsWhy(input, you, them),
   }
+}
+
+/** Which side has no own-post reading, in the words the reading supports. */
+function postsWhy(input: HeadToHeadInput, you: FaceOffSide | null, them: FaceOffSide | null): string | null {
+  if (you !== null && them !== null) return null
+  const missing = [you === null ? input.you.label : null, them === null ? input.them.label : null].filter(
+    (l): l is string => l !== null,
+  )
+  return `No post on an account of ${missing.join(' or ')}’s was read in either month, so there is nothing to count for them — which is not the same as having no account configured, and says nothing about whether one is.`
 }
 
 function sideWhy(input: HeadToHeadInput, you: FaceOffSide | null, them: FaceOffSide | null): string | null {
