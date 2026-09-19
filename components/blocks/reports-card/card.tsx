@@ -2,7 +2,6 @@ import Link from 'next/link'
 
 import { FigureCell } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
-import { MOVEMENT_WORDS } from '@/components/delta-badge'
 import { Tile } from '@/components/shell/tile'
 import { fmtInt, fmtPct, longMonth } from '@/lib/format'
 import type { QuarterlyCard } from '@/lib/pages/reports-card'
