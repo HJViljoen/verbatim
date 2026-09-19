@@ -204,6 +204,28 @@ describe('CalendarLine', () => {
     expect(labels.length).toBeLessThanOrEqual(12)
   })
 
+  it('sizes its type against the container, not against the viewBox (SH1)', () => {
+    // Every font-size is a viewBox unit, so a 880-unit drawing in a 352px
+    // column would print its 10-unit axis label at 4.0px. The correction is
+    // `--cal-k`, set by a container query in app/globals.css against the
+    // intrinsic width the chart publishes here.
+    const markup = render(chart())
+    expect(markup).toMatch(/--cal-w:\s*880/)
+    expect(markup).toContain('vb-cal')
+    // No raw font-size attribute survives: one that did would be the one label
+    // still shrinking with the box.
+    expect(markup).not.toMatch(/font-size="[0-9]/)
+    expect(markup).toMatch(/font-size:\s*calc\(10px \* var\(--cal-k, 1\)\)/)
+    // The end label carries a caller's string in a fixed gutter and is capped
+    // on its own variable rather than on --cal-k.
+    expect(markup).toMatch(/font-size:\s*calc\(11px \* var\(--cal-ke, 1\)\)/)
+  })
+
+  it('publishes the caller\'s own width as the correction base', () => {
+    const markup = render(chart({ width: 420 }))
+    expect(markup).toMatch(/--cal-w:\s*420/)
+  })
+
   it('renders nothing rather than an empty box when there is no axis or no series', () => {
     expect(CalendarLine({ axis: [], series: [you] })).toBeNull()
     expect(CalendarLine({ axis: AXIS, series: [] })).toBeNull()

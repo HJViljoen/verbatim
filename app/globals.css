@@ -242,6 +242,38 @@
   .vi-anim-ring:nth-of-type(4) { animation-delay: 0.24s; }
 }
 
+/* ── The calendar line's type (components/charts/calendar-line.tsx) ──────────
+   The chart is a viewBox scaled uniformly to its box, so every font-size in it
+   is in VIEWBOX UNITS and shrinks with the container: an 880-unit drawing in a
+   352px column printed its 10-unit axis label at 4.0px and the end label's
+   figure at 4.4px. Nothing in the component can know that factor; CSS can.
+
+   `--cal-w` is the drawing's intrinsic width, published by the component; the
+   container query buckets the BOX it landed in, so `--cal-k` is about
+   intrinsic / rendered and `calc(10px * var(--cal-k))` comes out near 10px on
+   the glass at any of them. `max(1, …)` so the correction never SHRINKS type,
+   `min(2.6, …)` so an extreme column cannot blow the drawing apart, and the
+   end label is capped lower again because it carries a caller's string in a
+   fixed 170-unit gutter (a column too narrow for it passes endLabels={false}).
+   No hex here: the drift guard scans this file. */
+.vb-cal { container-type: inline-size; }
+.vb-cal svg { --cal-k: 1; --cal-ke: 1; }
+@container (max-width: 820px) {
+  .vb-cal svg { --cal-k: min(2.6, max(1, var(--cal-w, 880) / 760)); --cal-ke: min(1.6, var(--cal-k)); }
+}
+@container (max-width: 700px) {
+  .vb-cal svg { --cal-k: min(2.6, max(1, var(--cal-w, 880) / 640)); --cal-ke: min(1.6, var(--cal-k)); }
+}
+@container (max-width: 580px) {
+  .vb-cal svg { --cal-k: min(2.6, max(1, var(--cal-w, 880) / 520)); --cal-ke: min(1.6, var(--cal-k)); }
+}
+@container (max-width: 460px) {
+  .vb-cal svg { --cal-k: min(2.6, max(1, var(--cal-w, 880) / 400)); --cal-ke: min(1.6, var(--cal-k)); }
+}
+@container (max-width: 340px) {
+  .vb-cal svg { --cal-k: min(2.6, max(1, var(--cal-w, 880) / 290)); --cal-ke: min(1.6, var(--cal-k)); }
+}
+
 /* Ring ↔ legend hover sync (components/charts/ring-sync.tsx): the hovered
    segment grows by 4px, its legend row takes the inner-block tint. */
 [data-ring-sync] circle[data-seg][data-active] {

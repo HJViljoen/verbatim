@@ -65,6 +65,38 @@ import {
 
 export type { CalendarBand, CalendarPoint, CalendarRule, CalendarSeries }
 
+/**
+ * THE TYPE DOES NOT SHRINK WITH THE CONTAINER (Block D wave 3, SH1).
+ *
+ * The drawing is a viewBox scaled uniformly to whatever box it is given, and
+ * every `fontSize` below is in VIEWBOX UNITS — so a 880-unit chart in a 352px
+ * column renders its 10-unit axis label at 4.0px, its dated-rule label at
+ * 3.6px and the end label's own figure at 4.4px. Measured across Overview's
+ * attention column (x0.40), Competitive's standings pane (x0.639 at 1440,
+ * x0.40 at 1024) and Subjects at 1024, where "Freitag 43.7% of 142" set at
+ * 5.8px with its "of 142" at 5.0px. A product whose rule is that a level
+ * without its "of N" is a score was printing the "of N" illegibly.
+ *
+ * NOTHING HERE CAN KNOW THE SCALE, so the correction is made in CSS, where the
+ * container's width is a fact: `app/globals.css` (.vb-cal) sets `--cal-k` from
+ * a container query against the intrinsic width this component publishes as
+ * `--cal-w`, and every font-size below is `calc(<n>px * var(--cal-k))`. At the
+ * chart's own size k is 1 and the drawing is byte-identical to what it was;
+ * in a half-width column k is about 2 and the 10-unit label comes out at
+ * roughly 10px on the glass either way.
+ *
+ * THE END LABEL IS CAPPED LOWER (`--cal-ke`, k clamped to 1.6). It is drawn
+ * OUTSIDE the plot, in the `padR` gutter, and unlike the axis furniture it has
+ * a string in it whose length is the caller's: growing it by 2.2 would run a
+ * theme's name past the viewBox. A caller whose column is too narrow for the
+ * gutter turns the labels off and prints the last reading underneath
+ * (`endLabels`), which is the mechanism that already exists for exactly this.
+ */
+/** Font size in viewBox units, corrected for the container's downscale. */
+const ts = (px: number) => ({ fontSize: `calc(${px}px * var(--cal-k, 1))` })
+/** The same, for the end label in the right gutter — clamped (see above). */
+const tsEnd = (px: number) => ({ fontSize: `calc(${px}px * var(--cal-ke, 1))` })
+
 /** How many dated rules can carry a printed date before the labels collide.
  *  Past it the rules are still drawn and still carry their `<title>`; only the
  *  printed tick label is dropped, because four overlapping 9px dates are less
@@ -186,7 +218,7 @@ export function CalendarLine({
   }
 
   return (
-    <div className={cn('flex min-w-0 flex-col gap-2', className)}>
+    <div className={cn('vb-cal flex min-w-0 flex-col gap-2', className)} style={{ '--cal-w': String(width) } as React.CSSProperties}>
       {showLegend && (
         <div className="flex flex-wrap gap-x-4 gap-y-1">
           {series.map((s) => {
@@ -266,8 +298,8 @@ export function CalendarLine({
             on a 44% series — an arithmetic accident, printed at a height where
             no rule is drawn to anchor it. The baseline and the midline both
             have a line under them; the top does not. */}
-        <text data-copy="figure" x={g.padL - 10} y={g.baseline + 3} textAnchor="end" fontSize={10} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">{format(scale.lo)}</text>
-        <text data-copy="figure" x={g.padL - 10} y={scale.y(scale.mid) + 3} textAnchor="end" fontSize={10} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">{format(scale.mid)}</text>
+        <text data-copy="figure" x={g.padL - 10} y={g.baseline + 3} textAnchor="end" style={ts(10)} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">{format(scale.lo)}</text>
+        <text data-copy="figure" x={g.padL - 10} y={scale.y(scale.mid) + 3} textAnchor="end" style={ts(10)} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">{format(scale.mid)}</text>
 
         {/* Dated rules. */}
         {drawn.map((r, i) => {
@@ -280,7 +312,7 @@ export function CalendarLine({
                 <title>{r.label}</title>
               </line>
               {printRuleLabels && (
-                <text x={x - 3} y={g.top} textAnchor="end" fontSize={9} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">
+                <text x={x - 3} y={g.top} textAnchor="end" style={ts(9)} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">
                   {r.at ? shortDate(r.at) : monthName(r.month)}
                 </text>
               )}
@@ -320,7 +352,7 @@ export function CalendarLine({
           return (
             <g>
               <line x1={x} y1={y1 + 4} x2={x} y2={y2 - 4} stroke="var(--cat)" strokeWidth={1} strokeDasharray="3 3" />
-              <text data-copy="figure" x={x - 10} y={(y1 + y2) / 2 + 3} textAnchor="end" fontSize={10} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">
+              <text data-copy="figure" x={x - 10} y={(y1 + y2) / 2 + 3} textAnchor="end" style={ts(10)} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">
                 {annotate.label}
               </text>
             </g>
@@ -335,7 +367,7 @@ export function CalendarLine({
               x={g.xAt(i)}
               y={g.labelY}
               textAnchor="middle"
-              fontSize={10}
+              style={ts(10)}
               fontFamily="var(--font-plex-mono), monospace"
               fill={read.has(m) ? 'var(--muted-foreground)' : 'var(--border)'}
             >
@@ -451,10 +483,10 @@ function SeriesMarks({
       })}
 
       {endLabel && end && endX != null && end.value != null && (
-        <text x={padR + 10} y={labelY ?? y(end.value) + 4} fontSize={11} fontWeight={600} fontFamily="var(--font-plex-sans), sans-serif" fill="var(--foreground)">
+        <text x={padR + 10} y={labelY ?? y(end.value) + 4} style={tsEnd(11)} fontWeight={600} fontFamily="var(--font-plex-sans), sans-serif" fill="var(--foreground)">
           {series.labelSlot ? <tspan data-copy="subject" data-slot={series.labelSlot}>{series.label}</tspan> : series.label}{' '}
           <tspan data-copy="figure" fontFamily="var(--font-plex-mono), monospace" fontWeight={500}>{format(end.value)}</tspan>
-          {series.endNote ? <tspan data-copy="figure" fontFamily="var(--font-plex-mono), monospace" fontWeight={400} fontSize={9.5} fill="var(--muted-foreground)"> {series.endNote}</tspan> : null}
+          {series.endNote ? <tspan data-copy="figure" fontFamily="var(--font-plex-mono), monospace" fontWeight={400} style={tsEnd(9.5)} fill="var(--muted-foreground)"> {series.endNote}</tspan> : null}
         </text>
       )}
     </g>
@@ -513,7 +545,7 @@ function FillingBar({
             x={x + w + 6 < padR ? x + w + 6 : x - w - 6}
             y={y(atLastMonth) + 13}
             textAnchor={x + w + 6 < padR ? 'start' : 'end'}
-            fontSize={9}
+            style={ts(9)}
             fontFamily="var(--font-plex-mono), monospace"
             fill="var(--muted-foreground)"
           >
