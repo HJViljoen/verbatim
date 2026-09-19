@@ -113,6 +113,42 @@ export function brandLabel(row: RivalRow): string {
   return row.role === 'client' ? `${row.label} (you)` : row.label
 }
 
+/**
+ * The rivals' own inks, in the artboard's order (Block D wave 3, M15).
+ *
+ * The first rival takes the full orange and the rest step toward the surface,
+ * which is `lib/pages/dashboard.ts`'s own ramp and resolves to exactly the
+ * hexes `Main.dc.html` paints its dots: #F0742B, #F59E6B, #F8BC99, #E6B03C,
+ * #CDD2D7. Written as tokens and colour-mixes `tokenHex` already knows, so the
+ * email arm can never resolve one to black.
+ */
+const RIVAL_INKS = [
+  'var(--comp)',
+  'color-mix(in srgb, var(--comp) 70%, var(--tile))',
+  'color-mix(in srgb, var(--comp) 48%, var(--tile))',
+  'var(--mixed)',
+  'var(--neutral-seg)',
+] as const
+
+/**
+ * Which ink a row's dot takes — by ROLE first, then by the row's place among
+ * the rivals.
+ *
+ * NOT A TINT AND NOT A RANK, which is this block's own rule. It is the ENTITY
+ * palette every chart on this product already uses to say whose line is whose
+ * — `var(--you)` for your own brand, the orange ramp for rivals, `var(--cat)`
+ * for the category — so a reader who has seen the subject chart, the attention
+ * line or the standings recognises the row without reading it. Identity is
+ * never colour ALONE (MASTER.md): the dot sits against the name, and the name
+ * is what the row is read by.
+ */
+export function rowInk(rows: readonly RivalRow[], row: RivalRow): string {
+  if (row.role === 'client') return 'var(--you)'
+  if (row.role !== 'rival') return 'var(--cat)'
+  const i = rows.filter((r) => r.role === 'rival').findIndex((r) => r.audience === row.audience)
+  return RIVAL_INKS[Math.max(0, i) % RIVAL_INKS.length]
+}
+
 export const overviewRivals: Block<OverviewData> = {
   key: 'overview.rivals',
   title: 'Rivals',
@@ -196,9 +232,24 @@ export const overviewRivals: Block<OverviewData> = {
                 </thead>
                 <tbody className="align-top">
                   {r.rows.map((row) => (
-                    <tr key={row.audience}>
-                      <th scope="row" className="py-1.5 pr-3 text-left text-[12.5px] font-medium">
-                        {brandLabel(row)}
+                    // THE ROW THAT IS YOURS IS THE FIRST THING A READER LOOKS
+                    // FOR (Block D wave 3, M15). "(you)" at the END of a label
+                    // is the only thing that marked it, and on a tenant whose
+                    // own name sorts between two rivals that is one row of six
+                    // with nothing to catch the eye. The artboard sets the
+                    // client's name at 600 on the inner ground — elevation,
+                    // never tone (MASTER.md), and never a rank.
+                    <tr key={row.audience} className={row.role === 'client' ? 'bg-inner' : undefined}>
+                      <th scope="row" className={`py-1.5 pr-3 text-left text-[12.5px] ${row.role === 'client' ? 'font-semibold' : 'font-medium'}`}>
+                        <span className="flex items-center gap-2">
+                          {/* The entity's own ink, 6px, as the artboard draws
+                              it. `aria-hidden`: the name beside it is what the
+                              row is read by, and a dot that announced itself
+                              would put a colour name in a screen reader's
+                              mouth. */}
+                          <span aria-hidden className="size-1.5 flex-none rounded-full" style={{ background: rowInk(r.rows, row) }} />
+                          <span className="min-w-0">{brandLabel(row)}</span>
+                        </span>
                         {row.retiredAt ? <span className="ml-1 text-[11px] font-normal text-muted-foreground">tracked until {shortDate(row.retiredAt)}</span> : null}
                       </th>
                       <td className="py-1.5 pr-3"><Share share={row.attention} recorded={r.recorded} mode={mode} /></td>
