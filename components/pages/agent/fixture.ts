@@ -329,7 +329,7 @@ export function agentFixture(over: Partial<AgentThreadData> = {}): AgentThreadDa
     planChip: PLAN_CHIP,
     // EXCLUDING th-1, which IS this thread: the rail lists where else to go,
     // not where you are (`askHistory`'s `exclude`).
-    history: askHistory(HISTORY_ROWS, new Date('2026-09-28T08:00:00.000Z'), 3, 'th-1'),
+    history: askHistory(HISTORY_ROWS, 3, 'th-1'),
     draws: askDraws(BASIS, 23),
     bar: { question: surface('ask').question ?? '', context: askBasisLine(BASIS, { short: true }) },
     record: { lines: askRecordLines(BASIS, 23), href: askRecordHref('th-1') },
@@ -371,8 +371,10 @@ export function refusedFixture(over: Partial<AgentThreadData> = {}): AgentThread
     // ONE QUESTION AND NO PLAN, AND THE ONE QUESTION IS THIS ONE. A fresh
     // workspace's rail on a thread page: the only thread held is the one being
     // read, so the rows are empty while the month count is 1 — which is why the
-    // empty line says "nothing ELSE has been asked" (`EarlierQuestionsTile`).
-    history: askHistory(HISTORY_ROWS.slice(0, 1), new Date('2026-09-28T08:00:00.000Z'), 3, 'th-1'),
+    // empty line says "nothing ELSE has been asked" (`EarlierQuestionsTile`),
+    // and why the footer is absent rather than a hairline with a lone
+    // right-aligned "earliest 28 Sep" against it.
+    history: askHistory(HISTORY_ROWS.slice(0, 1), 3, 'th-1'),
     draws: askDraws(EMPTY_BASIS, null),
     bar: { question: surface('ask').question ?? '', context: askBasisLine(EMPTY_BASIS, { short: true }) },
     record: { lines: askRecordLines(EMPTY_BASIS, null), href: askRecordHref('th-1') },

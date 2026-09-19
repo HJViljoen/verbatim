@@ -226,23 +226,31 @@ describe('earlier questions', () => {
     { threadId: 'c', title: 'Older', askedAt: '2026-09-06T09:00:00.000Z' },
     { threadId: 'd', title: 'Last month', askedAt: '2026-08-20T09:00:00.000Z' },
   ]
-  const now = new Date('2026-09-28T12:00:00.000Z')
 
-  it('draws the newest three and counts the whole wall-clock month', () => {
-    const h = askHistory(rows, now)
+  it('draws the newest three and says how many it had to draw from', () => {
+    const h = askHistory(rows)
     expect(h.rows.map((r) => r.threadId)).toEqual(['a', 'b', 'c'])
-    // Three in September; August's row is counted by neither.
-    expect(h.thisMonth).toBe(3)
+    // `held` is a fact about the TILE — four rows to draw from, three drawn.
+    // It was a count of the wall-clock month, which the list could never
+    // agree with: three September rows counted, and the third one drawn is
+    // August's.
+    expect(h.held).toBe(4)
+  })
+
+  it('leaves the open thread out of the denominator as well as out of the list', () => {
+    const h = askHistory(rows, 3, 'a')
+    expect(h.rows.map((r) => r.threadId)).toEqual(['b', 'c', 'd'])
+    expect(h.held).toBe(3)
   })
 
   it('dates the footer by the earliest question it holds, never by a start date', () => {
     // D14: both "since" dates in this product are earliest EVIDENCE.
-    expect(askHistory(rows, now).earliest).toBe('2026-08-20T09:00:00.000Z')
-    expect(askHistory([], now).earliest).toBeNull()
+    expect(askHistory(rows).earliest).toBe('2026-08-20T09:00:00.000Z')
+    expect(askHistory([]).earliest).toBeNull()
   })
 
   it('flags only the row whose plan claim crossed', () => {
-    expect(askHistory(rows, now).rows.map((r) => r.claimCrossed)).toEqual([false, true, false])
+    expect(askHistory(rows).rows.map((r) => r.claimCrossed)).toEqual([false, true, false])
   })
 
   it('keeps "we did not read that plan" apart from "nothing crossed"', () => {
@@ -256,7 +264,7 @@ describe('earlier questions', () => {
       // Omitted, not null: no plan behind it, so there is nothing to cross.
       { threadId: 'c', title: 'no plan at all', askedAt: '2026-09-18T09:00:00.000Z' },
     ]
-    expect(askHistory(mixed, now).rows.map((r) => r.claimCrossed)).toEqual([false, null, false])
+    expect(askHistory(mixed).rows.map((r) => r.claimCrossed)).toEqual([false, null, false])
   })
 })
 

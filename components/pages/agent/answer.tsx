@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { Fragment, type ReactNode } from 'react'
 import Link from 'next/link'
 import { CalendarLine } from '@/components/charts/calendar-line'
 import { BlockMovement } from '@/components/blocks/movement'
@@ -124,6 +124,30 @@ function OwnSide({ f }: { f: FindingMeasure }) {
 }
 
 /**
+ * THE CHART'S BOX — the one rule that makes a finding survive a narrow screen.
+ *
+ * It was `w-[380px] shrink-0` inside a row that could not wrap, beside a
+ * `min-w-0 flex-1` prose column, so the sentence got whatever 380px left over.
+ * Measured on the populated fixture: at 768 (sidebar on, tile 496px) the prose
+ * column was ~46px and rendered one short word per line — "The / wet- /
+ * commute / question / is / the / one no / tracked / brand / answers / on /
+ * camera" — and at 390 the SVG painted OVER the words while `Tile`'s
+ * `overflow-hidden` cut the end label to "The category 9.4", a level with its
+ * denominator gone, which is the one thing this page may not print. Neither
+ * width showed a scrollbar, so an overflow probe reported the page clean.
+ *
+ * `basis-[380px]` is the width the chart ASKS for and `grow-0` stops it taking
+ * more; the default `flex-shrink: 1` with `min-w-0` is what lets it come down
+ * to the tile's width on a phone, where `CalendarLine`'s SVG is already
+ * `width="100%"` over a viewBox and so scales rather than clips. Paired with
+ * the row's `flex-wrap` and the prose column's `basis-[16rem]`, the chart drops
+ * BELOW the sentence the moment the two cannot both be had — and the chart is
+ * the right one to move, because `MonthTrail` under it prints the same months
+ * as figures.
+ */
+const CHART_BOX = 'min-w-0 basis-[380px] grow-0'
+
+/**
  * The finding's chart.
  *
  * D3: a chart is a direction claim too, so a line is drawn only where there is
@@ -139,7 +163,7 @@ function FindingChart({ f }: { f: FindingMeasure }) {
   const readable = values.filter((v) => v != null).length
   if (label) {
     return (
-      <div className="flex w-[380px] shrink-0 flex-col justify-center gap-1">
+      <div className={`flex flex-col justify-center gap-1 ${CHART_BOX}`}>
         <p className="m-0 font-mono text-[11px] text-muted-foreground">{label}</p>
         <p className="m-0 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
           {readable === 0
@@ -150,7 +174,7 @@ function FindingChart({ f }: { f: FindingMeasure }) {
     )
   }
   return (
-    <div className="flex w-[380px] shrink-0 flex-col gap-1">
+    <div className={`flex flex-col gap-1 ${CHART_BOX}`}>
       <CalendarLine
         axis={f.chart.axis}
         series={[f.chart.line]}
@@ -188,21 +212,46 @@ function FindingChart({ f }: { f: FindingMeasure }) {
  * Changing the axis would be a change to `components/charts/*` and
  * `lib/charts/calendar.ts`, which every reading surface draws through — one
  * surface with a different axis from the other five is worse than this. So the
- * plotted values are printed, in order, as figures: every month on the line,
- * with its own number, in the reader's own words. `MeasuredPoint.pct` is null
- * for a month that could not be read, and a null prints as a dash rather than
- * as a zero.
+ * plotted values are printed, in order: every month on the line, with its own
+ * number, in the reader's own words. `MeasuredPoint.pct` is null for a month
+ * that could not be read, and a null prints as a dash rather than as a zero.
+ *
+ * AND EACH MONTH CARRIES ITS OWN DENOMINATOR, which is the whole reason
+ * `MeasuredPoint` has one ("its monthly series WITH denominators",
+ * `lib/agent/measure.ts:86`). It printed `Jul 5.1% → Aug 6.8% → Sep 9.4%` —
+ * three levels, no "of N" between them — and the chart's end label carries the
+ * denominator for the newest month only. A level without its "of N" is a
+ * score, which this product does not show, and marking the run
+ * `data-copy="figure"` meant rule (b) never looked: a `figure` is a number
+ * code computed, and these are levels.
+ *
+ * So each month is its OWN node: `level` where it has a counted pair, which
+ * rule (b) then inspects and which carries the pair inside one node the way
+ * `FindingLevel` does; `figure` for a month that could not be read, whose text
+ * is a dash and states no level at all. The separators sit outside both, so
+ * neither node's text is something the contract has to reason about.
  */
 function MonthTrail({ f }: { f: FindingMeasure }) {
   const months = f.series.filter((p) => f.chart.axis.includes(p.month))
   if (months.length === 0) return null
   return (
     <p className="m-0 font-mono text-[10px] leading-[1.4] text-muted-foreground">
-      <span data-copy="figure">
-        {months
-          .map((p) => `${monthName(p.month).split(' ')[0]} ${p.pct == null ? '—' : `${p.pct}%`}`)
-          .join(' → ')}
-      </span>
+      {months.map((p, i) => {
+        const when = monthName(p.month).split(' ')[0]
+        const read = p.pct != null && p.k != null && p.n != null
+        return (
+          <Fragment key={p.month}>
+            {i > 0 ? ' → ' : null}
+            {read ? (
+              <span data-copy="level" className="whitespace-nowrap">
+                {when} {p.pct}% ({fmtInt(p.k as number)} of {fmtInt(p.n as number)})
+              </span>
+            ) : (
+              <span data-copy="figure" className="whitespace-nowrap">{when} —</span>
+            )}
+          </Fragment>
+        )
+      })}
     </p>
   )
 }
@@ -241,11 +290,15 @@ function Finding({
 }) {
   const f = measure?.findings.find((x) => x.findingId === findingKey(turnIndex, point.id)) ?? null
   return (
-    <div className="flex items-start gap-3">
+    // WRAPS, AND THE PROSE HAS A FLOOR — see `CHART_BOX`. `basis-[16rem]` is
+    // the hypothetical size the wrap is decided on: with `flex-1` (basis 0) the
+    // line always "fitted" and the sentence was squeezed to whatever the chart
+    // left over.
+    <div className="flex flex-wrap items-start gap-3">
       <span className="w-3.5 shrink-0 font-mono text-[12px] font-semibold leading-[1.5] text-primary tabular-nums">
         {index + 1}
       </span>
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+      <div className="flex min-w-0 grow basis-[16rem] flex-col gap-1.5">
         {/* A REPLACED POINT IS MUTED, not hidden: its own sentence named a
             figure nothing measured, the text here is the product's reading in
             its place, and the quotes it rested on are untouched. */}
@@ -440,6 +493,7 @@ export function AnswerTile({
   citations,
   basis,
   composer,
+  prevUpdateAt,
   row = 6,
 }: {
   turn: Turn
@@ -459,9 +513,25 @@ export function AnswerTile({
    * kind of test and probably a different kind of block".)
    */
   composer?: ReactNode
+  /**
+   * The update the turn BEFORE this one was answered against — `undefined` on
+   * the first turn of a thread, which always prints its basis.
+   *
+   * AS3 is per turn because turns can be answered against different updates,
+   * and on a thread answered inside one week they are not: `askBasisLine`
+   * composed the same two-line mono paragraph under every answer, five times
+   * on a five-turn thread. The line is a fact about WHICH update an answer
+   * rests on, so it is printed where it CHANGES — the first turn, and any turn
+   * whose update is not its predecessor's. A reader scrolling a thread sees
+   * the basis once, and sees it again exactly where it stopped being true.
+   * (The deck is untouched: `index.tsx`'s `Question` prints it on every slide
+   * because a slide can leave the building on its own.)
+   */
+  prevUpdateAt?: string | null
   row?: number
 }) {
   const answer = turn.answer
+  const basisChanged = turnIndex === 0 || prevUpdateAt === undefined || prevUpdateAt !== turn.updateAt
   // THIS TURN's best-evidenced finding, never the thread's first — see
   // `turnFindings`. A turn that measured nothing prints no footer rather than
   // another turn's figure.
@@ -537,10 +607,13 @@ export function AnswerTile({
           {/* AS3 under the answer it is about: which update it was answered
               against, and how much of the corpus could be searched when it was.
               Mono here as it is on the deck — it is metadata, and the eye
-              should skip it until it wants it. */}
-          <p className="m-0 font-mono text-[11px] leading-[1.45] text-muted-foreground">
-            {askBasisLine({ ...basis, updateAt: turn.updateAt }, { asked: true })}
-          </p>
+              should skip it until it wants it. Printed where it CHANGES; see
+              `prevUpdateAt`. */}
+          {basisChanged && (
+            <p className="m-0 font-mono text-[11px] leading-[1.45] text-muted-foreground">
+              {askBasisLine({ ...basis, updateAt: turn.updateAt }, { asked: true })}
+            </p>
+          )}
         </>
       ) : turn.prose ? (
         <p className="m-0 text-[15px] leading-[1.45] text-foreground">{turn.prose}</p>

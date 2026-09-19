@@ -47,9 +47,19 @@ function PlanRail({ plan }: { plan: AskPlanChip }) {
         uploaded <span data-copy="figure">{shortDate(plan.uploadedOn)}</span> ·{' '}
         <span data-copy="figure">{fmtInt(plan.claims)}</span> {plan.claims === 1 ? 'claim' : 'claims'}
       </span>
-      <ClaimChip tone="supported">{fmtInt(plan.summary.supported)} supported</ClaimChip>
-      <ClaimChip tone="contradicted">{fmtInt(plan.summary.contradicted)} contradicted</ClaimChip>
-      <ClaimChip tone="untested">{fmtInt(plan.summary.untested)} untested</ClaimChip>
+      {/* ABSENT RATHER THAN ZERO, which is this package's own discipline —
+          `NotAnsweredTile`'s meta argues it in its own comment and `askDraws`
+          / `askRecordLines` distinguish "not recorded" from "none" throughout.
+          All three chips rendered unconditionally, so a plan whose claims all
+          held drew a red-tinted "0 contradicted" beside a grey "0 untested":
+          a negative tint firing where nothing is wrong, on the one rail a
+          reader checks to see whether their campaign still stands up. The
+          three counts partition the claims, so a plan with any claim in it
+          still draws at least one chip, and the claim count beside them is
+          the total either way. */}
+      {plan.summary.supported > 0 && <ClaimChip tone="supported">{fmtInt(plan.summary.supported)} supported</ClaimChip>}
+      {plan.summary.contradicted > 0 && <ClaimChip tone="contradicted">{fmtInt(plan.summary.contradicted)} contradicted</ClaimChip>}
+      {plan.summary.untested > 0 && <ClaimChip tone="untested">{fmtInt(plan.summary.untested)} untested</ClaimChip>}
       <Link href={plan.href} className="ml-auto shrink-0 text-[12px] font-medium text-foreground hover:underline">
         The plan check →
       </Link>

@@ -44,12 +44,30 @@ import type { Counted } from '@/lib/reading/verdicts'
  * `data-copy="level"` with the "of N" inside the SAME node, because rule (b)
  * reads a level node's whole text: a bare figure beside a denominator in a
  * sibling cell is exactly the failure the rule was written for.
+ *
+ * AND IT KEEPS THE ARTBOARD'S GREEN, WHICH IS THE THIRD DECISION. Refusing the
+ * tier chip (D11) and refusing the ladder word (above) were both about the
+ * WORD. What replaced them — `bg-inner` with `text-foreground` — was never
+ * decided as anything; it was what was left. The result: in ~1,200px of answer
+ * at 1440 the only saturated ink was one green "▲ 2.6 pts" and two numerals,
+ * and the counted pair — the page's entire argument — was the same grey as the
+ * "the month before" line under it. The eye landed instead on the amber
+ * inference pill in the judgement block, which is the one thing on the page
+ * explicitly NOT counted.
+ *
+ * So the chip takes the anchor the artboard gives it (`accent` /
+ * `accent-foreground`, 5.4:1 light and 7.6:1 dark) and keeps none of the claim:
+ * the artboard's green said "Strong evidence", and this says "130 of 1,388
+ * videos" — a counted pair, in the glossary's own example of a level, with no
+ * tier and no ladder anywhere near it. Green here is emphasis, not
+ * favourability: `MovementBadge` is the node that colours on an axis, and it
+ * is the one beside this.
  */
 export function FindingLevel({ value, noun = 'videos' }: { value: Counted; noun?: string }) {
   return (
     <span
       data-copy="level"
-      className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-inner px-2 py-px text-[12px] font-medium text-foreground tabular-nums"
+      className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-accent px-2 py-px text-[12px] font-medium text-accent-foreground tabular-nums"
     >
       {fmtInt(value.k)} of {fmtInt(value.n)} {noun}
     </span>
@@ -79,14 +97,34 @@ export function DirectionWord({ direction }: { direction: Direction | null | und
   )
 }
 
-/** A verdict chip on a plan claim — the three words `PLAN_VERDICT_LABEL`
- *  already fixes, in the sentiment tints §3.6 assigns them. */
+/**
+ * A verdict chip on a plan claim — the three words `PLAN_VERDICT_LABEL`
+ * already fixes, in the sentiment tints §3.6 assigns them.
+ *
+ * THE RED IS IN THE TINT AND THE RING, NOT IN THE TEXT — the fix
+ * `InferencePill` argues twenty lines below, in the colour it had not been
+ * applied to. `bg-negative/12 text-negative` is `#DB3B2E` on `#FBE7E6`:
+ * **3.78:1** at 12px against a 4.5:1 floor, and it renders on the plan rail of
+ * both routes in every populated shot ("1 contradicted"). Moving the words to
+ * `foreground` takes it to 12.3:1 light and 12.6:1 dark, and the ring keeps the
+ * colour doing the signalling — exactly the trade the amber pill made when
+ * `bg-warning/15 text-warning` measured 1.9:1.
+ *
+ * `supported` is untouched: `accent-foreground` on `accent` is 5.4:1 light and
+ * 7.6:1 dark, which clears the floor, and it is the one chip here whose ink IS
+ * legible. `untested` keeps `bg-inner text-muted-foreground` (4.46:1) because
+ * that pair is app-wide — fourteen other call sites and `lib/ui-colors.ts` —
+ * and moving it here alone would make this file the one place the product's
+ * quiet grey means something different. Same answer, and the same reason, as
+ * the `--warning-foreground` token `InferencePill` refers to whoever owns
+ * `app/globals.css`.
+ */
 export function ClaimChip({ tone, children }: { tone: 'supported' | 'contradicted' | 'untested'; children: ReactNode }) {
   const cls =
     tone === 'supported'
       ? 'bg-accent text-accent-foreground'
       : tone === 'contradicted'
-        ? 'bg-negative/12 text-negative'
+        ? 'bg-negative/12 text-foreground ring-1 ring-negative/50'
         : 'bg-inner text-muted-foreground'
   return (
     <span className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2 py-px text-[12px] font-medium ${cls}`}>

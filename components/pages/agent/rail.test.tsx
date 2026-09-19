@@ -23,14 +23,22 @@ describe('earlier questions', () => {
     assertCopyContract(<EarlierQuestionsTile history={null} />)
   })
 
-  it('never lists the thread the reader is on, and still counts it', () => {
+  it('never lists the thread the reader is on, and leaves it out of the meta too', () => {
     // "Earlier questions" listed the OPEN thread as its first row, linking to
     // itself, 300px from the same question rendered at 15px in the answer tile
-    // beside it. It is excluded from the rows and kept in the month count: the
-    // reader did ask it, and the rail is a list of where else to go.
+    // beside it. The rail is a list of where ELSE to go, so the open thread is
+    // out of both halves of the tile.
     expect(text).not.toContain('Should our summer campaign lead')
-    expect(text).toContain('3 this month')
     expect(text).toContain('Is price fading, or just quieter?')
+  })
+
+  it('states the meta as a count of the tile, never of the month', () => {
+    // It printed `thisMonth` — every question asked in the wall-clock month,
+    // drawn or not — so "3 this month" sat over rows dated 13 Sep · 6 Sep ·
+    // 20 Aug. A reader counting September rows in the list got two. The meta
+    // now says what the list IS: three rows, of three there were to draw from.
+    expect(text).toContain('3 of 3')
+    expect(text).not.toContain('this month')
   })
 
   it('draws the newest three of what is left', () => {
@@ -68,6 +76,18 @@ describe('earlier questions', () => {
     expect(text).toContain('earliest 20 Aug')
   })
 
+  it('draws no footer at all where there is no list', () => {
+    // `Tile` renders the footer row if EITHER half is present, and the note
+    // was gated only on `earliest` — so the refused state drew a hairline and
+    // a lone right-aligned "earliest 28 Sep" with the left half empty, under a
+    // body already saying nothing else has been asked. Both halves are facts
+    // about a list; neither prints without one.
+    const empty = renderText(<EarlierQuestionsTile history={refused.history} />)
+    expect(empty).toContain('Nothing else has been asked')
+    expect(empty).not.toContain('earliest')
+    expect(empty).not.toContain('All questions')
+  })
+
   it('says so when it could not be read, and never draws an empty list', () => {
     expect(renderText(<EarlierQuestionsTile history={null} />)).toContain('could not be read')
   })
@@ -81,7 +101,7 @@ describe('earlier questions', () => {
 
 describe('what an answer draws on', () => {
   const tile = (d: ReturnType<typeof agentFixture>) => (
-    <DrawsTile draws={d.draws} recordHref={d.record!.href} asAt={d.basis.lastEmbeddedAt ? '15 Sep' : null} />
+    <DrawsTile draws={d.draws} asAt={d.basis.lastEmbeddedAt ? '15 Sep' : null} />
   )
 
   it('keeps the copy contract in both states', () => {
@@ -96,13 +116,16 @@ describe('what an answer draws on', () => {
     expect(text).toContain('as at 15 Sep')
   })
 
-  it('opens the record, which is where the rows it does not print live', () => {
+  it('carries no second door to the record', () => {
     // Four rows, not the mock's five: updates-this-month, videos, languages and
     // tracking changes need `loadRecordInputs`' eight tenant-wide reads on every
-    // page load. `hasRecord` admits Ask so the drawer can be opened from here.
+    // page load, and the drawer is where they live. It is opened from the
+    // record BAND, which `AskShell` mounts under the page bar on both routes —
+    // one control, not two ~400px apart both opening the same three lines this
+    // tile already prints in the open.
     const markup = render(tile(measured))
-    expect(markup).toContain('detail=record')
-    expect(renderText(tile(measured))).toContain('The record →')
+    expect(markup).not.toContain('detail=record')
+    expect(renderText(tile(measured))).not.toContain('The record →')
     // Stated ONCE, in the Updates row whose term names it — not again as a
     // footer note that is present on one route and absent on the other.
     const text = renderText(tile(measured))
@@ -183,6 +206,20 @@ describe('the ask box', () => {
     expect(text).toContain('6 supported')
     expect(text).toContain('1 contradicted')
     expect(text).toContain('2 untested')
+  })
+
+  it('draws no chip for a verdict no claim earned', () => {
+    // All three rendered unconditionally, so a plan whose claims all held drew
+    // a red-tinted "0 contradicted" beside a grey "0 untested" — a negative
+    // tint firing where nothing is wrong. Absent rather than zero, which is
+    // what `NotAnsweredTile` and `askDraws` do six files from here.
+    const clean = box(agentFixture({
+      planChip: { ...measured.planChip!, summary: { supported: 9, contradicted: 0, untested: 0 } },
+    }))
+    const text = renderText(clean)
+    expect(text).toContain('9 supported')
+    expect(text).not.toContain('0 contradicted')
+    expect(text).not.toContain('0 untested')
   })
 
   it('says what checking a plan does, rather than drawing a blank rail', () => {

@@ -94,13 +94,27 @@ describe('the measurement half', () => {
     expect(text).toContain(MOVEMENT_WORDS.too_little_data)
   })
 
-  it('prints every plotted month as a figure a reader can check', () => {
+  it('prints every plotted month with its own denominator', () => {
     // The shared CalendarLine labels the baseline and one midline, so in a
     // 104px box the only labelled gridline sits BELOW the data: the axis says
     // 0% and 5% and the line ends at 9.4%. Changing the axis is a change to
     // `components/charts/*`, which all six surfaces draw through. The trail is
-    // the months themselves, in order, as figures.
-    expect(text).toContain('Jul 5.1% → Aug 6.8% → Sep 9.4%')
+    // the months themselves, in order.
+    //
+    // EACH WITH ITS "of N". It printed "Jul 5.1% → Aug 6.8% → Sep 9.4%" —
+    // three levels and no denominator between them — inside one
+    // `data-copy="figure"` node, so rule (b) never inspected it. The chart's
+    // end label carries a denominator for the newest month alone.
+    expect(text).toContain('Jul 5.1% (71 of 1,400) → Aug 6.8% (99 of 1,455) → Sep 9.4% (130 of 1,388)')
+  })
+
+  it('marks each month of the trail as the level it is', () => {
+    // A `figure` is a number code computed; these are levels, and rule (b)
+    // only reads a node it has been told is one. A month that could not be
+    // read prints a dash and stays a `figure`, because it states no level.
+    const markup = render(tile(measured))
+    expect(markup).toContain('<span data-copy="level" class="whitespace-nowrap">Jul 5.1% (71 of 1,400)</span>')
+    expect(copyViolations(tile(measured))).toEqual([])
   })
 
   it('names what the figures are figures OF, rather than dropping a bare label', () => {
@@ -230,6 +244,33 @@ describe('a follow-up prints its own turn’s figure', () => {
   it('wears the follow-up eyebrow and keeps the contract', () => {
     expect(renderText(followUp)).toContain('The follow-up')
     expect(copyViolations(followUp)).toEqual([])
+  })
+
+  it('prints AS3 where it changes and not under every turn', () => {
+    // A thread answered inside one week carries one `updateAt` on every turn,
+    // so the same two-line mono paragraph printed under each answer — five
+    // times on a five-turn thread. The line says WHICH update an answer rests
+    // on, so it belongs where that stops being true.
+    const same = renderText(
+      <AnswerTile
+        turn={thread.turns[1]} turnIndex={1} measure={thread.measure}
+        citations={thread.citations} basis={thread.basis}
+        prevUpdateAt={thread.turns[0].updateAt}
+      />,
+    )
+    expect(same).not.toContain('Answered against the update of')
+
+    // The first turn always states it, and so does a turn answered against a
+    // different update from the one before it.
+    expect(renderText(followUp)).toContain('Answered against the update of')
+    const moved = renderText(
+      <AnswerTile
+        turn={thread.turns[1]} turnIndex={1} measure={thread.measure}
+        citations={thread.citations} basis={thread.basis}
+        prevUpdateAt="2026-08-01T00:00:00.000Z"
+      />,
+    )
+    expect(moved).toContain('Answered against the update of')
   })
 
   it('prints no footer at all where the turn measured nothing', () => {

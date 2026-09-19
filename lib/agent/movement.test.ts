@@ -3,6 +3,11 @@ import { movementLine, movementDirection, renderMovement, rankMovement, NO_MOVEM
 import type { SeriesPoint } from '../reading/bands'
 import type { MonthLabel } from '../reading/series'
 import type { Verdict, VerdictFlag, VerdictState } from '../reading/verdicts'
+// The one table these words come from. `lib/agent/movement.ts` repeats them
+// rather than importing them — a lib module may not depend on `components`,
+// the reason `lib/reading/gap.ts:GAP_WORDS` already gives for the same two
+// phrases — so the TEST is what keeps the copy one copy.
+import { MOVEMENT_WORDS } from '../../components/delta-badge'
 
 // The MOVEMENT block, re-based on the comment-dated monthly reading (WP21,
 // decision D1). Everything here is the block's own words; the loader above it
@@ -49,13 +54,29 @@ describe('movementLine', () => {
     expect(movementLine(reading({ verdict: verdict({ state: 'no_clear_change', changePts: 1.2, bandPts: 6.6 }) })))
       .toContain('no clear change (+1.2 pts, band 6.6 pts)')
     for (const [state, words] of [
-      ['too_little_data', 'too few to compare'],
-      ['baseline_forming', 'not enough history to compare yet'],
-      ['refused', 'not comparable'],
+      ['too_little_data', MOVEMENT_WORDS.too_little_data],
+      ['baseline_forming', MOVEMENT_WORDS.baseline_forming],
+      ['refused', MOVEMENT_WORDS.refused],
     ] as [VerdictState, string][]) {
       const line = movementLine(reading({ verdict: verdict({ state, changePts: null, bandPts: null }) }))
       expect(line).toContain(words)
       expect(line).not.toContain('band')
+    }
+  })
+
+  it('says the badge’s words for a non-answer, not a fifth vocabulary', () => {
+    // `STATE_NOTE` disagreed with `MOVEMENT_WORDS` twice — "not enough history
+    // to compare yet" for "not enough months yet", and "not comparable" for
+    // "comparison refused" — six lines under `FLAG_NOTE`, which was exported
+    // precisely so there would be one copy ("a second table of these sentences
+    // is how a product comes to say two things about one flag"). It is not
+    // academic: `renderMovement` tells the model to say these words back, and
+    // Ask's answer is client-facing, so a reader could be told a comparison is
+    // "not comparable" by the agent and "comparison refused" by every badge on
+    // every other surface in the same week.
+    for (const state of ['no_clear_change', 'too_little_data', 'baseline_forming', 'refused'] as VerdictState[]) {
+      expect(movementLine(reading({ verdict: verdict({ state, changePts: null, bandPts: null }) })))
+        .toContain(MOVEMENT_WORDS[state as Exclude<VerdictState, 'moved'>])
     }
   })
 

@@ -31,16 +31,40 @@ export const TRACKED_HREF = '/dashboard/settings'
  * question, when it was answered, and the one flag that is a fact.
  */
 export function EarlierQuestionsTile({ history, col = 12, row = 2 }: { history: AskHistory | null; col?: number; row?: number }) {
+  /** Whether this tile has a LIST — what both halves of the footer, and the
+   *  meta, are facts about. */
+  const drawn = Boolean(history && history.rows.length > 0)
   return (
     <Tile
       col={col}
       row={row}
       eyebrow="Earlier questions"
-      meta={history ? `${fmtInt(history.thisMonth)} this month` : undefined}
-      footer={history && history.rows.length > 0 ? <Link href={history.href} className="hover:underline">All questions →</Link> : undefined}
+      // A FACT ABOUT THIS TILE, which is what every other meta on this page is.
+      // It printed `history.thisMonth` — every question asked in the wall-clock
+      // month, drawn or not — so on the fixture "3 this month" sat over rows
+      // dated 13 Sep · 6 Sep · 20 Aug: a reader counting September rows got
+      // two, and the August row read as if it were inside the count. On a
+      // thread page the two can NEVER agree, because the counted question the
+      // reader is looking at is the one deliberately not drawn. `held` is how
+      // many rows there were to draw from, so "3 of 12" says what the list is
+      // and what it is a list of; the month's asking is stated once on this
+      // page, by `NotAnsweredTile`'s budget line, which is the tile whose
+      // month it is. Absent rather than "0 of 0" where there is nothing to
+      // show — `NotAnsweredTile`'s own discipline, six lines from here.
+      meta={history && history.rows.length > 0
+        ? `${fmtInt(history.rows.length)} of ${fmtInt(history.held)}`
+        : undefined}
+      footer={drawn ? <Link href={history!.href} className="hover:underline">All questions →</Link> : undefined}
       // D14: EARLIEST EVIDENCE, and the word says so. We do not know when this
       // workspace started asking; we know the oldest question we still hold.
-      footerNote={history?.earliest ? `earliest ${shortDate(history.earliest)}` : undefined}
+      //
+      // GATED ON THE SAME CONDITION AS THE FOOTER IT SITS IN. `Tile` draws the
+      // footer row if EITHER half is present, and the note was gated only on
+      // `earliest` — so in the refused state the tile drew a hairline and a
+      // lone mono "earliest 28 Sep" hard against the right edge, with the left
+      // half empty, under a body already saying nothing else has been asked. A
+      // note about a list is furniture where there is no list.
+      footerNote={drawn && history!.earliest ? `earliest ${shortDate(history!.earliest)}` : undefined}
       distribute="between"
     >
       {!history ? (
@@ -91,15 +115,23 @@ export function EarlierQuestionsTile({ history, col = 12, row = 2 }: { history: 
  * The count is stated once, in the row whose term names it, and the tile reads
  * the same on both routes.
  *
- * The footer is the record: `lib/nav.ts:hasRecord` admits Ask (D-record, wave 1) precisely so
- * the drawer can be opened from here, and the drawer is where updates-this-
- * month, the video count, the language mix and the tracking changes live.
+ * AND NO "THE RECORD →" EITHER, WHICH IS THE ONE THIS TILE LOST. The footer
+ * used to carry it, on the argument that `lib/nav.ts:hasRecord` admits Ask
+ * (D-record, wave 1) precisely so the drawer can be opened from here. It can —
+ * from the record BAND, which `AskShell` mounts under the page bar on both
+ * routes for exactly that reason, and which is the product-wide door to the
+ * same drawer. Two doors to one drawer, ~400px apart on a thread at 1440, with
+ * the drawer's three lines being the three rows this tile already prints in
+ * the open: the band at y≈97 read "How sound is this: 23 updates delivered.
+ * the record →" and this tile at y≈513 read "UPDATES 23 delivered … The record
+ * →". The artboard states the basis in the bar and again in DRAWS — two
+ * statements, one control — so the tile keeps its four facts and gives the
+ * control up.
  */
 export function DrawsTile({
-  draws, recordHref, asAt, col = 12, row = 2,
+  draws, asAt, col = 12, row = 2,
 }: {
   draws: readonly AskDrawRow[]
-  recordHref: string | null
   /** The artboard's "as at 28 Sep" — when the index these facts describe was
    *  last written. Null leaves the slot empty rather than dating it today. */
   asAt?: string | null
@@ -117,7 +149,6 @@ export function DrawsTile({
       // this one left it blank; the fact is already in the Indexed row, so the
       // meta names WHEN rather than inventing a second one.
       meta={asAt ?? undefined}
-      footer={recordHref ? <Link href={recordHref} className="hover:underline">The record →</Link> : undefined}
       distribute="between"
     >
       <dl className="m-0 grid grid-cols-[84px_1fr] gap-x-3 gap-y-2.5">

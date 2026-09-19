@@ -141,7 +141,21 @@ export function AgentComposer({
     }
   }
 
-  const ready = canSend && !busy && question.trim().length >= MIN_QUESTION
+  // LIVE IS THE ONLY GATE ON THE BUTTON. It used to be `ready` — `live` AND at
+  // least `MIN_QUESTION` characters typed — with `disabled:opacity-30` on the
+  // pill, so the page's primary control was drawn unavailable on every first
+  // paint of both routes: `#0E8A5F` at 30% over white is `#B7DCCF` and the
+  // white label on it measures 1.48:1. On `/dashboard/agent` that pill is the
+  // only saturated element on the page and the only thing a new tenant can do,
+  // and it was greyed out before anyone had done anything wrong. "You have not
+  // typed yet" is not unavailability.
+  //
+  // The length rule is not lost; it is simply SAID rather than enforced in
+  // silence, which is the discipline `onSubmit` and the `tooShort` hint below
+  // already follow. Type nothing and press Ask and the box answers in a
+  // sentence beside the field; type four characters and the same sentence is
+  // there before the press. The button goes grey for the two states that ARE
+  // unavailability — a reader who may not ask, and a question in flight.
   const live = canSend && !busy
   // Shown while they are typing, not only when they press Ask — a rule a reader
   // meets before they hit it is a hint; one they meet afterwards is an error.
@@ -197,7 +211,7 @@ export function AgentComposer({
 
         <button
           type="submit"
-          disabled={!ready}
+          disabled={!live}
           className="inline-flex h-11 shrink-0 items-center gap-2 rounded-[6px] bg-primary px-5 text-[13px] font-semibold text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-30"
         >
           {busy && <Loader2 className="size-4 animate-spin" aria-hidden />}

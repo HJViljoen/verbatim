@@ -9,7 +9,7 @@ import { Tile, TileEmpty } from '@/components/shell/tile'
 import { canAsk } from '@/lib/agent/access'
 import { askBasisLine, nothingSearchable } from '@/lib/agent/basis'
 import { shortDate } from '@/lib/format'
-import { askRecordHref, loadAgentThread } from '@/lib/pages/agent-thread'
+import { loadAgentThread } from '@/lib/pages/agent-thread'
 import { AgentComposer } from '@/components/agent-composer'
 import { AnswerTile } from '@/components/pages/agent/answer'
 import { AskBoxTile } from '@/components/pages/agent/ask-box'
@@ -57,6 +57,18 @@ export default async function AgentThreadPage({
         .map(({ i }) => ({ key: `agent.answer:${i}`, title: data.turns.length > 1 ? `Answer ${i + 1}` : 'The answer' }))
     : []
 
+  /**
+   * ONE WAY BACK PER SCREEN, and this is not it wherever the rail is.
+   *
+   * "← All questions" here and "All questions →" in the history tile
+   * (`rail.tsx`) are two controls with the same name and the same destination,
+   * ~230px apart at 1440, pointing opposite ways. The artboard draws no back
+   * link at all and gives the history tile the only one. So the rail's is the
+   * one that stays — it sits under the list of what those questions ARE, which
+   * is what makes it worth following — and this one is drawn ONLY on the
+   * document branch below, which composes no rail and would otherwise strand a
+   * reader on a plan check with nothing to leave by.
+   */
   const back = (
     <Link
       href="/dashboard/agent"
@@ -72,7 +84,6 @@ export default async function AgentThreadPage({
       <EarlierQuestionsTile history={data.history} row={ASK_TILE_ROW} />
       <DrawsTile
         draws={data.draws}
-        recordHref={data.record?.href ?? askRecordHref(id)}
         asAt={data.basis.lastEmbeddedAt ? shortDate(data.basis.lastEmbeddedAt) : null}
         row={ASK_TILE_ROW}
       />
@@ -90,7 +101,14 @@ export default async function AgentThreadPage({
       <ExportScope page="agent" params={{ thread: id }} tiles={[]}>
         <AskShell context={data.bar.context} record={record} params={sp}>
           {back}
-          <Tile col={12} row={6} eyebrow="The plan check" meta={data.method.period}>
+          {/* `ASK_TILE_ROW`, like every other tile on this surface. `row` is a
+              `MIN_H[n]` floor at every width below `xl` and an inert span at
+              and above it (`surface.tsx:ASK_TILE_ROW` argues the whole rule),
+              so `row={6}` forced `min-h-[776px]` under a document split that
+              is its own height, and `row={2}` forced `min-h-[248px]` under a
+              two-sentence empty state — about 190px of white under ~60px of
+              text at 1024. These are the two branches H8 did not visit. */}
+          <Tile col={12} row={ASK_TILE_ROW} eyebrow="The plan check" meta={data.method.period}>
             {/* AS3, as the exported deck carries it: what this document was
                 CHECKED against. A document thread has no answer to hang it
                 under, which is how the screen and the deck both came to leave
@@ -125,9 +143,8 @@ export default async function AgentThreadPage({
     return (
       <ExportScope page="agent" params={{ thread: id }} tiles={[]}>
         <AskShell context={data.bar.context} record={record} params={sp}>
-          {back}
           <AskColumns rail={rail}>
-            <Tile col={12} row={2} eyebrow="The plan check" meta="nothing saved">
+            <Tile col={12} row={ASK_TILE_ROW} eyebrow="The plan check" meta="nothing saved">
               <TileEmpty>
                 Nothing was saved against this document. Either nothing in it read as a claim about customers or the
                 market, or the check failed on our side before it finished. It still counted as one of this
@@ -143,7 +160,6 @@ export default async function AgentThreadPage({
   return (
     <ExportScope page="agent" params={{ thread: id }} tiles={exportTiles}>
       <AskShell context={data.bar.context} record={record} params={sp}>
-        {back}
         <AskColumns rail={rail}>
           {/* THE ASK BOX STAYS ABOVE THE ANSWER, as the artboard draws it: a
               reader with an answer in front of them is one keystroke from the
@@ -168,6 +184,10 @@ export default async function AgentThreadPage({
               measure={data.measure}
               citations={data.citations}
               basis={data.basis}
+              // AS3 where it CHANGES, not under every answer — a five-turn
+              // thread answered inside one week printed the same two-line mono
+              // paragraph five times (`AnswerTile.prevUpdateAt`).
+              prevUpdateAt={i > 0 ? data.turns[i - 1].updateAt : undefined}
               row={ASK_TILE_ROW}
               composer={
                 i === data.turns.length - 1 ? (
