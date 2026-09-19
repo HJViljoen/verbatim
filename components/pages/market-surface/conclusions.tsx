@@ -49,9 +49,28 @@ import type { ConclusionRow, MarketSurfaceData } from '@/lib/pages/market-surfac
 // what was adjudicated and what was not. The count beside them is code's and
 // stays `figure`.
 
-/** The artboard's dotted-underlined mono figure: a number a reader can see is
- *  counted rather than asserted. */
-const FIGURE = 'font-mono text-[11.5px] tabular-nums text-secondary-foreground underline decoration-muted-foreground decoration-dotted underline-offset-[3px]'
+/** The artboard's mono figure: a number a reader can see is counted rather
+ *  than asserted.
+ *
+ *  AND IT DOES NOT WEAR THE DOTTED UNDERLINE, which on this page is a promise.
+ *  MASTER rule 5 gives a quiet grey dotted underline to a claim with evidence
+ *  BEHIND it — "click → popover with count, platform split, two quotes, link to
+ *  the page" — and `components/claim-popover.tsx` states the rule in the same
+ *  words it is built to: "Nothing gets this treatment unless it can open — a
+ *  claim without evidence is plain text." The artboard draws the decoration on
+ *  a bare `<span>` because an artboard is a still; the spec's own §3.12 draws
+ *  the same ink as a `<button>` with a `role="dialog"` panel behind it.
+ *
+ *  This page's port took the still. Five of its most load-bearing counts —
+ *  "157 of 1,699 videos behind it", "2 of 1,699 videos behind it" and the three
+ *  grounding cells — carried the underline with no link, no handler and no
+ *  popover, on the same viewport where every Derivation summary wears it and
+ *  DOES open. So the decoration is spent on the thing that opens and nothing
+ *  else, and the figure keeps everything the artboard gives it that is not an
+ *  affordance: the mono face, the tabular figures, the 11.5px step and the
+ *  secondary ink. The day one of these counts has an evidence panel behind it,
+ *  the underline comes back with the panel and not before. */
+const FIGURE = 'font-mono text-[11.5px] tabular-nums text-secondary-foreground'
 
 function Row({ row, mode, appUrl, corpus }: { row: ConclusionRow; mode: RenderMode; appUrl: string; corpus: number | null }) {
   const email = mode === 'email'
@@ -62,9 +81,8 @@ function Row({ row, mode, appUrl, corpus }: { row: ConclusionRow; mode: RenderMo
   // page bar reading "September 2026" is a fraction of two populations.
   // `corpusLine` under the rows says which population this one is.
   // A COUNT OF NOTHING IS NOT A SHARE OF ANYTHING. "0 of 1,699 videos behind
-  // it" is a fraction whose numerator says the record is empty, printed in the
-  // dotted-underline of a measured figure and sitting beside a chip promising
-  // an early signal. The row says it in words instead, and `TierChip` drops
+  // it" is a fraction whose numerator says the record is empty, set in the mono
+  // of a measured figure and sitting beside a chip promising an early signal. The row says it in words instead, and `TierChip` drops
   // its tint (never its label) for the same reason.
   const grounded = row.videos > 0
   const count = !grounded

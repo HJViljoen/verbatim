@@ -91,9 +91,28 @@ import {
  *  takes what is left. */
 const TRACKS = ['w-[22px]', '', 'w-[88px]', 'w-[96px]', 'w-[176px]', 'w-[100px]', 'w-[240px]'] as const
 
-/** The artboard's dotted-underlined mono figure — a number a reader can see is
- *  counted rather than asserted. */
-const FIGURE = 'font-mono text-[11.5px] tabular-nums text-secondary-foreground underline decoration-muted-foreground decoration-dotted underline-offset-[3px]'
+/** The artboard's mono figure: a number a reader can see is counted rather
+ *  than asserted.
+ *
+ *  AND IT DOES NOT WEAR THE DOTTED UNDERLINE, which on this page is a promise.
+ *  MASTER rule 5 gives a quiet grey dotted underline to a claim with evidence
+ *  BEHIND it — "click → popover with count, platform split, two quotes, link to
+ *  the page" — and `components/claim-popover.tsx` states the rule in the same
+ *  words it is built to: "Nothing gets this treatment unless it can open — a
+ *  claim without evidence is plain text." The artboard draws the decoration on
+ *  a bare `<span>` because an artboard is a still; the spec's own §3.12 draws
+ *  the same ink as a `<button>` with a `role="dialog"` panel behind it.
+ *
+ *  This page's port took the still. Five of its most load-bearing counts —
+ *  "157 of 1,699 videos behind it", "2 of 1,699 videos behind it" and the three
+ *  grounding cells — carried the underline with no link, no handler and no
+ *  popover, on the same viewport where every Derivation summary wears it and
+ *  DOES open. So the decoration is spent on the thing that opens and nothing
+ *  else, and the figure keeps everything the artboard gives it that is not an
+ *  affordance: the mono face, the tabular figures, the 11.5px step and the
+ *  secondary ink. The day one of these counts has an evidence panel behind it,
+ *  the underline comes back with the panel and not before. */
+const FIGURE = 'font-mono text-[11.5px] tabular-nums text-secondary-foreground'
 
 function StatusCell({ row, mode }: { row: AdviceRow; mode: RenderMode }) {
   const decided = row.decidedAt ? shortDate(row.decidedAt) : null

@@ -229,6 +229,23 @@ describe('the tiles are as tall as what they draw', () => {
     }
   })
 
+  it('spends the dotted underline only on something that opens', () => {
+    // MASTER rule 5 makes the decoration a promise, and
+    // `components/claim-popover.tsx` states it: nothing gets this treatment
+    // unless it can open. Five counts wore it as a bare span — the two
+    // conclusion figures and the three grounding cells — on a page where every
+    // Derivation summary wears it and does open.
+    for (const block of MARKET_BLOCKS) {
+      for (const data of STATES) {
+        // Cut every pressable element whole — the decoration may sit on it or
+        // on a span inside it — and nothing decorated may be left over.
+        const markup = render(block.render(data, 'app', ctx))
+          .replace(/<(summary|button|a)\b[\s\S]*?<\/\1>/g, ' ')
+        expect(markup, `${block.key} decorates something that cannot be pressed`).not.toContain('decoration-dotted')
+      }
+    }
+  })
+
   it('answers for every block on the page', () => {
     const rows = tileRows(marketFixture())
     for (const block of MARKET_BLOCKS) expect(rows[block.key]).toBeGreaterThan(0)
