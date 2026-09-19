@@ -74,7 +74,14 @@ export function Slide({
       {header && (
         <header className="flex shrink-0 items-baseline justify-between gap-4">
           <h1 className="line-clamp-2 min-w-0 text-[15px] font-semibold tracking-[-0.01em] text-foreground">{title}</h1>
-          <span className="shrink-0 font-mono text-[10.5px] text-muted-foreground">{chrome.context}</span>
+          {/* 11px, AND FOR THE SAME REASON THE PAGE NUMBER BELOW IS (Block D
+              wave 3b, `decks`). This span and that numeral are the only two
+              nodes on a sheet that sit OUTSIDE `.vb-slide-body`, so `--vb-zoom`
+              never touches them and 10.5px printed 10.5px — 7.87pt, under the
+              floor this file names, on every sheet of every brief. The body's
+              own floor is enforced in app/globals.css, where the zoom is; the
+              two nodes outside it are enforced here. */}
+          <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{chrome.context}</span>
         </header>
       )}
       {hasNote && (

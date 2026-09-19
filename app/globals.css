@@ -512,6 +512,33 @@
   min-height: 0;
   overflow: hidden;
 }
+/* THE 8pt FLOOR, WHERE THE APP'S SCALE MEETS PAPER (Block D wave 3b, `decks`;
+   `reports`-14, `sales`-1).
+   `components/print/slide.tsx` names a floor of 8pt and applied it to one
+   glyph. 1123px IS 297mm, so a point on a brief sheet is 1.334px and 8pt is
+   10.67px — and the body is laid out at `--vb-grid-w` and zoomed by
+   `--vb-zoom`, so a size written here prints at .902 × itself and anything
+   under 11.83px is under the floor. The app's own small tiers are 9 · 9.5 ·
+   10 · 10.5 · 11 · 11.5px: right on a 1440px screen a reader can lean into,
+   and 6.1–7.8pt on a page they cannot. A borrowed block renders the SAME
+   markup on both, so this is the one place the difference belongs — not 200
+   edits across eight block files, each of which would have to be undone for
+   the screen.
+   12px IS THE FIRST TIER THAT CLEARS IT (10.82px, 8.11pt) and it is already
+   on the app's ladder, so nothing new is invented. The tiers above are
+   untouched: this raises a floor, it does not rescale a deck.
+   SVG IS OUT, and not by oversight. `CalendarLine` and `Sparkline` size their
+   labels in viewBox UNITS over a `width="100%"` box, so a `font-size` inside
+   one is a number in the chart's coordinate space — the attention chart's
+   11px axis label prints at about 13px on the sheet — and rewriting it to 12
+   would resize the drawing rather than the type. `scripts/deck-fit.ts`
+   measures those through their own viewBox scale for the same reason. */
+.vb-slide-body .text-\[9px\]:not(svg *),
+.vb-slide-body .text-\[9\.5px\]:not(svg *),
+.vb-slide-body .text-\[10px\]:not(svg *),
+.vb-slide-body .text-\[10\.5px\]:not(svg *),
+.vb-slide-body .text-\[11px\]:not(svg *),
+.vb-slide-body .text-\[11\.5px\]:not(svg *) { font-size: 12px; }
 .vb-print-grid {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
