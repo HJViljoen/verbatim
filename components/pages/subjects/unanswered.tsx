@@ -5,7 +5,8 @@ import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt } from '@/lib/format'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import { periodPhrase, unansweredMeta, type SubjectsData, type UnansweredBlock, type UnansweredRow } from '@/lib/pages/subjects'
+import { HORIZON_LABEL } from '@/lib/reading/horizon'
+import { unansweredMeta, type SubjectsData, type UnansweredBlock, type UnansweredRow } from '@/lib/pages/subjects'
 
 // SU3 · Questions on this subject your content never answers (design §3 SU3,
 // the mock's (d)).
@@ -85,21 +86,30 @@ export const subjectsUnanswered: Block<SubjectsData> = {
         {text}
       </p>
     )
-    // THE PERIOD, WHERE THE MOCK PUTS THE MONTH. The mock stamps this tile
-    // "Sep"; this block follows the HORIZON control, not the month heading, and
-    // a month stamped on a twelve-month read is the mis-dating `unansweredLead`
-    // was already fixed for once.
-    const period = periodPhrase(data.horizon, data.month)
-
     return (
       <BlockFrame
         title={subjectsUnanswered.title}
         question={subjectsUnanswered.question}
         mode={mode}
-        // THE PERIOD IN THE APP, WHERE THE MOCK PUTS "Sep"; the full sentence
-        // on paper and in an email, which have the width and no rail beside
-        // them to state the gate's number in.
-        meta={mode === 'app' ? `${period[0].toUpperCase()}${period.slice(1)}` : unansweredMeta(u.questionVideos, u.yourPosts)}
+        // THE PERIOD, WHERE THE MOCK PUTS THE MONTH. The mock stamps this
+        // tile "Sep"; this block follows the HORIZON control, not the month
+        // heading, and a month stamped on a twelve-month read is the
+        // mis-dating `unansweredLead` was already fixed for once. The full
+        // sentence goes on paper and in an email, which have the width and no
+        // rail beside them to state the gate's number in.
+        //
+        // AND IT IS THE CONTROL'S OWN WORDS, NOT A CAPITALISED FRAGMENT OF THE
+        // BASIS SENTENCE (fix pass). "In the last 12 months" is `periodPhrase`
+        // mid-sentence with a capital bolted on; at 21 characters it did not
+        // fit beside this block's long title in the 354px header of the narrow
+        // half of the mock's 1.35:1 pair, so the TITLE wrapped and left
+        // "ANSWER" alone on a second line with the tile's header 18px below
+        // its neighbour's. `HORIZON_LABEL` is what the four pills at the top
+        // of the page are labelled with — "Last 12 months" — so the tile is
+        // stamped with the period in the same words the reader chose it in,
+        // and it is seven characters shorter. `periodPhrase` still writes the
+        // lead sentence, where a fragment is what a sentence needs.
+        meta={mode === 'app' ? HORIZON_LABEL[data.horizon] : unansweredMeta(u.questionVideos, u.yourPosts)}
         footer={footer}
         // ONE LINE, CLIPPED RATHER THAN WRAPPED. This tile is the narrow half of
         // the mock's 1.35:1 pair and its footer note is long; without it "Open
