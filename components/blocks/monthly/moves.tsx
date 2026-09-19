@@ -147,7 +147,20 @@ function Acted({ acted }: { acted: { decided: number; of: number; line: string }
                     ))}
                   </span>
                 ) : (
-                  <table width="100%" {...presentation} style={{ ...T, background: EMAIL.neutralSeg, borderRadius: 8 }}>
+                  // AND THE TRACK IS FAINT, NOT MID-GREY (the wave-3 review,
+                  // finding [Important]). On `EMAIL.neutralSeg` the track drew
+                  // as a 208px #CDD2D7 bar carrying a 3px green fill, beside
+                  // the figure "1 / of 64 acted on" — at a glance the picture
+                  // says "done" where the number says 1.6%, which is the same
+                  // defect the shape of this meter was rewritten to fix,
+                  // arriving by colour instead of by rounding. #CDD2D7 is right
+                  // for an unfilled SEGMENT (a countable block that is there
+                  // and is not filled) and wrong for the unfilled remainder of
+                  // a scale bar, which is not a quantity at all. `EMAIL.border`
+                  // is one step down from this panel's own `EMAIL.inner`,
+                  // which is what the other bar on this artefact uses as a
+                  // track against the white card (`rivals.tsx`).
+                  <table width="100%" {...presentation} style={{ ...T, background: EMAIL.border, borderRadius: 8 }}>
                     <tbody>
                       <tr>
                         <td style={{ height: 10, lineHeight: '10px', fontSize: 0 }}>

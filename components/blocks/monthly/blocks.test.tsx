@@ -634,6 +634,12 @@ describe('the five sections that are Overview’s', () => {
     const many = at(1, 64)
     expect(many).toContain('width:1.5625%')
     expect(many).not.toMatch(/width:14px/)
+    // AND THE TRACK IS FAINT (the wave-3 review, finding [Important]). Drawn
+    // on the segment grey, 1 of 64 was a 208px #CDD2D7 bar with a 3px green
+    // fill in it: a picture that says "done" beside a figure that says 1.6%.
+    // The unfilled remainder of a scale bar is not a countable segment.
+    expect(many).not.toContain(EMAIL.neutralSeg)
+    expect(many).toContain(`background:${EMAIL.border}`)
   })
 
   // THE SECTION'S ONE GRAPHIC (review finding [High]). The artboard's rival row
