@@ -7,12 +7,37 @@ import { isQuarterlyData } from '@/lib/reports/quarterly-build'
 import { renderQuarterlyEmail, QUARTERLY_IMAGE_BLOCKS } from '@/lib/email/quarterly'
 import { QUARTERLY_CANVAS_GUTTER, QUARTERLY_CARD_WIDTH, QUARTERLY_EMAIL_KEYS, QUARTERLY_EMAIL_WIDTH } from '@/components/email/quarterly'
 import { QuarterlyDeck } from '@/components/print/quarterly-deck'
+import { WeeklyDeck } from '@/components/print/weekly-deck'
+import { MonthlyDeck } from '@/components/print/monthly-deck'
+import { weeklyFixture } from '@/components/blocks/weekly/fixture'
+import { WEEKLY_BLOCK_KEYS, weeklySubject } from '@/lib/reports/weekly'
+import { WEEKLY_SNAPSHOT_VERSION, type WeeklySnapshotData } from '@/lib/reports/weekly-build'
+import { monthlyFixture } from '@/components/blocks/monthly/fixture'
+import { MONTHLY_BLOCK_KEYS, monthlyPeriod } from '@/lib/reports/monthly'
+import { MONTHLY_SNAPSHOT_VERSION, type MonthlySnapshotData } from '@/lib/reports/monthly-build'
 import { QuarterlyShareShell } from '@/components/share/quarterly-share-shell'
 import { closedFixture, formingFixture, quarterlySnapshotFixture } from './fixture'
 
 const APP = 'https://app.verbatimintel.com'
 const snapshot = quarterlySnapshotFixture()
 const forming = quarterlySnapshotFixture(formingFixture())
+
+// The two other `Slide` artefacts, as their build step writes them — enough of
+// a snapshot to render, because what is asserted about them is one attribute.
+const weeklyReading = weeklyFixture()
+const weeklySnapshot = {
+  version: WEEKLY_SNAPSHOT_VERSION, kind: 'weekly', company: 'Sealand', title: 'Sealand · your update',
+  period: '6 Sep – 13 Sep', readingAt: '2026-09-18T09:00:00.000Z', month: '2026-09-01',
+  keys: [...WEEKLY_BLOCK_KEYS], reading: weeklyReading, figures: {},
+  subject: weeklySubject('Sealand', weeklyReading.section1.check),
+} as WeeklySnapshotData
+const monthlyReading = monthlyFixture()
+const monthlySnapshot = {
+  version: MONTHLY_SNAPSHOT_VERSION, kind: 'monthly', company: 'Sealand', title: 'Sealand · the month',
+  period: monthlyPeriod(monthlyReading.month, monthlyReading.monthStatus, monthlyReading.readingAt),
+  readingAt: monthlyReading.readingAt, month: monthlyReading.month, monthStatus: monthlyReading.monthStatus,
+  keys: [...MONTHLY_BLOCK_KEYS], reading: monthlyReading, figures: {}, subject: monthlyReading.subject,
+} as MonthlySnapshotData
 
 describe('the deck', () => {
   it('gives every page its own sheet, and counts them', () => {
@@ -50,6 +75,36 @@ describe('the deck', () => {
     const text = renderText(<QuarterlyDeck data={{ ...snapshot, version: 1 }} date="16 Sep 2026" />)
     expect(text).toContain('older version of Verbatim')
     expect(text).not.toContain(snapshot.reading.cover.stamp)
+  })
+
+  it('declares the 8pt floor DEFERRED on every sheet, because three of eight clip under it', () => {
+    // app/globals.css lifts every app tier under 12px inside a
+    // `.vb-slide-body`, which is right and which this deck cannot pay for:
+    // measured at 1123px with scripts/deck-fit.ts, the floor takes this
+    // artefact from one clipping sheet to three (p4 +4px, p5 +17px, p6
+    // 108 → 144px; forming p6 0 → 29px), and the body is overflow:hidden, so
+    // each of those is content dropped from a client's PDF with no ellipsis.
+    // The deferral is declared HERE rather than by a CSS exception nobody can
+    // find, and it is on every sheet including the stale one.
+    const markup = render(<QuarterlyDeck data={snapshot} date="16 Sep 2026" />)
+    const sheets = (markup.match(/<section class="vb-slide"/g) ?? []).length
+    expect(sheets).toBe(QUARTERLY_BLOCK_KEYS.length)
+    expect((markup.match(/data-type-floor="deferred"/g) ?? []).length).toBe(sheets)
+    // The one-sheet arm too: a stale snapshot is still a sheet.
+    expect(render(<QuarterlyDeck data={{ ...snapshot, keys: [] }} date="16 Sep 2026" />)).toContain('data-type-floor="deferred"')
+  })
+
+  it('is the ONLY artefact that defers it', () => {
+    // The weekly and monthly decks and both briefs were measured at the floor
+    // and clip nothing at it, so they take it. A second deferral here is a
+    // second artefact printing at 6.8pt and has to be argued in a diff.
+    for (const other of [
+      render(<WeeklyDeck data={weeklySnapshot} date="16 Sep 2026" />),
+      render(<MonthlyDeck data={monthlySnapshot} date="16 Sep 2026" />),
+    ]) {
+      expect(other).toContain('vb-slide')
+      expect(other).not.toContain('data-type-floor')
+    }
   })
 
   it('keeps the copy contract on every state', () => {

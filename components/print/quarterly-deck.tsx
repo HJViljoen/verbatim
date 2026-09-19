@@ -23,6 +23,36 @@ import { Slide } from './slide'
 // to, which is why the method note is on every slide of a report and why this
 // is on every slide of this one.
 
+/**
+ * THE 8pt FLOOR IS DEFERRED ON THIS ARTEFACT, AND THIS IS THE WHOLE REASON.
+ *
+ * app/globals.css lifts every app tier under 12px inside a `.vb-slide-body`,
+ * because a 10px tier under the sheet's `.902` zoom sets at 6.8pt on a 297mm
+ * page. It is right, and this deck cannot pay for it today. Measured with
+ * `scripts/deck-fit.ts` (`--deck quarterly`), at 1123px, both fixtures:
+ *
+ *   floor on   populated  p4 +4px · p5 +17px · p6 +144px      forming p6 +29px
+ *   floor off  populated                       p6 +108px      forming clean
+ *
+ * `.vb-slide-body` is `overflow: hidden` over a fixed box, so every one of
+ * those numbers is content dropped from the PDF with no ellipsis and no
+ * warning — 144px of a 561px body is a quarter of a sheet, on the one artefact
+ * that goes to a client's board.
+ *
+ * IT IS NOT A DENSITY PROBLEM THAT A SIZE FIXES. This deck carries about 58%
+ * more text than the drawing does on the same eight sheets, and eight is the
+ * artefact: `quarterlyBlocksFor` gives one page one sheet because the mock
+ * draws eight frames. `components/blocks/quarterly/parts.tsx` wrote the
+ * conclusion down before this wave — "the last 0.6pt is a question about how
+ * many sheets this artefact has, not about this constant" — and answering it
+ * means deciding whether a quarterly review may run to nine sheets. That is
+ * Heinrich's call, not a merge's.
+ *
+ * WHAT THIS DEFERRAL DOES NOT CLOSE: p6 clips 108px with the floor off too,
+ * at f333f63c and before it. It is recorded, not fixed here.
+ */
+const QUARTERLY_TYPE_FLOOR = 'deferred' as const
+
 const fmtDate = (d: Date) => fullDate(d.toISOString())
 
 export function QuarterlyDeck({ data, date = fmtDate(new Date()) }: { data: QuarterlySnapshotData; date?: string }) {
@@ -49,7 +79,7 @@ export function QuarterlyDeck({ data, date = fmtDate(new Date()) }: { data: Quar
   }
   if (blocks.length === 0) {
     return (
-      <Slide title={data.title} chrome={chrome} page={1} pages={1} layout="single">
+      <Slide title={data.title} chrome={chrome} page={1} pages={1} layout="single" floor={QUARTERLY_TYPE_FLOOR}>
         {/* THE PRODUCT'S OWN WORDS, NOT THE DEVELOPER'S. "this build" and
             "page" are the calibration's pipeline jargon, on the one surface
             that goes to a client's board — and the calibrated sentence for
@@ -76,6 +106,7 @@ export function QuarterlyDeck({ data, date = fmtDate(new Date()) }: { data: Quar
           page={i + 1}
           pages={blocks.length}
           layout="single"
+          floor={QUARTERLY_TYPE_FLOOR}
         >
           {block.render(data.reading, 'print', ctx)}
         </Slide>

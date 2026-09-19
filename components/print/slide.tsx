@@ -37,7 +37,7 @@ export interface SlideChrome {
 const MEASURE = `(function(){if(window.__vbSlideMeasure){return}window.__vbSlideMeasure=1;var m=function(){var s=document.querySelectorAll('.vb-slide');for(var i=0;i<s.length;i++){var b=s[i].querySelector('.vb-slide-body');if(b){s[i].toggleAttribute('data-overflow',b.scrollHeight>b.clientHeight+2)}}document.documentElement.setAttribute('data-slides-measured','')};if(document.fonts&&document.fonts.ready){document.fonts.ready.then(function(){requestAnimationFrame(m)})}else{requestAnimationFrame(m)}})()`
 
 export function Slide({
-  title, chrome, page, pages, layout = 'grid', flow = false, header = true, note, children, className,
+  title, chrome, page, pages, layout = 'grid', flow = false, header = true, note, floor, children, className,
 }: {
   title: ReactNode
   chrome: SlideChrome
@@ -56,12 +56,29 @@ export function Slide({
   /** The operator's one line of framing (Report Studio) — a serif note under
    *  the title on a section's first slide; the body gives up its height. */
   note?: string | null
+  /**
+   * THE 8pt FLOOR, DEFERRED — declared by the artefact, never assumed.
+   *
+   * The floor rule lives in app/globals.css and applies to every
+   * `.vb-slide-body` that does NOT carry this, so a new artefact is inside it
+   * by default and an exception has to be written down here, in the deck that
+   * takes it, with what it measured.
+   *
+   * There is exactly one today (`components/print/quarterly-deck.tsx`) and its
+   * reason is not taste: lifting that deck's reading tier to 12px pushes three
+   * of its eight sheets past a fixed box that clips in silence. The size
+   * question and the sheet-count question are the same question for that
+   * artefact, and `components/blocks/quarterly/parts.tsx` said so before this
+   * wave: "the last 0.6pt is a question about how many sheets this artefact
+   * has, not about this constant."
+   */
+  floor?: 'deferred'
   children: ReactNode
   className?: string
 }) {
   const hasNote = Boolean(note && note.trim())
   return (
-    <section className={cn('vb-slide', className)} data-note={hasNote ? '' : undefined}>
+    <section className={cn('vb-slide', className)} data-note={hasNote ? '' : undefined} data-type-floor={floor}>
       <script dangerouslySetInnerHTML={{ __html: MEASURE }} />
       {/* TWO LINES, NOT ONE CUT SHORT (Block D wave 3, SH23). The `<h1>` and
           the framing note were `truncate`, on a sheet whose only output is a

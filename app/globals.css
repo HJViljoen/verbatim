@@ -554,13 +554,31 @@
    one is a number in the chart's coordinate space — the attention chart's
    11px axis label prints at about 13px on the sheet — and rewriting it to 12
    would resize the drawing rather than the type. `scripts/deck-fit.ts`
-   measures those through their own viewBox scale for the same reason. */
-.vb-slide-body .text-\[9px\]:not(svg *),
-.vb-slide-body .text-\[9\.5px\]:not(svg *),
-.vb-slide-body .text-\[10px\]:not(svg *),
-.vb-slide-body .text-\[10\.5px\]:not(svg *),
-.vb-slide-body .text-\[11px\]:not(svg *),
-.vb-slide-body .text-\[11\.5px\]:not(svg *) { font-size: 12px; }
+   measures those through their own viewBox scale for the same reason.
+
+   AND IT REACHES EVERY Slide ARTEFACT, NOT ONLY THE TWO IT WAS MEASURED ON
+   (Block D wave 3b, the merge). `.vb-slide-body` is the brief decks, the
+   weekly deck, the monthly deck AND the quarterly review, so this rule was
+   written against two artefacts and shipped to five. Measured on all five with
+   `scripts/deck-fit.ts`, which now renders all five for that reason: sales,
+   marketing, weekly and monthly clip nothing at 12px — monthly improved, one
+   clipping sheet to none — and the quarterly review goes from one clipping
+   sheet to three (p4 +4px, p5 +17px, p6 108 → 144px; forming p6 0 → 29px).
+   144px of a 561px body is a quarter of a sheet dropped with no ellipsis on a
+   document that goes to a client's board.
+
+   SO THE FLOOR IS DEFAULT-ON AND THE ONE EXCEPTION IS NAMED, in the deck that
+   takes it: `.vb-slide:not([data-type-floor])`, set from `Slide`'s `floor`
+   prop, and `components/print/quarterly-deck.tsx` is the only caller. A new
+   artefact is inside the floor without doing anything; leaving it costs a
+   typed prop, a comment and a test. `components/print/slide.test.tsx` pins
+   both halves. */
+.vb-slide:not([data-type-floor]) .vb-slide-body .text-\[9px\]:not(svg *),
+.vb-slide:not([data-type-floor]) .vb-slide-body .text-\[9\.5px\]:not(svg *),
+.vb-slide:not([data-type-floor]) .vb-slide-body .text-\[10px\]:not(svg *),
+.vb-slide:not([data-type-floor]) .vb-slide-body .text-\[10\.5px\]:not(svg *),
+.vb-slide:not([data-type-floor]) .vb-slide-body .text-\[11px\]:not(svg *),
+.vb-slide:not([data-type-floor]) .vb-slide-body .text-\[11\.5px\]:not(svg *) { font-size: 12px; }
 .vb-print-grid {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));

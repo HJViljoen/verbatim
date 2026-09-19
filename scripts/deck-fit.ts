@@ -1,10 +1,19 @@
-// A DECK-FIT PROBE, not a shot: renders the sales and marketing brief decks at
-// the sheet's own 1123px and reports, per sheet, what falls off the bottom of
+// A DECK-FIT PROBE, not a shot: renders every `Slide`-based artefact at the
+// sheet's own 1123px and reports, per sheet, what falls off the bottom of
 // `.vb-slide-body` and how much of the sheet's type prints under the 8pt floor
 // `components/print/slide.tsx` names.
 //
 //   node --import tsx scripts/deck-fit.ts --deck sales
-//   node --import tsx scripts/deck-fit.ts            (both)
+//   node --import tsx scripts/deck-fit.ts            (all seven renders)
+//
+// ALL FIVE ARTEFACTS, BECAUSE THE RULES ARE NOT SCOPED TO TWO (Block D wave
+// 3b, the merge). This probe was written beside the 8pt floor and the
+// calendar's paper factor, both of which are `.vb-slide-body` rules — and
+// `.vb-slide-body` is the two briefs AND the weekly, monthly and quarterly
+// decks. Measured on two, the floor read as a clean win; measured on five it
+// took the quarterly review from one clipping sheet to three, which is how
+// that deck came to declare `floor="deferred"`. A rule written for one sheet
+// is measured on every sheet that wears the class.
 //
 // THREE MEASURES, because "the deck fits" is three claims:
 //  · SHEETS — the count, against the artboard's (sales 7, marketing 9).
@@ -35,6 +44,16 @@ import tailwind from '@tailwindcss/postcss'
 import { withBrowser } from '../lib/render/chromium'
 import { DocumentDeck } from '../components/print/document-deck'
 import { salesBriefFixture, marketingDeckFixture } from '../components/print/fixture'
+import { WeeklyDeck } from '../components/print/weekly-deck'
+import { MonthlyDeck } from '../components/print/monthly-deck'
+import { QuarterlyDeck } from '../components/print/quarterly-deck'
+import { weeklyFixture, formingFixture as weeklyForming } from '../components/blocks/weekly/fixture'
+import { WEEKLY_BLOCK_KEYS, weeklySubject } from '../lib/reports/weekly'
+import { WEEKLY_SNAPSHOT_VERSION, type WeeklySnapshotData } from '../lib/reports/weekly-build'
+import { monthlyFixture, formingMonthlyFixture } from '../components/blocks/monthly/fixture'
+import { MONTHLY_BLOCK_KEYS, monthlyPeriod } from '../lib/reports/monthly'
+import { MONTHLY_SNAPSHOT_VERSION, type MonthlySnapshotData } from '../lib/reports/monthly-build'
+import { quarterlySnapshotFixture, formingFixture as quarterlyForming } from '../components/blocks/quarterly/fixture'
 
 const args = process.argv.slice(2)
 const flag = (n: string, d: string) => { const i = args.indexOf(`--${n}`); return i >= 0 && args[i + 1] ? args[i + 1] : d }
@@ -42,10 +61,35 @@ const only = flag('deck', '')
 const out = flag('out', 'scratch/deck-fit')
 const FONTS = 'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap'
 
+// The snapshot a scheduled send would carry, built from the offline fixture —
+// the same shape `lib/reports/*-build.ts` writes, so the probe renders what a
+// reader receives rather than a bare reading.
+const weeklySnapshot = (reading = weeklyFixture()): WeeklySnapshotData => ({
+  version: WEEKLY_SNAPSHOT_VERSION, kind: 'weekly', company: 'Sealand', title: 'Sealand · your update',
+  period: '6 Sep – 13 Sep', readingAt: '2026-09-18T09:00:00.000Z', month: '2026-09-01',
+  keys: [...WEEKLY_BLOCK_KEYS], reading, figures: {}, subject: weeklySubject('Sealand', reading.section1.check),
+} as WeeklySnapshotData)
+
+const monthlySnapshot = (reading = monthlyFixture()): MonthlySnapshotData => ({
+  version: MONTHLY_SNAPSHOT_VERSION, kind: 'monthly', company: 'Sealand', title: 'Sealand · the month',
+  period: monthlyPeriod(reading.month, reading.monthStatus, reading.readingAt), readingAt: reading.readingAt,
+  month: reading.month, monthStatus: reading.monthStatus, keys: [...MONTHLY_BLOCK_KEYS], reading, figures: {},
+  subject: reading.subject,
+} as MonthlySnapshotData)
+
+// `sheets` is the artboard's own frame count where the mock draws one
+// (the two briefs, the quarterly review's eight); the weekly and monthly decks
+// are paginated off their block list and report their own.
 const DECKS = [
   { key: 'sales', sheets: 7, markup: () => renderToStaticMarkup(DocumentDeck({ data: salesBriefFixture(), date: '28 Sep 2026' })) },
   { key: 'marketing', sheets: 9, markup: () => renderToStaticMarkup(DocumentDeck({ data: marketingDeckFixture(), date: '28 Sep 2026' })) },
-].filter((d) => !only || d.key === only)
+  { key: 'weekly', sheets: 0, markup: () => renderToStaticMarkup(WeeklyDeck({ data: weeklySnapshot(), date: '28 Sep 2026' })) },
+  { key: 'weekly-forming', sheets: 0, markup: () => renderToStaticMarkup(WeeklyDeck({ data: weeklySnapshot(weeklyForming()), date: '28 Sep 2026' })) },
+  { key: 'monthly', sheets: 0, markup: () => renderToStaticMarkup(MonthlyDeck({ data: monthlySnapshot(), date: '28 Sep 2026' })) },
+  { key: 'monthly-forming', sheets: 0, markup: () => renderToStaticMarkup(MonthlyDeck({ data: monthlySnapshot(formingMonthlyFixture()), date: '28 Sep 2026' })) },
+  { key: 'quarterly', sheets: 8, markup: () => renderToStaticMarkup(QuarterlyDeck({ data: quarterlySnapshotFixture(), date: '28 Sep 2026' })) },
+  { key: 'quarterly-forming', sheets: 8, markup: () => renderToStaticMarkup(QuarterlyDeck({ data: quarterlySnapshotFixture(quarterlyForming()), date: '28 Sep 2026' })) },
+].filter((d) => !only || d.key === only || d.key.startsWith(`${only}-`))
 
 const PROBE = `(() => {
   const PT = 1123 / (297 / 25.4 * 72);
@@ -148,7 +192,8 @@ body{font-family:var(--font-sans)}
       const totalNodes = rows.reduce((a, r) => a + r.nodes, 0)
       const totalUnder = rows.reduce((a, r) => a + r.under, 0)
       const clipped = rows.filter((r) => (r.over ?? 0) > 2)
-      console.log(`\n=== ${d.key}: ${rows.length} sheets (artboard ${d.sheets}) · ${totalUnder} of ${totalNodes} nodes under 8pt · ${clipped.length} sheets clip`)
+      const against = d.sheets ? ` (artboard ${d.sheets})` : ''
+      console.log(`\n=== ${d.key}: ${rows.length} sheets${against} · ${totalUnder} of ${totalNodes} nodes under 8pt · ${clipped.length} sheets clip`)
       for (const r of rows) {
         console.log(`  ${String(r.sheet).padStart(2)} ${r.title.padEnd(46)} over=${String(r.over).padStart(5)} slack=${String(r.slack).padStart(4)} nodes=${String(r.nodes).padStart(3)} under8=${String(r.under).padStart(3)} ${r.minPt}–${r.maxPt}pt`)
         for (const w of r.worst) console.log(`        ${w.pt}pt  ${JSON.stringify(w.text)}`)

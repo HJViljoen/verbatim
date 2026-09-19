@@ -79,7 +79,7 @@ describe('the 8pt print floor', () => {
   const zoom = Number(CSS.match(/--vb-zoom:\s*([0-9.]+)/)![1])
 
   it('lifts every app tier under the floor, inside the body where the zoom is', () => {
-    const rule = CSS.match(/((?:\.vb-slide-body \.text-\\\[[0-9.\\]+px\\\]:not\(svg \*\),?\s*)+)\{\s*font-size:\s*([0-9.]+)px/)
+    const rule = CSS.match(/((?:\.vb-slide:not\(\[data-type-floor\]\) \.vb-slide-body \.text-\\\[[0-9.\\]+px\\\]:not\(svg \*\),?\s*)+)\{\s*font-size:\s*([0-9.]+)px/)
     expect(rule).not.toBeNull()
     const lifted = Number(rule![2])
     // The tier it lifts TO clears the floor, and it is a tier the app already
@@ -99,6 +99,29 @@ describe('the 8pt print floor', () => {
     // would resize the drawing rather than the type; `--cal-p` is that half and
     // lib/charts/calendar.test.ts pins it. The rule must therefore EXCLUDE svg.
     expect(CSS).toContain(':not(svg *)')
+  })
+
+  // ── the one exception, and which way round it is ──────────────────────────
+  //
+  // The rule reaches every `.vb-slide-body`, which is five artefacts and not
+  // the two it was measured on. Measured on all five (`scripts/deck-fit.ts`),
+  // the quarterly review went from one clipping sheet to three — so the floor
+  // stays DEFAULT-ON and that deck declares its deferral in code. A carve-out
+  // that reads `:not(.something)` is one word away from being an opt-out
+  // nobody can find, so both halves are pinned here: the default is inside the
+  // floor, and the exception has to be written by the artefact that takes it.
+  it('is default-on: a sheet that declares nothing is inside the floor', () => {
+    const markup = render(slide())
+    expect(markup).not.toContain('data-type-floor')
+    // The selector is a NEGATION, so a new artefact is covered without doing
+    // anything. If this ever becomes a positive class, every deck written
+    // afterwards prints at 6.8pt until someone remembers.
+    expect(CSS).toContain('.vb-slide:not([data-type-floor]) .vb-slide-body')
+  })
+
+  it('lets one artefact defer it, out loud and in its own markup', () => {
+    const markup = render(slide({ floor: 'deferred' }))
+    expect(markup).toContain('data-type-floor="deferred"')
   })
 
   it('clears the floor on the two nodes the zoom never reaches', () => {
