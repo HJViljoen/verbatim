@@ -299,16 +299,29 @@ function Row({ row, mode }: { row: MoverRow; mode: RenderMode }) {
  * box and the ARROWS are where the line may break, so a narrow column gets two
  * short lines of whole readings instead of four ragged ones.
  *
+ * AND THE ARROW BELONGS TO THE POINT BEFORE IT (the wave-3 review, finding
+ * [Important]). With the separator a bare text node BETWEEN two unbreakable
+ * boxes, both of its spaces were break opportunities, so a line could break
+ * before an arrow as well as after one: in the half-width mover column at 375 a
+ * six-point trail set as ELEVEN lines, five of them a lone "→" — the fix above
+ * met at 640 and inverted on the phone, which is where a monthly report is
+ * opened most. The arrow now rides inside its own point's box and only the
+ * space after it can break, which is the one break this line ever wanted.
+ *
  * THE MARKER STAYS ON THE WHOLE LINE, not on each point: rule (b) reads a
  * level node's whole text, and "Jul —" alone is a month with no reading rather
- * than a level missing its evidence.
+ * than a level missing its evidence. The printed text is unchanged either way —
+ * the separator is split into the arrow and the space that follows it, and both
+ * come from `TRAIL_SEPARATOR` rather than being typed again here.
  */
 function Trail({ trail, mode }: { trail: string; mode: RenderMode }) {
   const points = trail.split(TRAIL_SEPARATOR)
+  const arrow = TRAIL_SEPARATOR.trimEnd()
+  const gap = TRAIL_SEPARATOR.slice(arrow.length)
   const parts = points.map((point, i) => (
     <Fragment key={point + i}>
-      {i > 0 ? TRAIL_SEPARATOR : null}
-      <span style={{ whiteSpace: 'nowrap' }}>{point}</span>
+      {i > 0 ? gap : null}
+      <span style={{ whiteSpace: 'nowrap' }}>{i < points.length - 1 ? `${point}${arrow}` : point}</span>
     </Fragment>
   ))
   return mode === 'email' ? (

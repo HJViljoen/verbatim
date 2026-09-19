@@ -195,12 +195,18 @@ describe('MR3 · what moved', () => {
   // fell between "9.4% of" and "1,388" — a share on one line and what it is a
   // share of on the next, which is the denominator rule broken by other means.
   // The arrows are where the line may break.
-  it('never breaks a point of the trail in half', () => {
+  // AND THE ARROW RIDES WITH THE POINT BEFORE IT (the wave-3 review, finding
+  // [Important]). As a bare text node between two unbreakable boxes the
+  // separator offered a break on BOTH sides, so at 375 a six-point trail set
+  // as eleven lines, five of them a lone "→". The box is the point plus its
+  // arrow; the space after it is the only break.
+  it('never breaks a point of the trail in half, or an arrow off its point', () => {
     for (const mode of MODES) {
       const markup = render(block.render(monthlyFixture(), mode, ctx))
-      for (const point of ['Apr 3.1% of 1,204', 'Sep 9.4% of 1,388', 'Apr —']) {
+      for (const point of ['Apr 3.1% of 1,204 →', 'Sep 9.4% of 1,388', 'Apr — →']) {
         expect(markup).toContain(`<span style="white-space:nowrap">${point}</span>`)
       }
+      expect(markup).not.toContain('</span> → <span')
     }
   })
 
