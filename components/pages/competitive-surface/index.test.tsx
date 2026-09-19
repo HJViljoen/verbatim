@@ -339,7 +339,14 @@ describe('the sections that are not built', () => {
   // on.
   it('names the two sections still missing, and no longer the two that landed', () => {
     const text = renderText(competitiveUnlocks.render(competitiveFixture(), 'app', ctx))
-    expect(text).toContain('What they say about themselves')
+    // AND IT NAMES THE MISSING HALF, NOT THE MOUNTED TILE (CO14). The row read
+    // "What they say about themselves", byte-identical to the CO4 eyebrow two
+    // tiles above — drawn, populated, working — under "Not on this page yet"
+    // and a badge reading "not built yet · Verbatim engineering".
+    expect(text).toContain('What they claim in their own posts')
+    expect(text).not.toContain('What they say about themselves')
+    expect(renderText(competitiveOwnClaims.render(competitiveFixture(), 'app', ctx)))
+      .toContain('What they say about themselves')
     expect(text).toContain('Findings, with recurrence')
     expect(text).not.toContain('Head to head, then and now')
     expect(text).not.toContain('How the category makes content')

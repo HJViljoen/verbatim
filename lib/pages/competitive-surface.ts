@@ -564,7 +564,16 @@ export function competitiveUnlockRows(ownClaims: readonly OwnPostCensus[] = []):
       : {
           section: 'CO4',
           state: 'not built yet' as const,
-          title: 'What they say about themselves',
+          // THE ROW NAMES THE MISSING HALF, NOT THE TILE THAT IS MOUNTED. This
+          // read "What they say about themselves" — byte-identical to the CO4
+          // eyebrow two tiles above, which is drawn, populated, and by this
+          // arm's own definition working — under a heading saying "Not on this
+          // page yet" and a badge reading "not built yet · Verbatim
+          // engineering". A readiness row is a list of what is ABSENT, and the
+          // absent thing here is the claims, which is what the line has always
+          // said. The other arm keeps the tile's name because there the tile
+          // genuinely has nothing: no account is configured anywhere.
+          title: 'What they claim in their own posts',
           line: 'What each rival published this month is above. What they CLAIM in it is read from their own transcripts and is not printed here — putting a rival’s words on this page is a decision to take, not a gap to fill.',
           owner: 'Verbatim engineering',
         }
