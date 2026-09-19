@@ -290,6 +290,14 @@ describe('content.playbook — a side nobody read', () => {
     // is not a column head over four empty rows.
     expect(text).toContain('Össur, 0 videos')
     expect(markup.match(/role="columnheader"/g)?.length ?? 0).toBe(4)
+    // A SWATCH IS THE KEY TO A SERIES THAT IS DRAWN (design review 12). The
+    // unread side kept a filled green dot for a column the table does not
+    // draw; it now carries a hollow ring and says the column is not there.
+    expect(text).toContain('Össur, 0 videos · no column drawn')
+    expect(markup).toContain('rounded-full border border-current')
+    // And a column no longer stretches to every pixel a dropped one freed.
+    expect(markup).toContain('minmax(0, 280px)')
+    expect(markup).not.toContain('minmax(0, 1fr)')
   })
 })
 

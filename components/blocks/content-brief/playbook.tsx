@@ -177,8 +177,19 @@ function Legend({ sides }: { sides: readonly FormatMatrixSide[] }) {
     <div className="flex flex-wrap items-center gap-4">
       {sides.map((s) => (
         <span key={s.audience} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          <span className="h-2 w-2 rounded-full" style={{ background: sideColour(s) }} aria-hidden />
+          {/* A SWATCH IS THE KEY TO A SERIES THAT IS DRAWN (design review 12).
+              The unread side keeps its place in the legend — that is what says
+              it exists and what it published — but it had a filled green dot
+              for a column the table does not draw, so the one thing a legend
+              is for pointed at nothing. It gets a hollow ring and says so; the
+              sentence explaining WHY is `unreadNotes`, once, for the slide. */}
+          <span
+            className={s.unread ? 'h-2 w-2 rounded-full border border-current' : 'h-2 w-2 rounded-full'}
+            style={s.unread ? undefined : { background: sideColour(s) }}
+            aria-hidden
+          />
           {s.label}, {fmtInt(s.published)} {s.published === 1 ? 'video' : 'videos'}
+          {s.unread ? ' \u00b7 no column drawn' : ''}
         </span>
       ))}
     </div>
@@ -220,7 +231,14 @@ function Matrix({ matrix, heading, mode, legend = true }: { matrix: FormatMatrix
   const keys = matrix.keys.slice(0, limit)
   if (keys.length === 0 || sides.length === 0) return null
   const max = matrixMax(sides, keys)
-  const cols = `168px repeat(${sides.length}, minmax(0, 1fr))`
+  // A COLUMN IS CAPPED, BECAUSE A LONGER BAR ENCODES NOTHING MORE (design
+  // review 12). `1fr` let the surviving column take every pixel a dropped one
+  // freed: on the thin arm the category's Story bar ran about 1,450px and its
+  // figure sat roughly 1,400px from the row label, four rows the eye cannot
+  // track across. 280px is the width the three-column populated table already
+  // gives each side on a 1123px sheet, so the full table is unchanged and only
+  // the recomposing case is bounded.
+  const cols = `168px repeat(${sides.length}, minmax(0, 280px))`
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center justify-between gap-4">
