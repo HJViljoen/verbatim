@@ -293,7 +293,27 @@ function expand(spec: AudienceSpec, month: string): PlaybookVideo[] {
   for (const [key, k, med, rated] of spec.formats) {
     for (let i = 0; i < k && at < out.length; i++, at++) {
       out[at].classified_type = key
-      if (i < rated && med !== null) out[at].engagement_rate = med
+      // THE RATED VIDEOS SPREAD AROUND THE MEDIAN, THEY DO NOT ALL SIT ON IT
+      // (content-6, at the wave-3 merge). Every rated video used to carry the
+      // format's median exactly, so `medianBand` — an order-statistic
+      // confidence interval — came back as a POINT on every format, the band
+      // clause was suppressed as empty, and `bandsSeparate` was trivially
+      // true. That made content-6 unobservable on the one artefact it was
+      // written against: the sheet went on printing "Story ran at 3.4%
+      // against Entertainment at 3.1% — measured over 206 and 39 …" with no
+      // range, which is the defect, while the unit tests passed.
+      //
+      // An arithmetic progression CENTRED ON ZERO, so the median is still
+      // exactly `med` on an odd count and on an even one, and the header's
+      // promise above — "the group medians come back exactly" — still holds.
+      // The half-width is 30% of the median, which is about what a real
+      // format's spread looks like and which leaves Story's band and
+      // Entertainment's OVERLAPPING: a 0.3-point gap is not a ranking, and
+      // the sheet has to say so rather than be arranged into saying so.
+      if (i < rated && med !== null) {
+        const step = rated > 1 ? (0.3 * med) / ((rated - 1) / 2) : 0
+        out[at].engagement_rate = Math.max(0, med + (i - (rated - 1) / 2) * step)
+      }
     }
   }
   let hookAt = 0

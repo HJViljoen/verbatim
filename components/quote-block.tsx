@@ -194,7 +194,14 @@ export function QuoteBlock({ quote, mode = 'app', cite }: QuoteBlockProps): Reac
           label reading as a third line of the quotation. */}
       {label && (
         <p className="m-0 mt-1.5">
-          <span className="inline-block rounded-full bg-inner px-2 py-0.5 font-mono text-[10.5px] text-muted-foreground">{label}</span>
+          {/* THE PILL NEEDS A GROUND IT IS NOT (subjects R2). `bg-inner` is the
+              pill's fill AND, on paper, the blockquote's own — `big` sets
+              `rounded-lg bg-inner px-5 py-3.5` five lines up — so on a printed
+              sheet the pill read as a bare mono line on identical ground and
+              the artboard's filled chip was not there at all. On paper it
+              takes `bg-tile`, the card the quote sits on, which is the one
+              ground that reads AGAINST `--inner` in both themes. */}
+          <span className={`inline-block rounded-full px-2 py-0.5 font-mono text-[10.5px] text-muted-foreground ${big ? 'bg-tile' : 'bg-inner'}`}>{label}</span>
         </p>
       )}
       {english && (

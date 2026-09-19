@@ -164,8 +164,20 @@ describe('the in-app arm', () => {
 
   it('leaves paper alone — a printed quote sits in a tinted block, not on a rule', () => {
     const paper = render(<QuoteBlock quote={es} mode="print" />)
-    expect(paper).toContain('bg-inner')
+    expect(paper).toContain('rounded-lg bg-inner px-5 py-3.5')
     expect(paper).not.toContain('border-primary/30')
+  })
+
+  // AND THE PILL IS NOT THE SAME GROUND AS THE BLOCK IT SITS IN (R2). On
+  // paper the blockquote is itself `bg-inner`, so a `bg-inner` pill was a bare
+  // mono line on identical ground and the artboard's filled chip was not
+  // there. In the app the blockquote has no fill, so `bg-inner` IS the pill.
+  it('fills the translation pill against whatever ground it sits on', () => {
+    const paper = render(<QuoteBlock quote={es} mode="print" />)
+    expect(paper).toContain('rounded-full px-2 py-0.5 font-mono text-[10.5px] text-muted-foreground bg-tile')
+    const app = render(<QuoteBlock quote={es} mode="app" />)
+    expect(app).toContain('rounded-full px-2 py-0.5 font-mono text-[10.5px] text-muted-foreground bg-inner')
+    expect(app).not.toContain('bg-tile')
   })
 })
 
