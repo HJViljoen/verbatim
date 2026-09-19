@@ -4,7 +4,7 @@ import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, copyNodes } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
-import { overviewSentence, provenanceLine } from './sentence'
+import { overviewSentence, provenanceLine, voicesFromLine } from './sentence'
 import { overviewFixture, prunedLedgerFixture, refusedFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
@@ -34,6 +34,19 @@ describe('OV1 · in one sentence', () => {
       expect(node?.slot).toBe('pass_d_b_recommendation')
       assertCopyContract(markup)
     }
+  })
+
+  // A BARE NUMERAL NEEDS ITS NOUN (Block D wave 3, M10). "chosen from the 37
+  // the month's videos carried" is two "the"-phrases with a zero relative
+  // pronoun between a numeral and a possessive, set at 11px mono as the second
+  // thing the eye reaches in the lead tile. The count stays — disposition #18's
+  // point is that a reader can see two were CHOSEN and not that two were all
+  // there was — and it is the heading's own noun that makes the clause read.
+  it('names what the two voices were chosen from, in a sentence', () => {
+    expect(voicesFromLine(2, 37)).toBe('chosen from the 37 voices this month’s videos carried')
+    // Nothing to say where the pool is the shown set.
+    expect(voicesFromLine(2, 2)).toBeNull()
+    expect(voicesFromLine(2, 1)).toBeNull()
   })
 
   it('writes the figures into the sentence and marks them as code’s', () => {

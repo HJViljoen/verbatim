@@ -56,8 +56,19 @@ export function voicesLabel(shown: number): string {
 export function voicesFromLine(shown: number, from: number): string | null {
   const pool = Math.max(from, shown)
   // "chosen from 37 the month's videos carried" was ungrammatical, directly
-  // under "TWO VOICES" in the page's lead block (design review High 10).
-  return pool > shown ? `chosen from the ${fmtInt(pool)} the month’s videos carried` : null
+  // under "TWO VOICES" in the page's lead block (design review High 10). The
+  // fix inserted a definite article and left the collision (Block D wave 3,
+  // M10): "the 37 the month's videos carried" is two "the"-phrases with a zero
+  // relative pronoun between a bare numeral and a possessive, set at 11px mono
+  // as the second thing the eye reaches in the lead tile. The numeral needs its
+  // NOUN — the relative clause is fine once there is something for it to
+  // qualify — and the noun is the one the heading above it already uses.
+  //
+  // NOT DELETED, although the artboard prints "TWO VOICES" and nothing else:
+  // the count is disposition #18's point, that a reader can see two were CHOSEN
+  // and not that two were all there was. The heading is the mock's and the
+  // count keeps its own line under it.
+  return pool > shown ? `chosen from the ${fmtInt(pool)} voices this month’s videos carried` : null
 }
 
 /**
