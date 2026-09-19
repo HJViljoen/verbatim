@@ -49,13 +49,21 @@ export function RecordHeader({ meta, children }: { meta: ReactNode; children: Re
  */
 export function SaveStrip({ state, note }: { state: SaveState; note?: string | null }) {
   return (
+    // THE SMALLEST TYPE ON THE PAGE TAKES THE DARKER INK (Block D wave 3,
+    // RC8). Both lines were `text-muted-foreground` on `bg-inner`, which is
+    // 4.46:1 — the strip is 10.5px mono, the smallest thing this page sets,
+    // and it is the rail's only content below the seven links. SH7 lifts the
+    // token itself to 4.66:1 for every surface that paints muted ink on a
+    // tint; this block takes `text-secondary-foreground` (6.4:1 on the same
+    // ground) as well, which is what `ScopeStatement` below — the other
+    // `bg-inner` block on this page — already does.
     <div className="flex flex-col gap-1.5 rounded-[4px] bg-inner p-3">
-      <span className="font-mono text-[10.5px] leading-[1.4] text-muted-foreground">
+      <span className="font-mono text-[10.5px] leading-[1.4] text-secondary-foreground">
         {state.pending.length === 0
           ? `${NOTHING_PENDING}.`
           : `${state.pending.length} change${state.pending.length === 1 ? '' : 's'} waiting to be saved.`}
       </span>
-      <span className="font-mono text-[10.5px] leading-[1.4] text-muted-foreground">
+      <span className="font-mono text-[10.5px] leading-[1.4] text-secondary-foreground">
         {state.lastSavedAt
           ? `Last save ${shortDate(state.lastSavedAt)}${note ? ` — ${note.replace(/\.$/, '')}.` : '.'}`
           : 'Nothing has been saved on this workspace yet.'}
