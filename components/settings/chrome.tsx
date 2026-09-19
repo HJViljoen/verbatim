@@ -63,17 +63,28 @@ export function SectionHead({ title, meta, rule }: { title: ReactNode; meta?: Re
  * `top` is which of the two paddings the gutter takes — the artboard aligns a
  * label with a row of chips (7px) differently from a label beside a 44px
  * control (11px), and the difference is visible at this type size.
+ *
+ * THE GUTTER IS KEYED TO THE PANE, NOT THE VIEWPORT (ST10). It was `md:`, a
+ * media query at 768px of WINDOW — but this row is four boxes deep: window →
+ * 224px app sidebar → 224px settings rail → the content pane. At a 1024
+ * viewport that pane is 496px, so a fixed 172px gutter took 35% of it and left
+ * the content column 300px: all twenty-one term chips laid out one per line and
+ * the Search terms section grew from 1,154px to 1,878px. A container query asks
+ * the box that actually decides. 560px is the threshold the gutter earns its
+ * place at — 172 of gutter, 24 of gap and 364 of content.
  */
 export function LabelRow({
   label, meta, top = 'chips', children,
 }: { label: ReactNode; meta?: ReactNode; top?: 'chips' | 'control'; children: ReactNode }) {
   return (
-    <div className="grid grid-cols-1 items-start gap-x-6 gap-y-2 md:grid-cols-[172px_minmax(0,1fr)]">
-      <div className={cn('flex flex-col gap-px', top === 'control' ? 'md:pt-2.5' : 'md:pt-1.5')}>
-        <span className="text-[12.5px] font-medium">{label}</span>
-        {meta && <span className="font-mono text-[10.5px] text-muted-foreground">{meta}</span>}
+    <div className="@container">
+      <div className="grid grid-cols-1 items-start gap-x-6 gap-y-2 @[560px]:grid-cols-[172px_minmax(0,1fr)]">
+        <div className={cn('flex flex-col gap-px', top === 'control' ? '@[560px]:pt-2.5' : '@[560px]:pt-1.5')}>
+          <span className="text-[12.5px] font-medium">{label}</span>
+          {meta && <span className="font-mono text-[10.5px] text-muted-foreground">{meta}</span>}
+        </div>
+        <div className="min-w-0">{children}</div>
       </div>
-      <div className="min-w-0">{children}</div>
     </div>
   )
 }
