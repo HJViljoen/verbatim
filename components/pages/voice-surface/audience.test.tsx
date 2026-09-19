@@ -174,4 +174,16 @@ describe('voiceAudience', () => {
   it('keeps its key, which is a stored contract', () => {
     expect(voiceAudience.key).toBe('voice.audience')
   })
+
+  it('drops the filter bar\u2019s label column when the bar stops being a row', () => {
+    // `w-[104px] flex-none` was unconditional under a parent that only flips to
+    // a row at `xl:`. Below 1280 three of the four labels wrapped mid-phrase
+    // ("WHERE IT WAS / SAID") inside a 104px box in a stacked column — four
+    // wasted lines, no overflow, nothing to catch it.
+    const markup = render(voiceAudience.render(voiceFixture(), 'app', ctx))
+    expect(markup).toContain('xl:w-[104px]')
+    // and never the unprefixed one: `xl:w-[104px]` is the fix, `w-[104px]`
+    // preceded by a space or a quote is the defect.
+    expect(markup).not.toMatch(/["\s]w-\[104px\]/)
+  })
 })
