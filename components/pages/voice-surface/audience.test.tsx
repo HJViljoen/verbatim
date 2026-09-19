@@ -199,6 +199,7 @@ describe('voiceAudience', () => {
     // Four audience pills and nothing else on this bar.
     expect(pills).toHaveLength(voiceFixture().audience.options.length)
     expect(markup).toContain('Asking how it works')
-    expect(markup).toContain('34% 472 of 1,388')
+    // `lib`'s fmtPct keeps an exact .0 so a decimal column lines up.
+    expect(markup).toContain('34.0% 472 of 1,388')
   })
 })

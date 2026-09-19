@@ -401,6 +401,7 @@ describe('voiceTheme', () => {
     const markup = render(voiceTheme.render(flat, 'app', ctx))
     expect(markup).not.toContain('flat')
     expect(markup).not.toMatch(/rounded-full bg-inner px-2 py-0\.5 text-\[12px\] font-medium"><\/span>/)
-    expect(render(voiceTheme.render(base, 'app', ctx))).toContain('growing, 3 months')
+    // M19: the direction word takes the artboards' tail, "growing, 3rd month".
+    expect(render(voiceTheme.render(base, 'app', ctx))).toContain('growing, 3rd month')
   })
 })

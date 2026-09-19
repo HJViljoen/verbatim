@@ -196,6 +196,7 @@ describe('voiceMovers', () => {
     // No empty pill left behind either.
     expect(markup).not.toMatch(/rounded-full bg-inner px-2 py-0\.5 text-\[12px\] font-medium"><\/span>/)
     // And a real direction still prints.
-    expect(render(voiceMovers.render(base, 'app', ctx))).toContain('growing, 3 months')
+    // M19: the direction word takes the artboards' tail, "growing, 3rd month".
+    expect(render(voiceMovers.render(base, 'app', ctx))).toContain('growing, 3rd month')
   })
 })
