@@ -14,6 +14,10 @@ import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, ty
 import { buildStandings, type StandingRow } from '../reading/standings'
 import type { HeadToHead } from '../reading/head-to-head'
 import { buildHeadToHead, buildPlaybook, loadPlaybookVideos, type PlaybookBlock } from './playbook'
+// THE FLOOR THE CONTENT BRIEF ALREADY RESTS ITS CONCLUSION ON. Imported rather
+// than re-derived from `COMPETITIVE_MIN_VIDEOS` so the two surfaces cannot
+// drift into two answers about the same sentence.
+import { LEAD_MIN_RATED } from './content-brief'
 import type { MonthStatus, PlatformMix } from '../reading/types'
 import type { Verdict } from '../reading/verdicts'
 // D3 · own posts, own claims and what the rivals say. This module's own two
@@ -734,7 +738,16 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
   // is read off them.
   const ownClaims = await ownClaimsAhead
   const playbookVideos = await playbookAhead
-  const playbook = playbookVideos ? buildPlaybook({ month, brand, rival: selected?.name ?? null, videos: playbookVideos }) : null
+  // THE CONCLUSION IS FLOORED HERE TOO (CO6). `matrixConclusion` defaults its
+  // `leadMinRated` to 0, so this call promoted the exact sentence the option
+  // was added to stop: "Review ran at 3.7% against Story at 3.4% — measured
+  // over 4 and 206 of The category's 687…", a 0.3-point gap between n=4 and
+  // n=206 printed as the page's takeaway, quoted as the finding at
+  // lib/reading/formats.ts:373-375. `content-brief.ts` passed `LEAD_MIN_RATED`
+  // and this did not, so one product floored one copy of one sentence.
+  const playbook = playbookVideos
+    ? buildPlaybook({ month, brand, rival: selected?.name ?? null, videos: playbookVideos, conclusionMinRated: LEAD_MIN_RATED })
+    : null
   const headToHead =
     playbookVideos && selected
       ? buildHeadToHead({

@@ -9,6 +9,7 @@ import { methodRecordFixture } from '@/lib/test/method-fixture'
 import { methodLines } from '@/lib/reading/method'
 import { claimEcho, rivalOwnClaims, type OwnPostInput } from '@/lib/reading/own-posts'
 import { buildHeadToHead, buildPlaybook, type PlaybookVideo } from '@/lib/pages/playbook'
+import { LEAD_MIN_RATED } from '@/lib/pages/content-brief'
 
 // Competitive's block fixtures (Phase 1 WP14).
 //
@@ -332,7 +333,9 @@ export function competitiveFixture(over: Partial<CompetitiveSurfaceData> = {}): 
       empty: null,
     },
     standings,
-    playbook: buildPlaybook({ month: MONTH, brand: 'Össur', rival: 'Ottobock', videos: PLAYBOOK_VIDEOS }),
+    // FLOORED AS THE LOADER FLOORS IT (CO6). A fixture that promotes an
+    // unfloored conclusion reviews a page the loader does not build.
+    playbook: buildPlaybook({ month: MONTH, brand: 'Össur', rival: 'Ottobock', videos: PLAYBOOK_VIDEOS, conclusionMinRated: LEAD_MIN_RATED }),
     headToHead: buildHeadToHead({
       month: MONTH,
       brand: 'Össur',
@@ -422,7 +425,7 @@ export function unreadRivalFixture(): CompetitiveSurfaceData {
     // never read is not a side that published nothing, and CO7's third column
     // has to say which — `formatReading` puts that sentence on `unread` and the
     // cells stay null so nothing prints a zero for it.
-    playbook: buildPlaybook({ month: MONTH, brand: 'Össur', rival: 'Rareform', videos: PLAYBOOK_VIDEOS }),
+    playbook: buildPlaybook({ month: MONTH, brand: 'Össur', rival: 'Rareform', videos: PLAYBOOK_VIDEOS, conclusionMinRated: LEAD_MIN_RATED }),
     headToHead: buildHeadToHead({
       month: MONTH,
       brand: 'Össur',

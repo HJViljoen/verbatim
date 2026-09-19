@@ -11,6 +11,7 @@ import { H2H_NO_RIVAL, competitiveHeadToHead } from './head-to-head'
 import { OWN_CLAIMS_OWNER, competitiveOwnClaims, trackedLine } from './own-claims'
 import { competitiveSaidAbout } from './said-about'
 import { PLAYBOOK_NO_READING, competitivePlaybook } from './playbook'
+import { LEAD_MIN_RATED } from '@/lib/pages/content-brief'
 import { competitiveRivals } from './rivals'
 import { competitiveStandings } from './standings'
 import { competitiveQuestions } from './questions'
@@ -603,6 +604,21 @@ describe('CO5 · said about them, by others', () => {
 })
 
 describe('CO7 · how the category makes content', () => {
+  it('floors the conclusion it promotes, as the content brief does (CO6)', () => {
+    // `matrixConclusion` defaults `leadMinRated` to 0, and this page's
+    // `buildPlaybook` call passed nothing — so the tile's takeaway was
+    // "Review ran at 3.7% against Story at 3.4% — measured over 4 and 206",
+    // the exact sentence quoted at lib/reading/formats.ts:373-375 as the
+    // finding `leadMinRated` was added to fix. One product, one corpus: the
+    // loader and this fixture now pass `LEAD_MIN_RATED`, which is
+    // `COMPETITIVE_MIN_VIDEOS` — "never rest a finding on one".
+    const conclusion = competitiveFixture().playbook!.formats.conclusion!
+    const ns = [...conclusion.matchAll(/measured over ([\d,]+) and ([\d,]+)/g)][0]
+    expect(ns).toBeTruthy()
+    for (const n of [ns[1], ns[2]]) expect(Number(n.replace(/,/g, ''))).toBeGreaterThanOrEqual(LEAD_MIN_RATED)
+    expect(conclusion).not.toContain('measured over 4 and 206')
+  })
+
   it('prints the classified n beside the published one, per column (D6)', () => {
     const text = renderText(competitivePlaybook.render(competitiveFixture(), 'app', ctx))
     // The format legend, per side …
