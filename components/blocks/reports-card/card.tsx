@@ -89,9 +89,19 @@ export function QuarterlyCardTile({
       footerNote={drawn && !unlocked ? card.gate : undefined}
     >
       <div className="flex flex-col items-start gap-1.5 sm:flex-row sm:items-center sm:gap-2.5">
+        {/* THE AMBER IS IN THE TINT AND THE RING, NOT IN THE TEXT.
+            `bg-warning/15 text-warning` is #E6B03C on a 15% tint of itself —
+            sampled off this very render at (230,176,60) on (251,243,226),
+            1.79:1, under even the 3:1 large-text floor — and it carried the
+            pill in the state `loadQuarterlyCard` lands both live workspaces
+            in. The remedy is `components/pages/agent/marks.tsx`'s, which ships
+            in this same tree: the colour still signals, through a stronger
+            ring, and the words go to `foreground`. The real fix is a
+            `--warning-foreground` token dark enough to carry text, which is a
+            palette change and belongs to whoever owns `app/globals.css`. */}
         <span
           className={`inline-block flex-none whitespace-nowrap rounded-full px-2 py-0.5 text-[12px] font-medium ${
-            drawn && unlocked ? 'bg-inner text-secondary-foreground' : 'bg-warning/15 text-warning'
+            drawn && unlocked ? 'bg-inner text-secondary-foreground' : 'bg-warning/15 text-foreground ring-1 ring-warning/50'
           }`}
         >
           {pillWord(card.readings, drawn)}

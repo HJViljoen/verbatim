@@ -110,6 +110,15 @@ describe('the quarterly card', () => {
     expect(text).toContain('July 2026')
   })
 
+  // THE PILL'S AMBER IS IN THE TINT AND THE RING. `bg-warning/15 text-warning`
+  // is 1.79:1 — the colour on a 15% tint of itself — and it carried the pill in
+  // the state both live workspaces are in.
+  it('does not set the state pill in warning ON warning', () => {
+    const html = render(<QuarterlyCardTile card={unreadCardFixture()} />)
+    expect(html).not.toContain('bg-warning/15 text-warning')
+    expect(html).toContain('bg-warning/15 text-foreground ring-1 ring-warning/50')
+  })
+
   // The bars are levels beside each other, not a line through time: one
   // series, named, with the quarter before it marked as a tick.
   it('names the one series it draws rather than promising two', () => {
