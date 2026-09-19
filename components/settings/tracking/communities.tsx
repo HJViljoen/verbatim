@@ -92,13 +92,30 @@ export function CommunitiesSection({
                 <Figure key="c" value={r.comments > 0 ? r.comments.toLocaleString('en-GB') : '—'} muted={r.comments === 0} />,
                 <Figure key="k" value={r.keptPct === null ? '—' : `${r.keptPct.toFixed(0)}%`} muted={r.keptPct === null} />,
                 <Figure key="i" value={r.insights > 0 ? r.insights.toLocaleString('en-GB') : '—'} muted={r.insights === 0} />,
-                <CommunityAction
-                  key="a"
-                  name={r.key}
-                  op={r.status === 'active' || r.status === 'candidate' ? 'stop' : 'add'}
-                  proposed={r.status === 'candidate'}
-                  canEdit={canEdit}
-                />,
+                // A RULED-OUT COMMUNITY IS OFFERED NO CONTROL (settings V3).
+                // `rejected` is the relevance probe's own verdict, and ST4
+                // made `applySubredditEdit` refuse an add against it — "Ask us
+                // to look again rather than turning it back on over that". So
+                // "Watch it" on this row was a button that could not succeed,
+                // and a control that always fails is worse than none: the
+                // reader spends a click to be told no. The recourse is a
+                // sentence, because asking us to look again is not a thing
+                // this page can do — there is no re-probe action to wire it
+                // to, and a button that opened nothing would be the same lie
+                // one step further on.
+                r.status === 'rejected' ? (
+                  <span key="a" className="block text-right text-[11px] leading-[1.3] text-muted-foreground">
+                    Ask us to look again
+                  </span>
+                ) : (
+                  <CommunityAction
+                    key="a"
+                    name={r.key}
+                    op={r.status === 'active' || r.status === 'candidate' ? 'stop' : 'add'}
+                    proposed={r.status === 'candidate'}
+                    canEdit={canEdit}
+                  />
+                ),
               ]}
             />
           ))}
