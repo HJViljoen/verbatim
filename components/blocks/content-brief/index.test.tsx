@@ -494,6 +494,21 @@ describe('content.make — the mock’s page 2', () => {
     expect(none).toContain('Advice lands with your next update.')
   })
 
+  // THE COUNT REACHES A PRINTED SHEET (design review 8). `header={mode !==
+  // 'print'}` drops the meta with the header row and DocumentCover prints only
+  // "{stamp} · {pages} pages", so "3 to make · 1 to stop" was computed and
+  // printed nowhere on the PDF while a comment in the file said otherwise.
+  it('prints its counts on the printed sheet, where the header row is gone', () => {
+    expect(text).toContain(`${toMake(data.advice.rows).length} to make · 1 to stop`)
+    // The ledger total is not in the note: it wrapped the footer to a second
+    // line, and `ct.advice` two slides on is a table of exactly that.
+    expect(text).not.toContain('64 in the ledger')
+    expect(markupText(render(contentMake.render(data, 'app', ctx)))).toContain('64 in the ledger')
+    // Still once: the app arm's header carries it and its note stays the month.
+    const app = markupText(render(contentMake.render(data, 'app', ctx)))
+    expect(app.match(/to make · 1 to stop/g)?.length ?? 0).toBe(1)
+  })
+
   it('says advice lands with the next update when the ledger is empty', () => {
     expect(blockAnswers(contentMake, emptyLedger()).empty).toBe('Advice lands with your next update.')
   })

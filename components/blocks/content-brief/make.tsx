@@ -392,8 +392,11 @@ export const contentMake: Block<MarketSurfaceData> = {
     const make = toMake(data.advice.rows)
     const stop = toStop(data.advice.rows)
     // THE COUNTS THE TITLE NO LONGER CLAIMS, where they can be recomputed from
-    // the rows actually drawn (design review 15).
-    const meta = `${fmtInt(make.length)} to make${stop ? ' · 1 to stop' : ''} · ${fmtInt(data.advice.total)} in the ledger`
+    // the rows actually drawn (design review 15) — the header's meta on the
+    // screen and in an email, the footer note on a printed sheet, which is
+    // where the header row does not exist (design review 8).
+    const counts = `${fmtInt(make.length)} to make${stop ? ' · 1 to stop' : ''}`
+    const meta = `${counts} · ${fmtInt(data.advice.total)} in the ledger`
 
     if (mode === 'email') {
       return (
@@ -421,7 +424,22 @@ export const contentMake: Block<MarketSurfaceData> = {
         // finding measured. `footer` is the `min-w-0` half and is where the
         // playbook block already puts its own long basis sentence.
         footer={`${data.advice.actedLine} ${GROUNDING_BASIS}`}
-        footerNote={longMonth(data.month)}
+        // THE COUNT REACHES A PRINTED SHEET (design review 8). `header={mode
+        // !== 'print'}` drops the whole header row on a slide — the meta with
+        // it — and `DocumentCover` prints only "{stamp} · {pages} pages", so
+        // "3 to make · 1 to stop" was computed and printed NOWHERE on the PDF,
+        // while the comment on `contentMake.title` said it printed in both
+        // places. The artboard carries it on the cover and titles the sheet
+        // with it; a fixed title still may not claim a count, so the count
+        // goes where the printed sheet can carry it — the footer note, which
+        // is the one metadata slot a suppressed header does not take away. In
+        // the app and in an email the header row is drawn and already carries
+        // the same string, so the note stays the month.
+        // THE COUNTS AND NOT THE LEDGER TOTAL: the note is mono at 11px beside
+        // a full sentence, and the whole meta wrapped the footer to a second
+        // line, which is 6px this 535px sheet does not have. The total is what
+        // `ct.advice` — the ledger section two slides on — is a table of.
+        footerNote={mode === 'print' ? `${longMonth(data.month)} \u00b7 ${counts}` : longMonth(data.month)}
       >
         <div className="flex min-w-0 flex-col gap-3">
           {/* ONE ROW, ALL OF ONE HEIGHT, AND THE STOP CARD IS THE LAST
