@@ -1239,6 +1239,35 @@ export function monthlyLineLabel(spark: readonly (number | null)[], months: read
   return read.length === 1 ? `${short(read[0])} only` : `${short(read[0])} → ${short(read[read.length - 1])} only`
 }
 
+/**
+ * The caption under a line that IS drawn: which months it spans, and how many
+ * readings it rests on (Block D wave 3, M16).
+ *
+ * THE MONTHS WERE PRINTED INSTEAD OF THE LINE, NEVER BESIDE IT.
+ * `monthlyLineLabel` is the refusal — what the column says when there are too
+ * few readings to draw anything — so a row with three or more drew a 72×20
+ * sparkline and nothing at all saying which months were under it. The artboard
+ * captions every one it draws ("May → Sep · Apr below floor", "Jul → Sep ·
+ * three readings"), and a normalised line with no axis and no dates is the one
+ * shape on this page a reader cannot date.
+ *
+ * THE SECOND CLAUSE IS THE COUNT AND NOT THE MOCK'S "below floor", because this
+ * input cannot tell the two absences apart: `spark` is `(number | null)[]`, and
+ * a null is a month with no reading whether it was hollow or under the floor.
+ * The count says what the line rests on, which is the part a reader can act on.
+ *
+ * Null wherever `monthlyLineLabel` answers instead — the two are the same
+ * either/or, so a column can never print both.
+ *
+ * Pure.
+ */
+export function monthlySpanLabel(spark: readonly (number | null)[], months: readonly string[]): string | null {
+  const read = months.filter((_, i) => spark[i] != null)
+  if (read.length < 3) return null
+  const short = (m: string) => monthName(m).split(' ')[0]
+  return `${short(read[0])} → ${short(read[read.length - 1])} · ${fmtInt(read.length)} readings`
+}
+
 /** The subjects block's line about which column carries the month. */
 export function subjectsNote(rows: readonly SubjectRow[]): string | null {
   if (rows.length === 0) return null

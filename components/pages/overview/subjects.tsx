@@ -12,7 +12,7 @@ import { gapBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
 import { TileBlock } from '@/components/shell/tile'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { OverviewData, SideReading, SubjectRow } from '@/lib/pages/overview'
-import { candidateLine, monthlyLineLabel, sentLineFor } from '@/lib/pages/overview'
+import { candidateLine, monthlyLineLabel, monthlySpanLabel, sentLineFor } from '@/lib/pages/overview'
 import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
 
 // OV2 · Your subjects — the hero (design §3 OV2).
@@ -215,7 +215,16 @@ function Row({ row, mode, appUrl = '', sentLine = null }: { row: SubjectRow; mod
         {monthlyLineLabel(row.spark, row.sparkMonths) ? (
           <span className="font-mono text-[10.5px] text-muted-foreground">{monthlyLineLabel(row.spark, row.sparkMonths)}</span>
         ) : (
-          <Sparkline values={row.spark} color="var(--cat)" width={72} height={20} animate={false} />
+          // AND A DRAWN LINE SAYS WHICH MONTHS IT IS OF (Block D wave 3, M16).
+          // The months were printed INSTEAD of the line — that is the refusal
+          // above — never beside it, so a three-reading row drew a 72×20
+          // normalised line with no axis, no dates and no denominator, which is
+          // the one shape on this page a reader cannot date. The artboard
+          // captions every line it draws.
+          <span className="flex flex-col gap-0.5">
+            <Sparkline values={row.spark} color="var(--cat)" width={72} height={20} animate={false} />
+            <span className="font-mono text-[10.5px] text-muted-foreground">{monthlySpanLabel(row.spark, row.sparkMonths)}</span>
+          </span>
         )}
       </td>
     </tr>

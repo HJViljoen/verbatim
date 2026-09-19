@@ -37,6 +37,7 @@ import {
   recordWindow,
   categoryAttentionVerdict,
   rivalsLead,
+  monthlySpanLabel,
   atThisPointLine,
   splitMovers,
   subjectsNote,
@@ -206,6 +207,24 @@ describe('atThisPointLine', () => {
   })
 })
 
+// The caption under a line that IS drawn (Block D wave 3, M16). Its sibling
+// `monthlyLineLabel` is the REFUSAL, printed instead of a line; this is what a
+// drawn line says about itself, and the two are the same either/or.
+describe('monthlySpanLabel', () => {
+  const months = ['2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01']
+  it('names the span and what the line rests on', () => {
+    expect(monthlySpanLabel([null, 18, 19, 20, 21, 22], months)).toBe('May → Sep · 5 readings')
+    expect(monthlySpanLabel([null, null, null, 20, 21, 22], months)).toBe('Jul → Sep · 3 readings')
+  })
+  it('says nothing where the refusal answers instead — never both', () => {
+    for (const spark of [[null, null, null, null, 21, 22], [null, null, null, null, null, 22], [null, null, null, null, null, null]]) {
+      expect(monthlySpanLabel(spark, months)).toBeNull()
+      expect(monthlyLineLabel(spark, months)).not.toBeNull()
+    }
+    expect(monthlyLineLabel([null, 18, 19, 20, 21, 22], months)).toBeNull()
+  })
+})
+
 describe('headline', () => {
   it('names the single largest banded change and leaves its figures as tokens', () => {
     const h = headline({ verdicts: [moved('t1', 'Durability', 5.4), moved('t2', 'Price', -2.1)] })
@@ -344,7 +363,7 @@ describe('monthlyLineLabel', () => {
   it('names the two months instead of drawing a slope through them', () => {
     // Sparkline normalises to the values it is handed, so 19.0 → 19.2 draws the
     // same climb as 5 → 40. The mock prints this label instead.
-    expect(monthlyLineLabel([null, null, 19, 19.2], months)).toBe('Aug \u2192 Sep only')
+    expect(monthlyLineLabel([null, null, 19, 19.2], months)).toBe('Aug → Sep only')
   })
   it('names the one month it has', () => {
     expect(monthlyLineLabel([null, null, null, 19.2], months)).toBe('Sep only')
