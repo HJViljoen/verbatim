@@ -147,7 +147,15 @@ function VoiceRow({ voice, mode }: { voice: Voice; mode: RenderMode }) {
   const onScreen = onScreenLine ? (
     mode === 'email'
       ? <div data-copy="quote" style={{ fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.ink2, marginTop: 3 }}>on-screen text on the same video: “{onScreenLine}”</div>
-      : <span data-copy="quote" className="block font-mono text-[10.5px] text-secondary-foreground">on-screen text on the same video: “{onScreenLine}”</span>
+      // AND IT SITS IN THE QUOTE'S OWN TEXT COLUMN (Block D wave 3, M17).
+      // `QuoteBlock` indents its words past a 2px rule and 12px of padding;
+      // this line was a sibling at the container's indent, level with the
+      // eyebrow, so a scanner reading down the voices column saw two quotes
+      // and then a loose unattributed sentence. `pl-[14px]` puts it under the
+      // words it belongs beside. It takes no rule of its own, which is the
+      // point: it is attached to the VIDEO and it is not inside the
+      // blockquote, because the speaker is a different one.
+      : <span data-copy="quote" className="block pl-[14px] font-mono text-[10.5px] text-secondary-foreground">on-screen text on the same video: “{onScreenLine}”</span>
   ) : null
   if (mode === 'email') {
     return <div><BlockQuote quote={voice.quote} cite={cite} mode={mode} />{onScreen}</div>
