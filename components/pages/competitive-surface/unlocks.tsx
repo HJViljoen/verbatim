@@ -14,9 +14,16 @@ import type { CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
 //
 // — and CO4 is the only one that can be in that state, because its inputs are a
 // rival's own accounts, which are the client's to name. That is why THAT row's
-// owner is their digital director and not engineering: saying "Verbatim
-// engineering" against it would quietly take a job off the client's desk and
-// put it on a queue.
+// tail names their digital director: the job really is on the client's desk,
+// and a row that said nothing there would quietly take it off.
+//
+// AND THE TAIL IS `closes`, NOT AN OWNER (the vocabulary ruling; see
+// `CLOSED_BY_US` in lib/readiness/types.ts). Two of these rows used to end
+// "· Verbatim engineering" — an internal team name on a paying reader's page,
+// with no link and nothing they could act on. A row that is ours now carries
+// `closes: null` and ends at its state, and its LINE ends in the sentence that
+// says what closes it, which is the shape every brief has printed since WP19.
+// So the tail names somebody only when that somebody is on the reader's side.
 //
 // BUT IT IS NOT ALWAYS IN THAT STATE ANY MORE, and the row is read off the
 // censuses CO4 now draws rather than written once here. Where the accounts are
@@ -59,13 +66,13 @@ export const competitiveUnlocks: Block<CompetitiveSurfaceData> = {
               <div key={row.section} style={{ padding: '5px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
                 <div style={{ fontFamily: FONT.sans, fontSize: 12.5, fontWeight: 600, color: EMAIL.ink }}>{row.title}</div>
                 <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink2, marginTop: 2 }}>{row.line}</div>
-                <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 }}>— {row.state} · {row.owner}</div>
+                <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 }}>— {row.state}{row.closes ? ` · ${row.closes}` : ''}</div>
               </div>
             ) : (
               <div key={row.section} className="flex min-w-0 flex-col gap-0.5 border-t border-border/70 pt-2">
                 <p className="m-0 text-[12.5px] font-medium">{row.title}</p>
                 <p className="m-0 text-[12px] text-secondary-foreground">{row.line}</p>
-                <p className="m-0 text-[11.5px] text-muted-foreground">— {row.state} · {row.owner}</p>
+                <p className="m-0 text-[11.5px] text-muted-foreground">— {row.state}{row.closes ? ` · ${row.closes}` : ''}</p>
               </div>
             ),
           )}

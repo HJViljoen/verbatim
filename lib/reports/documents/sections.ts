@@ -1,3 +1,4 @@
+import { CLOSED_BY_US } from '../../readiness/types'
 import type { DocPageKind, DocumentRole } from './types'
 
 /**
@@ -684,11 +685,14 @@ export function missingSentence(m: MissingInput): string {
   // own capital ("Mark a recommendation done…"), so hanging it off a dash put a
   // capital mid-sentence in a paid document. A full stop before it costs
   // nothing and takes the wording of every row as it stands.
+  // AND THE TWO NON-CLIENT SENTENCES ARE NOT WRITTEN HERE ANY MORE. They are
+  // `CLOSED_BY_US` (lib/readiness/types.ts), beside the `OWNER_LABEL` they
+  // exist to replace, because three app surfaces now print them too — and two
+  // copies of a ruling is how one surface keeps the owner after the other
+  // drops it. The strings are unchanged.
   const act = m.ownerRole === 'client'
     ? `This one is yours to close. ${trimStop(m.unlocks)}.`
-    : m.ownerRole === 'ops'
-      ? 'We are setting it up, and it appears here the moment it is there.'
-      : 'We are building it, and it appears here the moment it is there.'
+    : CLOSED_BY_US[m.ownerRole]
   // NO IN-APP DESTINATION. Every rendering of a brief is a printed one — the
   // PDF, the share link at /r/<token>, the deck in the Studio — and this
   // sentence is composed ONCE and frozen into the snapshot, so there is no

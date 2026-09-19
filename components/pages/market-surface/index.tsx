@@ -375,6 +375,19 @@ export function MarketSurfacePage({
     )
   }
   // The masthead's two clauses: the promise, then the limit on it, quiet.
+  //
+  // AND THE FACE IS THE ARTBOARD'S, RULED (block-d-review `market` finding 6,
+  // referred to Heinrich twice and open since; closed here). The finding read
+  // the serif as MASTER's speech face borrowed for the product's own sentence,
+  // so that our words and a commenter's are typeset alike. It is not borrowed:
+  // `spec/design-system.md:69` carries a ramp row for it — "Hero lead (the
+  // page's one sentence) · serif · 17px · 500 · 1.35 · -0.005em" — and
+  // `Market.dc.html:111` draws exactly that, as do `Main.dc.html:124` and
+  // `Subjects.dc.html:294`. The hero lead is the one non-quote serif node the
+  // system declares, and the mock states it three times. Nothing changed; the
+  // measurement is pinned in index.test.tsx so the next reader does not have
+  // to re-open it. Competitive was asked the same question and has no such
+  // node: zero serif in its artboard, zero `font-serif` in its components.
   const [promise, ...rest] = data.masthead.split(/(?<=\.)\s+/)
 
   return (

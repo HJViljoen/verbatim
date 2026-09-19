@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest'
 import { createCitedQuotePicker } from '../quotes'
 import type { RecDecision } from '../rec-decisions'
 import { afterwardsFor } from '../reading/afterwards'
+import { CLOSED_BY_US } from '../readiness/types'
 import {
   acceptableRow, actedLine, adviceAnchor, ageInMonths, buildAdviceRows, ledgerRowsShown, lineageKey, madeInMonth,
   marketSurfaceHref, monthsMadeIn, moveLedgerLine, moveTargetLabel, orderedTargets, recurrenceForTarget,
@@ -212,14 +213,23 @@ describe('what is not built', () => {
     expect(unlockRows(1).map((r) => r.section)).toEqual(['MK3'])
   })
 
-  it('names MK3 and MK6, each with an owner and no invented date', () => {
+  // AND `owner` IS `closes` (the vocabulary ruling). MK3 ended "— not built
+  // yet · Verbatim engineering", an internal team name on a paying client's
+  // page; it now ends at its state and its LINE carries the WP19 sentence that
+  // says what closes it. MK6 keeps a name because "You, on Ask" is the reader
+  // and a page of theirs — which is the client branch of the same split.
+  it('names MK3 and MK6, says what closes each, and invents no date', () => {
     const rows = unlockRows(0)
     expect(rows.map((r) => r.section)).toEqual(['MK3', 'MK6'])
     for (const r of rows) {
-      expect(r.owner).toBeTruthy()
       expect(r.line).not.toMatch(/\bby \d/)
       expect(`${r.line} ${r.title}`).not.toMatch(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+20\d\d/)
+      expect(`${r.title} ${r.line} ${r.closes ?? ''}`).not.toContain('Verbatim engineering')
     }
+    const mk3 = rows.find((r) => r.section === 'MK3')!
+    expect(mk3.closes).toBeNull()
+    expect(mk3.line).toContain(CLOSED_BY_US.engineering)
+    expect(rows.find((r) => r.section === 'MK6')?.closes).toBe('You, on Ask')
   })
 })
 

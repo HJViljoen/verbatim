@@ -5,6 +5,8 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { markupText, render, renderText } from '@/lib/test/render'
 import { SALES_GROUPS_SHOWN } from '@/lib/blocks/for-sales'
+import { OWN_POSTS_UNREAD, OWN_POSTS_UNREAD_OUTSIDE } from '@/lib/reading/own-posts'
+import { OWNER_LABEL } from '@/lib/readiness/types'
 import { FIRST_SCREEN_BUDGET, LATER_LINE, RIVAL_POSTS_CONSIDERED, RIVAL_POSTS_SHOWN, type WeekData } from '@/lib/pages/week'
 import { FIRST_SCREEN, WEEK_BLOCKS, WeekPage, weekContext, weekFigureCount } from '.'
 import { weekSubjects } from './subjects'
@@ -696,7 +698,26 @@ describe('WK §5 · notable rival posts', () => {
     // as "Ottobock went quiet this week".
     const text = renderText(weekRivalPosts.render(weekFixture(), 'app', ctx))
     expect(text).toContain('92 posts about them')
-    expect(text).toContain('their own posts are not read yet — Verbatim engineering')
+    // AND THE GAP NAMES THE PAGE, NOT THE OWNER (the vocabulary ruling, taking
+    // `OWN_POSTS_UNREADABLE`'s rule — design review nit 25, subjects R1 — on
+    // the last surface that had not). This asserted that the clause ends
+    // "— Verbatim engineering", which is a readiness OWNER: the right fact on
+    // /dashboard/settings/readiness and an internal team name in the middle of
+    // a client's rivals table, with no link and nothing to act on. The in-app
+    // clause names the page where the state IS recorded, and `rivalAccounts`
+    // is the first row lib/readiness/compute.ts draws.
+    expect(text).toContain(`92 posts about them · ${OWN_POSTS_UNREAD}`)
+    expect(text).not.toContain(OWNER_LABEL.engineering)
+    // A READER OUTSIDE THE WORKSPACE HAS NO SETTINGS TO OPEN, so print and
+    // email get the absence and no pointer — Overview's `_OUTSIDE` rule, on
+    // the same fact measured a different way ("not READ", a count; not
+    // "not READABLE", a policy).
+    for (const mode of ['print', 'email'] as const) {
+      const out = renderText(weekRivalPosts.render(weekFixture(), mode, ctx))
+      expect(out, mode).toContain(OWN_POSTS_UNREAD_OUTSIDE)
+      expect(out, mode).not.toContain('Settings')
+      expect(out, mode).not.toContain(OWNER_LABEL.engineering)
+    }
     // Sealand does capture rival-owned posts, so both counts are real.
     const thin = renderText(weekRivalPosts.render(thinFixture(), 'app', ctx))
     expect(thin).toContain('94 posts about them, 44 posts of their own')

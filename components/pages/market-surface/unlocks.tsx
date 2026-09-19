@@ -18,6 +18,15 @@ import type { MarketSurfaceData } from '@/lib/pages/market-surface'
 // section ships, and a delivery date computed from the calendar is wrong the
 // first time it is read — the defect OV5's unlock carried into production
 // ("arrives in Oct 2026", recomputed monthly, for ever).
+//
+// AND THE TAIL IS `closes`, NOT AN OWNER (the vocabulary ruling; see
+// `CLOSED_BY_US` in lib/readiness/types.ts, and Competitive's own unlocks
+// block, which prints the identical tail). MK3 ended "— not built yet ·
+// Verbatim engineering": an internal team name in front of the paying reader,
+// with no link and nothing they could do with it. A row that is ours carries
+// `closes: null` and ends at its state, with its LINE ending in the sentence
+// that says what closes it — the shape every brief has printed since WP19. MK6
+// keeps its tail, because "You, on Ask" is the reader and a page of theirs.
 
 export const marketUnlocks: Block<MarketSurfaceData> = {
   key: 'market.unlocks',
@@ -34,13 +43,13 @@ export const marketUnlocks: Block<MarketSurfaceData> = {
               <div key={row.section} style={{ padding: '5px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
                 <div style={{ fontFamily: FONT.sans, fontSize: 12.5, fontWeight: 600, color: EMAIL.ink }}>{row.title}</div>
                 <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink2, marginTop: 2 }}>{row.line}</div>
-                <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 }}>— not built yet · {row.owner}</div>
+                <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 }}>— not built yet{row.closes ? ` · ${row.closes}` : ''}</div>
               </div>
             ) : (
               <div key={row.section} className="flex min-w-0 flex-col gap-0.5 border-t border-border/70 pt-2">
                 <p className="m-0 text-[12.5px] font-medium">{row.title}</p>
                 <p className="m-0 text-[12px] text-secondary-foreground">{row.line}</p>
-                <p className="m-0 text-[11.5px] text-muted-foreground">— not built yet · {row.owner}</p>
+                <p className="m-0 text-[11.5px] text-muted-foreground">— not built yet{row.closes ? ` · ${row.closes}` : ''}</p>
               </div>
             ),
           )}

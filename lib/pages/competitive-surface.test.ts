@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 
 import { horizonWindow } from '../reading/horizon'
 import { ownPostCensus } from '../reading/own-posts'
+import { CLOSED_BY_US } from '../readiness/types'
 import { NOT_OBSERVED } from '../reading/standings'
 import {
   ATTENTION_UNLOCK, CORPUS_DENOMINATOR_LINE, QUESTIONS_GROUPING_NOTE,
@@ -386,16 +387,31 @@ describe('the sections that are not built', () => {
   // still withheld by M8's policy (`entity = 'client'`) while the posts half
   // draws; CO6 stays because nothing loads the months a finding identity was
   // seen in, which is the one input `recurrenceOf` cannot be given a label for.
-  it('names CO4 and CO6, each with an owner and no invented date', () => {
+  //
+  // AND `owner` IS `closes`, WHICH IS THE VOCABULARY RULING AND NOT A RENAME.
+  // Both rows carried "Verbatim engineering" and the block printed it: an
+  // internal team name on a paying client's page, with no link and nothing
+  // they could act on. A row that is OURS now carries `closes: null` and says
+  // what closes it in its own line, which is the split `missingSentence` has
+  // printed in every brief since WP19; a row that is the CLIENT's still names
+  // the person on their side of the desk.
+  it('names CO4 and CO6, says what closes each, and invents no date', () => {
     const rows = competitiveUnlockRows()
     expect(rows.map((r) => r.section)).toEqual(['CO4', 'CO6'])
     for (const r of rows) {
-      expect(r.owner).toBeTruthy()
       expect(r.line).not.toMatch(/\bby \d/)
       expect(r.line).not.toMatch(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+20\d\d/)
+      // Whatever the state, the row says who moves next — a name the reader
+      // can go to, or a sentence of ours in the line. Never neither.
+      expect(r.closes ?? r.line).toBeTruthy()
+      expect(`${r.title} ${r.line} ${r.closes ?? ''}`).not.toContain('Verbatim engineering')
     }
-    // CO4's owner is the client's, not ours: the accounts are theirs to name.
-    expect(rows.find((r) => r.section === 'CO4')?.owner).toBe('Your digital director')
+    // CO4 with nobody watched is the CLIENT's: the accounts are theirs to name.
+    expect(rows.find((r) => r.section === 'CO4')?.closes).toBe('Your digital director')
+    // CO6 is ours, so the promise is in the line and the tail names nobody.
+    const co6 = rows.find((r) => r.section === 'CO6')!
+    expect(co6.closes).toBeNull()
+    expect(co6.line).toContain(CLOSED_BY_US.engineering)
   })
 
   it('stops saying a rival is not tracked once the page prints what they published', () => {
@@ -416,10 +432,17 @@ describe('the sections that are not built', () => {
     const co4 = (rows: ReturnType<typeof competitiveUnlockRows>) => rows.find((r) => r.section === 'CO4')!
     expect(co4(competitiveUnlockRows([watched])).state).toBe('not built yet')
     expect(co4(competitiveUnlockRows([watched])).line).not.toContain('not configured')
-    expect(co4(competitiveUnlockRows([watched])).owner).toBe('Verbatim engineering')
+    // OURS, AND SAID WITHOUT NAMING US. The row used to end "· Verbatim
+    // engineering"; it now ends at its state, and the line carries the act.
+    // It is NOT `CLOSED_BY_US.engineering` either: that sentence promises a
+    // build, and this row's own line says printing a rival's words is a
+    // decision to take, not a gap to fill. Nobody is building it.
+    expect(co4(competitiveUnlockRows([watched])).closes).toBeNull()
+    expect(co4(competitiveUnlockRows([watched])).line).toContain('the decision is ours')
+    expect(co4(competitiveUnlockRows([watched])).line).not.toContain(CLOSED_BY_US.engineering)
 
-    // And where nobody IS watched, the row and its owner are unchanged: the
-    // accounts really are the client's to name.
+    // And where nobody IS watched, the row is unchanged: the accounts really
+    // are the client's to name.
     const unwatched = ownPostCensus({
       month: '2026-09-01',
       audience: 'competitor:Poler',
@@ -431,7 +454,7 @@ describe('the sections that are not built', () => {
       handles: { instagram: '  ' },
     })
     expect(co4(competitiveUnlockRows([unwatched])).state).toBe('not tracked')
-    expect(co4(competitiveUnlockRows([unwatched])).owner).toBe('Your digital director')
+    expect(co4(competitiveUnlockRows([unwatched])).closes).toBe('Your digital director')
     expect(co4(competitiveUnlockRows()).state).toBe('not tracked')
   })
 })

@@ -43,6 +43,38 @@ export const OWNER_LABEL: Record<OwnerRole, string> = {
   engineering: 'Verbatim engineering',
 }
 
+/**
+ * WHAT A CLIENT SURFACE SAYS WHERE THIS PAGE PRINTS AN OWNER — the vocabulary
+ * ruling, held in the one file that also holds the internal taxonomy it
+ * replaces, so the two are read together.
+ *
+ * `OWNER_LABEL` above is the OPERATOR's word. "Verbatim engineering" is the
+ * name of the team a not-yet-built half belongs to, and it is the right fact
+ * on `/dashboard/settings/readiness`, where the row it names is drawn beside
+ * every other row and the person reading is deciding what to build. Anywhere a
+ * CLIENT reads — a surface, a brief, an email — it is a ticket they were
+ * handed: an internal team name with no link, nothing saying what it would do,
+ * and nothing they can act on.
+ *
+ * THE RULE, which `missingSentence` (lib/reports/documents/sections.ts) has
+ * followed since WP19 and which this constant now holds for it and for the
+ * three surfaces that were still printing the owner in the app: a client
+ * surface names WHAT IS MISSING and WHAT CLOSES IT, and never the team. The
+ * two sentences below are the non-client half of that split. The client half
+ * is not a constant, because it ends in the row's own act ("This one is yours
+ * to close. …").
+ *
+ * KEYED ON THE ROLE, NOT ONE SENTENCE FOR BOTH. "We are setting it up" is a
+ * thing that is happening; "We are building it" is a thing that is being
+ * written. A gap that is an unapplied migration and a gap that is unwritten
+ * code do not make the same promise, and the readiness record already knows
+ * which is which.
+ */
+export const CLOSED_BY_US: Record<Exclude<OwnerRole, 'client'>, string> = {
+  ops: 'We are setting it up, and it appears here the moment it is there.',
+  engineering: 'We are building it, and it appears here the moment it is there.',
+}
+
 /** One block of the product, one input it needs. */
 export interface ReadinessRow {
   /** Stable key — used by React and by the tests, never shown. */

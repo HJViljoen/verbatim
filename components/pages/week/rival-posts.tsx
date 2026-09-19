@@ -5,6 +5,7 @@ import { FigureCell } from '@/components/blocks/frame'
 import { PlatformIcon } from '@/components/charts/platform-icon'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, platformLabel, shortDate } from '@/lib/format'
+import { OWN_POSTS_UNREAD, OWN_POSTS_UNREAD_OUTSIDE } from '@/lib/reading/own-posts'
 import { windowDays, type RivalPost, type RivalPosts, type WeekData } from '@/lib/pages/week'
 import type { FigureTable } from '@/lib/reading/verdicts'
 
@@ -142,12 +143,25 @@ function RivalRow({ rival, mode }: { rival: RivalPosts; mode: 'app' | 'print' | 
   // POSTS ABOUT THEM vs POSTS OF THEIRS, which is the pair this tile inherited
   // from §4 when it moved out of it. Össur has zero competitor-owned videos and
   // 92 posts about Ottobock; "0 posts of their own" would read as a quiet week
-  // rather than as a readiness gap, so the second half names the gap and its
-  // owner. NOT "is a handle configured" — that is a setting, and a setting is
-  // not evidence.
+  // rather than as a readiness gap, so the second half names the gap. NOT "is a
+  // handle configured" — that is a setting, and a setting is not evidence.
+  //
+  // AND IT NAMES THE PAGE, NOT THE OWNER (the vocabulary ruling, taking
+  // `OWN_POSTS_UNREADABLE`'s rule — design review nit 25, subjects R1 — on the
+  // last surface that had not). This clause ended "— Verbatim engineering": a
+  // readiness OWNER, right on /dashboard/settings/readiness where the row it
+  // belongs to is drawn, and an internal team name in the middle of a client's
+  // rivals table anywhere else.
+  //
+  // THE IN-APP SENTENCE MAY NAME THE PAGE, and here one genuinely exists —
+  // `rivalAccounts` is the FIRST row Readiness computes (lib/readiness/
+  // compute.ts), and it separates configured from captured from read, which is
+  // exactly the state this clause is reporting. A reader OUTSIDE the workspace
+  // has no Settings to open, so print and email get the absence with no
+  // pointer, which is what `OWN_POSTS_UNREADABLE_OUTSIDE` is for on Overview.
   const about = `${fmtInt(rival.aboutThem)} ${rival.aboutThem === 1 ? 'post' : 'posts'} about them`
   const seen = rival.ownPostsUnread
-    ? `${about} · their own posts are not read yet — Verbatim engineering`
+    ? `${about} · ${mode === 'app' ? OWN_POSTS_UNREAD : OWN_POSTS_UNREAD_OUTSIDE}`
     : `${about}, ${fmtInt(rival.byThem)} ${rival.byThem === 1 ? 'post' : 'posts'} of their own`
 
   if (email) {

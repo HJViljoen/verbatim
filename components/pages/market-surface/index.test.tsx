@@ -8,7 +8,7 @@ import { ADVICE_REQUESTED_GONE } from '@/lib/pages/market-surface'
 import { MOVES_UNLOCK } from '@/lib/pages/overview'
 import { pageModule } from '@/components/pages/registry'
 import type { AdviceRow } from '@/lib/pages/market-surface'
-import { MARKET_BLOCKS, startClasses, tileGrid, tileRows } from './index'
+import { MARKET_BLOCKS, MarketSurfacePage, startClasses, tileGrid, tileRows } from './index'
 import { marketConclusions } from './conclusions'
 import { marketAdvice } from './advice'
 import { marketCard } from './card'
@@ -17,6 +17,7 @@ import { marketPlans } from './plans'
 import { marketSayHear } from './sayhear'
 import { marketWays } from './ways'
 import { marketUnlocks } from './unlocks'
+import { CLOSED_BY_US, OWNER_LABEL } from '@/lib/readiness/types'
 import { deepLinkFixture, firstUpdateFixture, marketFixture, unrecordedFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
@@ -876,7 +877,7 @@ describe('MK4 · a move, read', () => {
 })
 
 describe('the sections that are not built', () => {
-  it('names MK3 with an owner and no invented date', () => {
+  it('names MK3, says what closes it, and invents no date', () => {
     const text = renderText(marketUnlocks.render(marketFixture(), 'app', ctx))
     // THE CARD IS BUILT; THE PRESS IS NOT — so the row that is listed here as
     // missing names the confirming, not the card (Phase 1 D2 fix pass). MK6 is
@@ -884,8 +885,22 @@ describe('the sections that are not built', () => {
     // that row — the test below owns it.
     expect(text).toContain('Confirming this month’s card')
     expect(text).toContain('The card is read above')
-    expect(text).toContain('Verbatim engineering')
     expect(text).not.toMatch(/by \d{1,2} \w+/)
+    // AND THE OWNER IS OFF THE PAGE (the vocabulary ruling; see `CLOSED_BY_US`,
+    // lib/readiness/types.ts). This line asserted that "Verbatim engineering"
+    // PRINTS, and it was right about what the code did and wrong about what a
+    // client may be handed: an internal team name, no link, nothing to act on,
+    // on a page they pay for. What replaces it is the WP19 split every brief
+    // has printed since — what is missing, then what closes it.
+    expect(text).toContain(CLOSED_BY_US.engineering)
+    for (const mode of MODES) {
+      const t = renderText(marketUnlocks.render(marketFixture(), mode, ctx))
+      expect(t, mode).not.toContain(OWNER_LABEL.engineering)
+      expect(t, mode).not.toContain(OWNER_LABEL.ops)
+    }
+    // MK6 is the row that still names somebody, and they are on the reader's
+    // side of the desk — which is WP19's client branch, not an owner.
+    expect(renderText(marketUnlocks.render(unrecordedFixture(), 'app', ctx))).toContain('You, on Ask')
   })
 
   // MK6 IS NAMED ONLY WHERE IT IS ABSENT (D4). A workspace with a checked plan
@@ -894,5 +909,44 @@ describe('the sections that are not built', () => {
   it('names MK6 for a workspace with no plan, and drops it once there is one', () => {
     expect(renderText(marketUnlocks.render(unrecordedFixture(), 'app', ctx))).toContain('Plans re-checked')
     expect(renderText(marketUnlocks.render(marketFixture(), 'app', ctx))).not.toContain('Plans re-checked')
+  })
+})
+
+// ---- the masthead · the artboard's ruling ---------------------------------
+
+/**
+ * THE SERIF MASTHEAD, RULED BY THE ARTBOARD AND MEASURED HERE SO IT CANNOT
+ * DRIFT (block-d-review `market` finding 6, referred twice and open since).
+ *
+ * The finding: the masthead is set in IBM Plex Serif, the face MASTER reserves
+ * for speech, so the product's own sentence and a commenter's own words are
+ * typeset identically — a typeface ROLE against THE MOCK IS THE SPEC.
+ *
+ * THE MOCK ANSWERS IT, AND SO DOES THE SYSTEM. `Market.dc.html:111` is the
+ * masthead node and it is `font-family: 'IBM Plex Serif'; font-size: 17px;
+ * font-weight: 500; line-height: 1.35; letter-spacing: -.005em; color:
+ * #26292C; text-wrap: pretty; max-width: 86ch` — which is what this page
+ * prints, class for declaration. And it is not the artboard freelancing: the
+ * design system's own type ramp (`spec/design-system.md:69`) has a row for it
+ * — "Hero lead (the page's one sentence) · **serif** · 17px · 500 · 1.35 ·
+ * -0.005em" — so the hero lead is the ONE non-quote serif node the system
+ * declares, and `--font-serif`'s "verbatim quotes ONLY" comment three tables
+ * up is about the token's other users, not a ban on the ramp above it.
+ * `Main.dc.html:124` and `Subjects.dc.html:294` draw the same node the same
+ * way, so this is a rule the mock states three times.
+ *
+ * NO CHANGE MADE, AND THE MEASUREMENT IS THE COMMIT. Competitive was asked the
+ * same question and does not have it: `Competitive.dc.html` contains zero
+ * serif nodes and `components/pages/competitive-surface/` contains zero
+ * `font-serif`, so there is no masthead there to rule on.
+ */
+describe('the masthead', () => {
+  it('is set at the artboard’s hero-lead ramp, declaration for declaration', () => {
+    const markup = render(MarketSurfacePage({ data: marketFixture() }))
+    // Market.dc.html:111 · spec/design-system.md:69. Overview's own hero lead
+    // pins the same three (components/pages/overview/sentence.test.tsx:165);
+    // the tracking and the measure are Market's own and are the artboard's.
+    expect(markup).toContain('font-serif text-[17px] font-medium leading-[1.35] tracking-[-0.005em]')
+    expect(markup).toContain('max-w-[86ch]')
   })
 })
