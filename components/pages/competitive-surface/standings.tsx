@@ -199,13 +199,25 @@ function ChartPane({
         legend={false}
         // `height` IS THE viewBox'S, NOT A PIXEL HEIGHT — the SVG is emitted
         // `width:100%` with `height:auto`, so this prop sets an ASPECT RATIO of
-        // `height / 880`. The previous comment here claimed 168 "buys the block
-        // 42px", which is not a mechanism the code has: at 1440 this tile gives
-        // each chart a 674px pane, and 168/880 of that rendered the chart 107px
-        // tall against the artboard's 196; dropping from 210 saved 27px, not
-        // 42. 256 is the number that renders 196 in a 674px pane, measured with
-        // the repo's own Chromium rather than reasoned about.
-        height={256}
+        // `height / 880`.
+        //
+        // THE PANE IS 562px, NOT 674, AND THE NUMBER HERE WAS FITTED TO THE
+        // WRONG ONE. Measured with the repo's own Chromium against this page's
+        // populated fixture at 1440: the tile's inner width is 1136px and the
+        // pair is `lg:grid-cols-2` with a 12px gap, so each pane is 562.0px —
+        // two 674px panes have never fitted, and `height={256}` rendered
+        // 163.5px against the artboard's 196. 307 is the number that renders
+        // 196 in a 562px pane (196 / 562 × 880 = 306.9), re-measured after the
+        // change rather than reasoned about.
+        //
+        // THE TYPE SCALE IS NOT THIS CALLER'S TO FIX, AND THIS COMMENT MAY NOT
+        // PRETEND OTHERWISE. `CalendarLine` sizes every label in viewBox units,
+        // so the rendered type is `fontSize × pane / 880` — 6.4px for the axis
+        // and 5.7px for a rule label in a 562px pane, 4.0px at 1024. Widening
+        // the pane is the only lever a caller has and it is not enough; the
+        // primitive is `components/charts/calendar-line.tsx` and belongs to
+        // another package in this wave (shell SH1). Nothing here hides that.
+        height={307}
         format={(v) => fmtPct(v)}
         label={label}
         id={chartId([chartKey, ...series.map((x) => x.label), axis[0], axis[axis.length - 1]])}
