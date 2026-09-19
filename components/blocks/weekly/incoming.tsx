@@ -43,21 +43,43 @@ import { weeklyPeriod } from '@/lib/reports/weekly'
  * and the first row states it: the month these videos fall into.
  */
 function StatRow({
-  value, label, note, last = false, mode,
+  value, label, note, href, last = false, mode,
 }: {
   value: string
   label: string
   note?: ReactNode
+  /**
+   * Where the videos behind this count are listed, or undefined where nothing
+   * lists them.
+   *
+   * THE COUNT IS THE DOOR (weekly.s3.counts). In the artboard every stat
+   * figure that HAS somewhere to go is an `<a>` with a dotted evidence
+   * underline — 312, 2,960 and 41 — and "3 new themes", which has no such
+   * page, is a plain span. The build rendered all four as plain spans, so the
+   * four biggest numbers on the artefact went nowhere and the only clickable
+   * thing in §3 was the block's own footer.
+   *
+   * THE DOTTED UNDERLINE IS SPENT ONLY ON SOMETHING THAT OPENS, which is the
+   * rule `claim-popover.tsx` states and the reason `market`'s figures gave
+   * theirs up this same wave: an artboard is a still and can draw the ink
+   * without the behaviour. Here the behaviour is real — these are links — so
+   * the ink is earned, and it is visually distinct from the green action links
+   * on purpose: this is evidence, not navigation.
+   */
+  href?: string
   last?: boolean
   mode: RenderMode
 }) {
   if (mode === 'email') {
+    const figure = <span data-copy="figure" style={{ ...text.figure, fontSize: 21 }}>{value}</span>
     return (
       <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} border={0} style={{ borderCollapse: 'collapse', borderSpacing: 0, borderBottom: last ? undefined : `1px solid ${EMAIL.hairline}` }}>
         <tbody>
           <tr>
             <td width={74} style={{ width: 74, padding: '9px 14px 9px 0', verticalAlign: 'top' }}>
-              <span data-copy="figure" style={{ ...text.figure, fontSize: 21 }}>{value}</span>
+              {href
+                ? <a href={href} style={{ color: EMAIL.ink, textDecoration: 'underline', textDecorationStyle: 'dotted', textDecorationThickness: 1, textUnderlineOffset: 4, textDecorationColor: EMAIL.muted }}>{figure}</a>
+                : figure}
             </td>
             <td style={{ padding: '9px 0', verticalAlign: 'top' }}>
               <div style={{ fontFamily: FONT.sans, fontSize: 14, color: EMAIL.ink2 }}>{label}</div>
@@ -68,9 +90,16 @@ function StatRow({
       </table>
     )
   }
+  const FIGURE = 'w-[74px] flex-none font-mono text-[21px] font-semibold leading-none tracking-[-0.02em] tabular-nums'
+  // PRINT IS NOT A BROWSER. A dotted underline on paper is decoration on
+  // something a reader cannot open, which is the rule this file quotes above;
+  // the print arm keeps the figure and drops the affordance.
+  const figure = href && mode === 'app'
+    ? <a href={href} data-copy="figure" className={`${FIGURE} underline decoration-dotted decoration-muted-foreground decoration-1 underline-offset-4`}>{value}</a>
+    : <span data-copy="figure" className={FIGURE}>{value}</span>
   return (
     <div className={`flex min-h-[44px] items-baseline gap-3.5 py-2 ${last ? '' : 'border-b border-border/70'}`}>
-      <span data-copy="figure" className="w-[74px] flex-none font-mono text-[21px] font-semibold leading-none tracking-[-0.02em] tabular-nums">{value}</span>
+      {figure}
       <span className="min-w-0">
         <span className="block text-[14px] text-secondary-foreground">{label}</span>
         {note ? <span className="mt-0.5 block font-mono text-[11px] leading-snug text-muted-foreground">{note}</span> : null}
@@ -195,8 +224,15 @@ export const weeklyIncoming: Block<WeeklyData> = {
             LOOKED, and the month counts by when people WROTE, so Össur's 618
             gathered sit beside a month of 449 and neither is inside the
             other. The sub-line says which is which. */}
+        {/* AND THE COUNTS ARE THE DOORS TO THEIR EVIDENCE. This week's "What
+            came in" is the surface that itemises all three — analysed and
+            newly found per audience, and the comments new on your subjects —
+            so the three counts it can account for carry it and "themes heard
+            for the first time" does not, which is exactly the artboard's own
+            split (312, 2,960 and 41 are `<a>`; "3 new themes" is a span). */}
         <StatRow
           mode={mode}
+          href={weekHref}
           value={fmtInt(i.gathered)}
           // "FOUND", NEVER "GATHERED". *gather* is on the client-facing
           // language ban list (design-system/verbatim/MASTER.md:311, Redesign
@@ -213,6 +249,10 @@ export const weeklyIncoming: Block<WeeklyData> = {
         />
         <StatRow
           mode={mode}
+          // NO DOOR ON A DASH. Where the count is not recorded there is
+          // nothing behind the figure to open, and a link on "—" promises a
+          // page that would answer the question the dash exists to refuse.
+          href={i.analysed != null ? weekHref : undefined}
           value={i.analysed != null ? fmtInt(i.analysed) : '—'}
           label={i.analysed != null ? 'analysed' : 'how many were analysed is not recorded for this update'}
         />
@@ -237,6 +277,7 @@ export const weeklyIncoming: Block<WeeklyData> = {
         <StatRow
           mode={mode}
           last
+          href={i.quotesTotal != null ? weekHref : undefined}
           value={i.quotesTotal != null ? fmtInt(i.quotesTotal) : '—'}
           label={i.quotesTotal === 1 ? 'new comment on your subjects' : 'new comments on your subjects'}
           note={i.quotesTotal == null ? i.quotesNote : null}

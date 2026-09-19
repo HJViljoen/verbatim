@@ -373,6 +373,42 @@ describe('WR3 · what came in this week', () => {
     expect(text).toContain('the month so far holds 2,359 videos, dated by when people wrote')
   })
 
+  // THE COUNTS OPEN TO THEIR EVIDENCE (weekly.s3.counts). `StatRow` rendered a
+  // plain `<span data-copy="figure">`, so the four biggest numbers on the
+  // artefact went nowhere and the only clickable thing in §3 was the block's
+  // own footer. The artboard makes each figure that HAS a destination an `<a>`
+  // with a dotted evidence underline (312, 2,960, 41) and leaves "3 new
+  // themes" — which has no such page — a plain span.
+  it('opens its counts to This week, and only the counts something lists', () => {
+    const data = weeklyFixture()
+    for (const mode of ['app', 'email'] as RenderMode[]) {
+      const markup = render(WEEKLY_BLOCKS['weekly.incoming'].render(data, mode, ctx))
+      // 271, 264 and 41 each open; the theme count does not; plus the block's
+      // own footer link — four, not five and not one.
+      expect(markup.split('dashboard/week').length - 1, mode).toBe(4)
+      for (const v of ['271', '264', '41']) {
+        expect(markup, `${v} · ${mode}`).toMatch(
+          new RegExp(`<a[^>]*dashboard/week[^>]*>(<span[^>]*>)?${v}<`),
+        )
+      }
+      // The theme count is a plain figure — nothing lists the themes.
+      expect(markup, mode).toMatch(/<span data-copy="figure"[^>]*>5</)
+    }
+  })
+
+  // NO DOOR ON A DASH, and none on paper. Where a count is not recorded there
+  // is nothing behind the figure to open; and a dotted underline in a PDF is
+  // decoration on something a reader cannot click, which is the rule
+  // `claim-popover.tsx` states and `market`'s figures gave theirs up for.
+  it('draws no evidence affordance in print, and none on an unrecorded count', () => {
+    expect(render(WEEKLY_BLOCKS['weekly.incoming'].render(weeklyFixture(), 'print', ctx)))
+      .not.toContain('decoration-dotted')
+    const forming = render(WEEKLY_BLOCKS['weekly.incoming'].render(formingFixture(), 'app', ctx))
+    // Its `analysed` and `quotesTotal` are both null, so the only count that
+    // opens is "videos found" — that link plus the footer's.
+    expect(forming.split('dashboard/week').length - 1).toBe(2)
+  })
+
   // ONE TINTED BAND, NOT ONE PER THEME, AND THE PILL IS THE 20% TINT.
   // `NewBlock` was rendered per theme, so three new themes drew three
   // identical full-width bands each with its own "New" pill where the artboard
