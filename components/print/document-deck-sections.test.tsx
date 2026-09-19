@@ -151,7 +151,7 @@ describe('the cover on a brief that is not the sales brief', () => {
     const slideFigures = { cannotTell: { refusals: [], line: 'x', items: [] }, switching: SWITCHING, crosscheck: null, scripted: [OBJECTION], line: null, untracked: [] }
     const read = overviewTiles(marketing({ slideFigures, figures: { conversations: { label: 'c', value: '2,359', kind: 'count' } } }))
     expect(read.map((t) => t.label)).toEqual([
-      'comments read',
+      'September 2026 — No denominator recorded for this month. Nothing on this sheet is a share of a counted population until it is.',
       'videos name a switch between brands · 64 of 120 toward you · 22 of 120 away',
       'of 205 videos carry pushing back',
     ])

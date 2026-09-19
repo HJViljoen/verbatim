@@ -215,7 +215,22 @@ describe('overviewTiles', () => {
 
   it('drops a tile it cannot fill rather than printing an empty one', () => {
     expect(overviewTiles(doc({ reading: reading() }))).toHaveLength(1)
-    expect(overviewTiles(doc({ reading: reading({ denominators: [] }) }))).toHaveLength(0)
+  })
+
+  // A ZERO IS NOT A BASIS. `documentFigures` sets `f.conversations` from the
+  // reading's own denominators whenever a reading exists, so the old fallback
+  // could only ever re-print the zero that sent it there: the first tile of the
+  // first sheet read "0 · comments read", with no month named.
+  it('refuses the basis, in words, where the month has no denominators', () => {
+    const tiles = overviewTiles(doc({
+      reading: reading({ denominators: [] }),
+      figures: { conversations: { label: 'comments read in September 2026', value: '0', kind: 'count' } },
+    }))
+    expect(tiles).toHaveLength(1)
+    expect(tiles[0].value).toBe('not read yet')
+    expect(tiles[0].word).toBe(true)
+    expect(tiles[0].label).toContain('September 2026')
+    expect(tiles[0].label).toContain('No denominator recorded for this month.')
   })
 
   // WITHOUT A READING nothing changes: the update's own three, exactly as they

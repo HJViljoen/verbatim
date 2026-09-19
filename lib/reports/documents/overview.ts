@@ -1,5 +1,6 @@
 import { GAP_WORDS, gapBasisLine, gapLine, sidePct, type Gap } from '../../reading/gap'
 import { fmtInt, round1 } from '../../format'
+import { denominatorLine } from './reading'
 import type { Verdict } from '../../reading/verdicts'
 import type { DocumentSnapshotData } from './types'
 
@@ -276,21 +277,32 @@ export function overviewTiles(data: DocumentSnapshotData): OverviewTile[] {
     const category = r.denominators.find((d) => d.audience === 'industry-other') ?? r.denominators[0] ?? null
     const comments = r.denominators.reduce((n, d) => n + d.comments, 0)
     // THE BASIS: the comments the month was read on, which is the one number
-    // the others are shares of. Off the month's own denominators where they
-    // have been written, and off the update's figure where they have not — a
-    // reading whose denominators are unwritten is the state every reader has
-    // to survive, and it must not cost the sheet its basis tile.
+    // the others are shares of. Off the month's own denominators.
+    //
+    // AND WHERE THEY ARE UNWRITTEN IT REFUSES, IT DOES NOT PRINT A ZERO (fix
+    // pass). The fallback here read `f.conversations` and called it the
+    // update's figure — but `documentFigures` sets `f.conversations` from
+    // `commentsRead(r.denominators)` on EVERY branch where a reading exists
+    // (compose.ts), so on the one path this arm is reachable on it is the
+    // reading's own count, which is the zero that sent us here. The first tile
+    // of the first sheet of a brief read "0 · comments read", with no month
+    // named and nothing saying the month had not been read — a zero standing
+    // in for a refusal, on the sheet a client meets first. Reachable now:
+    // `denominatorsOf` answers `[]` whenever `record.coverage` is null or
+    // empty, which is a fresh database, a `loadRecordInputs` that threw, and
+    // any window wider than one month. The refusal is set as a WORD, for the
+    // same reason `gapTile`'s is (mock-gap §6 D2): a refusal typeset as a
+    // numeral reads as a measurement.
     const basis: OverviewTile | null = comments > 0
       ? {
           value: fmtInt(comments),
           label: `comments read in ${r.monthLabel}${category ? `, on ${fmtInt(category.videos)} videos in ${category.label}` : ''}`,
         }
-      : f.conversations
-        ? {
-            value: f.conversations.value,
-            label: `comments read${f.videos ? `, on ${f.videos.value} videos` : ''}`,
-          }
-        : null
+      : {
+          value: 'not read yet',
+          label: `${r.monthLabel} — ${denominatorLine(r.denominators)} Nothing on this sheet is a share of a counted population until it is.`,
+          word: true,
+        }
     // The order is the merge's decision — see the header. A concluded gap and
     // a banded change lead where the month earned them; the basis follows;
     // E-sales's two measures fill whatever is left.
