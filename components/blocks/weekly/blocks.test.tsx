@@ -577,6 +577,20 @@ describe('WR4 · for sales', () => {
     expect(Object.keys(figures)).toEqual(['sales_videos', 'objection_1_videos', 'objection_2_videos', 'objection_3_videos', 'switching_comments'])
     expect(blockAnswers(block, weeklyFixture()).quotes).toEqual(['e:3', 'e:2', 'e:9'])
   })
+
+  // EACH QUOTE SAYS WHICH ROW IT IS FROM. The card pooled praise, the top
+  // objection and a switch under one fixed heading, so "Beautiful, but I
+  // cannot justify that for a bag" printed three lines under "IN THE
+  // CUSTOMERS' WORDS" and read as an endorsement — while the switching row
+  // above promised "· 1 below" and pointed into a box of three.
+  it('names the row each quote in the words card came from', () => {
+    for (const mode of MODES) {
+      const text = renderText(WEEKLY_BLOCKS['weekly.sales'].render(weeklyFixture(), mode, ctx))
+      expect(text, mode).toContain('Praise ·')
+      expect(text, mode).toContain('Objection ·')
+      expect(text, mode).toContain('Moving between brands ·')
+    }
+  })
 })
 
 describe('WR5 · for content', () => {
