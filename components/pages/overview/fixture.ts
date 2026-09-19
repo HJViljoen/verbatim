@@ -13,7 +13,7 @@ import {
   type MoveReading,
 } from '@/lib/reading/moves'
 import { groundingFor } from '@/lib/reading/afterwards'
-import { methodFixture, methodRefusedFixture } from '@/lib/test/method-fixture'
+import { methodFixture, methodRecordFixture, methodRefusedFixture, recordBandFixture } from '@/lib/test/method-fixture'
 
 // The Overview's block fixtures (Phase 1 WP11).
 //
@@ -612,23 +612,26 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
       acted: actedTally(1, 64),
     },
     record: {
-      // AS `loadOverview` COMPOSES IT: `howSoundLine`'s sentence and nothing
-      // prefixed to it. The ramp counter is `bar.counter` and leads the
-      // SOUNDNESS BAND at the page's own `SurfacePageBar` call — it used to be
-      // glued on here too, which printed it three times on one page.
-      line: '3 updates · 2,359 videos (TikTok 38% · YouTube 29% · Instagram 21% · Reddit 12%) · 27% of what was said on camera was not in English · 1 tracking change',
-      lines: [
-        // AS `recordLines` COMPOSES IT. The fixture held the raw ISO form this
-        // line used to produce, so the one artefact render that would have
-        // shown the defect showed the fixture's copy of it instead.
-        '3 updates delivered, 6 Sep to 13 Sep 2026, longest gap 7 days.',
-        '2,359 videos carried conversation in this window — TikTok 38% · YouTube 29% · Instagram 21% · Reddit 12%.',
-        '41 videos of your own named a tracked rival as well as you.',
-        'Nothing about what we track changed in this window.',
-        // Composed by recordLines from the render's own refusals, reasons and
-        // all (lib/reading/record.ts refusedSentence).
-        '2 comparisons were refused on this page: 1 because the two sides were grouped differently and 1 because too little was read on one side or both.',
-      ],
+      // THROUGH THE REAL COMPOSERS, not hand-written. Both strings were
+      // literals here, annotated "AS `loadOverview` COMPOSES IT" — and the
+      // band's literal outlived the composer: `howSoundLine` stopped carrying
+      // the platform mix (it is `recordLines`' line, said once) and the fixture
+      // went on printing it, so the shot that is the evidence for this page's
+      // fidelity showed a sentence the loader can no longer produce.
+      // `recordBandFixture` is the one place that composes both.
+      // The two refusals the page's own verdicts carry, as TOKENS — so
+      // `recordLines` composes "2 comparisons were refused on this page: 1
+      // because the two sides were grouped differently and 1 because too
+      // little was read on one side or both" rather than the fixture asserting
+      // that sentence and the composer being able to disagree with it.
+      ...recordBandFixture(
+        methodRecordFixture({
+          refusals: [
+            { state: 'refused', reason: 'clustering_changed' },
+            { state: 'too_little_data', reason: null },
+          ],
+        }),
+      ),
       href: '/dashboard/settings',
       freezesOn: '2026-10-31',
     },
