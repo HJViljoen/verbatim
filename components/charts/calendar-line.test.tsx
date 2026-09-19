@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CalendarLine } from './calendar-line'
+import { CalendarLine, niceTop } from './calendar-line'
 import { Sparkline } from './sparkline'
 import { render, markupText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
@@ -224,6 +224,31 @@ describe('CalendarLine', () => {
   it('publishes the caller\'s own width as the correction base', () => {
     const markup = render(chart({ width: 420 }))
     expect(markup).toMatch(/--cal-w:\s*420/)
+  })
+
+  it('puts a round mark ABOVE the data, not two marks under it (SH13)', () => {
+    // Ask's finding 1: 5.1 / 6.8 / 9.4, so the axis read 0% and 5% while the
+    // line ended at 9.4% — both printed marks under the whole series, on the
+    // surface whose promise is a figure you can check.
+    const ask: CalendarSeries = {
+      label: 'Fit',
+      color: 'var(--you)',
+      points: [p('2026-07-01', 5.1), p('2026-08-01', 6.8), p('2026-09-01', 9.4)],
+    }
+    const markup = render(CalendarLine({ axis: monthAxis('2026-07-01', '2026-09-01'), series: [ask], format: (v) => `${v}%` }))
+    expect(markup).toContain('>10%<')
+  })
+
+  it('picks the top by the round numbers, never by max x 1.12', () => {
+    // The objection the two-label rule was written against: 49.3% on a 44%
+    // series. 44 x 1.12 = 49.28, and 45 is what fits inside it.
+    expect(niceTop(44, 49.28)).toBe(45)
+    expect(niceTop(9.4, 10.528)).toBe(10)
+    expect(niceTop(14, 15.68)).toBe(15)
+    // Nothing round fits: the chart keeps the two labels it had.
+    expect(niceTop(9.99, 9.995)).toBeNull()
+    expect(niceTop(0, 1)).toBeNull()
+    expect(niceTop(Number.NaN, 10)).toBeNull()
   })
 
   it('renders nothing rather than an empty box when there is no axis or no series', () => {

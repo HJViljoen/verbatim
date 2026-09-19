@@ -111,6 +111,38 @@ const RULE_STROKE: Record<CalendarRule['kind'], { stroke: string; dash: string; 
   reconstructed: { stroke: 'var(--muted-foreground)', dash: '1 4', opacity: 0.5 },
 }
 
+/**
+ * THE TOP OF THE SCALE, AT A ROUND NUMBER (Block D wave 3, SH13).
+ *
+ * The chart labelled `lo` and `mid` only, and `mid` is the midpoint of a scale
+ * whose top carries 12% headroom — so on Ask's finding 1 (5.1 / 6.8 / 9.4) the
+ * axis read 0% and 5% while the line ended at 9.4%, and on finding 2
+ * (13.8 / 14 / 14) it read 0% and 8% with the line at 14%. BOTH printed marks
+ * lay under the whole series: on the surface whose promise is a figure you can
+ * check, there was nothing above the data to check it against.
+ *
+ * The old docblock's two objections to a third label are both answered rather
+ * than overruled. It is NOT `scale.hi` — `max × 1.12` is an arithmetic
+ * accident and would print 49.3% on a 44% series — but the largest ROUND value
+ * that still fits inside the headroom and is not below the data: 10 for a 9.4
+ * series, 15 for a 14, 45 for a 44. And it is not "printed at a height where
+ * no rule is drawn to anchor it": it draws its own rule, like the baseline and
+ * the midline. Where no round value fits, it returns null and the chart keeps
+ * the two labels it had.
+ */
+export function niceTop(max: number, hi: number): number | null {
+  if (!Number.isFinite(max) || !Number.isFinite(hi) || hi <= max || max <= 0) return null
+  const magnitude = 10 ** Math.floor(Math.log10(hi))
+  for (const step of [magnitude, magnitude / 2, magnitude / 4, magnitude / 5, magnitude / 10]) {
+    if (step <= 0) continue
+    const top = Math.ceil((max / step) - 1e-9) * step
+    // Rounded back through the step, so 32.500000000000004 prints as 32.5.
+    const value = Math.round(top * 1e6) / 1e6
+    if (value >= max && value <= hi) return value
+  }
+  return null
+}
+
 export function CalendarLine({
   axis, series, rules = [], bands = [], format = (v) => `${v}`,
   width = 880, height = 210, padL = 56, padR = 180,
@@ -175,6 +207,17 @@ export function CalendarLine({
 
   const g = calendarGeometry({ axis: months, width, height, padL, padR })
   const scale = valueScale(series, { zeroBase, top: g.top, baseline: g.baseline })
+  // The same values `valueScale` measures its top from.
+  const plotted: number[] = []
+  for (const sr of series) for (const pt of sr.points) {
+    if (pt.value != null) plotted.push(pt.value)
+    if (pt.atLastMonth != null) plotted.push(pt.atLastMonth)
+  }
+  const topLabel = plotted.length ? niceTop(Math.max(...plotted), scale.hi) : null
+  // A top that lands on the midline, or too close to the plot's own ceiling to
+  // carry a label, is not a third mark — it is the second one drawn twice.
+  const topY = topLabel == null ? null : scale.y(topLabel)
+  const drawTop = topLabel != null && topY != null && topY <= scale.y(scale.mid) - 12 && topY >= g.top + 2
   const drawn = collapseRules(months, rules)
   const uid = id ?? chartId([...series.map((s) => s.label), months[0], months[months.length - 1]])
   const hatch = `${uid}-back`
@@ -290,16 +333,29 @@ export function CalendarLine({
 
         <line x1={g.padL} y1={g.baseline} x2={g.padR} y2={g.baseline} stroke="var(--border)" strokeWidth={1} />
         <line x1={g.padL} y1={scale.y(scale.mid)} x2={g.padR} y2={scale.y(scale.mid)} stroke="var(--muted)" strokeWidth={1} />
-        {/* TWO Y LABELS, NOT THREE — the spec (§3.9) over the artboard, settled
-            here so WP11 does not have to. The mock's Subjects board also prints
-            the top of its scale ("50"), and it can: its data is invented and
-            tops out at a round number. This scale's top is `max × 1.12`, the
-            headroom an end label sits in, so the third label would read 49.3%
-            on a 44% series — an arithmetic accident, printed at a height where
-            no rule is drawn to anchor it. The baseline and the midline both
-            have a line under them; the top does not. */}
+        {/* TWO Y LABELS AND, WHERE ONE FITS, A THIRD (Block D wave 3, SH13 —
+            it was two, and the reason is kept below because the amendment
+            answers it rather than overruling it). The objection to a third was
+            that this scale's top is `max × 1.12`, the headroom an end label
+            sits in, so the label would read 49.3% on a 44% series — an
+            arithmetic accident, printed at a height where no rule is drawn to
+            anchor it. Both halves are met by `niceTop`: the value is the
+            largest ROUND number inside that headroom, and it draws its own
+            rule. What made the amendment necessary is that BOTH printed marks
+            could lie under the whole series — Ask's finding 1 read 0% and 5%
+            with the line ending at 9.4%. The mock's Subjects board prints the
+            top of its scale ("50") and was right to. */}
         <text data-copy="figure" x={g.padL - 10} y={g.baseline + 3} textAnchor="end" style={ts(10)} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">{format(scale.lo)}</text>
         <text data-copy="figure" x={g.padL - 10} y={scale.y(scale.mid) + 3} textAnchor="end" style={ts(10)} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">{format(scale.mid)}</text>
+        {/* AND THE TOP, WHERE A ROUND ONE FITS (SH13, see `niceTop`). With its
+            own rule, because a number printed at a height nothing is drawn at
+            is the objection the two-label rule was written against. */}
+        {drawTop && topY != null && topLabel != null ? (
+          <>
+            <line x1={g.padL} y1={topY} x2={g.padR} y2={topY} stroke="var(--muted)" strokeWidth={1} />
+            <text data-copy="figure" x={g.padL - 10} y={topY + 3} textAnchor="end" style={ts(10)} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">{format(topLabel)}</text>
+          </>
+        ) : null}
 
         {/* Dated rules. */}
         {drawn.map((r, i) => {
