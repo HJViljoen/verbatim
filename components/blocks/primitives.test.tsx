@@ -94,15 +94,32 @@ describe('BlockFrame', () => {
   // and reads as two numbers — the artboard never met it because it only puts
   // whole percentages in that slot. `tabular-nums` keeps the column aligned,
   // which is what the mono was for.
-  it('sets a large figure in the sans, tabular, and leaves the small one mono', () => {
-    const big = render(<FigureCell mode="email" size="lg" value="79.1%" of="32,600 of 41,200" />)
-    expect(big).toContain('font-variant-numeric:tabular-nums')
-    expect(big).not.toMatch(/font-size:17px[^"]*IBM Plex Mono/)
-    const small = render(<FigureCell mode="email" value="79.1%" of="32,600 of 41,200" />)
-    expect(small).toMatch(/IBM Plex Mono[^"]*font-size:13px/)
+  // AND NEITHER IS A SMALL ONE, IN AN EMAIL (Block D wave 3, SH12). The rule
+  // above was applied to `lg` alone, and the monthly rivals row is `md` — the
+  // one place on that artefact with a decimal — so it printed the exact thing
+  // the deviation was written about. In an inbox it is worse: a client that
+  // has not loaded Plex Mono falls back to Courier, whose advance is wider
+  // again. The app arm keeps its mono, where the face is loaded.
+  it('sets every email figure in the sans, tabular, and leaves the app\'s small one mono', () => {
+    for (const size of ['lg', 'md'] as const) {
+      const markup = render(<FigureCell mode="email" size={size} value="79.1%" of="32,600 of 41,200" />)
+      expect(markup).toContain('font-variant-numeric:tabular-nums')
+      expect(markup).not.toMatch(/IBM Plex Mono[^"]*font-size:(13|17)px/)
+      expect(markup).not.toMatch(/font-size:(13|17)px[^"]*IBM Plex Mono/)
+    }
     const app = render(<FigureCell size="lg" value="79.1%" of="32,600 of 41,200" />)
     expect(app).toContain('tabular-nums')
     expect(app).not.toMatch(/font-mono[^"]*text-\[17px\]/)
+    expect(render(<FigureCell value="79.1%" of="32,600 of 41,200" />)).toMatch(/font-mono text-\[13px\]/)
+  })
+
+  it('keeps the email "of N" on one line (SH12)', () => {
+    // It carried no white-space rule, so at 375 every rival row set
+    // "2,400 / of / 41,200" on three lines. A level that loses its
+    // denominator to a line break has become a score.
+    const markup = render(<FigureCell mode="email" value="2,400" of="of 41,200" />)
+    const level = markup.slice(markup.indexOf('data-copy="level"'))
+    expect(level).toContain('white-space:nowrap')
   })
 
   it('renders an email-safe frame', () => {

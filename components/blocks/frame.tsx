@@ -393,8 +393,24 @@ export function FigureCell({
   if (mode === 'email') {
     return (
       <div style={{ textAlign: right ? 'right' : 'left' }}>
-        <div data-copy="figure" style={{ fontFamily: big ? FONT.sans : FONT.mono, fontSize: big ? 17 : 13, fontWeight: 600, lineHeight: '1', letterSpacing: big ? '-.01em' : undefined, fontVariantNumeric: 'tabular-nums', color: EMAIL.ink }}>{value}</div>
-        {of ? <div data-copy="level" style={{ fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.muted, marginTop: big ? 3 : 2 }}>{of}</div> : null}
+        {/* THE SANS IN BOTH TIERS (Block D wave 3, SH12). E-monthly's
+            deviation 26 records why mono was dropped at 17px — every glyph
+            takes one advance, so "79.1%" sets as "79 . 1%" and the figure
+            reads as two numbers — and applied it to `lg` alone. The monthly
+            rivals row is `md`, and it is the one place on that artefact with a
+            decimal, so it printed exactly the thing the deviation was written
+            about. In an inbox it is worse than on the glass: a client that has
+            not loaded Plex Mono falls back to Courier, whose advance is wider
+            again. `tabular-nums` is what the mono was buying and it survives
+            in both tiers. The app arm keeps its mono, where the real face is
+            loaded and 13px is the artboards' dense-table size. */}
+        <div data-copy="figure" style={{ fontFamily: FONT.sans, fontSize: big ? 17 : 13, fontWeight: 600, lineHeight: '1', letterSpacing: big ? '-.01em' : undefined, fontVariantNumeric: 'tabular-nums', color: EMAIL.ink }}>{value}</div>
+        {/* AND THE DENOMINATOR DOES NOT BREAK. It carried no white-space rule,
+            so at 375 every rival row set "2,400 / of / 41,200" on three lines
+            — the exact share-and-denominator separation `movers.tsx` made the
+            trail points unbreakable to prevent. A level that loses its "of N"
+            to a line break has become a score. */}
+        {of ? <div data-copy="level" style={{ fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.muted, marginTop: big ? 3 : 2, whiteSpace: 'nowrap' }}>{of}</div> : null}
       </div>
     )
   }
