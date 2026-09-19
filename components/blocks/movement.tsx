@@ -15,6 +15,36 @@ import type { Verdict } from '@/lib/reading/verdicts'
  * (`EMAIL.mixedTint`): it moved, it cleared its band, and we are not saying
  * whether that is good news.
  */
+/**
+ * THE COLOUR IS IN THE TINT AND THE EDGE, NOT IN THE TEXT (Block D wave 3,
+ * SH8) — the remedy `components/pages/agent/marks.tsx` already uses, in the
+ * one form an email can carry (a border, since there are no rings in Word).
+ *
+ * `up` was `#0E8A5F` on `#DDF3E9` and `down` `#DB3B2E` on `#FBE3E1`, at
+ * 11px/700: 3.75:1 and 3.81:1, about ten instances on one monthly render and
+ * every email surface inherits them. `MonthlyReport.dc.html` contains none of
+ * those three hexes — its verdict pill is grey both ways and the DIRECTION is
+ * carried by a "▲/▼ n pts" glyph — so the artboard was also answering the
+ * question of what may carry a claim, and it is not a hue at 3.8:1.
+ *
+ * The tone survives, because it is the caller's `good` axis and a wave-2 fix
+ * put it here on purpose (a fall in price complaints printed red, a rise in
+ * the category's attention printed red on the leadership one-pager). It moves
+ * to the ground and a 1px edge; the WORDS go to `EMAIL.ink`, which reads at
+ * over 12:1 on all three tints.
+ *
+ * THE ARTBOARD'S "▲/▼ n pts" IS NOT ADOPTED, and that is a decision rather
+ * than an oversight. This arm is glyph-free on purpose — an arrow in a client
+ * that has dropped the font is a box, which is the rule the chip exists for —
+ * and the `+` / `−` sign it already prints carries exactly the same
+ * information with no font to drop. What the artboard's glyph was BUYING,
+ * which this arm did not have, is a direction that does not depend on the
+ * colour; the sign is that, and now the colour no longer has to carry the
+ * reading either.
+ *
+ * The neutral chip takes `ink2` rather than `muted`: muted on `inner` is the
+ * 4.46:1 pair SH7 is about, and this arm cannot read the app's token.
+ */
 const chip = (tone: 'up' | 'down' | 'neutral' | 'noted') => ({
   display: 'inline-block' as const,
   fontFamily: FONT.sans,
@@ -22,13 +52,15 @@ const chip = (tone: 'up' | 'down' | 'neutral' | 'noted') => ({
   padding: '2px 8px',
   borderRadius: 10,
   whiteSpace: 'nowrap' as const,
+  fontWeight: 600,
+  color: tone === 'neutral' ? EMAIL.ink2 : EMAIL.ink,
   ...(tone === 'neutral'
-    ? { background: EMAIL.inner, color: EMAIL.muted, fontWeight: 600 }
+    ? { background: EMAIL.inner, border: `1px solid ${EMAIL.border}` }
     : tone === 'noted'
-      ? { background: EMAIL.mixedTint, color: EMAIL.ink, fontWeight: 700 }
+      ? { background: EMAIL.mixedTint, border: `1px solid ${EMAIL.mixed}` }
       : tone === 'up'
-        ? { background: EMAIL.greenTint, color: EMAIL.up, fontWeight: 700 }
-        : { background: EMAIL.downTint, color: EMAIL.down, fontWeight: 700 }),
+        ? { background: EMAIL.greenTint, border: `1px solid ${EMAIL.up}` }
+        : { background: EMAIL.downTint, border: `1px solid ${EMAIL.down}` }),
 })
 
 /**

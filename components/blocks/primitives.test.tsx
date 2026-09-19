@@ -307,6 +307,27 @@ describe('BlockMovement', () => {
     expect(markup).toContain(EMAIL.greenTint)
   })
 
+  it('puts the email chip\'s colour in the tint and the edge, never in the text (SH8)', () => {
+    // `up` was #0E8A5F on #DDF3E9 and `down` #DB3B2E on #FBE3E1, at 11px/700:
+    // 3.75:1 and 3.81:1, about ten instances on one monthly render.
+    const up = render(<BlockMovement mode="email" verdict={moved} unit="pts" />)
+    expect(up).toContain(EMAIL.greenTint)
+    expect(up).toContain(`1px solid ${EMAIL.up}`)
+    expect(up).toContain(`color:${EMAIL.ink}`)
+    const down = render(<BlockMovement mode="email" verdict={{ state: 'moved', change: -6.9, band: 2.4 }} unit="pts" />)
+    expect(down).toContain(EMAIL.downTint)
+    expect(down).toContain(`1px solid ${EMAIL.down}`)
+    expect(down).toContain(`color:${EMAIL.ink}`)
+    // The non-answer's grey takes ink2: muted on inner is the 4.46:1 pair SH7
+    // is about, and this arm cannot read the app's token.
+    expect(render(<BlockMovement mode="email" verdict={refused} />)).toContain(`color:${EMAIL.ink2}`)
+    // No arm paints its words in a hue any more.
+    for (const m of [up, down]) {
+      expect(m).not.toContain(`color:${EMAIL.up};`)
+      expect(m).not.toContain(`color:${EMAIL.down};`)
+    }
+  })
+
   it('renders nothing at all without a verdict', () => {
     for (const mode of MODES) expect(BlockMovement({ verdict: null, mode })).toBeNull()
   })
