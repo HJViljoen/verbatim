@@ -50,6 +50,19 @@ export function BriefCards({
   studio?: boolean
   basePath?: string
 }) {
+  // ONE FACT ABOUT THE WORKSPACE, SAID ONCE (fix pass). `deliveryLine` is a
+  // statement about this workspace's SCHEDULES, and with no `brief:*` schedule
+  // — the shipped state, and both live workspaces — it returns the identical
+  // 106-character sentence for all three cards. Rendered, that was two mono
+  // lines × three cards, the largest block of body copy in the row, identical
+  // in all three and sitting between the only parts of the cards that differ;
+  // the artboard has no slot for it at all. Deviation 3 argues the fact must
+  // not be lost, which it is not — it moves to the section head, beside the
+  // other sentence about the row as a whole. Where the three DIFFER each card
+  // keeps its own, because then it is a fact about that brief.
+  const lines = cards.map((c) => deliveryLine(c))
+  const shared = lines.length > 1 && lines.every((l) => l === lines[0]) ? lines[0] : null
+
   return (
     <>
       {/* THE SECTION'S OWN HEAD, AND THE FOURTH BRIEF'S LINE IS PART OF IT.
@@ -63,6 +76,9 @@ export function BriefCards({
           {meta && <span className="font-mono text-[11px] text-muted-foreground">{meta}</span>}
         </div>
         <p className="m-0 max-w-[92ch] text-[11.5px] leading-[1.45] text-muted-foreground">{LEADERSHIP_LINE}</p>
+        {shared && (
+          <p className="m-0 max-w-[92ch] font-mono text-[10.5px] leading-[1.45] text-muted-foreground">{shared}</p>
+        )}
       </div>
 
       {/* The artboard's cards are `min-height:248px` and GROW; `PageGrid`'s
@@ -96,9 +112,12 @@ export function BriefCards({
               )}
               {/* The build has this and the mock has no slot for it, and it is
                   the answer the page exists to give on both live workspaces:
-                  "nobody receives this yet". It stays, in mono, above the
-                  figures. */}
-              <p className="m-0 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">{deliveryLine(c)}</p>
+                  "nobody receives this yet". It stays, in mono — on the card
+                  where it is this brief's own fact, and in the section head
+                  where it is the same sentence for all three. */}
+              {!shared && (
+                <p className="m-0 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">{deliveryLine(c)}</p>
+              )}
               {c.pdf?.stale && (
                 <p className="m-0 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">{STALE_PDF_LINE}</p>
               )}
