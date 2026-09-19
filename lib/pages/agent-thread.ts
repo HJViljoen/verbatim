@@ -767,7 +767,15 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
 
   const silentQuestions = turns.filter((t) => t.answer?.silent).map((t) => t.question)
   const platforms = [...new Set(citations.map((c) => c.platform).filter((p): p is string => !!p))]
-  const conversations = new Set(turns.flatMap((t) => (t.answer?.grounded ?? []).flatMap((g) => g.insightIds)))
+  // FINDINGS, WHICH IS WHAT THEY ARE AND WHAT THIS PAGE CALLS THEM. The set is
+  // `insightIds` — `audience_insights` rows — and the note under every printed
+  // slide used to name the table: "Findings rest on N distinct audience
+  // insights". "insight" is in neither THIRTEEN_WORDS nor GLOSSARY, and one
+  // file over `lib/agent/basis.ts` composes this same page's AS3 line as "N of
+  // M findings searchable", with a docblock at `:136` explaining exactly that
+  // choice. So the bar said `findings` and the PDF footer said `audience
+  // insights`, for one object.
+  const findings = new Set(turns.flatMap((t) => (t.answer?.grounded ?? []).flatMap((g) => g.insightIds)))
 
   // ── D8 · the measurement, and the scrub it licenses ──────────────────────
   //
@@ -858,8 +866,8 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
       comments: citations.length || null,
       note: document
         ? `${document.summary.supported} supported · ${document.summary.contradicted} contradicted · ${document.summary.untested} untested. A claim is untested when nothing in the conversation speaks to it — the blank is the information.`
-        : conversations.size > 0
-          ? `Every quoted voice is a real comment, listed in the appendix. Findings rest on ${conversations.size} distinct audience insights; the agent's own reading is marked as such.`
+        : findings.size > 0
+          ? `Every quoted voice is a real comment, listed in the appendix. This answer rests on ${findings.size} distinct findings; our own reading is marked as such.`
           : 'Nothing in the conversation analysed related to what was asked — a real result, not a gap in the tool.',
     },
   }

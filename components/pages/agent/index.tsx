@@ -10,6 +10,7 @@ import type { PageModule, Renderable } from '@/lib/renderables/types'
 import type { AnswerMeasure, FindingMeasure } from '@/lib/agent/measure'
 import { JUDGEMENT_HEADING, NEAREST_HEADING, citationDestination, citationWhere, saidHeading } from '@/lib/agent/types'
 import { askBasisLine } from '@/lib/agent/basis'
+import { surface } from '@/lib/nav'
 
 // The agent thread on paper (Reports & Exports T11, 2026-08-29). Question
 // mode: the question, the answer, "what your customers said" with a
@@ -359,12 +360,25 @@ const renderables: Record<string, Renderable<D>> = new Proxy({} as Record<string
   has: (_t, key: string | symbol) => typeof key === 'string' && !!resolve(key),
 })
 
+/**
+ * WHAT THIS SURFACE IS CALLED, FROM THE ONE TABLE.
+ *
+ * These three strings said "Verbatim Agent", "Agent" and "Verbatim Agent"
+ * while `lib/nav.ts` — whose own docstring is about exactly this ("the sidebar
+ * label AND the page title — one string, deliberately") — and the artboard
+ * both say **Ask**. `lib/reports/build.ts:69` puts `printContext` in the slide
+ * header, so a deck reached from a sidebar item called Ask carried a header
+ * saying "Verbatim Agent" over a footer saying "the agent". Reading the label
+ * off `surface('ask')` means the day it is renamed again, it is renamed once.
+ */
+const ASK = surface('ask').label
+
 export const agentPage: PageModule<D> = {
   key: 'agent',
-  title: 'Verbatim Agent',
+  title: ASK,
   load: loadAgentThread,
   slides: agentThreadSlides,
   renderables,
-  snapshotTitle: (d) => `${d.kind === 'document' ? 'Document check' : 'Agent'} · ${d.title.slice(0, 80)} · ${weekdayDate(d.createdAt)}`,
-  printContext: (d) => `${d.kind === 'document' ? 'Document check' : 'Verbatim Agent'} · ${d.brand} · ${weekdayDate(d.createdAt)}`,
+  snapshotTitle: (d) => `${d.kind === 'document' ? 'Document check' : ASK} · ${d.title.slice(0, 80)} · ${weekdayDate(d.createdAt)}`,
+  printContext: (d) => `${d.kind === 'document' ? 'Document check' : ASK} · ${d.brand} · ${weekdayDate(d.createdAt)}`,
 }
