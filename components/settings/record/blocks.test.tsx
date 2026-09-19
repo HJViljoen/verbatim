@@ -93,6 +93,19 @@ describe('the delivery block', () => {
     expect(render(delivery).match(/text-\[24px\]/g)).toHaveLength(4)
   })
 
+  it('opens its four-abreast grid and its 172px gutter at lg, where the rails have stopped taking the pane', () => {
+    // RC2. `md` is exactly where the app's 224px sidebar and SettingsFrame's
+    // own 224px rail both arrive, so at a 768px viewport the pane is 240px:
+    // measured stat-cell widths were 48px at 768 and 61px at 820, against the
+    // 82px a 24px mono "27 Sep" needs, and the figures painted over their
+    // neighbours. At `lg` the same cells are 112px and up.
+    const markup = render(delivery)
+    expect(markup).toContain('lg:grid-cols-4')
+    expect(markup).not.toContain('md:grid-cols-4')
+    expect(markup).toContain('lg:grid-cols-[172px_minmax(0,1fr)]')
+    expect(markup).not.toContain('md:grid-cols-[172px_minmax(0,1fr)]')
+  })
+
   it('never claims a start date it does not hold, and never promises a next update', () => {
     const text = renderText(delivery)
     // D14: "tracking since" is a claim about an act nothing recorded.

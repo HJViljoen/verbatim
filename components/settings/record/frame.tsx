@@ -69,12 +69,21 @@ export function RecordSection({
 /**
  * The 172px label gutter the artboard uses for "This month" and "Monthly
  * readings": a label and its sub-count on the left, the content on the right.
- * It stacks under the gutter width on a phone, where a 172px column would take
- * nearly half the screen.
+ * It stacks under the gutter width, where a 172px column would take nearly
+ * half of what is left.
+ *
+ * THE GUTTER OPENS AT `lg`, NOT `md` (Block D wave 3, RC2). `md` is exactly
+ * where BOTH 224px rails arrive — the app's (`components/ui/sidebar.tsx`) and
+ * SettingsFrame's own — so at a 768px viewport the content pane is 240px and
+ * the row was splitting it 172 │ 24 │ 44. The September date pills stacked one
+ * per line in a 44px column beside a 172px label. Measured pane / content
+ * column: 768 → 240/44, 820 → 292/96, 900 → 372/176, 1024 → 496/300. The
+ * change log (`change-log.tsx`) and the coverage grid (`coverage.tsx`) in this
+ * same package already moved to `lg` for precisely this reason.
  */
 export function LabelRow({ label, sub, children }: { label: ReactNode; sub?: ReactNode; children: ReactNode }) {
   return (
-    <div className="grid grid-cols-1 items-start gap-y-1.5 md:grid-cols-[172px_minmax(0,1fr)] md:gap-x-6">
+    <div className="grid grid-cols-1 items-start gap-y-1.5 lg:grid-cols-[172px_minmax(0,1fr)] lg:gap-x-6">
       <div className="flex flex-col gap-px pt-px">
         <span className="text-[12.5px] font-medium">{label}</span>
         {sub ? <span className="font-mono text-[10.5px] text-muted-foreground">{sub}</span> : null}
