@@ -34,6 +34,7 @@ import { CLIENT_AUDIENCE, isMissingCompetitors, loadCompetitors, rivalKey, stitc
 import type { Quote, Scope } from '../renderables/types'
 import { quoteRef } from '../renderables/quotes-freeze'
 import { selectAll } from '../supabase-admin'
+import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import { isMissingSubjects, TABLE_SUBJECTS } from '../subjects/types'
 import { recordWindow } from './overview'
 import { row } from './read'
@@ -1432,24 +1433,50 @@ async function buildQuestions(input: QuestionInputs): Promise<QuestionsBlock> {
   }
 }
 
-/** Comment dates by id, chunked to stay under the PostgREST URL cap. Read on
- *  the reading client with the tenant re-asserted: a date is not a reading and
- *  needs no policy of its own, but a read that could cross a tenant is a read
- *  that names its tenant. */
+/**
+ * Comment dates by id, chunked to stay under the PostgREST URL cap. Read on
+ * the reading client with the tenant re-asserted: a date is not a reading and
+ * needs no policy of its own, but a read that could cross a tenant is a read
+ * that names its tenant.
+ *
+ * THE CHUNKS GO OUT TOGETHER, AND THEY USED NOT TO. This was a hand-rolled
+ * `for` loop with an `await` in its body at 120 ids a chunk — the only read in
+ * the Phase 1 diff that did, against `lib/chunk.ts`'s four named chunked
+ * readers and its own measurement (32 concurrent 100-id reads of `comments` in
+ * 382ms against 6,714ms one at a time). A rival with 1,200 cited comments is
+ * ten chunks, and on this instance a round trip costs 180–800ms whatever it
+ * carries, so that was 1.8–8s of pure serial wait added to a loader measured
+ * at 1.6–4.6s — on every Competitive load, inside every `loadQuarterly`, and
+ * inside every `loadBriefReading` that names the surface, so three times in
+ * one document build.
+ *
+ * `comments.id` IS A KEY COLUMN, one row per id, and nothing downstream reads
+ * the order (the answer is a Map), so the size is `UUID_IN_CHUNK` and not the
+ * pinned 120: half the largest `.in()` proven to work, measured 16 September.
+ * `selectAll` pages each chunk, which is what keeps raising that constant a
+ * performance decision rather than a correctness one.
+ *
+ * A FAILED CHUNK IS STILL NON-FATAL. The loop logged and continued, and a
+ * missing date is already a state every caller handles (the comment is in no
+ * month). `mapWithLimit` rejects on the first failure like `Promise.all`, so
+ * the catch is INSIDE the mapped function: one chunk that fails costs its own
+ * dates and not the page.
+ */
 async function commentDates(client: SupabaseClient, clientId: string, ids: readonly string[]): Promise<Map<string, string>> {
+  const parts = chunk([...new Set(ids)], UUID_IN_CHUNK)
+  const pages = await mapWithLimit(parts, READ_CONCURRENCY, async (part) => {
+    try {
+      return await selectAll<{ id: string; comment_date: string | null }>(() =>
+        client.from('comments').select('id, comment_date').eq('client_id', clientId).in('id', part),
+      )
+    } catch (error) {
+      console.error(`[pages] competitive-surface.commentDates: ${(error as { message?: string })?.message ?? String(error)}`)
+      return []
+    }
+  })
   const out = new Map<string, string>()
-  const unique = [...new Set(ids)]
-  for (let i = 0; i < unique.length; i += 120) {
-    const chunk = unique.slice(i, i + 120)
-    const { data, error } = await client
-      .from('comments').select('id, comment_date').eq('client_id', clientId).in('id', chunk)
-    if (error) {
-      console.error(`[pages] competitive-surface.commentDates: ${error.message}`)
-      continue
-    }
-    for (const r of (data ?? []) as { id: string; comment_date: string | null }[]) {
-      if (r.comment_date) out.set(r.id, r.comment_date)
-    }
+  for (const r of pages.flat()) {
+    if (r.comment_date) out.set(r.id, r.comment_date)
   }
   return out
 }
