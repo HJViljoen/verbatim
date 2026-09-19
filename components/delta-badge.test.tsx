@@ -76,6 +76,17 @@ describe('MovementBadge', () => {
     expect(MOVEMENT_WORDS.too_little_data).toBe('too few to compare')
   })
 
+  it('lets a non-answer WRAP rather than paint over the column beside it (SH2)', () => {
+    // "comparison refused" needs about 117px; the quarterly standings' Change
+    // track is about 100. `whitespace-nowrap` made that an overprint rather
+    // than a second line — "comparison refuseCon" over "Comments per video".
+    const markup = render(<MovementBadge verdict={verdict('refused', { refusedReason: 'rename' })} />)
+    expect(markup).not.toContain('whitespace-nowrap')
+    // The magnitude still may not break: the arrow and its number stay one run.
+    const moved = render(<MovementBadge verdict={verdict('moved', { changePts: 3.2, bandPts: 2.4 })} unit="pts" />)
+    expect(moved).toContain('whitespace-nowrap')
+  })
+
   it('shows no comparison at all when there is none', () => {
     expect(MovementBadge({ verdict: null })).toBeNull()
     expect(MovementBadge({ verdict: undefined })).toBeNull()

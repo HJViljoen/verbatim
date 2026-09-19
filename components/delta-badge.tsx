@@ -72,8 +72,19 @@ export const MOVEMENT_WORDS: Record<Exclude<VerdictState, 'moved'> | 'unchanged'
  *  tooltip and a paragraph about one refusal may not differ. */
 const REFUSED_WHY = REFUSAL_WHY
 
-const NON_ANSWER = 'whitespace-nowrap text-xs font-medium text-muted-foreground'
-const MOVED = 'whitespace-nowrap text-xs font-semibold'
+/** THE NON-ANSWER WRAPS; IT DOES NOT OVERPRINT (Block D wave 3, SH2).
+ *
+ *  It was `whitespace-nowrap`, and "comparison refused" needs about 117px. The
+ *  quarterly standings' Change track is about 100px wide, so on six of seven
+ *  fixture states, at both widths, the phrase ran into the column beside it
+ *  and the sheet read "comparison refuseCon" over "Comments per video". Two
+ *  blocks of text overprinted is the one defect a PDF reader cannot recover
+ *  from, and a wrapped non-answer is still a readable non-answer.
+ *
+ *  `MOVED` keeps its nowrap on the figure alone (see `Moved`): a magnitude
+ *  broken across two lines is a different kind of unreadable. */
+const NON_ANSWER = 'text-xs font-medium text-muted-foreground'
+const MOVED = 'text-xs font-semibold'
 
 /** A muted non-answer. Never coloured, never arrowed. */
 function NonAnswer({ word, title }: { word: string; title: string }) {
@@ -93,7 +104,7 @@ function Moved({ change, unit, band, title, good = 'up' }: { change: number; uni
   const fav = favourability(change, good)
   return (
     <span title={title} className={`${MOVED} ${fav === null ? 'text-muted-foreground' : fav ? 'text-positive' : 'text-negative'}`}>
-      {change > 0 ? '▲' : '▼'} {Math.abs(change).toLocaleString('en-US')}{unit ? ` ${unit}` : ''}
+      <span className="whitespace-nowrap">{change > 0 ? '▲' : '▼'} {Math.abs(change).toLocaleString('en-US')}{unit ? ` ${unit}` : ''}</span>
       {/* THE BAND IS TEXT, NOT A TOOLTIP. lib/reports/weekly.ts's budget
           comment says "this product never prints a change without the band it
           cleared" — and on a printed page, in an email, and for anyone not
