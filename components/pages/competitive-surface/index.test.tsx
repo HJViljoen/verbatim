@@ -238,12 +238,16 @@ describe('CO2 · the standings', () => {
     const text = renderText(competitiveStandings.render(unreadMonthsFixture(), 'app', ctx))
     expect(text).not.toContain('the comments we kept on the right')
     expect(text).not.toContain('beside this table')
-    // The ones that are true with or without a row stay.
-    expect(text).toContain('The attention index')
-    // And the surface reading still prints both.
+    // AND THE UNLOCK IS ONE OF THEM (CO11). `ATTENTION_UNLOCK` ends "…so the
+    // right-hand share is of the comments we kept" — it explains the table's
+    // right-hand column, so a tile that has just said there are no standings
+    // to draw may not go on to explain them.
+    expect(text).not.toContain('The attention index')
+    // And the surface reading still prints all of them.
     const read = renderText(competitiveStandings.render(competitiveFixture(), 'app', ctx))
     expect(read).toContain('the comments we kept on the right')
     expect(read).toContain('beside this table')
+    expect(read).toContain('The attention index')
   })
 
   it('refuses in words when no month has been read', () => {

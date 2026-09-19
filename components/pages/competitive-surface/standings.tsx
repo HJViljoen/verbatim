@@ -407,12 +407,22 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
             {s.rules.map((r) => r.text).join(' ')}
           </p>
         ) : null}
+        {/* THE UNLOCK EXPLAINS THE TABLE'S RIGHT-HAND COLUMN, SO IT WAITS FOR
+            THE TABLE TOO. `ATTENTION_UNLOCK` ends "…so the right-hand share is
+            of the comments we kept", and it rendered ungated while the two
+            sentences above it were already gated on `hasTable` — so the
+            degraded tile said there are no standings to draw and then
+            explained that table's right-hand column. The unlock is a real
+            absence and still prints wherever there is a share for it to be
+            about; where there is not, it is describing nothing. */}
+        {hasTable ? (
         <p
           className={apron}
           style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 } : undefined}
         >
           {s.unlock}
         </p>
+        ) : null}
       </div>
     )
 
