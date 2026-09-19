@@ -172,14 +172,21 @@ describe('sales.p1 — the cover', () => {
   // Every Sales brief stored on production predates wave 2 and has no slide
   // figures at all. A stored artefact must keep rendering what it rendered.
   it('renders a brief built before the slide figures existed', () => {
-    const w = words(sheets(deck(salesBriefLegacyFixture()))[0])
+    const data = salesBriefLegacyFixture()
+    // IT IS THE SHAPE, NOT A FLAG. `main`'s `DocumentSnapshotData` has none of
+    // these keys at all, and a stored row has no key rather than a null one.
+    for (const key of ['reading', 'sections', 'surfaces', 'layout', 'slideFigures']) {
+      expect(key in data).toBe(false)
+    }
+    for (const key of ['dropped', 'findingsBelow', 'findingsHeld', 'languages', 'delivery']) {
+      expect(key in data.method).toBe(false)
+    }
+    const w = words(sheets(deck(data))[0])
     expect(w).toContain('Sales brief')
-    // MERGE, BLOCK D WAVE 2: the basis tile now NAMES THE MONTH and the
-    // population the videos are of — E-marketing's wording for the same
-    // figure, which is the same number with the two facts a reader needs
-    // beside it. It is also the LAST of the three now, because the two
-    // measures come first (see `overviewTiles`).
-    expect(w).toContain('2,359 comments read in September 2026, on 1,388 videos in the category')
+    // Its tiles are the UPDATE's three, which is what `documentFigures` wrote
+    // before item 43 and what every stored brief carries.
+    expect(w).toContain('2,359 conversations read this update, on 1,388 videos')
+    expect(w).toContain("Sealand's share of tracked conversation")
     expect(w).not.toContain('name a switch between brands')
   })
 })
