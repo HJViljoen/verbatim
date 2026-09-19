@@ -125,8 +125,24 @@ describe('refusals', () => {
 describe('howSoundLine — one sentence, printed in the open', () => {
   it('is the design’s line', () => {
     expect(howSoundLine(inputs())).toBe(
-      '3 updates · 394 videos (YouTube 212 · TikTok 163 · Instagram 82 · Reddit 12) · 34% of what was said on camera was not in English · 1 tracking change',
+      '3 updates · 394 videos · 34% of what was said on camera was not in English · 1 tracking change',
     )
+  })
+
+  it('states the platform mix NOWHERE — that is the record\u2019s line, said once', () => {
+    // Both were printed on one screen, ten lines apart, and on the weekly the
+    // footer then states a third mix (the update's own). One figure printed
+    // twice reads as two measures.
+    const band = howSoundLine(inputs())
+    expect(band).not.toContain('YouTube')
+    expect(band).not.toContain('TikTok')
+    expect(recordLines(inputs()).join(' ')).toContain('YouTube 212')
+  })
+
+  it('stays inside the artboard\u2019s band width', () => {
+    // ~110 characters is what the mock's bar holds at 11px mono before it
+    // wraps to a second row and orphans the record link onto a third.
+    expect(howSoundLine(inputs()).length).toBeLessThanOrEqual(110)
   })
 
   it('names no link — the record is a link beside it, not a clause in it', () => {
