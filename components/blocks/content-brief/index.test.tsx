@@ -8,7 +8,7 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { markupText, render } from '@/lib/test/render'
 import { REDDIT_CAP_LINE } from '@/lib/reading/method'
-import { BRIEF_UNIT, LABEL_RULE, LEAD_MIN_RATED, PLAYBOOK_EMPTY, PLAYBOOK_GONE, RECORD_GONE } from '@/lib/pages/content-brief'
+import { BRIEF_UNIT, DELIVERY_SCOPE, LABEL_RULE, LEAD_MIN_RATED, PLAYBOOK_EMPTY, PLAYBOOK_GONE, RECORD_GONE } from '@/lib/pages/content-brief'
 import { CONTENT_BRIEF_BLOCKS, contentMake, contentPlaybook, contentRecord } from './index'
 import { shownRows, toMake } from './make'
 import { cellFigure, engagementAxis, engagementOrder, unreadNotes } from './playbook'
@@ -320,6 +320,17 @@ describe('content.record — the mock’s page 5', () => {
   it('carries the delivery record and the reading counter, verbatim', () => {
     expect(text).toContain('4 updates since 6 Sep 2026 \u00b7 longest gap 7 days \u00b7 last on 27 Sep 2026')
     expect(text).toContain('your 3rd monthly reading · the quarter view needs 6')
+  })
+
+  // TWO DELIVERY RECORDS ON ONE SHEET, AND ONLY ONE OF THEM NAMED ITS SCOPE
+  // (design review 3). The prose's first sentence is window-scoped ("3 updates
+  // delivered, 1 Sep to 13 Sep 2026, longest gap 7 days.") and the mono tail is
+  // all-time ("4 updates since 6 Sep 2026 · … · last on 27 Sep 2026"); both end
+  // "longest gap 7 days", so they read as one statistic stated twice.
+  it('names the scope of the all-time delivery record it prints', () => {
+    expect(text).toContain(`${DELIVERY_SCOPE} \u00b7 4 updates since 6 Sep 2026`)
+    // And the window-scoped sentence is still the record's own, unrewritten.
+    expect(text).toContain('3 updates delivered, 1 Sep to 13 Sep 2026')
   })
 
   it('states the language share on its own basis, never as a fact about comments (D15)', () => {

@@ -103,7 +103,9 @@ export interface RecordSlide {
   lines: string[]
   /** The same sentences, grouped into the artboard's four paragraphs. */
   paragraphs: string[]
-  /** "23 updates since 6 Apr 2026 · longest gap 35 days · last on 27 Sep 2026". */
+  /** "Every update we have delivered · 23 updates since 6 Apr 2026 · longest
+   *  gap 35 days · last on 27 Sep 2026" — `deliveryRecord`'s own sentence with
+   *  its SCOPE in front of it (`DELIVERY_SCOPE`). */
   delivery: string | null
   /** "your 3rd monthly reading · the quarter view needs 6". Null where the
    *  month tables have never been seeded here, which is not a zeroth reading. */
@@ -241,6 +243,33 @@ export function numberRows(r: RecordInputs | null): NumberRow[] {
  * database — so a null one means the read THREW, and the only true reading of
  * that sentence was the one it could never have.
  */
+/**
+ * THE SCOPE OF THE MONO TAIL, SAID IN WORDS (design review 3).
+ *
+ * Two delivery records land on this sheet and neither named its scope. The
+ * prose's first sentence is `recordLines`', built over `monthRecordWindow` —
+ * "3 updates delivered, 1 Sep to 13 Sep 2026, longest gap 7 days." — and the
+ * mono tail 500px below it is `deliveryRecord` over EVERY update ever run: "4
+ * updates since 6 Sep 2026 · longest gap 7 days · last on 27 Sep 2026". Both
+ * end "longest gap 7 days", so they read as one statistic stated twice with
+ * two counts and two last dates; in production they differ by construction.
+ *
+ * The artboard names each one ("across four updates — 6, 13, 20 and 27
+ * September" in the prose, "Tracking since 6 Apr · 23 updates delivered" in
+ * the mono line). We name the one we compose. `deliveryRecord`'s own sentence
+ * is not rewritten — it belongs to Settings › The record, which prints it
+ * under a heading that already says what it is — so the scope is a prefix,
+ * and it is the scope the reader cannot infer from the dates alone.
+ *
+ * NOT "Tracking since" (D14): `DeliveryRecord` carries EARLIEST EVIDENCE, not
+ * a start date, and this sheet may not claim one.
+ */
+export const DELIVERY_SCOPE = 'Every update we have delivered'
+
+export function deliveryScoped(line: string | null): string | null {
+  return line ? `${DELIVERY_SCOPE} \u00b7 ${line}` : null
+}
+
 export const RECORD_GONE = 'The record behind this brief could not be read.'
 export const RECORD_UNREAD = 'The record behind this brief has not been read for this workspace yet.'
 
@@ -261,7 +290,7 @@ export function buildRecordSlide(input: {
     method: input.record ? methodLines(input.record) : null,
     lines: input.record ? recordLines(input.record) : [],
     paragraphs: input.record ? recordParagraphs(recordLines(input.record)) : [],
-    delivery: input.delivery,
+    delivery: deliveryScoped(input.delivery),
     counter: input.readings == null ? null : readingsCounter(input.readings),
     numbers: numberRows(input.record),
     videosRead: input.record?.coverage?.length ? totalVideos(input.record.coverage) : null,
