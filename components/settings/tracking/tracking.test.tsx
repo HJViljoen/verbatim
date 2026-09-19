@@ -5,6 +5,7 @@ import { CommunitiesSection } from './communities'
 import { rowMessage } from './community-controls'
 import { PlatformsSection } from './platforms'
 import { RivalsSection, RENAME_UNAVAILABLE } from './rivals'
+import { renameNotice } from '@/app/dashboard/settings/rival-rename'
 import { RIVAL_REMOVED_PENDING } from '@/lib/settings/rivals-view'
 import { NEW_TERM_RULE, REVIEW_KEEP_NOTE, TermsSection } from './terms'
 import { BREAK_NOT_RECORDED, BROKE_NOTHING, LastSaveStrip, NEVER_SAVED, SaveStateLine } from '../save-state-strip'
@@ -279,6 +280,28 @@ describe('the rivals section', () => {
     expect(words).toContain('28 captured, 0 read')
     expect(words).toContain('earliest evidence in our own data')
     expect(words).toContain('removing one is a break, not a zero')
+  })
+
+  it('keeps a rival’s Rename control after its own click, and spends a refusal with the row', () => {
+    // ST8: the control used to be REPLACED by the success message, and
+    // useActionState keeps its last result for the component's life — the
+    // action's revalidate re-renders the row but does not remount it, because
+    // the key is `r.identity.id` and a rename does not change it. So after one
+    // successful rename the Rename control was gone until a full reload. The
+    // same C4 rule as `rowMessage` in the cell next door, and the same shape.
+    expect(renameNotice('Freitag', null, { ok: false, message: '' })).toBeNull()
+    // Nothing was pressed on this row, so it owes nothing.
+    expect(renameNotice('Freitag', null, { ok: true, message: 'Renamed.' })).toBeNull()
+    // A refusal is about the name the reader pressed against.
+    expect(renameNotice('Freitag', 'Freitag', { ok: false, message: 'Could not rename: check the name.' }))
+      .toEqual({ text: 'Could not rename: check the name.', refused: true })
+    // …and once the row comes back under a new name it describes a state that
+    // no longer exists.
+    expect(renameNotice('Freitag AG', 'Freitag', { ok: false, message: 'Could not rename: check the name.' })).toBeNull()
+    // A SUCCESS stays: its sentence carries the count of posts rewritten and
+    // the name the frozen months stay under, and the row carries neither.
+    expect(renameNotice('Freitag AG', 'Freitag', { ok: true, message: 'Renamed. 412 stored posts now read as Freitag AG' }))
+      .toEqual({ text: 'Renamed. 412 stored posts now read as Freitag AG', refused: false })
   })
 
   it('shows a rival the reader has taken off as taken off, and offers the way back', () => {
