@@ -214,7 +214,7 @@ describe('OV3, ported to the artboard', () => {
     // independent share and there is no remainder slice to draw.
     const text = renderText(overviewCategory.render(overviewFixture(), 'app', ctx))
     expect(text).toContain('Questions 33.9% 470 of 1,388')
-    expect(text).toContain('Praise 28% 389 of 1,388')
+    expect(text).toContain('Praise 28.0% 389 of 1,388')
     expect(text).not.toContain('Other kinds')
   })
 
@@ -268,7 +268,7 @@ describe('OV3, ported to the artboard', () => {
     // say what it was. A null verdict is no comparison at all, which is not the
     // same statement as "no clear change".
     const text = renderText(overviewCategory.render(overviewFixture(), 'app', ctx))
-    expect(text).toContain(`Complaints 19% 264 of 1,388 ${KIND_NOT_COMPARED}`)
+    expect(text).toContain(`Complaints 19.0% 264 of 1,388 ${KIND_NOT_COMPARED}`)
   })
 
   it('puts "nothing else moved" in the footer note', () => {

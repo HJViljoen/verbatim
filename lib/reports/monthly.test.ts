@@ -201,7 +201,7 @@ describe('the series trail under a mover row', () => {
 
 describe('the report of {date} read X', () => {
   it('prints the sent reading with its own denominator where the month has moved', () => {
-    expect(sentReadingLine(sent(), 22)).toBe('the report of 1 Oct read 19% · 264 of 1,388')
+    expect(sentReadingLine(sent(), 22)).toBe('the report of 1 Oct read 19.0% · 264 of 1,388')
   })
 
   it('says nothing where the figure has not moved', () => {
@@ -227,7 +227,7 @@ describe('the report of {date} read X', () => {
   })
 
   it('prints a share without a denominator rather than inventing one', () => {
-    expect(sentReadingLine(sent({ k: null, n: null }), 22)).toBe('the report of 1 Oct read 19%')
+    expect(sentReadingLine(sent({ k: null, n: null }), 22)).toBe('the report of 1 Oct read 19.0%')
   })
 
   it('prints a count in its own unit', () => {
@@ -241,13 +241,13 @@ describe('next month’s confirming line', () => {
 
   it('says what the month closed at, and what we had said', () => {
     expect(confirmingLine('2026-09', sent(), closed(22))).toBe(
-      'September has closed at 22%. The report of 1 Oct read 19%; the rest of the month has since been counted.',
+      'September has closed at 22.0%. The report of 1 Oct read 19.0%; the rest of the month has since been counted.',
     )
   })
 
   it('confirms rather than corrects where the number held', () => {
     expect(confirmingLine('2026-09', sent({ value: 22 }), closed(22))).toBe(
-      'September has closed at 22%, which is what the report of 1 Oct read.',
+      'September has closed at 22.0%, which is what the report of 1 Oct read.',
     )
   })
 

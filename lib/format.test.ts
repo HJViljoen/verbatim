@@ -43,7 +43,12 @@ describe('fmtCompact', () => {
 describe('fmtPct / fmtDelta', () => {
   it('formats percents with at most one decimal', () => {
     expect(fmtPct(85.06)).toBe('85.1%')
-    expect(fmtPct(16)).toBe('16%')
+    // ONE DECIMAL MEANS ONE DECIMAL, INCLUDING AN EXACT .0: a column of
+    // tabular figures lines up on the decimal point, and a cell with no point
+    // does not. `decimals: 0` is how a caller asks for a whole percentage.
+    expect(fmtPct(16)).toBe('16.0%')
+    expect(fmtPct(16, 0)).toBe('16%')
+    expect(fmtPct(3.0259)).toBe('3.0%')
     expect(fmtPct(5.84, 0)).toBe('6%')
   })
   it('signs deltas and keeps units', () => {

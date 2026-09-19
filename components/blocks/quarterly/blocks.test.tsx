@@ -461,7 +461,7 @@ describe('what each page owes the reader', () => {
     // header, which is what the labels were standing in for. So the assertion
     // moves from the sentence to the header row and the cells beneath it.
     expect(text).toContain('Subject You, September The category, September')
-    expect(text).toContain('Durability 31% 26 of 84 22% 305 of 1,388')
+    expect(text).toContain('Durability 31.0% 26 of 84 22.0% 305 of 1,388')
     expect(data.subjects.quarterNote).toBeNull()
   })
 
@@ -527,7 +527,7 @@ describe('the two-audience gap the quarter can actually carry', () => {
   it('clears its band where a month could not — which is the honest scale for this claim', () => {
     const gap = row().gap!
     expect(gap.state).toBe('apart')
-    expect(gapLine(gap)).toBe('you 30.1% of 249 · The category 22% of 4,147 · 8.1 points apart (band 6)')
+    expect(gapLine(gap)).toBe('you 30.1% of 249 · The category 22.0% of 4,147 · 8.1 points apart (band 6)')
   })
 
   it('prints the prior quarter as its own dated reading with its own band, never as "narrowed"', () => {
@@ -541,11 +541,11 @@ describe('the two-audience gap the quarter can actually carry', () => {
     const data = quarterlyFixture()
     const body = renderText(QUARTERLY_BLOCKS['quarterly.subjects'].render(data, 'app', ctx))
     // The row prints your month beside the category's month …
-    expect(body).toContain('31% 26 of 84')
+    expect(body).toContain('31.0% 26 of 84')
     // … and the gap is of the quarter, so the line wave 2 binds says so.
     const labelled = gapLine(row().gap!, { period: true })
     expect(labelled).toBe(
-      'The quarter from July 2026 · you 30.1% of 249 · The category 22% of 4,147 · 8.1 points apart (band 6)',
+      'The quarter from July 2026 · you 30.1% of 249 · The category 22.0% of 4,147 · 8.1 points apart (band 6)',
     )
     expect(labelled.match(directionRe())).toBeNull()
   })
@@ -727,7 +727,7 @@ describe('the artboard port (Block D wave 2)', () => {
   it('qr.p3.* · five columns, the gap headline, the chart and the rival level', () => {
     const t = text('quarterly.subjects')
     expect(t).toContain('Subject You, September The category, September')
-    expect(t).toContain('Durability 31% 26 of 84 22% 305 of 1,388')
+    expect(t).toContain('Durability 31.0% 26 of 84 22.0% 305 of 1,388')
     // The gap, NAMED, and labelled with its own period because the row prints
     // the month's. `gapLine` carries no object label of its own, so without
     // this the page's opening line read as the page's gap when it is one

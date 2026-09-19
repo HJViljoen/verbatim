@@ -171,7 +171,7 @@ describe('WK §3 · moving now', () => {
     // is the artboard's own column order; both are still on the row.
     expect(text).toContain('Socket comfort after a long day')
     expect(text).toContain('44 of 398 category videos in September')
-    expect(text).toContain('against 5% across the three months behind it')
+    expect(text).toContain('against 5.0% across the three months behind it')
     expect(text).toContain('18 of them arrived with this update')
   })
 

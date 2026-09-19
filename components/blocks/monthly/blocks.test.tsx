@@ -171,7 +171,7 @@ describe('MR3 · what moved', () => {
 
   it('writes every row’s line out in words, so an email with no images loses nothing', () => {
     const text = renderText(block.render(monthlyFixture(), 'email', ctx))
-    expect(text).toContain('Apr 3.1% of 1,204 → May 4% of 1,260 → Jun 5.1% of 1,311 → Jul 6.8% of 1,349 → Aug 9.4% of 1,388 → Sep 9.4% of 1,388')
+    expect(text).toContain('Apr 3.1% of 1,204 → May 4.0% of 1,260 → Jun 5.1% of 1,311 → Jul 6.8% of 1,349 → Aug 9.4% of 1,388 → Sep 9.4% of 1,388')
   })
 
   it('names a month with no reading rather than closing the gap', () => {

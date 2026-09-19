@@ -178,7 +178,7 @@ describe('content.playbook — the mock’s page 3', () => {
     }
     // A median of a whole number prints as "3%", never as "3.0%" — the
     // formatter's own rule, and the reason to have exactly one.
-    expect(fmtPct(3)).toBe('3%')
+    expect(fmtPct(3)).toBe('3.0%')
   })
 
   // THE TAKEAWAY MAY NOT REST ON FOUR VIDEOS (design review 5). The slide's one
