@@ -102,7 +102,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
   off exactly those rows; and **frozen exports** —
   `report_snapshots.evidence_ids`, where `e:<insight_evidence.id>` resolves back
   to its `audience_insights` row and `p:<language_samples.id>` IS one of these
-  rows (the only citation path `language_samples` has). **Two further paths are
+  rows (the only citation path `language_samples` has). **Three further paths are
   deliberately NOT protected, and that is a judgement, not an omission:**
   `theme_observations.member_insight_ids` (a fifth id-exact path, walked by
   `monthly_theme_readings`) is left unprotected because a run's themes name most
@@ -112,8 +112,15 @@ This version has breaking changes — APIs, conventions, and file structure may 
   `c:` / `v:` / `m:` refs name no row, so they cannot be protected by id — they
   resolve by SEARCHING `insight_evidence` for a live excerpt on that comment or
   video, which holds only IF a re-read produced evidence on that comment,
-  possibly a different excerpt and sometimes none. Adding a fifth protected
-  class means re-opening that list here, not appending a set union to the step.
+  possibly a different excerpt and sometimes none; and the remaining ref kinds —
+  `k:` (`video_claims`), `t:` (`videos.ocr_text`, Block D wave 2), `h:` (a hero
+  row) and `b:` (`run_summary`) — read tables this step never deletes from.
+  Those three arms plus the protected `e:` / `p:` name EVERY ref kind
+  `quotes-freeze.ts` defines, which is the point of writing them down: **a new
+  ref kind joins the third arm or a protected class, never neither**, because a
+  kind named in no arm reads as an oversight whether or not it is one. Adding a
+  fifth protected class means re-opening that list here, not appending a set
+  union to the step.
   The set loads before the first delete, so the step fails closed — and a read
   that fails deletes nothing, on that run and every later one, until it is
   fixed. This is a different thing from the retention
