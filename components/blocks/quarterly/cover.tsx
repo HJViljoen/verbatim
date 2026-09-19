@@ -43,8 +43,27 @@ import { Note } from './parts'
 // renderer takes it out of the display mono face, because "comparison refused"
 // at 38px is a headline about our own bookkeeping.
 
+/**
+ * THE DISPLAY SLOT HOLDS ONE MAGNITUDE, NOT A WHOLE LEVEL.
+ *
+ * The three cards' 28px mono slot was holding a derived difference ("8.1 pts"),
+ * a raw count ("41,200") and a LEVEL ("912 of 4,147") side by side, at one
+ * size, so the cover's largest type did not read as one measure stated three
+ * times — it read as three unlike things a reader is invited to compare. A
+ * level is a figure AND its denominator, and the whole product sets that pair
+ * one way: the magnitude on top, the "of N" under it in mono at reading size
+ * (`FigureCell`, components/blocks/frame.tsx). This is that shape, at display
+ * scale, and rule (b) is unaffected — the pair is still one node and the
+ * denominator is still in it.
+ */
+function splitLevel(value: string): { head: string; of: string | null } {
+  const m = /^(.+?)\s+(of\s+.+)$/.exec(value)
+  return m ? { head: m[1], of: m[2] } : { head: value, of: null }
+}
+
 function StatCard({ stat, mode }: { stat: CoverStat; mode: RenderMode }) {
   const figure = stat.kind === 'figure'
+  const { head, of } = figure ? splitLevel(stat.value) : { head: stat.value, of: null }
   if (mode === 'email') {
     return (
       <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} border={0} style={{ borderCollapse: 'collapse', borderSpacing: 0, marginTop: 8 }}>
@@ -52,7 +71,10 @@ function StatCard({ stat, mode }: { stat: CoverStat; mode: RenderMode }) {
           <tr>
             <td style={{ border: `1px solid ${EMAIL.border}`, borderRadius: 6, padding: '12px 16px' }}>
               {figure ? (
-                <div data-copy="figure" style={{ fontFamily: FONT.mono, fontSize: 28, fontWeight: 500, lineHeight: 1, letterSpacing: '-.02em', color: EMAIL.ink }}>{stat.value}</div>
+                <div data-copy={of ? 'level' : 'figure'}>
+                  <span style={{ fontFamily: FONT.mono, fontSize: 28, fontWeight: 500, lineHeight: 1, letterSpacing: '-.02em', color: EMAIL.ink }}>{head}</span>
+                  {of ? <div style={{ marginTop: 3, fontFamily: FONT.mono, fontSize: 12, color: EMAIL.muted }}>{of}</div> : null}
+                </div>
               ) : (
                 <div style={{ fontFamily: FONT.sans, fontSize: 14, fontWeight: 600, color: EMAIL.ink2 }}>{stat.value}</div>
               )}
@@ -70,17 +92,31 @@ function StatCard({ stat, mode }: { stat: CoverStat; mode: RenderMode }) {
       </table>
     )
   }
+  // FIVE ROWS, ON EVERY CARD, WHETHER OR NOT IT HAS SOMETHING FOR ONE.
+  //
+  // The three cards ran to six lines, four and three, and every row below the
+  // first sat at a different height across the three — the value, then a badge
+  // on two of them, then a label of one or two lines, then a caption, then a
+  // second dated reading on one. The artboard's three sit on one line. So the
+  // rows are declared once and the cards share them: the badge row and the
+  // basis row hold their height where a card has nothing for them, and the
+  // label reserves the two lines the longest of the three takes.
   return (
-    <div className="flex min-w-0 flex-col rounded-md border border-border bg-tile px-5 py-4">
+    <div className="grid min-w-0 grid-rows-[auto_18px_auto_auto_auto] content-start rounded-md border border-border bg-tile px-5 py-4">
       {figure ? (
-        <span data-copy="figure" className="font-mono text-[28px] font-medium leading-none tracking-[-0.02em] tabular-nums">{stat.value}</span>
+        <span data-copy={of ? 'level' : 'figure'} className="flex flex-col">
+          <span className="font-mono text-[28px] font-medium leading-none tracking-[-0.02em] tabular-nums">{head}</span>
+          {of ? <span className="mt-0.5 font-mono text-[12px] tabular-nums text-muted-foreground">{of}</span> : null}
+        </span>
       ) : (
         <span className="text-[15px] font-semibold leading-tight text-secondary-foreground">{stat.value}</span>
       )}
-      {stat.verdict ? <span className="mt-1.5"><BlockMovement verdict={stat.verdict} unit="pts" mode={mode} /></span> : null}
-      <span className="mt-2 text-[12.5px] leading-[1.35] text-secondary-foreground">{stat.label}</span>
+      <span className="mt-1.5 flex items-start">
+        {stat.verdict ? <BlockMovement verdict={stat.verdict} unit="pts" mode={mode} /> : null}
+      </span>
+      <span className="mt-2 min-h-[34px] text-[12.5px] leading-[1.35] text-secondary-foreground">{stat.label}</span>
       <span className="mt-1 text-[11.5px] leading-[1.35] text-muted-foreground">{stat.caption}</span>
-      {stat.basis ? <span className="mt-0.5 text-[11.5px] leading-[1.35] text-muted-foreground">{stat.basis}</span> : null}
+      <span className="mt-0.5 text-[11.5px] leading-[1.35] text-muted-foreground">{stat.basis ?? ''}</span>
     </div>
   )
 }

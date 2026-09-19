@@ -645,6 +645,19 @@ describe('the artboard port (Block D wave 2)', () => {
     expect(t).toContain(forming.cover.stamp)
   })
 
+  it('qr.p1.stats · one magnitude in the display slot, its denominator under it', () => {
+    // The 28px mono slot held a derived difference ("8.1 pts"), a raw count
+    // ("41,200") and a LEVEL ("912 of 4,147") at one size, so the cover's
+    // largest type did not read as one measure stated three times. A level is
+    // set the way the whole product sets one: the magnitude, then the "of N"
+    // under it — and the PAIR is still the level node rule (b) reads.
+    const markup = render(QUARTERLY_BLOCKS['quarterly.cover'].render(data, 'print', ctx))
+    expect(markup).toMatch(/text-\[28px\][^>]*>912</)
+    expect(markup).toMatch(/data-copy="level"[\s\S]{0,400}of 4,147/)
+    expect(markup).not.toMatch(/text-\[28px\][^>]*>912 of 4,147</)
+    for (const mode of MODES) assertCopyContract(render(QUARTERLY_BLOCKS['quarterly.cover'].render(data, mode, ctx)))
+  })
+
   it('qr.p1.cover · one h1 per document, and one gutter', () => {
     // The share shell puts each block inside a card with its own padding and
     // under its own 30px `<h1>`; the print deck's `Slide` carries an `<h1>`
