@@ -130,8 +130,20 @@ export function QuarterlyCardTile({
                     <span className="w-[104px] flex-none">
                       <FigureCell value={fmtPct(pct, 1)} of={`${fmtInt(s.value.k)} of ${fmtInt(s.value.n)}`} align="right" />
                     </span>
+                    {/* `good="neutral"` — THE SERIES IS THE CATEGORY'S AND THE
+                        COLOURS ARE THE CLIENT'S. `CARD_AUDIENCE` is
+                        `INDUSTRY_AUDIENCE` and every row label ends "· the
+                        category", so with the prop's default (`'up'`) a rise
+                        in the wider category's attention printed in
+                        `--positive` — the token DESIGN.md reserves for "you,
+                        gaining" — and a fall would have printed red. That is a
+                        valence claim about somebody else's number.
+                        `movement.tsx` records that the prop was added because
+                        the leadership one-pager printed a rise in the
+                        category's attention to Price in red; this call site was
+                        never updated. */}
                     <span className="flex w-[132px] flex-none justify-end text-right">
-                      <BlockMovement verdict={verdict} unit="pts" />
+                      <BlockMovement verdict={verdict} unit="pts" good="neutral" />
                     </span>
                   </span>
                 </div>
