@@ -574,6 +574,21 @@ describe('the five sections that are Overview’s', () => {
     expect(text).toContain('Cotopaxi — nothing was raised under their content this month.')
   })
 
+  // AND THE VERDICTS ARE A COLUMN TOO (the wave-3 review, finding [Minor]).
+  // Right-aligned in an auto-width cell, both the composition AND the x
+  // changed row to row — Durability's verdicts began at x ≈ 176 and Price's at
+  // x ≈ 327 — so a row with no reading for your own side was indistinguishable
+  // from a row that is indented differently. Measured after: both begin at
+  // x = 341 at 640, and the column is a percentage, so on a phone it grows
+  // rather than painting over the row (scrollWidth 375, unchanged).
+  it('keeps every subject’s verdicts in one right-hand column', () => {
+    for (const data of STATES) {
+      const markup = render(MONTHLY_BLOCKS['monthly.subjects'].render(data, 'email', ctx))
+      expect(markup).not.toMatch(/<td align="right"[^>]*vertical-align:baseline/)
+      expect((markup.match(/<td width="48%"/g) ?? []).length).toBe(data.overview.subjects.rows.length)
+    }
+  })
+
   it('prints both sides of a subject as a column, each with its own "of N"', () => {
     const data = monthlyFixture()
     const text = renderText(MONTHLY_BLOCKS['monthly.subjects'].render(data, 'email', ctx))
