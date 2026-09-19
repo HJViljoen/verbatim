@@ -44,12 +44,30 @@ import type { Counted } from '@/lib/reading/verdicts'
  * `data-copy="level"` with the "of N" inside the SAME node, because rule (b)
  * reads a level node's whole text: a bare figure beside a denominator in a
  * sibling cell is exactly the failure the rule was written for.
+ *
+ * AND IT KEEPS THE ARTBOARD'S GREEN, WHICH IS THE THIRD DECISION. Refusing the
+ * tier chip (D11) and refusing the ladder word (above) were both about the
+ * WORD. What replaced them — `bg-inner` with `text-foreground` — was never
+ * decided as anything; it was what was left. The result: in ~1,200px of answer
+ * at 1440 the only saturated ink was one green "▲ 2.6 pts" and two numerals,
+ * and the counted pair — the page's entire argument — was the same grey as the
+ * "the month before" line under it. The eye landed instead on the amber
+ * inference pill in the judgement block, which is the one thing on the page
+ * explicitly NOT counted.
+ *
+ * So the chip takes the anchor the artboard gives it (`accent` /
+ * `accent-foreground`, 5.4:1 light and 7.6:1 dark) and keeps none of the claim:
+ * the artboard's green said "Strong evidence", and this says "130 of 1,388
+ * videos" — a counted pair, in the glossary's own example of a level, with no
+ * tier and no ladder anywhere near it. Green here is emphasis, not
+ * favourability: `MovementBadge` is the node that colours on an axis, and it
+ * is the one beside this.
  */
 export function FindingLevel({ value, noun = 'videos' }: { value: Counted; noun?: string }) {
   return (
     <span
       data-copy="level"
-      className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-inner px-2 py-px text-[12px] font-medium text-foreground tabular-nums"
+      className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-accent px-2 py-px text-[12px] font-medium text-accent-foreground tabular-nums"
     >
       {fmtInt(value.k)} of {fmtInt(value.n)} {noun}
     </span>
