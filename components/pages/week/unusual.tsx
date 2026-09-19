@@ -110,13 +110,21 @@ export const weekUnusual: Block<WeekData> = {
         question={weekUnusual.question}
         mode={mode}
         meta={headerMeta(u, data.windowVideos)}
-        // THE MOCK'S HAIRLINE FOOTER, with its right-hand note. The left-hand
-        // "See the 38 videos behind this →" has no destination in this product:
-        // a flag's object is a KIND or a THEME, and no route lists the videos
-        // behind one. The evidence a reader can actually open is on the flag's
-        // own quotes, which carry their citation links.
-        footerNote={u.state === 'flagged' && u.flaggedCount <= u.flags.length
-          ? 'nothing else was unusual this update'
+        // THE MOCK'S HAIRLINE FOOTER, WITH ITS NOTE ON THE LEFT (review W8).
+        // The artboard's left-hand "See the 38 videos behind this →" has no
+        // destination in this product: a flag's object is a KIND or a THEME,
+        // and no route lists the videos behind one (deviation 5). The
+        // evidence a reader can actually open is on the flag's own quotes,
+        // which carry their citation links.
+        //
+        // BUT THE NOTE WAS STILL ON THE RIGHT, so the page's most important
+        // tile ended on a hairline with two thirds of nothing under it —
+        // drawing the frame of a slot that will never be filled, which is
+        // what makes a deliberate omission read as a missing feature. The
+        // note takes the left-hand slot instead, in its own quiet face, and
+        // the footer reads as a footer rather than as half of one.
+        footer={u.state === 'flagged' && u.flaggedCount <= u.flags.length
+          ? <FooterNote mode={mode}>nothing else was unusual this update</FooterNote>
           : undefined}
       >
         {email ? <>{left}{right}</> : <TileColumns of={2}>{left}{right}</TileColumns>}
@@ -427,6 +435,15 @@ function Series({ series, mode, charted }: { series: UpdateSeries | null; mode: 
  *              are one body of small print and four paragraphs of it reads as
  *              four facts.
  */
+/** The footer's note, in the LEFT slot — so it keeps its quiet face rather
+ *  than taking the footer's own 12px/500 link styling. */
+function FooterNote({ mode, children }: { mode: 'app' | 'print' | 'email'; children: React.ReactNode }) {
+  if (mode === 'email') {
+    return <span style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted }}>{children}</span>
+  }
+  return <span className="font-mono text-[11px] font-normal text-muted-foreground">{children}</span>
+}
+
 function Line({ mode, rank = 'caveat', children }: { mode: 'app' | 'print' | 'email'; rank?: 'reading' | 'caveat'; children: React.ReactNode }) {
   const reading = rank === 'reading'
   if (mode === 'email') {

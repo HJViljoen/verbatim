@@ -348,6 +348,20 @@ describe('WK1 · unusual this week', () => {
   })
 })
 
+describe('§1’s footer (review W8)', () => {
+  it('puts its note in the LEFT slot, so the hairline is not two thirds empty', () => {
+    // Deviation 5 correctly refuses the artboard's "See the 38 videos behind
+    // this →" (no route lists them), but the footer rule was still drawn with
+    // only the right-hand note on it — the page's most important tile ending
+    // on a hairline with nothing under two thirds of it.
+    const markup = render(weekUnusual.render(weekFixture(), 'app', ctx))
+    expect(markup).toContain('nothing else was unusual this update')
+    // The left span carries it; the right-hand `footerNote` span is not drawn.
+    expect(markup).toContain('<span class="min-w-0"><span class="font-mono text-[11px] font-normal text-muted-foreground">nothing else was unusual this update')
+    expect(markup).not.toContain('shrink-0 font-mono text-[11px] font-normal text-muted-foreground">nothing else')
+  })
+})
+
 describe('the thirteen-point chart (Block D wave 2)', () => {
   it('ranks the lines under the chart instead of stacking eight of one size', () => {
     // REVIEW W7. Four lines under the chart and four down the right column,
