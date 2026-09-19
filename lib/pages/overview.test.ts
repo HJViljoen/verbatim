@@ -913,8 +913,13 @@ describe('rivalsLead', () => {
 
   it('counts the rivals that moved and names them — no magnitude, no direction', () => {
     const lead = rivalsLead([row('Freitag', v('moved')), row('Patagonia', v('no_clear_change'))]) as string
-    expect(lead).toContain('Freitag is the one rival whose share of attention moved beyond its band')
-    expect(lead).toContain('of 2 compared')
+    // THE COUNT LEADS (Block D wave 3, M26): it used to trail the finished
+    // sentence as a bare ", of 2 compared", which is not a clause anybody
+    // would say — and on a tenant tracking one rival it read "of 1 compared".
+    expect(lead).toBe(
+      'Of the 2 rivals compared, Freitag is the one whose share of attention moved beyond its band this month'
+      + ' \u2014 the change and the band are on each row.',
+    )
     // The mock's "took 3 points" and "slipped 2" are both refused: a magnitude
     // is printed by the badge with its band, and `slipped` is a direction word
     // no reader's flag earns.
@@ -923,13 +928,16 @@ describe('rivalsLead', () => {
 
   it('says so when nothing moved, and counts what was compared', () => {
     expect(rivalsLead([row('Freitag', v('no_clear_change')), row('Poler', v('no_clear_change'))]))
-      .toBe('No rival’s share of attention moved beyond its band this month, of 2 compared.')
+      .toBe('Of the 2 rivals compared, no rival’s share of attention moved beyond its band this month.')
+    // And a single compared rival is "the one rival", never "of 1 compared".
+    expect(rivalsLead([row('Freitag', v('no_clear_change'))]))
+      .toBe('Of the one rival compared, no rival’s share of attention moved beyond its band this month.')
   })
 
   it('tells "nothing moved" from "nothing could be compared"', () => {
     const lead = rivalsLead([row('Freitag', v('too_little_data')), row('Poler', v('refused', { refusedReason: 'tracking_change' }))]) as string
     expect(lead).toContain('could be compared')
-    expect(lead).not.toContain('moved beyond its band this month, of')
+    expect(lead).not.toContain('moved beyond its band this month')
   })
 
   it('says a rival is no longer tracked rather than naming it as a current one', () => {
@@ -939,12 +947,14 @@ describe('rivalsLead', () => {
     // or it claims a brand we stopped watching moved this month.
     const retired = { ...row('Poler', v('moved')), retiredAt: '2026-09-09' }
     const lead = rivalsLead([row('Freitag', v('no_clear_change')), retired]) as string
-    expect(lead).toContain('Poler (tracked until 9 Sep) is the one rival')
+    expect(lead).toContain('Poler (tracked until 9 Sep) is the one whose share of attention moved')
   })
 
   it('joins several names without an Oxford list of one', () => {
     const lead = rivalsLead([row('Freitag', v('moved')), row('Poler', v('moved')), row('Topo', v('moved'))]) as string
-    expect(lead).toContain('Freitag, Poler and Topo are the 3 rivals')
+    // AND THE PLURAL AGREES: three brands do not share one band (M26).
+    expect(lead).toContain('Freitag, Poler and Topo are the 3 whose shares of attention moved beyond their bands')
+    expect(lead).toContain('Of the 3 rivals compared,')
   })
 })
 

@@ -1175,9 +1175,20 @@ export function rivalsLead(rows: readonly RivalRow[]): string | null {
   if (answered.length === 0) {
     return `No rival\u2019s attention could be compared with the month before against its band; the ${rivals.length === 1 ? 'one row' : `${rivals.length} rows`} below say why.`
   }
+  // THE COUNT LEADS THE SENTENCE (Block D wave 3, M26). It used to trail it
+  // as ", of 1 compared — the change and the band are on each row.", which is
+  // a clause nobody would say: a bare "of N compared" hung off the end of a
+  // finished sentence, and on a tenant tracking one rival it read "of 1
+  // compared". Every fact is the same — a count with names, no magnitude and
+  // no direction word — and the population the count is of now stands before
+  // the claim it qualifies, which is where a reader needs it. This is the
+  // monthly email's only 15px lead sentence.
+  const compared = answered.length === 1
+    ? 'Of the one rival compared'
+    : `Of the ${answered.length} rivals compared`
   const moved = answered.filter((r) => (r.attentionVerdict as Verdict).state === 'moved')
   if (moved.length === 0) {
-    return `No rival\u2019s share of attention moved beyond its band this month, of ${answered.length} compared.`
+    return `${compared}, no rival\u2019s share of attention moved beyond its band this month.`
   }
   // A RETIRED RIVAL IS NAMED AS A RETIRED RIVAL. `buildStandings` deliberately
   // keeps a rival dropped from the tracked list on the table — its months are
@@ -1191,7 +1202,12 @@ export function rivalsLead(rows: readonly RivalRow[]): string | null {
     : names.length === 2
       ? `${names[0]} and ${names[1]}`
       : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
-  return `${who} ${names.length === 1 ? 'is the one rival' : `are the ${names.length} rivals`} whose share of attention moved beyond its band this month, of ${answered.length} compared \u2014 the change and the band are on each row.`
+  // AND THE PLURAL AGREES. "are the 2 rivals whose share of attention moved
+  // beyond ITS band" gave two brands one share and one band between them.
+  const claim = names.length === 1
+    ? `${who} is the one whose share of attention moved beyond its band this month`
+    : `${who} are the ${names.length} whose shares of attention moved beyond their bands this month`
+  return `${compared}, ${claim} \u2014 the change and the band are on each row.`
 }
 
 /**
