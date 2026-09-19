@@ -711,12 +711,17 @@ function Moves({ data }: { data: OverviewData }) {
   const over = m.readings.length - shown.length
   return (
     <div className="flex shrink-0 flex-col gap-2">
-      {/* The artboard's meta is four words ("you acted on 2 of 5 this
-          quarter") and `actedTally`'s sentence is twenty, because the twenty
-          are what make the ratio readable — it is the WHOLE ledger and not a
-          quarter (D12). The count goes in the eyebrow at the artboard's length
-          and the scoping sentence under the cards, so neither is truncated. */}
-      <Eyebrow meta={m.acted ? `acted on ${m.acted.decided} of ${m.acted.of}` : undefined}>Your moves</Eyebrow>
+      {/* THE RATIO IS PRINTED ONCE, WHERE IT IS SCOPED. The artboard's meta is
+          four words ("you acted on 2 of 5 this quarter") and `actedTally`'s
+          sentence is twenty, because the twenty are what make the ratio
+          readable — it is the WHOLE ledger and not a quarter (D12). Splitting
+          it put "1 of 64" in the eyebrow and "You have acted on 1 of 64 —
+          every piece of advice this product has ever given you." under the
+          cards, forty pixels apart in one column, with one line of prose
+          between them on the refused sheet: the same ratio twice, and the
+          eyebrow's half was the half with no scope on it. The artboard prints
+          it once, so the sentence keeps it. */}
+      <Eyebrow>Your moves</Eyebrow>
       {shown.length === 0 ? (
         <p className={BODY}>{m.empty ?? m.unlock}</p>
       ) : (

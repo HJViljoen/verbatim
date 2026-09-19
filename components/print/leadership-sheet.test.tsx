@@ -164,10 +164,14 @@ describe('the leadership one-pager', () => {
   // mock-gap §6 D12. The product refuses the quarter framing deliberately:
   // the decisions were not dated inside the quarter, so the ratio is the whole
   // ledger's and `actedTally` is the one sentence for it.
-  it('prints the whole-ledger acted-on ratio, never a quarter', () => {
+  it('prints the whole-ledger acted-on ratio, never a quarter, and prints it once', () => {
     const words = renderText(sheet())
     expect(words).toContain('every piece of advice this product has ever given you')
     expect(words).not.toContain('this quarter')
+    // The eyebrow carried the same ratio, unscoped, forty pixels above the
+    // sentence that scopes it. The artboard prints it once.
+    expect(words.match(/1 of 64/g) ?? []).toHaveLength(1)
+    expect(words).not.toContain('acted on 1 of 64 Push')
   })
 
   // The mock's change column carries a muted stand-alone "flat". It is not in
