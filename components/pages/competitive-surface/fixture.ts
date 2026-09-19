@@ -5,7 +5,7 @@ import {
   buildSaidAbout, competitiveUnlockRows, questionsEmpty,
   type CompetitiveSurfaceData,
 } from '@/lib/pages/competitive-surface'
-import { methodRecordFixture } from '@/lib/test/method-fixture'
+import { methodRecordFixture, recordBandFixture } from '@/lib/test/method-fixture'
 import { methodLines } from '@/lib/reading/method'
 import { claimEcho, rivalOwnClaims, type OwnPostInput } from '@/lib/reading/own-posts'
 import { buildHeadToHead, buildPlaybook, type PlaybookVideo } from '@/lib/pages/playbook'
@@ -47,8 +47,27 @@ const OSSUR_COVERAGE = [
   { audience: 'industry-other', videos: 388, comments: 10_534, platformMix: { tiktok: 195, youtube: 116, instagram: 77 }, dualMention: 0, excludedUndated: 12 },
 ]
 
-const ossurMethod = () =>
-  methodLines(methodRecordFixture({ coverage: OSSUR_COVERAGE }), { brand: 'Össur' })
+/**
+ * ONE RECORD BEHIND BOTH THE BAND AND THE FOOTNOTE.
+ *
+ * `ossurMethod()` overrode `coverage` only, so `language` stayed at the shared
+ * Sealand default (474 of 1,755 — 27%) while the page bar's `record.line` was
+ * hand-written and said 34%. Two answers to one question, 2,500px apart on one
+ * page; in production both halves derive from one `lang` record and cannot
+ * disagree, and `recordBandFixture`'s own docstring is about exactly this class
+ * of defect one layer up. The band is composed by `howSoundLine` from the same
+ * `RecordInputs` the footnote is composed from, so a fixture can no longer
+ * print a sentence the composer would not.
+ *
+ * The language record is Össur's own shape rather than Sealand's: the corpus
+ * this page reads is 2,359 analysed videos all-time, of which 1,755 have a
+ * known spoken language. Kept at the shared numbers because nothing here has
+ * measured Össur's, and a fixture that invents a figure is worse than one that
+ * reuses a shaped default — what it may not do is state two of them.
+ */
+const ossurRecord = () => methodRecordFixture({ coverage: OSSUR_COVERAGE })
+
+const ossurMethod = () => methodLines(ossurRecord(), { brand: 'Össur' })
 
 /** The degraded footnote, same tenant: no month-by-month coverage on record. */
 const ossurMethodRefused = () =>
@@ -387,11 +406,10 @@ export function competitiveFixture(over: Partial<CompetitiveSurfaceData> = {}): 
     // Read off the censuses above: accounts ARE configured for these rivals, so
     // CO4 no longer says nobody is watching them.
     unlocks: { rows: competitiveUnlockRows(ownClaimsFixture()) },
-    record: {
-      line: 'your 4th monthly reading · 2 updates · 449 videos · 34% of what was said on camera was not in English',
-      lines: ['2 updates delivered in this month.'],
-      href: '/dashboard/settings',
-    },
+    // COMPOSED, NOT WRITTEN (CO8). See `ossurRecord` above: the band and the
+    // method footnote are two readings of one record and may not state two
+    // language shares.
+    record: { ...recordBandFixture(ossurRecord()), href: '/dashboard/settings' },
     method: ossurMethod(),
     ...over,
   }
