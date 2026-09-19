@@ -1,7 +1,6 @@
 import { platformLabel } from '@/lib/format'
 import { glossaryRule } from '@/lib/calibration'
 import { EnhancedTable } from '@/components/shell/enhanced-table'
-import { LabelRow } from '@/components/settings/chrome'
 import type { TermSummary } from '@/lib/keywords/value'
 import { TERM_YIELD_BASIS, type TermYield } from '@/lib/settings/terms'
 
@@ -76,12 +75,24 @@ export function TermPerformance({ rows, updates, months = [] }: { rows: TermSumm
     ? 'Nothing to show yet — this fills in after your first update.'
     : `Pooled over your last ${updates} update${updates === 1 ? '' : 's'}. Found = posts the term surfaced · kept = the ones about your market · with comments = the ones worth reading · insights = findings they led to.${flagged > 0 ? ` ${flagged} term${flagged === 1 ? '' : 's'} worth a look.` : ''}`
 
-  // Inside the terms section rather than in a filled card of its own (the
-  // artboard port): the label gutter is the page's, so the record lines up
-  // under the lists it is the record OF.
+  // FULL WIDTH, NOT IN THE LABEL GUTTER (ST5). This sits inside the terms
+  // section, where every other row is laid out against the page's 172px label
+  // gutter — and the port put the record there too, which cost it that gutter
+  // plus the 24px gap and left its ten columns 716px of the 860 they declare
+  // at 1440, and 300 of 860 at 1024. "Worth reviewing" — the column the
+  // section's own meta points at ("1 term worth a look") — was the one cut off
+  // the edge, mid-word. A ten-column record is not a field beside a label; it
+  // takes the pane, and its own label sits over it on one baseline the way a
+  // section head does.
   return (
-    <LabelRow label="How they are doing" meta={`pooled over ${updates} update${updates === 1 ? '' : 's'}`}>
-      <p className="mb-2 text-[11.5px] text-muted-foreground">{description}</p>
+    <div className="flex min-w-0 flex-col gap-2">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+        <span className="shrink-0 text-[12.5px] font-medium">How they are doing</span>
+        <span className="min-w-0 font-mono text-[10.5px] text-muted-foreground">
+          pooled over {updates} update{updates === 1 ? '' : 's'}
+        </span>
+      </div>
+      <p className="text-[11.5px] text-muted-foreground">{description}</p>
       {rows.length === 0 ? (
         <p className="text-[12px] text-muted-foreground">
           We have not gathered anything yet, so no term has a record. Come back after your first update.
@@ -111,7 +122,7 @@ export function TermPerformance({ rows, updates, months = [] }: { rows: TermSumm
           </table>
         </EnhancedTable>
       )}
-      {rows.length > 0 && <p className="mt-2 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">{TERM_YIELD_BASIS}</p>}
-    </LabelRow>
+      {rows.length > 0 && <p className="font-mono text-[10.5px] leading-[1.4] text-muted-foreground">{TERM_YIELD_BASIS}</p>}
+    </div>
   )
 }
