@@ -170,12 +170,31 @@ export function MovementBadge({ verdict, unit, good = 'up' }: { verdict: Verdict
   // can produce it — so it reads as the thin answer rather than as a movement
   // with no number, which is the only safe way for it to be wrong.
   const word = verdict.state === 'moved' ? MOVEMENT_WORDS.too_little_data : MOVEMENT_WORDS[verdict.state]
-  // A REFUSAL SHOWS NO NUMBERS. `refused` is a break in our own bookkeeping —
-  // the figure exists and saying it moved would be a claim about the record,
-  // not about the conversation — so printing a change beside the word would be
-  // the claim the state exists to withhold.
-  const refused = verdict.state === 'refused'
-  return <NonAnswer word={word} title={why ?? inside} change={refused ? null : change} bandPts={refused ? null : bandPts} unit={unit} />
+  // A REFUSAL SHOWS NO NUMBERS, AND SO DOES A READING TOO THIN TO HAVE ONE.
+  // Two states withhold, for two reasons, and SH18's case for printing the
+  // change beside the word covers neither.
+  //
+  // `refused` is a break in our own bookkeeping — the figure exists and saying
+  // it moved would be a claim about the record, not about the conversation.
+  //
+  // `too_little_data` is the one SH18 let through and should not have. SH18's
+  // argument is that "a refusal a reader can check is a measurement", and that
+  // is true of `no_clear_change`: both sides cleared the n and k floors, the
+  // band is 2xSE of a real pair of proportions, and the change genuinely sits
+  // inside it. `too_little_data` is the opposite case by construction —
+  // `proportionDelta` (lib/report-bands.ts:60-70) sets it precisely when a side
+  // is BELOW those floors, and still returns the change it computed and a band
+  // that falls back to the `minBandPts` FLOOR when the SE is not finite. So
+  // `{nowPct:0.4, prevPct:5.0, nowK:5, prevK:64}` under SHARE_BAND printed
+  // "too few to compare - -4.6 pts - band +/-2 pts": a change ten times its
+  // band, beside the words that exist to withhold that reading, with a floor
+  // presented as a measured margin. With one side's n at 0 it printed
+  // "-27 pts - band +/-2 pts" off an infinite SE.
+  //
+  // The numbers stay in `title` for both, where they are an explanation and not
+  // a claim.
+  const withholds = verdict.state === 'refused' || verdict.state === 'too_little_data'
+  return <NonAnswer word={word} title={why ?? inside} change={withholds ? null : change} bandPts={withholds ? null : bandPts} unit={unit} />
 }
 
 /**

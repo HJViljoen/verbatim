@@ -79,8 +79,19 @@ describe('MovementBadge', () => {
     // compare" — the phrase GLOSSARY.change, the agent, the quarterly and the
     // overview note already used. Asserted against the table, so the day it
     // moves again it moves in one place.
-    expect(renderText(<MovementBadge verdict={{ state: 'too_little_data', change: 0, band: 2 }} />)).toBe(`${MOVEMENT_WORDS.too_little_data} · ±0 · band ±2`)
+    expect(renderText(<MovementBadge verdict={{ state: 'too_little_data', change: 0, band: 2 }} />)).toBe(MOVEMENT_WORDS.too_little_data)
     expect(MOVEMENT_WORDS.too_little_data).toBe('too few to compare')
+    // AND A THIN READING SHOWS NO NUMBERS EITHER. `proportionDelta` sets
+    // `too_little_data` exactly when a side is BELOW the n/k floors, and still
+    // returns the change it computed with a band that falls back to the
+    // `minBandPts` FLOOR when the SE is not finite. The two cases the reviewer
+    // measured, which SH18 printed and this does not:
+    expect(renderText(<MovementBadge verdict={{ state: 'too_little_data', change: -4.6, band: 2 }} unit="pts" />)).toBe('too few to compare')
+    expect(renderText(<MovementBadge verdict={{ state: 'too_little_data', change: -27, band: 2 }} unit="pts" />)).toBe('too few to compare')
+    // `no_clear_change` keeps its numbers: there BOTH sides cleared the floors,
+    // so the band is 2xSE of a real pair and the change really does sit inside
+    // it. That is the distinction SH18's argument actually rests on.
+    expect(renderText(<MovementBadge verdict={{ state: 'no_clear_change', change: -4.6, band: 5 }} unit="pts" />)).toBe('no clear change · −4.6 pts · band ±5 pts')
   })
 
   it('lets a non-answer WRAP rather than paint over the column beside it (SH2)', () => {
