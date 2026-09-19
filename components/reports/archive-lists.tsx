@@ -194,9 +194,20 @@ function ArchiveRow({ item, last }: { item: ArchiveItem; last: boolean }) {
             `readingLine` — "September 2026 (still filling) · read as at 12 Sep
             2026 · PDF" — and `truncate` cut it at "read as at…", which is the
             only place the READING date appears on that row. Two lines, then
-            clipped: the stamp beside it is one date and this is the other. */}
+            clipped: the stamp beside it is one date and this is the other.
+
+            AND TWO LINES IS NOT ENOUGH BELOW ~1100. The Built column is the
+            narrowest of the three (`0.75fr` of a 12-column tile) — about 320px
+            at a 1024 viewport — where that same string needs three lines, so
+            the clamp cut at "September 2026 (still filling) · read as at…" and
+            took the reading date with it. The `28 Sep` stamp beside it is the
+            BUILD date, a different fact, so the reading date was unrecoverable
+            from the row: the exact loss the clamp was added to prevent, one
+            breakpoint down from where it was measured. Three lines holds it at
+            every width the archive is drawn at, and a row is 48px high with
+            room for them. */}
         {item.meta && (
-          <span className={cn('line-clamp-2 font-mono text-[11px]', item.failed ? 'text-negative' : 'text-muted-foreground')}>
+          <span className={cn('line-clamp-3 font-mono text-[11px]', item.failed ? 'text-negative' : 'text-muted-foreground')}>
             {item.meta}
           </span>
         )}

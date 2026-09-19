@@ -108,6 +108,21 @@ describe('the archive', () => {
     expect(renderText(tile([column()]))).toContain('23 updates since 6 Apr 2026')
   })
 
+  // THE READING DATE SURVIVES THE NARROWEST COLUMN. A built row's meta is the
+  // whole `readingLine` plus the formats, and in the Built column (~320px at a
+  // 1024 viewport) that needs three lines — at two, the clamp cut at "read as
+  // at…" and the stamp beside it is the BUILD date, a different fact.
+  it('gives a built row’s meta the three lines it needs', () => {
+    const html = render(tile([column({
+      key: 'built',
+      label: 'Built',
+      meta: 'documents',
+      items: [{ id: 'b1', title: 'Sales brief', meta: 'September 2026 (still filling) · read as at 12 Sep 2026 · PDF, PNG', stamp: '28 Sep', href: '#', icon: 'file' }],
+    })]))
+    expect(html).toContain('line-clamp-3')
+    expect(html).not.toContain('line-clamp-2')
+  })
+
   it('marks the selected row rather than moving it', () => {
     const html = render(tile([column({ items: [{ id: 's1', title: 'Weekly report', stamp: '27 Sep', href: '#', active: true, icon: 'mail' }] })]))
     expect(html).toContain('aria-current="true"')
