@@ -282,6 +282,23 @@ function audiencePills(audiences: string, company: string) {
  * because the long one is sixty characters and printing it on all eleven
  * sheets put it three times on the method sheet alone.
  */
+/**
+ * The ONE mono line under a brief's name — "September 2026 · Sealand · as at
+ * 28 Sep", the artboard's own context line, in the artboard's own order.
+ *
+ * READ BY BOTH TITLE BLOCKS (wave 3, `sales`-4). The cover composed this and
+ * `SheetTitle` reached for `reading.stamp`, which is the SIXTY-character long
+ * form — "September 2026 reading as at 28 Sep 2026 · still filling until 30 Oct
+ * 2026" — so the marketing brief's first sheet wrapped its context onto two
+ * lines under a title the cover sets on one. They are the same block on the
+ * same artboard; they read the same function.
+ *
+ * The freeze boundary is not dropped, it rides `BriefFooter` on this sheet and
+ * on every other, which is where the artboard puts it too.
+ */
+const titleStamp = (data: DocumentSnapshotData): string =>
+  data.reading ? `${data.reading.monthLabel} · ${data.company} · as at ${shortDate(data.reading.readingAt)}` : data.period
+
 /** The footer's stamp: the artboard's short form where there is a reading, and
  *  nothing (so the render date stands) where there is not. */
 const footerStamp = (data: DocumentSnapshotData): string | null =>
@@ -327,7 +344,7 @@ function DocumentCover({ data, pages, contents, date }: {
     ? data.pages.find((p) => p.kind === 'in_short')?.blocks.find((b) => b.field === 'summary') ?? null
     : null
   const summaryText = summary?.text ?? ''
-  const stamp = data.reading ? `${data.reading.monthLabel} · ${data.company} · as at ${shortDate(data.reading.readingAt)}` : data.period
+  const stamp = titleStamp(data)
   return (
     // THE COVER SAYS SO. Three test files asked "is this the cover?" by
     // grepping the markup for the title's font-size, which made a type pass
@@ -533,18 +550,34 @@ export function corpusNote(data: DocumentSnapshotData): string | null {
   return [platforms.join(', '), corpus].filter(Boolean).join(' · ') || null
 }
 
-/** The brief's own title, on the first sheet of content rather than on a
- *  landscape sheet of its own (`mkt.p1.title`). The mono line under it is the
- *  artboard's context line: the month, the company, the reading instant and
- *  how much follows. */
+/**
+ * The brief's own title, on the first sheet of content rather than on a
+ * landscape sheet of its own (`mkt.p1.title`). The mono line under it is the
+ * artboard's context line: the month, the company, the reading instant and
+ * how much follows.
+ *
+ * AND IT IS THE SAME TITLE THE COVER SETS (wave 3, `sales`-4). This was 26px,
+ * on deviation 14's reason that 26 "sits between" the artboard's 58 and the
+ * build's old 32 — and splitting a difference is not a rule. The result was a
+ * first sheet whose own name was the FOURTH-largest thing on it: the three
+ * stat tiles down the right set their numerals at the artboard's 38px, so
+ * "11,840" printed 1.46x the size of the words "Marketing brief". The artboard
+ * draws this block and the sales cover's title block identically — the rule,
+ * the 58px name, the mono context line — and the ratio that follows from it
+ * (58 : 38) is what makes the sheet have a focal point at all. Sizes are the
+ * artboard's divided by .902, as everything in this file is: 64.5px prints 58,
+ * 14.5px prints 13, and the rule is 62 x 3 to print 56 x 3.
+ */
 function SheetTitle({ data, pages }: { data: DocumentSnapshotData; pages: number }) {
-  const stamp = data.reading?.stamp ?? data.period
+  const stamp = titleStamp(data)
   return (
-    <div className="flex flex-col gap-2">
-      <span className="inline-block h-[3px] w-14 rounded-full bg-primary" aria-hidden />
-      <h1 className="max-w-[24ch] text-[29px] font-semibold leading-[1.1] tracking-[-0.02em] text-foreground [text-wrap:balance]">{data.title}</h1>
-      <p className="font-mono text-[12px] text-muted-foreground">
-        {stamp} · {data.company} · {pages} {pages === 1 ? 'page' : 'pages'}
+    <div className="flex flex-col gap-[15.5px]">
+      <span className="inline-block h-[3px] w-[62px] rounded-full bg-primary" aria-hidden />
+      <h1 className="max-w-[16ch] text-[64.5px] font-semibold leading-[1.05] tracking-[-0.025em] text-foreground [text-wrap:balance]">{data.title}</h1>
+      {/* The company is inside `titleStamp` — it was appended here as well and
+          the line read "… · Sealand · as at 28 Sep · Sealand · 9 pages". */}
+      <p className="font-mono text-[14.5px] text-muted-foreground">
+        {stamp} · {pages} {pages === 1 ? 'page' : 'pages'}
       </p>
     </div>
   )
@@ -578,7 +611,11 @@ function OverviewPage({ page, data, title, pages }: { page: DocPage; data: Docum
   const onCover = coverCarriesSummary(data)
   return (
     <div className="grid h-full min-h-0 grid-cols-[7fr_5fr] gap-x-12">
-      <div className="flex min-h-0 flex-col gap-5">
+      {/* 15.5px BETWEEN THE FOUR PARTS, which prints the artboard's 14px
+          (`sales`-4). At 20px the column ran 594px inside a 563px body once the
+          title took the size the artboard draws it at, and the sentence the
+          sheet ends on — the calibration note — was the half that fell off. */}
+      <div className="flex min-h-0 flex-col gap-[15.5px]">
         {/* THE SHEET'S OWN TITLE, where the brief puts one here rather than on
             a cover (E-marketing); the eyebrow stands in its place where it
             does not. */}

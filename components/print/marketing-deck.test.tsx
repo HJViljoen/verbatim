@@ -68,6 +68,25 @@ describe('the sheets', () => {
     expect(text).toContain('The same subjects month by month, on the axis each side was read on.')
   })
 
+  // THE DOCUMENT'S NAME IS THE LARGEST THING ON ITS FIRST SHEET (wave 3,
+  // `sales`-4). It set at 26px beside stat numerals at 38 \u2014 its own name at
+  // .68 of a figure it prints three of. The artboard draws this block and the
+  // sales cover's title block identically, so they are now one set of sizes,
+  // and the mono line under it is the SHORT context, not the sixty-character
+  // reading stamp that wrapped it onto two lines.
+  it('sets the brief\u2019s name above every figure on the sheet', () => {
+    const html = render(<DocumentDeck data={marketingDeckFixture()} date="28 Sep 2026" />)
+    const first = html.split('<section class="vb-slide"')[1] ?? ''
+    expect(first).toContain('text-[64.5px]')
+    expect(first).toContain('font-mono text-[42px]')
+    // 64.5 and 42 print 58 and 38 under the body's .902 zoom \u2014 the artboard's
+    // own two numbers, and the ratio that gives the sheet a focal point.
+    expect(64.5 * 0.902).toBeCloseTo(58, 0)
+    expect(42 * 0.902).toBeCloseTo(38, 0)
+    expect(markupText(first)).toContain('September 2026 \u00b7 Sealand \u00b7 as at 28 Sep \u00b7 9 pages')
+    expect(markupText(first)).not.toContain('still filling until 30 Oct 2026 \u00b7 Sealand')
+  })
+
   // A SHEET NAMES ITSELF ONCE (wave 3, `sales`-2). `MARKETING_MAP` titles three
   // sheets with the words their leading block also prints through `BlockFrame`,
   // so each opened with an `<h1>`, a serif framing line and then a caps eyebrow
