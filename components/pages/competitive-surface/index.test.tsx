@@ -541,7 +541,12 @@ describe('CO4 · what they say about themselves', () => {
   it('draws three distinct absences and not one of them is a zero', () => {
     const text = renderText(competitiveOwnClaims.render(competitiveFixture(), 'app', ctx))
     // configured and silent …
-    expect(text).toContain('No post was published in this period')
+    // ONE CLOCK, ONE SENTENCE (CO16). `CENSUS_EMPTY` says "in this period" and
+    // then appends the clock label as a fragment after a dash — the same fact
+    // twice — and never says the thing that distinguishes this absence from
+    // the one below it: we READ their accounts.
+    expect(text).toContain('We read their accounts and found no posts published in September.')
+    expect(text).not.toContain('in this period')
     // … no account configured at all, with the owner and NO date (D14) …
     expect(text).toContain('No account is configured for this rival')
     expect(text).toContain(OWN_CLAIMS_OWNER)
