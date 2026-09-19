@@ -2,6 +2,7 @@
 
 import { useSearchParams } from 'next/navigation'
 import { DrawerLink } from '@/components/shell/drawer-link'
+import { useDialogFocus } from '@/components/shell/dialog-focus'
 import { Card, CardContent } from '@/components/ui/card'
 import { detailHref } from '@/lib/shell/bar'
 
@@ -41,6 +42,9 @@ export function HowSound({
   // refreshed or reached with Back, is a different reading.
   const open = detailHref(basePath, params, 'record')
   const close = detailHref(basePath, params, null)
+  // The same three promises as HowToRead's legend (SH20): this drawer is the
+  // other `aria-modal` overlay in the app and it opens the same way.
+  const dialog = useDialogFocus(isOpen, close)
   return (
     <>
       {/* The band wraps rather than truncates: at phone width the sentence
@@ -54,7 +58,7 @@ export function HowSound({
         </DrawerLink>
       </div>
       {isOpen && (
-        <div role="dialog" aria-modal="true" aria-label="The record" className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8">
+        <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="how-sound-title" tabIndex={-1} className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8">
           <DrawerLink href={close} aria-label="Close" className="absolute inset-0 bg-foreground/25">{''}</DrawerLink>
           <Card className="relative z-10 w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-tile-hover">
             <DrawerLink
@@ -66,7 +70,7 @@ export function HowSound({
             </DrawerLink>
             <CardContent className="pt-6">
               <div className="space-y-3 pr-6">
-                <h2 className="text-base font-semibold">How sound is this?</h2>
+                <h2 id="how-sound-title" className="text-base font-semibold">How sound is this?</h2>
                 <p className="text-sm text-muted-foreground">{line}</p>
                 {/* Unmarked on purpose: the copy contract's four kinds are
                     model prose, a code figure, a calibrated level and a

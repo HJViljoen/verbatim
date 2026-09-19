@@ -120,7 +120,7 @@ describe('WR1 · the week in one sentence', () => {
       expect(text, mode).toContain('Unusual this week · Objections')
       expect(text, mode).toContain('This week 14.1% 29 of 205')
       expect(text, mode).toContain('Three months behind 3.5% 38 of 1,089')
-      expect(text, mode).toMatch(/10\.7 pts · band 5/)
+      expect(text, mode).toMatch(/10\.7 pts · band ±5 pts/)
       expect(text, mode).toContain('counted against every audience together')
       expect(text, mode).not.toMatch(/×\s*usual/)
     }

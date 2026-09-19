@@ -194,7 +194,10 @@ describe('OV2, ported to the artboard', () => {
 
   it('puts the caveat in the footer note, not in the body', () => {
     const markup = render(overviewSubjects.render(overviewFixture(), 'app', ctx))
-    expect(markup).toContain('shrink-0 font-mono text-[11px] font-normal text-muted-foreground">Your side reads')
+    // `shrink-0` came off the slot in Block D wave 3 (SH5) — it was a clip
+    // with no signal inside an overflow-hidden Tile — so the assertion is on
+    // the slot's remaining signature rather than on the whole class string.
+    expect(markup).toContain('font-mono text-[11px] font-normal text-muted-foreground">Your side reads')
   })
 
   it('prints the refusal in the headline where the rival was renamed', () => {

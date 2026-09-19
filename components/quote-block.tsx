@@ -139,10 +139,16 @@ export function QuoteBlock({ quote, mode = 'app', cite }: QuoteBlockProps): Reac
               {english && (
                 <div data-copy="quote" style={{ fontFamily: FONT.serif, fontSize: 13, lineHeight: '1.45', color: EMAIL.muted, marginTop: 4 }}>{english}</div>
               )}
+              {/* `EMAIL.muted`, NOT `EMAIL.faint`, on the two lines below
+                  (Block D wave 3, SH10). #9AA0A6 is 2.64:1 on the card, and
+                  these are the translation label — "Afrikaans · machine
+                  translation", the one line telling a reader the English they
+                  just read is not what the commenter typed — and the cite,
+                  which is where a quote comes from. Both are apparatus. */}
               {label && (
-                <div style={{ fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.faint, marginTop: 3 }}>{label}</div>
+                <div style={{ fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.muted, marginTop: 3 }}>{label}</div>
               )}
-              {cite ? <div style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.faint, marginTop: 3 }}>{cite}</div> : null}
+              {cite ? <div style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted, marginTop: 3 }}>{cite}</div> : null}
             </td>
           </tr>
         </tbody>

@@ -127,7 +127,7 @@ describe('voiceMovers', () => {
 
   it('renders the one-mover month production is in without complaint', () => {
     const text = draw(refusedVoiceFixture())
-    expect(text).toContain('Admiration for personal resilience ▼ 5.1 pts · band 4 8.8% · 34 of 388 · Aug 13.9% of 402')
+    expect(text).toContain('Admiration for personal resilience ▼ 5.1 pts · band ±4 pts 8.8% · 34 of 388 · Aug 13.9% of 402')
     expect(text).not.toContain('Inside the band')
     // A minus under "a larger share than last month" is the one-axis failure
     // this block's header describes; the row is in the arm its verdict names.

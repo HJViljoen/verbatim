@@ -96,11 +96,23 @@ export function Tile({
       // (app/globals.css §Print mode) — the xl: span classes do not fire in
       // Chrome's print media, whose width is the page box.
       data-tile=""
+      // The hero's subtree takes the inverted tokens (app/globals.css
+      // `[data-tile][data-hero]`), so a block inside it does not have to know
+      // it is inside one.
+      data-hero={isHero ? '' : undefined}
       data-col={col}
       data-row={row}
       style={{ '--vb-span': col } as React.CSSProperties}
       className={cn(
-        'group/tile relative flex min-h-0 flex-col overflow-hidden rounded-lg bg-tile text-[12.5px] leading-[1.45] shadow-tile',
+        'group/tile relative flex min-h-0 flex-col overflow-hidden rounded-lg text-[12.5px] leading-[1.45] shadow-tile',
+        // THE HERO IS THE ONE INVERTED SURFACE (Block D wave 3, SH4).
+        // `Main.dc.html` §1 paints it #26292C with #ECEEF0 ink and the build
+        // gave every variant `bg-tile`, changing only gap and padding.
+        // Heinrich's ruling is that the artboard wins. The tile's own chrome
+        // inverts with the ground — an eyebrow at `secondary-foreground`
+        // (#45494D) on charcoal is unreadable — while the ink INSIDE the body
+        // is the calling page's to set.
+        isHero ? 'bg-hero text-hero-foreground' : 'bg-tile',
         COL[col] ?? 'xl:col-span-12',
         ROW[row] ?? 'xl:row-span-1',
         MIN_H[row] ?? 'min-h-[116px]',
@@ -113,14 +125,21 @@ export function Tile({
       )}
     >
       {!isStrip && (eyebrow || meta || exportKey) && (
-        <header className="relative flex items-baseline justify-between gap-2">
+        /* THE HEADER AND THE FOOTER WRAP (Block D wave 3, SH5). The meta was
+           `shrink-0 whitespace-nowrap` against a `truncate` eyebrow, so at 375
+           the Reports archive's 62-char delivery meta squeezed `THE ARCHIVE`
+           to ZERO WIDTH and the footer read "quotes carry" — with
+           `scrollWidth === clientWidth` in both cases, so the
+           no-horizontal-scroll check passed over a header with no title in it.
+           A slot that will not fit takes its own line instead. */
+        <header className="relative flex flex-wrap items-baseline justify-between gap-2">
           {eyebrow ? (
-            <h2 className="truncate text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">
+            <h2 className={cn('truncate text-[10.5px] font-semibold uppercase tracking-[0.06em]', isHero ? 'text-hero-foreground/75' : 'text-secondary-foreground')}>
               {eyebrow}
             </h2>
           ) : <span />}
           {meta && (
-            <span className={cn('shrink-0 whitespace-nowrap font-mono text-[11px] text-muted-foreground', exportKey && 'group-hover/tile:mr-6 group-focus-within/tile:mr-6')}>
+            <span className={cn('min-w-0 font-mono text-[11px]', isHero ? 'text-hero-foreground/70' : 'text-muted-foreground', exportKey && 'group-hover/tile:mr-6 group-focus-within/tile:mr-6')}>
               {meta}
             </span>
           )}
@@ -130,15 +149,19 @@ export function Tile({
         </header>
       )}
       {isHero && lead && (
-        <p className="line-clamp-3 font-serif text-[17px] font-medium leading-[1.35] tracking-[-0.005em] text-foreground [text-wrap:pretty]">{lead}</p>
+        <p className={cn('line-clamp-3 font-serif text-[17px] font-medium leading-[1.35] tracking-[-0.005em] [text-wrap:pretty]', isHero ? 'text-hero-foreground' : 'text-foreground')}>{lead}</p>
       )}
       {isStrip ? children : (
         <div className={cn('flex min-h-0 flex-1 flex-col gap-2.5', distribute === 'between' && 'justify-between', distribute === 'center' && 'justify-center', bodyClassName)}>{children}</div>
       )}
       {!isStrip && (footer || footerNote) && (
-        <footer className={cn('mt-auto flex items-center justify-between gap-2 border-t border-border/70 bg-tile pt-2 text-[12px] font-medium text-foreground', hoverable ? 'static' : 'relative z-[1]')}>
+        <footer className={cn(
+          'mt-auto flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-t pt-2 text-[12px] font-medium',
+          isHero ? 'border-hero-foreground/20 bg-hero text-hero-foreground' : 'border-border/70 bg-tile text-foreground',
+          hoverable ? 'static' : 'relative z-[1]',
+        )}>
           <span className="min-w-0 truncate [&_a:hover]:underline">{footer}</span>
-          {footerNote && <span className="shrink-0 font-mono text-[11px] font-normal text-muted-foreground">{footerNote}</span>}
+          {footerNote && <span className={cn('min-w-0 font-mono text-[11px] font-normal', isHero ? 'text-hero-foreground/70' : 'text-muted-foreground')}>{footerNote}</span>}
         </footer>
       )}
     </section>

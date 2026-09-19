@@ -77,7 +77,7 @@ describe('the measurement half', () => {
   it('prints the change and the band together', () => {
     // D2: a Verdict carries both or neither. The badge prints points only in
     // the `moved` state.
-    expect(text).toMatch(/▲ 2\.6 pts · band 2/)
+    expect(text).toMatch(/▲ 2\.6 pts · band ±2 pts/)
   })
 
   it('prints the direction word only where three readings earned one', () => {

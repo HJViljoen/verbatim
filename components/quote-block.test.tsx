@@ -116,7 +116,10 @@ describe('the email arm is painted from lib/email/theme', () => {
     expect(html).toContain(EMAIL.border)
     expect(html).toContain(EMAIL.ink)
     expect(html).toContain(EMAIL.muted)
-    expect(html).toContain(EMAIL.faint)
+    // `EMAIL.faint` (#9AA0A6, 2.64:1) came off the cite and the translation
+    // label in Block D wave 3 (SH10): a citation and a machine-translation
+    // disclosure are apparatus, not decoration.
+    expect(html).not.toContain(EMAIL.faint)
   })
 
   it('sets the speech in the theme serif and the metadata in the theme mono', () => {

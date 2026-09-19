@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CalendarLine } from './calendar-line'
+import { CalendarLine, niceTop } from './calendar-line'
 import { Sparkline } from './sparkline'
 import { render, markupText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
@@ -56,6 +56,52 @@ const chart = (extra: Partial<Parameters<typeof CalendarLine>[0]> = {}) =>
     ...extra,
   })
 
+describe('Sparkline, shared scales (SH22)', () => {
+  const rise: (number | null)[] = [18, 18.6, 19.2, 20]
+  const fall: (number | null)[] = [20, 19.2, 18.6, 18]
+
+  it('draws a rise and a fall at the same amplitude when each normalises to itself', () => {
+    // The defect, pinned: Durability's +3.2pts and Price's −3.1pts drew
+    // identically on Overview's subjects column.
+    const a = render(Sparkline({ values: rise }))
+    const b = render(Sparkline({ values: [40, 40.6, 41.2, 42] }))
+    const pts = (m: string) => (m.match(/points="([^"]+)"/) ?? [])[1]
+    expect(pts(a)).toBe(pts(b))
+  })
+
+  it('puts two rows on one scale when they are given one', () => {
+    const a = render(Sparkline({ values: rise, domain: [0, 50] }))
+    const b = render(Sparkline({ values: [40, 40.6, 41.2, 42], domain: [0, 50] }))
+    const pts = (m: string) => (m.match(/points="([^"]+)"/) ?? [])[1]
+    expect(pts(a)).not.toBe(pts(b))
+  })
+
+  it('reads a two-point rise as a two-point rise once the floor is zero', () => {
+    const own = render(Sparkline({ values: rise }))
+    const zeroed = render(Sparkline({ values: rise, zeroBase: true }))
+    const span = (m: string) => {
+      const ys = ((m.match(/points="([^"]+)"/) ?? [])[1] ?? '').split(' ').map((c) => Number(c.split(',')[1]))
+      return Math.max(...ys) - Math.min(...ys)
+    }
+    expect(span(zeroed)).toBeLessThan(span(own) / 4)
+  })
+
+  it('mirrors a fall against a rise on one scale, and draws its floor on request', () => {
+    const domain: [number, number] = [0, 25]
+    const up = render(Sparkline({ values: rise, domain }))
+    const down = render(Sparkline({ values: fall, domain }))
+    expect(up).not.toBe(down)
+    expect(render(Sparkline({ values: rise, domain, rule: true }))).toContain('stroke="var(--border)"')
+    expect(render(Sparkline({ values: rise, domain }))).not.toContain('stroke="var(--border)"')
+  })
+
+  it('clamps a value outside the given scale into the box rather than past it', () => {
+    const markup = render(Sparkline({ values: [5, 80], domain: [0, 20], height: 26 }))
+    const ys = ((markup.match(/points="([^"]+)"/) ?? [])[1] ?? '').split(' ').map((c) => Number(c.split(',')[1]))
+    for (const y of ys) expect(y).toBeGreaterThanOrEqual(3)
+  })
+})
+
 describe('CalendarLine', () => {
   it('renders without a React error and keeps the copy contract', () => {
     const markup = render(chart())
@@ -78,17 +124,33 @@ describe('CalendarLine', () => {
 
   it('puts the below-floor month in the gutter under the baseline, never on the line', () => {
     const markup = render(CalendarLine({ axis: AXIS, series: [you] }))
-    // The mock's April token: r=3.5, surface fill, ringed in the entity colour,
-    // at baseline + 6 = 186.
-    expect(markup).toContain('cy="186"')
+    // The mock's April token: r=3.5, surface fill, ringed in the entity
+    // colour. It sat at baseline + 6 = 186, which at print scale is ON the
+    // baseline; Block D wave 3 (SH14) moved it to baseline + 11 and gave it a
+    // dashed track of its own, so "off the scale" is visible before any word.
+    expect(markup).toContain('cy="191"')
     expect(markup).toContain('r="3.5"')
+    expect(markup).toContain('stroke-dasharray="1 3"')
     expect(markup).toContain('too few videos this month to read against')
   })
 
   it('gives the below-numerator month its own token, not the below-floor one', () => {
     const markup = render(CalendarLine({ axis: AXIS, series: [rival] }))
-    expect(markup).toContain('<rect x="310.6" y="183" width="6" height="6" fill="var(--tile)" stroke="var(--comp)"')
+    expect(markup).toContain('<rect x="310.6" y="188" width="6" height="6" fill="var(--tile)" stroke="var(--comp)"')
     expect(markup).toContain('too few of this one to read')
+  })
+
+  it('names a series that has no line, on the plot and not only in the key (SH14)', () => {
+    // On the marketing sheet a wholly below-floor series read as six months
+    // at zero: its only explanation was a 9.5px legend note three inches away,
+    // and where a caller turns the legend off there was none at all.
+    const floored: CalendarSeries = {
+      label: 'Sealand',
+      color: 'var(--you)',
+      points: AXIS.map((m) => p(m, null, 'below_floor', { n: 22 })),
+    }
+    const markup = render(CalendarLine({ axis: AXIS, series: [floored], legend: false }))
+    expect(markup).toContain('>Sealand<')
   })
 
   it('hovers with k of n on every read month, one column answering for every line', () => {
@@ -202,6 +264,78 @@ describe('CalendarLine', () => {
     }))
     const labels = markup.match(/text-anchor="middle"/g) ?? []
     expect(labels.length).toBeLessThanOrEqual(12)
+  })
+
+  it('sizes its type against the container, not against the viewBox (SH1)', () => {
+    // Every font-size is a viewBox unit, so a 880-unit drawing in a 352px
+    // column would print its 10-unit axis label at 4.0px. The correction is
+    // `--cal-k`, set by a container query in app/globals.css against the
+    // intrinsic width the chart publishes here.
+    const markup = render(chart())
+    expect(markup).toMatch(/--cal-w:\s*880/)
+    expect(markup).toContain('vb-cal')
+    // No raw font-size attribute survives: one that did would be the one label
+    // still shrinking with the box.
+    expect(markup).not.toMatch(/font-size="[0-9]/)
+    expect(markup).toMatch(/font-size:\s*calc\(10px \* var\(--cal-k, 1\)\)/)
+    // The end label carries a caller's string in a fixed gutter and is capped
+    // on its own variable rather than on --cal-k.
+    expect(markup).toMatch(/font-size:\s*calc\(11px \* var\(--cal-ke, 1\)\)/)
+  })
+
+  it('publishes the caller\'s own width as the correction base', () => {
+    const markup = render(chart({ width: 420 }))
+    expect(markup).toMatch(/--cal-w:\s*420/)
+  })
+
+  it('puts a round mark ABOVE the data, not two marks under it (SH13)', () => {
+    // Ask's finding 1: 5.1 / 6.8 / 9.4, so the axis read 0% and 5% while the
+    // line ended at 9.4% — both printed marks under the whole series, on the
+    // surface whose promise is a figure you can check.
+    const ask: CalendarSeries = {
+      label: 'Fit',
+      color: 'var(--you)',
+      points: [p('2026-07-01', 5.1), p('2026-08-01', 6.8), p('2026-09-01', 9.4)],
+    }
+    const markup = render(CalendarLine({ axis: monthAxis('2026-07-01', '2026-09-01'), series: [ask], format: (v) => `${v}%` }))
+    expect(markup).toContain('>10%<')
+  })
+
+  it('picks the top by the round numbers, never by max x 1.12', () => {
+    // The objection the two-label rule was written against: 49.3% on a 44%
+    // series. 44 x 1.12 = 49.28, and 45 is what fits inside it.
+    expect(niceTop(44, 49.28)).toBe(45)
+    expect(niceTop(9.4, 10.528)).toBe(10)
+    expect(niceTop(14, 15.68)).toBe(15)
+    // Nothing round fits: the chart keeps the two labels it had.
+    expect(niceTop(9.99, 9.995)).toBeNull()
+    expect(niceTop(0, 1)).toBeNull()
+    expect(niceTop(Number.NaN, 10)).toBeNull()
+  })
+
+  it('paints the filling month ONCE, however many series are filling (SH21)', () => {
+    // It was drawn inside SeriesMarks, so two filling series painted September
+    // twice below the lower point and once above — a false horizontal step
+    // landing on one series' end point, inside a shape whose only meaning is
+    // "this month is not finished".
+    const alsoFilling: CalendarSeries = {
+      label: 'Freitag',
+      color: 'var(--comp)',
+      points: AXIS.map((m, i) => p(m, 20 + i, m === '2026-09-01' ? 'filling' : 'read')),
+    }
+    const markup = render(CalendarLine({ axis: AXIS, series: [you, alsoFilling] }))
+    expect(markup.match(/Still filling/g) ?? []).toHaveLength(1)
+  })
+
+  it('keeps the filling bar inside the plot rather than half off its edge', () => {
+    // The filling month is by construction the last one, whose x IS the plot's
+    // right edge — on Voice, with the legend off, that read as a clipped band.
+    const markup = render(CalendarLine({ axis: AXIS, series: [you], legend: false }))
+    const bar = markup.match(/<rect x="([0-9.]+)" y="[0-9.]+" width="([0-9.]+)"[^>]*opacity="0.1"/)
+    expect(bar).not.toBeNull()
+    const [x, w] = [Number((bar as RegExpMatchArray)[1]), Number((bar as RegExpMatchArray)[2])]
+    // padR in viewBox terms is width - padR = 880 - 180 = 700.
+    expect(x + w).toBeLessThanOrEqual(700)
   })
 
   it('renders nothing rather than an empty box when there is no axis or no series', () => {

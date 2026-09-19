@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { Tile, TileBlock, StripCell, TileEmpty } from './tile'
-import { PageGrid, TileColumns } from './page-grid'
+import { PageBar, PageGrid, TileColumns } from './page-grid'
 
 // The grid's unit, tested at the level it is a promise: what a tile PRINTS.
 //
@@ -34,6 +34,26 @@ describe('Tile, variant="hero"', () => {
   it('takes the hero\'s own padding, not the default tile\'s', () => {
     expect(render(<Tile col={7} row={3} variant="hero" lead={LEAD} />)).toContain('px-5 py-4')
     expect(render(<Tile col={7} row={3}><p>body</p></Tile>)).toContain('px-4 py-3.5')
+  })
+
+  it('paints the artboard\'s charcoal ground, and inverts its own chrome with it (SH4)', () => {
+    const markup = render(<Tile col={7} row={3} variant="hero" eyebrow="In one sentence" meta="1,388 videos" lead={LEAD} footer="Open Subjects →" footerNote="all-time"><p>body</p></Tile>)
+    // Main.dc.html §1 is #26292C with #ECEEF0 ink; the build gave all three
+    // variants `bg-tile` and changed only gap and padding.
+    expect(markup).toContain('bg-hero')
+    expect(markup).toContain('text-hero-foreground')
+    expect(markup).not.toContain('bg-tile')
+    // An eyebrow at `secondary-foreground` (#45494D) on charcoal is unreadable,
+    // so the tile's own chrome turns with the ground.
+    expect(markup).not.toContain('text-secondary-foreground')
+    expect(markup).not.toContain('text-muted-foreground')
+  })
+
+  it('leaves every other variant on the white ground it always had', () => {
+    for (const markup of [render(<Tile col={5} row={2} eyebrow="x"><p>body</p></Tile>), render(<Tile col={12} row={1} variant="strip"><StripCell eyebrow="x">1</StripCell></Tile>)]) {
+      expect(markup).toContain('bg-tile')
+      expect(markup).not.toContain('bg-hero')
+    }
   })
 
   // The trap this test exists to mark: `lead` is a hero-only slot and every
@@ -79,6 +99,22 @@ describe('Tile chrome', () => {
     expect(words).toContain('1,221 rated')
     expect(words).toContain('Hear these voices')
     expect(words).toContain('all-time')
+  })
+
+  it('lets a slot that will not fit take its own line, rather than crushing the one beside it (SH5)', () => {
+    const markup = render(
+      <Tile col={4} row={2} eyebrow="THE ARCHIVE" meta="delivered every Monday · next on 5 Oct · 14 in the archive" footer="Open the archive →" footerNote="quotes carry their own links">
+        <p>body</p>
+      </Tile>,
+    )
+    // The meta was `shrink-0 whitespace-nowrap` against a `truncate` eyebrow,
+    // so at 375 the 62-char delivery meta squeezed `THE ARCHIVE` to zero width
+    // — with scrollWidth === clientWidth, so nothing flagged it.
+    expect(markup).not.toContain('shrink-0 whitespace-nowrap')
+    expect(markup.slice(0, markup.indexOf('</header>'))).toContain('flex-wrap')
+    const footer = markup.slice(markup.indexOf('<footer'))
+    expect(footer).toContain('flex-wrap')
+    expect(footer).not.toContain('shrink-0')
   })
 
   it('keeps its size when it is empty — the grid never collapses', () => {
@@ -134,10 +170,40 @@ describe('TileColumns', () => {
     expect(render(<TileColumns of={3}><div>a</div><div>b</div><div>c</div><div>d</div></TileColumns>)).toContain('nth-child(3n+1)')
   })
 
+  it('gives the last column a fixed width when the artboard sets one (SH15)', () => {
+    // Main.dc.html's hero is `1fr 400px`; `of={2}` could only say 584/584, and
+    // the artboard's hero sentence sets on one line where the build's wrapped.
+    const markup = render(<TileColumns of={2} rail={400}><div>reading</div><div>voices</div></TileColumns>)
+    expect(markup).toContain('xl:grid-cols-[minmax(0,1fr)_400px]')
+    expect(markup).not.toContain('xl:grid-cols-2')
+    // The rule between the columns survives the sizing.
+    expect(markup).toContain('nth-child(2n+1))]:border-l')
+    expect(render(<TileColumns of={2} rail={400} rule={false}><div>a</div><div>b</div></TileColumns>)).not.toContain('border-l')
+  })
+
+  it('leaves every caller that asks for no rail exactly as it was', () => {
+    expect(render(<TileColumns of={2}><div>a</div><div>b</div></TileColumns>)).toContain('xl:grid-cols-2')
+    // A three-column layout with one fixed side is a composition no artboard
+    // draws, so the rail is two-column only.
+    expect(render(<TileColumns of={3} rail={400}><div>a</div><div>b</div><div>c</div></TileColumns>)).toContain('xl:grid-cols-3')
+  })
+
   it('takes a caller class without losing its own', () => {
     const markup = render(<TileColumns of={2} className="items-start"><div>a</div><div>b</div></TileColumns>)
     expect(markup).toContain('items-start')
     expect(markup).toContain('xl:grid-cols-2')
+  })
+})
+
+describe('PageBar', () => {
+  it('wraps its context line instead of truncating it (SH17)', () => {
+    const markup = render(<PageBar title="This week" context="update of 13 Sep · previous 6 Sep · Össur · September 2026">x</PageBar>)
+    // It is the line that says what the page's numbers are OF, and `truncate`
+    // with no wrap fallback lost the other half of every comparison at 1024.
+    expect(markup).not.toContain('truncate')
+    expect(markup).toContain('flex-wrap')
+    // A bar that fits on one line is exactly what it was.
+    expect(markup).toContain('min-h-8')
   })
 })
 

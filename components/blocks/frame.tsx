@@ -149,7 +149,17 @@ export function BlockFrame({
       <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} border={0} style={{ borderCollapse: 'collapse', borderSpacing: 0, marginTop: 22 }}>
         <tbody>
           <tr>
-            <td style={{ padding: '0 0 6px' }}>
+            {/* A RULE ABOVE THE HEADER, NOT BELOW THE BODY (Block D wave 3,
+                SH11). The block's only hairline was on the FOOTER row, inside
+                the block, and sections were separated by `marginTop: 22`
+                alone — so the one rule on the artefact read as belonging to
+                "Open This week →" and the section boundary read as nothing at
+                all. Every artboard heads each section with a full-bleed
+                hairline, and that device is what makes a 6,500px scroll
+                legible as six sections rather than as one column of text. The
+                first section wears one too: under the masthead it is the line
+                that says the reading has started. */}
+            <td style={{ padding: '14px 0 6px', borderTop: `1px solid ${EMAIL.hairline}` }}>
               <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} border={0} style={{ borderCollapse: 'collapse', borderSpacing: 0 }}>
                 <tbody>
                   <tr>
@@ -172,11 +182,20 @@ export function BlockFrame({
                     >
                       {title}
                     </td>
-                    {meta ? <td align="right" style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.faint }}>{meta}</td> : null}
+                    {/* `EMAIL.muted`, NOT `EMAIL.faint` (Block D wave 3,
+                        SH10). `#9AA0A6` is 2.64:1 on the card, and what this
+                        slot holds is "2 named", "attention share", "Apr – Sep",
+                        "2 dated", "4 named" — a section's count is how a reader
+                        knows what the section is OF, which is apparatus and not
+                        decoration. `#6E7378` is already the hex this arm uses
+                        everywhere else. */}
+                    {meta ? <td align="right" style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted }}>{meta}</td> : null}
                   </tr>
                 </tbody>
               </table>
-              {question ? <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.muted, marginTop: 3 }}>{question}</div> : null}
+              {/* NO QUESTION ON PAPER OR IN AN INBOX (Block D wave 3, SH6).
+                  See the app arm below: counted across the seventeen
+                  artboards, every PRINTED one prints zero questions. */}
             </td>
           </tr>
           <tr><td>{children}</td></tr>
@@ -189,6 +208,12 @@ export function BlockFrame({
                 <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} border={0} style={{ borderCollapse: 'collapse', borderSpacing: 0 }}>
                   <tbody>
                     <tr>
+                      {/* `ink2` is the colour of the footer's own WORDS. The
+                          link inside it paints itself — `openLink`
+                          (components/blocks/open-link.tsx) is the one place
+                          the product's email link style is decided, and an
+                          `<a>` does not inherit either colour or underline
+                          from this cell in a mail client (SH24). */}
                       <td style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink2 }}>{footer}</td>
                       {footerNote ? <td align="right" style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted }}>{footerNote}</td> : null}
                     </tr>
@@ -229,12 +254,19 @@ export function BlockFrame({
           test on that string is updated with this reason. `heading` wins over
           `accent` where a caller passes both: a 20px heading with a 2px rule
           before it is neither of the two things the artboards draw. */}
+      {/* AND IT WRAPS RATHER THAN CRUSHES (Block D wave 3, SH5) — the rule the
+          FOOTER already follows, applied to the header. `meta` was
+          `flex-none whitespace-nowrap`, so at 768 Competitive's standings meta
+          (455px in a 472px pane) took its width out of the title, which wrapped
+          to three lines and was cut mid-phrase. With `flex-wrap` the meta
+          drops to its own line instead, and a header that already fits is
+          unchanged apart from the class. */}
       {header ? (
-      <header className={cn('flex gap-2', heading ? 'items-center justify-between gap-4' : 'items-baseline justify-between')}>
+      <header className={cn('flex flex-wrap gap-2', heading ? 'items-center justify-between gap-4' : 'items-baseline justify-between')}>
         {heading ? (
           <span className="flex min-w-0 items-baseline gap-2.5">
             <h2 className="m-0 whitespace-nowrap text-[20px] font-semibold tracking-[-0.01em] text-foreground">{title}</h2>
-            {meta ? <span className="flex-none whitespace-nowrap font-mono text-[11px] text-muted-foreground">{meta}</span> : null}
+            {meta ? <span className="min-w-0 font-mono text-[11px] text-muted-foreground">{meta}</span> : null}
           </span>
         ) : (
           <>
@@ -254,13 +286,24 @@ export function BlockFrame({
               {accent ? <span aria-hidden className="inline-block h-[2px] w-4 flex-none rounded-full bg-positive" /> : null}
               {title}
             </h2>
-            {meta ? <span className="flex-none whitespace-nowrap font-mono text-[11px] text-muted-foreground">{meta}</span> : null}
+            {meta ? <span className="min-w-0 font-mono text-[11px] text-muted-foreground">{meta}</span> : null}
           </>
         )}
         {actions ? <span className="flex flex-none items-center gap-2">{actions}</span> : null}
       </header>
       ) : null}
-      {header && question ? <p className={cn('m-0 text-muted-foreground', big ? 'text-[11.5px]' : 'text-[12.5px]')}>{question}</p> : null}
+      {/* THE QUESTION IS A SCREEN DEVICE (Block D wave 3, SH6). The docblock
+          above justified it as "the mock's own device — every artboard prints
+          one", and that is true of the artboards a reader SCROLLS: Ask prints
+          6, Competitive 7, This week 5, Voice 4. Counted on the printed ones
+          it is zero, every time — MarketingBrief, SalesBrief, ContentBrief,
+          LeadershipBrief, WeeklyReport, MonthlyReport and QuarterlyReview all
+          print none. A sheet has a title and a framing note above it and an
+          inbox has a subject line; the question is what orients a reader who
+          arrived at a tile with no preamble. So it is drawn in `app` alone,
+          and a page that wants one on paper says it in the block's own words.
+          The per-page app-mode calls it leaves standing are M8 and MK11. */}
+      {header && question && mode === 'app' ? <p className="m-0 text-[12.5px] text-muted-foreground">{question}</p> : null}
       {heading && lead ? (
         <p className="m-0 font-serif text-[17px] font-medium leading-[1.35] tracking-[-0.005em] text-foreground [text-wrap:pretty]">{lead}</p>
       ) : null}
@@ -276,7 +319,13 @@ export function BlockFrame({
               than wrap its link asks for that — `truncateFooter` — and every
               block that has not asked keeps the wrap it has always had. */}
           <span className={cn('min-w-0', truncateFooter && 'truncate')}>{footer}</span>
-          {footerNote ? <span className="shrink-0 font-mono text-[11px] font-normal text-muted-foreground">{footerNote}</span> : null}
+          {/* `shrink-0` inside an `overflow-hidden` Tile is a clip with no
+              signal: Overview's rivals note measures 825px against 768 and
+              lost its closing "41 did this month." — and `scrollWidth ===
+              clientWidth` throughout, so the no-horizontal-scroll check passed
+              over it. The footer already wraps; the note now wraps INSIDE its
+              line too. */}
+          {footerNote ? <span className="min-w-0 font-mono text-[11px] font-normal text-muted-foreground">{footerNote}</span> : null}
         </footer>
       ) : null}
     </section>
@@ -350,8 +399,24 @@ export function FigureCell({
   if (mode === 'email') {
     return (
       <div style={{ textAlign: right ? 'right' : 'left' }}>
-        <div data-copy="figure" style={{ fontFamily: big ? FONT.sans : FONT.mono, fontSize: big ? 17 : 13, fontWeight: 600, lineHeight: '1', letterSpacing: big ? '-.01em' : undefined, fontVariantNumeric: 'tabular-nums', color: EMAIL.ink }}>{value}</div>
-        {of ? <div data-copy="level" style={{ fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.muted, marginTop: big ? 3 : 2 }}>{of}</div> : null}
+        {/* THE SANS IN BOTH TIERS (Block D wave 3, SH12). E-monthly's
+            deviation 26 records why mono was dropped at 17px — every glyph
+            takes one advance, so "79.1%" sets as "79 . 1%" and the figure
+            reads as two numbers — and applied it to `lg` alone. The monthly
+            rivals row is `md`, and it is the one place on that artefact with a
+            decimal, so it printed exactly the thing the deviation was written
+            about. In an inbox it is worse than on the glass: a client that has
+            not loaded Plex Mono falls back to Courier, whose advance is wider
+            again. `tabular-nums` is what the mono was buying and it survives
+            in both tiers. The app arm keeps its mono, where the real face is
+            loaded and 13px is the artboards' dense-table size. */}
+        <div data-copy="figure" style={{ fontFamily: FONT.sans, fontSize: big ? 17 : 13, fontWeight: 600, lineHeight: '1', letterSpacing: big ? '-.01em' : undefined, fontVariantNumeric: 'tabular-nums', color: EMAIL.ink }}>{value}</div>
+        {/* AND THE DENOMINATOR DOES NOT BREAK. It carried no white-space rule,
+            so at 375 every rival row set "2,400 / of / 41,200" on three lines
+            — the exact share-and-denominator separation `movers.tsx` made the
+            trail points unbreakable to prevent. A level that loses its "of N"
+            to a line break has become a score. */}
+        {of ? <div data-copy="level" style={{ fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.muted, marginTop: big ? 3 : 2, whiteSpace: 'nowrap' }}>{of}</div> : null}
       </div>
     )
   }

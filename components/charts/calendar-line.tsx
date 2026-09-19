@@ -65,6 +65,38 @@ import {
 
 export type { CalendarBand, CalendarPoint, CalendarRule, CalendarSeries }
 
+/**
+ * THE TYPE DOES NOT SHRINK WITH THE CONTAINER (Block D wave 3, SH1).
+ *
+ * The drawing is a viewBox scaled uniformly to whatever box it is given, and
+ * every `fontSize` below is in VIEWBOX UNITS — so a 880-unit chart in a 352px
+ * column renders its 10-unit axis label at 4.0px, its dated-rule label at
+ * 3.6px and the end label's own figure at 4.4px. Measured across Overview's
+ * attention column (x0.40), Competitive's standings pane (x0.639 at 1440,
+ * x0.40 at 1024) and Subjects at 1024, where "Freitag 43.7% of 142" set at
+ * 5.8px with its "of 142" at 5.0px. A product whose rule is that a level
+ * without its "of N" is a score was printing the "of N" illegibly.
+ *
+ * NOTHING HERE CAN KNOW THE SCALE, so the correction is made in CSS, where the
+ * container's width is a fact: `app/globals.css` (.vb-cal) sets `--cal-k` from
+ * a container query against the intrinsic width this component publishes as
+ * `--cal-w`, and every font-size below is `calc(<n>px * var(--cal-k))`. At the
+ * chart's own size k is 1 and the drawing is byte-identical to what it was;
+ * in a half-width column k is about 2 and the 10-unit label comes out at
+ * roughly 10px on the glass either way.
+ *
+ * THE END LABEL IS CAPPED LOWER (`--cal-ke`, k clamped to 1.6). It is drawn
+ * OUTSIDE the plot, in the `padR` gutter, and unlike the axis furniture it has
+ * a string in it whose length is the caller's: growing it by 2.2 would run a
+ * theme's name past the viewBox. A caller whose column is too narrow for the
+ * gutter turns the labels off and prints the last reading underneath
+ * (`endLabels`), which is the mechanism that already exists for exactly this.
+ */
+/** Font size in viewBox units, corrected for the container's downscale. */
+const ts = (px: number) => ({ fontSize: `calc(${px}px * var(--cal-k, 1))` })
+/** The same, for the end label in the right gutter — clamped (see above). */
+const tsEnd = (px: number) => ({ fontSize: `calc(${px}px * var(--cal-ke, 1))` })
+
 /** How many dated rules can carry a printed date before the labels collide.
  *  Past it the rules are still drawn and still carry their `<title>`; only the
  *  printed tick label is dropped, because four overlapping 9px dates are less
@@ -77,6 +109,38 @@ const RULE_STROKE: Record<CalendarRule['kind'], { stroke: string; dash: string; 
   renamed: { stroke: 'var(--border)', dash: '2 3', opacity: 1 },
   // The second token: inferred, not recorded.
   reconstructed: { stroke: 'var(--muted-foreground)', dash: '1 4', opacity: 0.5 },
+}
+
+/**
+ * THE TOP OF THE SCALE, AT A ROUND NUMBER (Block D wave 3, SH13).
+ *
+ * The chart labelled `lo` and `mid` only, and `mid` is the midpoint of a scale
+ * whose top carries 12% headroom — so on Ask's finding 1 (5.1 / 6.8 / 9.4) the
+ * axis read 0% and 5% while the line ended at 9.4%, and on finding 2
+ * (13.8 / 14 / 14) it read 0% and 8% with the line at 14%. BOTH printed marks
+ * lay under the whole series: on the surface whose promise is a figure you can
+ * check, there was nothing above the data to check it against.
+ *
+ * The old docblock's two objections to a third label are both answered rather
+ * than overruled. It is NOT `scale.hi` — `max × 1.12` is an arithmetic
+ * accident and would print 49.3% on a 44% series — but the largest ROUND value
+ * that still fits inside the headroom and is not below the data: 10 for a 9.4
+ * series, 15 for a 14, 45 for a 44. And it is not "printed at a height where
+ * no rule is drawn to anchor it": it draws its own rule, like the baseline and
+ * the midline. Where no round value fits, it returns null and the chart keeps
+ * the two labels it had.
+ */
+export function niceTop(max: number, hi: number): number | null {
+  if (!Number.isFinite(max) || !Number.isFinite(hi) || hi <= max || max <= 0) return null
+  const magnitude = 10 ** Math.floor(Math.log10(hi))
+  for (const step of [magnitude, magnitude / 2, magnitude / 4, magnitude / 5, magnitude / 10]) {
+    if (step <= 0) continue
+    const top = Math.ceil((max / step) - 1e-9) * step
+    // Rounded back through the step, so 32.500000000000004 prints as 32.5.
+    const value = Math.round(top * 1e6) / 1e6
+    if (value >= max && value <= hi) return value
+  }
+  return null
 }
 
 export function CalendarLine({
@@ -142,7 +206,22 @@ export function CalendarLine({
   if (!months.length || !series.length) return null
 
   const g = calendarGeometry({ axis: months, width, height, padL, padR })
+  // Five units lower than `calendarGeometry`'s own gutterY, which puts a 3.5r
+  // ring's top edge ON the baseline (SH14). The month labels sit at
+  // `g.labelY`, 23 units under the baseline, so there is room.
+  const gutterY = g.gutterY + 5
   const scale = valueScale(series, { zeroBase, top: g.top, baseline: g.baseline })
+  // The same values `valueScale` measures its top from.
+  const plotted: number[] = []
+  for (const sr of series) for (const pt of sr.points) {
+    if (pt.value != null) plotted.push(pt.value)
+    if (pt.atLastMonth != null) plotted.push(pt.atLastMonth)
+  }
+  const topLabel = plotted.length ? niceTop(Math.max(...plotted), scale.hi) : null
+  // A top that lands on the midline, or too close to the plot's own ceiling to
+  // carry a label, is not a third mark — it is the second one drawn twice.
+  const topY = topLabel == null ? null : scale.y(topLabel)
+  const drawTop = topLabel != null && topY != null && topY <= scale.y(scale.mid) - 12 && topY >= g.top + 2
   const drawn = collapseRules(months, rules)
   const uid = id ?? chartId([...series.map((s) => s.label), months[0], months[months.length - 1]])
   const hatch = `${uid}-back`
@@ -186,7 +265,7 @@ export function CalendarLine({
   }
 
   return (
-    <div className={cn('flex min-w-0 flex-col gap-2', className)}>
+    <div className={cn('vb-cal flex min-w-0 flex-col gap-2', className)} style={{ '--cal-w': String(width) } as React.CSSProperties}>
       {showLegend && (
         <div className="flex flex-wrap gap-x-4 gap-y-1">
           {series.map((s) => {
@@ -256,18 +335,46 @@ export function CalendarLine({
           return span ? bandRect(span, `band${i}`, `url(#${hatch})`, b.label) : null
         })}
 
+        <FillingBars months={months} series={series} geometry={g} y={scale.y} />
+
         <line x1={g.padL} y1={g.baseline} x2={g.padR} y2={g.baseline} stroke="var(--border)" strokeWidth={1} />
+        {/* THE GUTTER IS ITS OWN TRACK (Block D wave 3, SH14). A below-floor
+            month is a mark 6 units under the baseline, which at print scale is
+            ON the baseline: on the marketing sheet Sealand's six months read as
+            six hollow rings sitting at 0%, three inches under a table row
+            saying "31% · 26 of 84". The docblock argued the legend key
+            prevents that read; on paper there is no hover and the key is 9.5px
+            at the other end of the sheet, and it does not. So the marks move
+            down to a dashed rule of their own, which says "off the scale"
+            before any word does — the one thing a reader must take from them
+            is that nothing here is a reading. */}
+        {states.some((st) => st === 'below_floor' || st === 'below_numerator') ? (
+          <line x1={g.padL} y1={gutterY} x2={g.padR} y2={gutterY} stroke="var(--border)" strokeWidth={1} strokeDasharray="1 3" />
+        ) : null}
         <line x1={g.padL} y1={scale.y(scale.mid)} x2={g.padR} y2={scale.y(scale.mid)} stroke="var(--muted)" strokeWidth={1} />
-        {/* TWO Y LABELS, NOT THREE — the spec (§3.9) over the artboard, settled
-            here so WP11 does not have to. The mock's Subjects board also prints
-            the top of its scale ("50"), and it can: its data is invented and
-            tops out at a round number. This scale's top is `max × 1.12`, the
-            headroom an end label sits in, so the third label would read 49.3%
-            on a 44% series — an arithmetic accident, printed at a height where
-            no rule is drawn to anchor it. The baseline and the midline both
-            have a line under them; the top does not. */}
-        <text data-copy="figure" x={g.padL - 10} y={g.baseline + 3} textAnchor="end" fontSize={10} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">{format(scale.lo)}</text>
-        <text data-copy="figure" x={g.padL - 10} y={scale.y(scale.mid) + 3} textAnchor="end" fontSize={10} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">{format(scale.mid)}</text>
+        {/* TWO Y LABELS AND, WHERE ONE FITS, A THIRD (Block D wave 3, SH13 —
+            it was two, and the reason is kept below because the amendment
+            answers it rather than overruling it). The objection to a third was
+            that this scale's top is `max × 1.12`, the headroom an end label
+            sits in, so the label would read 49.3% on a 44% series — an
+            arithmetic accident, printed at a height where no rule is drawn to
+            anchor it. Both halves are met by `niceTop`: the value is the
+            largest ROUND number inside that headroom, and it draws its own
+            rule. What made the amendment necessary is that BOTH printed marks
+            could lie under the whole series — Ask's finding 1 read 0% and 5%
+            with the line ending at 9.4%. The mock's Subjects board prints the
+            top of its scale ("50") and was right to. */}
+        <text data-copy="figure" x={g.padL - 10} y={g.baseline + 3} textAnchor="end" style={ts(10)} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">{format(scale.lo)}</text>
+        <text data-copy="figure" x={g.padL - 10} y={scale.y(scale.mid) + 3} textAnchor="end" style={ts(10)} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">{format(scale.mid)}</text>
+        {/* AND THE TOP, WHERE A ROUND ONE FITS (SH13, see `niceTop`). With its
+            own rule, because a number printed at a height nothing is drawn at
+            is the objection the two-label rule was written against. */}
+        {drawTop && topY != null && topLabel != null ? (
+          <>
+            <line x1={g.padL} y1={topY} x2={g.padR} y2={topY} stroke="var(--muted)" strokeWidth={1} />
+            <text data-copy="figure" x={g.padL - 10} y={topY + 3} textAnchor="end" style={ts(10)} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">{format(topLabel)}</text>
+          </>
+        ) : null}
 
         {/* Dated rules. */}
         {drawn.map((r, i) => {
@@ -280,7 +387,7 @@ export function CalendarLine({
                 <title>{r.label}</title>
               </line>
               {printRuleLabels && (
-                <text x={x - 3} y={g.top} textAnchor="end" fontSize={9} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">
+                <text x={x - 3} y={g.top} textAnchor="end" style={ts(9)} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">
                   {r.at ? shortDate(r.at) : monthName(r.month)}
                 </text>
               )}
@@ -296,6 +403,7 @@ export function CalendarLine({
             y={scale.y}
             format={format}
             padR={g.padR}
+            gutterY={gutterY}
             labelY={labelYs[i]}
             endLabel={endLabels}
           />
@@ -320,7 +428,7 @@ export function CalendarLine({
           return (
             <g>
               <line x1={x} y1={y1 + 4} x2={x} y2={y2 - 4} stroke="var(--cat)" strokeWidth={1} strokeDasharray="3 3" />
-              <text data-copy="figure" x={x - 10} y={(y1 + y2) / 2 + 3} textAnchor="end" fontSize={10} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">
+              <text data-copy="figure" x={x - 10} y={(y1 + y2) / 2 + 3} textAnchor="end" style={ts(10)} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">
                 {annotate.label}
               </text>
             </g>
@@ -335,7 +443,7 @@ export function CalendarLine({
               x={g.xAt(i)}
               y={g.labelY}
               textAnchor="middle"
-              fontSize={10}
+              style={ts(10)}
               fontFamily="var(--font-plex-mono), monospace"
               fill={read.has(m) ? 'var(--muted-foreground)' : 'var(--border)'}
             >
@@ -378,13 +486,16 @@ export function CalendarLine({
 /** One series: its segments, its points, its gutter marks, its filling bar and
  *  its end label. Split out so the chart body reads as a list of layers. */
 function SeriesMarks({
-  series, geometry: g, y, format, padR, labelY = null, endLabel = true,
+  series, geometry: g, y, format, padR, gutterY, labelY = null, endLabel = true,
 }: {
   series: CalendarSeries
   geometry: ReturnType<typeof calendarGeometry>
   y: (v: number) => number
   format: (v: number) => string
   padR: number
+  /** The gutter's own track, below the baseline (SH14) — the chart's, not
+   *  `calendarGeometry`'s, so every series marks the same line. */
+  gutterY: number
   /** Where the end label sits, de-collided against the other series by the
    *  chart (`spreadLabels`). Falls back to the point's own y. */
   labelY?: number | null
@@ -396,6 +507,7 @@ function SeriesMarks({
   const runs = lineSegments(points)
   const at = (p: CalendarPoint): number | null => g.x(p.month)
   const lastPlotted = runs.length ? runs[runs.length - 1][runs[runs.length - 1].length - 1] : null
+  const undrawn = undrawnNote(series)
   const end = lastPlotted != null ? points[lastPlotted] : null
   const endX = end ? at(end) : null
 
@@ -430,11 +542,11 @@ function SeriesMarks({
           // hollow month is the gap itself, and its column still answers.
           return (
             <g key={`m${i}`}>
-              {p.state === 'below_floor' && (
-                <circle cx={x} cy={g.gutterY} r={3.5} fill="var(--tile)" stroke={series.color} strokeWidth={1.5} />
+                {p.state === 'below_floor' && (
+                <circle cx={x} cy={gutterY} r={3.5} fill="var(--tile)" stroke={series.color} strokeWidth={1.5} />
               )}
               {p.state === 'below_numerator' && (
-                <rect x={x - 3} y={g.gutterY - 3} width={6} height={6} fill="var(--tile)" stroke={series.color} strokeWidth={1.5} />
+                <rect x={x - 3} y={gutterY - 3} width={6} height={6} fill="var(--tile)" stroke={series.color} strokeWidth={1.5} />
               )}
             </g>
           )
@@ -442,19 +554,33 @@ function SeriesMarks({
         const isEnd = i === lastPlotted
         return (
           <g key={`m${i}`}>
-            {p.state === 'filling' && (
-              <FillingBar x={x} value={p.value} atLastMonth={p.atLastMonth ?? null} y={y} baseline={g.baseline} slot={g.slot} format={format} padR={padR} />
+            {/* THE BAR IS THE CHART'S, NOT THE SERIES' (Block D wave 3,
+                SH21) — see `FillingBars`. The tick is the series': "what this
+                same month read at this point last month" is a reading, and two
+                series filling together have two of them. */}
+            {p.state === 'filling' && p.atLastMonth != null && (
+              <LastMonthTick x={x} atLastMonth={p.atLastMonth} y={y} slot={g.slot} format={format} padR={padR} />
             )}
             <circle cx={x} cy={y(p.value)} r={isEnd ? 3.4 : 2.2} fill={series.color} stroke="var(--tile)" strokeWidth={isEnd ? 1.5 : 1} />
           </g>
         )
       })}
 
+      {/* A SERIES WITH NO LINE SAYS SO ON THE PLOT (Block D wave 3, SH14).
+          Its only explanation was the legend key — 9.5px, at the other end of
+          a printed sheet, and absent entirely where a caller turned the legend
+          off — so a row of hollow rings under the zero rule read as six months
+          at zero. The words are `undrawnNote`'s, the same ones the key uses. */}
+      {endLabel && !end && undrawn ? (
+        <text x={padR + 10} y={gutterY + 3} style={tsEnd(9.5)} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">
+          {series.label}
+        </text>
+      ) : null}
       {endLabel && end && endX != null && end.value != null && (
-        <text x={padR + 10} y={labelY ?? y(end.value) + 4} fontSize={11} fontWeight={600} fontFamily="var(--font-plex-sans), sans-serif" fill="var(--foreground)">
+        <text x={padR + 10} y={labelY ?? y(end.value) + 4} style={tsEnd(11)} fontWeight={600} fontFamily="var(--font-plex-sans), sans-serif" fill="var(--foreground)">
           {series.labelSlot ? <tspan data-copy="subject" data-slot={series.labelSlot}>{series.label}</tspan> : series.label}{' '}
           <tspan data-copy="figure" fontFamily="var(--font-plex-mono), monospace" fontWeight={500}>{format(end.value)}</tspan>
-          {series.endNote ? <tspan data-copy="figure" fontFamily="var(--font-plex-mono), monospace" fontWeight={400} fontSize={9.5} fill="var(--muted-foreground)"> {series.endNote}</tspan> : null}
+          {series.endNote ? <tspan data-copy="figure" fontFamily="var(--font-plex-mono), monospace" fontWeight={400} style={tsEnd(9.5)} fill="var(--muted-foreground)"> {series.endNote}</tspan> : null}
         </text>
       )}
     </g>
@@ -462,9 +588,9 @@ function SeriesMarks({
 }
 
 /**
- * The still-filling month: a part-height bar under its point, and — where the
- * caller actually computed it — a tick at what the same month read at this
- * point last month.
+ * The still-filling month: a part-height bar under the newest reading, and —
+ * where the caller actually computed it — a tick at what the same month read
+ * at this point last month.
  *
  * The bar is the affordance item 6 asks for and §3.9 forbids ("no filled
  * areas"); it is part of the amendment. It is the ONE filled shape on the
@@ -474,53 +600,93 @@ function SeriesMarks({
  * entity's own colour, so on a chart where a rival held the only visible point
  * the newest month rendered as a solid peach column running the full plot
  * height — the loudest coloured shape on the page, encoding "incomplete" and
- * reading as the rival's ink. Two series filling in the same month drew two
- * overlapping colours for one fact. It takes the neutral token every other
- * piece of furniture on this chart takes (the dated rules, the midline), so
- * the coloured inks on the plot belong to the data alone.
+ * reading as the rival's ink. It takes the neutral token every other piece of
+ * furniture on this chart takes (the dated rules, the midline), so the
+ * coloured inks on the plot belong to the data alone.
+ *
+ * SO IT IS PAINTED ONCE PER MONTH, NOT ONCE PER SERIES (Block D wave 3,
+ * SH21). It was drawn inside `SeriesMarks`, so two filling series painted the
+ * September column TWICE below the lower of the two points and once above:
+ * sampled RGB (240,241,241) above y≈690 and (226,228,228) below, a false
+ * horizontal step landing exactly on one category's end point, inside a shape
+ * whose only meaning is "this month is not finished". One bar per month, from
+ * the HIGHEST filling reading down to the baseline, is the whole of what the
+ * shape has to say.
+ *
+ * AND IT IS CLAMPED INSIDE THE PLOT. The filling month is by construction the
+ * last one, whose x IS the plot's right edge, so half the bar hung outside it
+ * — which on Voice, where the caller turns the legend off, read as a clipped
+ * band rather than as a column. It is pulled in by its own half-width.
  */
 const FILLING_INK = 'var(--muted-foreground)'
 
-function FillingBar({
-  x, value, atLastMonth, y, baseline, slot, format, padR,
+function FillingBars({
+  months, series, geometry: g, y,
+}: {
+  months: readonly string[]
+  series: readonly CalendarSeries[]
+  geometry: ReturnType<typeof calendarGeometry>
+  y: (v: number) => number
+}) {
+  const tops = new Map<number, number>()
+  for (const s of series) {
+    for (const p of s.points) {
+      if (p.state !== 'filling' || p.value == null) continue
+      const i = months.indexOf(p.month)
+      if (i < 0) continue
+      const top = y(p.value)
+      const held = tops.get(i)
+      if (held == null || top < held) tops.set(i, top)
+    }
+  }
+  if (tops.size === 0) return null
+  const w = Math.max(6, Math.min(18, g.slot * 0.36))
+  return (
+    <g>
+      {[...tops].map(([i, top]) => {
+        const x = Math.min(Math.max(g.xAt(i), g.padL + w / 2), g.padR - w / 2)
+        return (
+          <rect key={`fill${i}`} x={x - w / 2} y={top} width={w} height={Math.max(0, g.baseline - top)} fill={FILLING_INK} opacity={0.1}>
+            <title>Still filling — this month is still taking comments</title>
+          </rect>
+        )
+      })}
+    </g>
+  )
+}
+
+/** What the same month read at this point LAST month — a reading, so it stays
+ *  with its series. */
+function LastMonthTick({
+  x, atLastMonth, y, slot, format, padR,
 }: {
   x: number
-  value: number
-  atLastMonth: number | null
+  atLastMonth: number
   y: (v: number) => number
-  baseline: number
   slot: number
   format: (v: number) => string
   padR: number
 }) {
   const w = Math.max(6, Math.min(18, slot * 0.36))
-  const top = y(value)
   return (
     <g>
-      <rect x={x - w / 2} y={top} width={w} height={Math.max(0, baseline - top)} fill={FILLING_INK} opacity={0.1}>
-        <title>Still filling — this month is still taking comments</title>
-      </rect>
-      {atLastMonth != null && (
-        <g>
-          <line x1={x - w} y1={y(atLastMonth)} x2={x + w} y2={y(atLastMonth)} stroke="var(--muted-foreground)" strokeWidth={1} strokeDasharray="3 2">
-            <title>{`At this point last month: ${format(atLastMonth)}`}</title>
-          </line>
-          {/* The filling month is the LAST one, so the label usually has no
-              room to its right and goes to the left of the bar instead — and it
-              sits BELOW the tick, because the tick is by definition close to
-              this month's own point and a label on its line reads over it. */}
-          <text
-            x={x + w + 6 < padR ? x + w + 6 : x - w - 6}
-            y={y(atLastMonth) + 13}
-            textAnchor={x + w + 6 < padR ? 'start' : 'end'}
-            fontSize={9}
-            fontFamily="var(--font-plex-mono), monospace"
-            fill="var(--muted-foreground)"
-          >
-            at this point last month
-          </text>
-        </g>
-      )}
+      <line x1={x - w} y1={y(atLastMonth)} x2={x + w} y2={y(atLastMonth)} stroke="var(--muted-foreground)" strokeWidth={1} strokeDasharray="3 2">
+        <title>{`At this point last month: ${format(atLastMonth)}`}</title>
+      </line>
+      {/* The filling month is the LAST one, so the label usually has no room
+          to its right and goes to the left of the tick instead — and it sits
+          BELOW it, because the tick is by definition close to this month's own
+          point and a label on its line reads over it. */}
+      <text
+        x={x + w + 6 < padR ? x + w + 6 : x - w - 6}
+        y={y(atLastMonth) + 13}
+        textAnchor={x + w + 6 < padR ? 'start' : 'end'}
+        style={ts(9)}
+        fontFamily="var(--font-plex-mono), monospace"
+        fill="var(--muted-foreground)"
+      >
+        at this point last month
+      </text>
     </g>
   )
 }

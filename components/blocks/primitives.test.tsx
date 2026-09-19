@@ -35,7 +35,7 @@ const moved: Verdict = {
 const refused: Verdict = { ...moved, changePts: null, bandPts: null, state: 'refused', refusedReason: 'rename' }
 
 describe('BlockFrame', () => {
-  it('renders its title, question and footer in all three modes', () => {
+  it('renders its title, its meta and its footer in all three modes', () => {
     for (const mode of MODES) {
       const words = renderText(
         <BlockFrame mode={mode} title="Your subjects" question="What are people saying about the things you decided to be known for?" meta="September 2026" footer="Open Subjects">
@@ -43,10 +43,31 @@ describe('BlockFrame', () => {
         </BlockFrame>,
       )
       expect(words).toContain('Your subjects')
-      expect(words).toContain('What are people saying')
       expect(words).toContain('September 2026')
       expect(words).toContain('Open Subjects')
     }
+  })
+
+  it('heads each email section with a full-bleed rule, not only its footer (SH11)', () => {
+    const markup = render(<BlockFrame mode="email" title="Your subjects" footer="Open Subjects"><p>body</p></BlockFrame>)
+    const header = markup.slice(0, markup.indexOf('Your subjects'))
+    expect(header).toContain(`border-top:1px solid ${EMAIL.hairline}`)
+    // The footer keeps its own rule; the point is that there are now two and
+    // the upper one belongs to the section rather than to "Open Subjects →".
+    expect(markup.slice(markup.indexOf('Open Subjects') - 400)).toContain(EMAIL.hairline)
+  })
+
+  it('prints the question on the SCREEN only (Block D wave 3, SH6)', () => {
+    // The docblock justified the question as "the mock's own device — every
+    // artboard prints one". Counted, every PRINTED artboard prints zero:
+    // MarketingBrief, SalesBrief, ContentBrief, LeadershipBrief,
+    // WeeklyReport, MonthlyReport and QuarterlyReview are 0 apiece, against
+    // Ask 6, Competitive 7, This week 5, Voice 4.
+    const q = 'What are people saying about the things you decided to be known for?'
+    const frame = (mode: RenderMode) => renderText(<BlockFrame mode={mode} title="Your subjects" question={q}><p>body</p></BlockFrame>)
+    expect(frame('app')).toContain(q)
+    expect(frame('print')).not.toContain(q)
+    expect(frame('email')).not.toContain(q)
   })
 
   // THE DEFAULT HEADER, BYTE FOR BYTE (the fix pass, E-monthly review
@@ -73,15 +94,32 @@ describe('BlockFrame', () => {
   // and reads as two numbers — the artboard never met it because it only puts
   // whole percentages in that slot. `tabular-nums` keeps the column aligned,
   // which is what the mono was for.
-  it('sets a large figure in the sans, tabular, and leaves the small one mono', () => {
-    const big = render(<FigureCell mode="email" size="lg" value="79.1%" of="32,600 of 41,200" />)
-    expect(big).toContain('font-variant-numeric:tabular-nums')
-    expect(big).not.toMatch(/font-size:17px[^"]*IBM Plex Mono/)
-    const small = render(<FigureCell mode="email" value="79.1%" of="32,600 of 41,200" />)
-    expect(small).toMatch(/IBM Plex Mono[^"]*font-size:13px/)
+  // AND NEITHER IS A SMALL ONE, IN AN EMAIL (Block D wave 3, SH12). The rule
+  // above was applied to `lg` alone, and the monthly rivals row is `md` — the
+  // one place on that artefact with a decimal — so it printed the exact thing
+  // the deviation was written about. In an inbox it is worse: a client that
+  // has not loaded Plex Mono falls back to Courier, whose advance is wider
+  // again. The app arm keeps its mono, where the face is loaded.
+  it('sets every email figure in the sans, tabular, and leaves the app\'s small one mono', () => {
+    for (const size of ['lg', 'md'] as const) {
+      const markup = render(<FigureCell mode="email" size={size} value="79.1%" of="32,600 of 41,200" />)
+      expect(markup).toContain('font-variant-numeric:tabular-nums')
+      expect(markup).not.toMatch(/IBM Plex Mono[^"]*font-size:(13|17)px/)
+      expect(markup).not.toMatch(/font-size:(13|17)px[^"]*IBM Plex Mono/)
+    }
     const app = render(<FigureCell size="lg" value="79.1%" of="32,600 of 41,200" />)
     expect(app).toContain('tabular-nums')
     expect(app).not.toMatch(/font-mono[^"]*text-\[17px\]/)
+    expect(render(<FigureCell value="79.1%" of="32,600 of 41,200" />)).toMatch(/font-mono text-\[13px\]/)
+  })
+
+  it('keeps the email "of N" on one line (SH12)', () => {
+    // It carried no white-space rule, so at 375 every rival row set
+    // "2,400 / of / 41,200" on three lines. A level that loses its
+    // denominator to a line break has become a score.
+    const markup = render(<FigureCell mode="email" value="2,400" of="of 41,200" />)
+    const level = markup.slice(markup.indexOf('data-copy="level"'))
+    expect(level).toContain('white-space:nowrap')
   })
 
   it('renders an email-safe frame', () => {
@@ -135,17 +173,18 @@ describe('BlockFrame', () => {
     assertEmailSafe(render(<BlockFrame mode="email" title="Rivals" footer="Open" footerNote="all-time"><span>x</span></BlockFrame>))
   })
 
-  it('sets the printed block heading and its question below the app, not above', () => {
+  it('sets the printed block heading below the app\'s, not above', () => {
     const paper = render(<BlockFrame mode="print" title="Rivals" question="Who holds the conversation?"><span>x</span></BlockFrame>)
     const screen = render(<BlockFrame mode="app" title="Rivals" question="Who holds the conversation?"><span>x</span></BlockFrame>)
     // A slide already carries a 15px section heading and a green-ruled
     // eyebrow above this one, at .902 zoom. It used to be 12px against the
     // app's 10.5px.
     expect(paper).toContain('text-[11px]')
-    expect(paper).toContain('text-[11.5px]')
     expect(paper).not.toContain('text-[12px]')
     expect(screen).toContain('text-[10.5px]')
+    // The question's own 11.5px print size went with the question (SH6).
     expect(screen).toContain('text-[12.5px]')
+    expect(paper).not.toContain('text-[11.5px]')
   })
 
   // `header={false}` (Block D wave 2, E-content) — ADDITIVE, default
@@ -156,7 +195,7 @@ describe('BlockFrame', () => {
   it('draws its own heading by default and drops it only when asked', () => {
     const withHeading = render(<BlockFrame mode="print" title="Rivals" question="Who holds it?" meta="September"><span>x</span></BlockFrame>)
     expect(markupText(withHeading)).toContain('Rivals')
-    expect(markupText(withHeading)).toContain('Who holds it?')
+    expect(markupText(withHeading)).toContain('September')
 
     const without = render(<BlockFrame mode="print" title="Rivals" question="Who holds it?" meta="September" footerNote="all-time"><span>x</span></BlockFrame>)
     expect(markupText(without)).toContain('Rivals')
@@ -290,8 +329,29 @@ describe('BlockMovement', () => {
     assertEmailSafe(markup)
     expect(markup).not.toContain('▲')
     // The band rides in the email arm too — it used to be dropped entirely here.
-    expect(markupText(markup)).toBe('+6.9 pts · band 2.4')
+    expect(markupText(markup)).toBe('+6.9 pts · band ±2.4 pts')
     expect(markup).toContain(EMAIL.greenTint)
+  })
+
+  it('puts the email chip\'s colour in the tint and the edge, never in the text (SH8)', () => {
+    // `up` was #0E8A5F on #DDF3E9 and `down` #DB3B2E on #FBE3E1, at 11px/700:
+    // 3.75:1 and 3.81:1, about ten instances on one monthly render.
+    const up = render(<BlockMovement mode="email" verdict={moved} unit="pts" />)
+    expect(up).toContain(EMAIL.greenTint)
+    expect(up).toContain(`1px solid ${EMAIL.up}`)
+    expect(up).toContain(`color:${EMAIL.ink}`)
+    const down = render(<BlockMovement mode="email" verdict={{ state: 'moved', change: -6.9, band: 2.4 }} unit="pts" />)
+    expect(down).toContain(EMAIL.downTint)
+    expect(down).toContain(`1px solid ${EMAIL.down}`)
+    expect(down).toContain(`color:${EMAIL.ink}`)
+    // The non-answer's grey takes ink2: muted on inner is the 4.46:1 pair SH7
+    // is about, and this arm cannot read the app's token.
+    expect(render(<BlockMovement mode="email" verdict={refused} />)).toContain(`color:${EMAIL.ink2}`)
+    // No arm paints its words in a hue any more.
+    for (const m of [up, down]) {
+      expect(m).not.toContain(`color:${EMAIL.up};`)
+      expect(m).not.toContain(`color:${EMAIL.down};`)
+    }
   })
 
   it('renders nothing at all without a verdict', () => {

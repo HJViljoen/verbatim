@@ -85,7 +85,12 @@ export function SettingsFrame({
       <PageBar title={title} context={context}>{controls}</PageBar>
       <div className="flex min-h-0 flex-col items-start gap-6 md:flex-row md:gap-8">
         <nav aria-label="Settings" className="flex w-full shrink-0 flex-col gap-0.5 md:w-[224px]">
-          <p className="flex h-[26px] items-center px-3 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground/80">Settings</p>
+          {/* AT FULL STRENGTH (Block D wave 3, SH16). It was
+              `text-muted-foreground/80`, which resolved to #8B8F93 — 3.26:1,
+              on the label that says what the rail IS, shared by nine routes.
+              The 40px row height below is the artboard's and stays; the
+              contrast and the focus ring were never the mock's to decide. */}
+          <p className="flex h-[26px] items-center px-3 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground">Settings</p>
           {SETTINGS_SUBPAGES.map((s) => {
             const count = counts?.[s.key] ?? null
             return (
@@ -94,7 +99,12 @@ export function SettingsFrame({
                 href={s.href}
                 aria-current={active === s.key ? 'page' : undefined}
                 className={cn(
+                  // Every other control on these pages sets a focus ring; the
+                  // seven links that ARE the settings area's navigation fell
+                  // back to the UA outline, which on a rounded tinted row is
+                  // the one place it is least visible (SH16).
                   'flex min-h-10 items-center gap-2 rounded-[4px] px-3 text-[13.5px] transition-colors',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
                   active === s.key
                     ? 'bg-inner font-semibold text-foreground'
                     : 'text-secondary-foreground hover:bg-inner hover:text-foreground',

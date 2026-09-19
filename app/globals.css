@@ -44,6 +44,9 @@
   --color-neutral-seg: var(--neutral-seg);
   /* Inner block inside a tile (two-level nesting: tile with shadow → flat tinted block) */
   --color-inner: var(--inner);
+  /* The hero tile's ground — the ONE inverted surface in the app (SH4) */
+  --color-hero: var(--hero);
+  --color-hero-foreground: var(--hero-foreground);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -85,12 +88,32 @@
   --popover: #FFFFFF;
   --inner: #F6F7F8;
 
+  /* THE HERO TILE IS DARK (Block D wave 3, SH4; Heinrich's ruling that the
+     artboard wins). `Main.dc.html` §1 paints the page's one-sentence tile
+     #26292C with #ECEEF0 ink; the build gave all three Tile variants the same
+     white ground and changed only gap and padding. It is a token rather than a
+     class because the tile's own chrome — the eyebrow, the meta, the footer
+     rule — has to invert with it, and because the unwired `.dark` block must
+     answer for it too (it paints its tiles #1B1D20, which is NOT this). */
+  --hero: #26292C;
+  --hero-foreground: #ECEEF0;
+
   /* Ink — charcoal, never black */
   --foreground: #26292C;
   --card-foreground: #26292C;
   --popover-foreground: #26292C;
   --muted: #F6F7F8;
-  --muted-foreground: #6E7378;
+  /* #6E7378 UNTIL BLOCK D WAVE 3 (SH7). It reads 4.79:1 on white and passes,
+     which is why it went unnoticed for a year — and 4.46:1 on `--inner`
+     (#F6F7F8), which FAILS, and the Block D ports are what put large amounts
+     of muted text inside tints: Voice's three persona cards, its tone block
+     and flags row, fourteen nodes on Market including both quote glosses and
+     the verdict words, five on This week, the record's SaveStrip, Content's
+     make cards. Three points darker clears 4.5:1 on the tint (4.66:1) and
+     reads 5.0:1 on white; it is still the same cool grey, and it is a token
+     change rather than fourteen files each reaching for
+     `text-secondary-foreground`. */
+  --muted-foreground: #6B7075;
   --secondary: #F6F7F8;
   --secondary-foreground: #45494D;
 
@@ -158,6 +181,10 @@
   --card: #1B1D20;
   --popover: #1B1D20;
   --inner: #22252A;
+  /* Lighter than the dark tile (#1B1D20), so the one inverted surface still
+     reads as lifted rather than as the same panel. */
+  --hero: #2E3237;
+  --hero-foreground: #ECEEF0;
   --foreground: #ECEEF0;
   --card-foreground: #ECEEF0;
   --popover-foreground: #ECEEF0;
@@ -240,6 +267,92 @@
   .vi-anim-ring:nth-of-type(2) { animation-delay: 0.08s; }
   .vi-anim-ring:nth-of-type(3) { animation-delay: 0.16s; }
   .vi-anim-ring:nth-of-type(4) { animation-delay: 0.24s; }
+}
+
+/* ── The hero tile's subtree (SH4) ───────────────────────────────────────────
+   The tile paints itself charcoal; everything INSIDE it is drawn by the page,
+   in `text-foreground`, `text-muted-foreground`, `bg-inner` and `border-border`
+   — every one of which is a light-surface value, so a hero whose ground had
+   turned and whose contents had not is dark ink on dark. Re-pointing the
+   tokens on the subtree turns all of them at once, which is what a token is
+   for, and means no page file has to know it is inside a hero.
+
+   THIS IS A FLOOR, NOT THE COMPOSITION. Which elements inside Overview's hero
+   want which weight is that page's own question (main's M3); this only
+   guarantees that none of them is invisible. Measured against the charcoal:
+   ink 12.6:1, the secondary 9.1:1, the muted 6.5:1, and on the inner block
+   10.3 / 7.4 / 5.4. */
+[data-tile][data-hero] {
+  --tile: var(--hero);
+  --card: var(--hero);
+  --popover: var(--hero);
+  --foreground: var(--hero-foreground);
+  --card-foreground: var(--hero-foreground);
+  --popover-foreground: var(--hero-foreground);
+  --secondary-foreground: #C9CCD0;
+  --muted-foreground: #A9AEB3;
+  --inner: #33373B;
+  --muted: #33373B;
+  --secondary: #33373B;
+  --border: #3E4347;
+  --input: #3E4347;
+  /* The data hues turn too, or they do not survive the ground: the product
+     green reads 3.4:1 on this charcoal and the red 3.3:1. These are the dark
+     palette's own counterparts, measured here at 6.2:1 and 4.9:1 on the tile
+     and 5.1:1 and 4.9:1 on its inner block — the same colours meaning the same
+     things, at a lightness this surface can carry. */
+  --primary: #2FBF85;
+  --primary-foreground: #0B1F16;
+  --positive: #2FBF85;
+  --you: #2FBF85;
+  --ring: #2FBF85;
+  --accent: #173B2D;
+  --accent-foreground: #7EDDB4;
+  --negative: #F08878;
+  --destructive: #F08878;
+  --warning: #E9BC55;
+  --mixed: #E9BC55;
+  --comp: #F58A4A;
+  --comp-2: #F7AE82;
+  --cat: #7C838B;
+  --neutral-seg: #3A3F45;
+  --chart-1: #ECEEF0;
+  --chart-2: #2FBF85;
+  --chart-3: #A9AEB3;
+  --chart-4: #7C838B;
+  --chart-5: #3A3F45;
+}
+
+/* ── The calendar line's type (components/charts/calendar-line.tsx) ──────────
+   The chart is a viewBox scaled uniformly to its box, so every font-size in it
+   is in VIEWBOX UNITS and shrinks with the container: an 880-unit drawing in a
+   352px column printed its 10-unit axis label at 4.0px and the end label's
+   figure at 4.4px. Nothing in the component can know that factor; CSS can.
+
+   `--cal-w` is the drawing's intrinsic width, published by the component; the
+   container query buckets the BOX it landed in, so `--cal-k` is about
+   intrinsic / rendered and `calc(10px * var(--cal-k))` comes out near 10px on
+   the glass at any of them. `max(1, …)` so the correction never SHRINKS type,
+   `min(2.6, …)` so an extreme column cannot blow the drawing apart, and the
+   end label is capped lower again because it carries a caller's string in a
+   fixed 170-unit gutter (a column too narrow for it passes endLabels={false}).
+   No hex here: the drift guard scans this file. */
+.vb-cal { container-type: inline-size; }
+.vb-cal svg { --cal-k: 1; --cal-ke: 1; }
+@container (max-width: 820px) {
+  .vb-cal svg { --cal-k: min(2.6, max(1, var(--cal-w, 880) / 760)); --cal-ke: min(1.6, var(--cal-k)); }
+}
+@container (max-width: 700px) {
+  .vb-cal svg { --cal-k: min(2.6, max(1, var(--cal-w, 880) / 640)); --cal-ke: min(1.6, var(--cal-k)); }
+}
+@container (max-width: 580px) {
+  .vb-cal svg { --cal-k: min(2.6, max(1, var(--cal-w, 880) / 520)); --cal-ke: min(1.6, var(--cal-k)); }
+}
+@container (max-width: 460px) {
+  .vb-cal svg { --cal-k: min(2.6, max(1, var(--cal-w, 880) / 400)); --cal-ke: min(1.6, var(--cal-k)); }
+}
+@container (max-width: 340px) {
+  .vb-cal svg { --cal-k: min(2.6, max(1, var(--cal-w, 880) / 290)); --cal-ke: min(1.6, var(--cal-k)); }
 }
 
 /* Ring ↔ legend hover sync (components/charts/ring-sync.tsx): the hovered
@@ -346,18 +459,25 @@
   page-break-after: always;
 }
 .vb-slide:last-child { break-after: auto; page-break-after: auto; }
-/* The slide body: laid out at the app's width, zoomed to fit the page. */
+/* The slide body: laid out at the app's width, zoomed to fit the page.
+   IT IS MEASURED, NOT BUDGETED (Block D wave 3, SH3). The height used to be
+   arithmetic — the page minus its padding, minus the header, minus a LITERAL
+   30px for the footer — and the footer is a method note whose coverage line
+   wraps: 51px on the populated leadership sheet, 21px where it does not wrap.
+   So the sheet with the longest note was the one given the least room for it,
+   and `overflow: hidden` took the difference silently, on the PDF, the in-app
+   viewer and /r/<token> alike. `.vb-slide` is already a flex column, so the
+   body takes the height that is actually LEFT after the header, the optional
+   framing note and the footer have been laid out at whatever height they
+   turned out to be — which is the same measurement, made by the layout
+   engine instead of by a constant that has to be kept in step with a
+   component. The framing note's own subtraction goes with it. */
 .vb-slide-body {
   width: var(--vb-grid-w);
-  height: calc((167mm - 14mm - 24px - 8px - 30px - 8px) / var(--vb-zoom));
+  flex: 1 1 0;
   zoom: var(--vb-zoom);
   min-height: 0;
   overflow: hidden;
-}
-/* A framing note (Report Studio) is one 18px line plus its gap; the body
-   gives that up so the footer stays on the slide. */
-.vb-slide[data-note] .vb-slide-body {
-  height: calc((167mm - 14mm - 24px - 8px - 18px - 8px - 30px - 8px) / var(--vb-zoom));
 }
 .vb-print-grid {
   display: grid;
