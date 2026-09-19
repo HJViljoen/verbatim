@@ -1075,8 +1075,30 @@ describe('the page', () => {
     expect(spans(weekFixture())).toEqual(['12x5', '12x4', '12x3', '12x4', '12x3', '5x4', '7x4', '12x2', '12x3'])
     // Sealand, and the arm both tenants render today: five of these blocks
     // stand on one sentence, and they take one or two rows rather than three.
-    expect(spans(thinFixture())).toEqual(['12x4', '12x1', '12x2', '12x5', '12x3', '5x3', '7x2', '12x1', '12x2'])
-    expect(spans(absentReadingFixture())).toEqual(['12x4', '12x1', '12x2', '12x5', '12x3', '5x3', '7x2', '12x1', '12x2'])
+    // §5 takes FOUR here and three on Össur (review W3, `rivalPostsRows`):
+    // three tracked rivals draw three rival groups, 429px at 1008 against a
+    // 3-row box of 380 — so the tile's own footer, "Open Competitive →" and
+    // the note beside it, rendered 34px below the clip on both arms.
+    expect(spans(thinFixture())).toEqual(['12x4', '12x1', '12x2', '12x5', '12x4', '5x3', '7x2', '12x1', '12x2'])
+    expect(spans(absentReadingFixture())).toEqual(['12x4', '12x1', '12x2', '12x5', '12x4', '5x3', '7x2', '12x1', '12x2'])
+  })
+
+  it('sizes §5 from its rivals and its post rows, not from a constant', () => {
+    // REVIEW W3. The sixteen shapes measured in a 1008 column — 1–4 rivals ×
+    // 0–3 posts — and the row each natural height needs. `rivalPostsRows`
+    // reproduces all sixteen; a constant 3 clipped every one of the last five.
+    const d = weekFixture()
+    const rival = d.cameIn.rivals[0]
+    const spanFor = (n: number, posts: number) => {
+      const rivals = Array.from({ length: n }, (_, i) => ({ ...rival, audience: `competitor:r${i}`, posts: rival.posts.slice(0, posts) }))
+      const markup = render(<WeekPage data={{ ...d, cameIn: { ...d.cameIn, rivals } }} />)
+      return Number([...markup.matchAll(/data-col="12" data-row="(\d+)"/g)][4][1])
+    }
+    // measured 233 253 278 / 298 339 388 / 364 424 499 / 458 538 638
+    expect([spanFor(1, 0), spanFor(1, 1), spanFor(1, 2)]).toEqual([2, 3, 3])
+    expect([spanFor(2, 0), spanFor(2, 1), spanFor(2, 2)]).toEqual([3, 3, 4])
+    expect([spanFor(3, 0), spanFor(3, 1), spanFor(3, 2)]).toEqual([3, 4, 4])
+    expect([spanFor(4, 0), spanFor(4, 1), spanFor(4, 2)]).toEqual([4, 5, 5])
   })
 
   it('takes no horizon and no soundness band — it is dated by the update', () => {
