@@ -40,7 +40,7 @@ export function QuarterlyDeck({ data, date = fmtDate(new Date()) }: { data: Quar
     // stand behind both sides" — the artefact's central fact, and the reason
     // half its columns are empty.
     footer: (
-      <p className="line-clamp-2 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
+      <p className="line-clamp-2 font-mono text-[10.5px] leading-[1.3] text-muted-foreground">
         <span className="text-secondary-foreground">{QUARTERLY_RULE}</span>
         <span aria-hidden> · </span>
         <span>{date}</span>

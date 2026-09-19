@@ -216,7 +216,7 @@ export const quarterlyMoves: Block<QuarterlyData> = {
                   <Stored slot="pass_d_b_recommendation">{a.title}</Stored>
                   <span className={email ? undefined : 'flex flex-wrap items-center gap-1.5'}>
                     <Chip tone="plain" mode={mode}>{a.statusLabel}{a.decidedAt ? ` · ${fullDate(a.decidedAt)}` : ''}</Chip>
-                    <span className={email ? undefined : 'font-mono text-[9.5px] text-muted-foreground'}>
+                    <span className={email ? undefined : 'font-mono text-[10.5px] text-muted-foreground'}>
                       {monthName(`${a.firstMade.slice(0, 7)}-01`)} · {a.monthsRepeated === 1 ? '1 month' : `${a.monthsRepeated} months`} ·{' '}
                       {a.timesMade === 1 ? '1 update' : `${a.timesMade} updates`}
                     </span>
@@ -318,7 +318,7 @@ export const quarterlyMoves: Block<QuarterlyData> = {
         >
           {m.rule}
         </p>
-        <Columns weights={[6, 6, 11]} gap={24} mode={mode}>
+        <Columns weights={[5.4, 6.2, 12]} gap={12} mode={mode}>
           {moves}
           {ledger}
           {claims}

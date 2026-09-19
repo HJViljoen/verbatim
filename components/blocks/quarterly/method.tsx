@@ -162,7 +162,7 @@ export const quarterlyMethod: Block<QuarterlyData> = {
     )
 
     return frame(
-      <Columns weights={[2, 1]} mode={mode}>
+      <Columns weights={[1.7, 1]} mode={mode}>
         {left}
         {right}
       </Columns>,

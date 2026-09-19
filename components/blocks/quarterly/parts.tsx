@@ -19,8 +19,32 @@ import { monthName } from '@/lib/format'
 // words are the calling block's, and a block that marked its own prose as
 // something else would be claiming a provenance it does not have.
 
-/** A quiet line under a table or a figure — the caveat, the denominator, the
- *  sentence that says what was not recorded. */
+/**
+ * A quiet line under a table or a figure — the caveat, the denominator, the
+ * sentence that says what was not recorded.
+ *
+ * 11px, NOT 10, AND THE SHEET PAYS NOTHING FOR IT.
+ *
+ * This is the deck's READING tier: measured over the eight sheets, 40% of the
+ * artefact's characters are in it. At 10px under `.vb-slide-body`'s `.902`
+ * zoom that set at 9.0px on a 297mm page — 6.8pt — under a rule
+ * (`components/print/slide.tsx`) that says in this deck, about this zoom, that
+ * 6.4pt is "below the 8pt most print work holds to". The artboard's own floor
+ * is 10px on an UNZOOMED 1123px sheet, which is 11.1px here; its modal size is
+ * 12.5px against this deck's 9.0.
+ *
+ * 11px sets at 9.9px on the page — the artboard's floor, and the size
+ * `slide.tsx` chose for its own page number one line below this text. The line
+ * BOX is unchanged: 11 × 1.3 is 14.3px against 10 × 1.38's 13.8, half a pixel
+ * a line, which the eight sheets were re-measured against rather than argued
+ * about.
+ *
+ * WHAT IS NOT FIXED HERE, and it is worth writing down: 9.9px on the page is
+ * 7.4pt and the 8pt floor would need 11.8px. The deck carries about 58% more
+ * text than the drawing does on the same eight sheets — which is the honesty
+ * rules doing their job, not a defect — so the last 0.6pt is a question about
+ * how many sheets this artefact has, not about this constant.
+ */
 export function Note({ children, mode = 'app', tone = 'muted' }: { children: ReactNode; mode?: RenderMode; tone?: 'muted' | 'body' }) {
   if (children == null || children === '') return null
   if (mode === 'email') {
@@ -30,7 +54,12 @@ export function Note({ children, mode = 'app', tone = 'muted' }: { children: Rea
       </div>
     )
   }
-  return <p className={`m-0 mt-px text-[10px] leading-[1.38] ${tone === 'body' ? 'text-secondary-foreground' : 'text-muted-foreground'}`}>{children}</p>
+  // NO `mt-px`. A note's separation from what is above it is its container's
+  // gap — every stack that holds one states a gap — and the extra pixel was a
+  // second, invisible spacing system on top of it: on the sheets that carry a
+  // dozen notes it was a dozen pixels of the deck's own margin, spent on a
+  // separation nothing asked for.
+  return <p className={`m-0 text-[11px] leading-[1.3] ${tone === 'body' ? 'text-secondary-foreground' : 'text-muted-foreground'}`}>{children}</p>
 }
 
 /** A measured number, with what it is out of beside it. The "of N" is REQUIRED
@@ -145,7 +174,8 @@ export function Line({ label, figure, badge, note, mode = 'app' }: {
         {figure ? <span className="flex-none">{figure}</span> : null}
         {badge ? <span className="flex-none">{badge}</span> : null}
       </div>
-      {note ? <span className="text-[10px] text-muted-foreground">{note}</span> : null}
+      {/* The reading tier (`Note`), because that is what this is. */}
+      {note ? <span className="text-[11px] leading-[1.3] text-muted-foreground">{note}</span> : null}
     </div>
   )
 }
@@ -286,7 +316,7 @@ export function TableHead({ template, cells, mode = 'app' }: { template: string;
       style={{ ['--qr-tab' as string]: template }}
     >
       {cells.map((c, i) => (
-        <span key={i} className="text-[10px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">{c}</span>
+        <span key={i} className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">{c}</span>
       ))}
     </div>
   )
@@ -489,7 +519,7 @@ export function DefList({ rows, mode = 'app' }: { rows: readonly { label: ReactN
     <dl className="m-0 grid grid-cols-1 gap-x-3 gap-y-[5px] lg:grid-cols-[100px_1fr]">
       {rows.map((r, i) => (
         <Fragment key={i}>
-          <dt className="pt-[2px] font-mono text-[9.5px] uppercase tracking-[0.06em] text-muted-foreground">{r.label}</dt>
+          <dt className="pt-[2px] font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">{r.label}</dt>
           <dd className="m-0 text-[11.5px] leading-[1.35]">{r.value}</dd>
         </Fragment>
       ))}

@@ -140,7 +140,7 @@ function MoverRow({ mover, mode }: { mover: QuarterMover; mode: RenderMode }) {
         ) : null}
       </div>
       {months ? (
-        <span data-copy="figure" className={email ? undefined : 'font-mono text-[10px] text-muted-foreground'}>
+        <span data-copy="figure" className={email ? undefined : 'font-mono text-[10.5px] text-muted-foreground'}>
           {months}{!drawn && label ? ` · ${label}` : ''}
           {mover.firstHeard ? ` · first read ${monthName(mover.firstHeard)}` : ''}
         </span>
@@ -223,7 +223,7 @@ export const quarterlyCategory: Block<QuarterlyData> = {
           aside={
             mode === 'email'
               ? <span style={{ textTransform: 'none', letterSpacing: 0 }}>each cleared its own band</span>
-              : <span className="font-sans text-[10px] normal-case tracking-normal text-muted-foreground">each cleared its own band</span>
+              : <span className="font-sans text-[11px] normal-case tracking-normal text-muted-foreground">each cleared its own band</span>
           }
         >
           What moved most

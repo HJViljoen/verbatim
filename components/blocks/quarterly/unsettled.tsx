@@ -151,7 +151,7 @@ export const quarterlyUnsettled: Block<QuarterlyData> = {
     )
 
     const right = (
-      <Column mode={mode} gap={10}>
+      <Column mode={mode} gap={6}>
         <Card mode={mode}>
           <Eyebrow mode={mode}>Held back</Eyebrow>
           {u.heldBack.length > 0 ? (
@@ -252,7 +252,7 @@ export const quarterlyUnsettled: Block<QuarterlyData> = {
     // or more of them plus its waits is a left column with a list on it.
     const itemsLead = u.items.length >= 2
     return frame(
-      <Columns weights={itemsLead ? [7, 5] : [5, 7]} mode={mode}>
+      <Columns weights={itemsLead ? [6, 6] : [4, 8]} mode={mode}>
         {left}
         {right}
       </Columns>,

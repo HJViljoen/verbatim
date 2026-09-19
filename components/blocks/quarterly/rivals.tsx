@@ -161,7 +161,7 @@ function MonthCells({ months, values, newest, newestLabel, share, recorded, mode
         ))}
       </span>
       {share && share.pct != null ? (
-        <span data-copy="figure" className="whitespace-nowrap font-mono text-[9.5px] leading-[1.2] text-muted-foreground">
+        <span data-copy="figure" className="whitespace-nowrap font-mono text-[10.5px] leading-[1.2] text-muted-foreground">
           {fmtInt(share.k)} of {fmtInt(share.n)}
         </span>
       ) : null}
@@ -206,7 +206,7 @@ function FaceOff({ m, basis, mode }: { m: FaceOffMeasure; basis: string | null; 
             stated clock: the line above it is the one it is read on, which is
             how a dated table is read, and it is the rule this block already
             follows for why a band was not drawn. */}
-        {basis ? <span className={email ? undefined : 'font-mono text-[9.5px] leading-[1.35] text-muted-foreground'}>{basis}</span> : null}
+        {basis ? <span className={email ? undefined : 'font-mono text-[10.5px] leading-[1.3] text-muted-foreground'}>{basis}</span> : null}
         {/* WHY A ROW DREW NO BAND IS SAID ONCE, UNDER THE TABLE, AND NOT
             FOUR TIMES INSIDE IT. Three of the five measures never can carry one
             — a rate, a median and a count are not proportions — and the three
@@ -455,8 +455,8 @@ export const quarterlyRivals: Block<QuarterlyData> = {
               </Note>
               <div className={email ? undefined : 'grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)] gap-x-2 border-b border-border pb-1'}>
                 <span />
-                <span className={email ? undefined : 'text-[10px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground'}>You</span>
-                <span className={email ? undefined : 'text-[10px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground'}>{r.headToHead.rivalLabel}</span>
+                <span className={email ? undefined : 'text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground'}>You</span>
+                <span className={email ? undefined : 'text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground'}>{r.headToHead.rivalLabel}</span>
               </div>
               {r.headToHead.measures.map((m, i) => (
                 <FaceOff
