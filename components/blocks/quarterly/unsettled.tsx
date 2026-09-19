@@ -233,8 +233,26 @@ export const quarterlyUnsettled: Block<QuarterlyData> = {
       </Column>
     )
 
+    // THE WIDE COLUMN IS THE SIDE WITH THE ROWS, AND WHICH SIDE THAT IS
+    // DEPENDS ON THE QUARTER.
+    //
+    // A fixed 7 / 5 was right for exactly one of the seven states this deck is
+    // drawn over. On a quarter whose comparisons mostly could not be drawn the
+    // left column carries three unsettled items and two waits and needs the
+    // width — measured, 466px against the right's 472. On a quarter that
+    // settled nearly everything the left carries two rule sentences and three
+    // waits and stands at 318px, while the right — "Held back", the term yield
+    // and the dated change log, none of which get shorter — runs to 472 in the
+    // NARROW column. So the sheet the page is named after ended at 57% of its
+    // height while the record beside it ran to the bottom, and the previous fix
+    // pass moved the change log right without moving the split that made it
+    // the crowded side.
+    //
+    // Two items is the line: `unsettledItems` caps at four, and a page with two
+    // or more of them plus its waits is a left column with a list on it.
+    const itemsLead = u.items.length >= 2
     return frame(
-      <Columns weights={[7, 5]} mode={mode}>
+      <Columns weights={itemsLead ? [7, 5] : [5, 7]} mode={mode}>
         {left}
         {right}
       </Columns>,
