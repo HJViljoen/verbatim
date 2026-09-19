@@ -804,6 +804,23 @@ describe('the artboard port (Block D wave 2)', () => {
     expect(t).toContain('20 of 1,112 judged')
   })
 
+  it('qr.p4.mood · the partition bar D15 licenses, with its legend in the rows', () => {
+    // A video is judged ONCE and the four shares are 100% of one denominator,
+    // so D4 — which is about kinds, whose counts run to 175–228% of theirs —
+    // never reached the mood. D15 governs it and licenses the bar.
+    const markup = render(QUARTERLY_BLOCKS['quarterly.category'].render(data, 'print', ctx))
+    // Four segments, one per mood, `mixed` among them.
+    expect(markup).toContain('var(--mixed)')
+    expect(markup).toContain('var(--positive)')
+    expect(markup).toContain('var(--negative)')
+    expect(markup).toContain('var(--neutral-seg)')
+    // IDENTITY IS NEVER COLOUR ALONE. The bar carries no legend of its own
+    // because the four rows under it are the legend — so every colour in the
+    // bar is also beside a label. Four swatches in the bar, four in the rows.
+    expect((markup.match(/var\(--mixed\)/g) ?? []).length).toBe(2)
+    for (const mode of MODES) assertCopyContract(render(QUARTERLY_BLOCKS['quarterly.category'].render(data, mode, ctx)))
+  })
+
   it('qr.p5.col.* · the month cells, and the refusal’s reason in print', () => {
     const t = text('quarterly.rivals')
     // THE UNIT IS IN THE HEADER AND ON EVERY CELL. The first cut drew two

@@ -13,7 +13,7 @@ import { monthlyLineLabel, type Mover } from '@/lib/pages/overview'
 import { hasQuote } from '@/lib/renderables/quotes-freeze'
 import type { CategoryPage, QuarterlyData, QuarterMover } from '@/lib/pages/quarterly'
 import { QUARTER_PAGE_QUESTION, QUARTER_PAGE_TITLE } from '@/lib/reports/quarterly'
-import { Card, ChartEndings, Chip, Column, Columns, Eyebrow, Line, Note } from './parts'
+import { Card, ChartEndings, Chip, Column, Columns, Eyebrow, Line, Note, Partition, Swatch } from './parts'
 
 // QR4 · What the category talked about (mock page 4).
 //
@@ -56,6 +56,17 @@ import { Card, ChartEndings, Chip, Column, Columns, Eyebrow, Line, Note } from '
 // wave 2), the month series under each row, the two READER_FLAGS as their own
 // tinted block, the quote, and the mood's four rows with "of N judged" — Mixed
 // included, which the mock folds away (D15).
+
+/** The four moods' colours — the SAME table `components/pages/overview/
+ *  category.tsx` draws, so the bar on the deck and the bar in the app cannot
+ *  paint one mood two colours. `mixed` is on it, because the fourth segment is
+ *  what D15 asks for. */
+const MOOD_COLOR: Record<string, string> = {
+  positive: 'var(--positive)',
+  mixed: 'var(--mixed)',
+  neutral: 'var(--neutral-seg)',
+  negative: 'var(--negative)',
+}
 
 /** A theme's label is the MODEL's words (`pass_b_theme`, policy 'none'), so it
  *  is marked and its slot is named — that is what buys the rule-(c) exemption,
@@ -346,16 +357,39 @@ export const quarterlyCategory: Block<QuarterlyData> = {
         </div>
     )
 
+    // D15, NOT D4 — AND D15 LICENSES THE BAR.
+    //
+    // The partition bar was dropped from the mood citing the KIND rule: kinds
+    // are independent shares of one denominator and a video carries several at
+    // once, so the per-kind counts run to 175–228% of their denominator and a
+    // printed mix invites summing (D4). None of that reaches the mood. A video
+    // is judged once, and 61% + 1.8% + 19.2% + 18% is exactly 100% of ONE
+    // denominator — which is what a partition bar is for.
+    //
+    // The rule that governs the mood is D15 (a basis that must travel with its
+    // figure), and its stated honest alternative is "print the fourth mood
+    // segment, the overlap note and the stated basis". The build already prints
+    // all three; what it dropped was the one artboard element D15 licenses.
+    //
+    // The bar carries no legend of its own: the four rows under it are the
+    // legend, each with its swatch, its label, its share and its "of N judged"
+    // (see `Partition`).
     const moodBlock = (
         <div className={email ? undefined : 'flex flex-col gap-2'}>
           <Eyebrow mode={mode}>Mood</Eyebrow>
           {c.mood ? (
             <>
+              <Partition
+                mode={mode}
+                segments={c.mood.shares
+                  .filter((m) => m.pct != null)
+                  .map((m) => ({ label: m.label, pct: m.pct as number, color: MOOD_COLOR[m.mood] ?? 'var(--neutral-seg)' }))}
+              />
               {c.mood.shares.map((m) => (
                 <Line
                   key={m.mood}
                   mode={mode}
-                  label={m.label}
+                  label={<><Swatch color={MOOD_COLOR[m.mood] ?? 'var(--neutral-seg)'} mode={mode} />{m.label}</>}
                   figure={
                     <FigureCell
                       mode={mode}
@@ -419,7 +453,12 @@ export const quarterlyCategory: Block<QuarterlyData> = {
                 series={panel}
                 rules={panelRule(c)}
                 mode={mode}
-                height={92}
+                // 76, NOT 92 — 15px, and it is what the mood bar next door is
+                // drawn with. A panel line across the whole 443px card at 69px
+                // is the artboard's own proportion for this chart; at 92 units
+                // the plot stood 83px tall over six months of a flat series,
+                // and this sheet does not have 15px to spend on the difference.
+                height={76}
                 // THE SCALE FACTOR, AND IT IS THE CARD'S OWN WIDTH. See above:
                 // 490 draws the chart across the whole card at the height 330
                 // drew it across two thirds of one.
