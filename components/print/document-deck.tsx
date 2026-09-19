@@ -399,7 +399,16 @@ function DocumentCover({ data, pages, contents, date }: {
             )}
           </div>
           <div className="flex flex-col gap-4">
-            {tiles.map((t, i) => <StatTile key={i} value={t.value} label={t.label} verdict={t.verdict} note={t.note} level={t.level} />)}
+            {/* `word` TOO, AND IT IS THE HALF THAT MATTERS (Block D wave 3b,
+                `decks`; `reports`-16). The overview sheet passed it and the
+                cover did not, so the SAME tile — `gapTile`'s, the one whose
+                value is "too few to compare" or "comparison refused" — set as
+                a sentence on sheet 2 and at the 42px mono numeral on sheet 1.
+                A refusal typeset as a figure reads as a measurement (mock-gap
+                §6 D2), and the cover is the sheet a reader meets first. Five
+                fields where there were four; the tile composes them all and
+                neither caller may pick. */}
+            {tiles.map((t, i) => <StatTile key={i} value={t.value} label={t.label} verdict={t.verdict} note={t.note} level={t.level} word={t.word} />)}
           </div>
         </div>
       </div>

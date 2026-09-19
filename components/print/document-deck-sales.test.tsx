@@ -5,6 +5,7 @@ import { overviewTiles } from '@/lib/reports/documents/overview'
 import { markupText, render } from '@/lib/test/render'
 import { DocumentDeck } from './document-deck'
 import {
+  marketingDeckFixture,
   salesBriefFixture,
   salesBriefLegacyFixture,
   salesBriefThinFixture,
@@ -74,6 +75,38 @@ describe('sales.p1 — the cover', () => {
   it('and the overview sheet does not print it again', () => {
     const rest = sheets(deck()).slice(1).join('')
     expect(words(rest)).not.toContain('Four objections carry September')
+  })
+
+  // A REFUSAL ON A COVER NEVER SETS AT THE 42px NUMERAL (Block D wave 3b,
+  // `decks`; `reports`-16). `OverviewTile.word` says the value is a WORD and
+  // not a figure — "too few to compare", "comparison refused" — and the
+  // overview sheet passed it to `StatTile` while the cover did not, so the
+  // SAME tile set as a sentence on sheet 2 and as a 42px mono figure on sheet
+  // 1. A refusal typeset as a numeral reads as a measurement (mock-gap §6 D2),
+  // and the cover is the sheet a reader meets first.
+  //
+  // THE STATE IS CONSTRUCTED, AND IT IS A REAL ONE. Neither shipped fixture
+  // reaches this line today — the sales brief keeps a cover and its reading
+  // carries no gaps, the marketing brief carries gaps and folds its cover away
+  // — which is why the defect survived a wave with a test suite around it. A
+  // sales brief on a workspace that has named its subjects is the case, and it
+  // is the case both production tenants are one Settings entry away from.
+  it('sets a refusal as a sentence, the way the overview sheet already did', () => {
+    const base = salesBriefFixture()
+    const gaps = marketingDeckFixture().reading!.gaps!
+    const data = { ...base, reading: { ...base.reading!, gaps } }
+    const refusal = overviewTiles(data).find((t) => t.word)
+    expect(refusal, 'the gap this asserts on is no longer a refusal').toBeTruthy()
+    expect(refusal!.value).toBe('too few to compare')
+
+    const c = sheets(render(<DocumentDeck data={data} date="28 Sep 2026" />))[0]
+    expect(words(c)).toContain(refusal!.value)
+    // Not inside the 42px mono figure node: the numeral treatment belongs to
+    // numbers, and a refusal typeset as one reads as a measurement.
+    const at = c.indexOf(refusal!.value)
+    const before = c.slice(Math.max(0, at - 400), at)
+    expect(before).not.toContain('font-mono text-[42px]')
+    expect(before).toContain('text-[21px]')
   })
 
   // `sales.p1.contents`: a table of contents with page numbers, which is the
