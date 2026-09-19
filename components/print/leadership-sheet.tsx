@@ -839,14 +839,28 @@ const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'obj
  * A STORED SNAPSHOT IS DATA, NOT A TYPE. `surfaces` is typed
  * `Record<string, unknown>` (lib/reports/documents/types.ts) precisely because
  * it is whatever the loader wrote on the day the brief was built, and this
- * sheet reads fields that did not exist for most of the life of that column:
- * `subjects.gaps` and `moves.readings` / `moves.acted` landed in Block D
- * wave 1 on 2026-09-18, while `surfaces` has been frozen into documents since
- * 2026-08-30. Every leadership brief built in that window has an Overview
- * WITHOUT them — and a bare cast plus `Object.values(overview.subjects.gaps)`
- * is a `TypeError` inside a server component, which takes the whole document
- * down on the share link, the in-app viewer, the Studio preview and the PDF
- * route rather than degrading one sheet.
+ * sheet reads fields younger than the column: `subjects.gaps` and
+ * `moves.readings` / `moves.acted` landed in Block D wave 1 on 2026-09-18
+ * (4cf5dd12), and `surfaces` itself entered `DocumentSnapshotData` at
+ * 88ffc246 on 2026-09-16. A bare cast plus
+ * `Object.values(overview.subjects.gaps)` is a `TypeError` inside a server
+ * component, which takes the whole document down on the share link, the
+ * in-app viewer, the Studio preview and the PDF route rather than degrading
+ * one sheet.
+ *
+ * AND THE WINDOW IS BRANCH-ONLY, WHICH IS THE OPPOSITE OF WHAT THIS DOCBLOCK
+ * USED TO SAY. It claimed `surfaces` "has been frozen into leadership briefs
+ * since 2026-08-30" and that "every brief built in that window has an Overview
+ * without them" — nineteen days of PRODUCTION briefs. What is dated 2026-08-30
+ * is `DocumentSnapshotData` itself (2a5c8ce6, on `main`); the `surfaces` KEY is
+ * 88ffc246, which `git merge-base --is-ancestor 88ffc246 main` says is not on
+ * `main`, and `git grep surfaces main -- lib/reports components/print` returns
+ * nothing. NO DEPLOYED BUILD HAS EVER WRITTEN A `surfaces` KEY. Every stored
+ * brief in production reaches this predicate with `surfaces` undefined and is
+ * refused at the first line, which is exactly right — the guard stays. What
+ * was wrong was the record of why, on a repo whose first rule is that the code
+ * is the record, and it is the sentence the next reader would have used to
+ * judge how urgent the same shape is elsewhere.
  *
  * The precedent is `isWeeklyData` (lib/reports/viewer.ts), added for exactly
  * this failure — "the cast below handed `deckSlides` a snapshot with no
