@@ -5,7 +5,7 @@ import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt } from '@/lib/format'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import { UNANSWERED_CLAIMS_UNREADABLE, UNANSWERED_CLAIMS_UNREADABLE_OUTSIDE, periodPhrase, unansweredMeta, type SubjectsData, type UnansweredBlock, type UnansweredRow } from '@/lib/pages/subjects'
+import { periodPhrase, unansweredMeta, type SubjectsData, type UnansweredBlock, type UnansweredRow } from '@/lib/pages/subjects'
 
 // SU3 · Questions on this subject your content never answers (design §3 SU3,
 // the mock's (d)).
@@ -136,7 +136,7 @@ export const subjectsUnanswered: Block<SubjectsData> = {
             claims caveat, which is about a half we could not read at all, keeps
             its own. */}
         {small([u.basis, u.reddit].filter(Boolean).join(' '))}
-        {u.claims ? small(u.claims === UNANSWERED_CLAIMS_UNREADABLE && mode === 'print' ? UNANSWERED_CLAIMS_UNREADABLE_OUTSIDE : u.claims) : null}
+        {u.claims ? small(u.claims) : null}
       </BlockFrame>
     )
   },

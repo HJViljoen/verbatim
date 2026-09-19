@@ -780,33 +780,44 @@ describe('the page’s own layout', () => {
 })
 
 // A brief borrows SU3 and SU-voices (SALES_MAP, CONTENT_MAP), and a brief is
-// read as a PDF and on a public share page. "Verbatim engineering" is a
-// readiness owner: right where a reader can open Settings › Readiness, an
-// internal label where they cannot. "Open the content brief →" resolves, for
-// such a reader, to a login wall.
+// read as a PDF and on a public share page. "Open the content brief →"
+// resolves, for such a reader, to a login wall.
+//
+// AND THE READINESS OWNER IS GONE FROM EVERY ARM, NOT JUST FROM PAPER. See the
+// vocabulary rule on `UNANSWERED_CLAIMS_UNREADABLE` (lib/pages/subjects.ts):
+// "— Verbatim engineering" names the team, which is a fact for
+// /dashboard/settings/readiness and a ticket anywhere else — and the app is
+// where the paying reader is. `lib/readiness/compute.ts` draws no row for the
+// claims ledger, so there is no page to name in its place either.
 describe('the Subjects blocks, read from outside the workspace', () => {
-  it('name the half they could not read without naming our own owner', () => {
+  it('name the half they could not read and never name our own owner', () => {
     const data = subjectsFixture()
-    const print = renderText(subjectsUnanswered.render(data, 'print', ctx))
-    const app = renderText(subjectsUnanswered.render(data, 'app', ctx))
-    expect(app).toContain('What your posts claim is not readable yet')
-    expect(app).toContain('Verbatim engineering')
-    expect(print).toContain('What your posts claim is not readable yet')
-    expect(print).not.toContain('Verbatim engineering')
+    for (const mode of MODES) {
+      const text = renderText(subjectsUnanswered.render(data, mode, ctx))
+      expect(text, mode).toContain('What your posts claim is not readable yet')
+      expect(text, mode).not.toContain('Verbatim engineering')
+    }
   })
 
-  // THE SAME RULE ON THE TWO NEW RAIL TILES. `refusedFixture` is production's
-  // state today, so this is the sentence a PDF and a `/r/<token>` page of the
-  // page as it stands would actually carry.
-  it('strip the readiness owner from the two rail tiles too', () => {
+  // THE SAME RULE ON SU5. `refusedFixture` is production's state today, so
+  // this is the sentence a reader in the app — and a PDF, and a `/r/<token>`
+  // page — of the page as it stands would actually carry.
+  //
+  // `subjects.ownposts` is NOT in this loop and the omission is deliberate:
+  // its sentence is `OWN_CLAIMS_UNREADABLE` in lib/reading/own-posts.ts, which
+  // this page reads and does not own, and it still carries the owner in its
+  // app arm. Its paper arm is asserted below, which is the guarantee that file
+  // makes today.
+  it('strips the readiness owner from SU5 in every arm', () => {
     const data = refusedFixture()
-    for (const block of [subjectsOwnPosts, subjectsSayHear]) {
-      const app = renderText(block.render(data, 'app', ctx))
-      const paper = renderText(block.render(data, 'print', ctx))
-      expect(app, block.key).toContain('Verbatim engineering')
-      expect(paper, block.key).toContain('not readable on this page yet')
-      expect(paper, block.key).not.toContain('Verbatim engineering')
+    for (const mode of MODES) {
+      const text = renderText(subjectsSayHear.render(data, mode, ctx))
+      expect(text, mode).toContain('there is no ledger to report')
+      expect(text, mode).not.toContain('Verbatim engineering')
     }
+    const paper = renderText(subjectsOwnPosts.render(data, 'print', ctx))
+    expect(paper).toContain('not readable on this page yet')
+    expect(paper).not.toContain('Verbatim engineering')
   })
 
   it('draw no in-app affordance on paper', () => {

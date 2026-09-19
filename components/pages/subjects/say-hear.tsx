@@ -6,7 +6,7 @@ import { fmtInt } from '@/lib/format'
 import { claimCountsLine } from '@/lib/market-tiles'
 import type { OwnClaimRow } from '@/lib/reading/own-posts'
 
-import { SAY_HEAR_CLAIMS_UNREADABLE, SAY_HEAR_CLAIMS_UNREADABLE_OUTSIDE, SAY_HEAR_SHOWN, type SubjectsData } from '@/lib/pages/subjects'
+import { SAY_HEAR_CLAIMS_UNREADABLE, SAY_HEAR_SHOWN, type SubjectsData } from '@/lib/pages/subjects'
 
 // The mock's third rail tile — "Say vs hear" (`subjects.sayhear.rows`, which
 // mock-gap found built on Market and nowhere near this page).
@@ -67,17 +67,12 @@ export const subjectsSayHear: Block<SubjectsData> = {
     const rows = (data.ownPosts?.claims ?? []).slice(0, SAY_HEAR_SHOWN)
 
     if (empty) {
-      // OUR OWN OWNER IS NOT A CLIENT'S BUSINESS OUTSIDE THE APP. `Verbatim
-      // engineering` is a readiness owner — a direction where a reader can
-      // open Settings › Readiness, an internal label where they cannot — and
-      // this page exports, so `print` is a PDF and a `/r/<token>` page. The
-      // precedent is one tile over (`unanswered.tsx`).
-      const said = mode === 'print' && empty === SAY_HEAR_CLAIMS_UNREADABLE
-        ? SAY_HEAR_CLAIMS_UNREADABLE_OUTSIDE
-        : empty
+      // NO MODE-DEPENDENT WORDING HERE ANY MORE. `SAY_HEAR_CLAIMS_UNREADABLE`
+      // carries no readiness owner in ANY arm, so there is nothing for print
+      // to strip — see the vocabulary rule on the constant itself.
       return (
         <BlockFrame title={subjectsSayHear.title} question={subjectsSayHear.question} mode={mode} footer={footer}>
-          <BlockEmpty mode={mode}>{said}</BlockEmpty>
+          <BlockEmpty mode={mode}>{empty}</BlockEmpty>
         </BlockFrame>
       )
     }

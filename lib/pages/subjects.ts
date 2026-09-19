@@ -128,7 +128,30 @@ export const UNANSWERED_BASIS =
   'Counted in the videos we have read on this subject over the period shown, each placed by the day it was posted — not by the calendar month the rest of this page reads. So these are counts, not shares, and carry no change.'
 
 /**
- * What SU3 says about the half of your posts it cannot read.
+ * THE READINESS OWNER IS NEVER THE CLIENT'S WORD — the vocabulary call, made
+ * once, here, because three surfaces were making it separately.
+ *
+ * "— Verbatim engineering" is an OWNER: the name of the team a not-yet-built
+ * half belongs to. It is the right fact on `/dashboard/settings/readiness`,
+ * where the row it belongs to is drawn and a reader can look at it. Anywhere
+ * else it is a ticket the client was handed, and it was being handed to them
+ * in the APP — which is where the paying reader is, not on the PDF the two
+ * `_OUTSIDE` twins were guarding.
+ *
+ * THE RULE (`OWN_POSTS_UNREADABLE`'s, design review nit 25, applied): the
+ * in-app sentence may name the PAGE where the state is recorded — "· Settings
+ * › Readiness" — and only where such a row actually exists. It never names the
+ * owner. And where no row exists the sentence names NEITHER: `lib/readiness/
+ * compute.ts` has no row for the claims ledger at all, so pointing a client at
+ * Readiness here would send them to a page that says nothing about it.
+ *
+ * SO THERE IS ONE SENTENCE PER STATE, not two. The `_OUTSIDE` twins existed
+ * only to strip the owner and are gone rather than left as aliases: an alias
+ * is an invitation to re-add the owner on one side of it. Competitive's
+ * "— not built yet · Verbatim engineering" (competitive-surface.ts) is the
+ * same call and takes the same answer.
+ *
+ * ---- what SU3 says about the half of your posts it cannot read -------------
  *
  * A question is "answered" here when one of your own posts is ABOUT it —
  * `videos.topics`. The other half of the evidence is what those posts CLAIM
@@ -140,13 +163,6 @@ export const UNANSWERED_BASIS =
  * as a zero.
  */
 export const UNANSWERED_CLAIMS_UNREADABLE =
-  'We match these against what your posts are about. What your posts claim is not readable yet — Verbatim engineering.'
-
-/** The same caveat WITHOUT the readiness owner, for a reader outside the
- *  workspace — a brief's PDF and its `/r/<token>` share page (WP19). The half
- *  we could not read is still named; only our internal owner is dropped, the
- *  same rule as OWN_POSTS_UNREADABLE_OUTSIDE. */
-export const UNANSWERED_CLAIMS_UNREADABLE_OUTSIDE =
   'We match these against what your posts are about. What your posts claim is not readable yet.'
 
 /**
@@ -158,15 +174,10 @@ export const UNANSWERED_CLAIMS_UNREADABLE_OUTSIDE =
  * the answer to a different question, on a tile that is not about posts, and
  * printed a second time by Your own posts one tile above. The unreadable half
  * is the same half; the sentence is this block's.
+ *
+ * And it carries no readiness owner either, for the reason above.
  */
 export const SAY_HEAR_CLAIMS_UNREADABLE =
-  'What your posts claim is not readable on this page yet, so there is no ledger to report — Verbatim engineering.'
-
-/** The same, without the readiness owner, for a reader outside the workspace —
- *  a PDF and its `/r/<token>` page. `Verbatim engineering` is an internal
- *  OWNER: it is a direction where a reader can open Settings › Readiness, and
- *  a leaked ticket where they cannot. */
-export const SAY_HEAR_CLAIMS_UNREADABLE_OUTSIDE =
   'What your posts claim is not readable on this page yet, so there is no ledger to report.'
 
 /** Reddit's own caveat wherever a question count leans on it (design §3 SU3). */
