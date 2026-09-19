@@ -17,7 +17,7 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 import type { QuoteRef } from '@/lib/blocks/types'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { SpokenLine, ThemeBlock, VoiceSurfaceData } from '@/lib/pages/voice-surface'
-import { heardLine, reachAxisMax } from '@/lib/pages/voice-surface'
+import { VOICES_WORD, heardLine, reachAxisMax } from '@/lib/pages/voice-surface'
 
 // VO3 · A theme, in full (design §3 VO3; ported to the artboard, Block D
 // wave 2).
@@ -109,11 +109,17 @@ function Line({ label, note, mode, children }: { label: string; note?: ReactNode
   )
 }
 
-/** "2 of 182 voices", or just "Voices" when there are none to count. */
+/** "2 of 182 voices", or just "Voices" when there are none to count.
+ *
+ *  `voices` IS THE BLOCK'S ONE WORD FOR `themes.evidence_count` (VOICES_WORD,
+ *  lib/pages/voice-surface.ts). The on-camera figure's basis prints the same
+ *  number — the loader assigns `quotesOf` and `onCameraOf` from that one
+ *  column — and called it "quotes" until wave 3. */
 function voicesLabel(t: ThemeBlock): string {
-  if (t.quotes.length === 0) return 'Voices'
-  if (t.quotesOf == null) return `${fmtInt(t.quotes.length)} ${t.quotes.length === 1 ? 'voice' : 'voices'}`
-  return `${fmtInt(t.quotes.length)} of ${fmtInt(t.quotesOf)} voices`
+  const cap = `${VOICES_WORD[0].toUpperCase()}${VOICES_WORD.slice(1)}`
+  if (t.quotes.length === 0) return cap
+  if (t.quotesOf == null) return `${fmtInt(t.quotes.length)} ${t.quotes.length === 1 ? 'voice' : VOICES_WORD}`
+  return `${fmtInt(t.quotes.length)} of ${fmtInt(t.quotesOf)} ${VOICES_WORD}`
 }
 
 /** The prior month's share of its OWN month, off the verdict's other side. */
@@ -321,7 +327,13 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
             // this month's videos, one line above a reach note that divides
             // this month's platform mix. Production printed those two together
             // and they contradicted each other.
-            base={<>of the {fmtInt(t.onCameraOf as number)} quotes behind this theme, counted over the whole update, not this month</>}
+            // AND IN THE BLOCK'S ONE WORD FOR THIS POPULATION (`VOICES_WORD`).
+            // `onCameraOf` and `quotesOf` are both `themes.evidence_count` —
+            // the loader assigns them from the same column, so they are always
+            // equal — and this line called them "quotes" while the heading
+            // three inches above called them "voices". The artboard's word is
+            // the heading's.
+            base={<>of the {fmtInt(t.onCameraOf as number)} {VOICES_WORD} behind this theme, counted over the whole update, not this month</>}
           />
         ) : null}
       </div>

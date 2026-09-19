@@ -720,7 +720,25 @@ export function heardLine(input: {
 }
 
 /**
- * "1 of the 12 quotes behind this theme was said on camera rather than typed —
+ * ONE WORD FOR ONE POPULATION, and this is the population.
+ *
+ * `themes.evidence_count` is the cited evidence behind a theme, and VO3 states
+ * it twice — once as the heading over the quote grid ("6 of 182 …") and once
+ * as the basis under the on-camera figure ("17 of the 182 …"). Those were
+ * "voices" and "quotes", two words for one count, three inches apart, on a
+ * page whose rule is that a word has one fixed meaning. The artboard settles
+ * it: its heading is "Six of the voices" and it never uses the other word for
+ * this number, so `voices` is the word and the sentence below takes it from
+ * here rather than spelling it out.
+ *
+ * (The footnote's "quotes carry platform and date only" is a different
+ * sentence about a different thing — what we print beside someone's words —
+ * and is the artboard's own.)
+ */
+export const VOICES_WORD = 'voices'
+
+/**
+ * "1 of the 12 voices behind this theme was said on camera rather than typed —
  * over the whole update, not this month."
  *
  * THE SCOPE IS PART OF THE FIGURE. `themes.video_evidence_count` and
@@ -736,7 +754,7 @@ export function onCameraScope(videoEvidenceCount: number | null | undefined, evi
   const total = Math.max(0, Math.trunc(Number(evidenceCount)))
   const n = Math.min(Math.trunc(Number(videoEvidenceCount ?? 0)), total)
   if (!Number.isFinite(n) || n <= 0) return null
-  return `${fmtInt(n)} of the ${fmtInt(total)} quotes behind this theme ${n === 1 ? 'was' : 'were'} said on camera rather than typed — counted over the whole update, not over this month.`
+  return `${fmtInt(n)} of the ${fmtInt(total)} ${VOICES_WORD} behind this theme ${n === 1 ? 'was' : 'were'} said on camera rather than typed — counted over the whole update, not over this month.`
 }
 
 /**

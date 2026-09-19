@@ -5,7 +5,7 @@ import type { Verdict } from '@/lib/reading/verdicts'
 import type { MonthPoint } from '@/lib/reading/series'
 import type { Mover } from '@/lib/pages/overview'
 import type { VoiceSurfaceData } from '@/lib/pages/voice-surface'
-import { PERSONA_VIDEO_FLOOR, voiceSurfaceHref } from '@/lib/pages/voice-surface'
+import { PERSONA_VIDEO_FLOOR, onCameraScope, voiceSurfaceHref } from '@/lib/pages/voice-surface'
 import { methodFixture, methodRefusedFixture, methodRefusedRecordFixture, recordBandFixture } from '@/lib/test/method-fixture'
 import { moodShares } from '@/lib/reading/mood'
 
@@ -204,9 +204,16 @@ export function voiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurface
         }),
       },
       toneNote: null,
-      onCamera: '17 of the 120 quotes behind this theme were said on camera rather than typed — counted over the whole update, not over this month.',
+      // ONE POPULATION, ONE NUMBER. `onCameraOf` and `quotesOf` are both
+      // `themes.evidence_count` in the loader (voice-surface.ts, the same
+      // `themeRow.evidence_count` two lines apart), so they are ALWAYS equal;
+      // written as 120 against 182 the block printed two denominators for one
+      // population three inches apart, in a state no production read can
+      // reach. And the sentence comes from `onCameraScope` rather than being
+      // typed, so the fixture cannot say something the loader would not.
+      onCamera: onCameraScope(17, 182),
       onCameraSaid: 17,
-      onCameraOf: 120,
+      onCameraOf: 182,
       // SIX, WHICH IS WHAT `THEME_QUOTES` ALLOWS AND WHAT THE ARTBOARD DRAWS.
       // Three filled one row of the three-column grid, so the second row —
       // its gutter, its baseline against the cite block, and the height the

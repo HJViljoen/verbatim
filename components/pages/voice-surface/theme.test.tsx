@@ -155,10 +155,25 @@ describe('voiceTheme', () => {
   it('draws the on-camera count as a figure carrying its own basis (D15)', () => {
     const text = draw()
     expect(text).toContain('17 said it on camera')
-    expect(text).toContain('of the 120 quotes behind this theme, counted over the whole update, not this month')
+    expect(text).toContain('of the 182 voices behind this theme, counted over the whole update, not this month')
     // Once, not twice: the sentence form is for the arm where the numbers are
     // absent.
     expect(text.split('said on camera rather than typed')).toHaveLength(1)
+  })
+
+  it('states ONE population with ONE denominator and ONE word for it', () => {
+    // `quotesOf` and `onCameraOf` are both `themes.evidence_count` in the
+    // loader, so no production read can make them differ — the fixture said
+    // 182 and 120, and the block printed two denominators for one population
+    // three inches apart. Worse, it called that population "voices" in the
+    // heading and "quotes" in the basis, on a page whose rule is that a word
+    // has one fixed meaning. The artboard's word is "voices".
+    const t = voiceFixture().theme
+    expect(t.onCameraOf).toBe(t.quotesOf)
+    const text = draw()
+    expect(text).toContain('6 of 182 voices')
+    expect(text).toContain('of the 182 voices behind this theme')
+    expect(text).not.toContain('quotes behind this theme')
   })
 
   it('keeps the month-by-month drawing at the size it was drawn for below xl', () => {
