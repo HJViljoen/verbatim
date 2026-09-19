@@ -8,7 +8,7 @@ import { ADVICE_REQUESTED_GONE } from '@/lib/pages/market-surface'
 import { MOVES_UNLOCK } from '@/lib/pages/overview'
 import { pageModule } from '@/components/pages/registry'
 import type { AdviceRow } from '@/lib/pages/market-surface'
-import { MARKET_BLOCKS, startClasses, tileGrid, tileRows } from './index'
+import { MARKET_BLOCKS, MarketSurfacePage, startClasses, tileGrid, tileRows } from './index'
 import { marketConclusions } from './conclusions'
 import { marketAdvice } from './advice'
 import { marketCard } from './card'
@@ -909,5 +909,44 @@ describe('the sections that are not built', () => {
   it('names MK6 for a workspace with no plan, and drops it once there is one', () => {
     expect(renderText(marketUnlocks.render(unrecordedFixture(), 'app', ctx))).toContain('Plans re-checked')
     expect(renderText(marketUnlocks.render(marketFixture(), 'app', ctx))).not.toContain('Plans re-checked')
+  })
+})
+
+// ---- the masthead · the artboard's ruling ---------------------------------
+
+/**
+ * THE SERIF MASTHEAD, RULED BY THE ARTBOARD AND MEASURED HERE SO IT CANNOT
+ * DRIFT (block-d-review `market` finding 6, referred twice and open since).
+ *
+ * The finding: the masthead is set in IBM Plex Serif, the face MASTER reserves
+ * for speech, so the product's own sentence and a commenter's own words are
+ * typeset identically — a typeface ROLE against THE MOCK IS THE SPEC.
+ *
+ * THE MOCK ANSWERS IT, AND SO DOES THE SYSTEM. `Market.dc.html:111` is the
+ * masthead node and it is `font-family: 'IBM Plex Serif'; font-size: 17px;
+ * font-weight: 500; line-height: 1.35; letter-spacing: -.005em; color:
+ * #26292C; text-wrap: pretty; max-width: 86ch` — which is what this page
+ * prints, class for declaration. And it is not the artboard freelancing: the
+ * design system's own type ramp (`spec/design-system.md:69`) has a row for it
+ * — "Hero lead (the page's one sentence) · **serif** · 17px · 500 · 1.35 ·
+ * -0.005em" — so the hero lead is the ONE non-quote serif node the system
+ * declares, and `--font-serif`'s "verbatim quotes ONLY" comment three tables
+ * up is about the token's other users, not a ban on the ramp above it.
+ * `Main.dc.html:124` and `Subjects.dc.html:294` draw the same node the same
+ * way, so this is a rule the mock states three times.
+ *
+ * NO CHANGE MADE, AND THE MEASUREMENT IS THE COMMIT. Competitive was asked the
+ * same question and does not have it: `Competitive.dc.html` contains zero
+ * serif nodes and `components/pages/competitive-surface/` contains zero
+ * `font-serif`, so there is no masthead there to rule on.
+ */
+describe('the masthead', () => {
+  it('is set at the artboard’s hero-lead ramp, declaration for declaration', () => {
+    const markup = render(MarketSurfacePage({ data: marketFixture() }))
+    // Market.dc.html:111 · spec/design-system.md:69. Overview's own hero lead
+    // pins the same three (components/pages/overview/sentence.test.tsx:165);
+    // the tracking and the measure are Market's own and are the artboard's.
+    expect(markup).toContain('font-serif text-[17px] font-medium leading-[1.35] tracking-[-0.005em]')
+    expect(markup).toContain('max-w-[86ch]')
   })
 })
