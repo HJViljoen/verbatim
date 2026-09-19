@@ -11,7 +11,7 @@ import { quoteRef } from '../../renderables/quotes-freeze'
 import type { Quote } from '../../renderables/types'
 import { competitorThemes, mergeAcrossBuckets, trajectoryWord, type MergeThemeRow, type MergedConcern } from './merge'
 import { DEFAULT_DOCUMENT_ROLE, isDocumentRole, type DocBriefSection, type DocumentRole, type DocumentSettings } from './types'
-import { loadBriefReading, type BriefSlideFigures } from './load-reading'
+import { loadBriefReading, type BriefReadingResult, type BriefSlideFigures } from './load-reading'
 import type { BriefReading } from './reading'
 import type { BriefEntry, BriefSurface, MissingInput } from './sections'
 import { readingHandle } from '../../reading/read'
@@ -130,6 +130,19 @@ export async function loadSignals(
      *  passed down. Absent only for a caller with no build behind it (a
      *  script, a fixture), which then takes the clock. */
     now?: string
+    /**
+     * The month's reading, already loaded — `researchStep`'s, carried through
+     * the step boundary so a build pays for six page loaders once instead of
+     * three times.
+     *
+     * ITS QUOTES ARE ALREADY REFS. A step's output is memoised by Inngest and
+     * no comment's words may be in it (AGENTS.md), so `researchStep` freezes
+     * this the way it already freezes its answers. Nothing is lost by that:
+     * `createSnapshot` freezes the whole artefact on the way to the row
+     * anyway, and the writer never sees a surface — `write.ts` reads
+     * `signals.reading != null` and nothing else off these fields.
+     */
+    brief?: BriefReadingResult
   },
 ): Promise<Signals> {
   const { clientId } = args
@@ -258,7 +271,17 @@ export async function loadSignals(
   // a reading of ONE MONTH, and every surface is read on that month, because
   // the stamp, the denominators and the method page's basis are the month's
   // and nothing else.
-  const brief = await loadBriefReading(
+  //
+  // AND IT IS READ ONCE PER BUILD, NOT ONCE PER STEP. `args.brief` is the
+  // reading `researchStep` already paid for, carried through Inngest's step
+  // memoisation exactly as `readingAt` is (`ResearchOut.brief`). Without it
+  // `writeStep` and `freezeStep` each ran `loadBriefReading` again — six page
+  // loaders in one `Promise.all`, each with its own `READ_CONCURRENCY = 12`,
+  // plus the record, the delivery record and the readiness rows — three times
+  // for one document, against a hard 5-slot Inngest concurrency shared with the
+  // pipeline. Absent (a script, a fixture, a build already in flight when this
+  // landed) it reads, exactly as before.
+  const brief = args.brief ?? await loadBriefReading(
     { supabase: admin, clientId, reading: readingHandle(clientId), params: {} },
     { role, now: args.now },
   ).catch((e) => {
