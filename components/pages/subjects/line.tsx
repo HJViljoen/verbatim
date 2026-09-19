@@ -6,7 +6,7 @@ import { calendarBandsFor, calendarRulesFor, seriesToCalendar } from '@/lib/char
 import { backReadBandLabel, type CalendarSeries } from '@/lib/charts/calendar'
 import { fmtPct, monthName } from '@/lib/format'
 import { GAP_WORDS } from '@/lib/reading/gap'
-import { sideLegend, type SubjectsData } from '@/lib/pages/subjects'
+import { endReadings, sideLegend, type SubjectsData } from '@/lib/pages/subjects'
 
 // SU2 · the monthly line (design §3 SU2 "you, each rival and the category by
 // month as lines with the counts"; the mock's (a)).
@@ -109,6 +109,9 @@ export const subjectsLine: Block<SubjectsData> = {
         }
       : null
 
+    // What the chart's end labels say, for the print arm that turns them off.
+    const ends = endReadings(pane.sides, pane.series)
+
     return (
       <BlockFrame
         title={`Share of videos where ${pane.name.toLowerCase()} came up`}
@@ -136,10 +139,28 @@ export const subjectsLine: Block<SubjectsData> = {
             // carrying and where a reader looks for it.
             mode={mode}
             ctx={ctx}
+            // THE GUTTER IS NOT THERE ON PAPER, SO THE LABELS ARE NOT EITHER
+            // (Block D wave 3b, `decks`). `CalendarLine`'s own `endLabels`
+            // contract prescribes this case: the label is drawn at
+            // `width - padR + 10` and clipped by nothing, so a caller whose
+            // column is too narrow for the gutter "turns it off, gives the
+            // plot the space back, and prints the last reading under the
+            // chart at its own type size". The marketing brief's `mk.subjectline`
+            // is six of twelve columns and "The category 22.0% of 1,388" wants
+            // about 40% of the drawing — it had been running under the gap
+            // card beside it since the sheet was composed, losing the
+            // denominator, which is the one part of an end label that may not
+            // go missing. `endReadings` is that sentence, and it carries the
+            // MONTH each line ends on, which the end label carried and a
+            // level taken off the side would not.
+            endLabels={mode !== 'print'}
           />
         ) : (
           <BlockEmpty mode={mode}>No audience carried a reading of this subject on this axis.</BlockEmpty>
         )}
+        {mode === 'print' && lines.length > 0 && ends ? (
+          <p data-copy="level" className="m-0 font-mono text-[12px] leading-[1.4] tabular-nums text-muted-foreground">{ends}</p>
+        ) : null}
       </BlockFrame>
     )
   },

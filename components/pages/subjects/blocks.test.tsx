@@ -309,6 +309,28 @@ describe('SU2 · the monthly line', () => {
   it('says what is not recorded rather than drawing an empty axis', () => {
     expect(subjectsLine.emptyState(refusedFixture())).toBe('Your subjects are not recorded for this workspace yet.')
   })
+
+  // ON PAPER THE END LABELS COME OFF AND THE READINGS PRINT UNDER THE CHART
+  // (Block D wave 3b, `decks`). `CalendarLine` draws an end label at
+  // `width - padR + 10` and clips it with nothing; on the marketing brief this
+  // block takes six of twelve columns and "The category 22.0% of 1,388" ran
+  // under the gap card beside it, losing the denominator — the one part of an
+  // end label that may not go missing. `endLabels` is the contract's own
+  // remedy and `endReadings` is the sentence it asks for.
+  it('turns the end labels off on paper and prints the last reading under the chart', () => {
+    const paper = render(subjectsLine.render(subjectsFixture(), 'print', ctx))
+    const app = render(subjectsLine.render(subjectsFixture(), 'app', ctx))
+    // The gutter label is a bold sans <text> with the series name in it; the
+    // app draws one and paper does not.
+    expect(app).toContain('font-weight="600"')
+    expect(paper).not.toContain('font-weight="600"')
+    // And nothing is lost: every side's last reading, with its month and its
+    // denominator, in the block's own type.
+    const words = renderText(paper)
+    expect(words).toContain('of 84')
+    expect(words).toContain('of 1,388')
+    expect(paper).toContain('data-copy="level"')
+  })
 })
 
 describe('SU2 · the kind mix', () => {

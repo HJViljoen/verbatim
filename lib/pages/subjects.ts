@@ -785,6 +785,46 @@ export function trailLine(series: MonthSeries | null, label: string): string | n
   return `${steps.join(' → ')} in ${label.toLowerCase()}`
 }
 
+/**
+ * Each drawn line's LAST READING, in words — the sentence that stands in for
+ * the chart's end labels where a column is too narrow for them (Block D wave
+ * 3b, `decks`).
+ *
+ * `CalendarLine`'s own contract says so in as many words: the end label is
+ * drawn at `width - padR + 10` and is clipped by nothing, so "a caller with a
+ * column too narrow for the gutter turns it off, gives the plot the space
+ * back, and prints the last reading under the chart at its own type size". The
+ * marketing brief is that column — `mk.subjectline` takes six of twelve, and
+ * "The category 22.0% of 1,388" wants about 40% of the drawing's width — and
+ * the labels had been running under the gap card beside them since the sheet
+ * was composed.
+ *
+ * IT IS THE SERIES' OWN LAST READING, NOT THIS MONTH'S LEVEL. `SubjectSide.pct`
+ * is September; a side whose newest reading is August would be printed under a
+ * September date by a sentence built from the side, and the end label it
+ * replaces carries the month the line actually ends on. So it walks the same
+ * points the chart draws, takes the last one with a share, and dates it.
+ *
+ * Null where no line carries a reading at all — then there is nothing to label
+ * and the chart's own empty words stand.
+ *
+ * Pure.
+ */
+export function endReadings(
+  sides: readonly SubjectSide[],
+  series: readonly MonthSeries[],
+): string | null {
+  const parts: string[] = []
+  for (const side of sides) {
+    const line = series.find((s) => s.audience === side.audience)
+    if (!line) continue
+    const last = [...line.points].reverse().find((p) => p.pct != null && p.videos != null)
+    if (!last) continue
+    parts.push(`${side.label} ${monthName(last.month).split(' ')[0]} ${fmtPct(last.pct as number)} of ${fmtInt(last.videos as number)}`)
+  }
+  return parts.length > 0 ? parts.join(' · ') : null
+}
+
 /** The words above the axis about which lines carry an n (design §3 SU2's
  *  gate, and the mock's own sentence). ONE sentence for a run of lines, never
  *  one per line. */

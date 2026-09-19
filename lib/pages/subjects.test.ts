@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   answeredBy,
   axisNote,
+  endReadings,
   buildSides,
   gapSideOf,
   matchWords,
@@ -609,5 +610,56 @@ describe('paneGap', () => {
     const gap = paneGap(args({ b: gapSideOf(rival({ k: null, n: null, pct: null, observed: false })) }))!
     expect(gap.state).toBe('too_little_data')
     expect(gapLine(gap)).toContain('Freitag — not tracked')
+  })
+})
+
+// ── endReadings (Block D wave 3b, `decks`) ──────────────────────────────────
+//
+// The sentence that stands in for the chart's end labels where a column is too
+// narrow for them. `CalendarLine` draws an end label at `width - padR + 10`
+// and clips it with nothing, so on the marketing brief — six of twelve columns
+// — "The category 22.0% of 1,388" ran under the gap card beside it and lost
+// its denominator, which is the one part of an end label that may not go
+// missing. The block turns the labels off on its print arm and prints this.
+describe('endReadings', () => {
+  const MONTHS = ['2026-07-01', '2026-08-01', '2026-09-01']
+  const side = (over: Partial<SubjectSide>): SubjectSide => ({
+    audience: CLIENT_AUDIENCE, label: 'You', kind: 'you', color: 'var(--you)',
+    k: 26, n: 84, pct: 31, observed: true, silence: null, verdict: null, direction: null,
+    previous: null, kinds: [], kindVerdicts: {}, reddit: null, ...over,
+  })
+  const line = (audience: string, pcts: (number | null)[], videos: (number | null)[]): MonthSeries => ({
+    audience,
+    names: [audience],
+    objectId: 's1',
+    objectLabel: 'Durability',
+    points: MONTHS.map((month, i) => ({
+      month, state: 'frozen', videos: videos[i], comments: null, k: null, pct: pcts[i], labels: [],
+    } as unknown as MonthPoint)),
+    notes: [],
+    firstReadable: MONTHS[0],
+    substrate: 'months',
+  } as unknown as MonthSeries)
+
+  it('names each line, the month it ends on, its share and the denominator', () => {
+    const out = endReadings(
+      [side({}), side({ audience: INDUSTRY_AUDIENCE, label: 'The category', kind: 'category' })],
+      [line(CLIENT_AUDIENCE, [29, 30, 31], [82, 83, 84]), line(INDUSTRY_AUDIENCE, [19, 20, 22], [1290, 1340, 1388])],
+    )
+    expect(out).toBe('You Sep 31.0% of 84 · The category Sep 22.0% of 1,388')
+  })
+
+  // THE SERIES' OWN LAST READING, NOT THIS MONTH'S LEVEL. `SubjectSide.pct` is
+  // September; a side whose newest reading is August would be dated September
+  // by a sentence built from the side, and the end label it replaces carries
+  // the month the line actually ends on.
+  it('dates a line by the last month it has a reading in, not by the newest month on the axis', () => {
+    const out = endReadings([side({})], [line(CLIENT_AUDIENCE, [29, 30, null], [82, 83, null])])
+    expect(out).toBe('You Aug 30.0% of 83')
+  })
+
+  it('skips a side with no series and a series with no reading at all', () => {
+    expect(endReadings([side({})], [])).toBeNull()
+    expect(endReadings([side({})], [line(CLIENT_AUDIENCE, [null, null, null], [null, null, null])])).toBeNull()
   })
 })
