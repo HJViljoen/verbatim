@@ -70,9 +70,13 @@ describe('CO1 · the rival selection', () => {
     const text = renderText(competitiveRivals.render(quietRivalFixture(), 'app', ctx))
     expect(text).toContain('nothing of theirs was read this window')
     // AND THE COUNT CARRIES ITS SPAN. `countAnalysedByRival` has no date
-    // filter, so this is the whole corpus beside a WINDOW state — "in all" is
-    // what stops 319 reading as a contradiction of the standings' 42 of 449.
-    expect(text).toContain('1 of their videos read in all')
+    // filter, so this is the whole corpus beside a WINDOW state, and saying so
+    // is what stops 319 reading as a contradiction of the standings' 42 of 449.
+    // NOT "in all" (competitive 5): the head-to-head footer 600px down uses
+    // that phrase for `readThisMonth`, which is every AUDIENCE this month, so
+    // the two would name two spans with one phrase on one page.
+    expect(text).toContain('1 of their videos read since we started')
+    expect(text).not.toContain('of their videos read in all')
   })
 
   it('says a rival you stopped tracking cannot be listed yet', () => {

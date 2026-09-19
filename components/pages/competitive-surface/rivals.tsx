@@ -45,10 +45,23 @@ function Option({ option, mode }: { option: RivalOption; mode: RenderMode }) {
           state. So the pill read "Ottobock read this window · 319 of their
           videos read" six hundred pixels above standings saying Ottobock is
           42 of 449 for September, and 319 read as a contradiction of the
-          window figure rather than as a different measure. "in all" is the
-          head-to-head footer's own phrase for the same span ("of 449 read in
-          all"), so the page names one span one way. */}
-      {option.analysed != null && option.analysed > 0 ? <> · <span data-copy="figure">{fmtInt(option.analysed)}</span> of their videos read in all</> : null}
+          window figure rather than as a different measure.
+
+          AND "in all" WAS NOT THE ANSWER (competitive 5). The fix borrowed the
+          head-to-head footer's phrase on the grounds that it names the same
+          span, and it does not. `readThisMonth` is documented at
+          lib/reading/head-to-head.ts:177 as "Every audience's videos in the
+          MONTH, summed", and :266 spends it as "42 videos of theirs read in
+          Sep 2026, of 449 read in all" — so there "in all" means across every
+          AUDIENCE, this month. Here `countAnalysedByRival`
+          (lib/pages/competitive-surface.ts:1080-1110) has no date filter and
+          means the whole corpus, ALL TIME. Both render on one page about 600px
+          apart, and because the fixture's month total is also 449 the
+          available reading of the pill's "in all" was the footer's month-wide
+          one — which puts 319 straight back into contradiction with 42 of 449.
+          So the pill names its span outright, in the words the page bar
+          already uses for it, and "in all" is left to the footer. */}
+      {option.analysed != null && option.analysed > 0 ? <> · <span data-copy="figure">{fmtInt(option.analysed)}</span> of their videos read since we started</> : null}
     </span>
   </>
 
@@ -121,7 +134,7 @@ export const competitiveRivals: Block<CompetitiveSurfaceData> = {
     )
   },
 
-  // NO FIGURES. "N of their videos read in all" is a count of the corpus, not a
+  // NO FIGURES. "N of their videos read since we started" is a count of the corpus, not a
   // reading of a month; the shares are the standings' to declare. The pill says
   // that span out loud rather than leaving it here (D15).
   figures(): FigureTable {
