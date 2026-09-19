@@ -15,7 +15,6 @@ import type { CoverText } from '@/lib/reports/types'
 import { sendDidNotFinish, sendFailureSentence } from '@/lib/schedules/copy'
 import { exportedRows, exportedLine, type ExportSnapshot } from '@/lib/exports/rows'
 import { rows as readRows } from '@/lib/pages/read'
-import { PRIVACY_LINE } from '@/lib/reading/method'
 import { BriefCards } from '@/components/reports/brief-cards'
 import { ArchiveTile, type ArchiveColumn, type ArchiveItem } from '@/components/reports/archive-lists'
 import { StudioCard } from '@/components/reports/studio-card'
@@ -674,12 +673,16 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
           // a reader take an unread record for an empty one.
           presetNote={chosen ? presetLine(chosen) : ctx.updatesUnread ? UPDATES_UNREAD_LINE : null}
           filter={filter}
+          // PRINTED ONCE ON THE SCREEN. `PRIVACY_LINE` is the last line of
+          // `methodLines`, which this page prints in full at the foot (the
+          // method footnote below), so the archive's own footer said the same
+          // sentence 60px above it. The footer copy predates that footnote.
+          // It is also the copy that clips at 375, so dropping it closes both.
           footer={
             <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <span className="text-[12px] text-muted-foreground">
                 Share links are created on an item below.
               </span>
-              <span className="font-mono text-[11px] font-normal text-muted-foreground">{PRIVACY_LINE}</span>
             </span>
           }
         />
