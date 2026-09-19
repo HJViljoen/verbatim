@@ -355,6 +355,20 @@
   .vb-cal svg { --cal-k: min(2.6, max(1, var(--cal-w, 880) / 290)); --cal-ke: min(1.6, var(--cal-k)); }
 }
 
+/* The below-floor gutter mark's radius (components/charts/calendar-line.tsx,
+   SH14 as amended by shell R1). The mark shares a four-to-eleven unit band
+   with the month labels, and SH1 grows those labels in the same viewBox units;
+   dividing the radius by the same `--cal-k` keeps the ring the size it was on
+   the glass while it takes less of the band exactly when the labels take more.
+   The `r="2.5"` attribute in the markup is the value for anything that does
+   not apply this. */
+.vb-cal svg circle.vb-cal-gutter-mark { r: calc(2.5px / var(--cal-k, 1)); }
+.vb-cal svg rect.vb-cal-gutter-mark {
+  width: calc(5px / var(--cal-k, 1));
+  height: calc(5px / var(--cal-k, 1));
+  translate: calc((1 - 1 / var(--cal-k, 1)) * 2.5px) calc((1 - 1 / var(--cal-k, 1)) * 2.5px);
+}
+
 /* Ring ↔ legend hover sync (components/charts/ring-sync.tsx): the hovered
    segment grows by 4px, its legend row takes the inner-block tint. */
 [data-ring-sync] circle[data-seg][data-active] {

@@ -206,10 +206,30 @@ export function CalendarLine({
   if (!months.length || !series.length) return null
 
   const g = calendarGeometry({ axis: months, width, height, padL, padR })
-  // Five units lower than `calendarGeometry`'s own gutterY, which puts a 3.5r
-  // ring's top edge ON the baseline (SH14). The month labels sit at
-  // `g.labelY`, 23 units under the baseline, so there is room.
-  const gutterY = g.gutterY + 5
+  // THE GUTTER TRACK, AND WHY IT IS NOT FIVE UNITS LOWER (SH14, amended at the
+  // wave-3 merge — shell R1).
+  //
+  // SH14 moved the below-floor marks off the baseline by adding 5 to
+  // `calendarGeometry`'s own gutterY, on the reasoning that the month labels
+  // sit at `g.labelY`, 23 units under the baseline, "so there is room". That
+  // was true of a 10-unit label and is not true of SH1's. SH1 sets every label
+  // to `calc(10px * var(--cal-k))` so the type survives a narrow container, and
+  // a font-size inside a viewBox is in VIEWBOX UNITS: at `--cal-k` 1.7 — a
+  // container under about 700px — a label is 17 units tall, its cap reaches
+  // y=191, and a 3.5r ring centred at 191 spans 187.5 to 194.5. The two
+  // overprinted: green rings on the "p" of Apr, the "a" of May, the "u" of Jun.
+  //
+  // The band between the baseline (180) and the label's cap is all there is,
+  // and SH1 caps `--cal-k` at 2.6, where the cap reaches y=184.5 and the band
+  // is four units wide. So BOTH ends give: the track goes back to
+  // `calendarGeometry`'s own gutterY, which centres the mark in the band, and
+  // the mark's radius is divided by `--cal-k` in CSS (`r` is a geometry
+  // property on `circle`, and the 2.5 attribute stays as the value for anything
+  // that does not apply it) so the ring keeps its size ON GLASS while taking
+  // less of the viewBox exactly when the labels take more. At k=1 the ring
+  // spans 183.5-188.5 and at k=2.6 about 185-187: below the baseline, which is
+  // SH14's point, and clear of the labels, which is this.
+  const gutterY = g.gutterY
   const scale = valueScale(series, { zeroBase, top: g.top, baseline: g.baseline })
   // The same values `valueScale` measures its top from.
   const plotted: number[] = []
@@ -543,10 +563,10 @@ function SeriesMarks({
           return (
             <g key={`m${i}`}>
                 {p.state === 'below_floor' && (
-                <circle cx={x} cy={gutterY} r={3.5} fill="var(--tile)" stroke={series.color} strokeWidth={1.5} />
+                <circle className="vb-cal-gutter-mark" cx={x} cy={gutterY} r={2.5} fill="var(--tile)" stroke={series.color} strokeWidth={1.5} />
               )}
               {p.state === 'below_numerator' && (
-                <rect x={x - 3} y={gutterY - 3} width={6} height={6} fill="var(--tile)" stroke={series.color} strokeWidth={1.5} />
+                <rect className="vb-cal-gutter-mark" x={x - 2.5} y={gutterY - 2.5} width={5} height={5} fill="var(--tile)" stroke={series.color} strokeWidth={1.5} />
               )}
             </g>
           )

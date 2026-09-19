@@ -124,19 +124,23 @@ describe('CalendarLine', () => {
 
   it('puts the below-floor month in the gutter under the baseline, never on the line', () => {
     const markup = render(CalendarLine({ axis: AXIS, series: [you] }))
-    // The mock's April token: r=3.5, surface fill, ringed in the entity
-    // colour. It sat at baseline + 6 = 186, which at print scale is ON the
-    // baseline; Block D wave 3 (SH14) moved it to baseline + 11 and gave it a
-    // dashed track of its own, so "off the scale" is visible before any word.
-    expect(markup).toContain('cy="191"')
-    expect(markup).toContain('r="3.5"')
+    // The mock's April token: surface fill, ringed in the entity colour, on a
+    // dashed track of its own so "off the scale" is visible before any word
+    // (SH14). SH14 also pushed it to baseline + 11 for clearance and the
+    // wave-3 merge took that back out — at `--cal-k` 1.7 the month labels SH1
+    // scales reach y=191 and the ring overprinted them (shell R1). It sits at
+    // `calendarGeometry`'s own baseline + 6, centred in the band it shares
+    // with the labels, and its radius is divided by `--cal-k` in CSS.
+    expect(markup).toContain('cy="186"')
+    expect(markup).toContain('r="2.5"')
+    expect(markup).toContain('class="vb-cal-gutter-mark"')
     expect(markup).toContain('stroke-dasharray="1 3"')
     expect(markup).toContain('too few videos this month to read against')
   })
 
   it('gives the below-numerator month its own token, not the below-floor one', () => {
     const markup = render(CalendarLine({ axis: AXIS, series: [rival] }))
-    expect(markup).toContain('<rect x="310.6" y="188" width="6" height="6" fill="var(--tile)" stroke="var(--comp)"')
+    expect(markup).toContain('<rect class="vb-cal-gutter-mark" x="311.1" y="183.5" width="5" height="5" fill="var(--tile)" stroke="var(--comp)"')
     expect(markup).toContain('too few of this one to read')
   })
 
