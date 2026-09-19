@@ -49,8 +49,9 @@ import { heardLine, reachAxisMax } from '@/lib/pages/voice-surface'
 // THE TITLE ROW CARRIES A PREVALENCE LEVEL, NOT A TIER CHIP (D11). The mock
 // puts "Strong evidence" beside the theme's name in the green tint. That word
 // is a CONCLUSION's tier (`lib/curation.ts gateTier`, printed by Market), and a
-// theme's month reading earns a different ladder — "Widespread · 130 of 1,388
-// videos". The chip's SHAPE is ported and its colour is not: the green does
+// theme's month reading earns a different ladder — "Recurring · 130 of 1,388
+// videos", the rung `prevalenceTier` assigns those two numbers. The chip's
+// SHAPE is ported and its colour is not: the green does
 // four jobs in this product and "a measurement exists" is not one of them.
 
 /** How much of the theme's name the chart's end label can hold — see

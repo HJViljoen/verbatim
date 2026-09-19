@@ -52,8 +52,13 @@ describe('voiceTheme', () => {
     expect(text).toContain('130 of 1,388 this month')
   })
 
-  it('prints the calibrated level only with its denominator', () => {
-    expect(draw()).toContain('Widespread · 130 of 1,388 videos')
+  it('prints the calibrated level only with its denominator, and the word the ladder assigns', () => {
+    // 130 of 1,388 is 9.4%, under `PREVALENCE.widespreadShare` — so the rung is
+    // Recurring. The fixture used to say "Widespread" beside those two numbers,
+    // which `prevalenceTier` cannot produce and which the page's own glossary
+    // ("at least 15%") refutes three inches away.
+    expect(draw()).toContain('Recurring · 130 of 1,388 videos')
+    expect(draw()).not.toContain('Widespread')
   })
 
   it('says when it was first heard and how many of the drawn months carried it', () => {

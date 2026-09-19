@@ -1,3 +1,4 @@
+import { prevalenceTier } from '@/lib/calibration'
 import { horizonWindow } from '@/lib/reading/horizon'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '@/lib/rivals'
 import type { Verdict } from '@/lib/reading/verdicts'
@@ -166,7 +167,17 @@ export function voiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurface
       k: 130,
       n: 1388,
       pct: 9.4,
-      prevalence: 'widespread',
+      // THE LADDER'S ANSWER, NOT A WORD TYPED BESIDE THE NUMBERS. Written by
+      // hand as `'widespread'`, the chip in the artboard's most prominent slot
+      // read "Widespread · 130 of 1,388 videos" — 9.4%, beside a glossary that
+      // defines Widespread as "at least 15%". `loadVoiceSurface` calls
+      // `prevalenceTier` and can never produce that pairing, so the title row
+      // had never been seen in its shipping state and this port's fidelity
+      // argument was made against a render production cannot reach. The fixture
+      // calls the function the loader calls, so the word and the counts cannot
+      // drift apart again — including in the refused arm, which spreads this
+      // object and re-cuts k and n (34 of 388 = 8.8%, also `recurring`).
+      prevalence: prevalenceTier(130, 1388),
       verdict: verdict(),
       direction: 'growing',
       firstHeard: '2026-07-01',
@@ -382,6 +393,11 @@ export function refusedVoiceFixture(over: Partial<VoiceSurfaceData> = {}): Voice
       k: 34,
       n: 388,
       pct: 8.8,
+      // RE-CUT, NOT INHERITED. This arm replaces k and n and the tier is a
+      // function of both; spread from the month above it would be a word about
+      // a different reading. It happens to land on the same rung today, which
+      // is exactly why it has to be computed rather than assumed.
+      prevalence: prevalenceTier(34, 388),
       direction: null,
       // THE OPEN THEME IS THE ONE MOVER THIS MONTH HAS, so it carries that
       // row's verdict and that row's months. It inherited t1's — a +2.6 on the
