@@ -107,7 +107,17 @@ export function WeeklyEmail({ data, shareUrl, appUrl, attached, ctx, preheader }
                             </tr>
                           </tbody>
                         </table>
-                        <div style={{ ...text.small, fontStyle: 'italic', marginTop: 10 }}>{weeklyRuleFor(periodNounFor(data.reading.window))}</div>
+                        {/* THE RULE, AND NOT IN A BORROWED FACE. It was sans
+                            italic at 12px — the artefact's ONLY non-speech
+                            italic, where every other lean on this page is a
+                            commenter's words in serif italic (`BlockQuote`).
+                            DESIGN.md: "Italic is semantic, never decorative",
+                            and `coverage.tsx` quotes that exact rule as its
+                            reason for not reprinting this sentence at the
+                            foot. The identity reserves the lean for speech;
+                            the sentence stays where a reader meets their first
+                            number, in the muted ink it already had. */}
+                        <div style={{ ...text.small, marginTop: 10 }}>{weeklyRuleFor(periodNounFor(data.reading.window))}</div>
                       </td>
                     </tr>
                     <tr>

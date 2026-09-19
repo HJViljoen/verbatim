@@ -73,6 +73,17 @@ describe('the weekly email', () => {
     expect(text.split(WEEKLY_RULE).length - 1).toBe(1)
   })
 
+  // THE LEAN IS FOR SPEECH. The masthead rule was the artefact's only
+  // non-speech italic — sans italic 12px muted — where every other italic here
+  // is a commenter's words in serif (`BlockQuote`). DESIGN.md: "Italic is
+  // semantic, never decorative", the rule `coverage.tsx` already quotes as its
+  // reason for not reprinting this sentence at the foot.
+  it('sets the masthead rule upright — italic on this artefact means a voice', () => {
+    const markup = body(snapshot())
+    const rule = markup.slice(markup.indexOf(WEEKLY_RULE) - 400, markup.indexOf(WEEKLY_RULE))
+    expect(rule).not.toContain('font-style:italic')
+  })
+
   it('stamps the reading date, which M9 will read back out of `data`', () => {
     // In the product's own date form, never raw ISO beside "6 Sep - 13 Sep".
     // It sits in the footer's provenance line now, where the artboard keeps
