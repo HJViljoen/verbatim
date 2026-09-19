@@ -3,6 +3,7 @@ import type { Block, BlockContext } from '@/lib/blocks/types'
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { monthName, shortDate } from '@/lib/format'
+import { READER_FLAGS, THIRTEEN_WORDS } from '@/lib/calibration'
 import { PageFrame, PageGrid } from '@/components/shell/page-grid'
 import { SurfacePageBar } from '@/components/shell/page-bar'
 import { Tile, TileEmpty } from '@/components/shell/tile'
@@ -76,6 +77,14 @@ export function GrowingTile({ children }: { children: ReactNode }) {
 export function voiceContext(params: Record<string, string | undefined> = {}): BlockContext {
   return blockContext('', EMAIL, params)
 }
+
+/** The words this page's legend explains — THIRTEEN_WORDS plus the two reader
+ *  flags, the vocabulary every new reading surface draws from
+ *  (lib/calibration.ts), exactly as `OVERVIEW_LEGEND` is. Exported so the
+ *  route and the review shots mount the same legend: the list was built inline
+ *  in `app/dashboard/voice/page.tsx` and nothing else could reach it, which is
+ *  half of why no wave-2 shot of this page had a legend pill at all. */
+export const VOICE_LEGEND = [...THIRTEEN_WORDS, ...READER_FLAGS]
 
 /**
  * "1 Jul → 30 Sep" — the window the horizon pills resolve to, for the page bar.
