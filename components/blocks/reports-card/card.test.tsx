@@ -24,6 +24,9 @@ describe('the quarterly card', () => {
   it('prints the gate word on every row below six readings, and no arrow', () => {
     const text = renderText(<QuarterlyCardTile card={formingCardFixture()} />)
     expect(text).toContain(MOVEMENT_WORDS.baseline_forming)
+    // Three rows and no pill: the count is the rows', and the card says it
+    // once per row rather than four times in all.
+    expect(text.match(new RegExp(MOVEMENT_WORDS.baseline_forming, 'g')) ?? []).toHaveLength(3)
     expect(text).not.toContain('▲')
     expect(text).not.toContain('▼')
   })
@@ -182,8 +185,11 @@ describe('pillWord', () => {
     expect(pillWord(12, true)).toBe('12 monthly readings stand behind it')
   })
 
-  it('is the gate word below the gate, and the cause where nothing was drawn', () => {
-    expect(pillWord(3, true)).toBe(MOVEMENT_WORDS.baseline_forming)
+  // SAID ONCE. Below the gate every row's badge already reads "not enough
+  // months yet" and the footnote carries the gate sentence, so a pill saying it
+  // a fourth time is the loudest thing on the card in the state Sealand is in.
+  it('says nothing below the gate, where the rows have already said it', () => {
+    expect(pillWord(3, true)).toBeNull()
     expect(pillWord(3, false)).toBe('nothing to compare yet')
     expect(pillWord(9, false)).toBe('nothing to compare yet')
   })

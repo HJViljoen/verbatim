@@ -70,6 +70,7 @@ export function QuarterlyCardTile({
   // swatch on `series.length > 0` and therefore promised a mark that is
   // nowhere on the card, in `formingCardFixture()`, which is production today.
   const anyBaseline = card.series.some((s) => baselineOf(s.label) != null)
+  const pill = pillWord(card.readings, drawn)
 
   return (
     <Tile
@@ -95,7 +96,8 @@ export function QuarterlyCardTile({
       footerNote={drawn && !unlocked ? card.gate : undefined}
     >
       <div className="flex flex-col items-start gap-1.5 sm:flex-row sm:items-center sm:gap-2.5">
-        {/* THE AMBER IS IN THE TINT AND THE RING, NOT IN THE TEXT.
+        {pill && (
+        /* THE AMBER IS IN THE TINT AND THE RING, NOT IN THE TEXT.
             `bg-warning/15 text-warning` is #E6B03C on a 15% tint of itself —
             sampled off this very render at (230,176,60) on (251,243,226),
             1.79:1, under even the 3:1 large-text floor — and it carried the
@@ -104,14 +106,15 @@ export function QuarterlyCardTile({
             in this same tree: the colour still signals, through a stronger
             ring, and the words go to `foreground`. The real fix is a
             `--warning-foreground` token dark enough to carry text, which is a
-            palette change and belongs to whoever owns `app/globals.css`. */}
+            palette change and belongs to whoever owns `app/globals.css`. */
         <span
           className={`inline-block flex-none whitespace-nowrap rounded-full px-2 py-0.5 text-[12px] font-medium ${
             drawn && unlocked ? 'bg-inner text-secondary-foreground' : 'bg-warning/15 text-foreground ring-1 ring-warning/50'
           }`}
         >
-          {pillWord(card.readings, drawn)}
+          {pill}
         </span>
+        )}
         <span className="min-w-0 text-[12.5px] text-foreground">
           {card.quarter.label} set against the quarter before it, and built with the first update after it closes.
         </span>
@@ -250,9 +253,17 @@ export function readingWord(readings: number): string {
  * which. "not enough months yet" there sends a reader off to wait for months
  * that will not, on their own, change anything.
  */
-export function pillWord(readings: number, drawn: boolean): string {
+export function pillWord(readings: number, drawn: boolean): string | null {
   if (!drawn) return 'nothing to compare yet'
-  return quarterUnlocked(readings) ? `${readingWord(readings)} stand behind it` : MOVEMENT_WORDS.baseline_forming
+  // AND BELOW THE GATE IT SAYS NOTHING, because the rows have already said it.
+  // Every `quarterChange` answers `baseline_forming` below `QUARTER_UNLOCKS_AT`,
+  // so the pill printed "not enough months yet" and then the verdict column
+  // printed it once per row — four times on one card, and the pill is the
+  // loudest of the four, in the state Sealand is in. The footnote carries the
+  // gate sentence in that state (`card.gate`, which names the count), so
+  // nothing is lost by dropping the pill and the card gains its quietest
+  // reading of its own worst case.
+  return quarterUnlocked(readings) ? `${readingWord(readings)} stand behind it` : null
 }
 
 
