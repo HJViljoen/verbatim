@@ -67,30 +67,63 @@ export const MOVE_MAX_THEMES = 5
  * At or above this cosine similarity, the phrase vector alone decides: the
  * insight is a member and no model is asked.
  *
- * NOT calibrated yet, and the module says so rather than implying otherwise.
- * The two numbers below are the design's own starting pair. What is measured
- * (research/subjects.md §6, refute-04 §2.2, both read-only against production
- * on 2026-09-15, using theme_registry vectors as stand-in subject phrases):
- * 5.0–8.5% of a sample of 200 insights clear 0.70, and 24–47% of the embedded
- * population falls in 0.55–0.70 depending on how many subjects there are. Both
- * measurements used `label. description` probes, and a real subject phrase is
- * shorter and embeds LOWER, so the true band is likely wider still.
+ * MOVED 2026-09-23, from 0.70/0.55, against the first measurement ever taken
+ * with REAL subject phrases (status/subject-band-2026-09-23.md; Sealand's six
+ * named subjects against all 3,719 live embedded insights on the preview
+ * branch, read-only).
  *
- * The repo's precedent for picking a pair like this is REC_LINEAGE_THRESHOLD /
- * REC_LINEAGE_CROSS_TYPE_THRESHOLD (lib/pipeline/rec-lineage.ts), which were
- * chosen against a hand-labelled pair set. scripts/subject-calibration.ts is
- * that set for subjects: it samples 200 insights per tenant, prints precision
- * at each threshold pair, and a subject prints "calibrating" until a precision
- * at or above SUBJECT_PRECISION_FLOOR has been recorded against it. Moving
- * either number changes JUDGE_VERSION, which is the point — a month read under
- * one band is not comparable with a month read under another.
+ * The old pair came from refute-04 §2.2 and research/subjects.md §6, which
+ * probed with `theme_registry` `label. description` vectors and measured
+ * 24–47% of the population inside 0.55–0.70. Both notes flagged the substitution
+ * as the open question ("a real subject phrase is shorter and embeds LOWER"),
+ * and it was not a small correction. The SAME corpus, the SAME day, six probes
+ * either way:
+ *
+ *   probe                      pairs ≥0.70   pairs in 0.55–0.70
+ *   top-6 theme_registry             214            1,176
+ *   the six real subjects              5              110
+ *
+ * A theme vector is written FROM the insights it clusters, so it sits at their
+ * centroid; a client's phrase does not, and a description written as "Comments
+ * about X, excluding Y" sits in a different register from an insight's
+ * `theme. description`. The whole similarity distribution lands ~0.10 lower:
+ * across the six subjects max similarity is 0.578–0.733, mean 0.23–0.30, and
+ * NOTHING in the corpus reaches 0.75.
+ *
+ * What the old band cost, measured by lexical recall — insights whose own theme
+ * slug literally contains the subject's word (487 of them across the six):
+ *
+ *   threshold   0.55   0.50   0.45   0.40   0.35
+ *   recall       17%    29%    52%    70%    81%
+ *
+ * A band starting at 0.55 was discarding five in six of even the most literal
+ * members before the judge was ever asked. And the judge was not the thing
+ * rejecting them: of the 110 pairs it saw at the old band it said yes to 92
+ * (84%), which is a band set far inside the region it was built to arbitrate.
+ *
+ * 0.60 for the auto tier: 28 pairs clear it and all 28 read as members by hand,
+ * while 0.70 admitted 5 — a tier that decided nothing. 0.40 for the floor: 70%
+ * lexical recall at 2,316 pairs, ~117 judge calls, ~$0.05 a full re-judge
+ * against a $3.00 pass ceiling. 0.35 buys 11 more points of recall for $0.11
+ * and is the next step if the shares still read short; cost is not what bounds
+ * this choice, and pretending otherwise is what made the band tight.
+ *
+ * STILL NOT CALIBRATED. The repo's precedent for picking a pair like this is
+ * REC_LINEAGE_THRESHOLD / REC_LINEAGE_CROSS_TYPE_THRESHOLD
+ * (lib/pipeline/rec-lineage.ts), chosen against a hand-labelled pair set.
+ * scripts/subject-calibration.ts is that set for subjects: it samples 200
+ * insights per tenant, prints precision at each threshold pair, and a subject
+ * prints "calibrating" until a precision at or above SUBJECT_PRECISION_FLOOR
+ * has been recorded against it. Moving either number changes JUDGE_VERSION,
+ * which is the point — a month read under one band is not comparable with a
+ * month read under another, and every subject goes back to "calibrating".
  */
-export const SUBJECT_MATCH_HIGH = 0.7
+export const SUBJECT_MATCH_HIGH = 0.6
 
 /** Below this, the vector alone decides the other way: not a member, and no row
  *  is stored. That answer costs nothing to recompute, and storing it would put
  *  the whole corpus in `subject_memberships` for an answer nobody reads. */
-export const SUBJECT_MATCH_LOW = 0.55
+export const SUBJECT_MATCH_LOW = 0.4
 
 /** Insights per judge call. The design's unit, kept — but a decision is about a
  *  (insight, subject) PAIR, and a banded insight is ambiguous against 1.43–1.98

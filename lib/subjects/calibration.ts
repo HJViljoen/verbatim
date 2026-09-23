@@ -175,10 +175,18 @@ export function precisionAt(
 }
 
 /** The pairs worth trying. The shipped pair is always in the table, wherever it
- *  sits, so the reader can see what they have against what they could have. */
+ *  sits, so the reader can see what they have against what they could have.
+ *
+ *  The grid moved down with the thresholds (2026-09-23). The old one started at
+ *  0.60/0.45 and ran to 0.80, which on real subject phrases is a sweep over
+ *  empty space: the highest similarity any of Sealand's 3,719 live insights
+ *  reaches against any of its six subjects is 0.733, and half the old grid's
+ *  rows would have printed `predicted 0` forever. A sweep has to cover the
+ *  region the data is actually in, or it cannot tell you that you are in the
+ *  wrong one. */
 export function candidateThresholds(
-  highs: readonly number[] = [0.6, 0.65, 0.7, 0.75, 0.8],
-  lows: readonly number[] = [0.45, 0.5, 0.55, 0.6],
+  highs: readonly number[] = [0.55, 0.6, 0.65, 0.7],
+  lows: readonly number[] = [0.35, 0.4, 0.45, 0.5, 0.55],
 ): { high: number; low: number }[] {
   const out: { high: number; low: number }[] = []
   for (const high of highs) {
