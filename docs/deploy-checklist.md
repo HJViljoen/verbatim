@@ -145,13 +145,107 @@ pointed at before every write step, out loud, the way you would check a
    `.env.branch` and change `NEXT_PUBLIC_SUPABASE_URL`,
    `SUPABASE_SERVICE_ROLE_KEY` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` there, so a
    forgotten shell cannot point a `--apply` at production.
-2. **Restore a production dump into it.** The branch starts from the project's
-   migration history, not its DATA, so a dump is the step that makes the
+2. **Restore a production dump into it.** A dump is the step that makes the
    rehearsal worth doing — without it you are testing thirteen migrations
    against empty tables, which the throwaway cluster already did for free.
    The dump is also the last copy of the artefacts `purge-reports.ts` removed
    on 17 Sep, which is what makes 0.7's smoke meaningful here and thin on
    production.
+
+   **The branch starts EMPTY — from NOTHING, not from the migration history.**
+   This line said "the branch starts from the project's migration history, not
+   its DATA" until 2026-09-20, and it was wrong. Measured on the real branch
+   that day: **0 tables, 0 functions, 0 policies, 0 rows in
+   `supabase_migrations.schema_migrations`**, and the branch reports
+   **`MIGRATIONS_FAILED`**. All 72 history rows carry their `statements`, so the
+   replay had material; it dies on the FIRST one.
+   `20260612191512_add_insight_evidence_junction` opens `CREATE TABLE
+   insight_evidence (… REFERENCES audience_insights(id) … REFERENCES
+   comments(id))` and both parents are **pre-baseline** — the project was
+   created 2026-03-24 and migration tracking starts 2026-06-12, so everything
+   below that date exists in production and in no migration file. That is the
+   same reason `supabase/schema-baseline.sql` exists and why the throwaway
+   cluster loads it before the 64 post-baseline files. **`MIGRATIONS_FAILED` on
+   a fresh branch of this project is expected, not a fault**, and it is not
+   worth debugging — the dump is what fills the branch.
+
+   Four consequences, all of them load-bearing:
+
+   - **Dump `public` with its SCHEMA, not `--data-only`.** There is no schema on
+     the branch to receive data. A full schema+data restore also loads every
+     table before it adds constraints and indexes, so there is no FK-ordering
+     problem inside `public` and no `--disable-triggers` needed there. Nothing
+     has to be dropped first — the empty schema is a clean target.
+   - **Pre-create `vector` on the branch**, before the restore:
+     `create extension if not exists vector with schema public;`. Production
+     carries **vector 0.8.0 in `public`** (not in `extensions`), and
+     `pg_dump --schema=public` deliberately does NOT emit the dependencies of
+     the selected schema — so `CREATE EXTENSION vector` is absent from the dump
+     and every vector column fails to restore without this. Done on the
+     2026-09-20 branch, which got 0.8.2 (a patch ahead, compatible).
+   - **`auth` data goes in FIRST**, its own `--data-only` dump, before the
+     `public` restore adds its foreign keys. Two `public` tables reference it —
+     `invitations.invited_by → auth.users` and
+     `platform_admins.user_id → auth.users`. (`public.users` does NOT, but a
+     dev-server login needs the auth rows anyway, so it is wanted twice over.)
+   - **Data BEFORE the thirteen migrations — never the other way round.** M3
+     (`20260918092000_reading_windows.sql`) installs
+     `month_denominators_frozen_insert_guard` /
+     `month_theme_readings_frozen_insert_guard`, whose whole job is that no NEW
+     row may appear behind a closed audience-month. Production carries **201
+     frozen audience-months**; restoring them into a schema that already has M3
+     is the guard correctly rejecting the copy. Step 3 follows step 2 for a
+     reason, and the reason is not tidiness.
+
+   **Connect through the SESSION POOLER, not the direct host.**
+   `db.<ref>.supabase.co` publishes AAAA and no A — for the branch as well as
+   production — so a machine with no global IPv6 route cannot reach it at all
+   (measured 2026-09-23: both hosts failed to resolve, no IPv6 address, no IPv6
+   default route). The path that works:
+
+   - host `aws-1-eu-west-1.pooler.supabase.com` (IPv4), database `postgres`,
+     user **`postgres.<project_ref>`**, password as per the direct URL;
+   - **port 5432 — SESSION mode.** `pg_dump` and `psql` work over it.
+     **Port 6543 is TRANSACTION mode and `pg_dump` does not work over it**,
+     and 6543 is what `GET /v1/projects/{ref}/config/database/pooler` reports
+     as the configured `pool_mode` — take the host and user from that endpoint,
+     not the port.
+
+   Measured end to end on 2026-09-23: `auth` data 19 KB in 18 s, `public`
+   schema+data **158 MB in 114 s**, restore 14 s + 261 s. One error, benign:
+   `ERROR: schema "public" already exists` from the `CREATE SCHEMA public` that
+   PG15+ emits — nothing is skipped by it. Exclude `auth.schema_migrations`
+   from the auth dump or it collides with the branch's own.
+
+   **KEEP THE PRIVILEGES — `--no-owner` yes, `--no-privileges` NO.** This is
+   not a preference; it was got wrong once, on 2026-09-20, and the second pass
+   on 2026-09-23 is what this paragraph is written from.
+
+   `--no-privileges` looks like the safer restore and it **silently hollows out
+   M11 and M12, the two migrations that operate on grants** — and both then
+   PASS VACUOUSLY, which is worse than failing. With privileges dropped, M11
+   has no Phase 0 grant to revoke and no SELECT to keep, so its query returns
+   **0 rows where ten are expected** and reads like an empty result rather than
+   a missed test; M12's `auth_update_cols` reads `subreddits` alone instead of
+   the eight. Measured both ways on the same branch.
+
+   Kept, the archive carries **120 ACL entries** and the rehearsal is real: the
+   eleven report-family tables arrive holding the full
+   `DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE` that M11
+   exists to strip, `share_links` arrives holding that set MINUS `SELECT`, and
+   `tracking_configs` arrives with M12's seven starting columns. After the
+   thirteen: **ten rows reading `SELECT` and nothing else, `share_links`
+   absent, `token` and `password_hash` still withheld from its column grant,
+   and `auth_update_cols` reading all eight.**
+
+   **The price is four restore errors, all harmless, and you list them rather
+   than suppress them:** one `ERROR: schema "public" already exists` (above),
+   and three `ERROR: permission denied to change default privileges` on
+   `ALTER DEFAULT PRIVILEGES FOR ROLE "supabase_admin" IN SCHEMA "public"` —
+   for SEQUENCES, FUNCTIONS and TABLES. Those three govern only what
+   `supabase_admin` creates in `public` LATER; you connect as `postgres`, which
+   may not alter another role's defaults, and **no ACL on any restored table is
+   affected** — confirmed by reading the grants back before applying anything.
 3. **Apply the thirteen**, §2's files in §2's order, with §2's verification
    query after each. Every expectation in §2 holds on the branch, with one
    substitution: M1's row count is the branch's tracked list, so run the
