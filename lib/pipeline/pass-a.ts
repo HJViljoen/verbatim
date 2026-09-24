@@ -2,7 +2,7 @@ import { zodResponseFormat } from 'openai/helpers/zod'
 import { createAdminClient, selectAll } from '../supabase-admin'
 import { chunk } from '../chunk'
 import { openai } from '../openai'
-import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, PASS_A_OCR_MIN_QUOTE_CHARS, PASS_A_VIDEO_QUOTE_MAX, estimateCost, passAMinComments, transcriptsEnabled } from '../config'
+import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, PASS_A_LENGTH_RETRY_REFS, PASS_A_MAX_OUTPUT_TOKENS, PASS_A_OCR_MIN_QUOTE_CHARS, PASS_A_VIDEO_QUOTE_MAX, estimateCost, passAMinComments, transcriptsEnabled } from '../config'
 import { PassAVideoSchema, PassAVideoSchemaV4, CLASSIFIED_TYPES, CLASSIFIED_TYPE_DEFS, HOOK_STYLES, HOOK_STYLE_DEFS, enumDefLines, type PassAVideoOutput, type PassAInsight, type PassAClaim } from './schemas'
 import { filterComments } from './spam-filter'
 import { computeQualityScore } from './metrics'
@@ -217,6 +217,10 @@ export interface RunPassASummary {
   videosErrored: number
   /** Videos the model refused / returned no parseable output for. */
   videosRefused: number
+  /** Videos that hit PASS_A_MAX_OUTPUT_TOKENS and were re-asked once on half
+   *  their comments. Non-zero is a real signal — the answer ran away, and the
+   *  video was read on less than it has. */
+  lengthRetries: number
   /** Videos already stamped with this run's id — a retried batch step skips
    *  them instead of re-spending the whole batch. */
   videosAlreadyAnalyzed: number
@@ -247,6 +251,43 @@ function isRateLimitError(e: unknown): boolean {
   if (status === 429) return true
   const msg = e instanceof Error ? e.message : String(e)
   return /\b429\b|rate limit|insufficient_quota|no credits/i.test(msg)
+}
+
+/**
+ * Did this call die because the model generated until it ran out of room?
+ *
+ * The SDK raises `LengthFinishReasonError` from `chat.completions.parse` when
+ * `finish_reason === 'length'`, and that class carries nothing but its message
+ * — no completion, no usage — so the name and the message are all there is to
+ * match on. Matched by NAME first because the class is not exported from a
+ * stable path, and by message second because a proxy or a re-thrown error
+ * keeps the text and loses the prototype.
+ *
+ * It is a different failure from every other Pass A error: a 429 is about the
+ * account and a refusal is about the content, but this one is about the SHAPE
+ * of the answer, and it is the one failure a second, smaller attempt fixes.
+ */
+export function isLengthLimitError(e: unknown): boolean {
+  if ((e as { name?: unknown })?.name === 'LengthFinishReasonError') return true
+  const msg = e instanceof Error ? e.message : String(e)
+  return /length limit was reached|finish_reason.*length/i.test(msg)
+}
+
+/**
+ * The comment refs the ONE length-limit retry shows the model.
+ *
+ * Half of them, the richest half kept — `kept` arrives already ordered, so the
+ * head is the half worth reading. Labels are NOT re-minted: `c7` has to keep
+ * meaning comment 7 or the validator resolves a quote to the wrong row, so
+ * this only ever drops refs from the tail.
+ *
+ * Returns null when there is nothing left to halve — a claims-lane call shows
+ * no comments at all, and a call that ran away on one comment will run away on
+ * zero, so there is no second attempt to make and the error stands.
+ */
+export function lengthRetryRefs(refs: CommentRef[]): CommentRef[] | null {
+  if (refs.length < 2) return null
+  return refs.slice(0, Math.max(1, Math.floor(refs.length * PASS_A_LENGTH_RETRY_REFS)))
 }
 
 interface TrackingConfig {
@@ -846,6 +887,7 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
     videosSkipped: 0,
     videosErrored: 0,
     videosRefused: 0,
+    lengthRetries: 0,
     videosAlreadyAnalyzed: 0,
     rateLimited: false,
     errors: [],
@@ -972,16 +1014,43 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
     let parsed: ParsedPassA | null = null
     let refusal: string | null = null
     let usage = { prompt_tokens: 0, completion_tokens: 0 }
+    // The prompt actually sent, which the ledger has to record: the one retry
+    // below re-assembles it over fewer comments, and logging the first one
+    // would file a response against bytes that did not produce it.
+    let sentPrompt = userPrompt
     try {
-      const completion = await openai.chat.completions.parse({
+      const call = (prompt: string) => openai.chat.completions.parse({
         model: ANALYSIS_MODEL,
         temperature: ANALYSIS_TEMPERATURE,
+        // The ceiling Pass A never had — see PASS_A_MAX_OUTPUT_TOKENS. Without
+        // it a degenerate generation runs to the model's own 32k window, which
+        // is ~220 s and a token bill the ledger cannot even see (the SDK throws
+        // before `completion.usage` exists).
+        max_completion_tokens: PASS_A_MAX_OUTPUT_TOKENS,
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
+          { role: 'user', content: prompt },
         ],
         response_format: zodResponseFormat(responseSchema, 'pass_a'),
       })
+      let completion
+      try {
+        completion = await call(userPrompt)
+      } catch (e) {
+        // ONE smaller second attempt, and only for the length limit. Every
+        // other failure is about the account or the content and a retry would
+        // just re-pay for it; this one is about the answer's shape, and the
+        // only lever a per-video call has is how much of the video it reads.
+        const smaller = isLengthLimitError(e) ? lengthRetryRefs(refs) : null
+        if (!smaller) throw e
+        console.warn(
+          `[pass-a] video ${v.id} hit the ${PASS_A_MAX_OUTPUT_TOKENS}-token output ceiling on ` +
+          `${refs.length} comments; retrying once on ${smaller.length}`,
+        )
+        summary.lengthRetries++
+        sentPrompt = buildUserPrompt(v, smaller, transcript, translation, ocr)
+        completion = await call(sentPrompt)
+      }
       const msg = completion.choices[0]?.message
       parsed = (msg?.parsed ?? null) as ParsedPassA | null
       refusal = msg?.refusal ?? null
@@ -998,7 +1067,7 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
       if (isRateLimitError(e)) summary.rateLimited = true
       const short = res.error.slice(0, 200)
       if (summary.errors.length < PASS_A_ERROR_MESSAGES_KEPT && !summary.errors.includes(short)) summary.errors.push(short)
-      if (persist) await logCall(admin, { clientId, runId, callIndex, promptVersion, systemPrompt, userPrompt, response: null, error: res.error, usage, durationMs: Date.now() - startedAt, validationStatus: 'parse_error' })
+      if (persist) await logCall(admin, { clientId, runId, callIndex, promptVersion, systemPrompt, userPrompt: sentPrompt, response: null, error: res.error, usage, durationMs: Date.now() - startedAt, validationStatus: 'parse_error' })
       continue
     }
 
@@ -1016,7 +1085,7 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
       res.error = refusal ?? 'no parsed output'
       summary.videosRefused++
       summary.perVideo.push(res)
-      if (persist) await logCall(admin, { clientId, runId, callIndex, promptVersion, systemPrompt, userPrompt, response: { refusal }, error: res.error, usage, durationMs, validationStatus: 'parse_error' })
+      if (persist) await logCall(admin, { clientId, runId, callIndex, promptVersion, systemPrompt, userPrompt: sentPrompt, response: { refusal }, error: res.error, usage, durationMs, validationStatus: 'parse_error' })
       continue
     }
 
@@ -1081,7 +1150,7 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
         callIndex,
         promptVersion,
         systemPrompt,
-        userPrompt,
+        userPrompt: sentPrompt,
         response: { classification: parsed.classification, insights_kept: validation.kept.length, insights_dropped: validation.insightsDropped, evidence_dropped: validation.evidenceDropped, ...(claims ? { claims_kept: claims.kept.length, claims_dropped: claims.dropped } : {}) },
         error: null,
         usage,

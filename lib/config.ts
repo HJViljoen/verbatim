@@ -986,6 +986,35 @@ export const GATHER_MAX_COMMENT_DEPTH = 500
  *  'completed' with errors=[]. */
 export const PASS_A_ERROR_RATIO = 0.05
 
+/**
+ * Output ceiling for ONE Pass A call, in completion tokens (2026-09-24).
+ *
+ * Pass A sent no ceiling at all, so a call could generate up to gpt-4.1-mini's
+ * whole 32,768-token output window. Four calls on run b67b56de did exactly
+ * that: structured output degenerated into repetition, each ran ~220 s, each
+ * died inside the SDK with "Could not parse response content as the length
+ * limit was reached", and because the throw happens before `completion.usage`
+ * is read, all four were logged with 0 tokens — the spend is real and the
+ * ledger cannot see it. The inputs were not the problem (one of the four
+ * showed the model 29 comments and a 2.6 kB prompt), so a smaller batch fixes
+ * nothing; a bound does.
+ *
+ * 4,000 is sized to the SCHEMA, not to the corpus: the widest honest Pass A
+ * answer measured on this tenant is an order of magnitude under it, so a call
+ * that reaches this ceiling is a runaway and not a rich video. It costs ~8 s
+ * instead of ~220 s to find that out, and `PASS_A_LENGTH_RETRY_REFS` decides
+ * what happens next.
+ */
+export const PASS_A_MAX_OUTPUT_TOKENS = 4000
+
+/** Share of a video's comments the ONE length-limit retry shows the model.
+ *  Halving is the in-call analogue of halving a batch: the unit of a Pass A
+ *  call is one video, so the only thing there is to make smaller is how much
+ *  of that video it reads. Exactly one retry — a video that runs away twice is
+ *  counted as an error and re-planned next run, which is what every other Pass
+ *  A failure already does. */
+export const PASS_A_LENGTH_RETRY_REFS = 0.5
+
 /** Recovered caption-batch tolerance (2026-09-13). A run-failed caption batch
  *  whose ids the isolation pass then re-fetched one by one cost Apify a dead
  *  actor run but lost no data, so it takes MORE of them than a per-video failure
