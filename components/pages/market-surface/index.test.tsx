@@ -351,6 +351,37 @@ describe('MK1 · what we concluded', () => {
 })
 
 describe('MK2 · the ledger', () => {
+  // THE COLUMN THAT SAID ONE THING TWELVE TIMES (polish pass, 2026-09-24).
+  // Nothing on the live page has two monthly readings behind a decision, so
+  // `afterwardsFor` answers every row with the same fifteen words — printed
+  // twelve times down a 200px column, with `a.unlock` saying it again under
+  // the table. The artboard's Afterwards column is an em dash on the rows that
+  // have nothing to report.
+  it('says the Afterwards column once where it says one thing about every row', () => {
+    const data = marketFixture()
+    const line = 'You have not decided on this one yet. We start reading the month after you do.'
+    const rows = data.advice.rows.map((r) => ({ ...r, afterwards: { state: 'too_soon' as const, line, verdict: null, months: [] } }))
+    const text = renderText(marketAdvice.render({ ...data, advice: { ...data.advice, rows } }, 'app', ctx))
+    expect(rows.length).toBeGreaterThan(1)
+    expect((text.match(new RegExp(line.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) ?? []).length).toBe(1)
+    expect(text).toContain('Afterwards, on every row:')
+  })
+
+  // AND ROW BY ROW THE MOMENT THEY DISAGREE. A ledger where one row is decided
+  // and another is not is saying something per row, and folding would hide the
+  // difference that makes the column worth having.
+  it('keeps the Afterwards cells per row as soon as two rows answer differently', () => {
+    const data = marketFixture()
+    const rows = data.advice.rows.map((r, i) => ({
+      ...r,
+      afterwards: { state: 'too_soon' as const, line: i === 0 ? 'One answer.' : 'A different answer.', verdict: null, months: [] },
+    }))
+    const text = renderText(marketAdvice.render({ ...data, advice: { ...data.advice, rows } }, 'app', ctx))
+    expect(text).toContain('One answer.')
+    expect(text).toContain('A different answer.')
+    expect(text).not.toContain('Afterwards, on every row:')
+  })
+
   it('draws the artboard’s seven columns, with the identity, the grounding and the afterwards', () => {
     // CHANGED BY THE ARTBOARD PORT (wave 2). Four columns became seven: the #
     // a person can say out loud, the evidence behind each row and what the

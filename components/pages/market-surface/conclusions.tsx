@@ -188,7 +188,19 @@ export const marketConclusions: Block<MarketSurfaceData> = {
           ? undefined
           : app
             ? (
-              <details className="group min-w-0">
+              // IT TAKES THE WHOLE FOOTER LINE (polish pass, 2026-09-24).
+              // `BlockFrame`'s footer is two nodes on one wrapping line, and
+              // the left one is `min-w-0` so a long note on the right can push
+              // it. That is right for a link; it is wrong for a DISCLOSURE
+              // that opens into a two-column grid of cards. Measured at 1440
+              // with `concluded` in the note beside it, this slot came out
+              // 54px wide holding 178px of content — a "Below the evidence
+              // bar" chip clipped to two characters and a conclusion's title
+              // breaking mid-word, inside a tile that is `overflow-hidden`, so
+              // nothing scrolled and nothing said it had been cut.
+              // `w-full` makes it its own line and the note wraps under it,
+              // which is what the footer's `flex-wrap` is for.
+              <details className="group w-full min-w-0">
                 <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[12px] font-medium text-foreground">
                   {/* The arrow turns with the disclosure — it was a static ▼
                       in both states, which says "open" when it is shut. */}

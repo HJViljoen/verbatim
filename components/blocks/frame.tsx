@@ -37,7 +37,9 @@ import { cn } from '@/lib/utils'
  * chrome rather than content and lives here.
  */
 export function BlockFrame({
-  title, question, mode = 'app', footer, footerNote, meta, heading = false, header = true, lead, actions,
+  // `question` is accepted and deliberately not destructured — see the note
+  // where it used to be drawn, at the foot of the header.
+  title, mode = 'app', footer, footerNote, meta, heading = false, header = true, lead, actions,
   truncateFooter = false, children, className, accent = false,
 }: {
   title: string
@@ -292,18 +294,31 @@ export function BlockFrame({
         {actions ? <span className="flex flex-none items-center gap-2">{actions}</span> : null}
       </header>
       ) : null}
-      {/* THE QUESTION IS A SCREEN DEVICE (Block D wave 3, SH6). The docblock
-          above justified it as "the mock's own device — every artboard prints
-          one", and that is true of the artboards a reader SCROLLS: Ask prints
-          6, Competitive 7, This week 5, Voice 4. Counted on the printed ones
-          it is zero, every time — MarketingBrief, SalesBrief, ContentBrief,
-          LeadershipBrief, WeeklyReport, MonthlyReport and QuarterlyReview all
-          print none. A sheet has a title and a framing note above it and an
-          inbox has a subject line; the question is what orients a reader who
-          arrived at a tile with no preamble. So it is drawn in `app` alone,
-          and a page that wants one on paper says it in the block's own words.
-          The per-page app-mode calls it leaves standing are M8 and MK11. */}
-      {header && question && mode === 'app' ? <p className="m-0 text-[12.5px] text-muted-foreground">{question}</p> : null}
+      {/* THE QUESTION IS NOT DRAWN AT ALL — IN ANY MODE (polish pass,
+          2026-09-24). SH6 cut it from paper and inboxes on a count of the
+          printed artboards, and left it on the screen on the strength of "Ask
+          prints 6, Competitive 7, This week 5, Voice 4". That count was of
+          question marks anywhere in the markup, and what it actually found was
+          Ask's own thread questions and the rivals' "Does the tarp smell?"
+          rows. Counted again, as the text of a node under a block header,
+          every one of the ten product artboards prints exactly ONE question
+          and it is the page bar's:
+
+            Main 1 · Subjects 1 · Voice 1 · Market 1 · Competitive 1 ·
+            ThisWeek 1 · Ask 1 · Reports 1 · Settings 0 · SettingsRecord 0
+
+          — all ten of them the string `lib/nav.ts` already hands
+          `SurfacePageBar`. M8 drew that conclusion for Main alone and removed
+          six lines from Overview; the same measurement holds for every
+          surface, and what it leaves behind on Subjects, Voice, Market,
+          Competitive and This week is about thirty-five tiles each narrated
+          twice — a 12.5px line of explanatory micro-copy between an eyebrow
+          and its content, on a page whose bar has already asked the question.
+
+          THE PROP STAYS. `Block.question` is the block's contract with the
+          reader and is read by the nav, the legend and the tests; what stops
+          is drawing it a second time under the header. A block with something
+          to say about its own basis says it in `meta` or in `footerNote`. */}
       {heading && lead ? (
         <p className="m-0 font-serif text-[17px] font-medium leading-[1.35] tracking-[-0.005em] text-foreground [text-wrap:pretty]">{lead}</p>
       ) : null}
@@ -443,4 +458,36 @@ export function BlockEmpty({ children, mode = 'app' }: { children: ReactNode; mo
     return <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>{children}</div>
   }
   return <p className="m-0 text-[12px] text-muted-foreground">{children}</p>
+}
+
+/**
+ * The artboards' em dash: a table cell that has nothing in it (polish pass,
+ * 2026-09-24).
+ *
+ * A CELL WITH NOTHING IN IT IS NOT THE SAME AS A COLUMN WITH NOTHING IN IT.
+ * Overview's subjects table heads a column "Your change" and Overview's rivals
+ * table heads one "Attention change"; on the live tenant both are refused on
+ * every row — your own audience is under the floor, and no creator panel has
+ * been frozen — and `BlockMovement` answers a null verdict with `null`. So the
+ * page prints a header over eleven rows of whitespace, which reads as a column
+ * that failed to load rather than as one the reading has no answer for.
+ *
+ * The artboards' own answer to an empty cell is an em dash (Settings' Reddit
+ * table draws one on every no-yield row, and this block's own "Raised most"
+ * cell has drawn one since it was written). It is muted, it is the same width
+ * wherever it appears, and it says "asked, no answer" without spending a
+ * sentence on it — the sentence, where there is one to say, belongs once in the
+ * footer note and not once per row.
+ *
+ * NOT A DEFAULT INSIDE `BlockMovement`. Most of that primitive's call sites are
+ * inline in a flex row beside a level or a direction word, where a dash for an
+ * absent verdict would be furniture. It is a TABLE CELL's answer, so the table
+ * cell asks for it.
+ */
+export function NoValue({ mode = 'app', label = 'no reading' }: { mode?: RenderMode; label?: string }) {
+  // The dash is decoration to a screen reader — one glyph that reads as
+  // "dash" — so the cell carries the words and hides the mark.
+  return mode === 'email'
+    ? <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>—</span>
+    : <span className="text-[12px] text-muted-foreground"><span aria-hidden>—</span><span className="sr-only">{label}</span></span>
 }

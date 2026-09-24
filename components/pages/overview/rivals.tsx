@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { openLink } from '@/components/blocks/open-link'
-import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
+import { BlockEmpty, BlockFrame, FigureCell, NoValue } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
 import { fmtInt, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
@@ -46,17 +46,43 @@ function Share({ share, recorded, mode }: { share: StandingShare | null; recorde
   return <FigureCell mode={mode} value={standingText(share)} of={`${fmtInt(share.k)} of ${fmtInt(share.n)}`} />
 }
 
+/**
+ * True where NOT ONE rival's own posts can be read — which is every workspace
+ * today, because `video_claims` is service-role only until M8.
+ *
+ * WHY THE BLOCK ASKS THIS AT ALL (polish pass, 2026-09-24). The cell answered
+ * the absence per row, so a tenant tracking nine rivals got the same 47-word
+ * sentence nine times down one column — "— not tracked · their own posts are
+ * not readable yet · Settings › Readiness", 340px wide, stacked — and the
+ * column that carries the block's actual content sat to the right of it. The
+ * artboard puts what a rival says on their own posts in that cell and puts the
+ * reading's own apparatus in the footer note; a state that is true of every
+ * row is apparatus.
+ *
+ * ROW BY ROW WHERE IT IS A ROW'S FACT. The moment one rival's claims become
+ * readable, this is false and every cell says its own thing again — including
+ * the ones that still cannot be read, because then the absence IS news about
+ * that rival rather than about the product.
+ */
+function ownPostsAllUnreadable(rows: readonly RivalRow[]): boolean {
+  const rivals = rows.filter((r) => isRivalAudience(r.audience))
+  return rivals.length > 0 && rivals.every((r) => r.ownPosts == null)
+}
+
 /** What they said on their own posts — or the honest absence.
  *
  *  `video_claims` is service-role only until M8 adds a tenant policy (WP16), so
  *  no tenant can read a rival's own claims today. The design's own words for a
  *  side we cannot read are "— not tracked", and the sentence names who fixes
- *  it rather than implying the rival said nothing. */
-function OwnPosts({ row, mode }: { row: RivalRow; mode: RenderMode }): ReactNode {
+ *  it rather than implying the rival said nothing — once, under the table,
+ *  where the absence is true of every row. */
+function OwnPosts({ row, mode, folded }: { row: RivalRow; mode: RenderMode; folded: boolean }): ReactNode {
   // ONLY A RIVAL HAS "THEIR OWN POSTS". The standings carry your own brand's
   // row and the category's, and "on their own posts: — not tracked" against
   // either of them is an absence of nothing.
   if (!isRivalAudience(row.audience)) return null
+  // The whole column is one sentence: it is said once, under the table.
+  if (folded && row.ownPosts == null) return <NoValue mode={mode} label="not tracked" />
   // Print mode is a PDF and a public share page (WP19's briefs), where a
   // readiness owner is our internal label rather than a screen the reader can
   // open. The absence is still named.
@@ -167,6 +193,9 @@ export const overviewRivals: Block<OverviewData> = {
       : openLink(mode, href, 'Open Competitive →')
 
     const empty = overviewRivals.emptyState(data)
+    // The own-posts column's absence, said once instead of once per row.
+    const folded = ownPostsAllUnreadable(r.rows)
+    const ownPostsNote = folded ? (mode === 'print' ? OWN_POSTS_UNREADABLE_OUTSIDE : OWN_POSTS_UNREADABLE) : null
 
     return (
       <BlockFrame
@@ -196,7 +225,11 @@ export const overviewRivals: Block<OverviewData> = {
         // was built, which is metadata about the reading rather than one of its
         // findings — and as a body paragraph under the table it read as the
         // block's conclusion.
-        footerNote={caveatLine(r)}
+        // AND THE COLUMN-WIDE ABSENCE JOINS IT. Both halves are statements
+        // about how the reading was built rather than findings, which is what
+        // the footer note is for — and one of them was being printed once per
+        // rival row until the polish pass folded it here.
+        footerNote={ownPostsNote ? <>{caveatLine(r)} On their own posts, every rival row reads {ownPostsNote}.</> : caveatLine(r)}
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         {r.standingsNote ? <BlockEmpty mode={mode}>{r.standingsNote}</BlockEmpty> : null}
@@ -254,8 +287,14 @@ export const overviewRivals: Block<OverviewData> = {
                       </th>
                       <td className="py-1.5 pr-3"><Share share={row.attention} recorded={r.recorded} mode={mode} /></td>
                       <td className="py-1.5 pr-3"><Share share={row.content} recorded={r.recorded} mode={mode} /></td>
-                      <td className="py-1.5 pr-3"><BlockMovement verdict={row.attentionVerdict} unit="pts" mode={mode} /></td>
-                      <td className="py-1.5 pr-3"><OwnPosts row={row} mode={mode} /></td>
+                      {/* THE COLUMN ANSWERS ON EVERY ROW (polish pass). No
+                          creator panel is frozen on either live tenant, so
+                          `attentionVerdict` is null on all eleven rows and the
+                          header stood over a column of whitespace. */}
+                      <td className="py-1.5 pr-3">
+                        {row.attentionVerdict ? <BlockMovement verdict={row.attentionVerdict} unit="pts" mode={mode} /> : <NoValue mode={mode} label="no change is read for this brand" />}
+                      </td>
+                      <td className="py-1.5 pr-3"><OwnPosts row={row} mode={mode} folded={folded} /></td>
                       <td className="py-1.5"><Raised row={row} mode={mode} /></td>
                     </tr>
                   ))}

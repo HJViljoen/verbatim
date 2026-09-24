@@ -293,6 +293,24 @@ describe('CO5 · what the category asks', () => {
     expect(text).toContain('How much does the battery cost to replace?')
   })
 
+  // ONE VOICE UNDER A QUESTION (polish pass, 2026-09-24). `QuestionRow.quotes`
+  // is uncapped, and eight rows carrying eleven comments ran the tile to about
+  // 1,700px inside a four-of-twelve column — beside two tiles of 215px and
+  // 340px in the same grid row. The artboard draws six rows and one quote.
+  it('draws one voice under each question, and freezes the refs it draws', () => {
+    const data = competitiveFixture()
+    const rows = data.questions.rows.map((r) => ({
+      ...r,
+      quotes: [...r.quotes, ...r.quotes.map((q) => ({ ...q, ref: `${q.ref}-second`, text: 'a second voice on the same question' }))],
+    }))
+    const stacked = { ...data, questions: { ...data.questions, rows } }
+    const text = renderText(competitiveQuestions.render(stacked, 'app', ctx))
+    expect(text).not.toContain('a second voice on the same question')
+    // And the freeze contract follows the render rather than the loader.
+    expect(competitiveQuestions.quotes?.(stacked).every((r) => !r.endsWith('-second'))).toBe(true)
+    expect(competitiveQuestions.quotes?.(stacked).length).toBe(rows.filter((r) => r.quotes.length > 0).length)
+  })
+
   it('lists the watched communities with the block', () => {
     const text = renderText(competitiveQuestions.render(competitiveFixture(), 'app', ctx))
     expect(text).toContain('r/amputee · r/prosthetics · r/bionics')
