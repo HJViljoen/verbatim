@@ -156,6 +156,43 @@ export function tagAfterExclusions(v: TagCandidate, tag: VideoTags, config: Gath
   return excludedTag(v, tag, config) ? { is_client: false, is_competitor: false, competitor_name: null } : tag
 }
 
+/**
+ * The tag a video gets when the attribution judge gave no verdict for it — a
+ * batch that failed, or an index the model skipped (lib/gather/attribution.ts).
+ *
+ * NOT tagVideo. That takes the first substring match at face value, and it is
+ * what turned every "Freitag 21.8.2026" and "Freitag ❤️ #food" into a rival
+ * post the day a batch 400'd. With no judge, a tag needs evidence that could
+ * not be a homonym:
+ *   - the client when a brand keyword is present (the configured forms are
+ *     specific phrases — "sealand gear", "sealand bag");
+ *   - a competitor only when a configured competitor KEYWORD that contains its
+ *     name is present ("freitag bag", "cotopaxi backpack"). The v4.1 rule holds:
+ *     a keyword never tags on its own, it only vouches for the name inside it.
+ *     So a keyword that does not contain the name never tags — "north face
+ *     backpack" does not contain "The North Face", and The North Face is never
+ *     tagged without a judge;
+ *   - untagged otherwise, and then the client's exclusions as always.
+ * It costs recall during an outage, not precision — logged, and a re-tag
+ * recovers it.
+ */
+export function tagWithoutJudge(v: TagCandidate, config: GatherConfig): VideoTags {
+  const untagged: VideoTags = { is_client: false, is_competitor: false, competitor_name: null }
+  if (matchEntities(v, config).brand) {
+    return tagAfterExclusions(v, { is_client: true, is_competitor: false, competitor_name: null }, config)
+  }
+  const hay = fold(tagText(v))
+  const vouched = (config.competitor_names ?? []).map((c) => str(c)).find((name) => {
+    const n = fold(name)
+    return n !== '' && (config.competitor_keywords ?? []).some((k) => {
+      const kw = fold(k)
+      return kw.includes(n) && hay.includes(kw)
+    })
+  })
+  if (!vouched) return untagged
+  return tagAfterExclusions(v, { is_client: false, is_competitor: true, competitor_name: vouched }, config)
+}
+
 /** Single-bucket substring tags (priority client > competitor). */
 export function tagVideo(v: TagCandidate, config: GatherConfig): VideoTags {
   const { brand, competitors } = matchEntities(v, config)
