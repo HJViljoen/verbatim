@@ -13,7 +13,9 @@ import { loadActiveSubjects } from '../subjects/membership'
 import { INDUSTRY_AUDIENCE } from '../rivals'
 import type { Scope } from '../renderables/types'
 import {
+  firstQuarterVerdictMonth,
   previousQuarter,
+  QUARTER_READINGS_NEEDED,
   quarterGateSentence,
   quarterLabel,
   quarterToReview,
@@ -63,6 +65,10 @@ export interface QuarterlyCard {
   gate: string
   /** The "Q2 read at setup / April below the floor" caveat, when it applies. */
   note: string | null
+  /** Below the gate, the one line that stands in for the rows: when the first
+   *  quarter-on-quarter comparison lands, as a reading MONTH (never a day —
+   *  see `ready`). Null once the gate is open. */
+  firstComparison: string | null
   href: string
   /** Never a promised date. */
   ready: null
@@ -87,6 +93,9 @@ export interface QuarterlyCardInput {
   /** Monthly readings behind the tenant, on Overview's own rule: months of the
    *  GATHERED era carrying a denominator row. */
   readings: number
+  /** The month the card is read in (`monthStartOf(readingAt)`) — what
+   *  `firstQuarterVerdictMonth` counts forward from. */
+  readingMonth?: string | null
   href?: string
 }
 
@@ -128,6 +137,7 @@ export function buildQuarterlyCard(input: QuarterlyCardInput): QuarterlyCard | n
       rows: [],
       series: [],
       note: 'The quarter-on-quarter reading is not recorded for this workspace yet, so there is nothing to compare across it.',
+      firstComparison: null,
     }
   }
 
@@ -136,14 +146,24 @@ export function buildQuarterlyCard(input: QuarterlyCardInput): QuarterlyCard | n
   const nowBySubject = new Map((input.subjectsNow ?? []).map((s) => [`${s.audience}:${s.subject_id}`, s]))
   const beforeBySubject = new Map((input.subjectsBefore ?? []).map((s) => [`${s.audience}:${s.subject_id}`, s]))
 
+  // A MISSING ROW IS A ZERO, NOT AN ABSENCE — once the side was read at all.
+  // `window_subject_readings` groups over the videos a subject's members cite,
+  // so a subject no category video mentioned in a window has NO ROW rather
+  // than a row of 0. The first cut read "no row" as "not read" and dropped the
+  // subject, and on Sealand (Q2 2026 against a Q1 of seven category videos)
+  // that kept Price, the one subject any of those seven mentioned, and dropped
+  // the other six without a word. Where the subject side was not read at all
+  // (`subjectsNow`/`subjectsBefore` null — M4 unapplied) there is still no row,
+  // and the note says so; and a side with no denominator still has no share.
+  const subjectsRead = input.subjectsNow != null && input.subjectsBefore != null
+  const n = denomNow.get(CARD_AUDIENCE)
+  const priorN = denomBefore.get(CARD_AUDIENCE)
   const rows: { label: string; verdict: Verdict }[] = []
   const series: { label: string; value: Counted }[] = []
   for (const subject of input.subjects) {
-    const value = nowBySubject.get(`${CARD_AUDIENCE}:${subject.id}`)
-    const baseline = beforeBySubject.get(`${CARD_AUDIENCE}:${subject.id}`)
-    const n = denomNow.get(CARD_AUDIENCE)
-    const priorN = denomBefore.get(CARD_AUDIENCE)
-    if (!value || !baseline || !n || !priorN) continue
+    if (!subjectsRead || !n || !priorN) continue
+    const value = { videos: nowBySubject.get(`${CARD_AUDIENCE}:${subject.id}`)?.videos ?? 0 }
+    const baseline = { videos: beforeBySubject.get(`${CARD_AUDIENCE}:${subject.id}`)?.videos ?? 0 }
     rows.push({
       label: subject.name,
       verdict: quarterChange({
@@ -166,8 +186,27 @@ export function buildQuarterlyCard(input: QuarterlyCardInput): QuarterlyCard | n
     ...base,
     rows,
     series,
-    note: quarterCaveat(input.monthsInQuarter, rows.length === 0, input.subjectsNow == null),
+    note: quarterCaveat(input.monthsInQuarter, rows.length === 0, !subjectsRead),
+    firstComparison: firstComparisonLine(input.readings, input.readingMonth ?? null),
   }
+}
+
+/**
+ * The card's whole body below the gate (Heinrich's three-month-user test):
+ * every row there reads "not enough months yet", so the rows say nothing a
+ * single line cannot, and the line says the one thing a reader wants — when.
+ *
+ * A MONTH, NOT A DATE. It is the artefact's own arithmetic
+ * (`firstQuarterVerdictMonth`, one reading a month), the same the quarterly's
+ * last page prints; the quarterly itself still fires on an update, not a day.
+ */
+export function firstComparisonLine(readings: number, readingMonth: string | null): string | null {
+  if (readings >= QUARTER_READINGS_NEEDED) return null
+  const month = firstQuarterVerdictMonth(readings, readingMonth)
+  const have = `it needs six monthly readings and you have ${readings}`
+  return month
+    ? `The first quarter-on-quarter comparison arrives with the ${monthWithYear(month)} reading: ${have}.`
+    : `The first quarter-on-quarter comparison arrives once six monthly readings stand behind it: you have ${readings}.`
 }
 
 /**
@@ -241,6 +280,7 @@ export async function loadQuarterlyCard(scope: Scope): Promise<QuarterlyCard | n
     subjectsBefore,
     monthsInQuarter: era.monthsInQuarter,
     readings: era.readings,
+    readingMonth: monthStartOf(readingAt),
   })
 }
 

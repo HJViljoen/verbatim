@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { MOVEMENT_WORDS } from '@/components/delta-badge'
-import { QuarterlyAbsentTile, QuarterlyCardTile, monthSpan, pillWord, readingWord } from './card'
+import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
+import { QuarterlyAbsentTile, QuarterlyCardTile, barCeiling, monthSpan, pillWord, readingWord } from './card'
 import { formingCardFixture, quarterlyCardFixture, unreadCardFixture } from './fixture'
 
 // The render tier for the quarterly card (Block D wave 2, package E-reports).
@@ -21,14 +22,28 @@ describe('the quarterly card', () => {
   // "▲ 5 pts" and "▼ 3 pts" on a card whose own footer says three readings of
   // six. Below the gate every `quarterChange` answers `baseline_forming`, so
   // every badge reads the product's word for it.
-  it('prints the gate word on every row below six readings, and no arrow', () => {
-    const text = renderText(<QuarterlyCardTile card={formingCardFixture()} />)
-    expect(text).toContain(MOVEMENT_WORDS.baseline_forming)
-    // Three rows and no pill: the count is the rows', and the card says it
-    // once per row rather than four times in all.
-    expect(text.match(new RegExp(MOVEMENT_WORDS.baseline_forming, 'g')) ?? []).toHaveLength(3)
+  // HEINRICH'S THREE-MONTH-USER TEST. Below the gate every row's badge reads
+  // "not enough months yet", so the rows said nothing but that, once per
+  // subject. The card now carries ONE line — when the first comparison
+  // arrives — and no rows, bars, legend or caveat.
+  it('shows only the gate line below six readings, with no rows', () => {
+    const card = { ...formingCardFixture(), firstComparison: 'The first quarter-on-quarter comparison arrives with the November 2026 reading: it needs six monthly readings and you have 3.' }
+    const text = renderText(<QuarterlyCardTile card={card} />)
+    expect(text).toContain('arrives with the November 2026 reading')
+    expect(text).not.toContain(MOVEMENT_WORDS.baseline_forming)
+    expect(text).not.toContain('Durability')
+    expect(text).not.toContain('bars:')
+    expect(text).not.toContain('read back at setup')
+    // said once: no footer copy of the same gate
+    expect(text).not.toContain('Quarter against quarter needs six months')
     expect(text).not.toContain('▲')
     expect(text).not.toContain('▼')
+  })
+
+  it('shows the rows as designed once the gate is open', () => {
+    const text = renderText(<QuarterlyCardTile card={quarterlyCardFixture()} />)
+    expect(text).toContain('Durability')
+    expect(text).toContain('bars:')
   })
 
   // NO PROMISED CALENDAR DATE, ANYWHERE. `lib/schedules/due.ts` fires the
@@ -54,11 +69,11 @@ describe('the quarterly card', () => {
     expect(text).toMatch(/of 3,810/)
   })
 
-  // The gate sentence is the artefact's own, verbatim, so the card and the
-  // document one click away cannot print different numbers under it.
-  it('carries the artefact’s own gate sentence in the footer', () => {
+  // Where no month is known the line falls back to the count alone, and it
+  // is the only line in the body.
+  it('falls back to the reading count where no month is known', () => {
     expect(renderText(<QuarterlyCardTile card={formingCardFixture()} />))
-      .toContain('Quarter against quarter needs six months: you have 3.')
+      .toContain('arrives once six monthly readings stand behind it: you have 3.')
   })
 
   // ONE NUMBER, THREE PLACES, AND THEY AGREE. The pill was the gate CONSTANT
@@ -108,7 +123,14 @@ describe('the quarterly card', () => {
   // month under the band's minimum are two different facts and the card says
   // both.
   it('names the months the quarter cannot stand on', () => {
-    const text = renderText(<QuarterlyCardTile card={formingCardFixture()} />)
+    const card = quarterlyCardFixture({
+      monthsInQuarter: [
+        { month: '2026-07-01', videos: 1290, backRead: true },
+        { month: '2026-08-01', videos: 1409, backRead: false },
+        { month: '2026-09-01', videos: 1448, backRead: false },
+      ],
+    })
+    const text = renderText(<QuarterlyCardTile card={card} />)
     expect(text).toContain('read back at setup')
     expect(text).toContain('July 2026')
   })
@@ -125,14 +147,34 @@ describe('the quarterly card', () => {
   // A LEGEND KEYS WHAT IS DRAWN. Below the gate `quarterChange` carries no
   // baseline, so no row has a tick — and the second swatch was drawn on
   // `series.length > 0`, promising a mark nowhere on the card.
-  it('does not key a tick the chart has not drawn', () => {
-    // The legend's second swatch is the only `h-2.5 w-0.5` mark on the card;
-    // the tick on a bar is the same shape, `absolute`-positioned.
+  it('keys the tick only where the chart draws one', () => {
+    // The legend's second swatch is the only `h-2.5 w-0.5` mark outside a bar;
+    // below the gate there are no bars and no legend at all.
     const forming = render(<QuarterlyCardTile card={formingCardFixture()} />)
-    expect(forming).toContain('bars: Q3 2026, the category')
+    expect(forming).not.toContain('bars:')
     expect(forming).not.toContain('h-2.5 w-0.5')
     const full = render(<QuarterlyCardTile card={quarterlyCardFixture()} />)
     expect(full).toContain('h-2.5 w-0.5 rounded-[1px] bg-muted-foreground')
+  })
+
+  // A 2.0% SHARE DREW AS A FULL BAR. Scaled against the largest level on the
+  // card, a lone row is always its own maximum (Sealand's Price, "1 of 49").
+  // One printed scale now covers every bar and every tick.
+  it('draws a lone small share as a sliver on a printed scale, with its tick on the same scale', () => {
+    const card = quarterlyCardFixture({
+      subjects: [{ id: 's1', name: 'Price' }],
+      thisQuarter: { denominators: [{ audience: INDUSTRY_AUDIENCE, videos: 49, comments: 0, platform_mix: {}, dual_mention: 0, excluded_undated: 0 }], themes: [] },
+      lastQuarter: { denominators: [{ audience: INDUSTRY_AUDIENCE, videos: 7, comments: 0, platform_mix: {}, dual_mention: 0, excluded_undated: 0 }], themes: [] },
+      subjectsNow: [{ audience: INDUSTRY_AUDIENCE, subject_id: 's1', videos: 1, comments: 0, platform_mix: {}, excluded_on_camera: 0, excluded_undated: 0 }],
+      subjectsBefore: [{ audience: INDUSTRY_AUDIENCE, subject_id: 's1', videos: 1, comments: 0, platform_mix: {}, excluded_on_camera: 0, excluded_undated: 0 }],
+    })
+    const html = render(<QuarterlyCardTile card={card} />)
+    const fill = html.match(/width:\s*([\d.]+)%/)
+    expect(Number(fill?.[1])).toBeCloseTo((100 / 49 / 25) * 100, 1)
+    expect(Number(fill?.[1])).toBeLessThan(10)
+    const tick = html.match(/left:\s*calc\(([\d.]+)% - 1px\)/)
+    expect(Number(tick?.[1])).toBeCloseTo((100 / 7 / 25) * 100, 1)
+    expect(renderText(<QuarterlyCardTile card={card} />)).toContain('scale 0–25%')
   })
 
   // The bars are levels beside each other, not a line through time: one
@@ -192,5 +234,16 @@ describe('pillWord', () => {
     expect(pillWord(3, true)).toBeNull()
     expect(pillWord(3, false)).toBe('nothing to compare yet')
     expect(pillWord(9, false)).toBe('nothing to compare yet')
+  })
+})
+
+describe('barCeiling', () => {
+  it('never lets the largest bar be its own full width', () => {
+    expect(barCeiling([2])).toBe(25)
+    expect(barCeiling([])).toBe(25)
+    expect(barCeiling([22, 18])).toBe(25)
+    expect(barCeiling([27.1, 14])).toBe(30)
+    expect(barCeiling([99])).toBe(100)
+    expect(barCeiling([Number.NaN, 3])).toBe(25)
   })
 })

@@ -12,7 +12,7 @@ import { gapBasisLine, gapLine } from '@/lib/reading/gap'
 import { marketFixture } from '@/components/pages/market-surface/fixture'
 import { competitiveFixture } from '@/components/pages/competitive-surface/fixture'
 import { QUARTERLY_BLOCKS, quarterlyBlocksFor } from './index'
-import { afterQuarterFixture, closedFixture, formingFixture, quarterlyFixture, subjectLeadFixture, thinMonthFixture, thinQuarterFixture } from './fixture'
+import { afterQuarterFixture, closedFixture, formingFixture, quarterlyFixture, subjectLeadFixture, thinMonthFixture, thinQuarterFixture, unmentionedFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -563,13 +563,20 @@ describe('the two-audience gap the quarter can actually carry', () => {
   })
 
   it('draws no gap where a column could not be drawn, and none at all with M3 unapplied', () => {
-    // `s6` is the row whose own side was not read at all — the table went to
-    // six subjects in the fix pass and one of them carries the category
-    // column alone, which is the state this arm is about.
-    const unread = quarterlyFixture().subjects.rows.find((r) => r.id === 's6')
-    expect(unread).toBeTruthy()
-    expect(unread?.gap ?? null).toBeNull()
     expect(formingFixture().subjects.rows.every((r) => r.gap == null)).toBe(true)
+  })
+
+  // A SUBJECT NOBODY MENTIONED IS 0 OF N, NOT AN UNREAD COLUMN.
+  // `window_subject_readings` emits no row for a zero, and requiring a row on
+  // both sides dropped the subject — on Sealand's Q2 2026 card, six of seven.
+  it('reads a subject with no row on a read side as zero, and still draws it', () => {
+    const data = unmentionedFixture()
+    const row = data.subjects.rows.find((r) => r.id === 's6')
+    expect(row?.youQuarter?.value).toEqual({ k: 0, n: 249 })
+    expect(row?.youQuarter?.baseline?.k).toBe(0)
+    expect(row?.categoryQuarter).toBeTruthy()
+    expect(renderText(QUARTERLY_BLOCKS['quarterly.unsettled'].render(data, 'app', ctx)))
+      .not.toContain('neither side read')
   })
 })
 
