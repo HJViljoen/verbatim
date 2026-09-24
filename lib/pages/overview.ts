@@ -169,15 +169,6 @@ export interface SubjectRow {
    * leadership sheet) says "calibrating" in its place: Heinrich's 24 Sep
    * ruling. Optional because a snapshot frozen before the field has none, and
    * such a row is read as it was frozen.
-   *
-   * ONE RULE FOR FROZEN ARTEFACTS, AND IT IS THE RECORD'S: a share is hidden
-   * wherever the frozen record SAYS the subject was calibrating, and an
-   * artefact re-renders as sent where the record says nothing. A Subjects
-   * pane frozen before the gate carries `calibration` (the field is older
-   * than the gate), so it now re-renders with its share hidden; an Overview
-   * or This week row frozen before carries none, so it re-renders with the
-   * share it was sent with. The difference between the two is what each
-   * snapshot recorded, not two policies.
    */
   calibration?: SubjectCalibration
 }
