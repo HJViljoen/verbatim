@@ -81,7 +81,10 @@ describe('the four fixed templates', () => {
     // is the deliberate change this number is here to make visible, and it is
     // one field of one template: the keys, roles, briefs and skeletons are
     // still word for word what they were.
-    expect(fnv1a(JSON.stringify(DOCUMENT_TEMPLATES))).toBe('c3778068')
+    // 2026-09-24: the four `description` strings were rewritten around the
+    // role each brief serves (Heinrich). Display copy only: no prompt reads a
+    // template's description.
+    expect(fnv1a(JSON.stringify(DOCUMENT_TEMPLATES))).toBe('86e76b43')
   })
 })
 

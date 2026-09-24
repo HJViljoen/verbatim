@@ -31,7 +31,7 @@ export default function NewReportPage() {
             <div className="flex flex-col gap-3">
               <p className="px-1 font-mono text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground">Written from the update</p>
               <ul className="grid gap-3 md:grid-cols-2">
-                {DOCUMENT_STARTERS.map((t) => (
+                {DOCUMENT_STARTERS.filter((t) => t.key !== CUSTOM_KEY).map((t) => (
                   <li key={t.key} className="flex flex-col gap-2 rounded-lg bg-tile p-4 shadow-tile">
                     <div>
                       <p className="text-[14px] font-semibold">{t.name}</p>
