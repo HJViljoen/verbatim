@@ -273,12 +273,19 @@ describe('parseLabelledSheet — a label is a JSON boolean or it is refused', ()
 describe('calibrationNote — the tenant-readable change-log line', () => {
   it('is plain words: no "by hand", no threshold', () => {
     const note = calibrationNote('Looks & style', 25)
-    expect(note).toBe('Checked how often the subject Looks & style picks the right comments, on 25 sampled comments.')
+    expect(note).toBe('Checked how often the subject Looks & style is matched correctly, on 25 sampled points viewers made.')
     expect(note).not.toMatch(/by hand/i)
     expect(note).not.toMatch(/\d\.\d|\d\/\d|precision|pair/i)
   })
 
+  // A sampled pair is an audience insight — one point drawn from one video's
+  // comments — and "comments" has a fixed meaning on client copy (GLOSSARY).
+  it('does not call the sampled unit a comment', () => {
+    expect(calibrationNote('Looks & style', 25)).not.toMatch(/comment/i)
+    expect(calibrationNote('Price', 1)).not.toMatch(/comment/i)
+  })
+
   it('counts one sample as one', () => {
-    expect(calibrationNote('Price', 1)).toBe('Checked how often the subject Price picks the right comments, on 1 sampled comment.')
+    expect(calibrationNote('Price', 1)).toBe('Checked how often the subject Price is matched correctly, on 1 sampled point a viewer made.')
   })
 })

@@ -295,7 +295,15 @@ export function parseLabelledSheet(lines: readonly string[]): { rows: SheetLine[
  * "by hand" was false once the labels were a model's (the 24 Sep ruling), and
  * "0.6/0.4" is a raw threshold, which client copy never prints. Plain words,
  * and only what is true of every way the sheet can be labelled.
+ *
+ * NOT "COMMENTS". What is sampled is a (subject, audience insight) pair, and an
+ * insight is one point drawn from ONE video's comments — several per video,
+ * never one comment. "Comments" has a fixed meaning on every client surface
+ * (lib/calibration.ts GLOSSARY: comments are counted separately, as comments),
+ * so a note saying "25 sampled comments" is a copy claim the code does not
+ * make. Once --apply writes it the row cannot be corrected without rewriting
+ * history.
  */
 export function calibrationNote(subject: string, pairs: number): string {
-  return `Checked how often the subject ${subject} picks the right comments, on ${pairs} sampled ${pairs === 1 ? 'comment' : 'comments'}.`
+  return `Checked how often the subject ${subject} is matched correctly, on ${pairs} sampled ${pairs === 1 ? 'point a viewer made' : 'points viewers made'}.`
 }
