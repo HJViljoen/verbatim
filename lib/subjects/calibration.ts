@@ -238,3 +238,64 @@ export function formatPrecisionTable(rows: readonly PrecisionRow[]): string {
   })
   return [head, ...body].join('\n')
 }
+
+/** One line of a labelled calibration sheet, as the scorer reads it. */
+export interface SheetLine {
+  subjectId: string
+  audienceInsightId: string
+  score: number
+  /** true / false, or null for a pair nobody has labelled yet. */
+  label: boolean | null
+}
+
+/**
+ * Read a labelled sheet — and REFUSE it if any label is not a JSON boolean.
+ *
+ * THE SCORER COUNTED A STRING AS A YES (calibration skeptic, 2026-09-24).
+ * `precisionAt` counts `if (p.label) correct++`, and the scorer skipped only
+ * `label === null`, so a sheet whose labels were written "false", "not" or
+ * "member" — the spot-check CSV's own words — scored every one of those pairs
+ * as CORRECT, and a subject could go READY on answers that said no. Null is
+ * still "not labelled yet" and is skipped with a warning; anything else that is
+ * not `true` or `false` (a string, a number, a missing key, a line that is not
+ * JSON) is refused by line number, and nothing is scored from the sheet.
+ */
+export function parseLabelledSheet(lines: readonly string[]): { rows: SheetLine[]; refused: string[] } {
+  const rows: SheetLine[] = []
+  const refused: string[] = []
+  lines.forEach((text, i) => {
+    if (!text.trim()) return
+    let line: Record<string, unknown>
+    try {
+      line = JSON.parse(text) as Record<string, unknown>
+    } catch {
+      refused.push(`line ${i + 1}: not JSON`)
+      return
+    }
+    const label = line?.label
+    if (label !== null && typeof label !== 'boolean') {
+      refused.push(`line ${i + 1}: label ${label === undefined ? 'missing' : JSON.stringify(label)} is not true, false or null`)
+      return
+    }
+    rows.push({
+      subjectId: String(line.subjectId),
+      audienceInsightId: String(line.audienceInsightId),
+      score: Number(line.score),
+      label,
+    })
+  })
+  return { rows, refused }
+}
+
+/**
+ * The change-log note a recorded calibration leaves — TENANT-READABLE, on
+ * Settings › The record (lib/settings/change-log.ts prints `note` verbatim).
+ *
+ * It used to read "precision measured by hand on 25 labelled pairs at 0.6/0.4":
+ * "by hand" was false once the labels were a model's (the 24 Sep ruling), and
+ * "0.6/0.4" is a raw threshold, which client copy never prints. Plain words,
+ * and only what is true of every way the sheet can be labelled.
+ */
+export function calibrationNote(subject: string, pairs: number): string {
+  return `Checked how often the subject ${subject} picks the right comments, on ${pairs} sampled ${pairs === 1 ? 'comment' : 'comments'}.`
+}

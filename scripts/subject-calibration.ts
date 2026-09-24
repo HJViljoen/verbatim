@@ -4,11 +4,13 @@ import { recordConfigChange, scriptActor } from '../lib/config-log'
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
 import {
   calibrationQuota,
+  calibrationNote,
   clearsPrecisionGate,
   formatPrecisionTable,
   pickCalibrationPairs,
   precisionAt,
   precisionTable,
+  parseLabelledSheet,
   predictAt,
   type LabelledPair,
 } from '../lib/subjects/calibration'
@@ -199,9 +201,15 @@ async function main() {
     return
   }
 
-  // --score
-  const raw = readFileSync(score!, 'utf8').split('\n').filter((l) => l.trim())
-  const rows = raw.map((l) => JSON.parse(l) as { subjectId: string; audienceInsightId: string; score: number; label: boolean | null })
+  // --score. A label that is not a JSON boolean is REFUSED, whole sheet, before
+  // anything is scored: `if (p.label) correct++` counted "false" as a yes.
+  const { rows, refused } = parseLabelledSheet(readFileSync(score!, 'utf8').split('\n'))
+  if (refused.length > 0) {
+    throw new Error(
+      `REFUSED: ${refused.length} line(s) of ${score} carry a label that is not true, false or null — nothing scored, nothing written.\n  ` +
+      refused.slice(0, 20).join('\n  ') + (refused.length > 20 ? `\n  … +${refused.length - 20} more` : ''),
+    )
+  }
   const unlabelled = rows.filter((r) => r.label === null).length
   if (unlabelled > 0) console.warn(`[subject-calibration] ${unlabelled} pair(s) still unlabelled — they are skipped, not counted as no.`)
 
@@ -248,7 +256,7 @@ async function main() {
       // Every configuration write carries an actor (AGENTS.md). There is no
       // trigger on `subjects` to catch this one, and it is the write that
       // decides whether a client sees a share at all.
-      await recordConfigChange(admin, {
+      const logged = await recordConfigChange(admin, {
         clientId,
         surface: 'subjects',
         field: 'calibration',
@@ -267,8 +275,17 @@ async function main() {
         // not — the same line attention_panels draws when it withholds
         // created_by from the tenant.
         actor: scriptActor(`scripts/subject-calibration.ts --client ${clientId} --score <file> --apply`),
-        note: `precision measured by hand on ${pairs.length} labelled pairs at ${SUBJECT_MATCH_HIGH}/${SUBJECT_MATCH_LOW}`,
+        // Tenant-readable: no "by hand", no thresholds (calibrationNote).
+        note: calibrationNote(s.name, pairs.length),
       })
+      // The figure is on the subject already; a calibration with no audit row
+      // must not pass quietly, and the next subject must not follow it.
+      if (!logged) {
+        throw new Error(
+          `${s.name}: the calibration was written but its change-log row was NOT recorded — stopped before the next subject. ` +
+          'Fix the change log and re-run --apply; it overwrites the figure and logs it.',
+        )
+      }
       console.log(`  recorded: ${shipped.precision === null ? 'no precision' : `${(100 * shipped.precision).toFixed(1)}%`} over ${pairs.length} pairs`)
     }
     console.log('')

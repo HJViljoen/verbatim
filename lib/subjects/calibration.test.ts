@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  calibrationNote,
   calibrationQuota,
   candidateThresholds,
   pickCalibrationPairs,
   clearsPrecisionGate,
   formatPrecisionTable,
+  parseLabelledSheet,
   precisionAt,
   precisionTable,
   predictAt,
@@ -228,5 +230,55 @@ describe('pickCalibrationPairs', () => {
     const row = precisionAt(labelled)
     expect(row.predicted).toBe(picked.length)
     expect(row.precision).toBe(labelled.filter((p) => p.label).length / picked.length)
+  })
+})
+
+describe('parseLabelledSheet — a label is a JSON boolean or it is refused', () => {
+  const line = (label: unknown, extra: Record<string, unknown> = {}) =>
+    JSON.stringify({ subjectId: 's1', subject: 'Price', audienceInsightId: 'i1', said: 'x', score: 0.62, label, ...extra })
+
+  it('reads true, false and null, and ignores blank lines and extra keys', () => {
+    const { rows, refused } = parseLabelledSheet([line(true, { reason: 'about price' }), '', line(false), line(null)])
+    expect(refused).toEqual([])
+    expect(rows.map((r) => r.label)).toEqual([true, false, null])
+    expect(rows[0]).toEqual({ subjectId: 's1', audienceInsightId: 'i1', score: 0.62, label: true })
+  })
+
+  // What it was for: `if (p.label) correct++` counted every one of these as a
+  // CORRECT prediction, so a sheet written in the CSV's own words scored its
+  // "not" answers as yeses.
+  it('refuses a string, a number or a missing label, by line number', () => {
+    const noLabel = JSON.stringify({ subjectId: 's1', audienceInsightId: 'i2', score: 0.7 })
+    const { refused } = parseLabelledSheet([line('false'), line('not'), line('member'), line(0), line(1), noLabel, line(true)])
+    expect(refused).toEqual([
+      'line 1: label "false" is not true, false or null',
+      'line 2: label "not" is not true, false or null',
+      'line 3: label "member" is not true, false or null',
+      'line 4: label 0 is not true, false or null',
+      'line 5: label 1 is not true, false or null',
+      'line 6: label missing is not true, false or null',
+    ])
+  })
+
+  it('refuses a line that is not JSON', () => {
+    expect(parseLabelledSheet(['{"label": tru']).refused).toEqual(['line 1: not JSON'])
+  })
+
+  it('is the gate the scorer needed: a string "false" scores as correct without it', () => {
+    const hazard = precisionAt([pair({ score: 0.9, label: 'false' as unknown as boolean })])
+    expect(hazard.correct).toBe(1)
+  })
+})
+
+describe('calibrationNote — the tenant-readable change-log line', () => {
+  it('is plain words: no "by hand", no threshold', () => {
+    const note = calibrationNote('Looks & style', 25)
+    expect(note).toBe('Checked how often the subject Looks & style picks the right comments, on 25 sampled comments.')
+    expect(note).not.toMatch(/by hand/i)
+    expect(note).not.toMatch(/\d\.\d|\d\/\d|precision|pair/i)
+  })
+
+  it('counts one sample as one', () => {
+    expect(calibrationNote('Price', 1)).toBe('Checked how often the subject Price picks the right comments, on 1 sampled comment.')
   })
 })
