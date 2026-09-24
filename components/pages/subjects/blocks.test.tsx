@@ -195,7 +195,7 @@ describe('SU2 · the subject in full', () => {
   it('refuses your own side’s change and answers the category’s, and says which in one sentence', () => {
     const text = renderText(subjectsSubject.render(subjectsFixture(), 'app', ctx))
     expect(text).toContain('too few to compare') // P0 item 6 / §6 D11 — the badge's one word
-    expect(text).toContain('carried too few videos this month to compare')
+    expect(text).not.toContain('carried too few videos this month to compare') // footnote removed 2026-09-24
   })
 
   it('prints a direction word only inside a verdict node', () => {
@@ -284,7 +284,7 @@ describe('SU2 · the subject in full', () => {
     // On screen an unread side gets no cell; the note under the grid names
     // it once. The email arm still prints every side's line.
     const text = renderText(subjectsSubject.render(unread, 'app', ctx))
-    expect(text).toContain('no reading yet')
+    expect(text).not.toContain('no reading yet') // footnote removed 2026-09-24
     expect(text).not.toContain('not tracked')
     expect(renderText(subjectsSubject.render(unread, 'email', ctx))).toContain('no reading yet')
   })
@@ -293,7 +293,7 @@ describe('SU2 · the subject in full', () => {
     const data = subjectsFixture()
     const provisional = { ...data, selected: { ...data.selected!, calibration: 'calibrating' as const } }
     expect(renderText(subjectsSubject.render(provisional, 'app', ctx)))
-      .toContain('still checking how often we get this subject right')
+      .not.toContain('still checking how often we get this subject right') // removed 2026-09-24
   })
 })
 
@@ -919,7 +919,7 @@ describe('the page says each of its sentences once', () => {
   it('prints the axis note on the hero and not again under the chart', () => {
     const data = subjectsFixture()
     const note = data.selected!.axisNote!
-    expect(renderText(subjectsSubject.render(data, 'app', ctx))).toContain(note)
+    expect(renderText(subjectsSubject.render(data, 'app', ctx))).not.toContain(note) // removed 2026-09-24
     expect(renderText(subjectsLine.render(data, 'app', ctx))).not.toContain(note)
   })
 })

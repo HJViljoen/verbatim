@@ -259,23 +259,8 @@ export const subjectsSubject: Block<SubjectsData> = {
           </TileColumns>
         )}
 
-        {pane.axisNote ? (
-          <p
-            className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'}
-            style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 6 } : undefined}
-          >
-            {pane.axisNote}
-          </p>
-        ) : null}
-
-        {pane.calibration === 'calibrating' ? (
-          <p
-            className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'}
-            style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}
-          >
-            We are still checking how often we get this subject right, so treat these as provisional.
-          </p>
-        ) : null}
+        {/* The axis note and the provisional line are no longer printed (Heinrich,
+            2026-09-24): each cell already says "too few to compare". */}
       </BlockFrame>
     )
   },
