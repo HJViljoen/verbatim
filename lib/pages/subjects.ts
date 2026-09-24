@@ -2235,7 +2235,15 @@ async function loadVoicesMany(
     const voices = shown.map((c) => {
       const m = c.commentId ? meta.get(c.commentId) : undefined
       const key = m?.platform && m.video_id ? `${m.platform}::${m.video_id}` : null
-      const from = voiceFrom(audienceOf(c), { ownPost: key !== null && ownPostKeys.has(key) })
+      // THE ONE FACT, READ ONCE. Both the comment cite and the transcript cite
+      // turn on whether the tenant PUBLISHED this video; `voiceFrom` takes it
+      // and the transcript arm used to recover it by matching the sentence
+      // voiceFrom had just returned (`from.startsWith('under a post of
+      // yours')`). That made a copy edit two functions away silently drop the
+      // "· yours" suffix with no test failing — the cite would still read
+      // "creator video, transcript" and simply stop saying whose.
+      const ownPost = key !== null && ownPostKeys.has(key)
+      const from = voiceFrom(audienceOf(c), { ownPost })
       const source = c.source ?? 'comment'
       // WHERE, IN THE RIGHT WORDS FOR THE KIND OF EVIDENCE IT IS. "under a
       // category video" is true of a COMMENT; a creator's own sentence was not
@@ -2243,7 +2251,7 @@ async function loadVoicesMany(
       const where = source === 'comment'
         ? from
         : source === 'video'
-          ? `creator video, transcript${from.startsWith('under a post of yours') ? ' · yours' : ''}`
+          ? `creator video, transcript${ownPost && audienceOf(c) === CLIENT_AUDIENCE ? ' · yours' : ''}`
           : 'on-screen text'
       // THE PLATFORM IS NOT IN THE WORDS (fix pass). It is carried by the
       // glyph the block draws in front of this line, so leading the cite with

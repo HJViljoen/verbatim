@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -113,6 +114,25 @@ describe('voicesMeta', () => {
     const meta = voicesMeta(6, 400, true)
     expect(meta).toContain('a sample')
     expect(meta).not.toContain('of 400')
+  })
+})
+
+describe('the transcript cite reads the fact, not the sentence (m10)', () => {
+  // `creator video, transcript · yours` used to be decided by
+  // `from.startsWith('under a post of yours')` — a match on the string
+  // `voiceFrom` had returned three lines earlier. Both cites turn on the same
+  // boolean, so the loader reads that boolean twice instead of reading one of
+  // its own sentences back. A re-wording of voiceFrom would have dropped the
+  // suffix silently: the cite still says "creator video, transcript" and just
+  // stops saying whose.
+  const source = readFileSync(new URL('./subjects.ts', import.meta.url), 'utf8')
+
+  it('does not recover the fact by matching voiceFrom’s copy', () => {
+    expect(source).not.toContain("from.startsWith('under a post of yours')")
+  })
+
+  it('builds the suffix from the ownPost boolean the loader already has', () => {
+    expect(source).toMatch(/creator video, transcript\$\{ownPost && audienceOf\(c\) === CLIENT_AUDIENCE/)
   })
 })
 
