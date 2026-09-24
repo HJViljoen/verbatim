@@ -27,7 +27,7 @@ import { runStep2c } from '@/lib/pipeline/owned-events'
 import { runAnomalyCheck } from '@/lib/pipeline/anomaly-check'
 import { runPassE } from '@/lib/pipeline/pass-e'
 import { reevaluatePlanChecks } from '@/lib/ask/reevaluate'
-import { summariseRunErrors, partialRunAlert, passADegradation, isolatedBatchDegradation, runCloseStatus, RUN_ERROR_CAP } from '@/lib/pipeline/run-errors'
+import { summariseRunErrors, partialRunAlert, passADegradation, isolatedBatchDegradation, runCloseStatus, closingErrors, RUN_ERROR_CAP } from '@/lib/pipeline/run-errors'
 import { writeRunCosts, runSpendSoFar } from '@/lib/pipeline/run-costs'
 import { withApifyRunContext, settleApifyRuns } from '@/lib/gather/apify-runs'
 import { decideOpenRun, runIdForEvent, RUN_STALE_AFTER_HOURS, PG_UNIQUE_VIOLATION, type RunningRow } from '@/lib/pipeline/run-guard'
@@ -491,6 +491,17 @@ export const runPipeline = inngest.createFunction(
       const message = detail instanceof Error ? detail.message : detail == null ? '' : String(detail)
       runErrors.push(message ? `${where}: ${message.slice(0, 300)}` : where)
     }
+    // Sub-threshold FINDINGS — the things a ratio gate decided not to count.
+    // They never touch totalErrors, so a ratio gate still means what it has
+    // always meant and a clean run still closes clean and silent; they ride
+    // along in `errors` once the run is partial anyway (`closingErrors`).
+    // Run b67b56de closed partial on one Instagram census while nine caption
+    // actor runs had failed inside the same window, and the row said nothing.
+    const runFindings: string[] = []
+    const noteFinding = (where: string, detail: string) => {
+      if (runFindings.length >= RUN_ERROR_CAP) return
+      runFindings.push(`${where}: ${detail.slice(0, 300)}`)
+    }
 
     // Reddit subreddit discovery (Wave 3): propose communities, probe each
     // against the live relevance gate, persist the survivors. Runs before
@@ -747,7 +758,16 @@ export const runPipeline = inngest.createFunction(
             // the ratio the actor itself is suspect and the run says so once.
             const txDegraded = isolatedBatchDegradation(isolatedBatches, txBatches.length, ISOLATED_BATCH_ERROR_RATIO)
             if (txDegraded) noteError(`transcribe:${platform}`, txDegraded)
-            else if (isolatedBatches > 0) console.warn(`[transcript] ${platform}: ${isolatedBatches} of ${txBatches.length} batches run-failed and were recovered id-by-id, under the ${ISOLATED_BATCH_ERROR_RATIO * 100}% ratio`)
+            else if (isolatedBatches > 0) {
+              // Under the ratio, so it does NOT degrade the run — but it is
+              // recorded rather than only logged. The console line it used to
+              // be was gone from the host's retention within the hour, which
+              // is how run b67b56de's nine failed YouTube caption actors were
+              // invisible on a row that already read 'partial'.
+              const say = `${isolatedBatches} of ${txBatches.length} caption batches run-failed and were recovered id-by-id, under the ${ISOLATED_BATCH_ERROR_RATIO * 100}% ratio`
+              console.warn(`[transcript] ${platform}: ${say}`)
+              noteFinding(`transcribe:${platform}`, say)
+            }
           } catch (e) {
             noteError(`plan-transcribe:${platform}`, e)
           }
@@ -1823,7 +1843,10 @@ export const runPipeline = inngest.createFunction(
           status: runCloseStatus(totalErrors),
           videos_scraped: totalVideos,
           completed_at: completedAt,
-          errors: runErrors,
+          // Findings ride along only on a run that is already partial — see
+          // closingErrors. error_message stays keyed to the COUNTED errors, so
+          // "N step errors" keeps meaning N steps failed.
+          errors: closingErrors(totalErrors, runErrors, runFindings),
           error_message: summariseRunErrors(totalErrors, runErrors),
           ...extra,
         }).eq('id', runId)
@@ -1944,12 +1967,23 @@ export const runPipeline = inngest.createFunction(
           const admin = createAdminClient()
           const { data: client } = await admin.from('clients')
             .select('company_name').eq('id', clientId).maybeSingle()
+          // WHAT THE RUN LEFT BEHIND, counted here rather than only by the ops
+          // check (`run_incomplete` is 'completed'-only, deliberately, and that
+          // is left alone). Three head counts inside a step that already reads
+          // the database — no new step id, no new query round when the run is
+          // clean, since this whole block is skipped then. Counted AFTER
+          // write-run-costs, which is the step immediately above, or `costs`
+          // would read 0 on every partial run and say so.
+          const rows = await runRowCounts(admin, runId)
           const { subject, text } = partialRunAlert({
             runId,
             clientName: client?.company_name ?? clientId,
             total: totalErrors,
             recorded: runErrors,
+            findings: runFindings,
             reportSent: Boolean(options.sendReport),
+            rows,
+            themeRegistry: flags.themeRegistry,
           })
           return sendAlertEmail(subject, text)
         })
@@ -1962,6 +1996,40 @@ export const runPipeline = inngest.createFunction(
     return { runId, status: runCloseStatus(totalErrors), totalVideos, ...passA, transcriptBackfill: backfill, translation: translate, onScreenText: ocr, classifyMeta: classify, brandMentions: crossRef.mentionsFlagged, ...themedSummary, ...synth, pruned }
   },
 )
+
+/**
+ * The three rows a finished run is judged by, for the partial-run alert.
+ *
+ * The same counts `/api/cron/ops-check` takes for `run_incomplete`, minus the
+ * groundedness arm: that one needs every `based_on.insight_ids` plus both
+ * insight tables' ids, which is four more reads for a number the alert would
+ * print in one clause. `missingRunRows` reads an absent
+ * `ungroundedRecommendations` as "not counted", never as zero, so leaving it
+ * out states less rather than states something false.
+ *
+ * Returns null when any count could not be read — "we did not look" and "there
+ * is nothing there" are exactly the two answers this email exists to tell
+ * apart, so a failed read must not arrive looking like a zero.
+ */
+async function runRowCounts(
+  admin: ReturnType<typeof createAdminClient>,
+  runId: string,
+): Promise<{ observations: number; recommendations: number; costs: number } | null> {
+  const head = async (table: string): Promise<number | null> => {
+    const { count, error } = await admin.from(table)
+      .select('id', { count: 'exact', head: true }).eq('run_id', runId)
+    if (error) {
+      console.warn(`[alert-partial] counting ${table} for run ${runId}: ${error.message}`)
+      return null
+    }
+    return count ?? 0
+  }
+  const [observations, recommendations, costs] = await Promise.all([
+    head('theme_observations'), head('recommendations'), head('run_costs'),
+  ])
+  if (observations === null || recommendations === null || costs === null) return null
+  return { observations, recommendations, costs }
+}
 
 /** What plan-owned reports when a tenant has no handles configured, or the
  *  step itself failed — no accounts to read, no window to read them over. */
