@@ -22,7 +22,12 @@ import type { InsightRow } from './types'
 // wholesale rather than trusted. When in doubt the pass keeps clusters apart:
 // a false merge hides a real finding inside an unrelated pile.
 
-const PROMPT_VERSION = 'theme_merge_v1'
+/** The prompt that decides which clusters fuse. Part of a run's clustering
+ *  regime (lib/pipeline/clustering.ts `mp=`), not just of its audit log: a
+ *  reworded merge prompt re-partitions the corpus exactly as a moved threshold
+ *  does. Exported as a plain string so open-run can stamp it without the
+ *  clustering module importing this one. */
+export const PROMPT_VERSION = 'theme_merge_v1'
 
 /** A merge group larger than this is a topic, not a theme — rejected whole. */
 const MAX_MERGE_GROUP = 8

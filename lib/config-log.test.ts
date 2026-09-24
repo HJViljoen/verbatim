@@ -22,6 +22,7 @@ import {
   updateWithActor,
   withActor,
   type ConfigActor,
+  type ConfigChangeInput,
 } from './config-log'
 
 // The configuration change log's pure half. The other half is a database
@@ -307,6 +308,28 @@ describe('diffConfigRows — one row per column that actually moved', () => {
 })
 
 describe('changeRow — what reaches the database', () => {
+  it('leaves the two affects columns out entirely when the writer cannot say', () => {
+    // Absent, not an explicit NULL: a deploy that lands before the migration
+    // is then rejected on the column that does not exist yet instead of
+    // quietly writing a row with the note and without the band.
+    const row = changeRow({ clientId: CLIENT, surface: 'entity_retag', actor: actor() })
+    expect(row).not.toHaveProperty('affects_audiences')
+    expect(row).not.toHaveProperty('affects_months')
+  })
+
+  it('carries the audiences and the band when it can', () => {
+    const row = changeRow({
+      clientId: CLIENT, surface: 'rival_rename', actor: actor(),
+      affects: { audiences: ['competitor:Topo Designs', 'competitor:Topo'], months: '[2025-06-01,2026-10-01)' },
+    })
+    expect(row.affects_audiences).toEqual(['competitor:Topo Designs', 'competitor:Topo'])
+    // An empty list is NOT "no audiences": the column says NULL means unknown,
+    // and a writer that names none has not told us there were none.
+    expect(changeRow({ clientId: CLIENT, surface: 'rivals', actor: actor(), affects: { audiences: [], months: null } }))
+      .not.toHaveProperty('affects_audiences')
+    expect(row.affects_months).toBe('[2025-06-01,2026-10-01)')
+  })
+
   it('defaults a logged row to now, with no changed_at of its own', () => {
     const row = changeRow({ clientId: CLIENT, surface: 'schedule', actor: actor() })
     expect(row).not.toHaveProperty('changed_at')
@@ -360,6 +383,60 @@ describe('recordConfigChange — non-fatal by design', () => {
     const err = vi.spyOn(console, 'error').mockImplementation(() => {})
     const f = fake({ message: 'relation "public.config_changes" does not exist' })
     expect(await recordConfigChange(f.client, { clientId: CLIENT, surface: 'regate', actor: actor() })).toBe(false)
+    expect(err).toHaveBeenCalled()
+  })
+
+  // A deploy can reach production before M1 is applied by hand, and PostgREST
+  // rejects an insert whole on an unknown column. Without the retry a re-tag
+  // moves 253 videos and then loses the ONLY record of it — the surface, the
+  // two distributions, the row count and the sentence — over a band.
+  const sequenced = (errors: ({ message?: string; code?: string } | null)[]) => {
+    const inserted: Record<string, unknown>[][] = []
+    return {
+      inserted,
+      client: {
+        from: () => ({
+          insert: async (rows: Record<string, unknown> | Record<string, unknown>[]) => {
+            inserted.push(Array.isArray(rows) ? rows : [rows])
+            return { error: errors[inserted.length - 1] ?? null }
+          },
+        }),
+      },
+    }
+  }
+  const withBand = (surface: 'entity_retag'): ConfigChangeInput => ({
+    clientId: CLIENT, surface, actor: actor(),
+    note: 'the record the 2026-09-09 re-tag never left',
+    affects: { audiences: ['competitor:Topo Designs'], months: '[2021-12-01,2026-10-01)' },
+  })
+
+  it('keeps the row when the database has not got the affects columns yet', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const f = sequenced([{ code: 'PGRST204', message: "Could not find the 'affects_months' column of 'config_changes' in the schema cache" }, null])
+    expect(await recordConfigChange(f.client, withBand('entity_retag'))).toBe(true)
+    expect(f.inserted).toHaveLength(2)
+    expect(f.inserted[0][0]).toHaveProperty('affects_months')
+    expect(f.inserted[1][0]).not.toHaveProperty('affects_months')
+    expect(f.inserted[1][0]).not.toHaveProperty('affects_audiences')
+    // The record itself survives the retry intact.
+    expect(f.inserted[1][0].surface).toBe('entity_retag')
+    expect(f.inserted[1][0].note).toBe('the record the 2026-09-09 re-tag never left')
+    expect(err).toHaveBeenCalled()
+  })
+
+  it('does not retry when the rejected column is not one of the two', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const f = sequenced([{ code: 'PGRST204', message: "Could not find the 'source' column of 'config_changes' in the schema cache" }, null])
+    expect(await recordConfigChange(f.client, withBand('entity_retag'))).toBe(false)
+    expect(f.inserted).toHaveLength(1)
+    expect(err).toHaveBeenCalled()
+  })
+
+  it('does not retry a row that never carried a band', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const f = sequenced([{ code: 'PGRST204', message: "Could not find the 'affects_months' column of 'config_changes' in the schema cache" }, null])
+    expect(await recordConfigChange(f.client, { clientId: CLIENT, surface: 'regate', actor: actor() })).toBe(false)
+    expect(f.inserted).toHaveLength(1)
     expect(err).toHaveBeenCalled()
   })
 
@@ -508,9 +585,14 @@ describe('changeLogBoundary — inference must never read as record', () => {
     expect(changeLogBoundary(null)).toContain('a label, not a record')
   })
 
-  it('names the day the record begins', () => {
+  it('names the day the record begins, in the reader’s form', () => {
+    // RC6: it was `slice(0, 10)`, which put the one machine-form date on the
+    // record page inside the sentence that explains the record to its reader.
+    // The year is not decoration — the readiness page prints this line beside
+    // dates four years apart.
     const line = changeLogBoundary('2026-09-15T08:12:03.400Z')
-    expect(line).toContain('2026-09-15')
+    expect(line).toContain('15 Sep 2026')
+    expect(line).not.toMatch(/\d{4}-\d{2}-\d{2}/)
     expect(line).not.toContain('08:12')
     expect(line).toContain('a label, not a record')
   })
@@ -566,11 +648,22 @@ describe('the mirror in the migration — the two have to keep saying the same t
   })
 
   it('carries the same two vocabularies in its CHECK constraints', () => {
-    const surfaces = sql.match(/check\s*\(surface in \(([\s\S]*?)\)\)/i)?.[1]
+    // The surface list moved: 20260918090000_competitors.sql (Phase 1 M1) drops
+    // and re-adds the constraint to admit 'rival_rename' and 'prompt_version',
+    // so the LIVE vocabulary is the newest migration that writes it, not this
+    // one. Read it that way rather than freezing the vocabulary here — the
+    // point of the test is that TypeScript and the database agree about what a
+    // surface may be, and a later migration is allowed to move the answer.
+    const rivalsSql = readFileSync(new URL('../supabase/migrations/20260918090000_competitors.sql', import.meta.url), 'utf8')
+    const surfaces = rivalsSql.match(/check\s*\(surface in \(([\s\S]*?)\)\)/i)?.[1]
     const kinds = sql.match(/check\s*\(actor_kind in\s*\(([\s\S]*?)\)\)/i)?.[1]
     expect(surfaces).toBeTruthy()
     expect(kinds).toBeTruthy()
     expect(quoted(surfaces!).sort()).toEqual([...CONFIG_SURFACES].sort())
     expect(quoted(kinds!).sort()).toEqual([...ACTOR_KINDS].sort())
+    // And the original file's own CHECK is still a subset of it — a migration
+    // that re-adds the constraint must never drop a surface already stored.
+    const original = quoted(sql.match(/check\s*\(surface in \(([\s\S]*?)\)\)/i)![1])
+    for (const surface of original) expect(CONFIG_SURFACES).toContain(surface as never)
   })
 })

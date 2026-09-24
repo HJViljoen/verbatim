@@ -4,6 +4,19 @@ import type { NextConfig } from "next";
 // routed by host in proxy.ts. Config-level redirects run BEFORE the proxy, so
 // this file must stay out of the way of that routing.
 const nextConfig: NextConfig = {
+  // Building inside a git worktree (Phase 1, 2026-09-15). `node_modules` in a
+  // worktree is a symlink out of the project root, and Turbopack resolves
+  // modules only inside the root it auto-detects from the nearest lockfile —
+  // so the default `next build` panics there with "Symlink … invalid". Next's
+  // own fix is `turbopack.root` set to a directory containing BOTH the
+  // worktree and the real `node_modules`
+  // (node_modules/next/dist/docs/01-app/03-api-reference/05-config/01-next-config-js/turbopack.md).
+  // A hard-coded absolute path must never reach Vercel, so it is env-gated:
+  // unset (which is every deploy) the key is absent and nothing changes.
+  //   TURBOPACK_ROOT=/Users/heinrichviljoen/Documents/code npx next build
+  // `npx next build --webpack` is the zero-config fallback; see README,
+  // "Working in a worktree".
+  ...(process.env.TURBOPACK_ROOT ? { turbopack: { root: process.env.TURBOPACK_ROOT } } : {}),
   // Reports & Exports (2026-08-29): the export route prints pages with
   // puppeteer-core + @sparticuz/chromium. Next 16 already leaves both packages
   // unbundled (they are on its built-in serverExternalPackages list); listed
@@ -26,6 +39,13 @@ const nextConfig: NextConfig = {
     '/api/admin/send-report': ['./node_modules/@sparticuz/chromium/bin/**/*', './node_modules/react-dom/**/*'],
     '/api/schedules/\\[id\\]/send': ['./node_modules/@sparticuz/chromium/bin/**/*', './node_modules/react-dom/**/*'],
     '/api/schedules/\\[id\\]/preview': ['./node_modules/react-dom/**/*'],
+    // The OG card reads its two Bricolage weights off disk by PATH rather than
+    // through `new URL(..., import.meta.url)`: webpack's shim for that hands
+    // `readFile` a URL object node:fs does not recognise, which broke
+    // `next build --webpack` outright (P0 item 8). A path read is invisible to
+    // the URL-based file tracer, so the fonts are named here — without this the
+    // route ships and throws at request time with no face to draw with.
+    '/opengraph-image': ['./app/fonts/**'],
   },
   // Share links (Stage 2): a public, read-only page nobody should index. The
   // page sets metadata.robots as well; this is the header form for crawlers

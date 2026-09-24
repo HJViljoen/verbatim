@@ -83,7 +83,14 @@ export const EMBED_PASS = 'embed'
 /** Read from the LIVE population, as AGENTS.md requires population reads to be:
  *  the base table still holds rows a later run superseded but
  *  prune-stale-analysis has not yet deleted, and embedding those spends money
- *  on evidence that is about to vanish. */
+ *  on evidence that is not part of the population.
+ *
+ *  Since 2026-09-18 some of those rows do not vanish at all — a superseded row
+ *  something still CITES is kept for the life of the workspace — which makes
+ *  reading the view more load-bearing than it was, not less. A retained row
+ *  keeps whatever vector it already had, is never re-embedded, and so costs no
+ *  OpenAI spend; it is invisible to `match_insights` and to `embeddingCoverage`
+ *  for the same reason, both of which read this view. */
 export const EMBED_SOURCE_VIEW = 'audience_insights_current'
 
 export interface EmbedCandidate {

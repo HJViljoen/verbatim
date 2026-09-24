@@ -1,53 +1,147 @@
+import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { PageFrame, PageBar } from '@/components/shell/page-grid'
-import { PaneHeader, PaneBody, RailGroup, RailLink } from '@/components/shell/master-list'
+import { SETTINGS_SUBPAGES, railCountText, type RailCounts, type SettingsSection } from '@/lib/settings/rail'
+import { cn } from '@/lib/utils'
 
-// The settings rail (component-map §3): one frame shared by Settings, Billing
-// and Team so the account pages read as one place. Workspace settings are
-// owner/admin-editable and member-readable, as before; Team holds the
-// member-level pages. Two panes, not resizable — settings don't need it.
+// The settings area (Phase 1 WP16, design item 29, revision 3): a rail of
+// seven sub-pages and a content pane, shared by everything under
+// /dashboard/settings plus Team and Billing, so the account pages read as one
+// place. The rail's labels and addresses come from lib/settings/rail.ts — this
+// file draws them and decides nothing.
+//
+// ONE GROUP, NOT TWO. The rail carried a "Workspace" / "Help" split when the
+// Guide was a page of its own; the Guide is now the seventh sub-page and the
+// mock's rail is flat. A group label over a single group is furniture.
+//
+// FORMS, NOT TILES (revision 3). The vocabulary below is the whole of it:
+// SettingsCard is an inner block with a title and a line of explanation,
+// FactRow is label-left value-right, ConnectionRow is name · what · status.
+// None of them is the elevated `bg-tile shadow-tile` card the reading pages
+// use, and nothing in a sub-page should introduce one.
+//
+// NEITHER IS THE FRAME ITSELF, AS OF THE ARTBOARD PORT (Block D wave 2,
+// E-settings). The rail and the content pane were each an elevated
+// `bg-tile shadow-tile` card with a `PaneHeader` eyebrow, and that spent the
+// system's two nesting levels — tile, then flat inner block — on the furniture,
+// leaving every `SettingsCard` on a third and every field on a fourth. The
+// artboard draws a BARE 224px nav on white beside a flat column: no card, no
+// eyebrow over the rail, 40px rail items at 13.5px, and a sub-page header that
+// is a 15px/600 `h2` with a mono meta beside it and one sentence of rule under
+// it. That header is deliberately NOT `PaneHeader`: `PaneHeader`'s 10.5px
+// uppercase eyebrow is what the artboard uses for a SECTION head inside the
+// page (components/settings/chrome.tsx SectionHead), and one component cannot
+// hold both type scales without one of them being wrong.
+//
+// NINE ROUTES SHARE THIS FILE AND EIGHT OF THEM WERE NOT IN THE PORT'S SHOTS
+// (C6). The seven sub-pages plus Team and Billing all pass the same five props
+// — active, title, context, contentTitle, contentMeta — and nothing else, so
+// the new ones (contentRule, counts, railFooter) are additive for them and the
+// header and pane changes below are what actually reaches them: a 15px h2
+// where a PaneHeader eyebrow was, and flat white where two elevated cards
+// were. That is the artboard's settings area, applied to the area rather than
+// to one page of it, which is the point; the test file renders that exact prop
+// shape, because none of the eight can be rendered in the static tier (each
+// needs a session and a read). E-record re-ports /dashboard/settings/record
+// against this same file in this wave.
+//
+// The pane no longer scrolls inside a fixed height either. The artboard's
+// Tracking page is 2,460px tall and the shell's <main> already scrolls; an
+// inner scroller here meant the rail scrolled away from its own save-state
+// strip and the page had two scrollbars.
 
-export type SettingsSection = 'tracking' | 'initiatives' | 'connections' | 'billing' | 'team' | 'guide'
-
-const RAIL: { key: SettingsSection; href: string; label: string; group: 'Workspace' | 'Help' }[] = [
-  { key: 'tracking', href: '/dashboard/settings', label: 'Tracking & reports', group: 'Workspace' },
-  { key: 'initiatives', href: '/dashboard/settings/initiatives', label: 'Initiatives', group: 'Workspace' },
-  { key: 'connections', href: '/dashboard/settings/connections', label: 'Connections', group: 'Workspace' },
-  { key: 'billing', href: '/dashboard/billing', label: 'Plan & billing', group: 'Workspace' },
-  { key: 'team', href: '/dashboard/team', label: 'Team', group: 'Workspace' },
-  { key: 'guide', href: '/dashboard/guide', label: 'Guide', group: 'Help' },
-]
+export type { SettingsSection }
 
 export function SettingsFrame({
-  active, title, context, contentTitle, contentMeta, children, controls,
+  active, title, context, contentTitle, contentMeta, contentRule, children, controls, counts, railFooter,
 }: {
-  active: SettingsSection
+  /** Which rail entry is lit. `null` lights none — the parked Initiatives
+   *  page is inside this frame and is not one of the seven, and lighting
+   *  Tracking from it would tell a reader they were somewhere they are not. */
+  active: SettingsSection | null
   title: string
   context?: ReactNode
   contentTitle?: ReactNode
   contentMeta?: ReactNode
+  /** The one sentence under the sub-page title: what this page is for, and
+   *  what changing it costs. */
+  contentRule?: ReactNode
   controls?: ReactNode
+  /** Rail counts, where the page that drew the rail happens to know them. A
+   *  key that is absent prints nothing rather than a zero. */
+  counts?: RailCounts
+  /** Under the rail, below the seven links: the mock's save-state strip
+   *  (`SettingsRecord.dc.html`, and the same block on the Tracking artboard).
+   *  It belongs to the AREA rather than to a sub-page — the thing it says is
+   *  "you have unsaved edits somewhere in Settings, and the last save broke
+   *  this" — and a sub-page that drew it inside its own pane would be saying it
+   *  about itself. Optional, so a page that has not composed one draws no
+   *  empty box. */
+  railFooter?: ReactNode
   children: ReactNode
 }) {
   return (
     <PageFrame className="min-h-0 flex-1">
       <PageBar title={title} context={context}>{controls}</PageBar>
-      <div className="flex min-h-0 flex-col gap-3 md:h-[calc(100dvh_-_6.75rem)] md:flex-none md:flex-row">
-        <section className="flex shrink-0 flex-col overflow-hidden rounded-lg bg-tile shadow-tile md:w-[220px]">
-          <PaneHeader title="Account" />
-          <PaneBody>
-            {(['Workspace', 'Help'] as const).map((g) => (
-              <RailGroup key={g} label={g}>
-                {RAIL.filter((r) => r.group === g).map((r) => (
-                  <RailLink key={r.key} href={r.href} active={active === r.key}>{r.label}</RailLink>
-                ))}
-              </RailGroup>
-            ))}
-          </PaneBody>
-        </section>
-        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg bg-tile shadow-tile">
-          {contentTitle && <PaneHeader title={contentTitle} meta={contentMeta} />}
-          <PaneBody className="px-5 py-4">{children}</PaneBody>
+      <div className="flex min-h-0 flex-col items-start gap-6 md:flex-row md:gap-8">
+        <nav aria-label="Settings" className="flex w-full shrink-0 flex-col gap-0.5 md:w-[224px]">
+          {/* AT FULL STRENGTH (Block D wave 3, SH16). It was
+              `text-muted-foreground/80`, which resolved to #8B8F93 — 3.26:1,
+              on the label that says what the rail IS, shared by nine routes.
+              The 40px row height below is the artboard's and stays; the
+              contrast and the focus ring were never the mock's to decide. */}
+          <p className="flex h-[26px] items-center px-3 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground">Settings</p>
+          {SETTINGS_SUBPAGES.map((s) => {
+            const count = counts?.[s.key] ?? null
+            return (
+              <Link
+                key={s.key}
+                href={s.href}
+                aria-current={active === s.key ? 'page' : undefined}
+                className={cn(
+                  // Every other control on these pages sets a focus ring; the
+                  // seven links that ARE the settings area's navigation fell
+                  // back to the UA outline, which on a rounded tinted row is
+                  // the one place it is least visible (SH16).
+                  'flex min-h-10 items-center gap-2 rounded-[4px] px-3 text-[13.5px] transition-colors',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+                  active === s.key
+                    ? 'bg-inner font-semibold text-foreground'
+                    : 'text-secondary-foreground hover:bg-inner hover:text-foreground',
+                )}
+              >
+                <span className="min-w-0 flex-1 truncate">{s.label}</span>
+                {count != null && (
+                  /* THE UNIT IS DRAWN WHERE THE ROW HOLDS IT (Block D wave 3,
+                     RC9, `lib/settings/rail.ts`). This printed `count.value`
+                     alone on every row, for a reason that only applies to a
+                     row too narrow for both — and the one row that reason was
+                     written about carries no count at all. The full phrase
+                     stays the accessible name and the tooltip either way. */
+                  <span
+                    className="shrink-0 whitespace-nowrap font-mono text-[10.5px] tabular-nums text-muted-foreground"
+                    aria-label={`${count.value} ${count.unit}`}
+                    title={`${count.value} ${count.unit}`}
+                  >
+                    {railCountText(count, s.label)}
+                  </span>
+                )}
+              </Link>
+            )
+          })}
+          {railFooter && <div className="mt-4">{railFooter}</div>}
+        </nav>
+        <section className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
+          {contentTitle && (
+            <header className="flex flex-col gap-1 pb-4">
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <h2 className="shrink-0 text-[15px] font-semibold">{contentTitle}</h2>
+                {contentMeta && <span className="min-w-0 font-mono text-[11px] text-muted-foreground">{contentMeta}</span>}
+              </div>
+              {contentRule && <p className="text-[12.5px] text-muted-foreground">{contentRule}</p>}
+            </header>
+          )}
+          {children}
         </section>
       </div>
     </PageFrame>
@@ -56,10 +150,13 @@ export function SettingsFrame({
 
 /** A settings card: an inner block with a title, a one-line description and
  *  its fields — the nesting level under the content pane. */
-export function SettingsCard({ title, description, children, className }: { title: ReactNode; description?: ReactNode; children: ReactNode; className?: string }) {
+export function SettingsCard({ title, description, children, className, action }: { title: ReactNode; description?: ReactNode; children: ReactNode; className?: string; action?: ReactNode }) {
   return (
     <section className={`rounded-md bg-inner px-4 py-3.5 ${className ?? ''}`}>
-      <h3 className="text-[13px] font-semibold">{title}</h3>
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 className="text-[13px] font-semibold">{title}</h3>
+        {action}
+      </div>
       {description && <p className="mt-0.5 text-[12px] text-muted-foreground">{description}</p>}
       <div className="mt-3">{children}</div>
     </section>
@@ -90,5 +187,39 @@ export function ConnectionRow({ name, what, status, action }: { name: ReactNode;
       {action}
       <span className={`inline-flex shrink-0 items-center rounded-full px-2 py-px text-[10.5px] font-medium ${cls}`}>{label}</span>
     </div>
+  )
+}
+
+/** A row of a settings table: the mock's idiom for the Rivals, Communities and
+ *  recipient blocks. Cells are supplied by the caller; the grid is one place so
+ *  five tables cannot drift apart. */
+export function SettingsTable({ head, children, empty }: { head: readonly string[]; children: ReactNode; empty?: ReactNode }) {
+  const hasRows = Array.isArray(children) ? children.flat().filter(Boolean).length > 0 : Boolean(children)
+  if (!hasRows && empty) return <p className="text-[12px] text-muted-foreground">{empty}</p>
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[420px] border-collapse text-[12.5px]">
+        <thead>
+          <tr className="border-b border-border/70">
+            {head.map((h, i) => (
+              <th key={h} className={`pb-1.5 font-mono text-[10.5px] font-medium uppercase tracking-[0.06em] text-muted-foreground ${i === 0 ? 'text-left' : 'text-right'}`}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>{children}</tbody>
+      </table>
+    </div>
+  )
+}
+
+/** One row of a SettingsTable. The first cell reads left, the rest read right
+ *  and set tabular figures, because every one of them is a count. */
+export function SettingsRow({ cells }: { cells: readonly ReactNode[] }) {
+  return (
+    <tr className="border-b border-border/50 last:border-b-0">
+      {cells.map((c, i) => (
+        <td key={i} className={`py-1.5 align-top ${i === 0 ? 'pr-3 text-left' : 'pl-3 text-right tabular-nums'}`}>{c}</td>
+      ))}
+    </tr>
   )
 }

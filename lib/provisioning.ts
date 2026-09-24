@@ -95,6 +95,53 @@ export const HANDLE_PLATFORMS: readonly string[] = ['instagram', 'tiktok', 'yout
  *  this way (`UClVW7BGbRvC5-0kowu8quhw`, `UCCthtmYgmon7h0meZaC1FEQ`). */
 export const YOUTUBE_CHANNEL_ID = /^UC[A-Za-z0-9_-]{22}$/
 
+/** Instagram: 1-30 of letters, digits, period and underscore; no leading or
+ *  trailing period and no consecutive periods — the platform's own published
+ *  rule. Checked against every handle this product stores. */
+export const INSTAGRAM_HANDLE = /^(?!.*\.\.)(?!\.)[A-Za-z0-9._]{1,30}(?<!\.)$/
+
+/** TikTok: 2-24 of letters, digits, period and underscore; no trailing period.
+ *  TikTok permits a LEADING period where Instagram does not, which is why
+ *  these are two expressions and not one. */
+export const TIKTOK_HANDLE = /^[A-Za-z0-9._]{2,24}(?<!\.)$/
+
+/**
+ * What a person actually pastes, turned into what we store.
+ *
+ * Handles arrive from a browser's address bar far more often than from the
+ * profile itself: `https://www.instagram.com/ossur_corp/`, `@ossur_corp`,
+ * `instagram.com/ossur_corp?hl=en`. All three are the same account, and
+ * rejecting two of them teaches a client to retype rather than to paste — so
+ * they are normalised to the bare handle before anything is validated.
+ *
+ * YouTube is the exception and stays untouched: the owned reader calls the
+ * Data API's channels endpoint with a CHANNEL ID, a pasted `youtube.com/@name`
+ * is NOT one, and quietly stripping it to `@name` would produce a value that
+ * passes as a handle and silently reads nothing. A YouTube URL is handed back
+ * as it came so `validateHandles` can say what is wrong with it.
+ *
+ * NOTHING CALLS THIS YET, and that is a declared gap rather than an oversight
+ * (Phase 1 WP16). It is half of a pair — normalise, then validate — written for
+ * the per-rival handles form on Settings › Tracking, and that form cannot be
+ * built until `competitor_handles` has a column UPDATE grant for
+ * `authenticated`, which is a migration WP16 does not own. The rules here were
+ * checked against every handle the product stores and the pair is tested
+ * together; deleting the normaliser would mean rediscovering the YouTube
+ * exception the week the form lands. The rivals panel is read-only apart from
+ * the rename until then.
+ */
+export function normaliseHandle(platform: string, raw: string): string {
+  const s = (raw ?? '').trim()
+  if (!s) return ''
+  if (platform === 'youtube') {
+    // One case is safe and worth taking: the canonical channel URL, which
+    // contains the channel id itself.
+    return s.match(/youtube\.com\/channel\/(UC[A-Za-z0-9_-]{22})/)?.[1] ?? s
+  }
+  const fromUrl = s.match(/(?:instagram|tiktok)\.com\/@?([^/?#\s]+)/i)?.[1]
+  return (fromUrl ?? s).replace(/^@/, '').replace(/\/+$/, '').trim()
+}
+
 /** Validate one rival's account handles. Nothing in the product has ever
  *  checked these — `buildProvisionPlan` only filters the KEYS to names that are
  *  tracked — and a wrong handle credits another brand's posts to a tracked
@@ -117,12 +164,43 @@ export function validateHandles(handles: Record<string, string>): string[] {
       errors.push(`${platform}: drop the leading @ — handles are stored bare`)
       continue
     }
-    if (platform === 'youtube' && !YOUTUBE_CHANNEL_ID.test(value)) {
-      errors.push(`youtube: "${value}" is not a channel id — YouTube is read by channel id (UC… , 24 characters), and an @name reads nothing at all`)
+    if (platform === 'youtube') {
+      if (!YOUTUBE_CHANNEL_ID.test(value)) {
+        errors.push(`youtube: "${value}" is not a channel id — YouTube is read by channel id (UC… , 24 characters), and an @name reads nothing at all`)
+      }
+      continue
+    }
+    if (/[/:?#]/.test(value) || /\.com/i.test(value)) {
+      errors.push(`${platform}: "${value}" looks like a link — paste the handle on its own, or let the form take it out of the URL for you`)
+      continue
+    }
+    if (platform === 'instagram' && !INSTAGRAM_HANDLE.test(value)) {
+      errors.push(`instagram: "${value}" is not an Instagram username — letters, digits, periods and underscores, at most 30, and never starting or ending with a period`)
+      continue
+    }
+    if (platform === 'tiktok' && !TIKTOK_HANDLE.test(value)) {
+      errors.push(`tiktok: "${value}" is not a TikTok username — letters, digits, periods and underscores, 2 to 24 of them, and never ending in a period`)
     }
   }
   return errors
 }
+
+/**
+ * What a format check CANNOT catch, said out loud.
+ *
+ * The canonical failure this product has already had is a handle in perfect
+ * format belonging to the wrong person: TikTok @cotopaxi is a private
+ * individual named Nelson, and it passes TIKTOK_HANDLE exactly as
+ * @cotopaxiofficial does. No expression distinguishes them.
+ *
+ * What does distinguish them is the census Settings already prints: a wrong
+ * handle yields posts that are captured and then discarded or never read,
+ * while a right one yields posts that are read and produce findings. So the
+ * handles form states the second check rather than implying the first is the
+ * whole of it.
+ */
+export const HANDLE_FORMAT_CAVEAT =
+  'A handle in the right shape can still be the wrong account. After the next update, check that posts captured from it are also being read — a handle that captures and never reads is usually the wrong person.'
 
 export interface ProvisionPlan {
   client: {

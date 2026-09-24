@@ -1,11 +1,13 @@
 import { readFileSync } from 'node:fs'
 import { describe, it, expect } from 'vitest'
 import {
+  chunkByAudienceMonth,
   denominatorKey,
   freezeBoundary,
   freezeFor,
   freezeStateFor,
   isMissingMonthlyReading,
+  kindReadingKey,
   mergeMonthRows,
   monthEndInstant,
   monthStartOf,
@@ -21,6 +23,8 @@ import {
   trailingCompleteMonths,
   themeReadingKey,
   windowOf,
+  monthRowKey,
+  toStoredFreeze,
 } from './monthly'
 import {
   FREEZE_AFTER_DAYS,
@@ -32,7 +36,15 @@ import {
   TABLE_THEME_READINGS,
   type StoredFreeze,
   type ThemeReading,
+  MONTH_AUDIENCE_STATS_TABLE,
+  MONTH_DENOMINATOR_TABLE,
+  MONTH_KIND_TABLE,
+  MONTH_SUBJECT_TABLE,
+  MONTH_TABLES,
+  MONTH_THEME_TABLE,
 } from './types'
+import { subjectMonthSide } from '../subjects/read'
+import { JUDGE_VERSION } from '../subjects/types'
 
 // The freeze rule's pure half. The numbers themselves come out of two SQL
 // functions no test here can reach, so the last block reads the migration and
@@ -42,7 +54,7 @@ const CLIENT_MONTHS = ['2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01']
 
 const stored = (over: Partial<StoredFreeze> & { key: string; month: string }): StoredFreeze => ({
   audience: 'industry-other',
-  theme_id: null,
+  objectId: null,
   status: 'filling',
   origin: 'live',
   frozen_at: null,
@@ -199,7 +211,7 @@ describe('mergeMonthRows — a frozen row is never rewritten', () => {
     const result = mergeMonthRows({
       months,
       fresh,
-      stored: [stored({ key: themeReadingKey(fresh[0]), month: '2026-08-01', theme_id: 't1', status: 'frozen', frozen_at: '2026-10-01T00:00:00.000Z' })],
+      stored: [stored({ key: themeReadingKey(fresh[0]), month: '2026-08-01', objectId: 't1', status: 'frozen', frozen_at: '2026-10-01T00:00:00.000Z' })],
       keyOf: themeReadingKey,
       now,
       runId: RUN,
@@ -209,12 +221,53 @@ describe('mergeMonthRows — a frozen row is never rewritten', () => {
     expect(result.stale).toEqual([])
   })
 
+  it('stamps the run clustering key on every row it writes', () => {
+    const fresh = [reading('2026-10-01', 'industry-other', 't1', 4)]
+    const key = 'a=pass_a_v4.1;c=0.58;f=2;m=gpt-5.4;k=video_v1'
+    const result = mergeMonthRows({
+      months, fresh, stored: [], keyOf: themeReadingKey, now, runId: RUN, clusteringKey: key,
+    })
+    expect(result.writes[0]).toMatchObject({ run_id: RUN, clustering_key: key })
+  })
+
+  it('OMITS the column when the run recorded no key, rather than writing null', () => {
+    // M2 is applied by hand, so a deploy can reach production before the column
+    // does. An omitted key is an omitted column, which lands on a database
+    // either way; `clustering_key: null` would be 42703 until the migration ran.
+    const fresh = [reading('2026-10-01', 'industry-other', 't1', 4)]
+    const result = mergeMonthRows({
+      months, fresh, stored: [], keyOf: themeReadingKey, now, runId: RUN, clusteringKey: null,
+    })
+    expect('clustering_key' in result.writes[0]).toBe(false)
+    const unset = mergeMonthRows({ months, fresh, stored: [], keyOf: themeReadingKey, now, runId: RUN })
+    expect('clustering_key' in unset.writes[0]).toBe(false)
+  })
+
+  // The kind and mood rows are merged by the same function and MUST NOT get a
+  // key: a kind is an enum Pass A writes, so a kind month is comparable across a
+  // clustering boundary, and a stored key would hand `clustering_unknown` and a
+  // refused direction word back to any reader that built a series off the table.
+  // The two tables have no such column; this pins the caller's half of it.
+  it('writes no clustering key onto a kind row, whatever the run recorded', () => {
+    const fresh = [{ month: '2026-10-01', audience: 'industry-other', kind: 'question', videos: 12 }]
+    const key = 'a=pass_a_v4.1;c=0.58;f=2;m=gpt-5.4;k=video_v1'
+    const result = mergeMonthRows({ months, fresh, stored: [], keyOf: kindReadingKey, now, runId: RUN })
+    expect('clustering_key' in result.writes[0]).toBe(false)
+    // The merge itself is generic and would stamp one if asked — the guarantee
+    // is the caller's (freezeMonths passes none for these two tables) and the
+    // column's (neither table has it). This pins the first half.
+    const asked = mergeMonthRows({
+      months, fresh, stored: [], keyOf: kindReadingKey, now, runId: RUN, clusteringKey: key,
+    })
+    expect(asked.writes[0]).toMatchObject({ clustering_key: key })
+  })
+
   it('rewrites a filling row and freezes it when its line has passed', () => {
     const fresh = [reading('2026-08-01', 'industry-other', 't1', 97), reading('2026-10-01', 'industry-other', 't1', 4)]
     const result = mergeMonthRows({
       months,
       fresh,
-      stored: [stored({ key: themeReadingKey(fresh[0]), month: '2026-08-01', theme_id: 't1' })],
+      stored: [stored({ key: themeReadingKey(fresh[0]), month: '2026-08-01', objectId: 't1' })],
       keyOf: themeReadingKey,
       now,
       runId: RUN,
@@ -237,12 +290,12 @@ describe('mergeMonthRows — a frozen row is never rewritten', () => {
   })
 
   it('names the filling rows the current clustering no longer produces', () => {
-    const gone = stored({ key: '2026-10-01|industry-other|t-dropped', month: '2026-10-01', theme_id: 't-dropped' })
+    const gone = stored({ key: '2026-10-01|industry-other|t-dropped', month: '2026-10-01', objectId: 't-dropped' })
     const frozenAndGone = stored({
-      key: '2026-08-01|industry-other|t-old', month: '2026-08-01', theme_id: 't-old',
+      key: '2026-08-01|industry-other|t-old', month: '2026-08-01', objectId: 't-old',
       status: 'frozen', frozen_at: '2026-10-01T00:00:00.000Z',
     })
-    const outsideWindow = stored({ key: '2026-05-01|industry-other|t-old', month: '2026-05-01', theme_id: 't-old' })
+    const outsideWindow = stored({ key: '2026-05-01|industry-other|t-old', month: '2026-05-01', objectId: 't-old' })
     const result = mergeMonthRows({
       months,
       fresh: [reading('2026-10-01', 'industry-other', 't1', 4)],
@@ -260,11 +313,51 @@ describe('mergeMonthRows — a frozen row is never rewritten', () => {
     const fresh = [{ ...reading('2026-08-15', 'client', 't1', 2), month: '2026-08-15' }]
     const result = mergeMonthRows({
       months, fresh,
-      stored: [stored({ key: '2026-08-01|client|t1', month: '2026-08-01', audience: 'client', theme_id: 't1', status: 'frozen' })],
+      stored: [stored({ key: '2026-08-01|client|t1', month: '2026-08-01', audience: 'client', objectId: 't1', status: 'frozen' })],
       keyOf: themeReadingKey, now, runId: RUN,
     })
     expect(result.writes).toEqual([])
     expect(result.keptFrozen).toBe(1)
+  })
+
+  it('never splits one audience-month across two write statements', () => {
+    // Decision K's back-read arm admits a first row into a closed audience-month
+    // only while no EARLIER transaction has written one, and every chunk is a
+    // transaction — so a boundary inside an audience-month loses its remainder
+    // for ever. Three audience-months of 2, 3 and 2 rows at a cap of 4.
+    const rows = [
+      { month: '2026-01-01', audience: 'client', n: 1 },
+      { month: '2026-01-01', audience: 'client', n: 2 },
+      { month: '2026-01-01', audience: 'competitor:a', n: 3 },
+      { month: '2026-01-01', audience: 'competitor:a', n: 4 },
+      { month: '2026-01-01', audience: 'competitor:a', n: 5 },
+      { month: '2026-02-01', audience: 'client', n: 6 },
+      { month: '2026-02-01', audience: 'client', n: 7 },
+    ]
+    const parts = chunkByAudienceMonth(rows, 4)
+    for (const part of parts) {
+      expect(new Set(part.map(denominatorKey)).size).toBeLessThanOrEqual(part.length)
+    }
+    // Every audience-month lands whole, in exactly one part.
+    for (const key of ['2026-01-01|client', '2026-01-01|competitor:a', '2026-02-01|client']) {
+      const holding = parts.filter((p) => p.some((r) => denominatorKey(r) === key))
+      expect(holding).toHaveLength(1)
+    }
+    expect(parts.flat().map((r) => r.n)).toEqual([1, 2, 3, 4, 5, 6, 7])
+  })
+
+  it('sends an audience-month wider than the cap alone rather than splitting it', () => {
+    const rows = [
+      { month: '2026-01-01', audience: 'client', n: 0 },
+      ...Array.from({ length: 5 }, (_, i) => ({ month: '2026-01-01', audience: 'competitor:a', n: i + 1 })),
+      { month: '2026-02-01', audience: 'client', n: 6 },
+    ]
+    const parts = chunkByAudienceMonth(rows, 3)
+    expect(parts.map((p) => p.length)).toEqual([1, 5, 1])
+  })
+
+  it('batches nothing into nothing', () => {
+    expect(chunkByAudienceMonth([], 500)).toEqual([])
   })
 
   it('keys a denominator on month and audience alone', () => {
@@ -300,8 +393,8 @@ describe('mergeMonthRows — a frozen row is never rewritten', () => {
     // the months for good — no filling row means no later visit, and the Pass A
     // prune makes the clustering unrecomputable.
     const held = [
-      stored({ key: '2026-08-01|industry-other|t1', month: '2026-08-01', theme_id: 't1' }),
-      stored({ key: '2026-09-01|industry-other|t2', month: '2026-09-01', theme_id: 't2' }),
+      stored({ key: '2026-08-01|industry-other|t1', month: '2026-08-01', objectId: 't1' }),
+      stored({ key: '2026-09-01|industry-other|t2', month: '2026-09-01', objectId: 't2' }),
     ]
     const result = mergeMonthRows({
       months, fresh: [] as ThemeReading[], stored: held, keyOf: themeReadingKey, now, runId: RUN,
@@ -313,7 +406,7 @@ describe('mergeMonthRows — a frozen row is never rewritten', () => {
   })
 
   it('still drops a row the clustering dropped when the rest of the reading arrived', () => {
-    const gone = stored({ key: '2026-08-01|industry-other|t-dropped', month: '2026-08-01', theme_id: 't-dropped' })
+    const gone = stored({ key: '2026-08-01|industry-other|t-dropped', month: '2026-08-01', objectId: 't-dropped' })
     const result = mergeMonthRows({
       months,
       fresh: [reading('2026-09-01', 'industry-other', 't1', 5)],
@@ -636,5 +729,301 @@ describe('dayInWindow — a comment date against a half-open window', () => {
   it('refuses a value that is not a date rather than dropping the row in silence', () => {
     expect(() => dayInWindow('not a date', august)).toThrow(/not a date/)
     expect(() => dayInWindow('2026-08-02', { from: 'whenever', to: august.to })).toThrow(/not a window/)
+  })
+})
+
+describe('mergeMonthRows — a closed audience-month takes no fresh key', () => {
+  const now = '2026-10-02T06:00:00.000Z'
+  const RUN = 'd346b0f7-5b2b-4b46-a60c-db0c83ecfda7'
+  const months = ['2026-08-01']
+  const AUG = '2026-08-01|industry-other'
+
+  const reading = (theme_id: string, videos: number): ThemeReading => ({
+    month: '2026-08-01', audience: 'industry-other', theme_id, videos, comments: videos * 2,
+    platform_mix: { tiktok: videos }, excluded_on_camera: 0, excluded_undated: 0,
+  })
+
+  // The state mergeMonthRows' own empty-reading path produces: a registry
+  // failure holds August's filling theme rows while the denominators — which do
+  // not depend on the clustering — are written and frozen. The next visit
+  // re-clusters and mints a key August never held.
+  const held = stored({ key: '2026-08-01|industry-other|t-held', month: '2026-08-01', objectId: 't-held' })
+
+  it('refuses the newly minted key and still writes the row it can', () => {
+    const result = mergeMonthRows({
+      months,
+      fresh: [reading('t-held', 97), reading('t-fresh', 12)],
+      stored: [held],
+      keyOf: themeReadingKey,
+      now,
+      runId: RUN,
+      closedAudienceMonths: [AUG],
+    })
+    // Without this the database refuses the batch IN WHOLE — the legitimate
+    // update of t-held never lands either, on every run, for ever.
+    expect(result.writes.map((w) => w.theme_id)).toEqual(['t-held'])
+    expect(result.refusedLate).toEqual([{ month: '2026-08-01', audience: 'industry-other', key: '2026-08-01|industry-other|t-fresh' }])
+  })
+
+  it('allows the first back-read of a table that holds nothing of that month (decision K)', () => {
+    const result = mergeMonthRows({
+      months,
+      fresh: [reading('t-fresh', 12), reading('t-other', 4)],
+      stored: [],
+      keyOf: themeReadingKey,
+      now,
+      runId: RUN,
+      closedAudienceMonths: [AUG],
+    })
+    expect(result.writes).toHaveLength(2)
+    expect(result.refusedLate).toEqual([])
+  })
+
+  it('leaves an audience-month that is still filling alone', () => {
+    const result = mergeMonthRows({
+      months,
+      fresh: [reading('t-fresh', 12)],
+      stored: [held],
+      keyOf: themeReadingKey,
+      now,
+      runId: RUN,
+      closedAudienceMonths: [],
+    })
+    expect(result.writes).toHaveLength(1)
+    expect(result.refusedLate).toEqual([])
+  })
+
+  it('judges the audience-month, not the month: a rival closed elsewhere is unaffected', () => {
+    const fresh = { ...reading('t-fresh', 12), audience: 'competitor:Topo' }
+    const result = mergeMonthRows({
+      months, fresh: [fresh], stored: [held], keyOf: themeReadingKey, now, runId: RUN,
+      closedAudienceMonths: [AUG],
+    })
+    expect(result.writes).toHaveLength(1)
+  })
+
+  it('refuses nothing when the caller names no closed months', () => {
+    const result = mergeMonthRows({
+      months, fresh: [reading('t-fresh', 12)], stored: [held], keyOf: themeReadingKey, now, runId: RUN,
+    })
+    expect(result.writes).toHaveLength(1)
+    expect(result.refusedLate).toEqual([])
+  })
+})
+
+// ---- The sibling tables (WP4) -------------------------------------------------
+// M4 adds a third month table and the plan adds more after it. What makes that
+// safe is that the freeze contract is now a DESCRIPTOR rather than a copied
+// block of code: one key builder, one stored read, one merge, one stale sweep,
+// one delete. These pin the descriptor's own behaviour, which is the part a
+// fourth table will lean on without reading.
+
+describe('monthRowKey', () => {
+  it('is the audience-month for a denominator, which is about no object at all', () => {
+    expect(monthRowKey(MONTH_DENOMINATOR_TABLE, { month: '2026-08-14', audience: 'client' }))
+      .toBe('2026-08-01|client')
+  })
+
+  it('appends the object column named by the descriptor, whichever it is', () => {
+    expect(monthRowKey(MONTH_THEME_TABLE, { month: '2026-08-01', audience: 'client', theme_id: 't1' }))
+      .toBe('2026-08-01|client|t1')
+    expect(monthRowKey(MONTH_SUBJECT_TABLE, { month: '2026-08-01', audience: 'client', subject_id: 's1' }))
+      .toBe('2026-08-01|client|s1')
+  })
+
+  it('agrees with the key builders the theme side already used', () => {
+    const row = { month: '2026-08-01', audience: 'competitor:Topo Designs', theme_id: 't1' }
+    expect(monthRowKey(MONTH_THEME_TABLE, row)).toBe(themeReadingKey(row))
+    expect(monthRowKey(MONTH_DENOMINATOR_TABLE, row)).toBe(denominatorKey(row))
+  })
+
+  it('stays unambiguous only because an object id is a uuid — so the descriptor’s columns are uuids', () => {
+    // The key is `month|audience|object`, and `audience` is FREE TEXT: a
+    // competitor's name exactly as somebody typed it in Settings, pipe
+    // characters and all. Two audience-months could fold into one key only if
+    // an object id could also carry a pipe, which is why every object column
+    // in every month table is a uuid and not a label. That is an invariant of
+    // the schema, so it is checked against the schema.
+    const collides = monthRowKey(MONTH_SUBJECT_TABLE, { month: '2026-08-01', audience: 'rival:a|b', subject_id: 's' })
+      === monthRowKey(MONTH_SUBJECT_TABLE, { month: '2026-08-01', audience: 'rival:a', subject_id: 'b|s' })
+    expect(collides).toBe(true)
+    const schema = [
+      ['supabase/migrations/20260915092000_monthly_reading.sql', 'theme_id           uuid not null'],
+      ['supabase/migrations/20260918093000_subjects.sql', 'subject_id         uuid not null'],
+    ] as const
+    for (const [file, declaration] of schema) expect(readFileSync(file, 'utf8')).toContain(declaration)
+  })
+})
+
+describe('toStoredFreeze over a descriptor', () => {
+  const row = { month: '2026-08-14', audience: 'client', status: 'frozen' as const, origin: 'back_read' as const, frozen_at: 'T' }
+
+  it('reads the object id out of whichever column the table uses', () => {
+    expect(toStoredFreeze(MONTH_SUBJECT_TABLE, [{ ...row, subject_id: 's1' }])[0])
+      .toEqual({ key: '2026-08-01|client|s1', month: '2026-08-01', audience: 'client', objectId: 's1', status: 'frozen', origin: 'back_read', frozen_at: 'T' })
+  })
+
+  it('leaves a denominator row with no object, because it is about none', () => {
+    expect(toStoredFreeze(MONTH_DENOMINATOR_TABLE, [row])[0].objectId).toBeNull()
+  })
+
+  it('normalises the month, so a row read mid-month keys the same as one read on the first', () => {
+    expect(toStoredFreeze(MONTH_THEME_TABLE, [{ ...row, theme_id: 't' }])[0].month).toBe('2026-08-01')
+  })
+})
+
+describe('MONTH_TABLES', () => {
+  it('holds every month table, so fillingMonths cannot forget one', () => {
+    // The silent, permanent bug this list exists to prevent: a month whose
+    // theme rows froze while its subject rows are still `filling` leaves
+    // fillingMonths, leaves monthsToRefresh, and is never visited again.
+    expect(MONTH_TABLES.map((t) => t.table)).toEqual([
+      'month_denominators', 'month_theme_readings', 'month_subject_readings',
+      'month_kind_readings', 'month_audience_stats',
+    ])
+  })
+
+  it('names exactly one denominator, and it is not simply the table with no object', () => {
+    // A NULL OBJECT COLUMN DOES NOT MEAN DENOMINATOR, and M5 is why. Two
+    // tables carry one row per audience-month: `month_denominators`, which IS
+    // the audience-month, and `month_audience_stats`, which is a second set of
+    // columns ON it — mood counts and an attention reading, a numerator with
+    // no object to be about. The denominator is the one freezeMonths writes
+    // LAST, because its freeze is what closes the month; so it is named, not
+    // inferred from a shape two tables share.
+    expect(MONTH_DENOMINATOR_TABLE.table).toBe('month_denominators')
+    expect(MONTH_TABLES.filter((t) => t.objectColumn === null).map((t) => t.table))
+      .toEqual(['month_denominators', 'month_audience_stats'])
+  })
+
+  it('spells every onConflict as the table’s real primary key', () => {
+    for (const t of MONTH_TABLES) {
+      const expected = ['client_id', 'month', 'audience', t.objectColumn].filter(Boolean).join(',')
+      expect(t.onConflict).toBe(expected)
+    }
+  })
+})
+
+describe('the subject side of a freeze visit', () => {
+  it('stamps the judge version, not a clustering key', () => {
+    // A subject reading is a judgement artefact. Stamping it with a clustering
+    // fingerprint would make two months of one subject look incomparable
+    // whenever the themes were re-clustered, which has nothing to do with it.
+    const side = subjectMonthSide({} as never, 'client-1', 'judge_vX')
+    expect(side.clustering).toBe(false)
+    expect(side.stamp).toEqual({ judge_version: 'judge_vX' })
+    expect(side.table).toBe(MONTH_SUBJECT_TABLE)
+  })
+
+  it('defaults to the shipped judge version', () => {
+    expect(subjectMonthSide({} as never, 'client-1').stamp).toEqual({ judge_version: JUDGE_VERSION })
+  })
+})
+
+describe('the subject month migration matches the module', () => {
+  const sql = readFileSync('supabase/migrations/20260918093000_subjects.sql', 'utf8')
+
+  it('names the table and the two functions this module calls', () => {
+    expect(sql).toContain('create table if not exists public.month_subject_readings')
+    expect(sql).toContain('create or replace function public.monthly_subject_readings')
+    expect(sql).toContain('create or replace function public.window_subject_readings')
+    expect(sql).toContain('create or replace function public.subject_band')
+  })
+
+  it('carries BOTH guards, reusing the generic functions rather than copying them', () => {
+    expect(sql).toContain('before update on public.month_subject_readings')
+    expect(sql).toContain('before insert on public.month_subject_readings')
+    expect(sql).toContain('execute function public.month_reading_frozen_guard()')
+    expect(sql).toContain('execute function public.month_reading_frozen_insert_guard()')
+  })
+
+  it('carries the freeze columns the merge writes, and judge_version beside run_id', () => {
+    for (const c of ['status', 'origin', 'read_at', 'run_id', 'frozen_at', 'judge_version', 'excluded_on_camera', 'excluded_undated']) {
+      expect(sql).toContain(c)
+    }
+  })
+
+  it('keeps the reads service-role only — the client_id is a parameter', () => {
+    expect(sql).toContain('revoke all on function public.monthly_subject_readings(uuid, timestamptz, timestamptz) from public, anon, authenticated')
+    expect(sql).toContain('grant execute on function public.window_subject_readings(uuid, timestamptz, timestamptz) to service_role')
+  })
+
+  it('withholds the columns that decide what a measurement means from a member', () => {
+    // A rename mints a new subject; an edit in place would re-decide membership
+    // under an unchanged judge_version.
+    expect(sql).toContain('grant update (status, superseded_by, updated_at) on public.subjects to authenticated')
+    expect(sql).not.toContain('grant update (name')
+  })
+})
+
+describe('the kind and audience-stat siblings (WP5)', () => {
+  const now = '2026-10-05T00:00:00.000Z'
+  const RUN = '11111111-2222-3333-4444-555555555555'
+
+  it('keys a kind row on the month, the audience and the kind', () => {
+    expect(kindReadingKey({ month: '2026-08-01', audience: 'industry-other', kind: 'question' }))
+      .toBe('2026-08-01|industry-other|question')
+    // Different tables, different third column, and the keys cannot collide
+    // across them because each merge is handed only its own table's rows.
+    expect(kindReadingKey({ month: '2026-08-15', audience: 'client', kind: 'praise' }))
+      .toBe('2026-08-01|client|praise')
+  })
+
+  it('folds kind rows through the same merge as themes, with the same freeze rule', () => {
+    const fresh = [
+      { month: '2026-09-01', audience: 'industry-other', kind: 'question', videos: 138 },
+      { month: '2026-08-01', audience: 'industry-other', kind: 'question', videos: 261 },
+    ]
+    const stored = [{
+      key: '2026-08-01|industry-other|question',
+      // The kind IS the object a kind row is about, so it rides in `objectId`
+      // like a registry id or a subject id, and the descriptor says the column
+      // it came out of is `kind`.
+      month: '2026-08-01', audience: 'industry-other', objectId: 'question',
+      status: 'frozen' as const, origin: 'live' as const, frozen_at: '2026-09-30T00:00:00.000Z',
+    }]
+    const result = mergeMonthRows({
+      months: ['2026-08-01', '2026-09-01'], fresh, stored, keyOf: kindReadingKey, now, runId: RUN,
+    })
+    expect(result.keptFrozen).toBe(1)
+    expect(result.writes.map((w) => w.month)).toEqual(['2026-09-01'])
+  })
+
+  it('keys an audience-stat row exactly as a denominator, because it has no third column', () => {
+    const fresh = [
+      { month: '2026-09-01', audience: 'client', judged: 7 },
+      { month: '2026-07-01', audience: 'client', judged: 3 },
+    ]
+    const result = mergeMonthRows({
+      months: ['2026-07-01', '2026-09-01'], fresh, stored: [], keyOf: denominatorKey, now, runId: RUN,
+    })
+    expect(result.writes).toHaveLength(2)
+    // September is still filling on 5 October; July closed on 30 August, so a
+    // first write of it now is a back-read and freezes at once.
+    expect(result.writes.find((w) => w.month === '2026-09-01')!.status).toBe('filling')
+    expect(result.writes.find((w) => w.month === '2026-07-01')!.status).toBe('frozen')
+    expect(result.writes.find((w) => w.month === '2026-07-01')!.origin).toBe('back_read')
+  })
+
+  it('reaches both tables through the same descriptor the other siblings use', () => {
+    // The kind key the module exports and the key the generic merge builds from
+    // the descriptor have to be the same string, or a stored kind row and a
+    // fresh one would never meet.
+    expect(monthRowKey(MONTH_KIND_TABLE, { month: '2026-08-15', audience: 'client', kind: 'praise' }))
+      .toBe(kindReadingKey({ month: '2026-08-15', audience: 'client', kind: 'praise' }))
+    // And an audience-stat row is about no object at all, exactly like a
+    // denominator — same key, same conflict target, one row per audience-month.
+    expect(MONTH_AUDIENCE_STATS_TABLE.objectColumn).toBeNull()
+    expect(monthRowKey(MONTH_AUDIENCE_STATS_TABLE, { month: '2026-09-01', audience: 'client' }))
+      .toBe(denominatorKey({ month: '2026-09-01', audience: 'client' }))
+  })
+
+  it('has both tables in MONTH_TABLES, so fillingMonths cannot forget them', () => {
+    // The one bug in this area that is silent and permanent: a month whose
+    // theme rows froze while its kind rows are still filling leaves
+    // fillingMonths and is never visited again.
+    const tables = MONTH_TABLES.map((t) => t.table)
+    expect(tables).toContain(MONTH_KIND_TABLE.table)
+    expect(tables).toContain(MONTH_AUDIENCE_STATS_TABLE.table)
   })
 })

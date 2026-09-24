@@ -11,9 +11,21 @@ export type Platform = 'tiktok' | 'youtube' | 'instagram' | 'reddit'
  *  lowercase — no 'r/' prefix; the display layer adds it. */
 export interface SubredditEntry {
   name: string
-  /** candidate = proposed, unprobed · active = probe passed · rejected = probe failed. */
-  status: 'candidate' | 'active' | 'rejected'
+  /** candidate = proposed, unprobed · active = probe passed · rejected = probe
+   *  failed · stopped = the CLIENT took it off the list.
+   *
+   *  `stopped` is not `rejected`, and the difference is a sentence we print to
+   *  the client: `rejected` means our relevance probe judged the community off
+   *  topic ("ruled out"), and a community the client stopped may have passed
+   *  that probe 31 of 40. Both are excluded from the gather the same way —
+   *  `activeSubreddits` reads `status === 'active'` — and both are in
+   *  `knownSubreddits`, so neither is re-proposed and neither is re-probed;
+   *  what they must never do is answer for each other. */
+  status: 'candidate' | 'active' | 'rejected' | 'stopped'
   discovered_at: string
+  /** When the client stopped watching it, on a `stopped` entry. The probe and
+   *  `discovered_at` are kept — stopping is a demotion, never a delete. */
+  stopped_at?: string
   /** What the relevance probe saw, when it ran. Absent on unprobed candidates. */
   probe?: { sampled: number; kept: number; at: string }
   /** Consecutive runs this ACTIVE community yielded nothing while other Reddit

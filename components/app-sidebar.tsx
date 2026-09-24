@@ -5,44 +5,39 @@ import {
   SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { LayoutDashboard, Target, MessageCircle, Swords, Play, FileText, LayoutTemplate, Users, UserRound, Sparkles, CreditCard, Settings, LogOut, BookOpen } from "lucide-react"
+import { LogOut, type LucideIcon } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { signOut } from "@/app/login/actions"
 import { VerbatimMark } from "@/components/brand/mark"
+import { NAV_ICON, OLD_NAV_ICON, OLD_NAV_ICON_FALLBACK, STUDIO_ICON } from "@/components/nav-icons"
 import { STUDIO_HREF } from "@/lib/studio-visibility"
+import { OLD_PAGES, oldPageFor, oldPagesGroupLabel, surfaceForPath, surfacesIn, type NavKey } from "@/lib/nav"
 
-// Two groups (component-map §1, MASTER rule 1): the intelligence pages a client
-// reads, then the account pages. Trends was dissolved into the pages it served
-// (2026-08-22): share over time lives on Competitive, theme movers on Voice,
-// movement since the first update on the Dashboard, your accounts on Content.
-const INTELLIGENCE = [
-  { href: "/dashboard",             label: "Dashboard",           icon: LayoutDashboard },
-  { href: "/dashboard/market",      label: "Market Intelligence", icon: Target },
-  { href: "/dashboard/voice",       label: "Voice of Customer",   icon: MessageCircle },
-  { href: "/dashboard/profile",     label: "Consumer Profile",    icon: UserRound },
-  { href: "/dashboard/competitive", label: "Competitive Intel",   icon: Swords },
-  { href: "/dashboard/videos",      label: "Content",             icon: Play },
-]
-// The Studio is NOT in this list (2026-09-17). It arrives through the `studio`
-// slot instead, for the reason the operator group does: whether this session
-// may see it depends on the session, and resolving that is async. See
-// lib/studio-visibility.ts and components/studio-nav-loader.tsx.
-const ACCOUNT = [
-  { href: "/dashboard/reports",  label: "Reports",  icon: FileText },
-  { href: "/dashboard/team",     label: "Team",     icon: Users },
-  { href: "/dashboard/billing",  label: "Billing",  icon: CreditCard },
-  { href: "/dashboard/settings", label: "Settings", icon: Settings },
-  { href: "/dashboard/guide",    label: "Guide",    icon: BookOpen },
-]
+// The nine reading surfaces, in the mock's order, from lib/nav.ts — the one
+// table the page bars and the parked pages' banners read too. Two groups, as
+// every app artboard draws them: Intelligence, then Account.
+//
+// Studio, Team and Billing left this list in Phase 1 (WP9): Team and Billing
+// are rail entries inside Settings (components/settings-frame.tsx) and reach
+// their pages from there, and the Studio is reached from Reports. Nothing was
+// orphaned by dropping them; WP16 rebuilds the Settings rail around them.
 
-// The agent rides its OWN flag, not the Ask one: lighting up the agent must
-// not light up Pass E and the weekly re-evaluation inside a pipeline run.
-const AGENT_ITEM = { href: "/dashboard/agent", label: "Verbatim Agent", icon: Sparkles }
+// THE ICONS ARE `components/nav-icons.ts` NOW, not this file. They were here,
+// and this file is `"use client"` and wired to the router, `next/link` and a
+// server action — so `scripts/wave2-shots.ts`, which photographs every ported
+// page beside its artboard, could not import them and drew nine grey squares
+// instead. The app has never been missing an icon; the shots have never had
+// one. Moved to a leaf so the harness draws what ships.
 
-const STUDIO_ITEM = { href: STUDIO_HREF, label: "Studio", icon: LayoutTemplate }
+// The Studio is not one of the nine and is not in any group list (2026-09-17,
+// from main). It arrives through the `studio` slot instead, for the reason the
+// operator group does: whether this session may see it depends on the session,
+// and resolving that is async. See lib/studio-visibility.ts and
+// components/studio-nav-loader.tsx.
+const STUDIO_ITEM = { href: STUDIO_HREF, label: "Studio", icon: STUDIO_ICON }
 
-type NavItem = { href: string; label: string; icon: typeof LayoutDashboard }
+type NavItem = { href: string; label: string; icon: LucideIcon }
 
 // Active = weight + a 2px green bar on the left (rule 1: green marks the active
 // page). No pill fill — the shadcn default paints bg-sidebar-accent on
@@ -55,13 +50,15 @@ const ITEM_CLASS =
   "data-[active=true]:before:w-0.5 data-[active=true]:before:rounded-full data-[active=true]:before:bg-primary data-[active=true]:before:content-['']"
 
 // One row of the navigation, module-level so the streamed Studio item below
-// renders exactly the same markup the static groups do. setOpenMobile closes
-// the mobile drawer when a row is tapped — otherwise it stays open over the
-// new page until the backdrop is tapped.
-function NavRow({ item }: { item: NavItem }) {
-  const pathname = usePathname()
+// renders exactly the same markup the static groups do. `active` is a PROP
+// rather than a pathname comparison made in here: in Phase 1 the one table
+// (lib/nav.ts `surfaceForPath`) decides which row is marked, and a row that
+// worked it out for itself would disagree with the table on exactly the
+// addresses `UNDER` exists to place. setOpenMobile closes the mobile drawer
+// when a row is tapped — otherwise it stays open over the new page until the
+// backdrop is tapped.
+function NavRow({ item, active }: { item: NavItem; active: boolean }) {
   const { setOpenMobile } = useSidebar()
-  const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href + "/"))
   return (
     <SidebarMenuItem>
       <SidebarMenuButton asChild isActive={active} className={ITEM_CLASS}>
@@ -76,22 +73,36 @@ function NavRow({ item }: { item: NavItem }) {
 
 /** The Studio's row, rendered by `StudioNavLoader` only for a session that may
  *  see it. A client component with no props, so a server component can render
- *  it across the boundary. */
+ *  it across the boundary.
+ *
+ *  Never marked active, and that is the table's answer rather than an
+ *  oversight: `lib/nav.ts` `UNDER` maps `/dashboard/studio` onto Reports, so a
+ *  reader inside the Studio is told they are in Reports and exactly one row
+ *  lights — which is the rule `lib/nav.test.ts` pins. */
 export function StudioNavItem() {
-  return <NavRow item={STUDIO_ITEM} />
+  return <NavRow item={STUDIO_ITEM} active={false} />
 }
 
-export function AppSidebar({ showAgent = false, header, ops, studio }: { showAgent?: boolean; header?: React.ReactNode; ops?: React.ReactNode; studio?: React.ReactNode }) {
-  // The agent sits directly under the profile it reads from.
-  const intelligence: NavItem[] = showAgent
-    ? INTELLIGENCE.flatMap((item) => (item.href === "/dashboard/profile" ? [item, AGENT_ITEM] : [item]))
-    : INTELLIGENCE
+export function AppSidebar({ header, ops, studio, tenant }: { header?: React.ReactNode; ops?: React.ReactNode; studio?: React.ReactNode; tenant?: React.ReactNode }) {
+  const pathname = usePathname()
+  // Ask is one of the nine, unconditionally (Phase 1 WP21, decision B). It
+  // rode AGENT_ENABLED while sending was platform-admin only, on the argument
+  // that showing a client an item they cannot use is worse than showing them
+  // eight. Owners and admins can use it now, and a member's Ask page is a
+  // readable archive of every answer the workspace has — which is a page worth
+  // a sidebar item, not a dead end.
+  const active = surfaceForPath(pathname)
+  const item = (key: NavKey, href: string, label: string): NavItem => ({ href, label, icon: NAV_ICON[key] })
+  const intelligence = surfacesIn("Intelligence").map((s) => item(s.key, s.href, s.label))
+  const account = surfacesIn("Account").map((s) => item(s.key, s.href, s.label))
+  const oldPages: NavItem[] = OLD_PAGES.map((p) => ({ href: p.href, label: p.label, icon: OLD_NAV_ICON[p.href] ?? OLD_NAV_ICON_FALLBACK }))
+  const parked = oldPageFor(pathname)
 
   async function handleLogout() {
     await signOut()
   }
 
-  const renderGroup = (label: string, items: NavItem[], lead?: React.ReactNode) => (
+  const renderGroup = (label: string, items: NavItem[], isActive: (href: string) => boolean, lead?: React.ReactNode) => (
     <SidebarGroup className="px-1.5">
       <SidebarGroupLabel className="h-7 px-2.5 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground/80">
         {label}
@@ -99,7 +110,9 @@ export function AppSidebar({ showAgent = false, header, ops, studio }: { showAge
       <SidebarGroupContent>
         <SidebarMenu className="gap-0.5">
           {lead}
-          {items.map((item) => <NavRow key={item.href} item={item} />)}
+          {items.map((navItem) => (
+            <NavRow key={navItem.href} item={navItem} active={isActive(navItem.href)} />
+          ))}
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>
@@ -122,18 +135,32 @@ export function AppSidebar({ showAgent = false, header, ops, studio }: { showAge
       </SidebarHeader>
 
       <SidebarContent className="gap-1 pt-1">
-        {renderGroup("Intelligence", intelligence)}
+        {renderGroup("Intelligence", intelligence, (href) => active?.href === href)}
         {/* The Studio leads the Account group when this session may see it,
             and is absent — not hidden, never rendered — when it may not. */}
-        {renderGroup("Account", ACCOUNT, studio)}
+        {renderGroup("Account", account, (href) => active?.href === href, studio)}
+        {/* The pages Phase 1 replaces, in their own group with the date on the
+            label (decision C). They are listed rather than hidden because the
+            reading on them is the reading people have been using for months,
+            and a page that disappears without a date is a page someone emails
+            about. Each one carries a banner naming its replacement. */}
+        {renderGroup(oldPagesGroupLabel(), oldPages, (href) => parked?.href === href)}
         {/* The operator's group arrives as a slot for the same reason the
             header does: resolving who is looking is async, and this component
             is "use client". Absent — every user who is not a platform admin —
-            the sidebar is exactly the two groups above. */}
+            the sidebar is exactly the three groups above. */}
         {ops}
       </SidebarContent>
 
       <SidebarFooter className="px-2 pb-3">
+        {/* WHOSE WORKSPACE, AND WHO YOU ARE IN IT (Block D wave 2,
+            `main.shell.sidebar.tenant`). The artboard draws it above Logout and
+            the footer held Logout alone, so a reader with two workspaces —
+            every platform admin, and every agency seat when Teams lands — had
+            nothing on the page telling them which one they were reading. A
+            slot, not a read: this component is "use client" and resolving the
+            session is async (the same reason `header` and `ops` are slots). */}
+        {tenant}
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton onClick={handleLogout} className={ITEM_CLASS}>

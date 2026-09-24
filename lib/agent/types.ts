@@ -11,6 +11,8 @@
 //   - a real finding suppressed because it did not perfectly resolve (FALSE
 //     SILENCE). Enforcement therefore DEMOTES rather than drops.
 
+import { fullDate, platformLabel } from '../format'
+
 export interface GroundedPoint {
   /** Stable within one answer, so judgement can cite it. */
   id: string
@@ -27,7 +29,7 @@ export interface GroundedPoint {
   voices: 'client' | 'category'
   /** Real comments. A quote carries the id it came from — an uncitable quote
    *  never reaches this register. */
-  quotes: { text: string; commentId: string | null; videoId: string | null }[]
+  quotes: { text: string; commentId: string | null; videoId: string | null; lang?: string | null; english?: string | null }[]
   /** Distinct source videos behind `insightIds`. Computed in code from the
    *  cited rows, never taken from the model (the 2026-08-19 lesson). */
   conversationCount: number
@@ -119,4 +121,87 @@ export interface QuestionPlan {
   /** 'trend' pulls the cross-run layers that survive pruning. Never implies
    *  that historical insight TEXT can be retrieved — it cannot. */
   timeframe: 'current' | 'trend'
+}
+
+// ── The three registers' headings, said once (Phase 1 WP21, AS4/B3) ─────────
+//
+// They were written out in three places and two of them had drifted. The deck
+// HARD-CODED "What your customers said" over every answer, ignoring the
+// `voices` field it carries — the field added on 2026-09-10 precisely because
+// the page had printed that sentence over a Patagonia comment under a Sealand
+// question. A PDF is the artefact that leaves the building, so the copy that
+// could not be checked was the copy in the riskiest place. The third register
+// said "What I'd take from that" on screen and "What the agent would take from
+// that" on paper, which is the same voice speaking as two different people.
+//
+// One first person, everywhere. The answer prose is already written in it
+// ("I could not find any claims about customers or the market in that
+// document"), and a reader who has just been answered by something that says
+// "I" should not be handed a deck about "the agent".
+
+/** "What your customers said" only when every point rests on the client's own
+ *  audience. `voices` is computed off the LIVE video tag, not the frozen theme
+ *  bucket (lib/agent/retrieve.ts), which is what makes the claim checkable. */
+export function saidHeading(points: readonly { voices: 'client' | 'category' }[]): string {
+  return points.length > 0 && points.every((p) => p.voices === 'client')
+    ? 'What your customers said'
+    : 'What people said'
+}
+
+export const NEAREST_HEADING = 'Not what you asked, but close'
+
+export const JUDGEMENT_HEADING = 'What I’d take from that'
+
+// ── Where a quoted voice was said, said once (Phase 1 WP21 fix pass) ────────
+//
+// The footnote numbering was unified across the two renderers and the DATE was
+// not: the screen printed `shortDate(meta.date)` — "30 Aug" — and the deck's
+// evidence appendix printed the stored string raw, "2026-08-30", for the same
+// numbered quote. A reader comparing the answer on screen with the appendix in
+// the PDF saw one fact rendered two ways.
+//
+// THE YEAR STAYS. `fullDate`, not `shortDate`: an answer retrieves across the
+// whole corpus, whose comments run back to 2020 on this tenant, and a column of
+// citations reading "30 Aug" beside "30 Aug" is two different Augusts (the rule
+// lib/format.ts already writes down for the readiness page). The screen gains
+// the year rather than the deck losing it.
+
+/** "YouTube · 30 Aug 2026", with whichever halves are recorded. Empty when
+ *  neither is — the caller says "source on file", which is a different
+ *  sentence in each renderer's own furniture. */
+export function citationWhere(
+  meta: { platform?: string | null; date?: string | null } | null | undefined,
+): string {
+  return [meta?.platform ? platformLabel(meta.platform) : null, meta?.date ? fullDate(meta.date) : null]
+    .filter(Boolean)
+    .join(' · ')
+}
+
+/**
+ * What a citation's link OPENS, in the reader's words.
+ *
+ * THE ARTBOARD SAYS "the video →" AND "the thread →" AND IT IS RIGHT. The build
+ * branched on `commentLevel` alone — "the comment →" or "the post →" — so a
+ * TikTok video and a Reddit thread read identically and the destination was
+ * indistinguishable, which is the one thing a provenance link has to say.
+ * `commentLevel` decides whether we hold the comment's own address; the
+ * PLATFORM decides what the reader lands on. Anything we do not recognise
+ * keeps the old, weaker words rather than guessing at a noun.
+ *
+ * One helper, so the screen's finding, the deck's appendix and a share link
+ * name one destination.
+ */
+export function citationDestination(
+  meta: { platform?: string | null; commentLevel?: boolean } | null | undefined,
+): string {
+  switch (meta?.platform) {
+    case 'reddit':
+      return meta.commentLevel ? 'the thread' : 'the post'
+    case 'youtube':
+    case 'tiktok':
+    case 'instagram':
+      return 'the video'
+    default:
+      return meta?.commentLevel ? 'the comment' : 'the post'
+  }
 }

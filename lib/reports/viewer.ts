@@ -2,7 +2,14 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { hydrateSnapshot, SNAPSHOT_COLS, type SnapshotRow } from '../snapshots'
 import { applyEdits, loadEdits } from './documents/edits'
 import { isDocumentData, type DocumentSnapshotData } from './documents/types'
+import { isWeeklyData, type WeeklySnapshotData } from './weekly-build'
+import { isMonthlyData, type MonthlySnapshotData } from './monthly-build'
+import { isQuarterlyData, type QuarterlySnapshotData } from './quarterly-build'
+import { WEEKLY_BLOCK_KEYS } from './weekly'
+import { MONTHLY_BLOCK_KEYS } from './monthly'
+import { QUARTERLY_BLOCK_KEYS } from './quarterly'
 import { deckSlides } from './compose'
+import { documentSheetCount } from './documents/compose'
 import type { ReportSnapshotData } from './types'
 
 // The in-app viewer's data (2026-09-09). Opening a build is a URL — `?view=`
@@ -14,10 +21,12 @@ import type { ReportSnapshotData } from './types'
 /** What the panel needs: the frozen pages, plus the line above them. */
 export interface ViewerSnapshot {
   id: string
-  kind: 'document' | 'report'
+  /** Which deck draws it. Three kinds share `report_snapshots.kind = 'report'`
+   *  and are told apart inside `data` — the `isDocumentData` precedent. */
+  kind: 'document' | 'report' | 'weekly' | 'monthly' | 'quarterly'
   /** Hydrated (quote texts resolved live) and, for a document, with the
    *  operator's edits applied — the same pages the PDF prints. */
-  data: DocumentSnapshotData | ReportSnapshotData
+  data: DocumentSnapshotData | ReportSnapshotData | WeeklySnapshotData | MonthlySnapshotData | QuarterlySnapshotData
   title: string
   builtAt: string
   pageCount: number
@@ -64,7 +73,38 @@ export async function loadViewerSnapshot(admin: SupabaseClient, clientId: string
   if (isDocumentData(raw)) {
     const edits = await loadEdits(admin, row.id)
     const withEdits = applyEdits(raw, edits)
-    return { ...common, kind: 'document', data: withEdits, pageCount: withEdits.pages.length + 1 }
+    return { ...common, kind: 'document', data: withEdits, pageCount: documentViewerPages(withEdits) }
+  }
+
+  // A WEEKLY REPORT (Phase 1 WP17): six blocks over one reading, and NO
+  // `sections`. Without this branch the cast below handed `deckSlides` a
+  // snapshot with no sections and `d.sections.forEach` threw inside a server
+  // component — and the row is reachable: /dashboard/reports lists every
+  // kind='report' snapshot that no report_sends row carries under "Builds",
+  // which is exactly what a weekly send that stored its PDF and then failed at
+  // the email leaves behind. One sheet per block, as WeeklyDeck paginates.
+  if (isWeeklyData(raw)) {
+    return { ...common, kind: 'weekly', data: raw, pageCount: weeklyViewerPages(raw.keys) }
+  }
+
+  // A MONTHLY REPORT (Phase 1 WP18), for the same reason and by the same route:
+  // /dashboard/reports lists every kind='report' snapshot that no report_sends
+  // row carries under "Builds", which is what a monthly send that stored its
+  // PDF and then failed at the email leaves behind. Without this branch the
+  // cast below hands `deckSlides` a snapshot with no sections and
+  // `d.sections.forEach` throws inside a server component.
+  if (isMonthlyData(raw)) {
+    return { ...common, kind: 'monthly', data: raw, pageCount: monthlyViewerPages(raw.keys) }
+  }
+
+  // A QUARTERLY REVIEW (Phase 1 WP20), for the same reason and by the same
+  // route: /dashboard/reports lists every kind='report' snapshot that no
+  // report_sends row carries under "Builds", which is what a quarterly send
+  // that stored its PDF and then failed at the email leaves behind. Without
+  // this branch the cast below hands `deckSlides` a snapshot with no sections
+  // and `d.sections.forEach` throws inside a server component.
+  if (isQuarterlyData(raw)) {
+    return { ...common, kind: 'quarterly', data: raw, pageCount: quarterlyViewerPages(raw.keys) }
   }
 
   // An arranged report: the cover plus every section's slides. The page
@@ -73,6 +113,53 @@ export async function loadViewerSnapshot(admin: SupabaseClient, clientId: string
   const report = raw as ReportSnapshotData
   const { pageModule } = await import('@/components/pages/registry')
   return { ...common, kind: 'report', data: report, pageCount: deckSlides(report, pageModule).length }
+}
+
+/**
+ * How many sheets a stored brief prints — one per WRITTEN page, one per
+ * BORROWED page block, plus the cover.
+ *
+ * A BORROWED BLOCK IS A SHEET TOO (WP19). `DocumentDeck` paginates off
+ * `documentSlides`, which walks `layout` — the written pages and the borrowed
+ * sections in one order — while both headers still counted `pages.length + 1`.
+ * Every brief this product builds is affected: MARKETING_MAP is 3 written pages
+ * and 5 blocks, SALES_MAP 4 and 4, CONTENT_MAP 4 and 3, LEADERSHIP_MAP 3 and 4,
+ * so the viewer header and the Studio bar undercounted by roughly half. The
+ * same deck already fixed the twin bug on its own cover and stopped one line
+ * short of the page count.
+ *
+ * This is the seam WP17 added `weeklyViewerPages` for, and WP18 and WP20 both
+ * took the lesson; the brief is the one kind that did not.
+ *
+ * ONE FUNCTION, THREE CALLERS (fix pass). This wrapper is kept because the
+ * viewer's vocabulary is `<kind>ViewerPages` and the switch above reads better
+ * for it; the arithmetic itself is `documentSheetCount`, which the deck and the
+ * share link's header now read too.
+ */
+export function documentViewerPages(data: DocumentSnapshotData): number {
+  return documentSheetCount(data)
+}
+
+/**
+ * How many sheets a stored weekly report prints — one per block key this build
+ * still knows, and never zero: `WeeklyDeck` draws a sheet saying so when it
+ * knows none of them, so the header must not say "0 pages" over it.
+ */
+export function weeklyViewerPages(keys: readonly string[]): number {
+  return Math.max(1, keys.filter((k) => (WEEKLY_BLOCK_KEYS as readonly string[]).includes(k)).length)
+}
+
+/** The same count for a monthly report — one sheet per block key this build
+ *  still knows, and never zero. */
+export function monthlyViewerPages(keys: readonly string[]): number {
+  return Math.max(1, keys.filter((k) => (MONTHLY_BLOCK_KEYS as readonly string[]).includes(k)).length)
+}
+
+/** The same count for a quarterly review — one sheet per block key this build
+ *  still knows, and never zero: `QuarterlyDeck` draws a sheet saying it knows
+ *  none of them, so the header must not say "0 pages" over it. */
+export function quarterlyViewerPages(keys: readonly string[]): number {
+  return Math.max(1, keys.filter((k) => (QUARTERLY_BLOCK_KEYS as readonly string[]).includes(k)).length)
 }
 
 /**

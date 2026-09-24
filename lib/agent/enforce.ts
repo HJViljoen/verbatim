@@ -96,20 +96,24 @@ export function enforceRegisters(
     const insights = live.map((id) => byId.get(id)!)
     const quotes: GroundedPoint['quotes'] = []
     for (const i of insights) {
-      // English-first, as a PREFERENCE and never a gate — the same rule the
+      // READABLE-first, as a PREFERENCE and never a gate — the same rule the
       // Pass D hero pool and the frontend picker already use (lib/quotes.ts).
       // The corpus is genuinely multilingual and dropping those voices would
       // misrepresent it; but a claim a reader cannot read is a claim they
-      // cannot check, and these answers get pasted into slides.
+      // cannot check, and these answers get pasted into slides. The citation
+      // carries the cache's reading, so a TRANSLATED quote sorts with the
+      // English ones rather than behind them (item 8) — passing it is the whole
+      // point of the reading, and `readsAsHeroQuote(q.quote)` alone would rank
+      // by what the text looks like and ignore what we know about it.
       const ordered = [...i.quotes].sort(
-        (x, y) => Number(readsAsHeroQuote(y.quote)) - Number(readsAsHeroQuote(x.quote)) || x.rank - y.rank,
+        (x, y) => Number(readsAsHeroQuote(y.quote, y)) - Number(readsAsHeroQuote(x.quote, x)) || x.rank - y.rank,
       )
       for (const q of ordered) {
         if (quotes.length >= AGENT_QUOTES_PER_POINT) break
         const key = q.commentId ?? q.quote
         if (usedQuotes.has(key)) continue
         usedQuotes.add(key)
-        quotes.push({ text: q.quote, commentId: q.commentId, videoId: q.videoId })
+        quotes.push({ text: q.quote, commentId: q.commentId, videoId: q.videoId, lang: q.lang, english: q.english })
       }
       if (quotes.length >= AGENT_QUOTES_PER_POINT) break
     }
@@ -121,9 +125,9 @@ export function enforceRegisters(
     if (quotes.length === 0) {
       const fallback = insights
         .flatMap((i) => i.quotes)
-        .sort((x, y) => Number(readsAsHeroQuote(y.quote)) - Number(readsAsHeroQuote(x.quote)) || x.rank - y.rank)[0]
+        .sort((x, y) => Number(readsAsHeroQuote(y.quote, y)) - Number(readsAsHeroQuote(x.quote, x)) || x.rank - y.rank)[0]
       if (fallback) {
-        quotes.push({ text: fallback.quote, commentId: fallback.commentId, videoId: fallback.videoId })
+        quotes.push({ text: fallback.quote, commentId: fallback.commentId, videoId: fallback.videoId, lang: fallback.lang, english: fallback.english })
       }
     }
 

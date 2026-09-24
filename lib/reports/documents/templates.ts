@@ -131,9 +131,18 @@ export const SALES_BRIEF: DocumentTemplate = {
 
 // ── leadership ─────────────────────────────────────────────────────────────
 
+/**
+ * THE NAME IS THE ARTBOARD'S. `LeadershipBrief.dc.html` heads the sheet
+ * "Leadership one-pager · September 2026", mock-gap §3.15 files `lead.title`
+ * as a difference, and Heinrich's ruling is that wording follows the mock —
+ * so the product defaults to the spec's words rather than relying on an
+ * operator to retitle. The KEY, the role and every stored snapshot's own
+ * `title` are untouched: `key: 'leadership_brief'` is the identity a brief was
+ * built under and a rename here can never reach an artefact already frozen.
+ */
 export const LEADERSHIP_BRIEF: DocumentTemplate = {
   key: 'leadership_brief',
-  name: 'Leadership brief',
+  name: 'Leadership one-pager',
   audience: 'leadership',
   description: 'Three readings of what the market is saying, what moved since last time, and where the company stands against the names it is measured against. Short on purpose: the pages a board member will actually read.',
   role:
@@ -218,6 +227,14 @@ export const CONTENT_BRIEF: DocumentTemplate = {
   },
   readerNoun: 'the content team',
   writtenFor: 'the people who make the content',
+  // THE `method` PAGE STAYS IN THE SKELETON AND IS NOT IN `CONTENT_MAP`
+  // (fix pass, reports-25). The map is what a brief with a reading paginates
+  // off, and the content brief's method sheet there is `ct.record`, the
+  // artboard's own; the SKELETON is the fallback walk, used by a custom brief
+  // and by any brief built where the reading could not be loaded at all
+  // (compose.ts), and in that state `ct.record` does not exist — so dropping
+  // it here would leave one reachable content brief with no method sheet and
+  // no PRIVACY_LINE at all.
   skeleton: [
     { kind: 'in_short' },
     { kind: 'finding', repeat: 'findings' },
@@ -493,6 +510,12 @@ export const PAGE_FIELDS: Record<DocPageKind, string[]> = {
   asked: ['asked'],
   personas: ['persona'],
   language: ['care'],
+  // NO FIELDS, AND NOT AN OVERSIGHT (E-sales). Every line on these two sheets
+  // is a count the reading already made; there is nothing for a model to
+  // write, so there is no field for it to write into and no key for it in the
+  // writer schema.
+  switching: [],
+  scripted: [],
   method: ['method'],
 }
 
@@ -506,6 +529,9 @@ export const PAGE_TITLE: Record<DocPageKind, string> = {
   asked: 'What the audience asks',
   personas: 'Who is buying',
   language: 'Language to handle with care',
+  // The artboard's own words for the two counted sheets (E-sales).
+  switching: 'Who is moving, and which way',
+  scripted: 'Answers you can use',
   method: 'About this brief',
 }
 

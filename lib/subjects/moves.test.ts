@@ -1,0 +1,210 @@
+import { readFileSync } from 'fs'
+
+import { describe, expect, it } from 'vitest'
+
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+import { activationCheck, MOVE_STATUS_SAID, moveTarget, moveTitle, sameName, setMoveStatus, subjectSetVerdict } from './moves'
+import { MOVE_MAX_THEMES, SUBJECTS_MAX, SUBJECTS_MIN, type MoveStatus } from './types'
+
+describe('moveTarget', () => {
+  it('takes a subject for a subject move', () => {
+    expect(moveTarget({ kind: 'subject', subjectId: 's1' }))
+      .toEqual({ subject_id: 's1', registry_ids: null, lineage_id: null })
+  })
+
+  it('takes up to five themes for a theme move, deduplicated', () => {
+    expect(moveTarget({ kind: 'theme', registryIds: ['t1', 't2', 't1'] }))
+      .toEqual({ subject_id: null, registry_ids: ['t1', 't2'], lineage_id: null })
+  })
+
+  it('takes a lineage for an advice move — never a recommendation id', () => {
+    // recommendations are deleted and re-inserted every update; the lineage is
+    // the identity that survives it (lib/pipeline/rec-lineage.ts).
+    expect(moveTarget({ kind: 'advice', lineageId: 'l1' }))
+      .toEqual({ subject_id: null, registry_ids: null, lineage_id: 'l1' })
+  })
+
+  it('refuses a move with no target', () => {
+    expect(moveTarget({ kind: 'subject' })).toBe('Pick the subject this is about.')
+    expect(moveTarget({ kind: 'theme', registryIds: [] })).toBe('Pick at least one theme.')
+    expect(moveTarget({ kind: 'advice' })).toBe('Name the recommendation this came from.')
+  })
+
+  it('refuses a move with two targets, whichever pair', () => {
+    const line = 'A move is about one thing: a subject, some themes, or a piece of advice.'
+    expect(moveTarget({ kind: 'subject', subjectId: 's', registryIds: ['t'] })).toBe(line)
+    expect(moveTarget({ kind: 'subject', subjectId: 's', lineageId: 'l' })).toBe(line)
+    expect(moveTarget({ kind: 'theme', registryIds: ['t'], subjectId: 's' })).toBe(line)
+    expect(moveTarget({ kind: 'advice', lineageId: 'l', subjectId: 's' })).toBe(line)
+  })
+
+  it('holds the theme cap the initiatives CHECK already holds', () => {
+    const six = Array.from({ length: MOVE_MAX_THEMES + 1 }, (_, i) => `t${i}`)
+    expect(moveTarget({ kind: 'theme', registryIds: six })).toContain(`at most ${MOVE_MAX_THEMES}`)
+  })
+
+  it('refuses a kind this product does not track', () => {
+    expect(moveTarget({ kind: 'vibes' as never })).toContain('vibes')
+  })
+})
+
+describe('moveTitle', () => {
+  it('collapses whitespace so a title reads the same on a chart as in the form', () => {
+    expect(moveTitle('  Make   comfort the thing\npeople mention ')).toBe('Make comfort the thing people mention')
+  })
+
+  it('refuses an empty title and one past the column', () => {
+    expect(moveTitle('   ')).toBeNull()
+    expect(moveTitle('x'.repeat(121))).toBeNull()
+    expect(moveTitle('x'.repeat(120))).toHaveLength(120)
+  })
+})
+
+describe('subjectSetVerdict', () => {
+  it('says how far off a tenant still setting up is, without refusing it', () => {
+    const short = subjectSetVerdict(3)
+    expect(short.state).toBe('short')
+    expect(short.line).toContain(`${SUBJECTS_MIN}-${SUBJECTS_MAX}`)
+  })
+
+  it('is ready across the whole range', () => {
+    for (let n = SUBJECTS_MIN; n <= SUBJECTS_MAX; n++) expect(subjectSetVerdict(n).state).toBe('ready')
+  })
+
+  it('says why too many is a problem, in the reader’s terms', () => {
+    const over = subjectSetVerdict(SUBJECTS_MAX + 1)
+    expect(over.state).toBe('over')
+    expect(over.line).toContain('enough of the conversation to read')
+  })
+
+  it('carries no pipeline jargon', () => {
+    for (const n of [0, 3, 6, 12]) {
+      const { line } = subjectSetVerdict(n)
+      for (const word of ['run', 'Pass', 'cluster', 'embedding', 'judge']) expect(line).not.toContain(word)
+    }
+  })
+})
+
+describe('activationCheck', () => {
+  it('confirms a proposed subject — the one write that starts the counting', () => {
+    // Everything downstream filters on `active`: the judge, the month reading
+    // and the freeze. A named subject is `proposed` and measures nothing until
+    // this returns `activate`.
+    expect(activationCheck({ status: 'proposed' }, 4)).toEqual({ do: 'activate' })
+  })
+
+  it('does nothing to a subject that is already being counted', () => {
+    expect(activationCheck({ status: 'active' }, 6).do).toBe('nothing')
+  })
+
+  it('refuses to bring a stopped subject back under its old line', () => {
+    const v = activationCheck({ status: 'retired' }, 2)
+    expect(v.do).toBe('refuse')
+    expect(v.do === 'refuse' && v.message).toContain('new line')
+  })
+
+  it('refuses a subject that is not this tenant\u2019s', () => {
+    expect(activationCheck(null, 0).do).toBe('refuse')
+  })
+
+  it('holds the ceiling on the way up, and only on the way up', () => {
+    expect(activationCheck({ status: 'proposed' }, SUBJECTS_MAX - 1).do).toBe('activate')
+    const over = activationCheck({ status: 'proposed' }, SUBJECTS_MAX)
+    expect(over.do).toBe('refuse')
+    expect(over.do === 'refuse' && over.message).toContain('enough of the conversation to read')
+  })
+
+  it('carries no pipeline jargon in anything it says', () => {
+    const lines = [
+      activationCheck(null, 0),
+      activationCheck({ status: 'active' }, 1),
+      activationCheck({ status: 'retired' }, 1),
+      activationCheck({ status: 'proposed' }, SUBJECTS_MAX),
+    ].map((v) => (v.do === 'activate' ? '' : v.message))
+    for (const line of lines) {
+      for (const word of ['run', 'Pass', 'cluster', 'embedding', 'judge', 'status']) expect(line).not.toContain(word)
+    }
+  })
+})
+
+describe('sameName', () => {
+  it('compares the way the partial unique index does — lower(trim(name))', () => {
+    expect(sameName('Comfort', ' comfort ')).toBe(true)
+    expect(sameName('COMFORT', 'Comfort')).toBe(true)
+  })
+
+  it('does not call two different subjects one', () => {
+    // A re-description keeps the name and retires the row it replaces; a name
+    // already taken by a DIFFERENT live subject is still refused.
+    expect(sameName('Comfort', 'Comfort under load')).toBe(false)
+  })
+})
+
+describe('setMoveStatus', () => {
+  it('names the three lifecycle answers without a direction word or a promise', () => {
+    expect(MOVE_STATUS_SAID.done).toBe('Marked done. Its line is kept.')
+    expect(MOVE_STATUS_SAID.dropped).toBe('Marked dropped. Its line is kept.')
+    expect(MOVE_STATUS_SAID.active).toContain('Running again')
+    // Never "we made this happen": the masthead rule (OV5) is that we report
+    // what the conversation did after a move, and never claim it was caused.
+    for (const said of Object.values(MOVE_STATUS_SAID)) {
+      expect(said.toLowerCase()).not.toContain('caused')
+      expect(said).not.toMatch(/\d/)
+    }
+  })
+
+  it('refuses a status the table does not have, before any write', async () => {
+    const supabase = { from: () => { throw new Error('no read should happen') } } as unknown as SupabaseClient
+    const result = await setMoveStatus(
+      { supabase, clientId: 'c1', userId: 'u1' },
+      supabase,
+      { id: 'm1', status: 'finished' as MoveStatus },
+    )
+    expect(result.ok).toBe(false)
+    expect(result.message).toContain('done, dropped, or still running')
+  })
+})
+
+describe('the subject audit trigger and the application log, which must not both fire', () => {
+  // M4 installed `subjects_status_audit` as AFTER UPDATE OF status only, so a
+  // subject INSERTED already `active` never moved and never got a row. Measured
+  // on the preview branch 2026-09-24: Sealand's six subjects all read
+  // `created_by = null`, and every `config_changes` row on surface `subjects`
+  // was `field = 'calibration'` — not one recorded that any of the six was
+  // created. M14 (`20260924091000_subjects_insert_audit.sql`) adds the INSERT
+  // arm, and the whole risk of adding it is DOUBLE LOGGING: `nameSubject`
+  // already writes its own row. The dedupe is `created_by IS NULL`, and it only
+  // holds while both halves stay true — which is what this test is for.
+  const insertAudit = readFileSync(new URL('../../supabase/migrations/20260924091000_subjects_insert_audit.sql', import.meta.url), 'utf8')
+  const m4 = readFileSync(new URL('../../supabase/migrations/20260918093000_subjects.sql', import.meta.url), 'utf8')
+  const movesSource = readFileSync(new URL('./moves.ts', import.meta.url), 'utf8')
+
+  it('fires on INSERT only for a row no member created', () => {
+    expect(insertAudit).toMatch(/create trigger subjects_insert_audit\s+after insert on public\.subjects\s+for each row when \(new\.created_by is null\)/i)
+  })
+
+  it('keeps M4’s UPDATE arm exactly as M4 wrote it', () => {
+    // The file restates it, so a re-apply cannot leave the two out of step —
+    // and a restatement that drifts is worse than no restatement.
+    const arm = /create trigger subjects_status_audit\s+after update of status on public\.subjects\s+for each row when \(new\.status is distinct from old\.status\)\s+execute function public\.subjects_status_audit\(\);/i
+    expect(m4).toMatch(arm)
+    expect(insertAudit).toMatch(arm)
+  })
+
+  it('leaves the UI insert to the application, which still logs it', () => {
+    // Half the dedupe: `nameSubject` writes its own config_changes row. If this
+    // call goes away the trigger must take the INSERT over, and if the trigger
+    // takes it over while this stays, every naming is logged twice.
+    expect(movesSource).toMatch(/named a subject/)
+    expect(movesSource).toMatch(/recordConfigChange\(admin, \{[\s\S]{0,400}?field: 'subjects'/)
+  })
+
+  it('relies on a created_by the insert policy makes non-null for every browser write', () => {
+    // The other half: M4's policy pins `created_by` to the caller, so a NULL
+    // there means the row did not come through the product. Without this clause
+    // the discriminator is a convention instead of a rule.
+    expect(m4).toMatch(/created_by = \(select auth\.uid\(\)\)/)
+    expect(m4).toMatch(/grant insert \([^)]*created_by[^)]*\)\s*\n?\s*on public\.subjects to authenticated;/)
+  })
+})

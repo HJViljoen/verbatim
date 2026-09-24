@@ -1,13 +1,13 @@
 import { zodResponseFormat } from 'openai/helpers/zod'
 import { z } from 'zod'
 import { openai, samplingParams } from '../openai'
-import { SYNTHESIS_MODEL, estimateCost, AGENT_HISTORY_TURNS, AGENT_REASONING_EFFORT, RUN_INDEXED_DIRECTION_WORDS } from '../config'
+import { SYNTHESIS_MODEL, estimateCost, AGENT_HISTORY_TURNS, AGENT_REASONING_EFFORT, directionWordsFor } from '../config'
 import { logAiCall } from '../pipeline/ai-log'
 import { CALIBRATED_PROSE_RULE, stripThemeRefs } from '../pipeline/prose-rules'
 import { enforceRegisters, type RawAnswer } from './enforce'
 import { interpretQuestion } from './interpret'
 import { retrieveForQueries, latestRunId, embeddedInsightCount, type RetrievedInsight } from './retrieve'
-import { loadTrendContext, type TrendContext } from './trend'
+import { loadMovement, renderMovement, NO_MOVEMENT_BLOCK, type MovementReading } from './movement'
 import { OUT_OF_CORPUS_NOTICE, type AgentAnswer, type QuestionPlan } from './types'
 
 // The answering half. Retrieval has already put real insights and real quotes
@@ -76,49 +76,27 @@ function renderEvidence(insights: RetrievedInsight[]): string {
     .join('\n')
 }
 
-/** What a "trend" question is told while D1's RUN_INDEXED_DIRECTION_WORDS is
- *  off: the per-reading series is not loaded at all, and the model is handed
- *  the line the block already printed whenever a topic had no points of its
- *  own. Said rather than left out — an unexplained silence invites the model to
- *  answer the direction question from the evidence in front of it, which is one
- *  reading and cannot speak to change.
+/** The MOVEMENT block for one question: nothing unless the question asked about
+ *  change, the monthly readings when `agent.movement` is on, and the
+ *  not-readable-yet line when it is off or when the months hold nothing for the
+ *  topics retrieved.
  *
- *  Scoped to A TOPIC's history, deliberately. D1 keeps the update's own banded
- *  verdicts — the sentiment and share the digest carries, which have an n and a
- *  band behind them — and the email sent this month leads on one of them
- *  ("sentiment down 13.9 pts"). A blanket "the history is not readable" here
- *  would have the agent contradict the email in the same week. */
-const NO_TREND_BLOCK = [
-  'MOVEMENT OVER TIME (counts per reading, not remembered words).',
-  '- no per-topic history for these topics yet',
-  'You may NOT claim a topic is growing, fading or steady: say plainly that a topic’s history is not readable yet, and answer what the conversation says now.',
-].join('\n')
-
-function renderTrend(trend: TrendContext): string {
-  const themes = trend.themes
-    .filter((t) => t.points.length > 0)
-    .map((t) => `- ${t.canonicalLabel}: ${t.movement} (${t.points.map((p) => `${p.runDate}:${p.evidenceCount}`).join(', ')})`)
-    .join('\n')
-  const summaries = trend.summaries
-    .map((s) => `- ${s.runDate}: ${s.totalComments ?? '?'} conversations analysed`)
-    .join('\n')
-  return [
-    'MOVEMENT OVER TIME (counts per reading, not remembered words).',
-    'These are evidence counts across past readings. You may describe direction from them.',
-    'You may NOT claim to know what anyone said in an earlier reading — that text is not retained.',
-    themes || '- no per-topic history for these topics yet',
-    summaries,
-  ].join('\n')
-}
-
-/** The MOVEMENT block for one question: nothing unless the question asked
- *  about change, the readings when the direction words are on, and the
- *  not-readable-yet line when they are off (D1). Pure, so both answers stay
- *  tested; the loader above it is skipped entirely in the gated case, so the
- *  gate costs no reads either. */
-export function movementBlock(trend: TrendContext | null, timeframe: string, directionWords = RUN_INDEXED_DIRECTION_WORDS): string {
+ *  THE GATE STAYS EVEN THOUGH THE READER IS NOW TRUE. D1 is a rule about WHICH
+ *  SERIES may carry a direction word, not a switch that was flipped once: the
+ *  gated branch is kept and tested so that turning `agent.movement` off — for a
+ *  tenant, a bug, a regression in the reading — returns the agent to silence
+ *  about direction rather than to the run-indexed series it used to read. That
+ *  series is gone; this block is the only movement the agent has.
+ *
+ *  Pure, so both answers stay tested; the loader above it is skipped entirely
+ *  in the gated case, so the gate costs no reads either. */
+export function movementBlock(
+  readings: readonly MovementReading[] | null,
+  timeframe: string,
+  directionWords = directionWordsFor('agent.movement'),
+): string {
   if (timeframe !== 'trend') return ''
-  return trend && directionWords ? renderTrend(trend) : NO_TREND_BLOCK
+  return readings && directionWords ? renderMovement(readings) : NO_MOVEMENT_BLOCK
 }
 
 export interface AnswerArgs {
@@ -175,17 +153,21 @@ export async function answerQuestion(
     return { ...empty, plan, retrievedCount: 0, emptyQueries: context.emptyQueries }
   }
 
-  // D1: while the direction words are gated the per-reading series is not even
-  // read — the block it feeds is the one place the agent is told it may name a
-  // direction, and the counts behind it are indexed by update, not by period.
-  const trend = plan.timeframe === 'trend' && RUN_INDEXED_DIRECTION_WORDS
-    ? await loadTrendContext(admin, {
+  // D1: while the direction words are gated the series is not even read — the
+  // block it feeds is the one place the agent is told it may name a direction.
+  // The AUDIENCES are the ones the retrieved insights actually came off:
+  // retrieval has already dropped every rival's voice (scopeToClientVoices), so
+  // this is the client's own audience and the rest of the category, and Ask
+  // never reads a rival's months to answer a question about the client.
+  const readings = plan.timeframe === 'trend' && directionWordsFor('agent.movement')
+    ? await loadMovement(admin, {
         clientId: args.clientId,
         registryIds: context.insights.map((i) => i.themeRef?.registryId).filter((r): r is string => Boolean(r)),
+        audiences: context.insights.map((i) => i.bucket),
       })
     : null
 
-  const movement = movementBlock(trend, plan.timeframe)
+  const movement = movementBlock(readings, plan.timeframe)
   const system = buildAnswerPrompt(args.companyName, allowNearest)
   const historyBlock = (args.history ?? [])
     .slice(-AGENT_HISTORY_TURNS)

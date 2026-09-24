@@ -1,0 +1,106 @@
+import Link from 'next/link'
+import type { ReactNode } from 'react'
+import { BarPill, PageBar } from '@/components/shell/page-grid'
+import { HowSound } from '@/components/shell/how-sound'
+import { hasHorizon, hasRecord, surface, type NavKey } from '@/lib/nav'
+import { contextLine, horizonOptions, updateLine, type ContextLineInput } from '@/lib/shell/bar'
+import { parseHorizon } from '@/lib/reading/horizon'
+
+/**
+ * The page bar every Phase 1 surface wears (item 42, the mock's §3.2).
+ *
+ * Title · the context line · the horizon and Export at the right-hand end · the
+ * one question under them · the "how sound is this" band under that, composed
+ * from lib/nav.ts so the label a
+ * reader clicked in the sidebar and the title at the top of the page it opened
+ * are the same string.
+ *
+ * THREE BARS, ONE COMPONENT. A reading surface (Overview, Subjects, Voice,
+ * Market, Competitive) carries the month context and the horizon. This week
+ * carries the two updates it compares and NO horizon — it is dated by the
+ * update, and a month control on it would offer a window the page does not
+ * read. Ask, Reports and Settings carry the title alone; nothing on them is a
+ * reading of a period, so a horizon or a soundness band would be furniture.
+ * Which one a surface takes is `Surface.bar` — a field in the table, not a
+ * judgement made per page — and BOTH controls are gated on it (`hasHorizon`,
+ * `hasRecord`). The band was gated on nothing but the data being present, so a
+ * caller handing Settings a record got "How sound is this · 2 updates" on a
+ * page that reads no period.
+ */
+
+export interface PageBarProps {
+  /** Which of the nine this is. */
+  nav: NavKey
+  /** The page's own URL params, verbatim — the horizon links carry them
+   *  through so changing the horizon never drops the reader's selection. */
+  params?: Record<string, string | undefined>
+  /** The month reading's context, on a reading surface. */
+  context?: ContextLineInput | null
+  /** This week's two updates. */
+  updates?: { update: string; previous?: string | null } | null
+  /** WP7's composed record: the one line for the pill, the lines behind it. */
+  record?: { line: string; lines: string[] } | null
+  /** The window the horizon pills are showing, in the artboard's own words —
+   *  "4 updates · 1 Sep → 28 Sep". Printed at the end of the pill row, mono,
+   *  because it is the RANGE the selected pill resolves to and a pill named
+   *  "This month" says nothing about which days are in it (Block D wave 2,
+   *  `main.bar.horizon.range`). Composed by the page, which is the only thing
+   *  that holds both the run count and the window. */
+  range?: ReactNode
+  /** Export and anything else the page puts at the right-hand end. */
+  children?: ReactNode
+}
+
+export function SurfacePageBar({ nav, params = {}, context = null, updates = null, record = null, range = null, children }: PageBarProps) {
+  const s = surface(nav)
+  const horizon = parseHorizon(params.horizon)
+  const line = s.bar === 'week'
+    ? (updates ? updateLine(updates) : null)
+    : s.bar === 'reading' && context
+      ? contextLine(context)
+      : null
+
+  return (
+    <div className="flex shrink-0 flex-col gap-1.5">
+      <PageBar title={s.label} context={line ?? undefined} subtitle={s.question ?? undefined}>
+        {children}
+      </PageBar>
+      {hasHorizon(s) && (
+        <div className="flex flex-wrap items-center gap-2">
+          <HorizonControl basePath={s.href} params={params} current={horizon} />
+          {/* THE RANGE BESIDE THE PILLS, NOT INSIDE THEM. The artboard puts the
+              horizon on its own row under the question with the window's own
+              dates at the end of it; the control used to sit at the right-hand
+              end of the TITLE row, beside Export, where four pills and two
+              controls competed for one line. */}
+          {range ? <span className="font-mono text-[11px] whitespace-nowrap text-muted-foreground">{range}</span> : null}
+        </div>
+      )}
+      {/* Under the bar, not in it (the mock's band): the basis is a sentence a
+          reader reads, not a control they operate, and the right-hand end of
+          the title row is where the controls are. */}
+      {record && hasRecord(s) && <HowSound basePath={s.href} params={params} line={record.line} lines={record.lines} />}
+    </div>
+  )
+}
+
+/**
+ * The horizon control (decision M). Four links, not a menu: the horizon is in
+ * the URL, so each option IS an address, and an address can be shared, opened
+ * in a new tab and frozen into an export's params the way a menu's internal
+ * state cannot.
+ */
+export function HorizonControl({
+  basePath, params, current,
+}: { basePath: string; params: Record<string, string | undefined>; current: ReturnType<typeof parseHorizon> }) {
+  const options = horizonOptions(basePath, params, current)
+  return (
+    <nav aria-label="How far back" className="flex shrink-0 items-center gap-1" data-print-hide>
+      {options.map((o) => (
+        <Link key={o.horizon} href={o.href} aria-current={o.active ? 'page' : undefined} className="cursor-pointer">
+          <BarPill active={o.active}>{o.label}</BarPill>
+        </Link>
+      ))}
+    </nav>
+  )
+}

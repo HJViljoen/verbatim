@@ -43,6 +43,11 @@ next-env.d.ts
 
 # local render/smoke output
 scratch/
+# A working file at the root of a repo whose .env.local rule is absolute must
+# not be able to ride along on a wildcard `git add -A`. Three did sit here
+# untracked and unmatched (scratch-sb.ts, scratch-seams-render.tsx,
+# scratch-weekly.tsx); `scratch/` only ever matched the directory.
+scratch-*
 
 # Agent worktrees (Claude Code --isolation worktree)
 .claude/worktrees/

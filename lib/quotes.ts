@@ -5,9 +5,12 @@
 // read every comment); this heuristic picker is the fallback that fills the rest
 // and covers rows/runs that predate hero_quote.
 
-import { chunk } from './chunk'
+import { chunk, HASH_IN_CHUNK, mapWithLimit, READ_CONCURRENCY } from './chunk'
+import { memoRead } from './reading/memo'
+import { audienceOf } from './rivals'
 import { selectAll } from './supabase-admin'
 import { VIDEO_QUOTE_BONUS } from './config'
+import { quoteTextHash } from './quote-text'
 import type { EvidenceSource } from './pipeline/pass-a'
 
 export interface QuoteRow {
@@ -23,6 +26,15 @@ export interface QuoteRow {
    *  citation with no comment behind it. Absent on rows read before the
    *  pickers scored it. Only onCameraBonus reads this, and only for 'video'. */
   source?: EvidenceSource
+  /** The language this text was written in, as comment_translations recorded
+   *  it. Absent means "nothing has read this text yet", which is not the same
+   *  as English — before the cache fills, every row is absent (item 8,
+   *  2026-09-18). */
+  lang?: string | null
+  /** The machine translation, or null for "this text is already English". A
+   *  reading aid shown BESIDE the original, never in place of it, and never
+   *  frozen: it is resolved at render exactly as the original is. */
+  english?: string | null
 }
 
 /** A quote plus what it can be traced back to. The agent's grounded register
@@ -89,10 +101,69 @@ const romanceHits = (q: string) => wordsOf(q).reduce((n, w) => n + (ROMANCE_WORD
  *  led a run-1 card). Used by the pipeline to order the hero-quote pool —
  *  a preference, not a hard gate: thin quotes still ground, they just stop
  *  being offered first. */
-export const readsAsHeroQuote = (q: string): boolean => {
+export const readsAsHeroQuote = (q: string, t?: QuoteLanguage): boolean => {
   const c = cleanQuote(q)
-  return c.length >= 18 && c.length <= 170 && englishHits(c) >= 2 && englishHits(c) > romanceHits(c)
+  if (c.length < 18 || c.length > 170) return false
+  // With a reading from the cache, the question is whether this reader can read
+  // it — not whether it happens to be English. Without one, the heuristic is
+  // still the only answer there is.
+  if (t && t.lang != null) return quoteAvailability({ text: c, ...t }) !== 'untranslated'
+  return englishHits(c) >= 2 && englishHits(c) > romanceHits(c)
 }
+
+/** What the cache knows about one text. */
+export interface QuoteLanguage {
+  lang?: string | null
+  english?: string | null
+}
+
+/**
+ * Can this reader read this quote, and how?
+ *
+ * THE ONE ENGLISH GATE (item 8, decision A, 2026-09-18). Three disagreeing
+ * rules used to answer this: quoteScore's hard `englishHits < 2 → reject`,
+ * readsAsHeroQuote used as a filter in two places and as an ordering in two
+ * others, and lib/engage.ts's own length-plus-englishHits pair. They differed
+ * by about twenty points of the corpus. They now all ask this.
+ *
+ *   'english'      — written in English. Nothing to add.
+ *   'translated'   — written in another language, and an English rendering
+ *                    exists. It shows underneath the original, stamped.
+ *   'untranslated' — written in another language with no rendering yet, OR
+ *                    nothing has read it at all. These are told apart by
+ *                    `lang`: absent means unread, which before the cache fills
+ *                    is every quote in the corpus, so the heuristic still has
+ *                    to answer for those.
+ *
+ * The inversion item 8 performs is here, in one place: the filter stops meaning
+ * "keep only what reads as English" and starts meaning "keep what this reader
+ * can read". An export's "English available" is `availability !== 'untranslated'`.
+ */
+export type QuoteAvailability = 'english' | 'translated' | 'untranslated'
+
+export function quoteAvailability(q: { text: string } & QuoteLanguage): QuoteAvailability {
+  if (q.lang == null) {
+    // Unread. Fall back to the heuristic that has always answered this, and
+    // say 'english' only where that heuristic would have let it through.
+    const c = cleanQuote(q.text)
+    return englishHits(c) >= 2 && englishHits(c) > romanceHits(c) ? 'english' : 'untranslated'
+  }
+  if (isEnglishTag(q.lang)) return 'english'
+  return q.english && q.english.trim() ? 'translated' : 'untranslated'
+}
+
+/** ISO 639-1 'en', 'english', or a regional tag like 'en-GB'. The same test
+ *  isEnglishLang (lib/pipeline/translate.ts) applies to a transcript label,
+ *  restated here so the read path does not import the pipeline. */
+const isEnglishTag = (lang: string | null | undefined): boolean => {
+  if (!lang) return false
+  const l = lang.trim().toLowerCase()
+  return l === 'en' || l === 'english' || /^en[-_]/.test(l)
+}
+
+/** Everything a reader can read, original or rendered — the export filter. */
+export const readableQuote = (q: { text: string } & QuoteLanguage): boolean =>
+  quoteAvailability(q) !== 'untranslated'
 
 /** Content keywords of a claim, for scoring how on-topic a quote is. */
 export const keywordsOf = (text: string) =>
@@ -100,11 +171,27 @@ export const keywordsOf = (text: string) =>
 
 // A quote earns its place by reading as English AND speaking to the claim it sits
 // under — generic praise that merely scans well must not outrank an on-topic voice.
-function quoteScore(q: string, keywords: Set<string>): number {
+function quoteScore(q: string, keywords: Set<string>, t?: QuoteLanguage): number {
   const len = q.length
   if (len < 18 || len > 170) return -1
   const eng = englishHits(q)
-  if (eng < 2) return -1 // reject non-English / transliteration fragments
+  // The gate is READABILITY, not Englishness (item 8). This is the collapse the
+  // plan asks for — quoteScore, readsAsHeroQuote and the inbox gate all ask one
+  // question — and it MOVES THE PRE-CACHE ANSWER, in one direction, which the
+  // first version of this comment wrongly denied.
+  //
+  // This line used to be `if (eng < 2) return -1`. The unread fallback is
+  // readsAsHeroQuote's rule, `englishHits >= 2 && englishHits > romanceHits`,
+  // so it is STRICTLY TIGHTER: a Romance-majority comment carrying two
+  // incidental English function words ("no me gusta pero es muy bueno para mi
+  // hermano" — `no`, `me`, and `a` inside the accent fold) used to score and now
+  // does not. It is the same text the 2026-09-05 fix already kept out of the
+  // hero pool while quoteScore went on offering it to cards, and keeping two
+  // answers to one question is what item 8 exists to end — so the pool shrinks
+  // by that class the moment this deploys, and the backfill hands the same
+  // quotes back as 'translated', with an English rendering under them, rather
+  // than as English they never were. Pinned by a test that names the movement.
+  if (!readableQuote({ text: q, ...t })) return -1
   let s = Math.min(eng, 5)
   if (len >= 30 && len <= 140) s += 2
   const content = new Set(q.toLowerCase().match(/[a-z']{4,}/g) ?? [])
@@ -197,7 +284,7 @@ interface Rows {
   range(from: number, to: number): Page
 }
 interface Ordered extends Rows {
-  order(col: string): Rows
+  order(col: string): Ordered
 }
 interface EvidenceClient {
   from(table: string): {
@@ -209,6 +296,26 @@ interface EvidenceClient {
 
 /** Split an id list into PostgREST-URL-sized chunks, fetch them ALL AT ONCE,
  *  and page each chunk past the 1000-row cap.
+ *
+ *  `size` IS IN IDS AND THE LIMIT IS IN BYTES, so a caller whose ids are not
+ *  uuids has to say so — readTranslations passes HASH_IN_CHUNK because a
+ *  sha-256 hex hash is nearly twice a uuid. The failure is a rejected chunk
+ *  that fails the whole Promise.all and takes every reading on the page with
+ *  it, so both sizes keep a wide margin under the measured cap (lib/chunk.ts:
+ *  500 uuids succeed, 700 do not).
+ *
+ *  AND THE SIZE IS PART OF WHAT THE PAGE PRINTS, which is why it is still 120
+ *  and not `UUID_IN_CHUNK` (lib/chunk.ts, 250 — measured, and what the other
+ *  chunked readers now use). The callers below key their result Map by
+ *  `audience_insight_id` in the order the EVIDENCE ROWS arrive, and the rows
+ *  arrive ordered by evidence id WITHIN each chunk — so the order the insights
+ *  land in the Map, and therefore the order a picker meets them, depends on
+ *  where the chunk boundaries fall. Raising the size to 250 changed four of
+ *  Sealand's "For sales" quotes (verified by diffing the loader's whole output
+ *  against the same read before the change; every other page on both tenants
+ *  was byte-identical). A performance constant must not choose which sentence
+ *  a client reads, so this one stays where it is until the order is settled by
+ *  something other than the chunk boundary.
  *
  *  Two different caps, and chunking only answers the first. 120 ids keeps the
  *  request URL short (PostgREST's other limit); it does nothing about the
@@ -225,10 +332,162 @@ interface EvidenceClient {
  *  disjoint by id, so processing the results in chunk order gives the same
  *  per-id ordering the serial loop did. */
 async function fetchChunks<R>(ids: string[], fetch: (ids: string[]) => Rows, size = 120): Promise<R[]> {
-  const pages = await Promise.all(
-    chunk(ids, size).map((part) => selectAll<R>(() => fetch(part) as { range: (from: number, to: number) => PromiseLike<{ data: R[] | null; error: unknown }> })),
+  const pages = await mapWithLimit(chunk(ids, size), READ_CONCURRENCY, (part) =>
+    selectAll<R>(() => fetch(part) as { range: (from: number, to: number) => PromiseLike<{ data: R[] | null; error: unknown }> }),
   )
   return pages.flat()
+}
+
+
+
+/**
+ * Attach the cache's reading to a set of texts.
+ *
+ * Keyed on the TEXT HASH alone, not on the comment id — three reasons, and the
+ * last is the one that decides it:
+ *   * the read path frequently has the words and not the comment behind them
+ *     (an `e:` ref resolves through insight_evidence, whose comment_id is one
+ *     more join away, and an `h:` hero quote has no comment row at all);
+ *   * the hash IS the identity of a text, so two comments that say the same
+ *     thing share one reading and that is correct rather than a collision;
+ *   * a row IS its text's reading, so serving it across tenants is correct
+ *     rather than a leak.
+ *
+ * THAT LAST POINT IS THE DELICATE ONE, and it is not the same as saying this
+ * read is tenant-scoped, because it is not. With a session client RLS injects
+ * client_id = get_my_client_id() and comment_translations_client_hash_idx
+ * serves it. With the ADMIN client — a snapshot hydrate (lib/snapshots.ts), a
+ * document build (lib/reports/documents/steps.ts), a scheduled digest and a
+ * share link at /r/<token> — there is no client predicate at all, so two
+ * tenants whose commenters wrote byte-identical text share whichever row is
+ * found first, and tenant A's erasure (which cascades A's row away) leaves B's
+ * row answering A's hash. That is harmless HERE and only here: the row holds a
+ * machine translation of the exact bytes asked about and nothing tenant-shaped,
+ * and a quote whose ORIGINAL does not resolve is dropped before this is
+ * consulted (fetchQuoteTextsByRefs resolves through insight_evidence, which the
+ * erasure empties). It would stop being harmless the moment a row carried
+ * anything a tenant owns — so it must not.
+ *
+ * 20260918095000 carries comment_translations_hash_idx for the unscoped read:
+ * the primary key leads with comment_id and PostgreSQL 17 has no skip scan, so
+ * without it every admin chunk sequentially scans the table.
+ *
+ * Degrades to "nothing is known" on any read failure, including the one that
+ * matters before 20260918095000 is applied. A quote with no reading renders as
+ * it always has.
+ *
+ * Exported alongside `readingOf` for the one page that does NOT reach its
+ * renderables through a picker: Voice builds a theme pane's quotes straight off
+ * insight_evidence rows, so it attaches the reading itself. Every other surface
+ * gets it from fetchQuotesByAudience / fetchQuoteCitationsByAudience.
+ */
+/**
+ * The ONLY columns the unscoped read may select, named once so a test can hold
+ * it.
+ *
+ * The cross-tenant read above is correct by argument — a row holds a machine
+ * translation of the exact bytes asked about and nothing tenant-shaped — and
+ * the argument was load-bearing with nothing enforcing it. The header's own
+ * sentence is the condition: "It would stop being harmless the moment a row
+ * carried anything a tenant owns." A column added to comment_translations and
+ * selected here would breach it silently; a test on this constant makes the
+ * breach a red build instead, and the table comment says the same thing to
+ * whoever adds the column.
+ */
+export const TRANSLATION_COLUMNS = 'text_hash, language, english'
+
+/**
+ * Is the translation cache reachable at all, asked ONCE per request.
+ *
+ * WHY A PROBE. The chunked read degrades on failure, which is right, but it
+ * degrades ONE CHUNK AT A TIME: with `20260918095000` unapplied, a page asking
+ * about 3,600 quote texts sent 60 requests that each took roughly a second to
+ * come back "Could not find the table 'public.comment_translations' in the
+ * schema cache", and This week sent 71 of them across its two quote loads.
+ * Measured against production on 16 September, that was 99 s of Össur's
+ * summed read time and 570 s of Sealand's — for an answer that was settled by
+ * the first one. A page cannot be under three seconds while it is asking a
+ * missing table seventy questions.
+ *
+ * One cheap row, asked before the chunks go out, and a YES memoised on the
+ * client so it is reached once per request whichever loader asks first. The
+ * cost when the table IS there is one small extra round trip per request and
+ * one extra hop before the chunks; the cost when it is not is one request per
+ * load instead of one per chunk — seventy-one became four.
+ *
+ * ANY failure is "not reachable", not only a missing table. A cache that
+ * cannot be read is a page of quotes without their English, which is exactly
+ * what the catch below already produced — this only reaches that answer
+ * sooner, and says the same thing in the same place.
+ *
+ * BUT ONLY THE YES IS REMEMBERED. The probe THROWS its "no" rather than
+ * returning one, so `memoRead`'s own rule applies to it: a rejection is evicted
+ * before it is handed on, and the next caller in the same request asks again.
+ * The two failures are not the same failure. A missing table is SETTLED — every
+ * chunk of every load would have been told the same thing, which is what makes
+ * seventy-one reads into one. A TIMED-OUT ROUND TRIP IS NOT SETTLED, and this
+ * instance produces them: an empty read measured 1.9 s and a one-row read
+ * 12.6 s on a bad minute of the same afternoon. Remembering that "no" would
+ * take the English off every quote in the whole request — This week loads
+ * quotes twice, Voice twice — for one unlucky probe, where before the probe
+ * existed a flaky read cost its own chunk and no more. So the settled answer is
+ * sticky and the flaky one is retried; a caller pays at most one wasted probe.
+ */
+function translationsReachable(client: unknown): Promise<true> {
+  return memoRead(client, 'quotes:translations-reachable', async () => {
+    const c = client as unknown as {
+      from(table: string): { select(cols: string): { limit(n: number): PromiseLike<{ error: unknown }> } }
+    }
+    const { error } = await c.from('comment_translations').select('text_hash').limit(1)
+    if (error) throw new Error((error as { message?: string }).message ?? String(error))
+    return true as const
+  })
+}
+
+export async function readTranslations(client: unknown, texts: readonly string[]): Promise<Map<string, { lang: string; english: string | null }>> {
+  const out = new Map<string, { lang: string; english: string | null }>()
+  const hashes = [...new Set(texts.map((t) => cleanQuote(t)).filter(Boolean).map(quoteTextHash))]
+  if (!hashes.length) return out
+  try {
+    await translationsReachable(client)
+  } catch (e) {
+    console.warn(`[quotes] translation read degraded — ${hashes.length} texts on this page show with no English: ${e instanceof Error ? e.message : String(e)}`)
+    return out
+  }
+  try {
+    const c = client as EvidenceClient
+    const rows = await fetchChunks<{ text_hash: string; language: string | null; english: string | null }>(
+      hashes,
+      // `.order('text_hash')` alone is not a unique order, and range paging on
+      // a non-unique order can repeat or skip a row. One popular emoji comment
+      // shared by a thousand videos would be enough. The primary key is
+      // (comment_id, text_hash), so comment_id is the tiebreaker that makes it
+      // total — and it need not be selected to be ordered on.
+      (part) => c.from('comment_translations').select(TRANSLATION_COLUMNS).in('text_hash', part).order('text_hash').order('comment_id') as unknown as Rows,
+      HASH_IN_CHUNK,
+    )
+    for (const r of rows) if (r.language) out.set(r.text_hash, { lang: r.language, english: r.english })
+  } catch (e) {
+    // Never fatal: an English rendering is an addition to a quote, and a page
+    // that cannot reach the cache shows the originals it has always shown.
+    //
+    // It is also INVISIBLE on the surface — a quote with no reading renders
+    // exactly like one nothing has read — so the log line is the only place it
+    // is ever said, and it says how much was lost rather than only that
+    // something was. A whole page's worth here means every non-English quote on
+    // it showed bare.
+    console.warn(`[quotes] translation read degraded — ${hashes.length} texts on this page show with no English: ${e instanceof Error ? e.message : String(e)}`)
+  }
+  return out
+}
+
+/** The reading for one text, or nothing. */
+export const readingOf = (
+  translations: Map<string, { lang: string; english: string | null }>,
+  text: string | null,
+): { lang?: string | null; english?: string | null } => {
+  const t = text ? translations.get(quoteTextHash(cleanQuote(text))) : undefined
+  return t ? { lang: t.lang, english: t.english } : {}
 }
 
 /** Fetch evidence quotes for a set of audience-insight ids (chunked to stay under
@@ -246,10 +505,11 @@ export async function fetchQuotesByAudience(
     audienceIds,
     (chunk) => c.from('insight_evidence').select('id, audience_insight_id, quote, relevance_rank, source').in('audience_insight_id', chunk).eq('redacted', false).order('id'),
   )
+  const translations = await readTranslations(client, rows.map((r) => r.quote ?? ''))
   for (const r of rows) {
     if (!r.quote) continue
     const arr = byAudience.get(r.audience_insight_id) ?? []
-    arr.push({ quote: r.quote, rank: r.relevance_rank ?? 99, evidenceId: r.id, source: evidenceSource(r.source) })
+    arr.push({ quote: r.quote, rank: r.relevance_rank ?? 99, evidenceId: r.id, source: evidenceSource(r.source), ...readingOf(translations, r.quote) })
     byAudience.set(r.audience_insight_id, arr)
   }
   return byAudience
@@ -282,6 +542,7 @@ export async function fetchQuoteCitationsByAudience(
     audienceIds,
     (chunk) => c.from('insight_evidence').select('id, audience_insight_id, quote, relevance_rank, comment_id, source_video_id, source').in('audience_insight_id', chunk).eq('redacted', false).order('id'),
   )
+  const translations = await readTranslations(client, rows.map((r) => r.quote ?? ''))
   for (const r of rows) {
     if (!r.quote) continue
     // A quote with neither a comment nor a video behind it cannot be cited,
@@ -296,6 +557,7 @@ export async function fetchQuoteCitationsByAudience(
       source: evidenceSource(r.source),
       commentId: r.comment_id,
       videoId: r.source_video_id,
+      ...readingOf(translations, r.quote),
     })
     byAudience.set(r.audience_insight_id, arr)
   }
@@ -385,7 +647,8 @@ function refReader(mode: QuoteRefReadErrors) {
 }
 
 /** Resolve quote TEXT for snapshot refs — 'e:<insight_evidence.id>',
- *  'c:<comments.id>', 'v:<videos.id>', 'h:<table>:<row id>'
+ *  'c:<comments.id>', 'v:<videos.id>', 'k:<video_claims.id>', 't:<videos.id>',
+ *  'h:<table>:<row id>'
  *  (lib/renderables/quotes-freeze.ts). Same rule and same reason as
  *  fetchQuoteTextsByCommentId: through insight_evidence, redacted = false, so
  *  a stored export re-renders without any voice the erasure sweep has removed.
@@ -406,7 +669,7 @@ export async function fetchQuoteTextsByRefs(
   const c = client as EvidenceClient
   const { read, settle } = refReader(opts.onReadError ?? 'degrade')
   const out = new Map<string, string>()
-  const by = { e: [] as string[], c: [] as string[], v: [] as string[], m: [] as string[], p: [] as string[] }
+  const by = { e: [] as string[], c: [] as string[], v: [] as string[], m: [] as string[], p: [] as string[], k: [] as string[], t: [] as string[] }
   const heroes = new Map<string, string[]>()
   const brandVoice = new Map<string, number[]>()
   for (const ref of new Set(refs)) {
@@ -420,8 +683,8 @@ export async function fetchQuoteTextsByRefs(
       brandVoice.set(b[1], [...(brandVoice.get(b[1]) ?? []), Number(b[2])])
       continue
     }
-    const m = /^([ecvmp]):(.+)$/.exec(ref)
-    if (m) by[m[1] as 'e' | 'c' | 'v' | 'm' | 'p'].push(m[2])
+    const m = /^([ecvmpkt]):(.+)$/.exec(ref)
+    if (m) by[m[1] as 'e' | 'c' | 'v' | 'm' | 'p' | 'k' | 't'].push(m[2])
   }
   const heroReads = [...heroes.entries()].map(([table, ids]) =>
     read(`h:${table}`, ids.length, async () => {
@@ -464,6 +727,34 @@ export async function fetchQuoteTextsByRefs(
         for (const r of rows) if (r.text) out.set(`m:${r.id}`, cleanQuote(r.text))
       }, undefined)
     : Promise.resolve()
+  // k: a claim as SPOKEN on a post — read from video_claims by id. The
+  // speaker's own words off their own transcript, which is `b:`'s case and not
+  // a commenter's, so it resolves through the claim row rather than through
+  // insight_evidence. It is a ref all the same, so no stored export carries the
+  // words and a claim row deleted with its video stops resolving.
+  const claimRead = by.k.length
+    ? read('k: (own-post claim)', by.k.length, async () => {
+        const rows = await fetchChunks<{ id: string; quote: string | null }>(
+          by.k,
+          (chunk) => c.from('video_claims').select('id, quote').in('id', chunk).order('id') as unknown as Rows,
+        )
+        for (const r of rows) if (r.quote) out.set(`k:${r.id}`, cleanQuote(r.quote))
+      }, undefined)
+    : Promise.resolve()
+  // t: the text ON SCREEN in a video — videos.ocr_text by the video's uuid. The
+  // creator's own words burnt into the frame, `k:`'s case and not a
+  // commenter's, so it resolves off the video row; a video the retention sweep
+  // removes stops resolving and the line disappears from a re-rendered export,
+  // which is the whole reason it travels as a ref.
+  const onScreenRead = by.t.length
+    ? read('t: (on-screen text)', by.t.length, async () => {
+        const rows = await fetchChunks<{ id: string; ocr_text: string | null }>(
+          by.t,
+          (chunk) => c.from('videos').select('id, ocr_text').in('id', chunk).order('id') as unknown as Rows,
+        )
+        for (const r of rows) if (r.ocr_text) out.set(`t:${r.id}`, cleanQuote(r.ocr_text))
+      }, undefined)
+    : Promise.resolve()
   // p: a customer phrase — language_samples by id (cascade-deleted with its comment).
   const phraseRead = by.p.length
     ? read('p: (customer phrase)', by.p.length, async () => {
@@ -488,7 +779,7 @@ export async function fetchQuoteTextsByRefs(
       (chunk) => c.from('insight_evidence').select('source_video_id, quote').in('source_video_id', chunk).eq('redacted', false).order('id'),
     ), []),
   ])
-  await Promise.all([...heroReads, brandVoiceRead, messageRead, phraseRead])
+  await Promise.all([...heroReads, brandVoiceRead, messageRead, phraseRead, claimRead, onScreenRead])
   // Every read has settled; under 'throw' this is where their failures arrive.
   settle()
   for (const r of byId) if (r.quote && !out.has(`e:${r.id}`)) out.set(`e:${r.id}`, r.quote)
@@ -497,23 +788,39 @@ export async function fetchQuoteTextsByRefs(
   return out
 }
 
-/** Whose post a video is, read LIVE from `videos`.
+/**
+ * As fetchQuoteTextsByRefs, plus the reading: for each ref, the original words
+ * and — where the cache has one — the language and the English rendering.
  *
- *  The same rule Step A2 uses to stamp `themes.bucket` (lib/pipeline/step-a2.ts),
- *  kept identical on purpose. The difference is when it is evaluated: a theme
- *  bucket is a snapshot frozen at the run that wrote it, so a re-tag
- *  (scripts/run-tagging.ts --write) moves `videos.is_client` and leaves every
- *  stored bucket saying the old thing. Reading it live is the only answer that
- *  cannot be stale.
+ * THE HYDRATION DOOR FOR ITEM 8. A snapshot stores a ref and nothing else; the
+ * words come back here, and so does their English. That is the only shape
+ * consistent with "exports and reports freeze numbers, never words": if the
+ * rendering were stored on the frozen quote it would be a third party's words
+ * inside report_snapshots.data, which is precisely what the freeze exists to
+ * prevent — and it would outlive the erasure that took the original.
+ *
+ * `onReadError` behaves exactly as it does on the text read. The translation
+ * read is never part of that contract: it degrades on its own, always, because
+ * a digest that goes out with the originals and no English beside them is a
+ * lesser artefact, and a digest that does not go out is not one at all.
  */
-export function videoBucketOf(v: {
-  is_client?: boolean | null
-  is_competitor?: boolean | null
-  competitor_name?: string | null
-}): string {
-  if (v.is_client) return 'client'
-  if (v.is_competitor) return `competitor:${v.competitor_name ?? 'unknown'}`
-  return 'industry-other'
+export async function fetchQuoteResolutionsByRefs(
+  client: unknown,
+  refs: string[],
+  opts: { onReadError?: QuoteRefReadErrors } = {},
+): Promise<Map<string, QuoteResolution>> {
+  const texts = await fetchQuoteTextsByRefs(client, refs, opts)
+  const translations = await readTranslations(client, [...texts.values()])
+  const out = new Map<string, QuoteResolution>()
+  for (const [ref, text] of texts) out.set(ref, { text, ...readingOf(translations, text) })
+  return out
+}
+
+/** What one ref resolves to at render: the original, and the reading. */
+export interface QuoteResolution {
+  text: string
+  lang?: string | null
+  english?: string | null
 }
 
 /** audience-insight id → entity bucket, resolved through each insight's source
@@ -543,7 +850,7 @@ export async function fetchLiveBucketsByAudience(
     c.from('videos').select('id, is_client, is_competitor, competitor_name').in('id', chunk).order('id'),
   )
   // A short read here is not cosmetic. This map decides whether the agent may
-  // say "your customers" (lib/agent/enforce.ts → components/agent-answer.tsx),
+  // say "your customers" (lib/agent/enforce.ts → components/pages/agent/*),
   // and an empty one silently reverts that decision to the stale stored bucket
   // — the exact failure this gate was built to end. It must never be the first
   // anyone hears of it.
@@ -553,7 +860,7 @@ export async function fetchLiveBucketsByAudience(
       `insights whose video did not resolve fall back to their stored theme bucket`,
     )
   }
-  const bucketByVideo = new Map(rows.map((r) => [r.id, videoBucketOf(r)]))
+  const bucketByVideo = new Map(rows.map((r) => [r.id, audienceOf(r)]))
   const out = new Map<string, string>()
   for (const i of insights) {
     if (!i.source_video_id) continue
@@ -605,11 +912,11 @@ export function createQuotePicker(
     const cand: { q: string; score: number; rank: number }[] = []
     for (const aid of audienceIds) {
       const themeBonus = themeRelevance(aid, keywords, themeSlugById) * 2
-      for (const { quote, rank, source } of quotesByAudience.get(aid) ?? []) {
+      for (const { quote, rank, source, lang, english } of quotesByAudience.get(aid) ?? []) {
         const q = cleanQuote(quote)
         const key = q.toLowerCase()
         if (used.has(key) || localKeys.has(key)) continue
-        const base = quoteScore(q, keywords)
+        const base = quoteScore(q, keywords, { lang, english })
         if (base <= 0) continue
         cand.push({ q, score: base + themeBonus + onCameraBonus(source), rank })
       }
@@ -623,10 +930,15 @@ export function createQuotePicker(
   }
 }
 
-/** A quote the spine can freeze: the words plus the ref they resolve through. */
+/** A quote the spine can freeze: the words plus the ref they resolve through.
+ *  `lang` and `english` ride along for the render and are stripped by the
+ *  freeze — an English rendering is a third party's words and no more belongs
+ *  in report_snapshots.data than the original does. */
 export interface CitedQuote {
   ref: string
   text: string
+  lang?: string | null
+  english?: string | null
 }
 
 /** As createQuotePicker, returning CITED quotes — { ref: 'e:<evidence id>',
@@ -646,13 +958,13 @@ export function createCitedQuotePicker(
   return function pick(audienceIds: string[], n: number, claimText: string, heroQuote?: string | null): CitedQuote[] {
     const chosen: CitedQuote[] = []
     const localKeys = new Set<string>()
-    const take = (raw: string, ref: string) => {
+    const take = (raw: string, ref: string, t?: QuoteLanguage) => {
       const q = cleanQuote(raw)
       const key = q.toLowerCase()
       if (!q || used.has(key) || localKeys.has(key)) return
       localKeys.add(key)
       used.add(key)
-      chosen.push({ ref, text: q })
+      chosen.push(t && t.lang != null ? { ref, text: q, lang: t.lang, english: t.english ?? null } : { ref, text: q })
     }
 
     // The model's hero quote leads when the pool can vouch for it — i.e. an
@@ -661,32 +973,37 @@ export function createCitedQuotePicker(
     if (heroQuote) {
       const want = cleanQuote(heroQuote).toLowerCase()
       let ref: string | null = null
+      let reading: QuoteLanguage | undefined
       outer: for (const aid of audienceIds) {
         for (const row of quotesByAudience.get(aid) ?? []) {
-          if (cleanQuote(row.quote).toLowerCase() === want) { ref = `e:${row.evidenceId}`; break outer }
+          if (cleanQuote(row.quote).toLowerCase() === want) {
+            ref = `e:${row.evidenceId}`
+            reading = { lang: row.lang, english: row.english }
+            break outer
+          }
         }
       }
-      if (ref) take(heroQuote, ref)
+      if (ref) take(heroQuote, ref, reading)
     }
     if (chosen.length >= n) return chosen
 
     const keywords = keywordsOf(claimText)
-    const cand: { q: string; ref: string; score: number; rank: number }[] = []
+    const cand: { q: string; ref: string; score: number; rank: number; lang?: string | null; english?: string | null }[] = []
     for (const aid of audienceIds) {
       const themeBonus = themeRelevance(aid, keywords, themeSlugById) * 2
-      for (const { quote, rank, evidenceId, source } of quotesByAudience.get(aid) ?? []) {
+      for (const { quote, rank, evidenceId, source, lang, english } of quotesByAudience.get(aid) ?? []) {
         const q = cleanQuote(quote)
         const key = q.toLowerCase()
         if (used.has(key) || localKeys.has(key)) continue
-        const base = quoteScore(q, keywords)
+        const base = quoteScore(q, keywords, { lang, english })
         if (base <= 0) continue
-        cand.push({ q, ref: `e:${evidenceId}`, score: base + themeBonus + onCameraBonus(source), rank })
+        cand.push({ q, ref: `e:${evidenceId}`, score: base + themeBonus + onCameraBonus(source), rank, lang, english })
       }
     }
     cand.sort((a, b) => b.score - a.score || a.rank - b.rank)
     for (const c of cand) {
       if (chosen.length >= n) break
-      take(c.q, c.ref)
+      take(c.q, c.ref, { lang: c.lang, english: c.english })
     }
     return chosen
   }

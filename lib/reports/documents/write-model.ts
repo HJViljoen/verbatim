@@ -3,7 +3,7 @@ import { zodResponseFormat } from 'openai/helpers/zod'
 import { openai } from '../../openai'
 import { SYNTHESIS_MODEL, SYNTHESIS_REASONING_EFFORT, estimateCost } from '../../config'
 import { logAiCall } from '../../pipeline/ai-log'
-import { buildWriterPrompts, writerSchema, type WriterArgs, type WriterOutput } from './write'
+import { buildWriterPrompts, writerPageKinds, writerSchema, type WriterArgs, type WriterOutput } from './write'
 import { promptVersion } from './templates'
 
 /**
@@ -23,10 +23,11 @@ export async function generateDocument(
 ): Promise<{ written: WriterOutput; costUsd: number; ms: number; promptTokens: number; completionTokens: number }> {
   if (!process.env.OPENAI_API_KEY) throw new WriteFailedError('OPENAI_API_KEY is not set')
   const { system, user } = buildWriterPrompts(args)
-  // The schema and the version are the TEMPLATE's: a leadership brief is never
-  // asked for a competitor block, and one template's prompt change must not
-  // read as another's in the log.
-  const schema = writerSchema(args.template)
+  // The schema is the pages this brief PRINTS — the template's skeleton, or
+  // the section map's where it has one, so the model is never paid to write a
+  // page the compose walk throws away. The version stays the template's: one
+  // template's prompt change must not read as another's in the log.
+  const schema = writerSchema(args.template, writerPageKinds(args.signals, args.template))
   const version = promptVersion(args.template)
   let lastError = ''
   for (let attempt = 1; attempt <= 2; attempt++) {

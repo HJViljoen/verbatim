@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 
 import { computeReadiness, longestGapDays, summarise } from './compute'
 import type { CommunityInput, MonthCountRow, ReadinessInputs, ReadinessRow } from './types'
+import { clientReadiness } from '../settings/readiness-view'
 
 // Both workspaces' shapes, from the read-only production measurements the
 // Phase 0 research recorded (research/subjects-readiness-data.md §2–§8,
@@ -68,6 +69,14 @@ function ossur(over: Partial<ReadinessInputs> = {}): ReadinessInputs {
     reddit: { postsStored: 149, postsFromUnconfigured: 99 },
     embeddings: { embedded: 1680, total: 3129, lastEmbeddedAt: null },
     subjectSet: { defined: null },
+    // The tables are there, eleven updates have been compared and the check has
+    // never fired — Össur's state on 2026-09-15, and a different answer both
+    // from "not recorded yet" and from "no update has run the check".
+    anomaly: {
+      available: true,
+      checks: Array.from({ length: 11 }, () => ({ weekStart: '2026-09-07T00:00:00.000Z', outcome: 'nothing_unusual' })),
+      flags: [],
+    },
     monthly: {
       tracked: ['client', 'competitor:Ottobock', 'industry-other'],
       months: months(
@@ -84,7 +93,7 @@ function ossur(over: Partial<ReadinessInputs> = {}): ReadinessInputs {
     },
     reads: {
       analysed: 1596, speech: 798, translated: 208, onScreenText: 269, unflagged: 0,
-      gateRows: 1700, gateKept: 1051, gateFirstAt: '2026-08-23T04:20:00.000Z',
+      gateRows: 1700, gateKept: 1051, gateFirstAt: '2026-08-23T04:20:00.000Z', gateReadable: true,
     },
     updates: [
       { id: 'd346b0f7', status: 'completed', startedAt: '2026-09-13T04:06:38.483Z', completedAt: '2026-09-13T06:26:49.308Z' },
@@ -148,7 +157,7 @@ function sealand(over: Partial<ReadinessInputs> = {}): ReadinessInputs {
     },
     reads: {
       analysed: 1010, speech: 630, translated: 139, onScreenText: 333, unflagged: 0,
-      gateRows: 2777, gateKept: 1091, gateFirstAt: '2026-09-09T12:10:00.000Z',
+      gateRows: 2777, gateKept: 1091, gateFirstAt: '2026-09-09T12:10:00.000Z', gateReadable: true,
     },
     updates: [
       { id: 'cb0d97b2', status: 'partial', startedAt: '2026-09-13T10:03:04.451Z', completedAt: '2026-09-13T13:07:52.340Z' },
@@ -181,6 +190,18 @@ describe('computeReadiness', () => {
       'change-record', 'decisions', 'retention',
     ])
     expect(computeReadiness(sealand()).map((r) => r.id)).toEqual(ids)
+  })
+
+  // A BRIEF COMPOSES A SENTENCE AROUND `input`. "We have not recorded {input}."
+  // is only English while every input is a lower-case noun phrase carrying its
+  // own article; one capitalised row label would put a proper noun mid-sentence
+  // in a paid document, and nothing between here and there would catch it.
+  it('keeps every input a lower-case noun phrase, which a brief writes into a sentence', () => {
+    for (const inputs of [ossur(), sealand()]) {
+      for (const row of computeReadiness(inputs)) {
+        expect(row.input).toBe(row.input.charAt(0).toLowerCase() + row.input.slice(1))
+      }
+    }
   })
 
   it('never puts pipeline vocabulary in a label', () => {
@@ -314,6 +335,18 @@ describe('watched communities', () => {
     ])
   })
 
+  it('counts a community the client stopped apart from one the probe ruled out', () => {
+    const inputs = ossur({
+      communities: [...ossur().communities, community('onebag', 'stopped', true, 31)],
+    })
+    const row = find(computeReadiness(inputs), 'communities')
+    // Not folded into "ruled out" — that is the probe's verdict, and this one
+    // is the client's. And not dropped: it is on the list and the row accounts
+    // for the list.
+    expect(row.detail).toContain('9 ruled out, 1 you stopped watching')
+    expect(row.notes).not.toContain('r/onebag — 31 posts')
+  })
+
   it('is missing when nothing is watched', () => {
     const inputs = ossur({ communities: [community('amputee', 'candidate', false, 0)] })
     expect(find(computeReadiness(inputs), 'communities').status).toBe('missing')
@@ -434,7 +467,72 @@ describe('the baseline behind an unusual week', () => {
       'Your own brand — baseline forming — 0 of 3 months',
       'Ottobock — baseline forming — 0 of 3 months',
       'The category — baseline ready',
+      'Flags raised — none in the 11 updates compared so far.',
     ])
+  })
+
+  it('tells "nothing has been unusual" apart from "nobody was writing it down"', () => {
+    const never = find(computeReadiness(ossur({ anomaly: { available: false, checks: [], flags: [] } })), 'anomaly-baseline')
+    expect(never.notes.at(-1)).toBe('Flags raised — not recorded yet.')
+
+    // The tables exist and no update has reached the check yet — a third
+    // answer, and the one the first week after M7 is applied will give.
+    const unrun = find(computeReadiness(ossur({ anomaly: { available: true, checks: [], flags: [] } })), 'anomaly-baseline')
+    expect(unrun.notes.at(-1)).toBe('Flags raised — no update has run the check yet.')
+
+    // A week the check REFUSED to compare is counted apart from the weeks it
+    // compared: a thin update cannot support "nothing was unusual".
+    const thin = find(
+      computeReadiness(
+        ossur({
+          anomaly: {
+            available: true,
+            checks: [
+              { weekStart: '2026-09-07T00:00:00.000Z', outcome: 'suppressed' },
+              { weekStart: '2026-08-31T00:00:00.000Z', outcome: 'nothing_unusual' },
+            ],
+            flags: [],
+          },
+        }),
+      ),
+      'anomaly-baseline',
+    )
+    expect(thin.notes.at(-1)).toBe(
+      'Flags raised — none in the one update compared so far. One update was not compared with the months behind it.',
+    )
+
+    const noneCompared = find(
+      computeReadiness(
+        ossur({
+          anomaly: { available: true, checks: [{ weekStart: null, outcome: 'no_window' }], flags: [] },
+        }),
+      ),
+      'anomaly-baseline',
+    )
+    expect(noneCompared.notes.at(-1)).toMatch(/^Flags raised — none: no update has been compared yet\./)
+
+    const raised = find(
+      computeReadiness(
+        ossur({
+          anomaly: {
+            available: true,
+            checks: [
+              { weekStart: '2026-09-07T00:00:00.000Z', outcome: 'flagged' },
+              { weekStart: '2026-08-10T00:00:00.000Z', outcome: 'flagged' },
+            ],
+            flags: [
+              { weekStart: '2026-09-07T00:00:00.000Z', objectKind: 'kind', label: 'Objections' },
+              { weekStart: '2026-08-10T00:00:00.000Z', objectKind: 'kind', label: 'Praise' },
+            ],
+          },
+        }),
+      ),
+      'anomaly-baseline',
+    )
+    // The label is framed, because a kind's label is a verb phrase — the
+    // pipeline writes "Pushing back", not "Objections" — and the sentence
+    // around it assumed a noun.
+    expect(raised.notes.at(-1)).toMatch(/^Flags raised — 2 in the 2 updates compared so far, the most recent about “Objections” in the week of /)
   })
 
   it('is one month of three on the trial workspace', () => {
@@ -467,13 +565,13 @@ describe('how much was read', () => {
   it('excludes Reddit from the denominator and dates the set-aside record', () => {
     const row = find(computeReadiness(ossur()), 'read-depth')
     expect(row.status).toBe('partial')
-    expect(row.detail).toBe('Speech read on 798 of 1,596 videos (50%), translated 208 (13%), on-screen text 269 (16.9%) · Reddit excluded.')
+    expect(row.detail).toBe('Speech read on 798 of 1,596 videos (50.0%), translated 208 (13.0%), on-screen text 269 (16.9%) · Reddit excluded.')
     expect(row.notes[0]).toBe('38.2% of what was looked at was set aside — recorded only from 23 Aug 2026, so no month before that can show it.')
   })
 
   it('reads the trial workspace’s own shares', () => {
     expect(find(computeReadiness(sealand()), 'read-depth').detail)
-      .toBe('Speech read on 630 of 1,010 videos (62.4%), translated 139 (13.8%), on-screen text 333 (33%) · Reddit excluded.')
+      .toBe('Speech read on 630 of 1,010 videos (62.4%), translated 139 (13.8%), on-screen text 333 (33.0%) · Reddit excluded.')
   })
 
   it('is in place only when the set-aside record reaches back past the first update', () => {
@@ -486,6 +584,21 @@ describe('how much was read', () => {
     const row = find(computeReadiness(inputs), 'read-depth')
     expect(row.status).toBe('missing')
     expect(row.notes[0]).toContain('is not recorded at all')
+  })
+
+  // A tenant session before M8 reads gate_verdicts as EMPTY, not as forbidden.
+  // Calling that `missing` said "not recorded at all" about 1,700 verdicts and
+  // then — missing, owned by engineering — withheld the whole row from the
+  // client's own page under a line saying we have not built this yet.
+  it('measures what it can and withholds the rest when the record is not open to the reader', () => {
+    const inputs = ossur({ reads: { ...ossur().reads, gateRows: 0, gateKept: 0, gateFirstAt: null, gateReadable: false } })
+    const row = find(computeReadiness(inputs), 'read-depth')
+    // Partly there, not in place: half of what this row measures was not
+    // measured, and it is still SHOWN, which is the point.
+    expect(row.status).toBe('partial')
+    expect(row.detail).toContain('Speech read on 798 of 1,596 videos')
+    expect(row.notes[0]).toContain('we do not yet show it to you')
+    expect(row.notes.some((n) => n.includes('is not recorded at all'))).toBe(false)
   })
 })
 
@@ -600,7 +713,7 @@ describe('the change record', () => {
     const row = find(computeReadiness(inputs), 'change-record')
     expect(row.status).toBe('exists')
     expect(row.detail).toBe('33 changes recorded · last on 13 Sep 2026.')
-    expect(row.notes[0]).toContain('No change was recorded before 2026-07-01')
+    expect(row.notes[0]).toContain('No change was recorded before 1 Jul 2026')
   })
 
   // The reconstruction writes 91 backdated rows across the two workspaces
@@ -624,7 +737,7 @@ describe('the change record', () => {
     const row = find(computeReadiness(inputs), 'change-record')
     expect(row.status).toBe('exists')
     expect(row.detail).toBe('2 changes recorded · last on 17 Sep 2026. 33 earlier entries reconstructed from what each update searched.')
-    expect(row.notes[0]).toContain('No change was recorded before 2026-09-17')
+    expect(row.notes[0]).toContain('No change was recorded before 17 Sep 2026')
   })
 })
 
@@ -691,6 +804,17 @@ describe('retention', () => {
     const row = find(computeReadiness(inputs), 'retention')
     expect(row.detail).toContain('shared across every workspace')
     expect(row.detail).not.toContain('one night covers it')
+  })
+
+  // AND THE CLIENT IS NOT TOLD ABOUT THE BUDGET AT ALL. Settings › Readiness
+  // shows `detail`, which is right for twelve rows and wrong for this one: the
+  // shared cap is a fact about our infrastructure, not about their workspace.
+  it('keeps the shared budget out of the sentence a client is shown', () => {
+    const row = find(computeReadiness(ossur()), 'retention')
+    expect(row.clientDetail).toBe('768 comments fall due to be read again on 17 Sep 2026.')
+    expect(row.clientDetail).not.toContain('budget')
+    expect(row.clientDetail).not.toContain('workspace')
+    expect(clientReadiness([row]).rows[0].detail).toBe(row.clientDetail)
   })
 
   it('is only partly there when a batch is bigger than the whole night', () => {

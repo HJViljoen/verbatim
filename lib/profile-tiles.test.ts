@@ -89,16 +89,25 @@ describe('shareSeries', () => {
   ]
 
   it('tracks each persona’s share of ITS OWN update, with a gap where absent', () => {
-    expect(shareSeries(personas, history)).toEqual([
+    expect(shareSeries(personas, history, true)).toEqual([
       { key: 'p1', name: 'Caregiver', points: [50, 100, 75] },
       { key: 'p2', name: 'Athlete', points: [50, null, 25] },
     ])
   })
 
   it('is empty with no history', () => {
-    expect(shareSeries(personas, [])).toEqual([
+    expect(shareSeries(personas, [], true)).toEqual([
       { key: 'p1', name: 'Caregiver', points: [] },
       { key: 'p2', name: 'Athlete', points: [] },
     ])
+  })
+
+  // D1 (Phase 1 WP0): the x axis here is run_date, which is the series D1 is
+  // about — two points can differ by a fortnight between updates as easily as
+  // by the conversation. The chart prints no direction word, which is how it
+  // survived Phase 0; a line that rises is a direction claim regardless.
+  it('hands back no series at all while profile.mix is gated off', () => {
+    expect(shareSeries(personas, history, false)).toEqual([])
+    expect(shareSeries(personas, history)).toEqual([]) // the shipped default
   })
 })

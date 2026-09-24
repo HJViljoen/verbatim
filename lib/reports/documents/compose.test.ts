@@ -1,12 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { composeDocument, documentFigures, documentSlides, heardLine, pickQuote, thinWeek } from './compose'
-import { buildWriterPrompts, deltaInWords, writerSchema, type WriterOutput } from './write'
+import { composeDocument, documentCoverSheet, documentFigures, documentSlides, heardLine, pickQuote, thinWeek } from './compose'
+import { buildWriterPrompts, deltaInWords, figureKeyFor, writerPageKinds, writerSchema, type WriterOutput } from './write'
 import { CONTENT_BRIEF, CUSTOM_BRIEF, LEADERSHIP_BRIEF, MARKET_BRIEF, SALES_BRIEF, resolveTemplate, type DocumentTemplate } from './templates'
 import { overviewTiles } from './overview'
+import { CONTENT_MAP, LEADERSHIP_MAP, MARKETING_MAP, SALES_MAP, type BriefEntry } from './sections'
 import { DEFAULT_DOCUMENT_SETTINGS } from './types'
 import { freezeQuotes } from '../../renderables/quotes-freeze'
 import type { Signals } from './signals'
-import type { ResearchAnswer } from './research'
+import type { ResearchAnswer, ResearchQuote } from './research'
+import { briefFiguresFixture } from '../../../components/blocks/brief-figures/fixture'
 
 const point = (id: string, n: number, text: string, quotes: { ref: string; text: string; commentId: string | null }[] = []): ResearchAnswer['grounded'][number] => ({
   id, text, insightIds: [`i-${id}`], themeLabels: ['Insurance blocks needed care'], conversationCount: n, questionId: 'stops',
@@ -90,6 +92,30 @@ describe('buildWriterPrompts', () => {
     expect(system).not.toMatch(/[—–]/)
     expect(user).toContain('Arrange a trial fitting.')
   })
+  // The month path withdraws <slug>_share_pct on purpose; the prompt used to
+  // advertise it anyway, per rival, on every brief.
+  it('advertises no rival figure key the table has withdrawn', () => {
+    const { user } = buildWriterPrompts({ template: SALES_BRIEF, settings: DEFAULT_DOCUMENT_SETTINGS, company: 'Ossur', period: 'p', reader: null, figures: {}, signals, answers: [], previous: null, thin: false })
+    expect(user).not.toContain('_share_pct]]')
+    expect(user).toContain('do not cite a number about them')
+  })
+
+  // substituteFigures deletes the whole sentence whose key is missing, so a
+  // 36-character hex token is one wrong character away from removing a
+  // paragraph of a paid document.
+  it('offers no figure token the model cannot retype', () => {
+    const { user } = buildWriterPrompts({
+      template: SALES_BRIEF, settings: DEFAULT_DOCUMENT_SETTINGS, company: 'Ossur', period: 'p', reader: null,
+      figures: {
+        videos: { label: 'videos analysed', value: '388', kind: 'count' },
+        o_2418f4d7_54a2_497e_8433_6cd89bc2322b_share: { label: 'a theme this month', value: '8.8%', kind: 'pct' },
+      },
+      signals, answers: [], previous: null, thin: false,
+    })
+    expect(user).toContain('[[videos]]')
+    expect(user).not.toContain('2418f4d7')
+  })
+
   it('says the update was thin and asks for fewer findings', () => {
     const { system, user } = buildWriterPrompts({ template: SALES_BRIEF, settings: DEFAULT_DOCUMENT_SETTINGS, company: 'Ossur', period: 'p', reader: null, figures: {}, signals: { ...signals, runStatus: 'partial' }, answers: [], previous: null, thin: true })
     expect(system).toContain('at most 3 findings')
@@ -128,11 +154,32 @@ describe('buildWriterPrompts', () => {
 
 describe('deltaInWords', () => {
   it('speaks in verdicts and keys, never numbers', () => {
-    const words = deltaInWords(signals)
+    const words = deltaInWords(signals, documentFigures(signals, answers))
     expect(words.join(' ')).toContain('about where it was (key [[positive_pct]])')
     expect(words.join(' ')).toContain('[[new_themes]]')
     expect(words.join(' ')).not.toMatch(/\d/)
     expect(deltaInWords({ delta: null, updatesCount: 1, trackedCompetitors: [] })[0]).toContain('first update')
+  })
+
+  // substituteFigures deletes whole sentences whose key is missing, so a key
+  // the table does not carry must never reach the prompt.
+  it('cites no key the figure table does not carry', () => {
+    const words = deltaInWords(signals, {}).join(' ')
+    expect(words).not.toContain('[[positive_pct]]')
+    expect(words).not.toContain('[[prev_conversations]]')
+    expect(words).not.toContain('[[new_themes]]')
+    expect(words).toContain('Do not cite a count of them')
+  })
+})
+
+describe('figureKeyFor', () => {
+  it('offers the share key on the update path and the month\'s own video count on the month path', () => {
+    expect(figureKeyFor({ ottobock_share_pct: { label: 'x', value: '9%', kind: 'pct' } }, 'Ottobock')).toBe('share key [[ottobock_share_pct]]')
+    expect(figureKeyFor({ ottobock_videos: { label: 'x', value: '42', kind: 'count' } }, 'Ottobock')).toBe('video count key [[ottobock_videos]]')
+  })
+
+  it('tells the writer not to cite a number rather than naming a withdrawn key', () => {
+    expect(figureKeyFor({}, 'Ottobock')).toBe('no figure key for them: do not cite a number about them')
   })
 })
 
@@ -204,6 +251,128 @@ describe('composeDocument', () => {
 // trajectory. The shape is not new — a concern whose members carried no word has
 // always produced it — and these pin what a document says in it. The fixture
 // above keeps the worded shape, which is what Phase 1 restores once the words
+// THE METHOD PAGE DESCRIBES THE PAGES THIS BRIEF HAS. Under a section map the
+// marketing brief prints no claims page, no competitor pages and no personas;
+// the method page was built from the TEMPLATE's kinds and went on describing
+// all three.
+// "N BELOW THE BAR" IS A CLAIM ABOUT THE EVIDENCE (fix pass, package
+// E-marketing). It was `candidates.length - findingPages.length`, which counted
+// the template's CAP and the scrub as evidence failures — so a brief capped at
+// three with eight findings that all cleared the floor printed "3 above the bar
+// · 5 below it" about five findings that were above it. The bar is
+// DOCUMENT_FINDING_MIN_CONVERSATIONS; the cap is its own sentence.
+describe('the findings bar and the findings cap are counted apart', () => {
+  const compose = (w: WriterOutput, findings: 3 | 4 = 4, a: ResearchAnswer[] = answers) =>
+    composeDocument({
+      template: SALES_BRIEF, settings: { ...DEFAULT_DOCUMENT_SETTINGS, findings }, reportId: 'rep', title: 't', period: 'p',
+      signals, answers: a, written: w, figures: documentFigures(signals, a), model: 'm', promptVersion: 'v', costUsd: 0, timings: {},
+    }).data
+
+  it('counts nothing below the bar when nothing fell below it', () => {
+    // The shared fixture drops "A thin one" for resting on no grounded point,
+    // which is not a reading the bar ever weighed.
+    const d = compose(written)
+    expect(d.method.findingsBelow).toBe(0)
+    expect(d.method.findingsHeld).toBeUndefined()
+  })
+
+  it('counts the findings the cap held, and does not call them thin', () => {
+    const five: WriterOutput = {
+      ...written,
+      // No digit in a headline: the scrub drops the sentence that carries one,
+      // and a dropped headline is a different reason again.
+      findings: ['one', 'two', 'three', 'four', 'five'].map((n) => ({
+        headline: `A finding called ${n}`, saw: 'People say so.', means: 'It matters.', practice: [], sure_note: '',
+        based_on: ['G1'], quote_from: null, continued_from: null,
+      })),
+    }
+    const d = compose(five, 3)
+    expect(d.pages.filter((p) => p.kind === 'finding')).toHaveLength(3)
+    expect(d.method.findingsHeld).toBe(2)
+    expect(d.method.findingsBelow).toBe(0)
+  })
+
+  it('counts a finding the conversations floor cut, and only that', () => {
+    const thin: ResearchAnswer[] = [
+      { ...answers[0], grounded: [...answers[0].grounded, point('G3', 1, 'One voice said it once.')] },
+      answers[1],
+    ]
+    const w: WriterOutput = {
+      ...written,
+      findings: [
+        { headline: 'A grounded one', saw: 'People say so.', means: 'It matters.', practice: [], sure_note: '', based_on: ['G1'], quote_from: null, continued_from: null },
+        { headline: 'One voice only', saw: 'One person said so.', means: 'Little.', practice: [], sure_note: '', based_on: ['G3'], quote_from: null, continued_from: null },
+        { headline: 'Rests on nothing we know', saw: 'Unsourced.', means: 'Nothing.', practice: [], sure_note: '', based_on: ['G99'], quote_from: null, continued_from: null },
+      ],
+    }
+    const d = compose(w, 4, thin)
+    expect(d.pages.filter((p) => p.kind === 'finding')).toHaveLength(1)
+    expect(d.method.findingsBelow).toBe(1)
+    expect(d.method.findingsHeld).toBeUndefined()
+  })
+})
+
+describe('a document composed from a section map', () => {
+  const mapped = { ...signals, map: MARKETING_MAP } as unknown as Signals
+  const method = () => composeDocument({
+    template: MARKET_BRIEF, settings: DEFAULT_DOCUMENT_SETTINGS, reportId: 'rep', title: 'Marketing brief', period: 'p',
+    signals: mapped, answers, written, figures: documentFigures(mapped, answers), model: 'm', promptVersion: 'v', costUsd: 0, timings: {},
+  }).data.pages.find((p) => p.kind === 'method')!.blocks[0].items!.join(' ')
+
+  it('describes only the pages the map prints', () => {
+    const items = method()
+    expect(items).not.toContain('Competitor pages read')
+    expect(items).not.toContain('Personas come from the consumer profile')
+    expect(items).not.toContain('The claims page sets what the company says')
+  })
+
+  // The model was still generating say_hear, competitor blocks and personas
+  // for a brief that prints none of them.
+  it('asks the model only for the pages the map prints', () => {
+    expect(Object.keys(writerSchema(MARKET_BRIEF, writerPageKinds(mapped, MARKET_BRIEF)).shape))
+      .toEqual(['in_short', 'findings', 'not_sure_yet'])
+    expect(Object.keys(writerSchema(MARKET_BRIEF, writerPageKinds(undefined, MARKET_BRIEF)).shape))
+      .toContain('say_hear')
+  })
+
+  // Deviation 3 withdrew the run-against-run figures; the prose that produces
+  // the same sentence stayed in the prompt.
+  it('hands a month-based brief no update-against-update comparison', () => {
+    const withReading = { ...mapped, reading: { monthLabel: 'September 2026' } } as unknown as Signals
+    const { user, system } = buildWriterPrompts({ template: MARKET_BRIEF, settings: DEFAULT_DOCUMENT_SETTINGS, company: 'Ossur', period: 'p', reader: null, figures: {}, signals: withReading, answers: [], previous: { summary: 's', headlines: ['h'] }, thin: false })
+    expect(user).not.toContain('What moved since the previous update')
+    expect(user).toContain('reading of September 2026')
+    expect(system).toContain('Do not claim movement between the two briefs')
+  })
+
+  // THE COVER FOLD IS ONE MAP'S, AND IT IS FROZEN (fix pass). Written as "any
+  // brief composed from a section map", it took the cover off the sales,
+  // leadership and content briefs too — from under the three packages building
+  // them — and re-paginated every artefact stored since WP19.
+  it('folds the cover for the map that opts in, and for no other', () => {
+    const compose = (map: readonly BriefEntry[], template: DocumentTemplate) => composeDocument({
+      template, settings: DEFAULT_DOCUMENT_SETTINGS, reportId: 'rep', title: 't', period: 'p',
+      signals: { ...signals, map } as unknown as Signals, answers, written, figures: documentFigures(signals, answers), model: 'm', promptVersion: 'v', costUsd: 0, timings: {},
+    }).data
+    const marketing = compose(MARKETING_MAP, MARKET_BRIEF)
+    expect(marketing.cover).toBe(false)
+    expect(documentCoverSheet(marketing)).toBe(false)
+    for (const [map, template] of [[SALES_MAP, SALES_BRIEF], [LEADERSHIP_MAP, LEADERSHIP_BRIEF], [CONTENT_MAP, CONTENT_BRIEF]] as const) {
+      const d = compose(map, template)
+      expect(d.cover).toBeUndefined()
+      expect(documentCoverSheet(d)).toBe(true)
+    }
+  })
+
+  it('still describes the pages the template alone would print', () => {
+    const items = composeDocument({
+      template: MARKET_BRIEF, settings: DEFAULT_DOCUMENT_SETTINGS, reportId: 'rep', title: 'Marketing brief', period: 'p',
+      signals, answers, written, figures: documentFigures(signals, answers), model: 'm', promptVersion: 'v', costUsd: 0, timings: {},
+    }).data.pages.find((p) => p.kind === 'method')!.blocks[0].items!.join(' ')
+    expect(items).toContain('Competitor pages read')
+  })
+})
+
 // come off the monthly reading rather than off the update index.
 describe('a document composed with no history word', () => {
   const gated = { ...signals, concerns: [{ ...signals.concerns[0], trajectory: '' }] } as unknown as Signals
@@ -241,6 +410,25 @@ describe('pickQuote and thinWeek', () => {
     expect(pickQuote(answers[0].grounded[0], used)).toBeNull()
     expect(pickQuote(answers[0].grounded[1], new Set())?.ref).toBe('v:vid')
   })
+  // Item 8 reaches this call site or it reaches no document at all: the filter
+  // is hard, so a translated voice handed over without its reading is dropped
+  // from every finding however good the rendering under it is.
+  it('takes a translated quote, and carries the rendering onto the renderable', () => {
+    const thai: ResearchQuote = { ref: 'c:bbb', text: 'ราคาเท่าไหร่ ซื้อได้ที่ไหนครับ อยากทราบจริง ๆ', commentId: 'bbb', videoId: null }
+    const english = 'How much does it cost, and where can I buy one near me?'
+    const only = (q: ResearchQuote) => ({ ...answers[0].grounded[0], quotes: [q] })
+    expect(pickQuote(only(thai), new Set())).toBeNull()
+    expect(pickQuote(only({ ...thai, lang: 'th', english }), new Set())).toEqual({ ref: 'c:bbb', text: thai.text, lang: 'th', english })
+  })
+
+  it('leaves an untranslated reading out, and adds nothing to a quote nothing has read', () => {
+    const thai: ResearchQuote = { ref: 'c:bbb', text: 'ราคาเท่าไหร่ ซื้อได้ที่ไหนครับ อยากทราบจริง ๆ', commentId: 'bbb', videoId: null, lang: 'th', english: null }
+    expect(pickQuote({ ...answers[0].grounded[0], quotes: [thai] }, new Set())).toBeNull()
+    expect(pickQuote(answers[0].grounded[1], new Set())).toEqual({
+      ref: 'v:vid', text: 'the socket rubbed raw by the afternoon and I had to take it off at work',
+    })
+  })
+
   it('calls a partial run or a quiet period thin', () => {
     expect(thinWeek(signals)).toBe(false)
     expect(thinWeek({ ...signals, runStatus: 'partial' })).toBe(true)
@@ -483,5 +671,47 @@ describe('the competitor page keeps the two voices apart', () => {
     const d = compose(signals, written)
     const method = d.pages.find((p) => p.kind === 'method')!.blocks[0].items!
     expect(method.join(' ')).toContain('videos other people posted about it for what others say')
+  })
+})
+
+// ── the brief's own slide figures, frozen (Block D wave 2, E-sales) ────────
+// Wave 1 computed all six and handed them to nobody. The artefact has to carry
+// them, because a share link renders from the snapshot alone.
+describe('a brief freezes its own slide figures', () => {
+  const withFigures = { ...signals, map: SALES_MAP, slideFigures: briefFiguresFixture() } as unknown as Signals
+  const compose = (s: Signals) => composeDocument({
+    template: SALES_BRIEF, settings: DEFAULT_DOCUMENT_SETTINGS, reportId: 'rep', title: 'Sales brief', period: 'p',
+    signals: s, answers, written, figures: documentFigures(s, answers), model: 'm', promptVersion: 'v', costUsd: 0, timings: {},
+  }).data
+
+  it('carries the six fields onto the snapshot', () => {
+    const f = compose(withFigures).slideFigures!
+    expect(f.switching?.pool).toBe(120)
+    expect(f.cannotTell.items.length).toBeGreaterThan(0)
+    expect(f.scripted).toHaveLength(1)
+    expect(f.line?.series).toHaveLength(1)
+    expect(f.untracked).toHaveLength(1)
+    expect(f.crosscheck).toContain('Two populations, two denominators')
+  })
+
+  // A brief built before wave 2 has no field at all, and a reader of the
+  // snapshot must be able to tell that from "nothing was measured".
+  it('is absent, not empty, where the reading could not be loaded', () => {
+    expect(compose({ ...signals, slideFigures: null } as unknown as Signals).slideFigures).toBeUndefined()
+  })
+
+  // The one quote in them is a commenter's words and is stored like any
+  // other: a ref, and no text.
+  it('stores the scripted line’s quote as a ref and no words', () => {
+    const quoted = {
+      ...withFigures,
+      slideFigures: {
+        ...briefFiguresFixture(),
+        scripted: briefFiguresFixture().scripted.map((l) => ({ ...l, quote: { ref: 'c:zzz', text: 'the zip went after 14 months' } })),
+      },
+    } as unknown as Signals
+    const frozen = freezeQuotes(compose(quoted))
+    expect(JSON.stringify(frozen.data)).not.toContain('the zip went after 14 months')
+    expect(frozen.refs).toContain('c:zzz')
   })
 })

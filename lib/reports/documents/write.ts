@@ -1,9 +1,10 @@
 import { z } from 'zod'
 import { DOCUMENT_BLOCK_MAX } from '../../config'
 import { CALIBRATED_PROSE_RULE } from '../../pipeline/prose-rules'
-import type { FigureTable } from '../types'
+import { isOpaqueFigureKey, type FigureTable } from '../types'
 import type { DocumentTemplate } from './templates'
-import type { DocumentSettings } from './types'
+import { pageKindsOf } from './sections'
+import type { DocPageKind, DocumentSettings } from './types'
 import { SELLS_TO } from './types'
 import type { Signals } from './signals'
 import type { ResearchAnswer } from './research'
@@ -44,6 +45,25 @@ export interface WriterArgs {
 const cap = (field: string) => DOCUMENT_BLOCK_MAX[field] ?? 400
 
 /**
+ * The pages the model is actually asked for (Phase 1 WP19 fix pass).
+ *
+ * The compose walk prints the SECTION MAP's pages where a brief has one and
+ * throws every other written page away. The writer's schema and its
+ * instruction set nevertheless came off `t.skeleton`, so a marketing build
+ * still generated say_hear, one competitor block per rival, personas and
+ * language — model spend and latency on tokens the artefact discards, plus
+ * checkDocument verdicts and workings referencing pages the document does not
+ * contain. One list, and it is the same one `composeDocument` walks.
+ */
+export function writerPageKinds(
+  signals: Pick<Signals, 'map'> | undefined,
+  template: Pick<DocumentTemplate, 'skeleton'>,
+): DocPageKind[] {
+  const map = signals?.map ?? []
+  return map.length > 0 ? pageKindsOf(map) : template.skeleton.map((p) => p.kind)
+}
+
+/**
  * The schema is built from the template's SKELETON: a brief with no competitor
  * page is never asked for competitor blocks, and the model is never handed a
  * field whose page will not be printed. The three constants below are on every
@@ -60,7 +80,7 @@ const cap = (field: string) => DOCUMENT_BLOCK_MAX[field] ?? 400
  * brief reproduces exactly the order it was approved on
  * (in_short, findings, competitors, persona_lines, care, not_sure_yet).
  */
-export function writerSchema(t: DocumentTemplate) {
+export function writerSchema(t: DocumentTemplate, kinds: DocPageKind[] = t.skeleton.map((p) => p.kind)) {
   const shape: Record<string, z.ZodTypeAny> = {
     in_short: z.object({
       summary: z.string().describe(`The executive summary: what the conversation shows this update, what changed since the last brief, and what matters ${t.lens.short}, developed in one or two paragraphs (separate paragraphs with a blank line). Under ${cap('summary')} characters. Cite figures by [[key]] only.`),
@@ -76,9 +96,9 @@ export function writerSchema(t: DocumentTemplate) {
       continued_from: z.string().nullable().describe("If this finding carries one of the previous brief's headlines, that headline verbatim; else null."),
     })),
   }
-  // The middle of the brief, in the order the skeleton prints it.
-  for (const page of t.skeleton) {
-    switch (page.kind) {
+  // The middle of the brief, in the order it prints.
+  for (const kind of kinds) {
+    switch (kind) {
       case 'competitor':
         shape.competitors ??= z.array(z.object({
         name: z.string(),
@@ -151,7 +171,14 @@ const registerLine = (s: DocumentSettings) => {
 
 export function buildWriterPrompts(a: WriterArgs): { system: string; user: string } {
   const t = a.template
-  const has = (kind: string) => t.skeleton.some((p) => p.kind === kind)
+  const kinds = writerPageKinds(a.signals, t)
+  const has = (kind: DocPageKind) => kinds.includes(kind)
+  // A BRIEF WITH A MONTHLY READING IS NOT COMPARED WITH THE PREVIOUS UPDATE.
+  // Its figures are a month's; the delta is one run against the run before it,
+  // which is the run-indexed series item 43 exists to take out of the
+  // artefacts. Handing the model both tables is how it writes a sentence that
+  // is half a month and half a Sunday.
+  const monthly = a.signals.reading != null
   const findingsMax = a.thin ? Math.min(Math.min(a.settings.findings, t.findingsMax), 3) : Math.min(a.settings.findings, t.findingsMax)
   // The operator's own brief, where there is one (WP7d): the top instruction,
   // before the role, because a custom brief exists to answer it. The role and
@@ -177,7 +204,9 @@ export function buildWriterPrompts(a: WriterArgs): { system: string; user: strin
     '- Every finding rests on grounded points: cite them in based_on. Never claim a product fact the grounded points do not carry; if a natural claim has no support, leave it out and put the open question in not_sure_yet instead.',
     `- Write at most ${findingsMax} findings, and fewer when the evidence is thin. Order does not matter; the product orders them by evidence.`,
     a.previous
-      ? '- Continuity: the previous brief\'s headlines are listed. When a finding still holds, keep its headline (put it in continued_from) and say what is still true and what moved since last time. Mark only what is new as new.'
+      ? monthly
+        ? '- Continuity: the previous brief\'s headlines are listed. When a finding still holds, keep its headline (put it in continued_from) and say what is still true about it. Do not claim movement between the two briefs: this one is a reading of one month, and the last one was a reading of a different period.'
+        : '- Continuity: the previous brief\'s headlines are listed. When a finding still holds, keep its headline (put it in continued_from) and say what is still true and what moved since last time. Mark only what is new as new.'
       : '- This is the first brief: say so in one clause of the summary, without apology.',
     a.thin ? '- The update was thin (see the summary note). Say so plainly in the summary and write fewer findings rather than stretch the evidence.' : '',
     has('standing') ? '- The standing page: the shares and what moved are printed beside your paragraphs as a table. Read them together and say what position they describe; do not list them back.' : '',
@@ -187,7 +216,12 @@ export function buildWriterPrompts(a: WriterArgs): { system: string; user: strin
   ].filter(Boolean).join('\n')
 
   const s = a.signals
-  const figureLines = Object.entries(a.figures).map(([k, f]) =>
+  // A TOKEN THE MODEL CANNOT RETYPE IS NOT OFFERED. The blocks' merged table
+  // carries per-theme figures keyed by the theme's UUID, and substituteFigures
+  // deletes the whole sentence whose key is missing — so one wrong hex
+  // character silently removes a paragraph from a paid document. The theme is
+  // still nameable in prose; it is the 36-character token that is withheld.
+  const figureLines = Object.entries(a.figures).filter(([k]) => !isOpaqueFigureKey(k)).map(([k, f]) =>
     f.kind === 'count' ? `- [[${k}]]: a count of ${f.label}; write it as "[[${k}]] ${f.label}"`
     : f.kind === 'pct' ? `- [[${k}]]: a share, written with its % sign: ${f.label}; put it after a verb ("stood at [[${k}]]")`
     : `- [[${k}]]: a name: ${f.label}`)
@@ -202,10 +236,10 @@ export function buildWriterPrompts(a: WriterArgs): { system: string; user: strin
   const concerns = s.concerns.map((c) =>
     `${c.id} (${countKey(c.id)}; heard from ${c.buckets.map((b) => bucketWord(b.bucket, s.company)).join(', ')}; ${c.trajectory || 'history unknown'}): ${c.label}. ${c.description}`)
 
-  const deltaWords = deltaInWords(s)
+  const deltaWords = monthly ? [] : deltaInWords(s, a.figures)
 
   const competitors = s.competitors.map((c) => [
-    `${c.name}${c.thin ? ' (thin this update: few videos, read with care)' : ''}; share key [[${slug(c.name)}_share_pct]]`,
+    `${c.name}${c.thin ? ' (thin this update: few videos, read with care)' : ''}; ${figureKeyFor(a.figures, c.name)}`,
     c.claims.length ? `  What they say in their own videos:\n${c.claims.map((cl) => `  - ${cl.claim}`).join('\n')}` : '  What they say in their own videos: nothing captured this update.',
     // A separate list with its own label, for the same reason Pass C gained a
     // second block: these lines are a creator's or a reviewer's, and read
@@ -238,7 +272,9 @@ export function buildWriterPrompts(a: WriterArgs): { system: string; user: strin
     a.thin ? `Note: this update was thin (${s.runStatus === 'partial' ? 'the update finished partially' : 'few conversations in the period'}).` : '',
     a.previous ? `Previous brief, in short: ${a.previous.summary}\nPrevious brief's headlines:\n${a.previous.headlines.map((h) => `- ${h}`).join('\n')}` : 'Previous brief: none, this is the first.',
     `Figures available (cite by placeholder; you do not know their values):\n${figureLines.join('\n')}`,
-    `What moved since the previous update:\n${deltaWords.map((d) => `- ${d}`).join('\n')}`,
+    monthly
+      ? `This brief is a reading of ${s.reading?.monthLabel ?? 'the month'}. There is no update-against-update comparison in it: do not write one.`
+      : `What moved since the previous update:\n${deltaWords.map((d) => `- ${d}`).join('\n')}`,
     `The researcher's questions and what the conversation answered, in short:\n${answersSummary.join('\n') || '- nothing answered'}`,
     `Grounded points (evidence; cite by index):\n${points.join('\n') || '- none'}`,
     judgements.length ? `The researcher's own reads (not evidence; may inform "what it means", never "what we saw"):\n${judgements.join('\n')}` : '',
@@ -261,23 +297,58 @@ export function bucketWord(bucket: string, company: string): string {
   return bucket
 }
 
+/**
+ * WHAT THE PROMPT MAY NAME AS A FIGURE KEY.
+ *
+ * `substituteFigures` (lib/reports/cover.ts) DROPS WHOLE SENTENCES whose key
+ * is missing, so a key advertised to the writer and absent from the table does
+ * not print a blank — it silently deletes a paragraph of a paid document. The
+ * month path withdraws `<slug>_share_pct`, `client_share_pct`,
+ * `competitor_videos`, `prev_*` and `new_themes` on purpose (documentFigures),
+ * and the prompt went on steering the model into citing them. `countKey`
+ * already had the right shape: offer the key where it exists and say "do not
+ * cite a count" where it does not. These two do the same for the rest.
+ */
+const hasKey = (figures: FigureTable, key: string): boolean => Boolean(figures[key])
+
+/** What a rival may be cited by: its share where the update figures stand, its
+ *  own month's video count on the month path, and nothing at all where the
+ *  table carries neither. */
+export function figureKeyFor(figures: FigureTable, name: string): string {
+  const share = `${slug(name)}_share_pct`
+  const videos = `${slug(name)}_videos`
+  if (hasKey(figures, share)) return `share key [[${share}]]`
+  if (hasKey(figures, videos)) return `video count key [[${videos}]]`
+  return 'no figure key for them: do not cite a number about them'
+}
+
 /** The delta as words for the writer: verdicts and directions, never the
- *  numbers (those are figure keys). */
-export function deltaInWords(s: Pick<Signals, 'delta' | 'updatesCount' | 'trackedCompetitors'>): string[] {
+ *  numbers (those are figure keys). A line whose key the table does not carry
+ *  is dropped rather than written — an unsubstitutable citation is a deleted
+ *  sentence, not a missing number. */
+export function deltaInWords(s: Pick<Signals, 'delta' | 'updatesCount' | 'trackedCompetitors'>, figures: FigureTable = {}): string[] {
   const d = s.delta
   if (!d) return [s.updatesCount <= 1 ? 'This is the first update; nothing to compare with yet.' : 'No earlier update to compare with.']
+  const has = (...keys: string[]) => keys.every((k) => hasKey(figures, k))
   const out: string[] = []
   if (d.sentiment) {
     const dir = d.sentiment.now > d.sentiment.prev ? 'up' : d.sentiment.now < d.sentiment.prev ? 'down' : 'level'
     const v = d.sentiment.verdict.state
-    out.push(v === 'moved' ? `Positive sentiment moved ${dir} since the previous update (key [[positive_pct]] now, [[prev_positive_pct]] before).` : v === 'too_little_data' ? 'Too few judged conversations to say whether sentiment moved.' : `Positive sentiment is about where it was (key [[positive_pct]]).`)
+    if (v === 'too_little_data') out.push('Too few judged conversations to say whether sentiment moved.')
+    else if (v === 'moved' && has('positive_pct', 'prev_positive_pct')) out.push(`Positive sentiment moved ${dir} since the previous update (key [[positive_pct]] now, [[prev_positive_pct]] before).`)
+    else if (has('positive_pct')) out.push('Positive sentiment is about where it was (key [[positive_pct]]).')
   }
   if (d.share) {
     const dir = d.share.now.client > d.share.prev.client ? 'up' : d.share.now.client < d.share.prev.client ? 'down' : 'level'
     const v = d.share.verdict.state
-    out.push(v === 'moved' ? `The company's share of tracked conversation moved ${dir} (key [[client_share_pct]]).` : v === 'too_little_data' ? 'Too few videos to say whether the company\'s share of tracked conversation moved.' : `The company's share of tracked conversation is about where it was (key [[client_share_pct]]).`)
+    if (v === 'too_little_data') out.push('Too few videos to say whether the company\'s share of tracked conversation moved.')
+    else if (has('client_share_pct')) out.push(v === 'moved' ? `The company's share of tracked conversation moved ${dir} (key [[client_share_pct]]).` : `The company's share of tracked conversation is about where it was (key [[client_share_pct]]).`)
   }
-  if (d.newThemes) out.push(d.newThemes.count ? `Themes new this update (key [[new_themes]]): ${d.newThemes.labels.slice(0, 6).join(', ')}.` : 'No confirmed theme is new this update.')
-  if (d.conversations) out.push(`Conversations this update (key [[conversations]]) against the previous update (key [[prev_conversations]]).`)
+  if (d.newThemes) {
+    if (!d.newThemes.count) out.push('No confirmed theme is new this update.')
+    else if (has('new_themes')) out.push(`Themes new this update (key [[new_themes]]): ${d.newThemes.labels.slice(0, 6).join(', ')}.`)
+    else out.push(`Themes new this update: ${d.newThemes.labels.slice(0, 6).join(', ')}. Do not cite a count of them.`)
+  }
+  if (d.conversations && has('conversations', 'prev_conversations')) out.push(`Conversations this update (key [[conversations]]) against the previous update (key [[prev_conversations]]).`)
   return out.length ? out : ['Nothing measurable moved.']
 }

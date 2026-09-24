@@ -1,4 +1,5 @@
 import { dbSafeJson, dbSafeText } from './db-text'
+import { fullDate } from './format'
 import { isMissingColumnError } from './supabase-admin'
 
 // The configuration change log (Phase 0, design item 16).
@@ -44,9 +45,38 @@ export const CONFIG_CHANGES_TABLE = 'config_changes'
  *  by column. Mirrors the config_changes surface CHECK. */
 export const CONFIG_SURFACES = [
   'terms', 'rivals', 'handles', 'platforms', 'subreddits', 'cadence', 'knobs',
-  'schedule', 'subjects', 'entity_retag', 'regate', 'other',
+  'schedule', 'subjects', 'entity_retag', 'regate', 'prompt_version',
+  'rival_rename', 'other',
 ] as const
 export type ConfigSurface = (typeof CONFIG_SURFACES)[number]
+
+/**
+ * The surfaces whose change moves WHAT IS IN THE CORPUS — the ones a reading
+ * of the months has to draw a line at (Phase 1 WP14).
+ *
+ * NOT EVERY LOGGED CHANGE IS ONE. `config_changes` is the log of every
+ * configuration write this product makes, and three of its surfaces change
+ * nothing a month is read from: `cadence` (which day the report goes out),
+ * `schedule` (whether a schedule is active) and `subjects` (which includes
+ * every declared move). Measured read-only on production for September 2026,
+ * Sealand logged 39 changes, of which one schedule/active, one cadence/
+ * report_day and one cadence/report_period — so a chart that drew a rule per
+ * logged row told a client that changing their report day broke the series.
+ *
+ * `prompt_version` is out for the opposite reason and it is the harder call: a
+ * Pass A prompt bump re-reads the whole corpus and IS a break, but it is a
+ * change to how we read rather than to what we track, and it deserves its own
+ * word on a chart rather than borrowing this one. `other` is in: it is the
+ * catch-all for an unwatched `tracking_configs` column, which is tracking.
+ */
+export const TRACKING_SURFACES: readonly ConfigSurface[] = [
+  'terms', 'rivals', 'handles', 'platforms', 'subreddits', 'knobs',
+  'entity_retag', 'regate', 'rival_rename', 'other',
+]
+
+/** Did this change move what a month is read from? */
+export const isTrackingChange = (surface: string): boolean =>
+  (TRACKING_SURFACES as readonly string[]).includes(surface)
 
 /** Who moved it. Mirrors the config_changes actor_kind CHECK. */
 export const ACTOR_KINDS = ['user', 'operator', 'script', 'pipeline', 'sql', 'reconstructed'] as const
@@ -91,6 +121,26 @@ export function surfaceForColumn(column: string): ConfigSurface {
 
 // ---- The row ----------------------------------------------------------------
 
+/** What a change broke, where the writer could work it out (Phase 1 WP1).
+ *
+ *  Both halves are optional and NULL means "not known", which is the honest
+ *  value on every row written before the columns existed — 91 of the 93 stored
+ *  today are reconstructed from gather records whose before/after are term
+ *  names, not video ids.
+ *
+ *  `months` is NOT the month the change was made in. `changed_at` is a wall
+ *  clock; every axis in this product is dated by the comment, and the two are
+ *  rarely the same: Sealand's 2026-09-09 re-tag moved 34 months from 2021-12
+ *  onward, and a term Össur added on 3 July put comments dated 11 June into the
+ *  corpus. lib/config-affects.ts computes it. */
+export interface ChangeAffects {
+  /** The literal audience keys this change moved. A rename carries BOTH, old
+   *  first — that pair is what lib/rivals.ts stitchRenames reads. */
+  audiences?: string[] | null
+  /** A Postgres daterange literal, `[first, last+1)` over calendar months. */
+  months?: string | null
+}
+
 /** One `config_changes` row, as stored. */
 export interface ConfigChange {
   id: string
@@ -107,6 +157,8 @@ export interface ConfigChange {
   source: ChangeSource
   rows_affected: number | null
   note: string | null
+  affects_audiences: string[] | null
+  affects_months: string | null
 }
 
 /** Who made a write, carried from the write site into the same UPDATE as the
@@ -154,6 +206,10 @@ export interface ConfigChangeInput {
   note?: string | null
   /** When the change happened, if that is not now — reconstruction only. */
   changedAt?: string | null
+  /** What the change broke, where the writer could work it out. Optional at
+   *  every one of the twenty call sites: a writer that cannot say leaves it
+   *  out, and NULL means "not known" rather than "nothing". */
+  affects?: ChangeAffects | null
 }
 
 /** A change input as the database takes it. Model-derived text can reach here
@@ -177,6 +233,18 @@ export function changeRow(input: ConfigChangeInput): Record<string, unknown> {
     source: input.source ?? 'logged',
     rows_affected: input.rowsAffected ?? null,
     note: input.note ? dbSafeText(input.note) : null,
+    // Absent stays absent rather than becoming an explicit NULL: a writer that
+    // cannot say leaves the column alone, and NULL there means "not known".
+    // A deploy that lands before M1 therefore sends a column the database does
+    // not have — `recordConfigChanges` catches exactly that and retries without
+    // these two, because losing the band must not cost the row.
+    //
+    // An EMPTY array is left out for the same reason. The column's contract is
+    // "NULL means unknown, not none", and [] says none — a claim no writer in
+    // this codebase is entitled to make. `affectsFor` returns null rather than
+    // [] already; this is the guard for a hand-built input.
+    ...(input.affects?.audiences?.length ? { affects_audiences: input.affects.audiences.map((a) => dbSafeText(a)) } : {}),
+    ...(input.affects?.months ? { affects_months: input.affects.months } : {}),
   }
 }
 
@@ -375,15 +443,50 @@ export async function recordConfigChange(admin: InsertableClient, input: ConfigC
   return (await recordConfigChanges(admin, [input])) === 1
 }
 
-/** The same, for a set of changes written together. Returns how many landed. */
+/** The two columns M1 adds, and the only part of a change row that a database
+ *  which has not seen M1 yet can reject. */
+const AFFECTS_COLUMNS = ['affects_audiences', 'affects_months'] as const
+
+/** The same row without what a change BROKE — the surface, the before/after,
+ *  the counts and the sentence, which is the record itself. */
+function withoutAffects(row: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...row }
+  for (const column of AFFECTS_COLUMNS) delete out[column]
+  return out
+}
+
+/** The same, for a set of changes written together. Returns how many landed.
+ *
+ *  Retries once without `affects_audiences` / `affects_months` when the
+ *  database has not seen M1 yet. PostgREST rejects an insert WHOLE on an
+ *  unknown column, so without this a deploy that lands before the migration
+ *  turns "the band was not computed" into "the change was never recorded" —
+ *  and for a corpus re-tag that record is unrecoverable once the process
+ *  exits (`videos` has no history). The band is the part we can afford to
+ *  lose; the row is not. Same shape as `updateWithActor`'s unstamped retry:
+ *  the rejected statement wrote nothing, so the retry cannot write twice. */
 export async function recordConfigChanges(admin: InsertableClient, inputs: ConfigChangeInput[]): Promise<number> {
   if (inputs.length === 0) return 0
-  const { error } = await admin.from(CONFIG_CHANGES_TABLE).insert(inputs.map(changeRow))
-  if (error) {
-    console.error(`[config-log] ${inputs.length} change(s) NOT logged for ${inputs[0].clientId}: ${error.message ?? 'unknown error'}`)
+  const rows = inputs.map(changeRow)
+  const { error } = await admin.from(CONFIG_CHANGES_TABLE).insert(rows)
+  if (!error) return inputs.length
+
+  const carried = rows.some((row) => AFFECTS_COLUMNS.some((column) => column in row))
+  const missing = AFFECTS_COLUMNS.find((column) => isMissingColumnError(error, column))
+  if (carried && missing) {
+    console.error(
+      `[config-log] config_changes.${missing} does not exist yet — re-inserting ${inputs.length} change(s) ` +
+      `for ${inputs[0].clientId} WITHOUT the affected audiences and months. The change is recorded; ` +
+      'what it moved is not, and cannot be worked out later.',
+    )
+    const { error: bare } = await admin.from(CONFIG_CHANGES_TABLE).insert(rows.map(withoutAffects))
+    if (!bare) return inputs.length
+    console.error(`[config-log] ${inputs.length} change(s) NOT logged for ${inputs[0].clientId}: ${bare.message ?? 'unknown error'}`)
     return 0
   }
-  return inputs.length
+
+  console.error(`[config-log] ${inputs.length} change(s) NOT logged for ${inputs[0].clientId}: ${error.message ?? 'unknown error'}`)
+  return 0
 }
 
 // ---- The corpus operations --------------------------------------------------
@@ -455,6 +558,9 @@ export function retagChange(args: {
   skipped: number
   costUsd?: number
   note?: string
+  /** The months the moved rows' comments sit in, computed by the caller while
+   *  it still knows which rows moved — after the process exits nothing can. */
+  affects?: ChangeAffects | null
 }): ConfigChangeInput {
   const how = RETAG_METHOD_WORDS[args.method] ?? `by ${args.method}`
   return {
@@ -465,6 +571,7 @@ export function retagChange(args: {
     after: args.after,
     actor: args.costUsd === undefined ? args.actor : labelled(args.actor, `OpenAI $${args.costUsd.toFixed(5)}`),
     rowsAffected: args.rowsAffected,
+    affects: args.affects ?? null,
     note:
       `re-checked which brand each stored video is about, ${how}. ` +
       `${args.rowsAffected} video(s) moved; ${args.skipped} posted by your own or a tracked rival's account ` +
@@ -497,13 +604,24 @@ export function isMissingConfigLog(error: unknown): boolean {
 
 // ---- The boundary -----------------------------------------------------------
 
-/** The sentence that has to appear wherever this log is read. Everything before
- *  the first real entry is inference from what each update searched — gather
- *  granular, with blind windows of 35 days (Össur) and 39 days (Sealand) where
- *  a change made and undone leaves nothing at all. */
+/**
+ * The sentence that has to appear wherever this log is read. Everything before
+ * the first real entry is inference from what each update searched — gather
+ * granular, with blind windows of 35 days (Össur) and 39 days (Sealand) where
+ * a change made and undone leaves nothing at all.
+ *
+ * THE DATE IS THE READER'S, NOT THE STORE'S (Block D wave 3, RC6). It was
+ * `firstLoggedAt.slice(0, 10)`, so the one machine-form date on Settings › The
+ * record was in the sentence that explains the record to its reader — "No
+ * change was recorded before 2026-04-06" beside a page whose every other date
+ * is a short form, and beside a change log that grew a whole
+ * `ClientChange.dateShort` field to get there. `fullDate` and not `shortDate`
+ * because this line is read on the readiness page too, which dates things four
+ * years apart on one screen: "6 Apr" beside "6 Apr" is two different Aprils.
+ */
 export function changeLogBoundary(firstLoggedAt: string | null | undefined): string {
   if (!firstLoggedAt) {
     return 'No configuration change has been recorded yet. Anything shown before the first one is reconstructed from what each update searched — a label, not a record.'
   }
-  return `No change was recorded before ${firstLoggedAt.slice(0, 10)}. Entries before it are reconstructed from what each update searched — a label, not a record.`
+  return `No change was recorded before ${fullDate(firstLoggedAt)}. Entries before it are reconstructed from what each update searched — a label, not a record.`
 }

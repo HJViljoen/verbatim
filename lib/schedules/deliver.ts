@@ -8,9 +8,22 @@ import { memberEmails } from './members'
 import { renderMany } from '../render/render'
 import { expiryFromDays, mintShareToken } from '../reports/share'
 import { isDocumentData } from '../reports/documents/types'
+import { isWeeklyData } from '../reports/weekly-build'
+import { monthScopedFigures } from '../reports/weekly'
+import { isMonthlyData, withBriefShareLink } from '../reports/monthly-build'
+import { renderWeeklyEmail } from '../email/weekly'
+import { renderMonthlyEmail } from '../email/monthly'
+import { recordSend } from '../reports/monthly-build'
+import { FIGURE_AUDIENCE, sentFigureRows } from '../reports/sent-figures'
+import { blockAnswers } from '../blocks/types'
+import { weeklyBlocksFor } from '../../components/blocks/weekly'
+import { monthlyBlocksFor } from '../../components/blocks/monthly'
+import { isQuarterlyData } from '../reports/quarterly-build'
+import { renderQuarterlyEmail } from '../email/quarterly'
 import type { ReportSnapshotData } from '../reports/types'
 import { hydrateSnapshot, loadSnapshot } from '../snapshots'
 import { claimDecision, pruneInlineImages, type ExistingSend } from './claim'
+import { cadenceWordOf } from './types'
 import type { ScheduleRow, SendRow } from './types'
 
 /**
@@ -74,9 +87,11 @@ export async function readyForReview(
   const schedule = scheduleRow as ScheduleRow | null
 
   const data = await hydrateSnapshot<ReportSnapshotData>(admin, snapRow)
-  const subject = isDocumentData(data)
+  const subject = isWeeklyData(data) || isMonthlyData(data) || isQuarterlyData(data)
+    ? data.subject
+    : isDocumentData(data)
     ? documentSubject(applyEdits(data, await loadEdits(admin, snapRow.id)))
-    : renderDigestEmail({ data, shareUrl: null, appUrl: a.baseUrl, attached: schedule?.attach_pdf ?? false, cadenceWord: schedule?.cadence === 'monthly' ? 'monthly' : 'weekly' }).subject
+    : renderDigestEmail({ data, shareUrl: null, appUrl: a.baseUrl, attached: schedule?.attach_pdf ?? false, cadenceWord: cadenceWordOf(schedule?.cadence) }).subject
 
   await admin
     .from('report_sends')
@@ -193,8 +208,24 @@ export async function deliverSend(a: DeliverArgs): Promise<DeliverResult> {
     // A written report carries no inline tile pictures: its pages are the
     // report, and the email is the way in.
     const document = isDocumentData(data) ? data : null
-    const cadenceWord = schedule.cadence === 'monthly' ? 'monthly' : 'weekly'
-    const imageTiles = document ? [] : EMAIL_IMAGE_TILES.filter((k) => {
+    // A block artefact says every number in words and asks for no PNGs — the
+    // monthly report's per-row lines are SVG on paper and words in the email,
+    // and the quarterly review's are the same (lib/email/quarterly.tsx).
+    const weekly = isWeeklyData(data) ? data : null
+    const monthly = isMonthlyData(data) ? data : null
+    const quarterly = isQuarterlyData(data) ? data : null
+    const arranged = weekly ?? monthly ?? quarterly
+    // AND THE TWO OF THE THREE THAT ARE A READING OF A MONTH. `arranged`
+    // answers "does this email carry tile pictures?", which is no for all
+    // three. The record below answers "under which month do these figures
+    // file?", and the quarterly review has no answer to it: `sent_figures`
+    // (M9) is keyed by one month and NOT NULL, and a quarter's figures filed
+    // under any single month of it would be filed under the wrong period.
+    // A quarterly send is recorded as a send; what it PRINTED is not yet in
+    // the record, and that is WP18's table to extend, not this merge's.
+    const recordable = weekly ?? monthly
+    const cadenceWord = cadenceWordOf(schedule.cadence)
+    const imageTiles = document || arranged ? [] : EMAIL_IMAGE_TILES.filter((k) => {
       const page = k.split('.')[0]
       return data.sections.some((s) => s.section.page === page && (s.section.keys ? s.section.keys.includes(k) : true))
     })
@@ -255,9 +286,18 @@ export async function deliverSend(a: DeliverArgs): Promise<DeliverResult> {
       images[k] = `cid:${cid}`
       inline.push({ filename: `${k}.png`, content: rendered[i + 1].buffer, contentType: 'image/png', contentId: cid })
     })
-    const email = document
-      ? renderDocumentEmail({ data: document, edits: await loadEdits(admin, snapRow.id), shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
-      : renderDigestEmail({ data, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf, images, cadenceWord })
+    const email = monthly
+      // THE BRIEF'S SHARE TOKEN REACHES THE EMAIL AND NOT THE SNAPSHOT. The
+      // stored reading carries the brief's snapshot id and the app href; the
+      // token is resolved here, on the send, and the frozen row is untouched.
+      ? renderMonthlyEmail({ data: await withBriefShareLink(admin, schedule.client_id, monthly), shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
+      : weekly
+      ? renderWeeklyEmail({ data: weekly, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
+      : quarterly
+      ? renderQuarterlyEmail({ data: quarterly, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
+      : document
+        ? renderDocumentEmail({ data: document, edits: await loadEdits(admin, snapRow.id), shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
+        : renderDigestEmail({ data, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf, images, cadenceWord })
     const attachments = pruneInlineImages(email.html, inline)
     if (schedule.attach_pdf) attachments.push({ filename: pdfFilename, content: rendered[0].buffer, contentType: 'application/pdf' })
     const { sent } = await sendReportEmail({ to, subject: email.subject, html: email.html, text: email.text, attachments })
@@ -278,6 +318,62 @@ export async function deliverSend(a: DeliverArgs): Promise<DeliverResult> {
       })
       .eq('id', sendId)
     await admin.from('report_schedules').update({ last_sent_at: now }).eq('id', schedule.id)
+
+    // THE RECORD, AFTER THE FACT. A review send reaches its recipients HERE
+    // rather than in runSchedule — a member pressed Send, possibly days after
+    // the build — so this is where that artefact's figures enter `sent_figures`.
+    // The reading date is the build's, not this moment's: the numbers are the
+    // ones that were frozen, and dating them now would say we read the month on
+    // the day somebody clicked. Non-fatal, and only for a block artefact; a
+    // document brief's figures are display strings with no object behind them
+    // until WP19 re-bases them.
+    //
+    // AND THE WHOLE OF IT IS OUTSIDE THIS FUNCTION'S FAILURE BOUNDARY, ROWS
+    // INCLUDED. `recordSend` guards its own two writes, but the rows were
+    // COMPUTED as its argument — `blockAnswers` over a snapshot frozen days
+    // earlier, possibly by an older deploy, and it carries no guard of its own.
+    // A throw there, after Resend has accepted the mail, ran the catch below:
+    // a scheduled send was marked `failed`, and a by-hand one went back to
+    // `ready`, from which a person can press Send and the client receives the
+    // artefact twice. Nothing after the mail has gone may be able to say the
+    // send did not happen.
+    if (recordable) {
+      try {
+        // THE MONTH'S STATE IS READ, NEVER GUESSED. It decides whether "the
+        // report of {date} read X" is ever printed beside a live figure — a
+        // frozen month cannot have moved since — and it is written into a table
+        // with no UPDATE grant, so a guess is permanent. A snapshot built by an
+        // older deploy may carry neither key; the send stands and the figures
+        // are not recorded, which is the honest half of the pair.
+        const monthStatus = monthly ? monthly.monthStatus : weekly?.reading.monthStatus
+        if (monthStatus !== 'filling' && monthStatus !== 'frozen') {
+          throw new Error('the snapshot carries no month status, so what it printed is not recorded')
+        }
+        const rows = sentFigureRows({
+          month: recordable.month,
+          monthStatus,
+          artefact: monthly ? 'monthly' : 'weekly',
+          verdicts: monthly
+            ? monthlyBlocksFor(monthly.keys).flatMap((b) => blockAnswers(b, monthly.reading).verdicts)
+            : weeklyBlocksFor(weekly!.keys).flatMap((b) => blockAnswers(b, weekly!.reading).verdicts),
+          // The weekly artefact's week-scoped tokens are not a reading of its
+          // month, and `sent_figures.month` is NOT NULL (lib/reports/weekly.ts
+          // isMonthScopedFigure).
+          figures: monthly ? recordable.figures : monthScopedFigures(recordable.figures),
+          figureAudience: FIGURE_AUDIENCE,
+        })
+        await recordSend(admin, {
+          clientId: schedule.client_id,
+          snapshotId: snapRow.id,
+          readingAt: recordable.readingAt,
+          month: recordable.month,
+          monthStatus,
+          rows,
+        })
+      } catch (error) {
+        console.warn(`[deliver ${sendId}] could not record what was sent`, error)
+      }
+    }
     return { status: 'sent', subject: email.subject, ms: ms() }
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e)

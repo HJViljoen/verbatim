@@ -6,6 +6,12 @@ import { renderDigestEmail } from '@/lib/email/digest'
 import { renderDocumentEmail } from '@/lib/email/document-brief'
 import { loadEdits } from '@/lib/reports/documents/edits'
 import { isDocumentData } from '@/lib/reports/documents/types'
+import { isWeeklyData } from '@/lib/reports/weekly-build'
+import { isMonthlyData, withBriefShareLink } from '@/lib/reports/monthly-build'
+import { renderWeeklyEmail } from '@/lib/email/weekly'
+import { renderMonthlyEmail } from '@/lib/email/monthly'
+import { isQuarterlyData } from '@/lib/reports/quarterly-build'
+import { renderQuarterlyEmail } from '@/lib/email/quarterly'
 import { runSchedule } from '@/lib/schedules/run'
 import type { ScheduleRow } from '@/lib/schedules/types'
 import type { ReportSnapshotData } from '@/lib/reports/types'
@@ -49,6 +55,22 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       const { data: link } = await admin.from('share_links').select('token, revoked_at').eq('id', linkId).maybeSingle()
       const l = link as { token: string; revoked_at: string | null } | null
       if (l && !l.revoked_at) shareUrl = `${appBaseUrl()}/r/${l.token}`
+    }
+    // THE EMAIL AS SENT, for a weekly artefact: re-rendered from the stored
+    // reading, with the quotes resolved live — so an erased voice is gone from
+    // "what went out" at the next look, which is the whole reason no body is
+    // ever stored.
+    if (isWeeklyData(data)) {
+      return page(renderWeeklyEmail({ data, shareUrl, appUrl: appBaseUrl(), attached: s.attach_pdf }).html)
+    }
+    if (isMonthlyData(data)) {
+      // The brief's share token lives on the send, not in the snapshot, so
+      // "the email as sent" resolves it again here (lib/reports/monthly-build).
+      const withBrief = await withBriefShareLink(admin, session.clientId, data)
+      return page(renderMonthlyEmail({ data: withBrief, shareUrl, appUrl: appBaseUrl(), attached: s.attach_pdf }).html)
+    }
+    if (isQuarterlyData(data)) {
+      return page(renderQuarterlyEmail({ data, shareUrl, appUrl: appBaseUrl(), attached: s.attach_pdf }).html)
     }
     if (isDocumentData(data)) {
       // Edits are read fresh: an edit made a minute ago shows on the next open.

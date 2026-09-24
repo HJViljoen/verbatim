@@ -28,11 +28,11 @@ describe('market selection', () => {
 
 describe('marketHref', () => {
   it('builds a group href, adding the filter and item only when present', () => {
-    expect(marketHref('recs')).toBe('/dashboard/market?group=recs')
-    expect(marketHref('insights', 'mi-1')).toBe('/dashboard/market?group=insights&item=mi-1')
-    expect(marketHref('recs', 'rec-1', 'strong')).toBe('/dashboard/market?group=recs&f=strong&item=rec-1')
+    expect(marketHref('recs')).toBe('/dashboard/market-intel?group=recs')
+    expect(marketHref('insights', 'mi-1')).toBe('/dashboard/market-intel?group=insights&item=mi-1')
+    expect(marketHref('recs', 'rec-1', 'strong')).toBe('/dashboard/market-intel?group=recs&f=strong&item=rec-1')
     // the default filter never appears in the URL
-    expect(marketHref('claims', undefined, 'all')).toBe('/dashboard/market?group=claims')
+    expect(marketHref('claims', undefined, 'all')).toBe('/dashboard/market-intel?group=claims')
   })
 })
 

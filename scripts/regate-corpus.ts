@@ -1,3 +1,4 @@
+import { audienceOf } from '../lib/rivals'
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
 import { recordConfigChange, scriptActor, skipRetag } from '../lib/config-log'
 import { classifyRelevance } from '../lib/gather/relevance'
@@ -32,6 +33,18 @@ import type { GatherConfig } from '../lib/gather/types'
 // the most destructive operation an operator can run — the rows are gone, and
 // a report already sent keeps citing comments that no longer exist — so the
 // record of having run it is the least the log can carry.
+//
+// AND IT IS THE ONE THING THAT EMPTIES A FROZEN MONTH'S EVIDENCE (item 31a,
+// 2026-09-18). month_evidence_refs promises that a frozen point can still be
+// opened to WHICH videos it was read on, and the promise rests on videos never
+// being deleted: the retention sweep TOMBSTONES a video the platform stopped
+// serving, precisely because videos(id) cascades into the whole analysis
+// (inngest/functions/retention.ts). This script deletes video rows outright, in
+// dependency order, and nothing stales the frozen months that name them —
+// month_evidence_refs' UPDATE guard would refuse a correction even if something
+// tried. After a re-gate those points read "counted, not quotable" with no
+// videos behind them either, and no run can put them back: a frozen month is
+// never revisited. Weigh that against the corpus being wrong.
 
 import { SEALAND_CLIENT_ID as SEALAND } from '../lib/config'
 
@@ -114,7 +127,6 @@ async function main() {
     fromAccounts[1] ? `${fromAccounts[1]} posted by an account of yours` : '',
   ].filter(Boolean).join(' and ')
 
-  const bucketOf = (v: StoredVideo) => (v.is_client ? 'client' : v.is_competitor ? `competitor:${v.competitor_name}` : 'industry-other')
   const byReason = new Map<string, StoredVideo[]>()
   for (const v of deletable) {
     const key = `${verdicts.get(v.video_id)?.reason}`
@@ -123,7 +135,7 @@ async function main() {
   console.log(`gate verdict: DROP ${dropped.length}/${videos.length} (gpt cost $${costUsd.toFixed(3)})\n`)
   for (const [reason, vs] of [...byReason.entries()].sort((a, b) => b[1].length - a[1].length)) {
     console.log(`— ${vs.length}× ${reason}`)
-    for (const v of vs.slice(0, 4)) console.log(`    [${v.platform}/${bucketOf(v)}] ${v.account_name}: ${(v.caption ?? '').replace(/\s+/g, ' ').slice(0, 80)}`)
+    for (const v of vs.slice(0, 4)) console.log(`    [${v.platform}/${audienceOf(v)}] ${v.account_name}: ${(v.caption ?? '').replace(/\s+/g, ' ').slice(0, 80)}`)
     if (vs.length > 4) console.log(`    … +${vs.length - 4} more`)
   }
   if (clientFlagged.length) {

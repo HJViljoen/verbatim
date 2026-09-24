@@ -101,65 +101,85 @@ normalised onto one **tweakcn** token set; keep our SSR SVG charts and add a cli
 
 ## Character
 
-Warm editorial intelligence, not SaaS-dashboard chrome. Cream paper canvas, deep-green ink,
-glass cards floating over a faint crowd illustration (the voices behind the data). No neon,
-no pure white, no pure black. The product expresses judgment — chips and prose, never raw
-scores (Redesign Spec §1).
+Grey-scale chrome, colour reserved for meaning, one green. Depth comes from elevation and
+never from tone: the canvas and the tile are the same white and a tile is found by its
+shadow. The product expresses judgment — chips and prose, never raw scores (Redesign Spec §1).
 
 **Primary viewport: laptop/desktop.** Clients read this on laptops; design desktop-first.
 Mobile must work but is the secondary pass.
 
+> **Corrected 2026-09-15 (Phase 1 WP10).** The four sections below described the 2026-07
+> cream-and-pine system as "current code". It has not been current since the identity shipped
+> — `app/globals.css` carries the 2026-08-28 tokens, and `scripts/check-design-drift.sh`
+> FAILS the build if a retired cream or pine hex comes back. A doc that describes a palette
+> the build refuses is worse than no doc, so they now describe the stylesheet.
+
 ## Color Palette
 
-> **Current code.** Superseded as the *target* by §Visual identity — 2026-08-28 above.
+> The tokens below ARE `app/globals.css`. §Visual identity — 2026-08-28 above states the
+> reasoning; this states the values. When the two disagree, the stylesheet wins.
 
-All tokens are CSS variables in `app/globals.css`, mapped to Tailwind utilities via `@theme inline`
-(e.g. `--accent-pine` → `bg-pine`, `text-pine`). Light theme:
+All tokens are CSS variables in `app/globals.css`, mapped to Tailwind utilities via `@theme inline`.
+Light theme:
 
 | Role | Hex | Token / utility |
 |------|-----|-----------------|
-| Canvas | `#F6F1E7` warm cream | `--background` |
-| Ink | `#14291F` deep green-black | `--foreground` |
-| Card | `rgba(253,250,244,0.78)` glass | `--card` + `backdrop-blur-xl` |
-| Primary | `#14503A` pine | `--primary`, links/CTAs |
-| Primary text on green | `#F7F3EA` cream | `--primary-foreground` |
-| Muted surface | `#ECE7DA` | `--muted` |
-| Border | `#E4DCCC` warm sand | `--border` |
+| Canvas **and** tile | `#FFFFFF` | `--background`, `--tile`, `--card` |
+| Inner block (inside a tile) | `#F6F7F8` | `--inner`, `--muted` |
+| Ink | `#26292C` charcoal | `--foreground` |
+| Ink-2 / muted / faint | `#45494D` / `#6E7378` / `#9AA0A6` | `--secondary-foreground`, `--muted-foreground` |
+| Verbatim green | `#0E8A5F` | `--primary`, `--you`, `--positive`, `--ring` |
+| Green tint | `#DDF3E9` → `#0B6E4C` | `--accent` / `--accent-foreground` — chips and hover fills only |
+| Hairline | `#DCDFE3` | `--border`, `--input` — inside tiles only |
 
-**Semantic status** (warm, no neon): positive `#1B6144` · warning/amber `#B9822B` · negative/destructive `#B4472F`.
+**Data buckets** (colour = meaning, data only): you `--you` `#0E8A5F` · competitor `--comp` `#F0742B`
+· category / rest of field `--cat` `#9AA1A9` · mixed / early `--mixed` `#E6B03C` · neutral segment
+`--neutral-seg` `#CDD2D7`.
 
-**Category accents** — muted & earthy, for category identity only (chips, dots), cycled/hashed via
-`lib/ui-colors.ts` (`categoryTint`, `categorySolid`): pine `#2E7D6F` · clay `#C4633F` · ochre `#C99A3B`
-· plum `#8A5A7A` · slate `#4E6E9E`.
+**Semantic status**: positive `#0E8A5F` (shares the green) · warning `#E6B03C` · negative/destructive `#DB3B2E`.
 
-**Chart greens** — deep → pale, for data viz: `#0F3B2B` · `#2E8B5E` · `#7C9A6B` · `#A8B98C` · `#4B6B4A`
-(`--chart-1…5`; `greenForPct()` maps 0–100 values onto them).
+**Category chips carry NO hue.** `lib/ui-colors.ts` `ACCENT_TINTS` is a ONE-entry list
+(`bg-inner text-muted-foreground`) and `categoryTint(key)` returns it for every key — the hashed
+multi-hue set retired with the identity. `categorySolid` and `levelBadge` no longer exist;
+`SENTIMENT_BADGE` and `PREVALENCE_BADGE` do.
+
+**Chart ramp** — ink lightness, NOT a green ramp: `--chart-1…5` = `#26292C` · `#0E8A5F` · `#6E7378`
+· `#9AA1A9` · `#CDD2D7`. `chart-2` is the green, for where "you"/"good" is implied. There is no
+`greenForPct()` anywhere in the codebase and there never was.
 
 A full dark theme exists (`.dark` block); every new surface must read in both.
 
 ## Typography
 
-- **Sans + headings:** Plus Jakarta Sans (`--font-jakarta`, loaded via next/font)
-- **Mono:** JetBrains Mono (`--font-jetbrains`) — data/ids only
+- **Sans + headings:** IBM Plex Sans (`--font-plex-sans`, via `next/font/google`)
+- **Serif:** IBM Plex Serif (`--font-plex-serif`) — **verbatim quotes only**; quotes are speech
+- **Mono:** IBM Plex Mono (`--font-plex-mono`) — counts, metadata, tabular figures
+- `--font-emoji` (Noto Color Emoji) is referenced ONLY from the `.vb-print` stacks: Vercel's
+  Chromium ships no emoji face, so a customer's "🙌" printed as a blank box on paper.
 - Page title: `text-2xl font-bold`. Section headings: `text-sm font-semibold uppercase tracking-wide text-muted-foreground`, optionally with a normal-case hint suffix.
 
 ## Shape & Elevation
 
-- Radius base `--radius: 0.3rem` (the value in `app/globals.css`, which is the
-  source of truth); chips/pills `rounded-full`. This doc drifted to `1rem` and
-  was corrected 2026-08-18 — when the two disagree, the stylesheet wins.
-- Card shadow (shared with the floating sidebar): `0 2px 6px -2px rgba(18,42,31,0.10), 0 18px 40px -16px rgba(18,42,31,0.32)` + `ring-1 ring-border/70`.
+- Radius base `--radius: 0.375rem` (6px — the value in `app/globals.css`, which is the source of
+  truth); chips/pills `rounded-full`, single-line only. This doc drifted to `1rem`, was corrected
+  to `0.3rem` on 2026-08-18 and to the shipped `0.375rem` on 2026-09-15 — when the two disagree,
+  the stylesheet wins.
+- **Elevation is ambient**, no offset and no negative spread, so every edge and corner reads alike:
+  `--shadow-tile: 0 0 0 1px rgba(38,41,44,.04), 0 1px 3px rgba(38,41,44,.05), 0 0 16px rgba(38,41,44,.09)`.
+  `--shadow-tile-hover` is the same, deeper. `--shadow-block` is a hair of lift for a block inside
+  a tile — never a ring. The sidebar uses the tile shadow. **No `backdrop-blur` anywhere in the
+  app** (drift guard (c) fails the build); `app/site` marketing is excluded.
 
 ## Signature components
 
-- **`.stat-hero`** — filled deep-green hero card: diagonal gradient `#1A5C43 → #113E2C` with a soft
-  top-right radial sheen, cream text `#F5F1E6`. The page's single strongest element — use sparingly.
-- **`.crowd-bg`** — ambient crowd illustration behind the app shell, opacity 0.16, masked to fade up.
-  Position `absolute` inside the shell, never `fixed` (mobile toolbar drift).
-- **Chips** — `px-2 py-0.5 rounded-full text-xs font-medium`; category chips use `categoryTint(key)`,
-  levels use `levelBadge()` (high = amber, rest muted), sentiment uses `SENTIMENT_BADGE`,
-  evidence tiers show "Strong evidence" (positive tint) / "Early signal" (warning tint) — never numeric scores.
+- **`.crowd-bg`** — ambient crowd illustration. It LEFT the app shell with the identity and now
+  appears on `/login` alone (rule 6); it is not an app-surface element.
+- **Chips** — `px-2 py-0.5 rounded-full text-xs font-medium`; category chips use `categoryTint(key)`
+  (grey, always), sentiment uses `SENTIMENT_BADGE`, prevalence uses `PREVALENCE_BADGE`,
+  evidence tiers show "Strong evidence" (green tint) / "Early signal" (warning tint) — never numeric scores.
 - **Voice links** — pill outline in primary: `text-primary ring-1 ring-primary/25 hover:bg-primary/5`.
+- **`.stat-hero`** is RETIRED. Rule 1 ("no black blocks / dark heroes") removed it from
+  `app/globals.css`; the class name survives only in a comment in `components/stat-band.tsx`.
 
 ## One-screen grid pages (2026-08-22 redesign — Dashboard first)
 
@@ -181,11 +201,13 @@ built from `components/shell/` and `components/charts/`, not from `Card`:
 - **Drawer:** `DetailDrawer` (client, on `ui/sheet`, right, ~480px) is the universal one-click-deeper surface,
   URL-driven like `DetailOverlay` (`?detail=<id>`; closing navigates to `closeHref`). Pages stay server
   components; only the drawer shell is client code.
-- **Charts** (server SVG, no libraries): `Sparkline`, `StatValue` (mono 24/30/18, tabular) + `Delta`
-  (favourability-coloured, `good: up|down|neutral`), `RankedBar` (dot · label · bar · count; bar colour follows
-  the entity, never the rank), `Mover` (label · spark · value · delta), `LineChart` (end labels, no legend box
-  for ≤4 series), `Ring` (the ONE circle allowed: share of something, ≤4 slices, your number in the centre),
-  `PlatformIcon`. `ProportionBar`/`BarLegend` stay for splits.
+- **Charts** (server SVG, no libraries): `Sparkline` (now `(number|null)[]` — a gap is a gap),
+  `StatValue` (mono 24/30/18, tabular) + `Delta` (favourability-coloured, `good: up|down|neutral`),
+  `RankedBar` (dot · label · bar · count; bar colour follows the entity, never the rank), `Mover`
+  (label · spark · value · delta), `LineChart` (end labels, no legend box for ≤4 series),
+  `CalendarLine` (the dated axis — see §Chart rules), `Ring` (the ONE circle allowed: share of
+  something, ≤4 slices, your number in the centre), `PlatformIcon`. `ProportionBar`/`BarLegend`
+  stay for splits. `MovementBadge` is the ONE badge (§Chart rules).
 - **Colour jobs on tiles:** you / positive = green (`--positive`, `--primary`); wider category = slate; a
   competitor = clay (first), ochre, plum, slate; rest-of-field = `--input` sand; mixed / early = warning gold;
   the verbatim rule stays the signature (clay/primary left rule).
@@ -194,6 +216,94 @@ built from `components/shell/` and `components/charts/`, not from `Card`:
 - **Rounding follows the content, not the box:** `rounded-full` ONLY on single-line pills (fixed height or
   `whitespace-nowrap`). Anything that can wrap — quotes, phrases, labels in a list — takes a fixed radius
   (`rounded-lg`/`rounded-[10px]`), otherwise a three-line chip renders as an oval (Heinrich, 2026-08-22).
+
+## Chart rules (amended 2026-09-15 — Phase 1 WP10, decision U)
+
+> **This section AMENDS the mock's `spec/design-system.md` §3.9**, which is code-lifted from
+> `components/charts/line-chart.tsx` and says: *"No gridlines beyond baseline + midline, no axis
+> rules, no tick marks, no filled areas. Points are **solid**, ringed in the surface colour, never
+> hollow. Event markers are the only ringed-hollow circle, in `#E6B03C`."*
+> That spec is still right for `LineChart`. It cannot express a monthly reading, and the amendment
+> below is what `CalendarLine` is allowed instead. Reasoning: decision U (plan §1) and
+> `research/change-log-break-rules.md` §5.
+
+**Why an amendment was needed.** §3.9 allocates exactly ONE non-solid token (the amber ringed-hollow
+event marker). A monthly reading needs four distinctions on the same axis — an event, a month with
+no reading, a month whose reading cannot be compared, and a month that is not finished — and the
+spec forbids both obvious escapes (hollow points, filled areas). It could not absorb them silently.
+
+**The resolution: the change leaves the data line.** Every DATA point stays solid, ringed in
+`--tile`, exactly as §3.9 says. The new tokens live in axis furniture — a gutter row 6px under the
+baseline, and rules drawn behind the lines.
+
+### `CalendarLine` — the dated axis (`components/charts/calendar-line.tsx`)
+
+- **x is a MONTH, not an index.** `x(m) = padL + (i/(n−1))·innerW` over a GENERATED axis
+  (`lib/reading/series.ts` `monthAxis`), so a month with no reading keeps its slot. Index spacing
+  closes a hollow month up and misdates everything after it — 16 of Ottobock's 36 months, 17 of the
+  Össur category's 72. Geometry: `880×210`, `padL 56`, `padR 180`, `top 12`, `baseline = height−30`,
+  gutter `baseline+6`, month labels `height−7`. Arithmetic in `lib/charts/calendar.ts`.
+- **A gap is a gap.** `(number | null)` per month, one `<polyline>` per unbroken run. `Sparkline`
+  behaves the same way.
+- **The calendar line scales UNIFORMLY** — no `preserveAspectRatio="none"`, unlike `LineChart`. Its
+  two gutter tokens differ by shape alone (circle vs square), and a stretched viewBox turns the
+  circle into an ellipse and the square into a rectangle until they read as the same mark.
+- **Five month states, three of them new tokens:**
+
+| state | token | meaning |
+|---|---|---|
+| `read` | solid point, `r 2.2` (`3.4` at the series end), ringed `--tile` | §3.9 unchanged |
+| `below_floor` | **hollow circle in the GUTTER**, `r 3.5`, fill `--tile`, stroke the entity colour `1.5` | the audience's denominator is under `SHARE_BAND.minN` — a real number, no comparison |
+| `below_numerator` | **hollow square in the gutter**, `6×6`, same stroke | the object's own k is under the numerator floor |
+| `hollow` | nothing on the line at all | no row at all — the gap IS the statement; the month's column still answers when hovered |
+| `filling` | the point, plus a **part-height bar** at `opacity .14` in the entity colour, with an "at this point last month" dashed tick beside it | the month is still taking comments and will be rewritten |
+
+- **Dated rules** (`tracking change` / `clustering change` / `rename`): a vertical
+  `stroke-dasharray="2 3"` in `--border` from `top−4` to the baseline, carrying the change note as
+  its `<title>` and the change's own day as a 9px mono tick label. Drawn at the month the change was
+  MADE.
+- **A reconstructed row draws a SECOND token**: `stroke-dasharray="1 4"` in `--muted-foreground` at
+  `.5` opacity. "We worked out that this probably happened" is not "this was recorded".
+- **The affected-months band**: the stored `config_changes.affects_months` span, a `--inner` rect
+  behind the lines. This is the "no filled areas" exception, and it is the point of decision U — a
+  retroactive change is an interval, not a tick.
+- **Read back at setup**: a 45° hairline hatch (`<pattern>` of `--border`) over the months that had
+  already closed when the tenant was set up.
+- **A run of identical breaks on adjacent months collapses into ONE rule** (`collapseRules`). Every
+  month frozen before the clustering fingerprint shipped carries no key and two unknowns are not one
+  regime, so drawn literally that is a dated rule on every bar of the history the trial is sold on.
+- **Month labels thin** past 12 months, keeping the last month always: a 68-month axis under a 644px
+  plot gives each label ~9px, which is not a label.
+- **Hover carries k of n**, and the hover target is a COLUMN PER MONTH, not a target per point:
+  "Aug 2026 / Sealand 28% · 23 of 82 videos / Freitag 41% · 57 of 139 videos". A column belongs to
+  the axis, like a dated rule does — SVG has no z-index, so per-series targets let the last line
+  painted cover every earlier line's points and answer for them. A share without its denominator is
+  a score, and this product shows no scores.
+- **Legend whenever there are ≥2 series or any gutter token**; identity is never colour-alone. A
+  series that excludes Reddit says so there, in its own entry.
+
+### `MovementBadge` — the one badge (`components/delta-badge.tsx`)
+
+- One component, three visual states: a movement that cleared its band (arrowed, coloured, `title`
+  naming the band); one of the honest non-answers (sans, weight 500, muted — **never coloured,
+  never arrowed**, spec §3.5); or nothing at all.
+- It takes the reading layer's `Verdict` (five states) or the band's `DeltaVerdict` (three).
+  Every non-answer word is in `MOVEMENT_WORDS`, stated once.
+- `CountBadge` is the COUNT arm of the same badge and the same vocabulary — a count has no band, and
+  requiring one would silence "6 themes confirmed → 5". `DeltaBadge` is gone.
+- `favourability()` has **no epsilon**. Flat is exactly zero; `Delta` rounds before it colours, so
+  what is coloured is what is printed.
+
+### The block primitives (`components/blocks/`)
+
+Every visual a reading block draws has an app/print form and an **email-safe form** — `<table>` with
+inline styles, no classes, no CSS variables, no flex, no grid, because Outlook lays out with Word.
+The email arm delegates to `components/email/primitives.tsx`; colours cross through `tokenHex`.
+`BlockCalendar` never emits inline SVG into an email: it takes the runner's attached PNG, and prints
+the same numbers as a table when none was rendered.
+
+Every primitive stamps its own `data-copy` (`figure` / `level` / `verdict`), so a block keeps the
+copy contract by construction (`lib/test/copy-contract.ts`).
 
 ## Rules
 

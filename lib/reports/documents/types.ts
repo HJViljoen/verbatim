@@ -1,7 +1,13 @@
-import { DOCUMENT_BRIEF_MAX, RUN_INDEXED_DIRECTION_WORDS } from '../../config'
+import { DOCUMENT_BRIEF_MAX, directionWordsFor } from '../../config'
+import type { MethodLines } from '../../reading/method'
+import type { Gap } from '../../reading/gap'
+import type { MonthStatus } from '../../reading/types'
+import type { Verdict } from '../../reading/verdicts'
 import type { Quote } from '../../renderables/types'
 import type { RunDelta } from '../../report-delta'
 import type { Audience, FigureTable } from '../types'
+import type { CannotTell, MonthLine, ScriptedLine, SwitchingFigure } from './figures'
+import type { UntrackedNote } from './sections'
 
 /**
  * Document reports (2026-08-31): a report WRITTEN by the Consumer Intelligence
@@ -93,7 +99,16 @@ export function documentSettings(raw: Partial<DocumentSettings> | null | undefin
 
 // ── the document ──────────────────────────────────────────────────────────
 
-export type DocPageKind = 'in_short' | 'finding' | 'competitor' | 'standing' | 'say_hear' | 'asked' | 'personas' | 'language' | 'method'
+export type DocPageKind =
+  | 'in_short' | 'finding' | 'competitor' | 'standing' | 'say_hear' | 'asked' | 'personas' | 'language' | 'method'
+  // Block D wave 2 (E-sales): two sheets drawn ENTIRELY from `slideFigures`
+  // and carrying no model block at all — `sales.p5` and `sales.p6` of the
+  // artboard. They are page kinds rather than borrowed block sections because
+  // no surface draws either one: wave 1 counted them for the brief and for
+  // nothing else. The writer is never asked for them (`writerSchema`'s switch
+  // has no arm for a kind with no field), which is the point: a sheet whose
+  // every line is counted cannot be written.
+  | 'switching' | 'scripted'
 
 /** Every field a block may carry; the skeleton says which page has which. */
 export type DocField =
@@ -158,7 +173,7 @@ export interface DocPage {
  * than beside `trajectoryWord` because the workings drawer is a client
  * component and `merge.ts` reaches the OpenAI client through `cosine`.
  */
-export function shownTrajectory(word: string | null | undefined, directionWords = RUN_INDEXED_DIRECTION_WORDS): string {
+export function shownTrajectory(word: string | null | undefined, directionWords = directionWordsFor('documents.trajectory')): string {
   return word && directionWords ? word : ''
 }
 
@@ -169,6 +184,180 @@ export interface DocLens {
   means: string
   short: string
 }
+
+/**
+ * The month a brief is a reading of, frozen onto its snapshot (Phase 1 WP19).
+ *
+ * "Exports and reports freeze numbers, never words" — so the stamp, the
+ * denominators and the platform mix are stored, and the quoted voices still
+ * resolve at render. Absent on every brief built before this landed and on a
+ * workspace whose month tables have never been seeded, which is why every
+ * reader of it is optional-chained rather than defaulted: a missing reading is
+ * a fact about the brief, not a zero.
+ */
+export interface DocumentReading {
+  /** `YYYY-MM-01`. */
+  month: string
+  /** "September 2026". */
+  monthLabel: string
+  monthStatus: MonthStatus
+  /** The instant the brief read, printed — never `created_at`. */
+  readingAt: string
+  /** The one line every page of the brief carries. */
+  stamp: string
+  denominators: { audience: string; label: string; videos: number; comments: number }[]
+  platformMix: Record<string, number>
+  /**
+   * The two-audience gaps the blocks drew (D1), frozen (package E-marketing).
+   *
+   * `BriefReading.gaps` has carried these since wave 1 and `documentReading`
+   * dropped them, so no artefact could print the one sentence the artboards
+   * lead with. Frozen because a brief freezes NUMBERS: the gap is measured at
+   * the reading instant, and re-deriving it at render would be a second
+   * measurement of a month a reader may open in March.
+   */
+  gaps?: Gap[]
+  /** The banded comparisons the blocks drew, frozen for the same reason. The
+   *  stat tiles print one; nothing on the deck may invent another. */
+  verdicts?: Verdict[]
+  /** True where the window crosses a recorded clustering boundary — the label
+   *  decision L requires travels with it. */
+  crossesClustering: boolean
+  /**
+   * How sound this reading is, in a calibrated word and a sentence
+   * (`sales.p2.confidence` … `p5.confidence`).
+   *
+   * READ OFF THE VERDICTS THE BRIEF'S BLOCKS ACTUALLY DREW — `confidenceOf`,
+   * the quarterly's own function, so one artefact cannot come to word this
+   * differently from another. It is NOT the finding pages' `sure` word, which
+   * is calibrated from conversations and strands and belongs to one argument:
+   * a borrowed section has no argument and no strands, and what a reader wants
+   * to know about a sheet of counted rows is how many of its comparisons were
+   * answered against a band. Absent on a brief built before wave 2.
+   */
+  confidence?: { word: string; why: string } | null
+  /**
+   * The method footnote, frozen (`sales.p7.footnote`, D15).
+   *
+   * Read depth, the translated and on-screen-text shares, the Reddit cap and
+   * the privacy sentence — every one already composed by `methodLines` on
+   * every brief's reading since wave 1, and every one thrown away at the door.
+   * Two of the five are NOT about the month this brief reads (read depth is
+   * all-time by construction; the language share is about what was said on
+   * camera), and `MethodLines.basis` is the clause that says so. Frozen rather
+   * than recomposed because the artefact must say in March what it said in
+   * September. Absent on every brief built before wave 2.
+   */
+  method?: MethodLines | null
+  /** "23 updates since 6 Apr 2026 · longest gap 35 days · last on 27 Sep 2026"
+   *  — `deliveryRecord().line`, the sentence Settings › The record prints. The
+   *  one figure a run's own clock is the honest index for, and the artboard
+   *  puts it in the method sheet's footer. */
+  delivery?: string | null
+}
+
+/** One input a brief needed and the workspace has not recorded, frozen so the
+ *  artefact says the same thing a year later. */
+export interface DocumentMissingInput {
+  id: string
+  input: string
+  owner: string
+  /** Which of the three owns it — so a later reader of the snapshot can tell a
+   *  promise ("we are building it") from an instruction ("name them in
+   *  Settings"). compose stores it; the type omitted it. */
+  ownerRole?: 'client' | 'ops' | 'engineering'
+  unlocks: string
+  sections: string[]
+}
+
+/**
+ * One borrowed page block, as the brief's deck prints it (Phase 1 WP19).
+ *
+ * "Deck pages that duplicate a block render the block in print mode" — so the
+ * section stores what to draw and where its data is, and the block draws
+ * itself. `empty` is the ONE line to print in its place: the block's own empty
+ * state where the block simply has nothing, and the missing-input sentence
+ * (naming the input and its ST1 owner) where the workspace has not recorded
+ * what the section needs. A section that could not be filled prints that
+ * sentence rather than dropping out of the brief in silence, which is what the
+ * compose walk did before.
+ */
+export interface DocBriefSection {
+  /** Stable, from the section map. Names a slide and an edit. */
+  id: string
+  /** `<surface>.<block>` — the block key, a stored contract. */
+  block: string
+  /** Which of `data.surfaces` holds this block's data. */
+  surface: string
+  title: string
+  framing: string
+  empty: string | null
+  /** The sheet's place in the brief, top right — "Objections · September 2026"
+   *  rather than the title repeated beside itself (E-sales, `sales.p2.header`). */
+  context?: string
+  /** The green-ruled eyebrow over the section's body: what the order of the
+   *  rows is. */
+  eyebrow?: string
+  /** What the right-hand pane carries: the month line, or the confidence dots
+   *  with their caveat. Absent keeps the full-bleed single column. */
+  pane?: 'chart' | 'confidence'
+  /** The pane's own eyebrow and opening line, so no two panes in a deck are
+   *  the same card (`BriefBlockSection.paneTitle` / `.paneLead`). A pane with
+   *  no lead prints the reading's denominators, as every pane did before. */
+  paneTitle?: string
+  paneLead?: string
+  /** The sheet this section shares with its neighbours (E-marketing). Absent
+   *  on every section that has a landscape sheet to itself, which is every
+   *  section of every brief built before 2026-09-18. */
+  sheet?: string
+  /** Columns of twelve this section takes on a shared sheet. */
+  span?: number
+  /** An element the deck draws on this section's sheet beside the blocks —
+   *  `'gap'` is the gap card. Frozen, like `sheet` and `span`, because what a
+   *  sheet carries is the artefact's and not today's map's. */
+  extras?: 'gap'
+}
+
+/**
+ * The figures a BRIEF'S OWN SLIDES print, frozen onto the snapshot (Block D
+ * wave 2, package E-sales).
+ *
+ * WHY IT IS ON THE SNAPSHOT AND NOT RE-READ AT RENDER. "Exports and reports
+ * freeze numbers, never words": every count here is a reading of one month and
+ * has to say the same thing in March that it said in September, and a share
+ * link renders from the snapshot alone and may never touch a tenant table. The
+ * QUOTE inside a scripted line is not exempt from that — it is a `Quote` like
+ * any other, so `freezeQuotes` empties its text structurally on the way in and
+ * `resolveQuotes` puts the words back at render, exactly as it does for a
+ * finding's pull quote.
+ *
+ * Wave 1 (`figures.ts`, `load-reading.ts`) computed all six of these and handed
+ * them to nobody; this is the field that carries them to the deck. Absent on
+ * every brief built before wave 2, which is why every reader is
+ * optional-chained: a brief with no slide figures is a fact about when it was
+ * built, not a zero.
+ */
+export interface DocumentSlideFigures {
+  /** `sales.p7.cannottell` — the comparisons this reading refused. */
+  cannotTell: CannotTell
+  /** `sales.p5.figure`. Null where nothing named both. */
+  switching: SwitchingFigure | null
+  /** `sales.p5.crosscheck`. Null where there is no objection to square it against. */
+  crosscheck: string | null
+  /** `sales.p6.rows`. Empty where no objection cleared the floor. */
+  scripted: ScriptedLine[]
+  /** `sales.p2.chart`. Null where the month axis could not be read. */
+  line: MonthLine | null
+  /** `sales.p4.untracked` — what is not tracked, and whose job it is, by role. */
+  untracked: UntrackedNote[]
+}
+
+/** The brief's order: written pages and borrowed blocks, interleaved. */
+export type DocLayoutEntry = { kind: 'page'; id: string } | { kind: 'section'; id: string }
+
+/** What a slide key looks like when it names a borrowed block rather than a
+ *  written page. Prefixed because both live in one `Slide.keys` vocabulary. */
+export const SECTION_SLIDE_PREFIX = 'section:'
 
 export interface DocumentMethod {
   conversations: number
@@ -181,6 +370,65 @@ export interface DocumentMethod {
   heldBack: number
   /** The update was partial or below the conversation floor. */
   thin: boolean
+  /**
+   * Findings the composer wrote and did not print — below the conversation
+   * floor, resting on no grounded point, or scrubbed to nothing.
+   *
+   * The count was computed on every build (`dropped.push(…)`) and lived only
+   * in the workings, which no reader of the document ever sees. "4 concluded ·
+   * 5 below the bar" is the artboard's row and it is the honest one: a
+   * findings count with no denominator says nothing about how selective the
+   * reading was. Absent on a brief built before wave 2.
+   */
+  dropped?: number
+  /**
+   * Findings written and dropped BELOW the bar this build (`mkt.p7.numbers`).
+   *
+   * NOT `dropped` ABOVE, AND BOTH ARE KEPT ON PURPOSE (merge, Block D wave 2).
+   * `dropped` is every finding the composer wrote and did not print, whatever
+   * the reason — the structural check's rejections, the floor, no grounded
+   * point, scrubbed to nothing — and it is what the sales brief's numbers card
+   * prints as "not carried". These two are the marketing card's finer split of
+   * the same build: below the bar, and held by the template's cap. A reader of
+   * one card never sees the other's row, and folding them would make one of
+   * the two sentences wrong.
+   *
+   * The artboard's row is "4 above the bar · 5 below the bar", and the deck
+   * could only ever print the first half: the dropped ones live in the
+   * workings, which the render and share paths never select. A count is not a
+   * headline and carries no evidence, so it travels on the snapshot.
+   */
+  findingsBelow?: number
+  /**
+   * Findings that CLEARED the bar and were not printed, because the template's
+   * cap stopped first (`findingsMax`, and three on a thin update).
+   *
+   * Its own field because it is its own sentence. `findingsBelow` used to be
+   * `candidates - printed`, which folded the cap and the scrub into a claim
+   * about the evidence: a brief capped at three with eight good findings said
+   * "3 above the bar · 5 below it" about five findings that were above it.
+   */
+  findingsHeld?: number
+  /**
+   * "27% of what was said on camera was not in English" — `MethodLines.language`,
+   * with the basis it must never be printed without.
+   *
+   * NOT THE ARTBOARD'S PER-LANGUAGE BREAKDOWN. "Afrikaans 14% · German 6% ·
+   * other 7%" needs a per-language count and the product records one bit —
+   * English or not — on `video_speech`. The share it does hold is printed, with
+   * its stated basis (D15).
+   */
+  languages?: string | null
+  /**
+   * "23 updates since 6 Apr 2026 · longest gap 35 days · last on 27 Sep 2026 —
+   * your 3rd monthly reading, the quarter view needs 6" (`mkt.p7.delivery`).
+   *
+   * RUN-DATED AND SAYING SO. It is the record OF the deliveries, which is the
+   * one figure a run's own clock is the honest index for — and it is the one
+   * line on the numbers card that is NOT a month reading, which is why it sits
+   * under the hairline rather than as a row beside them.
+   */
+  delivery?: string | null
 }
 
 /** report_snapshots.data for a document build (kind stays 'report'). */
@@ -196,6 +444,43 @@ export interface DocumentSnapshotData {
   runId: string | null
   figures: FigureTable
   delta: RunDelta | null
+  /** The month this brief is a reading of (WP19). Absent on a brief built
+   *  before item 43 and on a workspace with no monthly reading. */
+  reading?: DocumentReading | null
+  /** What it could not fill, and who closes each one (WP19). */
+  missing?: DocumentMissingInput[]
+  /** The borrowed page blocks, in the section map's order (WP19). */
+  sections?: DocBriefSection[]
+  /**
+   * FALSE where this brief's map folds its title onto the first sheet of
+   * content instead of spending a landscape sheet on it (E-marketing).
+   *
+   * FROZEN, AND ABSENT MEANS "KEEP THE COVER". A stored artefact re-renders
+   * from this field, never from today's map: pagination is the artefact's, so a
+   * brief that printed a cover, was shared on a `/r/<token>` and is opened
+   * again next March prints the same sheets with the same numbers in the same
+   * footers. The fold reaching a brief built before it landed is exactly the
+   * re-pagination `documentSlides` refuses for `sheet` and `span`.
+   */
+  cover?: boolean
+  /**
+   * TRUE where the sections this brief could not fill share one sheet instead
+   * of taking a landscape sheet each (E-marketing).
+   *
+   * Frozen for the same reason as `cover`, and absent means "one sheet each",
+   * which is what every brief built before this printed.
+   */
+  unfilledSheet?: boolean
+  /** Each borrowed surface's loader output, frozen — the same data the page
+   *  drew, so the brief and the page cannot come to say different things
+   *  (WP19). Quotes inside it freeze and resolve like any other snapshot's. */
+  surfaces?: Record<string, unknown>
+  /** Written pages and borrowed blocks in one order (WP19). Absent on a brief
+   *  built before the section maps, which paginates off `pages` as it did. */
+  layout?: DocLayoutEntry[]
+  /** What this brief's own slides may print beyond the blocks (E-sales).
+   *  Absent on every brief built before wave 2. */
+  slideFigures?: DocumentSlideFigures | null
   pages: DocPage[]
   /** What this document was COMPOSED FROM (WP7d, 2026-09-12), frozen beside
    *  the template key so a later reader (the structural eval, a rebuild, a

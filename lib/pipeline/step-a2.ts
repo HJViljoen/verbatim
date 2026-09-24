@@ -1,3 +1,4 @@
+import { audienceOf } from '../rivals'
 import { createAdminClient, selectAll } from '../supabase-admin'
 import { chunk } from '../chunk'
 import { EVIDENCE_FLOOR, CLUSTER_SIMILARITY_THRESHOLD, MEGA_CLUSTER_MIN, MEGA_CLUSTER_SHARE, VIDEO_EVIDENCE_WEIGHT } from '../config'
@@ -63,12 +64,6 @@ export interface StepA2Result {
 export interface InsightGroup {
   bucket: string
   insights: InsightRow[]
-}
-
-function bucketOf(v: { is_client: boolean; is_competitor: boolean; competitor_name: string | null }): string {
-  if (v.is_client) return 'client'
-  if (v.is_competitor) return `competitor:${v.competitor_name ?? 'unknown'}`
-  return 'industry-other'
 }
 
 /** Most frequent value, ties broken by first-seen order. */
@@ -274,7 +269,7 @@ export async function loadGroupedInsights(clientId: string, runId: string): Prom
   // 3. Group by bucket (Spec §8: bucket-level clustering, categories merge).
   const groups = new Map<string, InsightGroup>()
   for (const ins of insights) {
-    const bucket = bucketOf(ins)
+    const bucket = audienceOf(ins)
     const g = groups.get(bucket)
     if (g) g.insights.push(ins)
     else groups.set(bucket, { bucket, insights: [ins] })

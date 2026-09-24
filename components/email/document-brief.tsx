@@ -4,6 +4,8 @@ import { findingHeadlines, inShortSummary, overviewTiles } from '../../lib/repor
 import type { DocumentSnapshotData } from '../../lib/reports/documents/types'
 import { fmtInt, platformLabel } from '../../lib/format'
 import { EMAIL, FONT } from '../../lib/email/theme'
+import { BlockMovement } from '../blocks/movement'
+import type { Verdict } from '../../lib/reading/verdicts'
 import { Button, Columns, Hairline, Section, text } from './primitives'
 
 /**
@@ -31,11 +33,56 @@ export interface DocumentBriefEmailProps {
 
 const presentation = { role: 'presentation', cellPadding: 0, cellSpacing: 0, border: 0 } as const
 
-function NumberCell({ value, label }: { value: string; label: string }) {
+/**
+ * One tile in an inbox — and it carries the same four things the paper tile
+ * does (fix pass).
+ *
+ * THE EMAIL WAS DROPPING THE CLAIM AND THE REFUSAL. `OverviewTile` carries
+ * `verdict`, `note` and `word` as well as the pair, and the printed deck passes
+ * all four to `StatTile`; this cell took `value` and `label` only. So on 54
+ * own-posts with 3 toward and 2 away the printed brief said "Too few to
+ * compare: 54 videos where a banded reading needs 100…" and the email of the
+ * SAME frozen snapshot showed the counts and nothing else — paper and inbox
+ * disagreeing about whether the figure was banded, from one artefact.
+ * `OverviewTile.note` is documented as "Why the comparison was not drawn, in
+ * the FIGURE's own words", which is exactly the half an inbox lost.
+ *
+ * `word` comes with them: a refusal set at the 26px numeral reads as a
+ * measurement in an inbox as surely as on a sheet (mock-gap §6 D2).
+ *
+ * The badge is `BlockMovement` in `email` mode — a tinted chip, because an
+ * arrow glyph in a client that has dropped the font is a box — so the two media
+ * print one vocabulary and the direction word still comes from nowhere but
+ * `directionWord`.
+ */
+function NumberCell({ value, label, verdict, note, word }: {
+  value: string
+  label: string
+  verdict?: Verdict | null
+  note?: string | null
+  word?: boolean
+}) {
+  // `ClaimBadge`'s rule, which the deck states at length: a `too_little_data`
+  // with no baseline is a LEVEL, and saying "too few to compare" beside a pool
+  // that cleared both floors is a sentence the tile refutes.
+  const shown: Verdict | null = verdict
+    ? (!verdict.baseline && verdict.state === 'too_little_data' ? { ...verdict, state: 'baseline_forming' } : verdict)
+    : null
   return (
     <div>
-      <div style={{ ...text.figure, fontSize: 26 }}>{value}</div>
+      <div style={word
+        ? { ...text.body, fontSize: 15, fontWeight: 600, lineHeight: '1.25' }
+        : { ...text.figure, fontSize: 26 }}
+      >
+        {value}
+      </div>
       <div style={{ ...text.small, fontSize: 11.5, marginTop: 5 }}>{label}</div>
+      {(shown || note) && (
+        <div style={{ marginTop: 6 }}>
+          {shown ? <BlockMovement verdict={shown} unit="pts" mode="email" /> : null}
+          {note ? <div style={{ ...text.small, fontSize: 11, marginTop: shown ? 4 : 0 }}>{note}</div> : null}
+        </div>
+      )}
     </div>
   )
 }
@@ -84,7 +131,7 @@ export function DocumentBriefEmail({ data, shareUrl, appUrl, attached, preheader
                             <tbody>
                               <tr>
                                 <td style={{ padding: '16px 18px' }}>
-                                  <Columns cells={tiles.map((t, i) => <NumberCell key={i} value={t.value} label={t.label} />)} />
+                                  <Columns cells={tiles.map((t, i) => <NumberCell key={i} value={t.value} label={t.label} verdict={t.verdict} note={t.note} word={t.word} />)} />
                                 </td>
                               </tr>
                             </tbody>

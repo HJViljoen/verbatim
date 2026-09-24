@@ -3,6 +3,11 @@ import { chunk } from '../../chunk'
 import { readsAsHeroQuote } from '../../quotes'
 import type { Quote, Slide } from '../../renderables/types'
 import type { FigureTable } from '../types'
+import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../../rivals'
+import { CLUSTERING_CAVEAT, briefStamp, commentsRead, denominatorLine, platformLine, type BriefReading } from './reading'
+import { SECTION_SLIDE_PREFIX, type DocBriefSection, type DocLayoutEntry, type DocumentReading } from './types'
+import type { BriefEntry } from './sections'
+import { UNFILLED_SHEET, foldsCoverSheet, groupsUnfilledSections, missingSentence, missingSummary, pageKindsOf } from './sections'
 import type { Signals } from './signals'
 import type { ResearchAnswer, ResearchPoint } from './research'
 import { ASKED_MAX, CLAIMS_PER_PAGE, PAGE_TITLE, PERSONAS_PER_PAGE, SAY_HEAR_MAX, type DocumentTemplate } from './templates'
@@ -44,22 +49,75 @@ export function thinWeek(s: Pick<Signals, 'runStatus' | 'run'>): boolean {
   return s.runStatus === 'partial' || s.run.conversations < DOCUMENT_THIN_CONVERSATIONS
 }
 
-/** Every figure the writer may cite, computed in code from the signals and
- *  the research: the update's numbers, each competitor's share, the count
- *  behind every grounded point and every concern. */
+/**
+ * Every figure the writer may cite (Phase 1 WP19 re-based it onto the month).
+ *
+ * WHEN THERE IS A MONTHLY READING, IT IS THE MONTH'S. The table opens with the
+ * blocks' own merged figures — the shares, the levels and the banded changes a
+ * reader saw on the page — and its headline counts are the month's
+ * denominators, each labelled with the month it is of. The run-scoped figures
+ * that used to be here are deliberately NOT offered beside them:
+ * `prev_positive_pct`, `prev_conversations` and `new_themes` are one update
+ * against the previous update, which is the run-indexed series item 43 exists
+ * to take out of the artefacts, and a model handed both would write a sentence
+ * that is half a month and half a Sunday.
+ *
+ * VIDEOS ARE NOT SUMMED ACROSS AUDIENCES. A video naming two rivals sits in
+ * both buckets (`CoverageRecord.dualMention` counts exactly that), so
+ * `competitor_videos` — which summed them — has no month-scoped successor and
+ * each rival gets its own figure instead. Comments DO sum exactly, which is
+ * why `conversations` still has one.
+ *
+ * AND THE SAME SUM DOES NOT COME BACK IN THROUGH THE BLOCK TABLE. The blocks'
+ * merged figures open this table, and two of them are that sum by another
+ * name: `month_videos` ("videos read into this month", OV0's own total across
+ * audiences) and `standings_videos` ("videos read in Sep 2026"). Measured on
+ * production, Össur, September: both hand the writer 449 while the same
+ * brief's method page prints "388 videos in the category · 42 videos in
+ * Ottobock · 19 videos in your own brand", and `dual_mention_videos` = 6
+ * proves the overlap is real. Whether 449 is the right number for the page it
+ * is drawn on is Overview's argument; putting it in a document's citable list
+ * beside a contradicting 388 is this module's.
+ *
+ * WHEN THERE IS NO READING the update figures stand, unchanged, and the method
+ * page says which basis this brief used. That is the isMissing* precedent: a
+ * brief on a workspace whose month tables are not applied prints what it has
+ * and names what it could not read.
+ */
+/** Block figures a brief withdraws: a video count summed across audiences,
+ *  which double-counts a video naming two rivals. Withdrawn by KEY rather than
+ *  by a guess at the label, so adding one is a deliberate line here. */
+export const AUDIENCE_SUMMED_VIDEO_FIGURES: readonly string[] = ['month_videos', 'standings_videos']
+
 export function documentFigures(s: Signals, answers: ResearchAnswer[]): FigureTable {
-  const f: FigureTable = {
-    conversations: { label: 'conversations', value: fmtCount(s.run.conversations), kind: 'count' },
-    videos: { label: 'videos', value: fmtCount(s.run.videos), kind: 'count' },
-    client_videos: { label: `${s.company} videos`, value: fmtCount(s.run.clientVideos), kind: 'count' },
-    competitor_videos: { label: 'competitor videos', value: fmtCount(s.run.competitorVideos), kind: 'count' },
+  const f: FigureTable = {}
+  if (s.reading) for (const [k, v] of Object.entries(s.reading.figures)) if (!AUDIENCE_SUMMED_VIDEO_FIGURES.includes(k)) f[k] = v
+  if (s.reading) {
+    const r = s.reading
+    const of = (audience: string) => r.denominators.find((d) => d.audience === audience) ?? null
+    const category = of(INDUSTRY_AUDIENCE)
+    const client = of(CLIENT_AUDIENCE)
+    const comments = commentsRead(r.denominators)
+    f.reading_month = { label: 'the month this reading is of', value: r.monthLabel, kind: 'name' }
+    f.conversations = { label: `comments read in ${r.monthLabel}`, value: fmtCount(comments), kind: 'count' }
+    if (category) f.videos = { label: `videos read for the category in ${r.monthLabel}`, value: fmtCount(category.videos), kind: 'count' }
+    if (client) f.client_videos = { label: `${s.company} videos in ${r.monthLabel}`, value: fmtCount(client.videos), kind: 'count' }
+    for (const c of s.competitors) {
+      const d = of(`competitor:${c.name}`)
+      if (d) f[`${slug(c.name)}_videos`] = { label: `${c.name} videos in ${r.monthLabel}`, value: fmtCount(d.videos), kind: 'count' }
+    }
+  } else {
+    f.conversations = { label: 'conversations', value: fmtCount(s.run.conversations), kind: 'count' }
+    f.videos = { label: 'videos', value: fmtCount(s.run.videos), kind: 'count' }
+    f.client_videos = { label: `${s.company} videos`, value: fmtCount(s.run.clientVideos), kind: 'count' }
+    f.competitor_videos = { label: 'competitor videos', value: fmtCount(s.run.competitorVideos), kind: 'count' }
+    if (s.run.positivePct != null) f.positive_pct = { label: 'positive share of judged conversations', value: fmtPct(s.run.positivePct), kind: 'pct' }
+    if (s.run.clientSharePct != null) f.client_share_pct = { label: `${s.company} share of tracked conversation`, value: fmtPct(s.run.clientSharePct), kind: 'pct' }
+    for (const c of s.competitors) if (c.shareNow != null) f[`${slug(c.name)}_share_pct`] = { label: `${c.name} share of tracked conversation`, value: fmtPct(c.shareNow), kind: 'pct' }
+    if (s.delta?.sentiment) f.prev_positive_pct = { label: 'positive share in the previous update', value: fmtPct(s.delta.sentiment.prev), kind: 'pct' }
+    if (s.delta?.conversations) f.prev_conversations = { label: 'conversations in the previous update', value: fmtCount(s.delta.conversations.prev), kind: 'count' }
+    if (s.delta?.newThemes) f.new_themes = { label: 'themes new this update', value: fmtCount(s.delta.newThemes.count), kind: 'count' }
   }
-  if (s.run.positivePct != null) f.positive_pct = { label: 'positive share of judged conversations', value: fmtPct(s.run.positivePct), kind: 'pct' }
-  if (s.run.clientSharePct != null) f.client_share_pct = { label: `${s.company} share of tracked conversation`, value: fmtPct(s.run.clientSharePct), kind: 'pct' }
-  for (const c of s.competitors) if (c.shareNow != null) f[`${slug(c.name)}_share_pct`] = { label: `${c.name} share of tracked conversation`, value: fmtPct(c.shareNow), kind: 'pct' }
-  if (s.delta?.sentiment) f.prev_positive_pct = { label: 'positive share in the previous update', value: fmtPct(s.delta.sentiment.prev), kind: 'pct' }
-  if (s.delta?.conversations) f.prev_conversations = { label: 'conversations in the previous update', value: fmtCount(s.delta.conversations.prev), kind: 'count' }
-  if (s.delta?.newThemes) f.new_themes = { label: 'themes new this update', value: fmtCount(s.delta.newThemes.count), kind: 'count' }
   // A count under three is not worth a number on paper ("one conversation
   // praise…" reads as thin as it is); the point still grounds, the writer
   // names the pattern instead of counting it.
@@ -69,15 +127,25 @@ export function documentFigures(s: Signals, answers: ResearchAnswer[]): FigureTa
 }
 
 /** The quote that leads a finding: from the grounded point the writer named,
- *  a comment before a transcript line, one that reads as English and fits a
- *  card, the longest of those. Text stays in memory until freeze. */
+ *  a comment before a transcript line, one THIS READER CAN READ and that fits a
+ *  card, the longest of those. Text stays in memory until freeze.
+ *
+ *  The reading travels with the quote and both halves of this use it: the
+ *  filter, because a hard filter given only the words drops every translated
+ *  voice out of every document (item 8's inversion has to reach the call site
+ *  to reach the reader); and the returned Quote, because a finding that leads
+ *  with a Spanish sentence and no English under it is the failure the
+ *  translation exists to prevent. `steps.ts` resolves lang/english onto these
+ *  refs a moment before composing — they are never stored. */
 export function pickQuote(point: ResearchPoint | undefined, used: Set<string>): Quote | null {
   if (!point) return null
-  const ok = point.quotes.filter((q) => !used.has(q.ref) && readsAsHeroQuote(q.text))
+  const ok = point.quotes.filter((q) => !used.has(q.ref) && readsAsHeroQuote(q.text, q))
   const pick = [...ok].sort((a, b) => (b.commentId ? 1 : 0) - (a.commentId ? 1 : 0) || b.text.length - a.text.length)[0]
   if (!pick) return null
   used.add(pick.ref)
-  return { ref: pick.ref, text: pick.text }
+  return pick.lang != null
+    ? { ref: pick.ref, text: pick.text, lang: pick.lang, english: pick.english ?? null }
+    : { ref: pick.ref, text: pick.text }
 }
 
 /** Where a finding was heard, written by code from the points and concerns
@@ -144,6 +212,15 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
   const concernById = new Map(s.concerns.map((c) => [c.id, c]))
   const known = new Set([...points.keys(), ...concernById.keys()])
   const thin = thinWeek(s)
+  // THE PAGES THIS BRIEF ACTUALLY PRINTS, which is the section map's list
+  // where it has one and the template's skeleton otherwise — the same choice
+  // the walk below makes, made once. The method page used to describe the
+  // TEMPLATE's kinds: under MARKETING_MAP a marketing brief prints no claims
+  // page, no competitor pages and no personas, and its method page went on
+  // saying "Competitor pages read each competitor's own videos…" and
+  // "Personas come from the consumer profile…". A method note for a document
+  // the reader does not have is the rule the comment above methodItems states.
+  const printedKinds: DocPageKind[] = (s.map?.length ?? 0) > 0 ? pageKindsOf(s.map) : a.template.skeleton.map((p) => p.kind)
   const pages: DocPage[] = []
   const blocksW: BlockWorkings[] = []
   const dropped: DocumentWorkings['dropped'] = [...(a.check?.dropped ?? [])]
@@ -160,11 +237,17 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
     const { sure, conversations } = calibrateSure(gs)
     return { f, ok, gs, cs, sure, conversations }
   })
+  // THE BAR IS THE CONVERSATIONS FLOOR, AND ONLY THAT. "N below the bar" is a
+  // claim about the evidence, so it counts the findings the FLOOR cut and
+  // nothing else: a headline that did not survive the scrub and a finding that
+  // rests on no grounded point were not weighed against the bar at all, and the
+  // cap is a different sentence again. Counted here, where each reason is known.
+  let belowBar = 0
   const kept = candidates.filter((c) => {
     const headline = line(c.f.headline, figures, cap('headline'), true)
     if (!headline) { dropped.push({ headline: c.f.headline, reason: 'no headline survived scrub' }); return false }
     if (c.gs.length === 0) { dropped.push({ headline, reason: 'rests on no grounded point' }); notSure.push(headline); return false }
-    if (c.conversations < DOCUMENT_FINDING_MIN_CONVERSATIONS) { dropped.push({ headline, reason: `too thin: ${c.conversations} conversations` }); notSure.push(headline); return false }
+    if (c.conversations < DOCUMENT_FINDING_MIN_CONVERSATIONS) { dropped.push({ headline, reason: `too thin: ${c.conversations} conversations` }); notSure.push(headline); belowBar += 1; return false }
     return true
   })
   kept.sort((x, y) => y.conversations - x.conversations || y.gs.length - x.gs.length)
@@ -368,19 +451,49 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
       return [{ id: 'language', kind: 'language' as const, title: PAGE_TITLE.language, blocks: [{ id: 'language.care', field: 'care' as const, text: '', items: care }] }]
     },
 
+    // ── the two counted sheets (E-sales, sales.p5 / sales.p6) ────────────
+    // NO BLOCK, AND THAT IS THE DESIGN. Every line on these two sheets is a
+    // count the reading already made and froze onto `slideFigures`; the deck
+    // draws them from there. A page with no blocks writes nothing, is asked of
+    // no model and costs no tokens — and a sheet whose material is missing
+    // drops out rather than printing an empty one, the same rule the say-hear
+    // and asked builders follow.
+    switching: () => (s.slideFigures?.switching
+      ? [{ id: 'switching', kind: 'switching' as const, title: PAGE_TITLE.switching, blocks: [] }]
+      : []),
+
+    scripted: () => (s.slideFigures?.scripted.length
+      ? [{ id: 'scripted', kind: 'scripted' as const, title: PAGE_TITLE.scripted, blocks: [] }]
+      : []),
+
     method: () => {
       blocksW.push({ blockId: 'method.method', basedOn: [] })
-      return [{ id: 'method', kind: 'method' as const, title: PAGE_TITLE.method, blocks: [{ id: 'method.method', field: 'method' as const, text: '', items: methodItems(s, a.period, thin, s.updatesCount, a.template.skeleton.map((p) => p.kind), a.settings.brief) }] }]
+      return [{ id: 'method', kind: 'method' as const, title: PAGE_TITLE.method, blocks: [{ id: 'method.method', field: 'method' as const, text: '', items: methodItems(s, a.period, thin, s.updatesCount, printedKinds, a.settings.brief) }] }]
     },
   }
 
   // The walk. A kind that repeats is emitted once by its builder, which
   // returns every page of that kind; a kind listed twice is built once.
+  //
+  // WP19: the ORDER is the section map's where the brief has one — written
+  // pages and borrowed page blocks interleaved — and the template's skeleton
+  // otherwise. A custom brief keeps the skeleton, and so does any brief built
+  // where the reading could not be loaded at all, which is the same fallback
+  // every other number on the page takes.
+  const layout: DocLayoutEntry[] = []
   const done = new Set<DocPageKind>()
-  for (const page of a.template.skeleton) {
-    if (done.has(page.kind)) continue
-    done.add(page.kind)
-    pages.push(...build[page.kind]())
+  const walk: { kind: 'page'; page: DocPageKind }[] | readonly BriefEntry[] =
+    (s.map?.length ?? 0) > 0 ? s.map : printedKinds.map((page) => ({ kind: 'page' as const, page }))
+  for (const entry of walk) {
+    if (entry.kind === 'block') {
+      layout.push({ kind: 'section', id: entry.section.id })
+      continue
+    }
+    if (done.has(entry.page)) continue
+    done.add(entry.page)
+    const built = build[entry.page]()
+    pages.push(...built)
+    for (const p of built) layout.push({ kind: 'page', id: p.id })
   }
 
   const data: DocumentSnapshotData = {
@@ -395,6 +508,26 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
     runId: s.runId,
     figures,
     delta: s.delta,
+    ...(s.reading ? { reading: documentReading(s.reading) } : {}),
+    ...(s.missing?.length ? { missing: s.missing.map((m) => ({ ...m, sections: [...m.sections] })) } : {}),
+    ...(s.sections?.length ? { sections: s.sections.map((x) => ({ ...x })), surfaces: s.surfaces ?? {}, layout } : {}),
+    // THE BRIEF'S OWN SLIDE FIGURES, FROZEN (E-sales). Wave 1 computed all six
+    // and handed them to nobody. They are stored rather than re-read because a
+    // share link renders from the snapshot alone, and because a count of one
+    // month must read the same in March as it did in September. The one QUOTE
+    // in them rides `freezeQuotes` / `resolveQuotes` structurally, exactly as a
+    // finding's pull quote does — nothing here stores a commenter's words.
+    ...(s.slideFigures ? { slideFigures: s.slideFigures } : {}),
+    // WHETHER THIS BRIEF PRINTS A COVER, decided by the MAP and frozen here.
+    // The fold was written as "any brief composed from a section map", which is
+    // all four of them — so the other three lost their cover from under the
+    // packages building them. Only a map that opts in folds, and only a brief
+    // built from one carries the field, so a stored artefact keeps the
+    // pagination it printed.
+    ...(foldsCoverSheet(s.map) ? { cover: false } : {}),
+    // And whether the sections it could not fill share one sheet. Same rule,
+    // same reason: the map decides, the artefact remembers.
+    ...(groupsUnfilledSections(s.map) ? { unfilledSheet: true } : {}),
     pages,
     // What the skeleton above was composed from, so it can be composed again
     // (WP7d): the eval and any rebuild read these, not the picker.
@@ -411,6 +544,25 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
       sources: sourcesOf(s),
       heldBack: s.heldBackPhrases,
       thin,
+      // The denominator behind "Findings". Computed since the composer
+      // existed, kept in the workings, never shown to a reader.
+      dropped: dropped.length,
+      // The three the numbers card could not reach: how many findings fell
+      // below the bar, the language share with its basis, and the delivery
+      // record. All three are already computed — two on the reading, one right
+      // here — and none of them has ever reached a printed artefact.
+      // NOT `candidates.length - findingPages.length`, which counted the cap
+      // and the scrub as evidence failures: on a template with `findingsMax` 3
+      // and eight findings that all cleared the floor the card printed "3 above
+      // the bar · 5 below it" when five were above it and were simply not
+      // printed. The bar is DOCUMENT_FINDING_MIN_CONVERSATIONS; the cap gets
+      // its own half of the sentence.
+      findingsBelow: belowBar,
+      ...(kept.length > findingPages.length ? { findingsHeld: kept.length - findingPages.length } : {}),
+      ...(s.reading?.method?.language ? { languages: s.reading.method.language } : {}),
+      ...(s.reading?.delivery
+        ? { delivery: `${s.reading.delivery}${s.reading.counter ? ` — ${s.reading.counter}` : ''}` }
+        : {}),
     },
     notSureYet,
     generatedAt: new Date().toISOString(),
@@ -430,6 +582,35 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
     timings: a.timings,
   }
   return { data, workings }
+}
+
+/** The reading, as the snapshot carries it: the stamp and the denominators
+ *  frozen, the figures already on `data.figures`, and neither the verdicts nor
+ *  the surfaces' own data duplicated here. */
+export function documentReading(r: BriefReading): DocumentReading {
+  return {
+    month: r.month,
+    monthLabel: r.monthLabel,
+    monthStatus: r.monthStatus,
+    readingAt: r.readingAt,
+    stamp: briefStamp(r),
+    denominators: r.denominators.map((d) => ({ ...d })),
+    platformMix: { ...r.platformMix },
+    crossesClustering: r.crossesClustering,
+    // THE FOOTNOTE AND THE DELIVERY LINE, FROZEN (E-sales, `sales.p7`). Both
+    // were composed on every reading and consumed only by `methodItems`, as
+    // prose inside one paragraph. The method SHEET prints them as what they
+    // are — a footnote under the numbers card, and the record of how many
+    // updates there have been — and a stored artefact has to keep them.
+    method: r.method,
+    delivery: r.delivery,
+    confidence: r.confidence,
+    // E-marketing: the gaps and the banded comparisons travel onto the
+    // snapshot, because the sheets that print them are drawn from the frozen
+    // artefact and never from a live loader.
+    ...(r.gaps.length ? { gaps: r.gaps.map((g) => ({ ...g })) } : {}),
+    ...(r.verdicts.length ? { verdicts: r.verdicts.map((v) => ({ ...v })) } : {}),
+  }
 }
 
 /** The platforms the update's phrases came from: the honest list of what was read. */
@@ -462,18 +643,158 @@ export function methodItems(s: Signals, period: string, thin: boolean, updatesCo
   // reader of the snapshot later) can otherwise not tell what this document
   // was written to answer. Operator prose, printed as written.
   const asked = brief?.replace(/\s+/g, ' ').trim()
+  // WHAT THE BRIEF IS A READING OF. Two bases, and the page says which. With a
+  // monthly reading the basis is the month, dated by the comment, with its
+  // denominator per audience and the platform mix behind it — the three things
+  // no brief has ever printed. Without one it is the update, exactly as before,
+  // and the page says the month-by-month reading was not available rather than
+  // letting a reader take an update for a month.
+  // DEFENSIVE, and not from timidity: a `Signals` is constructed by the build
+  // path, by scripts/build-document.ts and by fixtures, and a brief that
+  // throws because one of them predates item 43 is worse than a brief that
+  // prints the update basis.
+  const r = s.reading ?? null
+  const missing = s.missing ?? []
+  const basis = r
+    ? `This brief is a reading of ${r.monthLabel}, written from public conversation around ${s.company}, ${competitors.length ? `${competitors.join(', ')} ` : ''}and the wider category. ${denominatorLine(r.denominators)}${platformLine(r.platformMix) ? ` Across ${platformLine(r.platformMix)}.` : ''} A month is dated by when the comment was written, not by when we looked${r.monthStatus === 'filling' ? ', and this month is still filling' : ''}. ${briefStamp(r)}.`
+    : `This brief is written from public conversation around ${s.company}, ${competitors.length ? `${competitors.join(', ')} ` : ''}and the wider category: ${fmtCount(s.run.conversations)} conversations on ${fmtCount(s.run.videos)} videos in the ${period.replace(/^Update/, 'update')}${sources.length ? `, on ${sources.join(', ')}` : ''}. The month-by-month reading is not recorded for this workspace yet, so these are the update's own numbers. A conversation is one comment or spoken line the analysis cited; the analysis reads what people said in public, not sales calls or surveys.`
+
   return [
     asked ? `This brief was written to answer an instruction from ${s.company}: "${/[.!?]$/.test(asked) ? asked : `${asked}.`}"` : '',
-    `This brief is written from public conversation around ${s.company}, ${competitors.length ? `${competitors.join(', ')} ` : ''}and the wider category: ${fmtCount(s.run.conversations)} conversations on ${fmtCount(s.run.videos)} videos in the ${period.replace(/^Update/, 'update')}${sources.length ? `, on ${sources.join(', ')}` : ''}. A conversation is one comment or spoken line the analysis cited; the analysis reads what people said in public, not sales calls or surveys.`,
+    basis,
+    r && sources.length ? `The words quoted in it were read on ${sources.join(', ')}.` : '',
+    r?.crossesClustering ? CLUSTERING_CAVEAT : '',
+    ...(missing.length ? [missingSummary(missing) ?? '', ...missing.map(missingSentence)] : []),
     `Findings are the researcher's readings of that conversation, ordered by the evidence behind them. Each rests on grounded points the analysis extracted and verified; confidence is judged from how many conversations and how many independent strands support the reading (solid, reasonable or thin), never by the writer.${thin ? ' This update was thin, so fewer findings were written rather than stretch the evidence.' : ''}`,
     `${wherePagesComeFrom}${wherePagesComeFrom && s.heldBackPhrases ? ' ' : ''}${s.heldBackPhrases ? `${fmtCount(s.heldBackPhrases)} phrases in other languages were read for the counts but not quoted.` : ''}`,
     updatesCount > 1
       ? `This is update ${updatesCount} for ${s.company}. Where a finding carries from the previous brief it says so; "new this update" means the theme was first seen now. Movement is called only after three updates.`
       : `This is the first update for ${s.company}; there is nothing yet to compare with.`,
+    // ── the method footnote, at last on a document (block D, D9) ──────────
+    //
+    // `sales.p7.footnote`, `content.p5.delivery` and `content.p5.caveat`, all
+    // three of them sentences the product already composes and no brief has
+    // ever printed. They go LAST, after the basis and the ordering rules,
+    // because they are the fine print rather than the argument — and each one
+    // carries its own basis, which is the whole reason they are separate
+    // sentences rather than one paragraph:
+    //
+    //   · the delivery line is RUN-dated, and names the updates;
+    //   · the read-depth and language shares are ALL-TIME, and say so;
+    //   · the caveat is this month's, about the client's own side.
+    r?.delivery ? `${r.delivery}${r.counter ? ` — ${r.counter}.` : '.'}` : '',
+    // THE OTHER FIVE MOVED TO THE CARD (E-sales). `methodLines`' read-depth,
+    // language, Reddit and privacy sentences are the artboard's FOOTNOTE — the
+    // mono rule under the numbers card, which is where a reader looks for the
+    // fine print — and the deck prints them there off `reading.method`. Two
+    // renderings of one sentence on one sheet is the drift `lib/reading/method.ts`
+    // was written to end, so the paragraph arm goes rather than both staying.
+    r?.hollow ?? '',
   ].filter(Boolean)
 }
 
-/** One slide per page, plus the cover. Pagination decided here, never by the browser. */
+/**
+ * One slide per page, plus the cover. Pagination decided here, never by the
+ * browser.
+ *
+ * WP19: a brief composed from a section map paginates off `layout`, which
+ * carries the written pages and the borrowed blocks in one order. A brief built
+ * before the maps has no `layout` and paginates off `pages`, exactly as it did
+ * — a stored artefact must keep rendering what it rendered.
+ */
 export function documentSlides(data: DocumentSnapshotData): Slide[] {
-  return data.pages.map((p) => ({ title: p.title, keys: [p.id], layout: 'single' as const }))
+  if (!data.layout?.length) {
+    return data.pages.map((p) => ({ title: p.title, keys: [p.id], layout: 'single' as const }))
+  }
+  const out: Slide[] = []
+  for (const entry of data.layout) {
+    if (entry.kind === 'page') {
+      const page = data.pages.find((p) => p.id === entry.id)
+      if (page) out.push({ title: page.title, keys: [page.id], layout: 'single' })
+      continue
+    }
+    const section = data.sections?.find((x) => x.id === entry.id)
+    if (!section) continue
+    // A SECTION THAT COULD NOT BE FILLED DOES NOT GET A SHEET OF ITS OWN (fix
+    // pass). Its body is one sentence, and four of them on the marketing brief
+    // meant four numbered, footed, stamped landscape sheets carrying a sentence
+    // each — one of them 92% white paper. They share a sheet, wherever the
+    // first of them fell in the map's order; an unfilled section has no content
+    // to be in order with, which is what makes moving it honest. Only for a
+    // brief whose map asked for it, and only from the frozen field, so a stored
+    // artefact keeps the sheets it printed.
+    if (data.unfilledSheet && section.empty != null) {
+      const sheet = out.find((s) => s.layout === 'grid' && s.title === UNFILLED_SHEET)
+      if (sheet) sheet.keys.push(`${SECTION_SLIDE_PREFIX}${section.id}`)
+      else out.push({ title: UNFILLED_SHEET, keys: [`${SECTION_SLIDE_PREFIX}${section.id}`], layout: 'grid' })
+      continue
+    }
+    // CONSECUTIVE SECTIONS SHARING A SHEET BECOME ONE SLIDE (E-marketing).
+    // The sheet's NAME is its title, so a two-block sheet is not headed by
+    // whichever block happened to come first. A section with no `sheet` — every
+    // section of every brief built before 2026-09-18, and every section of the
+    // other three maps — keeps its own sheet exactly as it had one, which is
+    // what makes this additive rather than a re-pagination of stored artefacts.
+    const last = out[out.length - 1]
+    if (section.sheet && last && last.layout === 'grid' && last.title === section.sheet) {
+      last.keys.push(`${SECTION_SLIDE_PREFIX}${section.id}`)
+      continue
+    }
+    out.push(
+      section.sheet
+        ? { title: section.sheet, keys: [`${SECTION_SLIDE_PREFIX}${section.id}`], layout: 'grid' }
+        : { title: section.title, keys: [`${SECTION_SLIDE_PREFIX}${section.id}`], layout: 'single' },
+    )
+  }
+  return out
+}
+
+/**
+ * Whether this brief prints a cover sheet of its own (package E-marketing).
+ *
+ * NO, WHERE THE BRIEF'S OWN MAP FOLDED IT. All four brief artboards open on the
+ * In-short sheet with a 17px page title and one mono context line, and none of
+ * them spends a landscape sheet on a 58px title — "Marketing brief · September
+ * 2026 · Sealand · as at 28 Sep · still filling · 7 pages" sits at the top of
+ * the first sheet of content. MARKETING_MAP is the one map that opts in today
+ * (`COVER_FOLDED_MAPS`); each other map's own package makes that call.
+ *
+ * READ FROM THE FROZEN FIELD, NOT FROM `layout` (fix pass). The first rule here
+ * was "no cover for any brief that has a layout", which is every brief built
+ * since WP19 — so the sales, leadership and content briefs lost their cover
+ * from under the three packages building them, and every stored artefact built
+ * since the maps re-rendered a sheet shorter, with every footer renumbered and
+ * a different page count in the viewer, the Studio bar and any `/r/<token>`
+ * already sent. Pagination belongs to the artefact: `cover: false` is written
+ * at compose and an artefact that carries no such field keeps the cover it
+ * printed, which is the same rule `documentSlides` applies to `sheet`/`span`.
+ *
+ * READ BY ALL THREE PAGINATORS through `documentSheetCount`. `DocumentDeck`
+ * draws the sheets, the viewer counts them and the share header prints the
+ * count, and any two disagreeing by one is a bug this file has shipped twice.
+ */
+export function documentCoverSheet(data: DocumentSnapshotData): boolean {
+  return data.cover !== false
+}
+
+/**
+ * HOW MANY SHEETS A BRIEF PRINTS, computed ONCE for every surface that states
+ * it (fix pass, package E-marketing).
+ *
+ * Three surfaces print this number — the deck's own stamp and its footers
+ * (`DocumentDeck`), the viewer and the Studio bar (`documentViewerPages`), and
+ * the share link's header (`DocumentShareShell`) — and each carried its own
+ * arithmetic. This diff moved two of them onto the deck's rule and left
+ * `/r/<token>` on `pages.length + 1`, so the one CLIENT-FACING surface printed
+ * "4 pages" about forty pixels above a deck whose own footers read "1 / 9".
+ * The count is one function now, and a fourth caller adds no fourth answer.
+ */
+export function documentSheetCount(data: DocumentSnapshotData): number {
+  return documentSlides(data).length + (documentCoverSheet(data) ? 1 : 0)
+}
+
+/** The section a slide key names, or null where it names a written page. */
+export function sectionOfSlide(data: DocumentSnapshotData, key: string): DocBriefSection | null {
+  if (!key.startsWith(SECTION_SLIDE_PREFIX)) return null
+  return data.sections?.find((x) => x.id === key.slice(SECTION_SLIDE_PREFIX.length)) ?? null
 }

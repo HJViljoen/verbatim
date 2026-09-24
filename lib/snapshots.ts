@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { collectQuoteRefs, freezeQuotes, resolveQuotes } from './renderables/quotes-freeze'
 import type { PageKey, PrintVariant } from './renderables/types'
-import { fetchQuoteTextsByRefs } from './quotes'
+import { fetchQuoteResolutionsByRefs, type QuoteResolution } from './quotes'
 
 /**
  * report_snapshots — what an export froze (Reports & Exports T9, 2026-08-29).
@@ -95,13 +95,13 @@ export async function loadSnapshotWorkings<T = unknown>(admin: SupabaseClient, i
   const w = (data as { workings?: unknown } | null)?.workings
   if (!w) return null
   const refs = collectQuoteRefs(w)
-  const texts = refs.length ? await fetchQuoteTextsByRefs(admin, refs) : new Map<string, string>()
+  const texts = refs.length ? await fetchQuoteResolutionsByRefs(admin, refs) : new Map<string, QuoteResolution>()
   return resolveQuotes(w, texts) as T
 }
 
 /** The snapshot's data with the words put back — what the renderers get. */
 export async function hydrateSnapshot<T = unknown>(admin: SupabaseClient, row: SnapshotRow): Promise<T> {
   const refs = collectQuoteRefs(row.data)
-  const texts = refs.length ? await fetchQuoteTextsByRefs(admin, refs) : new Map<string, string>()
+  const texts = refs.length ? await fetchQuoteResolutionsByRefs(admin, refs) : new Map<string, QuoteResolution>()
   return resolveQuotes(row.data, texts) as T
 }

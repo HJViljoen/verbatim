@@ -1,14 +1,25 @@
 import { describe, expect, it } from 'vitest'
-import { STARTER_TEMPLATES, instantiate, starterTemplate, templateKeys } from './templates'
+import { STARTER_TEMPLATES, instantiate, starterTemplate, starterTemplates, templateKeys } from './templates'
 import { isStaticKey } from './compose'
-import { SECTION_PAGES } from './types'
+import { ALL_SECTION_PAGES } from './types'
 
 describe('starter templates', () => {
-  it('are five, name only static keys of their own page, and every audience is real', () => {
-    expect(STARTER_TEMPLATES.map((t) => t.key)).toEqual(['weekly_digest', 'monthly_marketing_review', 'leadership_one_pager', 'sales_objections_competitors', 'content_what_to_make_next'])
+  it('name only static keys of their own page, and every audience is real', () => {
+    // Seven: four arrangements, the retiring digest, and the two ARTEFACTS —
+    // the weekly report (WP17), the monthly one (WP18) and the quarterly
+    // review (WP20) — each composed from block keys and carrying no sections
+    // at all. They are in this list so that a schedule naming one through
+    // `starter_key` resolves; they are never offered as a starting point for a
+    // report.
+    expect(STARTER_TEMPLATES.map((t) => t.key)).toEqual(['weekly_report', 'monthly_report', 'quarterly_review', 'weekly_digest', 'monthly_marketing_review', 'leadership_one_pager', 'sales_objections_competitors', 'content_what_to_make_next'])
+    expect(starterTemplates().map((t) => t.key)).not.toContain('monthly_report')
+    expect(starterTemplates().map((t) => t.key)).not.toContain('quarterly_review')
     for (const t of STARTER_TEMPLATES) {
       for (const s of t.sections) {
-        expect(SECTION_PAGES).toContain(s.page)
+        // ALL_, not SECTION_: the weekly digest and the leadership one-pager
+        // name `dashboard`, which WP9 retired from the picker and kept
+        // registered for the artefacts already built from them.
+        expect(ALL_SECTION_PAGES).toContain(s.page)
         expect(s.page).not.toBe('agent')
         for (const k of s.keys ?? []) {
           expect(isStaticKey(k)).toBe(true)
@@ -25,6 +36,16 @@ describe('starter templates', () => {
     expect(templateKeys(['voice.map', 'voice.movers', 'voice.mood'], false)).toEqual(['voice.map', 'voice.mood'])
     expect(templateKeys(['voice.map', 'voice.movers'], true)).toEqual(['voice.map', 'voice.movers'])
     expect(templateKeys(['voice.movers'])).toEqual([]) // the shipped default
+  })
+
+  it('offers only what a report can actually be started from', () => {
+    // A retired starter and an artefact both still RESOLVE — stored schedules
+    // name them — and neither is ever handed to somebody starting a report.
+    for (const t of starterTemplates()) {
+      expect(t.retired).toBeFalsy()
+      expect(t.artefact).toBeFalsy()
+      expect(t.sections.length).toBeGreaterThan(0)
+    }
   })
 
   it('instantiates with fresh ids', () => {

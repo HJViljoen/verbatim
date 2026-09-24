@@ -1,4 +1,5 @@
 import { randomUUID, createHash } from 'crypto'
+import { audienceOf } from '../lib/rivals'
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
 import { DEMO_CLIENT_ID, OSSUR_CLIENT_ID } from '../lib/config'
 import { computeMetrics } from '../lib/pipeline/metrics'
@@ -329,7 +330,11 @@ async function insertRuns(): Promise<void> {
     started_at: iso(w.startedAt),
     completed_at: iso(w.completedAt),
     errors: [],
-    steps_completed: ['gather', 'pass_a', 'cross_reference', 'themes', 'synthesize', 'run_summary'],
+    // `steps_completed` is NOT written here any more (2026-09-24). Nothing in
+    // the pipeline has ever written it and nothing anywhere reads it — this
+    // seed was its only writer in the whole repo, so demo data was the one
+    // place in the product where the column looked alive. See
+    // 20260924093000_steps_completed_dead.sql.
   }))
   await insertRows('pipeline_runs', rows)
 }
@@ -347,11 +352,10 @@ interface CloneMaps {
   evidenceInserted: number
 }
 
-function bucketOf(v: Row): string {
-  if (v.is_client) return 'client'
-  if (v.is_competitor) return `competitor:${(v.competitor_name as string) ?? 'Ottobock'}`
-  return 'industry-other'
-}
+/** The demo corpus stamps every rival row, so the fallback the shared rule
+ *  applies (`competitor:unknown`) never fires here — the name is always there.
+ *  The ninth copy of the three-way precedence lived at this line until WP1. */
+const bucketOf = (v: Row): string => audienceOf(v)
 
 function mapIds(ids: unknown, m: Map<string, string>): string[] {
   return (Array.isArray(ids) ? ids : [])

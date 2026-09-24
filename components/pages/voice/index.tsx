@@ -4,7 +4,7 @@ import { PREVALENCE_BADGE } from '@/lib/ui-colors'
 import { PREVALENCE_LABEL, glossaryRule } from '@/lib/calibration'
 import { fmtInt, fmtPct, weekdayDate, shortDate, platformLabel, cap } from '@/lib/format'
 import { categoryLabel, categoryChip, emotionTone, bucketKind, moverDirection, type Trajectory } from '@/lib/voice-tiles'
-import { RUN_INDEXED_DIRECTION_WORDS } from '@/lib/config'
+import { directionWordsFor } from '@/lib/config'
 
 import { VoiceFilters } from '@/components/voice-filters'
 import { HowToRead } from '@/components/how-to-read'
@@ -29,7 +29,7 @@ const MOVER_COLOR = { up: 'var(--positive)', down: 'var(--negative)', new: 'var(
 // changes only what has no meaning on paper: links, the filter selects, the
 // drawers, the "Next five" rotation.
 //
-// D1 (2026-09-15): while RUN_INDEXED_DIRECTION_WORDS is off, "Gaining and
+// D1 (2026-09-15): while directionWordsFor('voice.movers') is off, "Gaining and
 // fading" is not registered as a tile at all — it is out of the grid, out of
 // the Studio's picker, out of the export deck, and its drawer is not rendered,
 // so ?detail=movers simply opens nothing on a page that is otherwise whole.
@@ -39,7 +39,7 @@ const MOVER_COLOR = { up: 'var(--positive)', down: 'var(--negative)', new: 'var(
 const MOVER_ROWS = 6
 /** Columns the phrase and mood tiles take: four each beside the movers tile,
  *  six each when it is gated off, so the row still closes at twelve. */
-const HALF_ROW_COL = RUN_INDEXED_DIRECTION_WORDS ? 4 : 6
+const HALF_ROW_COL = directionWordsFor('voice.movers') ? 4 : 6
 const chip = 'inline-flex h-[18px] items-center rounded-full px-[7px] text-[10.5px] font-medium whitespace-nowrap'
 const MOOD_COLOR = { positive: 'var(--positive)', negative: 'var(--negative)', neutral: 'var(--neutral-seg)' } as const
 
@@ -343,14 +343,14 @@ const renderables: Record<string, Renderable<D>> = {
   'voice.theme': { key: 'voice.theme', title: 'Theme', render: theme },
   // Unregistered while the direction words are gated (D1): the Studio's picker
   // reads these keys, so a tile nobody may see must not be offerable either.
-  ...(RUN_INDEXED_DIRECTION_WORDS ? { 'voice.movers': { key: 'voice.movers', title: 'Gaining and fading', render: movers } } : {}),
+  ...(directionWordsFor('voice.movers') ? { 'voice.movers': { key: 'voice.movers', title: 'Gaining and fading', render: movers } } : {}),
   'voice.phrases': { key: 'voice.phrases', title: 'How your customers talk', render: phrases },
   'voice.mood': { key: 'voice.mood', title: 'Audience mood', render: mood },
   'voice.ribbon': { key: 'voice.ribbon', title: 'Hear these voices', render: ribbon },
 }
 
 const GRID_ORDER = ['voice.map', 'voice.theme', 'voice.movers', 'voice.phrases', 'voice.mood', 'voice.ribbon']
-  .filter((k) => RUN_INDEXED_DIRECTION_WORDS || k !== 'voice.movers')
+  .filter((k) => directionWordsFor('voice.movers') || k !== 'voice.movers')
 
 /** A renderable for a full-export theme slide; the registry resolves the
  *  `voice.theme:<n>` keys through this so the module stays a fixed catalogue. */
@@ -379,7 +379,7 @@ export const voicePage: PageModule<D> = {
   slides(d, variant): Slide[] {
     const slides: Slide[] = [
       { title: 'The conversation, by theme', keys: ['voice.map', 'voice.theme'], layout: 'grid' },
-      RUN_INDEXED_DIRECTION_WORDS
+      directionWordsFor('voice.movers')
         ? { title: 'What is moving, and how they say it', keys: ['voice.movers', 'voice.phrases', 'voice.mood', 'voice.ribbon'], layout: 'grid' }
         // Without the movers tile the slide is no longer about movement, and a
         // title that promises it would be the direction word the deck no longer
@@ -406,7 +406,7 @@ export function VoicePage({ data: d, detail, params }: { data: VoiceData | Voice
     return (
       <PageFrame>
         <PageBar title="Voice of Customer" context="What are they saying?">
-          <HowToRead items={d.legendItems} open={showLegend} basePath="/dashboard/voice" />
+          <HowToRead items={d.legendItems} open={showLegend} basePath="/dashboard/voice" anchor="voice" />
         </PageBar>
         <PageGrid>
           <Tile col={12} row={2} eyebrow="The conversation, by theme">
@@ -423,16 +423,16 @@ export function VoicePage({ data: d, detail, params }: { data: VoiceData | Voice
   // these five voices, not a fresh draw.
   const exportParams = { ...params, seed: String(f.seed) }
   return (
-    <ExportScope page="voice" params={exportParams} tiles={GRID_ORDER.map((k) => ({ key: k, title: renderables[k].title }))}>
+    <ExportScope page="voice" params={exportParams} tiles={GRID_ORDER.flatMap((k) => (renderables[k] ? [{ key: k, title: renderables[k].title }] : []))}>
     <PageFrame>
       <PageBar title="Voice of Customer" context={`What are they saying? · ${weekdayDate(d.runDate)}`}>
         {d.pillsInBar && <EntityPills d={d} />}
         <ExportMenu />
-        <HowToRead items={d.legendItems} open={showLegend} basePath="/dashboard/voice" />
+        <HowToRead items={d.legendItems} open={showLegend} basePath="/dashboard/voice" anchor="voice" />
       </PageBar>
 
       <PageGrid>
-        {GRID_ORDER.map((key) => <Fragment key={key}>{renderables[key].render(d, 'app')}</Fragment>)}
+        {GRID_ORDER.map((key) => <Fragment key={key}>{renderables[key]?.render(d, 'app')}</Fragment>)}
       </PageGrid>
 
       {/* ── drawers: one click deeper ────────────────────────────────── */}
@@ -449,7 +449,7 @@ export function VoicePage({ data: d, detail, params }: { data: VoiceData | Voice
 
       {/* Gated with the tile (D1): ?detail=movers then matches no drawer and
           the page renders whole, rather than opening an empty sheet. */}
-      {RUN_INDEXED_DIRECTION_WORDS && (
+      {directionWordsFor('voice.movers') && (
       <DetailDrawer value="movers" closeHref={closeHref} title="Gaining and fading" description={`themes heard in ≥2 of your ${d.updatesCount} updates · conversations per update, delta vs last`}>
         <div className="space-y-5">
           {(['gaining', 'fading', 'emerging'] as const).map((m) => {

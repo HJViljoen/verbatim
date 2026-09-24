@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  needsTranslation, isEnglishLang, buildTranslatePrompt, planTranslation, translateAttempts,
+  needsTranslation, isEnglishLang, buildTranslatePrompt, planTranslation, translatePlanCounts, translateDeferred, translateAttempts,
   translateErrorStamp, translationPatch, translateBatch, TRANSLATE_MAX_ATTEMPTS,
   type TranslatableVideo, type TranslateOutcome,
 } from './translate'
@@ -383,5 +383,107 @@ describe('translateBatch write paths', () => {
     expect(calls).toBe(1)       // only v2
     expect(r.skipped).toBe(2)
     expect(r.translated).toBe(1)
+  })
+})
+
+// ---- The 2026-09-20 false alarm (run b67b56de) ------------------------------
+//
+// Sealand was read as having "1,564 videos pending translation" and the run as
+// having attempted 178 of a 400 cap. Both halves came from measuring the
+// backlog with the DB PRE-FILTER — `transcript_status = 'ok' and transcript_en
+// is null`, which is also the predicate `videos_translate_pending_v2_idx` is
+// defined on — instead of with the selection rule. All 1,564 of those rows are
+// labelled English; the real candidate set was 178, and the run attempted all
+// of it. These pin the gap so the next person measuring it reads the same
+// number the step does.
+describe('the index predicate is not the selection rule', () => {
+  const pending = (over: Partial<TranslatableVideo> = {}): TranslatableVideo =>
+    video({ transcript_en: null, transcript_status: 'ok', ...over })
+
+  it('an English transcript matches the index predicate and is NOT a candidate', () => {
+    // Every spelling that reaches transcript_lang, all of them still pending by
+    // the index's own predicate, none of them anything to translate.
+    for (const lang of ['en', 'EN', 'english', 'English', 'en-US', 'en_GB']) {
+      expect(needsTranslation(pending({ transcript_lang: lang }))).toBe(false)
+    }
+  })
+
+  it('an unknown language IS a candidate — the model is asked, not told', () => {
+    expect(needsTranslation(pending({ transcript_lang: null }))).toBe(true)
+    expect(needsTranslation(pending({ transcript_lang: '   ' }))).toBe(true)
+  })
+
+  // The deferral used to be asserted here as `Math.max(0, n - 400)` — the test
+  // re-doing the production subtraction, which passes whatever the code says.
+  // `translateDeferred` is that subtraction, and `translatePlanCounts` is the
+  // partition the run reports; both are called, not re-implemented.
+  it('the cap defers CANDIDATES, never pre-filter rows: 178 of a 400 cap defers nothing', () => {
+    const candidates = Array.from({ length: 178 }, (_, i) => ({ id: `v${i}` }))
+    const batches = planTranslation(candidates, { cap: 400, batch: 4 })
+    expect(batches.flat()).toHaveLength(178)
+    expect(translateDeferred(candidates.length, 400)).toBe(0)
+  })
+
+  it('a real backlog IS worked up to the cap, and the remainder is reported', () => {
+    const candidates = Array.from({ length: 1564 }, (_, i) => ({ id: `v${i}` }))
+    const batches = planTranslation(candidates, { cap: 400, batch: 4 })
+    expect(batches.flat()).toHaveLength(400)
+    expect(batches).toHaveLength(100)
+    expect(translateDeferred(candidates.length, 400)).toBe(1164)
+  })
+})
+
+// ---- What the plan step actually reports (m9) -------------------------------
+//
+// The run log says "N needed of M offered (K already English, J out of
+// attempts)", and that sentence is the fix for the 2026-09-20 misreading. It
+// had no test: the counting lived inside planTranslateBatches, which is a DB
+// read. It is `translatePlanCounts` now, pure, and these are its tests.
+describe('translatePlanCounts — offered, and what the rule dropped', () => {
+  const r = (transcript_lang: string | null, transcript_en_error: string | null = null) =>
+    ({ transcript_lang, transcript_en_error })
+
+  it('reproduces the run that was misread: 1,564 offered, 178 needed, 1,386 English', () => {
+    const rows = [
+      ...Array.from({ length: 1386 }, () => r('en')),
+      ...Array.from({ length: 178 }, () => r('nl')),
+    ]
+    const c = translatePlanCounts(rows)
+    expect(c.offered).toBe(1564)
+    expect(c.pending).toHaveLength(178)
+    expect(c.excluded).toEqual({ english: 1386, exhausted: 0 })
+    // The cap never bound: that is what "attempting 178 of a 400 cap" missed.
+    expect(translateDeferred(c.pending.length, 400)).toBe(0)
+  })
+
+  it('partitions the offered rows exactly — every row is one of the three', () => {
+    // 'a; b; c' carries no `attempt n/3:` marker, which translateAttempts
+    // reads as EXHAUSTED — hand-written, or older than the counter, and
+    // neither wants re-paying for. 'attempt 1/3: …' has two attempts left.
+    const rows = [r('en'), r('EN'), r('nl'), r(null), r('de', 'a; b; c'), r('fr', 'attempt 1/3: boom')]
+    const c = translatePlanCounts(rows)
+    expect(c.pending.length + c.excluded.english + c.excluded.exhausted).toBe(c.offered)
+    expect(c.excluded).toEqual({ english: 2, exhausted: 1 })
+    expect(c.pending).toHaveLength(3)
+  })
+
+  it('drops a row that has spent its attempts, and keeps one that has not', () => {
+    const c = translatePlanCounts([
+      r('nl', `attempt ${TRANSLATE_MAX_ATTEMPTS}/${TRANSLATE_MAX_ATTEMPTS}: last`),
+      r('nl', `attempt ${TRANSLATE_MAX_ATTEMPTS - 1}/${TRANSLATE_MAX_ATTEMPTS}: one left`),
+    ])
+    expect(c.excluded.exhausted).toBe(1)
+    expect(c.pending).toHaveLength(1)
+  })
+
+  it('counts a re-attempt as spend, and an unknown language as a candidate', () => {
+    const c = translatePlanCounts([r('nl'), r('nl', 'attempt 2/3: boom'), r(null), r('  ')])
+    expect(c.retrying).toBe(1)
+    expect(c.byLang).toEqual({ nl: 2, unknown: 2 })
+  })
+
+  it('offers nothing when the pre-filter matched nothing', () => {
+    const c = translatePlanCounts([])
+    expect(c).toEqual({ offered: 0, pending: [], excluded: { english: 0, exhausted: 0 }, retrying: 0, byLang: {} })
   })
 })

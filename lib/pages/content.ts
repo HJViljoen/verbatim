@@ -71,7 +71,19 @@ const VOICES_SHOWN = 5
 /** Hook styles / formats listed per column in "What works right now". */
 const PERF_SHOWN = 6
 
-export type ContentParams = { detail?: string; intent?: string }
+/**
+ * `subject` is carried, NOT YET READ (Block D wave 2, subjects).
+ *
+ * Subjects' "the 26 videos behind your figure →" lands here with
+ * `?subject=<id>`, and until now the type did not admit the parameter at all —
+ * so the link arrived at an unfiltered catalogue with nothing recording that a
+ * filter had been asked for. Declaring it is half the fix and the half this
+ * package owns: this file is the retiring Content page's, and the read that
+ * would actually filter a catalogue by subject membership belongs with whoever
+ * retires it. Until then the page shows everything, which is what it showed
+ * before, and the status note says so.
+ */
+export type ContentParams = { detail?: string; intent?: string; subject?: string }
 
 export interface ContentSelection {
   intent: Intent | null
@@ -205,6 +217,11 @@ async function loadEngageDigest(supabase: SupabaseClient, clientId: string): Pro
 export interface ContentWorksData {
   hooks: PerfMultiple[]
   formats: PerfMultiple[]
+  /** Videos this update analysed that CARRY an engagement rate — the n the
+   *  median every multiple above is read against was taken over. A multiple
+   *  without it is a level without its denominator, which is the one thing this
+   *  product does not print (lib/calibration.ts). */
+  rated: number
   perfMax: number
   duration: DurationVerdict | null
   topSound: { name: string; count: number } | null
@@ -399,6 +416,7 @@ export async function loadContent(scope: Scope): Promise<ContentData | ContentEm
 
   // ── what works right now ───────────────────────────────────────────────
   const analysed = all.filter((v) => v.classified_type != null)
+  const rated = analysed.filter((v) => Number(v.engagement_rate) > 0).length
   const hooks = perfVsMedian(analysed, 'hook_style', { top: PERF_SHOWN })
   const formats = perfVsMedian(analysed, 'classified_type', { top: PERF_SHOWN })
   // One scale for both columns: the same multiple draws the same bar.
@@ -457,7 +475,7 @@ export async function loadContent(scope: Scope): Promise<ContentData | ContentEm
 
   return {
     updateDate, context,
-    works: { hooks, formats, perfMax, duration, topSound },
+    works: { hooks, formats, rated, perfMax, duration, topSound },
     inbox: {
       total: inboxRows.length,
       counts: intentCounts(inboxRows),

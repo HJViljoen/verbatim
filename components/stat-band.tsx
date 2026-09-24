@@ -1,4 +1,4 @@
-import { DeltaBadge } from './delta-badge'
+import { CountBadge } from './delta-badge'
 
 // The counted "this update, in figures" strip — a quiet tertiary ribbon under
 // the hero (Meltwater-style annotation, not a competing stat-hero). Extracted
@@ -22,7 +22,7 @@ export function StatBand({ tiles }: { tiles: StatTile[] }) {
         <div key={t.label} className="flex items-baseline gap-1.5 border-l border-border/60 pl-5">
           <span className="text-lg font-semibold tabular-nums">{t.n.toLocaleString('en-US')}</span>
           <span className="text-xs text-muted-foreground">{t.label}</span>
-          <DeltaBadge delta={t.delta} />
+          <CountBadge delta={t.delta} />
         </div>
       ))}
     </div>

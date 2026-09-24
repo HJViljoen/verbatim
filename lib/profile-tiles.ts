@@ -1,3 +1,4 @@
+import { directionWordsFor } from './config'
 import type { PlatformRow, ShareSeries } from '../components/profile-stats'
 
 // Pure shaping for the Consumer Profile page — split out of the old
@@ -143,11 +144,22 @@ export interface ProfileHistoryRow {
  *  every stored update. Personas are matched on key across updates (continuity
  *  keeps it stable; matching on name would break the moment a persona was
  *  reworded) — null where the persona did not exist in that update, a gap
- *  rather than a zero. */
+ *  rather than a zero.
+ *
+ *  EMPTY while `directionWordsFor('profile.mix')` is off (D1, gated in Phase 1
+ *  WP0 — Phase 0 missed it). The x axis of this chart is `run_date`: a line
+ *  drawn across it says a group grew or shrank when what actually differs
+ *  between two points may be a fortnight between updates or a week that was
+ *  missed. The chart prints no direction WORD, which is why it was missed; a
+ *  line that rises is a direction claim whether or not a word says so. The
+ *  series builder below is kept, tested and unchanged for the flip, and
+ *  `ShareOverTime` already renders nothing on an empty series. */
 export function shareSeries(
   personas: Pick<Persona, 'key' | 'name'>[],
   history: ProfileHistoryRow[],
+  directionWords = directionWordsFor('profile.mix'),
 ): ShareSeries[] {
+  if (!directionWords) return []
   return personas.map((p) => ({
     key: p.key,
     name: p.name,

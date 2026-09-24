@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { isStaticKey } from './compose'
-import { REPORT_FRAMING_MAX, REPORT_TITLE_MAX, SECTION_PAGES, type ReportSection } from './types'
+import { ALL_SECTION_PAGES, REPORT_FRAMING_MAX, REPORT_TITLE_MAX, type ReportSection } from './types'
 import { DOCUMENT_BRIEF_MAX, EXPORT_PARAMS_MAX_CHARS, EXPORT_PARAMS_MAX_KEYS, REPORT_MAX_SECTIONS } from '../config'
 import { DEFAULT_DOCUMENT_ROLE, DOCUMENT_BLOCK_KEYS, DOCUMENT_ROLES, documentSettings, type DocumentBlockKey, type DocumentRole, type DocumentSettings } from './documents/types'
 import { CUSTOM_KEY, documentTemplate } from './documents/templates'
@@ -12,7 +12,9 @@ export const audienceSchema = z.enum(['leadership', 'marketing', 'sales', 'conte
 
 export const sectionSchema = z.object({
   id: z.string().min(1).max(40),
-  page: z.enum(SECTION_PAGES as [string, ...string[]]),
+  // Accepts a retired key as well as an addable one: three stored reports
+  // name `dashboard` and must stay editable (types.ts SECTION_PAGES).
+  page: z.enum(ALL_SECTION_PAGES as [string, ...string[]]),
   params: z.record(z.string().max(40), z.string().max(EXPORT_PARAMS_MAX_CHARS)).refine((p) => Object.keys(p).length <= EXPORT_PARAMS_MAX_KEYS, 'too many params'),
   keys: z.array(z.string().max(60).refine(isStaticKey, 'not a static tile key')).min(1, 'a section keeps at least one tile').max(40).optional(),
   variant: z.enum(['default', 'full']).optional(),

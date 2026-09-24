@@ -1,30 +1,32 @@
 import { writeFileSync } from 'node:fs'
 
-import { chunk } from '../lib/chunk'
 import {
   KIND_SET,
   TOP_THEMES,
   baselineStateOf,
-  topThemesByBaseline,
+  preRegisteredSet,
   weekVsBaseline,
   type DenominatorSeries,
   type PreRegisteredObject,
 } from '../lib/reading/anomaly'
-import { SLICE, coverage, perAudience, sliceMonths } from '../lib/reading/coverage'
+import { SLICE, coverage, sliceMonths } from '../lib/reading/coverage'
 import {
   completeWeeksBefore,
-  dayInWindow,
   monthStartOf,
   monthsBetween,
   readDenominators,
+  readKindReadings,
   readThemeReadings,
+  readWindowDenominators,
+  readWindowKindReadings,
+  readWindowThemeReadings,
   trailingCompleteMonths,
-  weekCrossesAMonth,
   windowOf,
 } from '../lib/reading/monthly'
+import { readSubjectMonths, readSubjectWindow } from '../lib/subjects/read'
 import { SHARE_BAND } from '../lib/report-bands'
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
-import { categoryLabel } from '../lib/voice-tiles'
+import { kindLabel } from '../lib/reading/kinds'
 
 // Back-read coverage, and the anomaly check replayed over the weeks that
 // already exist (Phase 0 WP4, design items 37 and 40 + §9.20, 2026-09-15).
@@ -35,7 +37,7 @@ import { categoryLabel } from '../lib/voice-tiles'
 //      calendar month dated by when the COMMENT was written: how many months
 //      carried at least 100 videos, and how many carried at least 100 comments.
 //      The product's floor is videos (SHARE_BAND.minN, 100 a side); comments are
-//      printed beside them because the same month reads "too little data" or
+//      printed beside them because the same month reads "too few to compare" or
 //      "plenty" depending only on which noun you count, and nobody should
 //      discover that later.
 //
@@ -46,12 +48,13 @@ import { categoryLabel } from '../lib/voice-tiles'
 //      answer is zero over a quarter, section 1 is a sentence and a coverage
 //      line, not a check".
 //
-// IT CANNOT RUN UNTIL THE WP3 MIGRATION IS APPLIED. Every number here comes
-// from monthly_denominators / monthly_theme_readings — the two SQL functions in
-// supabase/migrations/20260915092000_monthly_reading.sql, which is authored and
-// NOT yet applied. Until it lands this script exits with that sentence rather
-// than a stack trace, and the 2026-09 edition of the report was produced by
-// running those two function bodies as plain SELECTs through the Supabase MCP.
+// IT CANNOT RUN UNTIL THE MIGRATIONS ARE APPLIED. Every number here comes from
+// the month and window SQL functions — 20260915092000_monthly_reading.sql
+// (applied to production 2026-09-15), and 20260918092000 / 093000 / 094000,
+// which are authored and NOT yet applied. Until they land this script exits
+// with that sentence rather than a stack trace, and the 2026-09 edition of the
+// report was produced by running the function bodies as plain SELECTs through
+// the Supabase MCP.
 //
 // THE DENOMINATOR THE CHECK USES. Every object is a share of the whole update's
 // comment-dated slice — every audience together — because that is the n the
@@ -60,24 +63,21 @@ import { categoryLabel } from '../lib/voice-tiles'
 // per-audience baselines are reported too, because the readiness page prints
 // one per audience and the category audience is the only one that ever clears.
 //
-// A WEEK THAT CROSSES A MONTH BOUNDARY IS NOT READ. Both SQL functions group by
-// calendar month, so a week spanning two months comes back as two rows and
-// adding them counts a video with comments on both sides twice: measured on
-// production, Össur's week 36 is 290 distinct videos and 372 added up, 28% high.
-// A denominator that wrong is worse than a gap, so those weeks are named and
-// skipped. Phase 1's weekly reading needs a window-grouped read, not a sum.
+// EVERY WEEK IS READ, INCLUDING THE ONES THAT CROSS A MONTH. Until WP8 they
+// were not: both month functions group by calendar month, so a week spanning
+// two months came back as two rows and adding them counted a video with
+// comments on both sides twice — Össur's week 36 is 290 distinct videos and 372
+// added up, 28% high — and a denominator that wrong is worse than a gap. The
+// window functions (20260918092000 and M4/M5's siblings) group by the WINDOW,
+// so the week is one row per audience and the count is distinct. That recovers
+// 3 of every 11 weeks here and about 3 of every 13 updates in the pipeline.
 //
-// THE KIND MIX IS READ IN THIS PROCESS, not by an RPC: there is no SQL function
-// for it. The chain is the COMMENT HALF of the one monthly_theme_readings uses,
-// with "an insight of this kind" in place of "a member of this theme" — insight
-// → comment evidence → dated comment → its analysed video. It is not the whole
-// chain: the RPC also attributes a member whose only evidence is spoken on
-// camera to the months its video already occupies, and this read has no such
-// arm. So a theme's numerator can hold a video a kind's never could, and the
-// two are not exactly commensurable — small on today's corpus (on-camera
-// evidence is 3.9% of Össur's rows, and only the part of it with no dated
-// comment anywhere is attributed), but not zero. When Phase 1 gives the kind
-// mix a loader, it should carry both arms and this read should go.
+// THE KIND MIX HAS A LOADER NOW, and this script uses it. It used to be read in
+// this process, because there was no SQL function for it — and that read was
+// the COMMENT HALF only, with no arm for a member whose evidence is spoken on
+// camera, so a theme's numerator could hold a video a kind's never could.
+// monthly_kind_readings / window_kind_readings carry both arms and the two are
+// commensurable; the in-process read is gone.
 //
 // WHAT IT NEVER DOES: write anything, call a model, or spend a cent.
 //
@@ -113,99 +113,6 @@ const sum = (ns: Iterable<number>): number => {
   let total = 0
   for (const n of ns) total += n
   return total
-}
-
-// ---- Reads -------------------------------------------------------------------
-
-interface KindCitation {
-  category: string
-  videoUuid: string
-  /** The comment's date, `YYYY-MM-DD`. */
-  date: string
-}
-
-/**
- * Every (kind, dated comment, analysed video) the current insights cite, in one
- * window — the kind mix's raw material.
- *
- * `audience_insights_current` is the population read the AGENTS.md rule asks
- * for: "all current insights", never a run filter. The comment carries the date
- * and names the video, exactly as the comment half of the theme reading does.
- *
- * It is that half and no more: monthly_theme_readings also attributes a member
- * whose only evidence is on camera to the months its video already occupies,
- * and there is no such arm here. Read a kind's share and a theme's share in the
- * same week as near neighbours, not as the same measurement.
- */
-async function readKindCitations(
-  admin: ReturnType<typeof createAdminClient>,
-  clientId: string,
-  window: { from: string; to: string },
-): Promise<KindCitation[]> {
-  const insights = await selectAll<{ id: string; category: string | null }>(() =>
-    admin.from('audience_insights_current').select('id, category').eq('client_id', clientId).order('id', { ascending: true }),
-  )
-  const categoryOf = new Map(insights.map((i) => [i.id, i.category ?? 'uncategorised']))
-
-  const videos = await selectAll<{ id: string; platform: string; video_id: string }>(() =>
-    admin
-      .from('videos')
-      .select('id, platform, video_id')
-      .eq('client_id', clientId)
-      .not('analyzed_run_id', 'is', null)
-      .order('id', { ascending: true }),
-  )
-  const videoOf = new Map(videos.map((v) => [`${v.platform}|${v.video_id}`, v.id]))
-
-  const comments = await selectAll<{ id: string; platform: string; video_id: string; comment_date: string | null }>(() =>
-    admin
-      .from('comments')
-      .select('id, platform, video_id, comment_date')
-      .eq('client_id', clientId)
-      .gte('comment_date', window.from)
-      .lt('comment_date', window.to)
-      .order('id', { ascending: true }),
-  )
-  const commentOf = new Map(comments.map((c) => [c.id, c]))
-
-  const out: KindCitation[] = []
-  const seen = new Set<string>()
-  for (const part of chunk([...categoryOf.keys()], 100)) {
-    const rows = await selectAll<{ audience_insight_id: string; comment_id: string | null }>(() =>
-      admin
-        .from('insight_evidence')
-        .select('audience_insight_id, comment_id')
-        .eq('source', 'comment')
-        .in('audience_insight_id', part)
-        .order('id', { ascending: true }),
-    )
-    for (const r of rows) {
-      if (!r.comment_id) continue
-      const comment = commentOf.get(r.comment_id)
-      if (!comment?.comment_date) continue
-      const videoUuid = videoOf.get(`${comment.platform}|${comment.video_id}`)
-      if (!videoUuid) continue
-      const category = categoryOf.get(r.audience_insight_id)
-      if (!category) continue
-      const key = `${category}|${videoUuid}|${comment.comment_date.slice(0, 10)}`
-      if (seen.has(key)) continue
-      seen.add(key)
-      out.push({ category, videoUuid, date: comment.comment_date.slice(0, 10) })
-    }
-  }
-  return out
-}
-
-/** Distinct videos per kind inside `[from, to)`. */
-function kindVideos(citations: readonly KindCitation[], from: string, to: string): Map<string, number> {
-  const perKind = new Map<string, Set<string>>()
-  for (const c of citations) {
-    if (!dayInWindow(c.date, { from, to })) continue
-    const set = perKind.get(c.category) ?? new Set<string>()
-    set.add(c.videoUuid)
-    perKind.set(c.category, set)
-  }
-  return new Map([...perKind].map(([k, v]) => [k, v.size]))
 }
 
 // ---- The report --------------------------------------------------------------
@@ -315,10 +222,10 @@ async function main() {
 
     // ---- Question 2: the replay ----
     const replayFrom = trailingCompleteMonths(weeks[0].from, 3)[0]
-    const citations = await readKindCitations(admin, id, { from: `${replayFrom}T00:00:00.000Z`, to: weeks.at(-1)!.to })
-    const themeMonths = runId
-      ? await readThemeReadings(admin, id, runId, { from: `${replayFrom}T00:00:00.000Z`, to: weeks.at(-1)!.to })
-      : []
+    const replayWindow = { from: `${replayFrom}T00:00:00.000Z`, to: weeks.at(-1)!.to }
+    const themeMonths = runId ? await readThemeReadings(admin, id, runId, replayWindow) : []
+    const kindMonths = await readKindReadings(admin, id, replayWindow)
+    const subjectMonths = await readSubjectMonths(admin, id, replayWindow)
     // Labels are decoration: theme identity is the registry id and labels churn
     // ~88% run to run, so nothing here keys on one.
     const themeLabels = new Map<string, string>()
@@ -328,39 +235,52 @@ async function main() {
       )
       for (const r of rows) themeLabels.set(r.id, r.canonical_label ?? '(unlabelled)')
     }
-    // One pass per window rather than one per kind per window.
-    const kindsByMonth = new Map<string, Map<string, number>>()
-    for (const month of monthsBetween(`${replayFrom}T00:00:00.000Z`, weeks.at(-1)!.to)) {
-      kindsByMonth.set(month, kindVideos(citations, `${month}T00:00:00.000Z`, nextMonthInstant(month)))
+    // EVERY ACTIVE SUBJECT, not only the ones with baseline month rows. This
+    // is a rehearsal of what the step will do, and `buildReading` admits every
+    // `status = 'active'` subject whether or not it has history — a subject
+    // with no baseline enters the set, is counted in `setSize` and is not
+    // tested. Admitting a different set here would give a different Holm
+    // threshold and stop the replay being a faithful rehearsal.
+    const subjectLabels = new Map<string, string>()
+    {
+      const rows = await selectAll<{ id: string; name: string }>(() =>
+        admin.from('subjects').select('id, name').eq('client_id', id).eq('status', 'active').order('id', { ascending: true }),
+      )
+      for (const r of rows) subjectLabels.set(r.id, r.name)
     }
+    const perMonth = <T extends { month: string; videos: number }>(rows: readonly T[], idOf: (r: T) => string) => {
+      const out = new Map<string, Map<string, number>>()
+      for (const r of rows) {
+        const month = monthStartOf(r.month)
+        const per = out.get(idOf(r)) ?? new Map<string, number>()
+        per.set(month, (per.get(month) ?? 0) + r.videos)
+        out.set(idOf(r), per)
+      }
+      return out
+    }
+    const kindsByObject = perMonth(kindMonths, (r) => r.kind)
+    const subjectsByObject = perMonth(subjectMonths, (r) => r.subject_id)
+    const themesByObject = perMonth(themeMonths, (r) => r.theme_id)
 
     say()
     say('### What the anomaly check would have said, week by week')
     say()
     say(
       `Pre-registered each week: the ${KIND_SET.length} insight kinds, ${rivals.length} tracked ` +
-      `${rivals.length === 1 ? 'rival' : 'rivals'}, the ${TOP_THEMES} themes with the largest share in that week's ` +
-      'baseline, and 0 subjects (none exist yet).',
+      `${rivals.length === 1 ? 'rival' : 'rivals'}, ${subjectLabels.size} ` +
+      `${subjectLabels.size === 1 ? 'subject' : 'subjects'}, and the themes among the top ${TOP_THEMES} of that ` +
+      "week's baseline whose share could imply ten of their own videos in a typical week (decision S's trim). " +
+      'Every week is read: the window functions count a crossing week correctly.',
     )
     say()
-    say('| Week | Videos in the week | Baseline | Objects tested | Flags |')
-    say('|---|---|---|---|---|')
+    say('| Week | Videos in the week | Baseline | Set (kept / ranked themes trimmed) | Objects tested | Flags |')
+    say('|---|---|---|---|---|---|')
 
     const flagDetail: string[] = []
-    const notes: string[] = []
     for (const week of weeks) {
-      if (weekCrossesAMonth(week)) {
-        say(`| ${week.label} (${week.from.slice(0, 10)}) | — | — | — | not read |`)
-        notes.push(
-          `- ${week.label} crosses a month boundary and is not read. The monthly reading groups by ` +
-          'calendar month, so this week would arrive as two parts and a video carrying comments on both ' +
-          'sides of the boundary would be counted twice — on production that inflates a week by up to 28%.',
-        )
-        continue
-      }
-      const weekRows = await readDenominators(admin, id, { from: week.from, to: week.to })
-      const weekByAudience = perAudience(weekRows)
-      const weekSlice = sum([...weekByAudience.values()].map((v) => v.videos))
+      const weekRows = await readWindowDenominators(admin, id, week)
+      const weekByAudience = new Map(weekRows.map((r) => [r.audience, r]))
+      const weekSlice = sum(weekRows.map((r) => r.videos))
       const baselineMonths = trailingCompleteMonths(week.from, 3)
 
       const sliceSeries: DenominatorSeries = {
@@ -369,22 +289,41 @@ async function main() {
         months: baselineMonths.map((month) => ({ month, videos: slice.get(month)?.videos ?? 0 })),
       }
 
-      const kindsThisWeek = kindVideos(citations, week.from, week.to)
-      const set: PreRegisteredObject[] = KIND_SET.map((kind) => ({
+      const [weekKinds, weekSubjects, weekThemes] = await Promise.all([
+        readWindowKindReadings(admin, id, week),
+        readSubjectWindow(admin, id, week),
+        runId ? readWindowThemeReadings(admin, id, runId, week) : Promise.resolve([]),
+      ])
+      const pool = <T extends { videos: number }>(rows: readonly T[], idOf: (r: T) => string) => {
+        const out = new Map<string, number>()
+        for (const r of rows) out.set(idOf(r), (out.get(idOf(r)) ?? 0) + r.videos)
+        return out
+      }
+      const kindWeek = pool(weekKinds, (r) => r.kind)
+      const subjectWeek = pool(weekSubjects, (r) => r.subject_id)
+      const themeWeek = pool(weekThemes, (r) => r.theme_id)
+      const monthsOf = (per: Map<string, number> | undefined) =>
+        baselineMonths.filter((m) => per?.has(m)).map((month) => ({ month, videos: per?.get(month) ?? 0 }))
+
+      const candidates: PreRegisteredObject[] = KIND_SET.map((kind) => ({
         kind: 'kind' as const,
         id: kind,
-        label: categoryLabel(kind),
+        // `kindLabel`, the word the step writes onto the row — not
+        // `categoryLabel`, which says 'Objections' where the step says
+        // 'Pushing back'. A replay that labels the same object differently
+        // from the run it is rehearsing is a replay of something else.
+        label: kindLabel(kind),
         denominator: SLICE,
-        weekVideos: kindsThisWeek.get(kind) ?? 0,
-        months: baselineMonths.map((month) => ({ month, videos: kindsByMonth.get(month)?.get(kind) ?? 0 })),
+        weekVideos: kindWeek.get(kind) ?? 0,
+        months: monthsOf(kindsByObject.get(kind)),
       }))
 
       for (const rival of rivals) {
         const audience = `competitor:${rival}`
-        set.push({
+        candidates.push({
           kind: 'rival',
           id: audience,
-          label: `${rival} — share of the conversation`,
+          label: rival,
           denominator: SLICE,
           weekVideos: weekByAudience.get(audience)?.videos ?? 0,
           months: baselineMonths.map((month) => ({
@@ -394,37 +333,40 @@ async function main() {
         })
       }
 
-      if (runId) {
-        const weekThemes = await readThemeReadings(admin, id, runId, { from: week.from, to: week.to })
-        const baselinePerTheme = new Map<string, Map<string, number>>()
-        for (const t of themeMonths) {
-          const month = monthStartOf(t.month)
-          if (!baselineMonths.includes(month)) continue
-          const per = baselinePerTheme.get(t.theme_id) ?? new Map<string, number>()
-          per.set(month, (per.get(month) ?? 0) + t.videos)
-          baselinePerTheme.set(t.theme_id, per)
-        }
-        const weekPerTheme = new Map<string, number>()
-        for (const t of weekThemes) weekPerTheme.set(t.theme_id, (weekPerTheme.get(t.theme_id) ?? 0) + t.videos)
-        const ranked = topThemesByBaseline(
-          [...baselinePerTheme.entries()].map(([themeId, per]) => ({ id: themeId, baselineVideos: sum(per.values()), per })),
-        )
-        for (const theme of ranked) {
-          set.push({
-            kind: 'theme',
-            id: theme.id,
-            label: themeLabels.get(theme.id) ?? theme.id.slice(0, 8),
-            denominator: SLICE,
-            weekVideos: weekPerTheme.get(theme.id) ?? 0,
-            months: baselineMonths.map((month) => ({ month, videos: theme.per.get(month) ?? 0 })),
-          })
-        }
+      for (const [subjectId, label] of subjectLabels) {
+        candidates.push({
+          kind: 'subject',
+          id: subjectId,
+          label,
+          denominator: SLICE,
+          weekVideos: subjectWeek.get(subjectId) ?? 0,
+          months: monthsOf(subjectsByObject.get(subjectId)),
+        })
       }
 
-      const reading = weekVsBaseline({ week: week.label, denominators: [sliceSeries], set, options })
+      // Every theme with a baseline is a candidate; the ranking takes the top
+      // TOP_THEMES and the trim then drops the ones whose share could never
+      // reach ten of their own videos in a typical week. Both decisions read
+      // the baseline alone, so the set is still fixed before the week is seen.
+      for (const [themeId, per] of themesByObject) {
+        const monthsHere = monthsOf(per)
+        if (monthsHere.length === 0) continue
+        candidates.push({
+          kind: 'theme',
+          id: themeId,
+          label: themeLabels.get(themeId) ?? themeId.slice(0, 8),
+          denominator: SLICE,
+          weekVideos: themeWeek.get(themeId) ?? 0,
+          months: monthsHere,
+        })
+      }
+
+      const registration = preRegisteredSet({ denominators: [sliceSeries], candidates })
+      const reading = weekVsBaseline({ week: week.label, denominators: [sliceSeries], set: registration.set, options })
       const state = reading.baselines[0]
       say(
         `| ${week.label} (${week.from.slice(0, 10)}) | ${weekSlice} | ${state.label} | ` +
+        `${registration.set.length} kept / ${registration.trimmed.length} of ${registration.ranked} trimmed | ` +
         `${reading.tested} of ${reading.setSize} | ${reading.flags.length} |`,
       )
       for (const flag of reading.flags) {
@@ -438,12 +380,8 @@ async function main() {
     }
 
     say()
-    if (flagDetail.length === 0) say('Nothing unusual in any week read.')
+    if (flagDetail.length === 0) say('Nothing unusual in any week.')
     else for (const line of flagDetail) say(line)
-    if (notes.length > 0) {
-      say()
-      for (const line of notes) say(line)
-    }
   }
 
   if (out) {
@@ -459,17 +397,13 @@ async function trackedRivals(admin: ReturnType<typeof createAdminClient>, client
   return ((data?.competitor_names as string[] | null) ?? []).filter((n) => n && n.trim().length > 0)
 }
 
-const nextMonthInstant = (month: string): string => {
-  const d = new Date(`${month}T00:00:00.000Z`)
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)).toISOString()
-}
-
 main().catch((e) => {
   const message = e instanceof Error ? e.message : String(e)
-  if (/monthly_denominators|monthly_theme_readings/.test(message)) {
+  if (/monthly_\w+|window_\w+_readings|window_denominators/.test(message)) {
     console.error(
-      'This report reads the two monthly-reading SQL functions, and they are not in the database yet.\n' +
-      'Apply supabase/migrations/20260915092000_monthly_reading.sql first (WP12 step 1), then re-run.\n' +
+      'This report reads the month and window SQL functions, and at least one of them is not in the\n' +
+      'database yet. Apply 20260915092000_monthly_reading.sql, then 20260918092000_reading_windows.sql,\n' +
+      '20260918093000_subjects.sql and 20260918094000_kind_mood_attention.sql, then re-run.\n' +
       `(${message})`,
     )
     process.exit(1)

@@ -187,6 +187,26 @@ export function tierCounts(tierById: Map<string, GateTier>): { confirmed: number
   return out
 }
 
+/**
+ * The tier a conclusion keeps once the evidence UNDER it has been counted.
+ *
+ * `gateTier` falls through to 'early_signal' on the model's own confidence
+ * alone: a conclusion whose `supporting_theme_ids` is empty scores 10, cites
+ * nothing, and is badged as evidence. That was invisible while no surface
+ * printed the count beside the tier. MK1 prints it, and both live tenants read
+ * "Early signal · 0 of 1,699 videos behind it" under a header saying "0 below
+ * the evidence bar" — while GLOSSARY defines an early signal as "heard in a
+ * single conversation so far", and zero is not one.
+ *
+ * A conclusion with nothing behind it is below the bar whatever it scored
+ * itself, and then joins the count it belongs to. The block's own header states
+ * the rule this serves: a conclusion below the evidence bar is labelled, not
+ * hidden.
+ */
+export function groundedTier(tier: GateTier, videos: number): GateTier {
+  return videos <= 0 ? 'archive' : tier
+}
+
 // ── news ──────────────────────────────────────────────────────────────────
 
 export interface NewsRingChip { label: string; tone: ClaimTone }

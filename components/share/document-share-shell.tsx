@@ -2,6 +2,7 @@ import { LinkGuard } from '@/components/share/link-guard'
 import { DocumentDeck } from '@/components/print/document-deck'
 import { FitWidth } from '@/components/reports/fit-width'
 import { audienceLabel } from '@/lib/reports/cover'
+import { documentSheetCount } from '@/lib/reports/documents/compose'
 import type { DocumentSnapshotData } from '@/lib/reports/documents/types'
 
 // A shared DOCUMENT (2026-08-31): the written pages exactly as printed, one
@@ -12,14 +13,21 @@ import type { DocumentSnapshotData } from '@/lib/reports/documents/types'
 // Client-led, as the arranged share: the client's name leads, Verbatim is
 // the provenance line and the one link at the foot.
 export function DocumentShareShell({ data, appUrl }: { data: DocumentSnapshotData; appUrl: string }) {
+  // THE SHEETS THE DECK BELOW ACTUALLY PRINTS. This header counted the written
+  // pages plus a cover — a number the deck stopped drawing when a borrowed
+  // block became a sheet of its own (WP19) and again when the cover folded
+  // away, so the one CLIENT-FACING surface printed "4 pages" about forty pixels
+  // above footers reading "1 / 9". One function, read by the deck, the viewer
+  // and this header (fix pass, package E-marketing).
+  const pages = documentSheetCount(data)
   const built = new Date(data.generatedAt)
   const date = Number.isNaN(built.getTime()) ? undefined : built.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
   return (
-    <LinkGuard>
+    <LinkGuard appUrl={appUrl}>
       <div className="mx-auto flex w-full max-w-[1216px] flex-col gap-6 px-4 py-8 md:px-6">
         <header className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 px-1">
           <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Prepared by {data.company} · for {audienceLabel(data.audience)}</p>
-          <p className="font-mono text-[11px] text-muted-foreground">{data.period} · {data.pages.length + 1} pages</p>
+          <p className="font-mono text-[11px] text-muted-foreground">{data.period} · {pages} {pages === 1 ? 'page' : 'pages'}</p>
         </header>
         <FitWidth base={1123}>
           <div className="vb-print vb-preview flex flex-col gap-6" data-print-variant="b">

@@ -4,6 +4,12 @@ import { ReportDeck } from '@/components/print/report-deck'
 import { FitWidth } from '@/components/reports/fit-width'
 import { ViewerEscape } from '@/components/reports/report-viewer-close'
 import { isDocumentData } from '@/lib/reports/documents/types'
+import { isWeeklyData } from '@/lib/reports/weekly-build'
+import { isMonthlyData } from '@/lib/reports/monthly-build'
+import { isQuarterlyData } from '@/lib/reports/quarterly-build'
+import { WeeklyDeck } from '@/components/print/weekly-deck'
+import { MonthlyDeck } from '@/components/print/monthly-deck'
+import { QuarterlyDeck } from '@/components/print/quarterly-deck'
 import type { ViewerSnapshot } from '@/lib/reports/viewer'
 import type { ReportSnapshotData } from '@/lib/reports/types'
 import { STUDIO_HREF } from '@/lib/studio-visibility'
@@ -30,7 +36,13 @@ export function ReportViewer({ snapshot, closeHref, showStudio = false }: { snap
   const date = fmtDate(builtAt)
   const deck = isDocumentData(data)
     ? <DocumentDeck data={data} date={date} />
-    : <ReportDeck data={data as ReportSnapshotData} date={date} />
+    : isWeeklyData(data)
+      ? <WeeklyDeck data={data} date={date} />
+      : isMonthlyData(data)
+        ? <MonthlyDeck data={data} date={date} />
+        : isQuarterlyData(data)
+          ? <QuarterlyDeck data={data} date={date} />
+          : <ReportDeck data={data as ReportSnapshotData} date={date} />
 
   return (
     <>

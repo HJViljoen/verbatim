@@ -6,6 +6,8 @@ import { weekdayDate } from '@/lib/format'
 import { rows as readRows, row } from '@/lib/pages/read'
 import { toInitiative, type InitiativeDbRow } from '@/lib/initiatives/types'
 import { initiativePromise } from '@/lib/initiatives/measure'
+import { OldPageBanner } from '@/components/shell/old-page-banner'
+import { PARKED_INITIATIVES } from '@/lib/nav'
 
 // Settings › Initiatives — the list of what this workspace declared it is
 // trying to move, and the only place to rename, finish or stop one. Declaring
@@ -16,6 +18,12 @@ import { initiativePromise } from '@/lib/initiatives/measure'
 // this page and the "Track this theme" sheet are the two places the product
 // tells a client what tracking will give them back, and both must promise only
 // what the tile can currently draw.
+//
+// PARKED, NOT RETIRED (Phase 1 WP9). What a client is trying to move reads on
+// Market as "moves" from WP14 on, and this page goes when that panel can do
+// what it does. Until then it stays and wears the banner, by the same rule
+// Market Intelligence and Competitive Intelligence do: a page whose job has
+// nowhere else to go is parked, never redirected.
 
 export default async function InitiativesSettingsPage() {
   const { supabase, clientId } = await getSessionContext()
@@ -43,13 +51,15 @@ export default async function InitiativesSettingsPage() {
 
   return (
     <SettingsFrame
-      active="initiatives"
+      // Parked, and not one of the seven: the rail lights nothing here (WP16).
+      active={null}
       title="Settings"
       context={client?.company_name ?? 'Client'}
       contentTitle="Initiatives"
       contentMeta={initiatives.length > 0 ? `${active.length} being tracked · ${initiatives.length} in all` : undefined}
     >
       <div className="flex flex-col gap-3">
+        <OldPageBanner page={PARKED_INITIATIVES} />
         <SettingsCard
           title="What you are trying to move"
           description={`Each one is measured on the themes it was declared with, from the day you declared it. ${initiativePromise()}`}

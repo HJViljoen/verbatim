@@ -6,7 +6,7 @@ import type { CompetitiveData } from '../../lib/pages/competitive'
 import { diverseByIntent, INTENT_LABEL } from '../../lib/content-tiles'
 import { shareDeltaShown } from '../../lib/competitive-tiles'
 import { movementRows, movementShowsChange } from '../../lib/dashboard-tiles'
-import { RUN_INDEXED_DIRECTION_WORDS } from '../../lib/config'
+import { directionWordsFor } from '../../lib/config'
 import { fmtCompact, fmtInt, fmtPct, platformLabel, shortDate } from '../../lib/format'
 import { firstSentence } from '../../lib/email/text'
 import { shareFootnoteLead } from '../../lib/calibration'
@@ -79,7 +79,7 @@ const hero: E<DashboardData> = ({ hero: h }) => {
       {h.beats.slice(0, 3).map((b) => (
         <p key={b.metric} style={{ ...text.body, fontSize: 13, margin: '8px 0 0' }}>{b.before}<strong>{b.figure}</strong>{b.after}</p>
       ))}
-      {h.quotes.slice(0, 2).map((q, i) => <Quote key={i} text={q.text} />)}
+      {h.quotes.slice(0, 2).map((q, i) => <Quote key={i} text={q.text} lang={q.lang} english={q.english} />)}
       {h.quotes.length > 0 && h.voices > 0 ? <div style={{ ...text.small, fontSize: 11, marginTop: 4 }}>{h.quotes.length > 1 ? 'two' : 'one'} of {fmtInt(h.voices)} voices behind the top recommendation</div> : null}
     </div>
   )
@@ -129,7 +129,7 @@ const themes: E<DashboardData> = ({ themes: t }) => {
       {t.rows.map((r, i) => (
         // Gated at render as well as at compute (D1): an email re-rendered
         // from a snapshot frozen before the gate still carries isNew.
-        <RankedRow key={`${i}-${r.label}`} label={r.label} dot color={tokenHex(BUCKET_COLOR[r.bucket])} pct={(r.conversations / t.max) * 100} count={fmtInt(r.conversations)} badge={r.isNew && RUN_INDEXED_DIRECTION_WORDS ? <Badge>New</Badge> : undefined} />
+        <RankedRow key={`${i}-${r.label}`} label={r.label} dot color={tokenHex(BUCKET_COLOR[r.bucket])} pct={(r.conversations / t.max) * 100} count={fmtInt(r.conversations)} badge={r.isNew && directionWordsFor('dashboard.themes') ? <Badge>New</Badge> : undefined} />
       ))}
       <div style={{ ...text.small, fontSize: 11, marginTop: 6 }}>conversations per theme · green you · grey category{t.topCompetitorName ? ` · orange ${t.topCompetitorName}` : ''}</div>
     </div>
@@ -173,7 +173,7 @@ const recommendation: E<DashboardData> = ({ hero: h }, ctx) => {
       <div style={{ ...text.body, fontSize: 15, fontWeight: 600, lineHeight: '1.3', marginTop: 4 }}>{h.oneThing.title}</div>
       {why ? <p style={{ ...text.body, fontSize: 13, margin: '6px 0 0', color: EMAIL.ink2 }}>{why}</p> : null}
       <div style={{ marginTop: 6 }}>
-        <a href={`${ctx.appUrl}/dashboard/market?rec=${encodeURIComponent(h.oneThing.id)}`} style={{ color: EMAIL.link, fontFamily: FONT.sans, fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
+        <a href={`${ctx.appUrl}/dashboard/market-intel?rec=${encodeURIComponent(h.oneThing.id)}`} style={{ color: EMAIL.link, fontFamily: FONT.sans, fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
           {h.voices > 0 ? `Grounded in ${fmtInt(h.voices)} voices${h.platforms.length > 1 ? ` · ${h.platforms.length} platforms` : ''}` : 'Why, and the voices'} →
         </a>
       </div>

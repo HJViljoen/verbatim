@@ -10,6 +10,18 @@ import { PrintTile } from '@/components/print/print-tile'
 import { ReportDeck } from '@/components/print/report-deck'
 import { DocumentDeck } from '@/components/print/document-deck'
 import { isDocumentData } from '@/lib/reports/documents/types'
+import { isWeeklyData, staleWeeklySnapshot } from '@/lib/reports/weekly-build'
+import { isMonthlyData, staleMonthlySnapshot } from '@/lib/reports/monthly-build'
+import { WeeklyDeck } from '@/components/print/weekly-deck'
+import { MonthlyDeck } from '@/components/print/monthly-deck'
+import { weeklyBlocksFor } from '@/components/blocks/weekly'
+import { monthlyBlocksFor } from '@/components/blocks/monthly'
+import { isQuarterlyData, staleQuarterlySnapshot } from '@/lib/reports/quarterly-build'
+import { QuarterlyDeck } from '@/components/print/quarterly-deck'
+import { quarterlyBlocksFor } from '@/components/blocks/quarterly'
+import { blockContext } from '@/lib/blocks/types'
+import { EMAIL } from '@/lib/email/theme'
+import { appBaseUrl } from '@/lib/site'
 import { applyEdits, loadEdits } from '@/lib/reports/documents/edits'
 import type { ReportSnapshotData } from '@/lib/reports/types'
 import { MethodNote, type MethodNoteData } from '@/components/print/method-note'
@@ -43,6 +55,92 @@ export default async function RenderPage({
   // component composes them; hydration is the same walk as for a page.
   if (row.kind === 'report') {
     const data = await hydrateSnapshot<ReportSnapshotData>(admin, row)
+    // A weekly report (Phase 1 WP17): six blocks over one reading, no page
+    // sections. Its tile key is a BLOCK key, and the block renders itself —
+    // there is no page module to look one up in.
+    if (isWeeklyData(data)) {
+      if (token.tileKey) {
+        // THE TILE ARM ASKS THE SAME QUESTION THE DECK DOES (quarterly, wave-3
+        // merge). The deck below calls its artefact's stale check first, so a
+        // stored row this build can no longer draw is a sentence a reader can
+        // act on; this arm went straight to `block.render(data.reading, …)`
+        // and a v1 row threw inside a server component — `r.ownPosts.filter`
+        // on a reading that has no `ownPosts`. All three artefacts had the
+        // identical hole, because all three `is*Data` predicates match on
+        // `kind` alone, on purpose.
+        const stale = staleWeeklySnapshot(data)
+        if (stale) return <PrintRoot style={style}><PrintTile><p className="m-0 text-[13px] text-muted-foreground">{stale}</p></PrintTile></PrintRoot>
+        const block = weeklyBlocksFor([token.tileKey])[0]
+        if (!block) notFound()
+        return (
+          <PrintRoot style={style}>
+            <PrintTile>{block.render(data.reading, 'print', blockContext(appBaseUrl(), EMAIL))}</PrintTile>
+          </PrintRoot>
+        )
+      }
+      return (
+        <PrintRoot style={style}>
+          <WeeklyDeck data={data} />
+        </PrintRoot>
+      )
+    }
+    // A monthly report (Phase 1 WP18): eight blocks over one reading, the same
+    // shape and the same rule as the weekly one.
+    if (isMonthlyData(data)) {
+      if (token.tileKey) {
+        // THE TILE ARM ASKS THE SAME QUESTION THE DECK DOES (quarterly, wave-3
+        // merge). The deck below calls its artefact's stale check first, so a
+        // stored row this build can no longer draw is a sentence a reader can
+        // act on; this arm went straight to `block.render(data.reading, …)`
+        // and a v1 row threw inside a server component — `r.ownPosts.filter`
+        // on a reading that has no `ownPosts`. All three artefacts had the
+        // identical hole, because all three `is*Data` predicates match on
+        // `kind` alone, on purpose.
+        const stale = staleMonthlySnapshot(data)
+        if (stale) return <PrintRoot style={style}><PrintTile><p className="m-0 text-[13px] text-muted-foreground">{stale}</p></PrintTile></PrintRoot>
+        const block = monthlyBlocksFor([token.tileKey])[0]
+        if (!block) notFound()
+        return (
+          <PrintRoot style={style}>
+            <PrintTile>{block.render(data.reading, 'print', blockContext(appBaseUrl(), EMAIL))}</PrintTile>
+          </PrintRoot>
+        )
+      }
+      return (
+        <PrintRoot style={style}>
+          <MonthlyDeck data={data} />
+        </PrintRoot>
+      )
+    }
+    // A quarterly review (Phase 1 WP20): eight pages over one reading, one
+    // page per sheet. Its tile key is a BLOCK key, exactly as the weekly
+    // report's is, and the block renders itself.
+    if (isQuarterlyData(data)) {
+      if (token.tileKey) {
+        // THE TILE ARM ASKS THE SAME QUESTION THE DECK DOES (quarterly, wave-3
+        // merge). The deck below calls its artefact's stale check first, so a
+        // stored row this build can no longer draw is a sentence a reader can
+        // act on; this arm went straight to `block.render(data.reading, …)`
+        // and a v1 row threw inside a server component — `r.ownPosts.filter`
+        // on a reading that has no `ownPosts`. All three artefacts had the
+        // identical hole, because all three `is*Data` predicates match on
+        // `kind` alone, on purpose.
+        const stale = staleQuarterlySnapshot(data)
+        if (stale) return <PrintRoot style={style}><PrintTile><p className="m-0 text-[13px] text-muted-foreground">{stale}</p></PrintTile></PrintRoot>
+        const block = quarterlyBlocksFor([token.tileKey])[0]
+        if (!block) notFound()
+        return (
+          <PrintRoot style={style}>
+            <PrintTile>{block.render(data.reading, 'print', blockContext(appBaseUrl(), EMAIL))}</PrintTile>
+          </PrintRoot>
+        )
+      }
+      return (
+        <PrintRoot style={style}>
+          <QuarterlyDeck data={data} />
+        </PrintRoot>
+      )
+    }
     // A document (2026-08-31): written pages, no sections, no tiles. Its
     // workings were never selected, so nothing here can print them.
     if (isDocumentData(data)) {
@@ -60,7 +158,10 @@ export default async function RenderPage({
     if (token.tileKey) {
       const page = token.tileKey.split('.')[0]
       const section = data.sections.find((s) => s.section.page === page)
-      const r = section ? pageModule(page)?.renderables[token.tileKey] : null
+      // Own keys only — see app/api/export/route.ts. An inherited
+      // Object.prototype key passes a truthiness test and is not a renderable.
+      const mod = section ? pageModule(page) : null
+      const r = mod && Object.hasOwn(mod.renderables, token.tileKey) ? mod.renderables[token.tileKey] : null
       if (!section || !r) notFound()
       return (
         <PrintRoot style={style}>
@@ -83,7 +184,7 @@ export default async function RenderPage({
     // an arbitrary tile through the query string.
     const tileKey = token.tileKey ?? row.ref.tileKey
     if (row.kind === 'tile' || tileKey) {
-      const r = tileKey ? mod.renderables[tileKey] : null
+      const r = tileKey && Object.hasOwn(mod.renderables, tileKey) ? mod.renderables[tileKey] : null
       if (!r) notFound()
       return (
         <PrintRoot style={style}>

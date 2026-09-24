@@ -20,17 +20,33 @@ const PLATFORM_LABEL: Record<string, string> = {
   reddit: 'Reddit',
 }
 
-// Three greens separated by LIGHTNESS rather than by opacity — tints of one
-// colour read as a gradient, which is what made the last version unreadable —
-// and the marketing surface's marker yellow for the fourth, where three shades
-// of one hue would start to blur. Fixed per platform, so a platform keeps its
-// colour even when another one is absent from the data.
+// A PLATFORM IS NOT A MEANING (Block D wave 3, SH9). This map spent two
+// colours the system reserves. `reddit` was a literal `#F7D046` — the
+// marketing theme's marker yellow, which DESIGN.md's anti-list names and
+// `scripts/check-design-drift.sh` cannot see, because it scans
+// app/globals.css only — and `instagram` was `var(--chart-2)`, the Verbatim
+// green, which the identity grants exactly four jobs ("you" in charts, the
+// primary button, the active-nav mark, "good"). Both reach Voice through
+// `voice-surface/cast.tsx`, so one 1440 viewport printed two yellows 14
+// degrees apart meaning "Reddit" and "both ways", and the same green as the
+// primary button, the active nav mark, a delta, a tone segment and a platform.
+//
+// So the four platforms take four steps of the INK RAMP, which is what the
+// ramp is for (globals.css: "ink lightness, not a green ramp") and which
+// encodes the one true thing about the set: these are four names, not four
+// judgements. They stay fixed per platform, so a platform keeps its step even
+// when another is absent from the data, and each resolves to its own hex in
+// the email arm (lib/email/theme.ts TOKEN_HEX).
 const PLATFORM_COLOUR: Record<string, string> = {
   tiktok: 'var(--chart-1)',
-  instagram: 'var(--chart-2)',
+  instagram: 'var(--chart-3)',
   youtube: 'var(--chart-4)',
-  reddit: '#F7D046',
+  reddit: 'var(--chart-5)',
 }
+/** A platform the product does not name falls to the ramp's middle grey — it
+ *  shares Instagram's step, and deliberately: gather produces exactly the four
+ *  above (`PLATFORM_LABEL`), so this arm is a safety net rather than a fifth
+ *  identity, and inventing a fifth colour for it would spend one. */
 export const platformColour = (p: string) => PLATFORM_COLOUR[p] ?? 'var(--chart-3)'
 
 export interface PlatformRow {

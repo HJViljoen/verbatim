@@ -33,6 +33,12 @@ describe('documentSettings', () => {
     expect(documentSettings(null)).toEqual({ sellsTo: 'consumers', competitors: null, language: 'en', findings: 4 })
     expect(documentSettings({ sellsTo: 'sideways' as never })).toMatchObject({ sellsTo: 'consumers' })
   })
+
+  // The window control is withdrawn: a brief is a reading of one month, and a
+  // stored horizon must not quietly widen the blocks under a month stamp.
+  it('carries no window, and drops one a report stored while the control existed', () => {
+    expect(documentSettings({ horizon: 'last_12' } as never)).toEqual({ sellsTo: 'consumers', competitors: null, language: 'en', findings: 4 })
+  })
 })
 
 describe('isDocumentData', () => {

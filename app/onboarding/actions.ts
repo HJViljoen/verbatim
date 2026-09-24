@@ -10,6 +10,7 @@ import { deriveCompetitorKeywords, cleanTerms, ONBOARDING_MAX_VIDEOS } from '@/l
 import { suggestSearchTerms, flattenCompetitorTerms } from '@/lib/keywords/suggest'
 import { takeSuggestionSlot } from '@/lib/keywords/suggest-guard'
 import { actorStamp, diffConfigRows, recordConfigChanges, type ConfigActor } from '@/lib/config-log'
+import { ensureRivals } from '@/lib/rivals'
 
 // State shape (a type) — idle value lives in the client form; a 'use server'
 // module may only export async functions.
@@ -189,13 +190,21 @@ export async function createWorkspace(_prev: OnboardingState, formData: FormData
   // rather than beside the insert because config_changes.actor_user_id
   // references `users`, and the membership row above is what makes this person
   // one. Non-fatal: a bookkeeping failure must never block workspace creation.
+  const birth = actorStamp({ userId: user.id, email: user.email ?? undefined, operator: null }, 'signed up')
   await recordConfigChanges(admin, diffConfigRows({
     clientId,
     before: null,
     after: initialConfig,
-    actor: actorStamp({ userId: user.id, email: user.email ?? undefined, operator: null }, 'signed up'),
+    actor: birth,
     note: 'the configuration this workspace was created with',
   }))
+
+  // Every tracked name gets an identity (WP1). The backfill in M1 covered the
+  // tenants that existed when it ran; a workspace created after it has to make
+  // its own, or its rivals have no "tracked since", cannot be renamed and
+  // cannot be resolved back from a frozen month's audience key. Non-fatal, for
+  // the same reason as everything else in this block.
+  await ensureRivals({ client: admin, clientId, actor: birth }, competitor_names)
 
   redirect('/dashboard')
 }

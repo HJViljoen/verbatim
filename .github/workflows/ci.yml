@@ -1,7 +1,15 @@
-# CI — typecheck, lint, unit tests on every push/PR. First guardrail added
-# 2026-07-11 (teardown flag: zero tests, zero CI). The unit tests cover the
-# pure pipeline logic (clustering, quote scoping, merge validation, window
-# math) — no network, no DB, no GPT — so this stays fast and secret-free.
+# CI — typecheck, lint, unit tests and a production build on every push/PR.
+# First guardrail added 2026-07-11 (teardown flag: zero tests, zero CI). The
+# unit tests cover the pure pipeline logic (clustering, quote scoping, merge
+# validation, window math) and the static render of each block — no network,
+# no DB, no GPT — so this stays fast and secret-free.
+#
+# The `build` job (2026-09-15, Phase 1 WP0) exists because the bundler is the
+# one gate the other three cannot stand in for. Vercel builds with Turbopack,
+# and a Turbopack-only break — a bad import, a route the file tracer cannot
+# follow — used to surface as a failed PRODUCTION deploy, because the only
+# local build that runs in a worktree is `next build --webpack`. CI has a real
+# `node_modules`, so it gets the real bundler. ~2 min per push.
 name: ci
 
 on:
@@ -22,3 +30,37 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # The default bundler (Turbopack), i.e. what Vercel runs.
+      #
+      # Dummy values, never secrets. `next build` collects page data by
+      # IMPORTING every route, and three modules build a client in their
+      # module body — lib/openai.ts throws "Missing credentials" without a
+      # key, and @supabase/supabase-js wants a URL — so the build needs four
+      # strings present, not four strings that work. Measured 2026-09-15: with
+      # no .env at all the build fails collecting /api/agent; with these four
+      # it exits 0 and prerenders all 52 routes. Nothing is fetched at build
+      # time (every page that reads a tenant is dynamic), so a real key would
+      # buy nothing and risk everything.
+      #
+      # THIS .next IS A TEST ARTIFACT, NEVER A DEPLOYABLE ONE. `NEXT_PUBLIC_*`
+      # is inlined into the client JS at build time, so promoting this output
+      # with `vercel deploy --prebuilt` would ship a bundle pointing at
+      # http://localhost:54321. The job uploads nothing and deploys nothing —
+      # it exits after the build, and Vercel builds its own. Any deploy
+      # checklist that mentions --prebuilt says the same.
+      - run: npx next build
+        env:
+          OPENAI_API_KEY: ci-build-dummy
+          NEXT_PUBLIC_SUPABASE_URL: http://localhost:54321
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-build-dummy
+          SUPABASE_SERVICE_ROLE_KEY: ci-build-dummy

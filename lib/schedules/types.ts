@@ -9,12 +9,46 @@
  * email body (words stay live in the snapshot, as everywhere on the spine).
  */
 
-export type ScheduleCadence = 'every_update' | 'monthly'
+// 'quarterly' joined the set with the quarterly review (Phase 1 WP16 M8,
+// design item 14). A schedule has never had a clock of its own — it rides the
+// scheduled update — so a quarter is expressed the way a month already is:
+// the first update of a calendar quarter, and nothing until the next one.
+export type ScheduleCadence = 'every_update' | 'monthly' | 'quarterly'
 
-export const CADENCES: { key: ScheduleCadence; label: string; help: string }[] = [
+export const CADENCE_COPY: { key: ScheduleCadence; label: string; help: string }[] = [
   { key: 'every_update', label: 'Every update', help: 'Goes out after each scheduled update.' },
   { key: 'monthly', label: 'Monthly', help: 'Goes out after the first update of each month.' },
+  { key: 'quarterly', label: 'Quarterly', help: 'Goes out after the first update of each quarter.' },
 ]
+
+/** What the Studio's schedule form OFFERS. It was the two the product could
+ *  serve while nothing built a quarterly artefact — an option that produces a
+ *  schedule the builder cannot serve is a form that lies. WP20 is the review
+ *  that fills it (`snapshotQuarterly`, and the quarterly branch in
+ *  `lib/schedules/run.ts`), so the picker is now all three. */
+export const CADENCES = CADENCE_COPY
+
+/**
+ * The word a subject line uses for a schedule's rhythm — "your {word} update"
+ * (`digestSubject`, lib/email/subject.ts).
+ *
+ * THREE CADENCES, THREE WORDS. Three call sites each wrote
+ * `cadence === 'monthly' ? 'monthly' : 'weekly'`, which called a quarterly
+ * schedule "weekly". Harmless only for as long as an arranged report is the
+ * one artefact that reaches `renderDigestEmail`, and a wrong word one branch
+ * away from a send. `every_update` is "weekly" because that is the rhythm the
+ * scheduled update actually keeps and what the product has always called it.
+ */
+export const CADENCE_WORD: Record<ScheduleCadence, string> = {
+  every_update: 'weekly',
+  monthly: 'monthly',
+  quarterly: 'quarterly',
+}
+
+/** …and a cadence string off a row, which may be anything the column allows. */
+export function cadenceWordOf(cadence: string | null | undefined): string {
+  return CADENCE_WORD[cadence as ScheduleCadence] ?? CADENCE_WORD.every_update
+}
 
 export interface ScheduleRow {
   id: string
@@ -34,6 +68,11 @@ export interface ScheduleRow {
   review: boolean
   /** The workspace's digest: the schedule an accepted invite joins. */
   is_default: boolean
+  /** Which artefact this schedule sends — `weekly` | `monthly` | `quarterly` |
+   *  `brief:<audience>` (M8, WP16). OPTIONAL because the column is not applied
+   *  yet: `lib/schedules/artefact.ts` falls back to the starter key until it
+   *  is, and a row that answers nothing sends exactly what it sent before. */
+  artefact?: string | null
   last_sent_at: string | null
   created_by: string | null
   created_at: string

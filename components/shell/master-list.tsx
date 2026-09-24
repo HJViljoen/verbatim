@@ -1,3 +1,4 @@
+import { QuoteBlock } from '@/components/quote-block'
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
@@ -131,12 +132,13 @@ export function DetailSection({ label, children, className }: { label?: ReactNod
   )
 }
 
-/** A verbatim quote in the house style: serif, mono attribution. */
-export function Verbatim({ quote, cite }: { quote: string; cite?: ReactNode }) {
-  return (
-    <blockquote className="border-l-2 border-border pl-3">
-      <p className="font-serif text-[13.5px] leading-[1.45] text-foreground">“{quote}”</p>
-      {cite && <footer className="mt-1 font-mono text-[10.5px] text-muted-foreground">{cite}</footer>}
-    </blockquote>
-  )
+/** A verbatim quote in the house style: serif, mono attribution.
+ *
+ *  A thin name over QuoteBlock (components/quote-block.tsx), which is the one
+ *  place the original-above-English order is decided. Kept as its own export
+ *  because seven call sites read `<Verbatim quote={…}>` and the string form is
+ *  still right for the two quotes that have no comment behind them at all (the
+ *  client's own video). `lang`/`english` pass straight through. */
+export function Verbatim({ quote, cite, lang, english }: { quote: string; cite?: ReactNode; lang?: string | null; english?: string | null }) {
+  return <QuoteBlock quote={{ text: quote, lang, english }} cite={cite} />
 }

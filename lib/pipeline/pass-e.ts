@@ -11,7 +11,8 @@ import {
   PERSONA_QUOTES,
 } from '../config'
 import { PassESchema, type PassEOutput } from './schemas'
-import { CALIBRATED_PROSE_RULE, stripThemeRefs } from './prose-rules'
+import { allowTokens } from '../prose/scrub'
+import { CALIBRATED_PROSE_RULE, noDirectionRule, slotScrubber, stripThemeRefs } from './prose-rules'
 import { logAiCall } from './ai-log'
 import { bucketByAudienceId, createQuotePicker, fetchInsightsByIds, fetchQuotesByAudience } from '../quotes'
 import { platformRows } from '../profile-tiles'
@@ -113,6 +114,7 @@ export function buildSystemPrompt(companyName: string): string {
     '- Never infer who someone is from a name, a platform, or a stereotype, and never quote a person to evidence a demographic. Where the conversation states a condition, life stage or use-case, the product counts it and renders the count itself — you do not describe it.',
     '- Do not state how many people a persona represents. The product counts that from your citations and renders it.',
     CALIBRATED_PROSE_RULE,
+    noDirectionRule('pass_e_persona'),
     '',
     'Also return a headline: one plain sentence naming who is talking in this category. No numbers.',
   ].join('\n')
@@ -345,14 +347,21 @@ export async function runPassE(
     console.warn(`[pass-e] ${poolIds.length} insight ids resolved 0 evidence rows — check insight_evidence reachability`)
   }
   const pick = createQuotePicker(quotesByAudience, themeSlugById)
+  // The slot's policy (item 9): a persona's prose may name no figure of its
+  // own. A persona's NAME is not prose and keeps the handle strip alone — the
+  // digit rule works in whole sentences, and a name is one sentence long, so
+  // running it there would answer a digit by deleting the persona.
+  const prose = slotScrubber('pass_e_persona', {
+    allow: allowTokens(themes.map((th) => `${th.label ?? ''}. ${th.description ?? ''}`)),
+  })
   const withQuotes = carried.map((p) => ({
     ...p,
     name: stripThemeRefs(p.name),
-    oneLiner: stripThemeRefs(p.oneLiner),
-    wants: stripThemeRefs(p.wants),
-    blockers: stripThemeRefs(p.blockers),
-    triggers: stripThemeRefs(p.triggers),
-    howTheyTalk: p.howTheyTalk.map(stripThemeRefs),
+    oneLiner: prose.run(p.oneLiner),
+    wants: prose.run(p.wants),
+    blockers: prose.run(p.blockers),
+    triggers: prose.run(p.triggers),
+    howTheyTalk: p.howTheyTalk.map((h) => prose.run(h)).filter(Boolean),
     quotes: pick(
       p.insightIds.slice(0, QUOTE_POOL_PER_PERSONA),
       PERSONA_QUOTES,
@@ -360,7 +369,7 @@ export async function runPassE(
     ),
   }))
 
-  const headline = stripThemeRefs(parsed.headline ?? '')
+  const headline = prose.run(parsed.headline ?? '')
   if (!persist) {
     return { profileId: null, costUsd, headline, personas: withQuotes, dropped }
   }

@@ -9,6 +9,7 @@ import { REPORT_MAX_SLIDES } from '../config'
 import { generateCover } from './cover-model'
 import { computeRunDelta, loadRunSummary } from '../report-delta'
 import { methodOf, type ReportRow, type ReportSection, type ReportSnapshotData, type SectionData } from './types'
+import { readingHandle } from '../reading/read'
 
 /**
  * Building a report (Stage 2): run every section's page loader with the
@@ -30,6 +31,10 @@ export async function loadReportSections(supabase: unknown, clientId: string, re
   // One loader call per distinct (page, params, variant); two sections that
   // show the same page with the same selection share a load.
   const byKey = new Map<string, Promise<unknown>>()
+  // One reading handle for the whole build: every section of one report reads
+  // the same tenant, and the handle is a client plus that tenant id travelling
+  // together so a loader cannot separate them (WP3, decision N).
+  const reading = readingHandle(clientId)
   const loadFor = (s: ReportSection) => {
     // Voice draws its ribbon from a random seed when none is given; a report
     // pins one per section so the preview, the build and a rebuild agree.
@@ -38,7 +43,7 @@ export async function loadReportSections(supabase: unknown, clientId: string, re
     let p = byKey.get(key)
     if (!p) {
       const mod = pageModule(s.page)
-      p = mod ? mod.load({ supabase, clientId, params, variant: s.variant ?? 'default' }) : Promise.resolve(null)
+      p = mod ? mod.load({ supabase, clientId, reading, params, variant: s.variant ?? 'default' }) : Promise.resolve(null)
       byKey.set(key, p)
     }
     return p

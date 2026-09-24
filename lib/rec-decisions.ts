@@ -3,7 +3,7 @@
 //
 // This lives one directory up from `lib/pipeline/rec-lineage.ts`, where the rest
 // of the lineage logic is, for one reason: the browser's write site
-// (app/dashboard/market/actions.ts) needs the same two things, and importing
+// (lib/actions/rec-status.ts) needs the same two things, and importing
 // rec-lineage would pull `./cluster` → `../openai` — an OpenAI client
 // constructed on every request that loads a dashboard server action, for a
 // module that does no arithmetic and calls nothing. rec-lineage re-exports both

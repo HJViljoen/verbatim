@@ -43,6 +43,38 @@ export const OWNER_LABEL: Record<OwnerRole, string> = {
   engineering: 'Verbatim engineering',
 }
 
+/**
+ * WHAT A CLIENT SURFACE SAYS WHERE THIS PAGE PRINTS AN OWNER — the vocabulary
+ * ruling, held in the one file that also holds the internal taxonomy it
+ * replaces, so the two are read together.
+ *
+ * `OWNER_LABEL` above is the OPERATOR's word. "Verbatim engineering" is the
+ * name of the team a not-yet-built half belongs to, and it is the right fact
+ * on `/dashboard/settings/readiness`, where the row it names is drawn beside
+ * every other row and the person reading is deciding what to build. Anywhere a
+ * CLIENT reads — a surface, a brief, an email — it is a ticket they were
+ * handed: an internal team name with no link, nothing saying what it would do,
+ * and nothing they can act on.
+ *
+ * THE RULE, which `missingSentence` (lib/reports/documents/sections.ts) has
+ * followed since WP19 and which this constant now holds for it and for the
+ * three surfaces that were still printing the owner in the app: a client
+ * surface names WHAT IS MISSING and WHAT CLOSES IT, and never the team. The
+ * two sentences below are the non-client half of that split. The client half
+ * is not a constant, because it ends in the row's own act ("This one is yours
+ * to close. …").
+ *
+ * KEYED ON THE ROLE, NOT ONE SENTENCE FOR BOTH. "We are setting it up" is a
+ * thing that is happening; "We are building it" is a thing that is being
+ * written. A gap that is an unapplied migration and a gap that is unwritten
+ * code do not make the same promise, and the readiness record already knows
+ * which is which.
+ */
+export const CLOSED_BY_US: Record<Exclude<OwnerRole, 'client'>, string> = {
+  ops: 'We are setting it up, and it appears here the moment it is there.',
+  engineering: 'We are building it, and it appears here the moment it is there.',
+}
+
 /** One block of the product, one input it needs. */
 export interface ReadinessRow {
   /** Stable key — used by React and by the tests, never shown. */
@@ -54,6 +86,17 @@ export interface ReadinessRow {
   status: ReadinessStatus
   /** What is measured today, in one sentence. */
   detail: string
+  /**
+   * The same sentence for a CLIENT, where the operator one cannot be shown.
+   *
+   * Almost every `detail` is client-safe, which is why this is optional and why
+   * Settings › Readiness shows `detail` by default. The retention row is not:
+   * it names the nightly re-read budget and says it is shared across every
+   * workspace, which is true, is what an operator needs, and tells a paying
+   * client their re-reads queue behind other customers'. A row whose detail
+   * says something only we may hear says it here instead.
+   */
+  clientDetail?: string
   owner: OwnerRole
   /** The act that changes the status. One sentence, always something someone
    *  can do — never "it will be built at some point". */
@@ -100,7 +143,9 @@ export interface TermsInput {
  *  status rather than by this flag alone. */
 export interface CommunityInput {
   name: string
-  status: 'active' | 'candidate' | 'rejected'
+  /** `stopped` is the client's own decision and is counted apart from
+   *  `rejected`, which is the probe's — see lib/gather/types.ts. */
+  status: 'active' | 'candidate' | 'rejected' | 'stopped'
   probed: boolean
   /** Posts stored from this community, all time. */
   postsStored: number
@@ -147,6 +192,13 @@ export interface ReadInput {
   gateKept: number
   /** When the discard record starts. Null = nothing recorded. */
   gateFirstAt: string | null
+  /** Whether the client this was loaded on can read that record AT ALL. False
+   *  on a tenant session until M8 is applied: RLS empties the read instead of
+   *  refusing it (lib/gate-record.ts), so the three figures above come back as
+   *  zeros that mean nothing. The row prints what it measured and says the rest
+   *  is not open yet, rather than reporting the product's own gap as this
+   *  workspace's. */
+  gateReadable: boolean
 }
 
 /** One update, as the delivery record holds it. `scheduledFor` and `stalled`
@@ -210,6 +262,20 @@ export interface RetentionInput {
   dueAfterDays: number
 }
 
+/** What the weekly anomaly check has actually said. `available` is false until
+ *  20260918096000 is applied — which is a different answer from "the rule has
+ *  never fired", and the row says which. */
+export interface AnomalyInput {
+  available: boolean
+  /** Every update the check ran on, newest first, whatever it concluded
+   *  (`anomaly_checks`). Without these, an update the check REFUSED to compare
+   *  — a thin week, a run with no window — is indistinguishable from one it
+   *  compared and found nothing in. */
+  checks: { weekStart: string | null; outcome: string }[]
+  /** Flags raised, newest first, as `anomaly_flags` holds them. */
+  flags: { weekStart: string; objectKind: string; label: string }[]
+}
+
 /** Everything the thirteen rows are computed from. One object, so `compute`
  *  can be exercised on a workspace's shape without a database. */
 export interface ReadinessInputs {
@@ -225,6 +291,8 @@ export interface ReadinessInputs {
   /** The subject set: null while the product has no such concept. */
   subjectSet: { defined: number | null }
   monthly: MonthlyInput | null
+  /** The check's own record. */
+  anomaly: AnomalyInput
   reads: ReadInput
   /** Every update this workspace has had, newest first. */
   updates: UpdateInput[]

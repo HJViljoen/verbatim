@@ -10,7 +10,7 @@ import { CUSTOM_KEY, documentTemplate } from '@/lib/reports/documents/templates'
 import { DEFAULT_DOCUMENT_ROLE, DEFAULT_DOCUMENT_SETTINGS } from '@/lib/reports/documents/types'
 import { applyDocumentSettingsPatch, documentSettingsPatch, IGNORED_FIELDS_MESSAGE, reportPatchSchema, tidySections } from '@/lib/reports/validate'
 import { AUDIENCES, isAudience, type CoverSpec, type ReportRow, type ReportSection } from '@/lib/reports/types'
-import { scheduleInputSchema, type ScheduleInput } from '@/lib/schedules/validate'
+import { CADENCE_NOT_STORED, isUnsupportedCadence, scheduleInputSchema, type ScheduleInput } from '@/lib/schedules/validate'
 import { markSnapshotsStale } from '@/lib/artifacts'
 import { actorStamp, recordConfigChange } from '@/lib/config-log'
 import { DOCUMENT_EDIT_MAX } from '@/lib/config'
@@ -67,6 +67,14 @@ export async function createReport(formData: FormData): Promise<void> {
   if (templateKey) {
     const t = starterTemplate(templateKey)
     if (!t) throw new Error('unknown template')
+    // AN ARTEFACT IS NOT A STARTING POINT. `starterTemplate('weekly_report')`
+    // resolves on purpose — a schedule names what it sends through
+    // `starter_key`, and saveSchedule's "is this a template we know?" guard has
+    // to answer yes — but the weekly report is composed from BLOCK keys and
+    // carries no sections, so resolving it here made a report with nothing in
+    // it. The picker stopped offering it (`starterTemplates()`); a server
+    // action is POST-reachable, so it refuses it too.
+    if (t.artefact) throw new Error('that template is written by Verbatim and cannot be arranged')
     title = t.name; audience = t.audience; sections = instantiate(t.sections); key = t.key
   }
   const cover: CoverSpec = { register: audience }
@@ -154,7 +162,17 @@ export async function saveSchedule(args: { id?: string | null; input: ScheduleIn
   const { clientId, userId, role } = session
   if (!canManageTenant(role)) return NOT_ALLOWED
   const parsed = scheduleInputSchema.safeParse(args.input)
-  if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? 'That could not be saved.' }
+  if (!parsed.success) {
+    // THE SCHEMA'S OWN SENTENCES ARE WRITTEN FOR A READER ("A schedule needs a
+    // name.", "Pick one template."). A Zod issue that carries none is Zod's
+    // words — "Invalid enum value. Expected 'every_update' | 'monthly'" — and
+    // this returned it verbatim to a client screen. Only a message the schema
+    // wrote is passed through; anything else is logged with the field named.
+    const first = parsed.error.issues[0]
+    const written = first && !/^Invalid|^Expected|^Required/.test(first.message) ? first.message : null
+    if (!written) console.error(`[studio] schedule input refused: ${first?.path.join('.') ?? '?'} — ${first?.message ?? 'no issue'}`)
+    return { ok: false, message: written ?? 'That could not be saved. Check the fields and try again.' }
+  }
   const s = parsed.data
   const admin = createAdminClient()
   if (s.starterKey && !starterTemplate(s.starterKey)) return { ok: false, message: 'Pick a template.' }
@@ -199,6 +217,11 @@ export async function saveSchedule(args: { id?: string | null; input: ScheduleIn
       .select('name, starter_key, report_id, cadence, recipients, attach_pdf, share_days, active, review')
       .eq('id', id).eq('client_id', clientId).maybeSingle()
     const { error } = await admin.from('report_schedules').update(row).eq('id', id).eq('client_id', clientId)
+    // THE PICKER OFFERS A CADENCE THE SCHEMA MAY STILL REFUSE. M8 widens
+    // `report_schedules_cadence_check` to accept 'quarterly' and is not
+    // applied; "Try again." over a CHECK violation asks for a retry that
+    // cannot succeed and names no cause.
+    if (isUnsupportedCadence(error)) return { ok: false, message: CADENCE_NOT_STORED }
     if (error) return { ok: false, message: 'Could not save that. Try again.' }
     await recordConfigChange(admin, {
       clientId,
@@ -213,6 +236,7 @@ export async function saveSchedule(args: { id?: string | null; input: ScheduleIn
     return { ok: true, message: 'Saved', id }
   }
   const { data, error } = await admin.from('report_schedules').insert({ ...row, client_id: clientId, created_by: userId, is_default: false }).select('id').single()
+  if (isUnsupportedCadence(error)) return { ok: false, message: CADENCE_NOT_STORED }
   if (error || !data) return { ok: false, message: 'Could not create the schedule. Try again.' }
   await recordConfigChange(admin, {
     clientId,

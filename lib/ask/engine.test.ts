@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildExtractPrompt, buildJudgePrompt, buildVerdictPrompt, clipInput } from './engine'
-import { dayStartIso, evaluateQuota } from './quota'
+import { dayStartIso } from './quota'
 
 // The prompts carry rules nothing downstream can re-check — whether the model
 // keeps the author's wording, whether it treats silence as a real answer,
@@ -69,19 +69,11 @@ describe('clipInput', () => {
   })
 })
 
-describe('evaluateQuota', () => {
-  it('allows a tenant under the limit', () => {
-    expect(evaluateQuota(3, 25)).toEqual({ ok: true, used: 3 })
-  })
-
-  it('refuses at the limit with a message rather than a silent bill', () => {
-    const out = evaluateQuota(25, 25)
-    expect(out.ok).toBe(false)
-    if (!out.ok) expect(out.message).toContain('daily limit')
-  })
-})
-
 describe('dayStartIso', () => {
+  // NOT dead with /api/ask. Three export routes count EXPORT_DAILY_LIMIT from
+  // this boundary (/api/export, /api/artifacts/[id], /api/reports/[id]/build),
+  // so the day it drifts off UTC a tenant's render cap moves with the server's
+  // timezone.
   it('anchors to the start of the UTC day', () => {
     expect(dayStartIso(new Date('2026-08-19T23:59:59Z'))).toBe('2026-08-19T00:00:00.000Z')
     expect(dayStartIso(new Date('2026-08-19T00:00:00Z'))).toBe('2026-08-19T00:00:00.000Z')

@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { getSessionContext } from '@/lib/auth'
 import { billingAccess, type BillingClient } from '@/lib/billing'
 import { isStripeConfigured } from '@/lib/stripe'
@@ -57,7 +58,7 @@ export default async function BillingPage({
   const cadence = tc?.report_period === 'paused' ? 'Paused' : tc?.report_period ? `${cap(tc.report_period)}${tc.report_day ? ` · ${cap(tc.report_day)}s` : ''}` : '—'
 
   return (
-    <SettingsFrame active="billing" title="Settings" context={`${client.company_name ?? 'Your workspace'}${!isOwner ? ' · read-only' : ''}`} contentTitle="Plan & billing" contentMeta={REASON_LABEL[access.reason] ?? 'Plan'}>
+    <SettingsFrame active="team" title="Settings" context={`${client.company_name ?? 'Your workspace'}${!isOwner ? ' · read-only' : ''}`} contentTitle="Plan & billing" contentMeta={REASON_LABEL[access.reason] ?? 'Plan'} controls={<Link href="/dashboard/team" className="text-[12px] font-medium text-secondary-foreground hover:underline">Team →</Link>}>
       <div className="flex flex-col gap-3">
         {status === 'success' && (
           <p className="rounded-md bg-accent px-4 py-3 text-[12.5px] text-accent-foreground">Thanks — your subscription is being activated. It may take a moment to reflect here.</p>

@@ -7,6 +7,10 @@
 // Pure functions only — tested in lib/format.test.ts.
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const LONG_MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+]
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 /** 6163 → "6,163". Rounds first; negative numbers keep their sign. */
@@ -35,10 +39,30 @@ export function fmtCompact(n: number): string {
 
 export const round1 = (n: number) => Math.round(n * 10) / 10
 
-/** 85.1 → "85.1%", 16 → "16%". One decimal max, trailing .0 dropped. */
+/**
+ * 85.1 → "85.1%", 16 → "16.0%", `fmtPct(16, 0)` → "16%".
+ *
+ * ONE DECIMAL MEANS ONE DECIMAL, INCLUDING AN EXACT .0. This used to
+ * interpolate `round1(n)`, so a value landing on x.0 silently lost its decimal
+ * while its neighbours kept theirs, on lines that are read across: Voice's tone
+ * legend printed "Warm 61% · Both ways 10% · Matter-of-fact 11% · Cold 18.1%"
+ * on one tabular-nums row, and the movers row printed "3%" (42/1,388 =
+ * 3.0259%) directly under "9.4%" and "5.1%" — where the artboard prints
+ * "3.0%". Tabular figures line up on the decimal point; a column where one
+ * cell has no point does not.
+ *
+ * A CALLER THAT WANTS NO DECIMAL ASKS FOR NONE. `decimals: 0` is the whole
+ * mechanism and it is what every surface printing whole percentages already
+ * passes (`record.ts` and `method.ts`'s `share`, the competitive sentiment
+ * row, the quarterly's method figures). `lib/reports/figures.ts` picks per
+ * value with `n % 1 === 0 ? 0 : 1`, which is a deliberate mixed column and
+ * still gets exactly what it asks for.
+ */
 export function fmtPct(n: number, decimals: 0 | 1 = 1): string {
-  const v = decimals === 0 ? Math.round(n) : round1(n)
-  return `${v}%`
+  if (decimals === 0) return `${Math.round(n)}%`
+  // `toFixed(1)` rather than `round1` + interpolation: the point of this branch
+  // is that the decimal is always there, and `${3}` is "3".
+  return `${round1(n).toFixed(1)}%`
 }
 
 /** Signed delta: +2.3 → "+2.3 pt", -53 → "−53", 0 → "±0". Unit optional. */
@@ -61,6 +85,40 @@ export function shortDate(iso: string): string {
 export function fullDate(iso: string): string {
   const d = new Date(iso)
   return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`
+}
+
+/** "2026-08-01" → "Aug 2026" (UTC). The unit the comment-dated reading is
+ *  drawn in: a day on a monthly axis would imply a precision the freeze line
+ *  does not have. */
+export function monthName(month: string): string {
+  const d = new Date(`${month.slice(0, 10)}T00:00:00.000Z`)
+  // Same guard as `longMonth` below, for the same reason and against the same
+  // `MONTHS[NaN]`.
+  const name = MONTHS[d.getUTCMonth()]
+  return name ? `${name} ${d.getUTCFullYear()}` : month.slice(0, 10)
+}
+
+/**
+ * "2026-09-01" → "September" (UTC). The month's own name and no year, for a
+ * sentence whose year is already settled — "this update's contribution to
+ * September so far".
+ *
+ * WRITTEN IN WP11 BESIDE OVERVIEW'S BAR AND MOVED HERE IN WP15, when a second
+ * page needed it: two copies of one date formatter is two ways to write one
+ * month. It also loses its `toLocaleString` on the way, which is the rule this
+ * file's own header sets — ICU data differs between the Node server and the
+ * browser, so a locale-formatted month in hydrated output is an SSR mismatch
+ * waiting for a reader whose browser disagrees.
+ */
+export function longMonth(month: string): string {
+  const d = new Date(`${month.slice(0, 10)}T00:00:00.000Z`)
+  // AN UNPARSEABLE MONTH GIVES BACK ITS OWN STRING, never `undefined`.
+  // `LONG_MONTHS[NaN]` is undefined, React renders undefined as nothing, and
+  // the sentence this feeds reads "this update's contribution to  so far" — a
+  // gap a reader cannot see and nobody can debug. The `toLocaleString` this
+  // replaced threw instead, which was at least loud; handing the caller the
+  // string it passed in is quieter and just as findable.
+  return LONG_MONTHS[d.getUTCMonth()] ?? month.slice(0, 10)
 }
 
 /** "2026-08-16T07:07:51Z" → "Sun 16 Aug" (UTC). */

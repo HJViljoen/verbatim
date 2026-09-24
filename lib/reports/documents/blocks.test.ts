@@ -75,8 +75,13 @@ describe('the four fixed templates', () => {
 
   it('are word for word what they were before the topic blocks existed', () => {
     // Verified against `git show bc1fa51:lib/reports/documents/templates.ts`,
-    // the merge WP7d was branched from: the same string, the same hash.
-    expect(fnv1a(JSON.stringify(DOCUMENT_TEMPLATES))).toBe('12113f56')
+    // the merge WP7d was branched from: the same string, the same hash —
+    // 12113f56 until Block D wave 3, when LEADERSHIP_BRIEF.name became the
+    // artboard's "Leadership one-pager" (mock-gap §3.15, `lead.title`). That
+    // is the deliberate change this number is here to make visible, and it is
+    // one field of one template: the keys, roles, briefs and skeletons are
+    // still word for word what they were.
+    expect(fnv1a(JSON.stringify(DOCUMENT_TEMPLATES))).toBe('c3778068')
   })
 })
 

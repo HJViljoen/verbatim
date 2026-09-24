@@ -32,9 +32,44 @@ export const AUDIENCES: { key: Audience; label: string; reader: string }[] = [
 
 export const isAudience = (v: unknown): v is Audience => typeof v === 'string' && AUDIENCES.some((a) => a.key === v)
 
-/** Pages a section may name. The agent page joins only through "add to
- *  report" from a thread (its params carry the thread id). */
-export const SECTION_PAGES: PageKey[] = ['dashboard', 'market', 'voice', 'competitive', 'content', 'profile', 'agent']
+/** Pages a NEW section may name. The agent page joins only through "add to
+ *  report" from a thread (its params carry the thread id).
+ *
+ *  Phase 1 WP9: `dashboard` left this list and did not leave the registry.
+ *  `SECTION_PAGES` is the Studio's picker — what an operator may ADD today —
+ *  and Overview replaces the Dashboard, so nothing new should name it. But
+ *  three stored `reports` rows already do, one of them the active weekly
+ *  schedule, and a zod enum narrowed to this list would refuse the next edit
+ *  to those rows. So validation reads `ALL_SECTION_PAGES` and the picker reads
+ *  this one: a stored report stays editable, and no new one is offered a
+ *  retired page. `week` is deliberately absent for Phase 1 — it is a page key
+ *  and a module, and it is not composable into a report until it has been read
+ *  for a few weeks. */
+export const SECTION_PAGES: PageKey[] = ['overview', 'subjects', 'market', 'voice', 'competitive', 'content', 'profile', 'agent']
+
+/** Pages a STORED section may still name — the retired keys whose modules are
+ *  kept registered so already-built artefacts keep rendering every tile. */
+export const LEGACY_SECTION_PAGES: PageKey[] = ['dashboard']
+
+/** What validation accepts: what may be added, plus what is already stored. */
+export const ALL_SECTION_PAGES: PageKey[] = [...SECTION_PAGES, ...LEGACY_SECTION_PAGES]
+
+/**
+ * May a NEW section name this page today? — the picker's own rule, written
+ * once (Block D wave 2).
+ *
+ * `SECTION_PAGES` minus `agent`, which joins a report only through "add to
+ * report" from a thread (its params carry the thread id) and so is not
+ * something a reader picks off a list.
+ *
+ * IT LIVES HERE AND NOT IN `catalogue.ts` because two surfaces apply it and
+ * one of them is a CLIENT component: `lib/reports/catalogue.ts` imports the
+ * page registry, and pulling that into the editor's bundle takes every page
+ * loader — and `node:async_hooks` — with it. This file imports a type and
+ * nothing else.
+ */
+export const isPickablePage = (page: PageKey): boolean =>
+  page !== 'agent' && SECTION_PAGES.includes(page)
 
 export interface ReportSection {
   /** Client-minted, stable across edits (React keys, reorder, remove). */
@@ -130,6 +165,17 @@ export interface ReportTemplate {
   /** One line for the picker: who it is for and what it holds. */
   description: string
   sections: Omit<ReportSection, 'id'>[]
+  /** Retired (Phase 1 WP17): still RESOLVABLE, because stored schedules name
+   *  it and must keep sending exactly what they sent — but never offered for a
+   *  new report. `starterTemplates()` is the picker's list; `starterTemplate()`
+   *  is the resolver and answers retired keys too. */
+  retired?: boolean
+  /** An ARTEFACT rather than an arrangement of page sections (Phase 1 WP17):
+   *  the weekly report is composed from block keys, so it has no `sections` and
+   *  must never be offered as a starting point for a report. It is here so that
+   *  a schedule may NAME it — `starter_key` is what the send path branches on
+   *  until M8's `artefact` column lands. */
+  artefact?: boolean
 }
 
 /** One frozen section inside a report snapshot. `data` is the page loader's
@@ -153,6 +199,19 @@ export interface Figure {
   kind: 'count' | 'pct' | 'name'
 }
 export type FigureTable = Record<string, Figure>
+
+/**
+ * A figure keyed by a record's UUID — `o_2418f4d7_54a2_497e_8433_6cd89bc2322b_share`,
+ * which is how a page block names a per-theme figure.
+ *
+ * WHY IT IS SINGLED OUT. `substituteFigures` (lib/reports/cover.ts) drops the
+ * WHOLE SENTENCE whose figure key is missing, so a token is only safe to offer
+ * a model if the model can retype it. Every token ever offered before was a
+ * short human word; a 36-character hex string is one wrong character away from
+ * silently deleting a sentence from a paid document, and nothing in the prompt
+ * or in checkDocument guards a figure key.
+ */
+export const isOpaqueFigureKey = (key: string): boolean => /^[a-z]_[0-9a-f]{8}_[0-9a-f]{4}_/.test(key)
 
 /** The cover as stored: prose with `[[figure_key]]` placeholders. The
  *  numbers are substituted at render from `figures` (lib/reports/cover.ts). */

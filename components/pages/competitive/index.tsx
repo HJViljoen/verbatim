@@ -11,8 +11,9 @@ import { ListSearch } from '@/components/shell/list-search'
 import { LineChart } from '@/components/charts/line-chart'
 import { Delta } from '@/components/charts/stat'
 import { fmtInt, fmtPct, fmtDelta, round1, weekdayDate, shortDate } from '@/lib/format'
-import { RUN_INDEXED_DIRECTION_WORDS } from '@/lib/config'
-import { kindOf, competitorBucket, shareDeltaShown, SENTIMENT_MIN_JUDGED, type KindTone } from '@/lib/competitive-tiles'
+import { directionWordsFor } from '@/lib/config'
+import { kindOf, shareDeltaShown, SENTIMENT_MIN_JUDGED, type KindTone } from '@/lib/competitive-tiles'
+import { rivalKey } from '@/lib/rivals'
 import {
   loadCompetitive, isCompetitiveEmpty, competitiveFindingHref, LEGEND_ITEMS,
   type CompetitiveData, type CompetitiveEmpty, type FindingDetail,
@@ -153,7 +154,7 @@ const shareLine: R = (d) => {
       meta={series ? `${d.updatesCount} updates · ${series.layers.some((l) => l === 'period') ? 'share in each update' : 'share across all updates'}` : undefined}
       // The whole-series delta goes while the gate is off, on either layer:
       // it spans every update on a line that can mix the two (D1).
-      footerNote={RUN_INDEXED_DIRECTION_WORDS && series && series.youDelta != null ? `since your first update: ${d.brandShort} ${fmtDelta(series.youDelta, 'pt', 1)}${series.themDelta != null ? ` · ${lead} ${fmtDelta(series.themDelta, 'pt', 1)}` : ''}` : undefined}
+      footerNote={directionWordsFor('competitive.deltas') && series && series.youDelta != null ? `since your first update: ${d.brandShort} ${fmtDelta(series.youDelta, 'pt', 1)}${series.themDelta != null ? ` · ${lead} ${fmtDelta(series.themDelta, 'pt', 1)}` : ''}` : undefined}
       bodyClassName="min-h-0 justify-center">
       {series && lead ? (
         <div className="overflow-x-auto">
@@ -195,7 +196,7 @@ const table: R = (d) => {
           </thead>
           <tbody className="font-mono tabular-nums">
             {rows.map((r) => (
-              <tr key={r.key} className={`border-b border-border/70 last:border-0 ${(lead && r.key === competitorBucket(lead)) || r.key === 'client' ? 'font-semibold' : ''}`}>
+              <tr key={r.key} className={`border-b border-border/70 last:border-0 ${(lead && r.key === rivalKey(lead)) || r.key === 'client' ? 'font-semibold' : ''}`}>
                 <td className="py-1 pr-2 font-sans"><span className="flex items-center gap-1.5"><span className="size-2 shrink-0 rounded-[2px]" style={{ background: r.color }} aria-hidden />{r.label}</span></td>
                 <td className="py-1 pr-2 text-right">{fmtInt(r.videos)}</td>
                 <td className="py-1 pr-2 text-right">{fmtPct(r.pct)}</td>
@@ -302,7 +303,7 @@ const detail: R = (d, mode) => {
             </DetailSection>
             {f.quotes.length > 0 && (
               <DetailSection label={f.competitorName ? `${f.competitorName}’s audience, in their words` : 'In their words'}>
-                <div className="flex flex-col gap-2.5">{f.quotes.map((q, i) => <Verbatim key={i} quote={q.text} />)}</div>
+                <div className="flex flex-col gap-2.5">{f.quotes.map((q, i) => <Verbatim key={i} quote={q.text} lang={q.lang} english={q.english} />)}</div>
               </DetailSection>
             )}
             <DetailSection label="Grounded in">
@@ -452,7 +453,7 @@ export function CompetitivePage({ data: d, detail: detailParam, params }: { data
       <PageBar title="Competitive Intelligence" context={d.context}>
         {d.updatesCount > 1 && <BarPill>Last {d.updatesCount} updates</BarPill>}
         <ExportMenu />
-        <HowToRead items={d.legendItems ?? LEGEND_ITEMS} open={showLegend} basePath="/dashboard/competitive" />
+        <HowToRead items={d.legendItems ?? LEGEND_ITEMS} open={showLegend} basePath="/dashboard/competitive-intel" anchor="competitive" />
       </PageBar>
 
       <PageGrid>

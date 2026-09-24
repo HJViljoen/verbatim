@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getRouteSession } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase-admin'
+import { readingHandle } from '@/lib/reading/read'
 import { getBaseUrl } from '@/lib/site'
 import { pageModule } from '@/components/pages/registry'
 import { createSnapshot, type SnapshotKind } from '@/lib/snapshots'
@@ -8,7 +9,7 @@ import { artifactFilename, logExport, signedArtifactUrl, storeArtifact, type Art
 import { renderArtifact, renderBaseUrl } from '@/lib/render/render'
 import { dayStartIso } from '@/lib/ask/quota'
 import { EXPORT_DAILY_LIMIT, EXPORT_PARAMS_MAX_KEYS, EXPORT_PARAMS_MAX_CHARS } from '@/lib/config'
-import type { PageKey, PrintVariant } from '@/lib/renderables/types'
+import { PAGE_KEYS, type PageKey, type PrintVariant } from '@/lib/renderables/types'
 
 // POST /api/export — freeze what the reader is looking at and render it.
 //
@@ -29,7 +30,10 @@ export const runtime = 'nodejs'
 // is the platform's, generous so a slow render fails as a render.
 export const maxDuration = 300
 
-const PAGE_KEYS = new Set<PageKey>(['dashboard', 'market', 'voice', 'competitive', 'content', 'profile', 'agent'])
+// Derived from the union rather than hand-kept beside it: a key added to
+// lib/renderables/types.ts is exportable the moment its module registers, and
+// the two lists cannot drift apart again (Phase 1 WP9).
+const EXPORTABLE = new Set<PageKey>(PAGE_KEYS)
 
 interface Body {
   kind?: unknown
@@ -54,7 +58,7 @@ export async function POST(request: Request) {
   }
   const kind = body.kind === 'tile' ? 'tile' : body.kind === 'page' ? 'page' : null
   const format: ArtifactFormat | null = body.format === 'pdf' ? 'pdf' : body.format === 'png' ? 'png' : null
-  const page = typeof body.page === 'string' && PAGE_KEYS.has(body.page as PageKey) ? (body.page as PageKey) : null
+  const page = typeof body.page === 'string' && EXPORTABLE.has(body.page as PageKey) ? (body.page as PageKey) : null
   const tileKey = typeof body.tileKey === 'string' && body.tileKey ? body.tileKey : null
   const variant: PrintVariant = body.variant === 'full' ? 'full' : 'default'
   const style = body.style === 'b' ? 'b' : body.style === 'a' ? 'a' : body.style === 'c' ? 'c' : null
@@ -73,7 +77,14 @@ export async function POST(request: Request) {
 
   const mod = pageModule(page)
   if (!mod) return NextResponse.json({ error: 'That page cannot be exported yet.' }, { status: 400 })
-  if (tileKey && !mod.renderables[tileKey]) return NextResponse.json({ error: 'Unknown tile.' }, { status: 400 })
+  // `Object.hasOwn`, not a bare index tested for truthiness: `constructor`,
+  // `toString` and `valueOf` all come back truthy off Object.prototype, so
+  // `tileKey: "constructor"` got past this 400, was written into
+  // report_snapshots.ref.tileKey, and reached the render route where
+  // `r.render(...)` is undefined — a 500 on a signed, tenant-scoped render.
+  // Block A's convention is `renderables[k]?.render(…)` and this is the same
+  // rule where the lookup is a guard rather than a call.
+  if (tileKey && !Object.hasOwn(mod.renderables, tileKey)) return NextResponse.json({ error: 'Unknown tile.' }, { status: 400 })
 
   const admin = createAdminClient()
 
@@ -94,7 +105,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const data = await mod.load({ supabase, clientId, params, variant })
+    const data = await mod.load({ supabase, clientId, reading: readingHandle(clientId), params, variant })
     if (!data) return NextResponse.json({ error: 'Nothing to export yet — your first update has not landed.' }, { status: 409 })
     const d = data as { runId?: string | null }
     const title = tileKey ? `${mod.renderables[tileKey].title} · ${mod.snapshotTitle(data)}` : mod.snapshotTitle(data)

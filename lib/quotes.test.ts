@@ -1,17 +1,21 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
+  TRANSLATION_COLUMNS,
   createCitedQuotePicker,
   bucketByAudienceId,
-  videoBucketOf,
   fetchLiveBucketsByAudience,
   fetchQuoteTextsByRefs,
+  readTranslations,
   scopeToClientVoices,
   scopeToCompetitor,
   readsAsHeroQuote,
   englishHits,
   createQuotePicker,
+  quoteAvailability,
+  readableQuote,
   type QuoteRow,
 } from './quotes'
+import { audienceOf } from './rivals'
 
 // Entity-bucket scoping (teardown 2026-07-09 §Run 1, defect 1): a competitor's
 // customers must never speak under a claim about the client. These tests lock
@@ -39,15 +43,15 @@ describe('scopeToClientVoices', () => {
   })
 })
 
-describe('videoBucketOf — live entity, not a cached one', () => {
+describe('audienceOf — live entity, not a cached one', () => {
   it('reads the client, a named competitor and the rest', () => {
-    expect(videoBucketOf({ is_client: true, is_competitor: false, competitor_name: null })).toBe('client')
-    expect(videoBucketOf({ is_client: false, is_competitor: true, competitor_name: 'Patagonia' })).toBe('competitor:Patagonia')
-    expect(videoBucketOf({ is_client: false, is_competitor: false, competitor_name: null })).toBe('industry-other')
+    expect(audienceOf({ is_client: true, is_competitor: false, competitor_name: null })).toBe('client')
+    expect(audienceOf({ is_client: false, is_competitor: true, competitor_name: 'Patagonia' })).toBe('competitor:Patagonia')
+    expect(audienceOf({ is_client: false, is_competitor: false, competitor_name: null })).toBe('industry-other')
   })
 
   it('matches Step A2 for a competitor with no name', () => {
-    expect(videoBucketOf({ is_client: false, is_competitor: true, competitor_name: null })).toBe('competitor:unknown')
+    expect(audienceOf({ is_client: false, is_competitor: true, competitor_name: null })).toBe('competitor:unknown')
   })
 })
 
@@ -302,5 +306,184 @@ describe('fetchQuoteTextsByRefs — the read-failure contract', () => {
     expect(await fetchQuoteTextsByRefs(admin, ['e:ev1'], { onReadError: 'throw' })).toEqual(
       new Map([['e:ev1', 'I love this bag']]),
     )
+  })
+})
+
+// ---- The one English gate (item 8, decision A, 2026-09-18) ------------------
+
+describe('quoteAvailability — the one English gate', () => {
+  const es = 'Me encanta esta pierna, cambió mi vida por completo'
+  const en = 'the socket rubs after about an hour of walking'
+
+  it('falls back to the old heuristic where nothing has read the text', () => {
+    expect(quoteAvailability({ text: en })).toBe('english')
+    expect(quoteAvailability({ text: es })).toBe('untranslated')
+  })
+
+  it('takes the cache\'s word over the heuristic in both directions', () => {
+    // "Love it 🔥" scores zero English function words and is English.
+    expect(quoteAvailability({ text: 'Love it 🔥', lang: 'en', english: null })).toBe('english')
+    // A Portuguese comment the heuristic scored as English ("doía" → do + a).
+    expect(quoteAvailability({ text: 'me doía mucho a mi', lang: 'pt', english: 'it hurt me a lot' })).toBe('translated')
+  })
+
+  it('is untranslated for another language with no rendering yet', () => {
+    expect(quoteAvailability({ text: es, lang: 'es', english: null })).toBe('untranslated')
+    expect(quoteAvailability({ text: es, lang: 'es', english: '   ' })).toBe('untranslated')
+  })
+
+  it('reads a regional tag as English', () => {
+    expect(quoteAvailability({ text: 'blah', lang: 'en-GB' })).toBe('english')
+  })
+
+  it('readableQuote is everything but untranslated — the "English available" filter', () => {
+    expect(readableQuote({ text: es, lang: 'es', english: 'I love this leg, it changed my life' })).toBe(true)
+    expect(readableQuote({ text: es, lang: 'es', english: null })).toBe(false)
+    expect(readableQuote({ text: en })).toBe(true)
+  })
+})
+
+describe('readsAsHeroQuote with a reading', () => {
+  const es = 'Me encanta esta pierna, cambió mi vida por completo'
+
+  it('still refuses anything outside card length, translated or not', () => {
+    expect(readsAsHeroQuote('too short', { lang: 'en' })).toBe(false)
+    expect(readsAsHeroQuote('x'.repeat(200), { lang: 'es', english: 'y'.repeat(200) })).toBe(false)
+  })
+
+  it('lets a translated quote lead a card, and an untranslated one not', () => {
+    expect(readsAsHeroQuote(es)).toBe(false)
+    expect(readsAsHeroQuote(es, { lang: 'es', english: 'I love this leg, it changed my life completely' })).toBe(true)
+    expect(readsAsHeroQuote(es, { lang: 'es', english: null })).toBe(false)
+  })
+})
+
+describe('the picker, once a quote can be read', () => {
+  const slugs = new Map<string, string>()
+  const untranslated: QuoteRow[] = [
+    { quote: 'Me encanta esta pierna, cambió mi vida por completo', rank: 1, evidenceId: 'ev-es' },
+  ]
+  const translated: QuoteRow[] = [
+    { ...untranslated[0], lang: 'es', english: 'I love this leg, it changed my life completely' },
+  ]
+
+  it('rejects a non-English quote nothing has read — today\'s behaviour, unchanged', () => {
+    const pick = createCitedQuotePicker(new Map([['a1', untranslated]]), slugs)
+    expect(pick(['a1'], 2, 'fit and comfort')).toEqual([])
+  })
+
+  it('takes it once the cache has an English rendering, and carries the rendering', () => {
+    const pick = createCitedQuotePicker(new Map([['a1', translated]]), slugs)
+    const out = pick(['a1'], 2, 'fit and comfort')
+    expect(out).toEqual([{
+      ref: 'e:ev-es',
+      text: 'Me encanta esta pierna, cambió mi vida por completo',
+      lang: 'es',
+      english: 'I love this leg, it changed my life completely',
+    }])
+  })
+
+  it('carries nothing extra for a quote nothing has read', () => {
+    const rows: QuoteRow[] = [{ quote: 'the socket rubs after about an hour of walking', rank: 1, evidenceId: 'ev-en' }]
+    const pick = createCitedQuotePicker(new Map([['a1', rows]]), slugs)
+    expect(pick(['a1'], 1, 'socket')).toEqual([{ ref: 'e:ev-en', text: 'the socket rubs after about an hour of walking' }])
+  })
+
+  // The one movement the collapse makes BEFORE any translation exists, named so
+  // it is a decision and not a surprise. quoteScore's gate used to be
+  // `englishHits >= 2` alone; the unified gate is readsAsHeroQuote's
+  // `englishHits >= 2 && englishHits > romanceHits`, which is strictly tighter.
+  const mixed = 'no me gusta pero es muy bueno para mi hermano'
+
+  it('drops a Romance-majority quote with two incidental English words, which quoteScore alone used to take', () => {
+    expect(englishHits(mixed)).toBeGreaterThanOrEqual(2) // the old gate passed it
+    expect(readsAsHeroQuote(mixed)).toBe(false) // the hero pool already refused it
+    expect(quoteAvailability({ text: mixed })).toBe('untranslated') // and now so does the picker
+    const pick = createCitedQuotePicker(new Map([['a1', [{ quote: mixed, rank: 1, evidenceId: 'ev-mix' }]]]), slugs)
+    expect(pick(['a1'], 1, 'comfort')).toEqual([])
+  })
+
+  it('hands the same quote back once the cache has read it, as a translation', () => {
+    const english = 'I do not like it but it is very good for my brother'
+    const rows: QuoteRow[] = [{ quote: mixed, rank: 1, evidenceId: 'ev-mix', lang: 'es', english }]
+    const pick = createCitedQuotePicker(new Map([['a1', rows]]), slugs)
+    expect(pick(['a1'], 1, 'comfort')).toEqual([{ ref: 'e:ev-mix', text: mixed, lang: 'es', english }])
+  })
+})
+
+describe('TRANSLATION_COLUMNS — the unscoped read selects nothing a tenant owns', () => {
+  it('names the three columns the cross-tenant argument rests on, and no others', () => {
+    // readTranslations queries comment_translations by text_hash with NO client
+    // predicate on the admin client. That is harmless only because a row holds
+    // a machine translation of the exact bytes asked about: "It would stop
+    // being harmless the moment a row carried anything a tenant owns — so it
+    // must not." This is the enforcement the argument did not have.
+    expect(TRANSLATION_COLUMNS.split(',').map((c) => c.trim()).sort())
+      .toEqual(['english', 'language', 'text_hash'])
+  })
+})
+
+describe('readTranslations — a flaky probe is not remembered, a missing table still costs one read', () => {
+  // The probe exists so a page asking about 3,600 texts does not send sixty
+  // requests to learn one thing. What it must NOT do is turn one bad round trip
+  // into a request-wide loss of English: `memoRead` evicts a rejection, so the
+  // probe fails by THROWING rather than by returning a "no". The saving it was
+  // written for is inside one load (one probe, not one per chunk); what it must
+  // not buy is a sticky "no" across the four loads a page makes.
+  const cache = (probeErrors: (string | null)[]) => {
+    let probes = 0
+    let chunks = 0
+    const rows = [{ text_hash: 'h', language: 'es', english: 'the socket rubs' }]
+    return {
+      from: () => ({
+        select: () => {
+          const b: Record<string, unknown> = {
+            // the probe's end
+            limit: () => {
+              const message = probeErrors[probes++]
+              return Promise.resolve({ error: message ? { message } : null })
+            },
+            // the chunked read's end, closed by selectAll
+            range: () => {
+              chunks++
+              return Promise.resolve({ data: rows, error: null })
+            },
+          }
+          b.order = () => b
+          b.in = () => b
+          return b
+        },
+      }),
+      counts: () => ({ probes, chunks }),
+    }
+  }
+
+  it('asks again after a timed-out probe, so the next load still gets its English', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const client = cache(['canceling statement due to statement timeout', null])
+    expect((await readTranslations(client, ['Me encanta esta pierna'])).size).toBe(0)
+    const second = await readTranslations(client, ['Me encanta esta pierna'])
+    expect(second.get('h')).toEqual({ lang: 'es', english: 'the socket rubs' })
+    expect(client.counts()).toEqual({ probes: 2, chunks: 1 })
+    warn.mockRestore()
+  })
+
+  it('remembers a yes: the second load reads the table without probing again', async () => {
+    const client = cache([null])
+    await readTranslations(client, ['uno'])
+    await readTranslations(client, ['dos'])
+    expect(client.counts()).toEqual({ probes: 1, chunks: 2 })
+  })
+
+  it('costs one probe a load when the table is missing, and issues no chunk at all', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const missing = "Could not find the table 'public.comment_translations' in the schema cache"
+    const client = cache([missing, missing, missing])
+    expect((await readTranslations(client, ['uno'])).size).toBe(0)
+    expect((await readTranslations(client, ['dos'])).size).toBe(0)
+    expect((await readTranslations(client, ['tres'])).size).toBe(0)
+    expect(client.counts()).toEqual({ probes: 3, chunks: 0 })
+    expect(warn.mock.calls[0]?.[0]).toContain(missing)
+    warn.mockRestore()
   })
 })

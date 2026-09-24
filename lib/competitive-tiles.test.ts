@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import {
-  competitorShares, leadCompetitor, videoBucket, isAudienceSentiment, bucketStats, themeCounts, pairScale,
+  competitorShares, leadCompetitor, isAudienceSentiment, bucketStats, themeCounts, pairScale,
   faceOffRows, ownedPostCounts, praisedFor, shareSeries, shareDeltaShown, kindOf, orderInsights, groupByKind, coverageOf, coverageText, competitiveHref,
   SENTIMENT_MIN_JUDGED,
 } from './competitive-tiles'
+import { audienceOf } from './rivals'
 
 const fmtInt = (n: number) => String(Math.round(n))
 const fmtPct = (n: number, d: 0 | 1 = 1) => `${d === 0 ? Math.round(n) : Math.round(n * 10) / 10}%`
@@ -35,9 +36,9 @@ describe('bucketStats', () => {
     { is_client: false, is_competitor: false, competitor_name: null, comments_count: 1, engagement_rate: null, sentiment: null },
   ]
   it('buckets videos like share_of_voice and reads the audience family only', () => {
-    expect(videoBucket(rows[0])).toBe('client')
-    expect(videoBucket(rows[3])).toBe('competitor:Ottobock')
-    expect(videoBucket(rows[4])).toBe('industry-other')
+    expect(audienceOf(rows[0])).toBe('client')
+    expect(audienceOf(rows[3])).toBe('competitor:Ottobock')
+    expect(audienceOf(rows[4])).toBe('industry-other')
     expect(isAudienceSentiment({ sentiment_source: null, analyzed_lane: 'full' })).toBe(true)
     expect(isAudienceSentiment({ sentiment_source: null, analyzed_lane: 'claims_only' })).toBe(false)
     const s = bucketStats(rows)
@@ -250,9 +251,9 @@ describe('findings', () => {
 
 describe('competitiveHref', () => {
   it('keeps the ?vs= pick alongside a drawer id', () => {
-    expect(competitiveHref(null)).toBe('/dashboard/competitive')
-    expect(competitiveHref('Ottobock', 'field')).toBe('/dashboard/competitive?vs=Ottobock&detail=field')
-    expect(competitiveHref('Össur Iceland')).toBe('/dashboard/competitive?vs=%C3%96ssur%20Iceland')
-    expect(competitiveHref(null, 'findings')).toBe('/dashboard/competitive?detail=findings')
+    expect(competitiveHref(null)).toBe('/dashboard/competitive-intel')
+    expect(competitiveHref('Ottobock', 'field')).toBe('/dashboard/competitive-intel?vs=Ottobock&detail=field')
+    expect(competitiveHref('Össur Iceland')).toBe('/dashboard/competitive-intel?vs=%C3%96ssur%20Iceland')
+    expect(competitiveHref(null, 'findings')).toBe('/dashboard/competitive-intel?detail=findings')
   })
 })

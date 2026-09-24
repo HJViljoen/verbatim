@@ -70,6 +70,8 @@ The dark band is charcoal-green, not near-black plus acid green.
 | Everything a person did not say | **Bricolage Grotesque** (variable, `opsz` axis) | Display and body. Display at opsz 96, weights 600–700, tight tracking (−0.035 to −0.045em). Loaded in `app/site/layout.tsx` via `next/font`, var `--font-bricolage` |
 | Everything a person did say | **IBM Plex Serif italic** | Quotes, voice fragments, the phrases in profiles. Loaded by the root layout, var `--font-plex-serif`. Italic is semantic, never decorative |
 
+In the app a quote is set at 15px in IBM Plex Serif italic (`components/quote-block.tsx`), which supersedes the mock's sans italic.
+
 Scale: big jumps. Hero `clamp(56px, 9.2vw, 148px)`, statements `clamp(44px,
 6.6vw, 104px)`, section leads `clamp(38px, 4.6vw, 68px)`, surface headings
 `clamp(30px, 3vw, 44px)`. Body 19px on leads, 17–18px elsewhere, 15px for the

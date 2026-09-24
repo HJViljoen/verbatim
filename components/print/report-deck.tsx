@@ -18,12 +18,26 @@ import type { ReportSnapshotData } from '@/lib/reports/types'
 
 const fmtDate = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 
-export function DeckFooter({ company, date }: { company: string; date: string }) {
+/**
+ * The line along the foot of every sheet.
+ *
+ * `note` is what the sheet was READ FROM, where the deck knows it — the
+ * artboards' own footer is "September 2026 reading · as at 28 Sep · TikTok,
+ * YouTube, Instagram, Reddit · 2,359 videos", and the brief printed only the
+ * provenance half. Optional, because a report's sheet has no single corpus to
+ * name (package E-marketing, fix pass).
+ *
+ * AND THE TYPE CLEARS 8pt. At 9.5px under the sheet's .902 zoom this line set
+ * at about 6.4pt on a 297mm page, below what print work holds to; 11px is
+ * about 7.4pt, and the page number beside it moves with it.
+ */
+export function DeckFooter({ company, date, note }: { company: string; date: string; note?: string | null }) {
   return (
-    <p className="truncate font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
+    <p className="truncate font-mono text-[11px] leading-[1.35] text-muted-foreground">
       <span className="text-secondary-foreground">Created by {company} with Verbatim</span>
       <span aria-hidden> · </span>
       <span>{date}</span>
+      {note ? <><span aria-hidden> · </span><span>{note}</span></> : null}
     </p>
   )
 }

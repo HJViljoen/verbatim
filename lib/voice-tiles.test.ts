@@ -109,7 +109,7 @@ describe('theme trajectories (registry_id join + label bridge + movement rule)',
   })
 
   // D1: the list is a direction read off a series indexed by UPDATE, so while
-  // RUN_INDEXED_DIRECTION_WORDS is off there is nothing honest to show — and
+  // directionWordsFor('voice.movers') is off there is nothing honest to show — and
   // the page has neither tile nor drawer to put it in.
   it('hands back no movers at all while the run-indexed direction words are gated off', () => {
     const { trajectories } = themeTrajectories([

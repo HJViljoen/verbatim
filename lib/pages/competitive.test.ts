@@ -4,15 +4,15 @@ import { competitiveFindingHref, type CompetitiveData, type FindingDetail } from
 
 describe('competitiveFindingHref', () => {
   it('keeps only the set keys, in vs/kind/about/item order, with an optional hash', () => {
-    expect(competitiveFindingHref({})).toBe('/dashboard/competitive')
-    expect(competitiveFindingHref({ vs: 'Ottobock' })).toBe('/dashboard/competitive?vs=Ottobock')
+    expect(competitiveFindingHref({})).toBe('/dashboard/competitive-intel')
+    expect(competitiveFindingHref({ vs: 'Ottobock' })).toBe('/dashboard/competitive-intel?vs=Ottobock')
     expect(competitiveFindingHref({ vs: 'Ottobock', kind: 'competitive_threat', about: null, item: 'ci-1' }))
-      .toBe('/dashboard/competitive?vs=Ottobock&kind=competitive_threat&item=ci-1')
-    expect(competitiveFindingHref({ vs: 'Ottobock', about: 'Ottobock' }, 'findings')).toBe('/dashboard/competitive?vs=Ottobock&about=Ottobock#findings')
+      .toBe('/dashboard/competitive-intel?vs=Ottobock&kind=competitive_threat&item=ci-1')
+    expect(competitiveFindingHref({ vs: 'Ottobock', about: 'Ottobock' }, 'findings')).toBe('/dashboard/competitive-intel?vs=Ottobock&about=Ottobock#findings')
   })
 
   it('drops null and empty-string values', () => {
-    expect(competitiveFindingHref({ vs: null, kind: '', about: undefined, item: 'ci-1' })).toBe('/dashboard/competitive?item=ci-1')
+    expect(competitiveFindingHref({ vs: null, kind: '', about: undefined, item: 'ci-1' })).toBe('/dashboard/competitive-intel?item=ci-1')
   })
 })
 

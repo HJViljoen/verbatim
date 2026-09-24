@@ -34,8 +34,11 @@ export interface ClaimResult {
   /** What the conversation actually says on this subject. Null when silent —
    *  enforced in code, never trusted to the model. */
   theySay: string | null
-  /** Distinct source videos behind the verdict. A conversation is one video and
-   *  the comments it sparked (lib/calibration.ts), so this is the honest unit. */
+  /** Distinct source videos behind the verdict, CUMULATIVE OVER THE RUN and
+   *  never month-scoped — validateVerdicts says the same thing, and the two
+   *  comments had come to disagree. The monthly reading's month-scoped
+   *  definition of a conversation (lib/calibration.ts) is a different unit from
+   *  this one; it is not what this counts. */
   conversationCount: number
   themeRefs: ThemeRef[]
   /** Grounding for live quote resolution. No quote text is stored. */

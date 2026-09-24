@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { fmtInt, fmtCompact, fmtPct, fmtDelta, shortDate, fullDate, weekdayDate, listNames, platformLabel } from './format'
+import { fmtInt, fmtCompact, fmtPct, fmtDelta, shortDate, fullDate, longMonth, monthName, weekdayDate, listNames, platformLabel } from './format'
 
 describe('fmtInt', () => {
   it('adds thousands separators and rounds', () => {
@@ -43,7 +43,12 @@ describe('fmtCompact', () => {
 describe('fmtPct / fmtDelta', () => {
   it('formats percents with at most one decimal', () => {
     expect(fmtPct(85.06)).toBe('85.1%')
-    expect(fmtPct(16)).toBe('16%')
+    // ONE DECIMAL MEANS ONE DECIMAL, INCLUDING AN EXACT .0: a column of
+    // tabular figures lines up on the decimal point, and a cell with no point
+    // does not. `decimals: 0` is how a caller asks for a whole percentage.
+    expect(fmtPct(16)).toBe('16.0%')
+    expect(fmtPct(16, 0)).toBe('16%')
+    expect(fmtPct(3.0259)).toBe('3.0%')
     expect(fmtPct(5.84, 0)).toBe('6%')
   })
   it('signs deltas and keeps units', () => {
@@ -79,5 +84,25 @@ describe('platforms', () => {
     expect(listNames(['tiktok', 'youtube', 'instagram'])).toBe('TikTok, YouTube & Instagram')
     expect(listNames(['tiktok'])).toBe('TikTok')
     expect(listNames([])).toBe('')
+  })
+})
+
+describe('the month words', () => {
+  it('names the month, in UTC, with no locale data behind it', () => {
+    expect(longMonth('2026-09-01')).toBe('September')
+    // The last day of a month is still that month — WP17's case, kept when the
+    // two copies of this formatter became one.
+    expect(longMonth('2026-01-31')).toBe('January')
+    expect(longMonth('2026-09-13T23:59:59Z')).toBe('September')
+    expect(monthName('2026-08-01')).toBe('Aug 2026')
+  })
+
+  it('gives back the string it was handed rather than the word "undefined"', () => {
+    // `LONG_MONTHS[NaN]` is undefined, React renders undefined as nothing, and
+    // the sentence reads "this update's contribution to  so far" — a gap a
+    // reader cannot see and nobody can debug.
+    expect(longMonth('not-a-month')).toBe('not-a-mont')
+    expect(longMonth('')).toBe('')
+    expect(monthName('not-a-month')).toBe('not-a-mont')
   })
 })

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, LoaderCircle, X } from 'lucide-react'
 import { updateReport, type ActionState } from '@/app/dashboard/studio/actions'
 import { newSectionId } from '@/lib/reports/templates'
-import { AUDIENCES, REPORT_FRAMING_MAX, type Audience, type ReportSection } from '@/lib/reports/types'
+import { AUDIENCES, REPORT_FRAMING_MAX, isPickablePage, type Audience, type ReportSection } from '@/lib/reports/types'
 import type { CataloguePage } from '@/lib/reports/catalogue'
 import { REPORT_MAX_SECTIONS } from '@/lib/config'
 
@@ -38,7 +38,16 @@ export function Outline(p: Props) {
   const [sections, setSections] = useState<ReportSection[]>(p.sections)
   const [open, setOpen] = useState<string | null>(p.sections[0]?.id ?? null)
   const [status, setStatus] = useState<ActionState | null>(null)
-  const [addPage, setAddPage] = useState(p.catalogue[0]?.page ?? 'dashboard')
+  // What may be ADDED today: the catalogue narrowed to the picker's list. The
+  // catalogue itself carries every page a stored section may name, `dashboard`
+  // included, so an already-stored section still finds its title and its tiles;
+  // offering `dashboard` in this menu would let a new report name a retired
+  // page. `agent` joins a report only through "add to report" from a thread.
+  const pickable = p.catalogue.filter((c) => isPickablePage(c.page))
+  // No fallback key: `SECTION_PAGES[0]` is `overview`, which has no module yet,
+  // and an "Add page" that files a section naming a page nothing can render is
+  // worse than one that is greyed out.
+  const [addPage, setAddPage] = useState<string>(pickable[0]?.page ?? '')
   const byPage = new Map(p.catalogue.map((c) => [c.page, c]))
   const skippedFor = new Map(p.skipped.map((s) => [s.sectionId, s.reason]))
 
@@ -69,7 +78,7 @@ export function Outline(p: Props) {
   }
   const remove = (id: string) => commit(sections.filter((s) => s.id !== id))
   const add = () => {
-    if (sections.length >= REPORT_MAX_SECTIONS) return
+    if (!addPage || sections.length >= REPORT_MAX_SECTIONS) return
     const s: ReportSection = { id: newSectionId(), page: addPage as ReportSection['page'], params: {} }
     setOpen(s.id)
     commit([...sections, s])
@@ -161,11 +170,11 @@ export function Outline(p: Props) {
       </ol>
 
       <div className="flex items-center gap-2">
-        <select value={addPage} onChange={(e) => setAddPage(e.target.value as CataloguePage['page'])} aria-label="Page to add"
+        <select value={addPage} onChange={(e) => setAddPage(e.target.value)} aria-label="Page to add"
           className="h-8 min-w-0 flex-1 rounded-[4px] border border-input bg-tile px-2 text-[13px] outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50">
-          {p.catalogue.filter((c) => c.page !== 'agent').map((c) => <option key={c.page} value={c.page}>{c.title}</option>)}
+          {pickable.map((c) => <option key={c.page} value={c.page}>{c.title}</option>)}
         </select>
-        <button type="button" onClick={add} disabled={sections.length >= REPORT_MAX_SECTIONS}
+        <button type="button" onClick={add} disabled={!addPage || sections.length >= REPORT_MAX_SECTIONS}
           className="inline-flex h-8 items-center rounded-full bg-tile px-3 text-[12px] font-medium text-secondary-foreground ring-1 ring-border hover:bg-inner disabled:opacity-50">
           Add page
         </button>

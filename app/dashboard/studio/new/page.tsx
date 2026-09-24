@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { PageFrame, PageBar, BarPill } from '@/components/shell/page-grid'
 import { PaneHeader, PaneBody } from '@/components/shell/master-list'
-import { STARTER_TEMPLATES } from '@/lib/reports/templates'
+import { starterTemplates } from '@/lib/reports/templates'
 import { CUSTOM_KEY, DOCUMENT_STARTERS } from '@/lib/reports/documents/templates'
 import { AUDIENCES } from '@/lib/reports/types'
 import { catalogueTitle } from '@/lib/reports/catalogue'
@@ -54,7 +54,7 @@ export default function NewReportPage() {
             </div>
             <p className="px-1 font-mono text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground">Arranged from the pages</p>
             <ul className="grid gap-3 md:grid-cols-2">
-              {STARTER_TEMPLATES.map((t) => (
+              {starterTemplates().map((t) => (
                 <li key={t.key} className="flex flex-col gap-2 rounded-lg bg-tile p-4 shadow-tile">
                   <div>
                     <p className="text-[14px] font-semibold">{t.name}</p>

@@ -1,0 +1,96 @@
+-- M15 · the one line M12 left, named as a gap in its own deploy section:
+-- TRUNCATE on `tracking_configs` for `anon` and `authenticated`.
+--
+-- WHY IT IS STILL OPEN AFTER M11 AND M12. M11
+-- (`20260918099500_report_family_grants.sql`) closed exactly this shape on
+-- eleven report-family tables, for the reason it states: PostgreSQL row
+-- security applies to SELECT, INSERT, UPDATE and DELETE — there is no TRUNCATE
+-- policy to write, and a TRUNCATE is not row-scoped. `tracking_configs` is not
+-- one of its eleven. M12 (`20260919090000_communities_control.sql`) then
+-- granted `authenticated` one column (`subreddits`) and revoked `anon`'s
+-- table-wide UPDATE, and said plainly in docs/deploy-checklist.md that the
+-- Supabase default INSERT, DELETE, TRIGGER, TRUNCATE and REFERENCES survive
+-- on this table, that the first two are inert under RLS and the third is not:
+-- "Recorded here as a known gap, not fixed in the deploy window — it is a
+-- one-line `revoke truncate` in a later migration". This is that migration.
+--
+-- MEASURED, NOT ARGUED. On the Supabase PREVIEW BRANCH `zfmxrrugaihxpubunleu`
+-- (a production restore with all thirteen Phase 1 migrations applied), read-only,
+-- 2026-09-24:
+--
+--   information_schema.role_table_grants, table_name='tracking_configs'
+--     anon           DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE
+--     authenticated  DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE
+--     service_role   DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE
+--
+--   role_column_grants, authenticated, UPDATE -> competitor_names,
+--     exclude_terms, last_actor, report_day, report_emails, report_period,
+--     subreddits, updated_at  (eight — M12 applied, as expected)
+--   role_column_grants, anon, UPDATE -> 0     (M12's revoke applied)
+--   pg_policy on tracking_configs -> two, `r` and `w`, both {authenticated};
+--     relrowsecurity = t
+--
+-- So M12 is on the branch and TRUNCATE is exactly what it left behind: held by
+-- both tenant roles, on a table whose two rows ARE the two tenants' entire
+-- tracked configuration — every keyword list, every rival name, the report
+-- schedule, the communities. Emptying it is not a row-scoped loss RLS could
+-- refuse; it is the product's configuration gone in one statement. Nothing
+-- cascades (no foreign key references `tracking_configs`), so the blast radius
+-- is that table and the runs that read it afterwards.
+--
+-- NOT A LIVE INCIDENT, AND STILL WORTH CLOSING — M11's words, and they hold
+-- here for the same two reasons: PostgREST issues no TRUNCATE verb, so there
+-- is no route through the public API, and `authenticated` is NOLOGIN. This is
+-- posture, closed one migration late because M12 shipped in the last file of
+-- thirteen and an unreviewed statement did not belong in it.
+--
+-- BY NAME, NOT `revoke all`, FOR M11's REASON. `tracking_configs` holds
+-- table-level SELECT for both tenant roles and a column list for
+-- `authenticated`'s UPDATE (M12's eight). `revoke all` would drop both, and a
+-- later `grant select` would not put the column list back. TRUNCATE alone is
+-- revoked here; every read and every write M12 deliberately left in place is
+-- untouched, so this migration cannot take anything the Settings page uses.
+--
+-- WHAT IS DELIBERATELY NOT REVOKED. INSERT, DELETE, TRIGGER and REFERENCES
+-- stay: RLS refuses INSERT and DELETE (there is no policy for either — the two
+-- policies are `r` and `w`), and TRIGGER/REFERENCES need ownership-adjacent
+-- rights this file has no case to relitigate. Narrowing them is M12's argument
+-- to reopen, not a line to slip into a one-statement migration.
+--
+-- `service_role` keeps what it holds. It is the migration runner and the
+-- operator path; nothing here touches it.
+--
+-- Idempotent: a revoke of a privilege already revoked is a no-op, so this file
+-- applies twice with the same result.
+
+revoke truncate on public.tracking_configs from authenticated, anon;
+
+-- VERIFICATION (WP22 style — run it after the apply and read the answer before
+-- moving on):
+--
+--   select grantee, string_agg(privilege_type, ',' order by privilege_type) as privs
+--     from information_schema.role_table_grants
+--    where table_schema='public' and table_name='tracking_configs'
+--      and grantee in ('anon','authenticated','service_role')
+--    group by 1 order by 1;
+--
+-- Expect exactly:
+--   anon           DELETE,INSERT,REFERENCES,SELECT,TRIGGER
+--   authenticated  DELETE,INSERT,REFERENCES,SELECT,TRIGGER
+--   service_role   DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE
+--
+-- TRUNCATE absent from the two tenant rows and present on the third; SELECT
+-- still on all three. And the column grants M12 set must be unmoved — this
+-- file is a no-op against them, so a change here is a bug in this file:
+--
+--   select
+--     (select string_agg(column_name, ', ' order by column_name)
+--        from information_schema.role_column_grants
+--       where table_schema='public' and table_name='tracking_configs'
+--         and grantee='authenticated' and privilege_type='UPDATE')  as auth_update_cols,
+--     (select count(*) from information_schema.role_column_grants
+--       where table_schema='public' and table_name='tracking_configs'
+--         and grantee='anon' and privilege_type='UPDATE')           as anon_update_cols;
+--
+-- Expect `competitor_names, exclude_terms, last_actor, report_day,
+-- report_emails, report_period, subreddits, updated_at` — eight — and 0.

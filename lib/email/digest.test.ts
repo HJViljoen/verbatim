@@ -5,6 +5,7 @@ import { digestSubject } from './subject'
 import { firstSentence, htmlToText } from './text'
 import { tokenHex } from './theme'
 import { DeltaBlock } from '../../components/email/delta-block'
+import { MOVEMENT_WORDS } from '../../components/delta-badge'
 import { clip, contentEmail, dashboardEmail } from '../../components/email/tiles'
 import type { RunDelta } from '../report-delta'
 import type { DashboardData } from '../pages/dashboard'
@@ -55,13 +56,13 @@ describe('the delta block', () => {
     expect(html).toContain('Ottobock <strong>15%</strong>')
     expect(html).toContain('Socket pain and poor fit · Price and access questions and 1 more')
     expect(html).toContain('4,626')
-    expect(html).toContain('href="https://app.verbatimintel.com/dashboard/competitive"')
+    expect(html).toContain('href="https://app.verbatimintel.com/dashboard/competitive-intel"')
   })
   it('says "where you stand" when nothing cleared its band, and on a first update', () => {
     const flat = { ...delta, sentiment: { ...delta.sentiment!, verdict: { state: 'too_little_data' as const, change: 0.4, band: 2 } } }
     const html = renderToStaticMarkup(createElement(DeltaBlock, { delta: flat, dashboard: null, appUrl: ctx.appUrl }))
     expect(html).toContain('Where you stand this update')
-    expect(html).toContain('too little data')
+    expect(html).toContain(MOVEMENT_WORDS.too_little_data) // the chip reads the one table (P0 item 6)
     const first = renderToStaticMarkup(createElement(DeltaBlock, { delta: null, dashboard: { sentiment: { positivePct: 91.2, judged: 120, deltaText: null, tierLabel: null, segments: [] }, share: null } as unknown as DashboardData, appUrl: ctx.appUrl }))
     expect(first).toContain('your first update')
     expect(first).toContain('<strong>91%</strong>')
@@ -149,7 +150,10 @@ describe('text helpers', () => {
     expect(text).toBe('One & two\na b\nOpen (https://x.y/z)\nDone now')
   })
   // 2026-09-13: the Össur digest's plain-text part was reported as
-  // `…/dashboard/market?rec\ufffddd4fde-…` for `?rec=85dd4fde-…`. The raw MIME
+  // `…/dashboard/market?rec\ufffddd4fde-…` for `?rec=85dd4fde-…`. (That send said
+  // /dashboard/market, which is what was in those four inboxes; WP9 moved the
+  // page to /dashboard/market-intel and the assertion below moved with it. The
+  // record of what happened does not.) The raw MIME
   // of that send (DKIM-pass, so these are the bytes Resend signed) carries
   // `Content-Transfer-Encoding: quoted-printable` with the `=` correctly
   // escaped — `rec=3D85dd4fde-…` — and decodes to the exact URL: the mangling
@@ -161,7 +165,7 @@ describe('text helpers', () => {
     const d = { hero: { oneThing: { id, title: 'Launch an access navigator', reasoning: 'People start with practical access questions.', priority: 'high' }, voices: 96, platforms: ['youtube', 'tiktok', 'instagram', 'reddit'] } } as unknown as DashboardData
     const html = renderToStaticMarkup(createElement('div', null, dashboardEmail['dashboard.recommendation'](d, ctx)))
     const text = htmlToText(html)
-    expect(text).toContain(`(https://app.verbatimintel.com/dashboard/market?rec=${id})`)
+    expect(text).toContain(`(https://app.verbatimintel.com/dashboard/market-intel?rec=${id})`)
     expect(text).not.toContain('rec=3D')
   })
 

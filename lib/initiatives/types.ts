@@ -1,4 +1,4 @@
-import { RUN_INDEXED_DIRECTION_WORDS } from '../config'
+import { directionWordsFor } from '../config'
 import { trackedLine, type InitiativeVerdict } from './measure'
 // Initiatives (WP7c, 2026-09-11) — the shapes the table, the actions and the
 // measurement all agree on.
@@ -8,6 +8,16 @@ import { trackedLine, type InitiativeVerdict } from './measure'
 // what they are trying to move, and the product's job is only to report whether
 // the conversation followed. That asymmetry is why the copy never says "your
 // goal is on track" — it says what the share did.
+//
+// LEGACY from Phase 1 WP4 (2026-09-18). `moves` replaces this: same idea, three
+// kinds of target instead of one. The reason is not tidiness — `registry_ids`
+// is documented as theme_registry ids, CHECKed at 1-5 and deliberately not
+// updatable, and a subject's membership is a set that exceeds five themes and
+// is re-decided every week, so a subject id stored here would break the
+// column's comment, the action's ownership check and the measurement all at
+// once. Nothing new reads or writes this module; the table holds 0 rows on both
+// tenants and is dropped in Phase 3. What still runs is the old Dashboard tile
+// and the email tile, until item 38a retires those pages.
 
 export const INITIATIVE_STATUSES = ['active', 'done', 'dropped'] as const
 export type InitiativeStatus = (typeof INITIATIVE_STATUSES)[number]
@@ -150,7 +160,7 @@ export interface InitiativeTileData extends InitiativesData {
  */
 export function initiativeTile(
   data: { initiatives?: InitiativesData },
-  directionWords = RUN_INDEXED_DIRECTION_WORDS,
+  directionWords = directionWordsFor('initiatives'),
 ): InitiativeTileData {
   const { rows, total } = initiativesOf(data)
   if (directionWords) return { rows, total, movement: true }

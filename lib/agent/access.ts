@@ -1,4 +1,5 @@
 import { createAdminClient } from '../supabase-admin'
+import { canManageTenant, type Role } from '../roles'
 
 // Who may SEND to the Verbatim Agent.
 //
@@ -34,3 +35,45 @@ export async function isPlatformAdmin(userId: string): Promise<boolean> {
   if (error) return false
   return Boolean(data)
 }
+
+// ── Decision B (Phase 1 WP21): Ask opens to client owners and admins ────────
+//
+// The asymmetry above stays — a member reads every thread and sends nothing —
+// but the line moved. From 2026-08-22 to now exactly ONE human could ask across
+// both tenants (the platform admin, who is also Össur's owner); opening to
+// `canManageTenant` adds Össur's admin and Sealand's owner and leaves Össur's
+// three members read-only. `canManageTenant` is already the gate on Settings,
+// Team, the Studio and the schedule send route, so this is the product's
+// existing answer to "who may act for this workspace", not a new one.
+//
+// `canManageTenant` comes from lib/roles.ts, a leaf. It used to come from
+// lib/auth.ts, which imports `isPlatformAdmin` back from here — a cycle that
+// worked, because both bindings are function declarations and each module sees
+// the other's before either finishes evaluating, and one that had no reason to
+// exist: the predicate is a pure line over a role and needs none of the
+// cookies, clients and membership resolution auth.ts carries. Moving it keeps
+// the single definition (the gate on Settings and this one must never disagree
+// about what an admin is) without the cycle. lib/auth.ts re-exports it, so
+// every other caller is unchanged.
+//
+// The ROLE is checked first and the table only after, which is not only an
+// ordering: an owner or an admin never pays for the `platform_admins` read at
+// all. The fallback is there for a platform admin who is a member of their own
+// tenant — nobody is today, and an operator viewing another tenant arrives
+// with role 'owner' anyway (lib/auth.ts applyOperatorView) — because losing
+// operator access to the one surface that spends money would be found in
+// production rather than here.
+//
+// The MONEY is still gated per tenant, not per person: the monthly cap counts
+// a workspace's questions (lib/ask/quota.ts), so three people sharing 40 is the
+// same budget as one person spending it.
+
+export async function canAsk(role: Role, userId: string): Promise<boolean> {
+  if (canManageTenant(role)) return true
+  return isPlatformAdmin(userId)
+}
+
+/** What a member is told. Not "switched off" — it is on, and it is not theirs
+ *  to spend. The sentence says who can, so the reader knows who to ask. */
+export const ASK_NOT_YOURS =
+  'Asking is for owners and admins on this workspace. You can read every answer here.'

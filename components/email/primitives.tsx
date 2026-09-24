@@ -1,4 +1,5 @@
 /* eslint-disable @next/next/no-img-element -- an email carries plain <img>, never next/image */
+import { translationNote, translationLabel } from '@/components/quote-block'
 import type { CSSProperties, ReactNode } from 'react'
 import { EMAIL, FONT } from '../../lib/email/theme'
 
@@ -94,7 +95,13 @@ export function Bar({ segments, height = 8 }: { segments: { pct: number; color: 
 }
 
 /** A ranked row: label · a single bar · the count. */
-export function RankedRow({ label, pct, color, count, badge, dot }: { label: ReactNode; pct: number; color: string; count: string; badge?: ReactNode; dot?: boolean }) {
+// `count` is a ReactNode, not a string, and that matters: a block marks its
+// level node with `data-copy` and the marker has to survive into the inbox.
+// Stringifying it dropped the node whole — What worked and This week's subjects
+// rendered every email row with no n at all, which is rule (b)'s failure in the
+// one artefact a client reads first. A bare marked span carries no class and no
+// token, so it is email-safe as it stands.
+export function RankedRow({ label, pct, color, count, badge, dot }: { label: ReactNode; pct: number; color: string; count: ReactNode; badge?: ReactNode; dot?: boolean }) {
   const w = Math.max(1, Math.min(100, Math.round(pct)))
   return (
     <table width="100%" {...presentation} style={T}>
@@ -147,7 +154,12 @@ export function DeltaText({ value, unit = '', decimals = 0, good = 'neutral' }: 
   return <span style={{ ...text.mono, fontSize: 11, fontWeight: 600, color }}>{v > 0 ? '+' : '−'}{Math.abs(v).toLocaleString('en-US')}{unit}</span>
 }
 
-export function Quote({ text: t, cite }: { text: string; cite?: ReactNode }) {
+export function Quote({ text: t, cite, lang, english }: { text: string; cite?: ReactNode; lang?: string | null; english?: string | null }) {
+  // The MARKUP is this file's (an email is a table of inline styles, and these
+  // are its theme constants); the WORDS are QuoteBlock's, so the label cannot
+  // drift between the app and the email that links to it.
+  const note = translationNote({ lang, english })
+  const label = translationLabel(note)
   return (
     <table width="100%" {...presentation} style={{ ...T, marginTop: 6 }}>
       <tbody>
@@ -155,6 +167,11 @@ export function Quote({ text: t, cite }: { text: string; cite?: ReactNode }) {
           <td width={2} style={{ background: EMAIL.border, fontSize: 1 }}>&nbsp;</td>
           <td style={{ padding: '2px 0 2px 10px' }}>
             <div style={{ fontFamily: FONT.serif, fontSize: 14, fontStyle: 'italic', lineHeight: '1.45', color: EMAIL.ink }}>“{t}”</div>
+            {/* LABEL, THEN THE RENDERING IT NAMES — `QuoteBlock`'s order, and
+                the artboards'. This renderer keeps its own markup and never
+                its own sequence. */}
+            {label ? <div style={{ ...text.small, fontSize: 10.5, marginTop: 3 }}>{label}</div> : null}
+            {note.english ? <div style={{ fontFamily: FONT.serif, fontSize: 13, lineHeight: '1.45', color: EMAIL.muted, marginTop: 4 }}>{note.english}</div> : null}
             {cite ? <div style={{ ...text.small, fontSize: 11, marginTop: 3 }}>{cite}</div> : null}
           </td>
         </tr>
@@ -163,9 +180,18 @@ export function Quote({ text: t, cite }: { text: string; cite?: ReactNode }) {
   )
 }
 
+/**
+ * The artefacts' one control.
+ *
+ * IT IS 44px TALL (the fix pass, E-monthly review [Nit]). At 13px over 9px of
+ * padding it measured about 34, under every touch-target guideline there is,
+ * on the artefacts most likely to be tapped with a thumb — a monthly report is
+ * opened on a phone more often than anywhere else. 18px of line box inside
+ * 13px of padding each side is 44 exactly, and the type is unchanged.
+ */
 export function Button({ href, children, primary }: { href: string; children: ReactNode; primary?: boolean }) {
   return (
-    <a href={href} style={{ display: 'inline-block', fontFamily: FONT.sans, fontSize: 13, fontWeight: 600, textDecoration: 'none', padding: '9px 16px', borderRadius: 6, background: primary ? EMAIL.green : EMAIL.card, color: primary ? EMAIL.card : EMAIL.ink, border: primary ? `1px solid ${EMAIL.green}` : `1px solid ${EMAIL.border}` }}>{children}</a>
+    <a href={href} style={{ display: 'inline-block', fontFamily: FONT.sans, fontSize: 13, lineHeight: '18px', fontWeight: 600, textDecoration: 'none', padding: '13px 18px', borderRadius: 6, background: primary ? EMAIL.green : EMAIL.card, color: primary ? EMAIL.card : EMAIL.ink, border: primary ? `1px solid ${EMAIL.green}` : `1px solid ${EMAIL.border}` }}>{children}</a>
   )
 }
 

@@ -4,7 +4,6 @@ import { zodResponseFormat } from 'openai/helpers/zod'
 import { openai } from '../openai'
 import { COVER_MODEL } from '../config'
 import { logAiCall } from '../pipeline/ai-log'
-import { FIGURE_RE, MAGNITUDE_RE, tidy } from '../pipeline/narrative'
 import { CALIBRATED_PROSE_RULE } from '../pipeline/prose-rules'
 import { composeFallbackCover, dedupeTitles, scrubCover, splitSentences } from './cover'
 import type { Audience, CoverText, FigureTable } from './types'
@@ -68,7 +67,7 @@ export function buildCoverPrompts(a: Omit<CoverArgs, 'admin' | 'clientId' | 'run
     '- Three to five sentences, one paragraph, plain English, no headings, no bullet points, no exclamation marks, no greeting.',
     '- You have NO numbers. Where a number belongs, write the figure\'s placeholder exactly as given, e.g. "[[videos]] conversations". The product substitutes the real value. Never type a digit. Never invent a figure that is not in the list.',
     '- Cite at most four figures; at least one. A placeholder is read aloud as its value: a count is followed by what it counts ("[[comments]] comments read"), never used as a noun ("the findings in [[competitive_findings]]" is wrong).',
-    '- A figure means exactly what its label says. Do not attach it to a narrower claim: "[[videos]] conversations analysed" is true; "the theme appears in [[videos]] conversations" is not.',
+    '- A figure means exactly what its label says. Do not attach it to a narrower claim: "[[videos]] videos analysed" is true; "the theme appears in [[videos]] videos" is not.',
     CALIBRATED_PROSE_RULE,
     '- Do not name the tool, the model or "AI". Do not say "this report"; say what was found.',
     '- No dashes between clauses (no em dash, no en dash, no spaced hyphen); use a comma, a colon or a full stop.',
@@ -106,7 +105,7 @@ export async function generateCover(args: CoverArgs): Promise<CoverText> {
       : { prompt_tokens: 0, completion_tokens: 0 }
     const parsed = completion.choices[0]?.message?.parsed ?? null
     const raw = (parsed?.sentences ?? []).map((s) => s.trim()).filter(Boolean).flatMap(splitSentences).slice(0, 6).join(' ')
-    const scrubbed = scrubCover(raw, args.figures, { magnitude: MAGNITUDE_RE, figure: FIGURE_RE, tidy })
+    const scrubbed = scrubCover(raw, args.figures)
     const usable = splitSentences(scrubbed.body).length >= 2
     await logAiCall(args.admin, {
       clientId: args.clientId, runId: args.runId, pass: 'report_cover', callIndex: 1, model: COVER_MODEL,

@@ -7,6 +7,7 @@ import { runPassD } from '../lib/pipeline/pass-d'
 import { runCrossReference } from '../lib/pipeline/cross-reference'
 import { loadBrandClaims, shapeBrandVoice } from '../lib/pipeline/claims'
 import { persistThemes } from '../lib/pipeline/themes'
+import { passAPromptVersion } from '../lib/pipeline/pass-a'
 import { writeRunSummary } from '../lib/pipeline/run-summary'
 import { resolveGatherWindow, inWindow } from '../lib/gather/gather'
 import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, OSSUR_CLIENT_ID as OSSUR, periodSince } from '../lib/config'
@@ -157,7 +158,21 @@ async function main() {
   console.log(`\n=== PASS B — theme labels (${b.labelled} labelled, ${b.fallbacks} fallbacks) ===`)
   for (const t of allThemes) console.log(`  ${t.label}${t.singleSource ? ' (early signal)' : ''} — ${t.description ?? ''}`)
   if (persist) {
-    const pt = await persistThemes(args.clientId, args.runId!, allThemes)
+    // The RUN's Pass A version, off the flags frozen on its row — not this
+    // shell's environment. The observation's prompt_version is a claim about
+    // the regime the corpus was READ under, and this script aggregates a run
+    // whose Pass A may have happened days ago under other flags; stamping
+    // today's TRANSCRIPTS_ENABLED would make the column a record of when
+    // someone ran a script. Falls back to the environment only for a run
+    // opened before flags were stored, where there is nothing better.
+    const { data: runRow } = await admin.from('pipeline_runs')
+      .select('flags').eq('id', args.runId!).eq('client_id', args.clientId).maybeSingle()
+    const runFlags = (runRow?.flags ?? null) as { transcripts?: boolean } | null
+    const pt = await persistThemes(args.clientId, args.runId!, allThemes, {
+      ...(typeof runFlags?.transcripts === 'boolean'
+        ? { promptVersion: passAPromptVersion(runFlags.transcripts) }
+        : {}),
+    })
     console.log(`Themes persisted: ${pt.inserted} (${pt.hadPreviousRun ? `${pt.firstSeen} new vs previous run` : 'first themed run — no "New" baseline yet'})`)
   }
 

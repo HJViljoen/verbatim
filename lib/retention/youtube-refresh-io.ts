@@ -114,6 +114,16 @@ export async function deleteCommentsProperly(
   return { deleted: ids.length, insightsAffected: insights.size, heroQuotesNulled, artifactsStaled: staled.artifacts }
 }
 
+/** Is this "20260918095000 has not been applied yet" and nothing else? The
+ *  `isMissingMonthlyReading` shape. */
+function isMissingTranslations(error: unknown): boolean {
+  const { code, message } = (typeof error === 'object' && error ? error : {}) as { code?: string; message?: string }
+  const text = message ?? String(error)
+  if (!text.includes('comment_translations')) return false
+  if (code && ['PGRST205', '42P01'].includes(code)) return true
+  return /in the schema cache/i.test(text) || /does not exist/i.test(text)
+}
+
 /** Refresh the YouTube comments that are due. */
 export async function refreshYoutubeComments(
   admin: SupabaseClient,
@@ -184,6 +194,26 @@ export async function refreshYoutubeComments(
       for (const part of chunk(dropLs, CHUNK)) {
         const { error } = await admin.from('language_samples').delete().in('id', part)
         if (error) throw new Error(`drop samples: ${error.message}`)
+      }
+      // AND THE TRANSLATION OF THE WORDS THAT ARE GONE. comment_translations
+      // cascades from comments, and both paths that DELETE a comment take the
+      // translation with them — but an EDIT is neither: this upsert is on
+      // (client_id, platform, comment_id), so the row keeps its id, no cascade
+      // fires, and an English rendering of words the author has since removed
+      // would persist indefinitely under the old hash. It never renders (the
+      // cache is keyed on the CURRENT text's hash), but `authenticated` holds
+      // SELECT on the whole table with only a client_id predicate, so a tenant
+      // reading it directly through PostgREST would see renderings of text that
+      // no longer exists in comments. The table's own comment claims no
+      // translated copy survives; this is the case that was not covered.
+      //
+      // The whole comment's rows go, not just the stale hash: the new text will
+      // be translated again the first time it is quoted.
+      for (const part of chunk(changed, CHUNK)) {
+        const { error } = await admin.from('comment_translations').delete().in('comment_id', part)
+        // Not fatal, and narrow: before 20260918095000 is applied the table is
+        // not there, and a refresh must not fail for a cache it cannot reach.
+        if (error && !isMissingTranslations(error)) throw new Error(`drop translations: ${error.message}`)
       }
     }
   }

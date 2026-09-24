@@ -1,3 +1,6 @@
+import { FIGURE_RE, MAGNITUDE_RE, PROSE_POLICY, dropUnverdictedDirection, tidy } from '../prose/scrub'
+import type { Verdict } from '../reading/verdicts'
+
 import type { ExecutiveBrief, BriefMetric } from './schemas'
 
 // Write-time validator for Pass D-a's executive_brief (2026-07-18). The brief is
@@ -14,28 +17,10 @@ import type { ExecutiveBrief, BriefMetric } from './schemas'
 /** The literal placeholder the model must leave where a figure goes. */
 export const FIGURE_TOKEN = '[[n]]'
 
-// The CALIBRATED_PROSE_RULE banned set — magnitude/frequency words code owns,
-// never the model. Whole-word, case-insensitive.
-export const MAGNITUDE_WORDS = [
-  'very', 'extremely', 'significant', 'significantly', 'overwhelming', 'overwhelmingly',
-  'huge', 'hugely', 'strong', 'strongly', 'most', 'many', 'widespread', 'frequent',
-  'frequently', 'consistently', 'growing', 'increasingly', 'increasing', 'vast', 'majority',
-]
-export const MAGNITUDE_RE = new RegExp(`\\b(${MAGNITUDE_WORDS.join('|')})\\b`, 'gi')
-
-// A figure-like token: an optional sign, digits with separators, an optional
-// unit (%/k/m/bn/pts). Catches "71%", "12.4k", "3", "+8 pts" — anything the
-// model might type where a `[[n]]` token belongs.
-export const FIGURE_RE = /[+-]?\d[\d.,]*\s?(?:%|k|m|bn|pts?|percent)?/gi
-
-/** Collapse whitespace and tidy the punctuation a strip leaves behind. */
-export function tidy(text: string): string {
-  return text
-    .replace(/\s{2,}/g, ' ')
-    .replace(/\s+([.,;:!?])/g, '$1')
-    .replace(/^[\s,;:–-]+/, '')
-    .trim()
-}
+// The banned magnitude set, the figure pattern and the tidy-up now live with
+// the other scrubber (lib/prose/scrub.ts), so the three near-copies of this
+// loop are one. Re-exported because eleven files import them from here.
+export { FIGURE_RE, MAGNITUDE_RE, MAGNITUDE_WORDS, tidy } from '../prose/scrub'
 
 interface Scrubbed {
   text: string
@@ -101,15 +86,42 @@ export interface ValidatedBrief {
 
 /** Sanitise + structurally validate a raw executive_brief. Keeps at most one
  *  beat per metric (first wins), caps at three, scrubs every string. */
-export function validateBrief(raw: ExecutiveBrief | null | undefined): ValidatedBrief {
+export function validateBrief(raw: ExecutiveBrief | null | undefined, verdicts: readonly Verdict[] = []): ValidatedBrief {
   if (!raw || typeof raw.headline_finding !== 'string' || !Array.isArray(raw.narrative)) {
     return { brief: null, leaked: false, dropped: 0 }
   }
   let leaked = false
   let dropped = 0
 
+  // The direction rule (item 9), on the same prose the digit rule already
+  // guards. The prompt has told the brief since July not to state a figure's
+  // "size or direction", and the enforcement was half: a probe of the live
+  // headline "Attention is fading while price talk is rising." comes back
+  // verbatim today. A beat or a headline that names a direction nothing earned
+  // is now gone, and an empty headline drops the whole brief to the
+  // code-composed fallback, which says it is one.
+  // Gated on the slot's own row in the policy table, so the brief's rules
+  // change in one place. `pass_d_a_brief` is `both` there; if it ever is not,
+  // this stops running rather than quietly disagreeing with the table.
+  const policy = PROSE_POLICY.pass_d_a_brief
+  const runsDirection = policy === 'direction' || policy === 'both'
+  const directional = (text: string): boolean =>
+    runsDirection && dropUnverdictedDirection(text, verdicts).dropped > 0
+
+  // A DEVIATION FROM THE DESIGN'S SENTENCE DROP, deliberate and stated: one
+  // directional sentence empties the whole headline, and a brief with no
+  // headline is null, so the dashboard falls to the code-composed narrative
+  // that says the product wrote it. A headline is one claim in one or two
+  // sentences; half of it is not a smaller version of it, it is a different
+  // claim with the qualifier gone. Falling back says so on the page, which
+  // keeping half does not. Blast radius checked read-only: none of the 18
+  // stored executive-brief headlines trips it.
   const headline = scrubHeadline(raw.headline_finding)
   leaked ||= headline.leaked
+  if (headline.text && directional(headline.text)) {
+    headline.text = ''
+    leaked = true
+  }
 
   const seen = new Set<BriefMetric>()
   const beats: ExecutiveBrief['narrative'] = []
@@ -119,6 +131,7 @@ export function validateBrief(raw: ExecutiveBrief | null | undefined): Validated
     leaked ||= scrubbed.leaked
     // A beat with no surviving prose around its token is noise.
     if (!scrubbed.text || scrubbed.text === FIGURE_TOKEN) { dropped++; continue }
+    if (directional(scrubbed.text)) { dropped++; leaked = true; continue }
     seen.add(beat.metric)
     beats.push({ metric: beat.metric, text: scrubbed.text })
     if (beats.length >= 3) break

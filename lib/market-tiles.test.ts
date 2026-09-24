@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   insightTiers, confirmedCompetitiveIds, recEvidenceTier, orderAgenda, openAgendaId, priorityDot, distinctVideos,
-  claimVerdict, claimCounts, claimCountsLine, ledgerRows, truncateWords, quadrantBullets, tierCounts, newsRingChip,
+  claimVerdict, claimCounts, claimCountsLine, ledgerRows, truncateWords, quadrantBullets, tierCounts, groundedTier, newsRingChip,
   labelsBySlug, themeChips,
 } from './market-tiles'
 
@@ -139,6 +139,17 @@ describe('tier counts + news chips', () => {
   it('counts tiers for the header chips', () => {
     expect(tierCounts(insightTiers([mi('a', 9, 3), mi('b', 8, 1), mi('c', 1, 0)]))).toEqual({ confirmed: 1, early: 1, archive: 1 })
     expect(tierCounts(new Map())).toEqual({ confirmed: 0, early: 0, archive: 0 })
+  })
+  // Both tenants carry a conclusion with confidence 10 and an empty
+  // `supporting_theme_ids`, which gateTier badges 'early_signal' on the score
+  // alone. MK1 prints the video count beside the tier, so the page read
+  // "Early signal · 0 of 1,699 videos behind it" under "0 below the bar".
+  it('puts a conclusion with nothing behind it below the bar, whatever it scored itself', () => {
+    expect(groundedTier('early_signal', 0)).toBe('archive')
+    expect(groundedTier('confirmed', 0)).toBe('archive')
+    expect(groundedTier('early_signal', 1)).toBe('early_signal')
+    expect(groundedTier('confirmed', 42)).toBe('confirmed')
+    expect(groundedTier('archive', 0)).toBe('archive')
   })
   it('ring → entity chip', () => {
     expect(newsRingChip(0)).toEqual({ label: 'Your brand', tone: 'positive' })

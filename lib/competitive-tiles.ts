@@ -6,7 +6,8 @@
 
 import type { Sov, HistoryRow } from './dashboard-tiles'
 import type { OwnedCensus } from './gather/owned'
-import { COMPETITIVE_MIN_VIDEOS, RUN_INDEXED_DIRECTION_WORDS } from './config'
+import { COMPETITIVE_MIN_VIDEOS, directionWordsFor } from './config'
+import { audienceOf, isRivalAudience, rivalKey, rivalNameOf } from './rivals'
 
 // ── what a share delta is allowed to say (D1) ─────────────────────────────
 
@@ -23,7 +24,7 @@ import { COMPETITIVE_MIN_VIDEOS, RUN_INDEXED_DIRECTION_WORDS } from './config'
  * the face-off header already reads the layer from), which also means a tile
  * frozen into a report snapshot is judged by the layer it was drawn on.
  */
-export function shareDeltaShown(layerWord: string, directionWords = RUN_INDEXED_DIRECTION_WORDS): boolean {
+export function shareDeltaShown(layerWord: string, directionWords = directionWordsFor('competitive.deltas')): boolean {
   return directionWords || layerWord === 'this update'
 }
 
@@ -35,8 +36,8 @@ export interface CompetitorShare { name: string; videos: number; pct: number }
 export function competitorShares(sov: Sov | null | undefined): CompetitorShare[] {
   if (!sov) return []
   return Object.entries(sov)
-    .filter(([k]) => k.startsWith('competitor:'))
-    .map(([k, v]) => ({ name: k.slice('competitor:'.length), videos: Number(v?.videos ?? 0), pct: Number(v?.pct_videos ?? 0) }))
+    .filter(([k]) => isRivalAudience(k))
+    .map(([k, v]) => ({ name: rivalNameOf(k) ?? k, videos: Number(v?.videos ?? 0), pct: Number(v?.pct_videos ?? 0) }))
     .sort((a, b) => b.videos - a.videos || a.name.localeCompare(b.name))
 }
 
@@ -53,8 +54,6 @@ export function leadCompetitor(sov: Sov | null | undefined, preferred?: string |
   }
   return comps[0].name
 }
-
-export const competitorBucket = (name: string) => `competitor:${name}`
 
 // ── per-bucket stats from this update's videos ────────────────────────────
 
@@ -81,13 +80,6 @@ export interface BucketStats {
   positive: number
 }
 
-/** videos.is_client / is_competitor / competitor_name → the share_of_voice bucket key. */
-export function videoBucket(v: Pick<VideoStatRow, 'is_client' | 'is_competitor' | 'competitor_name'>): string {
-  if (v.is_client) return 'client'
-  if (v.is_competitor) return competitorBucket(v.competitor_name ?? 'unknown')
-  return 'industry-other'
-}
-
 /** Pass A's audience family: provenance when stamped, else the lane (only the
  *  full lane reads comments) — the same rule run_summary applies. */
 export function isAudienceSentiment(v: Pick<VideoStatRow, 'sentiment_source' | 'analyzed_lane'>): boolean {
@@ -101,7 +93,7 @@ const SENTIMENTS = new Set(['positive', 'negative', 'neutral', 'mixed'])
 export function bucketStats(rows: VideoStatRow[]): Map<string, BucketStats> {
   const out = new Map<string, BucketStats>()
   for (const v of rows) {
-    const key = videoBucket(v)
+    const key = audienceOf(v)
     const s = out.get(key) ?? { videos: 0, comments: 0, avgEngagement: null, engagementN: 0, judged: 0, positive: 0 }
     s.videos += 1
     s.comments += Number(v.comments_count ?? 0)
@@ -204,7 +196,7 @@ export interface FaceOffInput {
  */
 export function faceOffRows(input: FaceOffInput): FaceOffRow[] {
   const { sov, layer, competitor, stats, themes, owned, fmtInt, fmtPct } = input
-  const themKey = competitorBucket(competitor)
+  const themKey = rivalKey(competitor)
   const rows: FaceOffRow[] = []
   const row = (key: FaceOffRow['key'], label: string, a: number, b: number, fa: string, fb: string) => {
     const sc = pairScale(a, b)
@@ -297,7 +289,7 @@ export function shareSeries(history: Pick<HistoryRow, 'run_date' | 'share_of_voi
   const sovOf = (s: (typeof history)[number], i: number) => (layers[i] === 'period' ? s.period_share_of_voice : s.share_of_voice) ?? {}
   const pctOf = (bucket: string) => history.map((s, i) => Number(sovOf(s, i)[bucket]?.pct_videos ?? 0))
   const you = pctOf('client')
-  const them = competitor ? pctOf(competitorBucket(competitor)) : null
+  const them = competitor ? pctOf(rivalKey(competitor)) : null
   // "Since your first update" must compare like with like: the latest update
   // against the earliest one measured the same way.
   const last = history.length - 1
@@ -368,7 +360,7 @@ export function groupByKind<T extends { category: string; impact_level: string |
  *  nothing rather than "thin: 0 videos". */
 export function coverageOf(sov: Sov | null | undefined, competitorName: string | null | undefined): number | null {
   if (!sov || !competitorName) return null
-  const want = competitorBucket(competitorName.trim()).toLowerCase()
+  const want = rivalKey(competitorName.trim()).toLowerCase()
   const hit = Object.entries(sov).find(([k]) => k.toLowerCase() === want)
   if (!hit) return null
   const e = hit[1]
@@ -390,5 +382,6 @@ export function competitiveHref(vs: string | null, detail?: string): string {
   const q: string[] = []
   if (vs) q.push(`vs=${encodeURIComponent(vs)}`)
   if (detail) q.push(`detail=${detail}`)
-  return `/dashboard/competitive${q.length ? `?${q.join('&')}` : ''}`
+  // The parked page (WP9) — see lib/pages/competitive.ts.
+  return `/dashboard/competitive-intel${q.length ? `?${q.join('&')}` : ''}`
 }

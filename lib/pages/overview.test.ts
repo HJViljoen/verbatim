@@ -1,0 +1,1202 @@
+import { describe, it, expect } from 'vitest'
+
+import { buildSeries, type DenominatorPoint, type NumeratorPoint } from '../reading/series'
+import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '../rivals'
+import type { Move, Subject } from '../subjects/types'
+import { actedTally } from '../reading/moves'
+import { gapLine, type Gap } from '../reading/gap'
+import { cardFixture, moveReadingFixture } from '../../components/pages/overview/fixture'
+import { buildAdviceRows } from './market-surface'
+import {
+  buildCategory,
+  buildRivals,
+  buildSubjects,
+  candidateLine,
+  daysInto,
+  citeWhere,
+  earliestNamedAt,
+  fillingLine,
+  fillingNote,
+  firstScoringMonth,
+  monthsOnRecord,
+  onScreenQuote,
+  onScreenText,
+  ON_SCREEN_MAX,
+  headline,
+  medianOf,
+  atThisPointWindow,
+  earlyInMonth,
+  firstHeardThisMonth,
+  isMissingAnomalyFlags,
+  monthlyLineLabel,
+  readingsCounter,
+  moveLine,
+  buildMoves,
+  MOVES_EMPTY,
+  MOVES_UNLOCK,
+  recordWindow,
+  categoryAttentionVerdict,
+  rivalsLead,
+  monthlySpanLabel,
+  atThisPointLine,
+  splitMovers,
+  subjectsNote,
+  type Mover,
+  type RivalRow,
+  type StoredKindRow,
+  type StoredStatsRow,
+  type SubjectRow,
+  ledgerTally,
+} from './overview'
+import type { Verdict } from '../reading/verdicts'
+import { proseFigures } from '../prose/figures'
+import { FIGURE_KEY_RE } from '../prose/scrub'
+import { substituteFigures } from '../reports/cover'
+
+// The Overview's pure half (Phase 1 WP11). Everything here is shape and words:
+// the loader's I/O is exercised against production read-only and the blocks are
+// exercised by the render tier; these are the rules that decide what a reader
+// is told when a migration, a month or a subject is not there.
+
+const moved = (id: string, label: string, change: number, k = 40, n = 300): Verdict => ({
+  objectKind: 'theme',
+  objectId: id,
+  objectLabel: label,
+  audience: INDUSTRY_AUDIENCE,
+  window: { kind: 'month', from: '2026-09-01', to: '2026-10-01' },
+  value: { k, n },
+  baseline: { k: k - 10, n },
+  changePts: change,
+  bandPts: 3,
+  state: 'moved',
+  flags: [],
+})
+
+describe('daysInto', () => {
+  it('counts the day of the month at the reading', () => {
+    expect(daysInto('2026-09-01', '2026-09-15T08:00:00.000Z')).toBe(15)
+  })
+  it('is null once the month is behind us', () => {
+    expect(daysInto('2026-08-01', '2026-09-15T08:00:00.000Z')).toBeNull()
+  })
+  it('is zero before the month begins', () => {
+    expect(daysInto('2026-10-01', '2026-09-15T08:00:00.000Z')).toBe(0)
+  })
+})
+
+describe('recordWindow', () => {
+  it('is the month, on every horizon — the only window the stored rows answer exactly', () => {
+    expect(recordWindow('2026-09-01', '2026-09-15T08:00:00.000Z')).toEqual({
+      kind: 'month', from: '2026-09-01', to: '2026-09-15',
+    })
+  })
+  it('stops at the last day of the month rather than running past it', () => {
+    expect(recordWindow('2026-08-01', '2026-09-15T08:00:00.000Z').to).toBe('2026-08-31')
+  })
+})
+
+describe('atThisPointWindow', () => {
+  it('puts the same number of COMPLETE days on both sides', () => {
+    // 15 Sep is fourteen whole days and part of a fifteenth; [1 Aug, 15 Aug)
+    // is fourteen whole days. The old window ran to 16 Aug and flattered last
+    // month by up to a day's traffic.
+    expect(atThisPointWindow('2026-09-01', '2026-09-15T08:00:00.000Z')).toEqual({
+      from: '2026-08-01', to: '2026-08-15T00:00:00.000Z',
+    })
+  })
+  it('has no comparison to offer on the first of the month', () => {
+    expect(atThisPointWindow('2026-09-01', '2026-09-01T08:00:00.000Z')).toBeNull()
+  })
+  it('is null once the month is complete — a finished month is not still filling', () => {
+    expect(atThisPointWindow('2026-08-01', '2026-09-15T08:00:00.000Z')).toBeNull()
+  })
+})
+
+describe('medianOf', () => {
+  it('ignores the months with no row rather than reading them as zero', () => {
+    expect(medianOf([100, null, 300, undefined])).toBe(200)
+  })
+  it('is null when nothing has a row', () => {
+    expect(medianOf([null, undefined])).toBeNull()
+  })
+})
+
+describe('fillingLine', () => {
+  const base = {
+    month: '2026-09-01',
+    status: 'filling' as const,
+    daysIn: 18,
+    updates: 3,
+    videos: 271,
+    expected: 469,
+    atLastMonth: 244,
+    atLastMonthKnown: true,
+    thin: false,
+  }
+
+  it('prints the month so far against the same point last month', () => {
+    expect(fillingLine(base)).toBe(
+      'September, 18 days in · 3 updates · 271 videos · trailing median 469 · last month at this point: 244',
+    )
+  })
+
+  it('says the comparison is not recorded rather than printing a zero', () => {
+    const line = fillingLine({ ...base, atLastMonth: null, atLastMonthKnown: false })
+    expect(line).toContain('last month at this point: not recorded yet')
+    expect(line).not.toContain(': 0')
+  })
+
+  it('says nothing about last month once the month is complete', () => {
+    const line = fillingLine({ ...base, status: 'frozen', daysIn: null })
+    expect(line).toContain('September, complete')
+    expect(line).not.toContain('last month at this point')
+  })
+
+  it('names a thin month and says the changes are suppressed', () => {
+    expect(fillingLine({ ...base, thin: true })).toContain('thin month — every change below is suppressed')
+    expect(fillingLine({ ...base, early: true })).toContain('early in the month — every change below is suppressed')
+    // A thin month is the worse of the two and keeps its own words.
+    expect(fillingLine({ ...base, thin: true, early: true })).not.toContain('early in the month')
+  })
+
+  it('carries no direction word — the badge carries the movement', () => {
+    expect(fillingLine(base)).not.toMatch(/\b(growing|fading|rising|falling|flat|steady)\b/i)
+  })
+})
+
+describe('isMissingAnomalyFlags', () => {
+  it('knows M7 from every other way a read can fail', () => {
+    expect(isMissingAnomalyFlags({ code: 'PGRST205', message: "Could not find the table 'public.anomaly_flags' in the schema cache" })).toBe(true)
+    expect(isMissingAnomalyFlags({ code: '42P01', message: 'relation "anomaly_flags" does not exist' })).toBe(true)
+    // An RLS refusal, a network error and a renamed column are news, not M7.
+    expect(isMissingAnomalyFlags({ code: '42501', message: 'permission denied for table anomaly_flags' })).toBe(false)
+    expect(isMissingAnomalyFlags(new Error('fetch failed'))).toBe(false)
+    expect(isMissingAnomalyFlags(null)).toBe(false)
+  })
+})
+
+describe('readingsCounter', () => {
+  it('is the design\u2019s one counter, with what the quarter view still needs', () => {
+    expect(readingsCounter(3)).toBe('your 3rd monthly reading · the quarter view needs 6')
+    expect(readingsCounter(1)).toBe('your 1st monthly reading · the quarter view needs 6')
+    expect(readingsCounter(2)).toBe('your 2nd monthly reading · the quarter view needs 6')
+  })
+  it('drops the second clause once the quarter unlocks', () => {
+    expect(readingsCounter(6)).toBe('your 6th monthly reading')
+    expect(readingsCounter(11)).toBe('your 11th monthly reading')
+    expect(readingsCounter(21)).toBe('your 21st monthly reading')
+  })
+  it('says so rather than counting a zeroth reading', () => {
+    expect(readingsCounter(0)).toBe('no monthly reading yet · the quarter view needs 6')
+  })
+})
+
+// The one fact OV0's tile carried alone, moved onto the soundness band when
+// the tile came off the app page (Block D wave 3, M7).
+describe('atThisPointLine', () => {
+  it('states the same point last month, where there is one', () => {
+    expect(atThisPointLine({ atLastMonth: 2044, atLastMonthKnown: true, daysIn: 18 }))
+      .toBe('2,044 at this point last month')
+  })
+  it('says nothing on a complete month — the comparison is not to a point in it', () => {
+    expect(atThisPointLine({ atLastMonth: 2044, atLastMonthKnown: true, daysIn: null })).toBeNull()
+  })
+  it('says nothing rather than a dash where nothing recorded the point', () => {
+    expect(atThisPointLine({ atLastMonth: null, atLastMonthKnown: false, daysIn: 18 })).toBeNull()
+    expect(atThisPointLine({ atLastMonth: null, atLastMonthKnown: true, daysIn: 18 })).toBeNull()
+  })
+})
+
+// The caption under a line that IS drawn (Block D wave 3, M16). Its sibling
+// `monthlyLineLabel` is the REFUSAL, printed instead of a line; this is what a
+// drawn line says about itself, and the two are the same either/or.
+describe('monthlySpanLabel', () => {
+  const months = ['2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01']
+  it('names the span and what the line rests on', () => {
+    expect(monthlySpanLabel([null, 18, 19, 20, 21, 22], months)).toBe('May → Sep · 5 readings')
+    expect(monthlySpanLabel([null, null, null, 20, 21, 22], months)).toBe('Jul → Sep · 3 readings')
+  })
+  it('says nothing where the refusal answers instead — never both', () => {
+    for (const spark of [[null, null, null, null, 21, 22], [null, null, null, null, null, 22], [null, null, null, null, null, null]]) {
+      expect(monthlySpanLabel(spark, months)).toBeNull()
+      expect(monthlyLineLabel(spark, months)).not.toBeNull()
+    }
+    expect(monthlyLineLabel([null, 18, 19, 20, 21, 22], months)).toBeNull()
+  })
+})
+
+describe('headline', () => {
+  it('names the single largest banded change and leaves its figures as tokens', () => {
+    const h = headline({ verdicts: [moved('t1', 'Durability', 5.4), moved('t2', 'Price', -2.1)] })
+    expect(h.lead?.objectLabel).toBe('Durability')
+    expect(h.body).toContain('Durability came up in [[o_t1_share]]')
+    expect(Object.keys(h.figures).sort()).toEqual(['o_t1_of', 'o_t1_share', 'o_t1_videos'])
+    // Code's sentence, not the model's: no digit is typed into it.
+    expect(h.body.replace(/\[\[[a-z0-9_]+\]\]/g, '')).not.toMatch(/\d/)
+  })
+
+  it('takes the largest by magnitude, in either direction', () => {
+    const h = headline({ verdicts: [moved('t1', 'Durability', 2.0), moved('t2', 'Price', -9.3)] })
+    expect(h.lead?.objectId).toBe('t2')
+  })
+
+  it('keys a figure so it can actually be substituted, whatever the object id is', () => {
+    // Össur's largest mover is `2418f4d7-…`: a key taken straight off that id
+    // starts with a digit, FIGURE_KEY_RE never matches it, and the raw
+    // `[[…]]` token reaches the reader. Found by rendering against production.
+    const h = headline({ verdicts: [moved('2418f4d7-54a2-497e-8433-6cd89bc2322b', 'Admiration', 5.1)] })
+    for (const key of Object.keys(h.figures)) expect(key).toMatch(/^[a-z][a-z0-9_]*$/)
+    expect(substituteFigures(h.body, proseFigures(h.figures)).some((p) => 'figure' in p)).toBe(true)
+    expect(h.body.match(FIGURE_KEY_RE)?.length).toBe(3)
+  })
+
+  it('names the audience the lead verdict is a proportion of, never a hard-coded one', () => {
+    // The sentence mixes subject verdicts on YOUR audience with theme verdicts
+    // on the category's and picks by magnitude. A hard-coded label prints your
+    // own video count as the category's on the page's headline claim.
+    const yours: Verdict = { ...moved('s1', 'Durability', 9.9, 26, 84), objectKind: 'subject', audience: CLIENT_AUDIENCE }
+    expect(headline({ verdicts: [yours, moved('t1', 'Price', 2.0)] }).body).toContain('of your own videos this month')
+    expect(headline({ verdicts: [moved('t1', 'Price', 2.0)] }).body).toContain('of the category’s videos this month')
+    const rival: Verdict = { ...moved('t9', 'Smell', 8.1), audience: rivalKey('Freitag') }
+    expect(headline({ verdicts: [rival] }).body).toContain('of Freitag’s videos this month')
+  })
+
+  it('labels the denominator with a noun, not with the sentence’s possessive', () => {
+    const labels = Object.values(headline({ verdicts: [moved('t1', 'Price', 2.0)] }).figures).map((f) => f.label)
+    expect(labels).toContain('videos read for the category')
+  })
+
+  it('reads nothing that did not clear its band', () => {
+    const unbanded: Verdict = { ...moved('t1', 'Durability', 5.4), state: 'no_clear_change' }
+    const h = headline({ verdicts: [unbanded] })
+    expect(h.lead).toBeNull()
+    expect(h.body).toBe('Nothing moved clearly this month. Here is where you stand.')
+    expect(h.figures).toEqual({})
+  })
+})
+
+describe('earlyInMonth', () => {
+  it('is the design\u2019s gate: under a third of the month gone', () => {
+    expect(earlyInMonth('2026-09-01', '2026-09-05T08:00:00.000Z')).toBe(true)
+    expect(earlyInMonth('2026-09-01', '2026-09-10T08:00:00.000Z')).toBe(false)
+    expect(earlyInMonth('2026-09-01', '2026-09-15T08:00:00.000Z')).toBe(false)
+  })
+  it('counts the month\u2019s own length', () => {
+    // 10 of 31 is under a third; 10 of 30 is not.
+    expect(earlyInMonth('2026-10-01', '2026-10-10T08:00:00.000Z')).toBe(true)
+  })
+  it('is never true of a month that is over', () => {
+    expect(earlyInMonth('2026-08-01', '2026-09-15T08:00:00.000Z')).toBe(false)
+  })
+})
+
+describe('firstHeardThisMonth', () => {
+  const readable = ['2026-09-01']
+  it('is silent when the drawn axis starts after the record does', () => {
+    // The default horizon draws two months. A theme absent in August and
+    // present in September is not thereby new: on production 7 Össur themes
+    // and 19 Sealand ones in exactly that shape have a reading further back.
+    expect(firstHeardThisMonth({ axisFrom: '2026-08-01', recordFrom: '2026-01-01', readableMonths: readable, month: '2026-09-01' })).toBe(false)
+  })
+  it('is said when the axis reaches the record and the absence is the theme\u2019s own', () => {
+    expect(firstHeardThisMonth({ axisFrom: '2026-01-01', recordFrom: '2026-01-01', readableMonths: readable, month: '2026-09-01' })).toBe(true)
+  })
+  it('is silent when the theme was read in an earlier month', () => {
+    expect(firstHeardThisMonth({ axisFrom: '2026-01-01', recordFrom: '2026-01-01', readableMonths: ['2026-07-01', '2026-09-01'], month: '2026-09-01' })).toBe(false)
+  })
+  it('is silent when nothing is readable at all', () => {
+    expect(firstHeardThisMonth({ axisFrom: '2026-01-01', recordFrom: null, readableMonths: readable, month: '2026-09-01' })).toBe(false)
+    expect(firstHeardThisMonth({ axisFrom: '2026-01-01', recordFrom: '2026-01-01', readableMonths: [], month: '2026-09-01' })).toBe(false)
+  })
+})
+
+describe('splitMovers', () => {
+  const mover = (id: string, change: number, state: Verdict['state'] = 'moved'): Mover => ({
+    id,
+    label: id,
+    k: 10,
+    n: 100,
+    pct: 10,
+    verdict: { ...moved(id, id, change), state },
+    direction: null,
+    isNew: false,
+  })
+
+  it('takes three up and three down, largest first', () => {
+    const { growing, fading } = splitMovers([
+      mover('a', 1), mover('b', 5), mover('c', 3), mover('d', 7),
+      mover('e', -2), mover('f', -8), mover('g', -1), mover('h', -4),
+    ])
+    expect(growing.map((m) => m.id)).toEqual(['d', 'b', 'c'])
+    expect(fading.map((m) => m.id)).toEqual(['f', 'h', 'e'])
+  })
+
+  it('drops anything that did not clear its band', () => {
+    const { growing, fading } = splitMovers([mover('a', 9, 'no_clear_change'), mover('b', -9, 'too_little_data')])
+    expect(growing).toEqual([])
+    expect(fading).toEqual([])
+  })
+})
+
+describe('moves', () => {
+  it('scores a move from the month after the one it was declared in', () => {
+    expect(firstScoringMonth('2026-09-14')).toBe('2026-10-01')
+    expect(firstScoringMonth('2026-12-31T10:00:00.000Z')).toBe('2027-01-01')
+  })
+
+  it('writes the one line the design asks for', () => {
+    expect(moveLine({ title: 'Advanced technology', declared_at: '2026-09-14' })).toBe(
+      'Advanced technology · tracked 14 Sep · first scoring lands with the October reading.',
+    )
+  })
+
+  it('has one sentence for nothing dated', () => {
+    expect(MOVES_EMPTY).toContain('Press Track this on a subject or a theme')
+  })
+})
+
+describe('monthlyLineLabel', () => {
+  const months = ['2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01']
+  it('lets a line be drawn once three months read', () => {
+    expect(monthlyLineLabel([null, 18, 19, 20], months)).toBeNull()
+  })
+  it('names the two months instead of drawing a slope through them', () => {
+    // Sparkline normalises to the values it is handed, so 19.0 → 19.2 draws the
+    // same climb as 5 → 40. The mock prints this label instead.
+    expect(monthlyLineLabel([null, null, 19, 19.2], months)).toBe('Aug → Sep only')
+  })
+  it('names the one month it has', () => {
+    expect(monthlyLineLabel([null, null, null, 19.2], months)).toBe('Sep only')
+  })
+  it('says so when no month reads at all', () => {
+    expect(monthlyLineLabel([null, null, null, null], months)).toBe('no month reads')
+  })
+})
+
+describe('subjectsNote', () => {
+  const sideless = { k: null, n: null, pct: null, verdict: null, observed: false }
+  const row = (yourN: number | null, verdict: Verdict | null): SubjectRow => ({
+    id: 's1',
+    label: 'Durability',
+    you: { k: 5, n: yourN, pct: null, verdict, observed: yourN != null },
+    rival: null,
+    category: { ...sideless },
+    direction: null,
+    spark: [],
+    sparkMonths: [],
+    categoryAtLastMonth: null,
+    href: '#',
+  })
+
+  // AND IT DOES NOT QUOTE THE COLUMN'S OWN WORD BACK (wave 3b, `decks`;
+  // subjects finding 11). This line fires exactly when every row is thin,
+  // which is exactly when every cell of the YOUR CHANGE column already reads
+  // it; what the note adds is the count and which column to read instead.
+  it('names the video count your own side reads on, without re-quoting the column', () => {
+    expect(subjectsNote([row(84, null)])).toBe(
+      'Your side carried 84 videos this month, too few for its column to answer — the category column carries the month.',
+    )
+    expect(subjectsNote([row(84, null)])).not.toContain('too few to compare')
+  })
+
+  it('says nothing when a side did clear its band', () => {
+    expect(subjectsNote([row(840, moved('s1', 'Durability', 4))])).toBeNull()
+  })
+
+  it('says nothing at all with no rows', () => {
+    expect(subjectsNote([])).toBeNull()
+  })
+})
+
+describe('candidateLine', () => {
+  it('is not a blank form', () => {
+    expect(candidateLine([{ name: 'Durability', origin: 'own_claims', because: 'x' }])).toContain(
+      'We have proposed 1 subject',
+    )
+  })
+  it('says so plainly when nothing has been proposed either', () => {
+    expect(candidateLine([])).toContain('No subjects are named yet')
+  })
+})
+
+// ---- the three block builders --------------------------------------------------
+
+const subject = (id: string, name: string, status: Subject['status'] = 'active'): Subject =>
+  ({
+    id,
+    client_id: 'c',
+    name,
+    description: null,
+    origin: 'client',
+    source_ref: null,
+    named_at: '2026-08-19',
+    status,
+    superseded_by: null,
+    embedded_at: null,
+    embed_input_version: null,
+    calibrated_at: null,
+    calibration_precision: null,
+    calibration_n: null,
+    calibration_judge_version: null,
+  }) as Subject
+
+const AXIS = ['2026-07-01', '2026-08-01', '2026-09-01']
+
+describe('buildSubjects', () => {
+  const perAudience = new Map<string, number>([
+    ['2026-08-01|industry-other', 1200],
+    ['2026-09-01|industry-other', 1388],
+    ['2026-08-01|client', 80],
+    ['2026-09-01|client', 84],
+  ])
+
+  it('says the reading is not recorded when M4 is not applied', () => {
+    const b = buildSubjects({
+      subjects: null, months: null, denominators: new Map(), perAudience,
+      axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01', leadRival: 'Freitag', atLastMonth: null, thin: false,
+    })
+    expect(b.state).toBe('not_recorded')
+    expect(b.rows).toEqual([])
+  })
+
+  it('reads an absent row as a zero only where the month was read at all', () => {
+    const b = buildSubjects({
+      subjects: [subject('s1', 'Durability'), subject('s2', 'Price')],
+      // September was read (s1 has a row); August was not read for anybody.
+      months: [{ month: '2026-09-01', audience: INDUSTRY_AUDIENCE, subject_id: 's1', videos: 305, comments: 900 }],
+      denominators: new Map(), perAudience,
+      axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01', leadRival: null, atLastMonth: null, thin: false,
+    })
+    const price = b.rows.find((r) => r.id === 's2') as SubjectRow
+    // s2 was not raised in a month that WAS read: a real zero, on both readers.
+    expect(price.category.k).toBe(0)
+    expect(price.category.observed).toBe(true)
+    expect(price.spark[price.spark.length - 1]).toBe(0)
+    // August was never computed: not a zero, and not "0.0% 0 of 1,200".
+    expect(price.spark[price.spark.length - 2]).toBeNull()
+  })
+
+  it('carries "at this point last month" on the category side only', () => {
+    const b = buildSubjects({
+      subjects: [subject('s1', 'Durability')],
+      months: [{ month: '2026-09-01', audience: INDUSTRY_AUDIENCE, subject_id: 's1', videos: 305, comments: 900 }],
+      denominators: new Map(), perAudience,
+      axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01', leadRival: 'Freitag',
+      atLastMonth: {
+        bySubject: new Map([[`${INDUSTRY_AUDIENCE}|s1`, 264], [`${CLIENT_AUDIENCE}|s1`, 12]]),
+        perAudience: new Map([[INDUSTRY_AUDIENCE, 1290], [CLIENT_AUDIENCE, 70]]),
+      },
+      thin: false,
+    })
+    expect(b.rows[0].categoryAtLastMonth).toEqual({ k: 264, n: 1290, pct: 20.5 })
+  })
+
+  it('says nothing about last month when the window could not be read', () => {
+    const b = buildSubjects({
+      subjects: [subject('s1', 'Durability')], months: [], denominators: new Map(), perAudience,
+      axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01', leadRival: 'Freitag', atLastMonth: null, thin: false,
+    })
+    expect(b.rows[0].categoryAtLastMonth).toBeNull()
+  })
+
+  it('offers the proposer’s candidates rather than a blank form', () => {
+    const b = buildSubjects({
+      subjects: [subject('s1', 'Durability', 'proposed')], months: [], denominators: new Map(), perAudience,
+      axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01', leadRival: null, atLastMonth: null, thin: false,
+    })
+    expect(b.state).toBe('candidates')
+    expect(b.candidates[0].name).toBe('Durability')
+    expect(b.note).toContain('We have proposed')
+  })
+
+  it('reads a confirmed subject on three sides and bands the category', () => {
+    const months = [
+      { month: '2026-08-01', audience: INDUSTRY_AUDIENCE, subject_id: 's1', videos: 240, comments: 0 },
+      { month: '2026-09-01', audience: INDUSTRY_AUDIENCE, subject_id: 's1', videos: 305, comments: 0 },
+      { month: '2026-09-01', audience: CLIENT_AUDIENCE, subject_id: 's1', videos: 26, comments: 0 },
+      { month: '2026-09-01', audience: rivalKey('Freitag'), subject_id: 's1', videos: 62, comments: 0 },
+    ]
+    const withRival = new Map(perAudience)
+    withRival.set(`2026-09-01|${rivalKey('Freitag')}`, 142)
+    const b = buildSubjects({
+      subjects: [subject('s1', 'Durability')], months, denominators: new Map(), perAudience: withRival,
+      axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01', leadRival: 'Freitag', atLastMonth: null, thin: false,
+    })
+    expect(b.state).toBe('ready')
+    expect(b.rows[0].category.pct).toBe(22)
+    expect(b.rows[0].you).toMatchObject({ k: 26, n: 84 })
+    expect(b.rows[0].rival).toMatchObject({ k: 62, n: 142 })
+    // Your own side is 84 videos — under the 100-video floor, so no comparison.
+    expect(b.rows[0].you.verdict?.state).toBe('too_little_data')
+    expect(b.rows[0].category.verdict?.state === 'moved' || b.rows[0].category.verdict?.state === 'no_clear_change').toBe(true)
+  })
+
+  it('draws no comparison at all in a thin month', () => {
+    const b = buildSubjects({
+      subjects: [subject('s1', 'Durability')],
+      months: [{ month: '2026-09-01', audience: INDUSTRY_AUDIENCE, subject_id: 's1', videos: 305, comments: 0 }],
+      denominators: new Map(), perAudience,
+      axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01', leadRival: null, atLastMonth: null, thin: true,
+    })
+    expect(b.rows[0].category.verdict).toBeNull()
+    expect(b.rows[0].direction).toBeNull()
+  })
+
+  // ---- D1 · the two-audience gap ----------------------------------------------
+
+  const gapMonths = [
+    { month: '2026-08-01', audience: CLIENT_AUDIENCE, subject_id: 's1', videos: 23, comments: 0 },
+    { month: '2026-08-01', audience: rivalKey('Freitag'), subject_id: 's1', videos: 60, comments: 0 },
+    { month: '2026-09-01', audience: CLIENT_AUDIENCE, subject_id: 's1', videos: 26, comments: 0 },
+    { month: '2026-09-01', audience: rivalKey('Freitag'), subject_id: 's1', videos: 62, comments: 0 },
+  ]
+  const gapAudiences = () => {
+    const m = new Map(perAudience)
+    m.set(`2026-09-01|${rivalKey('Freitag')}`, 142)
+    m.set(`2026-08-01|${rivalKey('Freitag')}`, 140)
+    return m
+  }
+  const withGap = (over: Partial<Parameters<typeof buildSubjects>[0]> = {}) =>
+    buildSubjects({
+      subjects: [subject('s1', 'Durability')], months: gapMonths, denominators: new Map(),
+      perAudience: gapAudiences(), axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
+      leadRival: 'Freitag', atLastMonth: null, thin: false, ...over,
+    })
+
+  it('takes the gap off the same rows the two levels come from, so it cannot disagree with them', () => {
+    const gap = withGap().gaps.s1 as Gap
+    expect(gap.a.value).toEqual({ k: 26, n: 84 })
+    expect(gap.b.value).toEqual({ k: 62, n: 142 })
+    expect(gap.a.pct).toBe(withGap().rows[0].you.pct)
+    expect(gap.b.pct).toBe(withGap().rows[0].rival?.pct)
+  })
+
+  it('refuses the difference on Sealand’s own numbers — 84 videos is under the floor', () => {
+    const gap = withGap().gaps.s1 as Gap
+    expect(gap.state).toBe('too_little_data')
+    expect(gapLine(gap)).toContain('too few to compare')
+  })
+
+  it('prints the earlier gap as LAST MONTH, not as the month that tells the best story', () => {
+    const gap = withGap().gaps.s1 as Gap
+    expect(gap.basis?.window.from).toBe('2026-08-01')
+    expect(gap.basis?.window.to).toBe('2026-09-01')
+  })
+
+  it('claims no direction — no reader’s flag is true in wave 1', () => {
+    expect((withGap().gaps.s1 as Gap).direction).toBeNull()
+  })
+
+  it('has no gap where no rival is tracked', () => {
+    expect(withGap({ leadRival: null }).gaps.s1).toBeNull()
+  })
+
+  it('withholds the gap in a thin month, as it withholds the verdicts', () => {
+    expect(withGap({ thin: true }).gaps.s1).toBeNull()
+  })
+
+  it('carries no gaps at all where the reading is not recorded', () => {
+    const b = buildSubjects({
+      subjects: null, months: null, denominators: new Map(), perAudience,
+      axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01', leadRival: 'Freitag', atLastMonth: null, thin: false,
+    })
+    expect(b.gaps).toEqual({})
+  })
+})
+
+const denominator = (month: string, audience: string, videos: number): DenominatorPoint => ({
+  month,
+  audience,
+  videos,
+  comments: videos * 4,
+  status: month === '2026-09-01' ? 'filling' : 'frozen',
+  origin: 'live',
+  read_at: '2026-09-15T00:00:00.000Z',
+  run_id: 'r1',
+  frozen_at: null,
+  clustering_key: 'k1',
+})
+
+const numerator = (month: string, audience: string, videos: number): NumeratorPoint => ({
+  month, audience, videos, comments: videos * 3, run_id: 'r1', clustering_key: 'k1',
+})
+
+describe('buildCategory', () => {
+  const perAudience = new Map<string, number>([
+    ['2026-07-01|industry-other', 1100],
+    ['2026-08-01|industry-other', 1200],
+    ['2026-09-01|industry-other', 1388],
+  ])
+  const series = [
+    buildSeries({
+      axis: AXIS,
+      audience: INDUSTRY_AUDIENCE,
+      objectId: 't1',
+      objectLabel: 'Will it survive a wet commute',
+      denominators: AXIS.map((m) => denominator(m, INDUSTRY_AUDIENCE, perAudience.get(`${m}|industry-other`) as number)),
+      readings: [numerator('2026-07-01', INDUSTRY_AUDIENCE, 60), numerator('2026-08-01', INDUSTRY_AUDIENCE, 80), numerator('2026-09-01', INDUSTRY_AUDIENCE, 130)],
+      changeLogFrom: '2026-01-01',
+    }),
+  ]
+
+  it('says what is not recorded rather than printing zeros, when M5 is absent', () => {
+    const c = buildCategory({
+      audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
+      series, recordFrom: AXIS[0], kindRows: null, statsRows: null, panel: null, perAudience, attentionVerdict: null, dormant: [], thin: false,
+    })
+    expect(c.kinds).toEqual([])
+    expect(c.kindsNote).toContain('not recorded month by month')
+    expect(c.mood).toBeNull()
+    expect(c.moodNote).toContain('not recorded month by month')
+    expect(c.attention).toBeNull()
+    expect(c.attentionNote).toContain('not recorded')
+  })
+
+  it('reads the movers off the month series and earns a direction word', () => {
+    const c = buildCategory({
+      audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
+      series, recordFrom: AXIS[0], kindRows: null, statsRows: null, panel: null, perAudience, attentionVerdict: null, dormant: [], thin: false,
+    })
+    expect(c.growing.map((m) => m.label)).toEqual(['Will it survive a wet commute'])
+    expect(c.growing[0].direction).toBe('growing')
+    expect(c.denominator).toBe(1388)
+  })
+
+  it('reads the kinds with the Reddit clause when the rows are there', () => {
+    const kindRows: StoredKindRow[] = [
+      { month: '2026-08-01', audience: INDUSTRY_AUDIENCE, kind: 'question', videos: 400, comments: 0, platform_mix: { reddit: 100, tiktok: 300 }, run_id: 'r1' },
+      { month: '2026-09-01', audience: INDUSTRY_AUDIENCE, kind: 'question', videos: 470, comments: 0, platform_mix: { reddit: 180, tiktok: 290 }, run_id: 'r1' },
+      { month: '2026-09-01', audience: INDUSTRY_AUDIENCE, kind: 'objection', videos: 120, comments: 0, platform_mix: { reddit: 20 }, run_id: 'r1' },
+    ]
+    const c = buildCategory({
+      audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
+      series, recordFrom: AXIS[0], kindRows, statsRows: null, panel: null, perAudience, attentionVerdict: null, dormant: [], thin: false,
+    })
+    expect(c.kinds.map((k) => k.kind)).toContain('question')
+    expect(c.kinds.find((k) => k.kind === 'question')?.pct).toBe(33.9)
+    expect(c.reddit?.pct).toBe(33.9)
+    expect(c.kindVerdicts.question).not.toBeNull()
+  })
+
+  it('suppresses every comparison in a thin month and says so', () => {
+    const c = buildCategory({
+      audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
+      series, recordFrom: AXIS[0], kindRows: null, statsRows: null, panel: null, perAudience, attentionVerdict: null, dormant: [], thin: true,
+    })
+    expect(c.growing).toEqual([])
+    expect(c.fading).toEqual([])
+    expect(c.moversNote).toBe('Too little conversation this month to say what moved.')
+  })
+
+  it('gives the attention line a calendar axis, so a missing month stays missing', () => {
+    // calendarGeometry positions by INDEX into the axis it is handed, so
+    // handing it the months that carried a panel reading draws July and
+    // September adjacent — the gap closes and every point after it is
+    // misdated. Sealand, which has no panel until October, is the tenant that
+    // meets this first.
+    const panelRow = (month: string, comments: number | null): StoredStatsRow => ({
+      month, audience: INDUSTRY_AUDIENCE, judged: 0, positive: 0, negative: 0, neutral: 0, mixed: 0,
+      judged_framing: null,
+      panel_videos: comments == null ? null : 40,
+      attention_comments: comments,
+      panel_platform_mix: null,
+      panel_id: 'p1',
+    })
+    const c = buildCategory({
+      audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
+      series, recordFrom: AXIS[0],
+      kindRows: null,
+      statsRows: [panelRow('2026-07-01', 50300), panelRow('2026-08-01', null), panelRow('2026-09-01', 41200)],
+      panel: null, perAudience, attentionVerdict: null, dormant: [], thin: false,
+    })
+    expect(c.attention?.months.map((m) => m.month)).toEqual(['2026-07-01', '2026-09-01'])
+    expect(c.attention?.axis).toEqual(AXIS)
+  })
+
+  it('reads mood off the stored counts, with the framing footnote', () => {
+    const statsRows: StoredStatsRow[] = [
+      { month: '2026-08-01', audience: INDUSTRY_AUDIENCE, judged: 1000, positive: 610, negative: 160, neutral: 210, mixed: 20, judged_framing: 100, panel_videos: null, attention_comments: null, panel_platform_mix: null, panel_id: null },
+      { month: '2026-09-01', audience: INDUSTRY_AUDIENCE, judged: 1112, positive: 678, negative: 200, neutral: 214, mixed: 20, judged_framing: 120, panel_videos: null, attention_comments: null, panel_platform_mix: null, panel_id: null },
+    ]
+    const c = buildCategory({
+      audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
+      series, recordFrom: AXIS[0], kindRows: null, statsRows, panel: null, perAudience, attentionVerdict: null, dormant: [], thin: false,
+    })
+    expect(c.mood?.judged).toBe(1112)
+    expect(c.mood?.shares.find((s) => s.mood === 'negative')?.pct).toBe(18)
+    expect(c.mood?.framingPct).toBeGreaterThan(0)
+    // No panel: attention is null and says why, and is NOT read as zero.
+    expect(c.attention).toBeNull()
+    expect(c.attentionNote).toContain('No panel has been frozen')
+  })
+
+  it('carries the panel’s size and the verdict the standings drew, never a second computation', () => {
+    const statsRows: StoredStatsRow[] = [
+      { month: '2026-08-01', audience: INDUSTRY_AUDIENCE, judged: 0, positive: 0, negative: 0, neutral: 0, mixed: 0, judged_framing: 0, panel_videos: 880, attention_comments: 46000, panel_platform_mix: {}, panel_id: 'p1' },
+      { month: '2026-09-01', audience: INDUSTRY_AUDIENCE, judged: 0, positive: 0, negative: 0, neutral: 0, mixed: 0, judged_framing: 0, panel_videos: 850, attention_comments: 41200, panel_platform_mix: {}, panel_id: 'p2' },
+    ]
+    const panel = { id: 'p2', client_id: 'c', frozen_at: '2026-09-03T00:00:00.000Z', cutoff: '2026-06-01', accounts: [], account_count: 214, reason: 'tracking_change' as const }
+    const refusal: Verdict = {
+      objectKind: 'audience', objectId: INDUSTRY_AUDIENCE, objectLabel: 'The category', audience: INDUSTRY_AUDIENCE,
+      window: { kind: 'month', from: '2026-09-01', to: '2026-10-01' },
+      value: { k: 41200, n: 41200 }, changePts: null, bandPts: null,
+      state: 'refused', refusedReason: 'tracking_change', flags: [],
+    }
+    const c = buildCategory({
+      audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
+      series, recordFrom: AXIS[0], kindRows: null, statsRows, panel, perAudience, attentionVerdict: refusal, dormant: [], thin: false,
+    })
+    expect(c.attention?.accountCount).toBe(214)
+    // Handed in, not recomputed: the block and the standings table print one
+    // answer about one panel.
+    expect(c.attention?.verdict).toBe(refusal)
+  })
+
+  it('flags only the dormant themes this page’s own axis ever drew', () => {
+    const c = buildCategory({
+      audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
+      series, recordFrom: AXIS[0], kindRows: null, statsRows: null, panel: null, perAudience,
+      attentionVerdict: null,
+      // 't1' IS drawn on this axis; 'tX' is dormant in the register and was
+      // never read here, which is silence this page never heard.
+      dormant: [{ id: 't1', label: 'Will it survive a wet commute' }, { id: 'tX', label: 'Something from 2022' }],
+      thin: false,
+    })
+    expect(c.quiet.map((q) => q.id)).toEqual(['t1'])
+    expect(c.quiet[0].lastHeard).toBe('2026-09-01')
+    expect(c.quietNote).toBeNull()
+  })
+
+  it('tells an unreadable register from a register with nothing dormant in it', () => {
+    const unreadable = buildCategory({
+      audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
+      series, recordFrom: AXIS[0], kindRows: null, statsRows: null, panel: null, perAudience,
+      attentionVerdict: null, dormant: null, thin: false,
+    })
+    expect(unreadable.quiet).toEqual([])
+    expect(unreadable.quietNote).toContain('not recorded for this workspace yet')
+
+    const nothing = buildCategory({
+      audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
+      series, recordFrom: AXIS[0], kindRows: null, statsRows: null, panel: null, perAudience,
+      attentionVerdict: null, dormant: [], thin: false,
+    })
+    expect(nothing.quietNote).toBe('Nothing this page has drawn has stopped being said.')
+    // The flag is never a direction claim, so neither sentence may carry one.
+    expect(nothing.quietNote).not.toMatch(/fading|falling|declin/i)
+  })
+})
+
+describe('buildRivals', () => {
+  const series = [
+    buildSeries({
+      axis: AXIS,
+      audience: rivalKey('Freitag'),
+      objectId: 't1',
+      objectLabel: 'Does the tarp smell',
+      denominators: AXIS.map((m) => denominator(m, rivalKey('Freitag'), 142)),
+      readings: [numerator('2026-09-01', rivalKey('Freitag'), 41)],
+      changeLogFrom: '2026-01-01',
+    }),
+  ]
+
+  it('prints what was raised under a rival’s content when the panel is not recorded', () => {
+    const b = buildRivals({
+      rivals: [{ name: 'Freitag', retiredAt: null }],
+      statsRows: null, month: '2026-09-01', prevMonth: '2026-08-01', brand: 'Sealand', series, dualMention: 41,
+    })
+    const freitag = b.rows.find((r) => r.label === 'Freitag')
+    expect(b.recorded).toBe(false)
+    expect(b.standingsNote).toContain('not recorded month by month')
+    expect(freitag?.observed).toBe(false)
+    expect(freitag?.attention).toBeNull()
+    expect(freitag?.raisedMost).toMatchObject({ label: 'Does the tarp smell', k: 41, n: 142 })
+    expect(b.caveat).toContain('counts in your audience only')
+    expect(b.dualMention).toBe(41)
+  })
+
+  // THE TABLE DOES NOT CHANGE SHAPE ON THE DAY M5 LANDS. The unrecorded arm
+  // used to draw the tracked rivals and nothing else, so your own row and the
+  // category's appeared the first time the migration was applied.
+  it('draws your own row and the category’s while the panel is not recorded', () => {
+    const b = buildRivals({
+      rivals: [{ name: 'Freitag', retiredAt: null }],
+      statsRows: null, month: '2026-09-01', prevMonth: '2026-08-01', brand: 'Sealand', series, dualMention: 41,
+    })
+    expect(b.rows.map((r) => r.role)).toEqual(['client', 'rival', 'category'])
+    expect(b.rows.map((r) => r.label)).toEqual(['Sealand', 'Freitag', 'The category'])
+    expect(b.rows.every((r) => !r.observed && r.attention == null && r.content == null)).toBe(true)
+  })
+
+  it('bands the two shares when the panel rows are there', () => {
+    const statsRows: StoredStatsRow[] = [
+      { month: '2026-08-01', audience: rivalKey('Freitag'), judged: 0, positive: 0, negative: 0, neutral: 0, mixed: 0, judged_framing: 0, panel_videos: 120, attention_comments: 4000, panel_platform_mix: {}, panel_id: 'p1' },
+      { month: '2026-08-01', audience: INDUSTRY_AUDIENCE, judged: 0, positive: 0, negative: 0, neutral: 0, mixed: 0, judged_framing: 0, panel_videos: 880, attention_comments: 46000, panel_platform_mix: {}, panel_id: 'p1' },
+      { month: '2026-09-01', audience: rivalKey('Freitag'), judged: 0, positive: 0, negative: 0, neutral: 0, mixed: 0, judged_framing: 0, panel_videos: 150, attention_comments: 6200, panel_platform_mix: {}, panel_id: 'p1' },
+      { month: '2026-09-01', audience: INDUSTRY_AUDIENCE, judged: 0, positive: 0, negative: 0, neutral: 0, mixed: 0, judged_framing: 0, panel_videos: 850, attention_comments: 35000, panel_platform_mix: {}, panel_id: 'p1' },
+    ]
+    const b = buildRivals({
+      rivals: [{ name: 'Freitag', retiredAt: null }],
+      statsRows, month: '2026-09-01', prevMonth: '2026-08-01', brand: 'Sealand', series, dualMention: null,
+    })
+    const freitag = b.rows.find((r) => r.label === 'Freitag')
+    expect(freitag?.observed).toBe(true)
+    expect(freitag?.content?.pct).toBe(15)
+    expect(freitag?.attentionVerdict).not.toBeNull()
+    expect(b.standingsNote).toBeNull()
+  })
+
+  it('keeps a retired rival’s row and says when it was retired', () => {
+    const b = buildRivals({
+      rivals: [{ name: 'Poler', retiredAt: '2026-09-09' }],
+      statsRows: null, month: '2026-09-01', prevMonth: null, brand: 'Sealand', series, dualMention: null,
+    })
+    expect(b.rows.find((r) => r.label === 'Poler')?.retiredAt).toBe('2026-09-09')
+  })
+
+  it('leads with nothing while the panel is not recorded, because nobody was compared', () => {
+    const b = buildRivals({
+      rivals: [{ name: 'Freitag', retiredAt: null }],
+      statsRows: null, month: '2026-09-01', prevMonth: '2026-08-01', brand: 'Sealand', series, dualMention: null,
+    })
+    expect(b.lead).toBeNull()
+  })
+})
+
+describe('categoryAttentionVerdict', () => {
+  const v: Verdict = {
+    objectKind: 'audience', objectId: INDUSTRY_AUDIENCE, objectLabel: 'The category', audience: INDUSTRY_AUDIENCE,
+    window: { kind: 'month', from: '2026-09-01', to: '2026-10-01' },
+    value: { k: 3, n: 4 }, changePts: null, bandPts: null, state: 'refused', refusedReason: 'tracking_change', flags: [],
+  }
+  const standing = (audience: string, role: RivalRow['role'], verdict: Verdict | null): RivalRow => ({
+    audience, label: audience, role, observed: true, attention: null, content: null,
+    attentionVerdict: verdict, contentVerdict: null, ownPosts: null, raisedMost: null, retiredAt: null,
+  })
+
+  it('takes the category’s own row, not whichever row was stamped “category”', () => {
+    // `buildStandings` stamps `role: 'category'` on any audience the panel holds
+    // that nobody asked for and that is not a rival key, and appends those rows
+    // after the wanted ones — so the role is not unique and the audience is.
+    const rows = [
+      standing(INDUSTRY_AUDIENCE, 'category', v),
+      standing('some-audience-nobody-asked-for', 'category', null),
+    ]
+    expect(categoryAttentionVerdict(rows)).toBe(v)
+    expect(categoryAttentionVerdict([...rows].reverse())).toBe(v)
+  })
+
+  it('is null where the standings drew no category row at all', () => {
+    expect(categoryAttentionVerdict([standing(rivalKey('Freitag'), 'rival', v)])).toBeNull()
+  })
+})
+
+describe('rivalsLead', () => {
+  const row = (label: string, v: Verdict | null): RivalRow => ({
+    audience: rivalKey(label),
+    label,
+    role: 'rival',
+    observed: true,
+    attention: null,
+    content: null,
+    attentionVerdict: v,
+    contentVerdict: null,
+    ownPosts: null,
+    raisedMost: null,
+    retiredAt: null,
+  })
+  const v = (state: Verdict['state'], over: Partial<Verdict> = {}): Verdict => ({
+    objectKind: 'rival', objectId: 'x', objectLabel: 'x', audience: 'x',
+    window: { kind: 'month', from: '2026-09-01', to: '2026-10-01' },
+    value: { k: 1, n: 2 }, changePts: 3, bandPts: 1.8, state, flags: [], ...over,
+  })
+
+  it('is null where no rival was compared at all', () => {
+    expect(rivalsLead([])).toBeNull()
+    expect(rivalsLead([row('Freitag', null)])).toBeNull()
+  })
+
+  it('counts the rivals that moved and names them — no magnitude, no direction', () => {
+    const lead = rivalsLead([row('Freitag', v('moved')), row('Patagonia', v('no_clear_change'))]) as string
+    // THE COUNT LEADS (Block D wave 3, M26): it used to trail the finished
+    // sentence as a bare ", of 2 compared", which is not a clause anybody
+    // would say — and on a tenant tracking one rival it read "of 1 compared".
+    expect(lead).toBe(
+      'Of the 2 rivals compared, Freitag is the one whose share of attention moved beyond its band this month'
+      + ' \u2014 the change and the band are on each row.',
+    )
+    // The mock's "took 3 points" and "slipped 2" are both refused: a magnitude
+    // is printed by the badge with its band, and `slipped` is a direction word
+    // no reader's flag earns.
+    expect(lead).not.toMatch(/\d+ points|slipped|gained|fell/)
+  })
+
+  it('says so when nothing moved, and counts what was compared', () => {
+    expect(rivalsLead([row('Freitag', v('no_clear_change')), row('Poler', v('no_clear_change'))]))
+      .toBe('Of the 2 rivals compared, no rival’s share of attention moved beyond its band this month.')
+    // And a single compared rival is "the one rival", never "of 1 compared".
+    expect(rivalsLead([row('Freitag', v('no_clear_change'))]))
+      .toBe('Of the one rival compared, no rival’s share of attention moved beyond its band this month.')
+  })
+
+  it('tells "nothing moved" from "nothing could be compared"', () => {
+    const lead = rivalsLead([row('Freitag', v('too_little_data')), row('Poler', v('refused', { refusedReason: 'tracking_change' }))]) as string
+    expect(lead).toContain('could be compared')
+    expect(lead).not.toContain('moved beyond its band this month')
+  })
+
+  it('says a rival is no longer tracked rather than naming it as a current one', () => {
+    // `buildStandings` keeps a retired rival on the table on purpose — its
+    // frozen months are under its name and the number still exists — and the
+    // ROW prints "tracked until 9 Sep". The lead has to carry the same stamp,
+    // or it claims a brand we stopped watching moved this month.
+    const retired = { ...row('Poler', v('moved')), retiredAt: '2026-09-09' }
+    const lead = rivalsLead([row('Freitag', v('no_clear_change')), retired]) as string
+    expect(lead).toContain('Poler (tracked until 9 Sep) is the one whose share of attention moved')
+  })
+
+  it('joins several names without an Oxford list of one', () => {
+    const lead = rivalsLead([row('Freitag', v('moved')), row('Poler', v('moved')), row('Topo', v('moved'))]) as string
+    // AND THE PLURAL AGREES: three brands do not share one band (M26).
+    expect(lead).toContain('Freitag, Poler and Topo are the 3 whose shares of attention moved beyond their bands')
+    expect(lead).toContain('Of the 3 rivals compared,')
+  })
+})
+
+describe('buildMoves — OV5, with the card and the readings (Block D · D2)', () => {
+  const move = (over: Partial<Move> = {}): Move => ({
+    id: 'mv1',
+    client_id: 'c1',
+    kind: 'subject',
+    subject_id: 's1',
+    registry_ids: null,
+    lineage_id: null,
+    title: 'Push repairability',
+    note: null,
+    direction: 'up',
+    declared_at: '2026-08-12',
+    declared_by: null,
+    status: 'active',
+    ...over,
+  })
+
+  it('lists the active moves and carries the card, the readings and the ledger ratio', () => {
+    const card = cardFixture()
+    const readings = [moveReadingFixture()]
+    const b = buildMoves({ moves: [move(), move({ id: 'mv2', status: 'done' })], card, readings, acted: actedTally(1, 64) })
+    expect(b.rows.map((r) => r.id)).toEqual(['mv1'])
+    expect(b.recorded).toBe(true)
+    expect(b.empty).toBeNull()
+    expect(b.card).toBe(card)
+    expect(b.readings).toHaveLength(1)
+    expect(b.acted?.line).toContain('1 of 64')
+    // The ledger's ratio is the whole ledger and never a quarter (D12).
+    expect(b.acted?.line).not.toMatch(/quarter/i)
+  })
+
+  it('tells "nothing dated" and "not recorded here" apart, and keeps the card in both', () => {
+    const card = cardFixture()
+    const nothing = buildMoves({ moves: [], card, readings: [], acted: null })
+    expect(nothing.recorded).toBe(true)
+    expect(nothing.empty).toBe(MOVES_EMPTY)
+    expect(nothing.card).toBe(card)
+
+    const unapplied = buildMoves({ moves: null, card, readings: [], acted: null })
+    expect(unapplied.recorded).toBe(false)
+    expect(unapplied.empty).toContain('not recorded for this workspace yet')
+    // THE CARD SURVIVES M4 BEING UNAPPLIED, which is the state of both live
+    // tenants: the posts, the floor, the claims and the hooks come off tables
+    // that ARE applied, and only the confirming is held.
+    expect(unapplied.card).toBe(card)
+  })
+
+  it('carries the unlock and the masthead, and the unlock names no month', () => {
+    const b = buildMoves({ moves: [], card: null, readings: [], acted: null })
+    expect(b.unlock).toBe(MOVES_UNLOCK)
+    expect(b.masthead).toContain('We never claim you caused it')
+    expect(b.unlock).not.toMatch(/not built yet/)
+  })
+})
+
+describe('ledgerTally — one "acted" rule for two surfaces', () => {
+  const rec = (over: Partial<Parameters<typeof ledgerTally>[0][number]> = {}) => ({
+    id: 'r1',
+    title: 'Lead with repairability',
+    lineage_id: 'L1',
+    status: 'new',
+    priority: 'high',
+    based_on: null,
+    created_at: '2026-09-13T00:00:00.000Z',
+    ...over,
+  })
+
+  it('takes the newest copy of a lineage, never any copy that ever moved', () => {
+    // One lineage, two copies: the OLDER one was marked done and the newest
+    // update rewrote it as new. Overview used to OR across the copies and call
+    // it acted; Market takes the newest copy and calls it new.
+    const rows = [
+      rec({ id: 'old', status: 'acted_on', created_at: '2026-09-10T00:00:00.000Z' }),
+      rec({ id: 'new', status: 'new', created_at: '2026-09-13T00:00:00.000Z' }),
+    ]
+    expect(ledgerTally(rows, []).decided).toBe(0)
+    expect(ledgerTally(rows, []).of).toBe(1)
+    // And that is the answer Market prints off the same rows.
+    const market = buildAdviceRows(
+      rows.map((r) => ({ id: r.id, title: r.title, lineage_id: r.lineage_id, status: r.status, type: 'content', created_at: r.created_at, run_id: r.id })),
+      [],
+    )
+    expect(market.filter((r) => r.status !== 'new')).toHaveLength(0)
+  })
+
+  it('a decision on the lineage is inherited over the newest copy', () => {
+    const rows = [rec({ id: 'a' }), rec({ id: 'b', lineage_id: 'L2' })]
+    const tally = ledgerTally(rows, [
+      { id: 'd1', lineage_id: 'L1', status: 'acted_on', decided_at: '2026-09-14T00:00:00.000Z' },
+    ])
+    expect(tally.decided).toBe(1)
+    expect(tally.of).toBe(2)
+    expect(tally.line).toContain('1 of 2')
+    expect(tally.line).not.toMatch(/quarter/i)
+  })
+
+  it('counts lineages and not copies, and falls back to the row id', () => {
+    const rows = [rec({ id: 'a', lineage_id: null }), rec({ id: 'b', lineage_id: null })]
+    expect(ledgerTally(rows, []).of).toBe(2)
+    expect(ledgerTally([rec({ id: 'a' }), rec({ id: 'b' })], []).of).toBe(1)
+  })
+})
+
+// ---- the fix pass: four exported pure functions, and the bar's residual -----
+//
+// Code review I8: `monthsOnRecord`, `citeWhere`, `onScreenText` and
+// `earliestNamedAt` were exported, pure, carrying real rules — the
+// `group.length < 2` refusal, the audience mapping, the `ON_SCREEN_MAX` cut,
+// the earliest-of — and tested nowhere. The component tier tests the component
+// helpers; these four fell between the two tiers. `fillingNote` and
+// `onScreenQuote` are the fix pass's own additions and are tested with them.
+
+describe('monthsOnRecord', () => {
+  const row = (created: string | null) => ({ created_at: created }) as Parameters<typeof monthsOnRecord>[0][number]
+
+  it('refuses a lineage of one, because one copy’s date is the newest update’s', () => {
+    expect(monthsOnRecord([row('2026-06-04T00:00:00Z')], '2026-09-18')).toBeNull()
+    expect(monthsOnRecord([], '2026-09-18')).toBeNull()
+  })
+
+  it('counts whole months from the OLDEST copy in the lineage', () => {
+    const group = [row('2026-09-01T00:00:00Z'), row('2026-06-04T00:00:00Z'), row('2026-07-02T00:00:00Z')]
+    expect(monthsOnRecord(group, '2026-09-18')).toBe(3)
+  })
+
+  it('says nothing rather than "0 months" inside the same month', () => {
+    expect(monthsOnRecord([row('2026-09-01T00:00:00Z'), row('2026-09-14T00:00:00Z')], '2026-09-18')).toBeNull()
+  })
+
+  it('survives a row with no date, and refuses when none of them can be parsed', () => {
+    // A copy with no `created_at` is skipped, not fatal: the lineage still has
+    // two copies, so the refusal does not apply and the oldest DATED one is
+    // what the count is from.
+    expect(monthsOnRecord([row(null), row('2026-06-04T00:00:00Z')], '2026-09-18')).toBe(3)
+    // Nothing datable at all, and nothing is claimed.
+    expect(monthsOnRecord([row(null), row(null)], '2026-09-18')).toBeNull()
+    expect(monthsOnRecord([row('2026-06-04T00:00:00Z'), row('2026-07-02T00:00:00Z')], 'not a date')).toBeNull()
+  })
+})
+
+describe('citeWhere', () => {
+  it('names the audience the video sits in, read live off its own tags', () => {
+    expect(citeWhere({ is_client: true })).toBe('under your own video')
+    expect(citeWhere({ is_competitor: true, competitor_name: 'Freitag' })).toBe('under Freitag’s video')
+    expect(citeWhere({})).toBe('under a category video')
+  })
+})
+
+describe('onScreenText', () => {
+  it('collapses whitespace and gives null for nothing at all', () => {
+    expect(onScreenText('  1 bag.\n3 years. ')).toBe('1 bag. 3 years.')
+    expect(onScreenText('   ')).toBeNull()
+    expect(onScreenText(null)).toBeNull()
+    expect(onScreenText(undefined)).toBeNull()
+  })
+
+  it('cuts a whole frame of words to one clause', () => {
+    const long = 'a'.repeat(ON_SCREEN_MAX + 40)
+    const cut = onScreenText(long)
+    expect(cut).not.toBeNull()
+    expect(cut!.length).toBe(ON_SCREEN_MAX)
+    expect(cut!.endsWith('…')).toBe(true)
+    // At the boundary it is printed whole.
+    expect(onScreenText('b'.repeat(ON_SCREEN_MAX))).toBe('b'.repeat(ON_SCREEN_MAX))
+  })
+})
+
+describe('onScreenQuote', () => {
+  it('carries the whole line under the video’s own ref', () => {
+    const q = onScreenQuote('vid-1', '  1 bag.  3 years. 0 regrets ')
+    expect(q).toEqual({ ref: 't:vid-1', text: '1 bag. 3 years. 0 regrets' })
+  })
+
+  it('is null without a uuid to build the ref from — a line with no ref is a line a snapshot would have to store', () => {
+    expect(onScreenQuote(null, 'words on the frame')).toBeNull()
+    expect(onScreenQuote('vid-1', '   ')).toBeNull()
+  })
+
+  it('does not cut: the cut happens at render, so an export cuts in the same place', () => {
+    const long = 'c'.repeat(ON_SCREEN_MAX + 40)
+    expect(onScreenQuote('vid-1', long)!.text.length).toBe(long.length)
+  })
+})
+
+describe('earliestNamedAt', () => {
+  it('is the first date any of them was named', () => {
+    expect(earliestNamedAt([{ named_at: '2026-09-02' }, { named_at: '2026-08-19' }])).toBe('2026-08-19')
+  })
+  it('ignores the ones with no date, and is null when none has one', () => {
+    expect(earliestNamedAt([{ named_at: null }, { named_at: '2026-08-19' }])).toBe('2026-08-19')
+    expect(earliestNamedAt([{ named_at: null }, {}])).toBeNull()
+    expect(earliestNamedAt([])).toBeNull()
+  })
+})
+
+describe('fillingNote', () => {
+  const base = {
+    month: '2026-09-01',
+    status: 'filling' as const,
+    daysIn: 18,
+    updates: 3,
+    videos: 271,
+    expected: 469,
+    atLastMonth: 244,
+    atLastMonthKnown: true,
+    thin: false,
+  }
+
+  it('says only what the tile’s three stats do not', () => {
+    // The stats draw the videos, the same point last month and the updates.
+    const note = fillingNote(base)
+    expect(note).toBe('trailing median 469')
+    expect(note).not.toContain('3 updates')
+    expect(note).not.toContain('271 videos')
+    expect(note).not.toContain('244')
+  })
+
+  it('names the comparison the tile cannot draw a stat for', () => {
+    expect(fillingNote({ ...base, atLastMonth: null, atLastMonthKnown: false })).toContain('last month at this point: not recorded yet')
+    expect(fillingNote({ ...base, atLastMonth: null })).toContain('no reading of last month at this point')
+  })
+
+  it('carries the gate, with a thin month winning over an early one', () => {
+    expect(fillingNote({ ...base, thin: true })).toContain('thin month — every change below is suppressed')
+    expect(fillingNote({ ...base, early: true })).toContain('early in the month — every change below is suppressed')
+    expect(fillingNote({ ...base, thin: true, early: true })).not.toContain('early in the month')
+  })
+
+  it('is null when it would only repeat the stats', () => {
+    expect(fillingNote({ ...base, expected: null })).toBeNull()
+    expect(fillingNote({ ...base, expected: null, status: 'frozen', daysIn: null })).toBeNull()
+  })
+
+  it('says nothing was read, where nothing was', () => {
+    expect(fillingNote({ ...base, videos: null })).toContain('nothing read into this month yet')
+  })
+})

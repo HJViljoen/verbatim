@@ -298,6 +298,73 @@ export const TRANSLATE_PARALLEL = 4
  *  clear the backlog instead of the first one. */
 export const TRANSLATE_CAP = 400
 
+// --- Quote translation (Phase 1 WP6, item 8, decision A, 2026-09-18) ---------
+// A DIFFERENT THING FROM THE FOUR CONSTANTS ABOVE, and the numbers look alike
+// enough to be wired together by accident. Those translate a TRANSCRIPT — a
+// creator's speech, one 2,400-char text per call, on the full gpt-4.1, as a
+// reading aid the extraction model consumes and nobody ever sees. These
+// translate a QUOTED COMMENT — a stranger's 90 characters, twenty-five of them
+// per call, shown to a client beside the original. TRANSLATE_CAP is 400 VIDEOS
+// per run and has nothing to do with the design's "~400 comments per update",
+// which is itself a measurement error (see below).
+
+/** Model for the quote-translation call. gpt-4.1-mini, not the full gpt-4.1 the
+ *  transcript wave uses, and the asymmetry is deliberate: a transcript
+ *  translation is what Pass A REASONS from for a quarter of the corpus, so a
+ *  mistranslation there becomes a wrong finding nothing downstream can catch. A
+ *  quote translation is shown to a reader beside the words it renders, stamped
+ *  as a machine translation, with the original above it — the reader is the
+ *  check, and a comment is short, whole and unclipped where a transcript is
+ *  machine-made, garbled and cut. */
+export const TRANSLATE_QUOTES_MODEL = 'gpt-4.1-mini'
+
+/** Comments per model call. 25 is the design's number and it survives
+ *  measurement: the non-English cited comments run 87–94 characters (25.7–28.8
+ *  tokens) each, so a 25-item call is ~550 tokens of fixed system block plus
+ *  ~700 of source — near the transcript call's measured 752-token input, which
+ *  is the shape the live ledger says is efficient. */
+export const TRANSLATE_QUOTES_BATCH = 25
+
+/** Calls per Inngest step. The step cap is 300 s and this is the only bound
+ *  that matters: 27–28 calls of ~1,100 output tokens cannot ride one step, and
+ *  a translate-quotes step that times out is a step that re-bills every call in
+ *  it on the retry. Eight calls of a measured few seconds each leaves the cap
+ *  an order of magnitude of headroom. */
+export const TRANSLATE_QUOTES_CALLS_PER_STEP = 8
+
+/** Steps dispatched per parallel wave. Two, not four: the account has a hard
+ *  5-slot Inngest concurrency shared with the rest of the pipeline, and this
+ *  step maintains a cache rather than producing the report. */
+export const TRANSLATE_QUOTES_PARALLEL = 2
+
+/** Runaway BACKSTOP in TEXTS per run — TRANSLATE_CAP's shape, not a quality
+ *  budget. TEXTS, because a text is what is billed and what a cache row is:
+ *  `planQuoteCalls` slices the uncached (comment, text) targets, so at the
+ *  measured 1.22–1.24 texts per comment 3,000 reaches about 2,450 comments.
+ *
+ *  It is a backstop and not an exact ceiling, deliberately. The plan step hands
+ *  its batches on as COMMENT ids, and translateQuotesBatch re-derives every
+ *  uncached text of those comments — including a sibling text the cap cut off
+ *  mid-comment. So a capped run spends slightly OVER the cap, by at most one
+ *  comment's remaining texts per batch. Splitting a comment across two runs to
+ *  hold the line exactly would cost a second planning pass over the whole
+ *  corpus to save a fraction of a cent. Measured on production 2026-09-15, one update newly cites 2,386
+ *  (Össur) / 3,988 (Sealand) distinct comments, of which 627–684 are
+ *  confidently not English; the design's "~400 newly-cited non-English
+ *  comments per update" is 1.6× low. Everything cited and uncached goes to the
+ *  model (there is no stored language signal to pre-filter on — the video's
+ *  transcript_lang is 34–58% precise per comment), so the first run after this
+ *  ships faces the whole ever-cited backlog: ~7,000 comments a tenant.
+ *
+ *  Measured read-only 2026-09-15: the current analysis cites 7,019 (Össur) /
+ *  7,543 (Sealand) comments, carrying 8,574 / 9,342 distinct displayable texts
+ *  (an excerpt and its whole comment are two texts, and about a quarter of
+ *  cited comments are quoted in part). 3,000 caps a run at roughly $0.25–0.55
+ *  and clears a tenant's backlog over three runs, or in one invocation of
+ *  scripts/translate-quotes.ts. Steady state after the cache fills is
+ *  ~$0.015–0.05 per tenant per update. */
+export const TRANSLATE_QUOTES_CAP = 3000
+
 // --- On-screen text from the cover frame (WP7b, 2026-09-12) ------------------
 // The 2026-09-02 blind benchmark found, independently and twice, that every
 // incumbent listening tool misses on-screen text on TikTok/YouTube — and that
@@ -695,6 +762,40 @@ export function passAMinComments(platform: string): number {
   return PASS_A_MIN_COMMENTS_BY_PLATFORM[platform] ?? PASS_A_MIN_COMMENTS_DEFAULT
 }
 
+// --- Own posts as the client audience (fix/client-audience, 2026-09-24) -------
+// An own post used to leave Pass A through the claims lane or not at all, so
+// the `client` audience could never hold a single theme: 0 insights on 298
+// claims-only and 91 skip videos across both tenants, against 3,719 on the
+// full lane. The guardrail that put them there (Owned-Data-Plan, "segment,
+// never blend") was worried about a brand's fans CONTAMINATING category
+// themes. The audience key already segments: an own post's insights key under
+// `client` and can never reach `industry-other`. So the invariant is now
+// "segmented by audience key, never blended", and own posts read like any
+// other video — the comment floor still governs, and the transcript still
+// yields the same brand claims it did (claims are computed on both lanes).
+//
+// A COMPETITOR'S own posts keep the claims lane. Their fans are not our
+// audience under any reading, and nothing on the product asks what a rival's
+// followers said under the rival's post.
+
+/** Master switch for own-post audience insights. Default ON — the translation
+ *  precedent: it gates a path whose absence is a silent hole in the product,
+ *  so the safe default is on and the switch exists to turn it OFF in a hurry.
+ *  `OWN_POST_AUDIENCE=0` kills it everywhere; `OWN_POST_AUDIENCE_OFF` is a
+ *  comma-separated client-id list for turning it off for ONE tenant without
+ *  touching the others. Read at call time (serverless) and frozen per run by
+ *  captureRunFlags, so a run's behaviour is explainable after the fact. */
+export function ownPostAudienceEnabled(clientId?: string): boolean {
+  const v = process.env.OWN_POST_AUDIENCE
+  if (v === '0' || v === 'false') return false
+  if (!clientId) return true
+  const off = (process.env.OWN_POST_AUDIENCE_OFF ?? '')
+    .split(',')
+    .map((x) => x.trim().toLowerCase())
+    .filter((x) => x !== '')
+  return !off.includes(clientId.trim().toLowerCase())
+}
+
 /** Incremental Pass A (Theme Registry shape A, 2026-08-17). OFF unless set, so
  *  merging the branch changes nothing until it is switched on in Vercel. Gates
  *  SELECTION only — with the flag off, plan-pass-a still selects every eligible
@@ -823,9 +924,13 @@ export interface RunFlags {
   themeRegistry: boolean
   redditDiscovery: boolean
   consumerProfile: boolean
+  /** Default ON (ownPostAudienceEnabled) — see the own-post block above. The
+   *  only flag that is per-tenant as well as global, so it is captured with
+   *  the run's client id and not from the environment alone. */
+  ownPostAudience: boolean
 }
 
-export function captureRunFlags(): RunFlags {
+export function captureRunFlags(clientId?: string): RunFlags {
   return {
     transcripts: transcriptsEnabled(),
     translation: translationEnabled(),
@@ -834,6 +939,7 @@ export function captureRunFlags(): RunFlags {
     themeRegistry: themeRegistryEnabled(),
     redditDiscovery: redditDiscoveryEnabled(),
     consumerProfile: consumerProfileEnabled(),
+    ownPostAudience: ownPostAudienceEnabled(clientId),
   }
 }
 
@@ -919,6 +1025,56 @@ export const GATHER_MAX_COMMENT_DEPTH = 500
  *  'completed' with errors=[]. */
 export const PASS_A_ERROR_RATIO = 0.05
 
+/**
+ * Output ceiling for ONE Pass A call, in completion tokens (2026-09-24).
+ *
+ * Pass A sent no ceiling at all, so a call could generate up to gpt-4.1-mini's
+ * whole 32,768-token output window. Four calls on run b67b56de did exactly
+ * that: structured output degenerated into repetition, each ran ~220 s, each
+ * died inside the SDK with "Could not parse response content as the length
+ * limit was reached", and because the throw happens before `completion.usage`
+ * is read, all four were logged with 0 tokens — the spend is real and the
+ * ledger cannot see it. The inputs were not the problem (one of the four
+ * showed the model 29 comments and a 2.6 kB prompt), so a smaller batch fixes
+ * nothing; a bound does.
+ *
+ * 8,000, AND THE FIRST NUMBER WAS 4,000 ON A CLAIM THE LEDGER REFUSES. That
+ * claim was "the widest honest Pass A answer measured on this tenant is an
+ * order of magnitude under it". It is not. Every non-zero `pass_a` row in
+ * `ai_call_log` on the Phase 1 preview branch, read-only 2026-09-24:
+ *
+ *   calls 8,291 · median 445 · p99 1,425 · p99.9 2,162 · max 5,912
+ *   calls at or over 4,000: 1   ·   calls at or over 8,000: 0
+ *
+ * and the 5,912 row is not a failure — `validation_status = 'ok'`, no error,
+ * `pass_a_v4`, 2026-08-17, on a 2,040-token prompt. So the widest honest
+ * answer on record sits 1.48x OVER the old ceiling, and 4,000 would have
+ * truncated it, thrown LengthFinishReasonError, and re-asked that video on
+ * half its comments — reading the richest video in the corpus on less than it
+ * has, silently, for a bound that was never measured against the table it was
+ * reasoning about.
+ *
+ * 8,000 is above everything the ledger has ever seen and still a quarter of
+ * the model's 32,768-token window, which is the whole job of the number: a
+ * degenerate generation is stopped in ~16 s instead of running ~220 s to the
+ * window, and `PASS_A_LENGTH_RETRY_REFS` decides what happens next. It is
+ * sized to the MEASURED corpus with headroom, not to the schema — a ceiling
+ * sized to a schema nobody measured is how the first one came out under the
+ * data.
+ *
+ * Re-read this the next time the Pass A prompt version moves: the widest
+ * answer is a property of the prompt, and the query above is one line.
+ */
+export const PASS_A_MAX_OUTPUT_TOKENS = 8000
+
+/** Share of a video's comments the ONE length-limit retry shows the model.
+ *  Halving is the in-call analogue of halving a batch: the unit of a Pass A
+ *  call is one video, so the only thing there is to make smaller is how much
+ *  of that video it reads. Exactly one retry — a video that runs away twice is
+ *  counted as an error and re-planned next run, which is what every other Pass
+ *  A failure already does. */
+export const PASS_A_LENGTH_RETRY_REFS = 0.5
+
 /** Recovered caption-batch tolerance (2026-09-13). A run-failed caption batch
  *  whose ids the isolation pass then re-fetched one by one cost Apify a dead
  *  actor run but lost no data, so it takes MORE of them than a per-video failure
@@ -1003,25 +1159,11 @@ export const ASK_PDF_MAX_PAGES = 60
  *  than return "no claims found" for a document full of claims. */
 export const ASK_PDF_MIN_CHARS_PER_PAGE = 200
 
-/** Ask submissions per tenant per UTC day. Three model calls each, up to
- *  ~$0.50 for a large plan — uncapped, one signed-in account is ~$40/hour.
- *  Crude on purpose: no new infrastructure, and the failure mode is a message
- *  rather than a bill. A real rate limiter belongs with the self-serve motion. */
-export const ASK_DAILY_LIMIT = 25
-
 /** Search-term suggestion calls per USER per rolling hour (WP5). One
  *  gpt-4.1-mini call each, ~$0.001 — small, but the onboarding one is reachable
  *  by any signed-in account before it has a tenant, so it needs a ceiling that
  *  is per person rather than per tenant. Counted in `suggestion_calls`. */
 export const SUGGEST_HOURLY_LIMIT = 5
-
-/** Master switch for the Ask surface. OFF unless set, so merging changes
- *  nothing: the route refuses, the nav item is hidden. Shares the flag with the
- *  consumer profile — one feature, and its weekly re-read runs in that step. */
-export function askEnabled(): boolean {
-  const v = process.env.CONSUMER_PROFILE
-  return v === '1' || v === 'true'
-}
 
 /** Stored checks re-tested per run. Each is one synthesis call, so a tenant
  *  with fifty saved plans must not quietly add fifty calls to every run.
@@ -1056,10 +1198,28 @@ export const AGENT_INSIGHTS_PER_QUERY = 40
  *  fits a prompt alongside their quotes, not by what retrieval can find. */
 export const AGENT_INSIGHTS_TOTAL = 60
 
-/** Agent turns per tenant per UTC day, separate from ASK_DAILY_LIMIT because a
- *  conversation burns turns far faster than a plan check burns submissions.
- *  Starting value — revisit on real use rather than on a guess. */
-export const AGENT_DAILY_LIMIT = 50
+/**
+ * Questions per TENANT per calendar month (Phase 1 WP21, decision B).
+ *
+ * It replaced AGENT_DAILY_LIMIT = 50, which could not fire underneath it: a
+ * workspace hits forty in a month long before it hits fifty in a day, and a cap
+ * that can never refuse anything teaches a reader that the other one will not
+ * either.
+ *
+ * Priced from the question path, not from the pooled ledger. The $0.058 that
+ * has been quoted for a question is a figure about the document builder — 141
+ * of production's 151 `agent_answer` rows are its research calls. On the ten
+ * rows that are a real question the mean is $0.0469 + $0.0003 interpret =
+ * $0.047, spread $0.019-$0.068. Forty questions is therefore ~$1.90 a month,
+ * and up to ~$20 if every one of them is a large document check
+ * (lib/ask/quota.ts prices a big plan at $0.35-0.50).
+ *
+ * Counted on `agent_messages`, in lib/ask/quota.ts — which says why that table
+ * and not the ledger. Raising it for one workspace is a code change today, not
+ * a column; a per-tenant override is worth having the first time a client asks
+ * for one, and not before.
+ */
+export const ASK_MONTHLY_CAP = 40
 
 /** Reasoning effort for the agent's synthesis call, SEPARATE from the
  *  pipeline's SYNTHESIS_REASONING_EFFORT. A weekly report can afford to think
@@ -1086,27 +1246,30 @@ export const AGENT_MAX_QUERIES = 5
  *  an answer. A point that cannot muster one is not grounded. */
 export const AGENT_QUOTES_PER_POINT = 3
 
-/** Runs of history shown to the agent. Twelve weekly readings is a quarter —
- *  enough to see a movement, short enough that the model is not handed a year
- *  of numbers to find a pattern in. */
-export const AGENT_TREND_MAX_RUNS = 12
+/** Calendar months of history the agent reads for a "has this changed?"
+ *  question (Phase 1 WP21). Twelve is a year — long enough that a direction
+ *  word has room to be earned three times over and a seasonal tenant is
+ *  compared with its own year, short enough that the model is not handed a
+ *  decade of numbers to find a pattern in. The THREE constants this replaced
+ *  (AGENT_TREND_MAX_RUNS / MIN_POINTS / MIN_EVIDENCE) were floors on a
+ *  run-indexed series and have no meaning on the monthly one: the floors are
+ *  SHARE_BAND's, applied by the same band every other reading uses. */
+export const AGENT_MOVEMENT_MONTHS = 12
 
-/** Readings needed before a direction is claimed at all. Three to six weekly
- *  points is noise; a product that calls noise a trend is the one that gets
- *  caught. Below this the honest answer is "too few readings yet". */
-export const AGENT_TREND_MIN_POINTS = 3
+/** Themes whose movement one answer's prompt carries. A question retrieves up
+ *  to AGENT_INSIGHTS_TOTAL insights across many themes; every one of them with
+ *  a year of months would be most of the prompt, and a specific question would
+ *  get a general answer. Ranked by whether the line SAYS anything
+ *  (lib/agent/movement.ts rankMovement), never by chance. */
+export const AGENT_MOVEMENT_TOPICS = 8
 
-/** Evidence rows a theme needs before its movement means anything. 2 → 4 is a
- *  doubling and it is also nothing. */
-export const AGENT_TREND_MIN_EVIDENCE = 5
-
-/** Master switch for the Verbatim Agent. Deliberately NOT the CONSUMER_PROFILE
- *  flag: lighting up the agent must not also light up Pass E and the weekly
- *  re-evaluation inside a pipeline run, and vice versa. OFF unless set. */
-export function agentEnabled(): boolean {
-  const v = process.env.AGENT_ENABLED
-  return v === '1' || v === 'true'
-}
+// AGENT_ENABLED IS RETIRED (Phase 1 WP21, decision B). It was the master switch
+// for the Verbatim Agent and it never switched the surface off: the pages
+// rendered with the flag unset, and only the sidebar item and the send route
+// read it. Ask is one of the nine surfaces now and the gate that decides who
+// may spend is `canAsk` (lib/agent/access.ts) plus the monthly cap below. A
+// flag whose only remaining job is to hide a menu entry is a flag that tells a
+// reader the wrong thing about what is switched on.
 
 /** How much evidence two personas must share for the newer one to BE the older
  *  one. A profile is not a weekly report — "Caregiver" should still be
@@ -1145,10 +1308,10 @@ export const REGISTRY_MATCH_WEAK = 0.25
  *  It revives on the next match — dormancy hides an entry, it never deletes it. */
 export const REGISTRY_DORMANT_RUNS = 3
 
-// --- Direction words on the run-indexed theme series (Phase 0 · D1, 2026-09-15) --
+// --- Direction words on the run-indexed series (D1, 2026-09-15) -------------
 
 /**
- * OFF, and deliberately: nothing may tell a client a theme is gaining, fading
+ * ALL OFF, and deliberately: nothing may tell a client a theme is gaining, fading
  * or gone quiet while the only series we hold is indexed by UPDATE.
  *
  * Every gaining / fading / New on a theme today compares two readings of one
@@ -1165,17 +1328,164 @@ export const REGISTRY_DORMANT_RUNS = 3
  * count in the email. Every LEVEL — counts, shares, sentiment, the theme map,
  * the lists — is untouched.
  *
- * Phase 1 flips this to true one reader at a time, as each is re-based on the
- * comment-dated monthly reading (lib/reading/monthly.ts). That is why every
- * gated branch READS this constant rather than deleting its code, and why the
- * gated pure functions take it as an argument defaulting to this, so both
- * answers stay under test.
+ * ONE FLAG PER READER (Phase 1 WP0, 2026-09-15). Phase 0 shipped a single
+ * boolean, which made the flip all-or-nothing: the first reader re-based on
+ * the comment-dated monthly series could not be turned on without turning on
+ * six that were not. The constant is now a map, and `directionWordsFor` is the
+ * only way to read it, so a reader flips the day its own series is honest and
+ * not before.
  *
- * Annotated `boolean` rather than left to infer the literal `false`: a literal
- * narrows every gated branch to dead code, and TypeScript then stops checking
- * the half Phase 1 turns back on.
+ * `profile.mix` joins the map having never been gated at all — the Consumer
+ * Profile's "How the mix has moved" is a line across `consumer_profiles` rows
+ * indexed by run_date, which is precisely the series D1 is about. It was
+ * missed in Phase 0 because the surface draws a chart and prints no direction
+ * WORD; a line that rises is a direction claim whether or not a word says so.
+ *
+ * Annotated `boolean` (the map's value type) rather than left to infer the
+ * literal `false`: a literal narrows every gated branch to dead code, and
+ * TypeScript then stops checking the half Phase 1 turns back on. For the same
+ * reason every gated branch READS the map rather than deleting its code, and
+ * every gated pure function takes the answer as an argument defaulting to it,
+ * so both answers stay under test.
  */
-export const RUN_INDEXED_DIRECTION_WORDS: boolean = false
+export type DirectionReader =
+  /**
+   * Voice of Customer · "Gaining and fading" — the tile, its drawer, its deck slide.
+   *
+   * STILL FALSE AFTER VOICE SHIPPED (Phase 1 WP13), and the plan's "flips
+   * `voice.movers` in the direction map" is answered by not flipping it —
+   * the same answer WP11 gave `dashboard.themes` below, for the same reason
+   * and one more that is this key's own.
+   *
+   * The shared reason: this key gates the LEGACY Voice of Customer module,
+   * whose renderables are registered under the page key `voice`
+   * (components/pages/registry.ts) and reached by the export route, the share
+   * page, the Studio's catalogue and `lib/reports/templates.ts`. WP13 replaced
+   * the ROUTE at /dashboard/voice; the module stays, because an artefact names
+   * a module and not an address. Flipping this key would re-register
+   * `voice.movers`, return it to the Studio picker and to the monthly-marketing
+   * starter, and hand a NEW report a tile whose series is `themes` rows per RUN
+   * with a per-update sparkline beside it — the exact object D1 exists to
+   * suppress. Nothing stored names it today (checked read-only on production:
+   * zero `reports` rows and zero `report_snapshots` name the page `voice`),
+   * which is an argument for leaving it alone, not for switching it on.
+   *
+   * The reason of its own: VO2 does not read this map at all. It ranks the
+   * comment-dated month series, bands each row against the month before it
+   * (`monthChange`), and prints a direction word only where `directionWord`
+   * earns one over three consecutive months inside one clustering regime. A
+   * key flips when the surface it names RE-BASES; this surface has not
+   * re-based, it has been replaced, and its replacement needs no permission
+   * from here.
+   */
+  | 'voice.movers'
+  /**
+   * Dashboard · the themes list's "New" chip, the movement row, the email's chip.
+   *
+   * STILL FALSE AFTER OVERVIEW SHIPPED (Phase 1 WP11), and the plan's "the
+   * reader flips `dashboard.themes`" is answered by not flipping it. This key
+   * gates the LEGACY Dashboard's tiles and the digest's chip, and those read
+   * the run-indexed series exactly as they always did; Overview replaced the
+   * dashboard's ROUTE, not its module, which stays registered so one sent
+   * snapshot, one live share link and two weekly schedules keep rendering
+   * (WP9). Flipping this key would turn direction words back on inside those
+   * artefacts, which is the thing D1 forbids.
+   *
+   * Overview earns its own direction words a different way and reads nothing
+   * here: `directionWord` (lib/reading/bands.ts) takes three consecutive months
+   * of the comment-dated series in one clustering regime, each clearing both
+   * floors. That is the re-basing this map exists to make possible — the key
+   * flips when the surface it names re-bases, and this surface has not; it has
+   * been replaced.
+   */
+  | 'dashboard.themes'
+  /** Reports & briefs · a theme's trajectory word in a document block. */
+  | 'documents.trajectory'
+  /**
+   * Ask · the movement paragraph a "trend" question is answered from.
+   *
+   * TRUE SINCE PHASE 1 WP21, and the first key in this map to flip. The block
+   * it gates no longer reads `theme_observations` — one row per theme per RUN,
+   * dated by the wall clock at persist, with a ±25% ratio against the mean of
+   * the prior readings and no denominator anywhere. It reads
+   * `month_theme_readings` against `month_denominators`: calendar months dated
+   * by the comment, each with its own n, compared by the product's own band,
+   * and a direction word only where `directionWord` earns one over three
+   * consecutive months in one clustering regime under one name.
+   *
+   * That is the re-basing this map exists for, and it is why this key flips
+   * while the other six do not: the others still name a surface reading the
+   * run-indexed series. The gated branch is KEPT and tested — turning this off
+   * returns the agent to saying a topic's history is not readable, not to the
+   * old series, which is deleted.
+   */
+  | 'agent.movement'
+  /** Initiatives · whether the conversation went the way the client said they wanted. */
+  | 'initiatives'
+  /**
+   * Competitive · share-point deltas "since your first update".
+   *
+   * NOT FLIPPED BY WP14, and the plan's "done when" says it should be. It must
+   * not. This key gates the PARKED Competitive Intelligence page
+   * (components/pages/competitive/index.tsx, via `shareDeltaShown`) and the
+   * weekly digest's delta block (components/email/tiles.tsx), both of which
+   * read `run_summary.period_share_of_voice` exactly as they always have —
+   * two readings of one cumulative corpus taken at two arbitrary moments.
+   * Flipping the key would turn direction words back on inside those, which
+   * is what D1 forbids.
+   *
+   * The new Competitive surface (lib/pages/competitive-surface.ts) reads
+   * nothing here. Its direction words are earned by a `Verdict` off the
+   * comment-dated month rows, with an n and a band on both sides — the
+   * re-basing this map exists to make possible. A key flips when the surface
+   * it names re-bases; this one has not re-based, it has been replaced.
+   * WP11 reached the same answer about `dashboard.themes` for the same reason.
+   */
+  | 'competitive.deltas'
+  /** Consumer Profile · "How the mix has moved", the per-persona share line. */
+  | 'profile.mix'
+
+/** Every reader, for the tests and for a Settings surface that lists them. */
+export const DIRECTION_READERS = [
+  'voice.movers', 'dashboard.themes', 'documents.trajectory', 'agent.movement',
+  'initiatives', 'competitive.deltas', 'profile.mix',
+] as const satisfies readonly DirectionReader[]
+
+/**
+ * NOT named `RUN_INDEXED_DIRECTION_WORDS`. Phase 0's constant of that name was
+ * a `boolean = false`, and `main` still exports it as one; an object under the
+ * same identifier would make every `RUN_INDEXED_DIRECTION_WORDS ? on : off`
+ * merged in from main — or written from memory by a later package — silently
+ * take the ON branch, with tsc and eslint both quiet about it. The rename is
+ * the gate; "never read the map directly" is only a rule.
+ */
+export const DIRECTION_WORDS_BY_READER: Record<DirectionReader, boolean> = {
+  'voice.movers': false,
+  'dashboard.themes': false,
+  'documents.trajectory': false,
+  // The one true key: Ask's movement block re-based on the comment-dated
+  // monthly reading in WP21. See the type above for why this one and not the
+  // other six.
+  'agent.movement': true,
+  'initiatives': false,
+  'competitive.deltas': false,
+  'profile.mix': false,
+}
+
+/** May this reader print a direction? Read it; never read the map directly. */
+export function directionWordsFor(reader: DirectionReader): boolean {
+  return DIRECTION_WORDS_BY_READER[reader]
+}
+
+/**
+ * When the pages Phase 1 replaces stop being reachable (decision C). A
+ * placeholder until Heinrich sets it at R2: the old Reports page, Dashboard,
+ * Guide, Connections, Initiatives, Voice of Customer, Market Intelligence,
+ * Competitive and Consumer Profile retire on this date, and the shell reads it
+ * rather than each page carrying its own answer. ISO, no time: a retirement is
+ * a day, and the reader's timezone decides when that day starts for them.
+ */
+export const OLD_PAGES_RETIRE_ON = '2026-11-30'
 
 // Order-of-magnitude Apify spend per platform, for RANKING keywords in
 // scripts/keyword-roi.ts — never invoicing. Apify doesn't land per-actor cost

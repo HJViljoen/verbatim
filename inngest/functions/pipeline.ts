@@ -4,7 +4,8 @@ import { inngest } from '@/inngest/client'
 import { createAdminClient, selectAll } from '@/lib/supabase-admin'
 import { planGatherSearches, searchStepId, searchOne, gatePlatform, scrapeCommentsBatch, transcribeBatch, planTranscribeBatches, resolveGatherWindow, inWindow, loadGatherConfig, type SearchResult } from '@/lib/gather/gather'
 import { runPassA, passALane, passAPromptVersion } from '@/lib/pipeline/pass-a'
-import { decideAnalysis, emptyReasonTally, staleInsightIds, type SelectReason } from '@/lib/pipeline/pass-a-plan'
+import { decideAnalysis, emptyReasonTally, protectedKeptIds, staleInsightIds, type SelectReason } from '@/lib/pipeline/pass-a-plan'
+import { parseRef } from '@/lib/renderables/quotes-freeze'
 import { loadGroupedInsights, runStepA2Bucket, type StepA2BucketResult } from '@/lib/pipeline/step-a2'
 import { runPassB } from '@/lib/pipeline/pass-b'
 import { runPassC } from '@/lib/pipeline/pass-c'
@@ -16,29 +17,39 @@ import { attributeRunKeywords } from '@/lib/pipeline/keyword-attribution'
 import { discoverRunKeywords } from '@/lib/pipeline/keyword-discovery'
 import { planClassifyMetaBatches, runClassifyMetaBatch } from '@/lib/pipeline/classify-meta'
 import { planTranslateBatches, translateBatch } from '@/lib/pipeline/translate'
+import { planQuoteTranslations, translateQuotesBatch } from '@/lib/pipeline/translate-quotes'
 import { planOcrBatches, ocrBatch, planOcrBackfill, ocrBackfillBatch, emptyOcrResult, mentionsMissingColumn } from '@/lib/pipeline/ocr'
 import { ingestOwnedPosts, supportsOwnedProfile, buildOwnedCensus, entitySlug, type OwnedEntity } from '@/lib/gather/owned'
 import { planTranscriptBackfill, backfillTranscriptsBatch, emptyBackfillTally, mergeTallies, formatTally } from '@/lib/gather/transcript-backfill'
 import { discoverSubreddits } from '@/lib/gather/subreddit-discovery'
 import { activeSubreddits } from '@/lib/gather/subreddits'
 import { runStep2c } from '@/lib/pipeline/owned-events'
+import { runAnomalyCheck } from '@/lib/pipeline/anomaly-check'
 import { runPassE } from '@/lib/pipeline/pass-e'
 import { reevaluatePlanChecks } from '@/lib/ask/reevaluate'
-import { summariseRunErrors, partialRunAlert, passADegradation, isolatedBatchDegradation, runCloseStatus, RUN_ERROR_CAP } from '@/lib/pipeline/run-errors'
+import { summariseRunErrors, partialRunAlert, passADegradation, isolatedBatchDegradation, runCloseStatus, closingErrors, RUN_ERROR_CAP } from '@/lib/pipeline/run-errors'
 import { writeRunCosts, runSpendSoFar } from '@/lib/pipeline/run-costs'
 import { withApifyRunContext, settleApifyRuns } from '@/lib/gather/apify-runs'
 import { decideOpenRun, runIdForEvent, RUN_STALE_AFTER_HOURS, PG_UNIQUE_VIOLATION, type RunningRow } from '@/lib/pipeline/run-guard'
 import { persistRunNews } from '@/lib/news/persist'
 import { persistThemes, loadThemes } from '@/lib/pipeline/themes'
 import { writeRunSummary } from '@/lib/pipeline/run-summary'
+import { pipelineActor } from '@/lib/config-log'
 import { fillingMonths, freezeMonths, isMissingMonthlyReading, monthsToRefresh } from '@/lib/reading/monthly'
+import { SLICE } from '@/lib/reading/coverage'
+import { subjectFreezeHold, subjectMonthSide, type MembershipOutcome } from '@/lib/subjects/read'
 import { embedNullInsights, embedSummary } from '@/lib/pipeline/embed-insights'
+import { embeddingCoverage } from '@/lib/agent/retrieve'
+import { embedSubjects, judgeSubject, loadActiveSubjects, membershipSummary, subjectBudgetUsd } from '@/lib/subjects/membership'
+import { isMissingSubjects } from '@/lib/subjects/types'
 import { resolveRunWindow, isStalled, type RunWindow } from '@/lib/pipeline/window'
-import { buildConfigSnapshot, openRunBookkeeping, isMissingBookkeepingColumn, previousRunEnd, rowWindow, CONFIG_SNAPSHOT_COLUMNS, type TrackingConfigRow, type WindowColumns } from '@/lib/pipeline/run-bookkeeping'
+import { clusteringKey as clusteringKeyOf, currentClusteringRegime } from '@/lib/pipeline/clustering'
+import { PROMPT_VERSION as THEME_MERGE_PROMPT_VERSION } from '@/lib/pipeline/theme-merge'
+import { buildConfigSnapshot, openRunBookkeeping, isMissingBookkeepingColumn, isMissingClusteringKeyColumn, previousRunEnd, rowWindow, CONFIG_SNAPSHOT_COLUMNS, type TrackingConfigRow, type WindowColumns } from '@/lib/pipeline/run-bookkeeping'
 import { computeMetrics, isDiscoveredVideo } from '@/lib/pipeline/metrics'
 import { sendAlertEmail } from '@/lib/email'
 import { billingAccess, type BillingClient } from '@/lib/billing'
-import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, PASS_A_ERROR_RATIO, ISOLATED_BATCH_ERROR_RATIO, RUN_MODEL_BUDGET_USD, TRANSCRIBE_PARALLEL, BACKFILL_PARALLEL, TRANSLATE_PARALLEL, OCR_PARALLEL, OCR_CAP, captureRunFlags, periodSince, effectivePeriod, type RunFlags } from '@/lib/config'
+import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, PASS_A_ERROR_RATIO, PASS_A_MAX_OUTPUT_TOKENS, ISOLATED_BATCH_ERROR_RATIO, RUN_MODEL_BUDGET_USD, TRANSCRIBE_PARALLEL, BACKFILL_PARALLEL, TRANSLATE_PARALLEL, TRANSLATE_QUOTES_PARALLEL, OCR_PARALLEL, OCR_CAP, captureRunFlags, periodSince, effectivePeriod, type RunFlags } from '@/lib/config'
 import type { Platform } from '@/lib/gather/types'
 import type { CommentRow, SynthesisVideoRow } from '@/lib/pipeline/types'
 import { SYNTHESIS_VIDEO_COLUMNS } from '@/lib/pipeline/types'
@@ -283,7 +294,7 @@ export const runPipeline = inngest.createFunction(
       // Frozen here, inside the memoised step: every later step replays these
       // values instead of re-reading an environment (or a tenant config) that
       // may have moved.
-      const flags = captureRunFlags()
+      const flags = captureRunFlags(clientId)
       // The run's effective period — the trigger's override, else the tenant's
       // configured cadence. Resolved ONCE, here, so gather, the owned window,
       // the synthesis slice, the census and run_summary.period cannot disagree
@@ -307,6 +318,21 @@ export const runPipeline = inngest.createFunction(
         stored: windowInput.stored,
       })
       const snapshot = buildConfigSnapshot(tc)
+      // The regime this invocation will cluster under, frozen beside the window
+      // and the flags for the same reason: a month row's run_id says WHICH run
+      // produced it and nothing about whether two runs grouped themes the same
+      // way, and one run id can span a change (Össur 29a56395 → d346b0f7 moved
+      // the Pass A flags with nothing but a JSON blob recording it).
+      const clusteringKey = clusteringKeyOf(currentClusteringRegime({
+        promptVersion: passAPromptVersion(flags.transcripts),
+        // The flags themselves, not just the version they select: flipping
+        // translation or OCR re-reads the corpus a video at a time (the
+        // 'translated' and 'ocr' SelectReasons) without moving
+        // passAPromptVersion, which is exactly what happened between 29a56395
+        // and d346b0f7.
+        passAInputs: { transcripts: flags.transcripts, translation: flags.translation, ocr: flags.ocr, ownPostAudience: flags.ownPostAudience },
+        mergePromptVersion: THEME_MERGE_PROMPT_VERSION,
+      }))
       // The bookkeeping migration is applied by hand (a schema change on a live
       // pipeline is not a deploy side effect), so the code CAN reach production
       // first. Every one of these columns is additive, so a write that names
@@ -316,6 +342,13 @@ export const runPipeline = inngest.createFunction(
       // tenant until someone applied the migration. The run then carries no
       // frozen window and every reader falls back to the clock, as a
       // pre-2026-09-15 row does. Same guard as ocr.ts and Pass D-b's lineage.
+      //
+      // `clustering_key` is retried on its OWN before that blanket drop. It
+      // came three migrations later, so it can be the only column missing, and
+      // it is one nullable text column nothing reads yet — while dropping the
+      // group costs the frozen window, which is the 18-days-apart failure
+      // AGENTS.md names. So: full write, then the same write minus the key,
+      // then (only for the seven) the bare row.
       let recorded = true
       const resumeRunId = options.runId
       if (resumeRunId) {
@@ -327,8 +360,9 @@ export const runPipeline = inngest.createFunction(
         // The bookkeeping is NOT simply rewritten: the slot the original run
         // served and the config it gathered under are its facts, not this
         // invocation's (lib/pipeline/run-bookkeeping.ts).
-        const bookkeeping = openRunBookkeeping({
+        const bookkeeping = (withClusteringKey: boolean) => openRunBookkeeping({
           period, window, snapshot,
+          ...(withClusteringKey ? { clusteringKey } : {}),
           scheduledFor: options.scheduledFor,
           resume: { hasConfigSnapshot: windowInput.hasConfigSnapshot },
         })
@@ -337,7 +371,11 @@ export const runPipeline = inngest.createFunction(
             .from('pipeline_runs')
             .update({ status: 'running', error_message: null, completed_at: null, started_at: new Date().toISOString(), flags, options, ...extra })
             .eq('id', resumeRunId).eq('client_id', clientId)
-        let { error } = await reopen({ stalled: false, ...bookkeeping })
+        let { error } = await reopen({ stalled: false, ...bookkeeping(true) })
+        if (error && isMissingClusteringKeyColumn(error)) {
+          console.warn('[open-run] pipeline_runs.clustering_key is not in the database yet; reopening without it (the window is still frozen)')
+          ;({ error } = await reopen({ stalled: false, ...bookkeeping(false) }))
+        }
         if (error && isMissingBookkeepingColumn(error)) {
           console.warn('[open-run] run bookkeeping columns are not in the database yet; reopening without them')
           recorded = false
@@ -351,7 +389,16 @@ export const runPipeline = inngest.createFunction(
         admin
           .from('pipeline_runs')
           .insert({ id: newRunId, client_id: clientId, status: 'running', flags, options, ...extra })
-      let { error } = await open(openRunBookkeeping({ period, window, snapshot, scheduledFor: options.scheduledFor }))
+      const opening = (withClusteringKey: boolean) => openRunBookkeeping({
+        period, window, snapshot,
+        ...(withClusteringKey ? { clusteringKey } : {}),
+        scheduledFor: options.scheduledFor,
+      })
+      let { error } = await open(opening(true))
+      if (error && isMissingClusteringKeyColumn(error)) {
+        console.warn('[open-run] pipeline_runs.clustering_key is not in the database yet; opening without it (the window is still frozen)')
+        ;({ error } = await open(opening(false)))
+      }
       if (error && isMissingBookkeepingColumn(error)) {
         console.warn('[open-run] run bookkeeping columns are not in the database yet; opening without them')
         recorded = false
@@ -379,7 +426,7 @@ export const runPipeline = inngest.createFunction(
     const runId: string | null = typeof opened === 'string' ? opened : opened.runId
     // A run opened before this shipped has no snapshot; read the environment,
     // which is exactly what it was doing anyway.
-    const flags: RunFlags = (typeof opened === 'string' ? undefined : opened.flags) ?? captureRunFlags()
+    const flags: RunFlags = (typeof opened === 'string' ? undefined : opened.flags) ?? captureRunFlags(clientId)
     // The run's effective period (options.period ?? tracking_configs.report_period),
     // frozen by open-run. A run opened before 2026-09-09 has no frozen value:
     // it falls back to its own options and then, at each use site, to reading
@@ -443,6 +490,17 @@ export const runPipeline = inngest.createFunction(
       if (runErrors.length >= RUN_ERROR_CAP) return
       const message = detail instanceof Error ? detail.message : detail == null ? '' : String(detail)
       runErrors.push(message ? `${where}: ${message.slice(0, 300)}` : where)
+    }
+    // Sub-threshold FINDINGS — the things a ratio gate decided not to count.
+    // They never touch totalErrors, so a ratio gate still means what it has
+    // always meant and a clean run still closes clean and silent; they ride
+    // along in `errors` once the run is partial anyway (`closingErrors`).
+    // Run b67b56de closed partial on one Instagram census while nine caption
+    // actor runs had failed inside the same window, and the row said nothing.
+    const runFindings: string[] = []
+    const noteFinding = (where: string, detail: string) => {
+      if (runFindings.length >= RUN_ERROR_CAP) return
+      runFindings.push(`${where}: ${detail.slice(0, 300)}`)
     }
 
     // Reddit subreddit discovery (Wave 3): propose communities, probe each
@@ -700,7 +758,16 @@ export const runPipeline = inngest.createFunction(
             // the ratio the actor itself is suspect and the run says so once.
             const txDegraded = isolatedBatchDegradation(isolatedBatches, txBatches.length, ISOLATED_BATCH_ERROR_RATIO)
             if (txDegraded) noteError(`transcribe:${platform}`, txDegraded)
-            else if (isolatedBatches > 0) console.warn(`[transcript] ${platform}: ${isolatedBatches} of ${txBatches.length} batches run-failed and were recovered id-by-id, under the ${ISOLATED_BATCH_ERROR_RATIO * 100}% ratio`)
+            else if (isolatedBatches > 0) {
+              // Under the ratio, so it does NOT degrade the run — but it is
+              // recorded rather than only logged. The console line it used to
+              // be was gone from the host's retention within the hour, which
+              // is how run b67b56de's nine failed YouTube caption actors were
+              // invisible on a row that already read 'partial'.
+              const say = `${isolatedBatches} of ${txBatches.length} caption batches run-failed and were recovered id-by-id, under the ${ISOLATED_BATCH_ERROR_RATIO * 100}% ratio`
+              console.warn(`[transcript] ${platform}: ${say}`)
+              noteFinding(`transcribe:${platform}`, say)
+            }
           } catch (e) {
             noteError(`plan-transcribe:${platform}`, e)
           }
@@ -966,7 +1033,7 @@ export const runPipeline = inngest.createFunction(
         .run('plan-translate', () => planTranslateBatches(clientId))
         .catch((e) => {
           noteError('plan-translate', e)
-          return { batches: [] as string[][], needing: 0, deferred: 0, retrying: 0, byLang: {} as Record<string, number> }
+          return { batches: [] as string[][], offered: 0, needing: 0, deferred: 0, retrying: 0, excluded: { english: 0, exhausted: 0 }, byLang: {} as Record<string, number> }
         })
       translate.batches = plan.batches.length
       translate.needing = plan.needing
@@ -1017,10 +1084,19 @@ export const runPipeline = inngest.createFunction(
       )
       if (translateDegraded && translate.batchesFailed === 0) noteError('translate', translateDegraded)
       else if (translate.failed > 0) console.warn(`[translate] ${translate.failed} translation(s) failed${translate.batchesFailed ? ' (batch steps already recorded)' : ` under the ${PASS_A_ERROR_RATIO * 100}% ratio`}. First: ${firstTranslateError ?? ''}`)
-      if (plan.needing) {
+      if (plan.needing || plan.excluded.english) {
         const langs = Object.entries(plan.byLang).sort((a, b) => b[1] - a[1]).map(([l, n]) => `${l}:${n}`).join(' ')
+        // `offered` is printed beside `needed` because the two are read as one
+        // number otherwise: the DB pre-filter (and the index that serves it) is
+        // status='ok' AND transcript_en IS NULL, which counts every English
+        // transcript as pending. Sealand's 2026-09-20 run offered 1,564 rows,
+        // of which 178 were candidates and all 178 were attempted — the cap
+        // deferred nothing. Without this line that reads as 178 of a 400 cap.
         console.log(
-          `[translate] ${plan.needing} needed (${plan.retrying} re-attempts of a recorded failure) · ${translate.translated} translated · ${translate.english} already English · ${translate.failed} failed · ${plan.deferred} deferred by the cap · ~$${translate.cost.toFixed(3)} · ${langs}`,
+          `[translate] ${plan.needing} needed of ${plan.offered} offered ` +
+          `(${plan.excluded.english} already English, ${plan.excluded.exhausted} out of attempts) · ` +
+          `${plan.retrying} re-attempts of a recorded failure · ${translate.translated} translated · ${translate.english} detected English · ` +
+          `${translate.failed} failed · ${plan.deferred} deferred by the cap · ~$${translate.cost.toFixed(3)} · ${langs}`,
         )
       }
       // A translation changes what Pass A sees on exactly those videos, and the
@@ -1131,7 +1207,7 @@ export const runPipeline = inngest.createFunction(
     }
 
     const batches = passAPlan.batches
-    const passA = { analyzed: 0, claimsOnly: 0, skipped: 0, errored: 0, refused: 0, alreadyDone: 0, rateLimited: false, errors: [] as string[], batchesFailed: 0, insights: 0, languageSamples: 0, cost: 0, planned: passAPlan.selected, considered: passAPlan.considered, unchanged: passAPlan.reasons.unchanged, planReasons: passAPlan.reasons }
+    const passA = { analyzed: 0, claimsOnly: 0, skipped: 0, errored: 0, refused: 0, alreadyDone: 0, lengthRetries: 0, rateLimited: false, errors: [] as string[], batchesFailed: 0, insights: 0, languageSamples: 0, cost: 0, planned: passAPlan.selected, considered: passAPlan.considered, unchanged: passAPlan.reasons.unchanged, planReasons: passAPlan.reasons }
     // Batches dispatch in parallel waves — batches are disjoint video sets, so
     // ordering is irrelevant to output; this is purely wall-time (a serial
     // pass over a depth-100 corpus measured ~3 videos/min). Wave size stays
@@ -1154,14 +1230,14 @@ export const runPipeline = inngest.createFunction(
               // decides passAPromptVersion, and a flip between the plan step
               // and this one would stamp half the corpus with the other
               // version and force a full re-read next run.
-              const s = await runPassA({ clientId, runId, videoIds, persist: true, transcripts: flags.transcripts })
-              return { analyzed: s.videosAnalyzed, claimsOnly: s.videosClaimsOnly, skipped: s.videosSkipped, errored: s.videosErrored, refused: s.videosRefused, alreadyDone: s.videosAlreadyAnalyzed, rateLimited: s.rateLimited, errors: s.errors, insights: s.insightsKept, languageSamples: s.languageSamples, cost: s.costUsd, stepFailed: false }
+              const s = await runPassA({ clientId, runId, videoIds, persist: true, transcripts: flags.transcripts, ownPostAudience: flags.ownPostAudience })
+              return { analyzed: s.videosAnalyzed, claimsOnly: s.videosClaimsOnly, skipped: s.videosSkipped, errored: s.videosErrored, refused: s.videosRefused, alreadyDone: s.videosAlreadyAnalyzed, lengthRetries: s.lengthRetries, rateLimited: s.rateLimited, errors: s.errors, insights: s.insightsKept, languageSamples: s.languageSamples, cost: s.costUsd, stepFailed: false }
             })
             .catch((e: unknown) => {
               const message = e instanceof Error ? e.message : String(e)
               console.error(`[pass-a] batch ${w + j + 1}-of-${batches.length} out of retries: ${message}`)
               noteError(`pass-a:${w + j + 1}-of-${batches.length}`, e)
-              return { analyzed: 0, claimsOnly: 0, skipped: 0, errored: videoIds.length, refused: 0, alreadyDone: 0, rateLimited: false, errors: [message.slice(0, 200)], insights: 0, languageSamples: 0, cost: 0, stepFailed: true }
+              return { analyzed: 0, claimsOnly: 0, skipped: 0, errored: videoIds.length, refused: 0, alreadyDone: 0, lengthRetries: 0, rateLimited: false, errors: [message.slice(0, 200)], insights: 0, languageSamples: 0, cost: 0, stepFailed: true }
             }),
         ),
       )
@@ -1172,6 +1248,7 @@ export const runPipeline = inngest.createFunction(
         passA.errored += r.errored ?? 0
         passA.refused += r.refused ?? 0
         passA.alreadyDone += r.alreadyDone ?? 0
+        passA.lengthRetries += r.lengthRetries ?? 0
         passA.rateLimited = passA.rateLimited || Boolean(r.rateLimited)
         if (r.stepFailed) passA.batchesFailed++
         for (const m of r.errors ?? []) if (passA.errors.length < 5 && !passA.errors.includes(m)) passA.errors.push(m)
@@ -1197,6 +1274,83 @@ export const runPipeline = inngest.createFunction(
     if (passADegraded && passA.batchesFailed === 0) noteError('pass-a', passADegraded)
     else if (passADegraded) console.warn(`[pass-a] ${passADegraded} (already recorded as failed batch steps)`)
     else if (passA.errored > 0) console.warn(`[pass-a] ${passA.errored} video call(s) failed under the ${PASS_A_ERROR_RATIO * 100}% ratio; re-read next run. First: ${passA.errors[0] ?? ''}`)
+
+    // A VIDEO READ ON HALF ITS COMMENTS IS A FINDING, NOT AN ERROR. A call that
+    // hit PASS_A_MAX_OUTPUT_TOKENS was re-asked on half its refs and succeeded,
+    // so nothing failed and the status must not move — but the video's
+    // insights come from less of it than the denominator counts, and until now
+    // the only trace was a console.warn inside runPassA, which is the record
+    // that is gone from the host's retention within the hour (the same defect
+    // noteFinding was added for, one commit over, for nine dead caption
+    // actors). Recorded here, where the run can carry it.
+    if (passA.lengthRetries > 0) {
+      const say = `${passA.lengthRetries} video(s) hit the ${PASS_A_MAX_OUTPUT_TOKENS}-token output ceiling and were re-asked once on half their comments — their insights are read from less than the denominator counts`
+      console.warn(`[pass-a] ${say}`)
+      noteFinding('pass-a', say)
+    }
+
+    // 4g. QUOTE TRANSLATION (Phase 1 WP6, design item 8, 2026-09-18). Every
+    //     comment this tenant's CURRENT analysis cites gets a detected language
+    //     and, where it is not English, an English rendering — cached on
+    //     (comment, exact text) so a comment is paid for once and an edited one
+    //     is re-read.
+    //
+    //     Here, right after the Pass A wave and before embed-insights, for the
+    //     same reason that one sits where it does: every videos.analyzed_run_id
+    //     pointer has moved by now, so audience_insights_current means what it
+    //     says and the read reaches the whole cited corpus rather than only
+    //     what this run re-analysed. It cannot live inside pass-a:N-of-M — a
+    //     video whose analysis is already current never enters a batch again,
+    //     and its comments would never be translated.
+    //
+    //     Logged, NOT noteError'd — the embed-insights and keyword-discovery
+    //     precedent. A reading aid kept alongside the report must not make a
+    //     clean run read 'partial'; an uncached comment is simply offered again
+    //     next run, which is the retry. It is also a step that can run before
+    //     its migration is applied: until then it is a logged no-op that has
+    //     read nothing and spent nothing.
+    const quoteTranslation = { needing: 0, deferred: 0, translated: 0, english: 0, cached: 0, failed: 0, cost: 0, rateLimited: false }
+    {
+      const plan = await step
+        .run('plan-translate-quotes', () => planQuoteTranslations(clientId))
+        .catch((e) => {
+          console.error(`[translate-quotes] plan out of retries: ${e instanceof Error ? e.message : String(e)}`)
+          return { batches: [] as string[][], needing: 0, deferred: 0, comments: 0 }
+        })
+      quoteTranslation.needing = plan.needing
+      quoteTranslation.deferred = plan.deferred
+      for (let w = 0; w < plan.batches.length; w += TRANSLATE_QUOTES_PARALLEL) {
+        const wave = await Promise.all(
+          plan.batches.slice(w, w + TRANSLATE_QUOTES_PARALLEL).map((commentIds, j) =>
+            step
+              .run(`translate-quotes:${w + j + 1}-of-${plan.batches.length}`, () =>
+                translateQuotesBatch({ clientId, runId, commentIds, batchNo: w + j + 1 }),
+              )
+              // Per-step catch (the transcribe fan-out's precedent): one batch
+              // out of retries must not abandon the rest, and its comments stay
+              // uncached and are re-planned next run.
+              .catch((e: unknown) => ({
+                translated: 0, english: 0, cached: 0, failed: commentIds.length, costUsd: 0, rateLimited: false,
+                errors: [`translate-quotes step failed: ${e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200)}`],
+              })),
+          ),
+        )
+        for (const r of wave) {
+          quoteTranslation.translated += r.translated
+          quoteTranslation.english += r.english
+          quoteTranslation.cached += r.cached
+          quoteTranslation.failed += r.failed
+          quoteTranslation.cost += r.costUsd
+          if (r.rateLimited) quoteTranslation.rateLimited = true
+          for (const err of r.errors) console.warn(`[translate-quotes] ${err}`)
+        }
+      }
+      if (plan.needing) {
+        console.log(
+          `[translate-quotes] ${plan.needing} texts needed across ${plan.comments} comments · ${quoteTranslation.translated} translated · ${quoteTranslation.english} already English · ${quoteTranslation.cached} already cached · ${quoteTranslation.failed} not placed · ${quoteTranslation.deferred} deferred by the cap${quoteTranslation.rateLimited ? ' · RATE LIMITED' : ''} · ~$${quoteTranslation.cost.toFixed(3)}`,
+        )
+      }
+    }
 
     // Keep the agent's retrieval index current (Phase 0, design item 36). Here,
     // right after the Pass A wave: every videos.analyzed_run_id pointer has
@@ -1228,6 +1382,98 @@ export const runPipeline = inngest.createFunction(
         console.error(`[embed-insights] out of retries: ${e instanceof Error ? e.message : String(e)}`)
         return null
       })
+
+    // 4c. Subject membership (Phase 1, design item 4). Directly after
+    //     embed-insights, because it reads the vectors that step writes; well
+    //     before themes:<bucket>, the step that cannot afford more work.
+    //
+    //     TWO ADDITIVE IDS, each in its own position, never a rename or a
+    //     reorder: `plan-subject-membership` and `subject-membership:N-of-M`.
+    //     The plan step exists for the same reason plan-classify, plan-pass-a
+    //     and plan-themes do — Inngest needs the fan-out width before it can
+    //     create the steps, and a read outside a step would re-run at every
+    //     step boundary for the rest of the function.
+    //
+    //     M is the number of ACTIVE SUBJECTS, not a batch count: 5-8, bounded,
+    //     and the same on a retry because loadActiveSubjects orders by
+    //     (named_at, id). Each step reads its own band with one RPC call and
+    //     judges it in batches of twenty inside the step, so a subject's whole
+    //     decision is one retryable unit and one bad subject does not cost the
+    //     other seven.
+    //
+    //     Logged, NOT noteError'd — the keyword-discovery precedent, the same
+    //     one embed-insights and freeze-months take. A subject reading is a
+    //     record the run maintains alongside the report, and a clean run must
+    //     not close `partial` because a judgement pass had a bad day; the pairs
+    //     are still undecided next run, which IS the retry.
+    //
+    //     No-op when M4 is not applied, and a REFUSAL rather than a low number
+    //     when insight embedding coverage is short — see lib/subjects/membership.ts.
+    const subjectPlan = await step
+      .run('plan-subject-membership', async () => {
+        const admin = createAdminClient()
+        try {
+          const named = await loadActiveSubjects(admin, clientId)
+          // Counted once here rather than once inside each fan-out step: it is
+          // two count=exact queries over the whole insight population and it is
+          // a property of the PASS, not of a subject.
+          const coverage = named.length > 0 ? await embeddingCoverage(admin, clientId) : null
+          // The phrase vectors, here rather than in each batch step: 5-8 texts
+          // is one embeddings request and about half a millionth of a dollar,
+          // and every band read below is meaningless without them. Re-read
+          // afterwards so each step carries its subject's real embedding state
+          // — a subject that has just been given a vector must not arrive at
+          // its step still looking like one that never had one.
+          if (await embedSubjects(admin, named) > 0) {
+            return { subjects: await loadActiveSubjects(admin, clientId), coverage }
+          }
+          return { subjects: named, coverage }
+        } catch (e) {
+          if (!isMissingSubjects(e)) throw e
+          console.log('[subject-membership] skipped: supabase/migrations/20260918093000_subjects.sql has not been applied yet')
+          return { subjects: [], coverage: null }
+        }
+      })
+      .catch((e) => {
+        console.error(`[subject-membership] plan failed, skipping: ${e instanceof Error ? e.message : String(e)}`)
+        return { subjects: [], coverage: null }
+      })
+    const subjects = subjectPlan.subjects
+    const subjectCoverage = subjectPlan.coverage ?? undefined
+    //
+    //     THE CEILING IS THE PASS'S, NOT EACH SUBJECT'S. subjectBudgetUsd() is
+    //     5% of RUN_MODEL_BUDGET_USD — $3 at the default $60 — and it is a
+    //     ceiling on the whole membership pass, which measures $0.17. Handing
+    //     every fan-out step the full $3 would make the real ceiling $24 at
+    //     eight subjects, eight times what SUBJECT_BUDGET_SHARE documents, and
+    //     assertWithinBudget would not catch it: it only trips at $60, by
+    //     which point the run fails and emails. So each step is given what is
+    //     LEFT of the pass, summed off the previous steps' own results. The
+    //     arithmetic is deterministic on a replay, because a memoised step
+    //     returns the same costUsd it returned the first time.
+    const passBudget = subjectBudgetUsd()
+    let subjectSpend = 0
+    const subjectOutcomes: MembershipOutcome[] = []
+    for (let i = 0; i < subjects.length; i++) {
+      const subject = subjects[i]
+      const budgetUsd = Math.max(0, passBudget - subjectSpend)
+      const r = await step
+        .run(`subject-membership:${i + 1}-of-${subjects.length}`, async () => {
+          const admin = createAdminClient()
+          const r = await judgeSubject(admin, subject, { clientId, runId, budgetUsd, coverage: subjectCoverage })
+          console.log(`[subject-membership] ${membershipSummary(r)}`)
+          return r
+        })
+        .catch((e) => {
+          console.error(`[subject-membership] ${subject.name} out of retries: ${e instanceof Error ? e.message : String(e)}`)
+          return null
+        })
+      subjectSpend += r?.costUsd ?? 0
+      subjectOutcomes.push(r)
+    }
+    if (subjectSpend > 0) {
+      console.log(`[subject-membership] pass spent $${subjectSpend.toFixed(4)} of its $${passBudget.toFixed(2)} ceiling`)
+    }
 
     // 5. Cross-reference detection — client-brand mentions under competitor /
     //    industry videos (deterministic regex, no GPT).
@@ -1289,7 +1535,15 @@ export const runPipeline = inngest.createFunction(
     // Persist with first_seen from mini theme-matching — the themes table is
     // the boundary the synthesis step reads back across.
     const persisted = await step.run('persist-themes', () =>
-      persistThemes(clientId, runId, themed.allThemes, { themeRegistry: flags.themeRegistry }),
+      // The RUN's Pass A version, off its frozen flags — not the environment's.
+      // A flag flipped mid-run would otherwise stamp observations with a regime
+      // the corpus was never read under, which is the one thing the stamp is
+      // for (the same reason flags.themeRegistry travels rather than being
+      // re-read here).
+      persistThemes(clientId, runId, themed.allThemes, {
+        themeRegistry: flags.themeRegistry,
+        promptVersion: passAPromptVersion(flags.transcripts),
+      }),
     )
     // COUNTED, though the step itself succeeded. The registry block inside
     // persistThemes catches its own failures so a client's update never dies on
@@ -1317,26 +1571,105 @@ export const runPipeline = inngest.createFunction(
     // run must not read 'partial' because a bookkeeping pass had a bad day. It
     // is also the step that can run before its migration has been applied:
     // until then it is a logged no-op rather than a retry loop holding a slot.
+    const subjectHold = subjectFreezeHold(subjectOutcomes)
     await step
       .run('freeze-months', async () => {
         const admin = createAdminClient()
         try {
           const months = monthsToRefresh(new Date().toISOString(), await fillingMonths(admin, clientId))
-          const r = await freezeMonths(admin, { clientId, runId, months })
+          // The subject side rides in the SAME visit, not beside it: the
+          // denominator's freeze is what closes an audience-month to new rows,
+          // so every numerator has to be written before it. A separate subject
+          // freeze running afterwards would be refused by the insert guard,
+          // correctly and permanently. The same is true of M5's kinds and
+          // audience stats, which freezeMonths builds itself because they need
+          // the attention panel it resolves.
+          //
+          // Unless the judgement that feeds it said it was short. A membership
+          // refusal protects its own table and nothing else — memberships
+          // persist between runs, so the reading here is not empty but SHORT,
+          // and a short month frozen by this visit can never be corrected.
+          // Better no subject row: a month that closes without one keeps
+          // decision K's single later chance.
+          //
+          // The actor lets this visit freeze the tenant's first attention panel
+          // (WP5). It is a configuration write and every configuration write
+          // carries one; without it an existing panel is still read and none is
+          // ever created.
+          if (subjectHold) console.warn(`[freeze-months] subject months NOT written — ${subjectHold}`)
+          const r = await freezeMonths(admin, {
+            clientId, runId, months,
+            sides: subjectHold ? [] : [subjectMonthSide(admin, clientId)],
+            actor: pipelineActor(runId, 'freeze-months'),
+          })
+          const sideCounts = Object.entries(r.sides)
+            .map(([table, side]) => `${table} ${side.written} written (${side.frozen} now frozen, ${side.keptFrozen} already frozen and left alone, ${side.deleted} dropped)`)
+            .join(' · ')
           console.log(
             `[freeze-months] ${r.months.join(' ')} · denominators ${r.denominators.written} written ` +
             `(${r.denominators.frozen} now frozen, ${r.denominators.keptFrozen} already frozen and left alone, ` +
-            `${r.denominators.deleted} dropped) · themes ${r.themes.written} written ` +
-            `(${r.themes.frozen} now frozen, ${r.themes.keptFrozen} already frozen and left alone, ` +
-            `${r.themes.deleted} dropped)`,
+            `${r.denominators.deleted} dropped) · ${sideCounts}` +
+            `${r.panelFrozen ? ' · attention panel frozen' : ''}` +
+            `${r.skippedKindMoodAttention ? ' · kinds/mood/attention skipped: M5 not applied' : ''}`,
           )
+          const all = [r.denominators, ...Object.values(r.sides)]
+          // The ids behind those numbers, said separately (item 31a). An
+          // operator reading this log is the only person who will ever see
+          // whether "which videos was this read on" was answerable for these
+          // months, and `refusedLate` is the number that says the record
+          // declined to take a point.
+          const refs = r.evidenceRefs
+          // A FAILURE IS NOT A ZERO, AND THIS BRANCH READ IT AS ONE. `freezeMonths`
+          // returns `{...emptyEvidenceRefSummary(), failed: why}` when the refs
+          // freeze throws — so `missing` is false and every counter is 0, and
+          // the Sunday run that closes real months printed "evidence ids 0
+          // written (0 now frozen, … )", indistinguishable from "there was
+          // nothing to write". scripts/monthly-reading.ts shouts about exactly
+          // this (Block A's fix 67d8f67); this visit was never taught to.
+          //
+          // It is the one shot: a month that closes without its ids can never
+          // be given them later. `stillFilling` is the script's other warning
+          // and is said here for the same reason — nothing revisits those rows.
+          console.log(
+            refs === undefined
+              ? '[freeze-months] evidence ids: not attempted — this visit has no run to attribute a clustering to'
+              : refs.failed
+                ? `[freeze-months] evidence ids: THE FREEZE FAILED — ${refs.failed} · the months are frozen and their ids are not, and a month that closes without its ids cannot be given them later. Fix the cause and re-run scripts/monthly-reading.ts --write BEFORE any further month freezes.`
+                : refs.missing
+                  ? '[freeze-months] evidence ids: skipped — 20260918095000_quote_translations.sql has not been applied yet'
+                  : `[freeze-months] evidence ids ${refs.written} written (${refs.frozen} now frozen, ` +
+                    `${refs.keptFrozen} already frozen and left alone, ${refs.deleted} dropped, ` +
+                    `${refs.refusedLate} refused because their months have closed) · ` +
+                    `${refs.videoIds} videos and ${refs.commentIds} comments named`,
+          )
+          if (refs && !refs.failed && refs.stillFilling > 0) {
+            console.log(
+              `[freeze-months] WARNING: ${refs.stillFilling} evidence-id rows are still 'filling' in audience-months that have already closed. ` +
+              'Nothing revisits them — month_evidence_refs is not in MONTH_TABLES. Re-run scripts/monthly-reading.ts over those months to repair them.',
+            )
+          }
           return {
             months: r.months.length,
             denominators: r.denominators.written,
             themes: r.themes.written,
-            frozen: r.denominators.frozen + r.themes.frozen,
-            keptFrozen: r.denominators.keptFrozen + r.themes.keptFrozen,
-            heldStale: r.denominators.heldStale + r.themes.heldStale,
+            kinds: r.kinds.written,
+            stats: r.stats.written,
+            panelFrozen: r.panelFrozen,
+            frozen: all.reduce((n, s) => n + s.frozen, 0),
+            keptFrozen: all.reduce((n, s) => n + s.keptFrozen, 0),
+            heldStale: all.reduce((n, s) => n + s.heldStale, 0),
+            refusedLate: all.reduce((n, s) => n + s.refusedLate, 0),
+            // `failed` and `stillFilling` ride on the RETURN as well as in the
+            // log, because the return object is what an operator sees in the
+            // Inngest UI — and without them the step read green while the log
+            // two lines up said the record was lost.
+            evidenceRefs: refs
+              ? {
+                  written: refs.written, frozen: refs.frozen, refusedLate: refs.refusedLate,
+                  videoIds: refs.videoIds, commentIds: refs.commentIds, missing: refs.missing,
+                  stillFilling: refs.stillFilling, failed: refs.failed ?? null,
+                }
+              : null,
           }
         } catch (e) {
           // Its tables and functions do not exist yet: a no-op, not a failure.
@@ -1350,6 +1683,54 @@ export const runPipeline = inngest.createFunction(
       })
       .catch((e) => {
         console.error(`[freeze-months] out of retries: ${e instanceof Error ? e.message : String(e)}`)
+        return null
+      })
+
+    // The anomaly check (design item 40, decision S). HERE, between
+    // freeze-months and owned-events, for two reasons and not by taste: it
+    // reads the month rows freeze-months has just written, and it wants this
+    // run's themes exactly as owned-events does. An ADDITIVE id in its own
+    // position — never a rename, a renumber or a reorder (AGENTS.md).
+    //
+    // Logged, NOT noteError'd — the freeze-months and keyword-discovery
+    // precedent. The flags are a record kept alongside the report, and a clean
+    // update must not read 'partial' because a bookkeeping pass had a bad day.
+    // A no-op, not a retry loop, until its migration is applied.
+    //
+    // THE ORDER IS ALSO WHAT GUARANTEES THE WEEKLY REPORT SEES THE FLAGS.
+    // `report/send.requested` is emitted after close-run, which is after this;
+    // so the rows are on disk before the report function starts.
+    //
+    // ONE MODEL CALL, AND ONLY IF SOMETHING FIRED. gpt-4.1-mini, ~$0.0014 on a
+    // week that flags and $0 on the ~21 of 22 tenant-weeks that do not.
+    //
+    // AND ONE ROW EVERY TIME, flagged or not, compared or not
+    // (`anomaly_checks`): a week the check refused to read has a reason, and a
+    // reason that only reaches this log is a reason nobody has.
+    await step
+      .run('anomaly-check', async () => {
+        const r = await runAnomalyCheck({
+          clientId,
+          runId,
+          window: runWindow,
+          // The videos this update held. `pipeline_runs.videos_scraped` is the
+          // same measure on the trailing runs — and is not written until
+          // close-run, which is why it is passed in rather than read.
+          updateVideos: totalVideos,
+        })
+        console.log(`[anomaly-check] ${r.status} — ${r.note}`)
+        if (r.registration) {
+          console.log(
+            `[anomaly-check] set: ${r.registration.counts.kind} kinds · ${r.registration.counts.rival} rivals · ` +
+            `${r.registration.counts.subject} subjects · ${r.registration.counts.theme} themes ` +
+            `(${r.registration.trimmed.length} of ${r.registration.ranked} ranked themes could not reach ` +
+            `${r.registration.minWeekVideos} videos in a typical week of ${Math.round(r.registration.medianWeekVideos[SLICE] ?? 0)})`,
+          )
+        }
+        return { status: r.status, written: r.written, flagged: r.reading?.flaggedCount ?? 0, costUsd: r.costUsd }
+      })
+      .catch((e) => {
+        console.error(`[anomaly-check] out of retries: ${e instanceof Error ? e.message : String(e)}`)
         return null
       })
 
@@ -1477,7 +1858,10 @@ export const runPipeline = inngest.createFunction(
           status: runCloseStatus(totalErrors),
           videos_scraped: totalVideos,
           completed_at: completedAt,
-          errors: runErrors,
+          // Findings ride along only on a run that is already partial — see
+          // closingErrors. error_message stays keyed to the COUNTED errors, so
+          // "N step errors" keeps meaning N steps failed.
+          errors: closingErrors(totalErrors, runErrors, runFindings),
           error_message: summariseRunErrors(totalErrors, runErrors),
           ...extra,
         }).eq('id', runId)
@@ -1542,13 +1926,40 @@ export const runPipeline = inngest.createFunction(
     //    close-run on purpose: the dashboard flips to this run on that status
     //    write, so the previous run's quotes resolve right up to the flip. Only
     //    completed/partial runs reach here (a failed run's stale rows wait for
-    //    the next successful close). Non-fatal and uncounted — leftovers are
-    //    harmless, just storage.
+    //    the next successful close). Non-fatal and uncounted — a leftover is
+    //    just storage.
+    //
+    //    IT DOES NOT TAKE CITED EVIDENCE (2026-09-18). The "leftovers are
+    //    harmless" this comment used to end on was true when nothing pointed at
+    //    a superseded row. Recommendations, plan checks, saved Ask answers and
+    //    frozen exports all do now, so citedEvidenceIds resolves what still
+    //    cites what and staleInsightIds never returns one of those rows. Same
+    //    step id, same position, one function body — see the note in
+    //    citedEvidenceIds for the four classes it protects, the two it
+    //    deliberately does not, and why each is resolved the way it is.
+    //
+    //    ITS FAILURE SURFACE GREW WITH THAT, AND THE FAILURE IS QUIET. The
+    //    cited-set walk alone is EIGHT table reads — recommendations, both
+    //    insight tables, both plan-check tables, agent_messages,
+    //    report_snapshots, insight_evidence — on top of the videos and rows
+    //    reads the step always did, and every one of them happens before the
+    //    first delete. Any one throwing — a schema-cache miss, a malformed
+    //    stored id, a PostgREST hiccup — takes it here. Non-fatal and uncounted
+    //    is still the right trade (fail-closed costs storage; the alternative
+    //    costs evidence, which is unrecoverable), but the shape of the failure is
+    //    "prunes nothing, on this run and every later one, until someone reads
+    //    the log". Deliberately not noteError'd — the keyword-discovery
+    //    precedent: a record kept alongside the report must not make a clean
+    //    run read 'partial'. The log line below is the only surface that says
+    //    so, so it says it plainly.
     const pruned = await step
       .run('prune-stale-analysis', () => pruneStaleAnalysis(clientId))
       .catch((e) => {
-        console.error(`[prune-stale-analysis] out of retries: ${e instanceof Error ? e.message : String(e)}`)
-        return { insights: 0, languageSamples: 0, failed: true }
+        console.error(
+          `[prune-stale-analysis] out of retries — NOTHING was pruned this run, and nothing will be ` +
+          `on any later run until this succeeds: ${e instanceof Error ? e.message : String(e)}`,
+        )
+        return { insights: 0, languageSamples: 0, keptInsights: 0, keptSamples: 0, failed: true }
       })
 
     // 8. Periodic report — only when requested (the scheduler sets this), so a
@@ -1571,12 +1982,23 @@ export const runPipeline = inngest.createFunction(
           const admin = createAdminClient()
           const { data: client } = await admin.from('clients')
             .select('company_name').eq('id', clientId).maybeSingle()
+          // WHAT THE RUN LEFT BEHIND, counted here rather than only by the ops
+          // check (`run_incomplete` is 'completed'-only, deliberately, and that
+          // is left alone). Three head counts inside a step that already reads
+          // the database — no new step id, no new query round when the run is
+          // clean, since this whole block is skipped then. Counted AFTER
+          // write-run-costs, which is the step immediately above, or `costs`
+          // would read 0 on every partial run and say so.
+          const rows = await runRowCounts(admin, runId)
           const { subject, text } = partialRunAlert({
             runId,
             clientName: client?.company_name ?? clientId,
             total: totalErrors,
             recorded: runErrors,
+            findings: runFindings,
             reportSent: Boolean(options.sendReport),
+            rows,
+            themeRegistry: flags.themeRegistry,
           })
           return sendAlertEmail(subject, text)
         })
@@ -1589,6 +2011,47 @@ export const runPipeline = inngest.createFunction(
     return { runId, status: runCloseStatus(totalErrors), totalVideos, ...passA, transcriptBackfill: backfill, translation: translate, onScreenText: ocr, classifyMeta: classify, brandMentions: crossRef.mentionsFlagged, ...themedSummary, ...synth, pruned }
   },
 )
+
+/**
+ * The three rows a finished run is judged by, for the partial-run alert.
+ *
+ * The same counts `/api/cron/ops-check` takes for `run_incomplete`, minus the
+ * groundedness arm: that one needs every `based_on.insight_ids` plus both
+ * insight tables' ids, which is four more reads for a number the alert would
+ * print in one clause. `missingRunRows` reads an absent
+ * `ungroundedRecommendations` as "not counted", never as zero, so leaving it
+ * out states less rather than states something false.
+ *
+ * Returns null when any count could not be read — "we did not look" and "there
+ * is nothing there" are exactly the two answers this email exists to tell
+ * apart, so a failed read must not arrive looking like a zero.
+ */
+async function runRowCounts(
+  admin: ReturnType<typeof createAdminClient>,
+  runId: string,
+): Promise<{ observations: number; recommendations: number; costs: number } | null> {
+  // COUNT THE COLUMN EVERY ONE OF THE THREE HAS, WHICH IS `run_id` AND NOT
+  // `id`. `run_costs` is keyed by run_id alone and carries no `id` column, so
+  // selecting that one made PostgREST answer 42703, `head` returned null, and
+  // the whole of runRowCounts returned null — the alert printed "(not counted)" on
+  // EVERY partial run and never once stated what the run left behind. The
+  // column that is always there is the one being filtered on; it is also what
+  // `app/api/cron/ops-check/route.ts`'s head() has selected since WP2.
+  const head = async (table: string): Promise<number | null> => {
+    const { count, error } = await admin.from(table)
+      .select('run_id', { count: 'exact', head: true }).eq('run_id', runId)
+    if (error) {
+      console.warn(`[alert-partial] counting ${table} for run ${runId}: ${error.message}`)
+      return null
+    }
+    return count ?? 0
+  }
+  const [observations, recommendations, costs] = await Promise.all([
+    head('theme_observations'), head('recommendations'), head('run_costs'),
+  ])
+  if (observations === null || recommendations === null || costs === null) return null
+  return { observations, recommendations, costs }
+}
 
 /** What plan-owned reports when a tenant has no handles configured, or the
  *  step itself failed — no accounts to read, no window to read them over. */
@@ -1695,10 +2158,13 @@ export interface PassAPlan {
 
 async function planPassABatches(clientId: string, runId: string, force: boolean, flags: RunFlags): Promise<PassAPlan> {
   const admin = createAdminClient()
-  // Discovered corpus + the client's OWN posts. Owned posts never take the
-  // full lane (their fans' comments would contaminate audience themes; Step 2c
-  // is their consumer) — passALane admits them to the claims lane only, when
-  // they carry a usable transcript (Brand Voice, 2026-08-16).
+  // Discovered corpus + the client's OWN posts. An own post takes the full
+  // lane like any other video when it clears the comment floor and
+  // `flags.ownPostAudience` is on (default): its insights key under the
+  // `client` audience and can never reach another — segmented by audience key,
+  // never blended (fix/client-audience, 2026-09-24). With the flag off it
+  // falls back to the claims lane when it carries a usable transcript (Brand
+  // Voice, 2026-08-16). A COMPETITOR's own posts are claims-lane always.
   type PlanVideo = {
     id: string; platform: string; video_id: string; is_client: boolean | null; is_competitor: boolean | null
     transcript_status: string | null; source: string | null; run_id: string | null
@@ -1816,7 +2282,7 @@ async function planPassABatches(clientId: string, runId: string, force: boolean,
     // is a title card is the case this exists for — but it IS read only on the
     // v4 prompt, so the transcripts flag still governs whether Pass A sees it.
     const ocrUsableNow = withTranscripts && withOcrText.has(v.id)
-    const lane = passALane({ ...v, transcript_status: withTranscripts ? v.transcript_status : null }, n)
+    const lane = passALane({ ...v, transcript_status: withTranscripts ? v.transcript_status : null }, n, undefined, { ownPostAudience: flags.ownPostAudience })
     if (lane === 'skip') continue
     considered++
     if (!incremental && lane === 'claims_only' && v.run_id !== runId) { reasons.unchanged++; continue }
@@ -1831,21 +2297,268 @@ async function planPassABatches(clientId: string, runId: string, force: boolean,
   return { batches, considered, selected: eligible.length, reasons }
 }
 
+/**
+ * What a prune MAY NOT TAKE: the `audience_insights` / `language_samples` rows
+ * something stored still points at.
+ *
+ * THE DEFECT THIS CLOSES (2026-09-18). `prune-stale-analysis` removes every row
+ * a later re-read superseded, and its own comment called the leftovers
+ * "harmless, just storage" — true when nothing cited them. Things cite them
+ * now: all twelve of Sealand's oldest recommendations, every row its advice
+ * ledger actually draws, had lost every `audience_insights` row beneath them,
+ * so "Grounded in" resolved to zero live videos down the whole page.
+ *
+ * FAIL CLOSED. Everything here is loaded BEFORE the first delete, so a read
+ * that fails takes the step to its retry and then to its non-fatal catch with
+ * nothing deleted. Deleting less than we could is a storage cost; deleting a
+ * cited row is unrecoverable.
+ *
+ * THE FOUR CITATION CLASSES, and why each is resolved the way it is:
+ *
+ *  1. RECOMMENDATIONS, a two-link chain. `recommendations.based_on.insight_ids`
+ *     names insight rows, and it MIXES `market_insights` (M#) and
+ *     `competitive_insights` (C#) ids — the resolution lib/pipeline/pass-d.ts
+ *     writes, and the same reason app/api/cron/ops-check/route.ts unions both
+ *     tables. Their `evidence.supporting_theme_ids` then holds the
+ *     `audience_insights` ids (scripts/citation-floor.ts states that mapping).
+ *     ONLY THE SECOND LINK IS PROTECTED HERE, and the first needs no protecting
+ *     by this step: it deletes `audience_insights` and `language_samples` and
+ *     nothing else, so no `market_insights` / `competitive_insights` row is at
+ *     risk from a prune. Those two tables ACCUMULATE across runs — lib/pipeline/
+ *     pass-d.ts:695 and lib/pipeline/pass-c.ts:285 delete only THEIR OWN run's
+ *     rows before re-inserting — which is why 329 of 334 stored refs still
+ *     resolved when this was measured. The one way the first link breaks is
+ *     documented at lib/pipeline/pass-d.ts:878-895: a D-b retry that fails
+ *     after `market_insights` was re-inserted with fresh ids leaves the
+ *     surviving recommendations' `based_on` pointing at rows that are gone.
+ *     That hole is real, it is deliberate ("degraded beats empty"), and it is
+ *     not this step's to close — a row whose market insight is itself gone
+ *     reaches lib/reading/afterwards.ts as an empty `based_on`, which is what
+ *     `GroundingInput.cited` exists to tell from the other absence.
+ *
+ *  2. PLAN CHECKS, both tables. `plan_checks.claims[].insightIds` is the
+ *     upload's reading and `plan_check_evaluations.claims[].insightIds` each
+ *     re-check's; `currentReading` (lib/ask/plan-cards.ts) prints the newest
+ *     evaluation that has claims and FALLS BACK to the upload's, so protecting
+ *     only one of the two leaves the other printing a card with no voices.
+ *
+ *  3. SAVED ASK ANSWERS. `agent_messages.result.grounded[].insightIds` stores
+ *     the ids an answer was grounded on and stores NO quote text — the column's
+ *     own comment says so in as many words, and lib/pages/agent-thread.ts
+ *     resolves the words live by comment id through `insight_evidence`, which
+ *     cascades from `audience_insights`. The quotes under a grounded point come
+ *     only from THAT point's own live insight ids (lib/agent/enforce.ts builds
+ *     them from `insights = live.map(...)`, its dedup fallback included), so
+ *     protecting `insightIds` is exactly what keeps a reopened thread's quotes
+ *     resolving. Id-exact like classes 1 and 2, on the surface a client reopens
+ *     most often — NOT the `c:`/`v:`/`m:` case below, which stores no row id.
+ *     Only role='agent' rows carry a `result`; a user's message is the question
+ *     they typed.
+ *
+ *  4. FROZEN SNAPSHOT QUOTES. `report_snapshots.evidence_ids` repeats the refs
+ *     in the stored artefact (lib/renderables/quotes-freeze.ts). Two of the ref
+ *     kinds name a row this prune can delete, and both are id-exact:
+ *     `e:<insight_evidence.id>`, which cascades from `audience_insights` and so
+ *     resolves back through it, and `p:<language_samples.id>`, which IS one of
+ *     these rows. The brief listed snapshots as a named non-goal to be measured
+ *     rather than fixed, "unless the count says it is the same one-line set
+ *     union". It is the same set union — `p:` needs no resolution at all and
+ *     `e:` needs one chunked select — so it is done here rather than left as a
+ *     second defect of the same shape. This is also why `language_samples` is
+ *     protected at all: it carries no OTHER citation path, but a stored export
+ *     names its rows by id.
+ *
+ *     "REPEATS THE REFS" IS TRUE SINCE 2026-08-31, AND THE DATE IS
+ *     LOAD-BEARING. Before T11 `createSnapshot` froze the workings' quotes and
+ *     threw their refs away, so a pre-T11 snapshot's `evidence_ids` carries only
+ *     what its PAGES cite — this class is therefore exactly as complete as
+ *     scripts/backfill-evidence-ids.ts --apply left it. The write path is fixed,
+ *     so every new snapshot is whole. The alternative, `collectQuoteRefs` over
+ *     `data` / `workings`, means selecting every snapshot's entire jsonb on
+ *     every run and is not worth it for a repaired window. Named here so the
+ *     dependency is not rediscovered as a bug.
+ *
+ * WHAT IS DELIBERATELY NOT PROTECTED — read this before treating the four above
+ * as all of them. Each exclusion is a judgement, and an unrecorded judgement
+ * reads as an oversight to whoever finds the path next:
+ *
+ *  a. THEME MEMBERS. `theme_observations.member_insight_ids` is a fifth
+ *     id-exact path into `audience_insights`: `monthly_theme_readings` walks it
+ *     to `insight_evidence` to `comments`
+ *     (supabase/migrations/20260915092000_monthly_reading.sql). It is NOT
+ *     protected and should not be — a run's themes name most of that run's
+ *     corpus, so protecting members would retain nearly everything and the
+ *     prune would stop being a prune. The monthly reading is built for this
+ *     already: its own header measures 18.2% of stored member references
+ *     dangling, 20260918091000_theme_key.sql:87 measures 20.2% at one run old,
+ *     and that is the stated reason `member_video_ids` became the PRIMARY
+ *     matching key — a video id survives a re-read, an insight id does not.
+ *
+ *  b. `c:` / `v:` / `m:` SNAPSHOT REFS, and the comment ids stored beside a
+ *     saved answer's insight ids. These name no row at all: they resolve by
+ *     SEARCHING `insight_evidence` for a live excerpt on that comment or video.
+ *     So they keep resolving IF the re-read produced evidence on that comment —
+ *     a Pass A re-read is free to quote different comments entirely, and
+ *     nothing guarantees it did. The honest reading is "usually still resolves,
+ *     possibly to a DIFFERENT excerpt, sometimes to nothing", and whether a
+ *     frozen export may change its quoted words is a real and separate
+ *     question. They cannot be added to the protected set by id; they have no
+ *     id. What class 3 protects is the insight ids stored ALONGSIDE them, which
+ *     is what makes a saved answer's quotes hold.
+ *
+ *  c. `k:` / `t:` / `h:` / `b:` refs read `video_claims`, `videos.ocr_text`, a
+ *     hero row and `run_summary`, none of which this step touches. `t:` is the
+ *     newest of them (Block D wave 2, lib/renderables/quotes-freeze.ts, written
+ *     by lib/pages/overview.ts's on-screen line) and is named here rather than
+ *     left to the reader because this arm is the answer to "is that all of
+ *     them": with `e:` and `p:` protected in class 4 and `c:` / `v:` / `m:` in
+ *     (b), these four close the ref set, so a kind absent from every arm reads
+ *     as an oversight whether or not it is one. A NEW REF KIND JOINS THIS LINE
+ *     OR A PROTECTED CLASS, NEVER NEITHER.
+ *
+ * A FIFTH protected class means re-opening this list and AGENTS.md, not
+ * appending a set union to the code.
+ */
+async function citedEvidenceIds(
+  admin: ReturnType<typeof createAdminClient>,
+  clientId: string,
+): Promise<{ insights: Set<string>; languageSamples: Set<string>; from: Record<string, number> }> {
+  // COUNTED ONE WAY, AND THIS IS WHICH: each class gets its OWN set, counted on
+  // its own, and the protected set is their union at the end. The classes
+  // OVERLAP heavily — one insight is routinely cited by a recommendation and by
+  // a plan check — so the per-class figures do not add up to the union and the
+  // log line says so. The first shape of this function counted FIRST
+  // ATTRIBUTION instead ("new to the set when this class reached it"), which is
+  // order-dependent and reads as a class total: on the two measured tenants
+  // 5,445 + 1,750 + 6 first-attribution ids stood against a distinct union of
+  // 6,107, so ~1,094 ids would have changed class if these blocks were
+  // reordered. Repo rule, verbatim: count them one way and say which.
+  const cls = {
+    recommendations: new Set<string>(),
+    planChecks: new Set<string>(),
+    savedAnswers: new Set<string>(),
+    snapshots: new Set<string>(),
+  }
+  const languageSamples = new Set<string>()
+
+  // 1. Recommendations → market/competitive insights → audience insights.
+  const recs = await selectAll<{ id: string; based_on: { insight_ids?: string[] } | null }>(() =>
+    admin.from('recommendations').select('id, based_on').eq('client_id', clientId).order('id', { ascending: true }),
+  )
+  const containers = new Set<string>()
+  for (const r of recs) for (const id of r.based_on?.insight_ids ?? []) if (typeof id === 'string' && id) containers.add(id)
+  for (const table of ['market_insights', 'competitive_insights'] as const) {
+    // Chunk 200 for the same PostgREST URL-length reason as the deletes below.
+    // A 200-id chunk can return at most 200 rows (`id` is the primary key), so
+    // the 1000-row default cap on a bare `.select()` is never in play here.
+    for (const part of chunk([...containers], 200)) {
+      const { data, error } = await admin.from(table).select('id, evidence').eq('client_id', clientId).in('id', part)
+      if (error) throw new Error(`cited ${table}: ${error.message}`)
+      for (const row of (data ?? []) as { evidence: { supporting_theme_ids?: string[] } | null }[]) {
+        for (const id of row.evidence?.supporting_theme_ids ?? []) {
+          if (typeof id === 'string' && id) cls.recommendations.add(id)
+        }
+      }
+    }
+  }
+
+  // 2. Plan checks — the upload's claims and every re-evaluation's.
+  for (const table of ['plan_checks', 'plan_check_evaluations'] as const) {
+    const rows = await selectAll<{ id: string; claims: unknown }>(() =>
+      admin.from(table).select('id, claims').eq('client_id', clientId).order('id', { ascending: true }),
+    )
+    for (const row of rows) {
+      if (!Array.isArray(row.claims)) continue
+      for (const claim of row.claims as { insightIds?: unknown }[]) {
+        if (!claim || !Array.isArray(claim.insightIds)) continue
+        for (const id of claim.insightIds) {
+          if (typeof id === 'string' && id) cls.planChecks.add(id)
+        }
+      }
+    }
+  }
+
+  // 3. Saved Ask answers — the ids each grounded point rests on.
+  const answers = await selectAll<{ id: string; result: unknown }>(() =>
+    admin.from('agent_messages').select('id, result')
+      .eq('client_id', clientId).eq('role', 'agent').not('result', 'is', null)
+      .order('id', { ascending: true }),
+  )
+  for (const a of answers) {
+    const grounded = (a.result as { grounded?: unknown } | null)?.grounded
+    if (!Array.isArray(grounded)) continue
+    for (const point of grounded as { insightIds?: unknown }[]) {
+      if (!point || !Array.isArray(point.insightIds)) continue
+      for (const id of point.insightIds) {
+        if (typeof id === 'string' && id) cls.savedAnswers.add(id)
+      }
+    }
+  }
+
+  // 4. Frozen snapshot quotes.
+  const snapshots = await selectAll<{ id: string; evidence_ids: string[] | null }>(() =>
+    admin.from('report_snapshots').select('id, evidence_ids').eq('client_id', clientId).order('id', { ascending: true }),
+  )
+  const evidenceRowIds = new Set<string>()
+  for (const s of snapshots) {
+    for (const ref of s.evidence_ids ?? []) {
+      const parsed = typeof ref === 'string' ? parseRef(ref) : null
+      if (!parsed) continue
+      if (parsed.kind === 'e') evidenceRowIds.add(parsed.id)
+      else if (parsed.kind === 'p') languageSamples.add(parsed.id)
+    }
+  }
+  for (const part of chunk([...evidenceRowIds], 200)) {
+    const { data, error } = await admin.from('insight_evidence').select('id, audience_insight_id').in('id', part)
+    if (error) throw new Error(`cited insight_evidence: ${error.message}`)
+    for (const row of (data ?? []) as { audience_insight_id: string | null }[]) {
+      const id = row.audience_insight_id
+      if (id) cls.snapshots.add(id)
+    }
+  }
+
+  // The union is what protects; the class sizes are what the operator reads.
+  // `snapshots` and `snapshotSamples` are kept apart because they count rows in
+  // two different tables — one figure spanning both would be meaningless.
+  const insights = new Set<string>([
+    ...cls.recommendations, ...cls.planChecks, ...cls.savedAnswers, ...cls.snapshots,
+  ])
+  const from: Record<string, number> = {
+    recommendations: cls.recommendations.size,
+    planChecks: cls.planChecks.size,
+    savedAnswers: cls.savedAnswers.size,
+    snapshots: cls.snapshots.size,
+    snapshotSamples: languageSamples.size,
+    insights: insights.size,
+  }
+  return { insights, languageSamples, from }
+}
+
 /** Delete every audience_insights / language_samples row that is not the
- *  current analysis of its video (staleInsightIds, lib/pipeline/pass-a-plan.ts).
+ *  current analysis of its video (staleInsightIds, lib/pipeline/pass-a-plan.ts)
+ *  AND that nothing stored still cites (citedEvidenceIds, above).
  *  Chunked deletes; insight_evidence cascades. video_claims is left alone —
  *  its reader is already newest-run-wins (lib/pipeline/claims.ts). */
-async function pruneStaleAnalysis(clientId: string): Promise<{ insights: number; languageSamples: number }> {
+async function pruneStaleAnalysis(clientId: string): Promise<{ insights: number; languageSamples: number; keptInsights: number; keptSamples: number }> {
   const admin = createAdminClient()
+  // Loaded first, and a failure here throws before anything is deleted.
+  const cited = await citedEvidenceIds(admin, clientId)
   const videos = await selectAll<{ id: string; analyzed_run_id: string | null }>(() =>
     admin.from('videos').select('id, analyzed_run_id').eq('client_id', clientId).order('id', { ascending: true }),
   )
-  const out = { insights: 0, languageSamples: 0 }
+  const out = { insights: 0, languageSamples: 0, keptInsights: 0, keptSamples: 0 }
   for (const table of ['audience_insights', 'language_samples'] as const) {
     const rows = await selectAll<{ id: string; run_id: string | null; source_video_id: string | null }>(() =>
       admin.from(table).select('id, run_id, source_video_id').eq('client_id', clientId).order('id', { ascending: true }),
     )
-    const stale = staleInsightIds(videos, rows)
+    const protectedIds = table === 'audience_insights' ? cited.insights : cited.languageSamples
+    const stale = staleInsightIds(videos, rows, protectedIds)
+    // What protection actually cost, counted against this tenant's own rows
+    // rather than against the size of the cited set (protectedKeptIds, same
+    // file as the rule, where its tests are): an id cited by a recommendation
+    // may name a row that is current anyway, or one this tenant no longer has
+    // at all. It walks the protected rows alone, not the table a second time.
+    const kept = protectedKeptIds(videos, rows, protectedIds).length
     // Chunk 200, not 500: ~500 uuids in an `in.()` filter overflows the
     // PostgREST URL cap ("fetch failed" — the lesson behind every other chunked
     // .in() in this repo). A first prune on a real tenant is thousands of rows.
@@ -1853,9 +2566,17 @@ async function pruneStaleAnalysis(clientId: string): Promise<{ insights: number;
       const { error } = await admin.from(table).delete().in('id', part)
       if (error) throw new Error(`prune ${table}: ${error.message}`)
     }
-    if (table === 'audience_insights') out.insights = stale.length
-    else out.languageSamples = stale.length
+    if (table === 'audience_insights') { out.insights = stale.length; out.keptInsights = kept }
+    else { out.languageSamples = stale.length; out.keptSamples = kept }
   }
+  console.log(
+    `[prune-stale-analysis] deleted ${out.insights} insight(s) · ${out.languageSamples} language sample(s); ` +
+    `kept ${out.keptInsights} + ${out.keptSamples} superseded row(s) because something still cites them ` +
+    `(cited ids PER CLASS, and the classes overlap: recommendations ${cited.from.recommendations} · ` +
+    `plan checks ${cited.from.planChecks} · saved answers ${cited.from.savedAnswers} · ` +
+    `snapshots ${cited.from.snapshots}; distinct union ${cited.from.insights} insight id(s) ` +
+    `+ ${cited.from.snapshotSamples} language sample id(s))`,
+  )
   return out
 }
 
@@ -1996,10 +2717,12 @@ async function runSynthesisHalf(
   })
 
   // The sentiment distribution stays MARKET-ONLY. It answers "how did the
-  // audience receive videos about this brand", and a census row carries either
-  // no audience sentiment at all (own posts never take Pass A's full lane) or a
-  // framing sentiment read off the brand's own caption — the brand rating
-  // itself. Widening share did not widen this, so the filter is explicit here
+  // audience receive videos about this brand", and a census row carries a
+  // sentiment about the brand's OWN post — the audience under the brand's own
+  // caption, or, on the claims lane, the brand rating itself. Either way it is
+  // not the market's reception of a video about the brand, and since
+  // 2026-09-24 own posts DO take the full lane, so this filter carries more
+  // weight than it used to rather than less. Widening share did not widen this, so the filter is explicit here
   // rather than inherited from the corpus.
   const marketVideos = videos.filter(isDiscoveredVideo)
   const marketPeriodVideos = periodVideos.filter(isDiscoveredVideo)

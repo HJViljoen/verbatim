@@ -7,6 +7,12 @@ import { PasswordForm } from '@/components/share/password-form'
 import { hydratedShare, recordShareView } from '@/lib/reports/share-view'
 import type { ReportSnapshotData } from '@/lib/reports/types'
 import { isDocumentData } from '@/lib/reports/documents/types'
+import { isWeeklyData } from '@/lib/reports/weekly-build'
+import { isMonthlyData } from '@/lib/reports/monthly-build'
+import { WeeklyShareShell } from '@/components/share/weekly-share-shell'
+import { MonthlyShareShell } from '@/components/share/monthly-share-shell'
+import { isQuarterlyData } from '@/lib/reports/quarterly-build'
+import { QuarterlyShareShell } from '@/components/share/quarterly-share-shell'
 import { applyEdits, loadEdits } from '@/lib/reports/documents/edits'
 import { DocumentShareShell } from '@/components/share/document-share-shell'
 
@@ -63,6 +69,33 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
   // A written document (2026-08-31): its pages as printed, with the
   // operator's edits laid over the frozen text (never cached: an edit made a
   // minute ago must show on the next open).
+  // A weekly report (Phase 1 WP17): six blocks over one reading, in the same
+  // screen rendering the app draws, so the link and the email agree.
+  if (isWeeklyData(data)) {
+    return (
+      <main>
+        <WeeklyShareShell data={data} appUrl={APP_URL} />
+      </main>
+    )
+  }
+  // A monthly report (Phase 1 WP18): eight blocks over one reading, in the same
+  // screen rendering the app draws, so the link and the email agree.
+  if (isMonthlyData(data)) {
+    return (
+      <main>
+        <MonthlyShareShell data={data} appUrl={APP_URL} />
+      </main>
+    )
+  }
+  // A quarterly review (Phase 1 WP20): eight pages over one reading, in the
+  // same screen rendering the app and the PDF draw.
+  if (isQuarterlyData(data)) {
+    return (
+      <main>
+        <QuarterlyShareShell data={data} appUrl={APP_URL} />
+      </main>
+    )
+  }
   if (isDocumentData(data)) {
     const edits = await loadEdits(admin, snapshot.id)
     return (

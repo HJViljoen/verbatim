@@ -16,7 +16,14 @@ import { SCHEDULE_RECIPIENTS_MAX } from '@/lib/config'
 // browser dialogs: a destructive click asks again inline.
 
 interface Props {
-  reportId: string
+  /** The workspace's own template this schedule sends, or null for a schedule
+   *  that sends an ARTEFACT (the weekly report) and has no `reports` row. */
+  reportId: string | null
+  /** The starter key an artefact schedule is stored under. Saving used to post
+   *  `starterKey: null` unconditionally, so the form could not express one at
+   *  all: the first save after `migrate-schedule-keys --apply` would have
+   *  emptied the key and left the schedule sending nothing this build knows. */
+  starterKey?: string | null
   reportTitle: string
   /** The report's schedule, or null when it is not sent to anyone yet. */
   schedule: ScheduleRow | null
@@ -38,7 +45,7 @@ const btn = 'inline-flex h-8 items-center rounded-full px-3 text-[12px] font-med
 const btnPrimary = `${btn} bg-primary text-primary-foreground hover:bg-accent-foreground`
 const btnQuiet = `${btn} bg-tile text-secondary-foreground ring-1 ring-border hover:bg-inner`
 
-export function ScheduleForm({ reportId, reportTitle, schedule, canManage, userEmail, sendable, ready, isDocument }: Props) {
+export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedule, canManage, userEmail, sendable, ready, isDocument }: Props) {
   const router = useRouter()
   const [pending, start] = useTransition()
   const [cadence, setCadence] = useState<ScheduleRow['cadence']>(schedule?.cadence ?? 'every_update')
@@ -54,16 +61,31 @@ export function ScheduleForm({ reportId, reportTitle, schedule, canManage, userE
 
   const parsedRecipients = splitRecipients(recipients)
   const tooMany = parsedRecipients.length > SCHEDULE_RECIPIENTS_MAX
-  const readOnly = !canManage
+  // A CADENCE THIS FORM CANNOT EXPRESS MAKES IT READ-ONLY, rather than letting
+  // it post one and be refused. Settings > Reports can create a quarterly row —
+  // M8's CHECK accepts it so the recipient table can name a quarterly review —
+  // and CADENCES deliberately does not offer it, because nothing builds one
+  // until WP20. The select then matched no option, the submit posted
+  // `cadence as 'every_update' | 'monthly'` (a cast that lies about the value),
+  // and `scheduleInputSchema` refused it with a raw Zod sentence on a client
+  // screen. Nothing is lost: such a row is stored switched off, so there is
+  // nothing to turn on until its builder lands.
+  const unofferedCadence = !CADENCES.some((c) => c.key === cadence)
+  const readOnly = !canManage || unofferedCadence
 
   const save = () => start(async () => {
     const r = await saveSchedule({
       id: schedule?.id ?? null,
       input: {
         name: reportTitle,
-        starterKey: null,
+        // Exactly one of the two, and the one this schedule already is: the
+        // input schema refuses both and refuses neither.
+        starterKey: reportId ? null : starterKey,
         reportId,
-        cadence,
+        // Narrowed to what this form offers, and the form is read-only when the
+        // stored value is not one of them (see `unofferedCadence`), so this is
+        // a narrowing and no longer a claim about a value it has not checked.
+        cadence: cadence === 'monthly' ? 'monthly' : 'every_update',
         recipients: parsedRecipients,
         attachPdf,
         shareDays: shareDays === 'never' ? null : (Number(shareDays) as 7 | 30 | 90),

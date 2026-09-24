@@ -9,6 +9,7 @@ import { ProfileConnectors } from '@/components/profile-connectors'
 import { PlatformMix, ShareOverTime } from '@/components/profile-stats'
 import { Tile } from '@/components/shell/tile'
 import { glossaryRule, type GlossaryKey } from '@/lib/calibration'
+import { directionWordsFor } from '@/lib/config'
 import { loadProfile, isProfileEmpty, type ProfileData, type ProfileEmpty, type PersonaDetail } from '@/lib/pages/profile'
 import type { Quote, PageModule, RenderMode, Renderable, Slide } from '@/lib/renderables/types'
 
@@ -59,7 +60,10 @@ const persona: R = (d, mode) => {
             return app ? (
               <Link
                 key={p.key}
-                href={`/dashboard/profile?persona=${encodeURIComponent(p.key)}`}
+                // WP9: /dashboard/profile redirects to Voice's cast. This module is
+                // kept registered for the stored artefacts that name it, and in app
+                // mode its switcher now points at the page that reads personas.
+                href={`/dashboard/voice?persona=${encodeURIComponent(p.key)}#cast`}
                 scroll={false}
                 aria-current={isActive ? 'page' : undefined}
                 className={cls}
@@ -212,7 +216,7 @@ function Block({
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-[15px] leading-relaxed text-foreground/85">{body}</p>
-          {quote && <Quotes items={[quote.text]} />}
+          {quote && <Quotes items={[{ text: quote.text, lang: quote.lang, english: quote.english }]} />}
         </CardContent>
       </Card>
     </div>
@@ -288,7 +292,13 @@ export function profilePersonaSlide(n: number): Renderable<D> {
 const renderables: Record<string, Renderable<D>> = {
   'profile.persona': { key: 'profile.persona', title: 'Consumer profile', render: persona },
   'profile.platformMix': { key: 'profile.platformMix', title: 'Where each one turns up', render: platformMix },
-  'profile.shareOverTime': { key: 'profile.shareOverTime', title: 'How the mix has moved', render: shareOverTime },
+  // Unregistered while profile.mix is gated (D1, WP0): the Studio's picker
+  // reads these keys, so a tile nobody may see must not be offerable either.
+  // `shareSeries` already hands back an empty series, so the tile would render
+  // nothing; taking it out of the catalogue is what keeps the deck honest.
+  ...(directionWordsFor('profile.mix')
+    ? { 'profile.shareOverTime': { key: 'profile.shareOverTime', title: 'How the mix has moved', render: shareOverTime } }
+    : {}),
 }
 
 export const profilePage: PageModule<D> = {
@@ -301,7 +311,12 @@ export const profilePage: PageModule<D> = {
   slides(d, variant): Slide[] {
     const slides: Slide[] = [
       { title: 'Consumer profile', keys: ['profile.persona'], layout: 'single' },
-      { title: 'Where they turn up, and how the mix has moved', keys: ['profile.platformMix', 'profile.shareOverTime'], layout: 'grid' },
+      directionWordsFor('profile.mix')
+        ? { title: 'Where they turn up, and how the mix has moved', keys: ['profile.platformMix', 'profile.shareOverTime'], layout: 'grid' }
+        // Without the chart the slide is no longer about movement, and a title
+        // that promises it would be the direction claim the deck no longer
+        // carries (D1).
+        : { title: 'Where they turn up', keys: ['profile.platformMix'], layout: 'grid' },
     ]
     if (variant === 'full') {
       for (let n = 0; n < (d.full?.length ?? 0); n++) slides.push({ title: `Persona · ${d.full![n].name}`, keys: [`${PERSONA_SLIDE_PREFIX}${n}`], layout: 'single' })
@@ -341,9 +356,15 @@ export function ProfilePage({ data: d, params }: { data: ProfileData | ProfileEm
         {/* No page bar on this page: the export control sits in the top-right
             corner, over nothing (the switcher is top-left). */}
         <div className="absolute right-0 top-0 z-10"><ExportMenu /></div>
-        {renderables['profile.persona'].render(d, 'app')}
-        {renderables['profile.platformMix'].render(d, 'app')}
-        {renderables['profile.shareOverTime'].render(d, 'app')}
+        {/* `?.` on every read, never a bare index: the outage this page had
+            was a gating change unregistering a key a render still asked for,
+            and a missing key throws the whole tree rather than dropping a tile. */}
+        {renderables['profile.persona']?.render(d, 'app')}
+        {renderables['profile.platformMix']?.render(d, 'app')}
+        {/* Optional: unregistered while profile.mix is gated (D1). `renderables`
+            is indexed, so TypeScript will not miss it for you — the page throws
+            if this reads the key without asking. */}
+        {renderables['profile.shareOverTime']?.render(d, 'app')}
       </div>
     </ExportScope>
   )

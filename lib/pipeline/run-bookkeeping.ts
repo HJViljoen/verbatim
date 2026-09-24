@@ -122,7 +122,18 @@ export function previousRunEnd(
   return best
 }
 
-/** The columns 20260915090000_run_bookkeeping.sql adds to `pipeline_runs`. */
+/** The columns a run writes about itself at open whose migration is applied by
+ *  hand: 20260915090000_run_bookkeeping.sql's seven. They share this list
+ *  because they share a fate — one write, one 42703 if the migration has not
+ *  landed, and the same answer without them that every earlier run had.
+ *
+ *  `clustering_key` (20260918091000_theme_key.sql) is deliberately NOT here.
+ *  It arrived in a later migration, so it can be missing while these seven
+ *  exist, and the caller's answer to a missing column is to re-issue the write
+ *  WITHOUT the whole group. Dropping the group costs the frozen window — the
+ *  run then gathers and synthesises against the clock, the failure AGENTS.md
+ *  names — and losing the window because a fingerprint nothing reads yet is
+ *  absent would be a bad trade. It gets its own narrow test below. */
 export const BOOKKEEPING_COLUMNS = [
   'scheduled_for',
   'window_start',
@@ -150,6 +161,23 @@ export function isMissingBookkeepingColumn(error: unknown): boolean {
   return BOOKKEEPING_COLUMNS.some((column) => isMissingColumnError(error, column))
 }
 
+/**
+ * Is this the error a run gets for `clustering_key` alone, before M2 lands?
+ *
+ * Its own test, and its own retry at the call site, because the remedy is
+ * different. The seven columns above arrived together, so one of them missing
+ * means the whole group is missing and the only write left is the one every
+ * pre-2026-09-15 run made. `clustering_key` arrived three days later and is
+ * one nullable text column that nothing reads yet: the write to retry is the
+ * SAME write minus that one key, keeping the frozen window, the period, the
+ * snapshot and the slot. Between a deploy of this code and M2 being applied by
+ * hand — and for the seconds a stale PostgREST schema cache lasts right after
+ * it is — that difference is every tenant's window.
+ */
+export function isMissingClusteringKeyColumn(error: unknown): boolean {
+  return isMissingColumnError(error, 'clustering_key')
+}
+
 export interface OpenRunBookkeepingInput {
   /** The run's effective period, frozen at open. */
   period: string
@@ -159,6 +187,16 @@ export interface OpenRunBookkeepingInput {
   scheduledFor?: string | null
   /** The config slice read at open — `buildConfigSnapshot`'s output. */
   snapshot: Record<string, unknown>
+  /** The clustering regime this invocation will theme under
+   *  (lib/pipeline/clustering.ts clusteringKey). Written on a resume too: the
+   *  resume re-runs the analysis half, so the themes it persists are this
+   *  invocation's clustering, not the original one's.
+   *
+   *  Optional so the caller can build the SAME bookkeeping without it, which
+   *  is the narrow retry for a database where M2 has not landed: an absent key
+   *  omits the column rather than writing null, so the rest of the row —
+   *  window included — still lands. */
+  clusteringKey?: string
   /** Present when this is an analysis-only resume of a row that already exists. */
   resume?: { hasConfigSnapshot: boolean } | null
 }
@@ -188,6 +226,7 @@ export function openRunBookkeeping(input: OpenRunBookkeepingInput): Record<strin
     window_start: input.window.start,
     window_end: input.window.end,
     window_basis: input.window.basis,
+    ...(input.clusteringKey ? { clustering_key: input.clusteringKey } : {}),
   }
   if (!input.resume) {
     return { ...window, scheduled_for: input.scheduledFor ?? null, config_snapshot: input.snapshot }

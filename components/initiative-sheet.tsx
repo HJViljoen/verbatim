@@ -4,7 +4,7 @@ import { useActionState, useState } from 'react'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { createInitiative, type InitiativeFormState } from '@/app/dashboard/settings/initiatives/actions'
+import { createInitiative, type InitiativeFormState } from '@/lib/actions/initiatives'
 import { INITIATIVE_DIRECTIONS, INITIATIVE_DIRECTION_LABEL } from '@/lib/initiatives/types'
 import { initiativePromise } from '@/lib/initiatives/measure'
 

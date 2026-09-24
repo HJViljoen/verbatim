@@ -10,7 +10,11 @@ import { englishHits, keywordsOf } from '../../quotes'
 import { quoteRef } from '../../renderables/quotes-freeze'
 import type { Quote } from '../../renderables/types'
 import { competitorThemes, mergeAcrossBuckets, trajectoryWord, type MergeThemeRow, type MergedConcern } from './merge'
-import type { DocumentSettings } from './types'
+import { DEFAULT_DOCUMENT_ROLE, isDocumentRole, type DocBriefSection, type DocumentRole, type DocumentSettings } from './types'
+import { loadBriefReading, type BriefReadingResult, type BriefSlideFigures } from './load-reading'
+import type { BriefReading } from './reading'
+import type { BriefEntry, BriefSurface, MissingInput } from './sections'
+import { readingHandle } from '../../reading/read'
 
 /**
  * The researcher's reading of an update, in code, before a single question is
@@ -83,6 +87,33 @@ export interface Signals {
   /** Customer phrases as refs, English-reading only. */
   phrases: { quote: Quote; platform: string | null }[]
   heldBackPhrases: number
+  /**
+   * The month this brief is about (Phase 1 WP19, item 43).
+   *
+   * Null where the workspace has no monthly reading at all — a first update, or
+   * a tenant whose month tables have never been seeded. Every number the brief
+   * prints comes from here when it is present; `run` below is what a brief
+   * falls back to, and the method page says which it used.
+   */
+  reading: BriefReading | null
+  /** Each borrowed surface's loader output, so the deck can render its blocks
+   *  in print mode from the same data the page drew. */
+  surfaces: Partial<Record<BriefSurface, unknown>>
+  /** The sections and written pages this brief is, in order. */
+  map: readonly BriefEntry[]
+  /** The borrowed blocks, resolved against what was actually read. */
+  sections: DocBriefSection[]
+  /** What this brief needed and the workspace has not recorded. */
+  missing: MissingInput[]
+  /**
+   * What this brief's OWN slides may print beyond the borrowed blocks
+   * (wave 1's `figures.ts`, carried to the artefact by wave 2).
+   *
+   * Null on a brief whose reading could not be loaded at all — the same
+   * degrade every other number here takes, and the deck draws the sheets it
+   * has material for rather than an empty pair.
+   */
+  slideFigures: BriefSlideFigures | null
   competitiveInsights: { id: string; category: string; competitor_name: string | null; title: string; finding: string; impact_level: string }[]
 }
 
@@ -90,9 +121,32 @@ export class SignalsError extends Error {}
 
 export async function loadSignals(
   admin: SupabaseClient,
-  args: { clientId: string; runId?: string | null; settings: DocumentSettings },
+  args: {
+    clientId: string
+    runId?: string | null
+    settings: DocumentSettings
+    role?: DocumentRole
+    /** The instant this build reads at, frozen once by `researchStep` and
+     *  passed down. Absent only for a caller with no build behind it (a
+     *  script, a fixture), which then takes the clock. */
+    now?: string
+    /**
+     * The month's reading, already loaded — `researchStep`'s, carried through
+     * the step boundary so a build pays for six page loaders once instead of
+     * three times.
+     *
+     * ITS QUOTES ARE ALREADY REFS. A step's output is memoised by Inngest and
+     * no comment's words may be in it (AGENTS.md), so `researchStep` freezes
+     * this the way it already freezes its answers. Nothing is lost by that:
+     * `createSnapshot` freezes the whole artefact on the way to the row
+     * anyway, and the writer never sees a surface — `write.ts` reads
+     * `signals.reading != null` and nothing else off these fields.
+     */
+    brief?: BriefReadingResult
+  },
 ): Promise<Signals> {
   const { clientId } = args
+  const role = args.role ?? (isDocumentRole(args.settings.role) ? args.settings.role : DEFAULT_DOCUMENT_ROLE)
 
   const [{ data: client }, { data: config }, { data: latestRun }, runningRes, historyRows, summaryRows] = await Promise.all([
     admin.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
@@ -165,7 +219,7 @@ export async function loadSignals(
 
   // History in words: the registry join Voice uses, so "new" and "seen N
   // updates" mean here what they mean on the page — which, while D1's
-  // RUN_INDEXED_DIRECTION_WORDS is off, is nothing. `trajectoryWord` answers
+  // directionWordsFor('documents.trajectory') is off, is nothing. `trajectoryWord` answers
   // null for every theme, every concern carries an empty word, and the deck,
   // the heard line and the writer's brief each already know what to do with
   // that. The join itself is still built: it is pure, and Phase 1 re-bases it.
@@ -207,6 +261,33 @@ export async function loadSignals(
   })
 
   const delta = await computeRunDelta(admin, clientId, summary)
+
+  // ── the month ───────────────────────────────────────────────────────────
+  // ITEM 43's WHOLE POINT. Everything above this line is the update: the
+  // themes of one run, the shares of one run's tracked videos, a delta between
+  // two runs. Below it is the month, read off the same blocks the reader sees
+  // on the page, with the band, the n, the denominator and the reading date
+  // the update-scoped figures never had. A brief has no window control: it is
+  // a reading of ONE MONTH, and every surface is read on that month, because
+  // the stamp, the denominators and the method page's basis are the month's
+  // and nothing else.
+  //
+  // AND IT IS READ ONCE PER BUILD, NOT ONCE PER STEP. `args.brief` is the
+  // reading `researchStep` already paid for, carried through Inngest's step
+  // memoisation exactly as `readingAt` is (`ResearchOut.brief`). Without it
+  // `writeStep` and `freezeStep` each ran `loadBriefReading` again — six page
+  // loaders in one `Promise.all`, each with its own `READ_CONCURRENCY = 12`,
+  // plus the record, the delivery record and the readiness rows — three times
+  // for one document, against a hard 5-slot Inngest concurrency shared with the
+  // pipeline. Absent (a script, a fixture, a build already in flight when this
+  // landed) it reads, exactly as before.
+  const brief = args.brief ?? await loadBriefReading(
+    { supabase: admin, clientId, reading: readingHandle(clientId), params: {} },
+    { role, now: args.now },
+  ).catch((e) => {
+    console.error(`[documents] brief reading: ${(e as { message?: string })?.message ?? String(e)}`)
+    return null
+  })
 
   const rawPersonas = ((profileRes.data?.personas ?? []) as Partial<Persona & { bucketMix: Record<string, number>; themeIds: string[] }>[])
   const personas: PersonaSignal[] = rawPersonas
@@ -263,6 +344,12 @@ export async function loadSignals(
     phrases,
     heldBackPhrases: samples.length - english.length,
     competitiveInsights: (ciRes.data ?? []) as Signals['competitiveInsights'],
+    reading: brief?.reading ?? null,
+    surfaces: brief?.surfaces ?? {},
+    map: brief?.map ?? [],
+    sections: brief?.sections ?? [],
+    missing: brief?.missing ?? [],
+    slideFigures: brief?.slideFigures ?? null,
   }
 }
 

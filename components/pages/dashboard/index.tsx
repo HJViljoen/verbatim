@@ -22,7 +22,7 @@ import { fmtInt, fmtCompact, fmtPct, weekdayDate, shortDate, platformLabel } fro
 import { shareFootnoteLead } from '@/lib/calibration'
 import { BUCKET_COLOR, loadDashboard, isDashboardEmpty, priorityLabel, type DashboardData, type DashboardEmpty } from '@/lib/pages/dashboard'
 import { movementRows } from '@/lib/dashboard-tiles'
-import { RUN_INDEXED_DIRECTION_WORDS } from '@/lib/config'
+import { directionWordsFor } from '@/lib/config'
 import { initiativeTile, isTrackingSomething } from '@/lib/initiatives/types'
 import type { PageModule, RenderMode, Renderable, Slide } from '@/lib/renderables/types'
 
@@ -92,7 +92,7 @@ const strip: R = ({ strip: s }, mode) => {
             // spine of the per-update series and the only part of this cell
             // that speaks across updates. Gated with the rest (D1); the three
             // tier counts are this update's own and stay.
-            base={<span className="font-mono tabular-nums text-secondary-foreground">{s.tiers.early} early · {s.tiers.once} heard once{RUN_INDEXED_DIRECTION_WORDS && s.registryCount > 0 ? ` · ${fmtInt(s.registryCount)} followed over time` : ''}</span>}
+            base={<span className="font-mono tabular-nums text-secondary-foreground">{s.tiers.early} early · {s.tiers.once} heard once{directionWordsFor('dashboard.themes') && s.registryCount > 0 ? ` · ${fmtInt(s.registryCount)} followed over time` : ''}</span>}
           />
         ) : <TileEmpty>Themes land with the first analysed update.</TileEmpty>}
       </StripCell>
@@ -114,7 +114,7 @@ const hero: R = (d, mode) => {
   const h = d.hero
   const app = mode === 'app'
   const claimEvidence = h.oneThing && h.voices > 0
-    ? { voices: h.voices, platforms: h.platforms, quotes: h.quotes.map((q) => q.text), href: `/dashboard/market?rec=${encodeURIComponent(h.oneThing.id)}`, hrefLabel: 'See all the voices in Market Intelligence →' }
+    ? { voices: h.voices, platforms: h.platforms, quotes: h.quotes.map((q) => q.text), href: `/dashboard/market-intel?rec=${encodeURIComponent(h.oneThing.id)}`, hrefLabel: 'See all the voices in Market Intelligence →' }
     : null
   return (
     <Tile exportKey="dashboard.hero" col={7} row={3} variant="hero" distribute="between" eyebrow="Executive brief · this update" meta={weekdayDate(d.runDate)}
@@ -127,7 +127,7 @@ const hero: R = (d, mode) => {
             {app
               ? (claimEvidence
                   ? <ClaimPopover evidence={claimEvidence}>{h.oneThing.title}</ClaimPopover>
-                  : <Link href="/dashboard/market" className="hover:underline">{h.oneThing.title}</Link>)
+                  : <Link href="/dashboard/market-intel" className="hover:underline">{h.oneThing.title}</Link>)
               : <span>{h.oneThing.title}</span>}
           </span>
         </span>
@@ -211,7 +211,7 @@ const share: R = ({ share: s }, mode) => {
   ) : null
   return (
     <Tile exportKey="dashboard.share" col={5} row={2} eyebrow="Share of tracked conversation" meta={s?.usePeriodShare ? 'by videos · this update' : 'by videos · all updates'}
-      footer={app ? <Link href="/dashboard/competitive">Where you stand{s?.topCompetitor ? ` vs ${s.topCompetitor.name}` : ''} →</Link> : undefined}
+      footer={app ? <Link href="/dashboard/competitive-intel">Where you stand{s?.topCompetitor ? ` vs ${s.topCompetitor.name}` : ''} →</Link> : undefined}
       distribute="center"
     >
       {body ? (
@@ -250,7 +250,7 @@ const themes: R = ({ themes: t }, mode) => {
               // The badge is gated at render as well as at compute (D1): a
               // snapshot frozen before the gate still carries isNew, and it is
               // re-rendered forever.
-              badge={row.isNew && RUN_INDEXED_DIRECTION_WORDS ? <span className="rounded-full bg-accent px-1.5 py-px text-[10px] font-medium text-accent-foreground">New</span> : undefined}
+              badge={row.isNew && directionWordsFor('dashboard.themes') ? <span className="rounded-full bg-accent px-1.5 py-px text-[10px] font-medium text-accent-foreground">New</span> : undefined}
               href={app ? `/dashboard/voice?themes=${encodeURIComponent(row.memberThemes.join(','))}` : undefined}
             />
           ))}
@@ -265,7 +265,7 @@ const themes: R = ({ themes: t }, mode) => {
 const movement: R = ({ movement: mv, updatesCount }, mode) => (
   <Tile exportKey="dashboard.movement" col={4} row={2} eyebrow="Since your first update"
     meta={mv ? `${updatesCount} updates · ${shortDate(mv.dates[0])} → ${shortDate(mv.dates[mv.dates.length - 1])}` : undefined}
-    footer={mv && mode === 'app' ? <Link href="/dashboard/competitive">Where you stand over time →</Link> : undefined}
+    footer={mv && mode === 'app' ? <Link href="/dashboard/competitive-intel">Where you stand over time →</Link> : undefined}
     distribute="center"
   >
     {mv ? (
@@ -297,7 +297,7 @@ const recommendation: R = ({ hero: h }, mode) => {
       ) : undefined}
       footer={h.oneThing ? (
         app ? (
-          <Link href={`/dashboard/market?rec=${encodeURIComponent(h.oneThing.id)}`} className="after:absolute after:inset-0">
+          <Link href={`/dashboard/market-intel?rec=${encodeURIComponent(h.oneThing.id)}`} className="after:absolute after:inset-0">
             {grounded ? `${grounded} →` : 'Why, and the voices →'}
           </Link>
         ) : (grounded ?? undefined)
@@ -410,13 +410,13 @@ function BriefBody({ d, mode }: { d: D; mode: RenderMode }) {
           <p className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{priorityLabel(h.oneThing.priority)}</p>
           <p className="mt-1 text-[13.5px] font-semibold">{h.oneThing.title}</p>
           <p className="mt-1 text-[12.5px] text-secondary-foreground">{h.oneThing.reasoning}</p>
-          {app && <Link href={`/dashboard/market?rec=${encodeURIComponent(h.oneThing.id)}`} className="mt-2 inline-block text-[12px] font-medium underline underline-offset-2">See the full picture →</Link>}
+          {app && <Link href={`/dashboard/market-intel?rec=${encodeURIComponent(h.oneThing.id)}`} className="mt-2 inline-block text-[12px] font-medium underline underline-offset-2">See the full picture →</Link>}
         </div>
       )}
       {h.quotes.length > 0 && (
         <div>
           <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">In their words</p>
-          <Quotes items={h.quotes.map((q) => q.text)} />
+          <Quotes items={h.quotes} />
         </div>
       )}
       {app && d.funnel.length > 0 && (
@@ -437,6 +437,7 @@ function FunnelBody({ d }: { d: D }) {
           </li>
         ))}
       </ol>
+      {/* Legacy wording: the counts above this line are cumulative per run. */}
       <p className="mt-4 text-[11px] text-muted-foreground">a conversation is one video and the comments it sparked; themes are confirmed only when heard in more than one conversation</p>
     </>
   )
@@ -457,7 +458,7 @@ const brief: R = (d) => {
         {h.quotes.length > 0 && (
           <div>
             <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">In their words</p>
-            <Quotes items={h.quotes.map((q) => q.text)} />
+            <Quotes items={h.quotes} />
           </div>
         )}
       </div>
@@ -495,7 +496,7 @@ const renderables: Record<string, Renderable<D>> = {
 
 // The email says the same tiles in tables (Stage 3); a tile without an email
 // renderer is on the paper only.
-for (const [k, fn] of Object.entries(dashboardEmail)) renderables[k].email = fn
+for (const [k, fn] of Object.entries(dashboardEmail)) { const r = renderables[k]; if (r) r.email = fn }
 
 /** The grid, in the page's order. */
 const GRID_ORDER = ['dashboard.strip', 'dashboard.hero', 'dashboard.sentiment', 'dashboard.share', 'dashboard.themes', 'dashboard.movement', 'dashboard.recommendation', 'dashboard.accounts']
@@ -544,16 +545,16 @@ export function DashboardPage({ data: d, detail, params }: { data: DashboardData
     )
   }
   return (
-    <ExportScope page="dashboard" params={params} tiles={gridOrder(d).map((k) => ({ key: k, title: renderables[k].title }))}>
+    <ExportScope page="dashboard" params={params} tiles={gridOrder(d).flatMap((k) => (renderables[k] ? [{ key: k, title: renderables[k].title }] : []))}>
     <PageFrame>
       <PageBar title="Dashboard" context={d.context}>
         {d.updatesCount > 1 && <BarPill>Last {d.updatesCount} updates</BarPill>}
         <ExportMenu />
-        <HowToRead items={d.legendItems} open={detail === 'legend'} basePath="/dashboard" />
+        <HowToRead items={d.legendItems} open={detail === 'legend'} basePath="/dashboard" anchor="overview" />
       </PageBar>
 
       <PageGrid>
-        {gridOrder(d).map((key) => <Fragment key={key}>{renderables[key].render(d, 'app')}</Fragment>)}
+        {gridOrder(d).map((key) => <Fragment key={key}>{renderables[key]?.render(d, 'app')}</Fragment>)}
       </PageGrid>
 
       {/* ── drawers: one click deeper ────────────────────────────────── */}

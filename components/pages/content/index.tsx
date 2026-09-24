@@ -310,7 +310,7 @@ const playbooksBody: R = (d) => (
         ))}
       </tbody>
     </table>
-    <p className="mt-3 text-[11px] text-muted-foreground">Hooks are read from each video’s caption, its speech transcript when captured, and the conversation it sparked — never the footage.</p>
+    <p className="mt-3 text-[11px] text-muted-foreground">Hooks are read from each video’s caption, its speech transcript when captured, and the comments written under it — never the footage.</p>
   </>
 )
 
@@ -434,7 +434,7 @@ function pagedRenderable(key: string): Renderable<D> | undefined {
   return { key, title: 'All videos', render: (d) => <CatalogTable rows={d.catalog.rows.slice(n * CATALOG_PER_SLIDE, (n + 1) * CATALOG_PER_SLIDE)} /> }
 }
 
-for (const [k, fn] of Object.entries(contentEmail)) renderables[k].email = fn
+for (const [k, fn] of Object.entries(contentEmail)) { const r = renderables[k]; if (r) r.email = fn }
 
 export const contentPage: PageModule<D> = {
   key: 'content',
@@ -468,7 +468,7 @@ export function ContentPage({ data: d, params }: { data: ContentData | ContentEm
   const repliesCloseHref = `${basePath}?detail=replies${filter ? `&intent=${filter}` : ''}`
 
   return (
-    <ExportScope page="content" params={params} tiles={GRID_ORDER.map((k) => ({ key: k, title: renderables[k].title }))}>
+    <ExportScope page="content" params={params} tiles={GRID_ORDER.flatMap((k) => (renderables[k] ? [{ key: k, title: renderables[k].title }] : []))}>
     <PageFrame>
       <PageBar title="Content" context={d.context}>
         <BarPill>This update</BarPill>
@@ -478,7 +478,7 @@ export function ContentPage({ data: d, params }: { data: ContentData | ContentEm
       </PageBar>
 
       <PageGrid>
-        {GRID_ORDER.map((key) => <Fragment key={key}>{renderables[key].render(d, 'app')}</Fragment>)}
+        {GRID_ORDER.map((key) => <Fragment key={key}>{renderables[key]?.render(d, 'app')}</Fragment>)}
       </PageGrid>
 
       {/* ── drawers: one click deeper ────────────────────────────────── */}

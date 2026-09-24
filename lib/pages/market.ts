@@ -19,7 +19,7 @@ import { row, rows } from './read'
 import { selectAll } from '../supabase-admin'
 import { fetchRunningRunIds } from './latest-video-run'
 
-// Market Intelligence loader — the data half of the old app/dashboard/market/
+// Market Intelligence loader — the data half of the old app/dashboard/market-intel/
 // page.tsx (split 2026-08-29, Reports & Exports T5). "What should we do?": a
 // rail of what this update produced, a searchable/filterable list, the
 // selected item in full. Selection lives in the URL (?group=&item=, with the
@@ -53,11 +53,16 @@ export const LEGEND_ITEMS: GlossaryKey[] = ['conversations', 'say_vs_hear', 'abo
 
 /** Hrefs that preserve group/item/filter. Pure — the renderers build every
  *  link with it. */
+/** The parked page's own address (WP9). The new Market takes
+ *  `/dashboard/market`; this module renders the page that moved aside, so
+ *  every link it draws has to stay on the page that drew it. */
+const BASE = '/dashboard/market-intel'
+
 export function marketHref(group: Group, item?: string | null, filter?: Filter): string {
   const q = new URLSearchParams({ group })
   if (filter && filter !== 'all') q.set('f', filter)
   if (item) q.set('item', item)
-  return `/dashboard/market?${q.toString()}`
+  return `${BASE}?${q.toString()}`
 }
 
 /** Group + filter from the URL, with the legacy ?detail=<group> mapping (old

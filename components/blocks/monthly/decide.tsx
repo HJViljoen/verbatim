@@ -1,0 +1,273 @@
+import type { ReactNode } from 'react'
+import Link from 'next/link'
+import type { Block, QuoteRef, RenderMode } from '@/lib/blocks/types'
+import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
+import { TokenProse } from '@/components/blocks/prose'
+import { INTERPRETATION_LABEL } from '@/lib/prose/interpret'
+import { EMAIL, FONT } from '@/lib/email/theme'
+
+import { fullDate, shortDate } from '@/lib/format'
+import type { FigureTable } from '@/lib/reading/verdicts'
+import { briefStaleLine, type BriefLink, type MonthlyData } from '@/lib/pages/monthly'
+import type { LedgerRow } from '@/lib/pages/overview'
+
+/** The artboard's amber interpretation pill, `rgba(230,176,60,.20)` — the same
+ *  `EMAIL.mixed` every other amber on the artefact is, at the artboard's own
+ *  opacity. An email may not use `color-mix`, so the rgba is literal. */
+const AMBER_TINT = 'rgba(230,176,60,.20)'
+
+/**
+ * MR7 · What to decide before the next reading (Phase 1 WP18; the mock's
+ * section 7, new in Heinrich's revision 6).
+ *
+ * THE ONE LABELLED SLOT ON THE ARTEFACT, AND IT IS HERE. Everywhere else in
+ * this product the model describes and code rates; in three places the model is
+ * allowed to say why and so what, and each carries the word *Interpretation* on
+ * the page, set apart from the record (design §7, item 9). The monthly report's
+ * slot is `interpretation_monthly`, and revision 6 puts the decision at the END
+ * of the report rather than in its first paragraph, so the slot travels with
+ * it. That is why section 1 prints the code sentence alone: one paragraph
+ * printed twice on one artefact, under two headings, is worse than either
+ * placement.
+ *
+ * WHAT IT IS ALLOWED TO ARGUE FROM. The verdicts code issued and the figures
+ * code computed, and nothing else. It never earns a direction word (three
+ * readings do that) and it never holds a quote's words. When the model is
+ * unavailable, refuses, or writes nothing that survives the two scrubbers, the
+ * product writes the slot itself out of the same verdicts AND SAYS SO on the
+ * page — a reader who cannot tell our sentence from the model's cannot
+ * calibrate either.
+ *
+ * THE STANDING ADVICE IS ITS METADATA, not a second block. The mock draws one
+ * serif headline and one metadata line under it — "Advice #1 · first raised in
+ * July · Working on it since 2 Sep" — which is exactly OV1's ledger row, moved
+ * here with the slot it belongs to. The title is a model's words read back out
+ * of a column, so it carries the `stored` kind and names the slot that wrote it
+ * (the exemption WP14 argued for the same string on Market).
+ *
+ * AND IT CARRIES A DATE. "Before the next reading" is a deadline or it is
+ * nothing: the next monthly reading lands on the first of next month, and the
+ * block says which day that is.
+ */
+export const monthlyDecide: Block<MonthlyData> = {
+  key: 'monthly.decide',
+  title: 'What to decide before the next reading',
+  question: 'What does this month actually ask of us?',
+
+  render(data, mode = 'app', ctx) {
+    const d = data.decide
+    const email = mode === 'email'
+    const href = `${ctx.appUrl}${d.href}`
+
+    const empty = monthlyDecide.emptyState(data)
+    const frame = (children: ReactNode) => (
+      <BlockFrame
+        title={monthlyDecide.title}
+        question={monthlyDecide.question}
+        mode={mode}
+        // THE ARTBOARDS' RULED EYEBROW (E-monthly): a 2 x 16 green mark and
+        // the title in mono 11 uppercase, which is how all seventeen head a
+        // section. Off by default on the primitive; on for every section of
+        // this artefact, so the eight read as one document.
+        accent
+        // NO `meta` WITH THE NEXT READING'S DATE ON IT. The body says "The next
+        // reading of this is 1 Oct 2026." in full, and the frame said the same
+        // date three lines above it — confirmed in both rendered emails. One
+        // date, once, in the sentence a client reads.
+        footer={email
+          ? <a href={href} style={{ color: EMAIL.ink }}>Open Market →</a>
+          : <Link href={href} className="hover:underline">Open Market →</Link>}
+      >
+        {children}
+      </BlockFrame>
+    )
+    if (empty) return frame(<BlockEmpty mode={mode}>{empty}</BlockEmpty>)
+
+    const ledger = d.ledger ? <Ledger row={d.ledger} mode={mode} appUrl={ctx.appUrl} /> : null
+
+    // THE ARTBOARD'S INNER TILE AND ITS AMBER CHIP (Block D wave 2, E-monthly).
+    // The artboard draws "Our read" as a shaded #F6F7F8 card with an amber
+    // "Interpretation" pill beside the label — the one labelled slot on the
+    // artefact, set apart from the record (design §7 item 9). Built, it was an
+    // uppercase eyebrow over prose, visually identical to every other heading
+    // on the page, so the one paragraph a model wrote read exactly like the
+    // seven code wrote. The artboard puts this tile in section 1; the build
+    // keeps it in section 7, because printing one paragraph twice on one
+    // artefact is worse than either placement (this file's own header).
+    const readLabel = (
+      <>
+        <span
+          className={email ? undefined : 'text-[12px] font-semibold uppercase tracking-[0.06em] text-muted-foreground'}
+          style={email ? { fontFamily: FONT.sans, fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: EMAIL.muted } : undefined}
+        >
+          Our read
+        </span>{' '}
+        <span
+          className={email ? undefined : 'ml-1.5 inline-block rounded-[10px] bg-warning/20 px-2 py-0.5 text-[11px] font-semibold text-foreground'}
+          style={email ? { display: 'inline-block', marginLeft: 6, borderRadius: 10, padding: '2px 8px', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', background: AMBER_TINT, color: EMAIL.ink, fontFamily: FONT.sans } : undefined}
+        >
+          {INTERPRETATION_LABEL}
+        </span>
+      </>
+    )
+    const readBody = (
+      <>
+        <TokenProse body={d.interpretation.sentences.join(' ')} figures={d.figures} mode={mode} model />
+        {d.interpretation.note ? (
+          <span
+            className={email ? undefined : 'text-[11px] text-muted-foreground'}
+            style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}
+          >
+            {d.interpretation.note}
+          </span>
+        ) : null}
+      </>
+    )
+    const read = d.interpretation.sentences.length > 0 ? (
+      email ? (
+        <div style={{ background: EMAIL.inner, borderRadius: 6, padding: '18px 20px', marginTop: 12 }}>
+          <div>{readLabel}</div>
+          <div style={{ fontFamily: FONT.sans, fontSize: 14, lineHeight: '1.55', color: EMAIL.ink, marginTop: 10 }}>{readBody}</div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2.5 rounded-md bg-inner px-5 py-4">
+          <div>{readLabel}</div>
+          <div className="flex flex-col gap-1 text-[14px] leading-[1.55]">{readBody}</div>
+        </div>
+      )
+    ) : null
+
+    const deadline = email ? (
+      <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 8 }}>
+        The next reading of this is {fullDate(d.nextReading)}.
+      </div>
+    ) : (
+      <p className="m-0 text-[11.5px] text-muted-foreground">The next reading of this is {fullDate(d.nextReading)}.</p>
+    )
+
+    return frame(
+      <div className={email ? undefined : 'flex flex-col gap-3'}>
+        {ledger}
+        {read}
+        {deadline}
+        {data.brief ? <Brief brief={data.brief} mode={mode} appUrl={ctx.appUrl} /> : null}
+      </div>,
+    )
+  },
+
+  figures(data): FigureTable {
+    // THE SLOT'S OWN TABLE, AND NOT A NEW READING. The interpretation cites
+    // `[[token]]`s that section 1 already declared; re-declaring them here would
+    // put the same number in the artefact's figure table twice under one key —
+    // which `mergeFigures` resolves silently and `figureConflicts` would then
+    // have nothing to report. The tokens a sentence cites are substituted from
+    // `d.figures`, which is section 1's table, handed here by the loader.
+    void data
+    return {}
+  },
+
+  quotes(data): QuoteRef[] {
+    return data.decide.interpretation.quotes.map((q) => q.ref)
+  },
+
+  emptyState(data) {
+    const d = data.decide
+    if (d.interpretation.sentences.length > 0 || d.ledger) return null
+    return 'Nothing this month asks for a decision. Here is where you stand.'
+  },
+}
+
+/** The standing advice — the mock's serif headline and its metadata line. */
+function Ledger({ row, mode, appUrl }: { row: LedgerRow; mode: RenderMode; appUrl: string }) {
+  const email = mode === 'email'
+  const meta = ledgerMeta(row)
+  // THE RULE IS GREEN AND IT IS 3px (the artboard). Grey at 2 reads as a
+  // blockquote; the one thing on the artefact a reader is asked to DECIDE gets
+  // the product's one accent, which the artboard spends here and in the
+  // masthead and nowhere else above the button. The title is serif 20 at
+  // -.01em, the artboard's, and the metadata mono — it is a provenance line,
+  // and mono is what every other provenance line on the artefact is set in.
+  if (email) {
+    return (
+      <div style={{ borderLeft: `3px solid ${EMAIL.green}`, paddingLeft: 16 }}>
+        <div style={{ fontFamily: FONT.serif, fontSize: 20, fontWeight: 500, lineHeight: 1.34, letterSpacing: '-.01em', color: EMAIL.ink }}>
+          <span data-copy="stored" data-slot="pass_d_b_recommendation">{row.title}</span>
+        </div>
+        <div style={{ fontFamily: FONT.mono, fontSize: 10.5, lineHeight: '1.55', color: EMAIL.muted, marginTop: 7 }}>{meta}</div>
+      </div>
+    )
+  }
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5 border-l-[3px] border-positive pl-4">
+      <Link
+        data-copy="stored"
+        data-slot="pass_d_b_recommendation"
+        href={`${appUrl}${row.href}`}
+        className="font-serif text-[20px] font-medium leading-[1.34] tracking-[-0.01em] underline-offset-2 hover:underline"
+      >
+        {row.title}
+      </Link>
+      <span className="font-mono text-[10.5px] leading-[1.55] text-muted-foreground">{meta}</span>
+    </div>
+  )
+}
+
+/**
+ * The Marketing brief, ATTACHED BY LINK.
+ *
+ * No second build: a brief is several model calls over minutes, and this report
+ * already holds its numbers. The line says whether the link opens without an
+ * account, because this artefact is emailed to a list that may include people
+ * who have none, and it says when the brief was built, because a report sent on
+ * 1 October must not offer September's document as this month's companion.
+ */
+function Brief({ brief, mode, appUrl }: { brief: BriefLink; mode: RenderMode; appUrl: string }) {
+  const email = mode === 'email'
+  const href = brief.href.startsWith('http') ? brief.href : `${appUrl}${brief.href}`
+  const tail = brief.stale ? ` ${briefStaleLine(brief)}` : ''
+  // THREE PROMISES, NOT TWO. A link with a password on it is a real link a
+  // recipient can open and is not readable with nothing else; saying "attached"
+  // over one sends a reader to a page that asks them for something they have
+  // not been given.
+  //
+  // AND NOTHING HERE IS ATTACHED. The public arm said "The brief is attached,
+  // one link per block." about a URL in the very next clause, in an email whose
+  // footer eleven lines later says "The PDF is attached." about something else
+  // — two attachments claimed, one of them a link (AGENTS.md: "a page once
+  // claimed 'no email is sent' while Resend sent"). "block" was ours as well:
+  // the same email's footer says the reader-facing noun, "One link per
+  // section", so one artefact carried two words for one thing.
+  const lead = brief.public
+    ? 'The brief opens from the link below, one link per section.'
+    : brief.locked
+    ? 'The brief opens from the link below, which asks for the password your workspace set on it.'
+    : 'The brief is in the workspace.'
+  if (email) {
+    return (
+      <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted, marginTop: 8 }}>
+        {lead} <a href={href} style={{ color: EMAIL.ink }}>{brief.title} →</a>{tail}
+      </div>
+    )
+  }
+  return (
+    <p className="m-0 text-[12px] text-muted-foreground">
+      {lead}{' '}
+      <Link href={href} className="underline underline-offset-2">{brief.title} →</Link>
+      {tail}
+    </p>
+  )
+}
+
+/** "first raised 3 months ago · you marked it Working on it on 2 Sep" — with
+ *  the age absent until a lineage has been kept for two updates, because a
+ *  recommendation dated from its newest copy is not an age. OV1's own line. */
+function ledgerMeta(l: LedgerRow): string {
+  const parts: string[] = []
+  if (l.monthsOld != null && l.monthsOld > 0) parts.push(`first raised ${l.monthsOld} ${l.monthsOld === 1 ? 'month' : 'months'} ago`)
+  parts.push(
+    l.decidedAt
+      ? `you marked it ${l.statusLabel} on ${shortDate(l.decidedAt)}`
+      : `no decision recorded — it stands at ${l.statusLabel}`,
+  )
+  return parts.join(' · ')
+}

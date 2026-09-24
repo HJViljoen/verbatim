@@ -53,8 +53,9 @@ function row(
   owner: OwnerRole,
   unlocks: string,
   notes: string[] = [],
+  clientDetail?: string,
 ): ReadinessRow {
-  return { id, block, input, status, detail, owner, unlocks, notes }
+  return { id, block, input, status, detail, owner, unlocks, notes, ...(clientDetail ? { clientDetail } : {}) }
 }
 
 // ---- 1 · the rival accounts --------------------------------------------------
@@ -155,6 +156,11 @@ function communities(i: ReadinessInputs): ReadinessRow {
   const active = i.communities.filter((c) => c.status === 'active')
   const proposedUnsampled = i.communities.filter((c) => c.status === 'candidate' && !c.probed)
   const ruledOut = i.communities.filter((c) => c.status === 'rejected')
+  // COUNTED APART FROM THE RULED-OUT ONES. A community the client stopped was
+  // often kept by the probe; folding the two together would make the row say we
+  // judged something we did not, and leaving it out of both would make a
+  // community disappear from a row that is supposed to account for the list.
+  const stopped = i.communities.filter((c) => c.status === 'stopped')
   const silent = active.filter((c) => c.postsStored === 0)
   const unconfiguredShare = i.reddit.postsStored > 0
     ? (i.reddit.postsFromUnconfigured / i.reddit.postsStored) * 100
@@ -167,6 +173,7 @@ function communities(i: ReadinessInputs): ReadinessRow {
 
   const detail =
     `${fmtInt(active.length)} watched, ${fmtInt(proposedUnsampled.length)} proposed and not yet sampled, ${fmtInt(ruledOut.length)} ruled out` +
+    (stopped.length > 0 ? `, ${fmtInt(stopped.length)} you stopped watching` : '') +
     (i.reddit.postsStored > 0
       ? ` · ${fmtPct(unconfiguredShare, 0)} of stored Reddit posts come from communities nobody configured.`
       : ' · no Reddit post stored yet.')
@@ -305,9 +312,47 @@ function anomalyBaseline(i: ReadinessInputs): ReadinessRow {
       : `No audience has a baseline yet — the fullest is ${Math.max(...shaped.map((s) => s.clearing), 0)} of ${BASELINE_MONTHS} months.`
 
   const notes = shaped.map((s) => `${audienceLabel(s.audience)} — ${baselineLabel(s.clearing)}`)
+  // WHAT THE CHECK HAS ACTUALLY SAID, not only whether it could speak. A
+  // baseline that is ready and a check that has never raised anything are two
+  // different states of this row, and until WP8 the page could only show the
+  // first. The flags are the record the check writes (`anomaly_flags`); "not
+  // recorded yet" is the answer before its migration is applied, and is not the
+  // same sentence as "nothing has been unusual".
+  notes.push(anomalyRecordLine(i.anomaly))
 
   return row('anomaly-baseline', 'Unusual weeks', `${BASELINE_MONTHS} complete months behind each audience`,
     status, detail, 'ops', unlocks, notes)
+}
+
+/** The one line the row prints about the check's own record.
+ *
+ *  THREE STATES, NOT TWO. "Not recorded yet" (no table), "no update has run the
+ *  check", and "N updates were compared and this is what they said" are
+ *  different answers, and an update the check REFUSED to compare — a thin week
+ *  — is a fourth thing again: it is counted separately rather than folded into
+ *  the updates that were compared, because a week nobody looked at cannot
+ *  support "nothing was unusual". */
+function anomalyRecordLine(a: ReadinessInputs['anomaly']): string {
+  if (!a.available) return 'Flags raised — not recorded yet.'
+  if (a.checks.length === 0) return 'Flags raised — no update has run the check yet.'
+  const compared = a.checks.filter((c) => c.outcome === 'flagged' || c.outcome === 'nothing_unusual').length
+  const skipped = a.checks.length - compared
+  const aside = skipped === 0
+    ? ''
+    : skipped === 1
+      ? ' One update was not compared with the months behind it.'
+      : ` ${fmtInt(skipped)} updates were not compared with the months behind them.`
+  if (compared === 0) return `Flags raised — none: no update has been compared yet.${aside}`
+  const updates = compared === 1 ? 'one update' : `${fmtInt(compared)} updates`
+  if (a.flags.length === 0) return `Flags raised — none in the ${updates} compared so far.${aside}`
+  const newest = a.flags[0]
+  const word = a.flags.length === 1 ? 'one' : fmtInt(a.flags.length)
+  // THE LABEL NEEDS A FRAME. A flag's label is whatever the flagged object is
+  // called, and for a KIND that is a verb phrase built to be a row label —
+  // KIND_LABELS gives "Pushing back", "Saying it worked", "What made them look"
+  // — so the bare sentence read "the most recent Pushing back in the week of
+  // 7 Sep 2026". The labels are right; the sentence around them assumed a noun.
+  return `Flags raised — ${word} in the ${updates} compared so far, the most recent about “${newest.label}” in the week of ${fullDate(newest.weekStart)}.${aside}`
 }
 
 // ---- 8 · how much of each video was read ------------------------------------
@@ -319,18 +364,32 @@ function howMuchWasRead(i: ReadinessInputs): ReadinessRow {
   const r = i.reads
   const firstUpdate = [...i.updates].reverse().find((u) => u.status === 'completed' || u.status === 'partial')
   const recordCoversHistory = Boolean(r.gateFirstAt && firstUpdate && r.gateFirstAt <= firstUpdate.startedAt)
+  // WHAT WAS NOT READ IS NOT THE SAME AS WHAT WAS NOT MEASURED. On a tenant
+  // session before M8 the discard half of this row is unreadable rather than
+  // empty (lib/gate-record.ts), and calling that `missing` did two things at
+  // once: it printed "not recorded at all" about 1,700 verdicts, and — missing,
+  // owned by engineering — it dropped the row out of Settings › Readiness under
+  // a sentence saying this is part of the product we have not finished, about a
+  // row that reads 798 of 1,596 videos today. Where the record cannot be read,
+  // the row is what the READ DEPTH says it is and the discard note is withheld.
+  // PARTIAL, never `exists`, where the record cannot be read: half of what this
+  // row measures was not measured, and a greener badge on less information is
+  // the wrong direction to round in.
   const status: ReadinessStatus =
     r.analysed === 0 ? 'missing'
-      : r.gateFirstAt === null ? 'missing'
-        : recordCoversHistory && r.unflagged === 0 ? 'exists'
-          : 'partial'
+      : !r.gateReadable ? 'partial'
+        : r.gateFirstAt === null ? 'missing'
+          : recordCoversHistory && r.unflagged === 0 ? 'exists'
+            : 'partial'
 
   const detail = r.analysed === 0
     ? 'No video has been read for this workspace yet.'
     : `Speech read on ${fmtInt(r.speech)} of ${fmtInt(r.analysed)} videos (${pct(r.speech, r.analysed)}), translated ${fmtInt(r.translated)} (${pct(r.translated, r.analysed)}), on-screen text ${fmtInt(r.onScreenText)} (${pct(r.onScreenText, r.analysed)}) · Reddit excluded.`
 
   const notes: string[] = []
-  if (r.gateFirstAt === null) {
+  if (!r.gateReadable) {
+    notes.push('What we looked at and set aside is recorded, and we do not yet show it to you, so the share left out is not drawn here.')
+  } else if (r.gateFirstAt === null) {
     notes.push('What was looked at and set aside is not recorded at all, so the share left out cannot be drawn for any month.')
   } else {
     notes.push(`${pct(r.gateRows - r.gateKept, r.gateRows)} of what was looked at was set aside — recorded only from ${fullDate(r.gateFirstAt)}, so no month before that can show it.`)
@@ -440,7 +499,11 @@ function delivery(i: ReadinessInputs): ReadinessRow {
   return row(
     'delivery', 'Delivery', 'somewhere for the update to go',
     status, detail, 'client',
-    'Add the people who should get it in Studio, and turn the schedule on.',
+    // SETTINGS, NOT THE STUDIO. WP16 built Settings > Reports and recipients
+    // one rail entry below Readiness, with an "Add recipients" control per
+    // artefact, and Block B's own weekly email footer says "an owner or admin
+    // changes it in Verbatim, in Settings". Three surfaces, one answer now.
+    'Add the people who should get it in Settings, under Reports and recipients, and turn it on.',
     i.delivery.schedules
       .filter((s) => !s.active || s.recipients === 0)
       .map((s) => `${s.name} — ${s.active ? 'on' : 'off'}, ${s.recipients === 0 ? 'no addresses' : plural(s.recipients, 'address', 'addresses')}`),
@@ -532,11 +595,20 @@ function retention(i: ReadinessInputs): ReadinessRow {
       `one night’s re-read budget is ${fmtInt(r.nightlyCap)} comments, shared across every workspace` +
       (r.cohortRows > r.nightlyCap ? ', and this batch alone is larger, so the rest waits.' : '.')
 
+  // THE BUDGET CLAUSE IS OURS, AND THE FIRST CLAUSE IS THEIRS. WP16 put the
+  // operator page's `detail` in front of the tenant on the strength of "detail
+  // and notes are already client-safe on every row"; this row is the exception
+  // that claim was false about, so it carries the client's half explicitly.
+  const clientDetail = r.cohortDay === null || due === null
+    ? 'Nothing is waiting to be read again.'
+    : `${plural(r.cohortRows, 'comment')} fall due to be read again on ${fullDate(due)}.`
+
   return row(
     'retention', 'Retention', 'comments read again before they age out',
     status, detail, 'ops',
     'Nothing to configure: each batch is read again nightly, and what the platform has removed is deleted with it.',
     r.cohortDay ? [`Deleting a comment changes any month it was counted in — the count stays as it was written down`] : [],
+    clientDetail,
   )
 }
 

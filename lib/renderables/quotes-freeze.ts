@@ -1,4 +1,4 @@
-import type { Quote } from './types'
+import type { Quote, QuoteResolution } from './types'
 
 /**
  * Freeze and thaw the quotes inside tile-ready page data.
@@ -27,9 +27,24 @@ import type { Quote } from './types'
  * `p:<language_samples.id>` is a customer PHRASE (Voice's "how your customers
  * talk") — a commenter's words with a comment_id behind them, cascade-deleted
  * on erasure like evidence rows.
+ * `k:<video_claims.id>` is a CLAIM quoted from a post's own transcript — the
+ * speaker's own words, `b:`'s case and not a commenter's, and the reason it
+ * cannot ride on `v:`: a `v:` ref resolves through insight_evidence to a
+ * COMMENTER's excerpt on that video, so freezing a claim under one would empty
+ * the brand's words and hand back a stranger's in their place, attributed to
+ * the brand, inside a stored artefact.
+ * `t:<videos.id>` is the TEXT ON SCREEN in a video — a title card, a price, a
+ * hashtag stack, read by the OCR pass into `videos.ocr_text`. It is the
+ * creator's own words like `k:` and `b:`, and it cannot ride on `v:` for
+ * exactly `k:`'s reason: `v:` resolves through insight_evidence to a
+ * COMMENTER's excerpt on that video, so a frozen on-screen line would come
+ * back as a stranger's comment printed as what the video said. Added Block D
+ * wave 2, when Overview's voices began printing the line and a registered
+ * export module would otherwise have stored the words themselves; it resolves
+ * off the video row, so a video the retention sweep removes stops resolving.
  */
 
-const REF_RE = /^([ecvmp]:.+|h:[a-z_]+:.+|b:[^:]+:\d+)$/
+const REF_RE = /^([ecvmpkt]:.+|h:[a-z_]+:.+|b:[^:]+:\d+)$/
 
 export function isQuote(v: unknown): v is Quote {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return false
@@ -45,18 +60,20 @@ export const quoteRef = {
   video: (id: string) => `v:${id}`,
   message: (commentId: string) => `m:${commentId}`,
   phrase: (sampleId: string) => `p:${sampleId}`,
+  claim: (claimId: string) => `k:${claimId}`,
+  onScreen: (videoId: string) => `t:${videoId}`,
   hero: (table: HeroTable, id: string) => `h:${table}:${id}`,
   brandVoice: (runId: string, index: number) => `b:${runId}:${index}`,
 }
 
 /** Split a ref into its kind, bare id and (for heroes) table. */
-export function parseRef(ref: string): { kind: 'e' | 'c' | 'v' | 'm' | 'p'; id: string } | { kind: 'h'; table: string; id: string } | { kind: 'b'; runId: string; index: number } | null {
+export function parseRef(ref: string): { kind: 'e' | 'c' | 'v' | 'm' | 'p' | 'k' | 't'; id: string } | { kind: 'h'; table: string; id: string } | { kind: 'b'; runId: string; index: number } | null {
   const h = /^h:([a-z_]+):(.+)$/.exec(ref)
   if (h) return { kind: 'h', table: h[1], id: h[2] }
   const b = /^b:([^:]+):(\d+)$/.exec(ref)
   if (b) return { kind: 'b', runId: b[1], index: Number(b[2]) }
-  const m = /^([ecvmp]):(.+)$/.exec(ref)
-  return m ? { kind: m[1] as 'e' | 'c' | 'v' | 'm' | 'p', id: m[2] } : null
+  const m = /^([ecvmpkt]):(.+)$/.exec(ref)
+  return m ? { kind: m[1] as 'e' | 'c' | 'v' | 'm' | 'p' | 'k' | 't', id: m[2] } : null
 }
 
 function walk(node: unknown, fn: (q: Quote) => Quote | null): unknown {
@@ -80,14 +97,47 @@ function walk(node: unknown, fn: (q: Quote) => Quote | null): unknown {
   return node
 }
 
-/** Empty every quote's text; return the frozen copy and the refs it carries. */
+/** Empty every quote's text; return the frozen copy and the refs it carries.
+ *
+ *  `english` and `lang` go with the text, and the reason is the same reason
+ *  `text` goes: an English rendering is a third party's words (item 8,
+ *  2026-09-18). Stored on the frozen quote it would sit inside
+ *  report_snapshots.data — the one place this module exists to keep words out
+ *  of — and it would survive the erasure that took the original, which is the
+ *  exact failure the ref spine was built to make impossible. Both come back at
+ *  render from comment_translations, through the same door and under the same
+ *  `redacted = false` rule as the original (lib/quotes.ts
+ *  fetchQuoteResolutionsByRefs). `lang` travels with them rather than being
+ *  kept as a harmless fact, because a language label on a quote whose words are
+ *  gone is a statement about a person nobody can check. */
 export function freezeQuotes<T>(data: T): { data: T; refs: string[] } {
   const refs = new Set<string>()
   const frozen = walk(data, (q) => {
     refs.add(q.ref)
-    return { ...q, text: '' }
+    const { lang: _lang, english: _english, ...rest } = q
+    return { ...rest, text: '' }
   }) as T
   return { data: frozen, refs: [...refs] }
+}
+
+/**
+ * A wrapper whose quote survived resolution.
+ *
+ * `resolveQuotes` DROPS an unresolvable quote from an ARRAY, but a Quote that
+ * is a FIELD of an object is nulled where it stands and its wrapper survives —
+ * `{ quote: null, cite: 'tiktok · 14 Sep …' }`. Every `{ quote, cite }` shape
+ * in the block layer is that second case, so a page that read `q.quote.ref` or
+ * handed `q.quote` to a renderer threw on the one event the ref spine exists
+ * for: a comment withdrawn after the snapshot was frozen, on the share link
+ * whose own header promises "quoted voices read live, so a withdrawn comment
+ * never travels".
+ *
+ * Use it to filter a list (`rows.filter(hasQuote)`) or to guard one wrapper.
+ * A FROZEN quote still has `text: ''` and is a Quote — `BlockQuote` is what
+ * says "counted, not quotable" over that; this is about words that are GONE.
+ */
+export function hasQuote<T extends { quote: unknown }>(row: T | null | undefined): row is T & { quote: Quote } {
+  return Boolean(row) && isQuote((row as T).quote)
 }
 
 /** Every distinct quote ref in the data (frozen or not). */
@@ -100,11 +150,21 @@ export function collectQuoteRefs(data: unknown): string[] {
   return [...refs]
 }
 
-/** Put the words back from a ref → text map. Unresolvable quotes are removed. */
-export function resolveQuotes<T>(data: T, texts: Map<string, string>): T {
+/** Put the words back from a ref → text map. Unresolvable quotes are removed.
+ *
+ *  A resolution may be a bare string (the words, as it always was) or a
+ *  `{ text, lang, english }` triple — the reading item 8 adds. Both are
+ *  accepted so that a caller who does not want the English, or a fixture that
+ *  never had it, keeps working unchanged. A resolution with no `text` is not a
+ *  resolution: the quote is dropped, exactly as an erased one is. */
+export function resolveQuotes<T>(data: T, texts: Map<string, string | QuoteResolution>): T {
   return walk(data, (q) => {
-    const text = texts.get(q.ref)
-    if (!text) return null
-    return { ...q, text }
+    const r = texts.get(q.ref)
+    if (!r) return null
+    if (typeof r === 'string') return { ...q, text: r }
+    if (!r.text) return null
+    const out: Quote = { ...q, text: r.text }
+    if (r.lang != null) { out.lang = r.lang; out.english = r.english ?? null }
+    return out
   }) as T
 }

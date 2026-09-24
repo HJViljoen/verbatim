@@ -3,7 +3,7 @@
 import { useActionState, useState, useTransition } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { updateInitiative, setInitiativeStatus, type InitiativeFormState } from './actions'
+import { updateInitiative, setInitiativeStatus, type InitiativeFormState } from '@/lib/actions/initiatives'
 import {
   INITIATIVE_DIRECTIONS, INITIATIVE_DIRECTION_LABEL, INITIATIVE_STATUS_LABEL,
   type Initiative, type InitiativeStatus,
