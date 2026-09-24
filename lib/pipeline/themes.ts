@@ -1,5 +1,5 @@
 import { createAdminClient, selectAll, isMissingColumnError } from '../supabase-admin'
-import { chunk } from '../chunk'
+import { chunk, UUID_IN_CHUNK } from '../chunk'
 import { THEME_MATCH_THRESHOLD, REGISTRY_DORMANT_RUNS, themeRegistryEnabled, transcriptsEnabled } from '../config'
 import { audienceFold } from '../rivals'
 import { embedTexts, cosine } from './cluster'
@@ -134,6 +134,29 @@ export async function insertThemesChunked<E>(
 ): Promise<E | null> {
   for (const part of chunk(rows, THEMES_INSERT_CHUNK)) {
     const { error } = await insert(part)
+    if (error) return error
+  }
+  return null
+}
+
+/**
+ * Mark registry entries dormant UUID_IN_CHUNK ids at a time, stopping at the
+ * first error.
+ *
+ * One `.in('id', stale)` carrying every stale id put the whole list in the
+ * query string. Run e80e9347 (Sealand, 2026-09-24) had 2,204 active entries,
+ * 825 of them unseen that run, and PostgREST's URL cap is measured between 500
+ * and 700 uuids (lib/chunk.ts) — so the update came back a bare "Bad Request",
+ * the registry step degraded and the run closed 'partial'. Setting a constant
+ * status is idempotent, so a retry that re-marks an earlier chunk is harmless.
+ * Takes the update as a callback so the chunking is testable without a database.
+ */
+export async function markDormantChunked<E>(
+  update: (part: string[]) => PromiseLike<{ error: E | null }>,
+  ids: readonly string[],
+): Promise<E | null> {
+  for (const part of chunk(ids, UUID_IN_CHUNK)) {
+    const { error } = await update(part)
     if (error) return error
   }
   return null
@@ -455,7 +478,8 @@ export async function persistThemes(
       REGISTRY_DORMANT_RUNS,
     )
     if (stale.length) {
-      const { error } = await admin.from('theme_registry').update({ status: 'dormant' }).in('id', stale)
+      // Chunked — see markDormantChunked for the "Bad Request" this fixes.
+      const error = await markDormantChunked((part) => admin.from('theme_registry').update({ status: 'dormant' }).in('id', part), stale)
       if (error) throw new Error(`mark dormant: ${error.message}`)
     }
     registrySummary = { ...matchTally(results), entries: entries.length + results.filter((r) => !r.themeId).length, dormant: stale.length }
