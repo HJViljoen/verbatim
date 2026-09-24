@@ -252,6 +252,7 @@ export async function attributeVideos(
   const batches = chunk(flagged, GPT_BATCH)
   for (const [b, batch] of batches.entries()) {
     const answered = new Set<string>()
+    let threw = false
     try {
       const completion = await openai.chat.completions.parse({
         model: ANALYSIS_MODEL,
@@ -278,12 +279,22 @@ export async function attributeVideos(
       // and its fallback was the substring tag, which is how every September
       // gather with a cut emoji tagged 100% of its name matches as rivals.
       const message = e instanceof Error ? e.message : String(e)
+      threw = true
       result.failedBatches++
       result.errors.push(`batch ${b + 1} of ${batches.length} (${batch.length} videos): ${message}`)
       console.warn(`[attribution] batch ${b + 1} of ${batches.length} failed; ${batch.length} videos tagged without a judge: ${message}`)
     }
     const skipped = batch.filter((f) => !answered.has(f.cand.video_id))
-    if (skipped.length > 0 && skipped.length < batch.length) {
+    if (!threw && batch.length > 0 && skipped.length === batch.length) {
+      // A batch that returned without throwing and answered NOTHING — a
+      // refusal, or parsed output that came back empty — failed as surely as
+      // one that threw. It was counted nowhere: no failedBatches, no errors
+      // line, an ai_call_log row reading 'ok', and a re-tag plan's check (d)
+      // reading 0 while up to a whole batch had no verdict.
+      result.failedBatches++
+      result.errors.push(`batch ${b + 1} of ${batches.length} (${batch.length} videos): no verdicts returned`)
+      console.warn(`[attribution] batch ${b + 1} of ${batches.length} returned no verdicts; ${batch.length} videos tagged without a judge`)
+    } else if (skipped.length > 0 && skipped.length < batch.length) {
       result.errors.push(`batch ${b + 1} of ${batches.length}: no verdict for ${skipped.length} of ${batch.length} videos`)
     }
     // No verdict → the strict fallback, and counted. Never tagVideo.

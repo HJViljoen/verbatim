@@ -181,6 +181,20 @@ describe('attributeVideos — no silent substring fallback', () => {
     expect(r.errors[0]).toContain('no verdict for 4 of 5')
   })
 
+  // A refusal or an empty parse returns without throwing; it answered nothing
+  // and was counted nowhere.
+  it('counts a batch that answers nothing as FAILED, not only its fallbacks', async () => {
+    parse.mockResolvedValueOnce(answer([]))
+    const r = await attributeVideos([...homonyms, ...genuine], { method: 'gpt', config })
+    expect(r.failedBatches).toBe(1)
+    expect(r.errors).toEqual(['batch 1 of 1 (5 videos): no verdicts returned'])
+    expect(r.fallbackIds.size).toBe(5)
+    expect(r.tags.get('otto')).toEqual(UNTAGGED)
+    parse.mockResolvedValueOnce({ choices: [{ message: { parsed: null, refusal: 'no' } }] })
+    const refused = await attributeVideos([...homonyms, ...genuine], { method: 'gpt', config })
+    expect(refused.failedBatches).toBe(1)
+  })
+
   it('counts a verdict that leaves a video untagged as a rejection', async () => {
     parse.mockResolvedValueOnce(answer([{ index: 0, entity: 'NONE' }, { index: 1, entity: 'Freitag' }]))
     const r = await attributeVideos([homonyms[0], genuine[0]], { method: 'gpt', config })
