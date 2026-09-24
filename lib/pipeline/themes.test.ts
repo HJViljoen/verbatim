@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { firstMatch, insertThemesChunked, rereadShare, THEMES_INSERT_CHUNK } from './themes'
+import { firstMatch, insertThemesChunked, markDormantChunked, rereadShare, THEMES_INSERT_CHUNK } from './themes'
+import { UUID_IN_CHUNK } from '../chunk'
 
 /** A stand-in for `admin.from('themes').insert(part)` that records batch sizes. */
 function fakeInsert(failOn?: number) {
@@ -43,6 +44,45 @@ describe('insertThemesChunked (run d346b0f7, 2026-09-13)', () => {
     const err = await insertThemesChunked(f.insert, rows(757))
     expect(err).toEqual({ message: 'canceling statement due to statement timeout' })
     expect(f.sizes).toEqual([100, 100, 100])
+  })
+})
+
+describe('markDormantChunked (run e80e9347, Sealand, 2026-09-24)', () => {
+  const uuid = (i: number) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`
+  const ids = (n: number) => Array.from({ length: n }, (_, i) => uuid(i))
+  function fakeUpdate(failOn?: number) {
+    const parts: string[][] = []
+    const update = async (part: string[]) => {
+      parts.push(part)
+      return { error: parts.length === failOn ? { message: 'Bad Request' } : null }
+    }
+    return { update, parts }
+  }
+
+  it('splits 825 stale ids into URL-sized chunks instead of one "Bad Request" filter', async () => {
+    // The live shape: 825 active entries unseen this run went out as ONE
+    // .in('id', …) — past the measured 500–700 uuid URL cap.
+    const f = fakeUpdate()
+    expect(await markDormantChunked(f.update, ids(825))).toBeNull()
+    expect(f.parts.map((p) => p.length)).toEqual([250, 250, 250, 75])
+    expect(f.parts.every((p) => p.length <= UUID_IN_CHUNK)).toBe(true)
+    // Every id, once, in order.
+    expect(f.parts.flat()).toEqual(ids(825))
+    // Each chunk's query string stays well under the ~18.6 KB proven to work.
+    const qs = (p: string[]) => `id=in.(${p.join(',')})`.length
+    expect(Math.max(...f.parts.map(qs))).toBeLessThan(10_000)
+  })
+
+  it('writes nothing for an empty stale list', async () => {
+    const f = fakeUpdate()
+    expect(await markDormantChunked(f.update, [])).toBeNull()
+    expect(f.parts).toEqual([])
+  })
+
+  it('returns the first error and stops', async () => {
+    const f = fakeUpdate(2)
+    expect(await markDormantChunked(f.update, ids(825))).toEqual({ message: 'Bad Request' })
+    expect(f.parts.length).toBe(2)
   })
 })
 
