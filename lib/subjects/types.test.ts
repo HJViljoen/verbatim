@@ -11,9 +11,11 @@ import {
   SUBJECT_MATCH_LOW,
   SUBJECT_MIN_COVERAGE,
   SUBJECT_PRECISION_FLOOR,
+  SUBJECT_EMBED_INPUT_VERSION,
   isMissingSubjects,
   subjectCalibration,
   subjectEmbedInput,
+  subjectPositiveGloss,
 } from './types'
 
 describe('the promise a move carries', () => {
@@ -55,16 +57,77 @@ describe('JUDGE_VERSION', () => {
   })
 })
 
+describe('subjectPositiveGloss', () => {
+  // The six real Sealand descriptions are the fixtures, because they are what
+  // the formula was measured on (status/subject-band-2026-09-23.md PART THREE).
+  it('drops the exclusion clause — a vector has no negation, so "excluding X" puts X in it', () => {
+    expect(subjectPositiveGloss('Comments about product pricing, sales, discounts, or value for money, excluding unrelated purchasing logistics.'))
+      .toBe('Product pricing, sales, discounts, or value for money.')
+    expect(subjectPositiveGloss('Comments about how comfortable the products are to use or carry, excluding style or weight complaints.'))
+      .toBe('How comfortable the products are to use or carry.')
+  })
+
+  it('drops the meta-register frame, which is the edit that measured largest', () => {
+    expect(subjectPositiveGloss('Comments about the aesthetic appeal, beauty, or fashionability of the products.'))
+      .toBe('The aesthetic appeal, beauty, or fashionability of the products.')
+    expect(subjectPositiveGloss('Feedback on how long the products last.'))
+      .toBe('How long the products last.')
+    expect(subjectPositiveGloss('What people say about the straps.')).toBe('The straps.')
+  })
+
+  it('takes every exclusion marker at a clause boundary, and only at one', () => {
+    expect(subjectPositiveGloss('Fabric and seams; excluding zips.')).toBe('Fabric and seams.')
+    expect(subjectPositiveGloss('Fabric and seams (but not zips).')).toBe('Fabric and seams.')
+    expect(subjectPositiveGloss('Fabric and seams — except zips.')).toBe('Fabric and seams.')
+    expect(subjectPositiveGloss('Fabric and seams. Excludes zips.')).toBe('Fabric and seams.')
+    expect(subjectPositiveGloss('Fabric and seams, not including zips.')).toBe('Fabric and seams.')
+    // Mid-phrase, no clause boundary: the description keeps its own words.
+    expect(subjectPositiveGloss('An exclusive finish on the leather.'))
+      .toBe('An exclusive finish on the leather.')
+  })
+
+  it('leaves a sentence, not a fragment — the shape the corpus vectors were built from', () => {
+    expect(subjectPositiveGloss('comments about the zips and the seams and, excluding X'))
+      .toBe('The zips and the seams.')
+    expect(subjectPositiveGloss('how the bag wears')).toBe('How the bag wears.')
+    expect(subjectPositiveGloss('Does it leak?')).toBe('Does it leak?')
+  })
+
+  it('is empty when there is nothing positive left to say', () => {
+    expect(subjectPositiveGloss(null)).toBe('')
+    expect(subjectPositiveGloss(undefined)).toBe('')
+    expect(subjectPositiveGloss('   ')).toBe('')
+    // Nothing but a frame and an exclusion: the name alone is the honest phrase.
+    expect(subjectPositiveGloss('Comments about, excluding everything.')).toBe('')
+    // A frame with something after it keeps that something, however thin.
+    expect(subjectPositiveGloss('Comments about anything, excluding everything.')).toBe('Anything.')
+  })
+})
+
 describe('subjectEmbedInput', () => {
   it('reads as a name, a full stop and a sentence — the insight formula shape', () => {
     expect(subjectEmbedInput({ name: 'comfort', description: 'How it feels to wear all day.' }))
       .toBe('comfort. How it feels to wear all day.')
   })
 
-  it('falls back to the bare name when there is no description', () => {
+  it('embeds the positive gloss, never the description as written', () => {
+    expect(subjectEmbedInput({
+      name: 'Waterproofing',
+      description: 'Comments about how well the bags keep their contents dry in rain and travel, excluding general durability or material sourcing.',
+    })).toBe('Waterproofing. How well the bags keep their contents dry in rain and travel.')
+  })
+
+  it('falls back to the bare name when there is no description, or none left', () => {
     expect(subjectEmbedInput({ name: 'price', description: null })).toBe('price')
     expect(subjectEmbedInput({ name: 'price' })).toBe('price')
     expect(subjectEmbedInput({ name: ' price ', description: '   ' })).toBe('price')
+    expect(subjectEmbedInput({ name: 'price', description: 'Comments about, excluding all of it.' })).toBe('price')
+  })
+
+  it('is stamped, so a stored vector says which formula built it', () => {
+    // subjectsNeedingVectors re-embeds on a version mismatch; that IS the
+    // repair, and it only works if the string moves with the formula.
+    expect(SUBJECT_EMBED_INPUT_VERSION).toBe('subject_embed_v2')
   })
 })
 

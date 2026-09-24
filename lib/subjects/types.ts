@@ -165,24 +165,100 @@ export const JUDGE_VERSION =
 
 // ---- The phrase vector ------------------------------------------------------
 
+/**
+ * Where an exclusion clause starts, in a subject description.
+ *
+ * A description is written for a READER — a person in Settings, and the judge's
+ * system prompt, both of which can act on "excluding Y". An embedding cannot.
+ * A vector has no negation: "excluding general durability" puts *durability*
+ * into the phrase vector, positively, and the two subjects carrying the longest
+ * such clauses (Waterproofing, Repair & warranty) measured worst in BOTH
+ * directions on 2026-09-23 — 12% judge yes-rate at the new band, and 551 and
+ * 692 pairs dragged in to keep 67 and 86.
+ *
+ * Anchored on a clause boundary (a comma, a semicolon, a dash, an opening
+ * bracket or a sentence end) so that a description which happens to contain the
+ * word mid-phrase — "an exclusive finish" — is not cut. `exclusive` is not in
+ * the list for the same reason the boundary is required: a marker is a word
+ * that OPENS a clause, and this list is deliberately short. A marker nobody
+ * writes is a regex nobody can reason about.
+ */
+const EXCLUSION_CLAUSE =
+  /(?:\s*[,;:(–—-]+\s*|\s*\.\s+)(?:excluding|excludes|exclude|not including|but not|except for|except|ignoring|and not)\b/i
+
+/**
+ * The meta-register frame a subject description opens with.
+ *
+ * An insight embeds as `theme words. description` — "waterproof feature. Users
+ * appreciate that the bag is waterproof and effectively keeps rain out". A
+ * subject description opens one level up, ABOUT the feedback rather than in it:
+ * "Comments about how well the bags keep their contents dry". Six words of
+ * "comments about" is six words of a register the corpus never uses, in a
+ * ~30-word phrase.
+ */
+const META_FRAME =
+  /^(?:comments?|feedback|mentions?|discussion|discussions|talk|remarks?|posts?|anything|everything|what (?:people|customers|users|owners) say)\s+(?:about|on|regarding|concerning|of|around)(?:\s+|$)/i
+
+/** Sentence-case the first letter and end on a full stop, so a fragment lifted
+ *  out of the middle of a description still reads as a sentence — which is the
+ *  shape the corpus's own vectors were built from. */
+function asSentence(text: string): string {
+  const t = text.trim().replace(/[\s,;:–—-]+$/, '').replace(/\s+(?:and|or|but)$/i, '')
+  if (!t) return ''
+  const body = t[0].toUpperCase() + t.slice(1)
+  return /[.!?]$/.test(body) ? body : `${body}.`
+}
+
+/**
+ * A subject description as a plain positive statement: the exclusion clause
+ * gone, the "comments about" frame gone, nothing else changed.
+ *
+ * PURE, AND THE DESCRIPTION COLUMN IS NOT TOUCHED. `subjects.description` stays
+ * exactly what the client wrote — it is what Settings shows them, and it is what
+ * `buildJudgeSystemPrompt` hands the judge under WHAT IT MEANS, exclusions and
+ * all. This is a derived EMBED INPUT and nothing else reads it.
+ *
+ * Returns '' when the description is empty, or when it was nothing but an
+ * exclusion — in which case the name alone is the honest phrase.
+ */
+export function subjectPositiveGloss(description?: string | null): string {
+  const text = (description ?? '').trim()
+  if (!text) return ''
+  const cut = EXCLUSION_CLAUSE.exec(text)
+  const positive = cut ? text.slice(0, cut.index) : text
+  return asSentence(positive.replace(META_FRAME, ''))
+}
+
 /** The text a subject is embedded from. The same shape as `embedInput`
  *  (lib/pipeline/cluster.ts) and `matchText` (lib/pipeline/themes.ts) — a short
  *  name, a full stop, a sentence — so the phrase lands in the same region of the
  *  space the insight vectors occupy. A bare 1–3 word name embeds systematically
  *  further from a long description than this does, which is exactly the
- *  distortion the research flagged as unmeasurable. */
+ *  distortion the research flagged as unmeasurable.
+ *
+ *  v2 (2026-09-24) feeds it the positive gloss rather than the description as
+ *  written. Measured on Sealand's six subjects against all 3,719 live insights
+ *  (status/subject-band-2026-09-23.md PART THREE): every subject's maximum
+ *  similarity rose, and the two that carried the longest exclusion clauses
+ *  gained most. See SUBJECT_EMBED_INPUT_VERSION for what a change here costs. */
 export function subjectEmbedInput(s: { name: string; description?: string | null }): string {
   const name = s.name.trim()
-  const description = (s.description ?? '').trim()
-  return description ? `${name}. ${description}` : name
+  const gloss = subjectPositiveGloss(s.description)
+  return gloss ? `${name}. ${gloss}` : name
 }
 
 /** Which formula produced a stored `subjects.embedding`. Change
  *  `subjectEmbedInput` or EMBEDDING_MODEL and every vector written before
  *  becomes incomparable with every vector written after — a silent retrieval
  *  failure, not an error. Bump this at the same time so the repair is a query.
- *  (The EMBED_INPUT_VERSION argument, lib/pipeline/cluster.ts, one table over.) */
-export const SUBJECT_EMBED_INPUT_VERSION = 'subject_embed_v1'
+ *  (The EMBED_INPUT_VERSION argument, lib/pipeline/cluster.ts, one table over.)
+ *
+ *  `subjectsNeedingVectors` compares a stored row's `embed_input_version`
+ *  against this string, so bumping it IS the repair: the next membership pass
+ *  re-embeds every subject whose version differs, at ~$0.0000005 for the set,
+ *  before it bands anything. That is the same path a subject with no vector at
+ *  all takes, and it has been there since v1. */
+export const SUBJECT_EMBED_INPUT_VERSION = 'subject_embed_v2'
 
 // ---- The precision gate -----------------------------------------------------
 
