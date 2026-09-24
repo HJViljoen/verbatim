@@ -14,7 +14,6 @@ import { marketMoves } from './moves'
 import { marketSayHear } from './sayhear'
 import { marketPlans } from './plans'
 import { marketWays } from './ways'
-import { marketUnlocks } from './unlocks'
 
 // Market — the page (Phase 1 WP14, design §3 MK1–MK7; ported to the artboard,
 // Block D wave 2).
@@ -85,7 +84,6 @@ export const MARKET_BLOCKS: readonly Block<MarketSurfaceData>[] = [
   marketMoves,
   marketSayHear,
   marketPlans,
-  marketUnlocks,
   marketWays,
 ]
 
@@ -93,7 +91,7 @@ export const MARKET_BLOCKS: readonly Block<MarketSurfaceData>[] = [
 const READINGS: readonly Block<MarketSurfaceData>[] = [marketConclusions, marketAdvice]
 /** The artboard's moves grid, in its rendered order. */
 const MOVES: readonly Block<MarketSurfaceData>[] = [
-  marketCard, marketMoves, marketSayHear, marketPlans, marketUnlocks, marketWays,
+  marketCard, marketMoves, marketSayHear, marketPlans, marketWays,
 ]
 
 /** Each block's span on the 12-column grid — the artboard's own widths. */
@@ -104,7 +102,6 @@ const COLS: Record<string, number> = {
   'market.moves': 7,
   'market.sayhear': 4,
   'market.plans': 4,
-  'market.unlocks': 4,
   'market.ways': 12,
 }
 
@@ -138,7 +135,9 @@ const GRIDS: readonly (readonly (readonly string[])[])[] = [
   [['market.conclusions'], ['market.advice']],
   [
     ['market.card', 'market.moves'],
-    ['market.sayhear', 'market.plans', 'market.unlocks'],
+    // "Not on this page yet" is gone from the reading page: the roadmap is
+    // listed once, in Settings › Readiness (copy de-clutter ruling G).
+    ['market.sayhear', 'market.plans'],
     ['market.ways'],
   ],
 ]
@@ -238,21 +237,6 @@ export function MarketSurfacePage({
       </Tile>
     )
   }
-  // The masthead's two clauses: the promise, then the limit on it, quiet.
-  //
-  // AND THE FACE IS THE ARTBOARD'S, RULED (block-d-review `market` finding 6,
-  // referred to Heinrich twice and open since; closed here). The finding read
-  // the serif as MASTER's speech face borrowed for the product's own sentence,
-  // so that our words and a commenter's are typeset alike. It is not borrowed:
-  // `spec/design-system.md:69` carries a ramp row for it — "Hero lead (the
-  // page's one sentence) · serif · 17px · 500 · 1.35 · -0.005em" — and
-  // `Market.dc.html:111` draws exactly that, as do `Main.dc.html:124` and
-  // `Subjects.dc.html:294`. The hero lead is the one non-quote serif node the
-  // system declares, and the mock states it three times. Nothing changed; the
-  // measurement is pinned in index.test.tsx so the next reader does not have
-  // to re-open it. Competitive was asked the same question and has no such
-  // node: zero serif in its artboard, zero `font-serif` in its components.
-  const [promise, ...rest] = data.masthead.split(/(?<=\.)\s+/)
 
   return (
     <PageFrame>
@@ -265,18 +249,19 @@ export function MarketSurfacePage({
         <HowToRead items={LEGEND} basePath="/dashboard/market" anchor="market" />
       </SurfacePageBar>
 
-      <p className="m-0 max-w-[86ch] font-serif text-[17px] font-medium leading-[1.35] tracking-[-0.005em] text-foreground [text-wrap:pretty]">
-        {promise}{rest.length > 0 ? <> <span className="text-muted-foreground">{rest.join(' ')}</span></> : null}
-      </p>
+      {/* NO MASTHEAD. "We never claim you caused it" is said once per
+          forwarded document, in its method sheet, and in Settings › How to
+          read; it is cut from the in-app pages (copy de-clutter L6). */}
 
       <PageGrid>{READINGS.map(tile)}</PageGrid>
 
       <PageGrid className="xl:items-start">{MOVES.map(tile)}</PageGrid>
 
+      {/* No method footnote: soundness lives in the page bar's "How sound is
+          this" pill and its record modal (copy de-clutter ruling B). The
+          privacy line is legal, not method, and stays. */}
       {data.method ? (
-        <p className="m-0 flex flex-col gap-0.5 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">
-          {data.method.lines.map((line) => <span key={line}>{line}</span>)}
-        </p>
+        <p className="m-0 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">{data.method.privacy}</p>
       ) : null}
     </PageFrame>
   )

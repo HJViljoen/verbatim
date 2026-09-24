@@ -2,7 +2,6 @@ import Link from 'next/link'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { TileBlock } from '@/components/shell/tile'
-import { Derivation } from './derivation'
 import { TierChip, tierMetaLine } from './tier'
 import { fmtInt, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
@@ -225,31 +224,11 @@ export const marketConclusions: Block<MarketSurfaceData> = {
               nobody can open would hide them. */}
           {!app ? below.map(row) : null}
         </div>
-        {/* THE POPULATION STAYS ON THE PAGE. `corpusLine` is what makes every
-            "157 of 1,699 videos behind it" on this block a fraction rather
-            than two numbers, and the fix pass put it inside `Derivation`,
-            which in mode `app` is a SHUT `<details>` — so the one mode a
-            reader can act in printed the numerator and the denominator with
-            nothing on screen saying what 1,699 is. That is the D8 deviation
-            this port made deliberately (the artboard's "305 of 1,388 category
-            videos" counts two different populations), and it only holds while
-            the sentence that replaces it is visible. `newLine` rides with it:
-            the amber chip above is a fact about OUR RECORD and reads as a
-            claim about the conversation without it.
-            What stays behind the disclosure is method — how the rows are
-            ordered — which is the thing a disclosure is for. */}
-        <p className={email ? undefined : 'm-0 text-[11px] leading-[1.35] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 6 } : undefined}>
-          {c.corpusLine} {c.newLine}
-        </p>
-        <Derivation mode={mode} label="How these are ordered">
-          {/* THE SORT IS PRINTED, not implied. The design asks for tier and
-              then the size of the MOVEMENT behind each conclusion, and the
-              movement is not computable: a conclusion cites audience_insight
-              ids and the monthly reading is keyed on theme_registry ids, with
-              nothing joining the two. So the second key is the size of the
-              evidence, and a reader is told which one they are looking at. */}
-          Ordered by {c.sortedBy}.
-        </Derivation>
+        {/* No basis or "New means" line and no "How these are ordered"
+            disclosure under the rows (copy de-clutter B45, B46, B48): the
+            all-time basis is said once on this page, on the advice table's
+            "Grounded in" column, and "New" is defined once in Settings › How
+            to read. */}
       </BlockFrame>
     )
   },

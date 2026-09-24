@@ -121,7 +121,7 @@ function Movement({ verdict, mode }: { verdict: Verdict; mode: RenderMode }) {
     <span data-copy="verdict" className="flex min-w-0 flex-col gap-1">
       <span className="flex items-baseline justify-between gap-3">
         <span className="min-w-0 text-[12px] text-secondary-foreground">{v.objectLabel} in {where}</span>
-        <MovementBadge verdict={v} unit="pts" good="neutral" />
+        <MovementBadge verdict={v} unit="pts" good="neutral" bandTip={mode === 'app'} />
       </span>
       <span className="flex flex-wrap items-end gap-x-3 gap-y-1">
         <FigureCell value={now} of={<>of {fmtInt(v.value.n)} videos</>} />
@@ -178,7 +178,9 @@ export const marketCard: Block<MarketSurfaceData> = {
         // THE PRESS, NAMED. See the header: the card is complete and the one
         // press that would turn it into a move is not built, so the slot the
         // artboard fills with a green button carries the sentence instead.
-        footer={card.proposal ? data.moves.unlock : card.unread}
+        // The scoring rule (MOVES_UNLOCK) is not repeated here: it is written
+        // once in Settings › How to read (copy de-clutter B65).
+        footer={card.proposal ? undefined : card.unread}
         footerNote={longMonth(card.month)}
       >
         <div className={email ? undefined : 'flex min-h-0 flex-1 flex-col justify-between gap-2.5'}>

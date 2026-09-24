@@ -469,7 +469,7 @@ describe('buildSaidAbout', () => {
     // app page and a reader that came back empty were indistinguishable.
     for (const r of rows) {
       expect(r.rows).toEqual([])
-      expect(r.empty).toContain('which are not open to this page')
+      expect(r.empty).toContain('transcripts are not open to this page')
       expect(r.empty).not.toContain('Nothing was said about')
     }
   })

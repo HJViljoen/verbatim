@@ -5,6 +5,7 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { markupText as markupOf, render, renderText } from '@/lib/test/render'
 import { ADVICE_REQUESTED_GONE } from '@/lib/pages/market-surface'
+import { GROUNDED_BASIS } from '@/lib/reading/afterwards'
 import { MOVES_UNLOCK } from '@/lib/pages/overview'
 import { pageModule } from '@/components/pages/registry'
 import type { AdviceRow } from '@/lib/pages/market-surface'
@@ -179,13 +180,14 @@ describe('the tiles are as tall as what they draw', () => {
     expect(grid['market.advice'].rowStart).toBe(2)
     expect(grid['market.card'].rowStart).toBe(1)
     expect(grid['market.moves'].rowStart).toBe(1)
-    for (const k of ['market.sayhear', 'market.plans', 'market.unlocks']) expect(grid[k].rowStart).toBe(2)
+    for (const k of ['market.sayhear', 'market.plans']) expect(grid[k].rowStart).toBe(2)
+    // The roadmap tile is off the reading page (copy de-clutter ruling G).
+    expect(grid['market.unlocks']).toBeUndefined()
     expect(grid['market.ways'].rowStart).toBe(3)
     expect(grid['market.card'].colStart).toBe(1)
     expect(grid['market.moves'].colStart).toBe(6)
     expect(grid['market.sayhear'].colStart).toBe(1)
     expect(grid['market.plans'].colStart).toBe(5)
-    expect(grid['market.unlocks'].colStart).toBe(9)
     expect(grid['market.ways'].colStart).toBe(1)
   })
 
@@ -245,7 +247,7 @@ describe('MK1 · what we concluded', () => {
     expect(print).toContain('Showcase Innovations in 3D Printed Prosthetics')
   })
 
-  it('flags a conclusion as New only where it holds an earlier month to compare, and says what New means', () => {
+  it('flags a conclusion as New only where it holds an earlier month to compare, and defines New nowhere on the page', () => {
     // `recurrence` is `recurrenceOf` over the leading theme registry id: the
     // first row has three months behind it, the third has one and is new, and
     // the second has no month reading at all — which is NOT new and carries no
@@ -255,7 +257,8 @@ describe('MK1 · what we concluded', () => {
     // The sentence says what the query asks for: mentioned, in the client's
     // audience or the category — never the wider "read" it used to promise
     // (`recurrenceForTarget` counts `k > 0` over `MARKET_AUDIENCES`).
-    expect(renderText(markup)).toContain('New means no earlier month in which the theme behind it was mentioned, in your audience or in the category')
+    // "New" is defined once, in Settings › How to read (copy de-clutter D).
+    expect(renderText(markup)).not.toContain('New means')
   })
 
   it('says a conclusion has nothing behind it in words, and drops the chip’s tint rather than its label', () => {
@@ -295,9 +298,9 @@ describe('MK1 · what we concluded', () => {
     expect(markup).toContain('/dashboard/voice?themes=comfort_and_fit')
   })
 
-  it('prints the sort it actually used', () => {
+  it('does not narrate its ordering (copy de-clutter B48)', () => {
     const text = renderText(marketConclusions.render(marketFixture(), 'app', ctx))
-    expect(text).toContain('Ordered by strongest evidence first, then by how many videos are behind it')
+    expect(text).not.toContain('Ordered by')
   })
 
   it('counts the videos behind a conclusion out of the corpus it counted them over', () => {
@@ -308,7 +311,9 @@ describe('MK1 · what we concluded', () => {
     // a figure, and only a level must carry its "of N".
     const text = renderText(marketConclusions.render(marketFixture(), 'app', ctx))
     expect(text).toContain('157 of 1,699 videos behind it')
-    expect(text).toContain('not over this month alone')
+    // The basis sentence is said once on the page, on the advice table's
+    // "Grounded in" header (copy de-clutter ruling C).
+    expect(text).not.toContain('not over this month alone')
   })
 
   it('says the bare count when the corpus could not be read, never a made-up denominator', () => {
@@ -329,7 +334,7 @@ describe('MK2 · the ledger', () => {
   // have nothing to report.
   it('says the Afterwards column once where it says one thing about every row', () => {
     const data = marketFixture()
-    const line = 'You have not decided on this one yet. We start reading the month after you do.'
+    const line = 'Not decided yet.'
     const rows = data.advice.rows.map((r) => ({ ...r, afterwards: { state: 'too_soon' as const, line, verdict: null, months: [] } }))
     const text = renderText(marketAdvice.render({ ...data, advice: { ...data.advice, rows } }, 'app', ctx))
     expect(rows.length).toBeGreaterThan(1)
@@ -379,8 +384,9 @@ describe('MK2 · the ledger', () => {
     // under the table rather than left in a title.
     const text = renderText(marketAdvice.render(marketFixture(), 'app', ctx))
     expect(text).toContain('First time')
-    expect(text).toContain('First time marks a row first raised by an update inside this month')
-    expect(text).toContain('the update’s clock, not the comment’s')
+    // Its clock rides as the chip's tooltip (copy de-clutter B57).
+    expect(text).not.toContain('First time marks a row')
+    expect(render(marketAdvice.render(marketFixture(), 'app', ctx))).toContain('the update’s clock, not the comment’s')
     // "New" survives exactly where the status column puts it.
     expect((text.match(/\bNew\b/g) ?? [])).toHaveLength(1)
   })
@@ -403,7 +409,7 @@ describe('MK2 · the ledger', () => {
     expect(text).toContain('too few to compare')
     expect(text).toContain('like for like')
     // The two silences, each its own sentence rather than a dash.
-    expect(text).toContain('We start reading the month after you do.')
+    expect(text).toContain('Not decided yet.')
     expect(text).not.toMatch(/Afterwards\s+—/)
   })
 
@@ -468,46 +474,27 @@ describe('MK2 · the ledger', () => {
     expect(text).not.toMatch(/quarter/i)
   })
 
-  it('puts the METHOD one press from the number and leaves the population on the page', () => {
-    // Three tiles ended in a wall of 11px grey prose that a reader's eye skips
-    // — which is the one thing a stated basis must not do — so the derivation
-    // is behind the page's own dotted-underline disclosure in `app` and INLINE
-    // in print and email, where there is nothing to press.
-    //
-    // WHAT MAY NOT GO BEHIND IT IS THE POPULATION. A shut `<details>` in the
-    // one mode a reader can act in left "157 of 1,699 videos behind it" and
-    // "3 videos" in the Grounded in column with nothing on screen naming what
-    // they are counted over — the D8 deviation this port made in order not to
-    // print the artboard's mixed denominator, unmade in `app` alone. The
-    // population line and the chip caveats print outside the disclosure in
-    // every mode; the method — how the rows are ordered, how the Repeated
-    // column counts — stays inside it.
+  it('says the all-time basis once on the page: a tooltip on "Grounded in", printed once on paper', () => {
+    // Copy de-clutter ruling C: the basis is said once per surface. On screen
+    // it is the column header's tooltip; paper and email have no tooltip, so
+    // it prints once under the table. MK1 no longer restates it.
     const app = render(marketAdvice.render(marketFixture(), 'app', ctx))
-    expect(app).toContain('<details')
-    expect(app).toContain('How the Repeated column counts')
-    const outsideApp = (markup: string) => markup.replace(/<details[\s\S]*?<\/details>/g, ' ')
-    expect(markupOf(outsideApp(app))).toContain('Grounded in counts the videos')
+    expect(app).toContain(`title="${GROUNDED_BASIS}"`)
+    expect(app).not.toContain('How the Repeated column counts')
+    expect(markupOf(app)).not.toContain('Counted over everything we have read for you')
     for (const mode of ['print', 'email'] as RenderMode[]) {
       const markup = render(marketAdvice.render(marketFixture(), mode, ctx))
       expect(markup).not.toContain('<details')
-      expect(markupOf(markup)).toContain('Grounded in counts the videos')
+      expect(markupOf(markup)).toContain('counted over everything we have read for you')
     }
-    // The same rule on MK1: the corpus line and the "New" chip's caveat are on
-    // the page with the rows they qualify, not behind the press.
     const mk1 = render(marketConclusions.render(marketFixture(), 'app', ctx))
-    expect(markupOf(outsideApp(mk1))).toContain('counted over everything we have read for you')
-    expect(markupOf(outsideApp(mk1))).toContain('New means no earlier month')
-    // Same disclosure shape on the other three blocks that carry one.
+    expect(markupOf(mk1)).not.toContain('counted over everything we have read for you')
+    expect(markupOf(mk1)).not.toContain('New means')
+    // Plans keeps its disclosure; nothing on paper is behind one.
+    expect(render(marketPlans.render(marketFixture(), 'app', ctx))).toContain('<details')
     for (const block of [marketConclusions, marketPlans, marketSayHear]) {
-      expect(render(block.render(marketFixture(), 'app', ctx))).toContain('<details')
       expect(render(block.render(marketFixture(), 'print', ctx))).not.toContain('<details')
     }
-  })
-
-  it('explains the within-month repeat once underneath, where the column now counts updates', () => {
-    const text = renderText(marketAdvice.render(marketFixture(), 'app', ctx))
-    expect(text).toContain('inside one calendar month')
-    expect(text).toContain('Grounded in counts the videos behind a piece of advice')
   })
 
   it('names the after-line only while no row on the page answers in that column', () => {
@@ -561,12 +548,13 @@ describe('MK2 · the ledger', () => {
     // array counted twice and they must add to the total.
     const data = marketFixture()
     const text = renderText(marketAdvice.render(data, 'app', ctx))
-    expect(text).toContain('3 shown · 61 behind them')
-    expect(text).not.toContain('12 oldest shown')
+    // Copy de-clutter ruling D: "N of T shown", T = shown + behind.
+    expect(text).toContain('3 of 64 shown')
+    expect(text).not.toContain('behind them')
     expect(text).not.toMatch(/quarter/i)
-    const shown = data.advice.rows.length
-    const behind = Number((text.match(/(\d+) behind them/) ?? [])[1])
-    expect(shown + behind).toBe(data.advice.total)
+    const [, shown, total] = text.match(/(\d+) of ([\d,]+) shown/) ?? []
+    expect(Number(shown)).toBe(data.advice.rows.length)
+    expect(Number(total.replace(/,/g, ''))).toBe(data.advice.total)
   })
 
   it('never states a row count the table is not showing, in any state', () => {
@@ -576,10 +564,10 @@ describe('MK2 · the ledger', () => {
     // still adds up.
     for (const data of [marketFixture(), unrecordedFixture(), deepLinkFixture()]) {
       const text = renderText(marketAdvice.render(data, 'app', ctx))
-      const note = text.match(/(\d+) shown · ([\d,]+) behind them/)
+      const note = text.match(/(\d+) of ([\d,]+) shown/)
       if (!note) continue
       expect(Number(note[1])).toBe(data.advice.rows.length)
-      expect(Number(note[1]) + Number(note[2].replace(/,/g, ''))).toBe(data.advice.total)
+      expect(Number(note[2].replace(/,/g, ''))).toBe(data.advice.total)
     }
   })
 })
@@ -621,11 +609,9 @@ describe('MK4 · declared moves', () => {
     expect(marketMoves.emptyState(firstUpdateFixture())).toContain('Nothing dated yet')
   })
 
-  it('names the unlock without naming a month for it', () => {
+  it('does not restate the scoring rule under the moves (copy de-clutter B66)', () => {
     const text = renderText(marketMoves.render(marketFixture(), 'app', ctx))
-    // Changed by Block D · D2: the card and the scoring are built, so the
-    // block's unlock says what it does instead of what it does not.
-    expect(text).toContain(MOVES_UNLOCK)
+    expect(text).not.toContain(MOVES_UNLOCK)
     expect(text).not.toMatch(/not built yet/)
     expect(text).not.toMatch(/bottom section/)
   })
@@ -709,8 +695,9 @@ describe('MK5b · say vs hear', () => {
     expect(text).toContain('Say vs hear')
     expect(text).toContain('3 claims · your audience')
     expect(text).toContain('Pushed back')
-    expect(text).toContain('how each claim reads in the latest update')
-    expect(text).toContain('held across two updates')
+    // The caveat is the footer note alone (copy de-clutter B72).
+    expect(text).toContain('this update’s reading')
+    expect(text).not.toContain('held across two updates')
   })
 
   it('prints no per-claim count, because `SayVsHearEntry` carries none', () => {
@@ -765,7 +752,7 @@ describe('MK3 · this month\u2019s card', () => {
   it('names the press rather than drawing a button nobody can press', () => {
     const text = renderText(marketCard.render(marketFixture(), 'app', ctx))
     expect(text).not.toContain('Yes, count this as a move')
-    expect(text).toContain(MOVES_UNLOCK)
+    expect(text).not.toContain(MOVES_UNLOCK)
   })
 
   it('keeps every level and its "of N" in one cell, and prints two claims as two rows', () => {
@@ -942,12 +929,9 @@ describe('the sections that are not built', () => {
  * `font-serif`, so there is no masthead there to rule on.
  */
 describe('the masthead', () => {
-  it('is set at the artboard’s hero-lead ramp, declaration for declaration', () => {
+  it('is not printed: "we never claim you caused it" is off the in-app pages (copy de-clutter L6)', () => {
     const markup = render(MarketSurfacePage({ data: marketFixture() }))
-    // Market.dc.html:111 · spec/design-system.md:69. Overview's own hero lead
-    // pins the same three (components/pages/overview/sentence.test.tsx:165);
-    // the tracking and the measure are Market's own and are the artboard's.
-    expect(markup).toContain('font-serif text-[17px] font-medium leading-[1.35] tracking-[-0.005em]')
-    expect(markup).toContain('max-w-[86ch]')
+    expect(markup).not.toContain('font-serif text-[17px]')
+    expect(markupOf(markup)).not.toContain('We never claim you caused it')
   })
 })

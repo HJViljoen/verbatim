@@ -186,7 +186,8 @@ export const voiceCast: Block<VoiceSurfaceData> = {
       // number wearing a defined word. "Insight" is pipeline vocabulary and
       // is not one of the thirteen words either, so the line says the plain
       // thing instead.
-      meta: c.population != null ? `read over ${fmtInt(c.population)} separate points people made` : undefined,
+      // No meta: "read over N separate points" was method trivia; each persona
+      // card carries its own video count (copy de-clutter B37).
       // A SENTENCE, IN EVERY MODE, BECAUSE IT IS ONE. This was
       // `<Link href={`${ctx.appUrl}/dashboard/voice#cast`}>` — in the app
       // `appUrl` is `''`, so the floor note was an anchor to the page it is
@@ -199,10 +200,7 @@ export const voiceCast: Block<VoiceSurfaceData> = {
       footer: email
         ? <span style={{ color: EMAIL.muted }}>{c.floorNote}</span>
         : <span>{c.floorNote}</span>,
-      // The artboard's right-hand footer note. NOT its left half — "No persona
-      // 16% of category videos" is the remainder of a partition these groups do
-      // not make, and `unnamedShare` was deleted for that reason.
-      footerNote: c.stateNote,
+      // No footer note: the title already says "current state" (B39).
     }
 
     if (empty) {

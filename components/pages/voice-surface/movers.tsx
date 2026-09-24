@@ -219,11 +219,10 @@ export const voiceMovers: Block<VoiceSurfaceData> = {
     const banded = m.growing.length + m.fading.length
     const both = m.growing.length > 0 && m.fading.length > 0
     const coda = moversCoda({ growing: m.growing.length, fading: m.fading.length, shown: m.shown, any: banded > 0 })
+    // The month pair only: the denominator is the Audience row's note one
+    // block above (copy de-clutter B23).
     const of = data.audience.videos != null
-      // NOT "share of 1,388 the category videos": an audience's prose label
-      // carries its own article and inlining it into a count makes one. The
-      // audience is named on its own selected pill one block above.
-      ? `share of ${fmtInt(data.audience.videos)} videos in this audience · ${monthName(data.month)} vs ${monthName(prevOf(data.month))}`
+      ? `${monthName(data.month)} vs ${monthName(prevOf(data.month))}`
       : undefined
 
     return (
@@ -257,16 +256,16 @@ export const voiceMovers: Block<VoiceSurfaceData> = {
                 is left keeps the column width it would have had. */}
             {email || !both ? (
               <div className={email ? undefined : 'xl:w-1/2 xl:pr-6'}>
-                <Arm label="Cleared their band · a larger share than last month" rows={arm(m.growing, m.shown)} mode={mode} ctx={ctx} />
-                <Arm label="Cleared their band · a smaller share than last month" rows={arm(m.fading, m.shown)} mode={mode} ctx={ctx} />
+                <Arm label="Larger share than last month" rows={arm(m.growing, m.shown)} mode={mode} ctx={ctx} />
+                <Arm label="Smaller share than last month" rows={arm(m.fading, m.shown)} mode={mode} ctx={ctx} />
               </div>
             ) : (
               <TileColumns of={2}>
                 <div className="min-w-0 xl:pr-6">
-                  <Arm label="Cleared their band · a larger share than last month" rows={arm(m.growing, m.shown)} mode={mode} ctx={ctx} />
+                  <Arm label="Larger share than last month" rows={arm(m.growing, m.shown)} mode={mode} ctx={ctx} />
                 </div>
                 <div className="min-w-0 xl:pl-6">
-                  <Arm label="Cleared their band · a smaller share than last month" rows={arm(m.fading, m.shown)} mode={mode} ctx={ctx} />
+                  <Arm label="Smaller share than last month" rows={arm(m.fading, m.shown)} mode={mode} ctx={ctx} />
                 </div>
               </TileColumns>
             )}
@@ -285,7 +284,7 @@ export const voiceMovers: Block<VoiceSurfaceData> = {
                 divider inside one column of it. */}
             {m.flat.length > 0 && !email ? <div className="border-t border-border/70" /> : null}
             <div className={email ? undefined : 'xl:w-1/2 xl:pr-6'}>
-              <Arm label="Inside the band" rows={arm(m.flat, m.shown)} mode={mode} ctx={ctx} />
+              <Arm label="No clear change" rows={arm(m.flat, m.shown)} mode={mode} ctx={ctx} />
             </div>
 
             {/* ONE FLAGS ROW, the mock's, rather than two more arms: neither

@@ -80,29 +80,6 @@ export const LEDGER_SHOWN = 12
  *  twenty. */
 export const CONCLUSIONS_SHOWN = 8
 
-/** What MK1's per-row video count is a count out of — said once, under the
- *  rows, because every row's chip is a share of the same thing. */
-export const CONCLUSIONS_CORPUS_LINE =
-  'The videos behind a conclusion are counted over everything we have read for you, not over this month alone.'
-
-/**
- * What the "New" chip on a conclusion means — a statement about OUR RECORD,
- * said once under the rows because every chip means the same thing. See
- * `ConclusionRow.recurrence`.
- *
- * THE SENTENCE SAYS WHAT IS COUNTED, NOT MORE. It read "no earlier month in
- * which the theme behind it was READ", and `recurrenceForTarget` counts
- * something narrower in two ways: a month counts only where the theme was
- * actually MENTIONED (`k > 0`), and the read covers `MARKET_AUDIENCES` — the
- * client's and the category's — not a rival's. A theme whose earlier months
- * were read and in which nobody said anything, or which was heard only inside
- * a rival's audience, therefore wore the chip under a sentence promising more
- * than the query asked. Narrowing the sentence is the honest half of that
- * choice; widening the read is a second query and a product decision.
- */
-export const CONCLUSIONS_NEW_LINE =
-  'New means no earlier month in which the theme behind it was mentioned, in your audience or in the category — a fact about our record, not a direction.'
-
 /**
  * What the "First time" chip in the Repeated column means, said once under the
  * table.
@@ -122,7 +99,7 @@ export const CONCLUSIONS_NEW_LINE =
  * printed under the table rather than left in a `title`.
  */
 export const LEDGER_FIRST_TIME_LINE =
-  'First time marks a row first raised by an update inside this month — the ledger’s own dates are the update’s clock, not the comment’s.'
+  'First time marks a row first raised by an update inside this month: the ledger’s own dates are the update’s clock, not the comment’s.'
 
 /** What the ledger's "Grounded in" column counts, said once under the table
  *  because every row's cell is counted the same way (D8, and the same shape as
@@ -172,8 +149,6 @@ export interface ConclusionsBlock {
   /** Every video this workspace has analysed, ever — the denominator the video
    *  count on each row is a count OUT OF. Null where it could not be read. */
   corpusVideos: number | null
-  /** What that denominator is, in the reader's words. */
-  corpusLine: string
   counts: { confirmed: number; early: number; archive: number }
   /** The conclusions below the evidence bar. Labelled, never hidden. */
   belowBar: number
@@ -193,9 +168,6 @@ export interface ConclusionsBlock {
    * to tell the two apart. Null where the run carried no date.
    */
   concludedOn: string | null
-  /** What "New" on a conclusion means, in the reader's words — the basis that
-   *  has to travel with the chip. */
-  newLine: string
   empty: string | null
 }
 
@@ -527,7 +499,9 @@ export function buildAdviceRows(
  */
 export function actedLine(acted: number, total: number): string {
   if (total === 0) return 'Nothing has been recommended yet.'
-  return `You have acted on ${fmtInt(acted)} of ${fmtInt(total)} — every piece of advice this product has ever given you.`
+  // The figure alone (copy de-clutter ruling D): "of 64" is the denominator
+  // and stays; the all-time scope is defined once in Settings › How to read.
+  return `You have acted on ${fmtInt(acted)} of ${fmtInt(total)}.`
 }
 
 /**
@@ -578,12 +552,12 @@ export const ADVICE_UNLOCK =
  * one of them. Same reasoning, same shape, as `MovesBlock.readings ?? []`.
  */
 export const ADVICE_AFTERWARDS_UNRECORDED =
-  'This was saved before we recorded what happened afterwards, so there is nothing in this column for it — which is not the same as nothing having happened.'
+  'This was saved before we recorded what happened afterwards, so nothing is recorded in this column for it.'
 
 /** Said when the decision ledger itself could not be read. The statuses then
  *  come off `recommendations.status`, which the next update rewrites. */
 export const ADVICE_UNRECORDED =
-  'Your decisions are not being written down for this workspace yet — a status set here survives only as long as the next update re-finds the row it is on.'
+  'Your decisions are not being written down for this workspace yet: a status set here lasts only until the next update.'
 
 export const ADVICE_EMPTY = 'Advice lands with your next update.'
 
@@ -681,7 +655,7 @@ export const MOVES_EMPTY_MK4 =
 /** Said when `moves` (M4) is not applied here. Not the same fact as "nothing
  *  dated yet", and the page must not say the second when it means the first. */
 export const MOVES_UNRECORDED =
-  'Declared moves are not recorded for this workspace yet, so this block has nothing to list — not even an empty list.'
+  'Declared moves are not recorded for this workspace yet.'
 
 /**
  * The five ways a move is made (design §3 MK5), and which of them work today.
@@ -743,7 +717,7 @@ export function waysOfMoving(acceptable: WaysBlock['acceptable'], plansChecked =
       // result back.
       key: 'plan',
       title: 'Upload a plan',
-      how: 'A campaign brief, re-read against the conversation with every update — each claim supported, contradicted or untested.',
+      how: 'A campaign brief, re-read against the conversation with every update: each claim supported, contradicted or untested.',
       href: '/dashboard/agent',
       live: true,
       unlock: plansChecked > 0 ? null : 'Nothing has been uploaded for this workspace yet.',
@@ -1062,7 +1036,6 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
       recurrence: recurrenceForTarget(conclusionTarget.get(c.id) ?? null, monthPoints, month),
     })),
     corpusVideos,
-    corpusLine: CONCLUSIONS_CORPUS_LINE,
     counts,
     belowBar: counts.archive,
     total: conclusionRows.length,
@@ -1070,7 +1043,6 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
     // THE RUN'S OWN DATE, and the only one on this block. See
     // `ConclusionsBlock.concludedOn`.
     concludedOn: latestRun.started_at ?? null,
-    newLine: CONCLUSIONS_NEW_LINE,
     empty: conclusionRows.length === 0 ? 'Conclusions land with your next update.' : null,
   }
 

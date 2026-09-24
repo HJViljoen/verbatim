@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import type { Block, BlockContext } from '@/lib/blocks/types'
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
-import { monthName, shortDate } from '@/lib/format'
+import { shortDate } from '@/lib/format'
 import { READER_FLAGS, THIRTEEN_WORDS } from '@/lib/calibration'
 import { PageFrame, PageGrid } from '@/components/shell/page-grid'
 import { SurfacePageBar } from '@/components/shell/page-bar'
@@ -180,29 +180,12 @@ export function VoiceSurfacePage({
           {data.notes.map((n) => n.text).join(' ')}
         </p>
       ) : null}
-      {/* THE METHOD FOOTNOTE — the one element of this artboard that was
-          missing rather than different (D15). Five facts this page already
-          holds and printed nowhere: who it was prepared for and when, how much
-          was read in this window and where, how much of each video we managed
-          to read, how much of what was said on camera was not in English, and
-          the Reddit cap — which has never rendered on any reading surface at
-          all. Each line states its own clock, which is the whole reason
-          `methodLines` composes them in one place: read depth and language are
-          ALL-TIME and the coverage line is this window's, and a footnote whose
-          lines are on three clocks with only one of them labelled is the defect
-          the module was written to end. */}
+      {/* No method footnote: soundness lives in the page bar's "How sound is
+          this" pill and its record modal (copy de-clutter, ruling B). The
+          privacy line is a legal line, not method, and stays. */}
       {data.method ? (
-        <p data-copy="figure" className="m-0 flex flex-col gap-0.5 pt-1 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
-          {/* WHICH MONTH EVERY FIGURE ABOVE IS A READING OF — and that alone.
-              This line used to carry the window too ("Months drawn: July to
-              September"), because the window printed nowhere else on the page.
-              It prints in the page bar now, in the artboard's own place and
-              the artboard's own day granularity (`voiceHorizonRange`), so what
-              is left here is the fact the bar does NOT carry: the span the
-              axis is drawn over and the month the figures read are not the
-              same thing. */}
-          <span>{`Every figure above reads ${monthName(data.month)}`}</span>
-          {data.method.lines.map((line) => <span key={line}>{line}</span>)}
+        <p data-copy="figure" className="m-0 pt-1 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
+          {data.method.privacy}
         </p>
       ) : null}
     </PageFrame>

@@ -1,7 +1,6 @@
 import Link from 'next/link'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
-import { Derivation } from './derivation'
 import { fmtInt } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable } from '@/lib/reading/verdicts'
@@ -98,7 +97,8 @@ export const marketSayHear: Block<MarketSurfaceData> = {
         <div className={email ? undefined : 'flex min-h-0 flex-1 flex-col justify-between gap-2.5'}>
           {w.claims.map((claim) => <Claim key={claim.id} claim={claim} mode={mode} />)}
         </div>
-        <Derivation mode={mode} label="What a verdict here is worth">{w.claimsCaveat}</Derivation>
+        {/* No "What a verdict here is worth" disclosure: the footer note
+            "this update's reading" carries the caveat (copy de-clutter B72). */}
       </BlockFrame>
     )
   },

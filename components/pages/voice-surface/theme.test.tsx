@@ -72,12 +72,13 @@ describe('voiceTheme', () => {
     // November 2022.
     const base = voiceFixture()
     const text = draw({ ...base, theme: { ...base.theme, firstHeard: '2022-11-01', firstHeardOnAxis: false } })
-    expect(text).toContain('first heard November 2022, before the months drawn here')
+    expect(text).toContain('first heard November 2022 · seen in')
     expect(text).not.toContain('first read here')
   })
 
   it('heads the tone line as the AUDIENCE’s, because that is whose it is', () => {
-    expect(draw()).toContain('Tone · the category, all judged videos')
+    expect(draw()).toContain('Tone · the category')
+    expect(draw()).not.toContain('all judged videos')
   })
 
   it('draws all four moods, because `moodShares` returns four', () => {
@@ -155,7 +156,7 @@ describe('voiceTheme', () => {
   it('draws the on-camera count as a figure carrying its own basis (D15)', () => {
     const text = draw()
     expect(text).toContain('17 said it on camera')
-    expect(text).toContain('of the 182 voices behind this theme, counted over the whole update, not this month')
+    expect(text).toContain('of 182 voices, whole update')
     // Once, not twice: the sentence form is for the arm where the numbers are
     // absent.
     expect(text.split('said on camera rather than typed')).toHaveLength(1)
@@ -172,7 +173,7 @@ describe('voiceTheme', () => {
     expect(t.onCameraOf).toBe(t.quotesOf)
     const text = draw()
     expect(text).toContain('6 of 182 voices')
-    expect(text).toContain('of the 182 voices behind this theme')
+    expect(text).toContain('of 182 voices')
     expect(text).not.toContain('quotes behind this theme')
   })
 
@@ -211,7 +212,8 @@ describe('voiceTheme', () => {
   it('prints the month the share moved from, and rules the bar there against a NAMED axis', () => {
     const text = draw()
     expect(text).toContain('130 of 1,388 this month · Aug 6.8% of 1,200')
-    expect(text).toContain('rule at Aug 6.8% · Sep 9.4%')
+    // No rule label: the stat line above already prints both months (B31).
+    expect(text).not.toContain('rule at Aug')
     // The artboard draws 9.4% at 62.7% of the bar and never says against what.
     expect(text).toContain('share of the category videos, axis to 15%')
   })
@@ -267,15 +269,13 @@ describe('voiceTheme', () => {
     expect(text).toContain('No video behind this theme carries readable speech')
   })
 
-  it('counts the withheld evidence, refuses to quote it, and says so at zero too', () => {
+  it('counts the withheld evidence, refuses to quote it, and hides the row at zero', () => {
     expect(draw()).toContain('Who these commenters are — counted, not quoted')
-    expect(draw()).toContain('4 comments describe who these commenters are and are counted rather than quoted.')
-    // PORTED (wave 2): the line printed only when there was something to
-    // count, so at zero a reader could not tell "nothing was withheld" from
-    // "we do not do this".
+    expect(draw()).toContain('4 comments describe who these commenters are.')
+    // At zero the row is hidden rather than printing an empty sentence (B34).
     const none = voiceFixture()
     expect(draw({ ...none, theme: { ...none.theme, withheld: 0 } }))
-      .toContain('Nothing behind this theme describes who the commenters are.')
+      .not.toContain('Who these commenters are')
   })
 
   it('links to the conclusion rather than rebuilding Market’s list here (decision Q)', () => {

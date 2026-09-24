@@ -5,7 +5,7 @@ import { BlockQuote } from '@/components/blocks/quote'
 import { TileBlock } from '@/components/shell/tile'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, shortDate } from '@/lib/format'
-import { CENSUS_EMPTY, OWN_POSTS_NO_ACCOUNTS, type ClaimEcho, type OwnClaimRow, type OwnPostCensus } from '@/lib/reading/own-posts'
+import { CENSUS_EMPTY, OWN_POSTS_NO_ACCOUNTS, RIVAL_CLAIMS_WITHHELD, type ClaimEcho, type OwnClaimRow, type OwnPostCensus } from '@/lib/reading/own-posts'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import type { CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
 
@@ -156,8 +156,11 @@ function Census({ census, mode }: { census: OwnPostCensus; mode: RenderMode }) {
   if (census.unread) {
     const line = (
       <p className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}>
-        {census.unread === CENSUS_EMPTY(census.basis) ? censusSilent(census.basis) : census.unread}
-        {census.unread === OWN_POSTS_NO_ACCOUNTS ? <> — {OWN_CLAIMS_OWNER}.</> : null}
+        {/* The mock's short form for a rival with no account (copy
+            de-clutter B102); the footer link says where to add them. */}
+        {census.unread === OWN_POSTS_NO_ACCOUNTS
+          ? <>not tracked · accounts not configured · {OWN_CLAIMS_OWNER}</>
+          : census.unread === CENSUS_EMPTY(census.basis) ? censusSilent(census.basis) : census.unread}
       </p>
     )
     return email
@@ -179,7 +182,9 @@ function Census({ census, mode }: { census: OwnPostCensus; mode: RenderMode }) {
       {head}
       {counts}
       {census.claims.map((c) => <Claim key={c.id} row={c} mode={mode} />)}
-      {census.claimsNote ? (
+      {/* The rivals' withheld-claims note is the same sentence on every card,
+          so the block says it once under the list (copy de-clutter). */}
+      {census.claimsNote && census.claimsNote !== RIVAL_CLAIMS_WITHHELD ? (
         <p className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}>
           {census.claimsNote}
         </p>
@@ -199,6 +204,9 @@ export function trackedLine(censuses: readonly OwnPostCensus[]): string {
   const watched = censuses.filter((c) => c.unread !== OWN_POSTS_NO_ACCOUNTS).length
   return `${fmtInt(watched)} of ${fmtInt(censuses.length)} tracked`
 }
+
+/** `RIVAL_CLAIMS_WITHHELD` said once for the block rather than once per card. */
+export const RIVAL_CLAIMS_WITHHELD_ONCE = 'What rivals claim in these posts is not printed here.'
 
 export const competitiveOwnClaims: Block<CompetitiveSurfaceData> = {
   key: 'competitive.ownclaims',
@@ -223,7 +231,7 @@ export const competitiveOwnClaims: Block<CompetitiveSurfaceData> = {
         className={mode === 'app' ? 'h-full' : undefined}
         question={competitiveOwnClaims.question}
         mode={mode}
-        meta="own posts · tracked accounts only"
+        // No meta: the heading and the "N of M tracked" footer say it (B100).
         footer={
           missing
             ? mode === 'app'
@@ -237,6 +245,11 @@ export const competitiveOwnClaims: Block<CompetitiveSurfaceData> = {
         <div className={email ? undefined : 'flex min-w-0 flex-col gap-2.5'}>
           {censuses.map((c) => <Census key={c.audience} census={c} mode={mode} />)}
         </div>
+        {censuses.some((c) => c.claimsNote === RIVAL_CLAIMS_WITHHELD) ? (
+          <p className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}>
+            {RIVAL_CLAIMS_WITHHELD_ONCE}
+          </p>
+        ) : null}
       </BlockFrame>
     )
   },

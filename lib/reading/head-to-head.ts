@@ -193,11 +193,17 @@ const round1 = (n: number): number => Math.round(n * 10) / 10
 // What each one has to carry is unchanged: WHY no band, and that both months
 // are printed in its place.
 const RATE_NOT_A_SHARE =
-  'Comments per video is an average, not a count out of a total, so no band is drawn over it — both months are printed instead.'
+  'Comments per video is an average, not a count out of a total, so no band is drawn over it; both months are printed instead.'
 const MEDIAN_NOT_A_SHARE =
-  'Engagement is the middle video’s rate, not a count out of a total, so no band is drawn over it — both months are printed instead.'
+  'Engagement is the middle video’s rate, not a count out of a total, so no band is drawn over it; both months are printed instead.'
 const COUNT_NOT_A_SHARE =
-  'Posts published is a plain count with nothing to be out of, so no band is drawn over it — both months are printed instead.'
+  'Posts published is a plain count with nothing to be out of, so no band is drawn over it; both months are printed instead.'
+
+/** The three reasons a row carries NO band because it is not a share. They
+ *  never change month to month, so on screen they ride as a tooltip on the
+ *  row's name and only the refusals (floor, no previous month) print under
+ *  the table (copy de-clutter B96). */
+export const NOT_A_SHARE_WHY: ReadonlySet<string> = new Set([RATE_NOT_A_SHARE, MEDIAN_NOT_A_SHARE, COUNT_NOT_A_SHARE])
 
 const floorWhy = (floor: number): string =>
   `Under ${fmtInt(floor)} videos on a side, so no comparison is drawn.`
@@ -425,7 +431,7 @@ function engagementMeasure(input: HeadToHeadInput, basisLine: string): FaceOffMe
     verdictWhy: MEDIAN_NOT_A_SHARE,
     why:
       you === null || them === null
-        ? 'No engagement rate was read on one side this month — Reddit is excluded, and a video the platform gave us no rate for carries none.'
+        ? 'No engagement rate was read on one side this month.'
         : null,
   }
 }
@@ -546,7 +552,7 @@ function postsWhy(input: HeadToHeadInput, you: FaceOffSide | null, them: FaceOff
   const missing = [you === null ? input.you.label : null, them === null ? input.them.label : null].filter(
     (l): l is string => l !== null,
   )
-  return `No post on an account of ${missing.join(' or ')}’s was read in either month, so there is nothing to count for them — which is not the same as having no account configured, and says nothing about whether one is.`
+  return `No post on an account of ${missing.join(' or ')}’s was read in either month, so there is nothing to count for them.`
 }
 
 function sideWhy(input: HeadToHeadInput, you: FaceOffSide | null, them: FaceOffSide | null): string | null {

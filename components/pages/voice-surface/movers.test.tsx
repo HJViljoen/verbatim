@@ -25,9 +25,9 @@ describe('voiceMovers', () => {
 
   it('names the arms by what was done to the number, never with a direction word', () => {
     const text = draw()
-    expect(text).toContain('Cleared their band · a larger share than last month')
-    expect(text).toContain('Cleared their band · a smaller share than last month')
-    expect(text).toContain('Inside the band')
+    expect(text).toContain('Larger share than last month')
+    expect(text).toContain('Smaller share than last month')
+    expect(text).toContain('No clear change')
     // A heading that said "Growing" would make the claim before a row earned
     // it; rule (c) refuses a direction word outside a verdict node, and the
     // copy-contract test above is what actually holds the line. The artboard's
@@ -49,7 +49,7 @@ describe('voiceMovers', () => {
     const markup = render(voiceMovers.render(voiceFixture(), 'app', ctx))
     expect(markup).toContain('xl:grid-cols-2')
     const text = draw()
-    expect(text.indexOf('a larger share than last month')).toBeLessThan(text.indexOf('a smaller share than last month'))
+    expect(text.indexOf('Larger share than last month')).toBeLessThan(text.indexOf('Smaller share than last month'))
   })
 
   it('prints the month a banded row moved FROM, with that month\u2019s own n', () => {
@@ -86,10 +86,8 @@ describe('voiceMovers', () => {
     expect(draw({ ...base, movers: { ...base.movers, growing: many, shown: 6 } })).not.toContain('Nothing else moved clearly')
   })
 
-  it('says the re-read caveat once, for the list, not once per row', () => {
-    const text = draw()
-    const note = 'a change that is really a re-reading cannot be marked'
-    expect(text.split(note)).toHaveLength(2)
+  it('does not print the standing re-read caveat (moved to How to read, B26)', () => {
+    expect(draw()).not.toContain('a change that is really a re-reading cannot be marked')
   })
 
   it('keeps every arm inside the length the data asked for — the flags row too', () => {
@@ -127,11 +125,11 @@ describe('voiceMovers', () => {
 
   it('renders the one-mover month production is in without complaint', () => {
     const text = draw(refusedVoiceFixture())
-    expect(text).toContain('Admiration for personal resilience ▼ 5.1 pts · band ±4 pts 8.8% · 34 of 388 · Aug 13.9% of 402')
-    expect(text).not.toContain('Inside the band')
+    expect(text).toContain('8.8% · 34 of 388 · Aug 13.9% of 402')
+    expect(text).not.toContain('No clear change')
     // A minus under "a larger share than last month" is the one-axis failure
     // this block's header describes; the row is in the arm its verdict names.
-    expect(text).toContain('a smaller share than last month')
+    expect(text).toContain('Smaller share than last month')
   })
 
   it('"Nothing moved clearly this month" is an answer, not a hole', () => {
@@ -151,7 +149,7 @@ describe('voiceMovers', () => {
     // runs the full width of the block, so it reads as the end of the
     // comparison rather than as a divider inside one column of it.
     const markup = render(voiceMovers.render(voiceFixture(), 'app', ctx))
-    const flat = markup.indexOf('Inside the band')
+    const flat = markup.indexOf('No clear change')
     expect(flat).toBeGreaterThan(-1)
     expect(markup.slice(0, flat)).toContain('<div class="border-t border-border/70"></div>')
     // No rule where there is no neutral arm to separate.
@@ -172,7 +170,7 @@ describe('voiceMovers', () => {
     const text = draw(client)
     expect(voiceMovers.title).toBe('Movers')
     expect(text).not.toContain('category themes')
-    expect(text).toContain('share of 212 videos in this audience · Sep 2026 vs Aug 2026')
+    expect(text).toContain('Sep 2026 vs Aug 2026')
   })
 
   it('keeps its key, which is a stored contract', () => {

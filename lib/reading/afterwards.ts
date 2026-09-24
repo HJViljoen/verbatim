@@ -166,7 +166,17 @@ export interface GroundingInput {
 /** The one sentence for "the evidence was replaced", written once so the two
  *  places that reach it cannot come to say different things. */
 const PRUNED_LINE =
-  'The evidence this was written from is no longer on record — a later update replaced it, so we cannot count the videos behind it.'
+  'The evidence this was written from is no longer on record: a later update replaced it, so we cannot count the videos behind it.'
+
+/**
+ * The basis every grounding count is on, said ONCE per surface (copy de-clutter
+ * ruling C): on Market as the "Grounded in" column's tooltip, in a document as
+ * one footer line. The per-row line below is the count alone, because the same
+ * clause stacked under every row of a ledger is what a three-month reader
+ * stops reading.
+ */
+export const GROUNDED_BASIS =
+  'Counted over everything we have read for you, not over one month.'
 
 const prunedGrounding = (audience: string): Grounding =>
   ({ videos: 0, themes: 0, audience, pruned: true, line: PRUNED_LINE })
@@ -187,8 +197,7 @@ export function groundingFor(input: GroundingInput): Grounding | null {
   const pruned = videos === 0
   const line = pruned
     ? PRUNED_LINE
-    : `${fmtInt(videos)} ${videos === 1 ? 'video' : 'videos'} behind it, ` +
-      `counted over everything we have read for you up to ${monthName(monthStartOf(input.month))} — not over one month.`
+    : `${fmtInt(videos)} ${videos === 1 ? 'video' : 'videos'} behind it`
   return { videos, themes, audience: input.audience, pruned, line }
 }
 
@@ -307,7 +316,7 @@ export function afterwardsFor(input: AfterwardsInput): Afterwards {
       state: 'too_soon',
       verdict: null,
       months: [],
-      line: 'You have not decided on this one yet. We start reading the month after you do.',
+      line: 'Not decided yet.',
     }
   }
   if (input.targetIds.length === 0) {
@@ -344,20 +353,10 @@ export function afterwardsFor(input: AfterwardsInput): Afterwards {
       // we compare from 2. Sep 2026 itself is in neither side", where "2. Sep
       // 2026" is a date in most of the world and the sentence break vanishes.
       // The count moves off the end of its clause; nothing else changes.
-      line:
-        `${have === 0 ? 'No month' : have === 1 ? 'One month' : `${fmtInt(have)} months`} has been read in ${where} since you decided this, ` +
-        `and we do not compare until ${fmtInt(minReadings)} have been read. ${monthName(decidedMonth)} itself is in neither side — ` +
-        // A decision dated the 1st was not made partway through anything. The
-        // month is still left out of both sides, and the reason is the same
-        // one either way: the decision sits inside it.
-        //
-        // "SITS", NOT "FALLS" (E-content fix pass, wave 2). `falls` is on the
-        // shared movement list (lib/calibration.ts DIRECTION_WORDS), so this
-        // sentence — code's own, unmarked, and printed on every ledger row
-        // decided on the 1st with fewer than two readings since — failed copy
-        // contract rule (c) on any block that renders it. Nothing here claims a
-        // direction; the word was the whole violation.
-        `${input.decidedAt.slice(8, 10) === '01' ? 'your decision sits at the start of it' : 'you decided partway through it'}.`,
+      // THE STATUS, NOT THE RULE (copy de-clutter B61/E88). The rule — two
+      // months are read before a comparison, and the decision's own month is
+      // in neither side — is written once in Settings › How to read.
+      line: `${fmtInt(have)} of ${fmtInt(minReadings)} months read since you decided.`,
     }
   }
   if (before.length === 0) {

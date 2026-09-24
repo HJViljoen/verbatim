@@ -98,10 +98,14 @@ function Way({ way, mode, appUrl }: { way: WayRow; mode: RenderMode; appUrl: str
           // PAPER DRAWS NO CONTROL AT ALL, live or dead: an export must not
           // render a button nobody can press, so print keeps the slot's shape
           // as a plain span and the words under it carry the whole answer.
-          ? <button type="button" disabled aria-disabled="true" data-print-hide className={DEAD}>{way.title}</button>
+          // ON SCREEN THE DEAD WAY'S "HOW" AND ITS NOT-BUILT LINE RIDE AS A
+          // TOOLTIP (copy de-clutter B75, ruling G): the roadmap is listed once
+          // in Settings › Readiness. The wrapper carries the title because a
+          // disabled button fires no hover in every browser.
+          ? <span title={[way.how, way.unlock].filter(Boolean).join(' ')} className="cursor-help"><button type="button" disabled aria-disabled="true" data-print-hide className={DEAD}>{way.title}</button></span>
           : <span className={dead ? DEAD : LIVE}>{way.title}</span>}
-      {dead ? <span className="text-[11px] leading-[1.35] text-secondary-foreground">{way.how}</span> : null}
-      {way.unlock ? <span className="text-[11px] leading-[1.35] text-muted-foreground">{way.unlock}</span> : null}
+      {dead && mode !== 'app' ? <span className="text-[11px] leading-[1.35] text-secondary-foreground">{way.how}</span> : null}
+      {way.unlock && (!dead || mode !== 'app') ? <span className="text-[11px] leading-[1.35] text-muted-foreground">{way.unlock}</span> : null}
     </span>
   )
 }
@@ -125,7 +129,7 @@ export const marketWays: Block<MarketSurfaceData> = {
         // move is scored from the update after it" is true and says nothing
         // about how many of the five a reader can actually use today, which on
         // this page is the more useful half.
-        meta={`five ways in · ${live} of ${w.ways.length} work today · a move is scored from the update after it`}
+        meta={`five ways in · ${live} of ${w.ways.length} work today`}
       >
         {email ? (
           <div>{w.ways.map((way) => <Way key={way.key} way={way} mode={mode} appUrl={ctx.appUrl} />)}</div>

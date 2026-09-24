@@ -317,10 +317,10 @@ export const PRECEDENCE_RULE =
 /** What the corpus shares are shares of. The design's own label, said in full
  *  rather than abbreviated to a percent sign. */
 export const CORPUS_DENOMINATOR_LINE =
-  'Both shares are of what our search plan found and we read this month — the videos on the left, the comments we kept on the right.'
+  'Both shares are of what our search plan found and we read this month.'
 
 export const PANEL_DENOMINATOR_LINE =
-  'Both shares are of a frozen panel of accounts — the videos they posted on the left, the comments those posts drew on the right.'
+  'Both shares are of a frozen panel of accounts.'
 
 /** The attention index item 11 describes and this block does not have: the
  *  platform's own comment counts on a frozen panel of accounts. Named, and
@@ -974,7 +974,7 @@ export async function loadRivalOwnPosts(
 
 /** Nobody read them, and the page says which silence that is. */
 export const SAID_ABOUT_WITHHELD = (label: string): string =>
-  `What others say about ${label} is read from those videos’ own transcripts, which are not open to this page — so this is not a silence we measured.`
+  `What others say about ${label} is not read here: those videos’ transcripts are not open to this page.`
 
 /** "Ottobock, Rareform or Patagonia" — a list a sentence can carry. */
 export const namesList = (labels: readonly string[]): string =>
@@ -994,7 +994,7 @@ export const namesList = (labels: readonly string[]): string =>
  * naming them all.
  */
 export const SAID_ABOUT_WITHHELD_ALL = (labels: readonly string[]): string =>
-  `What others say about ${namesList(labels)} is read from those videos’ own transcripts, which are not open to this page — so this is not a silence we measured.`
+  `What others say about ${namesList(labels)} is not read here: those videos’ transcripts are not open to this page.`
 
 /** Claims in hand and no month row to be a share of. */
 export const SAID_ABOUT_NO_DENOMINATOR = (label: string): string =>

@@ -144,7 +144,7 @@ function Side({ verdict, mode, control = false }: { verdict: Verdict; mode: Rend
   return (
     <span data-copy="verdict" className="flex items-baseline justify-between gap-3">
       <span className="min-w-0 text-[12px] text-secondary-foreground">{body}</span>
-      <MovementBadge verdict={v} unit="pts" good="neutral" />
+      <MovementBadge verdict={v} unit="pts" good="neutral" bandTip={mode === 'app'} />
     </span>
   )
 }
@@ -294,12 +294,9 @@ export const marketMoves: Block<MarketSurfaceData> = {
             )}
           </div>
         ) : null}
-        <p
-          className={email ? undefined : 'm-0 text-[11px] leading-[1.35] text-muted-foreground'}
-          style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 6 } : undefined}
-        >
-          {m.unlock}
-        </p>
+        {/* No MOVES_UNLOCK footer: each unscored row already says which
+            reading its first comparison lands with, and the rule is written
+            once in Settings › How to read (copy de-clutter B66). */}
       </BlockFrame>
     )
   },

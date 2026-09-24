@@ -385,7 +385,7 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
             // equal — and this line called them "quotes" while the heading
             // three inches above called them "voices". The artboard's word is
             // the heading's.
-            base={<>of the {fmtInt(t.onCameraOf as number)} {VOICES_WORD} behind this theme, counted over the whole update, not this month</>}
+            base={<>of {fmtInt(t.onCameraOf as number)} {VOICES_WORD}, whole update</>}
           />
         ) : null}
       </div>
@@ -484,9 +484,8 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
                     pct={t.pct}
                     max={reachAxisMax([t.pct, prevPct])}
                     rule={prevPct}
-                    ruleLabel={prevPct != null && prevMonth
-                      ? `rule at ${monthName(prevMonth).slice(0, 3)} ${fmtPct(prevPct)} · ${monthName(data.month).slice(0, 3)} ${fmtPct(t.pct)}`
-                      : undefined}
+                    // No rule label: the stat line and the chart caption already
+                    // print both months' shares (copy de-clutter B31).
                     axisLabel={`share of ${t.audienceLabel.toLowerCase()} videos`}
                   />
                 ) : null}
@@ -548,7 +547,6 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
               block already knows the 83. */}
           <Line
             label={voicesLabel(t)}
-            note={t.quotes.length > 0 ? 'original first, English beneath when translated' : undefined}
             mode={mode}
           >
             {t.quotes.length > 0 ? (
@@ -595,7 +593,7 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
               "we do not do this". The mock's "Counted with the first update."
               is not our sentence — the counting is not deferred, there is
               simply nothing in this theme that describes who is speaking. */}
-          <div className={email ? undefined : 'flex flex-wrap items-baseline justify-between gap-3 border-t border-border/70 pt-2.5'}>
+          {t.withheld > 0 ? <div className={email ? undefined : 'flex flex-wrap items-baseline justify-between gap-3 border-t border-border/70 pt-2.5'}>
             {email ? (
               <span style={{ fontFamily: FONT.sans, fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: EMAIL.muted }}>
                 Who these commenters are — counted, not quoted
@@ -606,11 +604,9 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
               </h4>
             )}
             <span className={email ? undefined : 'min-w-0 flex-1 text-[12px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted } : undefined}>
-              {t.withheld > 0
-                ? <><span data-copy="figure">{fmtInt(t.withheld)}</span> comments describe who these commenters are and are counted rather than quoted.</>
-                : 'Nothing behind this theme describes who the commenters are.'}
+              <span data-copy="figure">{fmtInt(t.withheld)}</span> comments describe who these commenters are.
             </span>
-          </div>
+          </div> : null}
 
           {notes.length > 0 ? (
             // The notes carry code's own counts (the reach line, the no-speech
@@ -747,7 +743,7 @@ function Tone({ t, mode }: { t: ThemeBlock; mode: RenderMode }) {
   )
   const inner = (
     <Line
-      label={`Tone · ${t.audienceLabel.toLowerCase()}, all judged videos`}
+      label={`Tone · ${t.audienceLabel.toLowerCase()}`}
       note={t.tone ? `of ${fmtInt(t.tone.judged)} judged` : undefined}
       mode={mode}
     >

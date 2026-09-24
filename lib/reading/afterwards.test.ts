@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 
 import { directionRe } from '../test/copy-contract'
-import { AFTERWARDS_MIN_READINGS, afterwardsFor, audiencePhrase, groundingFor } from './afterwards'
+import { AFTERWARDS_MIN_READINGS, GROUNDED_BASIS, afterwardsFor, audiencePhrase, groundingFor } from './afterwards'
 
 const videoMap = (pairs: [string, string | null][]) => new Map<string, string | null>(pairs)
 
@@ -104,9 +104,12 @@ describe('groundingFor', () => {
     // of an audience — the mock's "41 videos in the category, September" is
     // two populations in one sentence.
     expect(g?.pruned).toBe(false)
-    expect(g?.line).toContain('everything we have read for you')
+    // The per-row line is the count alone; the all-time basis is said once
+    // per surface off GROUNDED_BASIS (copy de-clutter ruling C).
+    expect(g?.line).toBe('1 video behind it')
     expect(g?.line).not.toContain('in the category')
-    expect(g?.line).toContain('not over one month')
+    expect(GROUNDED_BASIS).toContain('everything we have read for you')
+    expect(GROUNDED_BASIS).toContain('not over one month')
   })
 })
 
@@ -156,8 +159,8 @@ describe('afterwardsFor', () => {
     // Only September is strictly after August, so one reading of two.
     expect(a.state).toBe('too_soon')
     expect(a.months).toEqual(['2026-09-01'])
-    expect(a.line).toContain('Aug 2026')
-    expect(a.line).toContain('partway through it')
+    // The status only; the decision-month rule lives in How to read (E88).
+    expect(a.line).toBe('1 of 2 months read since you decided.')
   })
 
   it('never ends a clause with a digit in front of a month, which reads as a date', () => {
@@ -167,7 +170,7 @@ describe('afterwardsFor', () => {
     // inside it.
     const a = afterwardsFor({ decidedAt: '2026-08-14', targetIds: ['reg-1'], series: SERIES, audience: 'client' })
     expect(a.line).not.toMatch(/\d\.\s+[A-Z][a-z]{2}/)
-    expect(a.line).toContain('we do not compare until 2 have been read')
+    expect(a.line).toContain('1 of 2 months read')
   })
 
   // A DECISION DATED THE 1st TOOK THE OTHER ARM, AND THE OTHER ARM SAID
@@ -183,7 +186,6 @@ describe('afterwardsFor', () => {
       audience: 'client',
     })
     expect(a.state).toBe('too_soon')
-    expect(a.line).toContain('at the start of it')
     expect(directionRe().test(a.line)).toBe(false)
   })
 
@@ -195,14 +197,14 @@ describe('afterwardsFor', () => {
       audience: 'client',
     })
     expect(a.verdict).toBeNull()
-    expect(a.line).toContain('One month')
+    expect(a.line).toContain('1 of')
     expect(a.line).toContain(String(AFTERWARDS_MIN_READINGS))
   })
 
   it('is too_soon, not blank, when nothing has been decided', () => {
     const a = afterwardsFor({ decidedAt: null, targetIds: ['reg-1'], series: SERIES, audience: 'client' })
     expect(a.state).toBe('too_soon')
-    expect(a.line).toContain('have not decided')
+    expect(a.line).toBe('Not decided yet.')
     expect(a.line).not.toBe('—')
   })
 
@@ -330,7 +332,7 @@ describe('afterwardsFor — which silence a cell prints', () => {
     // reader is owed names the thing that resolves on the calendar.
     const a = afterwardsFor({ decidedAt: null, targetIds: [], series: [], audience: 'client' })
     expect(a.state).toBe('too_soon')
-    expect(a.line).toContain('have not decided')
+    expect(a.line).toBe('Not decided yet.')
     expect(a.line).not.toContain('does not name a subject')
   })
 
@@ -341,13 +343,12 @@ describe('afterwardsFor — which silence a cell prints', () => {
 })
 
 describe('afterwardsFor — the small true things', () => {
-  it('does not say you decided partway through a month you decided on the 1st of', () => {
+  it('says neither "partway through" nor "at the start of it": the status is the count alone', () => {
     const first = afterwardsFor({ decidedAt: '2026-08-01T09:00:00.000Z', targetIds: ['reg-1'], series: SERIES, audience: 'client' })
     expect(first.state).toBe('too_soon')
     expect(first.line).not.toContain('partway through')
-    expect(first.line).toContain('at the start of it')
     const mid = afterwardsFor({ decidedAt: '2026-08-14', targetIds: ['reg-1'], series: SERIES, audience: 'client' })
-    expect(mid.line).toContain('partway through it')
+    expect(mid.line).toBe(first.line)
   })
 
   it('keys the verdict on the kind of identity it was given', () => {

@@ -4,7 +4,7 @@ import { BlockMovement } from '@/components/blocks/movement'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, monthName } from '@/lib/format'
 import { prevMonth } from '@/lib/reading/month-key'
-import type { FaceOffMeasure, FaceOffSide, HeadToHead } from '@/lib/reading/head-to-head'
+import { NOT_A_SHARE_WHY, type FaceOffMeasure, type FaceOffSide, type HeadToHead } from '@/lib/reading/head-to-head'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import { headToHeadFigures } from '@/lib/pages/playbook'
 import type { CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
@@ -120,11 +120,17 @@ function Row({ measure: m, mode }: { measure: FaceOffMeasure; mode: RenderMode }
   const email = mode === 'email'
   const label = (
     <>
-      <span className={email ? undefined : 'block text-[12.5px]'} style={email ? { fontSize: 12.5, color: EMAIL.ink } : undefined}>{m.label}</span>
-      {/* THE CLOCK, PER ROW. Two of the five are comment-dated and three are
-          dated by the video's upload; printing all five under one month
-          heading without saying so is decision D9's exact defect. */}
-      <span className={email ? undefined : 'block font-mono text-[10.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.muted } : undefined}>{m.basisLine}</span>
+      {/* THE CLOCK IS SAID ONCE, UNDER THE TABLE (`basisGroups`, copy
+          de-clutter B98), not repeated under every row. On screen a row that
+          draws no band because it is not a share says why in a tooltip on its
+          name (B96). */}
+      <span
+        className={email ? undefined : `block text-[12.5px]${mode === 'app' && m.verdictWhy && NOT_A_SHARE_WHY.has(m.verdictWhy) ? ' cursor-help' : ''}`}
+        style={email ? { fontSize: 12.5, color: EMAIL.ink } : undefined}
+        title={mode === 'app' && m.verdictWhy && NOT_A_SHARE_WHY.has(m.verdictWhy) ? m.verdictWhy : undefined}
+      >
+        {m.label}
+      </span>
     </>
   )
 
@@ -186,6 +192,18 @@ export function sideReasons(h2h: HeadToHead): string[] {
     out.push(m.why)
   }
   return out
+}
+
+/** "Videos about the brand, Comments per video: videos and comments dated in
+ *  September · …" — each clock the table keeps, once, with the rows that keep
+ *  it (copy de-clutter B98: the basis was printed under every row). */
+export function basisGroups(h2h: HeadToHead): string {
+  const groups = new Map<string, string[]>()
+  for (const m of h2h.measures) {
+    if (!m.basisLine) continue
+    groups.set(m.basisLine, [...(groups.get(m.basisLine) ?? []), m.label])
+  }
+  return [...groups].map(([basis, labels]) => `${labels.join(', ')}: ${basis}`).join(' · ')
 }
 
 /** Every distinct reason a row drew no band, in the order the rows appear.
@@ -285,10 +303,12 @@ export const competitiveHeadToHead: Block<CompetitiveSurfaceData> = {
             {/* THE REASONS, IN THE OPEN. Three rows are a rate, a median and a
                 count and no band may be drawn over any of them; the mock prints
                 a green number on all three instead. */}
-            {verdictReasons(h).map((why) => (
+            {verdictReasons(h).filter((why) => mode !== 'app' || !NOT_A_SHARE_WHY.has(why)).map((why) => (
               <p key={why} className={note} style={noteStyle}>{why}</p>
             ))}
-            <p className={note} style={noteStyle}>{h.excludedNote}</p>
+            {basisGroups(h) ? <p className={note} style={noteStyle}>{basisGroups(h)}</p> : null}
+            {/* No `excludedNote`: the footer's "Reddit excluded from the
+                engagement rows" is the page's one Reddit line (ruling H). */}
           </>
         ) : null}
       </BlockFrame>

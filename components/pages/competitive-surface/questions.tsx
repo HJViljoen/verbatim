@@ -165,20 +165,8 @@ export const competitiveQuestions: Block<CompetitiveSurfaceData> = {
           </p>
         ) : null}
 
-        <p
-          className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'}
-          style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 4 } : undefined}
-        >
-          {q.groupingNote}
-        </p>
-        {q.subjectsNote ? (
-          <p
-            className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'}
-            style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 } : undefined}
-          >
-            {q.subjectsNote}
-          </p>
-        ) : null}
+        {/* The grouping and subject-matching notes are not-built notes and
+            are listed once in Settings › Readiness (copy de-clutter B108). */}
         {q.subreddits.length > 0 ? (
           <p
             className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'}
