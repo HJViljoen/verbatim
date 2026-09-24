@@ -118,25 +118,25 @@ export const GLOSSARY = {
   // date. Everything below them is legacy: each entry belongs to a page Phase 1
   // retires or rewrites, and it goes when that page does (THIRTEEN_WORDS is the
   // list a new surface may draw from; see the note on it).
-  update: ['Update', 'one delivery — a gather, an analysis, and everything written from it. Updates are counted and dated in the record; an update is never a period, and no figure on a reading page is indexed by one'],
-  month: ['Month', 'the calendar month a comment was WRITTEN in — the one clock this product keeps. A month is re-read by every update until 30 days after it ends, marked "still filling" until then, and frozen after'],
+  update: ['Update', 'one delivery: a gather, an analysis, and everything written from it. Updates are counted and dated in the record; an update is never a period, and no figure on a reading page is indexed by one'],
+  month: ['Month', 'the calendar month a comment was written in, not the day we read it: the one clock this product keeps. A month is re-read by every update until 30 days after it ends, marked "still filling" until then, and frozen after'],
   week: ['Week', 'seven days inside a month. Printed only on the weekly report and This week, always beside the month it is stated against, never on its own'],
-  video: ['Video', 'one video and the comments written under it that month — the unit every share is a share of. A video posted in June and still drawing comment in September belongs to both months. Comments are counted separately, as comments'],
+  video: ['Video', 'one video and the comments written under it that month: the unit every share is a share of. A video posted in June and still drawing comment in September belongs to both months. Comments are counted separately, as comments'],
   audience: ['Audience', 'whose videos a figure is about: yours, one named rival’s, or the rest of the category. Every figure states which, and no two are pooled silently'],
-  subject: ['Subject', 'something you told us you care about, in your own words, dated and logged — counted by exactly the rule a theme is'],
+  subject: ['Subject', 'something you told us you care about, in your own words, dated and logged, and counted by exactly the rule a theme is'],
   theme: ['Theme', 'something the category kept saying, grouped and named from what was read. The grouping is ours and it can change; when it does, the line says so'],
-  kind: ['Kind', 'what a comment was doing — a question, an objection, praise. One comment is one kind, and the kinds do not sum to the conversation'],
+  kind: ['Kind', 'what a comment was doing: a question, an objection, praise. One comment is one kind, and a video can carry several, so the kinds do not sum to the conversation'],
   rival: ['Rival', 'a brand you named in Settings. A rival that leaves the tracked set terminates its line with a break, never falling to zero, and a renamed rival is one line with the rename marked on it'],
-  move: ['Move', 'something you did — a launch, a campaign, a message you pushed — dated by you and read against the audiences you did not touch. Your statement, not ours; we only report what the conversation did after it'],
+  move: ['Move', 'something you did, such as a launch, a campaign or a message you pushed, dated by you and read against the audiences you did not touch. Your statement, not ours; we only report what the conversation did after it'],
   level: ['Level', 'what a figure is running at, always printed with its denominator: "3 of the 28 videos in your audience"'],
   change: ['Change', 'the difference between two levels, banded with each side’s video count as n. Inside the band it reads "no clear change"; under 100 videos a side, or 10 of the object’s own, "too few to compare"'],
   direction: ['Growing · fading · flat', 'a direction word, earned only by three consecutive monthly readings under one grouping and assigned in code, never by the model. One comparison can say a thing moved; it can never say which way it is going'],
-  gone_quiet: ['Gone quiet', 'heard in earlier months and not in this one — a flag, not a direction, and computed only over updates that actually produced themes'],
-  // `new` — the other flag — is the entry below. Its wording is still the
-  // run-indexed one ("not present in your previous update") because that is
-  // what the pages printing it today actually compute; it re-bases on the
-  // monthly series with the page that prints it, and the code that already
-  // reads the months calls the flag by the same name (VerdictFlag 'new').
+  gone_quiet: ['Gone quiet', 'heard in earlier months and not in this one: a flag, not a direction, and computed only over updates that actually produced themes'],
+  // `new` — the other flag — is the entry below. ONE definition (copy
+  // de-clutter ruling D, 2026-09-24): the month-based one Market computes.
+  // The run-indexed pages that computed "not present in your previous update"
+  // are no longer routed; This week counts themes "first heard in this update"
+  // and says so in those words rather than calling them New.
   // ---- Legacy · each retires with the page that prints it -------------------
   // The LEGACY unit, and deliberately not the month-scoped one. Every figure
   // this tooltip sits behind — dominant, widespread, a theme's share, the
@@ -155,7 +155,7 @@ export const GLOSSARY = {
   act_now: ['Act now', 'the single top-ranked action this update — never more than one'],
   plan_next: ['Plan next', 'ranked second or third this update'],
   worth_considering: ['Worth considering', 'ranked below the top three this update'],
-  new: ['New', 'this theme was not present in your previous update'],
+  new: ['New', 'no earlier month in our record in which the theme behind it was mentioned, in your audience or in the category. A fact about the record, not a direction'],
   sentiment: ['Strongly positive → Strongly negative', 'fixed cutoffs on the measured share of rated conversations; Polarized = both sides above 30%'],
   say_vs_hear: ['Say vs hear', "what your own videos claim (from their transcripts), set against what the tracked conversation actually says — 'not talked about yet' means the audience doesn't engage with the claim, not that it's wrong"],
   news: ['In the news', 'published coverage matched to your tracked names by headline — shown as context beside the conversation, never claimed as the cause of anything measured'],

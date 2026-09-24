@@ -144,8 +144,9 @@ export function forSalesEmpty(data: ForSalesData): string | null {
 /** "grouped by subject" / "grouped by theme, because no subjects are recorded
  *  for this workspace yet" — the sentence that tells a reader what the headings
  *  above the counts actually are. */
-export function groupingLine(grouping: SalesGrouping): string {
+export function groupingLine(grouping: SalesGrouping): string | null {
+  // Null where the reader named the subjects: they know (copy de-clutter D70).
   return grouping === 'subject'
-    ? 'Grouped by the subjects you named.'
-    : 'Grouped by theme — the grouping is ours and it can change. Name your subjects in Settings and these become yours.'
+    ? null
+    : 'Grouped by theme: the grouping is ours and it can change. Name your subjects in Settings and these become yours.'
 }

@@ -13,10 +13,8 @@ const base: AskBasis = {
 }
 
 describe('askBasisLine', () => {
-  it('states the four facts, in the design’s order', () => {
-    expect(askBasisLine(base, { asked: true })).toBe(
-      'Answered against the update of 13 Sep. Today: 4 monthly readings · 3,129 of 3,129 findings searchable · indexed as at 15 Sep',
-    )
+  it('dates an answer by its update alone', () => {
+    expect(askBasisLine(base, { asked: true })).toBe('Answered against the update of 13 Sep')
   })
 
   it('says the box will answer against it, before a question is asked', () => {
@@ -26,9 +24,8 @@ describe('askBasisLine', () => {
   // Under a thread answered in August, only the update belongs to the answer;
   // the index facts are today's. One `·`-joined list read as four facts about
   // that August answer.
-  it('breaks tense after the update an answer was given against', () => {
-    expect(askBasisLine(base, { asked: true })).toContain('of 13 Sep. Today: 4 monthly readings')
-    // The box on the landing page is all one tense and takes no break.
+  it('leaves the index census to the draws tile', () => {
+    expect(askBasisLine(base, { asked: true })).not.toContain('Today:')
     expect(askBasisLine(base)).not.toContain('Today:')
   })
 

@@ -147,11 +147,10 @@ function Prehistory({ log, rows, now }: { log: ChangeLogView; rows: number; now:
   const showing = showingLine(rows, log.prehistory.length)
   return (
     <div className="flex flex-col gap-2 pt-2">
-      <p className="m-0 font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">Before the record began</p>
-      <p className="m-0 text-[11.5px] text-muted-foreground">
-        {fmtInt(log.prehistory.length)} earlier {log.prehistory.length === 1 ? 'entry was' : 'entries were'} worked out
-        afterwards from what each update searched, the oldest dated {log.prehistory[log.prehistory.length - 1].date}. They
-        are a label, not a record, and are not counted above.
+      {/* The count is the section's meta; what these entries are is the
+          change-log note's, said once above (copy de-clutter C94). */}
+      <p className="m-0 font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">
+        Before the record began · {fmtInt(log.prehistory.length)} {log.prehistory.length === 1 ? 'entry' : 'entries'}
       </p>
       <div className="flex flex-col">
         {log.prehistory.slice(0, rows).map((c) => (

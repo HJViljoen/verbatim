@@ -151,12 +151,10 @@ describe('the delivery block', () => {
     expect(text).toContain('monthly reading')
     expect(text).toContain('Your 6th monthly reading')
     expect(text).toContain('read at setup')
-    expect(text).toContain('under the floor')
-    expect(text).toContain('has not filled up')
-    // The remainder is the TOTAL less the one named, not the truncated list's
-    // (code review finding 2), and the months that will never fill up say so.
-    expect(text).toContain('and 3 other months are under it too')
-    expect(text).toContain('3 were read at setup and will not fill up any further')
+    // Which months are under the floor is the coverage row's, once for the
+    // page (copy de-clutter C103).
+    expect(text).not.toContain('under the floor')
+    expect(text).not.toContain('not one that went wrong')
   })
 
   it('says the reading is not recorded rather than counting zero readings', () => {
@@ -416,11 +414,9 @@ describe('the coverage grid', () => {
     expect(text).toContain('and 3 other months are under it too')
   })
 
-  it('prints the one-line summary this page never carried', () => {
+  it('prints no one-line summary of the rows under it (copy de-clutter C8)', () => {
     const text = renderText(coverage)
-    expect(text).toContain('This window in one line')
-    expect(text).toContain('monthly reading')
-    expect(text).toContain('4 updates')
+    expect(text).not.toContain('This window in one line')
   })
 
   it('says what a fresh database cannot say, without a zero anywhere', () => {

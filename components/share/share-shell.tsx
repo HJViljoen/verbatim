@@ -31,7 +31,6 @@ export function ShareShell({ data, appUrl }: { data: ReportSnapshotData; appUrl:
           const mod = pageModule(sec.section.page)
           if (!mod) return null
           const slides = sectionSlides(mod, sec.section, sec.data)
-          const method = methodOf(sec.data)
           return (
             <section key={sec.section.id} className="flex flex-col gap-3" aria-labelledby={`sec-${i}`}>
               <div className="flex flex-col gap-1 px-1">
@@ -57,10 +56,16 @@ export function ShareShell({ data, appUrl }: { data: ReportSnapshotData; appUrl:
                   </div>
                 ),
               )}
-              {method && <div className="px-1"><MethodNote data={method} /></div>}
             </section>
           )
         })}
+
+        {/* ONE method note per document, not one per section (copy
+            de-clutter C79): every section of one build reads the same update. */}
+        {(() => {
+          const method = data.sections.map((s) => methodOf(s.data)).find((m) => m != null)
+          return method ? <div className="px-1"><MethodNote data={method} /></div> : null
+        })()}
 
         <footer className="flex flex-wrap items-baseline justify-between gap-3 border-t border-border/70 px-1 pt-4 font-mono text-[11px] text-muted-foreground">
           <span>Prepared by {data.company} · with Verbatim</span>

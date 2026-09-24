@@ -195,7 +195,7 @@ function Citations({ d, from, to }: { d: D; from: number; to: number }) {
 function Silent({ d }: { d: D }) {
   return (
     <div className="max-w-[46rem] space-y-4">
-      <p className="text-[13px] text-secondary-foreground">The conversation analysed for {d.brand} did not speak to these. That is a result, not a gap in the tool: nobody in the tracked audience has said anything about them yet.</p>
+      <p className="text-[13px] text-secondary-foreground">The conversation analysed for {d.brand} did not speak to these.</p>
       <ul className="space-y-2">
         {d.silentQuestions.map((q, i) => <li key={i} className="font-serif text-[15px] leading-snug">“{q}”</li>)}
       </ul>

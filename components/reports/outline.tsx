@@ -155,13 +155,12 @@ export function Outline(p: Props) {
                       <span>Every item, one slide each</span>
                     </label>
                   )}
-                  <label className="block">
+                  <label className="block" title={selection ? 'The selection came from the page you added it from; change it there and add again.' : undefined}>
                     <span className="font-mono text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground">Framing, one line, in your words</span>
                     <input defaultValue={s.framing ?? ''} maxLength={REPORT_FRAMING_MAX} placeholder="Why this section is here (optional)"
                       onBlur={(e) => { const v = e.target.value.trim(); if (v !== (s.framing ?? '')) patchSection(s.id, (x) => ({ ...x, framing: v || undefined })) }}
                       className="mt-1 h-8 w-full rounded-[4px] border border-input bg-tile px-2.5 font-serif text-[13px] italic outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" />
                   </label>
-                  {selection && <p className="text-[11px] text-muted-foreground/80">The selection came from the page you added it from; change it there and add again.</p>}
                 </div>
               )}
             </li>
@@ -175,11 +174,11 @@ export function Outline(p: Props) {
           {pickable.map((c) => <option key={c.page} value={c.page}>{c.title}</option>)}
         </select>
         <button type="button" onClick={add} disabled={!addPage || sections.length >= REPORT_MAX_SECTIONS}
+          title="Each section shows its page’s default view; a selection it was given (one competitor, one theme) stays with it."
           className="inline-flex h-8 items-center rounded-full bg-tile px-3 text-[12px] font-medium text-secondary-foreground ring-1 ring-border hover:bg-inner disabled:opacity-50">
           Add page
         </button>
       </div>
-      <p className="text-[11px] text-muted-foreground/80">Each section shows its page’s default view; a selection it was given (one competitor, one theme) stays with it.</p>
 
 
       <p className="flex items-center gap-2 font-mono text-[10.5px] text-muted-foreground" aria-live="polite">

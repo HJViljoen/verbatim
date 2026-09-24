@@ -61,18 +61,6 @@ export const weekCameIn: Block<WeekData> = {
     const email = mode === 'email'
     const empty = weekCameIn.emptyState(data)
     const days = windowDays(c.window)
-    // WHAT THE COLUMN BELOW ACTUALLY ADDS TO. The rows are built from the
-    // videos THIS update fetched; `windowComments` is every audience the
-    // windowed read returned, and that read counts videos of ANY update that
-    // carry a comment dated in these days. So an audience with comments in the
-    // window under videos an earlier update found contributes to the total and
-    // gets no row — and the column a reader can sum then falls short of the
-    // number printed above it, on the one surface whose discipline is that a
-    // stated number is checkable. Null where any row's comments are unknown,
-    // because a partial sum is not a sum.
-    const rowedComments = c.rows.every((r) => r.comments != null)
-      ? c.rows.reduce((t, r) => t + (r.comments ?? 0), 0)
-      : null
 
     // THE MOCK'S LEFT COLUMN: the audience table, with the stat and the
     // contribution lines the table's numbers are stated against.
@@ -100,11 +88,6 @@ export const weekCameIn: Block<WeekData> = {
                 The month’s own reading is not available here, so this update’s contribution to it cannot be stated.
               </Note>
             )}
-            {c.windowComments != null && rowedComments != null && rowedComments < c.windowComments ? (
-              <Note mode={mode}>
-                The rows below account for <span data-copy="figure">{fmtInt(rowedComments)}</span> of those comments; the rest were written in these days under videos an earlier update found, in audiences this update read no video of.
-              </Note>
-            ) : null}
             {/* THE CROSSING QUALIFIES THE CONTRIBUTION, so where there is no
                 contribution it is said alone: "the contribution above counts
                 only its September days" under "this update's contribution to
@@ -200,7 +183,7 @@ function Audiences({ block, mode, month }: { block: CameInBlock; mode: 'app' | '
             {r.label} — <span data-copy="figure">{fmtInt(r.analysed)}</span> analysed · {fmtInt(r.gathered)} newly found · {platformMixLine(r.platformMix) || 'no platform recorded'}
             {r.trackedSince ? (
               <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>
-                tracked since {shortDate(r.trackedSince)}, so its line is shorter than the rows above it
+                tracked since {shortDate(r.trackedSince)}
               </div>
             ) : null}
             {/* NO PER-ROW CONTRIBUTION HERE EITHER (design review F11): the
@@ -211,7 +194,7 @@ function Audiences({ block, mode, month }: { block: CameInBlock; mode: 'app' | '
                 <span data-copy="level">{fmtInt(r.share.k)} of {fmtInt(r.share.n)} videos this update analysed</span>
                 {r.comments != null
                   ? <> · <span data-copy="figure">{fmtInt(r.comments)}</span> {r.comments === 1 ? 'comment' : 'comments'} written in these days</>
-                  : ' · comments in these days are not recorded for this workspace yet'}
+                  : null}
               </div>
             ) : null}
           </div>
@@ -219,12 +202,14 @@ function Audiences({ block, mode, month }: { block: CameInBlock; mode: 'app' | '
         {byAudience ? (
           <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 4 }}>{byAudience}</div>
         ) : null}
+        {rows.some((r) => r.share.n > 0 && r.comments == null) ? (
+          <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 4 }}>
+            Comments in these days are not recorded for this workspace yet.
+          </div>
+        ) : null}
       </div>
     )
   }
-  const rowedComments = rows.every((r) => r.comments != null)
-    ? rows.reduce((t, r) => t + (r.comments ?? 0), 0)
-    : null
   // A COLUMN WHOSE EVERY CELL WOULD READ "NOT RECORDED" IS NOT DRAWN, and the
   // sentence under the table is what says so (review W1). `NotRecorded` was
   // `whitespace-nowrap` in a FIXED 64px track — a fixed track does not give,
@@ -288,7 +273,7 @@ function Audiences({ block, mode, month }: { block: CameInBlock; mode: 'app' | '
                 history as every row above it. */}
             {r.trackedSince ? (
               <span className="font-mono text-[10.5px] text-muted-foreground">
-                tracked since {shortDate(r.trackedSince)} — a shorter line than the rows above it
+                tracked since {shortDate(r.trackedSince)}
               </span>
             ) : null}
           </span>
@@ -310,7 +295,7 @@ function Audiences({ block, mode, month }: { block: CameInBlock; mode: 'app' | '
       <div className={`grid grid-cols-1 items-center gap-1 border-t border-border/70 pt-1.5 xl:gap-2.5 ${TRACKS}`}>
         <span className="text-[12.5px] font-medium text-secondary-foreground">All audiences</span>
         <span className="font-mono text-[10.5px] text-muted-foreground">
-          {block.window ? 'this update’s own videos, split by whose conversation they were' : ''}
+          {''}
         </span>
         <Cell label="Analysed"><FigureCell value={fmtInt(block.analysed)} align="right" mode={mode} /></Cell>
         <Cell label="Found"><FigureCell value={fmtInt(block.gathered)} align="right" mode={mode} /></Cell>
@@ -322,11 +307,6 @@ function Audiences({ block, mode, month }: { block: CameInBlock; mode: 'app' | '
           </Cell>
         ) : null}
       </div>
-      {rowedComments != null && block.windowComments != null && rowedComments < block.windowComments ? (
-        <span className="font-mono text-[10.5px] text-muted-foreground">
-          the rows above account for {fmtInt(rowedComments)} of them
-        </span>
-      ) : null}
       {/* EVERY ROW'S WINDOW, HANDED BACK TO ITS MONTH — once, for the table
           (design review F11). See `audienceContributionLine`. */}
       {byAudience ? <span className="text-[11px] text-muted-foreground">{byAudience}</span> : null}
@@ -477,7 +457,7 @@ function Quotes({ block, mode, ctx }: { block: CameInBlock; mode: 'app' | 'print
       </div>
       {block.quotesTotal != null ? (
         <Note mode={mode}>
-          <span data-copy="figure">{fmtInt(block.quotesTotal)}</span> comments on your subjects were written in these days; {block.quotes.length === 1 ? 'one is' : `${block.quotes.length} are`} below in full.
+          <span data-copy="figure">{fmtInt(block.quotesTotal)}</span> comments on your subjects were written in these days.
         </Note>
       ) : null}
       <div className={email ? undefined : 'grid grid-cols-1 gap-x-5 gap-y-3 xl:grid-cols-2'}>

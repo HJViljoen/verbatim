@@ -105,7 +105,6 @@ export default async function SettingsTrackingPage() {
         `${platforms.length} platform${platforms.length === 1 ? '' : 's'}`,
         period,
       ].join(' · ') : undefined}
-      contentRule="What we look for, where we look for it, and how often it lands. Changing any of this breaks a series: the months already counted stay as they are, and the new basis starts at the change."
       counts={{
         tracking: { value: String(termCount), unit: `search term${termCount === 1 ? '' : 's'}` },
         ...(inputs.railCounts.subjects != null
@@ -136,8 +135,8 @@ export default async function SettingsTrackingPage() {
           dates={dates}
           datesNote={
             inputs.termDates.size === 0
-              ? 'We have not written down when a term was added yet. That record starts with the next change either of us makes.'
-              : 'A date on a term is when it entered the set. “In use by” means we worked it out afterwards from what an update searched — a label, not a record.'
+              ? 'We have not written down when a term was added yet.'
+              : 'A date on a term is when it entered the set. “In use by” means we worked it out afterwards from what an update searched: a label, not a record.'
           }
           review={inputs.performance.rows.filter((t) => t.worthReviewing)}
           rivals={rivals}

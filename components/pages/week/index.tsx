@@ -137,7 +137,7 @@ export function WeekPage({
         <PageGrid>
           <Tile col={12} row={2}>
             <TileEmpty>
-              No update has been delivered for this workspace yet. This week reads the last one, so it has nothing to read.
+              No update has been delivered for this workspace yet.
             </TileEmpty>
           </Tile>
         </PageGrid>

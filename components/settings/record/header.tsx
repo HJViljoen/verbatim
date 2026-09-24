@@ -111,10 +111,10 @@ export function SaveStrip({ state, note }: { state: SaveState; note?: string | n
 export const NO_EXPORT_WHY =
   'There is no file to download here — what we turn into a document are the reading pages, and this is a settings page. So the record is printed below instead, to select and paste.'
 
-export function ScopeStatement({ text, why }: { text: string; why: ReactNode }) {
+export function ScopeStatement({ text, why }: { text: string; why?: ReactNode }) {
   return (
     <div className="flex flex-col gap-2">
-      <p className="m-0 text-[11.5px] text-muted-foreground">{why}</p>
+      {why ? <p className="m-0 text-[11.5px] text-muted-foreground">{why}</p> : null}
       <div className="whitespace-pre-wrap rounded-[4px] bg-inner px-3 py-2.5 font-mono text-[11.5px] leading-[1.6] text-secondary-foreground ring-1 ring-border">
         {text}
       </div>

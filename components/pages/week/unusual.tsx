@@ -98,7 +98,7 @@ export const weekUnusual: Block<WeekData> = {
 
         {u.state === 'flagged' && u.flaggedCount > u.flags.length ? (
           <Line mode={mode}>
-            {fmtInt(u.flaggedCount)} cleared the band this update; the {fmtInt(u.flags.length)} largest are printed.
+            {fmtInt(u.flags.length)} of {fmtInt(u.flaggedCount)} shown, the largest first
           </Line>
         ) : null}
       </div>
@@ -167,23 +167,23 @@ export const weekUnusual: Block<WeekData> = {
       // states what was measured now says so.
       case 'nothing_unusual':
         return u.setSize != null
-          ? `Nothing unusual in this update. Every one of the ${fmtInt(u.setSize)} objects this check watches read inside its usual band.`
-          : 'Nothing unusual in this update. Everything this check watches read inside its usual band.'
+          ? `Nothing unusual in this update (${fmtInt(u.setSize)} watched).`
+          : 'Nothing unusual in this update.'
       case 'refused':
         return u.note ?? 'This update was not compared with the months behind it.'
       case 'baseline_forming':
-        return 'This check compares one update with the three complete months behind it, and this workspace does not have three yet.'
+        return 'Not checked in this update.'
       case 'unreadable':
         // THE RECORD SAYS SOMETHING FIRED AND WE CANNOT SHOW IT. Every word
         // here is chosen against the sentence it replaces: "Nothing unusual
         // this week" would be a reading, and what happened is that the reading
         // could not be fetched.
         return u.flaggedCount > 0
-          ? `This update’s check raised ${fmtInt(u.flaggedCount)} ${u.flaggedCount === 1 ? 'flag' : 'flags'} and they could not be read just now — which is not the same as nothing being unusual.`
-          : 'This update’s check raised flags and they could not be read just now — which is not the same as nothing being unusual.'
+          ? `This update’s check raised ${fmtInt(u.flaggedCount)} ${u.flaggedCount === 1 ? 'flag' : 'flags'} and they could not be read just now.`
+          : 'This update’s check raised flags and they could not be read just now.'
       case 'not_checked':
       default:
-        return 'No update has run this check for this workspace yet — which is not the same as nothing being unusual.'
+        return 'No update has run this check for this workspace yet.'
     }
   },
 }
@@ -375,6 +375,7 @@ function Interpretation({
 function Series({ series, mode, charted }: { series: UpdateSeries | null; mode: 'app' | 'print' | 'email'; charted: boolean }) {
   if (!series || series.points.length === 0) return null
   const newest = series.points[series.points.length - 1]
+  const smallPrint = [...(charted ? [] : [`${series.basis}.`]), ...caveats(series, charted).map((n) => n.text)]
   return (
     <>
       {/* WHERE THE CHART IS DRAWN, ITS LEGEND IS THIS SENTENCE (design review
@@ -386,15 +387,11 @@ function Series({ series, mode, charted }: { series: UpdateSeries | null; mode: 
       {/* THE TWO READINGS FIRST, AT READING RANK: what the newest update
           found, and what it put into its month. */}
       <Line mode={mode} rank="reading">{charted ? updateSeriesHead(series) : updateSeriesLine(series)}</Line>
-      {newest.contribution.length > 0
-        ? newest.contribution.map((c) => (
-          <Line key={c.month} mode={mode} rank="reading">{contributionLine(c.month, c.videos, c.of)}</Line>
-        ))
-        : (
-          <Line mode={mode} rank="reading">
-            This update’s contribution to its own month cannot be stated here, so every figure above is of the delivery’s own days alone.
-          </Line>
-        )}
+      {/* Where the contribution cannot be stated, §4 "What came in" says so
+          once; §1 printed it twice more (copy de-clutter C25, C27). */}
+      {newest.contribution.map((c) => (
+        <Line key={c.month} mode={mode} rank="reading">{contributionLine(c.month, c.videos, c.of)}</Line>
+      ))}
       {/* THEN THE SMALL PRINT, AS ONE PARAGRAPH (review W7). The axis's own
           words — thirteen deliveries at the dates those deliveries covered,
           which is what keeps a reader from reading thirteen windows as
@@ -407,9 +404,9 @@ function Series({ series, mode, charted }: { series: UpdateSeries | null; mode: 
           printed in both arms, because nothing draws those. Joined, not
           stacked: they are one body of apparatus, and four paragraphs of it
           read as four facts competing with the two above. */}
-      <Line mode={mode}>
-        {[`${series.basis}; each point is one delivery’s own days, never a month.`, ...caveats(series, charted).map((n) => n.text)].join(' ')}
-      </Line>
+      {/* Where the chart is drawn its meta already names the updates, so the
+          basis is printed only where the chart is absent (copy de-clutter C30). */}
+      {smallPrint.length > 0 ? <Line mode={mode}>{smallPrint.join(' ')}</Line> : null}
     </>
   )
 }
@@ -469,12 +466,9 @@ function Line({ mode, rank = 'caveat', children }: { mode: 'app' | 'print' | 'em
  * and `null` means the column is not there to ask.
  */
 function baselineCaveats(flag: UnusualFlag): string[] {
+  // The grouping caveat is the page-foot note's, said once for the page
+  // (copy de-clutter C34); the filling caveat is this flag's own.
   const out: string[] = []
-  if (flag.baselineRegime === 'mixed') {
-    out.push('Those months were not all read under one grouping, so the comparison is not strictly like for like.')
-  } else if (flag.baselineRegime === 'unknown') {
-    out.push('We cannot tell whether those months were read under one grouping, so the comparison may not be like for like.')
-  }
   if (flag.baselineFilling.length > 0) {
     out.push(flag.baselineFilling.length === flag.baselineMonths.length
       ? 'Every month behind it was still filling when this was read, so the comparison will move.'
@@ -489,7 +483,9 @@ function caveats(series: UpdateSeries, charted: boolean): UpdateNote[] {
   // snapshot, a hand-made fixture — and `note` is then the only thing to
   // print, so the joined string stands in as one unkinded caveat.
   if (series.notes.length === 0) return series.note ? [{ kind: 'short', text: series.note }] : []
-  return charted ? series.notes.filter((n) => n.kind !== 'quiet') : series.notes
+  // The windowed reading's absence is said once, in §4 (copy de-clutter C27).
+  const notes = series.notes.filter((n) => n.kind !== 'window_read')
+  return charted ? notes.filter((n) => n.kind !== 'quiet') : notes
 }
 
 const pct = (k: number, n: number): number => (n > 0 ? (k / n) * 100 : 0)

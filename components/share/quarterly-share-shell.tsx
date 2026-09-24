@@ -1,7 +1,6 @@
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { fullDate } from '@/lib/format'
-import { QUARTERLY_RULE } from '@/lib/reports/quarterly'
 import { staleQuarterlySnapshot, type QuarterlySnapshotData } from '@/lib/reports/quarterly-build'
 import { quarterlyBlocksFor } from '@/components/blocks/quarterly'
 import { LinkGuard } from './link-guard'
@@ -41,7 +40,6 @@ export function QuarterlyShareShell({ data, appUrl }: { data: QuarterlySnapshotD
             <p className="font-mono text-[11px] text-muted-foreground">{data.period} · reading as at {fullDate(data.readingAt)}</p>
           </div>
           <h1 className="m-0 max-w-[24ch] font-serif text-[30px] font-medium leading-[1.15] [text-wrap:balance]">{data.title}</h1>
-          <p className="m-0 max-w-[68ch] text-[13.5px] italic leading-[1.6] text-secondary-foreground">{QUARTERLY_RULE}</p>
           <p className="m-0 font-mono text-[11px] text-muted-foreground">figures frozen when this was built · quoted voices read live, so a withdrawn comment never travels</p>
         </header>
         {quarterlyBlocksFor(data.keys).map((block) => (

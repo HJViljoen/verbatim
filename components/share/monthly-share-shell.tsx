@@ -1,6 +1,6 @@
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
-import { monthlyRuleFor, readingCaveat } from '@/lib/reports/monthly'
+import { readingCaveat } from '@/lib/reports/monthly'
 import type { MonthlySnapshotData } from '@/lib/reports/monthly-build'
 import { monthlyBlocksFor } from '@/components/blocks/monthly'
 import { LinkGuard } from './link-guard'
@@ -28,7 +28,6 @@ export function MonthlyShareShell({ data, appUrl }: { data: MonthlySnapshotData;
             <p className="font-mono text-[11px] text-muted-foreground">{data.period}</p>
           </div>
           <h1 className="m-0 max-w-[24ch] font-serif text-[30px] font-medium leading-[1.15] [text-wrap:balance]">{data.subject}</h1>
-          <p className="m-0 max-w-[68ch] text-[13.5px] italic leading-[1.6] text-secondary-foreground">{monthlyRuleFor(data.monthStatus)}</p>
           {caveat ? <p className="m-0 max-w-[68ch] text-[12px] leading-[1.6] text-muted-foreground">{caveat}</p> : null}
           <p className="m-0 font-mono text-[11px] text-muted-foreground">figures frozen when this was sent · quoted voices read live, so a withdrawn comment never travels</p>
         </header>

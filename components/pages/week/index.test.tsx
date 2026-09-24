@@ -7,7 +7,7 @@ import { markupText, render, renderText } from '@/lib/test/render'
 import { SALES_GROUPS_SHOWN } from '@/lib/blocks/for-sales'
 import { OWN_POSTS_UNREAD, OWN_POSTS_UNREAD_OUTSIDE } from '@/lib/reading/own-posts'
 import { OWNER_LABEL } from '@/lib/readiness/types'
-import { FIRST_SCREEN_BUDGET, LATER_LINE, RIVAL_POSTS_CONSIDERED, RIVAL_POSTS_SHOWN, type WeekData } from '@/lib/pages/week'
+import { FIRST_SCREEN_BUDGET, RIVAL_POSTS_CONSIDERED, RIVAL_POSTS_SHOWN, type WeekData } from '@/lib/pages/week'
 import { FIRST_SCREEN, WEEK_BLOCKS, WeekPage, weekContext, weekFigureCount } from '.'
 import { weekSubjects } from './subjects'
 import { weekRising } from './rising'
@@ -108,7 +108,7 @@ describe('WK §2 · this week in your subjects', () => {
       // what survives is the count, its denominator, the names and the basis.
       expect(text, mode).toContain('2 of your 3 subjects ran above typical in this update')
       expect(text, mode).toContain('Comfort and Price and cover')
-      expect(text, mode).toContain('a larger share of it than they hold of September so far')
+      expect(text, mode).toContain('ran above typical in this update:')
       expect(text, mode).not.toContain('typical week')
     }
   })
@@ -174,7 +174,7 @@ describe('WK §2 · this week in your subjects', () => {
     expect(widths).toContain(50)
     expect(widths).toContain(12.5)
     expect(widths).toContain(25)
-    expect(markupText(markup)).toContain('every bar on one scale')
+    expect(markupText(markup)).not.toContain('every bar on one scale')
   })
 
   it('says subjects are not recorded rather than drawing an empty table', () => {
@@ -242,14 +242,14 @@ describe('WK §3 · moving now', () => {
     // The note is a statement about the themes NOT printed, so it names how
     // many were compared. With more movers than rows it says how many cleared.
     const text = renderText(weekRising.render(weekFixture(), 'app', ctx))
-    expect(text).toContain('Nothing else of the 30 themes read against their band this month moved clearly.')
+    expect(text).toContain('Nothing else of the 30 themes moved clearly this month.')
 
     const d = weekFixture()
     const many = { ...d, rising: { ...d.rising, moved: 7 } }
     expect(renderText(weekRising.render(many, 'app', ctx)))
       // "with a larger share", because `moved` counts only the risers: a theme
       // that cleared its band downward did clear it and is not in this number.
-      .toContain('7 themes cleared their band with a larger share in this month’s reading; the 1 largest are printed.')
+      .toContain('1 of 7 with a larger share shown, the largest first')
   })
 
   it('says the pooled baseline counts a video once per month', () => {
@@ -260,7 +260,8 @@ describe('WK §3 · moving now', () => {
     const text = renderText(weekRising.render(weekFixture(), 'app', ctx))
     // In the footer's own mono slot since the artboard port: it is a fact
     // about the comparison's arithmetic, not a finding.
-    expect(text).toContain('the three months behind are added together, so a video talked about in two of them counts in both')
+    // Moved to Settings › How to read (copy de-clutter C40).
+    expect(text).not.toContain('the three months behind are added together')
 
     // AND NOT PRINTED WHEN THE BASELINE IS A WINDOW. `QuarterChangeInput`
     // forbids summing month rows for a banded n; §3 does it only while M3's
@@ -283,7 +284,6 @@ describe('WK §3 · moving now', () => {
   it('says "nothing moved clearly", which is a reading and not a refusal', () => {
     const text = renderText(weekRising.render(thinFixture(), 'app', ctx))
     expect(text).toContain('Nothing moved clearly in September’s reading so far')
-    expect(text).toContain('a theme that has not cleared its band has not moved')
   })
 })
 
@@ -309,8 +309,8 @@ describe('WK §4 · what came in', () => {
     const data = { ...d, cameIn: { ...d.cameIn, windowComments: 6000 } }
     const text = renderText(weekCameIn.render(data, 'app', ctx))
     expect(text).toContain('6,000 comments written in these days')
-    expect(text).toContain('The rows below account for 5,134 of those comments')
-    // And says nothing where the column does add up, which both fixtures do.
+    // The reconciliation sentence is audit copy (copy de-clutter C57).
+    expect(text).not.toContain('The rows below account for')
     expect(renderText(weekCameIn.render(d, 'app', ctx))).not.toContain('The rows below account for')
     expect(renderText(weekCameIn.render(thinFixture(), 'app', ctx))).not.toContain('The rows below account for')
   })
@@ -361,9 +361,10 @@ describe('WK §4 · what came in', () => {
     const absent = renderText(weekCameIn.render(absentReadingFixture(), 'app', ctx))
     expect(absent).toContain('This update also covered days of August.')
     expect(absent).not.toContain('counts only its September days')
-    // And where the contribution IS printed, it is still qualified.
+    // And where the contribution IS printed, the crossing is the short form:
+    // the contribution line names its own month (copy de-clutter C29).
     expect(renderText(weekCameIn.render(thinFixture(), 'app', ctx)))
-      .toContain('counts only its September days')
+      .toContain('This update also covered days of August.')
   })
 
   it('says when the window reached back into an earlier month', () => {
@@ -379,7 +380,7 @@ describe('WK §4 · what came in', () => {
     expect(text).toContain('Liner cost after the first year')
     const thin = renderText(weekCameIn.render(thinFixture(), 'app', ctx))
     expect(thin).toContain('592 themes were heard for the first time')
-    expect(thin).toContain('the same conversation under a new label')
+    expect(thin).not.toContain('the same conversation under a new label')
   })
 
   it('prints each audience’s share with both sides and its own comments', () => {
@@ -455,7 +456,8 @@ describe('WK §4 · what came in', () => {
     // prints no start, because a rival with the same history as the rows above
     // it is not news.
     const text = renderText(weekCameIn.render(thinFixture(), 'app', ctx))
-    expect(text).toContain('tracked since 3 Sep — a shorter line than the rows above it')
+    expect(text).toContain('tracked since 3 Sep')
+    expect(text).not.toContain('a shorter line than the rows above it')
     expect(text.match(/tracked since/g)).toHaveLength(1)
     // Össur has no rival added inside its own four months.
     expect(renderText(weekCameIn.render(weekFixture(), 'app', ctx))).not.toContain('tracked since')
@@ -558,8 +560,9 @@ describe('WK §2 · worth a reply', () => {
     // videos. The digest takes at most three of a category and twelve in all,
     // so the number is a cap and the meta says which rule produced it.
     const text = renderText(weekReply.render(weekFixture(), 'app', ctx))
-    expect(text).toContain('6 picked, at most three of a kind')
-    expect(text).toContain('picked from the comments written in the days this update covered')
+    expect(text).toContain('6 picked')
+    expect(text).not.toContain('at most three of a kind')
+    expect(text).not.toContain('picked from the comments written in the days this update covered')
     expect(text).not.toContain('of 205 videos')
   })
 
@@ -659,7 +662,7 @@ describe('WK §5 · notable rival posts', () => {
     const d = weekFixture()
     const one = d.cameIn.rivals.map((r) => ({ ...r, posts: r.posts.slice(0, 1), postsConsidered: 1, comments: r.posts[0]?.comments ?? 0 }))
     const text = markupText(render(weekRivalPosts.render({ ...d, cameIn: { ...d.cameIn, rivals: one } }, 'app', ctx)))
-    expect(text).toContain('1 shown · 1 of 92 weighed by reach · 610 comments under it in these days')
+    expect(text).toContain('1 of 92 · 610 comments')
   })
 
   // THE TILE THE ROWS MOVED INTO (Block D wave 2, the mock's §5). Every
@@ -689,7 +692,7 @@ describe('WK §5 · notable rival posts', () => {
     expect(first).toContain('Ottobock')
     expect(first).toContain('YouTube')
     // The rival's own counts are still printed, under the posts they are of.
-    expect(markupText(markup)).toContain('2 shown · 2 of 92 weighed by reach')
+    expect(markupText(markup)).toContain('2 of 92')
   })
 
   it('states the by/about distinction, and why a zero is a zero', () => {
@@ -747,9 +750,9 @@ describe('WK §5 · notable rival posts', () => {
       // tile's; what is the rival's is four numbers. And the rival's comment
       // figure is the sum over the posts NAMED; a bare total would be a claim
       // about their week that nothing here counted.
-      expect(text, mode).toContain('the widest-reaching of what this update read, then the most commented on of those')
-      expect(text.match(/widest-reaching/g)?.length, mode).toBe(1)
-      expect(text, mode).toContain('2 shown · 2 of 92 weighed by reach · 998 comments under them in these days')
+      // The pick rule moved off the tile (copy de-clutter C42).
+      expect(text, mode).not.toContain('widest-reaching')
+      expect(text, mode).toContain('2 of 92 · 998 comments')
     }
   })
 
@@ -808,7 +811,7 @@ describe('WK §5 · notable rival posts', () => {
     // is that an omitted "of N" is a statement; the days the comments were
     // counted in are in the block's meta, once.
     const text = renderText(weekRivalPosts.render(weekFixture(), 'app', ctx))
-    expect(text).toContain('comments counted under each post · 6 Sep – 13 Sep')
+    expect(text).toContain('6 Sep – 13 Sep')
     expect(text).not.toContain('610 of')
   })
 
@@ -817,7 +820,7 @@ describe('WK §5 · notable rival posts', () => {
     // Competitive reads the questions per RIVAL. The layout keeps the table
     // and the footer says so once, rather than a column repeating it.
     const text = renderText(weekRivalPosts.render(weekFixture(), 'app', ctx))
-    expect(text).toContain('what the audience asked is read per rival, not per post')
+    expect(text).not.toContain('what the audience asked is read per rival')
     expect(text).toContain('Open Competitive →')
   })
 })
@@ -828,7 +831,7 @@ describe('WK §5 · for sales', () => {
     expect(text).toContain('Price and cover')
     expect(text).toContain('96')
     expect(text).toContain('205 videos this update')
-    expect(text).toContain('Grounded answers to these sit in the sales brief.')
+    expect(text).not.toContain('Grounded answers to these sit in the sales brief.')
   })
 
   it('puts the denominator on every ranked row, marked as the level it is', () => {
@@ -867,9 +870,9 @@ describe('WK §5 · for sales', () => {
     expect(text).not.toContain('someone said they were moving between brands')
   })
 
-  it('says whose grouping the headings are', () => {
+  it('says nothing about the grouping where the reader named the subjects', () => {
     expect(renderText(weekSales.render(weekFixture(), 'app', ctx)))
-      .toContain('Grouped by the subjects you named.')
+      .not.toContain('Grouped by')
   })
 
   it('counts a rival’s complaints under that rival’s videos and says so', () => {
@@ -897,7 +900,7 @@ describe('WK §7 · for sales', () => {
     // artboard draws four and the sentence now says "to these".
     expect(SALES_GROUPS_SHOWN).toBe(4)
     const text = renderText(weekSales.render(weekFixture(), 'app', ctx))
-    expect(text).toContain('Grounded answers to these sit in the sales brief.')
+    expect(text).not.toContain('Grounded answers to these sit in the sales brief.')
   })
 
   it('refuses the switch’s direction and says it is refused', () => {
@@ -906,7 +909,7 @@ describe('WK §7 · for sales', () => {
     // citation is whose video it sat UNDER, not where the commenter went.
     const text = renderText(weekSales.render(weekFixture(), 'app', ctx))
     expect(text).toContain('7 comments')
-    expect(text).toContain('Which way each switch ran — toward you or away — is not read from the comment')
+    expect(text).toContain('Direction not read.')
     expect(text).not.toContain('toward Sealand')
   })
 
@@ -1035,13 +1038,16 @@ describe('WK §6 · what worked', () => {
 describe('the coverage line and the two sections Phase 1 does not build', () => {
   it('says who the reading is for, which update, and what it covered', () => {
     const text = renderText(weekCoverage.render(weekFixture(), 'app', ctx))
-    expect(text).toContain('Prepared for Össur with Verbatim · update of 13 Sep · previous 6 Sep')
+    // The page bar names the update on screen; paper keeps it (C61).
+    expect(text).toContain('Prepared for Össur with Verbatim')
+    expect(text).not.toContain('update of 13 Sep')
+    expect(renderText(weekCoverage.render(weekFixture(), 'print', ctx))).toContain('Prepared for Össur with Verbatim · update of 13 Sep · previous 6 Sep')
     expect(text).toContain('205 videos · 5,134 comments')
   })
 
-  it('names the two sections that stay on Content, rather than leaving a silence', () => {
+  it('carries no migration note about the Content page (copy de-clutter C62)', () => {
     for (const mode of MODES) {
-      expect(renderText(weekCoverage.render(weekFixture(), mode, ctx)), mode).toContain(LATER_LINE)
+      expect(renderText(weekCoverage.render(weekFixture(), mode, ctx)), mode).not.toContain('until that page retires')
     }
   })
 

@@ -123,7 +123,7 @@ export function CadenceSection({
                 single appearance the brief says the hour had to avoid, because
                 it reads as a greyed-out dropdown of one value. There is no
                 per-tenant hour column to grey out. */}
-            <MonoNote className="max-w-[420px]">{SLOT_NOTE} · {FREEZE_NOTE}</MonoNote>
+            <MonoNote className="max-w-[420px]">{SLOT_NOTE}</MonoNote>
           </div>
           <span className="text-[11.5px] text-muted-foreground">
             {showStudio ? (

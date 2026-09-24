@@ -1,7 +1,7 @@
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { fullDate } from '@/lib/format'
-import { periodNounFor, weeklyDateLine, weeklyHeadline, weeklyRuleFor } from '@/lib/reports/weekly'
+import { weeklyDateLine, weeklyHeadline } from '@/lib/reports/weekly'
 import { staleWeeklySnapshot, type WeeklySnapshotData } from '@/lib/reports/weekly-build'
 import { weeklyBlocksFor } from '@/components/blocks/weekly'
 import { LinkGuard } from './link-guard'
@@ -41,7 +41,6 @@ export function WeeklyShareShell({ data, appUrl }: { data: WeeklySnapshotData; a
           {/* The tenant is on the line above, once — never again as the first
               word of the headline (the artboard's own masthead). */}
           <h1 className="m-0 max-w-[24ch] font-serif text-[30px] font-medium leading-[1.15] [text-wrap:balance]">{weeklyHeadline(data.reading.section1.check)}</h1>
-          <p className="m-0 max-w-[68ch] text-[13.5px] italic leading-[1.6] text-secondary-foreground">{weeklyRuleFor(periodNounFor(data.reading.window))}</p>
           <p className="m-0 font-mono text-[11px] text-muted-foreground">figures frozen when this was sent · quoted voices read live, so a withdrawn comment never travels</p>
         </header>
         {weeklyBlocksFor(data.keys).map((block) => (

@@ -236,16 +236,9 @@ function Legend({ rows }: { rows: readonly SubjectWeekRow[] }) {
       {anyTypical ? (
         <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
           <span className="h-1.5 w-3.5 rounded-full" style={{ background: 'var(--neutral-seg)' }} aria-hidden />
-          what an update of its size usually adds — the subject’s month so far, scaled by this update’s own share of the month
+          what an update of its size usually adds
         </span>
       ) : null}
-      {/* AND WHAT THE LENGTHS ARE AGAINST (review W2). A legend shared by six
-          columns has to say that the six are comparable, or a reader is left
-          to assume it — which is what made the per-column scale a silent
-          error rather than a visible one. */}
-      <span className="text-[11px] text-muted-foreground">
-        every bar on one scale, so a longer bar anywhere in the row is more videos
-      </span>
     </div>
   )
 }

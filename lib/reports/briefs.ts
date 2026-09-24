@@ -96,9 +96,6 @@ export const BRIEF_CARDS: readonly { role: DocumentRole; artefact: Artefact }[] 
 /** The fourth, and where it lives. */
 export const LEADERSHIP_CARD = { role: 'leadership_brief' as DocumentRole, artefact: 'brief:leadership' as Artefact }
 
-export const LEADERSHIP_LINE =
-  'The leadership brief is built in the Studio rather than from here — it is the short management readout: the month in one page, with the method behind it.'
-
 export const briefLabel = (artefact: Artefact): string => ARTEFACT_COPY[artefact].label
 export const briefWhat = (artefact: Artefact): string => ARTEFACT_COPY[artefact].what
 
@@ -155,8 +152,8 @@ export function deliveryLine(card: Pick<BriefCard, 'cadence' | 'recipients' | 's
   if (card.scheduleKnown === false) return 'We could not read this workspace’s schedule just now. Try again, or look in Settings › Reports and recipients.'
   if (card.recipients.length === 0) {
     return card.cadence
-      ? `${card.cadence} · nobody receives this yet — add people in Settings › Reports and recipients.`
-      : 'Not on a schedule. Build it here when you want it, or set a cadence in Settings › Reports and recipients.'
+      ? `${card.cadence} · nobody receives this yet.`
+      : 'Not on a schedule.'
   }
   const who = `${card.recipients.length} ${card.recipients.length === 1 ? 'person' : 'people'}`
   if (!card.sending) return `${card.cadence ?? 'Scheduled'} · ${who} listed, but nothing is being sent yet.`
@@ -261,18 +258,5 @@ export function briefStamp(stamp: ReadingStamp | null): string | null {
  * sent" while Resend sent), and the date is on each card's own footer, where
  * it belongs, because three cards can be three months old.
  */
-export const BRIEFS_META = 'Built when you ask — no cadence rebuilds these yet'
+export const BRIEFS_META = 'Built when you ask · no cadence rebuilds these yet'
 
-/**
- * What a cleared PDF will do when you ask for it (Block D wave 2 fix pass).
- *
- * `artifacts.stale` means the file is no longer in storage and
- * `/api/artifacts/[id]` re-renders it on the way out — a DIFFERENT file from
- * the one whose bytes were stored, and a render that counts against
- * `EXPORT_DAILY_LIMIT` and can answer 429. The detail pane says this as a
- * clause on the download link ("· rebuilt on download"); a card footer is one
- * row wide and the clause would be truncated there, which is how a warning
- * gets lost. So the card's action drops the size it cannot stand behind and
- * the card's body says the sentence.
- */
-export const STALE_PDF_LINE = 'The stored PDF was cleared; downloading it builds the same file again.'

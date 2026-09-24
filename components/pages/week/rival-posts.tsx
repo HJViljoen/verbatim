@@ -58,24 +58,15 @@ export const weekRivalPosts: Block<WeekData> = {
         title={weekRivalPosts.title}
         question={weekRivalPosts.question}
         mode={mode}
-        meta={days ? `comments counted under each post · ${days}` : 'this update covered no window'}
+        meta={days ?? 'this update covered no window'}
         footer={email
           ? <a href={href} style={{ color: EMAIL.ink }}>Open Competitive →</a>
           : <Link href={href} className="hover:underline">Open Competitive →</Link>}
-        // WHERE THE FOURTH COLUMN LIVES. The mock prints the questions asked
-        // under each post; this product reads them per rival, on Competitive.
-        footerNote="what the audience asked is read per rival, not per post"
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         {/* THE PICK RULE, ONCE FOR THE TILE. Two stages, because on production
             the widest-reaching posts carry no window comments at all
             (Freitag's two 2.2M-view TikToks: zero). */}
-        {rivals.length > 0 ? (
-          <Rule mode={mode}>
-            Each rival’s posts are picked in two stages: the widest-reaching of what this update read, then
-            the most commented on of those in the days it covered.
-          </Rule>
-        ) : null}
         {rivals.length > 0 ? (
           <div className={email ? undefined : 'flex min-w-0 flex-col'}>
             {!email ? (
@@ -112,14 +103,6 @@ export const weekRivalPosts: Block<WeekData> = {
   },
 }
 
-/** The tile's one pick-rule sentence, in every mode. */
-function Rule({ mode, children }: { mode: 'app' | 'print' | 'email'; children: React.ReactNode }) {
-  if (mode === 'email') {
-    return <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginBottom: 4 }}>{children}</div>
-  }
-  return <p className="m-0 text-[11.5px] text-muted-foreground">{children}</p>
-}
-
 function Head({ children, right }: { children: React.ReactNode; right?: boolean }) {
   return (
     <span className={`text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground${right ? ' text-right' : ''}`}>
@@ -138,7 +121,7 @@ function RivalRow({ rival, mode }: { rival: RivalPosts; mode: 'app' | 'print' | 
   // ninety-four is a claim about three posts, and `postsTotal` beside it is
   // what keeps the two apart.
   const rule = rival.posts.length > 0
-    ? `${fmtInt(rival.posts.length)} shown · ${fmtInt(rival.postsConsidered)} of ${fmtInt(rival.postsTotal)} weighed by reach · ${fmtInt(rival.comments)} ${rival.comments === 1 ? 'comment' : 'comments'} under ${rival.posts.length === 1 ? 'it' : 'them'} in these days`
+    ? `${fmtInt(rival.posts.length)} of ${fmtInt(rival.postsTotal)} · ${fmtInt(rival.comments)} ${rival.comments === 1 ? 'comment' : 'comments'}`
     : null
   // POSTS ABOUT THEM vs POSTS OF THEIRS, which is the pair this tile inherited
   // from §4 when it moved out of it. Össur has zero competitor-owned videos and

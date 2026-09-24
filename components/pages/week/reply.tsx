@@ -84,7 +84,7 @@ export const weekReply: Block<WeekData> = {
         title={weekReply.title}
         question={weekReply.question}
         mode={mode}
-        meta={r.rows.length > 0 ? `${fmtInt(r.total)} picked, at most three of a kind` : undefined}
+        meta={r.rows.length > 0 ? `${fmtInt(r.total)} picked` : undefined}
         // THE ARTBOARD'S OWN FOOTER: "Open all 12 →" (design review, nits). It
         // read "2 more →" where the pick was bigger than the four shown, which
         // names a remainder rather than the queue, and changed shape between
@@ -159,7 +159,6 @@ function Lead({ counts, total, mode }: { counts: readonly { intent: Intent; coun
         mode={mode}
         value={fmtInt(total)}
         unit="worth a reply"
-        base="picked from the comments written in the days this update covered"
       />
       {/* THE ARTBOARD'S COUNTED CHIPS, NOT A PERCENTAGE OF SIX (design review
           F14). "Buying signals 50% · Questions 33% · Objections 17%" over a

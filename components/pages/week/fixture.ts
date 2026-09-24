@@ -1,4 +1,4 @@
-import { LATER_LINE, PRIVACY_LINE, coverageLine, subjectLead, subjectsNamedLine, typicalContribution, typicalTag, type RepliesBlock, type ReplyRow, type SubjectWeekRow, type WeekData, type WeekWindow } from '@/lib/pages/week'
+import { PRIVACY_LINE, coverageLine, subjectLead, subjectsNamedLine, typicalContribution, typicalTag, type RepliesBlock, type ReplyRow, type SubjectWeekRow, type WeekData, type WeekWindow } from '@/lib/pages/week'
 import { intentCounts } from '@/lib/content-tiles'
 import { ownSides, type PlaybookVideo } from '@/lib/pages/playbook'
 import { bandVerdict } from '@/lib/reading/verdicts'
@@ -560,7 +560,6 @@ export function weekFixture(): WeekData {
     // Össur's four months carry a clustering key throughout, so the reading
     // layer has no caveat to make about them.
     notes: [],
-    laterLine: LATER_LINE,
     // NULL, and always null on this page: This week is dated by the delivery
     // and its `coverage` block is its own footnote (lib/pages/week.ts).
     method: null,
@@ -599,7 +598,7 @@ export function thinFixture(): WeekData {
     monthsRead: 3,
     required: 3,
     ready: false,
-    label: 'baseline forming — 1 of 3 months',
+    label: 'baseline forming: 1 of 3 months',
   }
   return {
     brand: 'Sealand',
@@ -776,7 +775,6 @@ export function thinFixture(): WeekData {
       text: 'We did not record how themes were grouped for June to August 2026, so those months are not strictly comparable with the ones after them.',
       months: ['2026-06-01', '2026-07-01', '2026-08-01'],
     }],
-    laterLine: LATER_LINE,
     // NULL, and always null on this page: This week is dated by the delivery
     // and its `coverage` block is its own footnote (lib/pages/week.ts).
     method: null,

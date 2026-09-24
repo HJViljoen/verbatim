@@ -36,7 +36,6 @@ import { NOTHING_PENDING, type SaveState } from '@/lib/settings/save-state'
 export const BREAK_NOT_RECORDED = 'What that save broke was not written down.'
 export const BROKE_NOTHING = 'That save broke nothing that is read as a series.'
 export const NEVER_SAVED = 'Nothing here has been changed since we started keeping the record.'
-export const SAVE_BREAKS_RULE = 'A save names the series it breaks.'
 
 /** What the last save was, and what it broke. The rail's strip. */
 export function LastSaveStrip({ state, note }: {
@@ -64,10 +63,8 @@ export function LastSaveStrip({ state, note }: {
  *  broke. `pending` is the form's own, so this one is a client's to render. */
 export function SaveStateLine({ state }: { state: SaveState }) {
   const pending = state.pending.length
-  const names = state.recorded && state.breaks.length > 0
   return (
     <span className="min-w-0 flex-1 text-[12.5px] text-muted-foreground">
-      {names ? `${SAVE_BREAKS_RULE} ` : ''}
       {pending === 0
         ? `${NOTHING_PENDING}`
         : `${pending} change${pending === 1 ? '' : 's'} waiting to be saved — ${state.pending.map((p) => p.field.toLowerCase()).join(', ')}`}

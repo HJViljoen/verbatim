@@ -232,18 +232,14 @@ describe('the record as rows', () => {
     expect(row('refused').rest).toContain('Counted by the page that draws the comparisons')
   })
 
-  it('carries the all-time basis on both read-depth rows, and says it twice in one voice', () => {
-    // D15: the basis is part of the figure, so both rows carry one. They land
-    // side by side in the grid, so the second says it in seven words rather
-    // than repeating the first's twenty at the same eye level (design review
-    // finding 5) — and it is self-contained, never "as above".
-    for (const id of ['speech', 'ocr']) {
-      expect(row(id).basis).toContain('of everything we have ever read')
-      expect(row(id).basis).toContain('Reddit excluded')
-      expect(row(id).lead).toBe('on')
-    }
-    expect(row('ocr').basis).not.toBe(row('speech').basis)
-    expect(row('ocr').basis.length).toBeLessThan(row('speech').basis.length / 1.5)
+  it('carries the all-time basis on both read-depth rows, and says the sentence once', () => {
+    // D15: the basis is part of the figure, so both rows carry one. The full
+    // sentence is said once, on the speech row; the on-screen-text row beside
+    // it carries "all time" (copy de-clutter C15), self-contained, never "as above".
+    expect(row('speech').basis).toContain('of everything we have ever read')
+    expect(row('speech').basis).toContain('Reddit excluded')
+    expect(row('ocr').basis).toBe('all time')
+    for (const id of ['speech', 'ocr']) expect(row(id).lead).toBe('on')
     expect(row('ocr').basis).not.toMatch(/above|beside|same as/)
   })
 
@@ -253,7 +249,8 @@ describe('the record as rows', () => {
     // it was the only long-form date on a page of short ones.
     expect(row('changelog').figure).toBe('6 Apr')
     expect(row('changelog').rest).toBe('')
-    expect(row('changelog').basis).toContain('worked out afterwards')
+    // C94: the reconstructed count is the change log's section note, not repeated here.
+    expect(row('changelog').basis ?? '').not.toContain('worked out afterwards')
     // The year is kept where the year is the point.
     expect(recordDate('2025-04-06T06:00:00.000Z', '2026-09-28')).toBe('6 Apr 2025')
     expect(recordDate('2026-04-06T06:00:00.000Z', '2026-09-28')).toBe('6 Apr')

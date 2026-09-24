@@ -87,7 +87,7 @@ export function DocumentBuildControl({ reportId, inFlight = null, primary = true
         {busy ? `Building · ${mm}:${ss}` : state.phase === 'done' ? 'Build again' : 'Build'}
       </button>
       {!busy && blocked && <p className="max-w-[38ch] text-right text-[11.5px] text-muted-foreground">{blocked}</p>}
-      {busy && <p className="text-right text-[11.5px] text-muted-foreground" aria-live="polite">{state.phase === 'busy' ? state.words : 'Starting'}. A build takes three to five minutes.</p>}
+      {busy && <p className="text-right text-[11.5px] text-muted-foreground" aria-live="polite" title="A build takes three to five minutes.">{state.phase === 'busy' ? state.words : 'Starting'}.</p>}
       {state.phase === 'done' && (
         <p className="text-right text-[11.5px] text-muted-foreground" aria-live="polite">
           Built.{' '}

@@ -42,7 +42,6 @@ export const weekFlagged: Block<WeekData> = {
         question={weekFlagged.question}
         mode={mode}
         meta={flagged.length > 0 ? `${fmtInt(flagged.length)} ${flagged.length === 1 ? 'claim' : 'claims'} · no reply link` : undefined}
-        footerNote={flagged.length > 0 ? 'better answered in your own content' : undefined}
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         {flagged.map((row) => <Row key={row.id} row={row} mode={mode} />)}

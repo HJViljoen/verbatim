@@ -77,8 +77,8 @@ describe('the pre-registered set', () => {
 
 describe('the baseline state', () => {
   it('reads the design\'s sentence while it is forming', () => {
-    expect(baselineLabel(0)).toBe('baseline forming — 0 of 3 months')
-    expect(baselineLabel(2)).toBe('baseline forming — 2 of 3 months')
+    expect(baselineLabel(0)).toBe('baseline forming: 0 of 3 months')
+    expect(baselineLabel(2)).toBe('baseline forming: 2 of 3 months')
     expect(baselineLabel(3)).toBe('baseline ready')
   })
 
@@ -95,7 +95,7 @@ describe('the baseline state', () => {
     })
     expect(state.monthsClearing).toBe(1)
     expect(state.ready).toBe(false)
-    expect(state.label).toBe('baseline forming — 1 of 3 months')
+    expect(state.label).toBe('baseline forming: 1 of 3 months')
     expect(state.required).toBe(BASELINE_MONTHS)
   })
 
@@ -172,7 +172,7 @@ describe('the week against the baseline', () => {
       denominators: [series],
       set: [flatObject('runaway', { weekVideos: 380, monthVideos: 10 })],
     })
-    expect(reading.baselines[0].label).toBe('baseline forming — 2 of 3 months')
+    expect(reading.baselines[0].label).toBe('baseline forming: 2 of 3 months')
     expect(reading.rows[0].state).toBe('baseline_forming')
     expect(reading.rows[0].verdict).toBeNull()
     expect(reading.tested).toBe(0)
@@ -357,7 +357,7 @@ describe('the measurement knob', () => {
     expect(waived.rows[0].state).toBe('flagged')
     // The band's own floors are untouched, and the baseline state still tells
     // the truth about how many months cleared.
-    expect(waived.baselines[0].label).toBe('baseline forming — 2 of 3 months')
+    expect(waived.baselines[0].label).toBe('baseline forming: 2 of 3 months')
     expect(waived.rows[0].baselineMonthsClearing).toBe(2)
   })
 

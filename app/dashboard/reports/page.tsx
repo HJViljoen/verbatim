@@ -449,9 +449,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
       // said the opposite.
       empty: emptyFor('sent', 'was sent', paused
         ? PAUSED_SEND_LINE
-        : studio
-          ? 'Nothing sent yet. Each report in the Studio sends after the next update; the first lands then.'
-          : 'Nothing sent yet. Your updates are set up by Verbatim and send after the next update; the first lands then.'),
+        : 'Nothing sent yet.'),
     },
     {
       key: 'built',
@@ -469,9 +467,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
       })),
       held: builds.length,
       cappedAt: reachOf('built').cappedAt,
-      empty: emptyFor('built', 'was built', studio
-        ? 'Nothing built by hand yet. Build any template in the Studio and its PDF lands here.'
-        : 'Nothing built by hand yet. Ask your Verbatim contact for a report built to order and its PDF lands here.'),
+      empty: emptyFor('built', 'was built', 'Nothing built by hand yet.'),
     },
     {
       key: 'exported',
@@ -493,7 +489,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
       })),
       held: exports.length,
       cappedAt: reachOf('exported').cappedAt,
-      empty: emptyFor('exported', 'was exported', 'Nothing exported yet. Export any page or card from its menu; the files collect here.'),
+      empty: emptyFor('exported', 'was exported', 'Nothing exported yet.'),
     },
   ]
 
@@ -538,7 +534,6 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
         {selectedSend.snapshot_id && selectedSend.schedule_id && (
           <DetailSection label="The email as sent">
             <iframe src={`/api/schedules/${selectedSend.schedule_id}/preview?send=${selectedSend.id}`} sandbox="allow-popups allow-popups-to-escape-sandbox" title={selectedSend.subject ?? 'Update'} className="h-[720px] w-full rounded-[4px] bg-tile ring-1 ring-border" />
-            <p className="mt-1 text-[11px] text-muted-foreground">Re-rendered from the figures it was sent with; the quoted voices are read live, so a withdrawn comment never shows.</p>
           </DetailSection>
         )}
       </>
@@ -595,12 +590,9 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
       <DetailSection label="Files">
         <div className="flex flex-wrap items-center gap-3">
           {selectedExport.files.map((f) => (
-            <a key={f.id} href={`/api/artifacts/${f.id}`} className="text-[12px] font-medium underline underline-offset-2">Download the {f.format.toUpperCase()} · {fmtBytes(f.bytes)}</a>
+            <a key={f.id} href={`/api/artifacts/${f.id}`} className="text-[12px] font-medium underline underline-offset-2">Download the {f.format.toUpperCase()} · {fmtBytes(f.bytes)}{selectedExport.stale ? ' · rebuilt on download' : ''}</a>
           ))}
         </div>
-        {selectedExport.stale && (
-          <p className="mt-2 text-[11px] text-muted-foreground">This file was cleared from storage. Downloading it builds the same file again from the figures it was exported with; the quoted voices are read live, so a withdrawn comment never shows.</p>
-        )}
       </DetailSection>
     </>
   ) : (
@@ -710,18 +702,11 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
         </PageGrid>
       )}
 
-      {/* THE METHOD FOOTNOTE (`reports.method.footer`). The decision the brief
-          asked for, made: the page was given one minimal reading handle
-          (lib/reports/page-context.ts) and prints the REAL footnote —
-          `methodLines`, the same five facts in the same words every other
-          surface states them in. Nothing here is invented, and where the
-          record could not be read the footnote is absent rather than thin. */}
+      {/* NO METHOD FOOTNOTE (copy de-clutter C16, ruling B): Reports makes no
+          reading, and soundness lives in the page bar's pill and its record.
+          The privacy line stays. */}
       {ctx.method && (
-        <p className="m-0 flex flex-col gap-0.5 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
-          {ctx.method.lines.map((line, i) => (
-            <span key={i} className={i === 0 ? 'text-secondary-foreground' : undefined}>{line}</span>
-          ))}
-        </p>
+        <p className="m-0 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">{ctx.method.privacy}</p>
       )}
 
       {viewer && <ReportViewer snapshot={viewer} closeHref={closeViewer} showStudio={studio} />}

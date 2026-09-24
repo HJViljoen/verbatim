@@ -167,8 +167,8 @@ function FindingChart({ f }: { f: FindingMeasure }) {
         <p className="m-0 font-mono text-[11px] text-muted-foreground">{label}</p>
         <p className="m-0 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
           {readable === 0
-            ? 'No month on this axis carries a reading, so there is no line to draw.'
-            : 'Two readings are not a trend, so the months are named rather than drawn.'}
+            ? 'No month on this axis carries a reading.'
+            : 'Two readings: months named, not drawn.'}
         </p>
       </div>
     )

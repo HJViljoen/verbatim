@@ -464,8 +464,8 @@ describe('the baseline behind an unusual week', () => {
     expect(row.status).toBe('exists')
     expect(row.detail).toBe('Baseline ready in 1 of 3 audiences; the rest are still forming.')
     expect(row.notes).toEqual([
-      'Your own brand — baseline forming — 0 of 3 months',
-      'Ottobock — baseline forming — 0 of 3 months',
+      'Your own brand — baseline forming: 0 of 3 months',
+      'Ottobock — baseline forming: 0 of 3 months',
       'The category — baseline ready',
       'Flags raised — none in the 11 updates compared so far.',
     ])
@@ -538,7 +538,7 @@ describe('the baseline behind an unusual week', () => {
   it('is one month of three on the trial workspace', () => {
     const row = find(computeReadiness(sealand()), 'anomaly-baseline')
     expect(row.status).toBe('partial')
-    expect(row.notes).toContain('The category — baseline forming — 1 of 3 months')
+    expect(row.notes).toContain('The category — baseline forming: 1 of 3 months')
     expect(row.detail).toBe('No audience has a baseline yet — the fullest is 1 of 3 months.')
   })
 
@@ -549,7 +549,7 @@ describe('the baseline behind an unusual week', () => {
     expect(august.notes).toContain('The category — baseline ready')
     const july = find(computeReadiness(ossur({ now: '2026-08-01T00:00:00.000Z' })), 'anomaly-baseline')
     // May, June, July: only two of the three are read at all, and only two clear.
-    expect(july.notes).toContain('The category — baseline forming — 2 of 3 months')
+    expect(july.notes).toContain('The category — baseline forming: 2 of 3 months')
   })
 
   it('says "not seeded yet" rather than throwing when the reading has not landed', () => {

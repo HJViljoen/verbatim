@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DrawsTile, EarlierQuestionsTile, NotAnsweredTile } from './rail'
-import { AskBoxTile, readingsMeta } from './ask-box'
+import { AskBoxTile } from './ask-box'
 import { agentFixture, refusedFixture } from './fixture'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
@@ -189,11 +189,8 @@ describe('the ask box', () => {
     assertCopyContract(box(refused))
   })
 
-  it('moves the readings count into the tile’s meta', () => {
-    expect(renderText(box(measured))).toContain('3 monthly readings searchable')
-    expect(readingsMeta({ ...measured.basis, monthlyReadings: 1 })).toBe('1 monthly reading searchable')
-    expect(readingsMeta({ ...measured.basis, monthlyReadings: 0 })).toBe('no month yet carries enough videos')
-    expect(readingsMeta({ ...measured.basis, monthlyReadings: null })).toBe('monthly readings not recorded here')
+  it('leaves the readings count to the draws tile (copy de-clutter C11)', () => {
+    expect(renderText(box(measured))).not.toContain('monthly readings searchable')
   })
 
   it('shows the plan a reader already checked, with how its claims read now', () => {

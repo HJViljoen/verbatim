@@ -78,7 +78,7 @@ export default async function SettingsSubjectsPage() {
     >
       <div className="flex flex-col gap-3">
         {!available ? (
-          <SettingsCard title="Your subjects" description="What we read your market against.">
+          <SettingsCard title="Your subjects">
             <p className="text-[12px] text-muted-foreground">
               Subjects are not switched on for this workspace yet. When they are, we will bring you five to eight
               to look at, drawn from what your own videos already say.
@@ -88,7 +88,7 @@ export default async function SettingsSubjectsPage() {
           <>
             <SettingsCard
               title="What we read your market against"
-              description={`${verdict.line} Each one is counted by exactly the rule a theme is, so a subject and a theme can be read side by side.`}
+              description={verdict.line}
             >
               <SubjectEditor
                 rows={named}

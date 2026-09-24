@@ -16,7 +16,7 @@ import {
   sampleNote, GATE_SAMPLE, REJECT_ROWS,
   type GateVerdict,
 } from './reject-log'
-import { clientReadiness, withheldLine } from './readiness-view'
+import { clientReadiness, NOT_BUILT } from './readiness-view'
 import { termDates, termDateWords } from './terms'
 
 // ---- artefacts --------------------------------------------------------------
@@ -392,7 +392,7 @@ describe('deliveryRecord', () => {
     ]
     const rec = deliveryRecord({ updates: withSlots, slotsRecorded: true })
     expect(rec.scheduledServed).toEqual({ scheduled: 1, byHand: 1 })
-    expect(rec.caveats[0]).toMatch(/leaves no trace/)
+    expect(rec.caveats).toHaveLength(0)
   })
 
   it('says so plainly on a workspace with no update at all', () => {
@@ -459,10 +459,12 @@ describe('clientReadiness', () => {
     expect(view.rows.find((r) => r.id === 'tracked-terms')!.by).toBeNull()
   })
 
-  it('says how many rows are held back, or nothing at all', () => {
-    expect(withheldLine(2)).toMatch(/2 further inputs are not shown/)
-    expect(withheldLine(1)).toMatch(/1 further input is not shown/)
-    expect(withheldLine(0)).toBeNull()
+  it('lists what the reading pages do not do yet, once, without dates', () => {
+    expect(NOT_BUILT.length).toBeGreaterThan(0)
+    for (const n of NOT_BUILT) {
+      expect(['Market', 'Competitive']).toContain(n.page)
+      expect(n.what).not.toMatch(/\d{4}|—/)
+    }
   })
 })
 
