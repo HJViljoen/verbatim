@@ -59,14 +59,18 @@ this is a positive spec: grey-scale chrome, colour reserved for meaning, and a g
 5. **Claims are clickable evidence** (the Agent page's document-review pattern): a sentence with voices behind it
    gets a quiet grey dotted underline; click → popover with count, platform split, two quotes, link to the page
    that holds the rest. **Nothing is underlined that cannot be clicked.** No highlighter fills, no coloured tints.
-6. **The crowd art leaves the app shell.** Login and the Agent landing may keep it.
+6. **The crowd backdrop is back in the app shell** (reversed 2026-09-24, Heinrich's call; it left on 2026-08-28).
+   `.crowd-bg` (`public/crowd.svg`, centre bottom, cover, 10% with the top fade) sits behind every dashboard page,
+   absolute in the non-scrolling pane right of the sidebar (`app/dashboard/layout.tsx`): `aria-hidden`, never
+   interactive, no scroll height, hidden in print. Tiles stay opaque white on top of it. Login keeps its own.
 7. **Pages may scroll.** The 2026-08-22 "one screen, no scroll at 1440×900" rule is **retired** — it is no longer
    a constraint, not a new requirement. The 12-column grid, `Tile`, `PageGrid` and `Drawer` stay; the 6-row height
    cap goes. Whether a given page fits one screen or scrolls is a per-page judgment.
 8. **No top bar.** The 48px `<header>` in `app/dashboard/layout.tsx` only ever held the mobile sidebar trigger
    (the drift fix was the `h-dvh` inner-scrolling `<main>`, not the bar). Remove it; move the trigger into the
-   sidebar rail (desktop) / a floating control (mobile). With the crowd gone from the shell the inner-scroll pane
-   is optional — keep it if the sidebar should stay put while content scrolls.
+   sidebar rail (desktop) / a floating control (mobile). Keep the inner-scroll pane: with the crowd back in the
+   shell (rule 6) it is what holds the backdrop still while content scrolls, and what stopped the mobile toolbar
+   from shifting it.
 9. **Drift guards (mechanical, run before merge):** every neutral must have blue ≥ red in RGB (cream fails);
    the only green in `globals.css` is `#0E8A5F` and its tint; no `backdrop-blur` in the app.
 
@@ -172,8 +176,8 @@ A full dark theme exists (`.dark` block); every new surface must read in both.
 
 ## Signature components
 
-- **`.crowd-bg`** — ambient crowd illustration. It LEFT the app shell with the identity and now
-  appears on `/login` alone (rule 6); it is not an app-surface element.
+- **`.crowd-bg`** — ambient crowd illustration, on `/login` and (since 2026-09-24, rule 6) behind every
+  dashboard page via the shell.
 - **Chips** — `px-2 py-0.5 rounded-full text-xs font-medium`; category chips use `categoryTint(key)`
   (grey, always), sentiment uses `SENTIMENT_BADGE`, prevalence uses `PREVALENCE_BADGE`,
   evidence tiers show "Strong evidence" (green tint) / "Early signal" (warning tint) — never numeric scores.
