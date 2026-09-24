@@ -106,6 +106,15 @@ describe('mentions= — the judge sees the evidence it is asked about', () => {
     expect(mentionSnippets(v, ['BRAND', 'NONE'], config)[0]).toMatch(/^BRAND: ….*my sealand bag held up$/)
   })
 
+  // Matching is on FOLDED text (accents stripped), so the position has to be
+  // mapped back to the caption as written, not read off the folded copy.
+  it('finds an accented name the way the matcher does, and quotes it as written', () => {
+    const ossur = { ...config, competitor_names: ['Össur'] }
+    const v = cand('v1', `${'Prosthetic knee comparison, part two. '.repeat(8)}Then the ÖSSUR Rheo knee, which we wore for a month.`)
+    const [snip] = mentionSnippets(v, ['Össur', 'NONE'], ossur)
+    expect(snip).toMatch(/^Össur: ….*Then the ÖSSUR Rheo knee, which we wore for a month\.$/)
+  })
+
   it('keeps an emoji whole at the snippet edge', () => {
     const v = cand('v1', `${'🎒'.repeat(260)} Freitag bag ${'🎒'.repeat(80)}`)
     const [snip] = mentionSnippets(v, ['Freitag', 'NONE'], config)

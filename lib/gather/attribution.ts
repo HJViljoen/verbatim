@@ -126,7 +126,7 @@ function foldedIndexOf(points: readonly string[], needle: string): { start: numb
   let folded = ''
   const origin: number[] = []
   points.forEach((cp, i) => {
-    const f = cp.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    const f = cp.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     for (let j = 0; j < f.length; j++) origin.push(i)
     folded += f
   })
