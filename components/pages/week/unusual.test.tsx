@@ -45,7 +45,7 @@ describe('WK1 · unusual this week', () => {
     // decomposes a flag by audience. What is printed in that slot is the
     // banded k-of-n the code can actually write — the object, both levels, the
     // difference and the band it cleared — inside a verdict node.
-    expect(text).toContain('Objections ran at 13.7% of this update against 3.5% across Jun 2026, Jul 2026, Aug 2026 — a difference of 10.2 points, on a band of 4.9.')
+    expect(text).toContain('Objections ran at 13.7% of this update against 3.5% across Jun 2026, Jul 2026, Aug 2026, a difference of 10.2 points, on a band of 4.9.')
     expect(text).not.toContain('×')
   })
 

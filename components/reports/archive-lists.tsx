@@ -129,6 +129,12 @@ export function ArchiveTile({
         {presetNote && <span className="ml-auto flex-none font-mono text-[11px] text-muted-foreground">{presetNote}</span>}
       </div>
 
+      {/* NOTHING IN ANY COLUMN IS ONE LINE, NOT THREE EMPTY BOXES (sweep
+          2026-09-24): three headed columns of "nothing yet" were a card whose
+          whole body explained an absence. */}
+      {columns.every((c) => c.items.length === 0) ? (
+        <p className="m-0 text-[12px] text-muted-foreground">{columns.map((c) => c.empty).join(' ')}</p>
+      ) : (
       <div className="grid min-h-0 grid-cols-1 gap-4 md:grid-cols-[1.25fr_1fr_0.75fr]">
         {columns.map((c) => (
           <div key={c.key} className="flex min-w-0 flex-col gap-2">
@@ -157,6 +163,7 @@ export function ArchiveTile({
           </div>
         ))}
       </div>
+      )}
     </Tile>
   )
 }

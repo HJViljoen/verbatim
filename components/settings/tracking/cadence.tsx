@@ -95,7 +95,7 @@ export function CadenceSection({
                 {storedPeriod === p && updatesThisMonth.length > 0 && (
                   <MonoNote className="text-[11px] text-muted-foreground">
                     {updatesThisMonth.length} update{updatesThisMonth.length === 1 ? '' : 's'} in{' '}
-                    {new Date(`${month}T00:00:00.000Z`).toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' })} —{' '}
+                    {new Date(`${month}T00:00:00.000Z`).toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' })}:{' '}
                     {updatesThisMonth.map((d) => shortDate(`${d}T00:00:00.000Z`)).join(', ')}
                   </MonoNote>
                 )}

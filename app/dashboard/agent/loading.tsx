@@ -18,10 +18,13 @@ export default function AgentLoading() {
           the wrong shape is a layout shift dressed as a loading state, and this
           file is the skeleton for `page.tsx` alone. */}
       <Bone className="h-[128px] w-full rounded-lg" />
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <Bone className="h-[220px] w-full rounded-lg" />
-        <Bone className="h-[220px] w-full rounded-lg" />
-        <Bone className="h-[220px] w-full rounded-lg" />
+      {/* History at seven columns, the two short tiles stacked in five. */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+        <Bone className="h-[260px] w-full rounded-lg xl:col-span-7" />
+        <div className="flex flex-col gap-4 xl:col-span-5">
+          <Bone className="h-[140px] w-full rounded-lg" />
+          <Bone className="h-[104px] w-full rounded-lg" />
+        </div>
       </div>
     </div>
   )

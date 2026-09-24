@@ -19,6 +19,20 @@ const slide = (d: AgentThreadData, key: string) => {
   return renderText(r!.render(d, 'print'))
 }
 
+describe('the deck prints a voice’s English under it', () => {
+  // Sweep 2026-09-24: the PDF printed a quote's raw words alone, so a
+  // non-English voice read untranslated on paper and translated on screen.
+  it('stamps the language and prints the English beneath the original', () => {
+    const d = agentFixture()
+    const q = d.turns[0].answer!.grounded[0].quotes[0]
+    Object.assign(q, { text: '기내반입되나요??', lang: 'ko', english: 'Is it allowed as carry-on luggage??' })
+    const text = slide(d, 'agent.turn:0:0')
+    expect(text).toContain('기내반입되나요??')
+    expect(text).toContain('Korean · machine translation')
+    expect(text).toContain('Is it allowed as carry-on luggage??')
+  })
+})
+
 describe('the deck prints the screen’s figures', () => {
   const measured = agentFixture()
 

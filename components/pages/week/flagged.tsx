@@ -27,6 +27,16 @@ import type { FigureTable } from '@/lib/reading/verdicts'
 // many were flagged and that none of them carries a reply link, which is what
 // a reader needs to know before reading the words.
 
+/** Nothing was flagged and the read did not fail. The page then draws no
+ *  tile for this section: an absence is a one-line state inside the section it
+ *  belongs to, never a card (sweep 2026-09-24), so "Worth a reply" says it. */
+export function isFlaggedQuiet(data: WeekData): boolean {
+  return !data.replies.unread && data.replies.flagged.length === 0
+}
+
+/** The one line "Worth a reply" prints when `isFlaggedQuiet`. */
+export const FLAGGED_NONE = 'Flagged for awareness: nothing in these days.'
+
 export const weekFlagged: Block<WeekData> = {
   key: 'week.flagged',
   title: 'Flagged for awareness',

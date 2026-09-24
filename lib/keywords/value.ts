@@ -203,7 +203,7 @@ export function summariseTerms(rows: KeywordPerfRow[], by: 'term' | 'platform-te
         reviewPlatforms: flagged.map((p) => p.platforms[0] ?? '').filter(Boolean),
         because: pooled.worthReviewing
           ? [...pooled.because, ...lines]
-          : [...lines, 'everywhere else it is doing better — this is one platform’s problem, not the term’s'],
+          : [...lines, 'everywhere else it is doing better, so this is one platform’s problem, not the term’s'],
       }
     })
     // Flagged first here, unlike the CLI: a term flagged only on one platform

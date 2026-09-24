@@ -137,7 +137,7 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
                           {/* No `@` on YouTube: it is read by CHANNEL ID and an
                               @name reads nothing at all, so printing one as a
                               handle teaches a client the wrong shape to paste. */}
-                          {platformLabel(p.platform)} {p.handle ? (p.platform === 'youtube' ? p.handle : `@${p.handle}`) : '— not tracked'}
+                          {platformLabel(p.platform)} {p.handle ? (p.platform === 'youtube' ? p.handle : `@${p.handle}`) : 'not tracked'}
                           {p.captured > 0 ? ` · ${p.captured} captured, ${p.read} read` : ''}
                         </span>
                       ))}
@@ -154,7 +154,7 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
                   // and five copies of it down a 132px column is five rows of
                   // three-line text saying one thing. The dash says there is no
                   // census; the note under the table says why, once.
-                  : <span key="o" className="block text-right text-[11.5px] text-muted-foreground">— not read</span>,
+                  : <span key="o" className="block text-right text-[11.5px] text-muted-foreground">not read</span>,
                 dropped && canEdit
                   ? (
                     <span key="r" className="block text-right">
@@ -187,9 +187,9 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
                   <span className="min-w-0 truncate text-[12.5px] font-medium">{name}</span>
                   <input type="hidden" name="competitor_names" value={name} />
                 </span>,
-                <span key="h" className="block text-[12.5px] text-muted-foreground">added here, not yet saved — nothing of theirs is read until it is</span>,
-                <span key="t" className="block text-right font-mono text-[11.5px] text-muted-foreground">—</span>,
-                <span key="o" className="block text-right text-[11.5px] text-muted-foreground">—</span>,
+                <span key="h" className="block text-[12.5px] text-muted-foreground">added here, not yet saved. Nothing of theirs is read until it is</span>,
+                <span key="t" className="block text-right font-mono text-[11.5px] text-muted-foreground">{'—'}</span>,
+                <span key="o" className="block text-right text-[11.5px] text-muted-foreground">{'—'}</span>,
                 <span key="r" />,
               ]}
             />

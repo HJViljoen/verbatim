@@ -76,4 +76,4 @@ export function isUnsupportedCadence(error: unknown): boolean {
 /** What to tell the person, in the product's own words for "not shipped yet"
  *  — the sentence Settings › Reports and recipients already uses. */
 export const CADENCE_NOT_STORED =
-  'We cannot store that cadence yet — the part of the product that records it has not shipped.'
+  'We cannot store that cadence yet: the part of the product that records it has not shipped.'

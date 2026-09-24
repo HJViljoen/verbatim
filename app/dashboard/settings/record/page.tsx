@@ -237,7 +237,7 @@ export default async function SettingsRecordPage() {
  */
 function scopeStatement(tenant: string, lines: readonly string[], readingAt: string): string {
   return [
-    `${tenant} — what this reading covers, as at ${fullDate(readingAt)}.`,
+    `${tenant}: what this reading covers, as at ${fullDate(readingAt)}.`,
     '',
     ...lines.map((l) => `· ${l}`),
     '',

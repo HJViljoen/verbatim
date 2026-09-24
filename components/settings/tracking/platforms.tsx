@@ -64,7 +64,7 @@ export function PlatformsSection({ rows, basis, ownAccounts }: {
       <MonoNote className="max-w-[820px]">
         Your accounts:{' '}
         {mine.length === 0
-          ? 'none configured — the search still finds you, but nothing you publish is read as yours'
+          ? 'none configured. The search still finds you, but nothing you publish is read as yours'
           : mine.map(([p, h]) => `${platformLabel(p)} ${p === 'youtube' ? h : `@${h}`}`).join(' · ')}
       </MonoNote>
     </Section>

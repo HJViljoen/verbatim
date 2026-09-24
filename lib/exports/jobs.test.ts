@@ -62,7 +62,7 @@ describe('exportErrorLine', () => {
   })
 
   it('falls back when the server said nothing useful', () => {
-    expect(exportErrorLine(500, '   ')).toBe('Couldn’t make that file — try again.')
-    expect(exportErrorLine(500, null)).toBe('Couldn’t make that file — try again.')
+    expect(exportErrorLine(500, '   ')).toBe('Couldn’t make that file. Try again.')
+    expect(exportErrorLine(500, null)).toBe('Couldn’t make that file. Try again.')
   })
 })

@@ -41,7 +41,7 @@ describe('evaluateMonthlyCap', () => {
     expect(out.ok).toBe(false)
     if (!out.ok) {
       expect(out.message).toBe(
-        'That is 40 questions this month, which is the limit on this workspace. It starts again in October — or tell us if you need more.',
+        'That is 40 questions this month, which is the limit on this workspace. It starts again in October, or tell us if you need more.',
       )
     }
   })

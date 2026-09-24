@@ -198,7 +198,7 @@ export default async function StudioPage({ searchParams }: { searchParams?: Prom
               />
               <DetailSection>
                 <p className="max-w-[60ch] text-[12.5px] leading-relaxed text-muted-foreground">
-                  Verbatim writes this one from your update — there is no outline to edit. What you choose here is who receives it, when, and what rides along.
+                  Verbatim writes this one from your update, so there is no outline to edit. What you choose here is who receives it, when, and what rides along.
                 </p>
               </DetailSection>
               <DetailSection label="Sending">

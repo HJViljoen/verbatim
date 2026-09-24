@@ -74,5 +74,5 @@ export function tileSections(tileKey: string): ExportSection[] {
 export function exportErrorLine(status: number, serverError?: string | null): string {
   if (status === 429) return `Today's export limit is reached (${EXPORT_DAILY_LIMIT}). Tomorrow it resets.`
   const said = typeof serverError === 'string' ? serverError.trim() : ''
-  return said || 'Couldn’t make that file — try again.'
+  return said || 'Couldn’t make that file. Try again.'
 }

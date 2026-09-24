@@ -2,6 +2,7 @@ import { weekdayDate } from '@/lib/format'
 import { loadWeek, type WeekData } from '@/lib/pages/week'
 import type { PageModule, Renderable, Slide } from '@/lib/renderables/types'
 import { WEEK_BLOCKS, weekContext } from '.'
+import { isFlaggedQuiet, weekFlagged } from './flagged'
 
 /**
  * This week as a page module — what an export addresses (Block D wave 2,
@@ -38,8 +39,11 @@ const renderables: Record<string, Renderable<WeekData>> = Object.fromEntries(
 )
 
 function weekSlides(data: WeekData): Slide[] {
-  void data
-  return WEEK_BLOCKS.map((block) => ({ title: block.title, keys: [block.key], layout: 'single' as const }))
+  // An empty "Flagged for awareness" is a line inside "Worth a reply" on paper
+  // too, never a sheet of its own.
+  return WEEK_BLOCKS
+    .filter((block) => !(block.key === weekFlagged.key && isFlaggedQuiet(data)))
+    .map((block) => ({ title: block.title, keys: [block.key], layout: 'single' as const }))
 }
 
 export const weekPage: PageModule<WeekData> = {

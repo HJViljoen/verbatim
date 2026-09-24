@@ -65,7 +65,7 @@ export function SaveStrip({ state, note }: { state: SaveState; note?: string | n
       </span>
       <span className="font-mono text-[10.5px] leading-[1.4] text-secondary-foreground">
         {state.lastSavedAt
-          ? `Last save ${shortDate(state.lastSavedAt)}${note ? ` — ${note.replace(/\.$/, '')}.` : '.'}`
+          ? `Last save ${shortDate(state.lastSavedAt)}${note ? `: ${note.replace(/\.$/, '')}.` : '.'}`
           : 'Nothing has been saved on this workspace yet.'}
         <br />
         {!state.recorded
@@ -109,7 +109,7 @@ export function SaveStrip({ state, note }: { state: SaveState; note?: string | n
  * how the jargon survived a copy lens on a passing test.
  */
 export const NO_EXPORT_WHY =
-  'There is no file to download here — what we turn into a document are the reading pages, and this is a settings page. So the record is printed below instead, to select and paste.'
+  'There is no file to download here. The record is printed below instead, to select and paste.'
 
 export function ScopeStatement({ text, why }: { text: string; why?: ReactNode }) {
   return (

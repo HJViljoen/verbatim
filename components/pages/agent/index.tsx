@@ -11,6 +11,7 @@ import type { AnswerMeasure, FindingMeasure } from '@/lib/agent/measure'
 import { JUDGEMENT_HEADING, NEAREST_HEADING, citationDestination, citationWhere, saidHeading } from '@/lib/agent/types'
 import { askBasisLine } from '@/lib/agent/basis'
 import { surface } from '@/lib/nav'
+import { translationLabel, translationNote } from '@/components/quote-block'
 
 // The agent thread on paper (Reports & Exports T11, 2026-08-29). Question
 // mode: the question, the answer, "what your customers said" with a
@@ -120,7 +121,7 @@ function AnswerBody({ a, from, to, measure, turnIndex }: {
                   <Level f={levelFor(measure, turnIndex, p.id)} />
                 </div>
                 {p.quotes.map((q) => (
-                  <blockquote key={q.n} className="border-l-2 border-border pl-2.5 font-serif text-[12.5px] leading-[1.45] text-foreground">“{q.text}”<Sup n={q.n} /></blockquote>
+                  <blockquote key={q.n} className="border-l-2 border-border pl-2.5 font-serif text-[12.5px] leading-[1.45] text-foreground">“{q.text}”<Sup n={q.n} /><PdfEnglish q={q} /></blockquote>
                 ))}
                 {p.themeRefs.length > 0 && <p className="text-[10.5px] text-muted-foreground">{p.themeRefs.map((t) => t.label).filter(Boolean).join(' · ')}</p>}
               </div>
@@ -158,7 +159,7 @@ function MoreBody({ a }: { a: ThreadAnswer }) {
               return (
                 <div key={i} className="space-y-1">
                   <p className="text-[13px] leading-snug text-foreground/85">{j.text}</p>
-                  <p className="text-[10.5px] text-muted-foreground">{cites.length ? `Reasoning from ${cites.length === 1 ? 'finding' : 'findings'} ${cites.join(', ')}.` : 'Not drawn from any single finding — this one is inference.'}</p>
+                  <p className="text-[10.5px] text-muted-foreground">{cites.length ? `Reasoning from ${cites.length === 1 ? 'finding' : 'findings'} ${cites.join(', ')}.` : 'Not drawn from any single finding. This one is inference.'}</p>
                 </div>
               )
             })}
@@ -280,7 +281,7 @@ function ClaimsPage({ d, page }: { d: D; page: number }) {
             {!doc.anchored.includes(c.ref) && <p className="text-[10.5px] text-muted-foreground">Not stated directly in the document.</p>}
             {c.verdict !== 'silent' && (
               <div className="space-y-2 border-l-2 border-border pl-2.5">
-                {quotes.map((q, k) => <blockquote key={k} className="font-serif text-[12px] leading-[1.45]">“{q.text}”</blockquote>)}
+                {quotes.map((q, k) => <blockquote key={k} className="font-serif text-[12px] leading-[1.45]">“{q.text}”<PdfEnglish q={q} /></blockquote>)}
                 {c.theySay && <p className="text-[12px] leading-snug text-foreground/85">{c.theySay}</p>}
                 {/* The theme names alone. The count that stood here was the
                     same denominator-less retrieval figure, and the document
@@ -305,7 +306,7 @@ function DocJudgement({ d }: { d: D }) {
         return (
           <div key={i} className="space-y-1">
             <p className="text-[13.5px] leading-snug text-foreground/85">{j.text}</p>
-            <p className="text-[10.5px] text-muted-foreground">{cites.length ? `Reasoning from ${cites.length === 1 ? 'claim' : 'claims'} ${cites.join(', ')}.` : 'Not drawn from any single claim — this one is inference.'}</p>
+            <p className="text-[10.5px] text-muted-foreground">{cites.length ? `Reasoning from ${cites.length === 1 ? 'claim' : 'claims'} ${cites.join(', ')}.` : 'Not drawn from any single claim. This one is inference.'}</p>
           </div>
         )
       })}
@@ -341,7 +342,7 @@ function resolve(key: string): Renderable<D> | undefined {
       return (
         <div className="min-h-0 overflow-hidden">
           {p === 0 && <Question t={t} first={i === 0} d={d} />}
-          {t.answer ? <AnswerBody a={t.answer} from={p * GROUNDED_PER_SLIDE} to={p * GROUNDED_PER_SLIDE + GROUNDED_PER_SLIDE} measure={d.measure} turnIndex={i} /> : <p className="text-[13px]">{t.prose ?? 'That question did not get an answer — something went wrong on our side rather than in the data.'}</p>}
+          {t.answer ? <AnswerBody a={t.answer} from={p * GROUNDED_PER_SLIDE} to={p * GROUNDED_PER_SLIDE + GROUNDED_PER_SLIDE} measure={d.measure} turnIndex={i} /> : <p className="text-[13px]">{t.prose ?? 'That question did not get an answer. Something went wrong on our side rather than in the data.'}</p>}
         </div>
       )
     })
@@ -381,4 +382,20 @@ export const agentPage: PageModule<D> = {
   renderables,
   snapshotTitle: (d) => `${d.kind === 'document' ? 'Document check' : ASK} · ${d.title.slice(0, 80)} · ${weekdayDate(d.createdAt)}`,
   printContext: (d) => `${d.kind === 'document' ? 'Document check' : ASK} · ${d.brand} · ${weekdayDate(d.createdAt)}`,
+}
+
+/** A voice's English on paper, under the original with the language stamp,
+ *  in the order every quote renderer keeps (QuoteBlock). The deck printed the
+ *  raw words alone, so a Korean question read untranslated here while the same
+ *  quote on screen carried its English (sweep 2026-09-24). */
+function PdfEnglish({ q }: { q: { lang?: string | null; english?: string | null } }) {
+  const note = translationNote(q)
+  const label = translationLabel(note)
+  if (!label) return null
+  return (
+    <>
+      <span className="mt-1 block font-mono text-[9.5px] not-italic text-muted-foreground">{label}</span>
+      {note.english ? <span data-copy="quote" className="block text-[12px] text-muted-foreground">{note.english}</span> : null}
+    </>
+  )
 }

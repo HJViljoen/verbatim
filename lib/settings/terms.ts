@@ -226,4 +226,4 @@ export function termYieldByMonth(rows: readonly KeywordRunRow[]): TermYield[] {
 
 /** The sentence that has to sit beside every one of those numbers. */
 export const TERM_YIELD_BASIS =
-  'Dated by the update that searched, not by when the comments were written — this is what each search brought back, and it is the only figure here on that clock.'
+  'Dated by the update that searched, not by when the comments were written.'

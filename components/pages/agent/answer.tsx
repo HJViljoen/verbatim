@@ -118,7 +118,7 @@ function OwnSide({ f }: { f: FindingMeasure }) {
       <span data-copy="figure">
         {fmtInt(f.own.value.k)} of {fmtInt(f.own.value.n)} videos
       </span>
-      {f.own.thin ? <> — <span className="text-[12px] font-medium text-muted-foreground">{TOO_FEW}</span></> : null}
+      {f.own.thin ? <> · <span className="text-[12px] font-medium text-muted-foreground">{TOO_FEW}</span></> : null}
     </p>
   )
 }
@@ -247,7 +247,7 @@ function MonthTrail({ f }: { f: FindingMeasure }) {
                 {when} {p.pct}% ({fmtInt(p.k as number)} of {fmtInt(p.n as number)})
               </span>
             ) : (
-              <span data-copy="figure" className="whitespace-nowrap">{when} —</span>
+              <span data-copy="figure" className="whitespace-nowrap">{when}:</span>
             )}
           </Fragment>
         )

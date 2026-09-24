@@ -334,7 +334,7 @@ describe('the rivals section', () => {
     )
     // The state, three times — it is what the row is.
     expect(none.split(NO_ACCOUNTS_SHORT).length - 1).toBe(3)
-    expect(none).not.toContain('no accounts configured — nothing they publish is being read')
+    expect(none).not.toContain('no accounts configured, so nothing they publish is being read')
     // The consequence, once, in the section's one paragraph.
     expect(none.split(why).length - 1).toBe(1)
     // And where no month was passed there is no own-posts column to carry it,
@@ -470,7 +470,7 @@ describe('the cadence section', () => {
   })
 
   it('evidences the cadence with the updates that actually landed', () => {
-    expect(words).toContain('4 updates in September — 27 Sep, 20 Sep, 13 Sep, 6 Sep')
+    expect(words).toContain('4 updates in September: 27 Sep, 20 Sep, 13 Sep, 6 Sep')
     expect(words).toContain('last 27 Sep')
   })
 
@@ -578,7 +578,7 @@ describe('the save state', () => {
 
   it('renders the absence where M1 has not been applied', () => {
     const words = renderText(<LastSaveStrip state={saveState({ lastChange: change, affectsRecorded: false })} note="Poler was added." />)
-    expect(words).toContain('Last save 3 Sep — Poler was added.')
+    expect(words).toContain('Last save 3 Sep: Poler was added.')
     expect(words).toContain(BREAK_NOT_RECORDED)
     expect(words).not.toContain('Broke:')
   })
@@ -606,7 +606,7 @@ describe('the save state', () => {
       affectsRecorded: false,
     })
     const words = renderText(<SaveStateLine state={state} />)
-    expect(words).toContain('1 change waiting to be saved — category terms')
+    expect(words).toContain('1 change waiting to be saved: category terms')
     expect(words).toContain('last saved 3 Sep')
     // M3: the break half is the rail's, and it is drawn once.
     expect(words).not.toContain('was not written down')

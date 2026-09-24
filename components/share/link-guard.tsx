@@ -51,7 +51,7 @@ export function LinkGuard({ children, appUrl }: { children: ReactNode; appUrl?: 
       {note && (
         <p role="status" style={{ left: Math.min(note.x, window.innerWidth - 260), top: note.y + 12 }}
           className="pointer-events-none fixed z-50 rounded-md bg-foreground px-2.5 py-1.5 text-[12px] text-tile shadow-tile-hover">
-          That lives in Verbatim — ask whoever sent this.
+          That lives in Verbatim. Ask whoever sent this.
         </p>
       )}
     </div>

@@ -463,7 +463,7 @@ describe('the page’s own chrome', () => {
   it('tells a save that broke nothing from a save whose breakage was never written down', () => {
     const recorded = renderText(<SaveStrip state={saveStateFixture()} note="Poler added as a rival" />)
     expect(recorded).toContain('Nothing waiting to be saved.')
-    expect(recorded).toContain('Last save 3 Sep — Poler added as a rival.')
+    expect(recorded).toContain('Last save 3 Sep: Poler added as a rival.')
     expect(recorded).toContain('Broke:')
     const unrecorded = renderText(<SaveStrip state={unrecordedSaveStateFixture()} />)
     expect(unrecorded).toContain('not written down here yet')

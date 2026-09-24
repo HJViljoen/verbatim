@@ -462,7 +462,7 @@ describe('clientReadiness', () => {
   it('lists what the reading pages do not do yet, once, without dates', () => {
     expect(NOT_BUILT.length).toBeGreaterThan(0)
     for (const n of NOT_BUILT) {
-      expect(['Market', 'Competitive']).toContain(n.page)
+      expect(['Market', 'Competitive', 'Subjects', 'This week']).toContain(n.page)
       expect(n.what).not.toMatch(/\d{4}|—/)
     }
   })

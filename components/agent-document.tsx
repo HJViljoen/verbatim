@@ -1,4 +1,4 @@
-import { Quotes } from '@/components/quotes'
+import { Quotes, type QuoteItem } from '@/components/quotes'
 import type { ClaimResult, Judgement, AskSummary, Verdict } from '@/lib/ask/types'
 
 // A document, annotated — the agent's other face.
@@ -35,7 +35,9 @@ export function AgentDocumentView({
   claims: ClaimResult[]
   summary: AskSummary
   judgement: Judgement[]
-  quotesByClaim: Map<string, string[]>
+  /** Each claim's quotes WITH their reading, so a non-English voice prints
+   *  its English under it (sweep 2026-09-24: this path printed raw text). */
+  quotesByClaim: Map<string, (string | QuoteItem)[]>
   /** Set when the split view is driving selection from the document side. */
   activeRef?: string | null
   /** Refs whose span was found in the document. A claim NOT in here was never
@@ -129,7 +131,7 @@ export function AgentDocumentView({
                   <p className="text-xs text-muted-foreground">
                     {cites.length > 0
                       ? `Reasoning from ${cites.length === 1 ? 'claim' : 'claims'} ${cites.join(', ')} above.`
-                      : 'Not drawn from any single claim above — this one is inference.'}
+                      : 'Not drawn from any single claim above. This one is inference.'}
                   </p>
                 </div>
               )

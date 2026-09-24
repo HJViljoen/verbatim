@@ -91,7 +91,7 @@ export const weekRivalPosts: Block<WeekData> = {
       out[`rival_${r.audience}_post_comments`] = {
         value: r.comments,
         unit: 'comments',
-        label: `${r.label} — comments under the posts named, in the days this update covered`,
+        label: `${r.label} — comments under the posts named, in the days this update covered`, // em-dash-ok: FigureTable label (a record key, never printed)
       }
     }
     return out

@@ -136,7 +136,7 @@ export function RejectLogBlock({
           caller that draws the rows without it draws no button either. */}
       {!withheld && rows.length > 0 && control ? (
         <p className="m-0 text-[12px] text-muted-foreground">
-          Saying so files it for a person to look at — it does not re-run the gather, and it does not change a month
+          Saying so files it for a person to look at. It does not re-run the gather, and it does not change a month
           already read.
         </p>
       ) : null}

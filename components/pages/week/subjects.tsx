@@ -126,9 +126,9 @@ export const weekSubjects: Block<WeekData> = {
   figures(data): FigureTable {
     const out: FigureTable = {}
     for (const r of data.subjects.rows) {
-      out[`subject_${r.id}_videos`] = { value: r.monthVideos, unit: 'videos', label: `${r.label} — videos this month` }
+      out[`subject_${r.id}_videos`] = { value: r.monthVideos, unit: 'videos', label: `${r.label} — videos this month` } // em-dash-ok: FigureTable label (a record key, never printed)
       if (r.addedVideos != null) {
-        out[`subject_${r.id}_added`] = { value: r.addedVideos, unit: 'videos', label: `${r.label} — videos this update added` }
+        out[`subject_${r.id}_added`] = { value: r.addedVideos, unit: 'videos', label: `${r.label} — videos this update added` } // em-dash-ok: FigureTable label (a record key, never printed)
       }
     }
     return out

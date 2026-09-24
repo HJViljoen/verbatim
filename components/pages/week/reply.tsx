@@ -10,6 +10,7 @@ import { fmtInt, platformLabel, shortDate } from '@/lib/format'
 import { INTENT_PLURAL, INTENT_LABEL, type Intent } from '@/lib/content-tiles'
 import { REPLIES_SHOWN, windowDays, type ReplyRow, type WeekData } from '@/lib/pages/week'
 import type { FigureTable } from '@/lib/reading/verdicts'
+import { FLAGGED_NONE, isFlaggedQuiet } from './flagged'
 
 // WK §2 · Worth a reply (the mock's §2), moved here from the Content page in
 // Block D wave 2.
@@ -84,7 +85,8 @@ export const weekReply: Block<WeekData> = {
         title={weekReply.title}
         question={weekReply.question}
         mode={mode}
-        meta={r.rows.length > 0 ? `${fmtInt(r.total)} picked` : undefined}
+        // No meta: the lead row prints the count, and the footer link opens it
+        // (sweep 2026-09-24: a count is said once per block).
         // THE ARTBOARD'S OWN FOOTER: "Open all 12 →" (design review, nits). It
         // read "2 more →" where the pick was bigger than the four shown, which
         // names a remainder rather than the queue, and changed shape between
@@ -109,6 +111,11 @@ export const weekReply: Block<WeekData> = {
             </div>
           </>
         ) : null}
+        {isFlaggedQuiet(data) ? (
+          <p className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, margin: '6px 0 0' } : undefined}>
+            {FLAGGED_NONE}
+          </p>
+        ) : null}
       </BlockFrame>
     )
   },
@@ -129,7 +136,7 @@ export const weekReply: Block<WeekData> = {
     const r = data.replies
     if (r.unread) return r.unread
     if (r.rows.length > 0) return null
-    return 'Nothing in the days this update covered reads as a question, an objection or somebody ready to buy — so there is nothing here to answer.'
+    return 'Nothing in the days this update covered reads as a question, an objection or somebody ready to buy.'
   },
 }
 

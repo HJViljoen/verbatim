@@ -48,7 +48,7 @@ export function LastSaveStrip({ state, note }: {
       {state.lastSavedAt ? (
         <>
           <span className="font-mono text-[10.5px] leading-[1.4] text-muted-foreground">
-            Last save {shortDate(state.lastSavedAt)}{note ? ` — ${note}` : ''}
+            Last save {shortDate(state.lastSavedAt)}{note ? `: ${note}` : ''}
           </span>
           <span className="font-mono text-[10.5px] leading-[1.4] text-muted-foreground">{breakWords(state)}</span>
         </>
@@ -67,7 +67,7 @@ export function SaveStateLine({ state }: { state: SaveState }) {
     <span className="min-w-0 flex-1 text-[12.5px] text-muted-foreground">
       {pending === 0
         ? `${NOTHING_PENDING}`
-        : `${pending} change${pending === 1 ? '' : 's'} waiting to be saved — ${state.pending.map((p) => p.field.toLowerCase()).join(', ')}`}
+        : `${pending} change${pending === 1 ? '' : 's'} waiting to be saved: ${state.pending.map((p) => p.field.toLowerCase()).join(', ')}`}
       {state.lastSavedAt ? <> · last saved <span className="font-mono text-[12px] text-secondary-foreground">{shortDate(state.lastSavedAt)}</span>.</> : '.'}
     </span>
   )

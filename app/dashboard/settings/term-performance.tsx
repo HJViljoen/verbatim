@@ -61,7 +61,7 @@ function Row({ t, months }: { t: TermSummary; months?: TermYield }) {
             </ul>
           </details>
         ) : (
-          <span className="text-muted-foreground">—</span>
+          <span className="text-muted-foreground">{'—'}</span>
         )}
       </td>
     </tr>

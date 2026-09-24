@@ -4,6 +4,7 @@ import { fullDate } from '@/lib/format'
 import { staleQuarterlySnapshot, type QuarterlySnapshotData } from '@/lib/reports/quarterly-build'
 import { quarterlyBlocksFor } from '@/components/blocks/quarterly'
 import { LinkGuard } from './link-guard'
+import { withCurrentWords } from '@/lib/reports/legacy-words'
 
 // A shared quarterly review (Phase 1 WP20).
 //
@@ -17,6 +18,9 @@ import { LinkGuard } from './link-guard'
 // quoted voices resolve at render, so a withdrawn comment never travels.
 
 export function QuarterlyShareShell({ data, appUrl }: { data: QuarterlySnapshotData; appUrl: string }) {
+  // A snapshot built before the em-dash sweep re-renders with today's words
+  // (lib/reports/legacy-words.ts), the same walk the decks and emails take.
+  data = withCurrentWords(data)
   const ctx = blockContext(appUrl, EMAIL)
   // Asked before anything dereferences `data.reading`, whose shape changed
   // incompatibly in block D (`QUARTERLY_SNAPSHOT_VERSION`). A share link is

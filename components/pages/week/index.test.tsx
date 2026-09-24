@@ -560,7 +560,9 @@ describe('WK §2 · worth a reply', () => {
     // videos. The digest takes at most three of a category and twelve in all,
     // so the number is a cap and the meta says which rule produced it.
     const text = renderText(weekReply.render(weekFixture(), 'app', ctx))
-    expect(text).toContain('6 picked')
+    // The count is said once, in the lead row (sweep 2026-09-24).
+    expect(text).toContain('6 worth a reply')
+    expect(text.match(/\b6 picked\b/g) ?? []).toHaveLength(0)
     expect(text).not.toContain('at most three of a kind')
     expect(text).not.toContain('picked from the comments written in the days this update covered')
     expect(text).not.toContain('of 205 videos')
@@ -610,8 +612,8 @@ describe('WK §2 · worth a reply', () => {
 
   it('says the queue is empty rather than drawing an empty table', () => {
     const text = renderText(weekReply.render(thinFixture(), 'app', ctx))
-    expect(text).toContain('nothing here to answer')
-    expect(weekReply.emptyState(thinFixture())).toContain('nothing here to answer')
+    expect(text).toContain('ready to buy.')
+    expect(weekReply.emptyState(thinFixture())).toContain('ready to buy.')
   })
 
   it('keeps the copy contract with a commenter’s own words in every mode', () => {
@@ -859,7 +861,7 @@ describe('WK §5 · for sales', () => {
     // display cap reaches a salesperson as a measurement.
     const text = renderText(weekSales.render(weekFixture(), 'app', ctx))
     expect(text).toContain('7')
-    expect(text).toContain('someone said they were moving between brands — of 205 videos this update · 1 below')
+    expect(text).toContain('someone said they were moving between brands · of 205 videos this update · 1 below')
   })
 
   it('draws no switching stat at all where the total was never counted', () => {
@@ -1094,14 +1096,25 @@ describe('the page', () => {
       return [...markup.matchAll(/data-col="(\d+)" data-row="(\d+)"/g)].map((m) => `${m[1]}x${m[2]}`)
     }
     const shape = ['12x1', '12x1', '12x1', '12x1', '12x1', '5x1', '7x1', '12x1', '12x1']
+    // An empty "Flagged for awareness" draws no tile: it is a line inside
+    // "Worth a reply" (sweep 2026-09-24).
+    const quiet = ['12x1', '12x1', '12x1', '12x1', '12x1', '5x1', '7x1', '12x1']
     expect(spans(weekFixture())).toEqual(shape)
-    expect(spans(thinFixture())).toEqual(shape)
-    expect(spans(absentReadingFixture())).toEqual(shape)
+    expect(spans(thinFixture())).toEqual(quiet)
+    expect(spans(absentReadingFixture())).toEqual(absentReadingFixture().replies.unread ? shape : quiet)
     const d = weekFixture()
     const rival = d.cameIn.rivals[0]
     const rivals = Array.from({ length: 4 }, (_, i) => ({ ...rival, audience: `competitor:r${i}`, posts: rival.posts.slice(0, 3) }))
     expect(spans({ ...d, cameIn: { ...d.cameIn, rivals } })).toEqual(shape)
     expect(render(<WeekPage data={d} />)).toContain('xl:auto-rows-[minmax(116px,auto)]')
+  })
+
+  it('folds an empty "Flagged for awareness" into one line under "Worth a reply"', () => {
+    const quiet = render(<WeekPage data={thinFixture()} />)
+    expect(quiet).toContain('Flagged for awareness: nothing in these days.')
+    expect(quiet).not.toContain('>Flagged for awareness<')
+    const flagged = render(<WeekPage data={weekFixture()} />)
+    expect(flagged).not.toContain('Flagged for awareness: nothing in these days.')
   })
 
   it('takes no horizon and no soundness band — it is dated by the update', () => {

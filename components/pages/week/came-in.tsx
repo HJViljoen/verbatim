@@ -180,7 +180,7 @@ function Audiences({ block, mode, month }: { block: CameInBlock; mode: 'app' | '
       <div style={{ marginTop: 8 }}>
         {rows.map((r) => (
           <div key={r.audience} style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink, padding: '3px 0' }}>
-            {r.label} — <span data-copy="figure">{fmtInt(r.analysed)}</span> analysed · {fmtInt(r.gathered)} newly found · {platformMixLine(r.platformMix) || 'no platform recorded'}
+            {r.label}: <span data-copy="figure">{fmtInt(r.analysed)}</span> analysed · {fmtInt(r.gathered)} newly found · {platformMixLine(r.platformMix) || 'no platform recorded'}
             {r.trackedSince ? (
               <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>
                 tracked since {shortDate(r.trackedSince)}
@@ -400,7 +400,7 @@ function Themes({ block, mode }: { block: CameInBlock; mode: 'app' | 'print' | '
                 label carrying a direction word would have passed on screen and
                 failed the contract in the inbox — a confusing way to find out
                 which arm is stricter. */}
-            <span data-copy="stored" data-slot="pass_b_theme">{t.label}</span> — <span data-copy="figure">{fmtInt(t.videos)}</span> videos this month
+            <span data-copy="stored" data-slot="pass_b_theme">{t.label}</span> · <span data-copy="figure">{fmtInt(t.videos)}</span> videos this month
           </p>
         ))}
       </div>
@@ -455,7 +455,9 @@ function Quotes({ block, mode, ctx }: { block: CameInBlock; mode: 'app' | 'print
           </Link>
         ) : null}
       </div>
-      {block.quotesTotal != null ? (
+      {/* The count once (sweep 2026-09-24): the link beside the heading carries
+          it wherever the link is drawn, so the sentence is the email's alone. */}
+      {email && block.quotesTotal != null ? (
         <Note mode={mode}>
           <span data-copy="figure">{fmtInt(block.quotesTotal)}</span> comments on your subjects were written in these days.
         </Note>

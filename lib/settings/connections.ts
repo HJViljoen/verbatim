@@ -109,13 +109,13 @@ export function platformShareBasis(args: {
   if (args.videos === null) return PLATFORM_SHARE_ABSENT
   const when = longMonth(args.month)
   const state = args.status === 'frozen' ? 'closed' : 'still filling'
-  return `share of ${args.audience}’s ${args.videos.toLocaleString('en-GB')} videos in ${when} — dated by the comment, and ${when} is ${state}`
+  return `share of ${args.audience}’s ${args.videos.toLocaleString('en-GB')} videos in ${when}, dated by the comment; ${when} is ${state}`
 }
 
 /** What stands in its place where the month has not been read. Not a zero, and
  *  not a share computed some other way. */
 export const PLATFORM_SHARE_ABSENT =
-  'We cannot say how this month splits across the platforms yet — the month has not been read.'
+  'We cannot say how this month splits across the platforms yet: the month has not been read.'
 
 /** And what stands there when the read itself failed. "The month has not been
  *  read" is a claim about the record; this is a claim about the last ten
@@ -168,7 +168,7 @@ export function savedMessage(fields: readonly string[]): string {
   const list = words.length === 1
     ? words[0]
     : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`
-  return `Saved — ${list}. Your next update is the first one to use ${known.length === 1 ? 'it' : 'them'}.`
+  return `Saved: ${list}. Your next update is the first one to use ${known.length === 1 ? 'it' : 'them'}.`
 }
 
 export function trackingPending(

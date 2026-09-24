@@ -5,6 +5,7 @@ import { weeklyDateLine, weeklyHeadline } from '@/lib/reports/weekly'
 import { staleWeeklySnapshot, type WeeklySnapshotData } from '@/lib/reports/weekly-build'
 import { weeklyBlocksFor } from '@/components/blocks/weekly'
 import { LinkGuard } from './link-guard'
+import { withCurrentWords } from '@/lib/reports/legacy-words'
 
 // A shared weekly report (Phase 1 WP17).
 //
@@ -15,6 +16,9 @@ import { LinkGuard } from './link-guard'
 // is outside it.
 
 export function WeeklyShareShell({ data, appUrl }: { data: WeeklySnapshotData; appUrl: string }) {
+  // A snapshot built before the em-dash sweep re-renders with today's words
+  // (lib/reports/legacy-words.ts), the same walk the decks and emails take.
+  data = withCurrentWords(data)
   const ctx = blockContext(appUrl, EMAIL)
   // Asked before anything dereferences `data.reading`, whose shape changed
   // incompatibly in block D wave 2 (`WEEKLY_SNAPSHOT_VERSION`).

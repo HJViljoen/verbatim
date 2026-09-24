@@ -44,7 +44,7 @@ export const BUCKETS: readonly { key: Bucket; label: string; hint: string }[] = 
 export const NEW_TERM_RULE = 'a new term starts a new line; the old line is kept'
 
 /** Why there is no "Keep it" beside the control that takes a term off. */
-export const REVIEW_KEEP_NOTE = 'keeping it needs nothing — it stays until you take it off'
+export const REVIEW_KEEP_NOTE = 'keeping it needs nothing: it stays until you take it off'
 
 export interface TermsSectionProps {
   terms: Record<Bucket, string[]>
@@ -225,7 +225,7 @@ export function ReviewStrip({ term, canEdit, onDrop }: { term: TermSummary; canE
       <span className="min-w-0 flex-1 text-[12.5px] text-secondary-foreground">
         kept <span className="font-mono font-medium tabular-nums">{term.kept.toLocaleString('en-GB')}</span> of{' '}
         <span className="font-mono font-medium tabular-nums">{term.found.toLocaleString('en-GB')}</span> found
-        {term.because[0] ? ` — ${term.because[0]}` : ''}
+        {term.because[0] ? ` · ${term.because[0]}` : ''}
       </span>
       {/* Sentence, then action, on one line — which is what the artboard draws
           and what M7 was after when it moved the control to the strip's own

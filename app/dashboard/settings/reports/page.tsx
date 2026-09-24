@@ -123,7 +123,7 @@ export default async function SettingsReportsPage() {
           )}
 
           <p className="mt-2 text-[11.5px] text-muted-foreground">
-            A report rides the update — it goes out after one, and never on a clock of its own. Nothing is sent at
+            A report rides the update: it goes out after one, and never on a clock of its own. Nothing is sent at
             all while updates are paused.
           </p>
         </SettingsCard>
@@ -174,7 +174,7 @@ export default async function SettingsReportsPage() {
             <p className="font-mono text-[11.5px] text-muted-foreground">{inputs.deadRecipients.join(', ')}</p>
             <p className="mt-2 text-[11.5px] text-muted-foreground">
               If any of them should be receiving something, add them to the report above. We will clear this list
-              once you say so — deleting it is ours to do, and we would rather you saw it first.
+              once you say so.
             </p>
           </SettingsCard>
         )}

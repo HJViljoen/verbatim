@@ -345,7 +345,7 @@ const HEADINGS: Record<FindingKind, string> = {
  *  because the most likely cause is a registration gap after a deploy. */
 export function formatOpsEmail(findings: Finding[], now: Date): { subject: string; text: string } {
   const n = findings.length
-  const subject = `Verbatim ops — ${n} finding${n === 1 ? '' : 's'}`
+  const subject = `Verbatim ops: ${n} finding${n === 1 ? '' : 's'}`
   const lines = findings.map((f) => {
     const who = f.clientName ? ` [${f.clientName}]` : ''
     return `• ${HEADINGS[f.kind]}${who}: ${f.detail}`
@@ -356,7 +356,7 @@ export function formatOpsEmail(findings: Finding[], now: Date): { subject: strin
     ...lines,
     '',
     'First two moves:',
-    `  1. Inngest dashboard — is the app registered and are the crons firing? ${INNGEST_DASHBOARD}`,
+    `  1. Inngest dashboard: is the app registered and are the crons firing? ${INNGEST_DASHBOARD}`,
     `  2. Re-register after a deploy: ${REREGISTER}`,
     '',
     'Then: POST /api/admin/trigger-run {"clientId":"…"} to run a client by hand,',

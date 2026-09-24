@@ -123,8 +123,8 @@ export function RivalRename({ id, name }: { id: string; name: string }) {
         <button type="button" onClick={() => setOpen(false)} className="shrink-0 rounded-[3px] text-[12px] text-muted-foreground hover:underline">Cancel</button>
       </div>
       <p className="text-left text-[11px] text-muted-foreground">
-        The months already counted stay under the old name — they cannot be moved, and we would rather show you
-        one line with the change marked on it than quietly restate history.
+        The months already counted stay under the old name. They cannot be moved, so the line shows the rename
+        marked on it.
       </p>
       {state.message && !state.ok && <p role="alert" className="text-left text-[11.5px] text-negative">{state.message}</p>}
     </div>

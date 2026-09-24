@@ -140,7 +140,7 @@ export function unconfiguredShare(rows: readonly CommunityRow[]): { posts: numbe
  *  is a real and different state: somebody put it on the list by hand and no
  *  probe has ever measured it. */
 export function communityWords(row: CommunityRow): string {
-  if (row.unconfigured) return 'not on your list — the search found it'
+  if (row.unconfigured) return 'not on your list; the search found it'
   // "YOU STOPPED IT" AND "WE RULED IT OUT" ARE DIFFERENT SENTENCES, and the
   // second is a judgment of the community that a client who took it off the
   // list themselves never asked us to make. A stopped community often PASSED

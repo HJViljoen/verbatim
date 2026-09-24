@@ -119,7 +119,7 @@ export async function updateArtefactRecipients(
 
   if (readError) {
     if (isMissingArtefact(readError)) {
-      return { ok: false, message: 'We cannot store this yet — the part of the product that records it has not shipped.' }
+      return { ok: false, message: 'We cannot store this yet: the part of the product that records it has not shipped.' }
     }
     return { ok: false, message: 'Could not save just now. Try again, and tell us if it keeps happening.' }
   }

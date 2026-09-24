@@ -403,7 +403,7 @@ export function measureAnswer(input: MeasureAnswerInput): AnswerMeasure {
         ownSide = { value: { k: ownCurr.k, n: ownCurr.videos }, thin: thinSide }
         if (thinSide) {
           caveats.push(
-            `Your own side of ${label} is ${fmtInt(ownCurr.k)} of ${fmtInt(ownCurr.videos)} videos in ${longMonth(month)} — ${TOO_FEW}.`,
+            `Your own side of ${label} is ${fmtInt(ownCurr.k)} of ${fmtInt(ownCurr.videos)} videos in ${longMonth(month)}, ${TOO_FEW}.`,
           )
         }
       }

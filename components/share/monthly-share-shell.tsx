@@ -4,6 +4,7 @@ import { readingCaveat } from '@/lib/reports/monthly'
 import type { MonthlySnapshotData } from '@/lib/reports/monthly-build'
 import { monthlyBlocksFor } from '@/components/blocks/monthly'
 import { LinkGuard } from './link-guard'
+import { withCurrentWords } from '@/lib/reports/legacy-words'
 
 // A shared monthly report (Phase 1 WP18).
 //
@@ -14,6 +15,9 @@ import { LinkGuard } from './link-guard'
 // is outside it.
 
 export function MonthlyShareShell({ data, appUrl }: { data: MonthlySnapshotData; appUrl: string }) {
+  // A snapshot built before the em-dash sweep re-renders with today's words
+  // (lib/reports/legacy-words.ts), the same walk the decks and emails take.
+  data = withCurrentWords(data)
   const ctx = blockContext(appUrl, EMAIL)
   // What the reading cannot support, said once for the artefact — the page
   // prints the same sentence under its grid, and a shared report is read by

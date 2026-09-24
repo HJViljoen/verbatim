@@ -5,12 +5,16 @@ import { LinkGuard } from '@/components/share/link-guard'
 import { sectionSlides } from '@/lib/reports/compose'
 import { audienceLabel, substituteFigures } from '@/lib/reports/cover'
 import { methodOf, type ReportSnapshotData } from '@/lib/reports/types'
+import { withCurrentWords } from '@/lib/reports/legacy-words'
 
 // A shared report, read live from its snapshot (D5): the cover, then every
 // section as its APP-mode tiles — the evidence popovers work, which is what
 // a link is for and a PDF cannot do. Client-led: the client's name leads,
 // Verbatim is the provenance line and the one link at the foot.
 export function ShareShell({ data, appUrl }: { data: ReportSnapshotData; appUrl: string }) {
+  // A snapshot built before the em-dash sweep re-renders with today's words
+  // (lib/reports/legacy-words.ts), the same walk the decks and emails take.
+  data = withCurrentWords(data)
   const parts = substituteFigures(data.cover.body, data.figures)
   return (
     <LinkGuard appUrl={appUrl}>
@@ -69,7 +73,7 @@ export function ShareShell({ data, appUrl }: { data: ReportSnapshotData; appUrl:
 
         <footer className="flex flex-wrap items-baseline justify-between gap-3 border-t border-border/70 px-1 pt-4 font-mono text-[11px] text-muted-foreground">
           <span>Prepared by {data.company} · with Verbatim</span>
-          <a href={appUrl} className="underline underline-offset-2 hover:text-foreground">Verbatim — what your customers say, with the receipts</a>
+          <a href={appUrl} className="underline underline-offset-2 hover:text-foreground">Verbatim: what your customers say, with the receipts</a>
         </footer>
       </div>
     </LinkGuard>

@@ -132,7 +132,7 @@ function Row({ row, right }: { row: RecordRow; right: boolean }) {
           {row.figure != null ? (
             <span data-copy="figure" className="font-mono font-semibold tabular-nums">{row.figure}</span>
           ) : null}
-          {row.figure != null && row.rest ? (row.dash ? ' — ' : ' ') : ''}
+          {row.figure != null && row.rest ? (row.dash ? ' · ' : ' ') : ''}
           {row.rest}
         </span>
         {row.basis ? <span className="mt-0.5 block text-[11.5px] text-muted-foreground">{row.basis}</span> : null}

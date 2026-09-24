@@ -122,7 +122,7 @@ export default async function SettingsTrackingPage() {
       {inputs.configFailed ? (
         <p className="text-[12.5px] text-muted-foreground">We could not load your settings just now. Refresh the page, and tell us if it keeps happening.</p>
       ) : !c || !terms ? (
-        <p className="text-[12.5px] text-muted-foreground">No tracking config for this workspace — nothing is tracked until this is set up with you.</p>
+        <p className="text-[12.5px] text-muted-foreground">No tracking config for this workspace. Nothing is tracked until this is set up with you.</p>
       ) : (
         <TrackingForm
           canEdit={canEdit}

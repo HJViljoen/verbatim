@@ -83,7 +83,7 @@ export const SENTIMENT_TIER_RULE: Record<SentimentTier, string> = {
   strongly_positive: 'At least 70% of rated conversations positive, no more than 10% negative.',
   leaning_positive: 'Positive leads negative by at least 15 points.',
   balanced: 'Neither positive nor negative leads by 15 points.',
-  polarized: 'Both positive and negative above 30% — strong feelings both ways.',
+  polarized: 'Both positive and negative above 30%: strong feelings both ways.',
   leaning_negative: 'Negative leads positive by at least 15 points.',
   strongly_negative: 'At least 70% of rated conversations negative, no more than 10% positive.',
 }
@@ -146,20 +146,20 @@ export const GLOSSARY = {
   // month-scoped sentence under a figure that is not month-scoped, which is
   // the copy-matches-code rule broken in the helpful direction. It retires
   // with the pages that print it.
-  conversations: ['Conversations', 'one video and the comments it sparked — the unit behind every "heard in…" and share figure; comments are always counted separately as comments'],
+  conversations: ['Conversations', 'one video and the comments it sparked: the unit behind every "heard in…" and share figure; comments are always counted separately as comments'],
   dominant: ['Dominant', "at least 40% of the group's analysed conversations (minimum 10)"],
   widespread: ['Widespread', "at least 15% of the group's analysed conversations (minimum 5)"],
   recurring: ['Recurring', 'heard in more than one conversation, below Widespread'],
-  early_signal: ['Early signal', 'heard in a single conversation so far but scored strong — worth watching, not yet confirmed'],
+  early_signal: ['Early signal', 'heard in a single conversation so far but scored strong: worth watching, not yet confirmed'],
   strong_evidence: ['Strong evidence', 'high-confidence finding backed by two or more sources'],
-  act_now: ['Act now', 'the single top-ranked action this update — never more than one'],
+  act_now: ['Act now', 'the single top-ranked action this update, never more than one'],
   plan_next: ['Plan next', 'ranked second or third this update'],
   worth_considering: ['Worth considering', 'ranked below the top three this update'],
   new: ['New', 'no earlier month in our record in which the theme behind it was mentioned, in your audience or in the category. A fact about the record, not a direction'],
   sentiment: ['Strongly positive → Strongly negative', 'fixed cutoffs on the measured share of rated conversations; Polarized = both sides above 30%'],
-  say_vs_hear: ['Say vs hear', "what your own videos claim (from their transcripts), set against what the tracked conversation actually says — 'not talked about yet' means the audience doesn't engage with the claim, not that it's wrong"],
-  news: ['In the news', 'published coverage matched to your tracked names by headline — shown as context beside the conversation, never claimed as the cause of anything measured'],
-  initiative: ['Initiative', 'something you told us you are trying to move, and the themes it is measured on — your statement, not ours; we only report whether the conversation followed'],
+  say_vs_hear: ['Say vs hear', "what your own videos claim (from their transcripts), set against what the tracked conversation actually says. 'Not talked about yet' means the audience doesn't engage with the claim, not that it's wrong"],
+  news: ['In the news', 'published coverage matched to your tracked names by headline, shown as context beside the conversation, never claimed as the cause of anything measured'],
+  initiative: ['Initiative', 'something you told us you are trying to move, and the themes it is measured on. Your statement, not ours; we only report whether the conversation followed'],
   // Two entries, one constant (D1): while the run-indexed direction words are
   // gated the tile prints a theme's share and how long it has been tracked and
   // no movement at all, so the promise of "holding steady" would be a rule the
@@ -167,10 +167,10 @@ export const GLOSSARY = {
   moving: directionWordsFor('initiatives')
     ? ['Moving / not moving', 'the change in a theme’s share of the conversation since the day you started tracking it, in share points; under a point either way reads "holding steady", and two updates are the least that can say anything']
     : ['What it is running at', 'a theme’s share of the conversation this update, and how long you have been tracking it; the share of one update is a level, not a direction, and we do not read a change from it yet'],
-  on_camera: ['Said on camera', 'the creator spoke it in their own video rather than typing it in a comment — filming an opinion costs time and reputation, so those conversations weigh more than a comment when a theme is ranked'],
-  about_you: ['About you', "what other people's videos say about your brand, quoted verbatim from their transcripts and shown only when they name you — their words, never yours, and never counted as your audience"],
-  search_terms: ['Search terms', 'the words we look for on every platform, in three groups — your brand, your competitors, your category. Changing them changes what the next update finds, and nothing before it'],
-  term_value: ['Worth reviewing', 'across three or more updates — pooled, or on one platform on its own — this term found at least 100 posts, kept under 5% of them, and has led to no insight yet. A suggestion to look, never a change we make for you'],
+  on_camera: ['Said on camera', 'the creator spoke it in their own video rather than typing it in a comment. Filming an opinion costs time and reputation, so those conversations weigh more than a comment when a theme is ranked'],
+  about_you: ['About you', "what other people's videos say about your brand, quoted verbatim from their transcripts and shown only when they name you: their words, never yours, and never counted as your audience"],
+  search_terms: ['Search terms', 'the words we look for on every platform, in three groups: your brand, your competitors, your category. Changing them changes what the next update finds, and nothing before it'],
+  term_value: ['Worth reviewing', 'across three or more updates, pooled or on one platform on its own, this term found at least 100 posts, kept under 5% of them, and has led to no insight yet. A suggestion to look, never a change we make for you'],
 } as const
 
 export type GlossaryKey = keyof typeof GLOSSARY

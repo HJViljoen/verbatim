@@ -198,7 +198,7 @@ export function subredditEdit(
   if (!key) {
     return {
       error: (op.name ?? '').trim()
-        ? `${(op.name ?? '').trim()} is not a community we can watch — a community looks like r/prosthetics.`
+        ? `${(op.name ?? '').trim()} is not a community we can watch. A community looks like r/prosthetics.`
         : 'Name a community to watch, like r/prosthetics.',
     }
   }
@@ -210,7 +210,7 @@ export function subredditEdit(
     if (has) return { error: `You are already watching ${subredditLabel(key)}.` }
     if (folded.length >= WATCHED_COMMUNITY_CAP) {
       return {
-        error: `${WATCHED_COMMUNITY_CAP} watched communities is the limit — every one of them is searched and read on every update. Stop watching one first.`,
+        error: `${WATCHED_COMMUNITY_CAP} watched communities is the limit: every one of them is searched and read on every update. Stop watching one first.`,
       }
     }
     // Appended, not sorted in: the list's order is the order communities were

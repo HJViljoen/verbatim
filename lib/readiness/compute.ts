@@ -80,21 +80,21 @@ function rivalAccounts(i: ReadinessInputs): ReadinessRow {
   const detail = rivals.length === 0
     ? 'No rival is named for this workspace.'
     : configured.length === 0
-      ? `No accounts configured for ${plural(rivals.length, 'tracked rival')} — nothing they publish is being read.`
+      ? `No accounts configured for ${plural(rivals.length, 'tracked rival')}, so nothing they publish is being read.`
       : `${configured.length} of ${rivals.length} tracked rivals have accounts configured · ${plural(captured, 'post')} of their own captured, ${fmtInt(analysed)} read.`
 
   const notes = rivals.map((r) => {
-    if (r.handlePlatforms.length === 0) return `${r.name} — no accounts configured`
+    if (r.handlePlatforms.length === 0) return `${r.name}: no accounts configured`
     const where = listNames(r.handlePlatforms)
     const recent = r.capturedRecently > 0 ? `, ${fmtInt(r.capturedRecently)} in the last 30 days` : ''
     const readPart = r.analysed > 0 ? `${fmtInt(r.analysed)} read` : 'none read yet'
-    return `${r.name} — ${where} · ${plural(r.captured, 'post')} captured${recent}, ${readPart}`
+    return `${r.name}: ${where} · ${plural(r.captured, 'post')} captured${recent}, ${readPart}`
   })
 
   return row(
     'rival-accounts', 'Competitive', 'the rival accounts we read',
     status, detail, 'client',
-    'Give us each rival’s account name per platform — the next update reads what they publish themselves.',
+    'Give us each rival’s account name per platform, and the next update reads what they publish themselves.',
     notes,
   )
 }
@@ -128,7 +128,7 @@ function trackedTerms(i: ReadinessInputs): ReadinessRow {
   const changed = i.changeLog.available && i.changeLog.lastChangeAt
     ? `last change recorded ${fullDate(i.changeLog.lastChangeAt)}`
     : t.updatedAt
-      ? `last stamped ${fullDate(t.updatedAt)} — not every edit stamps that date, so they may have changed since`
+      ? `last stamped ${fullDate(t.updatedAt)}; not every edit stamps that date, so they may have changed since`
       : 'no edit has ever been stamped on them'
   const detail =
     `${plural(t.brand, 'brand term')}, ${plural(t.competitor, 'rival term')}, ${plural(t.industry, 'category term')}` +
@@ -182,7 +182,7 @@ function communities(i: ReadinessInputs): ReadinessRow {
   // ones: a list of three where one is dead is a different picture from a
   // list of three where one is carrying the whole thing.
   const notes = active.map((c) =>
-    `r/${c.name} — ${c.postsStored === 0 ? 'nothing stored from it yet' : plural(c.postsStored, 'post')}` +
+    `r/${c.name}: ${c.postsStored === 0 ? 'nothing stored from it yet' : plural(c.postsStored, 'post')}` +
     (c.probed ? '' : ' · watched by hand, never sampled'))
 
   return row(
@@ -223,7 +223,7 @@ function subjectSet(i: ReadinessInputs): ReadinessRow {
   const defined = i.subjectSet.defined
   const status: ReadinessStatus = defined === null || defined === 0 ? 'missing' : 'exists'
   const detail = defined === null
-    ? 'There is no subject set — the product holds no such thing yet.'
+    ? 'There is no subject set yet.'
     : defined === 0
       ? 'No subject has been named for this workspace yet.'
       : `${plural(defined, 'subject')} named.`
@@ -248,7 +248,7 @@ function byAudience(i: ReadinessInputs): Map<string, MonthCounts[]> {
   return out
 }
 
-const NOT_SEEDED = 'Not seeded yet — nothing has been written down month by month for this workspace.'
+const NOT_SEEDED = 'Not seeded yet: nothing has been written down month by month for this workspace.'
 
 function monthsOfHistory(i: ReadinessInputs): ReadinessRow {
   const unlocks = 'Apply the monthly reading and seed it once per workspace; every update after that keeps it.'
@@ -269,7 +269,7 @@ function monthsOfHistory(i: ReadinessInputs): ReadinessRow {
   const detail = shaped.length === 0
     ? NOT_SEEDED
     : clearing.length === 0
-      ? `No month yet carries ${i.floor} videos in any audience — the biggest holds ${fmtInt(Math.max(...shaped.map((s) => s.biggestVideos), 0))}.`
+      ? `No month yet carries ${i.floor} videos in any audience; the biggest holds ${fmtInt(Math.max(...shaped.map((s) => s.biggestVideos), 0))}.`
       : `${plural(best.monthsVideos, 'month')} clear ${i.floor} videos in ${audienceLabel(best.audience).toLowerCase()}; ${clearing.length} of ${shaped.length} audiences clear any.`
 
   // An audience with months stored under a name nobody tracks any more is a
@@ -279,7 +279,7 @@ function monthsOfHistory(i: ReadinessInputs): ReadinessRow {
   // zero. Named here because the two rows would otherwise just look short.
   const tracked = new Set(i.monthly.tracked)
   const notes = shaped.map((s) =>
-    `${audienceLabel(s.audience)} — ${s.monthsVideos} of ${s.monthsWithAny} months clear ${i.floor} videos (${s.monthsComments} clear ${i.floor} comments)` +
+    `${audienceLabel(s.audience)}: ${s.monthsVideos} of ${s.monthsWithAny} months clear ${i.floor} videos (${s.monthsComments} clear ${i.floor} comments)` +
     (s.monthsWithAny === 0 ? ' · no month at all' : '') +
     (!tracked.has(s.audience) ? ' · filed under a name this workspace no longer tracks, so its months are a series of their own' : ''))
 
@@ -309,9 +309,9 @@ function anomalyBaseline(i: ReadinessInputs): ReadinessRow {
     ? NOT_SEEDED
     : ready.length > 0
       ? `Baseline ready in ${ready.length} of ${shaped.length} audiences; the rest are still forming.`
-      : `No audience has a baseline yet — the fullest is ${Math.max(...shaped.map((s) => s.clearing), 0)} of ${BASELINE_MONTHS} months.`
+      : `No audience has a baseline yet; the fullest is ${Math.max(...shaped.map((s) => s.clearing), 0)} of ${BASELINE_MONTHS} months.`
 
-  const notes = shaped.map((s) => `${audienceLabel(s.audience)} — ${baselineLabel(s.clearing)}`)
+  const notes = shaped.map((s) => `${audienceLabel(s.audience)}: ${baselineLabel(s.clearing)}`)
   // WHAT THE CHECK HAS ACTUALLY SAID, not only whether it could speak. A
   // baseline that is ready and a check that has never raised anything are two
   // different states of this row, and until WP8 the page could only show the
@@ -333,8 +333,8 @@ function anomalyBaseline(i: ReadinessInputs): ReadinessRow {
  *  the updates that were compared, because a week nobody looked at cannot
  *  support "nothing was unusual". */
 function anomalyRecordLine(a: ReadinessInputs['anomaly']): string {
-  if (!a.available) return 'Flags raised — not recorded yet.'
-  if (a.checks.length === 0) return 'Flags raised — no update has run the check yet.'
+  if (!a.available) return 'Flags raised: not recorded yet.'
+  if (a.checks.length === 0) return 'Flags raised: no update has run the check yet.'
   const compared = a.checks.filter((c) => c.outcome === 'flagged' || c.outcome === 'nothing_unusual').length
   const skipped = a.checks.length - compared
   const aside = skipped === 0
@@ -342,9 +342,9 @@ function anomalyRecordLine(a: ReadinessInputs['anomaly']): string {
     : skipped === 1
       ? ' One update was not compared with the months behind it.'
       : ` ${fmtInt(skipped)} updates were not compared with the months behind them.`
-  if (compared === 0) return `Flags raised — none: no update has been compared yet.${aside}`
+  if (compared === 0) return `Flags raised: none, because no update has been compared yet.${aside}`
   const updates = compared === 1 ? 'one update' : `${fmtInt(compared)} updates`
-  if (a.flags.length === 0) return `Flags raised — none in the ${updates} compared so far.${aside}`
+  if (a.flags.length === 0) return `Flags raised: none in the ${updates} compared so far.${aside}`
   const newest = a.flags[0]
   const word = a.flags.length === 1 ? 'one' : fmtInt(a.flags.length)
   // THE LABEL NEEDS A FRAME. A flag's label is whatever the flagged object is
@@ -352,7 +352,7 @@ function anomalyRecordLine(a: ReadinessInputs['anomaly']): string {
   // KIND_LABELS gives "Pushing back", "Saying it worked", "What made them look"
   // — so the bare sentence read "the most recent Pushing back in the week of
   // 7 Sep 2026". The labels are right; the sentence around them assumed a noun.
-  return `Flags raised — ${word} in the ${updates} compared so far, the most recent about “${newest.label}” in the week of ${fullDate(newest.weekStart)}.${aside}`
+  return `Flags raised: ${word} in the ${updates} compared so far, the most recent about “${newest.label}” in the week of ${fullDate(newest.weekStart)}.${aside}`
 }
 
 // ---- 8 · how much of each video was read ------------------------------------
@@ -392,7 +392,7 @@ function howMuchWasRead(i: ReadinessInputs): ReadinessRow {
   } else if (r.gateFirstAt === null) {
     notes.push('What was looked at and set aside is not recorded at all, so the share left out cannot be drawn for any month.')
   } else {
-    notes.push(`${pct(r.gateRows - r.gateKept, r.gateRows)} of what was looked at was set aside — recorded only from ${fullDate(r.gateFirstAt)}, so no month before that can show it.`)
+    notes.push(`${pct(r.gateRows - r.gateKept, r.gateRows)} of what was looked at was set aside, recorded only from ${fullDate(r.gateFirstAt)}, so no month before that can show it.`)
   }
   if (r.unflagged > 0) notes.push(`${fmtInt(r.unflagged)} videos were read before the product recorded which of the three it managed`)
 
@@ -456,7 +456,7 @@ function updateRecord(i: ReadinessInputs): ReadinessRow {
   // count of six out of eight hides whether the two were consecutive.
   const notes = [
     ...recent.map((u) =>
-      `${fullDate(u.startedAt)} — ${updateWord(u.status)}` +
+      `${fullDate(u.startedAt)}: ${updateWord(u.status)}` +
       (u.stalled === true ? ' · took longer than the stretch it covered' : '') +
       (i.slotsRecorded ? (u.scheduledFor ? ' · on schedule' : ' · by hand') : '')),
     ...(i.slotsRecorded
@@ -506,7 +506,7 @@ function delivery(i: ReadinessInputs): ReadinessRow {
     'Add the people who should get it in Settings, under Reports and recipients, and turn it on.',
     i.delivery.schedules
       .filter((s) => !s.active || s.recipients === 0)
-      .map((s) => `${s.name} — ${s.active ? 'on' : 'off'}, ${s.recipients === 0 ? 'no addresses' : plural(s.recipients, 'address', 'addresses')}`),
+      .map((s) => `${s.name}: ${s.active ? 'on' : 'off'}, ${s.recipients === 0 ? 'no addresses' : plural(s.recipients, 'address', 'addresses')}`),
   )
 }
 
@@ -523,7 +523,7 @@ function changeRecord(i: ReadinessInputs): ReadinessRow {
     ? ` ${plural(c.reconstructed, 'earlier entry', 'earlier entries')} reconstructed from what each update searched.`
     : ''
   const detail = !c.available
-    ? 'Not recorded yet — nothing in the product writes down a configuration change.'
+    ? 'Not recorded yet: nothing in the product writes down a configuration change.'
     : c.rows === 0
       ? `Nothing has been recorded yet.${prehistory}`
       : `${plural(c.rows, 'change')} recorded · last on ${dateOrNever(c.lastChangeAt, '—')}.${prehistory}`
@@ -565,7 +565,7 @@ function decisions(i: ReadinessInputs): ReadinessRow {
     nothingCanRecord ? 'ops' : 'client',
     nothingCanRecord
       ? 'Apply the record of what was decided; the client can then mark a recommendation done, working on it, or not now.'
-      : 'Mark a recommendation done, working on it, or not now — the next update then carries the answer forward instead of asking again.',
+      : 'Mark a recommendation done, working on it, or not now, and the next update carries the answer forward instead of asking again.',
   )
 }
 
@@ -591,8 +591,8 @@ function retention(i: ReadinessInputs): ReadinessRow {
   // whole night's budget certainly will not clear it.
   const detail = r.cohortDay === null || due === null
     ? 'Nothing is waiting to be read again.'
-    : `${plural(r.cohortRows, 'comment')} fall due to be read again on ${fullDate(due)} — ` +
-      `one night’s re-read budget is ${fmtInt(r.nightlyCap)} comments, shared across every workspace` +
+    : `${plural(r.cohortRows, 'comment')} fall due to be read again on ${fullDate(due)}. ` +
+      `One night’s re-read budget is ${fmtInt(r.nightlyCap)} comments, shared across every workspace` +
       (r.cohortRows > r.nightlyCap ? ', and this batch alone is larger, so the rest waits.' : '.')
 
   // THE BUDGET CLAUSE IS OURS, AND THE FIRST CLAUSE IS THEIRS. WP16 put the
@@ -607,7 +607,7 @@ function retention(i: ReadinessInputs): ReadinessRow {
     'retention', 'Retention', 'comments read again before they age out',
     status, detail, 'ops',
     'Nothing to configure: each batch is read again nightly, and what the platform has removed is deleted with it.',
-    r.cohortDay ? [`Deleting a comment changes any month it was counted in — the count stays as it was written down`] : [],
+    r.cohortDay ? [`Deleting a comment changes any month it was counted in; the count stays as it was written down`] : [],
     clientDetail,
   )
 }

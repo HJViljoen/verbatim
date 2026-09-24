@@ -61,10 +61,16 @@ export const weekUnusual: Block<WeekData> = {
     // that repeat them are not printed (design review F4). `charted` is the
     // exact condition `UpdateSeriesChart` renders under.
     const charted = !email && u.series != null && u.series.points.length > 1
+    // NO FLAG, NO EMPTY COLUMN (layout sweep 2026-09-24). With nothing to
+    // list, the right half held one or two short lines beside a chart and its
+    // readings, and left most of its column white. The readings move across to
+    // sit under the state, so the chart has the left half to itself.
+    const quiet = charted && u.flags.length === 0
+    const series = <Series series={u.series} mode={mode} charted={charted} />
     const left = (
       <div className={email ? undefined : 'flex min-w-0 flex-col gap-2'}>
         {charted ? <UpdateSeriesChart series={u.series!} /> : null}
-        <Series series={u.series} mode={mode} charted={charted} />
+        {quiet ? null : series}
       </div>
     )
     const right = (
@@ -101,6 +107,7 @@ export const weekUnusual: Block<WeekData> = {
             {fmtInt(u.flags.length)} of {fmtInt(u.flaggedCount)} shown, the largest first
           </Line>
         ) : null}
+        {quiet ? series : null}
       </div>
     )
 
@@ -250,7 +257,7 @@ function Flag({ flag, n, mode, figures }: { flag: UnusualFlag; n: number; mode: 
             span around them is marked nothing and is checked like any prose. */}
         <span data-copy="subject" data-slot="pass_b_theme">{flag.label}</span>{' '}
         <span data-copy="verdict">
-          ran at {fmtPct(weekPct, 1)} of this update against {fmtPct(basePct, 1)} across {months} — a difference of{' '}
+          ran at {fmtPct(weekPct, 1)} of this update against {fmtPct(basePct, 1)} across {months}, a difference of{' '}
           {flag.changePts.toFixed(1)} points, on a band of {flag.bandPts.toFixed(1)}.
         </span>
       </span>

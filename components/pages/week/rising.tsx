@@ -127,9 +127,9 @@ export const weekRising: Block<WeekData> = {
   figures(data): FigureTable {
     const out: FigureTable = {}
     data.rising.rows.forEach((r, i) => {
-      out[`riser_${i + 1}_videos`] = { value: r.month.k, unit: 'videos', label: `${r.label} — videos this month` }
+      out[`riser_${i + 1}_videos`] = { value: r.month.k, unit: 'videos', label: `${r.label} — videos this month` } // em-dash-ok: FigureTable label (a record key, never printed)
       if (r.verdict.changePts != null) {
-        out[`riser_${i + 1}_change`] = { value: r.verdict.changePts, unit: 'pts', label: `${r.label} — the difference` }
+        out[`riser_${i + 1}_change`] = { value: r.verdict.changePts, unit: 'pts', label: `${r.label} — the difference` } // em-dash-ok: FigureTable label (a record key, never printed)
       }
     })
     return out
