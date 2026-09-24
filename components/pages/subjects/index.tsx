@@ -244,7 +244,9 @@ export function SubjectsPage({
               {tile(subjectsList)}
               {tile(subjectsOwnPosts)}
               {tile(subjectsSayHear)}
-              {drawn.has(subjectsUnanswered.key) ? tile(subjectsUnanswered, 'min-w-0') : null}
+              {/* Shown only when it has questions to list (Heinrich, 2026-09-24): a card
+                  that only says the gate was not met is not drawn. */}
+              {drawn.has(subjectsUnanswered.key) && !subjectsUnanswered.emptyState(data) ? tile(subjectsUnanswered, 'min-w-0') : null}
             </div>
             <div className="flex min-w-0 flex-col gap-4">
               {tile(subjectsSubject)}
