@@ -1,5 +1,6 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { validateInsights, validateClaims, buildSystemPrompt, buildUserPrompt, passALane, isVideoEvidence, missingBookkeepingColumn } from './pass-a'
+import { validateInsights, validateClaims, buildSystemPrompt, buildUserPrompt, passALane, COMMENTS_READ_LANE, isVideoEvidence, missingBookkeepingColumn } from './pass-a'
 import { usableOcr, usableTranscript } from './transcript-input'
 import { OCR_PROMPT_CHARS, PASS_A_VIDEO_QUOTE_MAX, TRANSCRIPT_PROMPT_CHARS } from '../config'
 import type { PassAVideoOutput, PassAInsight } from './schemas'
@@ -590,3 +591,50 @@ TRANSCRIPT rules — a TRANSCRIPT block, labelled "t", may be present: the words
 - CLIENT or COMPETITOR videos: the transcript is brand messaging, NEVER insight evidence — never cite "t" on these. Instead return claims: up to 3 assertions the brand makes about itself, its products, or the market — {claim: the assertion in your words, quote: the VERBATIM transcript line making it}.
 - claims come ONLY from CLIENT/COMPETITOR transcripts. Return an empty claims array in every other case.
 - Audience insights still come from the comments first; transcript evidence supplements them. Video sentiment stays comment-derived.`
+
+// ---- The denominator's lane (fix/client-audience, 2026-09-24) ---------------
+// `analyzed_lane = 'full'` is the rule that keeps a comment out of n unless
+// Pass A actually read it. It lives in TypeScript here and in three SQL
+// function bodies; this pins the copies together, the way lib/rivals.test.ts
+// pins the audience key's.
+
+describe('COMMENTS_READ_LANE — the one lane whose comments were read', () => {
+  const sql = readFileSync(
+    new URL('../../supabase/migrations/20260924090000_denominator_readable_lane.sql', import.meta.url),
+    'utf8',
+  )
+
+  it('is the full lane, and it is a lane passALane can return', () => {
+    expect(COMMENTS_READ_LANE).toBe('full')
+    expect(passALane(
+      { platform: 'instagram', is_client: false, is_competitor: false, transcript_status: null },
+      99,
+    )).toBe(COMMENTS_READ_LANE)
+  })
+
+  it('is the lane all three denominator functions filter on', () => {
+    for (const fn of ['monthly_denominators', 'window_denominators', 'window_span_denominators']) {
+      expect(sql).toContain(`create or replace function public.${fn}(`)
+    }
+    const predicate = `and v.analyzed_lane = '${COMMENTS_READ_LANE}'`
+    expect(sql.split(predicate).length - 1).toBe(3)
+  })
+
+  it('leaves no denominator on the old analysed-at-all test', () => {
+    expect(sql).not.toContain('v.analyzed_run_id is not null')
+  })
+
+  it('names the lanes that carry no audience evidence, so neither is counted', () => {
+    // A brand-side video below the floor with a transcript: claims lane, no
+    // comments in the prompt, so its comments may never reach a denominator.
+    expect(passALane(
+      { platform: 'instagram', is_client: true, is_competitor: false, transcript_status: 'ok' },
+      1,
+    )).not.toBe(COMMENTS_READ_LANE)
+    // An own post, whatever its comment count (Owned-Data-Plan guardrail).
+    expect(passALane(
+      { platform: 'instagram', is_client: true, is_competitor: false, transcript_status: 'ok', source: 'owned' },
+      400,
+    )).not.toBe(COMMENTS_READ_LANE)
+  })
+})

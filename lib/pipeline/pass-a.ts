@@ -266,6 +266,29 @@ function ownerLabel(v: VideoRow): string {
 export type PassALane = 'full' | 'claims_only' | 'skip'
 
 /**
+ * The ONE lane whose videos had their comments read.
+ *
+ * `videos.analyzed_lane` records which lane produced a video's current
+ * analysis, and only `full` puts comments in the prompt: `claims_only` enters
+ * with NO comments (see passALane below) and `skip` never entered at all.
+ * Measured on the Phase 1 preview branch 2026-09-24, across both live tenants:
+ * 1,081 `full` videos carry all 3,719 audience insights; 298 `claims_only` and
+ * 91 `skip` videos carry ZERO, and always will.
+ *
+ * That is why the audience denominators filter on it. `analyzed_run_id is not
+ * null` was the old test, and its own rationale — "counting it would put a
+ * denominator under a numerator that can never reach it" — is the rule this
+ * constant states: a claims-lane video's comments are counted in n and cannot
+ * appear in k, so every share read over them is low by construction. On
+ * Sealand's `client` audience that was 194 comments in n against 126 readable
+ * ones, and September 2026 was 40 against 0. The SQL copies live in
+ * `monthly_denominators`, `window_denominators` and `window_span_denominators`
+ * (20260924090000_denominator_readable_lane.sql); `lib/pipeline/pass-a.test.ts`
+ * pins them against this constant.
+ */
+export const COMMENTS_READ_LANE: PassALane = 'full'
+
+/**
  * Which lane a video enters Pass A through — used by BOTH gates (the plan
  * step on raw counts, runPassA on kept counts) so they cannot drift.
  *   full        — comments ≥ the platform floor: the normal analysis.
