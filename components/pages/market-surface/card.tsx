@@ -1,4 +1,5 @@
 import type { Block, RenderMode } from '@/lib/blocks/types'
+import { BrandClaim } from '@/components/blocks/brand-claim'
 import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
 import { MovementBadge } from '@/components/delta-badge'
 import { TileBlock } from '@/components/shell/tile'
@@ -205,7 +206,7 @@ export const marketCard: Block<MarketSurfaceData> = {
                         row with no transcribed wording keeps its count and
                         says the wording is not on record. */}
                     {c.quote && c.quote.text.trim() ? (
-                      <span data-copy="quote">“{claimText(c.quote.text)}”</span>
+                      <BrandClaim mode={mode} copy="quote">{claimText(c.quote.text)}</BrandClaim>
                     ) : (
                       <span style={{ color: EMAIL.muted }}>{CARD_CLAIM_UNQUOTED}</span>
                     )}{' '}
@@ -237,7 +238,7 @@ export const marketCard: Block<MarketSurfaceData> = {
                         benefits people"), so at two lines they still printed
                         as one row twice. */}
                     {c.quote && c.quote.text.trim() ? (
-                      <span data-copy="quote" title={c.quote.text} className="line-clamp-3 min-w-0 text-[12.5px]">“{claimText(c.quote.text)}”</span>
+                      <BrandClaim mode={mode} copy="quote" title={c.quote.text} className="line-clamp-3">{claimText(c.quote.text)}</BrandClaim>
                     ) : (
                       <span className="line-clamp-3 min-w-0 text-[12.5px] text-secondary-foreground">{CARD_CLAIM_UNQUOTED}</span>
                     )}

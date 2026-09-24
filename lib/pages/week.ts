@@ -1956,7 +1956,11 @@ async function buildCameIn(input: {
   // reader as silence — "Freitag went quiet" is a fact about a rival and the
   // page said it by saying nothing. A RETIRED rival with nothing is different:
   // nobody is watching them any more, and a zero there is about us.
-  .filter((r) => !r.retired || r.byThem > 0 || r.aboutThem > 0)
+  // AND A STOPPED OR NEVER-OBSERVED RIVAL IS NOT LISTED AT ALL (the listing
+  // rule, `listedRivals` in lib/rivals.ts): a retired rival is off every
+  // reading surface, and one with nothing this update and no post of theirs
+  // ever captured has nothing to read. Settings › Tracking lists them.
+  .filter((r) => !r.retired && !(r.ownPostsUnread && r.byThem === 0 && r.aboutThem === 0))
   .map(({ retired: _retired, ...r }) => r)
 
   const newThemes = await loadNewThemes(supabase, clientId, runId, month)

@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react'
+import { carriesShare } from '@/lib/reading/level'
+import { BrandClaim } from '@/components/blocks/brand-claim'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { openLink } from '@/components/blocks/open-link'
 import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
@@ -132,7 +134,7 @@ function Card({ card, mode }: { card: MoveCandidate; mode: RenderMode }) {
           {claims.map((c, i) => (
             <span key={c.quote?.ref ?? `claim-${i}`} className={email ? undefined : 'flex min-w-0 items-baseline gap-2 text-[12px]'}>
               {c.quote && c.quote.text.trim() ? (
-                <span data-copy="quote" className={email ? undefined : 'min-w-0 flex-1'}>“{claimText(c.quote.text)}”</span>
+                <BrandClaim mode={mode} copy="quote" className="flex-1 text-[12px]">{claimText(c.quote.text)}</BrandClaim>
               ) : (
                 <span className={email ? undefined : 'min-w-0 flex-1 text-secondary-foreground'}>{CARD_CLAIM_UNQUOTED}</span>
               )}
@@ -287,8 +289,13 @@ export function seriesLine(reading: MoveReading): string {
       // they are not one run.
       const read = s.points.filter((p) => p.pct != null)
       const parts = read.map((p, i) => {
-        const of = p.k != null && p.n != null ? ` ${fmtInt(p.k)} of ${fmtInt(p.n)}` : ''
-        const label = `${p.month.slice(5, 7)}/${p.month.slice(2, 4)} ${p.pct}%${of}`
+        // UNDER THE FLOOR, THE COUNT ALONE ("6 of 82"); at or over it, the
+        // share of its own n ("9.1% of 1,290"). "7.3% 6 of 82" was a decimal
+        // share of a sample that cannot carry one (lib/reading/level.ts).
+        const level = p.k != null && p.n != null
+          ? carriesShare(p.n) ? `${p.pct}% of ${fmtInt(p.n)}` : `${fmtInt(p.k)} of ${fmtInt(p.n)}`
+          : `${p.pct}%`
+        const label = `${p.month.slice(5, 7)}/${p.month.slice(2, 4)} ${level}`
         if (i === 0) return label
         const broke =
           !s.noClustering &&

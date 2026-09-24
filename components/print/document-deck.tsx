@@ -1221,7 +1221,9 @@ function SayHearPage({ page, figures, company }: { page: DocPage; figures: Figur
           return (
             <li key={b.id} className={`${CARD} flex min-h-0 flex-col gap-3 px-7 py-5`}>
               <div className="flex items-start justify-between gap-4">
-                <p className="max-w-[40ch] font-serif text-[19px] italic leading-[1.4] text-foreground">&ldquo;{b.label}&rdquo;</p>
+                {/* A claim is the brand's own line, not a quote: plain sans, no
+                    quotation marks (components/blocks/brand-claim.tsx). */}
+                <p className="max-w-[40ch] text-[18px] leading-[1.4] text-foreground">{b.label}</p>
                 {verdict && <span className="shrink-0"><Pill tone={verdict.tone}>{verdict.word}</Pill></span>}
               </div>
               {theySay && (

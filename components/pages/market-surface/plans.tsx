@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { BrandClaim } from '@/components/blocks/brand-claim'
 import type { Block, QuoteRef, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockQuote } from '@/components/blocks/quote'
@@ -60,7 +61,7 @@ function Claim({ claim, mode }: { claim: PlanClaimRow; mode: RenderMode }) {
   if (email) {
     return (
       <div style={{ padding: '4px 0' }}>
-        <span data-copy="quote" style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink }}>“{claim.claim}”</span>{' '}
+        <BrandClaim mode={mode} copy="quote">{claim.claim}</BrandClaim>{' '}
         <span style={{ fontFamily: FONT.sans, fontSize: 11, fontWeight: 600, color: EMAIL.ink2 }}>{claim.verdictLabel}</span>
         {claim.quote ? <BlockQuote quote={claim.quote} mode={mode} /> : null}
       </div>
@@ -69,7 +70,7 @@ function Claim({ claim, mode }: { claim: PlanClaimRow; mode: RenderMode }) {
   return (
     <TileBlock className="flex min-w-0 flex-col gap-2">
       <div className="flex items-center justify-between gap-2.5">
-        <span data-copy="quote" className="min-w-0 text-[12.5px]">“{claim.claim}”</span>
+        <BrandClaim mode={mode} copy="quote">{claim.claim}</BrandClaim>
         <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11.5px] font-medium ${CHIP_TONE[claim.verdict] ?? 'bg-inner text-muted-foreground'}`}>
           {claim.verdictLabel}
         </span>
@@ -180,7 +181,7 @@ export const marketPlans: Block<MarketSurfaceData> = {
               {card.moved.map((m) => (
                 <span key={`${m.claim}:${m.to}`} className={email ? undefined : 'flex min-w-0 flex-col gap-px'} style={email ? { display: 'block', fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink2 } : undefined}>
                   <span className={email ? undefined : 'min-w-0 text-[12px] text-secondary-foreground'}>
-                    <span data-copy="quote">“{m.claim}”</span> {m.from} → {m.to}
+                    <span data-copy="quote">{m.claim}</span>: {m.from} → {m.to}
                   </span>
                   {/* THE DATE IT MOVED, never "held N updates" — see the
                       header. `PlanMovedRow.on` is that dated sentence. */}

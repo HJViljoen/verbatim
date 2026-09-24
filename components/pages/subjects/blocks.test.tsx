@@ -4,12 +4,12 @@ import { blockAnswers, blockContext, figureConflicts, type RenderMode } from '@/
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
 import { markupText, render, renderText } from '@/lib/test/render'
-import { fmtInt, fmtPct } from '@/lib/format'
+import { fmtInt } from '@/lib/format'
 import { surface } from '@/lib/nav'
 import { layoutFor, SubjectsPage, SUBJECT_BLOCKS } from './index'
 import { subjectsList } from './list'
 import { subjectsOwnPosts } from './own-posts'
-import { subjectsSayHear } from './say-hear'
+import { SAY_HEAR_NONE, subjectsSayHear } from './say-hear'
 import { subjectsSubject } from './subject'
 import { subjectsLine } from './line'
 import { subjectsKinds } from './kinds'
@@ -362,14 +362,29 @@ describe('SU2 · the kind mix', () => {
   // within a few pixels of each other. The three DENOMINATORS stay apart on
   // the audience line above each group, which is what keeps the bars readable
   // against one scale.
-  it('labels a kind row with the share its bar draws, not with a count', () => {
+  it('prints a whole-number share over the floor and a count under it', () => {
     const data = subjectsFixture()
     const text = renderText(subjectsKinds.render(data, 'app', ctx))
     const category = data.selected!.sides.find((s) => s.kind === 'category')!
     const top = category.kinds.find((k) => k.pct != null && k.pct > 0)!
-    expect(text).toContain(`${top.label} ${fmtPct(top.pct!)}`)
-    expect(text).not.toContain(fmtInt(top.videos))
+    expect(text).toContain(`${Math.round((top.videos / category.n!) * 100)}%`)
     expect(text).toContain(`of ${fmtInt(category.n!)} videos`)
+    // No decimal share anywhere in the block.
+    expect(text).not.toMatch(/\d\.\d%/)
+    const thin = {
+      ...data,
+      selected: {
+        ...data.selected!,
+        sides: data.selected!.sides.map((side) =>
+          side.kind === 'you'
+            ? { ...side, n: 5, kinds: side.kinds.map((k, i) => ({ ...k, videos: i === 0 ? 5 : 1, denominator: 5, pct: i === 0 ? 100 : 20 })) }
+            : side,
+        ),
+      },
+    }
+    const thinText = renderText(subjectsKinds.render(thin, 'app', ctx))
+    expect(thinText).toContain('5 of 5')
+    expect(thinText).not.toContain('100%')
   })
 
   // THE REDDIT READ MOVED TO THE FOOTER NOTE, where the mock puts it: a basis
@@ -382,32 +397,12 @@ describe('SU2 · the kind mix', () => {
     expect(text.split('counted in each').length - 1).toBe(1)
   })
 
-  // THREE AUDIENCES IN ONE COLUMN, ON ONE TRACK. Each group was scaled to its
-  // own leader, so a tenant at 60% and a rival at 25% drew two identical
-  // full-width bars in a layout whose whole point is reading downward. The
-  // widths are now one scale; the "of N" per row is what keeps the three
-  // DENOMINATORS apart.
-  it('scales every audience’s bars against one maximum, not against its own', () => {
-    const data = subjectsFixture()
-    const skewed = {
-      ...data,
-      selected: {
-        ...data.selected!,
-        sides: data.selected!.sides.map((side) =>
-          side.kind === 'you'
-            ? { ...side, kinds: side.kinds.map((k) => ({ ...k, pct: (k.pct ?? 0) / 4 })) }
-            : side,
-        ),
-      },
-    }
-    const markup = render(subjectsKinds.render(skewed, 'app', ctx))
-    const widths = [...markup.matchAll(/width:\s*([\d.]+)%/g)].map((m) => Number(m[1]))
-    // Your own audience renders first, three kinds of it. Quartered against
-    // the others it cannot still own a full-width bar — which is exactly what
-    // it did while each group was scaled to its own leader.
-    const yours = Math.max(...widths.slice(0, 3))
-    expect(yours).toBeLessThan(40)
-    expect(Math.max(...widths)).toBeGreaterThan(99)
+  // ONE TABLE, NEUTRAL INK, ONE ACCENT. Six bar sets in per-rival orange were
+  // the loudest thing on a calm page.
+  it('draws one table with no per-rival colour', () => {
+    const markup = render(subjectsKinds.render(subjectsFixture(), 'app', ctx))
+    expect(markup).toContain('<table')
+    expect(markup).not.toContain('var(--comp')
   })
 
   // `kindChange` has existed since WP3 and this block called it for the first
@@ -714,14 +709,24 @@ describe('SU4 · your own posts', () => {
 })
 
 describe('SU5 · say vs hear', () => {
-  it('prints each claim, what the audience did with it, and the whole ledger’s tally', () => {
+  it('prints each ledger claim with its own state, and the tally only where rows are cut', () => {
     const text = renderText(subjectsSayHear.render(subjectsFixture(), 'app', ctx))
     expect(text).toContain('Built to last a decade')
-    expect(text).toContain('Echoed')
-    expect(text).toContain('said in 2 of 9 posts')
-    // BOUND, NOT REBUILT: `claimCounts` over the same run_summary rows Market
-    // reads. Two tiles counting one ledger twice is how two pages disagree.
+    expect(text).toContain('echoed')
+    expect(text).toContain('pushed back')
+    // ONE LEDGER: the rows carry the tally's own states, never a per-row
+    // "not tracked" under a tally that says some were echoed.
+    expect(text).not.toContain('not tracked')
+    // Thirteen claims and three rows, so the whole ledger is counted under them.
     expect(text).toContain('13 claims · 3 echoed · 2 pushed back · 8 silent')
+    const all = renderText(subjectsSayHear.render({ ...subjectsFixture(), sayHear: { total: 3, echoed: 1, pushedBack: 1, silent: 1 } }, 'app', ctx))
+    expect(all).not.toContain('3 claims')
+  })
+
+  it('sets a claim as plain text, never as a quotation', () => {
+    const markup = render(subjectsSayHear.render(subjectsFixture(), 'app', ctx))
+    expect(markup).not.toContain('“Built to last a decade”')
+    expect(markup).not.toContain('font-serif')
   })
 
   it('dates itself by the update, never by the month heading above it', () => {
@@ -733,17 +738,11 @@ describe('SU5 · say vs hear', () => {
     expect(text).not.toContain('Sep ·')
   })
 
-  it('answers its OWN question when the ledger is unreadable, not the census’s', () => {
-    const data = refusedFixture()
-    const text = renderText(subjectsSayHear.render(data, 'app', ctx))
-    // The own-posts sentence belongs to the tile above; this one is about the
-    // ledger it could not read.
+  it('says once that there is no ledger, rather than a state per row', () => {
+    const text = renderText(subjectsSayHear.render(refusedFixture(), 'app', ctx))
     expect(text).not.toContain('These are the posts you published')
-    expect(text).toContain('What your posts claim is not readable on this page yet.')
-  })
-
-  it('names the half it cannot read rather than drawing it as nothing', () => {
-    expect(subjectsSayHear.emptyState(refusedFixture())).toContain('not readable')
+    expect(text).toContain(SAY_HEAR_NONE)
+    expect(subjectsSayHear.emptyState(refusedFixture())).toBe(SAY_HEAR_NONE)
   })
 
   it('quotes no figure token — a claim is not a video, a comment, a point or a percentage', () => {
@@ -1004,7 +1003,7 @@ describe('the Subjects blocks, read from outside the workspace', () => {
     const data = refusedFixture()
     for (const mode of MODES) {
       const text = renderText(subjectsSayHear.render(data, mode, ctx))
-      expect(text, mode).toContain('What your posts claim is not readable on this page yet.')
+      expect(text, mode).toContain(SAY_HEAR_NONE)
       expect(text, mode).not.toContain('Verbatim engineering')
 
       const own = renderText(subjectsOwnPosts.render(data, mode, ctx))

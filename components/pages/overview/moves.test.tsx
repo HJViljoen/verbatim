@@ -194,7 +194,7 @@ describe('OV5, ported to the artboard', () => {
     const data = overviewFixture()
     const markup = render(overviewMoves.render(data, 'app', ctx))
     const text = renderText(overviewMoves.render(data, 'app', ctx))
-    expect(text).toContain('“We get things wrong, and we say so, and then we do better the next year.”')
+    expect(text).toContain('We get things wrong, and we say so, and then we do better the next year.')
     expect(text).not.toContain('Sealand acknowledges ongoing challenges')
     expect(text).not.toContain('award-winning B Corp certified brand')
     // The quotation mark on this row is now truthful, so the marker stays.
@@ -266,9 +266,12 @@ describe('OV5, ported to the artboard', () => {
   it('prints every level in the run with its own denominator', () => {
     const reading = overviewFixture().moves.readings[0]
     const line = seriesLine(reading)
-    expect(line).toContain('07/26 7.3% 6 of 82')
-    expect(line).toContain('09/26 11.9% 10 of 84')
-    expect(line).toContain('07/26 9.1% 118 of 1,290')
+    // Under the floor a count, never a decimal share of 82 videos.
+    expect(line).toContain('07/26 6 of 82')
+    expect(line).toContain('09/26 10 of 84')
+    expect(line).not.toContain('7.3%')
+    // At or over it, the share of its own n.
+    expect(line).toContain('07/26 9.1% of 1,290')
     // And the node is MARKED, so rule (b) reaches it from here on — it escaped
     // the contract entirely while it carried no marker.
     const markup = render(overviewMoves.render(overviewFixture(), 'app', ctx))

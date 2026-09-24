@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { carriesShare } from '@/lib/reading/level'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockCalendar } from '@/components/blocks/calendar'
 import { openLink } from '@/components/blocks/open-link'
@@ -326,8 +327,10 @@ export const overviewCategory: Block<OverviewData> = {
               <span className={email ? undefined : 'w-[104px] shrink-0'}>
                 <FigureCell
                   mode={mode}
-                  value={k.pct == null ? '—' : fmtPct(k.pct)}
-                  of={`${fmtInt(k.videos)} of ${fmtInt(k.denominator)}`}
+                  // Under the floor a count, never a share (lib/reading/level.ts):
+                  // never "100.0%" of five videos. Over it, the block's own format.
+                  value={k.pct == null ? '—' : carriesShare(k.denominator) ? fmtPct(k.pct) : fmtInt(k.videos)}
+                  of={carriesShare(k.denominator) ? `${fmtInt(k.videos)} of ${fmtInt(k.denominator)}` : `of ${fmtInt(k.denominator)}`}
                 />
               </span>
               {/* AN ABSENCE THAT SAYS WHAT IT IS (design review Medium 11).

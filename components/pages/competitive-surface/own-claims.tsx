@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { BrandClaim } from '@/components/blocks/brand-claim'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
 import { BlockQuote } from '@/components/blocks/quote'
@@ -92,14 +93,7 @@ function Claim({ row, mode }: { row: OwnClaimRow; mode: RenderMode }) {
   return (
     <div className={email ? undefined : 'flex min-w-0 flex-col gap-1.5'} style={email ? { padding: '4px 0' } : undefined}>
       <div className={email ? undefined : 'flex items-baseline justify-between gap-2.5'}>
-        <span
-          data-copy="stored"
-          data-slot="pass_a_brand_claim"
-          className={email ? undefined : 'min-w-0 text-[12.5px]'}
-          style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}
-        >
-          &ldquo;{row.claim}&rdquo;
-        </span>
+        <BrandClaim mode={mode} copy="stored" slot="pass_a_brand_claim">{row.claim}</BrandClaim>
         <span className={email ? undefined : 'shrink-0'}>
           <FigureCell
             value={`${fmtInt(row.posts.k)} ${row.posts.k === 1 ? 'post' : 'posts'}`}

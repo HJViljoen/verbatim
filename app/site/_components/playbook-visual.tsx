@@ -178,7 +178,7 @@ export function PlaybookStepVisual({ show }: { show: StepVisual }): ReactNode {
             <div key={i}>
               <div className="kv">
                 <span className="k">You say</span>
-                <span>“{r.claim}.”</span>
+                <span>{r.claim}.</span>
               </div>
               <div className="kv">
                 <span className="k">They hear</span>

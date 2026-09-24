@@ -29,7 +29,7 @@ import {
   type OwnPostInput,
   type SaidAbout,
 } from '../reading/own-posts'
-import { CLIENT_AUDIENCE, isMissingCompetitors, loadCompetitors, rivalKey, stitchRenames } from '../rivals'
+import { CLIENT_AUDIENCE, isMissingCompetitors, listedRivals, loadCompetitors, rivalKey, stitchRenames } from '../rivals'
 import type { Quote, Scope } from '../renderables/types'
 import { quoteRef } from '../renderables/quotes-freeze'
 import { selectAll } from '../supabase-admin'
@@ -560,10 +560,21 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
 
   const denominators = storedDenominators(history, readAxis)
 
+  // ONLY WHAT CAN BE READ IS LISTED (`listedRivals`, lib/rivals.ts): a rival
+  // that stopped being tracked, or that carried no video in this window, is
+  // not in the selector, the standings, the censuses or "said about". Settings
+  // › Tracking is where the whole list lives.
+  const observed = new Set(
+    (denominators ?? [])
+      .filter((d) => axis.includes(monthStartOf(d.month)) && d.videos > 0)
+      .map((d) => d.audience),
+  )
+  const listed = listedRivals(rivals.rivals, (audience) => observed.has(audience))
+
   // CO4 · what each rival published this month. It needs the month and the
   // tracked list and nothing else, so it starts here and is collected at the
   // bottom beside the record.
-  const ownClaimsAhead = loadRivalOwnPosts(supabase, clientId, month, rivals.rivals)
+  const ownClaimsAhead = loadRivalOwnPosts(supabase, clientId, month, listed)
   ownClaimsAhead.catch(() => {})
 
   // The record's reads depend on the month and nothing else; the refusals it
@@ -573,7 +584,7 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
 
   const standings = buildStandingsBlock({
     brand,
-    rivals: rivals.rivals,
+    rivals: listed,
     denominators,
     axis,
     readAxis,
@@ -583,12 +594,7 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
 
   // ── CO1 · the rival selection ──────────────────────────────────────────
   const analysedByRival = await analysedAhead
-  const observed = new Set(
-    (denominators ?? [])
-      .filter((d) => axis.includes(monthStartOf(d.month)) && d.videos > 0)
-      .map((d) => d.audience),
-  )
-  const options: RivalOption[] = rivals.rivals.map((r) => {
+  const options: RivalOption[] = listed.map((r) => {
     const audience = rivalKey(r.name)
     const analysed = analysedByRival ? analysedByRival.get(r.name) ?? 0 : null
     return {
@@ -674,14 +680,18 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
       options,
       selected,
       identityRecorded: rivals.recorded,
-      empty: options.length === 0 ? 'No rival is tracked for this workspace yet. Name one in Settings and this page starts reading them.' : null,
+      empty: options.length > 0
+        ? null
+        : rivals.rivals.length === 0
+          ? 'No rival is tracked for this workspace yet. Name one in Settings and this page starts reading them.'
+          : 'None of your tracked rivals carried a video in this window.',
     },
     standings,
     questions,
     ownClaims: ownClaims,
     // CO5 · the denominator is the audience's own videos this month, off the
     // rows the standings already read — never a second count of the same thing.
-    saidAbout: buildSaidAbout(rivals.rivals, (audience) =>
+    saidAbout: buildSaidAbout(listed, (audience) =>
       (denominators ?? [])
         .filter((row2) => monthStartOf(row2.month) === month && row2.audience === audience)
         .reduce((n, row2) => n + row2.videos, 0),

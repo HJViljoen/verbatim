@@ -1,10 +1,10 @@
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { openLink } from '@/components/blocks/open-link'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
-import { BlockRanked } from '@/components/blocks/bars'
 import { BlockMovement } from '@/components/blocks/movement'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fmtInt, fmtPct, monthName } from '@/lib/format'
+import { fmtInt, monthName } from '@/lib/format'
+import { levelText } from '@/lib/reading/level'
 import { KIND_ORDER } from '@/lib/reading/kinds'
 import { sideEyebrow, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
 
@@ -35,52 +35,95 @@ import { sideEyebrow, type SubjectSide, type SubjectsData } from '@/lib/pages/su
 // the page. The verdicts are banded and each carries its own k and n, so they
 // are honest to print; they do NOT sum and nothing here adds them.
 
-function Audience({ side, brand, mode, max }: { side: SubjectSide; brand: string; mode: RenderMode; max: number }) {
+/** A column's short head: the audience by name, the reader's own words. */
+const columnHead = (side: SubjectSide): string =>
+  side.kind === 'you' ? 'You' : side.kind === 'category' ? 'Category' : side.label
+
+/**
+ * ONE TABLE, NOT SIX CHARTS (the calm pass). Rows are the kinds, columns the
+ * audiences, and each cell is that audience's level for that kind. It used to
+ * be five or six bar sets in per-rival orange, with "100.0%" on a five-video
+ * audience: loud beside the rest of the page and precise about a sample that
+ * cannot carry a percentage. Now:
+ *
+ *   · Under the floor (`LEVEL_FLOOR_N`, the band's 100 videos) a cell is a
+ *     count, "4 of 5"; at or over it, a whole-number share. The column head
+ *     carries the audience's "of N videos" either way.
+ *   · Neutral ink throughout, one accent: your own column's head takes the
+ *     green dot, the way the rest of the product marks "you".
+ *   · The kinds still do not sum (decision T): a table of independent levels
+ *     says that better than a bar that looks like a part of a whole.
+ */
+function KindTable({ sides, mode }: { sides: SubjectSide[]; mode: RenderMode }) {
   const email = mode === 'email'
-  const shown = side.kinds
-    .filter((k) => k.pct != null && k.pct > 0)
-    .sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind))
-    .slice(0, 5)
-  if (shown.length === 0) return null
+  const kinds = KIND_ORDER.filter((kind) => sides.some((s) => s.kinds.some((k) => k.kind === kind && (k.videos ?? 0) > 0))).slice(0, 6)
+  const labelOf = new Map(sides.flatMap((s) => s.kinds.map((k) => [k.kind, k.label] as const)))
+  const cellOf = (side: SubjectSide, kind: string) => {
+    const k = side.kinds.find((x) => x.kind === kind)
+    return levelText(k?.videos ?? 0, side.n)
+  }
+
+  const th = email
+    ? { fontFamily: FONT.sans, fontSize: 11.5, fontWeight: 500, color: EMAIL.ink, textAlign: 'right' as const, padding: '0 0 6px 12px', verticalAlign: 'bottom' as const }
+    : undefined
+  const td = email
+    ? { fontFamily: FONT.mono, fontSize: 11.5, color: EMAIL.ink2, textAlign: 'right' as const, padding: '5px 0 5px 12px', borderTop: `1px solid ${EMAIL.hairline}`, whiteSpace: 'nowrap' as const }
+    : undefined
 
   return (
-    <div className={email ? undefined : 'flex min-w-0 flex-col gap-1'} style={email ? { paddingTop: 8 } : undefined}>
-      <span
-        className={email ? undefined : 'flex items-baseline justify-between gap-2 text-[12.5px] font-medium text-foreground'}
-        style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted, display: 'block' } : undefined}
-      >
-        {sideEyebrow(side, brand)}{' '}
-        <span data-copy="level" className={email ? undefined : 'shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground decoration-dotted underline-offset-[3px] [text-decoration-line:underline]'} style={email ? { fontFamily: FONT.mono, color: EMAIL.faint } : undefined}>
-          of {fmtInt(side.n ?? 0)} videos
-        </span>
-      </span>
-      {/* THE BAR MEASURES A SHARE, SO THE ROW IS LABELLED WITH THE SHARE (fix
-          pass). It used to ride the share on the LABEL and end the row in the
-          count: the category's "Asking how it works 34%" ended in 472 and
-          yours in 29, with the two bars within a few pixels of each other,
-          because the bar's length and the row's terminal number were measuring
-          two different things. A reader scans the number at the end of a bar.
-
-          Deviation 4 / D4 is what justifies ranked rows here instead of the
-          mock's segmented proportion bar — the kinds do not sum, so there is
-          no whole to divide. It does not justify a share-length with a
-          count-label. The artboard labels its kinds with percentages and no
-          counts, which is what this now does; the audience's own "of N videos"
-          is on the line directly above, so 34% of 1,388 is still recoverable
-          as the 472 it was.
-
-          `countWidth` because `RankedBar`'s default column is 28px — built for
-          a three-digit count — and "34.5%" needs ~35. */}
-      <BlockRanked
-        mode={mode}
-        countWidth={38}
-        rows={shown.map((k) => ({
-          label: k.label,
-          pct: ((k.pct ?? 0) / max) * 100,
-          color: side.color,
-          count: fmtPct(k.pct ?? 0),
-        }))}
-      />
+    <div className={email ? undefined : 'min-w-0 overflow-x-auto'}>
+      <table className={email ? undefined : 'w-full border-collapse'} style={email ? { width: '100%', borderCollapse: 'collapse' } : undefined}>
+        <thead>
+          <tr>
+            <th aria-label="Kind" style={email ? { ...th, textAlign: 'left', padding: '0 0 6px 0' } : undefined} className={email ? undefined : 'pb-1.5'} />
+            {sides.map((s) => (
+              <th key={s.audience} scope="col" style={th} className={email ? undefined : 'pb-1.5 pl-3 text-right align-bottom font-normal'}>
+                <span className={email ? undefined : 'flex items-center justify-end gap-1.5 whitespace-nowrap text-[12px] font-medium text-foreground'}>
+                  {s.kind === 'you' ? (
+                    email
+                      ? <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: 9999, background: EMAIL.up, marginRight: 5 }} />
+                      : <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-[var(--you)]" />
+                  ) : null}
+                  {columnHead(s)}
+                </span>
+                <span
+                  data-copy="level"
+                  className={email ? undefined : 'block whitespace-nowrap font-mono text-[10.5px] tabular-nums text-muted-foreground'}
+                  style={email ? { display: 'block', fontFamily: FONT.mono, fontSize: 10.5, fontWeight: 400, color: EMAIL.muted } : undefined}
+                >
+                  of {fmtInt(s.n ?? 0)} videos
+                </span>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {kinds.map((kind) => (
+            <tr key={kind} className={email ? undefined : 'border-t border-border/70'}>
+              <th
+                scope="row"
+                className={email ? undefined : 'py-1.5 pr-2 text-left text-[12.5px] font-normal text-foreground'}
+                style={email ? { ...td, fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, textAlign: 'left', padding: '5px 8px 5px 0', whiteSpace: 'normal' } : undefined}
+              >
+                {labelOf.get(kind) ?? kind}
+              </th>
+              {sides.map((s) => {
+                const cell = cellOf(s, kind)
+                return (
+                  <td
+                    key={s.audience}
+                    data-copy={cell?.kind === 'count' ? 'level' : cell ? 'figure' : undefined}
+                    className={email ? undefined : `whitespace-nowrap py-1.5 pl-3 text-right font-mono text-[12px] tabular-nums ${s.kind === 'you' ? 'text-foreground' : 'text-secondary-foreground'}`}
+                    style={td}
+                  >
+                    {cell?.text ?? '—'}
+                  </td>
+                )
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }
@@ -119,7 +162,7 @@ function KindMovement({ side, brand, mode }: { side: SubjectSide; brand: string;
       </span>
       {rows.map((k) => (
         <span key={k.kind} className={email ? undefined : 'flex items-center gap-1.5 text-[12px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted, marginRight: 10 } : undefined}>
-          {k.label.toLowerCase()} <BlockMovement verdict={side.kindVerdicts[k.kind]} unit="pts" mode={mode} />
+          {k.label.toLowerCase()} <BlockMovement verdict={side.kindVerdicts[k.kind]} unit="pts" mode={mode} good="neutral" />
         </span>
       ))}
     </>
@@ -153,16 +196,6 @@ export const subjectsKinds: Block<SubjectsData> = {
     }
 
     const withKinds = pane.sides.filter((s) => s.kinds.length > 0)
-    // ONE SCALE ACROSS THE TILE (fix pass). Each audience was normalised to its
-    // OWN leader, and three audiences stacked in one column at one x-offset on
-    // one track width is a layout that exists to be read DOWNWARD. It looked
-    // right only because the three maxima happened to be 34.5 / 33.8 / 34; the
-    // first tenant whose own audience runs at 60% against a rival's 25% would
-    // get two identical full-width bars. The bars are shares of three different
-    // denominators — which is why each row carries its own "of N" — but their
-    // LENGTHS are now comparable, which is the one thing a stacked bar chart
-    // promises.
-    const trackMax = Math.max(...withKinds.flatMap((s) => s.kinds.map((k) => k.pct ?? 0)), 1)
     // THE CATEGORY'S Reddit share, not the first side's. Reddit is where the
     // questions are and the category is where Reddit is; naming your own
     // audience's figure here would answer a question nobody asked about a
@@ -187,20 +220,7 @@ export const subjectsKinds: Block<SubjectsData> = {
         // body paragraph of raw counts, which reads as one of the block's
         // findings rather than as a caveat about where they came from.
       >
-        {/* TWO COLUMNS OF AUDIENCES WHERE THE TILE IS WIDE (layout sweep):
-            five audiences of five bars stacked in one column made this the
-            tallest tile on the page by ~700px. A container query, because the
-            block does not know where the page put it; the email arm is a
-            single column of table rows as before. */}
-        {email ? (
-          withKinds.map((s) => <Audience key={s.audience} side={s} brand={data.brand} mode={mode} max={trackMax} />)
-        ) : (
-          <div className="@container">
-            <div className="grid grid-cols-1 gap-x-8 gap-y-2 @[640px]:grid-cols-2">
-              {withKinds.map((s) => <Audience key={s.audience} side={s} brand={data.brand} mode={mode} max={trackMax} />)}
-            </div>
-          </div>
-        )}
+        <KindTable sides={withKinds} mode={mode} />
         {category ? <KindMovement side={category} brand={data.brand} mode={mode} /> : null}
         {/* THE OVERLAP, WITH THE SHARES IT IS ABOUT. The footer note states
             Reddit's share; this states why the kinds it pools do not sum, and

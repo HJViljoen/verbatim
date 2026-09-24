@@ -432,6 +432,12 @@ export function subjectsFixture(over: Partial<SubjectsData> = {}): SubjectsData 
       ...Array.from({ length: 2 }, () => ({ audience: 'contradicts' })),
       ...Array.from({ length: 8 }, () => ({ audience: 'silent' })),
     ]),
+    // The first three rows of that ledger, in `ledgerRows` order.
+    sayHearClaims: [
+      { claim: 'Made from 100% recycled sails', state: 'pushed_back' },
+      { claim: 'Built to last a decade', state: 'echoed' },
+      { claim: 'Waterproof', state: 'silent' },
+    ],
     record: {
       // THROUGH THE REAL COMPOSERS. The band was hand-written as "4 updates ·
       // 2,359 videos · TikTok, YouTube, Instagram, Reddit" — a shape
@@ -474,6 +480,7 @@ export function refusedFixture(over: Partial<SubjectsData> = {}): SubjectsData {
     // rail one tile up, on the one arm a real tenant sees.
     ownPosts: ownCensusWithClaims(refusedOwnPostsInput(), false),
     sayHear: null,
+    sayHearClaims: [],
     ...over,
   }
 }
