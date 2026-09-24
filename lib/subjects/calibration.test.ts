@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 import {
   calibrationNote,
   calibrationQuota,
+  calibrationRecorded,
+  lastCalibrationLogged,
   candidateThresholds,
   pickCalibrationPairs,
   clearsPrecisionGate,
@@ -264,9 +266,61 @@ describe('parseLabelledSheet — a label is a JSON boolean or it is refused', ()
     expect(parseLabelledSheet(['{"label": tru']).refused).toEqual(['line 1: not JSON'])
   })
 
+  // A lost id was scored as the subject "undefined" and dropped silently; a
+  // lost or edited score became NaN — 'unknown' at score time, while
+  // calibration_n still counted it.
+  it('refuses a line whose ids or score were lost or rewritten, by line number', () => {
+    const noSubject = JSON.stringify({ audienceInsightId: 'i1', score: 0.62, label: true })
+    const blankInsight = line(true, { audienceInsightId: ' ' })
+    const stringScore = line(true, { score: '0.62' })
+    const noScore = JSON.stringify({ subjectId: 's1', audienceInsightId: 'i1', label: false })
+    const nanScore = line(false, { score: null })
+    expect(parseLabelledSheet([noSubject, blankInsight, stringScore, noScore, nanScore, line(true)]).refused).toEqual([
+      'line 1: subjectId missing is not an id',
+      'line 2: audienceInsightId " " is not an id',
+      'line 3: score "0.62" is not a number',
+      'line 4: score missing is not a number',
+      'line 5: score null is not a number',
+    ])
+  })
+
   it('is the gate the scorer needed: a string "false" scores as correct without it', () => {
     const hazard = precisionAt([pair({ score: 0.9, label: 'false' as unknown as boolean })])
     expect(hazard.correct).toBe(1)
+  })
+})
+
+describe('calibrationRecorded — a re-run of --apply completes only what is missing', () => {
+  const next = { calibration_precision: 22 / 25, calibration_n: 25, calibration_judge_version: 'j1' }
+  const none = { calibration_precision: null, calibration_n: null, calibration_judge_version: null }
+
+  it('skips a subject whose figure is stored AND logged', () => {
+    // numeric comes back from the database as a number, or as its string.
+    expect(calibrationRecorded({ ...next, calibration_precision: '0.88' }, next, next)).toBe(true)
+  })
+
+  it('writes a subject whose update landed but whose change-log row did not — the one the re-run is for', () => {
+    expect(calibrationRecorded(next, undefined, next)).toBe(false)
+    expect(calibrationRecorded(next, none, next)).toBe(false)
+  })
+
+  it('writes a subject whose figure is new or whose key moved', () => {
+    expect(calibrationRecorded(none, null, next)).toBe(false)
+    expect(calibrationRecorded({ ...next, calibration_n: 24 }, next, next)).toBe(false)
+    expect(calibrationRecorded({ ...next, calibration_judge_version: 'j0' }, { ...next, calibration_judge_version: 'j0' }, next)).toBe(false)
+  })
+
+  it('reads each subject’s NEWEST logged figure', () => {
+    const rows = [
+      { after: { id: 's1', calibration_precision: 0.88, calibration_n: 25, calibration_judge_version: 'j1' } },
+      { after: { id: 's1', calibration_precision: 0.5, calibration_n: 33, calibration_judge_version: 'j0' } },
+      { after: null },
+      { after: { id: 's2', calibration_precision: null, calibration_n: 0, calibration_judge_version: 'j1' } },
+    ]
+    const last = lastCalibrationLogged(rows)
+    expect(last.get('s1')).toEqual({ calibration_precision: 0.88, calibration_n: 25, calibration_judge_version: 'j1' })
+    expect(last.get('s2')?.calibration_n).toBe(0)
+    expect(last.size).toBe(2)
   })
 })
 
