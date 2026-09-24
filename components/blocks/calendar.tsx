@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import type { BlockContext, RenderMode } from '@/lib/blocks/types'
 import { CalendarLine } from '@/components/charts/calendar-line'
 import type { CalendarBand, CalendarRule, CalendarSeries } from '@/lib/charts/calendar'
-import { CAL_PAD_L, CAL_PAD_R, CAL_PAPER_K, chartId, STATE_SHORT } from '@/lib/charts/calendar'
+import { CAL_PAD_L, CAL_PAD_R, CAL_PAPER_K, chartId, chartReady, CHART_WAITING, drawsLine, figureLines, STATE_SHORT, undrawnLine } from '@/lib/charts/calendar'
 import { monthName } from '@/lib/format'
 import { EMAIL, FONT, tokenHex } from '@/lib/email/theme'
 
@@ -137,6 +137,25 @@ export function BlockCalendar({
     )
   }
 
+  // TOO FEW MONTHS FOR A LINE, IN AN EMAIL TOO (2026-09-24). The app and
+  // paper arms print the figures instead of a chart (`CalendarLine`); a
+  // picture of those figures, or a month table of one or two columns, would
+  // say the same thing less plainly.
+  if (!chartReady(series)) {
+    return (
+      <div>
+        {figureLines(series, format).map((r) => (
+          <div key={r.label} style={{ fontFamily: FONT.sans, fontSize: 13, color: EMAIL.ink, lineHeight: 1.45 }}>
+            <span style={{ fontWeight: 600 }}>{r.labelSlot ? <span data-copy="subject" data-slot={r.labelSlot}>{r.label}</span> : r.label}</span>{' '}
+            <span data-copy="figure" style={{ fontFamily: FONT.mono, fontSize: 12 }}>{r.text}</span>
+          </div>
+        ))}
+        {undrawnLine(series) ? <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted, marginTop: 4 }}>{undrawnLine(series)}</div> : null}
+        <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted, marginTop: 2 }}>{CHART_WAITING}</div>
+      </div>
+    )
+  }
+
   const src = ctx?.image(blockKey) ?? null
   const alt = label ?? `${series.map((s) => s.label).join(' vs ')}, month by month`
   if (src) {
@@ -160,7 +179,7 @@ export function BlockCalendar({
             </td>
           ))}
         </tr>
-        {series.map((s) => {
+        {series.filter(drawsLine).map((s) => {
           const byMonth = new Map(s.points.map((p) => [p.month, p]))
           return (
             <tr key={s.label}>
@@ -190,6 +209,11 @@ export function BlockCalendar({
             </tr>
           )
         })}
+        {undrawnLine(series) ? (
+          <tr>
+            <td colSpan={months.length + 1} style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted, paddingTop: 6 }}>{undrawnLine(series)}</td>
+          </tr>
+        ) : null}
         {caption ? (
           <tr>
             <td colSpan={months.length + 1} style={{ fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.muted, paddingTop: 6 }}>{caption}</td>

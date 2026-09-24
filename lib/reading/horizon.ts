@@ -197,3 +197,27 @@ export function horizonDates(window: Pick<HorizonWindow, 'months'>): string {
     ? monthName(months[0])
     : `${monthName(months[0])} to ${monthName(months[months.length - 1])}`
 }
+
+/** How many months a month-by-month chart shows, whatever the horizon. */
+export const CHART_MONTHS = 12
+
+/**
+ * THE CHART'S AXIS IS NOT THE HORIZON'S (2026-09-24).
+ *
+ * The horizon control chooses the period the FIGURES are read over; it used to
+ * choose the chart's axis too, so the default "This month" drew a line chart
+ * one month wide — a single dot — and a reader who knew the product had been
+ * reading for months asked where the line was. The chart now always shows the
+ * trailing `CHART_MONTHS`, ending on the month in hand, or from the tenant's
+ * first readable month (`sinceStart().from`) where that is later: months before
+ * it hold too little to read, and a year of empty slots is the flat nothing
+ * decision M refused to plot. The horizon changes the figures, not how much
+ * line you can see.
+ */
+export function chartMonths(now: string, firstReadable?: string | null): string[] {
+  const months = monthsBack(monthStartOf(now), CHART_MONTHS)
+  const from = firstReadable ? monthStartOf(firstReadable) : null
+  if (!from) return months
+  const trimmed = months.filter((m) => m >= from)
+  return trimmed.length > 0 ? trimmed : [months[months.length - 1]]
+}

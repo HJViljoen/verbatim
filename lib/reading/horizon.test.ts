@@ -190,3 +190,17 @@ describe('horizonDates', () => {
     expect(horizonDates({ months: [] })).toBe('')
   })
 })
+
+describe('chartMonths — the chart axis is not the horizon', () => {
+  it('is the trailing twelve months ending on the month in hand', async () => {
+    const { chartMonths } = await import('./horizon')
+    const m = chartMonths('2026-09-24T10:00:00.000Z', '2019-01-01')
+    expect(m).toHaveLength(12)
+    expect(m[0]).toBe('2025-10-01')
+    expect(m[11]).toBe('2026-09-01')
+  })
+  it('starts at the first readable month when that is later', async () => {
+    const { chartMonths } = await import('./horizon')
+    expect(chartMonths('2026-09-24T10:00:00.000Z', '2026-08-01')).toEqual(['2026-08-01', '2026-09-01'])
+  })
+})

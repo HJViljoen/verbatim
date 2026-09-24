@@ -96,6 +96,13 @@ export interface CalendarSeries {
   excludes?: string
   /** The denominator printed after the end label ("of 142"). */
   endNote?: string
+  /**
+   * Leave this series out ENTIRELY when it draws nothing — no key entry, no
+   * place in the "No line yet" sentence. A stopped rival is the case: it is
+   * kept on the chart while its frozen months still draw, and it is not news
+   * that a rival we no longer follow has no line this year.
+   */
+  omitWhenUndrawn?: boolean
 }
 
 /** A dated break. `kind` picks the token; `affects` is the stored
@@ -315,9 +322,19 @@ export function spreadLabels(
   const gap = opts.gap ?? 13
   const min = opts.min ?? 0
   const max = opts.max ?? Number.POSITIVE_INFINITY
-  const placed = ys
+  // A LABEL THAT CANNOT FIT IS DROPPED, NOT STACKED ON ANOTHER (2026-09-24).
+  // The lift below can only move the stack up as far as `min`; past the box's
+  // capacity the bottom labels used to print over each other. The box holds
+  // `capacity` labels a `gap` apart, and the ones kept are the FIRST in the
+  // caller's order (you, then rivals, then the category) — a dropped line is
+  // still named in the key, which is where a reader looks for it.
+  const capacity = Number.isFinite(max) ? Math.max(1, Math.floor((max - min) / gap) + 1) : Number.POSITIVE_INFINITY
+  const candidates = ys
     .map((y, i) => ({ y, i }))
     .filter((e): e is { y: number; i: number } => e.y != null)
+  const kept = new Set(candidates.slice(0, capacity).map((e) => e.i))
+  const placed = candidates
+    .filter((e) => kept.has(e.i))
     .sort((a, b) => a.y - b.y)
   let last = -Infinity
   for (const e of placed) {
@@ -612,6 +629,91 @@ export function undrawnNote(series: CalendarSeries): string | null {
   }
   return 'no line: no month could be read'
 }
+
+/**
+ * THE FEWEST READABLE MONTHS A LINE IS DRAWN FROM (2026-09-24).
+ *
+ * A line is a direction claim before it says a word (AGENTS.md: a chart is a
+ * direction claim too), and one or two dots under a line-chart's furniture
+ * read as a trend that has not happened — Subjects drew one category dot in a
+ * tall grey column and a reader asked where the rest of the line was. Under
+ * three readable months on EVERY series the chart prints the figures instead
+ * (`figureLines`) and says when the line will appear. Three is
+ * `directionWord`'s own minimum (lib/reading/bands.ts): the line appears when
+ * the series could first earn a word, not before.
+ */
+export const MIN_CHART_MONTHS = 3
+
+/** How many months of a series carry a plotted value. */
+export function readableCount(series: CalendarSeries): number {
+  return series.points.filter((p) => p.value != null).length
+}
+
+/** A series draws something on the plot — at least one plotted value. */
+export function drawsLine(series: CalendarSeries): boolean {
+  return series.points.some((p) => p.value != null)
+}
+
+/** Whether the chart has enough to draw a line at all (see MIN_CHART_MONTHS). */
+export function chartReady(series: readonly CalendarSeries[], min = MIN_CHART_MONTHS): boolean {
+  return series.some((s) => readableCount(s) >= min)
+}
+
+/** How many names the "No line yet" sentence prints before it counts the rest. */
+const UNDRAWN_NAMES = 5
+
+/**
+ * ONE SHORT LINE FOR EVERY SERIES THAT DRAWS NOTHING (2026-09-24) —
+ * "No line yet: Patagonia, The North Face, Freitag (too few videos)".
+ *
+ * It replaced a key entry per undrawn series, each with its own "no line: …"
+ * reason, which on Sealand's comfort chart was ten entries for one dot. The
+ * per-series reason is the hover's business; the key says only which inks are
+ * missing. Left out altogether: a series with no reading of any kind on the
+ * axis (every month `hollow` — the audience was not read, which is not a line
+ * that is late, it is a name that is not tracked here) and any series that
+ * asks to be (`omitWhenUndrawn`, a stopped rival).
+ *
+ * Null where nothing is missing.
+ */
+export function undrawnLine(series: readonly CalendarSeries[]): string | null {
+  const names = series
+    .filter((s) => !drawsLine(s) && !s.omitWhenUndrawn)
+    .filter((s) => s.points.some((p) => p.state !== 'hollow'))
+    .map((s) => s.label)
+  if (names.length === 0) return null
+  const shown = names.slice(0, UNDRAWN_NAMES)
+  const more = names.length - shown.length
+  return `No line yet: ${shown.join(', ')}${more > 0 ? ` and ${more.toLocaleString('en-US')} more` : ''} (too few videos)`
+}
+
+/**
+ * The figures that stand in for a chart with too few months to draw
+ * (`MIN_CHART_MONTHS`): one entry per series that has any reading, newest
+ * month first, each with its own "of N" — "Category 6.1% of 626 in Sep ·
+ * 6.3% of 590 in Aug". A still-filling month says so, because it may yet be
+ * rewritten.
+ */
+export function figureLines(
+  series: readonly CalendarSeries[],
+  format: (v: number) => string = (v) => `${v}`,
+): { label: string; labelSlot?: string; text: string }[] {
+  const out: { label: string; labelSlot?: string; text: string }[] = []
+  for (const s of series) {
+    const read = s.points.filter((p) => p.value != null).slice().reverse()
+    if (read.length === 0) continue
+    const text = read.map((p) => {
+      const of = p.k != null && p.n != null ? ` of ${p.n.toLocaleString('en-US')}` : ''
+      const filling = p.state === 'filling' ? ' (still filling)' : ''
+      return `${format(p.value as number)}${of} in ${monthName(p.month).split(' ')[0]}${filling}`
+    }).join(' · ')
+    out.push({ label: s.label, ...(s.labelSlot ? { labelSlot: s.labelSlot } : {}), text })
+  }
+  return out
+}
+
+/** The sentence under the figures, while the chart is waiting for its months. */
+export const CHART_WAITING = 'The chart appears from the third month.'
 
 /** The gutter token's word, for the legend. */
 export const STATE_LABEL: Record<CalendarPointState, string> = {

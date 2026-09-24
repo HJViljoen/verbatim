@@ -753,9 +753,12 @@ describe('the page, as the artboard composes it', () => {
     }
   })
 
-  it('draws the charts on a one-month horizon too, with the attention share first', () => {
+  // 2026-09-24: under three readable months a calendar chart prints its
+  // figures and says when the line appears, rather than one dot per brand.
+  it('prints the figures on a one-month horizon, with the attention share first', () => {
     const markup = render(competitiveStandings.render(oneMonthFixture(), 'app', ctx))
-    expect(markup).toContain('<svg')
+    expect(markup).not.toContain('<svg')
+    expect(markupOf(markup)).toContain('The chart appears from the third month.')
     const attention = markup.indexOf('Attention share')
     const content = markup.indexOf('Content share')
     expect(attention).toBeGreaterThan(-1)
