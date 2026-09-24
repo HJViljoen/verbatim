@@ -583,9 +583,29 @@ export function voiceCite(voice: Pick<SubjectVoice, 'cite' | 'platform'>): strin
   return voice.platform ? `${platformLabel(voice.platform)} · ${voice.cite}` : voice.cite
 }
 
-/** Where a voice was heard, in the reader's words — never an audience key. */
-export function voiceFrom(audience: string): string {
-  if (audience === CLIENT_AUDIENCE) return 'under a post of yours'
+/**
+ * Where a voice was heard, in the reader's words — never an audience key.
+ *
+ * THE CLIENT AUDIENCE IS TWO DIFFERENT PLACES, and it printed as one. The
+ * glossary's own definition of `audience` is "whose videos a figure is ABOUT",
+ * and the `client` key is earned two ways: a post published from one of the
+ * tenant's own handles (`videos.source = 'owned'`), and a STRANGER's video
+ * whose caption or hashtags name a brand keyword (content tagging,
+ * lib/gather/tagging.ts). Both are "you"; only the first is yours.
+ *
+ * Measured on the preview branch 2026-09-24: all 21 of Sealand's
+ * client-audience insights sat on eight third-party accounts — `tunl.to`,
+ * `honest_money_pod`, `jessejadeturner` and five more — and every quote drawn
+ * from them was cited "under a post of yours". A client reading their own
+ * Subjects page would have gone looking for a post of theirs that does not
+ * exist. `ownPost` is the video's `source`, which is the only thing that knows.
+ *
+ * Absent (the default) is the honest answer for a caller that cannot tell: the
+ * audience key alone does not know whose account the video came off, so it
+ * says what it CAN say — the video names you.
+ */
+export function voiceFrom(audience: string, opts: { ownPost?: boolean } = {}): string {
+  if (audience === CLIENT_AUDIENCE) return opts.ownPost ? 'under a post of yours' : 'in a video that names you'
   if (audience === INDUSTRY_AUDIENCE) return 'under a category video'
   const name = audience.startsWith('competitor:') ? audience.slice('competitor:'.length) : audience
   return `under a ${name} video`
@@ -2132,12 +2152,16 @@ async function loadVoicesMany(
   const nativeIds = [...new Set([...meta.values()].map((m) => m.video_id).filter((v): v is string => Boolean(v)))]
   const urlByKey = new Map<string, string>()
   const audienceByKey = new Map<string, string>()
+  // Which of those videos the tenant actually PUBLISHED. `source` is the only
+  // column that knows: `is_client` is true of a stranger's review too, which
+  // is what made every cite read "under a post of yours" (voiceFrom).
+  const ownPostKeys = new Set<string>()
   if (nativeIds.length > 0) {
-    type V = { platform: string | null; video_id: string | null; video_url: string | null; is_client: boolean | null; is_competitor: boolean | null; competitor_name: string | null }
+    type V = { platform: string | null; video_id: string | null; video_url: string | null; source: string | null; is_client: boolean | null; is_competitor: boolean | null; competitor_name: string | null }
     const read = await readByIds<V>(nativeIds, (part) =>
       supabase
         .from('videos')
-        .select('platform, video_id, video_url, is_client, is_competitor, competitor_name')
+        .select('platform, video_id, video_url, source, is_client, is_competitor, competitor_name')
         .eq('client_id', clientId)
         .in('video_id', part)
         .order('video_id', { ascending: true }),
@@ -2146,6 +2170,7 @@ async function loadVoicesMany(
       if (!v.video_id) continue
       const key = `${v.platform}::${v.video_id}`
       if (v.video_url) urlByKey.set(key, v.video_url)
+      if (v.source === 'owned') ownPostKeys.add(key)
       audienceByKey.set(
         key,
         v.is_client ? CLIENT_AUDIENCE : v.is_competitor ? rivalKey(v.competitor_name ?? 'unknown') : INDUSTRY_AUDIENCE,
@@ -2210,7 +2235,7 @@ async function loadVoicesMany(
     const voices = shown.map((c) => {
       const m = c.commentId ? meta.get(c.commentId) : undefined
       const key = m?.platform && m.video_id ? `${m.platform}::${m.video_id}` : null
-      const from = voiceFrom(audienceOf(c))
+      const from = voiceFrom(audienceOf(c), { ownPost: key !== null && ownPostKeys.has(key) })
       const source = c.source ?? 'comment'
       // WHERE, IN THE RIGHT WORDS FOR THE KIND OF EVIDENCE IT IS. "under a
       // category video" is true of a COMMENT; a creator's own sentence was not

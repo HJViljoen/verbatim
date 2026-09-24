@@ -762,6 +762,40 @@ export function passAMinComments(platform: string): number {
   return PASS_A_MIN_COMMENTS_BY_PLATFORM[platform] ?? PASS_A_MIN_COMMENTS_DEFAULT
 }
 
+// --- Own posts as the client audience (fix/client-audience, 2026-09-24) -------
+// An own post used to leave Pass A through the claims lane or not at all, so
+// the `client` audience could never hold a single theme: 0 insights on 298
+// claims-only and 91 skip videos across both tenants, against 3,719 on the
+// full lane. The guardrail that put them there (Owned-Data-Plan, "segment,
+// never blend") was worried about a brand's fans CONTAMINATING category
+// themes. The audience key already segments: an own post's insights key under
+// `client` and can never reach `industry-other`. So the invariant is now
+// "segmented by audience key, never blended", and own posts read like any
+// other video — the comment floor still governs, and the transcript still
+// yields the same brand claims it did (claims are computed on both lanes).
+//
+// A COMPETITOR'S own posts keep the claims lane. Their fans are not our
+// audience under any reading, and nothing on the product asks what a rival's
+// followers said under the rival's post.
+
+/** Master switch for own-post audience insights. Default ON — the translation
+ *  precedent: it gates a path whose absence is a silent hole in the product,
+ *  so the safe default is on and the switch exists to turn it OFF in a hurry.
+ *  `OWN_POST_AUDIENCE=0` kills it everywhere; `OWN_POST_AUDIENCE_OFF` is a
+ *  comma-separated client-id list for turning it off for ONE tenant without
+ *  touching the others. Read at call time (serverless) and frozen per run by
+ *  captureRunFlags, so a run's behaviour is explainable after the fact. */
+export function ownPostAudienceEnabled(clientId?: string): boolean {
+  const v = process.env.OWN_POST_AUDIENCE
+  if (v === '0' || v === 'false') return false
+  if (!clientId) return true
+  const off = (process.env.OWN_POST_AUDIENCE_OFF ?? '')
+    .split(',')
+    .map((x) => x.trim().toLowerCase())
+    .filter((x) => x !== '')
+  return !off.includes(clientId.trim().toLowerCase())
+}
+
 /** Incremental Pass A (Theme Registry shape A, 2026-08-17). OFF unless set, so
  *  merging the branch changes nothing until it is switched on in Vercel. Gates
  *  SELECTION only — with the flag off, plan-pass-a still selects every eligible
@@ -890,9 +924,13 @@ export interface RunFlags {
   themeRegistry: boolean
   redditDiscovery: boolean
   consumerProfile: boolean
+  /** Default ON (ownPostAudienceEnabled) — see the own-post block above. The
+   *  only flag that is per-tenant as well as global, so it is captured with
+   *  the run's client id and not from the environment alone. */
+  ownPostAudience: boolean
 }
 
-export function captureRunFlags(): RunFlags {
+export function captureRunFlags(clientId?: string): RunFlags {
   return {
     transcripts: transcriptsEnabled(),
     translation: translationEnabled(),
@@ -901,6 +939,7 @@ export function captureRunFlags(): RunFlags {
     themeRegistry: themeRegistryEnabled(),
     redditDiscovery: redditDiscoveryEnabled(),
     consumerProfile: consumerProfileEnabled(),
+    ownPostAudience: ownPostAudienceEnabled(clientId),
   }
 }
 

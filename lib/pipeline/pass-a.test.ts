@@ -1,7 +1,8 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { validateInsights, validateClaims, buildSystemPrompt, buildUserPrompt, passALane, isVideoEvidence, missingBookkeepingColumn, isLengthLimitError, lengthRetryRefs } from './pass-a'
+import { validateInsights, validateClaims, buildSystemPrompt, buildUserPrompt, passALane, COMMENTS_READ_LANE, isVideoEvidence, missingBookkeepingColumn, isLengthLimitError, lengthRetryRefs } from './pass-a'
 import { usableOcr, usableTranscript } from './transcript-input'
-import { OCR_PROMPT_CHARS, PASS_A_MAX_OUTPUT_TOKENS, PASS_A_VIDEO_QUOTE_MAX, TRANSCRIPT_PROMPT_CHARS } from '../config'
+import { OCR_PROMPT_CHARS, PASS_A_MAX_OUTPUT_TOKENS, PASS_A_VIDEO_QUOTE_MAX, TRANSCRIPT_PROMPT_CHARS, captureRunFlags, ownPostAudienceEnabled } from '../config'
 import type { PassAVideoOutput, PassAInsight } from './schemas'
 
 // Pure-logic coverage for the Pass A v4 transcript seam: the "t" evidence
@@ -460,18 +461,97 @@ describe('passALane — the comment floor vs the Wave 4 claims lane', () => {
     expect(passALane(yt({ is_client: true, transcript_status: null }), 0)).toBe('skip')
   })
 
-  it("the client's OWN posts take the claims lane or nothing — never the full lane, however many comments", () => {
+  it("the client's OWN posts take the full lane when they clear the floor — segmented by audience key, never blended", () => {
     const owned = { ...yt({ is_client: true, transcript_status: 'ok' }), source: 'owned' }
-    expect(passALane(owned, 57)).toBe('claims_only')
-    expect(passALane(owned, 0)).toBe('claims_only')
-    expect(passALane({ ...owned, transcript_status: 'lyrics' }, 57)).toBe('skip')
-    expect(passALane({ ...owned, transcript_status: null }, 57)).toBe('skip')
+    const on = { ownPostAudience: true }
+    expect(passALane(owned, 57, undefined, on)).toBe('full')
+    expect(passALane(owned, 5, undefined, on)).toBe('full')
+    // Below the floor the audience side is still too thin to be evidence, so
+    // the transcript governs alone — exactly as for any other brand-side video.
+    expect(passALane(owned, 4, undefined, on)).toBe('claims_only')
+    expect(passALane({ ...owned, transcript_status: 'lyrics' }, 4, undefined, on)).toBe('skip')
   })
 
-  it("a COMPETITOR's own posts take the same lane — their fans' comments are not our audience either", () => {
+  it('defaults to ON when no option is passed, so a caller that forgot cannot silently lose the audience', () => {
+    const owned = { ...yt({ is_client: true, transcript_status: 'ok' }), source: 'owned' }
+    expect(passALane(owned, 57)).toBe('full')
+    expect(passALane(owned, 57, undefined, {})).toBe('full')
+  })
+
+  it('with the switch OFF an own post falls back to exactly the pre-2026-09-24 lanes', () => {
+    const owned = { ...yt({ is_client: true, transcript_status: 'ok' }), source: 'owned' }
+    const off = { ownPostAudience: false }
+    expect(passALane(owned, 57, undefined, off)).toBe('claims_only')
+    expect(passALane(owned, 0, undefined, off)).toBe('claims_only')
+    expect(passALane({ ...owned, transcript_status: 'lyrics' }, 57, undefined, off)).toBe('skip')
+    expect(passALane({ ...owned, transcript_status: null }, 57, undefined, off)).toBe('skip')
+  })
+
+  it("a COMPETITOR's own posts keep the claims lane under BOTH settings — a rival's fans are not our audience", () => {
     const theirs = { ...yt({ is_competitor: true, transcript_status: 'ok' }), source: 'competitor_owned' }
-    expect(passALane(theirs, 200)).toBe('claims_only')
-    expect(passALane({ ...theirs, transcript_status: 'no_media' }, 200)).toBe('skip')
+    for (const opts of [{ ownPostAudience: true }, { ownPostAudience: false }, {}]) {
+      expect(passALane(theirs, 200, undefined, opts)).toBe('claims_only')
+      expect(passALane({ ...theirs, transcript_status: 'no_media' }, 200, undefined, opts)).toBe('skip')
+    }
+  })
+
+  it('leaves a DISCOVERED video alone under both settings — the switch reaches own posts only', () => {
+    const disc = yt({ is_client: true, transcript_status: 'ok' })
+    for (const opts of [{ ownPostAudience: true }, { ownPostAudience: false }]) {
+      expect(passALane(disc, 12, undefined, opts)).toBe('full')
+      expect(passALane(disc, 1, undefined, opts)).toBe('claims_only')
+      expect(passALane(yt({ transcript_status: 'ok' }), 1, undefined, opts)).toBe('skip')
+    }
+  })
+})
+
+describe('ownPostAudienceEnabled — default ON, reversible globally and per tenant', () => {
+  const SEALAND = 'ac16988e-c4f3-4baf-b388-73895852a554'
+  const withEnv = (env: Record<string, string | undefined>, run: () => void) => {
+    const before: Record<string, string | undefined> = {}
+    for (const [k, v] of Object.entries(env)) {
+      before[k] = process.env[k]
+      if (v === undefined) delete process.env[k]
+      else process.env[k] = v
+    }
+    try { run() } finally {
+      for (const [k, v] of Object.entries(before)) {
+        if (v === undefined) delete process.env[k]
+        else process.env[k] = v
+      }
+    }
+  }
+
+  it('is on when nothing is set', () => {
+    withEnv({ OWN_POST_AUDIENCE: undefined, OWN_POST_AUDIENCE_OFF: undefined }, () => {
+      expect(ownPostAudienceEnabled()).toBe(true)
+      expect(ownPostAudienceEnabled(SEALAND)).toBe(true)
+    })
+  })
+
+  it('OWN_POST_AUDIENCE=0 turns it off everywhere', () => {
+    withEnv({ OWN_POST_AUDIENCE: '0' }, () => {
+      expect(ownPostAudienceEnabled(SEALAND)).toBe(false)
+    })
+    withEnv({ OWN_POST_AUDIENCE: 'false' }, () => {
+      expect(ownPostAudienceEnabled(SEALAND)).toBe(false)
+    })
+  })
+
+  it('OWN_POST_AUDIENCE_OFF turns it off for ONE tenant and leaves the others on', () => {
+    withEnv({ OWN_POST_AUDIENCE: undefined, OWN_POST_AUDIENCE_OFF: ` ${SEALAND.toUpperCase()} , other ` }, () => {
+      expect(ownPostAudienceEnabled(SEALAND)).toBe(false)
+      expect(ownPostAudienceEnabled('e52cac94-30e1-426a-9a36-31b11e0b30b6')).toBe(true)
+      // No client id is the global question, which the list cannot answer.
+      expect(ownPostAudienceEnabled()).toBe(true)
+    })
+  })
+
+  it('is frozen onto the run by captureRunFlags, never re-read mid-run', () => {
+    withEnv({ OWN_POST_AUDIENCE: undefined, OWN_POST_AUDIENCE_OFF: SEALAND }, () => {
+      expect(captureRunFlags(SEALAND).ownPostAudience).toBe(false)
+      expect(captureRunFlags('e52cac94-30e1-426a-9a36-31b11e0b30b6').ownPostAudience).toBe(true)
+    })
   })
 })
 
@@ -645,5 +725,64 @@ describe('the Pass A length limit', () => {
     expect(smaller.length).toBeLessThan(full.length)
     expect(full).toContain('COMMENTS (20)')
     expect(smaller).toContain('COMMENTS (10)')
+  })
+})
+
+// ---- The denominator's lane (fix/client-audience, 2026-09-24) ---------------
+// `analyzed_lane = 'full'` is the rule that keeps a comment out of n unless
+// Pass A actually read it. It lives in TypeScript here and in three SQL
+// function bodies; this pins the copies together, the way lib/rivals.test.ts
+// pins the audience key's.
+
+describe('COMMENTS_READ_LANE — the one lane whose comments were read', () => {
+  const sql = readFileSync(
+    new URL('../../supabase/migrations/20260924090000_denominator_readable_lane.sql', import.meta.url),
+    'utf8',
+  )
+
+  it('is the full lane, and it is a lane passALane can return', () => {
+    expect(COMMENTS_READ_LANE).toBe('full')
+    expect(passALane(
+      { platform: 'instagram', is_client: false, is_competitor: false, transcript_status: null },
+      99,
+    )).toBe(COMMENTS_READ_LANE)
+  })
+
+  it('is the lane all three denominator functions filter on', () => {
+    for (const fn of ['monthly_denominators', 'window_denominators', 'window_span_denominators']) {
+      expect(sql).toContain(`create or replace function public.${fn}(`)
+    }
+    const predicate = `and v.analyzed_lane = '${COMMENTS_READ_LANE}'`
+    expect(sql.split(predicate).length - 1).toBe(3)
+  })
+
+  it('leaves no denominator on the old analysed-at-all test', () => {
+    expect(sql).not.toContain('v.analyzed_run_id is not null')
+  })
+
+  it('names the lanes that carry no audience evidence, so neither is counted', () => {
+    // A brand-side video below the floor with a transcript: claims lane, no
+    // comments in the prompt, so its comments may never reach a denominator.
+    expect(passALane(
+      { platform: 'instagram', is_client: true, is_competitor: false, transcript_status: 'ok' },
+      1,
+    )).not.toBe(COMMENTS_READ_LANE)
+    // A rival's own post, whatever its comment count (the guardrail that stands).
+    expect(passALane(
+      { platform: 'instagram', is_client: false, is_competitor: true, transcript_status: 'ok', source: 'competitor_owned' },
+      400,
+    )).not.toBe(COMMENTS_READ_LANE)
+    // The client's own post with the switch OFF — the pre-2026-09-24 lane, and
+    // the reason a month read under that switch must not be read as a low share.
+    expect(passALane(
+      { platform: 'instagram', is_client: true, is_competitor: false, transcript_status: 'ok', source: 'owned' },
+      400, undefined, { ownPostAudience: false },
+    )).not.toBe(COMMENTS_READ_LANE)
+    // With the switch ON it IS the read lane — which is the whole point, and
+    // why the denominator above can finally hold a client-audience month.
+    expect(passALane(
+      { platform: 'instagram', is_client: true, is_competitor: false, transcript_status: 'ok', source: 'owned' },
+      400, undefined, { ownPostAudience: true },
+    )).toBe(COMMENTS_READ_LANE)
   })
 })

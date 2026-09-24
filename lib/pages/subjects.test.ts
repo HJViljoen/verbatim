@@ -116,9 +116,36 @@ describe('voicesMeta', () => {
   })
 })
 
+describe('voiceFrom — the client audience is two different places', () => {
+  it('says "a post of yours" ONLY for a video the tenant published', () => {
+    // source='owned'. The 20 Sealand posts a September run reads.
+    expect(voiceFrom(CLIENT_AUDIENCE, { ownPost: true })).toBe('under a post of yours')
+  })
+
+  it('says the video NAMES you when a stranger published it', () => {
+    // All 21 of Sealand's client-audience insights on the preview branch sit
+    // on third-party accounts (tunl.to, honest_money_pod, …) that the content
+    // tagger flagged on a brand keyword. They were cited as the tenant's own.
+    expect(voiceFrom(CLIENT_AUDIENCE, { ownPost: false })).toBe('in a video that names you')
+    expect(voiceFrom(CLIENT_AUDIENCE)).toBe('in a video that names you')
+  })
+
+  it('never claims a post for a tenant it cannot place', () => {
+    // Absent is not "probably theirs" — the default may not overclaim.
+    expect(voiceFrom(CLIENT_AUDIENCE)).not.toContain('yours')
+  })
+
+  it('leaves the rival and category words exactly as they were', () => {
+    for (const opts of [{}, { ownPost: true }, { ownPost: false }]) {
+      expect(voiceFrom(INDUSTRY_AUDIENCE, opts)).toBe('under a category video')
+      expect(voiceFrom('competitor:Freitag', opts)).toBe('under a Freitag video')
+    }
+  })
+})
+
 describe('voiceFrom', () => {
   it('never prints an audience key', () => {
-    expect(voiceFrom(CLIENT_AUDIENCE)).toBe('under a post of yours')
+    expect(voiceFrom(CLIENT_AUDIENCE, { ownPost: true })).toBe('under a post of yours')
     expect(voiceFrom(INDUSTRY_AUDIENCE)).toBe('under a category video')
     expect(voiceFrom('competitor:Freitag')).toBe('under a Freitag video')
     expect(voiceFrom('competitor:Freitag')).not.toContain('competitor:')
