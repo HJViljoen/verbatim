@@ -19,7 +19,8 @@ import { weekSales } from './sales'
 import { weekWorked } from './worked'
 import { weekCoverage } from './coverage'
 import { weekPage } from './module'
-import { absentReadingFixture, thinFixture, weekFixture } from './fixture'
+import { absentReadingFixture, calibratingWeekFixture, calibratingWeekRow, thinFixture, weekFixture } from './fixture'
+import { CALIBRATING_WORD } from '@/lib/subjects/types'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -181,6 +182,39 @@ describe('WK §2 · this week in your subjects', () => {
     const text = renderText(weekSubjects.render(thinFixture(), 'app', ctx))
     expect(text).toContain('No subjects are recorded for this workspace yet')
     expect(text).not.toContain('0 of 0')
+  })
+})
+
+// Heinrich's 24 Sep ruling on This week: a CALIBRATING subject reads
+// "calibrating", its count hidden — the gate Overview, both report emails, the
+// leadership sheet and Subjects already carry.
+describe('WK §2 · a calibrating subject', () => {
+  it('prints "calibrating" in place of its count, level and bars, in every mode', () => {
+    for (const mode of MODES) {
+      const markup = render(weekSubjects.render(calibratingWeekFixture(), mode, ctx))
+      assertCopyContract(markup)
+      const text = markupText(markup)
+      // The row is its name and the word, and nothing between them: no
+      // count, no level, no "+N this update", no "usually".
+      const row = text.slice(text.indexOf('Repair & warranty'))
+      expect(row, mode).toMatch(new RegExp(`^Repair & warranty (· )?${CALIBRATING_WORD}`))
+    }
+  })
+
+  it('leaves it out of the lead and of figures()', () => {
+    const plain = weekFixture()
+    const withIt = calibratingWeekFixture()
+    expect(withIt.subjects.lead).toBe(plain.subjects.lead)
+    expect(Object.keys(weekSubjects.figures!(withIt))).toEqual(Object.keys(weekSubjects.figures!(plain)))
+    expect(Object.keys(weekSubjects.figures!(withIt)).some((k) => k.includes('s9'))).toBe(false)
+  })
+
+  it('draws no legend when every subject is calibrating — production on the day this shipped', () => {
+    const base = weekFixture()
+    const rows = [calibratingWeekRow('s1', 'Comfort'), calibratingWeekRow('s2', 'Price')]
+    const text = renderText(weekSubjects.render({ ...base, subjects: { ...base.subjects, rows, lead: null } }, 'app', ctx))
+    expect(text).toContain(CALIBRATING_WORD)
+    expect(text).not.toContain('what this update added')
   })
 })
 

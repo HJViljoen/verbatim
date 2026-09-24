@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest'
 import { CLASSIFIED_TYPES, HOOK_STYLES } from '../pipeline/schemas'
 import { baselineStateOf } from '../reading/anomaly'
 import { directionRe } from '../test/copy-contract'
+import { JUDGE_VERSION, type Subject } from '../subjects/types'
 import {
   baselineFormingLine,
   baselineStartsWith,
@@ -21,6 +22,7 @@ import {
   refTargets,
   subjectLead,
   subjectsNamedLine,
+  subjectWeekRows,
   typicalContribution,
   typicalTag,
   windowDays,
@@ -252,6 +254,53 @@ describe('the subjects lead', () => {
   it('speaks no direction word', () => {
     const lead = subjectLead([row('Comfort', 'above typical'), row('Price', 'below typical')], '2026-09-01')!
     expect(directionRe().test(lead)).toBe(false)
+  })
+})
+
+// Heinrich's 24 Sep ruling on This week: a CALIBRATING subject carries no count
+// of itself in the data — not a count a component is trusted to hide — and is
+// not in the lead.
+describe('subjectWeekRows — a calibrating subject carries no count', () => {
+  const subject = (id: string, name: string, calibrated: boolean, status: Subject['status'] = 'active'): Subject =>
+    ({
+      id,
+      client_id: 'c',
+      name,
+      description: null,
+      origin: 'client',
+      source_ref: null,
+      named_at: '2026-08-19',
+      status,
+      superseded_by: null,
+      embedded_at: null,
+      embed_input_version: null,
+      calibrated_at: calibrated ? '2026-09-25T10:00:00.000Z' : null,
+      calibration_precision: calibrated ? 0.92 : null,
+      calibration_n: calibrated ? 25 : null,
+      calibration_judge_version: calibrated ? JUDGE_VERSION : null,
+    }) as Subject
+  const stored = ['s1', 's2'].map((id) => ({ audience: 'client', subject_id: id, videos: id === 's1' ? 31 : 40 }))
+  const added = ['s1', 's2'].map((id) => ({ audience: 'client', subject_id: id, videos: 8 }))
+  const rows = subjectWeekRows({
+    subjects: [subject('s1', 'Comfort', true), subject('s2', 'Repair & warranty', false), subject('s3', 'Proposed', true, 'proposed')],
+    stored, added, denominator: 96, clientUpdateVideos: 14,
+  })
+
+  it('counts a calibrated subject as before', () => {
+    expect(rows[0]).toMatchObject({ id: 's1', monthVideos: 31, monthOf: 96, addedVideos: 8, calibration: 'ready' })
+    expect(rows[0].tag).not.toBeNull()
+  })
+
+  it('carries nothing of a calibrating subject but its name and the audience denominator, and sorts it last', () => {
+    expect(rows.map((r) => r.id)).toEqual(['s1', 's2'])
+    expect(rows[1]).toEqual({
+      id: 's2', label: 'Repair & warranty', monthVideos: null, monthOf: 96,
+      addedVideos: null, typical: null, tag: null, verdict: null, calibration: 'calibrating',
+    })
+  })
+
+  it('keeps it out of the lead, denominator and names', () => {
+    expect(subjectLead(rows, '2026-09-01')).toBe('1 of your 1 subject ran above typical in this update: Comfort.')
   })
 })
 
