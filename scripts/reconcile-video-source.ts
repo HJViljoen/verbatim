@@ -118,14 +118,30 @@ async function main() {
 
   if (!apply) return console.log('dry run — pass --apply to write')
   let done = 0
+  let skipped = 0
   for (const f of flips) {
     // The WHOLE identity, not `source` alone: a row that says 'owned' while
     // is_client is false is read as an industry video by everything downstream.
-    const { error } = await admin.from('videos').update(f.set).eq('id', f.id)
+    //
+    // AND STILL A COMPARE-AND-SET. The old write carried `.eq('source',
+    // 'discovered')`, which was doing two jobs — narrowing to the rows being
+    // flipped, and refusing a row that had moved since the plan was printed.
+    // The first job went to planSourceFlips (it returns already-owned rows to
+    // repair now, so a literal 'discovered' would skip them); the second is
+    // this, on the source the flip was actually planned from. An operator
+    // reads a dry run, thinks, and then passes --apply; a gather can land in
+    // between and re-stamp a row, and this is what refuses to overwrite it.
+    const { error, count } = await admin.from('videos')
+      .update(f.set, { count: 'exact' }).eq('id', f.id).eq('source', f.from)
     if (error) throw new Error(`update ${f.id}: ${error.message}`)
+    if (count === 0) {
+      skipped++
+      console.warn(`  ! ${f.id} moved off '${f.from}' since the plan was read — left alone`)
+      continue
+    }
     done++
   }
-  console.log(`applied: ${done} rows`)
+  console.log(`applied: ${done} rows${skipped ? ` · ${skipped} left alone — the row moved since the plan was read` : ''}`)
 }
 
 main().catch((e) => { console.error(e); process.exit(1) })

@@ -432,6 +432,15 @@ describe('planSourceFlips', () => {
     expect(flips[0].set.is_client).toBe(true)
   })
 
+  // m12. The apply is a second statement, minutes after the operator read the
+  // plan. `from` is what lets the write be a compare-and-set on the source it
+  // was planned from — the guard the old `.eq('source', 'discovered')` was
+  // doing as a side effect of being the filter.
+  it('carries the source it was planned from, so the write can refuse a moved row', () => {
+    expect(planSourceFlips([row()], [client])[0].from).toBe('discovered')
+    expect(planSourceFlips([row({ source: 'owned', is_client: false })], [client])[0].from).toBe('owned')
+  })
+
   it('leaves a row whose identity already matches', () => {
     expect(planSourceFlips([row({ source: 'owned', is_client: true })], [client])).toEqual([])
   })

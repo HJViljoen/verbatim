@@ -58,9 +58,17 @@ import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, SYNTHESIS_MODEL } from '.
  *  on — not when a threshold moves, which `c` and `f` already carry. */
 export const THEME_KEY_RULE = 'video_v1'
 
-/** The Pass A inputs a run read its videos with. Each one is a SelectReason in
- *  pass-a-plan, so flipping it re-reads the corpus a video at a time without
- *  moving `passAPromptVersion`. */
+/** The Pass A inputs a run read its videos with.
+ *
+ *  Flipping any of them re-reads the corpus a video at a time without moving
+ *  `passAPromptVersion` — but by two different doors, and this comment used to
+ *  name only one. `transcripts` / `translation` / `ocr` are each a
+ *  `SelectReason` of their own in pass-a-plan ('transcript', 'translated',
+ *  'ocr'). `ownPostAudience` is not: it changes which LANE a video enters, and
+ *  `decideAnalysis` re-selects it on `s.analyzed_lane !== a.laneNow` under the
+ *  reason 'lane'. Same effect, different rule — an own post stamped
+ *  `claims_only` re-selects as 'lane' when the switch goes on, and one that
+ *  was `skip` has no `analyzed_run_id` at all and re-selects as 'new'. */
 export interface PassAInputs {
   transcripts: boolean
   translation: boolean

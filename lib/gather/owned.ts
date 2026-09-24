@@ -189,6 +189,13 @@ export interface SourceFlip {
   platform: string
   /** The identity, for the log line ('client' / 'competitor:<name>'). */
   label: string
+  /** The `source` this row was PLANNED FROM, so the write can be a
+   *  compare-and-set. The script's update used to carry `.eq('source',
+   *  'discovered')`, which was both the guard and the filter; the filter had
+   *  to go when this function started returning already-owned rows to repair,
+   *  and the guard went with it by accident. A plan and its apply are two
+   *  statements with a human between them, and a gather can land in the gap. */
+  from: string | null
   /** EVERY identity column, never `source` alone — see planSourceFlips. */
   set: ReturnType<typeof entityIdentity>
 }
@@ -214,9 +221,18 @@ export interface FlipIdentity {
  * `source='owned', is_client=false`: filed under `industry-other` by every
  * reading, while `passALane` had already taken its comments out of the full
  * lane BECAUSE the source now said owned. The brand's own post, counted as a
- * stranger's, with nothing read from it either way. Measured on the Phase 1
- * preview branch 2026-09-24: 13 of Sealand's 75 own posts, carrying 31
- * comments, sat in `industry-other` for exactly this reason.
+ * stranger's, with nothing read from it either way.
+ *
+ * THE MEASUREMENT, AND WHAT IT IS NOW. 13 of Sealand's 75 own posts, carrying
+ * 31 comments, sat in `industry-other` on the preview branch when this was
+ * found (2026-09-24). Re-read on that branch after the repair, the damage is
+ * gone: all 76 rows whose account_name matches an owned account are
+ * `source='owned', is_client=true`, 246 comments, none in `industry-other`.
+ * So the evidence sentence above describes the PRE-REPAIR branch and no
+ * longer reproduces there — said plainly rather than left to read as a live
+ * count. The query that reproduces it on any database is the one that found
+ * it: rows whose (platform, account_name) is in the owned set, grouped by
+ * `source`, `is_client`, `is_competitor`.
  *
  * So a flip writes the whole identity the fresh read would have written, from
  * the same `entityIdentity` the fresh read uses. Pure: the caller does the I/O.
@@ -277,6 +293,7 @@ export function planSourceFlips(
         id: r.id,
         platform: r.platform,
         label: idt.entity.kind === 'client' ? 'client' : `competitor:${idt.entity.name}`,
+        from: r.source,
         set,
       })
       break
