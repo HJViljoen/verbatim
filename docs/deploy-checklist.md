@@ -361,6 +361,31 @@ control). The full list, in order, is:
 | M11 | `20260918099500_report_family_grants.sql` | the TRUNCATE posture fix |
 | M12 | `20260919090000_communities_control.sql` | **new in wave 3** — the communities grant + the subreddits ceilings |
 | M13 | `20260924090000_tracking_configs_truncate.sql` | **added 2026-09-24, after the thirteen were verified** — the one-line `revoke truncate` M12's section records as its known gap. Apply it last; see the M12 section below. |
+| M14 | `20260924091000_subjects_insert_audit.sql` | **added 2026-09-24, after the thirteen were verified** — M4's audit trigger extended to INSERT, so a subject born `active` is recorded. Apply after M13. |
+
+**M14 · `20260924091000_subjects_insert_audit.sql`.** M4 installed
+`subjects_status_audit` as `after update of status`, which covers the
+retirement it was written for and nothing else: a row INSERTED already `active`
+never moves, so nothing records that the thing the workspace is measured on was
+ever decided. Read on the preview branch `zfmxrrugaihxpubunleu` (read-only,
+2026-09-24): Sealand's six subjects all `active`, all `created_by = null`, and
+every `config_changes` row on surface `subjects` is `field = 'calibration'` —
+none of the six creations recorded. M14 adds a second trigger,
+`subjects_insert_audit`, on the same function, firing only when
+`created_by IS NULL`; the product's own insert path (`nameSubject`) pins
+`created_by` and writes its own row, so nothing is logged twice. It back-fills
+nothing: the six already on the branch stay unrecorded rather than acquire an
+invented actor. Verify with
+```sql
+select tgname, pg_get_triggerdef(oid) from pg_trigger
+ where tgrelid = 'public.subjects'::regclass and not tgisinternal order by tgname;
+```
+— **five** triggers, `subjects_insert_audit` among them with its
+`WHEN (new.created_by IS NULL)` clause, and M4's `subjects_status_audit`,
+`subjects_retirement_freeze` and `subjects_retirement_is_final` unchanged. Both
+arms were exercised on a throwaway PostgreSQL 17.11 cluster built from the
+baseline plus every migration in filename order, including a re-apply twice
+over; the migration's own footer carries the probes.
  A regex character class inside a migration must be
 written with `chr()` — the MCP transport decodes `\u` escapes (Phase 0's
 lesson, proven harmless once and not worth proving twice).

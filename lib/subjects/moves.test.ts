@@ -1,3 +1,5 @@
+import { readFileSync } from 'fs'
+
 import { describe, expect, it } from 'vitest'
 
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -161,5 +163,48 @@ describe('setMoveStatus', () => {
     )
     expect(result.ok).toBe(false)
     expect(result.message).toContain('done, dropped, or still running')
+  })
+})
+
+describe('the subject audit trigger and the application log, which must not both fire', () => {
+  // M4 installed `subjects_status_audit` as AFTER UPDATE OF status only, so a
+  // subject INSERTED already `active` never moved and never got a row. Measured
+  // on the preview branch 2026-09-24: Sealand's six subjects all read
+  // `created_by = null`, and every `config_changes` row on surface `subjects`
+  // was `field = 'calibration'` — not one recorded that any of the six was
+  // created. M14 (`20260924091000_subjects_insert_audit.sql`) adds the INSERT
+  // arm, and the whole risk of adding it is DOUBLE LOGGING: `nameSubject`
+  // already writes its own row. The dedupe is `created_by IS NULL`, and it only
+  // holds while both halves stay true — which is what this test is for.
+  const insertAudit = readFileSync(new URL('../../supabase/migrations/20260924091000_subjects_insert_audit.sql', import.meta.url), 'utf8')
+  const m4 = readFileSync(new URL('../../supabase/migrations/20260918093000_subjects.sql', import.meta.url), 'utf8')
+  const movesSource = readFileSync(new URL('./moves.ts', import.meta.url), 'utf8')
+
+  it('fires on INSERT only for a row no member created', () => {
+    expect(insertAudit).toMatch(/create trigger subjects_insert_audit\s+after insert on public\.subjects\s+for each row when \(new\.created_by is null\)/i)
+  })
+
+  it('keeps M4’s UPDATE arm exactly as M4 wrote it', () => {
+    // The file restates it, so a re-apply cannot leave the two out of step —
+    // and a restatement that drifts is worse than no restatement.
+    const arm = /create trigger subjects_status_audit\s+after update of status on public\.subjects\s+for each row when \(new\.status is distinct from old\.status\)\s+execute function public\.subjects_status_audit\(\);/i
+    expect(m4).toMatch(arm)
+    expect(insertAudit).toMatch(arm)
+  })
+
+  it('leaves the UI insert to the application, which still logs it', () => {
+    // Half the dedupe: `nameSubject` writes its own config_changes row. If this
+    // call goes away the trigger must take the INSERT over, and if the trigger
+    // takes it over while this stays, every naming is logged twice.
+    expect(movesSource).toMatch(/named a subject/)
+    expect(movesSource).toMatch(/recordConfigChange\(admin, \{[\s\S]{0,400}?field: 'subjects'/)
+  })
+
+  it('relies on a created_by the insert policy makes non-null for every browser write', () => {
+    // The other half: M4's policy pins `created_by` to the caller, so a NULL
+    // there means the row did not come through the product. Without this clause
+    // the discriminator is a convention instead of a rule.
+    expect(m4).toMatch(/created_by = \(select auth\.uid\(\)\)/)
+    expect(m4).toMatch(/grant insert \([^)]*created_by[^)]*\)\s*\n?\s*on public\.subjects to authenticated;/)
   })
 })
