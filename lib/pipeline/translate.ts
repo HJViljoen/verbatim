@@ -299,6 +299,15 @@ export async function planTranslateBatches(clientId: string, cap = TRANSLATE_CAP
   /** Of `needing`, how many are re-attempts of a recorded failure — the rows
    *  that are costing a second or third call. Visible because they are spend. */
   retrying: number
+  /** Rows the DB pre-filter matched and the selection rule then dropped, by
+   *  reason. `english` dominates and is the whole point of reporting it: the
+   *  pre-filter is `transcript_status = 'ok' and transcript_en is null`, which
+   *  is ALSO what `videos_translate_pending_v2_idx` is defined on, so anyone
+   *  measuring the backlog with the index's own predicate counts every English
+   *  transcript as pending translation. On Sealand that is 1,564 rows against
+   *  178 real candidates, and on 2026-09-20 it was read as a step attempting
+   *  11% of its cap. The cap is not what bounded that run; the corpus was. */
+  excluded: { english: number; exhausted: number }
   byLang: Record<string, number>
 }> {
   const admin = createAdminClient()
@@ -319,6 +328,11 @@ export async function planTranslateBatches(clientId: string, cap = TRANSLATE_CAP
   // and an English one costs one call and stores only its language.
   const pending = rows.filter((r) =>
     !isEnglishLang(r.transcript_lang) && translateAttempts(r.transcript_en_error) < TRANSLATE_MAX_ATTEMPTS)
+  const excluded = {
+    english: rows.filter((r) => isEnglishLang(r.transcript_lang)).length,
+    exhausted: rows.filter((r) =>
+      !isEnglishLang(r.transcript_lang) && translateAttempts(r.transcript_en_error) >= TRANSLATE_MAX_ATTEMPTS).length,
+  }
   const byLang: Record<string, number> = {}
   for (const r of pending) {
     const k = (r.transcript_lang ?? '').trim().toLowerCase() || 'unknown'
@@ -329,7 +343,7 @@ export async function planTranslateBatches(clientId: string, cap = TRANSLATE_CAP
   pending.sort((a, b) => (b.comments_count ?? 0) - (a.comments_count ?? 0))
   const batches = planTranslation(pending, { cap })
   const retrying = pending.filter((r) => r.transcript_en_error !== null).length
-  return { batches, needing: pending.length, deferred: Math.max(0, pending.length - cap), retrying, byLang }
+  return { batches, needing: pending.length, deferred: Math.max(0, pending.length - cap), retrying, excluded, byLang }
 }
 
 /**

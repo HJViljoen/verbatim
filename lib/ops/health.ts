@@ -11,6 +11,7 @@
 
 import { billingAccess, type BillingClient } from '../billing'
 import { cadenceReliability } from '../pipeline/cadence'
+import { missingRunRows } from '../pipeline/run-errors'
 import { lastDailySlot, lastExpectedSlot, type ScheduleConfig } from '../pipeline/schedule-due'
 
 /** keepWarm runs every 5 min; 30 min means six consecutive misses. */
@@ -288,32 +289,11 @@ export function assessPipelineHealth(inputs: HealthInputs): Finding[] {
     if (!needsRowCounts(r, inputs.now)) continue
     const counts = r.rows
     if (!counts) continue
-    const missing: string[] = []
-    // Only when the registry was on for THIS run: before the flag, observations
-    // were not written at all, and a feature's age is not an incident.
-    if (r.flags?.themeRegistry === true && counts.observations === 0) {
-      missing.push('no theme observations — the trend series has no point for this update')
-    }
-    if (counts.recommendations === 0) missing.push('no recommendations')
-    // Presence is not groundedness. A retried synthesis that fails at D-b keeps
-    // the previous attempt's recommendations, whose `based_on` ids point at
-    // market insights this run deleted and reinserted under fresh ids — a
-    // non-zero count of rows the client reads with no evidence behind any of
-    // them. Only when ALL of them are dangling: one recommendation whose
-    // references the parser rejected is an ordinary bad day for the model, not
-    // an incomplete run.
-    else if (
-      counts.ungroundedRecommendations !== undefined &&
-      counts.ungroundedRecommendations === counts.recommendations
-    ) {
-      missing.push(
-        `${counts.recommendations} recommendations that cite no insight this run has — ` +
-        'a retried synthesis left the previous attempt\'s rows behind, and they render ungrounded',
-      )
-    }
-    // Written after close-run and .catch()-ed, so its absence cannot show up in
-    // the status: a run that cost money and recorded none looks free.
-    if (counts.costs === 0) missing.push('no run_costs row — what this update spent is unrecorded')
+    // The rule itself lives in lib/pipeline/run-errors.ts so the partial-run
+    // alert can state the same thing: `run_incomplete` still fires on
+    // 'completed' runs alone (needsRowCounts), and a partial run's counts now
+    // reach the operator through its own email instead of nowhere.
+    const missing = missingRunRows(counts, { themeRegistry: r.flags?.themeRegistry })
     if (missing.length === 0) continue
     findings.push({
       kind: 'run_incomplete',

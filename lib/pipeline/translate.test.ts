@@ -385,3 +385,46 @@ describe('translateBatch write paths', () => {
     expect(r.translated).toBe(1)
   })
 })
+
+// ---- The 2026-09-20 false alarm (run b67b56de) ------------------------------
+//
+// Sealand was read as having "1,564 videos pending translation" and the run as
+// having attempted 178 of a 400 cap. Both halves came from measuring the
+// backlog with the DB PRE-FILTER — `transcript_status = 'ok' and transcript_en
+// is null`, which is also the predicate `videos_translate_pending_v2_idx` is
+// defined on — instead of with the selection rule. All 1,564 of those rows are
+// labelled English; the real candidate set was 178, and the run attempted all
+// of it. These pin the gap so the next person measuring it reads the same
+// number the step does.
+describe('the index predicate is not the selection rule', () => {
+  const pending = (over: Partial<TranslatableVideo> = {}): TranslatableVideo =>
+    video({ transcript_en: null, transcript_status: 'ok', ...over })
+
+  it('an English transcript matches the index predicate and is NOT a candidate', () => {
+    // Every spelling that reaches transcript_lang, all of them still pending by
+    // the index's own predicate, none of them anything to translate.
+    for (const lang of ['en', 'EN', 'english', 'English', 'en-US', 'en_GB']) {
+      expect(needsTranslation(pending({ transcript_lang: lang }))).toBe(false)
+    }
+  })
+
+  it('an unknown language IS a candidate — the model is asked, not told', () => {
+    expect(needsTranslation(pending({ transcript_lang: null }))).toBe(true)
+    expect(needsTranslation(pending({ transcript_lang: '   ' }))).toBe(true)
+  })
+
+  it('the cap defers CANDIDATES, never pre-filter rows: 178 of a 400 cap defers nothing', () => {
+    const candidates = Array.from({ length: 178 }, (_, i) => ({ id: `v${i}` }))
+    const batches = planTranslation(candidates, { cap: 400, batch: 4 })
+    expect(batches.flat()).toHaveLength(178)
+    expect(Math.max(0, candidates.length - 400)).toBe(0)
+  })
+
+  it('a real backlog IS worked up to the cap, and the remainder is reported', () => {
+    const candidates = Array.from({ length: 1564 }, (_, i) => ({ id: `v${i}` }))
+    const batches = planTranslation(candidates, { cap: 400, batch: 4 })
+    expect(batches.flat()).toHaveLength(400)
+    expect(batches).toHaveLength(100)
+    expect(Math.max(0, candidates.length - 400)).toBe(1164)
+  })
+})

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { validateInsights, validateClaims, buildSystemPrompt, buildUserPrompt, passALane, isVideoEvidence, missingBookkeepingColumn } from './pass-a'
+import { validateInsights, validateClaims, buildSystemPrompt, buildUserPrompt, passALane, isVideoEvidence, missingBookkeepingColumn, isLengthLimitError, lengthRetryRefs } from './pass-a'
 import { usableOcr, usableTranscript } from './transcript-input'
-import { OCR_PROMPT_CHARS, PASS_A_VIDEO_QUOTE_MAX, TRANSCRIPT_PROMPT_CHARS } from '../config'
+import { OCR_PROMPT_CHARS, PASS_A_MAX_OUTPUT_TOKENS, PASS_A_VIDEO_QUOTE_MAX, TRANSCRIPT_PROMPT_CHARS } from '../config'
 import type { PassAVideoOutput, PassAInsight } from './schemas'
 
 // Pure-logic coverage for the Pass A v4 transcript seam: the "t" evidence
@@ -590,3 +590,60 @@ TRANSCRIPT rules — a TRANSCRIPT block, labelled "t", may be present: the words
 - CLIENT or COMPETITOR videos: the transcript is brand messaging, NEVER insight evidence — never cite "t" on these. Instead return claims: up to 3 assertions the brand makes about itself, its products, or the market — {claim: the assertion in your words, quote: the VERBATIM transcript line making it}.
 - claims come ONLY from CLIENT/COMPETITOR transcripts. Return an empty claims array in every other case.
 - Audience insights still come from the comments first; transcript evidence supplements them. Video sentiment stays comment-derived.`
+
+// ---- The output ceiling (run b67b56de, 2026-09-20) --------------------------
+//
+// Four pass_a calls died with "Could not parse response content as the length
+// limit was reached", each after ~220 s, each logged with 0 tokens because the
+// SDK throws before `completion.usage` exists. The inputs were not large — one
+// of the four showed the model 29 comments and a 2.6 kB prompt — so this is a
+// runaway generation against a call that sent no ceiling at all, not a batch
+// that needed shrinking.
+describe('the Pass A length limit', () => {
+  it('has a ceiling at all, and it is well under the model window', () => {
+    expect(PASS_A_MAX_OUTPUT_TOKENS).toBeGreaterThan(0)
+    expect(PASS_A_MAX_OUTPUT_TOKENS).toBeLessThan(32_768)
+  })
+
+  it('recognises the SDK error by class name and by message', () => {
+    const byName = Object.assign(new Error('some other text'), { name: 'LengthFinishReasonError' })
+    expect(isLengthLimitError(byName)).toBe(true)
+    expect(isLengthLimitError(new Error('Could not parse response content as the length limit was reached'))).toBe(true)
+  })
+
+  it('does not mistake the failures a retry would only re-pay for', () => {
+    expect(isLengthLimitError(new Error('429 rate limit exceeded'))).toBe(false)
+    expect(isLengthLimitError(new Error('no parsed output'))).toBe(false)
+    expect(isLengthLimitError(null)).toBe(false)
+  })
+
+  it('halves the comments and keeps the head — labels must not be re-minted', () => {
+    const refs = Array.from({ length: 29 }, (_, i) => ({ label: `c${i + 1}`, realId: `id${i + 1}`, text: `t${i + 1}` }))
+    const smaller = lengthRetryRefs(refs)
+    expect(smaller).not.toBeNull()
+    expect(smaller!).toHaveLength(14)
+    expect(smaller![0].label).toBe('c1')
+    expect(smaller![13].label).toBe('c14')
+    // c7 still means comment 7: the validator resolves a quote by label.
+    expect(smaller![6].realId).toBe('id7')
+  })
+
+  it('refuses a second attempt when there is nothing left to halve', () => {
+    // The claims lane shows no comments, and one comment cannot run away less.
+    expect(lengthRetryRefs([])).toBeNull()
+    expect(lengthRetryRefs([{ label: 'c1', realId: 'id1', text: 't' }])).toBeNull()
+  })
+
+  it('the smaller prompt is genuinely smaller — it is the only lever a per-video call has', () => {
+    const v = {
+      platform: 'tiktok', account_name: 'acc', caption: 'a bag', hashtags: [],
+      content_format: 'reel', transcript_lang: null, is_client: false, is_competitor: false,
+    } as unknown as Parameters<typeof buildUserPrompt>[0]
+    const refs = Array.from({ length: 20 }, (_, i) => ({ label: `c${i + 1}`, realId: `id${i + 1}`, text: `comment number ${i + 1}` }))
+    const full = buildUserPrompt(v, refs, null, null, null)
+    const smaller = buildUserPrompt(v, lengthRetryRefs(refs)!, null, null, null)
+    expect(smaller.length).toBeLessThan(full.length)
+    expect(full).toContain('COMMENTS (20)')
+    expect(smaller).toContain('COMMENTS (10)')
+  })
+})
