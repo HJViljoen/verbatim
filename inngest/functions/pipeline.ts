@@ -149,16 +149,19 @@ async function loadRunWindowInput(
     // the rule for content too. Ordered by window_end (the index this migration
     // creates) and then by completed_at, which is what a row without a window
     // sorts on; `previousRunEnd` then takes the latest of the two per row,
-    // because a resume moves completed_at without moving window_end. Five rows,
+    // because a resume moves completed_at without moving window_end. Ten rows,
     // not one: this run's own row (and a resume's target) can sit at the top of
-    // the ordering and must not anchor the window on itself.
+    // the ordering and must not anchor the window on itself, and neither may a
+    // run that gathered nothing (a fresh skipGather rehearsal — `gatheredNothing`,
+    // which is why `options` is read), however many of those sit above the real
+    // previous run.
     admin.from('pipeline_runs')
-      .select('id, window_end, completed_at')
+      .select('id, window_end, completed_at, options')
       .eq('client_id', clientId)
       .in('status', ['completed', 'partial'])
       .order('window_end', { ascending: false, nullsFirst: false })
       .order('completed_at', { ascending: false, nullsFirst: false })
-      .limit(5),
+      .limit(10),
     // "The map exists" — the same existence check resolveGatherWindow has
     // always made: a closed synthesis, not merely an earlier run row.
     admin.from('run_summary').select('run_id').eq('client_id', clientId).neq('run_id', runId).limit(1).maybeSingle(),
@@ -175,7 +178,7 @@ async function loadRunWindowInput(
   // swallowed error here reads as "this client has never been synthesised" and
   // opens the run on the `baseline` arm.
   if (summaryRes.error) throw summaryRes.error
-  const closed = (prevRes.data ?? []) as ({ id: string } & WindowColumns & { completed_at?: string | null })[]
+  const closed = (prevRes.data ?? []) as ({ id: string } & WindowColumns & { completed_at?: string | null; options?: unknown })[]
   const storedRow = storedRes.data as (WindowColumns & { config_snapshot?: unknown }) | null
   return {
     prevEnd: previousRunEnd(closed, mine),

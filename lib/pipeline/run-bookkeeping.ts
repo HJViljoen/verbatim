@@ -102,9 +102,12 @@ export function rowWindow(row: WindowColumns | null | undefined): RunWindow | nu
  * So the anchor is the MAXIMUM effective end, not the first row of an ordering.
  * `exclude` is this run's own id (and a resume's target), which can sit at the
  * top of the ordering and must never anchor the window on itself.
+ *
+ * A run that gathered nothing is never an anchor either (`gatheredNothing`):
+ * its window is a label on a re-analysis, not a record of what was scraped.
  */
 export function previousRunEnd(
-  rows: { id: string; window_end?: string | null; completed_at?: string | null }[],
+  rows: { id: string; window_end?: string | null; completed_at?: string | null; options?: unknown }[],
   exclude: Iterable<string>,
 ): string | null {
   const mine = new Set(exclude)
@@ -112,6 +115,7 @@ export function previousRunEnd(
   let bestMs = -Infinity
   for (const row of rows) {
     if (mine.has(row.id)) continue
+    if (gatheredNothing(row)) continue
     const end = row.window_end ?? row.completed_at ?? null
     if (!end) continue
     const ms = Date.parse(end)
@@ -120,6 +124,31 @@ export function previousRunEnd(
     bestMs = ms
   }
   return best
+}
+
+/**
+ * Did this run row gather nothing? A FRESH `skipGather: true` run — a rehearsal
+ * or a catch-up opened on its own row — scrapes no videos, yet opens an
+ * anchored window and closes `partial`/`completed` like any other. Anchoring on
+ * it moves the next run's start past days nobody gathered: Sealand's rehearsal
+ * `e80e9347` (2026-09-24) opened 20 → 24 Sep with nothing scraped, and the next
+ * scheduled run would have started on the 24th and never read 20–24 Sep.
+ *
+ * The documented RESUME lever is different and stays an anchor: `{runId,
+ * skipGather: true}` reopens a row whose gather already ran, and open-run
+ * overwrites that row's `options` with the resume's while its window keeps the
+ * original gather's bounds (`cb0d97b2`, `5a2ebc43` in production). So a
+ * skipGather row whose `options.runId` names ITSELF gathered under its window;
+ * only one that is not its own resume gathered nothing. (A resume OF a
+ * rehearsal looks exactly like a resume of a real run once its options are
+ * overwritten, and is still read as an anchor — the pre-fix behaviour.)
+ */
+export function gatheredNothing(row: { id: string; options?: unknown }): boolean {
+  const o = row.options
+  if (!o || typeof o !== 'object') return false
+  const { skipGather, runId } = o as { skipGather?: unknown; runId?: unknown }
+  // Truthiness, as the pipeline itself reads it (`if (options.skipGather)`).
+  return Boolean(skipGather) && runId !== row.id
 }
 
 /** The columns a run writes about itself at open whose migration is applied by
