@@ -360,6 +360,7 @@ control). The full list, in order, is:
 | M10 | `20260918099000_reading_indexes.sql` | WP23's two indexes |
 | M11 | `20260918099500_report_family_grants.sql` | the TRUNCATE posture fix |
 | M12 | `20260919090000_communities_control.sql` | **new in wave 3** — the communities grant + the subreddits ceilings |
+| M13 | `20260924090000_tracking_configs_truncate.sql` | **added 2026-09-24, after the thirteen were verified** — the one-line `revoke truncate` M12's section records as its known gap. Apply it last; see the M12 section below. |
  A regex character class inside a migration must be
 written with `chr()` — the MCP transport decodes `\u` escapes (Phase 0's
 lesson, proven harmless once and not worth proving twice).
@@ -908,6 +909,24 @@ migration does not close it either. Nothing reaches it through PostgREST, which
 issues no TRUNCATE verb. **Recorded here as a known gap, not fixed in the
 deploy window** — it is a one-line `revoke truncate` in a later migration, and
 adding it now would put an unreviewed statement in the last file of thirteen.
+
+**CLOSED on 2026-09-24 by M13, which is the FOURTEENTH file and is NOT one of
+the thirteen this document counts.** `20260924090000_tracking_configs_truncate.sql`
+revokes TRUNCATE on `tracking_configs` from `authenticated` and `anon`, and
+nothing else. Every "thirteen" elsewhere in this file is the set that was
+re-applied and catalogue-diffed on the throwaway PostgreSQL 17.11 cluster on
+19 September; M13 was written after that and has not been through it, so the
+count is left alone deliberately rather than quietly incremented. **Apply it
+last, after M12**, in filename order like the rest — it is one statement, it
+depends on nothing, and it is idempotent. The gap was re-measured before the
+file was written, on the preview branch `zfmxrrugaihxpubunleu` (read-only,
+2026-09-24): both tenant roles still hold
+`DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE`, M12's eight update
+columns are in place and `anon`'s column UPDATE count is 0. The verification
+query is in the migration's own footer; after the apply, TRUNCATE must be
+absent from the `anon` and `authenticated` rows of `role_table_grants` and
+still present on `service_role`, with every SELECT and M12's column list
+unmoved.
 
 **The ceilings bite on an UPDATE, so check the two tenants can still be
 saved.** The constraint is restated whole (the only way to extend one) and
