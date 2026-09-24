@@ -1,5 +1,5 @@
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
-import { ownAccountNames, normAccount } from '../lib/gather/owned'
+import { ownAccountNames, planSourceFlips, type FlipIdentity } from '../lib/gather/owned'
 import { SEALAND_CLIENT_ID } from '../lib/config'
 
 // Make videos.source tell the truth about rows the keyword gather found FIRST.
@@ -16,6 +16,11 @@ import { SEALAND_CLIENT_ID } from '../lib/config'
 // Identity is the test, exactly as the census applies it (ownAccountNames):
 // the configured handle plus every account name an owned read has stored for
 // that platform. is_client is NOT the test — it is true of a stranger's review.
+// It IS part of the WRITE: a flipped row takes the whole identity the fresh
+// owned read would have stamped (entityIdentity, via planSourceFlips), because
+// `source` alone leaves the row filed under industry-other while its comments
+// are already out of Pass A's full lane. See planSourceFlips' header for the
+// 13 Sealand posts that landed in exactly that hole.
 //
 // What --apply costs, beyond the column: a flipped row's Pass A lane changes
 // (passALane sends owned/competitor_owned to claims-only or skip), plan-pass-a
@@ -34,6 +39,8 @@ interface Row {
   platform: string
   source: string | null
   account_name: string | null
+  is_client: boolean | null
+  is_competitor: boolean | null
   competitor_name: string | null
   upload_date: string | null
 }
@@ -68,37 +75,26 @@ async function main() {
   // at 1000 — a silent cap here would under-report the flip.
   const rows = await selectAll<Row>(() =>
     admin.from('videos')
-      .select('id, platform, source, account_name, competitor_name, upload_date')
+      .select('id, platform, source, account_name, is_client, is_competitor, competitor_name, upload_date')
       .eq('client_id', clientId).order('id'),
   )
 
   // Who each entity IS, learned from the rows the owned reads stored.
-  const identities: { label: string; fresh: 'owned' | 'competitor_owned'; names: Map<string, Set<string>>; competitorName?: string }[] = [
-    { label: 'client', fresh: 'owned', names: ownAccountNames(rows, ownHandles, { source: 'owned' }) },
+  const identities: FlipIdentity[] = [
+    { entity: { kind: 'client' }, names: ownAccountNames(rows, ownHandles, { source: 'owned' }) },
   ]
   for (const [name, handles] of Object.entries(competitorHandles)) {
     identities.push({
-      label: `competitor:${name}`, fresh: 'competitor_owned', competitorName: name,
+      entity: { kind: 'competitor', name },
       names: ownAccountNames(rows, handles ?? {}, { source: 'competitor_owned', competitorName: name }),
     })
   }
 
-  const flips: { id: string; platform: string; to: string; label: string }[] = []
-  for (const r of rows) {
-    if (r.source !== 'discovered' || !r.account_name) continue
-    for (const idt of identities) {
-      if (!idt.names.get(r.platform)?.has(normAccount(r.account_name))) continue
-      // A competitor's own post must also be tagged to that competitor, or the
-      // row is some other account that happens to share a name.
-      if (idt.competitorName && normAccount(r.competitor_name) !== normAccount(idt.competitorName)) continue
-      flips.push({ id: r.id, platform: r.platform, to: idt.fresh, label: idt.label })
-      break
-    }
-  }
+  const flips = planSourceFlips(rows, identities)
 
   const byKey = new Map<string, number>()
   for (const f of flips) {
-    const k = `${f.label} · ${f.platform} → ${f.to}`
+    const k = `${f.label} · ${f.platform} → ${f.set.source}`
     byKey.set(k, (byKey.get(k) ?? 0) + 1)
   }
   console.log(`client ${clientId}: ${rows.length} videos, ${rows.filter((r) => r.source === 'discovered').length} on 'discovered'`)
@@ -123,7 +119,9 @@ async function main() {
   if (!apply) return console.log('dry run — pass --apply to write')
   let done = 0
   for (const f of flips) {
-    const { error } = await admin.from('videos').update({ source: f.to }).eq('id', f.id).eq('source', 'discovered')
+    // The WHOLE identity, not `source` alone: a row that says 'owned' while
+    // is_client is false is read as an industry video by everything downstream.
+    const { error } = await admin.from('videos').update(f.set).eq('id', f.id)
     if (error) throw new Error(`update ${f.id}: ${error.message}`)
     done++
   }

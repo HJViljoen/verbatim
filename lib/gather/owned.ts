@@ -180,6 +180,96 @@ export function stampOwnedSource<T extends { video_id: string }>(
   return posts.map((p) => ({ ...p, source: fresh }))
 }
 
+/** A row a source reconciliation moves, and the columns it must write. */
+export interface SourceFlip {
+  id: string
+  platform: string
+  /** The identity, for the log line ('client' / 'competitor:<name>'). */
+  label: string
+  /** EVERY identity column, never `source` alone — see planSourceFlips. */
+  set: ReturnType<typeof entityIdentity>
+}
+
+/** One entity the reconciliation can move a row to. */
+export interface FlipIdentity {
+  entity: OwnedEntity
+  /** platform → the account names this entity is known by (ownAccountNames). */
+  names: Map<string, Set<string>>
+}
+
+/**
+ * Which stored rows belong to an account the tenant owns, and WHAT each one
+ * must be re-stamped with.
+ *
+ * THE BUG THIS EXISTS TO STOP. The reconciliation used to write `source`
+ * alone. Identity is not carried by `source`: `audienceOf` (lib/rivals.ts)
+ * reads `is_client` / `is_competitor`, and those are stamped by the owned read
+ * from `entityIdentity`, never re-derived from the source column. A
+ * caption-tagged row whose account is the client's — and Sealand's handle
+ * `sealandgear` contains none of its brand keywords, so that is the NORMAL
+ * case, not the edge one — came out of the flip as
+ * `source='owned', is_client=false`: filed under `industry-other` by every
+ * reading, while `passALane` had already taken its comments out of the full
+ * lane BECAUSE the source now said owned. The brand's own post, counted as a
+ * stranger's, with nothing read from it either way. Measured on the Phase 1
+ * preview branch 2026-09-24: 13 of Sealand's 75 own posts, carrying 31
+ * comments, sat in `industry-other` for exactly this reason.
+ *
+ * So a flip writes the whole identity the fresh read would have written, from
+ * the same `entityIdentity` the fresh read uses. Pure: the caller does the I/O.
+ *
+ * TWO KINDS OF ROW, ONE RULE. A row still on 'discovered' is the original
+ * case. A row ALREADY on an owned source whose identity columns disagree with
+ * the account it came off is the damage the source-only write left behind, and
+ * no owned read will ever visit it again (the census reads a window), so the
+ * reconciliation is the only thing that can repair it. Both are "this account
+ * owns this row, so the row says what the account says"; a row whose stored
+ * columns already match is not returned.
+ */
+export function planSourceFlips(
+  rows: readonly {
+    id: string
+    platform: string
+    source: string | null
+    account_name: string | null
+    is_client?: boolean | null
+    is_competitor?: boolean | null
+    competitor_name: string | null
+  }[],
+  identities: readonly FlipIdentity[],
+): SourceFlip[] {
+  const flips: SourceFlip[] = []
+  for (const r of rows) {
+    if (!r.account_name) continue
+    if (r.source !== 'discovered' && r.source !== 'owned' && r.source !== 'competitor_owned') continue
+    for (const idt of identities) {
+      if (!idt.names.get(r.platform)?.has(norm(r.account_name))) continue
+      // A competitor's own post must also be tagged to that competitor, or the
+      // row is some other account that happens to share a name. A row already
+      // stamped 'competitor_owned' for this rival passes on its source alone —
+      // that IS the stamp, and demanding the tag too would skip the rows whose
+      // tag is the thing that went missing.
+      const stampedHere = r.source === 'competitor_owned' && idt.entity.kind === 'competitor'
+        && norm(r.competitor_name) === norm(idt.entity.name)
+      if (idt.entity.kind === 'competitor' && !stampedHere && norm(r.competitor_name) !== norm(idt.entity.name)) continue
+      const set = entityIdentity(idt.entity)
+      const settled = r.source === set.source
+        && Boolean(r.is_client) === set.is_client
+        && Boolean(r.is_competitor) === set.is_competitor
+        && norm(r.competitor_name) === norm(set.competitor_name)
+      if (settled) break
+      flips.push({
+        id: r.id,
+        platform: r.platform,
+        label: idt.entity.kind === 'client' ? 'client' : `competitor:${idt.entity.name}`,
+        set,
+      })
+      break
+    }
+  }
+  return flips
+}
+
 /**
  * Platform-aware minimum % floor for a follower event. YouTube's public
  * subscriberCount rounds to 3 significant figures, so one rounding step on a

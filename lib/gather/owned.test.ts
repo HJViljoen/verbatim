@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { acceptSnapshot, followerFloorPct, supportsOwnedProfile, emptyProfileIsGlitch, stampOwnedSource, ownedRawRows, igRawsByShortcode, ownPostsInWindow, stopUploadsWalk, buildOwnedCensus, ownedCensusTotal, ownedCommentRefs, entityIdentity, entitySlug, OWN_POSTS_CEILING, ownedPostsIn, ownAccountNames, normAccount, censusWindow } from './owned'
+import { acceptSnapshot, followerFloorPct, supportsOwnedProfile, emptyProfileIsGlitch, stampOwnedSource, ownedRawRows, igRawsByShortcode, ownPostsInWindow, stopUploadsWalk, buildOwnedCensus, ownedCensusTotal, ownedCommentRefs, entityIdentity, entitySlug, planSourceFlips, type FlipIdentity, OWN_POSTS_CEILING, ownedPostsIn, ownAccountNames, normAccount, censusWindow } from './owned'
 import { shareFootnoteLead } from '../calibration'
 
 describe('supportsOwnedProfile', () => {
@@ -396,5 +396,75 @@ describe('one definition of "our post" (2026-09-11)', () => {
     const census = buildOwnedCensus(rows, { handles, since: window.since, until: window.until })
     expect(censusWindow(census)).toEqual(window)
     expect(censusWindow(null)).toBeNull()
+  })
+})
+
+// ---- planSourceFlips (fix/client-audience, 2026-09-24) -----------------------
+// The reconciliation used to write `source` alone, which left the client's own
+// posts saying 'owned' with is_client false — filed under industry-other by
+// every reading while passALane had already taken their comments out of the
+// full lane because the source said owned. 13 of Sealand's 75 own posts.
+
+describe('planSourceFlips', () => {
+  const names = (platform: string, ...n: string[]) => new Map([[platform, new Set(n)]])
+  const client: FlipIdentity = { entity: { kind: 'client' }, names: names('instagram', 'sealandgear') }
+  const rival: FlipIdentity = {
+    entity: { kind: 'competitor', name: 'Freitag' },
+    names: names('instagram', 'freitaglab'),
+  }
+  const row = (over: Partial<Parameters<typeof planSourceFlips>[0][number]> = {}) => ({
+    id: 'v1', platform: 'instagram', source: 'discovered',
+    account_name: 'sealandgear', is_client: false, is_competitor: false, competitor_name: null,
+    ...over,
+  })
+
+  it('stamps the WHOLE identity on a discovered row, never source alone', () => {
+    const [flip] = planSourceFlips([row()], [client])
+    expect(flip.set).toEqual({
+      source: 'owned', is_client: true, is_competitor: false, competitor_name: null,
+    })
+    expect(flip.label).toBe('client')
+  })
+
+  it('repairs a row the source-only write already broke', () => {
+    const flips = planSourceFlips([row({ source: 'owned', is_client: false })], [client])
+    expect(flips).toHaveLength(1)
+    expect(flips[0].set.is_client).toBe(true)
+  })
+
+  it('leaves a row whose identity already matches', () => {
+    expect(planSourceFlips([row({ source: 'owned', is_client: true })], [client])).toEqual([])
+  })
+
+  it('stamps a rival own post with its name and never as the client', () => {
+    const [flip] = planSourceFlips(
+      [row({ account_name: 'freitaglab', competitor_name: 'Freitag' })],
+      [client, rival],
+    )
+    expect(flip.set).toEqual({
+      source: 'competitor_owned', is_client: false, is_competitor: true, competitor_name: 'Freitag',
+    })
+    expect(flip.label).toBe('competitor:Freitag')
+  })
+
+  it('repairs a competitor_owned row whose tag went missing', () => {
+    const [flip] = planSourceFlips(
+      [row({ source: 'competitor_owned', account_name: 'freitaglab', competitor_name: 'Freitag', is_competitor: false })],
+      [rival],
+    )
+    expect(flip.set.is_competitor).toBe(true)
+  })
+
+  it('never claims an account nobody owns, or another rival’s name', () => {
+    expect(planSourceFlips([row({ account_name: 'somestranger' })], [client, rival])).toEqual([])
+    expect(planSourceFlips(
+      [row({ account_name: 'freitaglab', competitor_name: 'Cotopaxi' })],
+      [rival],
+    )).toEqual([])
+  })
+
+  it('ignores a row with no account name and a source it does not own', () => {
+    expect(planSourceFlips([row({ account_name: null })], [client])).toEqual([])
+    expect(planSourceFlips([row({ source: 'reddit_thread' })], [client])).toEqual([])
   })
 })
