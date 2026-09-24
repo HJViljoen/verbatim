@@ -62,7 +62,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           scroll height, and follows the sidebar because the pane is the space
           right of it. <main> is `relative z-10`, so every tile paints on top. */}
       <div className="relative flex flex-col flex-1 min-w-0 h-dvh overflow-hidden">
-        <div className="crowd-bg" aria-hidden />
+        <div className="crowd-bg crowd-bg--shell" aria-hidden />
         <SidebarTrigger
           aria-label="Open navigation"
           className="absolute left-3 top-3 z-20 size-9 rounded-full bg-tile text-foreground shadow-tile md:hidden"
