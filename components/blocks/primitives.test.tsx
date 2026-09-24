@@ -57,15 +57,15 @@ describe('BlockFrame', () => {
     expect(markup.slice(markup.indexOf('Open Subjects') - 400)).toContain(EMAIL.hairline)
   })
 
-  it('prints the question on the SCREEN only (Block D wave 3, SH6)', () => {
-    // The docblock justified the question as "the mock's own device — every
-    // artboard prints one". Counted, every PRINTED artboard prints zero:
-    // MarketingBrief, SalesBrief, ContentBrief, LeadershipBrief,
-    // WeeklyReport, MonthlyReport and QuarterlyReview are 0 apiece, against
-    // Ask 6, Competitive 7, This week 5, Voice 4.
+  it('never draws the question, in any mode (polish pass, 2026-09-24)', () => {
+    // SH6 cut it from paper and inboxes and kept it on the screen on a count
+    // that had matched Ask's thread questions and Competitive's "Does the tarp
+    // smell?" rows. Counted as a node under a block header, all ten product
+    // artboards print exactly one question and it is the page bar's. The prop
+    // survives as the block's contract; the second narrator does not.
     const q = 'What are people saying about the things you decided to be known for?'
     const frame = (mode: RenderMode) => renderText(<BlockFrame mode={mode} title="Your subjects" question={q}><p>body</p></BlockFrame>)
-    expect(frame('app')).toContain(q)
+    expect(frame('app')).not.toContain(q)
     expect(frame('print')).not.toContain(q)
     expect(frame('email')).not.toContain(q)
   })
@@ -182,8 +182,9 @@ describe('BlockFrame', () => {
     expect(paper).toContain('text-[11px]')
     expect(paper).not.toContain('text-[12px]')
     expect(screen).toContain('text-[10.5px]')
-    // The question's own 11.5px print size went with the question (SH6).
-    expect(screen).toContain('text-[12.5px]')
+    // The question's own sizes went with the question — 11.5px on paper with
+    // SH6, 12.5px on the screen with the polish pass.
+    expect(screen).not.toContain('text-[12.5px]')
     expect(paper).not.toContain('text-[11.5px]')
   })
 

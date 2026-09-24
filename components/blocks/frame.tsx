@@ -37,7 +37,9 @@ import { cn } from '@/lib/utils'
  * chrome rather than content and lives here.
  */
 export function BlockFrame({
-  title, question, mode = 'app', footer, footerNote, meta, heading = false, header = true, lead, actions,
+  // `question` is accepted and deliberately not destructured — see the note
+  // where it used to be drawn, at the foot of the header.
+  title, mode = 'app', footer, footerNote, meta, heading = false, header = true, lead, actions,
   truncateFooter = false, children, className, accent = false,
 }: {
   title: string
@@ -292,18 +294,31 @@ export function BlockFrame({
         {actions ? <span className="flex flex-none items-center gap-2">{actions}</span> : null}
       </header>
       ) : null}
-      {/* THE QUESTION IS A SCREEN DEVICE (Block D wave 3, SH6). The docblock
-          above justified it as "the mock's own device — every artboard prints
-          one", and that is true of the artboards a reader SCROLLS: Ask prints
-          6, Competitive 7, This week 5, Voice 4. Counted on the printed ones
-          it is zero, every time — MarketingBrief, SalesBrief, ContentBrief,
-          LeadershipBrief, WeeklyReport, MonthlyReport and QuarterlyReview all
-          print none. A sheet has a title and a framing note above it and an
-          inbox has a subject line; the question is what orients a reader who
-          arrived at a tile with no preamble. So it is drawn in `app` alone,
-          and a page that wants one on paper says it in the block's own words.
-          The per-page app-mode calls it leaves standing are M8 and MK11. */}
-      {header && question && mode === 'app' ? <p className="m-0 text-[12.5px] text-muted-foreground">{question}</p> : null}
+      {/* THE QUESTION IS NOT DRAWN AT ALL — IN ANY MODE (polish pass,
+          2026-09-24). SH6 cut it from paper and inboxes on a count of the
+          printed artboards, and left it on the screen on the strength of "Ask
+          prints 6, Competitive 7, This week 5, Voice 4". That count was of
+          question marks anywhere in the markup, and what it actually found was
+          Ask's own thread questions and the rivals' "Does the tarp smell?"
+          rows. Counted again, as the text of a node under a block header,
+          every one of the ten product artboards prints exactly ONE question
+          and it is the page bar's:
+
+            Main 1 · Subjects 1 · Voice 1 · Market 1 · Competitive 1 ·
+            ThisWeek 1 · Ask 1 · Reports 1 · Settings 0 · SettingsRecord 0
+
+          — all ten of them the string `lib/nav.ts` already hands
+          `SurfacePageBar`. M8 drew that conclusion for Main alone and removed
+          six lines from Overview; the same measurement holds for every
+          surface, and what it leaves behind on Subjects, Voice, Market,
+          Competitive and This week is about thirty-five tiles each narrated
+          twice — a 12.5px line of explanatory micro-copy between an eyebrow
+          and its content, on a page whose bar has already asked the question.
+
+          THE PROP STAYS. `Block.question` is the block's contract with the
+          reader and is read by the nav, the legend and the tests; what stops
+          is drawing it a second time under the header. A block with something
+          to say about its own basis says it in `meta` or in `footerNote`. */}
       {heading && lead ? (
         <p className="m-0 font-serif text-[17px] font-medium leading-[1.35] tracking-[-0.005em] text-foreground [text-wrap:pretty]">{lead}</p>
       ) : null}
