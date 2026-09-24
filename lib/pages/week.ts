@@ -31,7 +31,7 @@ import { bandVerdict, type FigureTable, type Verdict } from '../reading/verdicts
 import { parseRef, quoteRef } from '../renderables/quotes-freeze'
 import type { Quote, Scope } from '../renderables/types'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, isMissingCompetitors, loadCompetitors, rivalKey, rivalNameOf } from '../rivals'
-import { isMissingSubjects, subjectCalibration, TABLE_SUBJECTS, type Subject, type SubjectCalibration } from '../subjects/types'
+import { isMissingSubjects, TABLE_SUBJECTS, type Subject } from '../subjects/types'
 import { selectAll } from '../supabase-admin'
 import { row, rows } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
@@ -298,9 +298,8 @@ export interface UnusualBlock {
 export interface SubjectWeekRow {
   id: string
   label: string
-  /** Videos carrying the subject this month so far, in the client's audience.
-   *  Null for a CALIBRATING subject, whose share may not be printed. */
-  monthVideos: number | null
+  /** Videos carrying the subject this month so far, in the client's audience. */
+  monthVideos: number
   /** The month's denominator for that audience. */
   monthOf: number
   /** What THIS update added — the videos of its window carrying the subject. */
@@ -330,17 +329,6 @@ export interface SubjectWeekRow {
    *  words, which are a LEVEL against a level and never a direction. */
   tag: string | null
   verdict: Verdict | null
-  /**
-   * Whether this subject's share may be printed (lib/subjects/types.ts
-   * subjectCalibration) — Heinrich's 24 Sep ruling, the same gate Overview,
-   * both report emails, the leadership sheet and Subjects carry. A
-   * `calibrating` row carries NO count of the subject (`subjectWeekRows`): no
-   * month videos, nothing added, no typical, no tag. It prints the word, and it
-   * is left out of the lead and of `figures()`. Optional because a This week
-   * snapshot frozen before the field has none, and such a row is read as it was
-   * frozen (Overview's rule).
-   */
-  calibration?: SubjectCalibration
 }
 
 export interface WeekSubjectsBlock {
@@ -922,10 +910,7 @@ export function typicalContribution(input: {
  * it into "of 6" would count a silence as a comparison that came back "not
  * above".
  */
-export function subjectLead(all: readonly SubjectWeekRow[], _month: string): string | null {
-  // Over the rows that print a figure: a calibrating subject's count may not
-  // be read, so it is neither in the denominator nor among the names.
-  const rows = all.filter((r) => r.calibration !== 'calibrating')
+export function subjectLead(rows: readonly SubjectWeekRow[], _month: string): string | null {
   const tagged = rows.filter((r) => r.tag != null)
   if (tagged.length === 0) return null
   const above = tagged.filter((r) => r.tag === 'above typical')
@@ -1581,60 +1566,9 @@ async function buildSubjects(input: {
   const added = window ? await readSubjectWindow(reading, clientId, window) : null
   const denominator = await readClientMonthVideos(reading, clientId, month)
 
-  const rowsOut = subjectWeekRows({
-    subjects, stored, added, denominator, clientUpdateVideos: input.clientUpdateVideos,
-  })
-
-  const active = subjects.filter((s) => s.status === 'active')
-  return {
-    rows: rowsOut,
-    unread: rowsOut.length > 0 ? null : SUBJECTS_UNREAD,
-    month,
-    lead: subjectLead(rowsOut, month),
-    // The rows are the ACTIVE subjects — a proposed subject measures nothing
-    // (`loadActiveSubjects`' own filter) — so the count in the footer is a
-    // count of the rows above it and not of the table.
-    namedLine: subjectsNamedLine(active.map((s) => s.named_at)),
-  }
-}
-
-/**
- * §2's rows, pure: one per ACTIVE subject, month-to-date in the client's
- * audience, with what this update added, largest first.
- *
- * A CALIBRATING SUBJECT CARRIES NO COUNT AT ALL, not a count a component is
- * trusted to hide (Heinrich's 24 Sep ruling; Overview's `buildSubjects` does
- * the same). This block is frozen into a This week snapshot, handed to a cover
- * prompt through `figures()` and shipped to the browser as props, so a share
- * hidden only on screen would still travel in all three. The row keeps its
- * name; the denominator stays, because it is the audience's, not the
- * subject's. Calibrating rows sort after the rows that print a figure.
- */
-export function subjectWeekRows(input: {
-  subjects: readonly Subject[]
-  stored: readonly { audience: string; subject_id: string; videos: number }[]
-  added: readonly { audience: string; subject_id: string; videos: number }[] | null
-  denominator: number
-  clientUpdateVideos: number | null
-}): SubjectWeekRow[] {
-  const { stored, added, denominator } = input
-  return input.subjects
+  const rowsOut: SubjectWeekRow[] = subjects
     .filter((s) => s.status === 'active')
-    .map((s): SubjectWeekRow => {
-      const calibration = subjectCalibration(s)
-      if (calibration !== 'ready') {
-        return {
-          id: s.id,
-          label: s.name,
-          monthVideos: null,
-          monthOf: denominator,
-          addedVideos: null,
-          typical: null,
-          tag: null,
-          verdict: null,
-          calibration,
-        }
-      }
+    .map((s) => {
       const held = stored.filter((r) => r.subject_id === s.id && r.audience === CLIENT_AUDIENCE)
       const monthVideos = held.reduce((t, r) => t + (r.videos ?? 0), 0)
       const addedVideos = added ? added.filter((r) => r.subject_id === s.id && r.audience === CLIENT_AUDIENCE).reduce((t, r) => t + (r.videos ?? 0), 0) : null
@@ -1652,10 +1586,21 @@ export function subjectWeekRows(input: {
         typical,
         tag: typicalTag(addedVideos, typical),
         verdict: null,
-        calibration,
       }
     })
-    .sort((a, b) => (b.monthVideos ?? -1) - (a.monthVideos ?? -1))
+    .sort((a, b) => b.monthVideos - a.monthVideos)
+
+  const active = subjects.filter((s) => s.status === 'active')
+  return {
+    rows: rowsOut,
+    unread: rowsOut.length > 0 ? null : SUBJECTS_UNREAD,
+    month,
+    lead: subjectLead(rowsOut, month),
+    // The rows are the ACTIVE subjects — a proposed subject measures nothing
+    // (`loadActiveSubjects`' own filter) — so the count in the footer is a
+    // count of the rows above it and not of the table.
+    namedLine: subjectsNamedLine(active.map((s) => s.named_at)),
+  }
 }
 
 // ---- §3 ----------------------------------------------------------------------

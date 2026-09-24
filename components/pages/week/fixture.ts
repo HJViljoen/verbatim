@@ -324,31 +324,6 @@ function ossurSubjects(): WeekData['subjects'] {
   }
 }
 
-/** A subject whose share may not be printed yet — what `subjectWeekRows`
- *  hands the page for a CALIBRATING subject (Heinrich's 24 Sep ruling): its
- *  name, the audience's denominator, and no count of the subject at all. */
-export function calibratingWeekRow(id = 's9', label = 'Repair & warranty'): SubjectWeekRow {
-  return {
-    id,
-    label,
-    monthVideos: null,
-    monthOf: 96,
-    addedVideos: null,
-    typical: null,
-    tag: null,
-    verdict: null,
-    calibration: 'calibrating',
-  }
-}
-
-/** This week with a calibrating subject after the three that read, the lead
- *  computed the way the loader computes it. */
-export function calibratingWeekFixture(): WeekData {
-  const base = weekFixture()
-  const rows = [...base.subjects.rows, calibratingWeekRow()]
-  return { ...base, subjects: { ...base.subjects, rows, lead: subjectLead(rows, base.subjects.month) } }
-}
-
 export function weekFixture(): WeekData {
   const risingVerdict = bandVerdict({
     objectKind: 'theme',

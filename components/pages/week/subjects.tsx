@@ -6,7 +6,6 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, fmtPct, longMonth } from '@/lib/format'
 import { type SubjectWeekRow, type WeekData } from '@/lib/pages/week'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import { CALIBRATING_WORD } from '@/lib/subjects/types'
 
 // WK §2 · This week in your subjects (the mock's §3; OV2 at update length).
 //
@@ -40,16 +39,6 @@ import { CALIBRATING_WORD } from '@/lib/subjects/types'
 // WHEN NOTHING IS RECORDED IT SAYS SO. Subjects are M4 and the table does not
 // exist on production yet. A block that drew an empty table there would be
 // saying this workspace cares about nothing.
-//
-// A CALIBRATING SUBJECT READS "calibrating" AND NOTHING ELSE (Heinrich's 24 Sep
-// ruling, the gate every other surface carries). The loader hands it no count
-// (`subjectWeekRows`); its column names it and says the word once, with no
-// bars, and it is not in the lead or in `figures()`.
-
-/** Does this row print a figure? A row frozen before the field is read as it
- *  was frozen. */
-const printsFigure = (r: SubjectWeekRow): r is SubjectWeekRow & { monthVideos: number } =>
-  r.calibration !== 'calibrating' && r.monthVideos != null
 
 export const weekSubjects: Block<WeekData> = {
   key: 'week.subjects',
@@ -61,9 +50,7 @@ export const weekSubjects: Block<WeekData> = {
     const email = mode === 'email'
     const empty = weekSubjects.emptyState(data)
     const href = `${ctx.appUrl}/dashboard/subjects`
-    const shown = s.rows.filter(printsFigure)
-    const calibrating = s.rows.filter((r) => !printsFigure(r))
-    const max = Math.max(1, ...shown.map((r) => r.monthVideos))
+    const max = Math.max(1, ...s.rows.map((r) => r.monthVideos))
     // ONE SCALE ACROSS THE STRIP, NOT ONE PER COLUMN (review W2). `top` was
     // `Math.max(1, added, typical)` INSIDE each column, so six bars of one
     // unit under one shared legend were drawn on six different scales:
@@ -112,32 +99,23 @@ export const weekSubjects: Block<WeekData> = {
               // 6px bars are six columns Outlook lays out with Word; the
               // ranked row is the primitive that already survives that, and it
               // carries the same two numbers.
-              <>
-                <BlockRanked
-                  mode={mode}
-                  rows={shown.map((r) => ({
-                    label: r.label,
-                    pct: (r.monthVideos / max) * 100,
-                    color: 'var(--you)',
-                    count: <Level row={r} />,
-                    badge: <Added row={r} />,
-                  }))}
-                />
-                {/* No bar for a calibrating subject: the ranked row draws a
-                    stub even at zero, which would be a false reading. */}
-                {calibrating.map((r) => (
-                  <div key={r.id} style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '3px 0' }}>
-                    {r.label} <span style={{ color: EMAIL.muted, fontSize: 11 }}>· {CALIBRATING_WORD}</span>
-                  </div>
-                ))}
-              </>
+              <BlockRanked
+                mode={mode}
+                rows={s.rows.map((r) => ({
+                  label: r.label,
+                  pct: (r.monthVideos / max) * 100,
+                  color: 'var(--you)',
+                  count: <Level row={r} />,
+                  badge: <Added row={r} />,
+                }))}
+              />
             )
             : (
               <>
                 <div className={`grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3 ${STRIP_COLUMNS[Math.min(s.rows.length, 6)] ?? 'xl:grid-cols-6'}`}>
-                  {s.rows.map((r) => (printsFigure(r) ? <Column key={r.id} row={r} top={barTop} /> : <CalibratingColumn key={r.id} row={r} />))}
+                  {s.rows.map((r) => <Column key={r.id} row={r} top={barTop} />)}
                 </div>
-                {shown.length > 0 ? <Legend rows={shown} /> : null}
+                <Legend rows={s.rows} />
               </>
             )
         ) : null}
@@ -147,8 +125,7 @@ export const weekSubjects: Block<WeekData> = {
 
   figures(data): FigureTable {
     const out: FigureTable = {}
-    // A calibrating subject has no count to cite.
-    for (const r of data.subjects.rows.filter(printsFigure)) {
+    for (const r of data.subjects.rows) {
       out[`subject_${r.id}_videos`] = { value: r.monthVideos, unit: 'videos', label: `${r.label} — videos this month` } // em-dash-ok: FigureTable label (a record key, never printed)
       if (r.addedVideos != null) {
         out[`subject_${r.id}_added`] = { value: r.addedVideos, unit: 'videos', label: `${r.label} — videos this update added` } // em-dash-ok: FigureTable label (a record key, never printed)
@@ -176,19 +153,9 @@ const STRIP_COLUMNS: Record<number, string> = {
   4: 'xl:grid-cols-4', 5: 'xl:grid-cols-5', 6: 'xl:grid-cols-6',
 }
 
-/** A calibrating subject's column: its name and the word, once. */
-function CalibratingColumn({ row }: { row: SubjectWeekRow }) {
-  return (
-    <div className="flex min-w-0 flex-col gap-1.5 border-border/70 xl:border-l xl:pl-4 xl:first:border-l-0 xl:first:pl-0">
-      <span className="truncate text-[12.5px] font-medium" title={row.label}>{row.label}</span>
-      <span className="text-[11px] text-muted-foreground">{CALIBRATING_WORD}</span>
-    </div>
-  )
-}
-
 /** One of the mock's six columns. `top` is the STRIP's tallest bar, not this
  *  column's — see `barTop`. */
-function Column({ row, top }: { row: SubjectWeekRow & { monthVideos: number }; top: number }) {
+function Column({ row, top }: { row: SubjectWeekRow; top: number }) {
   // BOTH BARS ARE THE SAME UNIT ON THE SAME SCALE — videos this update added,
   // measured and expected — AND SO IS EVERY OTHER COLUMN'S PAIR. The mock's
   // pair is this week against a typical week, which needs a history nothing
@@ -278,7 +245,7 @@ function Legend({ rows }: { rows: readonly SubjectWeekRow[] }) {
 
 /** The level, with the denominator it is a level of. A calibrated count on its
  *  own is a score, and this product shows no scores (copy contract rule (b)). */
-function Level({ row, className }: { row: SubjectWeekRow & { monthVideos: number }; className?: string }) {
+function Level({ row, className }: { row: SubjectWeekRow; className?: string }) {
   return (
     <span data-copy="level" className={className}>
       {fmtInt(row.monthVideos)} of {fmtInt(row.monthOf)} videos
