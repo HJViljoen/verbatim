@@ -174,9 +174,6 @@ A full dark theme exists (`.dark` block); every new surface must read in both.
 
 - **`.crowd-bg`** — ambient crowd illustration. It LEFT the app shell with the identity and now
   appears on `/login` alone (rule 6); it is not an app-surface element.
-- **`.ask-crowd`** — the Agent landing's keep under rule 6: the six-ring `CrowdFigure` field
-  (`components/pages/agent/crowd.tsx`), fixed behind Ask's tiles (index and threads) via `AskShell`,
-  `aria-hidden`, never interactive; its entrance plays only under `prefers-reduced-motion: no-preference`.
 - **Chips** — `px-2 py-0.5 rounded-full text-xs font-medium`; category chips use `categoryTint(key)`
   (grey, always), sentiment uses `SENTIMENT_BADGE`, prevalence uses `PREVALENCE_BADGE`,
   evidence tiers show "Strong evidence" (green tint) / "Early signal" (warning tint) — never numeric scores.

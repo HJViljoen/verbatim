@@ -17,14 +17,11 @@
 // skeletons read as siblings.
 
 import { Bone } from '@/components/shell/skeleton'
-import { AskCrowd } from '@/components/pages/agent/crowd'
 
 export default function AgentThreadLoading() {
   return (
     <div className="flex flex-col gap-3">
       <span role="status" className="sr-only">Loading…</span>
-      {/* The crowd `AskShell` draws behind the tiles, already arrived. */}
-      <AskCrowd />
       {/* The page bar, and under it the record band `hasRecord` gives Ask —
           both mounted by `AskShell` on this route. */}
       <Bone className="h-8 w-64 rounded-md" />

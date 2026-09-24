@@ -408,7 +408,7 @@
 }
 
 /* Ambient crowd layer — kept for the login page only (MASTER rule 6: the crowd
-   left the app shell; Ask keeps its own ring, `.ask-crowd` below). Absolute inside its container, never fixed. */
+   left the app shell). Absolute inside its container, never fixed. */
 .crowd-bg {
   position: absolute;
   inset: 0;
@@ -422,67 +422,6 @@
 .crowd-bg--live {
   background-image: url("/crowd-live.svg");
   opacity: 0.18;
-}
-
-/* ── Ask: the crowd rings the asker (restored 2026-09-24) ───────────────────
-   `AskCrowd` (components/pages/agent/crowd.tsx), mounted by `AskShell` on the
-   Ask index and every thread — the one app surface MASTER rule 6 lets keep the
-   crowd. A backdrop to the tiles, not a stage: fixed over the content pane so
-   it neither scrolls with the tiles nor adds to the scroll range, and at
-   z-index -1 inside <main>'s stacking context (main is `relative z-10`) so
-   every tile paints over it. Left edge follows the sidebar (offcanvas: 14rem
-   open, 0 collapsed, 0 on phones), at the sidebar's own 200ms linear. */
-.ask-crowd {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  overflow: hidden;
-  pointer-events: none;
-  /* The ring is ~93rem across at full size. On a phone that puts most of it
-     off-screen, so it contracts instead of clipping to two half-figures. */
-  --ring: 0.5;
-}
-@media (min-width: 640px) { .ask-crowd { --ring: 0.72; } }
-@media (min-width: 768px) {
-  .ask-crowd { left: var(--sidebar-width); transition: left 200ms linear; }
-  [data-slot="sidebar-wrapper"]:has([data-slot="sidebar"][data-state="collapsed"]) .ask-crowd { left: 0; }
-}
-@media (min-width: 1024px) { .ask-crowd { --ring: 1; } }
-@media print { .ask-crowd { display: none; } }
-.vb-print .ask-crowd { display: none; }
-
-/* The static (no-motion) state is the ARRIVED one, so a reader who prefers
-   reduced motion gets the finished ring rather than a pile in the middle. */
-.ask-crowd-figure {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%)
-             translate(calc(var(--rx) * var(--ring)), calc(var(--ry) * var(--ring)))
-             scale(var(--s));
-  opacity: var(--o);
-}
-
-@keyframes ask-crowd-out {
-  from {
-    /* Stacked at the centre and small: the crowd has not made room yet. */
-    transform: translate(-50%, -50%) scale(0.35);
-    opacity: 0;
-  }
-  to {
-    transform: translate(-50%, -50%)
-               translate(calc(var(--rx) * var(--ring)), calc(var(--ry) * var(--ring)))
-               scale(var(--s));
-    opacity: var(--o);
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  /* Same spring as the profile blocks: the overshoot lives in the easing, so
-     the ring settles on one beat instead of drifting into place. */
-  .ask-crowd[data-enter] .ask-crowd-figure {
-    animation: ask-crowd-out 0.85s cubic-bezier(0.22, 1.35, 0.36, 1) both;
-  }
 }
 
 /* ── Print mode (Reports & Exports, 2026-08-29) ─────────────────────────────
