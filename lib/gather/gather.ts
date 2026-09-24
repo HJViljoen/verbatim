@@ -8,9 +8,9 @@ import { logAiCall } from '../pipeline/ai-log'
 import { resolveTranscript, gateTranscript, normaliseLang, transcriptColumn } from './transcript'
 import { dedupeBy, round2 } from './util'
 import { loadSuppressedKeys, filterSuppressed } from './suppression'
-import { classifyRelevance, type RelevanceMethod } from './relevance'
+import { classifyRelevance, type ClassifyResult, type RelevanceMethod } from './relevance'
 import { buildGateVerdictRows, recordGateVerdicts } from './gate-verdicts'
-import { attributeVideos, type AttributionMethod } from './attribution'
+import { attributeVideos, ATTRIBUTION_PROMPT_VERSION, type AttributionMethod, type AttributionResult } from './attribution'
 import { splitDelta, pickRechecks, pickDormant, scrapeBaseline, type KnownVideoState, type RecheckCandidate } from './delta'
 import type { RunWindow } from '../pipeline/window'
 import type {
@@ -460,6 +460,57 @@ export function resolveScrapeCap(platform: Platform, videoLimit?: number): numbe
   return platformCap == null ? videoLimit : Math.min(videoLimit, platformCap)
 }
 
+/** What a gate's ledger row says. Pure, so the counts are tested rather than
+ *  trusted to a log line nobody reads. */
+interface GateReport<R> {
+  response: R
+  /** The failures, for ai_call_log.error_message. Null on a clean call. */
+  error: string | null
+  validationStatus: 'ok' | 'call_failed'
+}
+
+/** The relevance gate's ledger row. `failedBatches` is the half that was
+ *  missing: a failed batch keeps every video in it unjudged (fail-open, by
+ *  design), and until 2026-09-24 gate_verdicts source='default' in exact
+ *  multiples of 60 was the only trace that it had happened. */
+export function relevanceReport(
+  platform: string,
+  counts: { judged: number; kept: number; dropped: number },
+  r: Pick<ClassifyResult, 'failedBatches' | 'errors'>,
+): GateReport<{ platform: string; judged: number; kept: number; dropped: number; failedBatches: number }> {
+  return {
+    response: { platform, ...counts, failedBatches: r.failedBatches },
+    error: r.errors.length > 0 ? r.errors.join('; ') : null,
+    validationStatus: r.failedBatches > 0 ? 'call_failed' : 'ok',
+  }
+}
+
+/** The attribution judge's ledger row, and the line gatePlatform's errors[]
+ *  carries when any video was tagged without a verdict. `tagged` and
+ *  `rejected` count verdicts only; `fallback` is everything else the judge was
+ *  sent and did not answer for. */
+export function attributionReport(
+  platform: string,
+  r: Pick<AttributionResult, 'gptJudged' | 'rejected' | 'fallbackIds' | 'failedBatches' | 'errors'>,
+): GateReport<{ platform: string; judged: number; tagged: number; rejected: number; fallback: number; failedBatches: number }> & { errorLine: string | null } {
+  const fallback = r.fallbackIds.size
+  return {
+    response: {
+      platform,
+      judged: r.gptJudged,
+      tagged: r.gptJudged - r.rejected - fallback,
+      rejected: r.rejected,
+      fallback,
+      failedBatches: r.failedBatches,
+    },
+    error: r.errors.length > 0 ? r.errors.join('; ') : null,
+    validationStatus: r.failedBatches > 0 ? 'call_failed' : 'ok',
+    errorLine: fallback > 0
+      ? `attribution: ${fallback} ${fallback === 1 ? 'video' : 'videos'} tagged without a judge (${r.failedBatches} ${r.failedBatches === 1 ? 'batch' : 'batches'} failed)`
+      : null,
+  }
+}
+
 /** Merge a platform's keyword searches (unioning source_keywords), run the
  *  relevance gate + entity attribution, upsert kept videos, persist per-keyword
  *  performance, and return the comment-eligible refs (videoLimit applied). */
@@ -565,7 +616,10 @@ export async function gatePlatform(opts: {
   // The gate's GPT spend used to be discarded here — it ran on every platform of
   // every run and appeared in no cost report, so per-keyword ROI understated
   // what a keyword actually cost. Logging failure must never sink a gather.
-  if (!opts.dryRun && gateResult.promptTokens + gateResult.completionTokens > 0) {
+  // A run whose every batch failed spent nothing and is logged anyway: that
+  // row is the only place the failure shows (the gate itself stays fail-open).
+  if (!opts.dryRun && (gateResult.promptTokens + gateResult.completionTokens > 0 || gateResult.failedBatches > 0)) {
+    const report = relevanceReport(adapter.platform, { judged: videos.length, kept: kept.length, dropped }, gateResult)
     try {
       await logAiCall(admin, {
         clientId: opts.clientId,
@@ -576,11 +630,11 @@ export async function gatePlatform(opts: {
         promptVersion: `relevance_${method}`,
         systemPrompt: `relevance gate (${method})`,
         userPrompt: `${adapter.platform} — ${videos.length} candidates`,
-        response: { platform: adapter.platform, judged: videos.length, kept: kept.length, dropped },
-        error: null,
+        response: report.response,
+        error: report.error,
         usage: { prompt_tokens: gateResult.promptTokens, completion_tokens: gateResult.completionTokens },
         durationMs: Date.now() - gateStartedAt,
-        validationStatus: 'ok',
+        validationStatus: report.validationStatus,
       })
     } catch (e) {
       console.warn(`[${adapter.platform}] relevance gate cost log failed: ${e instanceof Error ? e.message : String(e)}`)
@@ -626,7 +680,42 @@ export async function gatePlatform(opts: {
   // homonym hits ("Freitag"=Friday, "Patagonia"=a region) don't pollute the
   // competitor buckets. Industry videos skip GPT internally, so the call is small.
   const attribution = opts.attribution ?? 'gpt'
-  const { tags: entityTags } = await attributeVideos(kept, { method: attribution, config })
+  const attributionStartedAt = Date.now()
+  const attributed = await attributeVideos(kept, { method: attribution, config })
+  const entityTags = attributed.tags
+
+  // VISIBLE, 2026-09-24. Attribution wrote nothing anywhere: its cost was
+  // thrown away on this line, and a batch that failed fell back to substring
+  // tags in silence — which is how four September gathers tagged 100% of their
+  // name matches as rivals and nobody could tell. Now a ledger row with the
+  // counts, and an errors[] line when any video was tagged without a judge
+  // (the 'gate verdicts not recorded' precedent above).
+  const attributionLog = attributionReport(adapter.platform, attributed)
+  if (attributionLog.errorLine) {
+    console.warn(`[${adapter.platform}] ${attributionLog.errorLine}`)
+    errors.push(attributionLog.errorLine)
+  }
+  if (!opts.dryRun && attributed.gptJudged > 0) {
+    try {
+      await logAiCall(admin, {
+        clientId: opts.clientId,
+        runId: opts.runId,
+        pass: 'attribution',
+        callIndex: 1,
+        model: ANALYSIS_MODEL,
+        promptVersion: ATTRIBUTION_PROMPT_VERSION,
+        systemPrompt: `attribution (${attribution})`,
+        userPrompt: `${adapter.platform} — ${attributed.gptJudged} videos with a candidate name`,
+        response: attributionLog.response,
+        error: attributionLog.error,
+        usage: { prompt_tokens: attributed.promptTokens, completion_tokens: attributed.completionTokens },
+        durationMs: Date.now() - attributionStartedAt,
+        validationStatus: attributionLog.validationStatus,
+      })
+    } catch (e) {
+      console.warn(`[${adapter.platform}] attribution cost log failed: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
   for (const v of kept) {
     const t = entityTags.get(v.video_id)
     if (t) {
