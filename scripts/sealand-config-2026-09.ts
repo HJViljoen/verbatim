@@ -17,8 +17,10 @@ import type { SubredditEntry } from '../lib/gather/types'
 // set it rewrote is recoverable only from theme_registry buckets and from this
 // file's own git history.)
 //
-// Dry by default. After --apply, re-stamp the stored corpus's entity tags:
-//   node --env-file=.env.local --import tsx scripts/run-tagging.ts --write --client <sealand>
+// Dry by default. After --apply, re-stamp the stored corpus's entity tags —
+// run-tagging's --write is gone; judge to a plan, review it, then apply it:
+//   node --env-file=.env.local --import tsx scripts/run-tagging.ts --client <sealand> --plan-out <plan.json>
+//   node --env-file=.env.local --import tsx scripts/run-tagging.ts --client <sealand> --apply <plan.json> --project <ref>
 // (competitor_names changed, so Patagonia / Topo Designs / Poler videos must
 // fall back to the category bucket rather than keep a competitor name nothing
 // tracks any more.)
@@ -188,7 +190,9 @@ async function main() {
   if (reErr) throw new Error(`re-read config: ${reErr.message}`)
   console.log('\nwritten. Re-read:')
   console.log(JSON.stringify(after, null, 2))
-  console.log('\nNext: node --env-file=.env.local --import tsx scripts/run-tagging.ts --write --client ' + SEALAND)
+  console.log('\nNext: judge a re-tag plan, review it, then apply it:\n' +
+    `  node --env-file=.env.local --import tsx scripts/run-tagging.ts --client ${SEALAND} --plan-out <plan.json>\n` +
+    `  node --env-file=.env.local --import tsx scripts/run-tagging.ts --client ${SEALAND} --apply <plan.json> --project <ref>`)
 }
 
 main().catch((e) => {

@@ -21,8 +21,10 @@ import { SEALAND_CLIENT_ID as SEALAND } from '../lib/config'
 // It does NOT touch subreddits, report_period, report_day, platforms or
 // max_videos. Those are left exactly as the scheduler will find them on Sunday.
 //
-// Dry by default. After --apply, re-stamp the stored corpus's entity tags:
-//   node --env-file=.env.local --import tsx scripts/run-tagging.ts --write --client <sealand>
+// Dry by default. After --apply, re-stamp the stored corpus's entity tags —
+// run-tagging's --write is gone; judge to a plan, review it, then apply it:
+//   node --env-file=.env.local --import tsx scripts/run-tagging.ts --client <sealand> --plan-out <plan.json>
+//   node --env-file=.env.local --import tsx scripts/run-tagging.ts --client <sealand> --apply <plan.json> --project <ref>
 // (competitor_names gained four entries, so stored videos that mention them are
 // still filed under the category bucket until a re-tag moves them.)
 

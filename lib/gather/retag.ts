@@ -60,6 +60,10 @@ export interface PlannedChange {
   platform: string
   before: VideoTags
   after: VideoTags
+  /** The judge's own words for this row: the subject it named and, for a tag,
+   *  the proof it quoted (AttributionResult.reasons). For the STEP 4 reviewer;
+   *  absent on plans built before 2026-09-25 and on substring plans. */
+  why?: string
 }
 
 /** A judged row the plan leaves where it is — the only rows `--set` may add. */
@@ -68,6 +72,7 @@ export interface KeptRow {
   video_id: string
   platform: string
   tags: VideoTags
+  why?: string
 }
 
 export interface RetagPlan {
@@ -80,6 +85,9 @@ export interface RetagPlan {
   gitSha: string
   method: string
   promptVersion: string
+  /** The judge's model (ATTRIBUTION_JUDGE.model); absent on plans built before
+   *  2026-09-25, which --apply refuses anyway on promptVersion. */
+  model?: string
   configFingerprint: string
   costUsd: number
   /** Videos sent to the judge. */
@@ -299,6 +307,9 @@ export function planRetag(
   fallbackIds: ReadonlySet<string>,
   identities: readonly FlipIdentity[],
   config: GatherConfig,
+  /** The judge's words per row id (AttributionResult.reasons), carried onto
+   *  each planned and kept row so the reviewer reads them beside the move. */
+  reasons: ReadonlyMap<string, string> = new Map(),
 ): RetagDecision {
   const out: RetagDecision = { changes: [], kept: [], fallback: [], spared: [] }
   for (const r of rows) {
@@ -308,10 +319,11 @@ export function planRetag(
     const flagged = m.brand || m.competitors.length > 0
     if (fallbackIds.has(r.id)) { out.fallback.push(r); continue }
     const after = finalTags.get(r.id) ?? { is_client: false, is_competitor: false, competitor_name: null }
+    const why = reasons.get(r.id)
     if (!sameTags(r, after)) {
-      out.changes.push({ id: r.id, video_id: r.video_id, platform: r.platform, before: tagsOf(r), after })
+      out.changes.push({ id: r.id, video_id: r.video_id, platform: r.platform, before: tagsOf(r), after, ...(why ? { why } : {}) })
     } else if (flagged) {
-      out.kept.push({ id: r.id, video_id: r.video_id, platform: r.platform, tags: tagsOf(r) })
+      out.kept.push({ id: r.id, video_id: r.video_id, platform: r.platform, tags: tagsOf(r), ...(why ? { why } : {}) })
     }
   }
   return out
@@ -392,10 +404,24 @@ export function applyRefusals(a: {
   allowInflight: string | null
   /** Runs for this client that STARTED after the plan was judged. */
   runsSince?: readonly { id: string; status: string; started_at: string | null }[]
+  /** The judge this code ships (ATTRIBUTION_JUDGE's version and model) —
+   *  passed in, so this file stays free of the OpenAI client. */
+  judge: { version: string; model: string }
 }): string[] {
   const out: string[] = []
   const host = projectRefOf(a.supabaseUrl)
   if (a.plan.version !== RETAG_PLAN_VERSION) out.push(`plan version ${a.plan.version} is not ${RETAG_PLAN_VERSION}`)
+  // A JUDGED plan must be this code's judge. The NO-GO attribution_v2 plan of
+  // 2026-09-24 (clean SHA, staging, 0 failed batches) passed every other guard
+  // until a run started or the config moved; the review of a plan is a review
+  // of the judge that made it.
+  if (a.plan.method === 'gpt') {
+    if (a.plan.promptVersion !== a.judge.version) {
+      out.push(`the plan was judged by ${a.plan.promptVersion}, not this code's ${a.judge.version}; build a new plan`)
+    } else if (a.plan.model !== a.judge.model) {
+      out.push(`the plan was judged on ${a.plan.model ?? 'an unrecorded model'}, not this code's ${a.judge.model}; build a new plan`)
+    }
+  }
   if (host !== a.project) out.push(`the Supabase URL points at ${host ?? 'no Supabase project'}, not --project ${a.project}`)
   if (a.plan.project !== a.project) out.push(`the plan was judged against ${a.plan.project ?? 'no project'}, not ${a.project}`)
   if (a.plan.clientId !== a.clientId) out.push(`the plan is for client ${a.plan.clientId}, not ${a.clientId}`)
@@ -443,6 +469,27 @@ export function applyRefusals(a: {
     out.push(`a run is in flight for this client: ${blocking.map((r) => `${r.id} (${r.status})`).join(', ')}`)
   }
   return out
+}
+
+/**
+ * A re-tag logged AFTER this plan was judged, by anything other than this
+ * plan — or null. Checked only when this plan is not on file yet.
+ *
+ * Two plans built from the same corpus before either is applied (a Friday
+ * rehearsal and Saturday's real one): once the first lands and is logged, the
+ * second finds the rows they share already at its after-state — 'already',
+ * not drift — and, not being on file itself, retagAudit credits them to it,
+ * so two entity_retag rows would count the same moves. No other guard sees
+ * it: no run intervened, the config is the same. So a later re-tag refuses:
+ * the corpus moved under this plan; build a new one.
+ */
+export function laterRetagOnFile(
+  log: readonly { changed_at: string; actor_label: string | null }[],
+  plan: Parameters<typeof planId>[0],
+): { changed_at: string; actor_label: string | null } | null {
+  const mine = planMarker(plan)
+  const judgedAt = Date.parse(plan.createdAt)
+  return log.find((l) => Date.parse(l.changed_at) > judgedAt && !(l.actor_label ?? '').includes(mine)) ?? null
 }
 
 /** More than this share of the planned rows drifted or vanished: the corpus
@@ -596,7 +643,10 @@ export function decideApply(
  * So when no change-log row names this judged pass (`planAudited`), the
  * 'already' rows are counted in too, with their before-bucket rebuilt from the
  * plan (the stored row already shows the after). When one does, only this
- * apply's own writes are logged, as before.
+ * apply's own writes are logged, as before. An 'already' row can be credited
+ * here only because --apply has refused first when any OTHER re-tag was logged
+ * after this plan was judged (laterRetagOnFile) — otherwise it could be that
+ * plan's move.
  */
 export function retagAudit(
   rows: readonly RetagRow[],

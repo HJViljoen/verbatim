@@ -10,6 +10,7 @@ import {
   editPlan,
   identitySkip,
   judgeable,
+  laterRetagOnFile,
   movedAudiences,
   pairTotals,
   passAConsequences,
@@ -150,6 +151,14 @@ describe('planRetag', () => {
     expect(plan.kept.map((k) => k.id)).toEqual([genuine.id])
   })
 
+  it('carries the judge’s words onto the rows the reviewer reads', () => {
+    const why = new Map([[erda.id, 'weekday chat [Freitag not marked ABOUT]'], [genuine.id, 'new bag — "my freitag bag"']])
+    const withWhy = planRetag([erda, genuine, industry], finalTags, new Set(), identities, config, why)
+    expect(withWhy.changes[0].why).toBe('weekday chat [Freitag not marked ABOUT]')
+    expect(withWhy.kept[0].why).toBe('new bag — "my freitag bag"')
+    expect('why' in plan.changes[1]).toBe(false) // no reason given, no key
+  })
+
   it('totals the moves by pair, and names every audience they touched', () => {
     expect(pairTotals(plan.changes)).toEqual([
       ['competitor:Freitag → industry-other', 1],
@@ -166,7 +175,8 @@ const basePlan = (o: Partial<RetagPlan> = {}): RetagPlan => ({
   createdAt: '2026-09-25T10:00:00.000Z',
   gitSha: '3adbc670a1b2c3d4e5f60718293a4b5c6d7e8f90',
   method: 'gpt',
-  promptVersion: 'attribution_v2',
+  promptVersion: 'attribution_v3',
+  model: 'gpt-4.1',
   configFingerprint: 'f00d',
   costUsd: 0.08,
   judged: 960,
@@ -234,6 +244,7 @@ describe('applyRefusals — the guards', () => {
     configFingerprint: 'f00d',
     inflight: [] as { id: string; status: string }[],
     allowInflight: null as string | null,
+    judge: { version: 'attribution_v3', model: 'gpt-4.1' },
   }
 
   it('lets a clean apply through', () => {
@@ -308,6 +319,18 @@ describe('applyRefusals — the guards', () => {
       .toEqual(['a run started after the plan was judged (run-sun completed); build a new plan'])
   })
 
+  // The 2026-09-24 staging plan: attribution_v2, a clean SHA, staging, no
+  // failed batch — a NO-GO judge whose plan passed every other guard.
+  it('refuses a judged plan from another judge — its prompt version or its model', () => {
+    expect(applyRefusals({ ...ok, plan: basePlan({ promptVersion: 'attribution_v2', model: undefined }) }))
+      .toEqual(['the plan was judged by attribution_v2, not this code\'s attribution_v3; build a new plan'])
+    expect(applyRefusals({ ...ok, plan: basePlan({ model: 'gpt-4.1-mini' }) }))
+      .toEqual(['the plan was judged on gpt-4.1-mini, not this code\'s gpt-4.1; build a new plan'])
+    expect(applyRefusals({ ...ok, plan: basePlan({ model: undefined }) })[0]).toContain('an unrecorded model')
+    // A substring plan has no judge to compare (and production refuses it on its own).
+    expect(applyRefusals({ ...ok, plan: basePlan({ method: 'substring', promptVersion: 'substring', model: undefined }) })).toEqual([])
+  })
+
   it('refuses a plan that carries a row tagged without a judge', () => {
     expect(applyRefusals({ ...ok, plan: basePlan({ fallbackIds: ['erda'] }) })[0]).toContain('tagged without a judge')
   })
@@ -373,6 +396,19 @@ describe('the change-log row for an apply — named, found, and finished by a re
     expect(audit.moves.map((m) => m.change.id).sort()).toEqual(['alexa', 'erda', 'reddit'])
     expect(audit.before).toEqual(['competitor:Freitag', 'competitor:Cotopaxi', 'competitor:Cotopaxi', 'competitor:Freitag'])
     expect(audit.after).toEqual(['industry-other', 'industry-other', 'competitor:Patagonia', 'competitor:Freitag'])
+  })
+
+  // Two plans from one corpus: the Friday rehearsal's and Saturday's. The
+  // first lands and is logged; the second would find the shared rows
+  // 'already' and credit them to itself.
+  it('names a re-tag logged after this plan was judged by anything but this plan', () => {
+    const mine = applyLabel(plan, 'retag.json')
+    const friday = applyLabel(basePlan({ createdAt: '2026-09-25T08:00:00.000Z' }), 'friday.json')
+    const later = { changed_at: '2026-09-25T12:00:00Z', actor_label: friday }
+    expect(laterRetagOnFile([later], plan)).toEqual(later)
+    expect(laterRetagOnFile([{ changed_at: '2026-09-25T12:00:00Z', actor_label: mine }], plan)).toBeNull()
+    expect(laterRetagOnFile([{ changed_at: '2026-09-09T18:10:00Z', actor_label: null }], plan)).toBeNull()
+    expect(laterRetagOnFile([{ changed_at: '2026-09-25T12:00:00Z', actor_label: null }], plan)).not.toBeNull()
   })
 
   it('does not count a write that did not land', () => {

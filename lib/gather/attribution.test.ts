@@ -5,7 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const { parse } = vi.hoisted(() => ({ parse: vi.fn() }))
 vi.mock('../openai', () => ({ openai: { chat: { completions: { parse } } } }))
 
-import { ATTRIBUTION_JUDGE, attributeVideos, buildSystemPrompt, buildUserPrompt, proofIsShown, type AttrCandidate } from './attribution'
+import { APIConnectionTimeoutError, APIUserAbortError } from 'openai'
+import { ATTRIBUTION_JUDGE, attributeVideos, buildSystemPrompt, buildUserPrompt, JUDGE_CALL_CAP_MS, JUDGE_REQUEST, projectedJudgeCost, proofIsShown, type AttrCandidate } from './attribution'
 import { ATTRIBUTION_MODEL } from '../config'
 import type { GatherConfig } from './types'
 
@@ -49,14 +50,14 @@ const cand = (id: string, caption: string, o: Partial<AttrCandidate> = {}): Attr
 
 /** A v3 answer: a verdict per index; a tag is marked ABOUT with a proof unless
  *  the test says otherwise. */
-const answer = (verdicts: { index: number; entity: string; proof?: string; about?: boolean; subject?: string }[]) => ({
+const answer = (verdicts: { index: number; entity: string; proof?: string; about?: boolean; subject?: string; sense?: string }[]) => ({
   choices: [{
     message: {
       parsed: {
         verdicts: verdicts.map((v) => ({
           index: v.index,
           subject: v.subject ?? 's',
-          candidates: v.entity === 'NONE' ? [] : [{ label: v.entity, sense: '', about: v.about ?? true, proof: v.proof ?? '' }],
+          candidates: v.entity === 'NONE' ? [] : [{ label: v.entity, sense: v.sense ?? '', about: v.about ?? true, proof: v.proof ?? '' }],
           entity: v.entity,
         })),
       },
@@ -205,6 +206,23 @@ describe('attributeVideos — a verdict becomes a tag only with ABOUT and a show
     expect(r.reasons.get('gear')).toContain('proof not in the text shown')
   })
 
+  it('carries the other sense the judge named into its reason, for the reviewer', async () => {
+    parse.mockResolvedValueOnce(answer([{ index: 0, entity: 'Freitag', proof: 'my new FREITAG messenger bag', sense: 'German for Friday' }]))
+    const r = await attributeVideos([cand('bag', 'my new FREITAG messenger bag')], { method: 'gpt', config })
+    expect(r.tags.get('bag')).toEqual(rival('Freitag'))
+    expect(r.reasons.get('bag')).toBe('s — "my new FREITAG messenger bag" (other sense: German for Friday)')
+  })
+
+  // What a re-tag prints and caps on before any call: on gpt-4.1 a whole
+  // tenant is dollars, not cents. Sealand's 957 judged videos measured
+  // $0.55–0.65 in the eval; the projection sits above that, never below.
+  it('projects a judge’s spend above what the eval measured', () => {
+    expect(projectedJudgeCost(957, 'gpt-4.1')).toBeCloseTo(0.8039, 3)
+    expect(projectedJudgeCost(957, 'gpt-4.1')).toBeGreaterThan(0.65)
+    expect(projectedJudgeCost(957, 'gpt-4.1-mini')).toBeCloseTo(0.8039 / 5, 3)
+    expect(projectedJudgeCost(0, 'gpt-4.1')).toBe(0)
+  })
+
   it('never trusts a label that was not a candidate', async () => {
     parse.mockResolvedValueOnce(answer([{ index: 0, entity: 'Osprey', proof: 'Osprey Farpoint 40' }]))
     const r = await attributeVideos([cand('o', 'Osprey Farpoint 40 vs Cotopaxi Allpa')], { method: 'gpt', config })
@@ -238,6 +256,34 @@ describe('attributeVideos — no silent substring fallback', () => {
     expect(r.errors[0]).toContain('400')
     expect(r.gptJudged).toBe(5)
     expect(r.rejected).toBe(0) // nothing was judged
+  })
+
+  // One gpt-4.1 batch hung for most of a 955.8 s eval run. Unbounded, the SDK
+  // waits 600 s and retries twice — inside a gate step the route kills at
+  // 300 s. Bounded, a hang is one more failed batch, counted like the 400.
+  it('bounds every call, and counts a timeout exactly as it counts the 400', async () => {
+    parse.mockRejectedValueOnce(new APIConnectionTimeoutError())
+    const r = await attributeVideos([...homonyms, ...genuine], { method: 'gpt', config })
+    const [, request] = parse.mock.calls[0]
+    expect(request).toMatchObject({ timeout: 90_000, maxRetries: 1 })
+    expect(request.signal).toBeInstanceOf(AbortSignal)
+    expect(JUDGE_REQUEST.timeout).toBeLessThan(JUDGE_CALL_CAP_MS)
+    expect(JUDGE_CALL_CAP_MS).toBeLessThan(300_000) // the route's maxDuration
+    expect(r.tags.get('otto')).toEqual(UNTAGGED)
+    expect(r.tags.get('bag')).toEqual(rival('Freitag'))
+    expect(r.tags.get('own')).toEqual(CLIENT)
+    expect(r.failedBatches).toBe(1)
+    expect(r.fallbackIds.size).toBe(5)
+    expect(r.errors).toEqual(['batch 1 of 1 (5 videos): Request timed out.'])
+    expect(r.rejected).toBe(0)
+  })
+
+  it('counts a call cut off by the per-call cap the same way', async () => {
+    parse.mockRejectedValueOnce(new APIUserAbortError())
+    const r = await attributeVideos([...homonyms, ...genuine], { method: 'gpt', config })
+    expect(r.failedBatches).toBe(1)
+    expect(r.fallbackIds.size).toBe(5)
+    expect(r.errors[0]).toMatch(/^batch 1 of 1 \(5 videos\): /)
   })
 
   it('gives a skipped index the same strict fallback, and says so', async () => {

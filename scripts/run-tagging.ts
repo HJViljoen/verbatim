@@ -4,9 +4,9 @@ import { basename, dirname, resolve } from 'node:path'
 import { monthsOfVideos } from '../lib/config-affects'
 import { audienceOf } from '../lib/rivals'
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
-import { CONFIG_CHANGES_TABLE, recordConfigChange, retagChange, scriptActor } from '../lib/config-log'
-import { tagVideo, type VideoTags } from '../lib/gather/tagging'
-import { attributeVideos, ATTRIBUTION_PROMPT_VERSION, type AttributionMethod, type AttrCandidate } from '../lib/gather/attribution'
+import { changeRow, CONFIG_CHANGES_TABLE, recordConfigChange, retagChange, scriptActor, type ConfigChangeInput } from '../lib/config-log'
+import { matchEntities, tagVideo, type VideoTags } from '../lib/gather/tagging'
+import { ATTRIBUTION_JUDGE, attributeVideos, projectedJudgeCost, type AttributionMethod, type AttrCandidate } from '../lib/gather/attribution'
 import { loadGatherConfig } from '../lib/gather/gather'
 import {
   accountLookalikes,
@@ -19,6 +19,7 @@ import {
   editPlan,
   identitySkip,
   judgeable,
+  laterRetagOnFile,
   movedAudiences,
   needsPassARead,
   pairTotals,
@@ -48,10 +49,13 @@ import { COMMENT_THRESHOLD, SEALAND_CLIENT_ID as SEALAND } from '../lib/config'
 // node --env-file=… --import tsx scripts/run-tagging.ts …). The first line it
 // prints is the project it is pointed at.
 //
-//   --client <uuid> [--platform <p>] [--method gpt|substring]
-//       Inspect. Judges (gpt spends OpenAI — about $0.08 on Sealand) and prints
-//       the distribution, the CHANGES table and the review checks. Writes
-//       nothing anywhere.
+//   --client <uuid> [--platform <p>] [--method gpt|substring] [--max-usd <n>]
+//       Inspect. Judges and prints the distribution, the CHANGES table (each
+//       moved row with the judge's own words) and the review checks. Writes
+//       nothing anywhere. gpt spends OpenAI on ATTRIBUTION_JUDGE's model — on
+//       gpt-4.1 about $0.6 for all of Sealand, $0.8–0.9 for Össur — so the
+//       candidates are counted first, the projected cost printed, and the run
+//       refused above --max-usd (default $1.00) before any call.
 //
 //   … --plan-out <file>
 //       The same dry run, and the plan it prints is written to <file>: every
@@ -64,10 +68,12 @@ import { COMMENT_THRESHOLD, SEALAND_CLIENT_ID as SEALAND } from '../lib/config'
 //   --client <uuid> --apply <file> --project <ref> [--check] [--allow-inflight <run id>]
 //       Replays a reviewed plan with ZERO OpenAI calls. Refuses when the
 //       Supabase URL is not <ref>, the plan was judged on another project or
-//       for another client, the tracking config has changed since, a judge
-//       batch failed, the plan was built from uncommitted code, a run has
-//       started since the plan was judged, more than 5% of its rows have moved
-//       since, or a run for the client is in flight (--allow-inflight <run id>
+//       for another client, or by another judge (prompt version or model),
+//       the tracking config has changed since, a judge batch failed, the plan
+//       was built from uncommitted code, a run has started since the plan was
+//       judged, another re-tag was logged since it was judged, the plan has
+//       been edited into a newer file (<file>.superseded), more than 5% of its
+//       rows have moved since, or a run for the client is in flight (--allow-inflight <run id>
 //       looks past that ONE run, on the staging ref only — its stale
 //       'analyzing' run ddbbffe4 — and is refused for production). Every row
 //       is re-checked: an own or tracked-rival post (by source or by account)
@@ -77,7 +83,10 @@ import { COMMENT_THRESHOLD, SEALAND_CLIENT_ID as SEALAND } from '../lib/config'
 //       nothing. One config_changes row for what landed — and if an earlier
 //       apply of the same plan landed rows and left no change-log row (the
 //       insert failed, or the process died mid-write), this one records those
-//       too (lib/gather/retag.ts retagAudit).
+//       too (lib/gather/retag.ts retagAudit) — until the next pipeline run
+//       starts, after which the apply is refused; so a failed change-log
+//       insert also leaves the exact row in <file>.audit.json for a hand
+//       insert.
 //
 //   --client <uuid> --apply <file> --project <ref> --check --plan-out <edited>
 //                  [--drop <id>[,<id>…]] [--set <id>=<audience>]…
@@ -86,7 +95,10 @@ import { COMMENT_THRESHOLD, SEALAND_CLIENT_ID as SEALAND } from '../lib/config'
 //       their list and the row ids they touched, to <edited>; the real apply
 //       then takes <edited> with no edit flags, so the judgments written are
 //       exactly the ones reviewed and the change log names every row a person
-//       overrode. --drop / --set are refused on a writing --apply.
+//       overrode. --drop / --set are refused on a writing --apply. Writing
+//       <edited> also writes <file>.superseded naming it, and a writing
+//       --apply of <file> is refused from then on: the base plan cannot be
+//       pasted by mistake for the reviewed one.
 //
 //   --write is GONE. It judged and wrote in one go with none of the guards
 //       above; the plan and the apply are the only write path.
@@ -126,12 +138,14 @@ interface Args {
   allowInflight: string | null
   check: boolean
   edits: PlanEdits
+  /** The judged dry run's spend cap, checked on the projection before any call. */
+  maxUsd: number
 }
 
 function parseArgs(argv: string[]): Args {
   const a: Args = {
     clientId: SEALAND, clientGiven: false, method: 'gpt', planOut: null,
-    apply: null, project: null, allowInflight: null, check: false, edits: { drop: [], set: [] },
+    apply: null, project: null, allowInflight: null, check: false, edits: { drop: [], set: [] }, maxUsd: 1,
   }
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i]
@@ -152,6 +166,11 @@ function parseArgs(argv: string[]): Args {
     else if (flag === '--project') a.project = next()
     else if (flag === '--allow-inflight') a.allowInflight = next()
     else if (flag === '--check') a.check = true
+    else if (flag === '--max-usd') {
+      const v = Number(next())
+      if (!Number.isFinite(v) || v < 0) throw new Error('--max-usd is a number of US dollars')
+      a.maxUsd = v
+    }
     else if (flag === '--drop') a.edits.drop.push(...next().split(',').map((s) => s.trim()).filter(Boolean))
     else if (flag === '--set') {
       const v = next()
@@ -257,6 +276,34 @@ function checkNewFile(path: string) {
   }
 }
 
+/** The sentinel an edited plan leaves beside the plan it was edited from. */
+const supersededPath = (planFile: string) => `${planFile}.superseded`
+
+/** The file a failed change-log insert leaves: the exact row, for a hand
+ *  insert once a re-run of the apply is refused. Never overwritten. */
+function writeAuditFallback(planFile: string, input: ConfigChangeInput, planMark: string): string | null {
+  const body = JSON.stringify({
+    note: 'config_changes row NOT recorded by --apply; insert `row` by hand (it is changeRow(input)), or re-run the same --apply before the next pipeline run starts',
+    plan: basename(planFile),
+    planId: planMark,
+    writtenAt: new Date().toISOString(),
+    input,
+    row: changeRow(input),
+  }, null, 2) + '\n'
+  for (const path of [`${planFile}.audit.json`, `${planFile}.audit.${Date.now()}.json`]) {
+    try {
+      writeFileSync(path, body, { flag: 'wx' })
+      return path
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') {
+        console.error(`could not write ${path}: ${(e as Error).message}`)
+        return null
+      }
+    }
+  }
+  return null
+}
+
 const shortSha = (sha: string) => (sha.endsWith('+dirty') ? `${sha.replace(/\+dirty$/, '').slice(0, 12)}+dirty` : sha.slice(0, 12))
 
 /** This client's average Pass A call, for the re-read estimate. One bounded
@@ -357,7 +404,7 @@ async function logMoves(admin: Admin, a: {
   costUsd?: number
   label: string
   note?: string
-}): Promise<boolean> {
+}): Promise<{ logged: boolean; input: ConfigChangeInput }> {
   // The MONTHS it moved, computed now because nothing can compute them later:
   // `videos` has no updated_at and no history. The rows are already written,
   // so a failure here costs the band and not the re-tag.
@@ -370,7 +417,7 @@ async function logMoves(admin: Admin, a: {
   const audiences = movedAudiences(a.audit.moves.map((m) => m.change))
   console.log(months ? `months moved: ${months}` : 'months moved: not known')
   console.log(`audiences moved: ${audiences.join(', ')}`)
-  return recordConfigChange(admin, retagChange({
+  const input = retagChange({
     affects: { months, audiences },
     clientId: a.clientId,
     actor: scriptActor(a.label),
@@ -381,7 +428,8 @@ async function logMoves(admin: Admin, a: {
     skipped: a.spared,
     costUsd: a.costUsd,
     note: a.note,
-  }))
+  })
+  return { logged: await recordConfigChange(admin, input), input }
 }
 
 // ---- judge (inspect, --plan-out) ---------------------------------------------------
@@ -417,14 +465,24 @@ async function judge(args: Args) {
     hashtags: r.hashtags ?? [],
   }))
   if (args.method === 'gpt') {
+    // COUNTED AND PRICED BEFORE THE CALL. On gpt-4.1 a whole-tenant judge is
+    // five times what it was on mini; attributeVideos sends exactly the
+    // candidates with a name match, so this is the number it will send.
+    const flagged = candidates.filter((c) => { const m = matchEntities(c, config); return m.brand || m.competitors.length > 0 }).length
+    const projected = projectedJudgeCost(flagged, ATTRIBUTION_JUDGE.model)
     console.log(
-      `! --method gpt asks OpenAI about every substring candidate among ${candidates.length} videos.\n` +
+      `! --method gpt sends the ${flagged} of ${candidates.length} videos with a candidate name to ${ATTRIBUTION_JUDGE.model} ` +
+      `(${ATTRIBUTION_JUDGE.version}): projected ≈ $${projected.toFixed(2)}, cap --max-usd $${args.maxUsd.toFixed(2)}.\n` +
       '  --method substring is the free path, and its plan is refused against production.\n',
     )
+    if (projected > args.maxUsd) {
+      throw new Error(`projected $${projected.toFixed(2)} is over --max-usd $${args.maxUsd.toFixed(2)}; nothing was sent to OpenAI. ` +
+        'Narrow it with --platform, or raise --max-usd once the spend is agreed.')
+    }
   }
   console.log(`Attributing ${candidates.length} of ${rows.length} videos (method=${args.method})…\n`)
   const result = await attributeVideos(candidates, { method: args.method, config })
-  const decision = planRetag(rows, result.tags, result.fallbackIds, identities, config)
+  const decision = planRetag(rows, result.tags, result.fallbackIds, identities, config, result.reasons)
   const byId = new Map(rows.map((r) => [r.id, r]))
   const sparedIds = new Set(decision.spared.map((s) => s.row.id))
 
@@ -460,6 +518,8 @@ async function judge(args: Args) {
       `  ${`${audienceOf(c.before)} → ${audienceOf(c.after)}`.padEnd(52)} [${r.platform}] @${trim(r.account_name, 30)} ` +
       `lane=${r.analyzed_lane ?? '-'} ${r.comments_count ?? 0} cmts id=${r.id} "${trim(r.caption, 80)}"`,
     )
+    // The judge's subject and quoted proof — what STEP 4 reviews it by.
+    if (c.why) console.log(`      judge: ${trim(c.why, 200)}`)
   }
 
   if (decision.fallback.length) {
@@ -521,7 +581,8 @@ async function judge(args: Args) {
     createdAt: readAt,
     gitSha: gitSha(),
     method: args.method,
-    promptVersion: args.method === 'gpt' ? ATTRIBUTION_PROMPT_VERSION : 'substring',
+    promptVersion: args.method === 'gpt' ? ATTRIBUTION_JUDGE.version : 'substring',
+    ...(args.method === 'gpt' ? { model: ATTRIBUTION_JUDGE.model } : {}),
     configFingerprint: fingerprint,
     costUsd: result.costUsd,
     judged: result.gptJudged,
@@ -570,12 +631,30 @@ async function apply(args: Args) {
       inflight,
       allowInflight: args.allowInflight,
       runsSince,
+      judge: { version: ATTRIBUTION_JUDGE.version, model: ATTRIBUTION_JUDGE.model },
     })
     if (refusals.length === 0) return
     console.error('REFUSED — nothing written:')
     for (const r of refusals) console.error(`  - ${r}`)
     process.exit(1)
   }
+  // AN EDITED PLAN REPLACES ITS BASE. Pasting `--apply <plan>.json` for
+  // `<plan>.edited.json` would write the rows the review dropped or changed —
+  // the edited plan keeps the base's id, so the change log could not tell.
+  const sentinel = supersededPath(planFile)
+  if (existsSync(sentinel)) {
+    const into = readFileSync(sentinel, 'utf8').trim()
+    if (args.planOut) {
+      console.error(`REFUSED — nothing written:\n  - ${basename(planFile)} was already edited into ${into}; edit that file instead (its edits carry over)`)
+      process.exit(1)
+    }
+    if (!args.check) {
+      console.error(`REFUSED — nothing written:\n  - ${basename(planFile)} was edited into ${into} (${basename(sentinel)}); apply that file`)
+      process.exit(1)
+    }
+    console.warn(`! ${basename(planFile)} was edited into ${into}; a writing --apply takes that file, not this one.`)
+  }
+
   // Twice. First before ANY database access — a wrong host, project, client,
   // plan or --allow-inflight is refused without reading the wrong project at
   // all — then with what only the database can say: the config now, and the
@@ -631,8 +710,18 @@ async function apply(args: Args) {
   // IS THIS JUDGED PASS ON THE CHANGE LOG ALREADY? If an earlier apply landed
   // rows and its change-log insert failed (or it died mid-write), nothing else
   // can record them, so this apply does (retagAudit).
-  const onFile = (await loadRetagLog(admin, args.clientId)).find((l) => planAudited([l.actor_label], plan)) ?? null
+  const retagLog = await loadRetagLog(admin, args.clientId)
+  const onFile = retagLog.find((l) => planAudited([l.actor_label], plan)) ?? null
   const audited = onFile !== null
+  // ANOTHER RE-TAG SINCE THIS PLAN WAS JUDGED — the Friday rehearsal applied
+  // before Saturday's plan. The rows both moved read 'already' here, and with
+  // this plan not on file retagAudit would credit them to it.
+  const later = audited ? null : laterRetagOnFile(retagLog, plan)
+  if (later) {
+    console.error(`\nREFUSED — nothing written:\n  - another re-tag was logged at ${later.changed_at} (${trim(later.actor_label, 140) || 'no label'}), ` +
+      'after this plan was judged; the corpus moved under it. Build a new plan.')
+    process.exit(1)
+  }
   console.log(audited
     ? `\nchange log: this plan is on file (${onFile!.changed_at}); an apply logs only its own new writes.`
     : `\nchange log: nothing on file for this plan yet; an apply records ${moves.length + already.length} row(s)` +
@@ -642,7 +731,9 @@ async function apply(args: Args) {
   if (args.check) {
     if (args.planOut) {
       writeFileSync(args.planOut, JSON.stringify(plan, null, 2) + '\n', { flag: 'wx' })
+      writeFileSync(sentinel, `${basename(args.planOut)}\n`, { flag: 'wx' })
       console.log(`\nedited plan written: ${args.planOut} (${plan.changes.length} changes, ${plan.edits?.length ?? 0} edit(s)). Review it, then --apply THAT file with no edit flags.`)
+      console.log(`${basename(sentinel)} written: a writing --apply of ${basename(planFile)} is refused from now on.`)
     }
     console.log('\n--check: every guard passed; nothing written to the database.')
     return
@@ -666,7 +757,7 @@ async function apply(args: Args) {
   if (!audited && already.length) console.log(`recording ${already.length} row(s) an earlier apply of this plan wrote without a change-log row.`)
 
   const spared = rows.filter((r) => identitySkip(r, identities) !== null).length
-  const logged = await logMoves(admin, {
+  const { logged, input } = await logMoves(admin, {
     clientId: args.clientId,
     audit,
     spared,
@@ -677,9 +768,16 @@ async function apply(args: Args) {
     label: applyLabel(plan, basename(planFile)),
     note: plan.platform ? `${plan.platform} only` : undefined,
   })
-  console.log(logged
-    ? 'change log: recorded.'
-    : 'change log: NOT recorded (see the error above). The rows are written. Re-run the same --apply: it finds no change-log row for this plan and records everything the plan has landed.')
+  if (logged) console.log('change log: recorded.')
+  else {
+    const kept = writeAuditFallback(planFile, input, planMarker(plan))
+    console.error(
+      'change log: NOT recorded (see the error above). The rows are written.\n' +
+      '  Re-run the same --apply BEFORE THE NEXT PIPELINE RUN STARTS: it finds no change-log row for this plan and records everything the plan has landed.\n' +
+      '  Once a run has started the re-run is refused, and the row must be inserted by hand' +
+      (kept ? ` — the exact row is in ${kept}.` : ' — and writing the row to a file failed too; copy the counts printed above.'),
+    )
+  }
   if (!logged || errs.length) process.exit(1)
 }
 

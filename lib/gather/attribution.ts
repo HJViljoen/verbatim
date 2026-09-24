@@ -23,13 +23,15 @@ export type AttributionMethod = 'substring' | 'gpt'
 /**
  * The prompt's version label, for the ai_call_log row and a re-tag plan.
  *
- * v3 (2026-09-25) is the first judge scored against hand-labelled truth:
- * scripts/eval-attribution.ts, on a 200-video Sealand gold set split train /
- * holdout. On the 123 train videos v2 scored 0.56 and main's v1 0.78; v3 on
- * gpt-4.1 scored 0.95 (in a wording that still explained mentions=), and 0.87
- * on the 77 holdout videos it was never tuned on. Its misses there: a
- * two-brand thrift find, an alternatives post, an outfit list, bare
- * "#patagonia", "Freitag" and "x Cotopaxi" captions (six false tags), and four
+ * v3 (2026-09-25) is the first judge scored against labelled truth:
+ * scripts/eval-attribution.ts, on a 200-video Sealand gold set labelled by two
+ * independent model labellers (one row adjudicated), split train / holdout by
+ * row (scripts/eval-data/attribution/sealand-gold-2026-09-24.json). On the 123
+ * train videos v2 scored 0.56 and main's v1 0.78; v3 on gpt-4.1 scored 0.95
+ * (in a wording that still explained mentions=), and 0.87 on the 77 holdout
+ * videos it was never tuned on. Its misses there: a two-brand thrift find, an
+ * alternatives post, an outfit list, bare "#patagonia", "Freitag" and
+ * "x Cotopaxi" captions (six false tags), and four
  * genuine rival posts it answered NONE — founder and talk-show stories, a
  * partner post, and one whose name sits past the head. What changed, each for
  * a failure the gold set showed:
@@ -77,6 +79,37 @@ const BRAND = 'BRAND'
 const NONE = 'NONE'
 const GPT_BATCH = 60
 
+/**
+ * Every judge call's bound. The SDK's default is a 600 s timeout and two
+ * retries, and gatePlatform runs inside ONE Inngest step (gate:<platform>)
+ * that the route caps at 300 s (app/api/inngest/route.ts maxDuration): a hung
+ * call there is killed with the step, and Inngest retries the whole gate step —
+ * relevance and attribution paid for again. One gpt-4.1 batch hung for most of
+ * the eval's 955.8 s run (v3d, 2026-09-25).
+ *
+ * 90 s per attempt is about nine times a normal 60-video batch on gpt-4.1
+ * (~10 s in the eval). One retry, for a 429 or a 5xx that clears in seconds.
+ * The signal caps the whole call, the retry included, at 120 s, so a hang
+ * costs at most that and lands as a COUNTED failed batch — the strict
+ * tagWithoutJudge fallback, an errors[] line, validation_status call_failed —
+ * the same as a 400. A retried attempt's usage is never reported back, so it
+ * reaches neither costUsd nor ai_call_log; one retry bounds that to one batch.
+ * lib/pipeline/pass-b.ts bounds its calls the same way (120 s, no retry).
+ */
+export const JUDGE_REQUEST = { timeout: 90_000, maxRetries: 1 } as const
+export const JUDGE_CALL_CAP_MS = 120_000
+
+/** Tokens one judged video costs, with room: v3 on gpt-4.1 used 111 prompt /
+ *  57 completion tokens a video on Sealand's holdout and 127 / 63 on Össur's
+ *  sample (2026-09-25), the system prompt spread over its batch included. */
+export const JUDGE_TOKENS_PER_VIDEO = { prompt: 140, completion: 70 } as const
+
+/** What judging `videos` candidates should cost on `model`, before any call —
+ *  for a re-tag's refusal above its --max-usd, and the eval's budget. */
+export function projectedJudgeCost(videos: number, model: string): number {
+  return videos * estimateCost(model, JUDGE_TOKENS_PER_VIDEO.prompt, JUDGE_TOKENS_PER_VIDEO.completion)
+}
+
 /** What the judge is shown of each video — the one definition the prompt and
  *  the proof check both read, so they cannot disagree about what was visible. */
 const CAPTION_HEAD = 200
@@ -97,7 +130,7 @@ export interface JudgeVerdict { index: number; entity: string; reason: string }
  * model, its two prompts, the shape of its answer, and how an answer becomes a
  * label. attributeVideos runs ATTRIBUTION_JUDGE unless it is handed another —
  * which only scripts/eval-attribution.ts does, to score the frozen earlier
- * judges against the same hand-labelled gold set as the current one.
+ * judges against the same labelled gold set as the current one.
  */
 export interface AttributionJudge {
   version: string
@@ -224,9 +257,23 @@ const bare = (s: string): string =>
  * video: at least half of its words of three or more characters are in it.
  * Exported for tests.
  *
- * The prompt's rule is "no proof in the text shown → NOT ABOUT"; this is its
- * deterministic half. An empty proof, or one the model could not have read —
- * words it made up, or a description it never saw — takes the tag away.
+ * What it catches, and no more: an EMPTY proof, and a proof mostly made of
+ * words the judge was never shown — typically a quote from past the
+ * 200-code-point caption head or past the eighth hashtag, which matchEntities
+ * reads and the prompt does not. It is NOT a check that the proof shows the
+ * company: the candidate's own name is usually in the text shown (it is why
+ * the video is a candidate), so a proof of the name plus one invented word
+ * passes by half — "Freitag bag" on "FREITAG PARTY PEOPLE", "Patagonia
+ * jacket" on a bare "#patagonia". It vetoed no tag in the chosen train run or
+ * the holdout run (2026-09-25). The prompt's "the name alone is the other
+ * sense" rule rests on the judge.
+ *
+ * A stricter variant — at least one shown word BESIDES the candidate's name —
+ * was measured offline on saved answers only: it would veto 1 wrong and 0
+ * right Sealand tags (train + holdout) and 2 wrong and 1 right Össur tags
+ * (bare "#ottobock"). Both sets had already been seen, so it waits for a fresh
+ * sample before it is adopted.
+ *
  * Word by word and only by half, not as one exact string, because a faithful
  * proof still comes back stitched and trimmed: "Perfect backpack #cotopaxi"
  * out of "Perfect backpack #hiking … #cotopaxi", "Bought a Patago…Nano puff
@@ -251,10 +298,13 @@ function verdictsV3(parsed: unknown, items: JudgeItem[]): JudgeVerdict[] {
     const call = v.candidates.find((c) => fold(c.label) === fold(entity))
     const item = items[v.index]
     if (!call?.about) return { index: v.index, entity: NONE, reason: `${subject} [${entity} not marked ABOUT]` }
+    // The other sense the judge named for the name it tagged, for the reviewer:
+    // a Freitag tag that says "German for Friday" is one to read twice.
+    const sense = str(call.sense) ? ` (other sense: ${str(call.sense)})` : ''
     if (!item || !proofIsShown(call.proof, item.cand)) {
-      return { index: v.index, entity: NONE, reason: `${subject} [${entity}: proof not in the text shown: "${call.proof}"]` }
+      return { index: v.index, entity: NONE, reason: `${subject} [${entity}: proof not in the text shown: "${call.proof}"]${sense}` }
     }
-    return { index: v.index, entity, reason: `${subject} — "${call.proof}"` }
+    return { index: v.index, entity, reason: `${subject} — "${call.proof}"${sense}` }
   })
 }
 
@@ -333,7 +383,7 @@ export async function attributeVideos(
           { role: 'user', content: judge.userPrompt(items, opts.config) },
         ],
         response_format: zodResponseFormat(judge.schema, 'attribution'),
-      })
+      }, { ...JUDGE_REQUEST, signal: AbortSignal.timeout(JUDGE_CALL_CAP_MS) })
       if (completion.usage) {
         result.promptTokens += completion.usage.prompt_tokens
         result.completionTokens += completion.usage.completion_tokens

@@ -62,8 +62,11 @@ import {
 //        --client <uuid> --score labels.jsonl [--apply --project <ref>]
 //      Prints precision at every threshold pair, and with --apply records the
 //      shipped pair's figure on each subject. A subject whose figure is under
-//      85% — or absent — prints "calibrating" everywhere and its share is not
-//      shown to a client.
+//      85% — or absent — is 'calibrating' (lib/subjects/types.ts): on this
+//      code the Subjects rail reads "provisional" and withholds its share,
+//      while the pane, Overview, the report emails and the leadership sheet
+//      still print it. Hiding it on every surface is held on
+//      hold/calibrating-share-hidden, not merged.
 //
 //      THE FIRST LINE IS THE PROJECT, and --apply names the one it means to
 //      write: it refuses when the Supabase URL is not --project <ref>. `node

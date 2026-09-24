@@ -91,13 +91,22 @@ export const ANALYSIS_TEMPERATURE = 0
  * Model for the attribution judge (lib/gather/attribution.ts), which decides
  * which ONE company a name-matched video is about. The FULL gpt-4.1, not mini,
  * on measurement (scripts/eval-attribution.ts, 2026-09-25): the same v3 prompt
- * scored 0.85 on gpt-4.1-mini and 0.95 on gpt-4.1 over 123 hand-labelled train
- * videos, and mini kept tagging bare German "Freitag" (Friday), multi-brand
- * hauls and comparisons as rivals. About five times mini's price: the eval's
- * cost per judged video puts a re-judge of Sealand's ~960 name-matched videos
- * at $0.56–0.65 (mini: ~$0.12), and a gather at cents, since only videos with a
+ * scored 0.85 on gpt-4.1-mini and 0.95 on gpt-4.1 over Sealand's 123 train
+ * videos (labelled by two independent model labellers, 1 row adjudicated), and
+ * mini kept tagging bare German "Freitag" (Friday), multi-brand hauls and
+ * comparisons as rivals. About five times mini's price: the eval's cost per
+ * judged video puts a re-judge of Sealand's ~960 name-matched videos at
+ * $0.56–0.65 (mini: ~$0.12), and a gather at cents, since only videos with a
  * candidate name reach the judge. Same 4.1-family sunset caveat as
  * ANALYSIS_MODEL; re-run the eval before moving it.
+ *
+ * ONE TENANT'S NUMBER. On Össur's own 54-row sample (2026-09-25) the same
+ * judge scored 0.80 against main's v1 on mini at 0.78 — no better, at eight
+ * times the cost — and it misses Össur posts whose only sign of the company
+ * sits past the caption head while taking a bare "#ottobock" as proof. Every
+ * tenant's gathers run this judge, so Össur's choice — this judge plus a
+ * re-tag of Össur's history, or main's v1 kept for Össur — is made before a
+ * deploy (scripts/eval-data/attribution/ossur-gold-2026-09-25.json).
  */
 export const ATTRIBUTION_MODEL = 'gpt-4.1'
 
