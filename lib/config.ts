@@ -87,6 +87,20 @@ export const VIDEO_QUOTE_BONUS = 0.15
 /** Sampling temperature for analysis calls. 0 for reproducible iteration. */
 export const ANALYSIS_TEMPERATURE = 0
 
+/**
+ * Model for the attribution judge (lib/gather/attribution.ts), which decides
+ * which ONE company a name-matched video is about. The FULL gpt-4.1, not mini,
+ * on measurement (scripts/eval-attribution.ts, 2026-09-25): the same v3 prompt
+ * scored 0.85 on gpt-4.1-mini and 0.95 on gpt-4.1 over 123 hand-labelled train
+ * videos, and mini kept tagging bare German "Freitag" (Friday), multi-brand
+ * hauls and comparisons as rivals. About five times mini's price: the eval's
+ * cost per judged video puts a re-judge of Sealand's ~960 name-matched videos
+ * at $0.56–0.65 (mini: ~$0.12), and a gather at cents, since only videos with a
+ * candidate name reach the judge. Same 4.1-family sunset caveat as
+ * ANALYSIS_MODEL; re-run the eval before moving it.
+ */
+export const ATTRIBUTION_MODEL = 'gpt-4.1'
+
 // --- Video transcripts (Step 1 capture 2026-07-23, Step 2 analysis 2026-08-08) --
 // Gather stores the raw item + resolves one transcript per kept video (caption
 // when present, else Whisper). Pass A reads them behind the same flag (v4:

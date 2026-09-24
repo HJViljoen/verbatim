@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { chunk } from '../chunk'
 import { zodResponseFormat } from 'openai/helpers/zod'
 import { openai } from '../openai'
-import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, estimateCost } from '../config'
+import { ANALYSIS_TEMPERATURE, ATTRIBUTION_MODEL, estimateCost } from '../config'
 import { promptText } from './transcript'
 import { fold, str } from './util'
 import { matchEntities, tagVideo, tagAfterExclusions, tagWithoutJudge, type EntityMatches, type TagCandidate, type VideoTags } from './tagging'
@@ -20,9 +20,33 @@ import type { GatherConfig } from './types'
 
 export type AttributionMethod = 'substring' | 'gpt'
 
-/** The prompt's version label, for the ai_call_log row. v2 (2026-09-24): the
- *  homonym / round-up / not-visible rules and the `mentions=` evidence. */
-export const ATTRIBUTION_PROMPT_VERSION = 'attribution_v2'
+/**
+ * The prompt's version label, for the ai_call_log row and a re-tag plan.
+ *
+ * v3 (2026-09-25) is the first judge scored against hand-labelled truth:
+ * scripts/eval-attribution.ts, on a 200-video Sealand gold set split train /
+ * holdout. On the 123 train videos v2 scored 0.56 and main's v1 0.78; v3 on
+ * gpt-4.1 scored 0.95 (in a wording that still explained mentions=), and 0.87
+ * on the 77 holdout videos it was never tuned on. Its misses there: a
+ * two-brand thrift find, an alternatives post, an outfit list, bare
+ * "#patagonia", "Freitag" and "x Cotopaxi" captions (six false tags), and four
+ * genuine rival posts it answered NONE — founder and talk-show stories, a
+ * partner post, and one whose name sits past the head. What changed, each for
+ * a failure the gold set showed:
+ *  - no mentions= snippets. v2 quoted the words around a name that sat past
+ *    the caption head, and the judge read a quoted name as a confirmed one —
+ *    26 of 71 train videos about no company went to Cotopaxi off gear lists
+ *    and affiliate links. A reworded, located snippet still cost 5 points on
+ *    gpt-4.1, and 36 of the 38 train videos whose names sit only past the head
+ *    are about no company;
+ *  - the subject first, then each candidate ABOUT / NOT ABOUT with the other
+ *    sense of its name and a quoted proof, and only then the label (v2 wrote
+ *    the label first, and a label could contradict the reason under it);
+ *  - a counter-example per failure class, with invented company names so the
+ *    shared prompt names no client;
+ *  - gpt-4.1 (ATTRIBUTION_MODEL): the same prompt scored 0.85 on gpt-4.1-mini.
+ */
+export const ATTRIBUTION_PROMPT_VERSION = 'attribution_v3'
 
 /** A VideoInsert/DB-row subset + its id — what attribution judges. */
 export type AttrCandidate = TagCandidate & { video_id: string }
@@ -44,159 +68,204 @@ export interface AttributionResult {
   failedBatches: number
   /** One line per failed batch or skipped index, for the log row. */
   errors: string[]
+  /** The judge's own words for each video it answered: the subject it named
+   *  and, for a tag, the proof it quoted. For review and the eval. */
+  reasons: Map<string, string>
 }
 
 const BRAND = 'BRAND'
 const NONE = 'NONE'
 const GPT_BATCH = 60
 
-/** What the judge is shown of each video — the one definition both the prompt
- *  and the evidence check below read, so they cannot disagree about what was
- *  visible. */
+/** What the judge is shown of each video — the one definition the prompt and
+ *  the proof check both read, so they cannot disagree about what was visible. */
 const CAPTION_HEAD = 200
 const HASHTAGS_SHOWN = 8
 const ACCOUNT_CHARS = 100
 const HASHTAG_CHARS = 60
-/** Code points either side of a name the judge could not otherwise see. */
-const MENTION_CONTEXT = 60
 
-const verdictSchema = z.object({
-  index: z.number().int(),
-  entity: z.string(), // 'BRAND' | an exact competitor name | 'NONE'
-  reason: z.string(),
-})
-const batchSchema = z.object({ verdicts: z.array(verdictSchema) })
+/** One video as a judge receives it: the candidate and its labels (the
+ *  matched names, BRAND first when a brand keyword matched, then NONE). */
+export interface JudgeItem { cand: AttrCandidate; labels: string[] }
 
-/** Exported for tests. */
+/** A verdict reduced to what attributeVideos acts on. `entity` is BRAND, a
+ *  candidate name or NONE; anything else is treated as NONE. */
+export interface JudgeVerdict { index: number; entity: string; reason: string }
+
+/**
+ * Everything that makes one attribution judge different from another: its
+ * model, its two prompts, the shape of its answer, and how an answer becomes a
+ * label. attributeVideos runs ATTRIBUTION_JUDGE unless it is handed another —
+ * which only scripts/eval-attribution.ts does, to score the frozen earlier
+ * judges against the same hand-labelled gold set as the current one.
+ */
+export interface AttributionJudge {
+  version: string
+  model: string
+  systemPrompt: (config: GatherConfig) => string
+  userPrompt: (items: JudgeItem[], config: GatherConfig) => string
+  /** The structured-output schema; must be a z.object. */
+  schema: z.ZodType
+  /** The parsed answer → one verdict per video it answered. */
+  verdicts: (parsed: unknown, items: JudgeItem[]) => JudgeVerdict[]
+}
+
+/** Exported for tests. Tenant-generic: every name, product and sense in it
+ *  comes from the tenant's config, and the worked examples use invented
+ *  companies so that no client's names are written into a prompt every tenant
+ *  shares. */
 export function buildSystemPrompt(config: GatherConfig): string {
   const brand = config.brand_keywords?.[0] ?? 'the brand'
+  const rivals = (config.competitor_names ?? []).map((c) => str(c)).filter(Boolean)
   const category = (config.industry_keywords ?? []).join(', ') || 'the brand’s category'
-  // The client's own homonym list (tracking_configs.exclude_terms). This is the
-  // one prompt whose whole job is homonym disambiguation, so it is where a
-  // client's "Cotopaxi the volcano" / "Sealand the shipping line" belongs —
-  // rendered the same way relevance.ts does, as senses rather than banned
-  // words, because a video can name the other sense and still be about the
-  // company. `excludedTag` below is the deterministic half of the same rule.
+  // The client's own homonym list (tracking_configs.exclude_terms), rendered
+  // as senses rather than banned words, the way relevance.ts renders it:
+  // a video can name the other sense and still be about the company.
+  // tagAfterExclusions below is the deterministic half of the same rule.
   const excluded = (config.exclude_terms ?? []).map((t) => `${t}`.trim()).filter(Boolean)
   const exclusionLines = excluded.length > 0
     ? [
         '',
-        `For THIS client, matches about any of these are NOT about the brand: ${excluded.join(', ')}.`,
-        'They name other senses of the names, not banned words — a video genuinely about the company',
-        'or its products stays attributed even if one of them appears in it.',
+        `Senses of the names this client has flagged as NOT the company: ${excluded.join(', ')}.`,
+        'A video about one of these is NOT ABOUT; a video genuinely about the company stays ABOUT even if one appears in it.',
       ]
     : []
   return [
-    `You attribute social videos to a brand ("${brand}") or its competitors for a consumer-intelligence report.`,
-    `The brand and its competitors make: ${category}.`,
+    `You decide which ONE company a social video is about, for a consumer-intelligence report on a brand ("${brand}")${rivals.length > 0 ? ` and its competitors (${rivals.join(', ')})` : ''}.`,
+    `They make: ${category}.`,
     '',
-    'Each video already matched one or more entity NAMES by keyword. Those matches are CANDIDATES only.',
-    'Decide which ONE entity the video is genuinely ABOUT — it shows, reviews, mentions, compares, or',
-    'discusses that company or its products — or NONE if every match is coincidental.',
+    'Each video matched one or more company NAMES by keyword: its candidates. A keyword match is not evidence — most matches are not about the company.',
+    'For each video, first write its subject: what it is mainly about, in at most 8 words. Then, for every candidate:',
+    '- sense: if the name is also an ordinary word, a day, a place or a person in any language, say which (“German for Sunday”, “a mountain in Tanzania”); otherwise "".',
+    '- about: true when ABOUT, false when NOT ABOUT, by the rules below.',
+    '- proof: for an ABOUT candidate, the shortest exact words (at most 12) from the text shown that show the company or its product as the subject; otherwise "".',
     '',
-    'Reject coincidental matches — a brand name that is also a common word or a place:',
-    '- "Freitag" is German for "Friday"; a video about a day, the weather, or news is NOT the bag brand.',
-    '- "Patagonia" and "Cotopaxi" are regions in South America; travel/scenery content is NOT the brand.',
-    'When the name is used as the ordinary word or the place, answer NONE.',
-    // The v2 rules, one line each (2026-09-24). The first is ERDA's "was haltet
-    // ihr von diesen Freitag" — a real verdict, not a fallback, that took 45
-    // August comments into a rival's bucket. The second is the round-ups and
-    // gear lists; the third, the judge confirming names it was never shown.
-    // The products are the tenant's own (the category line above), never a
-    // list written for one client: every tenant shares this prompt.
-    'A name that is also a common word, a day, a date, a place or a person needs visible sign of the company or its products (what the brand and its competitors make, above), a store, or the company’s own handle; otherwise NONE — German day phrasings such as "am/ab/diesen/jeden Freitag", "Freitag 21.8.", "#friday" or "Freitagskracher" are the day, not the brand.',
-    'A video that lists, ranks or rounds up many brands, or names the company only in a gear list or affiliate links, is NONE unless that company is its main subject.',
-    'If the candidate name is not visible in the text shown for that video (account, caption, hashtags or mentions), answer NONE.',
+    'ABOUT — the company or one of its products is the MAIN subject:',
+    '- a review, unboxing, demo, question or complaint about one of its products, or a creator wearing or using it as the focus;',
+    '- two or more of its OWN products compared or shown together;',
+    '- a shop, reseller or retailer showing that company’s products;',
+    '- news about the company: a lawsuit, campaign, collaboration, store opening, controversy or its history;',
+    '- the company’s own account, or a community named after the company discussing its products.',
+    'NOT ABOUT:',
+    '- the name used as an ordinary word, a day, a date, a place or a person — a weekday in another language, a region, a mountain or volcano, a town, a hostel or a park that shares the name. When the name has another sense, only the COMPANY counts as proof: one of its products or what it makes, its store, its handle, or a brand hashtag. The name alone — in capitals, as a hashtag, beside emojis, a day, an event, music or a place — is the other sense;',
+    '- a round-up, top-N list, “best …” ranking, buying guide, deal list, gear list, packing list, what’s-in-my-bag, outfit list, haul or shop show across several brands, or affiliate links — unless the whole video is about this one company;',
+    '- a comparison of this company against another brand (“A vs B”, “which should I buy”) or a question about several brands: no single company is the subject. A post centred on one company that names others only for context IS about it;',
+    '- other brands named in the text count, whether or not they are candidates: a haul, sale or list naming this company and another brand is several brands;',
+    '- a video about something else — a trip, a vlog, another brand’s product — that names the company in passing, in a pile of hashtags or in links.',
     '',
-    'mentions=[…] quotes the words around a candidate name that sits further into a long caption than the part shown.',
+    'No proof in the text shown → NOT ABOUT.',
+    'entity: the ABOUT candidate (BRAND when the brand is ABOUT), or NONE. Use the label exactly as listed.',
     '',
-    'If the brand is genuinely featured, prefer BRAND. Otherwise return the exact competitor name it is about.',
-    'Return exactly one of the candidate labels listed for that video, or NONE.',
+    'Examples, with invented company names — carry over the reasoning, not the names:',
+    '- candidates=[Sonntag] caption="Sonntag 😴☕ #fyp #weekend" → NONE: the weekday.',
+    '- candidates=[Sonntag] caption="Was macht ihr diesen Sonntag? 🎶 @dj.lena" → NONE: the day — "am/ab/diesen/jeden Sonntag", "Sonntag 21.8.", "SONNTAG VIBES 🎉" and "Sonntag Live" are all the day.',
+    '- candidates=[Sonntag] caption="My new SONNTAG messenger bag, cut from an old truck tarp" → Sonntag, proof "My new SONNTAG messenger bag".',
+    '- candidates=[Kilimanjaro] caption="Sunrise at the top 🏔️ #kilimanjaro #tanzania #hiking" → NONE: the mountain.',
+    '- candidates=[Kilimanjaro] caption="Kilimanjaro is being sued over its recycled-fabric claims" → Kilimanjaro, proof "Kilimanjaro is being sued".',
+    '- candidates=[Kilimanjaro] caption="Top 7 carry-on backpacks of 2026: Osprey, Kilimanjaro, Tortuga…" → NONE: a round-up.',
+    '- candidates=[Kilimanjaro, Sonntag] caption="Kilimanjaro Summit 30 vs Sonntag Roller — which daypack wins?" → NONE: a comparison.',
+    '- candidates=[Kilimanjaro] caption="3 weeks in Vietnam 🇻🇳 Our travel gear: camera https://… hip pack: Kilimanjaro Lumbar 5L https://…" → NONE: a travel vlog with a gear list.',
+    '- candidates=[Kilimanjaro] caption="Office look #12 Shirt: Uniqlo · Trousers: COS · Bag: Kilimanjaro Roll-Top" → NONE: an outfit list; the bag is one item of several.',
+    '- candidates=[Kilimanjaro] caption="Cabin life, day 40: hauling water uphill. My Deuter and Kilimanjaro packs make it easy #offgrid" → NONE: cabin life; the packs come up in passing.',
+    '- candidates=[Kilimanjaro] caption="Summit 30 vs Summit 40 — which Kilimanjaro pack should you buy?" → Kilimanjaro, proof "which Kilimanjaro pack should you buy": two of its own products.',
+    '- candidates=[Kilimanjaro] caption="Why does nobody review Kilimanjaro packs? Osprey has thousands" → Kilimanjaro, proof "Why does nobody review Kilimanjaro packs".',
     ...exclusionLines,
   ].join('\n')
 }
 
-/**
- * Where a folded needle first occurs in a text, in CODE POINTS of the text.
- *
- * Every match in this product is made on `fold`ed text (lowercase, accents
- * stripped), and folding can change a string's length — so the position has to
- * be mapped back one code point at a time, not read off the folded copy.
- */
-function foldedIndexOf(points: readonly string[], needle: string): { start: number; end: number } | null {
-  if (!needle) return null
-  let folded = ''
-  const origin: number[] = []
-  points.forEach((cp, i) => {
-    const f = cp.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    for (let j = 0; j < f.length; j++) origin.push(i)
-    folded += f
-  })
-  const at = folded.indexOf(needle)
-  if (at < 0) return null
-  return { start: origin[at], end: origin[at + needle.length - 1] + 1 }
-}
-
-/**
- * The words around each candidate name the judge would otherwise not see.
- *
- * matchEntities reads the WHOLE caption — on YouTube that is the full
- * description — while the judge is shown its first 200 code points and eight
- * hashtags. So "Top 5 Best Backpacks" with The North Face at character 778 was
- * confirmed as a rival post by a judge that never saw the name (Freitag 64 of
- * 366 tags, Cotopaxi 34 of 271). One snippet per candidate whose first
- * occurrence is outside what is shown; none when it is visible.
- */
-export function mentionSnippets(cand: AttrCandidate, labels: readonly string[], config: GatherConfig): string[] {
-  const caption = str(cand.caption).replace(/\s+/g, ' ').trim()
-  // Exactly what buildUserPrompt prints, so "visible" means visible.
-  const shown = fold([
-    promptText(str(cand.account_name), ACCOUNT_CHARS),
-    promptText(caption, CAPTION_HEAD),
-    ...(cand.hashtags ?? []).slice(0, HASHTAGS_SHOWN).map((h) => promptText(str(h), HASHTAG_CHARS)),
-  ].join(' '))
-  const hay = fold([cand.account_name, caption, ...(cand.hashtags ?? [])].join(' '))
-  const points = [...caption]
-  const out: string[] = []
-  for (const label of labels) {
-    if (label === NONE) continue
-    // BRAND's evidence is whichever configured brand keyword is present.
-    const names = label === BRAND
-      ? (config.brand_keywords ?? []).map(fold).filter((k) => k !== '' && hay.includes(k))
-      : [fold(label)]
-    if (names.length === 0 || names.some((n) => shown.includes(n))) continue
-    const name = names[0]
-    const hit = foldedIndexOf(points, name)
-    if (hit) {
-      const from = Math.max(0, hit.start - MENTION_CONTEXT)
-      const to = Math.min(points.length, hit.end + MENTION_CONTEXT)
-      const words = `${from > 0 ? '…' : ''}${points.slice(from, to).join('')}${to < points.length ? '…' : ''}`
-      out.push(`${label}: ${promptText(words, 2 * MENTION_CONTEXT + name.length + 2)}`)
-      continue
-    }
-    // Not in the caption at all: then it is in a hashtag past the eighth.
-    const tag = (cand.hashtags ?? []).slice(HASHTAGS_SHOWN).find((h) => fold(h).includes(name))
-    if (tag) out.push(`${label}: ${promptText(str(tag), HASHTAG_CHARS)}`)
+/** The account, caption head and hashtags exactly as the user prompt prints them. */
+function shownFields(cand: AttrCandidate): { account: string; caption: string; tags: string } {
+  return {
+    account: promptText(str(cand.account_name), ACCOUNT_CHARS),
+    caption: promptText(str(cand.caption), CAPTION_HEAD),
+    tags: (cand.hashtags ?? []).slice(0, HASHTAGS_SHOWN).map((h) => promptText(str(h), HASHTAG_CHARS)).filter(Boolean).join(' '),
   }
-  return out
 }
 
 /** Exported for tests. Every scraped string goes through promptText — the
  *  UTF-16 `.slice(0, 200)` this used to be cut an emoji in half and 400'd the
- *  whole batch (lib/gather/transcript.ts promptText). */
-export function buildUserPrompt(items: { cand: AttrCandidate; labels: string[] }[], config: GatherConfig): string {
-  const lines = ['VIDEOS — for each, pick which candidate it is genuinely about (or NONE):']
+ *  whole batch (lib/gather/transcript.ts promptText).
+ *
+ *  The judge sees the caption's first 200 code points, the first eight
+ *  hashtags and the account — and nothing past them. matchEntities reads the
+ *  whole caption (on YouTube the full description), so a name first named past
+ *  the head is proposed but not shown, and the prompt's rule answers it: no
+ *  proof in the text shown → NONE. See ATTRIBUTION_PROMPT_VERSION for why v2's
+ *  mentions= snippets are gone. */
+export function buildUserPrompt(items: JudgeItem[]): string {
+  const lines = ['VIDEOS — for each: its subject, then every candidate ABOUT or NOT ABOUT with proof, then the entity:']
   items.forEach(({ cand, labels }, i) => {
-    const caption = promptText(str(cand.caption), CAPTION_HEAD)
-    const tags = (cand.hashtags ?? []).slice(0, HASHTAGS_SHOWN).map((h) => promptText(str(h), HASHTAG_CHARS)).filter(Boolean).join(' ')
-    const account = promptText(str(cand.account_name), ACCOUNT_CHARS)
-    const mentions = mentionSnippets(cand, labels, config)
-    lines.push(
-      `[${i}] candidates=[${labels.join(', ')}] | account=${account || '(none)'} | caption=${caption || '(none)'} | hashtags=${tags || '(none)'}` +
-      (mentions.length > 0 ? ` | mentions=[${mentions.join('; ')}]` : ''),
-    )
+    const f = shownFields(cand)
+    lines.push(`[${i}] candidates=[${labels.join(', ')}] | account=${f.account || '(none)'} | caption=${f.caption || '(none)'} | hashtags=${f.tags || '(none)'}`)
   })
   return lines.join('\n')
+}
+
+// The answer, in the order the model should think it: the subject, then each
+// candidate with its proof, and only then the label. v2 asked for the label
+// FIRST and the reason after, and a label can contradict the reason written
+// under it ("Video about Patagonia brand history" → NONE).
+const verdictSchema = z.object({
+  index: z.number().int(),
+  subject: z.string(),
+  candidates: z.array(z.object({ label: z.string(), sense: z.string(), about: z.boolean(), proof: z.string() })),
+  entity: z.string(), // 'BRAND' | an exact competitor name | 'NONE'
+})
+const batchSchema = z.object({ verdicts: z.array(verdictSchema) })
+
+/** Letters and digits only, compatibility-folded, so a proof matches the text
+ *  whatever the model did to its spacing, punctuation, emoji, case, accents or
+ *  𝐬𝐭𝐲𝐥𝐞𝐝 letters. */
+const bare = (s: string): string =>
+  s.normalize('NFKD').toLowerCase().replace(/[\u0300-\u036f]/g, '').replace(/[^\p{L}\p{N}]+/gu, '')
+
+/**
+ * True when a proof is quoted from the text the judge was shown for this
+ * video: at least half of its words of three or more characters are in it.
+ * Exported for tests.
+ *
+ * The prompt's rule is "no proof in the text shown → NOT ABOUT"; this is its
+ * deterministic half. An empty proof, or one the model could not have read —
+ * words it made up, or a description it never saw — takes the tag away.
+ * Word by word and only by half, not as one exact string, because a faithful
+ * proof still comes back stitched and trimmed: "Perfect backpack #cotopaxi"
+ * out of "Perfect backpack #hiking … #cotopaxi", "Bought a Patago…Nano puff
+ * jacket", "Terravia Pack 22L … by Patagonia". An exact-string check vetoed five
+ * genuine tags in six on the gold set's train split.
+ */
+export function proofIsShown(proof: string, cand: AttrCandidate): boolean {
+  const f = shownFields(cand)
+  const hay = bare([f.account, f.caption, f.tags].join(' '))
+  const words = str(proof).split(/\s+|…|\.{2,}/).map(bare).filter((w) => w.length >= 3)
+  return words.length > 0 && 2 * words.filter((w) => hay.includes(w)).length >= words.length
+}
+
+/** The parsed answer → verdicts. A tag stands only when the model marked that
+ *  candidate ABOUT and its proof is in the text shown; otherwise NONE, with the
+ *  reason saying which check it failed. */
+function verdictsV3(parsed: unknown, items: JudgeItem[]): JudgeVerdict[] {
+  return (parsed as z.infer<typeof batchSchema>).verdicts.map((v) => {
+    const entity = str(v.entity).trim()
+    const subject = str(v.subject)
+    if (entity.toUpperCase() === NONE) return { index: v.index, entity: NONE, reason: subject }
+    const call = v.candidates.find((c) => fold(c.label) === fold(entity))
+    const item = items[v.index]
+    if (!call?.about) return { index: v.index, entity: NONE, reason: `${subject} [${entity} not marked ABOUT]` }
+    if (!item || !proofIsShown(call.proof, item.cand)) {
+      return { index: v.index, entity: NONE, reason: `${subject} [${entity}: proof not in the text shown: "${call.proof}"]` }
+    }
+    return { index: v.index, entity, reason: `${subject} — "${call.proof}"` }
+  })
+}
+
+/** The judge every gather and re-tag runs. */
+export const ATTRIBUTION_JUDGE: AttributionJudge = {
+  version: ATTRIBUTION_PROMPT_VERSION,
+  model: ATTRIBUTION_MODEL,
+  systemPrompt: buildSystemPrompt,
+  userPrompt: buildUserPrompt,
+  schema: batchSchema,
+  verdicts: verdictsV3,
 }
 
 /** Map a GPT label back to tags, trusting only labels that were real candidates. */
@@ -226,12 +295,13 @@ function resolveTag(entity: string, matches: EntityMatches): VideoTags {
  */
 export async function attributeVideos(
   videos: AttrCandidate[],
-  opts: { method: AttributionMethod; config: GatherConfig },
+  opts: { method: AttributionMethod; config: GatherConfig; judge?: AttributionJudge },
 ): Promise<AttributionResult> {
+  const judge = opts.judge ?? ATTRIBUTION_JUDGE
   const tags = new Map<string, VideoTags>()
   const result: AttributionResult = {
     tags, costUsd: 0, promptTokens: 0, completionTokens: 0, gptJudged: 0,
-    rejected: 0, fallbackIds: new Set(), failedBatches: 0, errors: [],
+    rejected: 0, fallbackIds: new Set(), failedBatches: 0, errors: [], reasons: new Map(),
   }
 
   const flagged: { cand: AttrCandidate; matches: EntityMatches; labels: string[] }[] = []
@@ -254,24 +324,27 @@ export async function attributeVideos(
     const answered = new Set<string>()
     let threw = false
     try {
+      const items = batch.map((f) => ({ cand: f.cand, labels: f.labels }))
       const completion = await openai.chat.completions.parse({
-        model: ANALYSIS_MODEL,
+        model: judge.model,
         temperature: ANALYSIS_TEMPERATURE,
         messages: [
-          { role: 'system', content: buildSystemPrompt(opts.config) },
-          { role: 'user', content: buildUserPrompt(batch.map((f) => ({ cand: f.cand, labels: f.labels })), opts.config) },
+          { role: 'system', content: judge.systemPrompt(opts.config) },
+          { role: 'user', content: judge.userPrompt(items, opts.config) },
         ],
-        response_format: zodResponseFormat(batchSchema, 'attribution'),
+        response_format: zodResponseFormat(judge.schema, 'attribution'),
       })
       if (completion.usage) {
         result.promptTokens += completion.usage.prompt_tokens
         result.completionTokens += completion.usage.completion_tokens
-        result.costUsd += estimateCost(ANALYSIS_MODEL, completion.usage.prompt_tokens, completion.usage.completion_tokens)
+        result.costUsd += estimateCost(judge.model, completion.usage.prompt_tokens, completion.usage.completion_tokens)
       }
-      for (const v of completion.choices[0]?.message?.parsed?.verdicts ?? []) {
+      const parsed = completion.choices[0]?.message?.parsed
+      for (const v of parsed == null ? [] : judge.verdicts(parsed, items)) {
         const f = batch[v.index]
-        if (!f) continue
+        if (!f || answered.has(f.cand.video_id)) continue
         tags.set(f.cand.video_id, tagAfterExclusions(f.cand, resolveTag(v.entity, f.matches), opts.config))
+        result.reasons.set(f.cand.video_id, v.reason)
         answered.add(f.cand.video_id)
       }
     } catch (e) {

@@ -10,7 +10,7 @@ import { dedupeBy, round2 } from './util'
 import { loadSuppressedKeys, filterSuppressed } from './suppression'
 import { classifyRelevance, type ClassifyResult, type RelevanceMethod } from './relevance'
 import { buildGateVerdictRows, recordGateVerdicts } from './gate-verdicts'
-import { attributeVideos, ATTRIBUTION_PROMPT_VERSION, type AttributionMethod, type AttributionResult } from './attribution'
+import { attributeVideos, ATTRIBUTION_JUDGE, ATTRIBUTION_PROMPT_VERSION, type AttributionMethod, type AttributionResult } from './attribution'
 import { splitDelta, pickRechecks, pickDormant, scrapeBaseline, type KnownVideoState, type RecheckCandidate } from './delta'
 import type { RunWindow } from '../pipeline/window'
 import type {
@@ -702,7 +702,7 @@ export async function gatePlatform(opts: {
         runId: opts.runId,
         pass: 'attribution',
         callIndex: 1,
-        model: ANALYSIS_MODEL,
+        model: ATTRIBUTION_JUDGE.model,
         promptVersion: ATTRIBUTION_PROMPT_VERSION,
         systemPrompt: `attribution (${attribution})`,
         userPrompt: `${adapter.platform} — ${attributed.gptJudged} videos with a candidate name`,

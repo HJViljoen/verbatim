@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-// The model is a stub: these tests are about what the judge is SHOWN and what
-// happens to a video when no verdict comes back for it.
+// The model is a stub: these tests are about what the judge is SHOWN, how an
+// answer becomes a tag, and what happens to a video when no verdict comes back.
 const { parse } = vi.hoisted(() => ({ parse: vi.fn() }))
 vi.mock('../openai', () => ({ openai: { chat: { completions: { parse } } } }))
 
-import { attributeVideos, buildSystemPrompt, buildUserPrompt, mentionSnippets, type AttrCandidate } from './attribution'
+import { ATTRIBUTION_JUDGE, attributeVideos, buildSystemPrompt, buildUserPrompt, proofIsShown, type AttrCandidate } from './attribution'
+import { ATTRIBUTION_MODEL } from '../config'
 import type { GatherConfig } from './types'
 
 const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/
@@ -28,6 +29,16 @@ const config: GatherConfig = {
   subreddits: [],
 }
 
+/** A tenant with none of Sealand's names — the prompt is shared by every tenant. */
+const ossur: GatherConfig = {
+  ...config,
+  brand_keywords: ['össur'],
+  competitor_names: ['Ottobock', 'Fillauer'],
+  competitor_keywords: [],
+  industry_keywords: ['prosthetic knee', 'running blade'],
+  exclude_terms: [],
+}
+
 const cand = (id: string, caption: string, o: Partial<AttrCandidate> = {}): AttrCandidate => ({
   video_id: id,
   account_name: 'someone',
@@ -36,8 +47,21 @@ const cand = (id: string, caption: string, o: Partial<AttrCandidate> = {}): Attr
   ...o,
 })
 
-const answer = (verdicts: { index: number; entity: string; reason?: string }[]) => ({
-  choices: [{ message: { parsed: { verdicts: verdicts.map((v) => ({ reason: 'x', ...v })) } } }],
+/** A v3 answer: a verdict per index; a tag is marked ABOUT with a proof unless
+ *  the test says otherwise. */
+const answer = (verdicts: { index: number; entity: string; proof?: string; about?: boolean; subject?: string }[]) => ({
+  choices: [{
+    message: {
+      parsed: {
+        verdicts: verdicts.map((v) => ({
+          index: v.index,
+          subject: v.subject ?? 's',
+          candidates: v.entity === 'NONE' ? [] : [{ label: v.entity, sense: '', about: v.about ?? true, proof: v.proof ?? '' }],
+          entity: v.entity,
+        })),
+      },
+    },
+  }],
   usage: { prompt_tokens: 100, completion_tokens: 20 },
 })
 
@@ -55,7 +79,7 @@ describe('buildUserPrompt — code-point-safe text', () => {
 
   it('never cuts an emoji in half at the 200 mark', () => {
     expect(LONE_SURROGATE.test(rosenheim.slice(0, 200))).toBe(true) // the old cut
-    const prompt = buildUserPrompt([{ cand: cand('v1', rosenheim), labels: ['Freitag', 'NONE'] }], config)
+    const prompt = buildUserPrompt([{ cand: cand('v1', rosenheim), labels: ['Freitag', 'NONE'] }])
     expect(LONE_SURROGATE.test(prompt)).toBe(false)
     expect(JSON.stringify(prompt)).not.toMatch(/\\ud8/i)
   })
@@ -63,82 +87,128 @@ describe('buildUserPrompt — code-point-safe text', () => {
   it('strips a stray surrogate already present in the account or a hashtag', () => {
     const prompt = buildUserPrompt([
       { cand: cand('v1', 'bag', { account_name: 'freibag\uD83D', hashtags: ['#freitag\uDC5C', '#bag'] }), labels: ['Freitag', 'NONE'] },
-    ], config)
+    ])
     expect(LONE_SURROGATE.test(prompt)).toBe(false)
     expect(prompt).toContain('account=freibag |')
     expect(prompt).toContain('hashtags=#freitag #bag')
   })
 })
 
-describe('mentions= — the judge sees the evidence it is asked about', () => {
+describe('buildUserPrompt — the judge sees the head, and nothing past it', () => {
   // "Top 5 Best Backpacks" (YouTube): the name at character 778 of the
-  // description, far past the 200 the judge is shown.
+  // description. v2 quoted the words around it (mentions=) and the judge
+  // confirmed gear lists off them; v3 shows only the head, so the name is not
+  // in front of the judge and "no proof in the text shown" makes it NONE.
   const roundUp = `Top 5 Best Backpacks for travel in 2026. ${'Here is what we tested and why. '.repeat(23)}Number four is the Borealis from The North Face, a daypack with a laptop sleeve. Links below.`
 
-  it('quotes the words around a candidate name that sits past the visible head', () => {
+  it('prints no mentions= and no words past the 200th code point', () => {
     expect(roundUp.indexOf('The North Face')).toBeGreaterThan(700)
-    const snips = mentionSnippets(cand('v1', roundUp), ['The North Face', 'NONE'], config)
-    expect(snips).toHaveLength(1)
-    // Cut in front (marked …); the caption ends inside the 60 after it.
-    expect(snips[0]).toMatch(/^The North Face: …is what we tested and why\. Number four is the Borealis from The North Face, a daypack with a laptop sleeve\. Links below\.$/)
-    const prompt = buildUserPrompt([{ cand: cand('v1', roundUp), labels: ['The North Face', 'NONE'] }], config)
-    expect(prompt).toContain('| mentions=[The North Face: …')
+    const prompt = buildUserPrompt([{ cand: cand('v1', roundUp), labels: ['The North Face', 'NONE'] }])
+    expect(prompt).not.toContain('mentions=')
+    expect(prompt).not.toContain('Borealis')
+    expect(prompt).toContain('candidates=[The North Face, NONE]')
   })
 
-  it('adds nothing when the name is already in what the judge is shown', () => {
-    const v = cand('v1', 'The North Face Borealis review after a year of commuting')
-    expect(mentionSnippets(v, ['The North Face', 'NONE'], config)).toEqual([])
-    expect(buildUserPrompt([{ cand: v, labels: ['The North Face', 'NONE'] }], config)).not.toContain('mentions=')
-  })
-
-  it('counts the account and the first eight hashtags as shown', () => {
-    expect(mentionSnippets(cand('v1', `${'x '.repeat(150)}cotopaxi`, { account_name: 'cotopaxi' }), ['Cotopaxi', 'NONE'], config)).toEqual([])
-    expect(mentionSnippets(cand('v1', `${'x '.repeat(150)}cotopaxi`, { hashtags: ['#cotopaxi'] }), ['Cotopaxi', 'NONE'], config)).toEqual([])
-  })
-
-  it('names a hashtag past the eighth when that is the only place the name is', () => {
+  it('shows the account and the first eight hashtags only', () => {
     const tags = ['#a', '#b', '#c', '#d', '#e', '#f', '#g', '#h', '#freitagbag']
-    expect(mentionSnippets(cand('v1', 'new drop', { hashtags: tags }), ['Freitag', 'NONE'], config)).toEqual(['Freitag: #freitagbag'])
-  })
-
-  it('finds the brand by whichever configured keyword is present', () => {
-    const v = cand('v1', `${'long intro words '.repeat(20)}and my sealand bag held up`)
-    expect(mentionSnippets(v, ['BRAND', 'NONE'], config)[0]).toMatch(/^BRAND: ….*my sealand bag held up$/)
-  })
-
-  // Matching is on FOLDED text (accents stripped), so the position has to be
-  // mapped back to the caption as written, not read off the folded copy.
-  it('finds an accented name the way the matcher does, and quotes it as written', () => {
-    const ossur = { ...config, competitor_names: ['Össur'] }
-    const v = cand('v1', `${'Prosthetic knee comparison, part two. '.repeat(8)}Then the ÖSSUR Rheo knee, which we wore for a month.`)
-    const [snip] = mentionSnippets(v, ['Össur', 'NONE'], ossur)
-    expect(snip).toMatch(/^Össur: ….*Then the ÖSSUR Rheo knee, which we wore for a month\.$/)
-  })
-
-  it('keeps an emoji whole at the snippet edge', () => {
-    const v = cand('v1', `${'🎒'.repeat(260)} Freitag bag ${'🎒'.repeat(80)}`)
-    const [snip] = mentionSnippets(v, ['Freitag', 'NONE'], config)
-    expect(LONE_SURROGATE.test(snip)).toBe(false)
-    expect(snip).toContain('Freitag bag')
+    const prompt = buildUserPrompt([{ cand: cand('v1', 'new drop', { account_name: 'freitag.pluto', hashtags: tags }), labels: ['Freitag', 'NONE'] }])
+    expect(prompt).toContain('account=freitag.pluto')
+    expect(prompt).toContain('hashtags=#a #b #c #d #e #f #g #h')
+    expect(prompt).not.toContain('#freitagbag')
   })
 })
 
-describe('buildSystemPrompt — the v2 rules', () => {
+describe('buildSystemPrompt — v3', () => {
   const prompt = buildSystemPrompt(config)
-  it('asks for visible company or product context where the name is also a word, a day, a place or a person', () => {
-    expect(prompt).toContain('a common word, a day, a date, a place or a person needs visible sign of the company')
-    expect(prompt).toContain('am/ab/diesen/jeden Freitag')
+
+  it('asks for the subject, then per candidate its other sense, ABOUT or not, and a proof', () => {
+    expect(prompt).toContain('first write its subject')
+    expect(prompt).toMatch(/- sense: if the name is also an ordinary word, a day, a place or a person/)
+    expect(prompt).toContain('- about: true when ABOUT, false when NOT ABOUT')
+    expect(prompt).toContain('- proof: for an ABOUT candidate, the shortest exact words')
+    expect(prompt).toContain('No proof in the text shown → NOT ABOUT.')
   })
-  it('names the tenant’s own products, not one client’s — every tenant shares this prompt', () => {
-    expect(prompt).not.toMatch(/bags, clothing/)
-    expect(prompt).toContain('its products (what the brand and its competitors make, above)')
-    expect(prompt).toContain('The brand and its competitors make: eco backpack, upcycled bag, travel gear.')
+
+  it('carries each failure class the gold set showed', () => {
+    expect(prompt).toContain('only the COMPANY counts as proof') // homonyms
+    expect(prompt).toContain('a round-up, top-N list') // round-ups, gear and outfit lists, affiliate links
+    expect(prompt).toContain('a comparison of this company against another brand') // A vs B
+    expect(prompt).toContain('other brands named in the text count, whether or not they are candidates')
+    expect(prompt).toContain('news about the company: a lawsuit') // the company in the news IS about it
   })
-  it('makes a round-up or gear list NONE unless the company is its main subject', () => {
-    expect(prompt).toContain('lists, ranks or rounds up many brands')
+
+  it('is built from the tenant’s config and names no client in its examples', () => {
+    expect(prompt).toContain('a brand ("sealand gear") and its competitors (Cotopaxi, Freitag, Rareform, The North Face, Patagonia, Freedom of Movement, Old School)')
+    expect(prompt).toContain('They make: eco backpack, upcycled bag, travel gear.')
+    const other = buildSystemPrompt(ossur)
+    expect(other).toContain('They make: prosthetic knee, running blade.')
+    for (const name of ['sealand', 'Cotopaxi', 'Freitag', 'Patagonia', 'North Face', 'bags, clothing']) expect(other).not.toContain(name)
   })
-  it('makes a candidate the judge cannot see NONE', () => {
-    expect(prompt).toContain('not visible in the text shown')
+
+  it('renders the client’s exclusions as senses, and none when there are none', () => {
+    expect(prompt).toContain('Senses of the names this client has flagged as NOT the company: argentina, chile,')
+    expect(buildSystemPrompt(ossur)).not.toContain('flagged as NOT the company')
+  })
+})
+
+describe('proofIsShown — the deterministic half of "no proof → NOT ABOUT"', () => {
+  const amy = cand('amy', 'Such a nice size backpack that holds a lot. Great brand and designs. Perfect backpack #hiking #backtoschoolshopping #backpack #cotopaxi #tiktokshopcreatorpicks')
+
+  it('accepts a proof stitched from pieces of what was shown', () => {
+    expect(proofIsShown('Great brand and designs. Perfect backpack #cotopaxi', amy)).toBe(true)
+    expect(proofIsShown('Perfect backpack … #cotopaxi', amy)).toBe(true)
+  })
+
+  it('refuses an empty proof, and one the judge could not have read', () => {
+    expect(proofIsShown('', amy)).toBe(false)
+    expect(proofIsShown('Cotopaxi Allpa 35L review', amy)).toBe(false)
+    // The name sits past the 200-code-point head: quoting it is quoting
+    // something the judge was never shown.
+    const deep = cand('deep', `${'Packing for the trip. '.repeat(12)}Hip pack: Cotopaxi Kapai 1.5L`)
+    expect(proofIsShown('Hip pack: Cotopaxi Kapai', deep)).toBe(false)
+  })
+
+  it('reads styled letters, accents and case as the plain text they show', () => {
+    expect(proofIsShown('F41 HAWAII FIVE-O', cand('th', '𝐅𝟒𝟏 𝐇𝐀𝐖𝐀𝐈𝐈 𝐅𝐈𝐕𝐄-𝐎 (𝐂𝐡𝐚𝐫𝐜𝐨𝐚𝐥 𝐆𝐫𝐚𝐲)'))).toBe(true)
+    expect(proofIsShown('ossur rheo knee', cand('o', 'The ÖSSUR Rheo Knee after a month'))).toBe(true)
+  })
+})
+
+describe('attributeVideos — a verdict becomes a tag only with ABOUT and a shown proof', () => {
+  it('runs the v3 judge on its own model', async () => {
+    parse.mockResolvedValueOnce(answer([{ index: 0, entity: 'Freitag', proof: 'unboxing my new freitag bag' }]))
+    const r = await attributeVideos([cand('bag', 'unboxing my new freitag bag from the Zurich store')], { method: 'gpt', config })
+    expect(ATTRIBUTION_MODEL).toBe('gpt-4.1')
+    expect(parse.mock.calls[0][0].model).toBe(ATTRIBUTION_MODEL)
+    expect(ATTRIBUTION_JUDGE.version).toBe('attribution_v3')
+    expect(r.tags.get('bag')).toEqual(rival('Freitag'))
+    expect(r.reasons.get('bag')).toBe('s — "unboxing my new freitag bag"')
+  })
+
+  it('makes a label the model did not mark ABOUT, or proved with unshown words, NONE — and counts it', async () => {
+    parse.mockResolvedValueOnce(answer([
+      { index: 0, entity: 'Freitag', about: false, proof: 'FREITAG PARTY' },
+      { index: 1, entity: 'Cotopaxi', proof: 'Cotopaxi Allpa 35L — main travel backpack' },
+      { index: 2, entity: 'Patagonia', proof: '' },
+    ]))
+    const r = await attributeVideos([
+      cand('party', 'FREITAG PARTY PEOPLE 🎉'),
+      cand('gear', `VLOG | Hanoi street food 🇻🇳 ${'Our travel gear, all linked below. '.repeat(6)}Cotopaxi Allpa 35L — main travel backpack`),
+      cand('hat', 'Patagonia cap'),
+    ], { method: 'gpt', config })
+    expect(r.tags.get('party')).toEqual(UNTAGGED)
+    expect(r.tags.get('gear')).toEqual(UNTAGGED)
+    expect(r.tags.get('hat')).toEqual(UNTAGGED)
+    expect(r.rejected).toBe(3)
+    expect(r.fallbackIds.size).toBe(0)
+    expect(r.reasons.get('party')).toContain('not marked ABOUT')
+    expect(r.reasons.get('gear')).toContain('proof not in the text shown')
+  })
+
+  it('never trusts a label that was not a candidate', async () => {
+    parse.mockResolvedValueOnce(answer([{ index: 0, entity: 'Osprey', proof: 'Osprey Farpoint 40' }]))
+    const r = await attributeVideos([cand('o', 'Osprey Farpoint 40 vs Cotopaxi Allpa')], { method: 'gpt', config })
+    expect(r.tags.get('o')).toEqual(UNTAGGED)
   })
 })
 
@@ -171,7 +241,7 @@ describe('attributeVideos — no silent substring fallback', () => {
   })
 
   it('gives a skipped index the same strict fallback, and says so', async () => {
-    parse.mockResolvedValueOnce(answer([{ index: 3, entity: 'Freitag' }]))
+    parse.mockResolvedValueOnce(answer([{ index: 3, entity: 'Freitag', proof: 'my new freitag bag' }]))
     const r = await attributeVideos([...homonyms, ...genuine], { method: 'gpt', config })
     expect(r.failedBatches).toBe(0)
     expect(r.tags.get('bag')).toEqual(rival('Freitag')) // the verdict
@@ -196,7 +266,7 @@ describe('attributeVideos — no silent substring fallback', () => {
   })
 
   it('counts a verdict that leaves a video untagged as a rejection', async () => {
-    parse.mockResolvedValueOnce(answer([{ index: 0, entity: 'NONE' }, { index: 1, entity: 'Freitag' }]))
+    parse.mockResolvedValueOnce(answer([{ index: 0, entity: 'NONE' }, { index: 1, entity: 'Freitag', proof: 'my new freitag bag' }]))
     const r = await attributeVideos([homonyms[0], genuine[0]], { method: 'gpt', config })
     expect(r.rejected).toBe(1)
     expect(r.fallbackIds.size).toBe(0)
@@ -213,7 +283,10 @@ describe('attributeVideos — no silent substring fallback', () => {
 
 describe('attributeVideos — the exclusions still have the last word over a verdict', () => {
   it('strips a GPT "Cotopaxi" on the volcano, and keeps one that @-mentions the company', async () => {
-    parse.mockResolvedValueOnce(answer([{ index: 0, entity: 'Cotopaxi' }, { index: 1, entity: 'Cotopaxi' }]))
+    parse.mockResolvedValueOnce(answer([
+      { index: 0, entity: 'Cotopaxi', proof: '#cotopaxi' },
+      { index: 1, entity: 'Cotopaxi', proof: '@COTOPAXI apparel and backpack' },
+    ]))
     const r = await attributeVideos([
       cand('alexa', '', { account_name: 'alexa', hashtags: ['#cotopaxi', '#ecuador', '#travel'] }),
       cand('joel', '@COTOPAXI apparel and backpack at Cotopaxi volcano in Ecuador', { account_name: 'JoelWestBarish' }),
