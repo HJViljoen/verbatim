@@ -188,8 +188,11 @@ export function TileColumns({ of, rule = true, rail, children, className }: {
  *  the page. `subtitle` (optional) is a one-line reading under the title —
  *  component-map §1: orientation and actions in one place. */
 export function PageBar({
-  title, context, subtitle, children,
+  title, children,
 }: { title: ReactNode; context?: ReactNode; subtitle?: ReactNode; children?: ReactNode }) {
+  // TITLE ONLY (Heinrich, 2026-09-24): the question under the title and the
+  // context line beside it are no longer printed on any page. The props stay
+  // so callers compile; they are ignored.
   return (
     <div className="flex shrink-0 flex-col gap-0.5">
       {/* THE CONTEXT WRAPS (Block D wave 3, SH17). It was `truncate`, with no
@@ -203,10 +206,8 @@ export function PageBar({
           fits on one line is exactly what it was. */}
       <div className="flex min-h-8 flex-wrap items-center gap-x-3 gap-y-1">
         <h1 className="text-[17px] font-semibold tracking-[-0.01em]">{title}</h1>
-        {context && <span className="min-w-0 font-mono text-[11.5px] leading-[1.4] text-muted-foreground">{context}</span>}
         {children && <div className="ml-auto flex shrink-0 items-center gap-2">{children}</div>}
       </div>
-      {subtitle && <p className="text-[12.5px] text-muted-foreground">{subtitle}</p>}
     </div>
   )
 }

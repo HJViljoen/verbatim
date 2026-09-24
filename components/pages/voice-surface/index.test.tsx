@@ -67,7 +67,7 @@ describe('VoiceSurfacePage', () => {
   it('draws four tiles and the page bar', () => {
     const markup = render(<VoiceSurfacePage data={voiceFixture()} params={{ audience: 'industry-other' }} />)
     expect(markup.match(/data-tile=""/g)).toHaveLength(4)
-    expect(markup).toContain('Who is saying what in this category?')
+    expect(markup).not.toContain('Who is saying what in this category?')
   })
 
   it('gives no block a fixed height, so nothing on this page can be cut in silence', () => {

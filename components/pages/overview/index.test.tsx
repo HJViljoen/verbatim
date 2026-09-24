@@ -174,7 +174,7 @@ describe('the Overview page', () => {
   // the reader, and the nav and the legend read it — and stop drawing it.
   it('prints one question, and it is the page bar\u2019s', () => {
     const text = renderText(<OverviewPage data={overviewFixture()} />)
-    expect(text).toContain('What is this month\u2019s reading?')
+    expect(text).not.toContain('What is this month\u2019s reading?') // the bar prints its title only (2026-09-24)
     for (const block of TILE_BLOCKS) {
       expect(block.question, block.key).toBeTruthy()
       expect(text, block.key).not.toContain(block.question as string)

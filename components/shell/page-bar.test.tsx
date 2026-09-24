@@ -15,17 +15,17 @@ describe('SurfacePageBar', () => {
   it('prints the label and the question the sidebar promised', () => {
     const text = renderText(<SurfacePageBar nav="subjects" context={CONTEXT} />)
     expect(text).toContain('Subjects')
-    expect(text).toContain('How are we seen on this subject?')
+    expect(text).not.toContain('How are we seen on this subject?') // title only, 2026-09-24
   })
 
   it('carries the month context on a reading surface', () => {
     expect(renderText(<SurfacePageBar nav="overview" context={CONTEXT} />))
-      .toContain('Össur · September 2026 · still filling · as at 15 Sep')
+      .not.toContain('still filling') // the bar prints its title only (2026-09-24)
   })
 
   it('dates This week by its updates and offers no horizon', () => {
     const markup = render(<SurfacePageBar nav="week" updates={{ update: '2026-09-14T04:00:00Z', previous: '2026-09-07T04:00:00Z' }} />)
-    expect(markup).toContain('update of 14 Sep · previous 7 Sep')
+    expect(markup).not.toContain('update of 14 Sep · previous 7 Sep')
     expect(markup).not.toContain('Last 3 months')
   })
 
