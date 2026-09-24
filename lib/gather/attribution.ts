@@ -3,6 +3,7 @@ import { chunk } from '../chunk'
 import { zodResponseFormat } from 'openai/helpers/zod'
 import { openai } from '../openai'
 import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, estimateCost } from '../config'
+import { promptText } from './transcript'
 import { fold, str } from './util'
 import { matchEntities, tagVideo, tagAfterExclusions, type EntityMatches, type TagCandidate, type VideoTags } from './tagging'
 import type { GatherConfig } from './types'
@@ -76,13 +77,17 @@ function buildSystemPrompt(config: GatherConfig): string {
   ].join('\n')
 }
 
-function buildUserPrompt(items: { cand: AttrCandidate; labels: string[] }[]): string {
+/** Exported for tests. Every scraped string goes through promptText — the
+ *  UTF-16 `.slice(0, 200)` this used to be cut an emoji in half and 400'd the
+ *  whole batch (lib/gather/transcript.ts promptText). */
+export function buildUserPrompt(items: { cand: AttrCandidate; labels: string[] }[]): string {
   const lines = ['VIDEOS — for each, pick which candidate it is genuinely about (or NONE):']
   items.forEach(({ cand, labels }, i) => {
-    const caption = str(cand.caption).replace(/\s+/g, ' ').trim().slice(0, 200)
-    const tags = (cand.hashtags ?? []).slice(0, 8).join(' ')
+    const caption = promptText(str(cand.caption), 200)
+    const tags = (cand.hashtags ?? []).slice(0, 8).map((h) => promptText(str(h), 60)).filter(Boolean).join(' ')
+    const account = promptText(str(cand.account_name), 100)
     lines.push(
-      `[${i}] candidates=[${labels.join(', ')}] | account=${str(cand.account_name) || '(none)'} | caption=${caption || '(none)'} | hashtags=${tags || '(none)'}`,
+      `[${i}] candidates=[${labels.join(', ')}] | account=${account || '(none)'} | caption=${caption || '(none)'} | hashtags=${tags || '(none)'}`,
     )
   })
   return lines.join('\n')

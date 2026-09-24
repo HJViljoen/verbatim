@@ -83,6 +83,23 @@ export function clipText(s: string, max: number): string {
   return points.length <= max ? collapsed : points.slice(0, max).join('')
 }
 
+/**
+ * Scraped metadata bound for a model prompt: clipped by code point (clipText)
+ * AND stripped of any lone surrogate the source text already carried
+ * (dbSafeText). The second half is not hypothetical either — a scraped
+ * account name or hashtag can arrive with half an emoji, and it 400s the
+ * request body exactly as a cut one does.
+ *
+ * WHY THIS IS SHARED (2026-09-24). The relevance gate and the attribution judge
+ * each cut captions with `.slice(0, 200)`, and every September Sealand gather
+ * that tagged 100% of its name matches had a caption with an emoji at unit 199:
+ * one lone surrogate 400'd a whole 60-video batch, relevance failed OPEN (kept
+ * everything) and attribution fell back to substring tags, silently.
+ */
+export function promptText(s: string, max: number): string {
+  return dbSafeText(clipText(s, max))
+}
+
 /** The `transcript` column's value for a resolved text. ASR output (Whisper,
  *  AssemblyAI) and platform captions are as capable of carrying a U+0000 as any
  *  model reply, and one of those 400s the PATCH that carries it — losing a paid
