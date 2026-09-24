@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import type { Block, BlockContext, QuoteRef, RenderMode } from '@/lib/blocks/types'
-import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
+import { BlockEmpty, BlockFrame, NoValue } from '@/components/blocks/frame'
 import { BlockQuote } from '@/components/blocks/quote'
 import { MovementBadge } from '@/components/delta-badge'
 import { RecStatusMenu, RecStatusWord } from '@/components/rec-status'
@@ -178,7 +178,35 @@ function GroundedCell({ row, mode }: { row: AdviceRow; mode: RenderMode }) {
  * inside it is the only place on this page a movement word is allowed to appear
  * (copy contract, rule (c)).
  */
-function AfterwardsCell({ row, mode }: { row: AdviceRow; mode: RenderMode }) {
+/**
+ * The one sentence the Afterwards column says about EVERY row, or null
+ * (polish pass, 2026-09-24).
+ *
+ * Nothing on this page has two monthly readings behind a decision yet, so
+ * `afterwardsFor` answers every one of the ledger's twelve rows with the same
+ * fifteen words — "You have not decided on this one yet. We start reading the
+ * month after you do." — printed twelve times down a 200px column, with
+ * `a.unlock` saying the same thing again in a line under the table. The
+ * artboard's Afterwards column is an em dash on the three of its five rows
+ * that have nothing to report.
+ *
+ * FOLDED ONLY WHERE IT IS ONE SENTENCE ABOUT ALL OF THEM. The moment two rows
+ * give different answers — one decided, one not — the column is saying
+ * something per row and every cell speaks for itself again. The block's own
+ * four states are what make this safe: the fold is on the rendered LINE, not
+ * on a state, so a new state cannot be folded away by accident.
+ */
+export function foldedAfterwards(rows: readonly AdviceRow[]): string | null {
+  if (rows.length < 2) return null
+  const lines = new Set(rows.map((r) =>
+    r.afterwards?.state === 'reading' && r.afterwards.verdict ? '\u0000reading' : (r.afterwards?.line ?? ADVICE_AFTERWARDS_UNRECORDED),
+  ))
+  if (lines.size !== 1) return null
+  const only = [...lines][0]
+  return only === '\u0000reading' ? null : only
+}
+
+function AfterwardsCell({ row, mode, folded = false }: { row: AdviceRow; mode: RenderMode; folded?: boolean }) {
   // A FROZEN ROW MAY NOT HAVE THE FIELD AT ALL, and this cell used to reach
   // straight through it. `afterwards` is required and wave 1 added it, so a
   // `report_snapshots` row whose `surfaces.market` froze before Block D
@@ -189,6 +217,9 @@ function AfterwardsCell({ row, mode }: { row: AdviceRow; mode: RenderMode }) {
   const a: Afterwards | null = row.afterwards ?? null
   const email = mode === 'email'
   if (a == null || a.state !== 'reading' || !a.verdict) {
+    // The column says one thing about every row: it says it once, under the
+    // table, and the cell carries the artboard's mark for an empty one.
+    if (folded) return <NoValue mode={mode} label="nothing to report yet" />
     const line = a?.line ?? ADVICE_AFTERWARDS_UNRECORDED
     return email
       ? <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>{line}</span>
@@ -270,8 +301,10 @@ export const marketAdvice: Block<MarketSurfaceData> = {
     // state sentences — nothing is being written down, nothing has been read
     // in the Afterwards column yet — are facts about this workspace, not
     // method. What goes behind the disclosure is how the columns count.
+    const afterwardsOnce = foldedAfterwards(a.rows)
     const state = [
       !a.recorded ? ADVICE_UNRECORDED : null,
+      afterwardsOnce ? `Afterwards, on every row: ${afterwardsOnce}` : null,
       !anyReading ? a.unlock : null,
     ].filter((x): x is string => Boolean(x)).join(' ')
     const notes = (
@@ -351,7 +384,7 @@ export const marketAdvice: Block<MarketSurfaceData> = {
                   <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}> · grounded in </span>
                   <GroundedCell row={row} mode={mode} />
                 </div>
-                <div style={{ marginTop: 2 }}><AfterwardsCell row={row} mode={mode} /></div>
+                <div style={{ marginTop: 2 }}><AfterwardsCell row={row} mode={mode} folded={afterwardsOnce != null} /></div>
               </div>
             ))}
             {notes}
@@ -402,7 +435,7 @@ export const marketAdvice: Block<MarketSurfaceData> = {
                         <td className="py-1.5 pr-3"><RepeatCell row={row} isNew={row.firstMade.slice(0, 7) === readingMonth} mode={mode} /></td>
                         <td className="py-1.5 pr-3"><StatusCell row={row} mode={mode} /></td>
                         <td className="py-1.5 pr-3"><GroundedCell row={row} mode={mode} /></td>
-                        <td className="py-1.5"><AfterwardsCell row={row} mode={mode} /></td>
+                        <td className="py-1.5"><AfterwardsCell row={row} mode={mode} folded={afterwardsOnce != null} /></td>
                       </tr>
                     )
                     // The artboard's expansion, in its own track directly under
