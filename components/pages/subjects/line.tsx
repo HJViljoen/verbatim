@@ -7,7 +7,6 @@ import { backReadBandLabel, chartReady, type CalendarSeries } from '@/lib/charts
 import { fmtPct, monthName } from '@/lib/format'
 import { GAP_WORDS } from '@/lib/reading/gap'
 import { endReadings, sideLegend, type SubjectsData } from '@/lib/pages/subjects'
-import { CALIBRATING_LINE } from '@/lib/subjects/types'
 
 // SU2 · the monthly line (design §3 SU2 "you, each rival and the category by
 // month as lines with the counts"; the mock's (a)).
@@ -182,9 +181,6 @@ export const subjectsLine: Block<SubjectsData> = {
     if (data.list.notRecorded) return data.list.notRecorded
     if (!data.selected) return 'Nothing is selected, so there is no line to draw.'
     if (data.selected.notRecorded) return data.selected.notRecorded
-    // A line of a calibrating subject's share is its share, month by month —
-    // hidden with it, and said as the hero says it.
-    if (data.selected.calibration !== 'ready') return CALIBRATING_LINE
     if (data.selected.series.length === 0) {
       return 'This subject has no stored months on this axis yet.'
     }

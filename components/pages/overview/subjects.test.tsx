@@ -7,8 +7,7 @@ import { render, renderText } from '@/lib/test/render'
 import { gapBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
 import { DirectionWord, leadGap, overviewSubjects, sparkDomain, subjectsMeta } from './subjects'
 import { monthlyLineLabel } from '@/lib/pages/overview'
-import { calibratingFixture, overviewFixture, refusedFixture, renamedRivalFixture } from './fixture'
-import { CALIBRATING_WORD } from '@/lib/subjects/types'
+import { overviewFixture, refusedFixture, renamedRivalFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -287,34 +286,5 @@ describe('the monthly-line column shares one scale', () => {
   it('draws the zero floor and its rule on the row line', () => {
     const markup = render(overviewSubjects.render(overviewFixture(), 'app', ctx))
     expect(markup).toContain('stroke="var(--border)"')
-  })
-})
-
-// Heinrich's 24 Sep ruling: a CALIBRATING subject reads "calibrating" with its
-// share hidden — on Overview as on the Subjects page.
-describe('OV2 · a calibrating subject', () => {
-  const rowText = (text: string) => text.slice(text.indexOf('Repair & warranty'))
-
-  it('names the subject and says "calibrating" once, with no share and no "not tracked", in every mode', () => {
-    for (const mode of MODES) {
-      const markup = render(overviewSubjects.render(calibratingFixture(), mode, ctx))
-      assertCopyContract(markup)
-      const row = rowText(renderText(overviewSubjects.render(calibratingFixture(), mode, ctx)))
-      expect(row, mode).toContain('Repair & warranty')
-      expect(row, mode).toContain(CALIBRATING_WORD)
-      expect(row, mode).not.toMatch(/not tracked|\d%/)
-    }
-  })
-
-  it('leaves the rows that read exactly as they were', () => {
-    const text = renderText(overviewSubjects.render(calibratingFixture(), 'app', ctx))
-    expect(text).toContain('Durability')
-    expect(text).toMatch(/22(\.0)?%/)
-  })
-
-  it('declares no figure and no verdict for it', () => {
-    const figures = overviewSubjects.figures!(calibratingFixture())
-    expect(Object.keys(figures).some((k) => k.includes('s9'))).toBe(false)
-    expect(overviewSubjects.verdicts!(calibratingFixture()).some((v) => v.objectId === 's9')).toBe(false)
   })
 })

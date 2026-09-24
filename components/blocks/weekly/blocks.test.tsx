@@ -6,9 +6,6 @@ import { markupText, render, renderText } from '@/lib/test/render'
 import { FIRST_SCREEN_BUDGET, NOTHING_UNUSUAL, WEEKLY_BLOCK_KEYS, WEEKLY_RULE, firstScreenCount } from '@/lib/reports/weekly'
 import { WEEKLY_BLOCKS, forSales, weeklyBlocksFor } from './index'
 import { formingFixture, quietFixture, thinFixture, weeklyFixture } from './fixture'
-import { weeklySubjects } from './subjects'
-import { calibratingRow } from '@/components/pages/overview/fixture'
-import { CALIBRATING_WORD } from '@/lib/subjects/types'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -897,30 +894,5 @@ describe('WR6 · coverage', () => {
 
   it('is never empty', () => {
     for (const data of STATES) expect(block.emptyState(data)).toBeNull()
-  })
-})
-
-// Heinrich's 24 Sep ruling, in the weekly report's subjects section.
-describe('WR2 · a calibrating subject', () => {
-  const withCalibrating = () => {
-    const data = weeklyFixture()
-    return { ...data, subjects: { ...data.subjects, rows: [...data.subjects.rows, calibratingRow()], gaps: { ...data.subjects.gaps, s9: null } } }
-  }
-
-  it('prints "calibrating" in place of its bar, figure and sides, in every mode', () => {
-    for (const mode of MODES) {
-      assertCopyContract(render(weeklySubjects.render(withCalibrating(), mode, ctx)))
-      const text = renderText(weeklySubjects.render(withCalibrating(), mode, ctx))
-      const row = text.slice(text.indexOf('Repair & warranty'))
-      expect(row, mode).toContain(CALIBRATING_WORD)
-      expect(row, mode).not.toMatch(/not tracked|\d%|since the last update/)
-    }
-  })
-
-  it('does not count it in the lead’s "n of N moved"', () => {
-    const plain = renderText(weeklySubjects.render(weeklyFixture(), 'app', ctx))
-    const withIt = renderText(weeklySubjects.render(withCalibrating(), 'app', ctx))
-    const lead = (t: string) => /(\d+) of (\d+) subjects? moved/.exec(t)?.slice(1)
-    expect(lead(withIt)).toEqual(lead(plain))
   })
 })

@@ -32,7 +32,6 @@ import { pointsByMonth, type MonthLabel, type MonthSeries, type Substrate } from
 import type { MonthStatus } from '../reading/types'
 import type { FigureTable, RefusedReason, Verdict } from '../reading/verdicts'
 import {
-  CALIBRATING_WORD,
   isMissingSubjects,
   subjectCalibration,
   TABLE_SUBJECTS,
@@ -528,48 +527,10 @@ export function railNote(
   status: Subject['status'] = 'active',
 ): string | null {
   if (status === 'proposed') return 'not counted yet: confirm it and counting starts with the next update'
-  // A67: the pane says it in full; the rail says the one word — the ruling's
-  // word (24 Sep), which it now shares with every other surface.
-  if (calibration === 'calibrating') return CALIBRATING_WORD
+  // A67: the pane says it in full; the rail says the one word.
+  if (calibration === 'calibrating') return 'provisional'
   if (!read) return 'no reading yet'
   return null
-}
-
-/**
- * The pane of a subject whose share may not be printed, with every figure OF
- * THE SUBJECT taken out — the level, its count, the change, the direction, the
- * month before, the chart's lines, the gap, the category trail and the link to
- * "the videos behind your figure" (which names a figure that is not there).
- *
- * TAKEN OUT OF THE DATA, NOT ONLY OFF THE SCREEN. This page is a PageModule: an
- * export freezes this object into `report_snapshots.data`, `sideFigures` hands
- * its shares to a cover prompt, and the app ships it to the browser as props.
- * A share hidden only by a component would still travel in all three.
- *
- * What stays is what is not the subject's share: the audiences' own video
- * counts and kind mix, the voices, the unanswered questions, a declared move.
- */
-export function withheldPane(pane: SubjectPane): SubjectPane {
-  if (pane.calibration === 'ready') return pane
-  return {
-    ...pane,
-    sides: pane.sides.map((s) => ({
-      ...s,
-      k: null,
-      pct: null,
-      observed: false,
-      silence: null,
-      verdict: null,
-      direction: null,
-      previous: null,
-    })),
-    series: [],
-    chartSeries: [],
-    gap: null,
-    trail: null,
-    axisNote: null,
-    behind: null,
-  }
 }
 
 /** Which subject the page is about: the one asked for, else the first
@@ -1747,8 +1708,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       thin,
     })
 
-    // A calibrating subject's pane carries no share at all (withheldPane).
-    selected = withheldPane({
+    selected = {
       id: subject.id,
       name: subject.name,
       description: subject.description,
@@ -1779,7 +1739,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       notRecorded: subjectSet?.numeratorSubstrate === 'missing'
         ? 'This subject has no monthly reading recorded for this workspace yet.'
         : null,
-    })
+    }
   }
 
   // ── SU4 · your own posts, and the claims ledger ───────────────────────
@@ -2605,9 +2565,7 @@ async function nameQuestions(
 /** The figures the selected subject's hero prints, by token. */
 export function sideFigures(pane: SubjectPane | null): FigureTable {
   const out: FigureTable = {}
-  // A calibrating subject has no share to cite — not even off a pane frozen
-  // before withheldPane existed.
-  if (!pane || pane.calibration !== 'ready') return out
+  if (!pane) return out
   for (const s of pane.sides) {
     if (s.pct == null || s.k == null || s.n == null) continue
     const token = `subject_${s.kind}_${s.audience.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}`

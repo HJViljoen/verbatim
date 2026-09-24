@@ -19,8 +19,7 @@ import { calendarRulesFor } from '@/lib/charts/from-series'
 import { freezeQuotes } from '@/lib/renderables/quotes-freeze'
 import { gapBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
 import { SUBJECTS_NONE_NAMED } from '@/lib/reading/own-posts'
-import { axisNote, railNote, voiceCite, withheldPane } from '@/lib/pages/subjects'
-import { CALIBRATING_LINE, CALIBRATING_WORD } from '@/lib/subjects/types'
+import { axisNote, voiceCite } from '@/lib/pages/subjects'
 import { candidatesFixture, refusedFixture, retiredRivalFixture, subjectsFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
@@ -1114,61 +1113,5 @@ describe('the Subjects page', () => {
     expect(text).not.toContain(data.method!.language!)
     expect(text).not.toContain(data.method!.preparedBy)
     expect(text).not.toContain(data.method!.redditCap)
-  })
-})
-
-// Heinrich's 24 Sep ruling: a CALIBRATING subject reads "calibrating" with its
-// share hidden — on the rail, in the hero and on the chart, in every mode.
-describe('a calibrating subject — share hidden, "calibrating" said', () => {
-  const calibrating = () => {
-    const data = subjectsFixture()
-    return {
-      ...data,
-      list: {
-        ...data.list,
-        rows: data.list.rows.map((r, i) => (i === 0
-          ? { ...r, calibration: 'calibrating' as const, level: null, verdict: null, note: railNote('calibrating', true) }
-          : r)),
-      },
-      selected: withheldPane({ ...data.selected!, calibration: 'calibrating' as const }),
-    }
-  }
-
-  it('reads "calibrating" on its rail row, with no level', () => {
-    const data = calibrating()
-    const row = renderText(subjectsList.render(data, 'app', ctx))
-    expect(row).toContain(CALIBRATING_WORD)
-    expect(row).not.toContain('provisional')
-    // The other rows are ready and keep their levels.
-    expect(row).toMatch(/%/)
-  })
-
-  it('prints the calibrating line in the hero, and no share, no count, no gap, in every mode', () => {
-    for (const mode of MODES) {
-      const text = renderText(subjectsSubject.render(calibrating(), mode, ctx))
-      expect(text, mode).toContain(CALIBRATING_LINE)
-      expect(text, mode).not.toMatch(/\d%|of your videos|videos behind your figure|too few to compare/)
-      assertCopyContract(render(subjectsSubject.render(calibrating(), mode, ctx)))
-    }
-    expect(subjectsSubject.figures!(calibrating())).toEqual({})
-    expect(subjectsSubject.verdicts!(calibrating())).toEqual([])
-  })
-
-  it('draws no line of its share — the chart says the same line instead', () => {
-    const data = calibrating()
-    expect(subjectsLine.emptyState(data)).toBe(CALIBRATING_LINE)
-    for (const mode of MODES) {
-      const markup = render(subjectsLine.render(data, mode, ctx))
-      expect(markup, mode).not.toContain('<svg')
-      expect(markupText(markup), mode).toContain(CALIBRATING_LINE)
-    }
-  })
-
-  it('hides it even on a pane frozen before the loader withheld it', () => {
-    const data = subjectsFixture()
-    const frozen = { ...data, selected: { ...data.selected!, calibration: 'calibrating' as const } }
-    expect(renderText(subjectsSubject.render(frozen, 'app', ctx))).toContain(CALIBRATING_LINE)
-    expect(subjectsLine.emptyState(frozen)).toBe(CALIBRATING_LINE)
-    expect(subjectsSubject.figures!(frozen)).toEqual({})
   })
 })

@@ -428,20 +428,6 @@ export interface Move {
 export type SubjectCalibration = 'calibrating' | 'ready'
 
 /**
- * What a client surface prints where a calibrating subject's share would be —
- * Heinrich's 24 Sep ruling, word for word: a CALIBRATING subject "reads
- * 'calibrating', share hidden". One word for a cell or a rail row; one
- * sentence for a tile whose whole body is that share (the pane, its chart).
- *
- * EVERY SURFACE THAT PRINTS A SUBJECT'S SHARE, not only the rail. Until this
- * the gate lived on the Subjects rail alone, so Repair & warranty read
- * "provisional" in the rail and printed its share in the pane beside it, on
- * Overview and in both report emails.
- */
-export const CALIBRATING_WORD = 'calibrating'
-export const CALIBRATING_LINE = 'Calibrating: this subject’s share is not shown yet.'
-
-/**
  * Is this subject's share fit to print?
  *
  * Two independent gates and both have to pass. The precision gate is the
