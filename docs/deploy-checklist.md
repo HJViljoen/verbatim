@@ -1219,6 +1219,69 @@ because PostgREST's `authenticator` role carries `statement_timeout = 8s` and
 The order is not a preference. Each step is a prerequisite of the next, and
 step 5.4 is the one-shot.
 
+### 5.0 · Video source reconcile, per tenant
+
+**Before 5.1, because everything after it keys on the audience.** `audienceOf`
+files a video under `client` only when `is_client` is true, and the membership
+pass, the one-shot's `audience='client'` months and Pass A's own-post lane all
+read that key. `reconcile-video-source.ts` moves a row the keyword gather found
+first onto the source its account earns (`owned`, or `competitor_owned` for a
+rival's own post) and, since `1ee1a8a9`, writes the WHOLE identity: `source`,
+`is_client`, `is_competitor`, `competitor_name`. The old write set `source`
+alone and left the brand's own posts reading `owned` with `is_client=false`,
+filed under industry-other by every reading, with their comments already out of
+Pass A's full lane. Production has not run it. Numbered 5.0 so
+5.1–5.6 keep the numbers they are called by everywhere else.
+
+What `--apply` costs beyond the columns: a flipped row's Pass A lane can change,
+so its old `audience_insights` go stale and the next run's prune retires them
+(cascading to `insight_evidence`). Cited evidence is protected by the prune
+since 2026-09-18, but check first anyway, as staging did:
+```sql
+select client_id, count(*) from public.report_snapshots
+where cardinality(evidence_ids) > 0 group by 1;
+```
+
+```
+# dry — the plan per entity · platform, and how many already carry insights. Writes nothing.
+node --env-file=.env.local --import tsx scripts/reconcile-video-source.ts --client <uuid>
+# apply
+node --env-file=.env.local --import tsx scripts/reconcile-video-source.ts --client <uuid> --apply
+```
+Always pass `--client`: without it the dry run silently reads Sealand, and
+`--apply` refuses to start. Expected shape (staging, Sealand, 2026-09-24 — 21
+flips; Össur has not been measured):
+```
+client ac16988e-…: 5256 videos, 5013 on 'discovered'
+  client · instagram → owned: 8
+  client · tiktok → owned: 6
+  competitor:Cotopaxi · tiktok → competitor_owned: 2
+  competitor:Cotopaxi · youtube → competitor_owned: 1
+  competitor:Freitag · instagram → competitor_owned: 1
+  competitor:Freitag · tiktok → competitor_owned: 3
+  of those, 1 already carry audience insights (own-account comments in the market corpus)
+applied: 21 rows
+```
+The staging branch was rebuilt from a fresh production dump on 2026-09-24, so
+Sealand on production should plan about the same 21 unless a gather has moved
+rows since; a count far off that is a reason to stop and read the plan. A line
+`! <id> moved off '<source>' since the plan was read — left alone` is the
+compare-and-set refusing a row a gather re-stamped between plan and write;
+re-run the dry run and it is either gone or planned again.
+
+**Idempotent.** A row whose columns already match its account is not planned,
+so a second dry run prints `nothing to reconcile`. Verify:
+```sql
+select client_id,
+  count(*) filter (where source = 'owned')                                              as owned,
+  count(*) filter (where source = 'owned' and is_client is not true)                    as owned_not_client,
+  count(*) filter (where source = 'competitor_owned'
+                   and (is_competitor is not true or competitor_name is null))          as rival_unnamed
+from public.videos where source in ('owned', 'competitor_owned') group by 1 order by 1;
+```
+`owned_not_client` and `rival_unnamed` are 0 on both tenants (staging after:
+76 `owned`, every one `is_client`).
+
 ### 5.1 · Subject membership, per tenant
 
 ```
@@ -1758,7 +1821,7 @@ and the action's own `config_changes` row is never reached, so the failure
 leaves no record either, while the identical click from a platform admin
 succeeds. A control that tests green for every operator and is dead for every
 paying client is the worst thing to leave standing across a split. · step 3 · step 4 ·
-backfills 5.1, 5.1b, 5.2, 5.3 · **5.4 the one-shot** · 5.5 · rehearsal · screenshots ·
+backfills 5.0, 5.1, 5.1b, 5.2, 5.3 · **5.4 the one-shot** · 5.5 · rehearsal · screenshots ·
 **recipients NOT set** · the Sunday watch minus items 4 and 5. The code-then-
 migrations order is the same here and for the same reason (§1's first
 paragraph): R1's window is where `main`'s flat-chunk freeze writer would meet
