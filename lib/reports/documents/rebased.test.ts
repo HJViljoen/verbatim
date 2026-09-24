@@ -170,7 +170,7 @@ describe('the method page', () => {
     const d = documentReading(reading())
     const joined = [d.method?.basis, d.method?.language, d.method?.redditCap, d.method?.privacy].join('\n')
     expect(joined).toContain('Of everything we have ever read for you, not just this window, speech was read on')
-    expect(joined).toContain('of what was said on camera was not in English')
+    expect(joined).not.toContain('of what was said on camera was not in English')
     expect(joined).toContain('Reddit comments are capped at 40 per thread')
     expect(joined).toContain('Commenters are never identified; quotes carry platform and date only.')
     expect(d.delivery).toContain('23 updates since 6 April 2026')

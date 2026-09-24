@@ -114,7 +114,7 @@ const hero: R = (d, mode) => {
   const h = d.hero
   const app = mode === 'app'
   const claimEvidence = h.oneThing && h.voices > 0
-    ? { voices: h.voices, platforms: h.platforms, quotes: h.quotes.map((q) => q.text), href: `/dashboard/market-intel?rec=${encodeURIComponent(h.oneThing.id)}`, hrefLabel: 'See all the voices in Market Intelligence →' }
+    ? { voices: h.voices, platforms: h.platforms, quotes: h.quotes.map((q) => q.text), href: `/dashboard/market?rec=${encodeURIComponent(h.oneThing.id)}`, hrefLabel: 'See all the voices in Market →' }
     : null
   return (
     <Tile exportKey="dashboard.hero" col={7} row={3} variant="hero" distribute="between" eyebrow="Executive brief · this update" meta={weekdayDate(d.runDate)}
@@ -127,7 +127,7 @@ const hero: R = (d, mode) => {
             {app
               ? (claimEvidence
                   ? <ClaimPopover evidence={claimEvidence}>{h.oneThing.title}</ClaimPopover>
-                  : <Link href="/dashboard/market-intel" className="hover:underline">{h.oneThing.title}</Link>)
+                  : <Link href="/dashboard/market" className="hover:underline">{h.oneThing.title}</Link>)
               : <span>{h.oneThing.title}</span>}
           </span>
         </span>
@@ -211,7 +211,7 @@ const share: R = ({ share: s }, mode) => {
   ) : null
   return (
     <Tile exportKey="dashboard.share" col={5} row={2} eyebrow="Share of tracked conversation" meta={s?.usePeriodShare ? 'by videos · this update' : 'by videos · all updates'}
-      footer={app ? <Link href="/dashboard/competitive-intel">Where you stand{s?.topCompetitor ? ` vs ${s.topCompetitor.name}` : ''} →</Link> : undefined}
+      footer={app ? <Link href="/dashboard/competitive">Where you stand{s?.topCompetitor ? ` vs ${s.topCompetitor.name}` : ''} →</Link> : undefined}
       distribute="center"
     >
       {body ? (
@@ -265,7 +265,7 @@ const themes: R = ({ themes: t }, mode) => {
 const movement: R = ({ movement: mv, updatesCount }, mode) => (
   <Tile exportKey="dashboard.movement" col={4} row={2} eyebrow="Since your first update"
     meta={mv ? `${updatesCount} updates · ${shortDate(mv.dates[0])} → ${shortDate(mv.dates[mv.dates.length - 1])}` : undefined}
-    footer={mv && mode === 'app' ? <Link href="/dashboard/competitive-intel">Where you stand over time →</Link> : undefined}
+    footer={mv && mode === 'app' ? <Link href="/dashboard/competitive">Where you stand over time →</Link> : undefined}
     distribute="center"
   >
     {mv ? (
@@ -297,7 +297,7 @@ const recommendation: R = ({ hero: h }, mode) => {
       ) : undefined}
       footer={h.oneThing ? (
         app ? (
-          <Link href={`/dashboard/market-intel?rec=${encodeURIComponent(h.oneThing.id)}`} className="after:absolute after:inset-0">
+          <Link href={`/dashboard/market?rec=${encodeURIComponent(h.oneThing.id)}`} className="after:absolute after:inset-0">
             {grounded ? `${grounded} →` : 'Why, and the voices →'}
           </Link>
         ) : (grounded ?? undefined)
@@ -410,7 +410,7 @@ function BriefBody({ d, mode }: { d: D; mode: RenderMode }) {
           <p className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{priorityLabel(h.oneThing.priority)}</p>
           <p className="mt-1 text-[13.5px] font-semibold">{h.oneThing.title}</p>
           <p className="mt-1 text-[12.5px] text-secondary-foreground">{h.oneThing.reasoning}</p>
-          {app && <Link href={`/dashboard/market-intel?rec=${encodeURIComponent(h.oneThing.id)}`} className="mt-2 inline-block text-[12px] font-medium underline underline-offset-2">See the full picture →</Link>}
+          {app && <Link href={`/dashboard/market?rec=${encodeURIComponent(h.oneThing.id)}`} className="mt-2 inline-block text-[12px] font-medium underline underline-offset-2">See the full picture →</Link>}
         </div>
       )}
       {h.quotes.length > 0 && (

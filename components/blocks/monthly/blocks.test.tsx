@@ -444,7 +444,11 @@ describe('the five sections that are Overview’s', () => {
   it('states how sound the month is in exactly the mock’s three sentences', () => {
     const text = renderText(MONTHLY_BLOCKS['monthly.sound'].render(monthlyFixture(), 'email', ctx))
     expect(text).toContain('3 updates · 18,020 comments read · 2,359 videos analysed, against a trailing median of 2,240.')
-    expect(text).toContain('27% not in English · speech read on 71% of videos · on-screen text on 64%.')
+    // The share not in English is still on the figures and never printed
+    // (2026-09-24).
+    expect(monthlyFixture().overview.record.sound?.notEnglishPct).not.toBeNull()
+    expect(text).toContain('speech read on 71% of videos · on-screen text on 64%.')
+    expect(text).not.toContain('English')
     expect(text).toContain('1 tracking change · 2 comparisons refused · your 3rd monthly reading, and the quarter view needs 6.')
     const data = monthlyFixture()
     expect(text).not.toContain(freezeSentence(data.overview.record.freezesOn))
@@ -489,7 +493,7 @@ describe('the five sections that are Overview’s', () => {
     const markup = render(MONTHLY_BLOCKS['monthly.sound'].render(monthlyFixture(), 'email', ctx))
     expect((markup.match(/font-size:13\.5px/g) ?? []).length).toBe(3)
     expect(markup).toContain(`<span style="font-weight:600;color:${EMAIL.ink}">3 updates</span>`)
-    expect(markup).toContain(`<span style="font-weight:600;color:${EMAIL.ink}">27%</span>`)
+    expect(markup).not.toContain(`<span style="font-weight:600;color:${EMAIL.ink}">27%</span>`)
     expect(markup).toContain(`<span style="font-weight:600;color:${EMAIL.ink}">1 tracking</span>`)
   })
 

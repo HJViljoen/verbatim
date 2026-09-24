@@ -1002,11 +1002,11 @@ describe('the artboard port (Block D wave 2)', () => {
     for (const mode of MODES) assertCopyContract(render(QUARTERLY_BLOCKS['quarterly.method'].render(data, mode, ctx)))
   })
 
-  it('qr.p7.numbers · eight rows, with Sources, Held back and Languages among them', () => {
+  it('qr.p7.numbers · Sources and Held back among them, and no language share (2026-09-24)', () => {
     const labels = data.method.numbers.map((r) => r.label)
     expect(labels).toContain('Sources')
     expect(labels).toContain('Held back')
-    expect(labels).toContain('Languages')
+    expect(labels).not.toContain('Languages')
     // D5 · deliberately not the mock's "Conversations".
     expect(labels).not.toContain('Conversations')
   })

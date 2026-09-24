@@ -77,7 +77,8 @@ export interface MethodLines {
   coverage: string
   /** The basis that must travel with the read-depth and language figures. */
   basis: string
-  /** "27% of what was said ON CAMERA was not in English" — the stated basis. */
+  /** Always null since 2026-09-24: no surface states a language share. Kept so
+   *  a frozen snapshot that carries one still types; nothing prints it. */
   language: string | null
   /** "Reddit comments are capped at 40 per thread and excluded from engagement rows." */
   redditCap: string
@@ -182,16 +183,10 @@ export function methodLines(inputs: RecordInputs, opts: MethodOptions = {}): Met
     ? `Of everything we have ever read for you, not just this window, speech was read on ${share(r.speech, r.analysed)} of ${fmtInt(r.analysed)} videos, translated on ${share(r.translated, r.analysed)}, and on-screen text read on ${share(r.onScreenText, r.analysed)}, Reddit excluded, which has neither audio nor a cover frame.`
     : 'How much of each video we managed to read is not recorded yet.'
 
-  const lang = inputs.language
-  const known = lang.english + lang.notEnglish
-  const language = lang.analysed === 0 || known === 0
-    ? null
-    // "ON CAMERA" IS THE BASIS, not an emphasis. `LanguageRecord.basis` is
-    // `video_speech`: this share is about what was SAID in videos and says
-    // nothing about the language a comment was written in. The mock prints it
-    // as a fact about this month's videos and it is neither this month's nor
-    // about the comments.
-    : `${share(lang.notEnglish, known)} of what was said on camera was not in English: ${fmtInt(lang.notEnglish)} of ${fmtInt(known)} videos whose language we know${lang.unknown > 0 ? `, and ${fmtInt(lang.unknown)} with no language recorded at all` : ''}.`
+  // NO LANGUAGE SHARE IS PRINTED (Heinrich, 2026-09-24). The field stays so a
+  // frozen snapshot's shape still types, and it is always null now; renderers
+  // no longer print it either, so an old snapshot's sentence stays unprinted.
+  const language: string | null = null
 
   const redditCap = REDDIT_CAP_LINE
 

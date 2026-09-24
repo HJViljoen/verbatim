@@ -559,7 +559,6 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
       // its own half of the sentence.
       findingsBelow: belowBar,
       ...(kept.length > findingPages.length ? { findingsHeld: kept.length - findingPages.length } : {}),
-      ...(s.reading?.method?.language ? { languages: s.reading.method.language } : {}),
       ...(s.reading?.delivery
         ? { delivery: `${s.reading.delivery}${s.reading.counter ? ` · ${s.reading.counter}` : ''}` }
         : {}),

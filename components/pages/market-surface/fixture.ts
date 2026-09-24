@@ -254,7 +254,7 @@ export function marketFixture(over: Partial<MarketSurfaceData> = {}): MarketSurf
       empty: null,
     },
     record: {
-      line: 'your 3rd monthly reading · 3 updates · 2,359 videos · 27% of what was said on camera was not in English',
+      line: 'your 3rd monthly reading · 3 updates · 2,359 videos',
       // THE REFUSAL LINE IS READ OFF THE ROWS BESIDE IT, never typed. The full
       // ledger row's afterwards verdict is `too_little_data` (9 of 104 is under
       // SHARE_BAND's floor of 10), and the loader feeds exactly those verdicts

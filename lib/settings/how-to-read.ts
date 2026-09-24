@@ -172,7 +172,7 @@ export const DEFINITIONS: readonly Definition[] = [
   {
     id: 'soundness',
     title: 'How sound is this',
-    body: 'The line in every page bar: how many updates and videos stand behind the page, how much of what was said on camera was not in English, and whether anything we track changed. Click it for the record behind it: how deeply each video was read, what was set aside, and which comparisons were refused.',
+    body: 'The line in every page bar: how many updates and videos stand behind the page, and whether anything we track changed. Click it for the record behind it: how deeply each video was read, what was set aside, and which comparisons were refused.',
   },
   {
     id: 'all-time',

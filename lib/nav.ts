@@ -194,21 +194,15 @@ export function oldPage(href: string): OldPage {
   return p
 }
 
-export const oldPageFor = (pathname: string): OldPage | null =>
-  OLD_PAGES.find((p) => p.href === pathname || pathname.startsWith(`${p.href}/`)) ?? null
-
-/** "30 Nov 2026" — the sidebar group's label and the banners read the same
- *  constant, never the clock: computing it per render would let the sidebar and
- *  the banner on one page disagree across midnight. */
+/** "30 Nov 2026" — every banner reads the same constant, never the clock:
+ *  computing it per render would let two banners disagree across midnight. */
 export const retireDate = (): string => fullDate(`${OLD_PAGES_RETIRE_ON}T00:00:00.000Z`)
-
-export const oldPagesGroupLabel = (): string => `Old pages (retiring ${retireDate()})`
 
 /**
  * Settings › Initiatives, parked rather than redirected.
  *
- * It is not in `OLD_PAGES` because `OLD_PAGES` is the sidebar's "Old pages"
- * group and this is a Settings sub-page, reached from the settings rail and
+ * It is not in `OLD_PAGES` because `OLD_PAGES` is the three parked reading
+ * pages and this is a Settings sub-page, reached from the settings rail and
  * from the two "Manage what you track →" tiles. It is parked for the same
  * reason Market Intelligence is: it is the only place a client can rename,
  * finish or stop an initiative, and Market's `moves` panel — the thing that

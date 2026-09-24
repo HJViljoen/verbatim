@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  OLD_PAGES, PARKED_INITIATIVES, RETIRED_ADDRESSES, SURFACES, hasHorizon, hasRecord, oldPageBanner, oldPageFor,
-  oldPagesGroupLabel, retireDate, surface, surfaceForPath, surfacesIn,
+  OLD_PAGES, PARKED_INITIATIVES, RETIRED_ADDRESSES, SURFACES, hasHorizon, hasRecord, oldPageBanner,
+  retireDate, surface, surfaceForPath, surfacesIn,
 } from './nav'
 import { OLD_PAGES_RETIRE_ON } from './config'
 import { SETTINGS_ADDRESSES } from './settings/rail'
@@ -101,27 +101,19 @@ describe('the old pages', () => {
     for (const p of OLD_PAGES) expect(surface(p.replacedBy).href).toMatch(/^\/dashboard/)
   })
 
-  it('parks Settings › Initiatives outside the sidebar group, with the same banner', () => {
+  it('parks Settings › Initiatives apart from the three, with the same banner', () => {
     const b = oldPageBanner(PARKED_INITIATIVES)
     expect(b.title).toBe('Initiatives is being replaced by Market')
     expect(b.body).toBe('This page stays available until 30 Nov 2026. Renaming, finishing and stopping one happens here until Market can do it.')
     expect(b.href).toBe('/dashboard/market')
-    // It is a Settings sub-page, not one of the three the sidebar lists.
+    // It is a Settings sub-page, not one of the three parked reading pages.
     expect(OLD_PAGES.map((p) => p.href)).not.toContain(PARKED_INITIATIVES.href)
     // And it is not redirected any more.
     expect(RETIRED_ADDRESSES[PARKED_INITIATIVES.href]).toBeUndefined()
   })
 
-  it('finds the page a parked path belongs to', () => {
-    expect(oldPageFor('/dashboard/market-intel')?.label).toBe('Market Intelligence')
-    expect(oldPageFor('/dashboard/videos')?.label).toBe('Content')
-    expect(oldPageFor('/dashboard/market')).toBeNull()
-  })
-
-  it('dates the group label and the banner off the one constant', () => {
+  it('dates the banner off the one constant', () => {
     expect(retireDate()).toBe('30 Nov 2026')
-    expect(oldPagesGroupLabel()).toBe('Old pages (retiring 30 Nov 2026)')
-    expect(oldPagesGroupLabel()).toContain(retireDate())
     // The constant is what moves the date, not the clock.
     expect(OLD_PAGES_RETIRE_ON).toBe('2026-11-30')
   })

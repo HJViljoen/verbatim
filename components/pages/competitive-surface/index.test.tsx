@@ -621,19 +621,11 @@ describe('CO5 · said about them (CO10)', () => {
 })
 
 describe('the page foot and the page bar are one record (CO8)', () => {
-  it('states ONE language share, in the band and in the footnote', () => {
-    // `ossurMethod()` overrode `coverage` only, so `language` stayed at the
-    // shared Sealand default while the band was hand-written: the bar said
-    // "34% of what was said on camera was not in English" and the foot, 2,500px
-    // below, said "27% — 474 of 1,755". Both halves derive from one `lang`
-    // record in production and cannot disagree; the fixture may not either.
+  it('states no language share, in the band or in the footnote (2026-09-24)', () => {
     const data = competitiveFixture()
-    const share = /(\d+(?:\.\d+)?)% of what was said on camera was not in English/
-    const band = data.record.line.match(share)
-    const foot = data.method!.language!.match(share)
-    expect(band).toBeTruthy()
-    expect(foot).toBeTruthy()
-    expect(band![1]).toBe(foot![1])
+    expect(data.record.line).not.toContain('not in English')
+    expect(data.method!.language).toBeNull()
+    expect(data.method!.lines.join(' ')).not.toContain('not in English')
   })
 })
 

@@ -10,9 +10,9 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { signOut } from "@/app/login/actions"
 import { VerbatimMark } from "@/components/brand/mark"
-import { NAV_ICON, OLD_NAV_ICON, OLD_NAV_ICON_FALLBACK, STUDIO_ICON } from "@/components/nav-icons"
+import { NAV_ICON, STUDIO_ICON } from "@/components/nav-icons"
 import { STUDIO_HREF } from "@/lib/studio-visibility"
-import { OLD_PAGES, oldPageFor, oldPagesGroupLabel, surfaceForPath, surfacesIn, type NavKey } from "@/lib/nav"
+import { surfaceForPath, surfacesIn, type NavKey } from "@/lib/nav"
 
 // The nine reading surfaces, in the mock's order, from lib/nav.ts — the one
 // table the page bars and the parked pages' banners read too. Two groups, as
@@ -95,8 +95,6 @@ export function AppSidebar({ header, ops, studio, tenant }: { header?: React.Rea
   const item = (key: NavKey, href: string, label: string): NavItem => ({ href, label, icon: NAV_ICON[key] })
   const intelligence = surfacesIn("Intelligence").map((s) => item(s.key, s.href, s.label))
   const account = surfacesIn("Account").map((s) => item(s.key, s.href, s.label))
-  const oldPages: NavItem[] = OLD_PAGES.map((p) => ({ href: p.href, label: p.label, icon: OLD_NAV_ICON[p.href] ?? OLD_NAV_ICON_FALLBACK }))
-  const parked = oldPageFor(pathname)
 
   async function handleLogout() {
     await signOut()
@@ -139,16 +137,14 @@ export function AppSidebar({ header, ops, studio, tenant }: { header?: React.Rea
         {/* The Studio leads the Account group when this session may see it,
             and is absent — not hidden, never rendered — when it may not. */}
         {renderGroup("Account", account, (href) => active?.href === href, studio)}
-        {/* The pages Phase 1 replaces, in their own group with the date on the
-            label (decision C). They are listed rather than hidden because the
-            reading on them is the reading people have been using for months,
-            and a page that disappears without a date is a page someone emails
-            about. Each one carries a banner naming its replacement. */}
-        {renderGroup(oldPagesGroupLabel(), oldPages, (href) => parked?.href === href)}
+        {/* The retiring-pages group that stood here is gone
+            (2026-09-24). The parked pages still answer at their addresses and
+            carry their own banner; Content stays reachable from the "videos
+            behind" links on the new surfaces. */}
         {/* The operator's group arrives as a slot for the same reason the
             header does: resolving who is looking is async, and this component
             is "use client". Absent — every user who is not a platform admin —
-            the sidebar is exactly the three groups above. */}
+            the sidebar is exactly the two groups above. */}
         {ops}
       </SidebarContent>
 

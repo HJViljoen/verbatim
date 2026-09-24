@@ -490,7 +490,7 @@ describe('sales.p7 — the method sheet', () => {
   it('prints the method footnote, with its basis', () => {
     const w = words(sheet())
     expect(w).toContain('Of everything we have ever read for you, not just this window')
-    expect(w).toContain('of what was said on camera was not in English')
+    expect(w).not.toContain('of what was said on camera was not in English')
     expect(w).toContain('capped at 40 per thread')
     expect(w).toContain('Commenters are never identified')
   })

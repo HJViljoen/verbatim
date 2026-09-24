@@ -47,7 +47,7 @@ describe('methodLines', () => {
   it('composes every line, in print order', () => {
     const m = methodLines(inputs(), { brand: 'Sealand' })
     expect(m.preparedBy).toBe('Prepared for Sealand with Verbatim · 15 Sep 2026.')
-    expect(m.lines).toEqual([m.preparedBy, m.coverage, m.basis, m.language, m.redditCap, m.privacy])
+    expect(m.lines).toEqual([m.preparedBy, m.coverage, m.basis, m.redditCap, m.privacy])
     for (const line of m.lines) expect(line.length).toBeGreaterThan(0)
     // EVERY ITEM TERMINATES. The consumers join `lines` with a bare space, so
     // an item without a full stop runs into the next one: "18 Sep 2026 2,359
@@ -80,11 +80,11 @@ describe('methodLines', () => {
     expect(m.basis).not.toMatch(/this month|September|Sep 2026/)
   })
 
-  it('states the language share is about what was said on camera, with its k of n', () => {
+  it('states no language share, though the record holds one (2026-09-24)', () => {
     const m = methodLines(inputs())
-    expect(m.language).toBe(
-      '34% of what was said on camera was not in English: 375 of 1,105 videos whose language we know, and 491 with no language recorded at all.',
-    )
+    expect(inputs().language.notEnglish).toBeGreaterThan(0)
+    expect(m.language).toBeNull()
+    expect(m.lines.join(' ')).not.toMatch(/English/)
   })
 
   it('draws no language line where no language was ever recorded', () => {
