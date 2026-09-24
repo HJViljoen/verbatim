@@ -39,16 +39,43 @@ import { mixLine, type CompetitiveSurfaceData, type QuestionRow } from '@/lib/pa
 // difference is every question naming a model number: "3r85 or 3r80",
 // "Cotopaxi Allpa 32L", "Gregory Terros 28".
 
+/**
+ * ONE VOICE UNDER A QUESTION, NOT EVERY VOICE (polish pass, 2026-09-24).
+ *
+ * `QuestionRow.quotes` is every cited comment in the window, uncapped, and the
+ * block drew all of them. Measured on Sealand at 1440: eight question rows
+ * carrying eleven comments — one of them five lines of a Reddit answer, one of
+ * them a pair of Korean comments with their machine translations under each —
+ * ran the tile to about 1,700px inside a four-of-twelve column. The two tiles
+ * beside it in the same grid row are 215px and 340px, so the band drew two
+ * voids of well over a thousand pixels apiece and the page lost its rhythm.
+ *
+ * The artboard draws this tile as six question rows and ONE quote, with the
+ * rest behind "Hear these voices →" — which is this block's own footer link
+ * and already points at the right window. So the cap is one per row: every
+ * question keeps a voice, no question takes the tile, and nothing is hidden
+ * that the footer does not offer.
+ *
+ * `quotes()` READS THE SAME HELPER, so the freeze contract and the render
+ * cannot drift: a snapshot holds the refs the block draws (WP19), and a ref
+ * frozen for a quote nothing prints is a quote text resolved at render for
+ * nobody.
+ */
+export const QUOTES_PER_QUESTION = 1
+
+export const questionQuotes = (row: QuestionRow): QuestionRow['quotes'] => row.quotes.slice(0, QUOTES_PER_QUESTION)
+
 function Question({ row, mode }: { row: QuestionRow; mode: RenderMode }) {
   const email = mode === 'email'
   const cite = row.platform ? platformLabel(row.platform) : null
+  const quotes = questionQuotes(row)
 
   if (email) {
     return (
       <div style={{ padding: '6px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
         <div data-copy="stored" data-slot="pass_a_audience_insight" style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink }}>{row.text}</div>
         {cite ? <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted, marginTop: 2 }}>{cite}</div> : null}
-        {row.quotes.map((q) => <BlockQuote key={q.ref} quote={q} mode={mode} />)}
+        {quotes.map((q) => <BlockQuote key={q.ref} quote={q} mode={mode} />)}
       </div>
     )
   }
@@ -68,7 +95,7 @@ function Question({ row, mode }: { row: QuestionRow; mode: RenderMode }) {
     <div className="flex min-w-0 flex-col gap-1 border-t border-border/70 pt-2">
       <p data-copy="stored" data-slot="pass_a_audience_insight" className="m-0 text-[12.5px]">{row.text}</p>
       {where}
-      {row.quotes.map((q) => <BlockQuote key={q.ref} quote={q} mode={mode} />)}
+      {quotes.map((q) => <BlockQuote key={q.ref} quote={q} mode={mode} />)}
     </div>
   )
 }
@@ -182,7 +209,7 @@ export const competitiveQuestions: Block<CompetitiveSurfaceData> = {
   },
 
   quotes(data) {
-    return data.questions.rows.flatMap((r) => r.quotes.map((q) => q.ref))
+    return data.questions.rows.flatMap((r) => questionQuotes(r).map((q) => q.ref))
   },
 
   emptyState(data) {
