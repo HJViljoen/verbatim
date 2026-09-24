@@ -44,11 +44,24 @@ describe('JUDGE_VERSION', () => {
   // comparable with a month read under another, and subject_band() re-judges
   // the corpus when it moves — so a test that pins the parts is a test that
   // stops someone moving a threshold and quietly keeping the old months.
-  it('carries the prompt, the model and both thresholds', () => {
+  it('carries the prompt, the model, both thresholds and the phrase formula', () => {
     expect(JUDGE_VERSION).toContain(SUBJECT_JUDGE_PROMPT_VERSION)
     expect(JUDGE_VERSION).toContain(SUBJECT_JUDGE_MODEL)
     expect(JUDGE_VERSION).toContain(String(SUBJECT_MATCH_HIGH))
     expect(JUDGE_VERSION).toContain(String(SUBJECT_MATCH_LOW))
+    expect(JUDGE_VERSION).toContain(SUBJECT_EMBED_INPUT_VERSION)
+  })
+
+  // The regression that cost 43 frozen rows. `subject_embed_v2` changed which
+  // insights each subject is near while prompt, model and thresholds all stood
+  // still; without the phrase formula in the key, v1-vector and v2-vector
+  // decisions shared one string and `subject_band()` treated the stale ones as
+  // settled. A key that omits an input it depends on agrees wrongly.
+  it('moves when the phrase formula moves and nothing else does', () => {
+    const key = (embed: string) =>
+      `${SUBJECT_JUDGE_PROMPT_VERSION}·${SUBJECT_JUDGE_MODEL}·${SUBJECT_MATCH_HIGH}/${SUBJECT_MATCH_LOW}·${embed}`
+    expect(key(SUBJECT_EMBED_INPUT_VERSION)).toBe(JUDGE_VERSION)
+    expect(key('subject_embed_v1')).not.toBe(JUDGE_VERSION)
   })
 
   it('is one line, so it fits a column and a log', () => {

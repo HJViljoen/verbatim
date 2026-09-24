@@ -143,25 +143,61 @@ export const SUBJECT_JUDGE_MODEL = ANALYSIS_MODEL
 /** The prompt's identity. Bump it with any change to what the judge is asked. */
 export const SUBJECT_JUDGE_PROMPT_VERSION = 'subject_judge_v1'
 
+/** Which formula produced a stored `subjects.embedding`. Change
+ *  `subjectEmbedInput` (below) or EMBEDDING_MODEL and every vector written
+ *  before becomes incomparable with every vector written after — a silent
+ *  retrieval failure, not an error. Bump this at the same time so the repair is
+ *  a query. (The EMBED_INPUT_VERSION argument, lib/pipeline/cluster.ts, one
+ *  table over.)
+ *
+ *  `subjectsNeedingVectors` compares a stored row's `embed_input_version`
+ *  against this string, so bumping it IS the repair: the next membership pass
+ *  re-embeds every subject whose version differs, at ~$0.0000005 for the set,
+ *  before it bands anything. That is the same path a subject with no vector at
+ *  all takes, and it has been there since v1.
+ *
+ *  Declared HERE, above JUDGE_VERSION, rather than beside the function it
+ *  names: it is part of the comparability key, and a `const` used in that
+ *  template has to be initialised before it. */
+export const SUBJECT_EMBED_INPUT_VERSION = 'subject_embed_v2'
+
 /**
  * The comparability key, written onto every membership row and every stored
  * month.
  *
  * It folds in everything that could change the answer without changing the
- * question: the prompt, the model and BOTH thresholds. Two months of one
- * subject are like-for-like exactly when this string is equal on both, which is
- * the same rule `month_theme_readings.run_id` carries for a theme — and the
- * reason a subject row does not use run_id for it, because a subject's
- * membership is a judgement artefact and not a clustering one.
+ * question: the prompt, the model, BOTH thresholds and the PHRASE FORMULA. Two
+ * months of one subject are like-for-like exactly when this string is equal on
+ * both, which is the same rule `month_theme_readings.run_id` carries for a
+ * theme — and the reason a subject row does not use run_id for it, because a
+ * subject's membership is a judgement artefact and not a clustering one.
  *
  * It is also how the incremental step knows what to do: `subject_band()`
- * returns only pairs with no decision AT THIS VERSION, so bumping any of the
- * three parts re-judges the whole corpus on the next run. That is a real cost
- * (≈$0.14–0.25 for both tenants, refute-04 §2.5) and it is deliberate — budget
- * for it, exactly as AGENTS.md says to budget for a Pass A prompt bump.
+ * returns only pairs with no decision AT THIS VERSION, so bumping any part
+ * re-judges the whole corpus on the next run. That is a real cost (≈$0.14–0.25
+ * for both tenants, refute-04 §2.5) and it is deliberate — budget for it,
+ * exactly as AGENTS.md says to budget for a Pass A prompt bump.
+ *
+ * THE PHRASE FORMULA WAS ADDED 2026-09-24, and it was not there on 2026-09-23
+ * when it was needed. `subject_embed_v2` changed which insights each subject is
+ * near without touching prompt, model or thresholds, so every pair decided
+ * under v1 vectors carried a key that said it was comparable with a v2 pair. On
+ * the branch that meant 2,316 stale decisions were invisible to `subject_band()`
+ * at the moment the new vectors landed — the incremental step would have skipped
+ * exactly the rows it most needed to re-judge — and 43 already-frozen
+ * `month_subject_readings` rows now carry v1-vector counts under a key that
+ * reads as v2. Frozen is frozen; that record cannot be repaired, only re-built.
+ * A key that omits an input it depends on does not fail loudly, it agrees
+ * wrongly, which is the worse of the two.
+ *
+ * This is the whole fix. `embedSubjects` deliberately does NOT also delete a
+ * re-embedded subject's memberships: the key makes the old rows invisible to
+ * the next band, which is the mechanism that already exists for every other
+ * part of the key, and a delete would throw away the record of what the
+ * previous judge decided for no gain.
  */
 export const JUDGE_VERSION =
-  `${SUBJECT_JUDGE_PROMPT_VERSION}·${SUBJECT_JUDGE_MODEL}·${SUBJECT_MATCH_HIGH}/${SUBJECT_MATCH_LOW}`
+  `${SUBJECT_JUDGE_PROMPT_VERSION}·${SUBJECT_JUDGE_MODEL}·${SUBJECT_MATCH_HIGH}/${SUBJECT_MATCH_LOW}·${SUBJECT_EMBED_INPUT_VERSION}`
 
 // ---- The phrase vector ------------------------------------------------------
 
@@ -246,19 +282,6 @@ export function subjectEmbedInput(s: { name: string; description?: string | null
   const gloss = subjectPositiveGloss(s.description)
   return gloss ? `${name}. ${gloss}` : name
 }
-
-/** Which formula produced a stored `subjects.embedding`. Change
- *  `subjectEmbedInput` or EMBEDDING_MODEL and every vector written before
- *  becomes incomparable with every vector written after — a silent retrieval
- *  failure, not an error. Bump this at the same time so the repair is a query.
- *  (The EMBED_INPUT_VERSION argument, lib/pipeline/cluster.ts, one table over.)
- *
- *  `subjectsNeedingVectors` compares a stored row's `embed_input_version`
- *  against this string, so bumping it IS the repair: the next membership pass
- *  re-embeds every subject whose version differs, at ~$0.0000005 for the set,
- *  before it bands anything. That is the same path a subject with no vector at
- *  all takes, and it has been there since v1. */
-export const SUBJECT_EMBED_INPUT_VERSION = 'subject_embed_v2'
 
 // ---- The precision gate -----------------------------------------------------
 
