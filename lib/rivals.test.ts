@@ -13,6 +13,7 @@ import {
   findRival,
   isMissingCompetitors,
   isRivalAudience,
+  listedRivals,
   planRivals,
   renameFrom,
   renameRival,
@@ -595,5 +596,17 @@ describe('renameChains — a reader expands its question before it asks it', () 
     const [line] = stitchRenames(points, renames)
     const chains = renameChains([TOPO], renames)
     expect(chains.namesOf.get(line.audience)).toEqual(line.names)
+  })
+})
+
+describe('listedRivals', () => {
+  it('lists only rivals still tracked and observed', () => {
+    const rivals = [
+      { name: 'Freitag', retiredAt: null },
+      { name: 'Poler', retiredAt: '2026-09-09' },
+      { name: 'Rareform', retiredAt: null },
+    ]
+    const seen = new Set([rivalKey('Freitag'), rivalKey('Poler')])
+    expect(listedRivals(rivals, (a) => seen.has(a)).map((r) => r.name)).toEqual(['Freitag'])
   })
 })

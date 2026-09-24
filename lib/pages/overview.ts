@@ -3492,7 +3492,7 @@ export function buildRivals(input: RivalsInput): RivalsBlock {
         ownPosts: null,
         raisedMost: raisedMost(s.audience),
         retiredAt: retiredBy.get(s.audience) ?? null,
-      })),
+      })).filter((r) => r.role !== 'rival' || r.retiredAt == null),
       recorded: false,
       standingsNote:
         'How much attention each brand drew is not recorded month by month for this workspace yet.',
@@ -3552,6 +3552,10 @@ export function buildRivals(input: RivalsInput): RivalsBlock {
     raisedMost: raisedMost(s.audience),
     retiredAt: retiredBy.get(s.audience) ?? null,
   }))
+    // THE LISTING RULE (`listedRivals`, lib/rivals.ts): a stopped rival, or
+    // one this month's panel did not observe, is not a row. Settings ›
+    // Tracking is where the whole list lives.
+    .filter((r) => r.role !== 'rival' || (r.observed && r.retiredAt == null))
 
   return {
     rows,

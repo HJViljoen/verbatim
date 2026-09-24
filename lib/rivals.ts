@@ -268,6 +268,30 @@ export async function loadTrackedRivals(client: SupabaseClient, clientId: string
   return names.map((name) => ({ name, retiredAt: null }))
 }
 
+/**
+ * The rivals a READING surface may list: tracked now, and observed.
+ *
+ * A PICKER, A PILL ROW, A LEGEND OR A TABLE OFFERS ONLY WHAT IT CAN READ.
+ * Sealand's Voice page offered five rivals that carried nothing ("Freedom of
+ * Movement not observed", "Poler not observed · tracked to 9 Sep 2026") beside
+ * the four it could read, and choosing one opened an empty page. A stopped
+ * rival (`retiredAt`) and a rival with nothing observed are not offered
+ * anywhere except Settings › Tracking, which is where the list is edited.
+ *
+ * THIS IS A LISTING RULE, NOT A READING RULE. A stopped rival's frozen months
+ * still exist and still render where a surface reads them by name
+ * (`retireRival` never deletes, and `stitchRenames` draws across a rename);
+ * this only decides what a surface OFFERS. `observed` is the caller's, because
+ * each surface knows its own window: Voice asks "any videos this month",
+ * a horizon page asks "any videos in the horizon".
+ */
+export function listedRivals<T extends { name: string; retiredAt: string | null }>(
+  rivals: readonly T[],
+  observed: (audience: string) => boolean,
+): T[] {
+  return rivals.filter((r) => r.retiredAt == null && observed(rivalKey(r.name)))
+}
+
 // ---- Creating, renaming and retiring ----------------------------------------
 
 /** What a write to a rival's identity needs: the admin client, the tenant, and

@@ -14,7 +14,6 @@ import { directionWord, monthChange, thinMonth, type Direction, type SeriesPoint
 import { chartMonths, horizonWindow, HORIZON_LABEL, parseHorizon, sinceStart, type Horizon } from '../reading/horizon'
 import { kindChange, kindShares, redditRead, type KindShare, type RedditRead } from '../reading/kinds'
 import {
-  claimEcho,
   ownCensusWithClaims,
   type ClaimEcho,
   type OwnPostCensus,
@@ -110,6 +109,18 @@ export const VOICES_POOL_CITATIONS = 400
  *  many were not shown. */
 export const SAY_HEAR_SHOWN = 3
 
+/** One ledger claim as the Say vs hear tile prints it. */
+export interface SayHearClaim {
+  /** `run_summary.say_vs_hear.you_say`, Pass D-a's line for what you claimed. */
+  claim: string
+  state: 'echoed' | 'pushed_back' | 'silent'
+}
+
+/** The ledger's stance as the tile's state: the tally's own three buckets
+ *  (`claimCounts`), so a row and the count under it use one rule. */
+export const claimState = (audience: string): SayHearClaim['state'] =>
+  audience === 'echoes' ? 'echoed' : audience === 'contradicts' ? 'pushed_back' : 'silent'
+
 export const UNANSWERED_SHOWN = 3
 
 /** SU3's gate (design §3 SU3): fewer question videos than this on the subject
@@ -164,21 +175,6 @@ export const UNANSWERED_BASIS =
  */
 export const UNANSWERED_CLAIMS_UNREADABLE =
   'Matched against what your posts are about; what they claim is not readable yet.'
-
-/**
- * What SU5 says when it cannot read the claims ledger at all.
- *
- * ITS OWN SENTENCE, NOT THE CENSUS'S (fix pass). Say vs hear answers "what did
- * we claim, and did anyone take it up?" and printed
- * `OwnPostCensus.claimsNote` — "These are the posts you published…" — which is
- * the answer to a different question, on a tile that is not about posts, and
- * printed a second time by Your own posts one tile above. The unreadable half
- * is the same half; the sentence is this block's.
- *
- * And it carries no readiness owner either, for the reason above.
- */
-export const SAY_HEAR_CLAIMS_UNREADABLE =
-  'What your posts claim is not readable on this page yet.'
 
 /** Reddit's own caveat wherever a question count leans on it (design §3 SU3). */
 export const REDDIT_THREAD_CAP =
@@ -474,6 +470,15 @@ export interface SubjectsData {
    * resolved no claim — which is when Market's tile is empty too.
    */
   sayHear: ClaimCounts | null
+  /**
+   * The ledger's claims themselves, in `ledgerRows` order (pushed back, then
+   * echoed, then silent): the SAME rows `sayHear` counts, so the tile's rows
+   * and its tally cannot disagree. Each carries the one state the ledger gave
+   * it. There is no "not tracked" per claim here: a claim is on the ledger
+   * because the update read it against the audience, and a workspace with no
+   * ledger says so once, in the block's empty state.
+   */
+  sayHearClaims: SayHearClaim[]
   record: SubjectsRecordBlock
   /**
    * The method footnote, composed once for every surface (block D, D9).
@@ -1413,80 +1418,6 @@ async function loadSayHear(supabase: SupabaseClient, clientId: string, runId: st
   return { counts: claimCounts(rows), entries: rows }
 }
 
-/**
- * One echo per census claim, counted rather than asserted.
- *
- * THE CHAIN, AND WHY IT IS GUARDED. A claim's echo is "how many videos in your
- * own audience carried what this claim rests on, of how many" — which means
- * `run_summary.say_vs_hear.supporting_theme_ids` (durable audience-insight
- * ids) → the `theme_registry` entries holding them in the client bucket →
- * `month_theme_readings` for this month through `loadMonthSeries`. Two reads.
- * They are skipped entirely when the census has no claims to echo, which is
- * every tenant today while `video_claims` is closed — so the page pays nothing
- * for this until the day it has something to say.
- *
- * ONE CLAIM'S READING IS ITS STRONGEST THEME, NOT THE SUM OF THEM. Adding the
- * themes behind a claim double-counts every video that carried two of them,
- * and a k above its own n is not a proportion. The maximum is the honest
- * single reading: "the most-carried thing this claim rests on reached k of n".
- */
-export async function loadClaimEchoes(
-  supabase: SupabaseClient,
-  reading: ReadingHandle,
-  clientId: string,
-  month: string,
-  claims: readonly { claim: string }[],
-  entries: readonly SayVsHearEntry[],
-): Promise<ClaimEcho[]> {
-  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim()
-  const stanceOf = new Map(entries.map((e) => [norm(e.you_say), e]))
-  const matched = claims.map((c) => stanceOf.get(norm(c.claim)) ?? null)
-  const insightIds = [...new Set(matched.flatMap((e) => e?.supporting_theme_ids ?? []))]
-  const none = (): ClaimEcho[] =>
-    claims.map(() => claimEcho({ audience: CLIENT_AUDIENCE, audienceLabel: 'You', reading: null }))
-  if (insightIds.length === 0) return none()
-
-  const registry = await selectAll<{ id: string; member_insight_ids: string[] | null }>(() =>
-    supabase
-      .from('theme_registry')
-      .select('id, member_insight_ids')
-      .eq('client_id', clientId)
-      .eq('bucket', CLIENT_AUDIENCE)
-      .overlaps('member_insight_ids', insightIds)
-      .order('id', { ascending: true }),
-  ).catch(() => [] as { id: string; member_insight_ids: string[] | null }[])
-  if (registry.length === 0) return none()
-
-  const set = await loadMonthSeries(reading.client, clientId, {
-    from: month,
-    to: month,
-    audiences: [CLIENT_AUDIENCE],
-    objectKind: 'theme',
-    objectIds: registry.map((r) => r.id),
-    updatesByMonth: {},
-  })
-  if (set.numeratorSubstrate === 'missing') return none()
-  const readingOf = new Map<string, { k: number | null; videos: number | null }>()
-  for (const s of set.series) {
-    if (!s.objectId) continue
-    const point = pointsByMonth(s).get(monthStartOf(month))
-    if (point) readingOf.set(s.objectId, { k: point.k, videos: point.videos })
-  }
-
-  return claims.map((_, i) => {
-    const entry = matched[i]
-    const ids = new Set(entry?.supporting_theme_ids ?? [])
-    let best: { k: number; n: number } | null = null
-    for (const r of registry) {
-      if (!(r.member_insight_ids ?? []).some((id) => ids.has(id))) continue
-      const point = readingOf.get(r.id)
-      if (!point || point.k == null || point.videos == null) continue
-      if (!best || point.k > best.k) best = { k: point.k, n: point.videos }
-    }
-    return claimEcho({ audience: CLIENT_AUDIENCE, audienceLabel: 'You', reading: best, stance: entry?.audience ?? null })
-  })
-}
-
 // ---- the loader ---------------------------------------------------------------
 
 /**
@@ -1814,14 +1745,12 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   // ── SU4 · your own posts, and the claims ledger ───────────────────────
   const census = await ownPostsAhead
   const sayHear = await sayHearAhead
-  // The echo reads run only where there is a claim to echo — which is nowhere
-  // until `video_claims` opens to a tenant session. See `loadClaimEchoes`.
-  const ownPosts: OwnPostCensus = census.claims.length === 0
-    ? census
-    : await loadClaimEchoes(supabase, reading, clientId, month, census.claims, sayHear.entries).then((echoes) => ({
-        ...census,
-        claims: census.claims.map((c, i) => ({ ...c, echo: echoes[i] ?? c.echo })),
-      }))
+  // THE CENSUS IS PRINTED BY "Your own posts" AND NOT RE-READ HERE. Say vs hear
+  // lists the LEDGER's claims (`sayHearClaims`), the same rows its tally counts;
+  // matching the census's `video_claims` sentences to the ledger by exact text
+  // never matched, and every row read "not tracked" under a tally that said
+  // two of three were echoed.
+  const ownPosts: OwnPostCensus = census
 
   // ── the record ────────────────────────────────────────────────────────
   const pageVerdicts = (selected?.sides ?? []).map((s) => s.verdict).filter((v): v is Verdict => v != null)
@@ -1845,6 +1774,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     selected,
     ownPosts,
     sayHear: sayHear.counts,
+    sayHearClaims: sayHear.entries.map((e) => ({ claim: e.you_say, state: claimState(e.audience) })),
     record: {
       line: howSoundLine(recordInputs),
       lines: recordLines(recordInputs),

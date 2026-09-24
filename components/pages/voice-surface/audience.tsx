@@ -3,7 +3,8 @@ import type { ReactNode } from 'react'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
-import { fmtInt, fmtPct, fullDate, monthName } from '@/lib/format'
+import { fmtInt, fullDate } from '@/lib/format'
+import { carriesShare, levelText } from '@/lib/reading/level'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { AudienceOption, VoiceSurfaceData } from '@/lib/pages/voice-surface'
@@ -115,6 +116,9 @@ function AudiencePill({ option, mode }: { option: AudienceOption; mode: RenderMo
   )
 }
 
+/** Is this option offered: selected, or carrying videos and still tracked. */
+const offered = (o: AudienceOption): boolean => o.selected || (o.observed && (o.videos ?? 0) > 0 && o.retiredAt == null)
+
 /** One row of the filter bar: its label, its content, and the basis of the
  *  figures in it. The note is `flex-none` at the right-hand end, exactly as the
  *  artboard has it, because it is metadata and the eye should skip it until it
@@ -160,43 +164,58 @@ export const voiceAudience: Block<VoiceSurfaceData> = {
     // a count makes one. "in this audience" says the same thing and says it
     // the way the artboard does — the audience's NAME is on the selected pill
     // two inches to the left.
-    const of = a.videos != null ? `${fmtInt(a.videos)} videos in this audience · ${monthName(data.month)}` : null
-
+    // THE SAME SYSTEM AS SUBJECTS' "Kind of thing said" (the calm pass): a
+    // kind is its label and its level, a count under the floor ("2 of 8") and
+    // a whole-number share at or over it ("51%"), never both and never a
+    // decimal (lib/reading/level.ts). Rows in a grid rather than a run-on
+    // line, so the numbers sit in one column a reader can scan.
     const kinds = a.kinds.length > 0 ? (
-      <div className={email ? undefined : 'flex flex-wrap items-center gap-x-4 gap-y-1'}>
-        {a.kinds.map((k) => (
-          // NOT A PILL, BECAUSE IT IS NOT A CONTROL. These wore the audience
-          // pills' exact chrome — same height, radius, ring token, size and
-          // weight, in the same bar — and did nothing: a keyboard user tabbing
-          // the bar found the top row focusable and the next row silently not.
-          // The kind FILTER was deleted two paragraphs up on the rule that this
-          // product does not print controls that do not work; the same rule
-          // takes the appearance of one. So a kind reads as what it is, a
-          // reading of the month — the label with its share and count beside
-          // it, spaced like the platform mix on the row above rather than
-          // boxed.
-          <span
-            key={k.kind}
-            className={email ? undefined : 'inline-flex items-center gap-1.5 whitespace-nowrap text-[12px] text-secondary-foreground'}
-            style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, marginRight: 10 } : undefined}
-          >
-            {k.label}{' '}
-            {/* THE "of N" TRAVELS WITH THE SHARE, INSIDE THE PILL. The mock
-                prints "questions 34%" and D4 / D10 refuse it: a kind is an
-                independent share of ONE denominator — the ten of them sum to
-                175% on Össur and 228% on Sealand — so a bare 34% beside five
-                others reads as a partition it is not. The row's note names the
-                denominator once; the pill names the count it rests on. */}
-            <span data-copy="figure" className={email ? undefined : 'font-mono text-[11px] font-normal tabular-nums text-muted-foreground'}>
-              {k.pct == null ? '—' : fmtPct(k.pct)} {fmtInt(k.videos)} of {fmtInt(k.denominator)}
-            </span>
-            <BlockMovement verdict={a.kindVerdicts[k.kind] ?? null} unit="pts" mode={mode} />
-          </span>
-        ))}
+      <div className={email ? undefined : 'grid grid-cols-1 gap-x-8 gap-y-1 sm:grid-cols-2 2xl:grid-cols-3'}>
+        {a.kinds.map((k) => {
+          const level = levelText(k.videos, k.denominator)
+          return (
+            <div
+              key={k.kind}
+              className={email ? undefined : 'flex min-w-0 items-baseline justify-between gap-3 border-t border-border/60 py-1 text-[12.5px] text-foreground'}
+              style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '3px 0', borderTop: `1px solid ${EMAIL.hairline}` } : undefined}
+            >
+              <span className={email ? undefined : 'min-w-0'}>{k.label}</span>{' '}
+              <span className={email ? undefined : 'flex shrink-0 items-baseline gap-2'}>
+                <BlockMovement verdict={a.kindVerdicts[k.kind] ?? null} unit="pts" mode={mode} good="neutral" />{' '}
+                <span
+                  data-copy={level?.kind === 'count' ? 'level' : 'figure'}
+                  className={email ? undefined : 'font-mono text-[12px] tabular-nums text-secondary-foreground'}
+                  style={email ? { fontFamily: FONT.mono, fontSize: 12, color: EMAIL.ink2 } : undefined}
+                >
+                  {level?.text ?? '—'}
+                </span>
+              </span>
+            </div>
+          )
+        })}
       </div>
     ) : (
       <BlockEmpty mode={mode}>{a.kindsNote ?? 'No kind carried a reading this month.'}</BlockEmpty>
     )
+
+    // WHERE IT WAS SAID, AT ITS REAL SIZE. One platform is just its name
+    // ("Instagram 100.0% 8" said one fact three ways); under the floor each
+    // platform is its count; at or over it a whole-number share.
+    const platforms = a.platformMix.length === 1
+      ? <span className={email ? undefined : 'text-[12px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink } : undefined}>{a.platformMix[0].label}</span>
+      : (
+        <div className={email ? undefined : 'flex flex-wrap items-center gap-x-4 gap-y-1'}>
+          {a.platformMix.map((p) => {
+            const level = a.videos != null && carriesShare(a.videos) && p.pct != null ? `${Math.round(p.pct)}%` : fmtInt(p.videos)
+            return (
+              <span key={p.platform} className={email ? undefined : 'text-[12px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink, marginRight: 10 } : undefined}>
+                {p.label}{' '}
+                <span data-copy="figure" className={email ? undefined : 'font-mono tabular-nums text-muted-foreground'}>{level}</span>
+              </span>
+            )
+          })}
+        </div>
+      )
 
     return (
       <BlockFrame
@@ -216,82 +235,27 @@ export const voiceAudience: Block<VoiceSurfaceData> = {
           : <Link href={href} className="hover:underline">Compare the audiences on Competitive →</Link>}
       >
         <div className={email ? undefined : 'flex flex-col gap-2'}>
-          <Row
-            label="Audience"
-            mode={mode}
-            // The thin mark, in words, exactly where it changes what the page
-            // may claim: on the audience being READ. The pills mark it by
-            // weight; this says what the weight means.
-            note={of ? <>{of}{a.thin ? ' · too thin to compare' : ''}</> : undefined}
-          >
+          {/* NO RIGHT-HAND NOTE: the selected pill already carries the count,
+              and the thin mark rides on the pill's weight and its words. */}
+          <Row label="Audience" mode={mode} note={a.thin ? 'too thin to compare' : undefined}>
             <div className={email ? undefined : 'flex flex-wrap items-center gap-1.5'}>
-              {a.options.map((o) => <AudiencePill key={o.audience} option={o} mode={mode} />)}
+              {/* ONLY WHAT CAN BE READ (`listedRivals`, lib/rivals.ts). The
+                  loader already offers nothing else; the block says it again
+                  because a stored snapshot carries the options it was frozen
+                  with, and one frozen before this rule still lists them. */}
+              {a.options.filter(offered).map((o) => <AudiencePill key={o.audience} option={o} mode={mode} />)}
             </div>
           </Row>
 
-          {/* NO NOTE ON THIS ROW, AND NONE ON THE NEXT. The right-hand basis
-              is here because each row is a share of a DIFFERENT denominator —
-              and these two are not. The platform mix divides the same
-              population the row above names ("1,388 videos in this audience ·
-              Sep 2026", printed identically), and every kind pill carries its
-              own "of N" inside it, which is what D4 / D10 require of a kind
-              share. Printing the same string three times down one bar is how a
-              reader learns to stop reading the column. */}
-          {a.platformMix.length > 0 ? (
-            <Row label="Where it was said" mode={mode}>
-              {/* A PLATFORM THE MONTH DID NOT CARRY IS ABSENT, not a 0% row.
-                  Össur's own brand read no Reddit thread at all in September,
-                  and "Reddit 0" would be a reading of a platform nobody
-                  posted on. */}
-              <div className={email ? undefined : 'flex flex-wrap items-center gap-x-4 gap-y-1'}>
-                {a.platformMix.map((p) => (
-                  <span key={p.platform} className={email ? undefined : 'text-[12px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink, marginRight: 10 } : undefined}>
-                    {p.label}{' '}
-                    <span data-copy="figure" className={email ? undefined : 'font-mono tabular-nums text-muted-foreground'}>
-                      {p.pct == null ? '—' : fmtPct(p.pct)} {fmtInt(p.videos)}
-                    </span>
-                  </span>
-                ))}
-              </div>
-            </Row>
-          ) : null}
+          {a.platformMix.length > 0 ? <Row label="Where it was said" mode={mode}>{platforms}</Row> : null}
 
+          {/* NO REDDIT CLAUSE AND NO "ARGUED" ROW (the calm pass). "Reddit
+              carried 0 of 2 of the question-and-objection videos" and the
+              tenant-wide reply share ("7.2% of this month's comments were
+              replies") are not about the audience this block is scoped to,
+              and neither changes what a returning reader does next. */}
           <Row label="Kind of thing said" mode={mode}>
             {kinds}
-            {a.reddit && a.reddit.pct != null ? (
-              <p className={email ? undefined : 'm-0 mt-1.5 text-[11.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}>
-                Reddit carried <span data-copy="figure">{fmtInt(a.reddit.reddit)} of {fmtInt(a.reddit.videos)}</span> of the question-and-objection videos.
-              </p>
-            ) : null}
-          </Row>
-
-          <Row label="Argued, not just said" mode={mode}>
-            {a.replies ? (
-              <p
-                className={email ? undefined : 'm-0 text-[12.5px]'}
-                style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}
-                // The basis note rides as a tooltip on screen (copy de-clutter
-                // B21); email and print still print it under the line.
-                title={mode === 'app' && a.repliesNote ? a.repliesNote : undefined}
-              >
-                <span data-copy="figure">{a.replies.pct == null ? '—' : fmtPct(a.replies.pct)}</span> of this month’s comments were replies to another comment:{' '}
-                {/* THE TRAILING CLAUSE IS SUPPRESSED WHEN IT REPEATS THE NUMBER BEFORE
-                    IT. Rendered on production: "7.1% ... - 835 of 11,712, 835
-                    of them on Reddit." A reader who does not compare the two
-                    digits reads two populations, and the note under this line
-                    already says every reply we can see is a Reddit reply. */}
-                <span data-copy="figure">{fmtInt(a.replies.replies)} of {fmtInt(a.replies.comments)}</span>{a.replies.reddit != null && a.replies.reddit !== a.replies.replies ? (
-                  <>, <span data-copy="figure">{fmtInt(a.replies.reddit)}</span> of them on Reddit</>
-                ) : null}.
-              </p>
-            ) : (
-              <BlockEmpty mode={mode}>{a.repliesNote ?? 'How much of this month was argued is not readable here.'}</BlockEmpty>
-            )}
-            {a.replies && a.repliesNote && mode !== 'app' ? (
-              <p className={email ? undefined : 'm-0 mt-1 text-[11px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}>
-                {a.repliesNote}
-              </p>
-            ) : null}
           </Row>
         </div>
       </BlockFrame>

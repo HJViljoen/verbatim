@@ -10,6 +10,7 @@ import {
   CLIENT_AUDIENCE,
   INDUSTRY_AUDIENCE,
   isMissingCompetitors,
+  listedRivals,
   loadCompetitors,
   rivalKey,
   type Competitor,
@@ -1090,7 +1091,16 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
       .filter((d) => monthStartOf(d.month) === month)
       .map((d) => [d.audience, d] as const),
   )
-  const selected = pickAudience(params.audience, audiences)
+  // ONLY WHAT CAN BE READ IS OFFERED (`listedRivals`): an audience with no
+  // video this month, and a rival that has stopped being tracked, are not in
+  // the switch. Your own brand and the category follow the same rule; when
+  // nothing at all carried a video the switch keeps the full list, so the page
+  // can still say the month is empty.
+  const hasVideos = (a: string): boolean => (denomThisMonth.get(a)?.videos ?? 0) > 0
+  const offeredRivals = new Set(listedRivals(rivals, hasVideos).map((r) => rivalKey(r.name)))
+  const readable = audiences.filter((a) => (a === CLIENT_AUDIENCE || a === INDUSTRY_AUDIENCE ? hasVideos(a) : offeredRivals.has(a)))
+  const offered = readable.length > 0 ? readable : audiences
+  const selected = pickAudience(params.audience, offered)
 
   const searching = (params.q ?? '').trim().length >= 2
 
@@ -1154,7 +1164,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   const selectedDenom = denomThisMonth.get(selected) ?? null
   const platformMix = platformShares(selectedDenom?.platform_mix, selectedDenom?.videos ?? null)
 
-  const options: AudienceOption[] = audiences.map((a) => {
+  const options: AudienceOption[] = offered.map((a) => {
     const d = denomThisMonth.get(a) ?? null
     return {
       audience: a,

@@ -846,12 +846,13 @@ describe('buildRivals', () => {
     expect(b.standingsNote).toBeNull()
   })
 
-  it('keeps a retired rival’s row and says when it was retired', () => {
+  it('lists no stopped rival: Settings › Tracking is where the whole list lives', () => {
     const b = buildRivals({
-      rivals: [{ name: 'Poler', retiredAt: '2026-09-09' }],
+      rivals: [{ name: 'Poler', retiredAt: '2026-09-09' }, { name: 'Freitag', retiredAt: null }],
       statsRows: null, month: '2026-09-01', prevMonth: null, brand: 'Sealand', series, dualMention: null,
     })
-    expect(b.rows.find((r) => r.label === 'Poler')?.retiredAt).toBe('2026-09-09')
+    expect(b.rows.find((r) => r.label === 'Poler')).toBeUndefined()
+    expect(b.rows.find((r) => r.label === 'Freitag')).toBeDefined()
   })
 
   it('leads with nothing while the panel is not recorded, because nobody was compared', () => {

@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { BrandClaim } from '@/components/blocks/brand-claim'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { fmtInt } from '@/lib/format'
@@ -30,10 +31,11 @@ import type { ClaimRow, MarketSurfaceData } from '@/lib/pages/market-surface'
 // ever recurred have already flipped their verdict — so the card says this is
 // the latest update's reading and does not dress it as a series.
 //
-// THE CLAIM IS THE CLIENT'S OWN VOICE AND THE ANSWER IS THE MODEL'S. `you_say`
-// is lifted off the client's own transcript and prints as a quotation; the
-// audience's line is Pass D-a's and is marked `stored` under
-// `pass_d_a_say_vs_hear`, which is the slot that adjudicated it at write time.
+// A CLAIM IS NOT A QUOTE. `you_say` is Pass D-a's line for what the client
+// claimed, so it prints as plain text through `BrandClaim` (no quotation marks,
+// no serif: those belong to people in the conversation) and is marked `stored`
+// under `pass_d_a_say_vs_hear`, the slot that wrote it, as is the audience's
+// line under it.
 
 /** The artboard's dot, in the colour the verdict earns. */
 const DOT: Record<string, string> = {
@@ -47,7 +49,7 @@ function Claim({ claim, mode }: { claim: ClaimRow; mode: RenderMode }) {
   if (email) {
     return (
       <div style={{ padding: '5px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
-        <div data-copy="quote" style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink }}>“{claim.youSay}”</div>
+        <div><BrandClaim mode={mode} copy="stored" slot="pass_d_a_say_vs_hear">{claim.youSay}</BrandClaim></div>
         <div style={{ fontFamily: FONT.sans, fontSize: 11, fontWeight: 600, color: EMAIL.ink2, marginTop: 2 }}>{claim.verdictLabel}</div>
         {claim.theySay ? <div data-copy="stored" data-slot="pass_d_a_say_vs_hear" style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink2, marginTop: 2 }}>{claim.theySay}</div> : null}
       </div>
@@ -55,7 +57,7 @@ function Claim({ claim, mode }: { claim: ClaimRow; mode: RenderMode }) {
   }
   return (
     <div className="flex min-w-0 flex-col gap-1">
-      <p data-copy="quote" className="m-0 text-[12.5px]">“{claim.youSay}”</p>
+      <BrandClaim mode={mode} copy="stored" slot="pass_d_a_say_vs_hear" className="block">{claim.youSay}</BrandClaim>
       <span className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
         <span aria-hidden className="size-1.5 shrink-0 rounded-full" style={{ background: DOT[claim.audience] ?? 'var(--border)' }} />
         {claim.verdictLabel}
