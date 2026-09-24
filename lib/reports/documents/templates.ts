@@ -96,7 +96,7 @@ export const SALES_BRIEF: DocumentTemplate = {
   key: 'sales_brief',
   name: 'Sales brief',
   audience: 'sales',
-  description: 'What buyers will say this month, what changed, what to say back and how sure we are: written from the update as the company\'s own consumer researcher would write it for the sales team. Read it, edit it, send it.',
+  description: 'Helps your sales team walk into every conversation ready: the objections buyers are raising now, the answers that land, and what changed since last month, so reps answer with confidence instead of guessing.',
   role:
     `You are the company's consumer researcher. ${READ} and you are writing the research brief the sales team reads. You report what the conversation shows and what it means for a sale; you are an intelligence function, not a sales coach. A finding is an argument developed from the evidence: what the conversation shows, what it means for a sale, and how sure the reading is.`,
   brief:
@@ -144,7 +144,7 @@ export const LEADERSHIP_BRIEF: DocumentTemplate = {
   key: 'leadership_brief',
   name: 'Leadership one-pager',
   audience: 'leadership',
-  description: 'Three readings of what the market is saying, what moved since last time, and where the company stands against the names it is measured against. Short on purpose: the pages a board member will actually read.',
+  description: 'Gives leadership a fast, honest read on where the company stands with its customers and against its rivals, so decisions start from what people actually say rather than from assumptions.',
   role:
     `You are the company's consumer researcher. ${READ} and you are writing the short brief the executive team reads. You report what the conversation shows and what it means for the business: demand, reputation, and where the company sits against the alternatives. You do not recommend a strategy; you give the reading the strategy would have to answer to.`,
   brief:
@@ -178,7 +178,7 @@ export const MARKET_BRIEF: DocumentTemplate = {
   key: 'market_brief',
   name: 'Market brief',
   audience: 'marketing',
-  description: 'What the audience already believes, which claims land and which come back, who is in the conversation and what words they use for it: the brief the marketing team works from between campaigns.',
+  description: 'Helps your marketing team plan every campaign around what the audience already believes and which messages land or get pushed back, so the work speaks the audience\'s own language.',
   role:
     `You are the company's consumer researcher. ${READ} and you are writing the brief the marketing team works from. You report what the audience already believes, what it does with what the company says, and where the company's own words and the audience's words are not the same words. You are describing the market, not writing the campaign.`,
   brief:
@@ -215,7 +215,7 @@ export const CONTENT_BRIEF: DocumentTemplate = {
   key: 'content_brief',
   name: 'Content brief',
   audience: 'content',
-  description: 'What the audience asks and nobody answers, what it gets wrong, and the words it uses: written from the update for the people who make the videos and posts.',
+  description: 'Gives the people who make your videos and posts a steady supply of what the audience wants to know, gets wrong and cares about, so every piece answers a real question and earns attention.',
   role:
     `You are the company's consumer researcher. ${READ} and you are writing the brief the people who make the content read. You report what the audience asks, what it misunderstands, what it says about the videos and posts themselves, and what language it uses. You do not write the content calendar; you describe the audience the content has to meet.`,
   brief:

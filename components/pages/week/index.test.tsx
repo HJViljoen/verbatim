@@ -1067,7 +1067,7 @@ describe('the page', () => {
   it('draws every block, the two updates and the update’s own size', () => {
     const text = renderText(<WeekPage data={weekFixture()} />)
     expect(text).toContain('This week')
-    expect(text).toContain('update of 13 Sep · previous 6 Sep')
+    expect(text).not.toContain('update of 13 Sep · previous 6 Sep')
     expect(text).toContain('Össur · 205 videos this update')
     // Every block's TITLE is on the page — except the footnote's, which the
     // artboard sets bare on the page ground with no eyebrow (design review,
