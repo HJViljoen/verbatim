@@ -3,7 +3,7 @@ import { BlockFrame } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
 import { TokenProse } from '@/components/blocks/prose'
 import type { CoverStat, QuarterlyData } from '@/lib/pages/quarterly'
-import { QUARTER_PAGE_QUESTION, QUARTER_PAGE_TITLE, quarterLabel } from '@/lib/reports/quarterly'
+import { QUARTER_PAGE_QUESTION, QUARTER_PAGE_TITLE, quarterLabel, withoutReadingCounter } from '@/lib/reports/quarterly'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { Note } from './parts'
 
@@ -138,7 +138,7 @@ export const quarterlyCover: Block<QuarterlyData> = {
           title={`${quarterlyCover.title} · ${quarterLabel(data.quarter)}`}
           question={quarterlyCover.question}
           mode={mode}
-          meta={c.stamp}
+          meta={withoutReadingCounter(c.stamp)}
           // THE MIX, AND NOT THE COUNTS. `c.corpus` is the platform mix alone
           // now; the counts it used to carry are page 2's, beside the argument
           // that rests on them, and were printing verbatim on both sheets.
@@ -169,7 +169,7 @@ export const quarterlyCover: Block<QuarterlyData> = {
         <p className="m-0 font-mono text-[12.5px] leading-[1.5] text-muted-foreground">
           {quarterLabel(data.quarter)} against {quarterLabel(data.prior, false)} · {data.brand}
           <br />
-          {c.stamp}
+          {withoutReadingCounter(c.stamp)}
         </p>
         <div className={`max-w-[66ch] leading-[1.55] ${hero ? 'text-[16px]' : 'text-[14px]'}`}>
           <TokenProse body={c.body} figures={c.figures} mode={mode} />

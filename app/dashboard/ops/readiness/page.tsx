@@ -59,7 +59,7 @@ export default async function ReadinessPage() {
           <ReadinessTable
             rows={rows}
             title="This workspace"
-            description={`Read ${fullDate(now.toISOString())}. A month counts when it carries ${inputs.floor} videos — the same floor the product compares on; comments are shown beside it because the two do not agree.`}
+            description={`Read ${fullDate(now.toISOString())}. A month counts when it carries ${inputs.floor} videos, the same floor the product compares on.`}
           />
         </PaneBody>
       </section>

@@ -40,7 +40,7 @@ import { RecordSection } from './frame'
  */
 
 export function CoverageBlock({
-  title, meta, rows, oneLine,
+  title, meta, rows,
 }: {
   /** "Coverage · September 2026". */
   title: string
@@ -50,7 +50,9 @@ export function CoverageBlock({
   /** The mono one-liner under the grid: the readings counter and
    *  `howSoundLine`, which every reading surface prints in its page bar and
    *  this page did not print at all. */
-  oneLine: string
+  /** No longer printed (copy de-clutter C8): the rows are the long form and
+   *  the page bar is the one line. Accepted so older callers still compile. */
+  oneLine?: string
 }) {
   return (
     <RecordSection title={title} meta={meta}>
@@ -104,9 +106,6 @@ export function CoverageBlock({
           </>
         ) : null}
       </div>
-      <p className="m-0 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
-        <span className="text-secondary-foreground">This window in one line</span> · {oneLine}
-      </p>
     </RecordSection>
   )
 }
@@ -133,7 +132,7 @@ function Row({ row, right }: { row: RecordRow; right: boolean }) {
           {row.figure != null ? (
             <span data-copy="figure" className="font-mono font-semibold tabular-nums">{row.figure}</span>
           ) : null}
-          {row.figure != null && row.rest ? (row.dash ? ' — ' : ' ') : ''}
+          {row.figure != null && row.rest ? (row.dash ? ' · ' : ' ') : ''}
           {row.rest}
         </span>
         {row.basis ? <span className="mt-0.5 block text-[11.5px] text-muted-foreground">{row.basis}</span> : null}

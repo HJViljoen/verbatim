@@ -472,7 +472,7 @@ describe('formatOpsEmail', () => {
       ],
       NOW,
     )
-    expect(subject.startsWith('Verbatim ops — ')).toBe(true)
+    expect(subject.startsWith('Verbatim ops: ')).toBe(true)
     expect(subject).toContain('2 findings')
     expect(text).toContain('no heartbeat recorded yet')
     expect(text).toContain('Össur')

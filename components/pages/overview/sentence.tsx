@@ -8,7 +8,7 @@ import { RecStatusMenu, RecStatusWord } from '@/components/rec-status'
 import { TileBlock } from '@/components/shell/tile'
 import { TileColumns } from '@/components/shell/page-grid'
 import { INTERPRETATION_LABEL } from '@/lib/prose/interpret'
-import { fmtInt, longMonth, shortDate } from '@/lib/format'
+import { fmtInt, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import { onScreenText } from '@/lib/pages/overview'
@@ -33,7 +33,7 @@ import { TokenProse } from '@/components/blocks/prose'
  *  it. ("Nothing unusual this week" is printed on This week and on the weekly
  *  report, where it answers a question the reader arrived with.) */
 function anomalySentence(a: AnomalyLine): string {
-  return `${a.label} — ${fmtInt(a.k)} of ${fmtInt(a.n)} ${a.denominator} in the week of ${shortDate(a.weekStart)}, against the three months behind it (band ±${Math.abs(a.bandPts)} points).`
+  return `${a.label}: ${fmtInt(a.k)} of ${fmtInt(a.n)} ${a.denominator} in the week of ${shortDate(a.weekStart)}, against the three months behind it (band ±${Math.abs(a.bandPts)} points).`
 }
 
 /**
@@ -53,23 +53,6 @@ export function voicesLabel(shown: number): string {
   return word ? `${word} ${shown === 1 ? 'voice' : 'voices'}` : `${fmtInt(shown)} voices`
 }
 
-export function voicesFromLine(shown: number, from: number): string | null {
-  const pool = Math.max(from, shown)
-  // "chosen from 37 the month's videos carried" was ungrammatical, directly
-  // under "TWO VOICES" in the page's lead block (design review High 10). The
-  // fix inserted a definite article and left the collision (Block D wave 3,
-  // M10): "the 37 the month's videos carried" is two "the"-phrases with a zero
-  // relative pronoun between a bare numeral and a possessive, set at 11px mono
-  // as the second thing the eye reaches in the lead tile. The numeral needs its
-  // NOUN — the relative clause is fine once there is something for it to
-  // qualify — and the noun is the one the heading above it already uses.
-  //
-  // NOT DELETED, although the artboard prints "TWO VOICES" and nothing else:
-  // the count is disposition #18's point, that a reader can see two were CHOSEN
-  // and not that two were all there was. The heading is the mock's and the
-  // count keeps its own line under it.
-  return pool > shown ? `chosen from the ${fmtInt(pool)} voices this month’s videos carried` : null
-}
 
 /**
  * "first on record 3 months ago · repeated across 3 updates · 412 videos behind
@@ -110,12 +93,6 @@ export function decisionStamp(l: LedgerRow): string {
   return l.decidedAt ? `you marked it on ${shortDate(l.decidedAt)}` : 'no decision recorded'
 }
 
-/** The month this block's figures are of, for the footer note — the artboard's
- *  "September 2026 · still filling". */
-export function monthNote(data: OverviewData): string {
-  const label = `${longMonth(data.month)} ${data.month.slice(0, 4)}`
-  return data.monthStatus === 'filling' ? `${label} · still filling` : label
-}
 
 /** "update of 13 Sep" — the newest update delivered into this month, or the
  *  honest absence. `BarBlock.updateDates` are already formatted short dates, so
@@ -254,17 +231,9 @@ export const overviewSentence: Block<OverviewData> = {
           className={email ? undefined : 'w-fit rounded-full bg-inner px-2 py-px text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground'}
           style={email ? { fontFamily: FONT.sans, fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: EMAIL.muted } : undefined}
         >
-          Our read · {INTERPRETATION_LABEL}
+          {INTERPRETATION_LABEL}
         </span>
         <TokenProse body={s.interpretation.sentences.join(' ')} figures={s.figures} mode={mode} model />
-        {s.interpretation.note ? (
-          <span
-            className={email ? undefined : 'text-[11px] text-muted-foreground'}
-            style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}
-          >
-            {s.interpretation.note}
-          </span>
-        ) : null}
       </div>
     ) : null
 
@@ -322,25 +291,16 @@ export const overviewSentence: Block<OverviewData> = {
       )
     ) : null
 
-    const fromLine = voicesFromLine(s.voices.length, s.voicesFrom)
+    // A43: "chosen from the N voices…" is cut; a reader knows quotes are a
+    // selection.
     const voices = s.voices.length > 0 ? (
       <div className={email ? undefined : 'flex min-w-0 flex-col gap-2.5'}>
-        <div className={email ? undefined : 'flex flex-col gap-px'}>
-          <span
-            className={email ? undefined : 'text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground'}
-            style={email ? { fontFamily: FONT.sans, fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: EMAIL.muted } : undefined}
-          >
-            {voicesLabel(s.voices.length)}
-          </span>
-          {fromLine ? (
-            <span
-              className={email ? undefined : 'font-mono text-[10.5px] tabular-nums text-muted-foreground'}
-              style={email ? { fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.faint } : undefined}
-            >
-              {fromLine}
-            </span>
-          ) : null}
-        </div>
+        <span
+          className={email ? undefined : 'text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground'}
+          style={email ? { fontFamily: FONT.sans, fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: EMAIL.muted } : undefined}
+        >
+          {voicesLabel(s.voices.length)}
+        </span>
         {s.voices.map((v) => <VoiceRow key={v.quote.ref} voice={v} mode={mode} />)}
       </div>
     ) : null
@@ -373,7 +333,6 @@ export const overviewSentence: Block<OverviewData> = {
         // and nothing in the product holds one.
         meta={lastUpdateMeta(data)}
         footer={openLink(mode, market, 'Open Market →')}
-        footerNote={monthNote(data)}
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         {email ? (

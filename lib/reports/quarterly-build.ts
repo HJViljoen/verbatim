@@ -156,7 +156,7 @@ export async function snapshotQuarterly(args: {
     { quarter: args.quarter, now: args.now },
   )
   if (!reading) {
-    throw new QuarterlyEmptyError('Nothing to review yet — your first update has not landed.')
+    throw new QuarterlyEmptyError('Nothing to review yet: your first update has not landed.')
   }
 
   const known = (args.keys ?? QUARTERLY_BLOCK_KEYS).filter(isQuarterlyBlockKey)

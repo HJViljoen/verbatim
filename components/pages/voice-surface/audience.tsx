@@ -209,7 +209,8 @@ export const voiceAudience: Block<VoiceSurfaceData> = {
         // screen it is a 12.5px line pushing the rows the block exists for
         // further down a bar the artboard draws in 105px.
         mode={mode}
-        meta={a.videos != null ? `${fmtInt(a.videos)} videos · ${fmtInt(a.comments ?? 0)} comments` : undefined}
+        // No block meta: the Audience row's note one line below prints the same
+        // denominator (copy de-clutter B19).
         footer={email
           ? <a href={href} style={{ color: EMAIL.ink }}>Open Competitive →</a>
           : <Link href={href} className="hover:underline">Compare the audiences on Competitive →</Link>}
@@ -259,16 +260,21 @@ export const voiceAudience: Block<VoiceSurfaceData> = {
             {kinds}
             {a.reddit && a.reddit.pct != null ? (
               <p className={email ? undefined : 'm-0 mt-1.5 text-[11.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}>
-                Reddit carried <span data-copy="figure">{fmtInt(a.reddit.reddit)} of {fmtInt(a.reddit.videos)}</span> of the question-and-objection videos
-                {a.reddit.exact ? '' : ' (a video carrying both is counted in each)'}.
+                Reddit carried <span data-copy="figure">{fmtInt(a.reddit.reddit)} of {fmtInt(a.reddit.videos)}</span> of the question-and-objection videos.
               </p>
             ) : null}
           </Row>
 
           <Row label="Argued, not just said" mode={mode}>
             {a.replies ? (
-              <p className={email ? undefined : 'm-0 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}>
-                <span data-copy="figure">{a.replies.pct == null ? '—' : fmtPct(a.replies.pct)}</span> of this month’s comments were replies to another comment —{' '}
+              <p
+                className={email ? undefined : 'm-0 text-[12.5px]'}
+                style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}
+                // The basis note rides as a tooltip on screen (copy de-clutter
+                // B21); email and print still print it under the line.
+                title={mode === 'app' && a.repliesNote ? a.repliesNote : undefined}
+              >
+                <span data-copy="figure">{a.replies.pct == null ? '—' : fmtPct(a.replies.pct)}</span> of this month’s comments were replies to another comment:{' '}
                 {/* THE TRAILING CLAUSE IS SUPPRESSED WHEN IT REPEATS THE NUMBER BEFORE
                     IT. Rendered on production: "7.1% ... - 835 of 11,712, 835
                     of them on Reddit." A reader who does not compare the two
@@ -281,7 +287,7 @@ export const voiceAudience: Block<VoiceSurfaceData> = {
             ) : (
               <BlockEmpty mode={mode}>{a.repliesNote ?? 'How much of this month was argued is not readable here.'}</BlockEmpty>
             )}
-            {a.replies && a.repliesNote ? (
+            {a.replies && a.repliesNote && mode !== 'app' ? (
               <p className={email ? undefined : 'm-0 mt-1 text-[11px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}>
                 {a.repliesNote}
               </p>

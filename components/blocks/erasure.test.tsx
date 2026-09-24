@@ -50,7 +50,7 @@ describe('every quote withdrawn', () => {
   it('leaves the monthly voices page standing, saying what happened per cell', () => {
     const data = erased(monthlyFixture())
     const text = renderText(MONTHLY_BLOCKS['monthly.voices'].render(data, 'app', ctx))
-    expect(text).toContain('counted, not quotable — this comment has since been removed')
+    expect(text).toContain('counted, not quotable: this comment has since been removed')
     expect(MONTHLY_BLOCKS['monthly.voices'].quotes?.(data)).toEqual([])
   })
 })

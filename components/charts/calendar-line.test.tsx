@@ -177,14 +177,14 @@ describe('CalendarLine', () => {
 
   it('draws the still-filling month as a part-height bar with last month beside it', () => {
     const markup = render(chart())
-    expect(markup).toContain('Still filling — this month is still taking comments')
+    expect(markup).toContain('Still filling: this month is still taking comments')
     expect(markup).toContain('At this point last month: 27%')
     expect(markupText(markup)).toContain('at this point last month')
   })
 
   it('dates a tracking change at its own month and shades the months it moved', () => {
     const markup = render(chart())
-    expect(markup).toContain('Poler added to what we track — affects Sep 2026')
+    expect(markup).toContain('Poler added to what we track: affects Sep 2026')
     expect(markup).toContain('>3 Sep<')
     expect(markup).toContain('stroke-dasharray="2 3"')
   })
@@ -211,7 +211,7 @@ describe('CalendarLine', () => {
   it('draws a legend for two series, and names the Reddit exclusion on the one that has it', () => {
     const words = markupText(render(chart()))
     expect(words).toContain('Sealand')
-    expect(words).toContain('Freitag — excludes Reddit')
+    expect(words).toContain('Freitag · excludes Reddit')
     expect(words).toContain('below the floor')
   })
 

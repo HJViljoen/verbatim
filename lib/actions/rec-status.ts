@@ -95,7 +95,7 @@ export async function setRecommendationStatus(id: string, status: string): Promi
       return { ok: false, message: couldNotSave('setRecStatus decision', decisionError) }
     }
     console.warn(
-      '[rec-status] rec_decisions does not exist — apply supabase/migrations/20260915093000_rec_decisions.sql. ' +
+      '[rec-status] rec_decisions does not exist; apply supabase/migrations/20260915093000_rec_decisions.sql. ' +
       'Recording the status on the recommendation alone; it now survives only as long as the next update re-finds this row.',
     )
   }
@@ -120,7 +120,7 @@ export async function setRecommendationStatus(id: string, status: string): Promi
     // that lands the database refuses it, and the reader deserves a sentence
     // rather than a constraint name.
     if (status === 'in_progress' && (error as { code?: string }).code === '23514') {
-      return { ok: false, message: '“Working on it” isn’t available yet — mark it Acknowledged for now.' }
+      return { ok: false, message: '“Working on it” isn’t available yet. Mark it Acknowledged for now.' }
     }
     return { ok: false, message: couldNotSave('setRecStatus update', error) }
   }

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
-import { BRIEFS_META, BRIEF_CARDS, LEADERSHIP_LINE, STALE_PDF_LINE, briefMonthChip, briefReader, briefStamp, cadenceWord, cardSending, deliveryLine, latestBriefLine, type BriefCard } from '@/lib/reports/briefs'
+import { BRIEFS_META, BRIEF_CARDS, briefMonthChip, briefReader, briefStamp, cadenceWord, cardSending, deliveryLine, latestBriefLine, type BriefCard } from '@/lib/reports/briefs'
 import { BriefCards } from './brief-cards'
 
 const card = (over: Partial<BriefCard> = {}): BriefCard => ({
@@ -37,17 +37,16 @@ describe('the three cards', () => {
     expect(BRIEF_CARDS.map((c) => c.artefact)).toEqual(['brief:sales', 'brief:marketing', 'brief:content'])
   })
 
-  it('say where the fourth is rather than leaving it withdrawn', () => {
+  it('carries no page-architecture note about the fourth (copy de-clutter C80)', () => {
     const html = render(<BriefCards cards={[card()]} />)
-    expect(html).toContain('leadership brief')
-    expect(LEADERSHIP_LINE).toContain('Studio')
+    expect(html).not.toContain('built in the Studio rather than from here')
   })
 })
 
 describe('deliveryLine', () => {
   it('says nobody receives it, which is true on both live workspaces today', () => {
     expect(deliveryLine({ cadence: 'Every update', recipients: [], sending: false }))
-      .toBe('Every update · nobody receives this yet — add people in Settings › Reports and recipients.')
+      .toBe('Every update · nobody receives this yet.')
   })
 
   it('says there is no schedule at all where there is none', () => {
@@ -215,9 +214,9 @@ describe('the card', () => {
     const fresh = renderText(<BriefCards cards={[card()]} />)
     expect(fresh).toContain('PDF · 240 KB')
     const stale = renderText(<BriefCards cards={[card({ pdf: { id: 'a1', bytes: 240_000, stale: true } })]} />)
-    expect(stale).toContain(STALE_PDF_LINE)
+    expect(stale).toContain('rebuilt on download')
     expect(stale).not.toContain('240 KB')
-    expect(fresh).not.toContain(STALE_PDF_LINE)
+    expect(fresh).not.toContain('rebuilt on download')
   })
 
   // The figure rows are the archive detail pane's own markup, lifted onto the

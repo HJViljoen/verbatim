@@ -4,7 +4,7 @@ import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, copyNodes } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
-import { overviewSentence, provenanceLine, voicesFromLine } from './sentence'
+import { overviewSentence, provenanceLine } from './sentence'
 import { overviewFixture, prunedLedgerFixture, refusedFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
@@ -34,19 +34,6 @@ describe('OV1 · in one sentence', () => {
       expect(node?.slot).toBe('pass_d_b_recommendation')
       assertCopyContract(markup)
     }
-  })
-
-  // A BARE NUMERAL NEEDS ITS NOUN (Block D wave 3, M10). "chosen from the 37
-  // the month's videos carried" is two "the"-phrases with a zero relative
-  // pronoun between a numeral and a possessive, set at 11px mono as the second
-  // thing the eye reaches in the lead tile. The count stays — disposition #18's
-  // point is that a reader can see two were CHOSEN and not that two were all
-  // there was — and it is the heading's own noun that makes the clause read.
-  it('names what the two voices were chosen from, in a sentence', () => {
-    expect(voicesFromLine(2, 37)).toBe('chosen from the 37 voices this month’s videos carried')
-    // Nothing to say where the pool is the shown set.
-    expect(voicesFromLine(2, 2)).toBeNull()
-    expect(voicesFromLine(2, 1)).toBeNull()
   })
 
   it('writes the figures into the sentence and marks them as code’s', () => {
@@ -80,10 +67,11 @@ describe('OV1 · in one sentence', () => {
     const prose = nodes.filter((n) => n.kind === 'prose')
     expect(prose).toHaveLength(1)
     expect(prose[0].text).toContain('Durability has become the question of the season')
-    // The one place the model may argue carries its label and says who wrote it.
+    // The one place the model may argue carries its label; who wrote it is
+    // not printed (copy de-clutter L9).
     const text = renderText(render(overviewSentence.render(overviewFixture(), 'app', ctx)))
     expect(text).toContain('Interpretation')
-    expect(text).toContain('We wrote this read ourselves this month.')
+    expect(text).not.toContain('We wrote this read ourselves')
   })
 
   it('prints the unusual line with its band, its n and one quote', () => {
@@ -186,14 +174,9 @@ describe('OV1, ported to the artboard', () => {
     expect(text).not.toContain('next 4 Oct')
   })
 
-  it('puts the month and its freeze state in the footer note, not in the body', () => {
-    const markup = render(overviewSentence.render(overviewFixture(), 'app', ctx))
-    // `BlockFrame.footerNote` — the right-hand mono slot P0 built and nothing
-    // used. Six of Main's footer notes were body paragraphs or absent.
-    // `shrink-0` came off the slot in Block D wave 3 (SH5) — it was a clip
-    // with no signal inside an overflow-hidden Tile — so the assertion is on
-    // the slot's remaining signature rather than on the whole class string.
-    expect(markup).toContain('font-mono text-[11px] font-normal text-muted-foreground">September 2026 · still filling')
+  it('leaves the month and its freeze state to the page-bar context line (ruling F)', () => {
+    const text = renderText(overviewSentence.render(overviewFixture(), 'app', ctx))
+    expect(text).not.toContain('still filling')
   })
 
   it('prints the video’s own on-screen text as a sibling of the quote, never inside it', () => {

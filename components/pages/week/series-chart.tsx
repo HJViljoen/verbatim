@@ -221,7 +221,7 @@ export function UpdateSeriesChart({ series }: { series: UpdateSeries }) {
           // point, so it mapped to nothing a reader could find; then it was a
           // ring, which mapped to a mark the system had already spent.
           <Key swatch={<span className="size-2 border" style={{ borderColor: 'var(--chart-1)', background: 'var(--tile)' }} />}>
-            {fmtInt(quiet)} of them found nothing at all, drawn off the line and left out of the range
+            {fmtInt(quiet)} found nothing
           </Key>
         ) : null}
       </div>

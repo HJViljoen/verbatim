@@ -193,10 +193,7 @@ export function QuarterlyCardTile({
             )}
           </div>
         )}
-        <p className="m-0 text-[12px] text-muted-foreground">
-          {card.series.length > 0 ? 'Share of the videos read in the category. ' : ''}
-          {card.note ?? ''}
-        </p>
+        {card.note ? <p className="m-0 text-[12px] text-muted-foreground">{card.note}</p> : null}
       </div>
     </Tile>
   )
@@ -296,11 +293,8 @@ export function QuarterlyAbsentTile({ col = 7, row = 2 }: { col?: number; row?: 
       footer={<Link href="/dashboard/settings" className="inline-flex h-8 -my-1 items-center underline underline-offset-2">Name a subject in Settings</Link>}
     >
       <p className="m-0 text-[12.5px] leading-[1.45] text-foreground">
-        The quarterly review reads the subjects you track, and none is confirmed for this workspace yet — so there is no
+        The quarterly review reads the subjects you track, and none is confirmed for this workspace yet, so there is no
         quarter to set against the one before it.
-      </p>
-      <p className="m-0 text-[12px] text-muted-foreground">
-        Name and confirm a subject and it appears here, with the quarter under review and what stands behind it.
       </p>
     </Tile>
   )

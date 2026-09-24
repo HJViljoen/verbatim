@@ -14,7 +14,6 @@ import { marketMoves } from './moves'
 import { marketSayHear } from './sayhear'
 import { marketPlans } from './plans'
 import { marketWays } from './ways'
-import { marketUnlocks } from './unlocks'
 
 // Market — the page (Phase 1 WP14, design §3 MK1–MK7; ported to the artboard,
 // Block D wave 2).
@@ -85,7 +84,6 @@ export const MARKET_BLOCKS: readonly Block<MarketSurfaceData>[] = [
   marketMoves,
   marketSayHear,
   marketPlans,
-  marketUnlocks,
   marketWays,
 ]
 
@@ -93,7 +91,7 @@ export const MARKET_BLOCKS: readonly Block<MarketSurfaceData>[] = [
 const READINGS: readonly Block<MarketSurfaceData>[] = [marketConclusions, marketAdvice]
 /** The artboard's moves grid, in its rendered order. */
 const MOVES: readonly Block<MarketSurfaceData>[] = [
-  marketCard, marketMoves, marketSayHear, marketPlans, marketUnlocks, marketWays,
+  marketCard, marketMoves, marketSayHear, marketPlans, marketWays,
 ]
 
 /** Each block's span on the 12-column grid — the artboard's own widths. */
@@ -104,7 +102,6 @@ const COLS: Record<string, number> = {
   'market.moves': 7,
   'market.sayhear': 4,
   'market.plans': 4,
-  'market.unlocks': 4,
   'market.ways': 12,
 }
 
@@ -130,18 +127,48 @@ const COLS: Record<string, number> = {
 // 190px of ink). The start stays explicit so a line whose spans do not fill
 // twelve columns can never have a later tile flowed up into it.
 
-/** The page's two grids, each as its own lines of tile keys, in order: the two
- *  full-width readings; then the artboard's moves row, the three narrow cards,
- *  and the button strip. Tiles named on one line share one grid row and start
- *  level; each ends at its own content. */
+/** The readings grid as its lines of tile keys: the two full-width readings,
+ *  one row each. The moves grid is `MOVES_STACKS` below, then the button
+ *  strip across the full width. */
 const GRIDS: readonly (readonly (readonly string[])[])[] = [
   [['market.conclusions'], ['market.advice']],
-  [
-    ['market.card', 'market.moves'],
-    ['market.sayhear', 'market.plans', 'market.unlocks'],
-    ['market.ways'],
-  ],
 ]
+
+/**
+ * THE MOVES GRID IS TWO STACKS, NOT TWO ROWS (layout sweep, 2026-09-24).
+ *
+ * As rows, each line was as tall as its tallest tile: the card (5) stood
+ * ~300px beside a ~110px "Your moves" (7), and say-vs-hear (4) and plans (4)
+ * left four columns empty beside them once "Not on this page yet" left the
+ * page. On Sealand at 1440 that was two blocks of white each taller than a
+ * short card, which the layout rule forbids. Stacked, the left column is the
+ * card over say-vs-hear and the right is your moves over plans, and the two
+ * columns end within a few lines of each other. Below xl the stacks dissolve
+ * (`contents`) and `order` keeps the reading order card, moves, say-vs-hear,
+ * plans.
+ */
+export const MOVES_STACKS: readonly { col: number; keys: readonly string[] }[] = [
+  { col: 5, keys: ['market.card', 'market.sayhear'] },
+  { col: 7, keys: ['market.moves', 'market.plans'] },
+]
+/** Where each stacked tile sits in the single-column reading order below xl. */
+const MOBILE_ORDER: Record<string, string> = {
+  'market.card': 'order-1', 'market.moves': 'order-2', 'market.sayhear': 'order-3', 'market.plans': 'order-4',
+}
+const STACK_SPAN: Record<number, string> = { 5: 'xl:col-span-5', 7: 'xl:col-span-7' }
+
+/**
+ * AN ABSENCE IS A LINE, NEVER A CARD (layout sweep 3). With no plan uploaded,
+ * "Plans re-checked" was a card whose whole body said nothing had been
+ * uploaded; with no claim read, "Say vs hear" was the same. The "Upload a plan"
+ * and "Register a claim you make" buttons in "How a move is made" already
+ * carry that state and the act that ends it, so the page draws no card.
+ */
+export function drawnOnMarket(key: string, data: MarketSurfaceData): boolean {
+  if (key === 'market.plans') return data.plans.length > 0
+  if (key === 'market.sayhear') return data.ways.claims.length > 0
+  return true
+}
 
 /** The grid lines of the moves grid, kept exported-shaped for the test that
  *  reads which tiles sit beside which. */
@@ -238,21 +265,6 @@ export function MarketSurfacePage({
       </Tile>
     )
   }
-  // The masthead's two clauses: the promise, then the limit on it, quiet.
-  //
-  // AND THE FACE IS THE ARTBOARD'S, RULED (block-d-review `market` finding 6,
-  // referred to Heinrich twice and open since; closed here). The finding read
-  // the serif as MASTER's speech face borrowed for the product's own sentence,
-  // so that our words and a commenter's are typeset alike. It is not borrowed:
-  // `spec/design-system.md:69` carries a ramp row for it — "Hero lead (the
-  // page's one sentence) · serif · 17px · 500 · 1.35 · -0.005em" — and
-  // `Market.dc.html:111` draws exactly that, as do `Main.dc.html:124` and
-  // `Subjects.dc.html:294`. The hero lead is the one non-quote serif node the
-  // system declares, and the mock states it three times. Nothing changed; the
-  // measurement is pinned in index.test.tsx so the next reader does not have
-  // to re-open it. Competitive was asked the same question and has no such
-  // node: zero serif in its artboard, zero `font-serif` in its components.
-  const [promise, ...rest] = data.masthead.split(/(?<=\.)\s+/)
 
   return (
     <PageFrame>
@@ -265,18 +277,38 @@ export function MarketSurfacePage({
         <HowToRead items={LEGEND} basePath="/dashboard/market" anchor="market" />
       </SurfacePageBar>
 
-      <p className="m-0 max-w-[86ch] font-serif text-[17px] font-medium leading-[1.35] tracking-[-0.005em] text-foreground [text-wrap:pretty]">
-        {promise}{rest.length > 0 ? <> <span className="text-muted-foreground">{rest.join(' ')}</span></> : null}
-      </p>
+      {/* NO MASTHEAD. "We never claim you caused it" is said once per
+          forwarded document, in its method sheet, and in Settings › How to
+          read; it is cut from the in-app pages (copy de-clutter L6). */}
 
       <PageGrid>{READINGS.map(tile)}</PageGrid>
 
-      <PageGrid className="xl:items-start">{MOVES.map(tile)}</PageGrid>
+      <PageGrid className="xl:items-start">
+        {MOVES_STACKS.map((stack) => (
+          <div key={stack.keys.join()} className={`contents xl:flex xl:min-w-0 xl:flex-col xl:gap-4 ${STACK_SPAN[stack.col]}`}>
+            {stack.keys.map((key) => {
+              const block = MOVES.find((b) => b.key === key)
+              if (!block || !drawnOnMarket(key, data)) return null
+              return (
+                <Tile key={block.key} col={12} row={1} className={`${MOBILE_ORDER[key] ?? ''} xl:order-none`} distribute="between">
+                  {block.render(data, 'app', ctx)}
+                </Tile>
+              )
+            })}
+          </div>
+        ))}
+        {MOVES.filter((b) => !MOVES_STACKS.some((st) => st.keys.includes(b.key))).map((block) => (
+          <Tile key={block.key} col={COLS[block.key] ?? 12} row={1} className="order-5 xl:order-none" distribute="between">
+            {block.render(data, 'app', ctx)}
+          </Tile>
+        ))}
+      </PageGrid>
 
+      {/* No method footnote: soundness lives in the page bar's "How sound is
+          this" pill and its record modal (copy de-clutter ruling B). The
+          privacy line is legal, not method, and stays. */}
       {data.method ? (
-        <p className="m-0 flex flex-col gap-0.5 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">
-          {data.method.lines.map((line) => <span key={line}>{line}</span>)}
-        </p>
+        <p className="m-0 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">{data.method.privacy}</p>
       ) : null}
     </PageFrame>
   )

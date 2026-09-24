@@ -40,20 +40,13 @@ export const monthlyMonth: Block<MonthlyData> = {
     const email = mode === 'email'
     const href = `${ctx.appUrl}/dashboard`
 
-    // TWO LINES, NOT ONE. OV0 prints the filling line and the reading counter
-    // as separate paragraphs; joined by a space they read as one sentence
-    // running off the end of itself — "last month at this point: not recorded
-    // yet your 4th monthly reading" — which is what the live render showed.
+    // ONE LINE. The reading counter ("your 3rd monthly reading · the quarter
+    // view needs 6") is said once in this artefact, in "How sound is this
+    // month" (ruling E); the month's stamp keeps the filling line alone.
     const stamp = email ? (
-      <>
-        <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>{b.line}</div>
-        <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 }}>{b.counter}</div>
-      </>
+      <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>{b.line}</div>
     ) : (
-      <div className="flex flex-col gap-0.5">
-        <p className="m-0 text-[12px] text-muted-foreground">{b.line}</p>
-        <p className="m-0 text-[11.5px] text-muted-foreground">{b.counter}</p>
-      </div>
+      <p className="m-0 text-[12px] text-muted-foreground">{b.line}</p>
     )
 
     // THE MONTH'S SENTENCE IS THE ARTEFACT'S HERO (Block D wave 2, E-monthly).
@@ -94,11 +87,15 @@ export const monthlyMonth: Block<MonthlyData> = {
     // LAST MONTH, CONFIRMED. The other half of item 13's loop, and it belongs
     // here rather than in the masthead: a reader meets the month's own numbers
     // first and is then told what the month before them settled at.
-    const confirming = data.confirming ? (
+    // A snapshot built before the copy de-clutter stored the line with its
+    // explanatory tail (D45); the figure pair is the finding, so the tail is
+    // not reprinted.
+    const confirmingText = data.confirming?.replace('; the rest of the month has since been counted.', '.') ?? null
+    const confirming = confirmingText ? (
       email ? (
-        <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 8 }}>{data.confirming}</div>
+        <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 8 }}>{confirmingText}</div>
       ) : (
-        <p className="m-0 text-[11.5px] text-muted-foreground">{data.confirming}</p>
+        <p className="m-0 text-[11.5px] text-muted-foreground">{confirmingText}</p>
       )
     ) : null
 
@@ -200,5 +197,5 @@ export const monthlyMonth: Block<MonthlyData> = {
  *  week" for the same sentence on a weekly surface, where the period is
  *  unambiguous. */
 function anomalySentence(a: AnomalyLine): string {
-  return `${a.label} — ${fmtInt(a.k)} of ${fmtInt(a.n)} ${a.denominator} in the week of ${shortDate(a.weekStart)}, against the three months behind it (band ±${Math.abs(a.bandPts)} points).`
+  return `${a.label}: ${fmtInt(a.k)} of ${fmtInt(a.n)} ${a.denominator} in the week of ${shortDate(a.weekStart)}, against the three months behind it (band ±${Math.abs(a.bandPts)} points).`
 }

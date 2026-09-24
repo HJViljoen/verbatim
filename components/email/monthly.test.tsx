@@ -163,10 +163,14 @@ describe('the monthly email', () => {
     expect(words(snapshot())).toContain('reading as at')
   })
 
-  it('prints the rule that keeps it honest, in the arm the month is in', () => {
-    expect(words(snapshot())).toContain(MONTHLY_RULE)
+  // THE FREEZE IS SAID ONCE, IN THE EYEBROW (copy de-clutter, ruling F). The
+  // masthead rule restated it under the eyebrow, and §8 said it twice more.
+  it('says the month is still filling once, in the eyebrow, and prints no masthead rule', () => {
+    const text = words(snapshot())
+    expect(text).not.toContain(MONTHLY_RULE)
+    expect(text.split('still filling').length - 1).toBe(1)
     const closed = monthlyFixture({ monthStatus: 'frozen' })
-    expect(words(snapshot(closed, { monthStatus: 'frozen' }))).toContain(MONTHLY_RULE_FROZEN)
+    expect(words(snapshot(closed, { monthStatus: 'frozen' }))).not.toContain(MONTHLY_RULE_FROZEN)
   })
 
   it('leads with the subject line frozen with the reading', () => {
@@ -230,15 +234,17 @@ describe('the monthly report on paper', () => {
     expect(markup).toContain('How sound is this month')
   })
 
-  it('prints the rule on every sheet, because a PDF has no masthead to scroll back to', () => {
+  // ONCE, NOT ON EVERY SHEET (copy de-clutter, E89/E91): the rule and the
+  // reading's caveat were in the footer of all eight sheets.
+  it('prints the rule once, not in every sheet footer', () => {
     const markup = render(<MonthlyDeck data={snapshot()} date="16 Sep 2026" />)
     const hits = markup.split(MONTHLY_RULE).length - 1
-    expect(hits).toBe(8)
+    expect(hits).toBe(1)
   })
 
-  it('carries the reading’s caveat on every sheet, beside the rule', () => {
+  it('carries the reading’s caveat once, not on every sheet', () => {
     const markup = render(<MonthlyDeck data={snapshot(withNote())} date="16 Sep 2026" />)
-    expect(markup.split(CAVEAT).length - 1).toBe(8)
+    expect(markup.split(CAVEAT).length - 1).toBe(1)
   })
 
   it('says so on its own sheet when it knows none of the stored keys', () => {

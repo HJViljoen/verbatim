@@ -218,7 +218,7 @@ export function languageRow(r: RecordInputs['language']): NumberRow | null {
     // "27% not in English" under a month heading; the share is of what was said
     // ON CAMERA, all-time, and a reader who is not told reads it as a fact
     // about this month's comments.
-    value: `${fmtPct((r.notEnglish / known) * 100, 0)} of what was said on camera was not in English — ${fmtInt(r.notEnglish)} of ${fmtInt(known)} videos whose language we know`,
+    value: `${fmtPct((r.notEnglish / known) * 100, 0)} of what was said on camera was not in English: ${fmtInt(r.notEnglish)} of ${fmtInt(known)} videos whose language we know`,
     figure: true,
   }
 }

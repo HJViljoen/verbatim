@@ -4,7 +4,7 @@ import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
-import { overviewRecord, readLabel, recordColumns } from './record'
+import { figureLine, overviewRecord } from './record'
 import { overviewFixture, refusedFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
@@ -24,59 +24,24 @@ describe('OV6 · how sound is this month', () => {
     }
   })
 
-  it('splits the corpus from the instrument, which is the artboard’s own split', () => {
-    // `main.coverage.para1` / `.para2`: what was READ on the left, how it was
-    // read and what would not compare on the right. They are on different
-    // clocks, which is why they are two paragraphs and not one.
-    const markup = render(overviewRecord.render(overviewFixture(), 'app', ctx))
-    expect(markup).toContain('xl:grid-cols-2')
-    // THE LEFT LEAD-IN IS THE MOCK'S (Block D wave 3, M18): `Main.dc.html` §6
-    // opens "September so far:" and this column IS the month's record. The
-    // right one is not, because the content is not the mock's — the artboard's
-    // "Changes, refusals and delivery" is all on the LEFT here — and it drops
-    // the clause that described the other column.
-    expect(markup).toContain('September 2026 so far:')
-    expect(markup).toContain('How it was read:')
-    expect(markup).not.toContain('and what would not compare:')
-    expect(readLabel({ ...overviewFixture(), monthStatus: 'frozen' })).toBe('September 2026:')
-  })
-
-  it('binds methodLines rather than re-deriving the five facts', () => {
-    // Wave 1 wrote `methodLines` as the ONE composer for coverage, read depth,
-    // language, the Reddit cap and the privacy line; eight surfaces had been
-    // composing them separately, which is how "27% not in English" came to mean
-    // two different things on two pages.
+  it('prints labelled figures only, none the page bar already prints (ruling B)', () => {
     const data = overviewFixture()
-    const { method, read } = recordColumns(data)
-    const m = data.method!
-    for (const line of [m.preparedBy, m.basis, m.language, m.redditCap, m.privacy]) {
-      if (line) expect(method).toContain(line)
-    }
-    expect(m.lines.length).toBeGreaterThan(0)
-    // EXCEPT `coverage`, WHICH IS THE LEFT COLUMN'S (Block D wave 3, M14).
-    // "2,359 videos read in this window · TikTok 38% · …" and the left
-    // column's "2,359 videos carried conversation in this window — TikTok
-    // 38% · …" are the same count and the same mix in two wordings, nine
-    // hundred pixels apart, with nothing saying whether they are two measures
-    // or one. The denominator is a fact about the corpus, so the corpus column
-    // keeps it.
-    expect(method).not.toContain(m.coverage)
-    expect(read.join(' ')).toContain('2,359')
-    expect(method.join(' ')).not.toContain('TikTok')
-  })
-
-  it('states the basis of every figure that is not this month’s (D15)', () => {
-    const text = renderText(overviewRecord.render(overviewFixture(), 'app', ctx))
-    // Read depth is all-time BY CONSTRUCTION and the language share is about
-    // what was said on camera, not about the comments a reader sees. The mock
-    // prints both under a month heading.
-    expect(text).toContain('Of everything we have ever read for you, not just this window')
-    expect(text).toContain('was said on camera')
-  })
-
-  it('says when the month stops moving, on the instrument side', () => {
-    const { method } = recordColumns(overviewFixture())
-    expect(method[method.length - 1]).toContain('This month stops moving on 31 Oct 2026')
+    const text = renderText(overviewRecord.render(data, 'app', ctx))
+    // On screen each figure is its own label/value cell; the email arm joins
+    // them as figureLine does.
+    for (const f of data.record.figures) expect(text).toContain(`${f.label} ${f.value}`)
+    expect(renderText(overviewRecord.render(data, 'email', ctx))).toContain(figureLine(data))
+    expect(text).toContain('read depth, all time speech 71%')
+    expect(text).toContain('comparisons refused 2')
+    // No sentences: the freeze, the change record, and the bar's own figures
+    // live in the page bar and its modal.
+    expect(text).not.toContain('This month stops moving')
+    expect(text).not.toContain('Reading as at')
+    expect(text).not.toContain('No change record before')
+    expect(text).not.toContain('not in English')
+    expect(text).not.toContain('Of everything we have ever read for you')
+    // Read depth prints once.
+    expect(text.split('read depth').length - 1).toBe(1)
   })
 
   it('puts the record link in the header, not in the footer rail', () => {
@@ -90,7 +55,7 @@ describe('OV6 · how sound is this month', () => {
     // so the link's position in the markup is the fact to pin.
     const markup = render(overviewRecord.render(overviewFixture(), 'app', ctx))
     const link = markup.indexOf('the record →')
-    const body = markup.indexOf('September 2026 so far:')
+    const body = markup.indexOf('comments read')
     expect(link).toBeGreaterThan(-1)
     expect(body).toBeGreaterThan(-1)
     expect(link).toBeLessThan(body)
@@ -116,7 +81,7 @@ describe('OV6 · how sound is this month', () => {
 
   it('says so plainly when nothing has been recorded', () => {
     const data = overviewFixture()
-    const empty = { ...data, record: { ...data.record, lines: [] } }
+    const empty = { ...data, record: { ...data.record, lines: [], figures: [] } }
     expect(overviewRecord.emptyState(empty)).toBe('Nothing about this reading has been recorded yet.')
   })
 })

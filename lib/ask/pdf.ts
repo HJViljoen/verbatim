@@ -61,5 +61,5 @@ export async function extractPdfText(bytes: Uint8Array): Promise<PdfExtraction> 
  *  pass) but the caller is told, because a 200-page appendix dump is not a plan
  *  and the claim extractor will read only the clipped head of it. */
 export function pageWarning(pages: number): string | null {
-  return pages > ASK_PDF_MAX_PAGES ? `${pages} pages — only the first part will be read` : null
+  return pages > ASK_PDF_MAX_PAGES ? `${pages} pages: only the first part will be read` : null
 }

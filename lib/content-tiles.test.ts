@@ -42,7 +42,7 @@ describe('contextLine', () => {
     expect(contextLine({ account: null, likes: 0, category: 'question' }, own, roles)).toBe('under a category video')
   })
   it('marks misinformation as awareness only', () => {
-    expect(contextLine({ account: 'ossur', likes: 9, category: 'misinformation' }, own, roles)).toBe('awareness only — never a reply prompt')
+    expect(contextLine({ account: 'ossur', likes: 9, category: 'misinformation' }, own, roles)).toBe('awareness only, never a reply prompt')
   })
 })
 

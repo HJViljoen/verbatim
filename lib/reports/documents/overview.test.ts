@@ -99,7 +99,7 @@ describe('gapTile', () => {
     // headline beside it printed `fmtPct`'s exact tenth, so one gap read "31%"
     // on the cover and "31.0%" on the sheet. Same function, same string.
     expect(tile.label).toContain('you 31.0% of 84')
-    expect(tile.label).toContain('the category — not tracked')
+    expect(tile.label).toContain('the category · not tracked')
     // A side nothing was read for never prints a share, least of all a zero.
     expect(tile.label).not.toContain('the category 0')
   })
@@ -165,7 +165,7 @@ describe('verdictTile', () => {
   it('prints an arrow, a magnitude, the level with its "of N" and the band — and no direction word', () => {
     const tile = verdictTile(verdict())
     expect(tile.value).toBe('▲ 3.2 pts')
-    expect(tile.label).toBe('Durability — 22%, 305 of 1,388. Band 2.1.')
+    expect(tile.label).toBe('Durability: 22%, 305 of 1,388. Band 2.1.')
     for (const word of ['growing', 'fading', 'rising', 'up', 'down']) expect(tile.label).not.toContain(word)
   })
 

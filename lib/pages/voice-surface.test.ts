@@ -252,7 +252,7 @@ describe('openRefusal', () => {
     // audience-month, and every other register id — 1,046 of them on Össur —
     // silently opened the first mover instead.
     expect(openRefusal({ asked: { id: 'r1', label: 'Filip’s storytelling stands out', found: false } }, 'The category'))
-      .toBe('“Filip’s storytelling stands out” was not said in the category this month, so there is nothing to open — clear it from the link to see what was.')
+      .toBe('“Filip’s storytelling stands out” was not said in the category this month, so there is nothing to open. Clear it from the link to see what was.')
   })
 
   it('tells a register id nobody has named apart from a theme nobody said', () => {
@@ -282,7 +282,7 @@ describe('heardLine', () => {
     // on this month, July 2026 on the last three and March 2026 on the last
     // twelve — three answers to a question with one answer.
     expect(heardLine({ firstHeard: '2022-11-01', firstHeardOnAxis: false, monthsSeen: 1, monthsDrawn: 1 }))
-      .toBe('first heard November 2022, before the months drawn here · seen in 1 of 1 month drawn')
+      .toBe('first heard November 2022 · seen in 1 of 1 month drawn')
   })
 
   it('does not vary with the horizon — one answer, whatever is drawn', () => {
@@ -307,11 +307,11 @@ describe('onCameraScope', () => {
     // line above "read from 0 of 2 videos". The first is the update's whole
     // evidence, the second this month's platform mix.
     expect(onCameraScope(1, 12))
-      .toBe('1 of the 12 voices behind this theme was said on camera rather than typed — counted over the whole update, not over this month.')
+      .toBe('1 of 12 voices behind this theme was said on camera, whole update.')
   })
 
   it('agrees with itself about more than one', () => {
-    expect(onCameraScope(17, 182)).toContain('17 of the 182 voices behind this theme were said on camera')
+    expect(onCameraScope(17, 182)).toContain('17 of 182 voices behind this theme were said on camera')
   })
 
   it('says nothing about a theme heard only in comments — a zero on every pane is noise', () => {
@@ -320,14 +320,14 @@ describe('onCameraScope', () => {
   })
 
   it('never claims more on camera than there is evidence', () => {
-    expect(onCameraScope(40, 12)).toContain('12 of the 12 voices')
+    expect(onCameraScope(40, 12)).toContain('12 of 12 voices')
   })
 })
 
 describe('onCameraReach', () => {
   it('names the videos the speech read could not reach', () => {
     expect(onCameraReach({ videos: 130, reddit: 12 }))
-      .toBe('read from 118 of 130 videos — Reddit carries no speech and no on-screen text')
+      .toBe('read from 118 of 130 videos; Reddit carries no speech and no on-screen text')
   })
 
   it('says nothing where no Reddit thread is in the count — there is nothing to warn about', () => {
@@ -468,14 +468,14 @@ describe('castMasthead', () => {
     state: 'ready', personas: [], selected: null, population: 3129,
     overlapNote: 'A video can carry more than one group, so these counts overlap and do not add up to a whole.',
     profileDate: '2026-09-13', stale: false,
-    floorNote: `A group is named only where at least ${PERSONA_VIDEO_FLOOR} videos carry it.`,
-    stateNote: 'this month as it stands, never compared with another month',
+    floorNote: `${PERSONA_VIDEO_FLOOR}-video floor`,
     empty: null,
     ...over,
   })
 
-  it('dates the cast by the update it was read on — not by the month', () => {
-    expect(castMasthead(cast({}))).toContain('Who is talking, as read on')
+  it('prints nothing when the cast is current: only the stale warning earns a line', () => {
+    expect(castMasthead(cast({}))).toBeNull()
+    expect(castMasthead(cast({ stale: true }))).toContain('Who is talking, as read on')
   })
 
   it('says so when a later update has landed since', () => {

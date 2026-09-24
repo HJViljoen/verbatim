@@ -3,13 +3,12 @@ import { blockAnswers, blockContext, figureConflicts, mergeFigures, type RenderM
 import { EMAIL } from '@/lib/email/theme'
 import { fullDate } from '@/lib/format'
 import { assertCopyContract } from '@/lib/test/copy-contract'
-import { markupText, render, renderText } from '@/lib/test/render'
+import { render, renderText } from '@/lib/test/render'
 import { fmtInt, fmtPct } from '@/lib/format'
 import { sentFigureRows } from '@/lib/reports/sent-figures'
-import { MONTHLY_BLOCK_KEYS, MONTHLY_MOVES_UNLOCK } from '@/lib/reports/monthly'
+import { MONTHLY_BLOCK_KEYS } from '@/lib/reports/monthly'
 import { MOVEMENT_WORDS } from '@/components/delta-badge'
 import { freezeSentence, REFUSAL_WHY } from '@/lib/reading/record'
-import { overviewRecord } from '@/components/pages/overview/record'
 import { gapLine, type Gap } from '@/lib/reading/gap'
 import { OWN_POSTS_UNREADABLE_OUTSIDE } from '@/lib/pages/overview'
 import { MOVERS_UNREAD_NOTE } from '@/lib/pages/monthly'
@@ -156,8 +155,10 @@ describe('MR3 · what moved', () => {
   it('heads itself with no direction word — the rows carry theirs', () => {
     expect(block.title).toBe('What moved this month')
     const text = renderText(block.render(monthlyFixture(), 'app', ctx))
-    expect(text).toContain('Cleared their band · a larger share than last month')
-    expect(text).toContain('Cleared their band · a smaller share than last month')
+    // No "Cleared their band ·" prefix (ruling I): each row's badge carries its band.
+    expect(text).toContain('A larger share than last month')
+    expect(text).toContain('A smaller share than last month')
+    expect(text).not.toContain('Cleared their band')
     // AND THE ONE WORD THAT DIFFERS IS THE DARK ONE (the fix pass, review
     // finding [Medium]): at 10.5px caps over two lines, two headings of the
     // same shape whose distinguishing word arrives fifth read as two copies of
@@ -340,10 +341,12 @@ describe('MR6 · one voice per subject', () => {
 describe('MR7 · what to decide', () => {
   const block = MONTHLY_BLOCKS['monthly.decide']
 
-  it('carries the labelled slot and says who wrote it', () => {
+  // The label marks the paragraph; who wrote it is not printed (ruling L9),
+  // even where the stored interpretation still carries the fallback note.
+  it('carries the labelled slot and no note on who wrote it', () => {
     const text = renderText(block.render(monthlyFixture(), 'app', ctx))
     expect(text).toContain('Interpretation')
-    expect(text).toContain('We wrote this read ourselves this month.')
+    expect(text).not.toContain('We wrote this read ourselves')
   })
 
   it('carries the standing advice as its metadata, marked as stored model prose', () => {
@@ -372,9 +375,10 @@ describe('MR7 · what to decide', () => {
   // NOTHING IS ATTACHED AND "block" IS OURS. The line used to read "The brief
   // is attached, one link per block." about a URL in the next clause, eleven
   // lines above a footer saying "The PDF is attached." about something else.
-  it('offers the brief by link, says nothing is attached, and says "section"', () => {
+  it('offers the brief by link and says nothing is attached', () => {
     const text = renderText(block.render(monthlyFixture(), 'app', ctx))
-    expect(text).toContain('The brief opens from the link below, one link per section.')
+    expect(text).toContain('The brief opens from the link below.')
+    expect(text).not.toContain('one link per section')
     expect(text).not.toContain('attached')
     expect(text).not.toContain('per block')
     expect(text).toContain('Marketing brief')
@@ -433,21 +437,35 @@ describe('the five sections that are Overview’s', () => {
     expect(Object.keys(subjects).length).toBeGreaterThan(0)
   })
 
-  // THE RECORD PARAGRAPH IS OVERVIEW'S, AND A TEST SAYS SO (the fix pass,
-  // review finding [Minor]). Section 8's header claims the paragraph is
-  // Overview's "word for word", and it was a COPY of Overview's composition —
-  // the same template string in two files, so the first re-wording on the page
-  // would have left the artefact stating one reading two ways, silently. The
-  // freeze sentence is one composer now; this asserts the whole paragraph
-  // against what the page itself renders.
-  it('state the record in Overview’s own words, not in a copy of them', () => {
+  // THREE SENTENCES, AS THE MOCK DREW THEM (copy de-clutter, ruling B). §8
+  // printed the whole record paragraph, the freeze sentence and three method
+  // footnotes: about fourteen sentences, the freeze stated three more times
+  // than the eyebrow and read depth twice.
+  it('states how sound the month is in exactly the mock’s three sentences', () => {
+    const text = renderText(MONTHLY_BLOCKS['monthly.sound'].render(monthlyFixture(), 'email', ctx))
+    expect(text).toContain('3 updates · 18,020 comments read · 2,359 videos analysed, against a trailing median of 2,240.')
+    expect(text).toContain('27% not in English · speech read on 71% of videos · on-screen text on 64%.')
+    expect(text).toContain('1 tracking change · 2 comparisons refused · your 3rd monthly reading, and the quarter view needs 6.')
     const data = monthlyFixture()
-    const page = renderText(overviewRecord.render(data.overview, 'email', ctx))
-    const artefact = renderText(MONTHLY_BLOCKS['monthly.sound'].render(data, 'email', ctx))
-    const freeze = freezeSentence(data.overview.record.freezesOn)
-    expect(page).toContain(freeze)
-    expect(artefact).toContain(freeze)
-    for (const line of data.overview.record.lines) expect(artefact).toContain(line)
+    expect(text).not.toContain(freezeSentence(data.overview.record.freezesOn))
+    expect(text).not.toContain('still filling')
+    expect(text).not.toContain('Of everything we have ever read')
+    expect(text).not.toContain('Reddit comments are capped')
+    expect(text).not.toContain('—')
+  })
+
+  // A snapshot frozen before `record.sound` existed: the clauses the bar can
+  // carry print, and nothing is printed as a zero for what it cannot.
+  it('falls back to the bar’s figures on a snapshot that has none of its own', () => {
+    const data = monthlyFixture()
+    const { sound: _sound, ...record } = data.overview.record as typeof data.overview.record & { sound?: unknown }
+    void _sound
+    const old = { ...data, overview: { ...data.overview, record } }
+    const text = renderText(MONTHLY_BLOCKS['monthly.sound'].render(old, 'email', ctx))
+    expect(text).toContain('3 updates · 2,359 videos analysed, against a trailing median of 2,240.')
+    expect(text).toContain('your 3rd monthly reading, and the quarter view needs 6.')
+    expect(text).not.toContain('not in English')
+    expect(text).not.toContain(' 0 ')
   })
 
   // THE ARTBOARD'S STRUCTURE, NOT ONE JOINED PARAGRAPH (the wave-3 review,
@@ -467,34 +485,12 @@ describe('the five sections that are Overview’s', () => {
     expect(markup.slice(markup.indexOf('What is this reading made of'))).not.toContain('the record →')
   })
 
-  it('sets the record as one paragraph per fact, each led by its own figure', () => {
-    const data = monthlyFixture()
-    const record = data.overview.record
-    const markup = render(MONTHLY_BLOCKS['monthly.sound'].render(data, 'email', ctx))
-    // One paragraph per line, plus the freeze sentence, at the artboard's tier.
-    expect((markup.match(/font-size:13\.5px/g) ?? []).length).toBe(record.lines.length + 1)
-    expect(markup).not.toContain('font-size:11.5px')
-    // The lead is the sentence's own figure, in the ink, and never a rewording:
-    // "27% of what was said" leads on the figure alone.
+  it('sets each sentence as its own paragraph, led by its own figure', () => {
+    const markup = render(MONTHLY_BLOCKS['monthly.sound'].render(monthlyFixture(), 'email', ctx))
+    expect((markup.match(/font-size:13\.5px/g) ?? []).length).toBe(3)
     expect(markup).toContain(`<span style="font-weight:600;color:${EMAIL.ink}">3 updates</span>`)
-    expect(markup).toContain(`<span style="font-weight:600;color:${EMAIL.ink}">2,359 videos</span>`)
     expect(markup).toContain(`<span style="font-weight:600;color:${EMAIL.ink}">27%</span>`)
-    expect(markup).not.toContain('>27% of<')
-    // A sentence that opens on no figure gets no bold lead at all. This named
-    // one such line by its opening words — "Nothing about what we track changed
-    // in this window" — which the fixture stopped producing when `lib` put the
-    // record through `recordBandFixture` and the real composers: the composed
-    // record has one tracking change in the window, so `recordLines` writes the
-    // other branch and `find` returned undefined. Assert the RULE over every
-    // line the rule covers instead of naming one sentence, which is also the
-    // stronger test and cannot be re-based out from under itself again.
-    const noFigure = record.lines.filter((l) => !/^\d/.test(l))
-    expect(noFigure.length).toBeGreaterThan(1)
-    for (const line of noFigure) expect(markup).toContain(`>${line}</div>`)
-    // And every word is still the composer's, whole.
-    for (const line of [...record.lines, freezeSentence(record.freezesOn)]) {
-      expect(markupText(markup)).toContain(line)
-    }
+    expect(markup).toContain(`<span style="font-weight:600;color:${EMAIL.ink}">1 tracking</span>`)
   })
 
   // A Block renders its own heading inside its own frame, so an adapter that
@@ -534,11 +530,13 @@ describe('the five sections that are Overview’s', () => {
   // with the separator gone. The assertion is the two halves, which is what the
   // reader sees; asserting the raw line back would pin the block to printing
   // the name once, in one size, which is the thing that changed.
-  it('still print the rows, the promise and the figures the page declares', () => {
+  // NO PROMISE AND NO UNLOCK (ruling L6, D33): the no-causation promise is
+  // said once per forwarded document, on its method sheet.
+  it('still print the rows and the figures the page declares, without the promise', () => {
     const data = monthlyFixture()
     const text = renderText(MONTHLY_BLOCKS['monthly.moves'].render(data, 'email', ctx))
-    expect(text).toContain(MONTHLY_MOVES_UNLOCK)
-    expect(text).toContain(data.overview.moves.masthead)
+    expect(text).not.toContain('We never claim you caused it')
+    expect(text).not.toContain('A move is read from the month after it was dated')
     // BLOCK D WAVE 2, BOTH INTENTS. Every row prints its TITLE (E-monthly:
     // the name is printed once, in its own size, and the composed line's
     // remainder beside it); and a move with a READING behind it prints the
@@ -611,7 +609,7 @@ describe('the five sections that are Overview’s', () => {
       },
     }
     const text = renderText(MONTHLY_BLOCKS['monthly.rivals'].render(quiet, 'email', ctx))
-    expect(text).toContain('Cotopaxi — nothing was raised under their content this month.')
+    expect(text).toContain('Cotopaxi: nothing was raised under their content this month.')
   })
 
   // AND THE VERDICTS ARE A COLUMN TOO (the wave-3 review, finding [Minor]).
@@ -673,11 +671,6 @@ describe('the five sections that are Overview’s', () => {
     const text = renderText(MONTHLY_BLOCKS['monthly.moves'].render(forming, 'email', ctx))
     expect(text).toContain('No move has been dated yet')
     expect(text).not.toContain(m.masthead)
-    expect(text).not.toContain(MONTHLY_MOVES_UNLOCK)
-    // And the populated arm still carries both.
-    const full = renderText(MONTHLY_BLOCKS['monthly.moves'].render(monthlyFixture(), 'email', ctx))
-    expect(full).toContain(monthlyFixture().overview.moves.masthead)
-    expect(full).toContain(MONTHLY_MOVES_UNLOCK)
   })
 
   // THE APPARATUS IS NOT DECORATION (the fix pass, review finding [High]).

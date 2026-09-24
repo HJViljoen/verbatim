@@ -79,7 +79,7 @@ export async function renameTrackedRival(_prev: RenameState, formData: FormData)
     }
   } catch (error) {
     if (isMissingCompetitors(error)) {
-      return { ok: false, message: 'We cannot rename a rival yet — the part of the product that keeps their identity has not shipped.' }
+      return { ok: false, message: 'We cannot rename a rival yet: the part of the product that keeps their identity has not shipped.' }
     }
     console.error(`[settings] rival not renamed for ${clientId}: ${error instanceof Error ? error.message : String(error)}`)
     return { ok: false, message: 'Could not rename just now. Try again, and tell us if it keeps happening.' }

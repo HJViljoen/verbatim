@@ -21,9 +21,9 @@ export const APPEAL_ASK = 'This should have been kept'
 export const APPEAL_FILING = 'Filing…'
 
 /** Filed, now or on an earlier visit. */
-export const APPEAL_FILED = 'Filed — we will look at this one by hand.'
+export const APPEAL_FILED = 'Filed. We will look at this one by hand.'
 
 /** The same statement twice is still one statement: `gate_appeals` is unique on
  *  the verdict's own key, so a second click is told the truth rather than being
  *  refused. */
-export const APPEAL_ALREADY = 'Already filed — we have this one.'
+export const APPEAL_ALREADY = 'Already filed. We have this one.'

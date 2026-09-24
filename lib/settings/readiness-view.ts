@@ -58,7 +58,7 @@ const CLIENT_UNLOCKS: Readonly<Record<string, string>> = {
   communities: 'We choose which communities to watch and check them each update. Tell us one to add or drop and we will.',
   'searchable-findings': 'We are working through the findings that cannot yet be searched by a question.',
   'read-depth': 'Nothing to configure: the shares rise as more of what we gather can be listened to and read.',
-  'update-record': 'Nothing to do — this is the record of your updates as they ran.',
+  'update-record': 'Nothing to do: this is the record of your updates as they ran.',
   retention: 'Nothing to do. Comments are read again on a schedule, and this is where that schedule stands.',
   'months-of-history': 'We write your months down as each update runs; this fills in on its own.',
   'anomaly-baseline': 'The weekly check needs three complete months behind it before it can say anything is unusual.',
@@ -97,6 +97,10 @@ export function clientReadiness(
     return {
       ...r,
       detail: r.clientDetail ?? r.detail,
+      // The set-aside and read-before-the-flags history is the record's
+      // (Settings › The record › Coverage says it word for word); Readiness is
+      // about what is missing (copy de-clutter C9).
+      notes: r.id === 'read-depth' ? [] : r.notes,
       unlocks: r.owner === 'client' ? r.unlocks : (CLIENT_UNLOCKS[r.id] ?? r.unlocks),
       ownerWords: OWNER_WORDS[r.owner],
       by: by ? fullDate(by) : null,
@@ -105,8 +109,21 @@ export function clientReadiness(
   return { rows: view, summary: summarise(view), withheld: rows.length - shown.length }
 }
 
-/** The sentence under the table when rows are held back. */
-export function withheldLine(withheld: number): string | null {
-  if (withheld <= 0) return null
-  return `${withheld} further input${withheld === 1 ? ' is' : 's are'} not shown: ${withheld === 1 ? 'it is' : 'they are'} part of the product we have not finished, so there is nothing yet to measure about your workspace.`
-}
+/**
+ * What the reading pages do not do yet, in one list (copy de-clutter ruling G,
+ * 2026-09-24). These used to be "not built yet" tiles on Market and
+ * Competitive, printed on every visit; this is their one home. No dates: a
+ * date nobody promised is not one to print.
+ */
+export const NOT_BUILT: readonly { page: string; what: string }[] = [
+  { page: 'Market', what: 'Confirming this month’s card as a move in one press.' },
+  { page: 'Market', what: 'Plans re-checked: an uploaded campaign brief re-read against every update.' },
+  { page: 'Market', what: 'Registering a claim, and keeping a claim’s identity across updates.' },
+  { page: 'Market', what: 'A claim’s verdict per month, held across two updates before it is printed.' },
+  { page: 'Subjects', what: 'Reading what your own posts claim, beside the subjects they match.' },
+  { page: 'This week', what: 'How much of each subject arrived since the last update.' },
+  { page: 'This week', what: 'Which way a switching signal ran, toward you or away.' },
+  { page: 'Competitive', what: 'Rivals’ own claims beside what their audience says. This is a decision we have not taken yet, not a gap in your workspace.' },
+  { page: 'Competitive', what: 'Cross-brand findings marked “seen in N of the last 6 months”, which needs a finding identity that survives an update.' },
+  { page: 'Competitive', what: 'Grouping rivals’ questions, and matching them to your subjects.' },
+]

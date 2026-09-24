@@ -125,37 +125,12 @@ export function DeliveryBlock({
             <p className="m-0 text-[12px] text-muted-foreground">{capitalise(readings.counter)}.</p>
             {readings.backReadLabel ? (
               <p className="m-0 text-[12px] text-muted-foreground">
-                {readings.backReadLabel} {readings.backRead.length === 1 ? 'was' : 'were'} read at setup — a reading of
+                {readings.backReadLabel} {readings.backRead.length === 1 ? 'was' : 'were'} read at setup: a reading of
                 today’s corpus, not what we would have said at the time.
               </p>
             ) : null}
-            {readings.belowFloor.length > 0 ? (
-              <p className="m-0 text-[12px] text-muted-foreground">
-                {readings.belowFloor[0].who} is under the floor in {readings.belowFloor[0].label} —{' '}
-                <span data-copy="figure" className="font-mono text-[11.5px] tabular-nums text-secondary-foreground">
-                  {fmtInt(readings.belowFloor[0].videos)}
-                </span>{' '}
-                videos against the{' '}
-                <span data-copy="figure" className="font-mono text-[11.5px] tabular-nums text-secondary-foreground">
-                  {fmtInt(readings.floor)}
-                </span>{' '}
-                a banded reading needs
-                {/* THE REMAINDER IS COUNTED OFF THE TOTAL, NEVER OFF THE LIST.
-                    `readings.belowFloor` is truncated to three, so counting it
-                    here said "2 other months" over a workspace with four under
-                    the floor (code review finding 2). */}
-                {readings.belowFloorTotal > 1
-                  ? `, and ${fmtInt(readings.belowFloorTotal - 1)} other ${readings.belowFloorTotal === 2 ? 'month is' : 'months are'} under it too`
-                  : ''}
-                . A month under the floor is one that has not filled up, not one that went wrong.
-                {/* Except a month read at setup, which is as full as it will
-                    ever be — so the thin-month sentence is not left standing
-                    over months it is not true of. */}
-                {readings.belowFloorBackRead > 0
-                  ? ` Of those, ${fmtInt(readings.belowFloorBackRead)} ${readings.belowFloorBackRead === 1 ? 'was' : 'were'} read at setup and will not fill up any further.`
-                  : ''}
-              </p>
-            ) : null}
+            {/* Which months are under the floor is the coverage row's, on this
+                same page (copy de-clutter C103). */}
           </div>
         )}
       </LabelRow>

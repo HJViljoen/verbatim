@@ -77,7 +77,10 @@ describe('the measurement half', () => {
   it('prints the change and the band together', () => {
     // D2: a Verdict carries both or neither. The badge prints points only in
     // the `moved` state.
-    expect(text).toMatch(/▲ 2\.6 pts · band ±2 pts/)
+    // On screen the band is the badge's hover (copy de-clutter ruling I);
+    // print keeps it inline.
+    expect(text).toMatch(/▲ 2\.6 pts/)
+    expect(render(tile(measured))).toContain('title="moved beyond the 2 pt margin of this measurement"')
   })
 
   it('prints the direction word only where three readings earned one', () => {

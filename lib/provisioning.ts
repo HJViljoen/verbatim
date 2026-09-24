@@ -61,7 +61,7 @@ export function validateSpec(spec: TenantSpec): string[] {
   const push = (c: boolean, m: string) => { if (c) errors.push(m) }
 
   push(!spec.companyName?.trim(), 'companyName is required')
-  push(!spec.competitorNames?.length, 'at least one competitor is required — half the corpus is found through them, and every competitive surface reads them')
+  push(!spec.competitorNames?.length, 'at least one competitor is required: half the corpus is found through them, and every competitive surface reads them')
   push((spec.competitorNames ?? []).length > LIMITS.keywordsPerBucket, `at most ${LIMITS.keywordsPerBucket} competitors`)
   push((spec.industryKeywords ?? []).length > LIMITS.keywordsPerBucket, `at most ${LIMITS.keywordsPerBucket} industry keywords`)
   push((spec.brandKeywords ?? []).length > LIMITS.keywordsPerBucket, `at most ${LIMITS.keywordsPerBucket} brand keywords`)
@@ -79,7 +79,7 @@ export function validateSpec(spec: TenantSpec): string[] {
     push(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e), `not an email address: ${e}`)
   }
   for (const [name, handles] of Object.entries(spec.competitorHandles ?? {})) {
-    for (const e of validateHandles(handles ?? {})) errors.push(`${name} — ${e}`)
+    for (const e of validateHandles(handles ?? {})) errors.push(`${name}: ${e}`)
   }
   return errors
 }
@@ -157,29 +157,29 @@ export function validateHandles(handles: Record<string, string>): string[] {
     }
     const value = (handle ?? '').trim()
     if (!value) {
-      errors.push(`${platform}: empty handle — leave the platform out instead`)
+      errors.push(`${platform}: empty handle; leave the platform out instead`)
       continue
     }
     if (value.startsWith('@')) {
-      errors.push(`${platform}: drop the leading @ — handles are stored bare`)
+      errors.push(`${platform}: drop the leading @; handles are stored bare`)
       continue
     }
     if (platform === 'youtube') {
       if (!YOUTUBE_CHANNEL_ID.test(value)) {
-        errors.push(`youtube: "${value}" is not a channel id — YouTube is read by channel id (UC… , 24 characters), and an @name reads nothing at all`)
+        errors.push(`youtube: "${value}" is not a channel id. YouTube is read by channel id (UC… , 24 characters), and an @name reads nothing at all`)
       }
       continue
     }
     if (/[/:?#]/.test(value) || /\.com/i.test(value)) {
-      errors.push(`${platform}: "${value}" looks like a link — paste the handle on its own, or let the form take it out of the URL for you`)
+      errors.push(`${platform}: "${value}" looks like a link. Paste the handle on its own, or let the form take it out of the URL for you`)
       continue
     }
     if (platform === 'instagram' && !INSTAGRAM_HANDLE.test(value)) {
-      errors.push(`instagram: "${value}" is not an Instagram username — letters, digits, periods and underscores, at most 30, and never starting or ending with a period`)
+      errors.push(`instagram: "${value}" is not an Instagram username: letters, digits, periods and underscores, at most 30, and never starting or ending with a period`)
       continue
     }
     if (platform === 'tiktok' && !TIKTOK_HANDLE.test(value)) {
-      errors.push(`tiktok: "${value}" is not a TikTok username — letters, digits, periods and underscores, 2 to 24 of them, and never ending in a period`)
+      errors.push(`tiktok: "${value}" is not a TikTok username: letters, digits, periods and underscores, 2 to 24 of them, and never ending in a period`)
     }
   }
   return errors
@@ -200,7 +200,7 @@ export function validateHandles(handles: Record<string, string>): string[] {
  * whole of it.
  */
 export const HANDLE_FORMAT_CAVEAT =
-  'A handle in the right shape can still be the wrong account. After the next update, check that posts captured from it are also being read — a handle that captures and never reads is usually the wrong person.'
+  'A handle in the right shape can still be the wrong account. After the next update, check that posts captured from it are also being read. A handle that captures and never reads is usually the wrong person.'
 
 export interface ProvisionPlan {
   client: {

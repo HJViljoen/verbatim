@@ -115,7 +115,7 @@ const shortRead: R = (d, mode) => (
                 <ul className="flex flex-col gap-1.5">
                   {items.map((it, i) => <li key={i} className="text-[12.5px] leading-[1.45] text-secondary-foreground">{it}</li>)}
                 </ul>
-              ) : <p className="text-[12px] text-muted-foreground">— nothing stood out here this update</p>}
+              ) : <p className="text-[12px] text-muted-foreground">Nothing stood out here this update.</p>}
             </TileBlock>
           )
         })}
@@ -137,7 +137,7 @@ const news: R = (d, mode) => {
   <div id="news" className="scroll-mt-3 xl:col-span-12 xl:row-span-2" data-print-contents="">
     <Tile exportKey="market.news" col={12} row={mode === 'print' ? (d.news.items.length ? 4 : 1) : 2} eyebrow="In the news"
       meta={d.news.total > 0 ? `${fmtInt(d.news.total)} ${plural(d.news.total, 'headline')} · newest first${more > 0 ? ` · ${more} more in the app` : ''}` : undefined}
-      footerNote="Coverage of your brand, competitors and category — context beside the conversation, never a claimed cause of anything measured.">
+      footerNote="Coverage of your brand, competitors and category: context beside the conversation, never a claimed cause.">
       {items.length > 0 ? (
         <ol className="grid gap-x-6 sm:grid-cols-2 xl:grid-cols-3" data-print-cols="3">
           {items.map((n, i) => {
@@ -432,7 +432,7 @@ function DetailPane({ d, mode }: { d: D; mode: RenderMode }) {
         <PaneBody>
           <DetailSection label="In your own video"><Verbatim quote={item.yourQuote} cite="your own video" /></DetailSection>
           <DetailSection label="They hear">
-            {item.theySay ? <p className="text-[13px] leading-[1.55]">{item.theySay}</p> : <p className="text-[13px] text-muted-foreground">— nobody in the tracked conversation mentions this yet</p>}
+            {item.theySay ? <p className="text-[13px] leading-[1.55]">{item.theySay}</p> : <p className="text-[13px] text-muted-foreground">Nobody in the tracked conversation mentions this yet.</p>}
           </DetailSection>
           <DetailSection label="The gap">
             <p className="text-[12.5px] leading-[1.5] text-secondary-foreground">{item.gap}</p>
@@ -526,7 +526,7 @@ function DetailSlideBody({ d, item }: { d: D; item: MarketDetail }) {
         <div className="min-h-0 overflow-hidden space-y-4">
           <div>
             <p className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">They hear</p>
-            {item.theySay ? <p className="text-[13px] leading-[1.55]">{item.theySay}</p> : <p className="text-[13px] text-muted-foreground">— nobody in the tracked conversation mentions this yet</p>}
+            {item.theySay ? <p className="text-[13px] leading-[1.55]">{item.theySay}</p> : <p className="text-[13px] text-muted-foreground">Nobody in the tracked conversation mentions this yet.</p>}
           </div>
           <div>
             <p className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">The gap</p>
@@ -623,7 +623,7 @@ export function MarketPage({ data: d, detail: detailParam, params }: { data: Mar
           <HowToRead items={d.legendItems} open={showLegend} basePath="/dashboard/market-intel" anchor="market" />
         </PageBar>
         <section className="rounded-lg bg-tile p-6 shadow-tile">
-          <p className="text-[12px] text-muted-foreground">Your market intelligence lands with your first update — check back then.</p>
+          <p className="text-[12px] text-muted-foreground">Your market intelligence lands with your first update.</p>
         </section>
       </PageFrame>
     )

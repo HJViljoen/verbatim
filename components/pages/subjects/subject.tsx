@@ -118,7 +118,7 @@ function Side({ side, brand, mode }: { side: SubjectSide; brand: string; mode: R
     return (
       <div className={email ? undefined : 'flex min-w-0 flex-col justify-start gap-1'} style={email ? { padding: '4px 0' } : undefined}>
         {label}
-        <span className={email ? undefined : 'text-[12px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted } : undefined}>{side.silence === 'no_reading' ? '— no reading yet' : '— not tracked'}</span>
+        <span className={email ? undefined : 'text-[12px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted } : undefined}>{side.silence === 'no_reading' ? 'no reading yet' : 'not tracked'}</span>
       </div>
     )
   }
@@ -196,7 +196,7 @@ export const subjectsSubject: Block<SubjectsData> = {
     const basis = pane.gap && (answered(pane.gap.state) || answered(pane.gap.basis?.state ?? ''))
       ? gapBasisLine(pane.gap)
       : null
-    const lead = pane.gap ? `${pane.name} — ${gapLine(pane.gap)}${basis ? `; ${basis}` : ''}.` : null
+    const lead = pane.gap ? `${pane.name}: ${gapLine(pane.gap)}${basis ? `; ${basis}` : ''}.` : null
 
     // THE LINK, IN THE RIGHT MARKUP FOR EACH READER. Print draws none — a PDF
     // and a `/r/<token>` page have no session to open a filtered catalogue
@@ -240,7 +240,6 @@ export const subjectsSubject: Block<SubjectsData> = {
         // The mock's right-hand note: the category's last three readings, so
         // the reader can see the series the chart below draws without reading
         // the chart. Levels, dated, in the category's own n.
-        footerNote={pane.trail}
       >
         {pane.notRecorded ? <BlockEmpty mode={mode}>{pane.notRecorded}</BlockEmpty> : null}
 
@@ -250,8 +249,13 @@ export const subjectsSubject: Block<SubjectsData> = {
           // THE MOCK'S VERTICAL HAIRLINES, from the primitive that owns them
           // (P0 item 3). Three hand-rolled `grid-cols-3`s is how a product ends
           // up with four gutters.
+          // ONLY THE SIDES THAT CARRY A READING GET A CELL (absence sweep,
+          // 2026-09-24). A side with nothing read printed a whole cell saying
+          // "not tracked" — five of ten on Sealand — and the note under the
+          // grid then said the same five names again. The note is the one
+          // place an absent side is named.
           <TileColumns of={3} className="gap-x-4 [&>*]:px-4 [&>*:first-child]:pl-0 [&>*:last-child]:pr-0">
-            {pane.sides.map((s) => <Side key={s.audience} side={s} brand={data.brand} mode={mode} />)}
+            {pane.sides.filter((s) => s.observed && s.pct != null).map((s) => <Side key={s.audience} side={s} brand={data.brand} mode={mode} />)}
           </TileColumns>
         )}
 

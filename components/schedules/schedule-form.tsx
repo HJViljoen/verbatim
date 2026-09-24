@@ -234,7 +234,6 @@ export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedul
         <div className="flex flex-col gap-1">
           <span className={labelCls}>The email, at today’s data</span>
           <iframe src={`/api/schedules/${schedule.id}/preview`} sandbox="allow-popups allow-popups-to-escape-sandbox" title="Email preview" className="h-[720px] w-full rounded-[4px] bg-tile ring-1 ring-border" />
-          <span className="text-[11px] text-muted-foreground">Builds the report at today’s data (a few seconds); the sparkline pictures are added when it is sent.</span>
         </div>
       )}
     </div>

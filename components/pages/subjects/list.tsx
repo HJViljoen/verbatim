@@ -131,12 +131,8 @@ export const subjectsList: Block<SubjectsData> = {
             ))}
           </div>
         )}
-        <div
-          className={email ? undefined : 'pt-2 text-[11px] text-muted-foreground'}
-          style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted, paddingTop: 6 } : undefined}
-        >
-          {l.rule}
-        </div>
+        {/* L3: "Renaming or adding a subject starts a new line" is said by the
+            Add and Rename dialogs, at the moment it matters, not on the rail. */}
       </BlockFrame>
     )
   },

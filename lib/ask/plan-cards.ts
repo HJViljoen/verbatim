@@ -82,7 +82,7 @@ export const PLAN_HOLD_CAVEAT =
  * says both.
  */
 export const PLAN_CLAIM_BASIS =
-  'A claim’s count is the videos we can show you a comment from, out of everything we have read for you — not out of one month. ' +
+  'A claim’s count is the videos we can show you a comment from, out of everything we have read for you, not out of one month. ' +
   'Each claim is read against the themes closest to it, so the count is a floor and not a full sweep.'
 
 /** The same, where the corpus could not be counted — the denominator is absent

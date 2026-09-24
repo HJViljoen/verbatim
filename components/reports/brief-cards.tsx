@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { FigureCell } from '@/components/blocks/frame'
 import { Tile, TileBlock } from '@/components/shell/tile'
 import { PageGrid } from '@/components/shell/page-grid'
-import { LEADERSHIP_LINE, STALE_PDF_LINE, deliveryLine, latestBriefLine, type BriefCard } from '@/lib/reports/briefs'
+import { deliveryLine, latestBriefLine, type BriefCard } from '@/lib/reports/briefs'
 import { STUDIO_HREF } from '@/lib/studio-visibility'
 import { fmtBytes } from '@/lib/reports/files'
 
@@ -75,7 +75,6 @@ export function BriefCards({
           <h2 className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">The role briefs</h2>
           {meta && <span className="font-mono text-[11px] text-muted-foreground">{meta}</span>}
         </div>
-        <p className="m-0 max-w-[92ch] text-[11.5px] leading-[1.45] text-muted-foreground">{LEADERSHIP_LINE}</p>
         {shared && (
           <p className="m-0 max-w-[92ch] font-mono text-[10.5px] leading-[1.45] text-muted-foreground">{shared}</p>
         )}
@@ -126,7 +125,7 @@ export function BriefCards({
                 <p className="m-0 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">{deliveryLine(c)}</p>
               )}
               {c.pdf?.stale && (
-                <p className="m-0 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">{STALE_PDF_LINE}</p>
+                <p className="m-0 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">rebuilt on download</p>
               )}
             </div>
 

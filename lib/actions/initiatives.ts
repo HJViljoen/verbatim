@@ -198,7 +198,7 @@ export async function updateInitiative(
     before: prior ?? null,
     after: { title: parsed.data.title, goal: parsed.data.goal ?? null, direction: parsed.data.direction },
     actor: actorStamp(session, 'edited an initiative'),
-    note: `initiative ${parsed.data.id} — title, note and direction only; what an initiative measures cannot be edited`,
+    note: `initiative ${parsed.data.id}: title, note and direction only; what an initiative measures cannot be edited`,
   })
 
   revalidateInitiatives()

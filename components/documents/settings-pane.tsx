@@ -170,7 +170,6 @@ export function SettingsPane({ reportId, title, reader, settings, tracked, reade
         <div className="flex flex-col gap-1">
           <span className={labelCls}>Findings</span>
           <span>Up to three</span>
-          <span className="text-[11.5px] text-muted-foreground">This brief is short by design.</span>
         </div>
       )}
       {/* NO WINDOW CONTROL, and the pane says what the window is instead.
@@ -183,7 +182,6 @@ export function SettingsPane({ reportId, title, reader, settings, tracked, reade
       <div className="flex flex-col gap-1">
         <span className={labelCls}>Window</span>
         <span>The month in hand</span>
-        <span className="text-[11.5px] text-muted-foreground">A brief reads the month it is built in, and the month is printed on every page of it.</span>
       </div>
       <div className="flex flex-col gap-1">
         <span className={labelCls}>Language</span>

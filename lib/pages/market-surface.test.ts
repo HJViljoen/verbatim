@@ -3,11 +3,10 @@ import { describe, it, expect } from 'vitest'
 import { createCitedQuotePicker } from '../quotes'
 import type { RecDecision } from '../rec-decisions'
 import { afterwardsFor } from '../reading/afterwards'
-import { CLOSED_BY_US } from '../readiness/types'
 import {
   acceptableRow, actedLine, adviceAnchor, ageInMonths, buildAdviceRows, ledgerRowsShown, lineageKey, madeInMonth,
   marketSurfaceHref, monthsMadeIn, moveLedgerLine, moveTargetLabel, orderedTargets, recurrenceForTarget,
-  registryIdsByInsight, repeatCell, repeatLine, unlockRows, waysOfMoving,
+  registryIdsByInsight, repeatCell, repeatLine, waysOfMoving,
   type AdviceRow, type RecCopy, type TargetPoint,
 } from './market-surface'
 
@@ -203,36 +202,6 @@ describe('the five ways', () => {
     }
   })
 })
-
-describe('what is not built', () => {
-  // MK6 LEAVES THE LIST WHEN THE WORKSPACE HAS A PLAN (D4). It is still named
-  // for a workspace with none, because for them the feature really is absent —
-  // but "not built yet · Verbatim engineering" beside a card printing three
-  // claims and their verdicts would be the page arguing with itself.
-  it('drops MK6 once a plan has been checked, and keeps MK3', () => {
-    expect(unlockRows(1).map((r) => r.section)).toEqual(['MK3'])
-  })
-
-  // AND `owner` IS `closes` (the vocabulary ruling). MK3 ended "— not built
-  // yet · Verbatim engineering", an internal team name on a paying client's
-  // page; it now ends at its state and its LINE carries the WP19 sentence that
-  // says what closes it. MK6 keeps a name because "You, on Ask" is the reader
-  // and a page of theirs — which is the client branch of the same split.
-  it('names MK3 and MK6, says what closes each, and invents no date', () => {
-    const rows = unlockRows(0)
-    expect(rows.map((r) => r.section)).toEqual(['MK3', 'MK6'])
-    for (const r of rows) {
-      expect(r.line).not.toMatch(/\bby \d/)
-      expect(`${r.line} ${r.title}`).not.toMatch(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+20\d\d/)
-      expect(`${r.title} ${r.line} ${r.closes ?? ''}`).not.toContain('Verbatim engineering')
-    }
-    const mk3 = rows.find((r) => r.section === 'MK3')!
-    expect(mk3.closes).toBeNull()
-    expect(mk3.line).toContain(CLOSED_BY_US.engineering)
-    expect(rows.find((r) => r.section === 'MK6')?.closes).toBe('You, on Ask')
-  })
-})
-
 describe('the surface’s own links', () => {
   it('carries the horizon and drops the legacy selection parameters', () => {
     expect(marketSurfaceHref('L', { horizon: 'last_3', rec: 'old', item: 'other' })).toBe('/dashboard/market?horizon=last_3&item=L')

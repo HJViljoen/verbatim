@@ -3,14 +3,14 @@ import { ChangeLogBlock } from '@/components/settings/record/change-log'
 import { CoverageBlock } from '@/components/settings/record/coverage'
 import { DeliveryBlock } from '@/components/settings/record/delivery'
 import { RecordFooter, RecordSection } from '@/components/settings/record/frame'
-import { NO_EXPORT_WHY, RecordHeader, SaveStrip, ScopeStatement } from '@/components/settings/record/header'
+import { RecordHeader, SaveStrip, ScopeStatement } from '@/components/settings/record/header'
 import { RejectLogBlock } from '@/components/settings/record/rejects'
 import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { changeLogBoundary } from '@/lib/config-log'
 import { fmtInt, fullDate, longMonth, monthName, shortDate } from '@/lib/format'
-import { readingsCounter, recordWindow } from '@/lib/pages/overview'
+import { recordWindow } from '@/lib/pages/overview'
 import { readingHandle } from '@/lib/reading/read'
-import { howSoundLine, recordLines, recordRows } from '@/lib/reading/record'
+import { recordLines, recordRows } from '@/lib/reading/record'
 import { CHANGE_LOG_ROWS, changeLogMeta, changeNote, readChangeLog, showingLine } from '@/lib/settings/change-log'
 import { deliveryRecord, deliveryStats, gapFigure, updatesInMonth } from '@/lib/settings/delivery'
 import { loadReadings } from '@/lib/settings/readings'
@@ -144,8 +144,7 @@ export default async function SettingsRecordPage() {
     >
       <div className="flex flex-col">
         <RecordHeader meta={headerMeta}>
-          What was delivered, what changed, what was thrown away, and how much was read. Written as the work
-          happens; it is added to, never edited.
+          What was delivered, what changed, what was thrown away, and how much was read.
         </RecordHeader>
 
         <DeliveryBlock
@@ -186,18 +185,15 @@ export default async function SettingsRecordPage() {
               // that is what it says.
               : 'We do not yet show you what was set aside. The record exists; it is not open to you here yet.'
           }
-          unjudged={
-            totals.unjudged > 0
-              ? `${fmtInt(totals.unjudged)} of them were never actually judged — the quick check found no reason to drop them and nothing looked closer.`
-              : null
-          }
+          // Said once, on the coverage row (copy de-clutter C99).
+          unjudged={null}
           byTerm={keptByTerm(inputs.gate.verdicts).slice(0, 10)}
           byPlatform={keptByPlatform(inputs.gate.verdicts)}
           basis={sampleNote(inputs.gate.verdicts.length, totals.found)}
           withheld={
             canSeeExcerpt
               ? null
-              : 'The posts themselves are shown to owners and admins only. They are other people’s public posts, and the fewer copies of them we hand around the better.'
+              : 'The posts themselves are shown to owners and admins only.'
           }
           control={(r) => <AppealButton runId={r.runId} platform={r.platform} videoId={r.videoId} filed={r.appealed} />}
         />
@@ -209,19 +205,15 @@ export default async function SettingsRecordPage() {
             `as at ${shortDate(inputs.coverage.readingAt)}`,
           ].join(' · ')}
           rows={rows}
-          // The line every reading surface prints in its page bar and this page
-          // — the page those surfaces link to — did not print at all.
-          oneLine={`${readingsCounter(readings.readings)} · ${howSoundLine(inputs.coverage)}`}
         />
 
         <RecordSection title="What this covers, and what it does not" meta="select it and paste">
           <ScopeStatement
             text={scopeStatement(tenant, lines, nowIso)}
-            why={NO_EXPORT_WHY}
           />
         </RecordSection>
 
-        <RecordFooter rule="The record is written as the work happens. It is added to, never edited — a correction here is a new line, dated." />
+        <RecordFooter rule="The record is written as the work happens. It is added to, never edited: a correction here is a new line, dated." />
       </div>
     </SettingsFrame>
   )
@@ -245,7 +237,7 @@ export default async function SettingsRecordPage() {
  */
 function scopeStatement(tenant: string, lines: readonly string[], readingAt: string): string {
   return [
-    `${tenant} — what this reading covers, as at ${fullDate(readingAt)}.`,
+    `${tenant}: what this reading covers, as at ${fullDate(readingAt)}.`,
     '',
     ...lines.map((l) => `· ${l}`),
     '',

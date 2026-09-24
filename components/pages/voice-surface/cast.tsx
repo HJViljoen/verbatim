@@ -54,7 +54,7 @@ import { castMasthead } from '@/lib/pages/voice-surface'
 // under the cards.
 
 /** The floor is a fact about the reading and is printed, not implied. */
-function Persona({ persona, mode }: { persona: CastPersona; mode: RenderMode }) {
+function Persona({ persona, mode, className }: { persona: CastPersona; mode: RenderMode; className?: string }) {
   const email = mode === 'email'
   const head = email ? (
     <>
@@ -154,10 +154,23 @@ function Persona({ persona, mode }: { persona: CastPersona; mode: RenderMode }) 
     )
   }
   return (
-    <div className="flex min-w-0 flex-col gap-2 rounded bg-inner px-3.5 py-3">
+    <div className={`flex min-w-0 flex-col gap-2 rounded bg-inner px-3.5 py-3 ${className ?? ''}`}>
       {body}
     </div>
   )
+}
+
+/**
+ * NO EMPTY CELL IN THE LAST ROW (layout sweep, 2026-09-24). Five personas in
+ * three columns left a persona-sized hole beside the last two, white a whole
+ * card tall. The last card takes the leftover columns instead: two left over,
+ * it spans two; one left over, it spans the row. Classes are literal so
+ * Tailwind's scanner sees them.
+ */
+export function lastRowSpan(i: number, n: number): string {
+  if (i !== n - 1) return ''
+  const left = n % 3
+  return left === 2 ? 'xl:col-span-2' : left === 1 && n > 1 ? 'xl:col-span-3' : ''
 }
 
 export const voiceCast: Block<VoiceSurfaceData> = {
@@ -186,7 +199,8 @@ export const voiceCast: Block<VoiceSurfaceData> = {
       // number wearing a defined word. "Insight" is pipeline vocabulary and
       // is not one of the thirteen words either, so the line says the plain
       // thing instead.
-      meta: c.population != null ? `read over ${fmtInt(c.population)} separate points people made` : undefined,
+      // No meta: "read over N separate points" was method trivia; each persona
+      // card carries its own video count (copy de-clutter B37).
       // A SENTENCE, IN EVERY MODE, BECAUSE IT IS ONE. This was
       // `<Link href={`${ctx.appUrl}/dashboard/voice#cast`}>` — in the app
       // `appUrl` is `''`, so the floor note was an anchor to the page it is
@@ -199,10 +213,7 @@ export const voiceCast: Block<VoiceSurfaceData> = {
       footer: email
         ? <span style={{ color: EMAIL.muted }}>{c.floorNote}</span>
         : <span>{c.floorNote}</span>,
-      // The artboard's right-hand footer note. NOT its left half — "No persona
-      // 16% of category videos" is the remainder of a partition these groups do
-      // not make, and `unnamedShare` was deleted for that reason.
-      footerNote: c.stateNote,
+      // No footer note: the title already says "current state" (B39).
     }
 
     if (empty) {
@@ -225,7 +236,7 @@ export const voiceCast: Block<VoiceSurfaceData> = {
             ? c.personas.map((p) => <Persona key={p.key} persona={p} mode={mode} />)
             : (
               <TileColumns of={3} rule={false}>
-                {c.personas.map((p) => <Persona key={p.key} persona={p} mode={mode} />)}
+                {c.personas.map((p, i) => <Persona key={p.key} persona={p} mode={mode} className={lastRowSpan(i, c.personas.length)} />)}
               </TileColumns>
             )}
           {/* NOT the mock's "No persona 16% of category videos". That figure is

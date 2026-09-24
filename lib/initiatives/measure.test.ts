@@ -136,8 +136,8 @@ describe('initiativeLine', () => {
   })
 
   it('is honest about having too little to say', () => {
-    expect(initiativeLine(measure([]), '1 Aug')).toBe('Nothing heard on this since 1 Aug — it lands with the next update.')
-    expect(initiativeLine(measure([10]), '1 Aug')).toBe('One update in since 1 Aug — movement needs a second.')
+    expect(initiativeLine(measure([]), '1 Aug')).toBe('Nothing heard on this since 1 Aug. It lands with the next update.')
+    expect(initiativeLine(measure([10]), '1 Aug')).toBe('One update in since 1 Aug. Movement needs a second.')
   })
 
   // D1: one point per UPDATE against a denominator that grows with every
@@ -149,8 +149,8 @@ describe('initiativeLine', () => {
     expect(initiativeLine(measure([20, 12]), '1 Aug', false)).toBe('Tracked since 1 Aug · 2 updates read')
     expect(initiativeLine(measure([10, 10]), '1 Aug')).toBe('Tracked since 1 Aug · 2 updates read') // the shipped default
     // The two honest-silence sentences are already direction-free and stay.
-    expect(initiativeLine(measure([]), '1 Aug', false)).toBe('Nothing heard on this since 1 Aug — it lands with the next update.')
-    expect(initiativeLine(measure([10]), '1 Aug', false)).toBe('One update in since 1 Aug — movement needs a second.')
+    expect(initiativeLine(measure([]), '1 Aug', false)).toBe('Nothing heard on this since 1 Aug. It lands with the next update.')
+    expect(initiativeLine(measure([10]), '1 Aug', false)).toBe('One update in since 1 Aug. Movement needs a second.')
   })
 })
 
@@ -160,7 +160,7 @@ describe('initiativePromise', () => {
   // delta and no verdict, so the invitation may not say "grew or shrank".
   it('promises no direction while the run-indexed direction words are gated off', () => {
     const off = initiativePromise(false)
-    expect(off).toBe('Every update from today on reports its share of its own group’s conversation — never whether you succeeded.')
+    expect(off).toBe('Every update from today on reports its share of its own group’s conversation, never whether you succeeded.')
     expect(initiativePromise()).toBe(off) // the shipped default
     for (const word of ['grew', 'shrank', 'rose', 'fell', 'gaining', 'fading']) expect(off).not.toContain(word)
   })

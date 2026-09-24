@@ -56,12 +56,12 @@ export function HowToRead({ items, basePath, anchor }: { items: GlossaryKey[]; o
                   {items.map((key) => (
                     <div key={key} className="flex gap-2">
                       <dt className="shrink-0 font-semibold text-foreground">{GLOSSARY[key][0]}</dt>
-                      <dd>— {GLOSSARY[key][1]}</dd>
+                      <dd>{GLOSSARY[key][1]}</dd>
                     </div>
                   ))}
                 </dl>
                 <p className="text-xs opacity-80">
-                  Every label above is assigned by a fixed rule from counted data — never worded by the AI.
+                  Every label above is assigned by a fixed rule from counted data, never worded by the AI.
                 </p>
                 <p className="pt-1 text-xs">
                   {/* The Guide retired into Settings › How to read (WP9 decision C,

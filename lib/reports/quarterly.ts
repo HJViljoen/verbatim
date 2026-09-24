@@ -262,7 +262,15 @@ export const QUARTER_READINGS_NEEDED = QUARTER_UNLOCKS_AT
  * all — not months on the axis, not updates delivered.
  */
 export function quarterGateSentence(readings: number): string {
-  return `Quarter against quarter needs six months — you have ${readings}.`
+  return `Quarter against quarter needs six months: you have ${readings}.`
+}
+
+/** A stamp or meta line with the reading counter taken off its end. Snapshots
+ *  frozen before 2026-09-24 carry the counter on the cover stamp and on Our
+ *  read's meta; the cover's stat card is now its one home, so render drops it
+ *  from the stored strings and old reviews print the new copy. */
+export function withoutReadingCounter(line: string): string {
+  return line.replace(/ · (your \d+(st|nd|rd|th) monthly reading|no monthly reading yet)(, the quarter view needs \d+)?$/, '')
 }
 
 export const quarterUnlocked = (readings: number): boolean => readings >= QUARTER_READINGS_NEEDED
@@ -284,6 +292,10 @@ export function firstQuarterVerdictMonth(readings: number, latestMonth: string |
  * The weekly report prints its own (`WEEKLY_RULE`); the same reason applies
  * with more force here, because a quarterly review is the artefact most likely
  * to be forwarded to somebody who has never seen the product.
+ *
+ * Not printed since the copy de-clutter (2026-09-24): the cover's stat card is
+ * the one place the six-month gate is said, and every figure already prints
+ * what it is out of. Kept so tests can assert it stays off the artefact.
  */
 export const QUARTERLY_RULE =
   'Every figure on these pages is a share of videos we read, printed with what it is out of. A quarter is compared with the quarter before it only where six monthly readings stand behind both sides.'
@@ -328,6 +340,6 @@ function latestMonthOf(quarter: Quarter, readingAt: string): string | null {
  * opening it is whether their own half is readable yet.
  */
 export function quarterlySubject(company: string, quarter: Quarter, readings: number): string {
-  const head = `${company}: your quarterly review — ${quarterLabel(quarter, false)}`
+  const head = `${company}: your quarterly review · ${quarterLabel(quarter, false)}`
   return quarterUnlocked(readings) ? head : `${head} (your own side is still forming)`
 }

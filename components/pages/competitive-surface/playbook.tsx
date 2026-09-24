@@ -3,7 +3,7 @@ import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, fmtPct } from '@/lib/format'
-import { ENGAGEMENT_MIN_VIDEOS, type FormatMatrix, type FormatMatrixSide, type FormatRow } from '@/lib/reading/formats'
+import type { FormatMatrix, FormatMatrixSide, FormatRow } from '@/lib/reading/formats'
 import type { PlaybookBlock } from '@/lib/pages/playbook'
 import { playbookFigures } from '@/lib/pages/playbook'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '@/lib/rivals'
@@ -150,7 +150,7 @@ function Matrix({
         <div style={{ fontFamily: FONT.mono, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', color: EMAIL.muted, paddingBottom: 4 }}>{label}</div>
         {matrix.keys.map((key) => (
           <div key={key.key} style={{ padding: '3px 0', borderTop: `1px solid ${EMAIL.hairline}`, fontFamily: FONT.sans, fontSize: 12 }}>
-            {key.label}{' — '}
+            {key.label}{' · '}
             {[lead, ...rest].map((side) => (
               <span key={side.audience}>
                 {side.label}{' '}<Cell side={side} formatKey={key.key} mode={mode} />{' '}
@@ -252,15 +252,8 @@ function Medians({ rows, mode }: { rows: readonly FormatRow[]; mode: RenderMode 
           </span>
         </div>
       ))}
-      {/* THE THIRD COLUMN'S OWN NOTE, ON THE OTHER TWO'S BASELINE (CO17). It
-          had none — the two matrices carry a legend and a coverage sentence
-          and this ended on its last row — and what it was missing is the one
-          thing this column needs stated: a median is not read off one video.
-          `ENGAGEMENT_MIN_VIDEOS` is the floor every row here cleared, and the
-          n beside each row says how far past it that row is. */}
-      <p className="m-0 font-mono text-[10px] leading-[1.35] text-muted-foreground xl:mt-auto xl:pt-1.5">
-        Every format here was read off at least <span data-copy="figure">{fmtInt(ENGAGEMENT_MIN_VIDEOS)}</span> rated videos; the n beside each median is how many.
-      </p>
+      {/* No floor sentence: the n beside each median is the point, and the
+          sentence only narrated it (copy de-clutter B111). */}
     </div>
   )
 }
@@ -326,7 +319,7 @@ export const competitivePlaybook: Block<CompetitiveSurfaceData> = {
         // THE MOCK SAYS "shares are of the 1,388 category videos" AND IT IS NOT
         // TRUE OF ANY COLUMN BUT THE FIRST. Each column's shares are of that
         // column's own classified videos, and the legend above prints all three.
-        footerNote={p && !p.unread ? 'each column is of its own classified videos' : undefined}
+        // No footer note: the legend prints each column's classified n (B110).
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         {p && !p.unread ? (
@@ -342,7 +335,7 @@ export const competitivePlaybook: Block<CompetitiveSurfaceData> = {
             <p className={note} style={noteStyle}>{p.coverageLine}</p>
             <p className={note} style={noteStyle}>{p.hookCoverageLine}</p>
             {p.formats.conclusion ? <p className={note} style={noteStyle}>{p.formats.conclusion}</p> : null}
-            <p className={note} style={noteStyle}>{p.excludedNote}</p>
+            {/* No Reddit line: head to head's footer is the page's one (H). */}
           </>
         ) : null}
       </BlockFrame>

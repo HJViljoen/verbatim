@@ -18,6 +18,7 @@ import { loadOverview, audienceInLabel, daysInto, isMissingAnomalyFlags, type Mo
 import { loadContent, isContentEmpty, type ContentInboxRow } from './content'
 import { buildSales, loadSubjectQuotes, loadSubjects, workedLabel } from './week'
 import {
+  CONTRIBUTIONS_NOT_RECORDED,
   periodNounFor,
   weekCheck,
   weekSentence,
@@ -566,7 +567,7 @@ export async function loadWeekly(scope: Scope): Promise<WeeklyData | null> {
     // be a claim about the conversation; saying it is not recorded is a claim
     // about our own bookkeeping, and only the second one is true.
     contributions: null,
-    contributionsNote: 'How much of each subject arrived since the last update is not recorded for this workspace yet.',
+    contributionsNote: CONTRIBUTIONS_NOT_RECORDED,
     incoming,
     sales,
     content,

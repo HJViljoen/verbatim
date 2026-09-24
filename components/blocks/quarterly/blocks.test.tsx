@@ -113,17 +113,17 @@ describe('the six-month gate', () => {
 
   it('is on the last page, with when it settles AND the month it settles in', () => {
     const text = renderText(QUARTERLY_BLOCKS['quarterly.unsettled'].render(forming, 'app', ctx))
-    expect(text).toContain('Quarter against quarter needs six months')
-    expect(text).toContain('once six stand behind it')
+    // The refusal row states the gate once; the settles line keeps only when.
+    expect(text.split('Quarter against quarter needs six months').length - 1).toBe(1)
+    expect(text).toContain('once six readings stand behind it')
     // Three readings, the latest September: October, November, December make
     // six. `firstQuarterVerdictMonth` computes it and was called by nothing.
-    expect(text).toContain('at one reading a month, with Dec 2026')
+    expect(text).toContain('with Dec 2026')
   })
 
   it('is gone once six readings stand behind it', () => {
     const read = quarterlyFixture()
     const text = renderText(QUARTERLY_BLOCKS['quarterly.cover'].render(read, 'app', ctx))
-    expect(text).toContain('your 8th monthly reading')
     expect(text).not.toContain('the quarter view needs 6')
   })
 
@@ -131,9 +131,11 @@ describe('the six-month gate', () => {
   // it unconditionally, so a workspace standing at eight readings — one that
   // cleared the gate two readings ago — was told "Quarter against quarter needs
   // six months — you have 8." as a live caveat under its own basis line.
-  it('is on the category page below six readings, and gone above', () => {
+  // Copy de-clutter E19: the category page compares months, so the gate
+  // does not bite there and is not printed at any reading count.
+  it('is not on the category page', () => {
     expect(renderText(QUARTERLY_BLOCKS['quarterly.category'].render(forming, 'app', ctx)))
-      .toContain(quarterGateSentence(3))
+      .not.toContain(quarterGateSentence(3))
     for (const read of [quarterlyFixture(), afterQuarterFixture()]) {
       const text = renderText(QUARTERLY_BLOCKS['quarterly.category'].render(read, 'app', ctx))
       expect(text).toContain('Movers and the mix are')
@@ -213,9 +215,12 @@ describe('the read page counts over the same window it argues over', () => {
 // moves page forwarded the Market page's CLAIMS_CAVEAT unchanged, second
 // sentence and all — the exact class WP18 removed from the monthly report.
 describe('QR6 · what the claims caveat says on the artefact', () => {
-  it('keeps the first sentence and drops the build status', () => {
+  it('keeps the not-counted caveat and drops the build status', () => {
     const text = renderText(QUARTERLY_BLOCKS['quarterly.moves'].render(quarterlyFixture(), 'email', ctx))
-    expect(text).toContain(QUARTERLY_CLAIMS_CAVEAT)
+    // Copy de-clutter E85: the not-counted state stays; the sentences that
+    // restated the heading and the dating go.
+    expect(text).toContain('is not counted yet')
+    expect(text).not.toContain(QUARTERLY_CLAIMS_CAVEAT)
     expect(text).not.toContain('is not built yet')
     expect(CLAIMS_CAVEAT).toContain('is not built yet')
   })
@@ -277,12 +282,13 @@ describe('what each page owes the reader', () => {
       .toContain('assigned by a fixed rule from counted data')
   })
 
-  it('labels the interpretation page as interpretation, and says who wrote it', () => {
+  // Copy de-clutter E30 and L9: the Interpretation chip is the label; who
+  // wrote the read is not a distinction a reader can act on.
+  it('labels the interpretation page as interpretation, once', () => {
     const text = renderText(QUARTERLY_BLOCKS['quarterly.read'].render(data, 'app', ctx))
     expect(text).toContain('Interpretation')
-    expect(text).toContain('not a counted result')
-    // No model draft in a fixture, so the product wrote it — and says so.
-    expect(text).toContain('We wrote this read ourselves this quarter.')
+    expect(text).not.toContain('not a counted result')
+    expect(text).not.toContain('We wrote this read ourselves')
   })
 
   it('says the category page is a month against a month, before any row', () => {
@@ -310,7 +316,7 @@ describe('what each page owes the reader', () => {
     // AND THE POINTER NAMES A PAGE, NOT A NUMBER (D13). Only the print deck
     // paginates; the share shell and the email have no page numbers at all,
     // and the deck's own numbering moves when a snapshot omits a key.
-    expect(text).toContain('the three largest quarter readings are under Our read')
+    expect(text).not.toContain('the three largest quarter readings are under Our read')
     for (const mode of MODES) {
       expect(renderText(QUARTERLY_BLOCKS['quarterly.category'].render(data, mode, ctx))).not.toMatch(/on page \d/)
     }
@@ -354,7 +360,8 @@ describe('what each page owes the reader', () => {
     // "You acted on N of 12 this quarter" divided decisions dated inside the
     // quarter by the twelve OLDEST rows the page draws, out of 56 and 64.
     const text = renderText(QUARTERLY_BLOCKS['quarterly.moves'].render(data, 'app', ctx))
-    expect(text).toContain('every piece of advice this product has ever given you')
+    expect(text).toMatch(/You have acted on \d+ of \d+\./)
+    expect(text).not.toContain('every piece of advice this product has ever given you')
     expect(text).not.toMatch(/acted on \d+ of \d+ this quarter/)
     expect(data.moves.actedLine).toBe(marketFixture().advice.actedLine)
   })
@@ -389,9 +396,10 @@ describe('what each page owes the reader', () => {
     }
   })
 
-  it('states the rule of the moves page on the moves page', () => {
-    const text = renderText(QUARTERLY_BLOCKS['quarterly.moves'].render(data, 'app', ctx))
-    expect(text).toContain('We never claim you caused it.')
+  // Ruling L6: once per forwarded document, on its method page.
+  it('states the no-causation promise once, on the method page', () => {
+    expect(renderText(QUARTERLY_BLOCKS['quarterly.moves'].render(data, 'app', ctx))).not.toContain('We never claim you caused it.')
+    expect(renderText(QUARTERLY_BLOCKS['quarterly.method'].render(data, 'app', ctx))).toContain('We never claim you caused it.')
   })
 
   it('never prints a MONTH’s record as the quarter’s', () => {
@@ -705,9 +713,11 @@ describe('the artboard port (Block D wave 2)', () => {
     const t = text('quarterly.read')
     // The three facts that were split across pages 1 and 7.
     expect(t).toContain('4,147 category videos read in Q3 2026')
-    expect(t).toContain('your 8th monthly reading')
-    // The grounding count, with the population it is a count of.
-    expect(t).toContain('videos behind it, counted over everything we have read for you')
+    // The counter is the cover's stat card's alone (copy de-clutter E16).
+    expect(t).not.toContain('your 8th monthly reading')
+    // The grounding count; its all-time basis is said once, under the moves
+    // page's ledger (ruling C).
+    expect(t).toContain('videos behind it')
     // The confidence dots are aria-hidden; the WORD and its sentence remain.
     expect(t).toContain('reasonable')
     expect(render(QUARTERLY_BLOCKS['quarterly.read'].render(data, 'print', ctx))).toContain('aria-hidden')
@@ -760,7 +770,7 @@ describe('the artboard port (Block D wave 2)', () => {
       const cover = renderText(QUARTERLY_BLOCKS['quarterly.cover'].render(state, 'print', ctx))
       const page3 = renderText(QUARTERLY_BLOCKS['quarterly.subjects'].render(state, 'print', ctx))
       expect(cover).toContain(lead.objectLabel)
-      expect(page3).toContain(`${lead.objectLabel} — `)
+      expect(page3).toContain(`${lead.objectLabel}: `)
     }
   })
 
@@ -772,7 +782,7 @@ describe('the artboard port (Block D wave 2)', () => {
     // the month's. `gapLine` carries no object label of its own, so without
     // this the page's opening line read as the page's gap when it is one
     // subject's.
-    expect(t).toContain('Durability — The quarter from July 2026 · you 30.1% of 249')
+    expect(t).toContain('Durability: The quarter from July 2026 · you 30.1% of 249')
     // The chart, and the rival's own month as a level beside it.
     expect(render(QUARTERLY_BLOCKS['quarterly.subjects'].render(data, 'print', ctx))).toContain('<svg')
     expect(t).toContain('Freitag, September:')
@@ -784,9 +794,9 @@ describe('the artboard port (Block D wave 2)', () => {
     // until their fifth word and both wrapped to two lines in a 1fr track.
     expect(t).toContain('Larger share than last month')
     expect(t).toContain('Smaller share than last month')
-    // And the band — what "Cleared their band ·" was carrying — is still on
-    // the sheet, said once, beside the section both columns sit under.
-    expect(t).toContain('each cleared its own band')
+    // The band rides on every row's badge; the heading aside that said so
+    // went (copy de-clutter E76).
+    expect(t).not.toContain('each cleared its own band')
     // Still no direction word in either heading (D5).
     expect(t).not.toContain('Growing')
     expect(t).not.toContain('Fading')
@@ -872,7 +882,7 @@ describe('the artboard port (Block D wave 2)', () => {
     // so nothing on this table is a share of nothing in particular.
     expect(t).toContain('6,200 of 41,200')
     expect(t).toContain('2,400 of 41,200')
-    expect(t).toContain('the counts under each cell are that month’s (Sep)')
+    expect(t).not.toContain('the counts under each cell are that month’s')
     // And no bare unitless month value survives anywhere on the table.
     expect(t).not.toMatch(/2\.4\s+0\.9/)
     // PRINTED, not a `title` — a tooltip is nothing at all on paper.
@@ -916,15 +926,14 @@ describe('the artboard port (Block D wave 2)', () => {
 
   it('qr.p5.whatasked · the brand prefix and the occurrence count', () => {
     const t = text('quarterly.rivals')
-    expect(t).toContain('Ottobock — Viewers ask about')
+    expect(t).toContain('Ottobock: Viewers ask about')
     expect(t).toContain('41 comments behind it in this window')
   })
 
-  it('qr.p6.masthead · the rule is above the moves, not under them', () => {
-    const t = text('quarterly.moves')
-    const rule = 'We never claim you caused it.'
-    expect(t.indexOf(rule)).toBeGreaterThan(-1)
-    expect(t.indexOf(rule)).toBeLessThan(t.indexOf('The advice, and what you decided'))
+  // Ruling L6: the promise is on the method page, once per document.
+  it('qr.p6.masthead · the moves page carries no promise over itself', () => {
+    expect(text('quarterly.moves')).not.toContain('We never claim you caused it.')
+    expect(text('quarterly.method')).toContain('We never claim you caused it.')
   })
 
   it('qr.p6.move1 · the reading behind a move, its control and its chart', () => {
@@ -946,10 +955,13 @@ describe('the artboard port (Block D wave 2)', () => {
 
   it('qr.p6.ledger · numbered, grounded, and what happened afterwards', () => {
     const t = text('quarterly.moves')
-    expect(t).toContain('videos behind it, counted over everything we have read for you')
+    // The basis once, under the ledger, not on each row (ruling C).
+    expect(t.split('counted over everything we have read for you').length - 1).toBe(1)
+    expect(t).toContain('videos behind it')
     expect(t).toContain('Afterwards:')
-    // D12 · the ratio is the whole ledger's and says so.
-    expect(t).toContain('every piece of advice this product has ever given you')
+    // D12 · the ratio is the whole ledger's; the trailer is gone (ruling D).
+    expect(t).toMatch(/You have acted on \d+ of \d+\./)
+    expect(t).not.toContain('every piece of advice this product has ever given you')
   })
 
   it('qr.p6.sayhear · the counts are named as not recorded, never printed as zero', () => {
@@ -962,9 +974,9 @@ describe('the artboard port (Block D wave 2)', () => {
     const t = text('quarterly.moves')
     expect(t).toContain('The plan, re-checked')
     expect(t).toContain('Untested → Supported')
-    // The floor, in the card's own words, and the hold it does not have.
-    expect(t).toContain('at least 1 real comment stands behind it')
-    expect(t).toContain('nothing here is held across two updates before it is printed')
+    // The basis only; the floor and the hold are How to read material (E86).
+    expect(t).not.toContain('at least 1 real comment stands behind it')
+    expect(t).not.toContain('nothing here is held across two updates before it is printed')
   })
 
   it('qr.p7.method · the record as four paragraphs, in order, with every word kept', () => {

@@ -91,11 +91,11 @@ describe('the arrangement', () => {
     expect(weeklyRuleFor('update')).toContain('This update is how much of it arrived since the last one.')
     expect(weeklyRuleFor('update')).not.toContain('The week is')
     expect(weeklySubject('Sealand', { state: 'baseline_forming', noun: 'update' } as never))
-      .toBe('Sealand: Your update — this update’s check is still forming')
+      .toBe('Sealand: Your update · this update’s check is still forming')
     expect(weeklySubject('Sealand', { state: 'not_recorded', noun: 'update' } as never))
-      .toBe('Sealand: Your update — this update’s check is not recorded yet')
+      .toBe('Sealand: Your update · this update’s check is not recorded yet')
     expect(weeklySubject('Össur', { state: 'not_recorded', noun: 'week' } as never))
-      .toBe('Össur: Your update — the weekly check is not recorded yet')
+      .toBe('Össur: Your update · the weekly check is not recorded yet')
     expect(checkNotRecorded('update')).toContain('This update’s check')
 
     expect(WEEKLY_RULE).toContain('this month so far')
@@ -213,7 +213,7 @@ describe('weekCheck', () => {
 
   it('names how many months the baseline has', () => {
     const c = weekCheck({ state: 'baseline_forming', flags: [], monthsClearing: 2 })
-    expect(c.baseline).toBe('baseline forming — 2 of 3 months')
+    expect(c.baseline).toBe('baseline forming: 2 of 3 months')
   })
 
   it('counts the flags it could not print', () => {
@@ -305,7 +305,7 @@ describe('the masthead', () => {
   // the opposite case: it is checkable from the inbox.
   it('names the flagged object in the subject line, with its count, and no direction word', () => {
     const one = weeklySubject('Össur', weekCheck({ state: 'flagged', flags: [flag()] }))
-    expect(one).toBe('Össur: Objections is unusual this week — 29 of 205 videos')
+    expect(one).toBe('Össur: Objections is unusual this week · 29 of 205 videos')
     const two = weeklySubject('Össur', weekCheck({ state: 'flagged', flags: [flag(), flag({ label: 'Praise' })] }))
     expect(two).toContain('and 1 more')
     for (const s of [one, two]) {
@@ -380,9 +380,9 @@ describe('what to call the window', () => {
 
   it('says the subject line in that word too', () => {
     const quiet = weekCheck({ state: 'nothing_unusual', flags: [], noun: 'update' })
-    expect(weeklySubject('Sealand', quiet)).toBe('Sealand: Your update — nothing unusual in this update')
+    expect(weeklySubject('Sealand', quiet)).toBe('Sealand: Your update · nothing unusual in this update')
     const fired = weekCheck({ state: 'flagged', flags: [flag()], noun: 'update' })
-    expect(weeklySubject('Sealand', fired)).toBe('Sealand: Objections is unusual in this update — 29 of 205 videos')
+    expect(weeklySubject('Sealand', fired)).toBe('Sealand: Objections is unusual in this update · 29 of 205 videos')
   })
 })
 
@@ -399,7 +399,7 @@ describe('what the subject table adds up to', () => {
   it('counts the subjects that cleared their band, and names them', () => {
     const lead = subjectsLead([row('Durability', 'moved'), row('Price', 'no_clear_change'), row('Zips', 'moved')])
     expect(lead?.level).toBe('2 of 3')
-    expect(lead?.body).toBe(' subjects moved beyond their band this month — durability and zips.')
+    expect(lead?.body).toBe(' subjects moved beyond their band this month: durability and zips.')
   })
 
   it('says none moved when the comparison ran and nothing cleared', () => {
@@ -434,7 +434,7 @@ describe('what the subject table adds up to', () => {
 describe('the headline inside the artefact', () => {
   it('is the subject line without the tenant', () => {
     const fired = weekCheck({ state: 'flagged', flags: [flag()], flaggedCount: 1 })
-    expect(weeklyHeadline(fired)).toBe('Objections is unusual this week — 29 of 205 videos')
+    expect(weeklyHeadline(fired)).toBe('Objections is unusual this week · 29 of 205 videos')
     expect(weeklySubject('Sealand', fired)).toBe(`Sealand: ${weeklyHeadline(fired)}`)
   })
 

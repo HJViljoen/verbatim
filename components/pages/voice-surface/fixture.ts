@@ -156,7 +156,7 @@ export function voiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurface
       expanded: false,
       expandHref: voiceSurfaceHref(params, { movers: 'all' }),
       note: null,
-      rereadNote: 'Whether a theme’s members were re-read this month is not recorded here yet, so a change that is really a re-reading cannot be marked.',
+      rereadNote: null,
     },
     theme: {
       state: 'ready',
@@ -334,8 +334,7 @@ export function voiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurface
       overlapNote: 'A video can carry more than one group, so these counts overlap and do not add up to a whole.',
       profileDate: '2026-09-13',
       stale: false,
-      floorNote: `A group is named only where at least ${PERSONA_VIDEO_FLOOR} videos carry it.`,
-      stateNote: 'this month as it stands, never compared with another month',
+      floorNote: `${PERSONA_VIDEO_FLOOR}-video floor`,
       empty: null,
     },
     // THE BAND AND THE FOOTNOTE COME OFF ONE RECORD. Hand-written, the band

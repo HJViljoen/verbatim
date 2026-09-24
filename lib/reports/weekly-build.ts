@@ -133,7 +133,7 @@ export async function snapshotWeekly(args: {
     params: {},
   })
   if (!reading) {
-    throw new WeeklyEmptyError('Nothing to report yet — your first update has not landed.')
+    throw new WeeklyEmptyError('Nothing to report yet: your first update has not landed.')
   }
 
   const known = (args.keys ?? WEEKLY_BLOCK_KEYS).filter((k): k is WeeklyBlockKey =>

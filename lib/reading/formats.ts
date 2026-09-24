@@ -500,7 +500,7 @@ export function matrixConclusion(
       ? ' The two ranges overlap, so this reading does not separate them.'
       : ' Too few rated videos on one side for a range, so this reading does not separate them.'
   return (
-    `${head} — ${bands}measured over ${fmtInt(best.engagement.n)} and ${fmtInt(next.engagement.n)} ` +
+    `${head}: ${bands}measured over ${fmtInt(best.engagement.n)} and ${fmtInt(next.engagement.n)} ` +
     `of ${labelInSentence(widest.audienceLabel)}’s ${fmtInt(widest.of)} classified ${widest.basisLine}.${tail}`
   )
 }

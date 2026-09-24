@@ -210,7 +210,7 @@ export async function loadCompetitors(client: SupabaseClient, clientId: string):
     )
   } catch (error) {
     if (isMissingCompetitors(error)) {
-      console.error(`[rivals] ${COMPETITORS_TABLE} is not there yet — no rival identities for ${clientId}.`)
+      console.error(`[rivals] ${COMPETITORS_TABLE} is not there yet; no rival identities for ${clientId}.`)
       return []
     }
     throw error
@@ -404,7 +404,7 @@ export async function ensureRivals(ctx: RivalContext, names: readonly string[]):
     }
   } catch (error) {
     if (isMissingCompetitors(error)) {
-      console.error(`[rivals] ${COMPETITORS_TABLE} is not there yet — ${ctx.clientId} keeps its names without identities.`)
+      console.error(`[rivals] ${COMPETITORS_TABLE} is not there yet; ${ctx.clientId} keeps its names without identities.`)
       return out
     }
     const message = (error as { message?: string }).message ?? String(error)

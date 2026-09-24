@@ -129,8 +129,8 @@ export function TrackingForm(props: TrackingFormProps) {
   /** Returns the reason a term was refused, or null when it went in. */
   function addTerm(bucket: Bucket, raw: string): string | null {
     const term = raw.trim().replace(/\s+/g, ' ')
-    if (term.length < MIN_KEYWORD_CHARS) return `Terms need at least ${MIN_KEYWORD_CHARS} characters — a shorter word finds the whole internet.`
-    if (term.length > MAX_TERM_CHARS) return `Keep a term under ${MAX_TERM_CHARS} characters — a search box does not read a sentence.`
+    if (term.length < MIN_KEYWORD_CHARS) return `Terms need at least ${MIN_KEYWORD_CHARS} characters: a shorter word finds the whole internet.`
+    if (term.length > MAX_TERM_CHARS) return `Keep a term under ${MAX_TERM_CHARS} characters: a search box does not read a sentence.`
     const list = terms[bucket]
     if (list.length >= MAX_TERMS_PER_BUCKET) return `That list is full at ${MAX_TERMS_PER_BUCKET}. Remove one first.`
     if (list.some((t) => t.toLowerCase() === term.toLowerCase())) return 'That term is already in the list.'

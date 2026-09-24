@@ -103,8 +103,7 @@ export function DocumentEditor({ snapshotId, data, workings, editedIds, deck }: 
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border px-4 py-2 text-[12px]">
-        <p className="text-muted-foreground">Click any text to change it. It saves when you click away.</p>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border px-4 py-2 text-[12px]" title="Click any text to change it. It saves when you click away.">
         {workings && (
           <label className="ml-auto flex items-center gap-2">
             <input type="checkbox" checked={showWorkings} onChange={(e) => setShowWorkings(e.target.checked)} className="size-3.5 accent-primary" />

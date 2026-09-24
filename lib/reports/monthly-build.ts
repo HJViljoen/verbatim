@@ -118,7 +118,7 @@ export async function snapshotMonthly(args: {
     params: {},
   })
   if (!reading) {
-    throw new MonthlyEmptyError('Nothing to report on yet — your first update has not landed.')
+    throw new MonthlyEmptyError('Nothing to report on yet: your first update has not landed.')
   }
 
   const known = (args.keys ?? MONTHLY_BLOCK_KEYS).filter((k): k is MonthlyBlockKey =>

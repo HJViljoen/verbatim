@@ -5,8 +5,7 @@ import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockQuote, BlockQuotes } from '@/components/blocks/quote'
 import { PlatformIcon } from '@/components/charts/platform-icon'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fmtInt } from '@/lib/format'
-import { voiceCite, voicesMeta, VOICES_SHOWN, type SubjectsData, type SubjectVoice } from '@/lib/pages/subjects'
+import { voiceCite, voicesMeta, type SubjectsData, type SubjectVoice } from '@/lib/pages/subjects'
 
 // SU2 · six voices on the subject (design §3 SU2, the mock's (c)).
 //
@@ -46,7 +45,7 @@ import { voiceCite, voicesMeta, VOICES_SHOWN, type SubjectsData, type SubjectVoi
 
 /** What a frame whose evidence row no longer resolves says. The speaker's own
  *  words have `BlockQuote`'s sentence; this is the frame's. */
-const FRAME_GONE = 'counted, not quotable — this frame has since been removed'
+const FRAME_GONE = 'counted, not quotable: this frame has since been removed'
 
 const SOURCE_FLAG: Record<string, string | null> = {
   comment: null,
@@ -134,7 +133,9 @@ export const subjectsVoices: Block<SubjectsData> = {
         // comments have no language of their own recorded at all. `methodLines`
         // composes that sentence once for every surface — so the slot prints
         // the measure the product actually holds, or stays empty.
-        footerNote={data.method?.language ?? undefined}
+        // A45: on screen the page bar's how-sound line carries the language
+        // share; a block that travels alone (print, email) keeps its basis.
+        footerNote={mode === 'app' ? undefined : data.method?.language ?? undefined}
       >
         {mode === 'email' ? (
           <BlockQuotes
@@ -212,7 +213,7 @@ export const subjectsVoices: Block<SubjectsData> = {
     if (pane.voices.length === 0) {
       return pane.notRecorded
         ? pane.notRecorded
-        : `Nothing quotable has been matched to this subject yet — we show at most ${fmtInt(VOICES_SHOWN)} once there is.`
+        : 'Nothing quotable has been matched to this subject yet.'
     }
     return null
   },

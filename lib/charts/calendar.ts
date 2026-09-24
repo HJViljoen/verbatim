@@ -510,11 +510,9 @@ export function stateNote(state: CalendarPointState): string | null {
  * plural; the per-month sentence stays where it belongs, on the point.
  */
 export function backReadBandLabel(count: number): string {
-  return count === 1
-    ? 'Read back at setup — this month had already closed when we started, so this is what it reads today, ' +
-      'not what we would have reported at the time.'
-    : `Read back at setup — these ${count.toLocaleString('en-US')} months had already closed when we started, so this is ` +
-      'what they read today, not what we would have reported at the time.'
+  // A64: the short form. Why a read-back month is today's reading is How to
+  // read's ("read at setup").
+  return count === 1 ? 'Read at setup' : `${count.toLocaleString('en-US')} months read at setup`
 }
 
 /** A stable id for one chart's `<defs>`, so two calendar lines on one page do

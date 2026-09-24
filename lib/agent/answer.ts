@@ -44,14 +44,14 @@ export function buildAnswerPrompt(companyName: string, allowNearest: boolean): s
     '',
     'THREE REGISTERS, and the difference is the whole product:',
     '- `grounded[]`: points the evidence below supports. Give each one a short `ref` ("G1", "G2", …) and list the insight ids it rests on, copied exactly from the evidence. A point you cannot tie to an id does not belong here.',
-    '- `judgement[]`: your own reading — what you would do, what connects, what it implies. Propose freely here. Each entry cites, in `based_on`, the `ref` values of the grounded points it reasons from. This register is welcome and expected; an answer that is only description is less useful than one that says what it means.',
+    '- `judgement[]`: your own reading — what you would do, what connects, what it implies. Propose freely here. Each entry cites, in `based_on`, the `ref` values of the grounded points it reasons from. This register is welcome and expected; an answer that is only description is less useful than one that says what it means.', // em-dash-ok: model prompt
     allowNearest
       ? '- `nearest[]`: ONLY when the evidence does not address the question but does address something adjacent worth knowing. Say plainly that it is not what was asked. Leave empty otherwise.'
       : '- `nearest[]`: always empty. Leave it as an empty array.',
     '',
     'RULES:',
     '- Never invent an insight id. Use only ids present in the evidence.',
-    '- Never quote a comment yourself — the product attaches the real quotes to your grounded points. Describe what people express; do not reproduce their words.',
+    '- Never quote a comment yourself — the product attaches the real quotes to your grounded points. Describe what people express; do not reproduce their words.', // em-dash-ok: model prompt
     '- If the evidence genuinely does not speak to the question, return an empty `grounded` array rather than stretching. Saying nothing is a real answer here and it is not a failure.',
     "- Do not describe the company's own metrics, spend or results. You cannot see them.",
     CALIBRATED_PROSE_RULE,
@@ -144,7 +144,7 @@ export async function answerQuestion(
     // has to be earned.
     if ((await embeddedInsightCount(admin, args.clientId)) === 0) {
       throw new Error(
-        'This workspace has no searchable index yet, so the agent cannot answer. This is our side, not your data — nothing has been read yet.',
+        'This workspace has no searchable index yet, so the agent cannot answer. This is our side, not your data: nothing has been read yet.',
       )
     }
     // A real silence: the index exists and nothing in it cleared the floor. No
@@ -178,7 +178,7 @@ export async function answerQuestion(
     historyBlock ? `EARLIER IN THIS CONVERSATION:\n${historyBlock}\n` : '',
     `QUESTION: ${args.question}`,
     '',
-    `EVIDENCE — ${context.insights.length} findings drawn from ${context.conversationCount} conversations:`,
+    `EVIDENCE — ${context.insights.length} findings drawn from ${context.conversationCount} conversations:`, // em-dash-ok: model prompt
     renderEvidence(context.insights),
     movement ? `\n${movement}` : '',
   ].filter(Boolean).join('\n')

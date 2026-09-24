@@ -102,10 +102,10 @@ export const weekWorked: Block<WeekData> = {
       worked_rated: { value: data.worked.rated, unit: 'videos', label: 'videos with an engagement figure' },
     }
     data.worked.formats.forEach((r, i) => {
-      out[`format_${i + 1}_videos`] = { value: r.videos, unit: 'videos', label: `${r.label} — videos` }
+      out[`format_${i + 1}_videos`] = { value: r.videos, unit: 'videos', label: `${r.label} — videos` } // em-dash-ok: FigureTable label (a record key, never printed)
     })
     data.worked.hooks.forEach((r, i) => {
-      out[`hook_${i + 1}_videos`] = { value: r.videos, unit: 'videos', label: `${r.label} — videos` }
+      out[`hook_${i + 1}_videos`] = { value: r.videos, unit: 'videos', label: `${r.label} — videos` } // em-dash-ok: FigureTable label (a record key, never printed)
     })
     return out
   },

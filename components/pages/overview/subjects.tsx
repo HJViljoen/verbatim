@@ -63,8 +63,8 @@ export function DirectionWord({ direction, mode = 'app' }: { direction: Directio
 function Side({ side, mode = 'app' }: { side: SideReading | null; mode?: RenderMode }): ReactNode {
   if (!side || !side.observed || side.pct == null) {
     return mode === 'email'
-      ? <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>— not tracked</span>
-      : <span className="text-[12px] text-muted-foreground">— not tracked</span>
+      ? <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>not tracked</span>
+      : <span className="text-[12px] text-muted-foreground">not tracked</span>
   }
   // P0'S CELL, NOT A HAND-ROLLED PAIR (`main.subjects.col.*`). The artboard
   // stacks the share over its "n of N" — mono 13/600 at `line-height:1` with
@@ -97,7 +97,10 @@ function SentLine({ line, mode = 'app' }: { line: string | null; mode?: RenderMo
     : <span className="block text-[11px] text-muted-foreground">{line}</span>
 }
 
-/** "at this point last month 20.5% · 264 of 1,290", or nothing at all.
+/** The one legend for the grey second line under the category's level. */
+export const AT_LAST_MONTH_LEGEND = 'grey line: at this point last month'
+
+/** "20.5% · 264 of 1,290" at this point last month, or nothing at all.
  *
  *  THE TWO FIGURES ARE SEPARATED (design review Medium 18). They ran together
  *  with no separator — "at this point last month 20.5% 264 of 1,290" — inside a
@@ -105,7 +108,9 @@ function SentLine({ line, mode = 'app' }: { line: string | null; mode?: RenderMo
  *  number that has gone wrong. */
 function AtLastMonth({ at, mode = 'app' }: { at: SubjectRow['categoryAtLastMonth']; mode?: RenderMode }): ReactNode {
   if (!at || at.pct == null) return null
-  const body = <>at this point last month <span data-copy="figure">{fmtPct(at.pct)}</span> <span className={mode === 'email' ? undefined : 'text-muted-foreground'}>·</span> <span data-copy="figure">{fmtInt(at.k)} of {fmtInt(at.n)}</span></>
+  // L4: the comparison is named once, in the column header (app) or one
+  // legend line (email), never on every row.
+  const body = <><span data-copy="figure">{fmtPct(at.pct)}</span> <span className={mode === 'email' ? undefined : 'text-muted-foreground'}>·</span> <span data-copy="figure">{fmtInt(at.k)} of {fmtInt(at.n)}</span></>
   return mode === 'email'
     ? <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted }}>{body}</div>
     : <span className="block text-[11px] text-muted-foreground">{body}</span>
@@ -181,7 +186,7 @@ function GapHeadline({ gap, mode }: { gap: Gap; mode: RenderMode }) {
   const body = (
     <>
       <span className={mode === 'email' ? undefined : 'text-[12.5px] font-medium'}>
-        {gap.objectLabel} — <span data-copy="level" className={mode === 'email' ? undefined : 'font-mono tabular-nums'}>{gapLine(gap)}</span>
+        {gap.objectLabel}: <span data-copy="level" className={mode === 'email' ? undefined : 'font-mono tabular-nums'}>{gapLine(gap)}</span>
       </span>
       {basis ? (
         <span
@@ -356,7 +361,7 @@ export const overviewSubjects: Block<OverviewData> = {
             <ul className={email ? undefined : 'm-0 flex list-none flex-col gap-1 p-0'}>
               {s.candidates.map((c) => (
                 <li key={c.name} className={email ? undefined : 'text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}>
-                  {c.name} — <span className={email ? undefined : 'text-muted-foreground'} style={email ? { color: EMAIL.muted } : undefined}>{c.because}</span>
+                  {c.name}: <span className={email ? undefined : 'text-muted-foreground'} style={email ? { color: EMAIL.muted } : undefined}>{c.because}</span>
                 </li>
               ))}
             </ul>
@@ -366,10 +371,12 @@ export const overviewSubjects: Block<OverviewData> = {
     }
 
     const gap = leadGap(s)
+    const hasAt = s.rows.some((r) => r.categoryAtLastMonth?.pct != null)
     if (email) {
       return frame(
         <div>
           {gap ? <GapHeadline gap={gap} mode={mode} /> : null}
+          {hasAt ? <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted }}>{AT_LAST_MONTH_LEGEND}</div> : null}
           {s.rows.map((r) => (
             <div key={r.id} style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '4px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
               <strong>{r.label}</strong>
@@ -401,7 +408,10 @@ export const overviewSubjects: Block<OverviewData> = {
                 <th scope="col" className="py-1 pr-3 font-semibold">Subject</th>
                 <th scope="col" className="py-1 pr-3 font-semibold">You</th>
                 <th scope="col" className="py-1 pr-3 font-semibold">{s.rivalLabel ?? 'Lead rival'}</th>
-                <th scope="col" className="py-1 pr-3 font-semibold">{s.categoryLabel}</th>
+                <th scope="col" className="py-1 pr-3 font-semibold">
+                  {s.categoryLabel}
+                  {hasAt ? <span className="block font-normal normal-case tracking-normal">{AT_LAST_MONTH_LEGEND}</span> : null}
+                </th>
                 <th scope="col" className="py-1 pr-3 font-semibold">Your change</th>
                 <th scope="col" className="py-1 pr-3 font-semibold">Category change</th>
                 <th scope="col" className="py-1 font-semibold">Monthly line</th>

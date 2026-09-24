@@ -68,20 +68,11 @@ describe('the weekly email', () => {
   // ONCE, WHERE A READER MEETS THEIR FIRST NUMBER. It was printed under the
   // masthead AND at the foot of WR6 — the same 26 italic words twice in one
   // 640px email — and the artboard carries them in neither position.
-  it('prints the rule that keeps it honest exactly once', () => {
+  // AND NOW NOT AT ALL (copy de-clutter, D53): §1's meta prints the update
+  // beside the month so far, and the month-to-date rule is in How to read.
+  it('prints no masthead rule', () => {
     const text = words(snapshot())
-    expect(text.split(WEEKLY_RULE).length - 1).toBe(1)
-  })
-
-  // THE LEAN IS FOR SPEECH. The masthead rule was the artefact's only
-  // non-speech italic — sans italic 12px muted — where every other italic here
-  // is a commenter's words in serif (`BlockQuote`). DESIGN.md: "Italic is
-  // semantic, never decorative", the rule `coverage.tsx` already quotes as its
-  // reason for not reprinting this sentence at the foot.
-  it('sets the masthead rule upright — italic on this artefact means a voice', () => {
-    const markup = body(snapshot())
-    const rule = markup.slice(markup.indexOf(WEEKLY_RULE) - 400, markup.indexOf(WEEKLY_RULE))
-    expect(rule).not.toContain('font-style:italic')
+    expect(text.split(WEEKLY_RULE).length - 1).toBe(0)
   })
 
   it('stamps the reading date, which M9 will read back out of `data`', () => {
@@ -117,7 +108,7 @@ describe('the weekly email', () => {
   it('prints the three mono footer lines, and promises no next update', () => {
     const text = words(snapshot())
     expect(text).toContain('Prepared for Sealand · with Verbatim · update of 13 Sep 2026')
-    expect(text).toContain('— this update’s 271 videos')
+    expect(text).toContain('· this update’s 271 videos')
     expect(text).toContain('Commenters are never identified; quotes carry platform and date only.')
     // A cadence is not a promise about when a run lands, and nothing in this
     // product computes one.
@@ -130,9 +121,9 @@ describe('the weekly email', () => {
   // the artboard's headline does not open with it.
   it('leads with the same claim as the inbox line, minus the tenant', () => {
     const data = snapshot()
-    expect(data.subject).toBe('Sealand: Objections is unusual this week — 29 of 205 videos')
+    expect(data.subject).toBe('Sealand: Objections is unusual this week · 29 of 205 videos')
     const text = words(data)
-    expect(text).toContain('Objections is unusual this week — 29 of 205 videos')
+    expect(text).toContain('Objections is unusual this week · 29 of 205 videos')
     // The preheader carries the full subject; the masthead headline does not.
     expect(text.split('Sealand: Objections').length - 1).toBe(1)
   })

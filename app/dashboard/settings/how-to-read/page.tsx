@@ -5,7 +5,7 @@ import { ListSearch } from '@/components/shell/list-search'
 import { GLOSSARY, THIRTEEN_WORDS, READER_FLAGS } from '@/lib/calibration'
 import { getSessionContext } from '@/lib/auth'
 import { surface } from '@/lib/nav'
-import { READING_CARDS, READING_PATH } from '@/lib/settings/how-to-read'
+import { DEFINITIONS, READING_CARDS, READING_PATH } from '@/lib/settings/how-to-read'
 
 // Settings › How to read (Phase 1 WP16, design ST9) — one card per surface,
 // the thirteen words, and a path through the product on the three clocks it
@@ -62,7 +62,7 @@ export default async function HowToReadPage() {
                       {card.read.map((k) => (
                         <div key={k} className="flex gap-2 text-[12px] leading-[1.45]">
                           <dt className="shrink-0 font-semibold text-foreground">{GLOSSARY[k][0]}</dt>
-                          <dd className="text-secondary-foreground">— {GLOSSARY[k][1]}</dd>
+                          <dd className="text-secondary-foreground">{GLOSSARY[k][1]}</dd>
                         </div>
                       ))}
                     </dl>
@@ -87,7 +87,7 @@ export default async function HowToReadPage() {
 
         <SettingsCard
           title="The thirteen words"
-          description="Every figure in this product is built out of these. Each one means the same thing on every page and in every document, and each is assigned by a fixed rule from counted data — never worded by the model."
+          description="Every figure in this product is built out of these. Each one means the same thing on every page and in every document, and each is assigned by a fixed rule from counted data, never worded by the model."
         >
           {/* Thirteen, and then two. lib/calibration.ts is careful about this —
               "the thirteen words, in the design's own order, plus the two
@@ -114,6 +114,23 @@ export default async function HowToReadPage() {
               </div>
             ))}
           </dl>
+        </SettingsCard>
+
+        <SettingsCard
+          title="Definitions"
+          description="What the pages no longer explain beside every figure. Each one is linked from the page that uses it."
+        >
+          {/* Ruling M (copy de-clutter, 2026-09-24): one paragraph per idea,
+              each under a stable id. A legend or tooltip links to #<id>, and
+              lib/settings/how-to-read.test.ts asserts every anchor exists. */}
+          <div className="flex flex-col gap-3">
+            {DEFINITIONS.map((d) => (
+              <section key={d.id} id={d.id} className="scroll-mt-4">
+                <h3 className="text-[13px] font-semibold">{d.title}</h3>
+                <p className="mt-0.5 text-[12px] leading-[1.5] text-secondary-foreground">{d.body}</p>
+              </section>
+            ))}
+          </div>
         </SettingsCard>
 
         <SettingsCard

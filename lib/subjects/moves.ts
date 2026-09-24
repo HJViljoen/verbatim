@@ -181,7 +181,7 @@ export function activationCheck(
   if (activeCount >= SUBJECTS_MAX) {
     return {
       do: 'refuse',
-      message: `You are already tracking ${SUBJECTS_MAX}. Stop tracking one before you add another — more than ${SUBJECTS_MAX} and no single one gets enough of the conversation to read.`,
+      message: `You are already tracking ${SUBJECTS_MAX}. Stop tracking one before you add another. With more than ${SUBJECTS_MAX}, no single one gets enough of the conversation to read.`,
     }
   }
   return { do: 'activate' }

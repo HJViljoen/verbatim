@@ -19,8 +19,8 @@ describe('OV0 · the month so far', () => {
     }
   })
 
-  it('prints the month against the same point last month', () => {
-    const text = renderText(overviewBar.render(overviewFixture(), 'app', ctx))
+  it('prints the month against the same point last month on paper, where there is no page bar', () => {
+    const text = renderText(overviewBar.render(overviewFixture(), 'print', ctx))
     expect(text).toContain('2,359')
     expect(text).toContain('2,044')
     expect(text).toContain('last month at this point')
@@ -80,8 +80,10 @@ describe('OV0 · the month so far', () => {
     expect(app).toContain('trailing median 2,240')
     expect(app).not.toContain('September, 18 days in · 3 updates')
     expect(app).not.toContain('last month at this point: 2,044')
-    // The stats themselves are untouched.
-    expect(app).toContain('2,359')
-    expect(app).toContain('last month at this point')
+    // L10: on screen the page bar owns the videos, the same point last month
+    // and the updates, so the tile prints none of them.
+    expect(app).not.toContain('2,359')
+    expect(app).not.toContain('2,044')
+    expect(app).toContain('18 days in')
   })
 })

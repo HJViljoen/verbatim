@@ -350,7 +350,7 @@ export async function updateWithActor<R extends { error: unknown }>(
     // filed as the machine's. This line is then the only record of who it was.
     const code = (stamped.error as { code?: string }).code ?? '?'
     console.error(
-      `[config-log] tracking_configs.last_actor rejected (${code}) — retrying UNSTAMPED. ` +
+      `[config-log] tracking_configs.last_actor rejected (${code}); retrying UNSTAMPED. ` +
       `The write was ${actor.kind} ${actor.label ?? actor.user_id ?? 'unknown'}; ` +
       'the log will name the database role instead, or nothing at all.',
     )
@@ -475,7 +475,7 @@ export async function recordConfigChanges(admin: InsertableClient, inputs: Confi
   const missing = AFFECTS_COLUMNS.find((column) => isMissingColumnError(error, column))
   if (carried && missing) {
     console.error(
-      `[config-log] config_changes.${missing} does not exist yet — re-inserting ${inputs.length} change(s) ` +
+      `[config-log] config_changes.${missing} does not exist yet; re-inserting ${inputs.length} change(s) ` +
       `for ${inputs[0].clientId} WITHOUT the affected audiences and months. The change is recorded; ` +
       'what it moved is not, and cannot be worked out later.',
     )
@@ -621,7 +621,7 @@ export function isMissingConfigLog(error: unknown): boolean {
  */
 export function changeLogBoundary(firstLoggedAt: string | null | undefined): string {
   if (!firstLoggedAt) {
-    return 'No configuration change has been recorded yet. Anything shown before the first one is reconstructed from what each update searched — a label, not a record.'
+    return 'No configuration change has been recorded yet. Anything shown before the first one is reconstructed from what each update searched: a label, not a record.'
   }
-  return `No change was recorded before ${fullDate(firstLoggedAt)}. Entries before it are reconstructed from what each update searched — a label, not a record.`
+  return `No change was recorded before ${fullDate(firstLoggedAt)}. Entries before it are reconstructed from what each update searched: a label, not a record.`
 }

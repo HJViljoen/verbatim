@@ -100,7 +100,7 @@ export function evaluateMonthlyCap(
   if (usedThisMonth >= limit) {
     return {
       ok: false,
-      message: `That is ${limit} questions this month, which is the limit on this workspace. It starts again in ${nextMonthName(now)} — or tell us if you need more.`,
+      message: `That is ${limit} questions this month, which is the limit on this workspace. It starts again in ${nextMonthName(now)}, or tell us if you need more.`,
     }
   }
   return { ok: true, used: usedThisMonth }

@@ -61,7 +61,6 @@ export function monthlySubjectsEmail(data: OverviewData, ctx: BlockContext): Rea
       accent
       meta={s.rows.length > 0 ? `${fmtInt(s.rows.length)} named` : undefined}
       footer={<a href={href} style={{ color: EMAIL.ink }}>Open Subjects →</a>}
-      footerNote={s.rows.length > 0 ? 'share of videos where the subject came up' : undefined}
     >
       {children}
     </BlockFrame>
@@ -74,7 +73,7 @@ export function monthlySubjectsEmail(data: OverviewData, ctx: BlockContext): Rea
         <BlockEmpty mode="email">{empty}</BlockEmpty>
         {s.candidates.map((c) => (
           <div key={c.name} style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, marginTop: 4 }}>
-            {c.name} — <span style={{ color: EMAIL.muted }}>{c.because}</span>
+            {c.name}: <span style={{ color: EMAIL.muted }}>{c.because}</span>
           </div>
         ))}
       </>,
@@ -104,7 +103,7 @@ export function monthlySubjectsEmail(data: OverviewData, ctx: BlockContext): Rea
       {leadGap ? (
         <div style={{ marginTop: 6, marginBottom: 4 }}>
           <div style={{ fontFamily: FONT.sans, fontSize: 15, lineHeight: '1.5', color: EMAIL.ink }}>
-            {leadGap.objectLabel} — <GapLevel gap={leadGap} />
+            {leadGap.objectLabel}: <GapLevel gap={leadGap} />
           </div>
           {/* THE BASIS LINE IS NOT MARKED AS A LEVEL, and that is the point of
               it. "19 points apart in June (band 8.1)" is a dated, banded
@@ -284,7 +283,7 @@ function SubjectBlock({ row, sentLine }: { row: SubjectRow; sentLine: string | n
  *  reason this is `FigureCell` with no `of` rather than a share of zero. */
 function Side({ side }: { side: SideReading | null }) {
   if (!side || !side.observed || side.pct == null) {
-    return <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>— not tracked</span>
+    return <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>not tracked</span>
   }
   return (
     <FigureCell

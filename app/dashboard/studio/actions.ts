@@ -170,7 +170,7 @@ export async function saveSchedule(args: { id?: string | null; input: ScheduleIn
     // wrote is passed through; anything else is logged with the field named.
     const first = parsed.error.issues[0]
     const written = first && !/^Invalid|^Expected|^Required/.test(first.message) ? first.message : null
-    if (!written) console.error(`[studio] schedule input refused: ${first?.path.join('.') ?? '?'} — ${first?.message ?? 'no issue'}`)
+    if (!written) console.error(`[studio] schedule input refused: ${first?.path.join('.') ?? '?'}: ${first?.message ?? 'no issue'}`)
     return { ok: false, message: written ?? 'That could not be saved. Check the fields and try again.' }
   }
   const s = parsed.data

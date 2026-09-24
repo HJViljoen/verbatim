@@ -34,16 +34,16 @@ export function buildInterpretPrompt(companyName: string): string {
     '',
     'Return:',
     '- intent:',
-    '  - "about_customers" — answerable from what consumers say in public. Default to this when unsure.',
-    '  - "about_our_metrics" — about the company\'s OWN internal numbers (ad spend, revenue, conversion rate, email lists, campaign results). The corpus cannot see these.',
-    '  - "out_of_scope" — not a question about the category or its consumers at all (small talk, questions about this tool).',
+    '  - "about_customers" — answerable from what consumers say in public. Default to this when unsure.', // em-dash-ok: model prompt
+    '  - "about_our_metrics" — about the company\'s OWN internal numbers (ad spend, revenue, conversion rate, email lists, campaign results). The corpus cannot see these.', // em-dash-ok: model prompt
+    '  - "out_of_scope" — not a question about the category or its consumers at all (small talk, questions about this tool).', // em-dash-ok: model prompt
     '- retrieval_queries: 2-5 short queries describing CONSUMER BEHAVIOUR OR OPINION, in the words consumers would use, from genuinely different angles.',
     '  A question about a discount promotion becomes things like: "price is too expensive", "waiting for a sale before buying", "comparing cost against alternatives".',
-    '  Write what a PERSON would say, not a topic label. Never reuse the question\'s marketing vocabulary ("campaign", "positioning", "funnel", "segment") — consumers do not talk like that.',
+    '  Write what a PERSON would say, not a topic label. Never reuse the question\'s marketing vocabulary ("campaign", "positioning", "funnel", "segment") — consumers do not talk like that.', // em-dash-ok: model prompt
     '  Different angles, not restatements of one angle. If the question contains several distinct assumptions, cover them.',
     '- timeframe: "trend" only if the question explicitly asks about change over time ("has this shifted", "compared to last quarter", "are people warming to"). Otherwise "current".',
     '',
-    'When intent is not "about_customers", still return your best queries — retrieval is cheap and a wrong intent call should not silence a good question.',
+    'When intent is not "about_customers", still return your best queries — retrieval is cheap and a wrong intent call should not silence a good question.', // em-dash-ok: model prompt
   ].join('\n')
 }
 

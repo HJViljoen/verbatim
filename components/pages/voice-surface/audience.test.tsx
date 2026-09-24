@@ -145,8 +145,11 @@ describe('voiceAudience', () => {
 
   it('says the replies figure with its own n and its own caveat', () => {
     const text = draw()
-    expect(text).toContain('21.0% of this month’s comments were replies to another comment — 1,972 of 9,397')
-    expect(text).toContain('Counted across every audience')
+    expect(text).toContain('21.0% of this month’s comments were replies to another comment: 1,972 of 9,397')
+    // The caveat rides as a tooltip on screen and prints in email (B21).
+    expect(text).not.toContain('Counted across every audience')
+    expect(render(voiceAudience.render(voiceFixture(), 'app', ctx))).toContain('Counted across every audience')
+    expect(draw(voiceFixture(), 'email')).toContain('Counted across every audience')
   })
 
   it('declares the audience denominator and the leading kinds as figures', () => {

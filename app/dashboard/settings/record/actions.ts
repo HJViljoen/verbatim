@@ -93,7 +93,7 @@ export async function fileGateAppeal(_prev: AppealState, formData: FormData): Pr
 
   if (error) {
     if (isMissingGateAppeals(error)) {
-      return { ok: false, message: 'We cannot take this yet — the part of the product that records it has not shipped. Tell us and we will look at the post ourselves.' }
+      return { ok: false, message: 'We cannot take this yet: the part of the product that records it has not shipped. Tell us and we will look at the post ourselves.' }
     }
     // One appeal per verdict: a second click is the same statement, not a
     // second one, and saying "already filed" is the truth.

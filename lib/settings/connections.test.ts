@@ -202,13 +202,13 @@ describe('what the one save row says afterwards', () => {
     // m4: the composed save may change the terms, the exclusions, the rival
     // list, the cadence and the day, and answered with the terms form's own
     // sentence whichever of them had moved.
-    expect(savedMessage(['Cadence'])).toBe('Saved — cadence. Your next update is the first one to use it.')
+    expect(savedMessage(['Cadence'])).toBe('Saved: cadence. Your next update is the first one to use it.')
     expect(savedMessage(['Brand terms', 'Rivals', 'Cadence']))
-      .toBe('Saved — brand terms, rivals and cadence. Your next update is the first one to use them.')
+      .toBe('Saved: brand terms, rivals and cadence. Your next update is the first one to use them.')
   })
 
   it('drops a field it does not know, so nothing crafted is echoed back', () => {
-    expect(savedMessage(['<script>', 'Rivals'])).toBe('Saved — rivals. Your next update is the first one to use it.')
+    expect(savedMessage(['<script>', 'Rivals'])).toBe('Saved: rivals. Your next update is the first one to use it.')
     expect(savedMessage([])).toBe('Saved. Nothing had changed, so nothing moved.')
   })
 

@@ -187,7 +187,7 @@ function FaceOff({ m, basis, mode }: { m: FaceOffMeasure; basis: string | null; 
   }
   const side = (s: FaceOffMeasure['you']) =>
     s == null
-      ? <NotDrawn mode={mode}>— not read</NotDrawn>
+      ? <NotDrawn mode={mode}>not read</NotDrawn>
       : <FigureCell mode={mode} value={s.text} of={of(s)} />
   // THE ARTBOARD'S OWN ROW: the measure on the left with its clock under it,
   // the two sides beside each other, and the badge with the row. Stacked, five
@@ -347,9 +347,6 @@ export const quarterlyRivals: Block<QuarterlyData> = {
               "both shares are of the month's tracked set" — is `r.caveat`'s
               own subject, said more precisely two lines down, and one sheet
               does not need it twice. */}
-          {months.length > 0 ? (
-            <Note mode={mode}>The newest month is the bold column, and the counts under each cell are that month’s ({newestLabel}).</Note>
-          ) : null}
           {/* `qr.p5.standings.note` · the two denominators as figures, and the
               per-month tracking rules with their dates. Both were carried on
               `StandingsBlock` and neither was rendered. */}
@@ -373,14 +370,9 @@ export const quarterlyRivals: Block<QuarterlyData> = {
               and the fifth was the row this table lost off the sheet. Where
               the count exists it is the sentence that carries both; where it
               does not, the rule still prints on its own. */}
-          {r.dualMention != null ? (
-            <Note mode={mode}>
-              <span data-copy="figure">{fmtInt(r.dualMention)}</span> of your own videos also named a tracked rival;
-              each is counted once, in one audience.
-            </Note>
-          ) : r.standings ? (
-            <Note mode={mode}>{r.standings.precedence}</Note>
-          ) : null}
+          {/* THE DUAL-MENTION COUNT IS ON THE METHOD PAGE (the record's own
+              line there), and the precedence rule is How to read's, so
+              nothing is said here (E82, B85). */}
           {r.standings?.caveat ? <Note mode={mode}>{r.standings.caveat}</Note> : null}
           {/* THE CORPUS CAVEAT, UNDER THE TABLE IT IS ABOUT, AND IT IS THIS
               BLOCK THAT PRINTS IT.
@@ -450,7 +442,7 @@ export const quarterlyRivals: Block<QuarterlyData> = {
           {r.headToHead ? (
             <>
               <Note mode={mode}>
-                {data.brand} against {r.headToHead.rivalLabel}, {monthName(r.headToHead.month)} — a badge is that side
+                {data.brand} against {r.headToHead.rivalLabel}, {monthName(r.headToHead.month)}. A badge is that side
                 against its own month before, never one side against the other.
               </Note>
               <div className={email ? undefined : 'grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)] gap-x-2 border-b border-border pb-1'}>
@@ -547,7 +539,7 @@ export const quarterlyRivals: Block<QuarterlyData> = {
                 )
               }
             >
-              {r.questionsRival ? <span className={email ? undefined : 'text-muted-foreground'}>{r.questionsRival} — </span> : null}
+              {r.questionsRival ? <span className={email ? undefined : 'text-muted-foreground'}>{r.questionsRival}: </span> : null}
               <span data-copy="stored" data-slot="pass_a_audience_insight">{q.text}</span>
             </Row>
           ))}

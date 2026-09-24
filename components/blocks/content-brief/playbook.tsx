@@ -352,7 +352,7 @@ function Engagement({ rows: all, mode, of, basisLine }: { rows: readonly FormatR
         ))}
       </div>
       <p className="m-0 border-t border-border pt-2.5 text-[12.5px] leading-[1.45] text-muted-foreground">
-        Read from {fmtInt(of)} classified {basisLine}. A Reddit post carries no engagement rate and is in no row here.
+        Read from {fmtInt(of)} classified {basisLine}.
       </p>
     </div>
   )

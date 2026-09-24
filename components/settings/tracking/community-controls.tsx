@@ -88,7 +88,7 @@ export function rowMessage(op: 'add' | 'stop', firedFor: 'add' | 'stop' | null, 
 }
 
 /** The add row under the table. */
-export function CommunityAdd({ canEdit, note }: { canEdit: boolean; note: string }) {
+export function CommunityAdd({ canEdit, note }: { canEdit: boolean; note?: string }) {
   const [draft, setDraft] = useState('')
   const [state, dispatch, pending] = useActionState(updateCommunity, idle)
 
@@ -121,7 +121,7 @@ export function CommunityAdd({ canEdit, note }: { canEdit: boolean; note: string
         >
           {pending ? 'Saving…' : 'Watch this community'}
         </button>
-        <MonoNote className="max-w-[420px]">{note}</MonoNote>
+        {note ? <MonoNote className="max-w-[420px]">{note}</MonoNote> : null}
       </div>
       {state.message && (
         <span

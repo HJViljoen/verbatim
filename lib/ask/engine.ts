@@ -112,7 +112,7 @@ export function buildExtractPrompt(kind: 'idea' | 'plan'): string {
       ? 'You read a marketing or business document and list the TESTABLE CLAIMS it rests on.'
       : 'You read a short idea and list the TESTABLE CLAIMS it rests on.',
     '',
-    'A testable claim is an assertion about customers, the market, or a product that real consumer conversation could support or contradict — "buyers care most about price", "people find the setup confusing", "our audience wants a subscription".',
+    'A testable claim is an assertion about customers, the market, or a product that real consumer conversation could support or contradict — "buyers care most about price", "people find the setup confusing", "our audience wants a subscription".', // em-dash-ok: model prompt
     '',
     'Rules:',
     '- Use the author\'s own terms. Do not sharpen, correct, or improve a claim; you are indexing the document, not editing it.',
@@ -120,7 +120,7 @@ export function buildExtractPrompt(kind: 'idea' | 'plan'): string {
     '- Skip anything not testable against consumer conversation: budgets, timelines, staffing, internal process, legal.',
     '- One assertion per claim. Split a sentence that carries two.',
     '- Return them in the order they appear.',
-    '- For each claim, also return `source`: the sentence in the document the claim comes from, COPIED EXACTLY, character for character. Do not tidy it, do not join two sentences, do not paraphrase. If a claim is implied rather than stated anywhere, return an empty string — that is a real and useful answer, not a failure.',
+    '- For each claim, also return `source`: the sentence in the document the claim comes from, COPIED EXACTLY, character for character. Do not tidy it, do not join two sentences, do not paraphrase. If a claim is implied rather than stated anywhere, return an empty string — that is a real and useful answer, not a failure.', // em-dash-ok: model prompt
     '',
     'Also return a short title naming the document, in plain words.',
   ].join('\n')
@@ -133,15 +133,15 @@ export function buildVerdictPrompt(companyName: string): string {
     'Each claim is labelled [C#] and comes with the themes the conversation contains that are closest to it, each labelled [T#] with its description and some real comments.',
     '',
     'For every claim return a verdict:',
-    '- "echoes" — the conversation independently says the same thing.',
-    '- "contradicts" — the conversation pushes back on it, or says something incompatible.',
-    '- "silent" — the conversation does not engage with this claim.',
+    '- "echoes" — the conversation independently says the same thing.', // em-dash-ok: model prompt
+    '- "contradicts" — the conversation pushes back on it, or says something incompatible.', // em-dash-ok: model prompt
+    '- "silent" — the conversation does not engage with this claim.', // em-dash-ok: model prompt
     '',
     'Rules:',
-    '- SILENT IS A REAL ANSWER and often the right one. The themes shown are merely the closest ones; closest is not the same as relevant. If the conversation does not speak to the claim, say silent — never stretch a loosely-related theme to manufacture a verdict.',
+    '- SILENT IS A REAL ANSWER and often the right one. The themes shown are merely the closest ones; closest is not the same as relevant. If the conversation does not speak to the claim, say silent — never stretch a loosely-related theme to manufacture a verdict.', // em-dash-ok: model prompt
     '- they_say: what the conversation actually says on this subject, in plain words. Null when silent.',
     '- theme_refs: the [T#] handles that carry your verdict. Empty when silent.',
-    '- Judge ONLY against what is shown. You are not being asked whether the claim is true in the world — only whether this conversation supports it.',
+    '- Judge ONLY against what is shown. You are not being asked whether the claim is true in the world — only whether this conversation supports it.', // em-dash-ok: model prompt
     '- Do not advise, propose, or recommend here. This is the evidence register; recommendations come later and separately.',
     CALIBRATED_PROSE_RULE,
   ].join('\n')
@@ -157,7 +157,7 @@ export function buildJudgePrompt(companyName: string): string {
     '- This is explicitly your judgement, and it will be shown to the reader as your judgement, clearly separated from the evidence. So reason freely: infer, connect claims, propose. You are not restricted to repeating what the evidence says.',
     '- Cite the claims you are reasoning from in based_on_refs. A proposal that builds on nothing is allowed, but one that builds on evidence is worth more.',
     '- Do not restate a verdict as advice. "Assumption 4 is contradicted" is already on the page; what should they DO about it?',
-    '- A claim being untested is not a failure — say what would settle it, or whether it matters.',
+    '- A claim being untested is not a failure — say what would settle it, or whether it matters.', // em-dash-ok: model prompt
     '- Fewer, sharper points. Three good ones beat eight.',
     CALIBRATED_PROSE_RULE,
   ].join('\n')
@@ -242,7 +242,7 @@ export async function verdictPass(
   const evidenceUnreachable = poolIds.length > 0 && quotedInsightIds.size === 0
   if (evidenceUnreachable) {
     console.warn(
-      `[ask] ${poolIds.length} insight ids resolved 0 evidence rows — quote-backing not enforced for this check; check insight_evidence reachability`,
+      `[ask] ${poolIds.length} insight ids resolved 0 evidence rows; quote-backing not enforced for this check; check insight_evidence reachability`,
     )
   }
 
@@ -265,7 +265,7 @@ export async function verdictPass(
         return lines.join('\n')
       }
       s.themes.forEach((t, i) => {
-        lines.push(`   [T${i + 1}] ${t.label}${t.description ? ` — ${t.description}` : ''}`)
+        lines.push(`   [T${i + 1}] ${t.label}${t.description ? ` — ${t.description}` : ''}`) // em-dash-ok: model prompt
         const quotes = t.insightIds
           .flatMap((id) => (quotesByAudience.get(id) ?? []).map((q: { quote: string }) => q.quote))
           .slice(0, ASK_QUOTES_PER_THEME)

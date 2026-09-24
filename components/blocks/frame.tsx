@@ -488,6 +488,6 @@ export function NoValue({ mode = 'app', label = 'no reading' }: { mode?: RenderM
   // The dash is decoration to a screen reader — one glyph that reads as
   // "dash" — so the cell carries the words and hides the mark.
   return mode === 'email'
-    ? <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>—</span>
-    : <span className="text-[12px] text-muted-foreground"><span aria-hidden>—</span><span className="sr-only">{label}</span></span>
+    ? <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>{'—'}</span>
+    : <span className="text-[12px] text-muted-foreground"><span aria-hidden>{'—'}</span><span className="sr-only">{label}</span></span>
 }

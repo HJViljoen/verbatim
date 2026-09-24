@@ -51,9 +51,9 @@ export default async function BillingPage({
     access.reason === 'comped' ? 'This workspace has complimentary full access and is never charged.'
     : access.reason === 'subscribed' ? 'Your subscription is active.'
     : access.reason === 'past_due' ? 'We couldn’t process your last payment. Update your card to keep access.'
-    : access.reason === 'trialing' ? `Free trial — ${access.trialDaysLeft} day${access.trialDaysLeft === 1 ? '' : 's'} left.`
+    : access.reason === 'trialing' ? `Free trial: ${access.trialDaysLeft} day${access.trialDaysLeft === 1 ? '' : 's'} left.`
     : access.reason === 'suspended' ? 'This workspace is suspended. Contact support to reactivate.'
-    : access.reason === 'pending' ? 'This workspace is set up but not yet switched on — you’ll hear from us.'
+    : access.reason === 'pending' ? 'This workspace is set up but not yet switched on. You’ll hear from us.'
     : 'Subscribe to keep access to your dashboards and scheduled updates.'
   const cadence = tc?.report_period === 'paused' ? 'Paused' : tc?.report_period ? `${cap(tc.report_period)}${tc.report_day ? ` · ${cap(tc.report_day)}s` : ''}` : '—'
 
@@ -61,10 +61,10 @@ export default async function BillingPage({
     <SettingsFrame active="team" title="Settings" context={`${client.company_name ?? 'Your workspace'}${!isOwner ? ' · read-only' : ''}`} contentTitle="Plan & billing" contentMeta={REASON_LABEL[access.reason] ?? 'Plan'} controls={<Link href="/dashboard/team" className="text-[12px] font-medium text-secondary-foreground hover:underline">Team →</Link>}>
       <div className="flex flex-col gap-3">
         {status === 'success' && (
-          <p className="rounded-md bg-accent px-4 py-3 text-[12.5px] text-accent-foreground">Thanks — your subscription is being activated. It may take a moment to reflect here.</p>
+          <p className="rounded-md bg-accent px-4 py-3 text-[12.5px] text-accent-foreground">Thanks. Your subscription is being activated. It may take a moment to reflect here.</p>
         )}
         {status === 'cancelled' && (
-          <p className="rounded-md bg-inner px-4 py-3 text-[12.5px] text-muted-foreground">Checkout cancelled — no charge was made.</p>
+          <p className="rounded-md bg-inner px-4 py-3 text-[12.5px] text-muted-foreground">Checkout cancelled. No charge was made.</p>
         )}
 
         <SettingsCard title="Your plan" description={description}>

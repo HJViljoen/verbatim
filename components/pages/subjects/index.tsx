@@ -81,7 +81,8 @@ const MIN_H: Record<string, string> = {
   'subjects.subject': 'lg:min-h-[216px]',
   'subjects.line': 'lg:min-h-[340px]',
   'subjects.kinds': 'lg:min-h-[280px]',
-  'subjects.unanswered': 'lg:min-h-[280px]',
+  // No floor: it sits in the rail now, at the height of what it says.
+  'subjects.unanswered': '',
   'subjects.voices': 'lg:min-h-[300px]',
 }
 
@@ -243,24 +244,19 @@ export function SubjectsPage({
               {tile(subjectsList)}
               {tile(subjectsOwnPosts)}
               {tile(subjectsSayHear)}
+              {drawn.has(subjectsUnanswered.key) ? tile(subjectsUnanswered, 'min-w-0') : null}
             </div>
             <div className="flex min-w-0 flex-col gap-4">
               {tile(subjectsSubject)}
               {tile(subjectsLine)}
-              {/* The mock's 1.35 : 1 pair — the kind mix reads as three rows of
-                  bars and needs the width; the questions list is a list.
-                  FLEX, NOT A GRID, and that is not a preference: `Tile` carries
-                  `xl:col-span-N` for the PAGE's twelve columns, and a Tile
-                  dropped into a two-column grid spans six of two and takes the
-                  whole row. Flex ignores the span, so the two tiles sit side by
-                  side and the same Tile still addresses itself correctly on a
-                  printed slide. */}
-              {drawn.has(subjectsKinds.key) ? (
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-stretch">
-                  {tile(subjectsKinds, 'h-full min-w-0 xl:basis-0 xl:grow-[1.35]')}
-                  {tile(subjectsUnanswered, 'h-full min-w-0 xl:basis-0 xl:grow')}
-                </div>
-              ) : null}
+              {/* THE KIND MIX TAKES THE MAIN COLUMN; ITS AUDIENCES FLOW INTO
+                  TWO COLUMNS where the tile is wide enough (a container query
+                  in the block). The mock's 1.35 : 1 pair with the questions
+                  list assumed a list as tall as the bars; on real data the
+                  list is often one line, and the pair left ~700px of white
+                  beside five audiences of bars (layout sweep, 2026-09-24). The
+                  questions now stack in the rail with the other short cards. */}
+              {drawn.has(subjectsKinds.key) ? tile(subjectsKinds, 'min-w-0') : null}
             </div>
           </div>
           {tile(subjectsVoices)}
@@ -288,40 +284,8 @@ export function SubjectsPage({
           </p>
         ) : null}
 
-        {/* THE METHOD FOOTNOTE (`subjects.method.footer`, D15). The mock ends
-            the page on the mono line that says which clock each figure is on,
-            what was read and what changed about our own tracking; the build had
-            those facts only in the record drawer at the TOP of the page, where
-            a reader who has just finished reading a figure is not looking.
-            `methodLines` composes them once for every surface, so this page and
-            the next cannot word the language share differently. */}
-        {/* 10.5px, THE PAGE'S SMALLEST TYPE AND NOT SMALLER. At 9.5px this was
-            a full point under the eyebrows and the smallest thing on the page
-            — for the paragraph that says which clock each figure is on, which
-            is the paragraph the page asks a client to trust most. */}
-        {/* AND NO MARKER. `methodLines` composes every one of these sentences
-            in code, figures included, so there is no model value here to mark
-            — `data-copy="figure"` on the whole paragraph claimed the block had
-            marked something it had not. Unmarked, rule (c) still sweeps it. */}
-        {/* AND EACH SENTENCE ONCE, WHICH IS WHAT `methodLines` IS FOR (fix
-            pass). The language share is drawn by the voices tile — that is
-            where the artboard puts it, on the tile it qualifies — and the
-            footnote printed it again byte for byte about 110px below, both
-            inside one screenful at 1440. Commit 0894c90 was "the page says
-            each of its sentences once"; this footnote arrived afterwards and
-            brought the one it had already retired. The line is dropped HERE,
-            not on the tile: on paper and in an email a block travels alone and
-            has to carry its own basis, and this footnote is the app page's
-            only. */}
-        {data.method ? (
-          <p className="m-0 flex flex-col gap-0.5 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">
-            {data.method.lines
-              .filter((line) => line !== data.method?.language)
-              .map((line, i) => (
-                <span key={i} className={i === 0 ? 'text-secondary-foreground' : undefined}>{line}</span>
-              ))}
-          </p>
-        ) : null}
+        {/* The method footnote came off this page (copy de-clutter ruling B):
+            the page bar's How-sound pill and its record are the one home. */}
       </PageFrame>
     </ExportScope>
   )

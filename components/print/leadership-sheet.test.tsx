@@ -166,7 +166,10 @@ describe('the leadership one-pager', () => {
   // ledger's and `actedTally` is the one sentence for it.
   it('prints the whole-ledger acted-on ratio, never a quarter, and prints it once', () => {
     const words = renderText(sheet())
-    expect(words).toContain('every piece of advice this product has ever given you')
+    // The ratio without its trailer (copy de-clutter ruling D): "of 64" is
+    // the whole-ledger denominator; How to read says what "all" is.
+    expect(words).toContain('You have acted on 1 of 64.')
+    expect(words).not.toContain('every piece of advice this product has ever given you')
     expect(words).not.toContain('this quarter')
     // The eyebrow carried the same ratio, unscoped, forty pixels above the
     // sentence that scopes it. The artboard prints it once.
@@ -329,9 +332,12 @@ describe('the leadership one-pager', () => {
   // a long record lost its tail to CSS with no trace and nowhere named to
   // look. `record.lines` is what the method page prints, and the note says so
   // first, where the clamp can never reach it.
-  it('names where the whole record is, before anything a clamp could eat', () => {
+  // Copy de-clutter E66: the one-pager printed alone has no such sheet, so
+  // the pointer goes and the coverage line leads.
+  it('prints the coverage line without a pointer to a sheet it may not have', () => {
     const words = renderText(sheet())
-    expect(words).toMatch(/Coverage · in full on “How this was read” ·/)
+    expect(words).toMatch(/Coverage · /)
+    expect(words).not.toContain('in full on “How this was read”')
   })
 
   // The sheet and the "The month" slide are drawn from the SAME frozen

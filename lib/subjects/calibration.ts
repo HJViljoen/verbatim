@@ -228,6 +228,7 @@ export function formatPrecisionTable(rows: readonly PrecisionRow[]): string {
   const head = ' high    low  predicted  correct  precision  missed  unknown'
   const body = rows.map((r) => {
     const shipped = r.high === SUBJECT_MATCH_HIGH && r.low === SUBJECT_MATCH_LOW ? '  <- shipped' : ''
+    // em-dash-ok: operator console table, the empty-cell mark
     const pct = r.precision === null ? '     —' : `${(100 * r.precision).toFixed(1)}%`.padStart(6)
     return (
       `${r.high.toFixed(2).padStart(5)}  ${r.low.toFixed(2).padStart(5)}  ` +

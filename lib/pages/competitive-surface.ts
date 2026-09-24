@@ -5,9 +5,6 @@ import { CONFIG_CHANGES_TABLE, isMissingConfigLog, isTrackingChange, type Config
 import { COMPETITIVE_MIN_VIDEOS } from '../config'
 import { fmtInt, monthName, platformLabel } from '../format'
 import { fetchQuoteCitationsByAudience } from '../quotes'
-// The client-facing half of the readiness vocabulary — what a surface says
-// where the readiness page names the team. See `CLOSED_BY_US`'s own docblock.
-import { CLOSED_BY_US } from '../readiness/types'
 import { attentionTotals, type AttentionRow } from '../reading/attention'
 import { horizonWindow, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
 import { freezeStateFor, monthStartOf } from '../reading/monthly'
@@ -26,7 +23,6 @@ import type { Verdict } from '../reading/verdicts'
 // D3 · own posts, own claims and what the rivals say. This module's own two
 // fields and one call line; everything counted is in lib/reading/own-posts.ts.
 import {
-  OWN_POSTS_NO_ACCOUNTS,
   rivalOwnClaims,
   saidAbout,
   type OwnPostCensus,
@@ -163,11 +159,8 @@ export interface StandingsBlock {
   rules: { month: string; label: string; text: string }[]
   /** Videos of the client's own that also named a tracked rival, this month. */
   dualMention: number | null
-  precedence: string
   /** What these shares are shares OF, in the reader's words. */
   denominatorLine: string
-  /** The attention index this block does not have yet. */
-  unlock: string
   /** Months whose comparison was refused because the updates behind them
    *  differ — collapsed into ONE sentence, never one per bar. */
   caveat: string | null
@@ -224,32 +217,6 @@ export interface QuestionsBlock {
   subjectsNote: string | null
 }
 
-export interface CompetitiveUnlockRow {
-  section: string
-  title: string
-  line: string
-  /**
-   * WHO THE READER CAN GO TO, and null where that is nobody they can go to.
-   *
-   * THE FIELD WAS `owner` AND CARRIED "Verbatim engineering" — a readiness
-   * OWNER, which is the right fact on /dashboard/settings/readiness and an
-   * internal team name in the middle of a client's page (see `CLOSED_BY_US`,
-   * lib/readiness/types.ts). Renamed rather than re-valued, because a field
-   * called `owner` is an invitation to put an owner back in it — the same
-   * reason subjects R1 deleted the `_OUTSIDE` twin instead of aliasing it.
-   *
-   * Null means the row is OURS. It is not an omission: the row's own `line`
-   * then ends in the WP19 sentence that says what closes it, so the reader is
-   * told, in words they can act on or not act on, rather than handed a queue
-   * name.
-   */
-  closes: string | null
-  /** Which silence this is. ST1's "— not tracked" is for a section whose
-   *  INPUTS are not configured; "— not built yet" is Market's word for a
-   *  section whose inputs are here and whose code is not. */
-  state: 'not tracked' | 'not built yet'
-}
-
 export interface CompetitiveSurfaceData {
   brand: string
   month: string
@@ -295,7 +262,6 @@ export interface CompetitiveSurfaceData {
   /** CO7 — formats and hooks for the category, for you and for the selected
    *  rival, on the published clock, with the classified n per column. */
   playbook: PlaybookBlock | null
-  unlocks: { rows: CompetitiveUnlockRow[] }
   record: { line: string; lines: string[]; href: string }
   /**
    * The method footnote, composed once for every surface (block D, D9).
@@ -310,23 +276,13 @@ export interface CompetitiveSurfaceData {
 
 // ---- the pure half ------------------------------------------------------------
 
-/** The precedence caveat CO2 carries, printed once under the table (§7). */
-export const PRECEDENCE_RULE =
-  'A video that names both you and a rival counts in your audience only; the count of those is beside this table.'
-
 /** What the corpus shares are shares of. The design's own label, said in full
  *  rather than abbreviated to a percent sign. */
 export const CORPUS_DENOMINATOR_LINE =
-  'Both shares are of what our search plan found and we read this month — the videos on the left, the comments we kept on the right.'
+  'Both shares are of what our search plan found and we read this month.'
 
 export const PANEL_DENOMINATOR_LINE =
-  'Both shares are of a frozen panel of accounts — the videos they posted on the left, the comments those posts drew on the right.'
-
-/** The attention index item 11 describes and this block does not have: the
- *  platform's own comment counts on a frozen panel of accounts. Named, and
- *  without a date, because nothing in the product holds one. */
-export const ATTENTION_UNLOCK =
-  'The attention index — what the platforms themselves report on a frozen panel of accounts — is not recorded for this workspace yet, so the right-hand share is of the comments we kept.'
+  'Both shares are of a frozen panel of accounts.'
 
 export const STANDINGS_UNREAD =
   'No month has been read for this workspace yet, so there are no standings to draw.'
@@ -473,7 +429,9 @@ export function questionsEmpty(input: {
     return `Nothing was asked under ${input.rival}’s content in this window. Widen the horizon and this block reads further back.`
   }
   if (input.videos < input.floor) {
-    return `${fmtInt(input.videos)} of ${input.rival}’s videos carried a question in this window, under the floor of ${fmtInt(input.floor)}. They are shown, and no share is drawn from them.`
+    // The block's own count line already says how many videos carried a
+    // question, so this arm says only what the floor means (copy slip 4a).
+    return `Under the floor of ${fmtInt(input.floor)}, so no share is drawn.`
   }
   return null
 }
@@ -531,117 +489,6 @@ export const QUESTIONS_GROUPING_NOTE =
 
 export const QUESTIONS_SUBJECTS_NOTE =
   'Matching these against your own subjects arrives once subjects are named and confirmed for this workspace.'
-
-/**
- * CO3, CO4, CO6 and CO7: what each waits for, who owns it, and WHICH silence
- * it is.
- *
- * All four printed "— not tracked", which is ST1's state for a section whose
- * inputs are not configured. Head-to-head, findings and category content have
- * their inputs — they are the same ones CO2 and CO5 have just drawn on the page
- * above — and what they are missing is the code. Market's own unlocks say
- * "— not built yet" for that, and two surfaces of one product should not
- * disagree about what a missing section is.
- *
- * CO4'S ROW IS NOW READ OFF THE CENSUSES BESIDE IT, and that is the whole point
- * of the argument. Until this package the section drew nothing, so "their
- * accounts are not configured" was always true enough to print. It now draws a
- * census per rival — "Freitag · 10 posts published in September" — and on both
- * tenants every tracked rival has handles on two or three platforms, so the
- * page would have printed "nobody is watching Freitag" directly beside ten of
- * Freitag's posts. A page may not claim a behaviour the code has just
- * disproved. So: where no rival is tracked, or every tracked rival has no
- * account configured, the row is unchanged and the job is still the client's
- * digital director's. Where the accounts ARE configured, the inputs are not
- * what is missing — what is missing is the verbatim claims half, which is read
- * from the rival's own transcripts and is not printed from a tenant session,
- * and that is engineering's row to answer, not the client's to fix. And where
- * the claims ARE in hand the row goes entirely: the tile has just printed them.
- */
-export function competitiveUnlockRows(ownClaims: readonly OwnPostCensus[] = []): CompetitiveUnlockRow[] {
-  const watched = ownClaims.filter((c) => c.unread !== OWN_POSTS_NO_ACCOUNTS).length
-  // AND IT IS KEYED ON WHAT PRINTED, NOT ON WHAT IS CONFIGURED. Where a census
-  // carries claims, CO4's tile prints a rival's own sentences verbatim — and
-  // the readiness row five tiles below said, on the same screen, that they are
-  // "not printed here". Accounts being configured is not the same fact as
-  // claims having been read: the claims-read arm has both, and the app page
-  // today has the first without the second. A page may not claim a behaviour
-  // the code has just disproved, and that rule does not stop at the tile that
-  // disproved it.
-  const printed = ownClaims.some((c) => c.claims.length > 0)
-  const co4: CompetitiveUnlockRow | null = printed
-    ? null
-    : watched === 0
-      ? {
-          section: 'CO4',
-          state: 'not tracked' as const,
-          title: 'What they say about themselves',
-          line: 'The rival’s own-post claims, verbatim, beside what their audience says on the same subject. Their accounts are not configured, and a rival’s claims may only be read from videos they posted themselves.',
-          // THIS ONE STILL NAMES SOMEBODY, and the ruling does not touch it: a
-          // digital director is a person on the READER's side of the desk,
-          // which is the client branch of the same WP19 split ("This one is
-          // yours to close"). What the ruling forbids is handing the client
-          // one of OUR queue names.
-          closes: 'Your digital director',
-        }
-      : {
-          section: 'CO4',
-          state: 'not built yet' as const,
-          // THE ROW NAMES THE MISSING HALF, NOT THE TILE THAT IS MOUNTED. This
-          // read "What they say about themselves" — byte-identical to the CO4
-          // eyebrow two tiles above, which is drawn, populated, and by this
-          // arm's own definition working — under a heading saying "Not on this
-          // page yet" and a badge reading "not built yet · Verbatim
-          // engineering". A readiness row is a list of what is ABSENT, and the
-          // absent thing here is the claims, which is what the line has always
-          // said. The other arm keeps the tile's name because there the tile
-          // genuinely has nothing: no account is configured anywhere.
-          title: 'What they claim in their own posts',
-          // AND THE OWNER IS OFF THE CLIENT'S PAGE. The badge under this row
-          // read "— not built yet · Verbatim engineering": an internal team
-          // name on a paying reader's screen, with no link and nothing they
-          // could do with it (the ruling, and `CLOSED_BY_US` in
-          // lib/readiness/types.ts).
-          //
-          // IT IS NOT `CLOSED_BY_US.engineering`, THOUGH, AND THAT MATTERS.
-          // That sentence promises a build — "We are building it" — and this
-          // row's own line says the opposite one clause earlier: printing a
-          // rival's words is a decision to take, not a gap to fill. Nobody is
-          // building this. So the row takes the SHAPE of the WP19 split (what
-          // is missing, then what closes it, in the line itself) with the act
-          // this row actually has: a decision, ours, undated.
-          line: 'What each rival published this month is above. What they CLAIM in it is read from their own transcripts and is not printed here — putting a rival’s words on this page is a decision to take, not a gap to fill. Nothing in your workspace is holding it up: the decision is ours, and this section appears here the day we take it.',
-          closes: null,
-        }
-  // CO3 AND CO7 CAME OUT IN THE COMMIT THAT MOUNTED THEM (Block D wave 2,
-  // E-competitive; wave 1's standing instruction). Both now draw on the page
-  // above this tile — the head-to-head's five measures with an n on every row
-  // and a band only where a proportion earned one, and the format and hook
-  // matrix with each column's classified n printed beside its published one —
-  // so a readiness row saying either is "not built yet" would contradict the
-  // tile a reader has just scrolled past. A row is removed when its tile
-  // mounts, never before and never in a separate change.
-  //
-  // CO6 STAYS, AND ITS LINE IS WHY. `recurrenceOf` (lib/reading/head-to-head.ts)
-  // is built and takes a `theme_registry.id` plus the months that identity was
-  // seen in; nothing loads those months for this page, and keying recurrence on
-  // a LABEL instead would mark nine findings in ten as new every month, which
-  // is a measurement of our own naming. That is the finding identity this row
-  // has always named.
-  return [
-    ...(co4 ? [co4] : []),
-    {
-      section: 'CO6',
-      state: 'not built yet' as const,
-      title: 'Findings, with recurrence',
-      // THE WP19 SENTENCE, VERBATIM, where "Verbatim engineering" stood. This
-      // one IS being built, so it takes the promise the briefs have made since
-      // WP19 rather than a second wording of it.
-      line: `Cross-brand findings with “seen in 4 of the last 6 months”, which needs a finding identity that survives an update. ${CLOSED_BY_US.engineering}`,
-      closes: null,
-    },
-  ]
-}
 
 // ---- the loader ---------------------------------------------------------------
 
@@ -827,7 +674,7 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
       options,
       selected,
       identityRecorded: rivals.recorded,
-      empty: options.length === 0 ? 'No rival is tracked for this workspace yet — name one in Settings and this page starts reading them.' : null,
+      empty: options.length === 0 ? 'No rival is tracked for this workspace yet. Name one in Settings and this page starts reading them.' : null,
     },
     standings,
     questions,
@@ -843,7 +690,6 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
     // say "their accounts are not configured" above ten of Freitag's posts.
     headToHead,
     playbook,
-    unlocks: { rows: competitiveUnlockRows(ownClaims) },
     record: { line: howSoundLine(recordInputs), lines: recordLines(recordInputs), href: '/dashboard/settings' },
     method: methodLines(recordInputs, { brand }),
   }
@@ -974,7 +820,7 @@ export async function loadRivalOwnPosts(
 
 /** Nobody read them, and the page says which silence that is. */
 export const SAID_ABOUT_WITHHELD = (label: string): string =>
-  `What others say about ${label} is read from those videos’ own transcripts, which are not open to this page — so this is not a silence we measured.`
+  `What others say about ${label} is not read here: those videos’ transcripts are not open to this page.`
 
 /** "Ottobock, Rareform or Patagonia" — a list a sentence can carry. */
 export const namesList = (labels: readonly string[]): string =>
@@ -994,7 +840,20 @@ export const namesList = (labels: readonly string[]): string =>
  * naming them all.
  */
 export const SAID_ABOUT_WITHHELD_ALL = (labels: readonly string[]): string =>
-  `What others say about ${namesList(labels)} is read from those videos’ own transcripts, which are not open to this page — so this is not a silence we measured.`
+  `What others say about ${namesList(labels)} is not read here: those videos’ transcripts are not open to this page.`
+
+/**
+ * AN ABSENCE IS A LINE, NEVER A CARD (layout sweep 3). When nothing said about
+ * any rival could be read (every group withheld, which is every app load
+ * today), the "Said about them, by others" tile had one sentence explaining
+ * why it was empty. The page draws no tile for it then; the state is one line
+ * inside the questions block, the section about what others say under the
+ * rival's content.
+ */
+export const SAID_ABOUT_UNREAD_LINE = 'Said about them by others: not read on this page.'
+
+export const saidAboutUnread = (groups: readonly SaidAbout[]): boolean =>
+  groups.length > 0 && groups.every((g) => g.rows.length === 0 && g.empty === SAID_ABOUT_WITHHELD(g.label))
 
 /** Claims in hand and no month row to be a share of. */
 export const SAID_ABOUT_NO_DENOMINATOR = (label: string): string =>
@@ -1227,9 +1086,7 @@ export function buildStandingsBlock(input: StandingsInputs): StandingsBlock {
   const base = {
     source: 'corpus' as StandingsSource,
     months: input.axis,
-    precedence: PRECEDENCE_RULE,
     denominatorLine: CORPUS_DENOMINATOR_LINE,
-    unlock: ATTENTION_UNLOCK,
   }
   const nothing = (month: string, empty: string): StandingsBlock => ({
     ...base,

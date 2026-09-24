@@ -140,7 +140,7 @@ describe('subredditEdit', () => {
     // A user profile is not a community — lib/gather/subreddits.ts rejects
     // both forms, and counting one would corrupt per-community ROI.
     expect(subredditEdit(current, { kind: 'add', name: 'u/spez' })).toEqual({
-      error: 'u/spez is not a community we can watch — a community looks like r/prosthetics.',
+      error: 'u/spez is not a community we can watch. A community looks like r/prosthetics.',
     })
   })
 
@@ -234,7 +234,7 @@ describe('applySubredditEdit', () => {
       name: `community${i}`, status: 'active' as const, discovered_at: '2026-04-06',
     }))
     expect(applySubredditEdit(watched, { kind: 'add', name: 'r/BuyItForLife' }, '2026-09-18')).toEqual({
-      error: '12 watched communities is the limit — every one of them is searched and read on every update. Stop watching one first.',
+      error: '12 watched communities is the limit: every one of them is searched and read on every update. Stop watching one first.',
     })
     // One below the cap still goes in, so the ceiling is a ceiling and not an
     // off-by-one that closes the control a community early.

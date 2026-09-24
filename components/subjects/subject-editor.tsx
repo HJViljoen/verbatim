@@ -153,7 +153,6 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
             no sentence beside it reads as "you have not named any" — which is
             the opposite of what happened. */}
         <p className="m-0 text-[11.5px] text-muted-foreground">{SUBJECTS_UNREADABLE_WHY}</p>
-        <p className="m-0 text-[11px] text-muted-foreground">{SUPERSEDE_RULE}</p>
       </div>
     )
   }
@@ -336,8 +335,6 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
         ))}
       </ul>
 
-      <p className="m-0 text-[11px] text-muted-foreground">{SUPERSEDE_RULE}</p>
-
       {said?.message ? (
         <p className={`m-0 text-[11.5px] ${said.ok ? 'text-positive' : 'text-negative'}`} aria-live="polite">
           {said.message}
@@ -421,7 +418,7 @@ function SubjectSheet({
               <span className="text-xs font-medium text-muted-foreground">The subject</span>
               <Input name="name" defaultValue={defaultName} maxLength={60} required autoComplete="off" />
               <span className="block text-[11px] text-muted-foreground/70">
-                A noun phrase a buyer would say out loud — “durability”, not “product longevity perception”.
+                A noun phrase a buyer would say out loud: “durability”, not “product longevity perception”.
               </span>
             </label>
             <label className="block space-y-1.5">

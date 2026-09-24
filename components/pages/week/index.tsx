@@ -15,7 +15,7 @@ import { weekSubjects } from './subjects'
 import { weekRising } from './rising'
 import { weekCameIn } from './came-in'
 import { weekRivalPosts } from './rival-posts'
-import { weekFlagged } from './flagged'
+import { isFlaggedQuiet, weekFlagged } from './flagged'
 import { weekSales } from './sales'
 import { weekWorked } from './worked'
 import { weekCoverage } from './coverage'
@@ -137,7 +137,7 @@ export function WeekPage({
         <PageGrid>
           <Tile col={12} row={2}>
             <TileEmpty>
-              No update has been delivered for this workspace yet. This week reads the last one, so it has nothing to read.
+              No update has been delivered for this workspace yet.
             </TileEmpty>
           </Tile>
         </PageGrid>
@@ -169,7 +169,9 @@ export function WeekPage({
               no tile, no eyebrow, 10.5px mono under everything (design review,
               nits). The port had it inside a titled tile, which is both the
               wrong face and a 116px row a 124px footnote overflowed at 1280. */}
-          {WEEK_BLOCKS.filter((b) => b.key !== weekCoverage.key).map((block) => (
+          {/* An empty "Flagged for awareness" is a line inside "Worth a reply",
+              never a card of its own (sweep 2026-09-24). */}
+          {WEEK_BLOCKS.filter((b) => b.key !== weekCoverage.key && !(b.key === weekFlagged.key && isFlaggedQuiet(data))).map((block) => (
             <Tile key={block.key} col={COLS[block.key] ?? 12} row={TILE_FLOOR_ROWS}>
               {block.render(data, 'app', ctx)}
             </Tile>

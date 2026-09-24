@@ -36,7 +36,7 @@ export const BUCKETS: readonly { key: Bucket; label: string; hint: string }[] = 
   { key: 'brand_keywords', label: 'Brand', hint: 'How people write your name, including the ways they get it wrong.' },
   { key: 'competitor_keywords', label: 'Competitor', hint: 'What we search for to find their posts. The names we tag them by are set under Rivals.' },
   { key: 'industry_keywords', label: 'Category', hint: 'What buyers type when they are talking about this kind of product.' },
-  { key: 'exclude_terms', label: 'Not this', hint: 'Senses of your name that are not you — Cotopaxi the volcano, Sealand the shipping line.' },
+  { key: 'exclude_terms', label: 'Not this', hint: 'Senses of your name that are not you: Cotopaxi the volcano, Sealand the shipping line.' },
 ]
 
 /** The sentence the add row prints. A term is not retroactive: the next update
@@ -44,7 +44,7 @@ export const BUCKETS: readonly { key: Bucket; label: string; hint: string }[] = 
 export const NEW_TERM_RULE = 'a new term starts a new line; the old line is kept'
 
 /** Why there is no "Keep it" beside the control that takes a term off. */
-export const REVIEW_KEEP_NOTE = 'keeping it needs nothing — it stays until you take it off'
+export const REVIEW_KEEP_NOTE = 'keeping it needs nothing: it stays until you take it off'
 
 export interface TermsSectionProps {
   terms: Record<Bucket, string[]>
@@ -98,10 +98,11 @@ export function TermsSection({ terms, dates, datesNote, review, canEdit, onAdd, 
           key={b.key}
           label={b.label}
           meta={
-            <>
+            // The bucket's help is a hover once it has been read (copy
+            // de-clutter C109).
+            <span title={b.hint} className="cursor-help">
               {terms[b.key].length} term{terms[b.key].length === 1 ? '' : 's'}
-              <span className="mt-0.5 block font-sans text-[10.5px] leading-[1.35] text-muted-foreground">{b.hint}</span>
-            </>
+            </span>
           }
         >
           <ul className="flex flex-wrap gap-2">
@@ -120,7 +121,7 @@ export function TermsSection({ terms, dates, datesNote, review, canEdit, onAdd, 
                       dated, an undated one keeps its own sentence, because
                       there the absence is about that term. */}
                   {logged && (
-                    <span className="font-mono text-[10.5px] font-normal leading-[1.3] text-muted-foreground">
+                    <span title={datesNote} className="font-mono text-[10.5px] font-normal leading-[1.3] text-muted-foreground">
                       {dates[t.trim().toLowerCase()] ?? 'in the set before we kept a record'}
                     </span>
                   )}
@@ -142,7 +143,9 @@ export function TermsSection({ terms, dates, datesNote, review, canEdit, onAdd, 
         </LabelRow>
       ))}
 
-      {datesNote && (
+      {/* Where terms carry dates, what a date means is the chip's hover
+          (copy de-clutter C92); where none do, the absence is said once. */}
+      {datesNote && !logged && (
         <LabelRow label="" top="chips">
           <MonoNote>{datesNote}</MonoNote>
         </LabelRow>
@@ -222,7 +225,7 @@ export function ReviewStrip({ term, canEdit, onDrop }: { term: TermSummary; canE
       <span className="min-w-0 flex-1 text-[12.5px] text-secondary-foreground">
         kept <span className="font-mono font-medium tabular-nums">{term.kept.toLocaleString('en-GB')}</span> of{' '}
         <span className="font-mono font-medium tabular-nums">{term.found.toLocaleString('en-GB')}</span> found
-        {term.because[0] ? ` — ${term.because[0]}` : ''}
+        {term.because[0] ? ` · ${term.because[0]}` : ''}
       </span>
       {/* Sentence, then action, on one line — which is what the artboard draws
           and what M7 was after when it moved the control to the strip's own

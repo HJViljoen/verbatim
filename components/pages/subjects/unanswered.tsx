@@ -135,7 +135,7 @@ export const subjectsUnanswered: Block<SubjectsData> = {
             style={email ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted } : undefined}
           >
             Questions grouped as “<span data-copy="subject" data-slot="pass_b_theme">{u.lead.label}</span>” came up in{' '}
-            <span data-copy="figure">{fmtInt(u.lead.videos)}</span> of the videos we have read — {u.lead.posts}.
+            <span data-copy="figure">{fmtInt(u.lead.videos)}</span> of the videos we have read: {u.lead.posts}.
           </p>
         ) : null}
         <div>{u.rows.map((r) => <Row key={r.id} row={r} of={askedOf(u)} mode={mode} />)}</div>
@@ -145,7 +145,8 @@ export const subjectsUnanswered: Block<SubjectsData> = {
             that are both about WHERE the count came from are one paragraph; the
             claims caveat, which is about a half we could not read at all, keeps
             its own. */}
-        {small([u.basis, u.reddit].filter(Boolean).join(' '))}
+        {/* The Reddit cap is said once, in Settings › How to read (ruling H). */}
+        {small(u.basis)}
         {u.claims ? small(u.claims) : null}
       </BlockFrame>
     )

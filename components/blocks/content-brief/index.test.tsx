@@ -191,8 +191,10 @@ describe('content.playbook — the mock’s page 3', () => {
     for (const s of sides) expect(cellFigure(s, s.byKey[key]).of).toMatch(/^of [\d,]+$/)
   })
 
-  it('says why Reddit is in no engagement row, in the one sentence that says it', () => {
-    expect(text).toContain('carries no engagement rate')
+  // Copy de-clutter E56: the record sheet's numbers card carries the Reddit
+  // cap once per document; the playbook keeps its basis only.
+  it('leaves the Reddit clause to the record sheet', () => {
+    expect(text).not.toContain('carries no engagement rate')
   })
 
   it('draws no remainder row and no partition (D4)', () => {
@@ -534,7 +536,9 @@ describe('content.make — the mock’s page 2', () => {
       // A commenter's own words and the refusal sentence are printed whole
       // whatever their length: both appear on this page or nowhere.
       if (r.quote?.text) expect(text).toContain(r.quote.text)
-      expect(text).toContain(r.afterwards.line)
+      // An undecided card prints no "after" (copy de-clutter E87).
+      if (r.decidedAt) expect(text).toContain(r.afterwards.line)
+      else expect(text).not.toContain(r.afterwards.line)
     }
   })
 

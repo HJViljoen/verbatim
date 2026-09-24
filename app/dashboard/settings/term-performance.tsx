@@ -61,19 +61,26 @@ function Row({ t, months }: { t: TermSummary; months?: TermYield }) {
             </ul>
           </details>
         ) : (
-          <span className="text-muted-foreground">—</span>
+          <span className="text-muted-foreground">{'—'}</span>
         )}
       </td>
     </tr>
   )
 }
 
+const HEAD_HELP: Readonly<Record<string, string>> = {
+  Found: 'posts the term surfaced',
+  Kept: 'the ones about your market',
+  'With comments': 'the ones worth reading',
+  Insights: 'findings they led to',
+}
+
 export function TermPerformance({ rows, updates, months = [] }: { rows: TermSummary[]; updates: number; months?: readonly TermYield[] }) {
   const monthsByTerm = new Map(months.map((m) => [m.keyword.trim().toLowerCase(), m]))
   const flagged = rows.filter((t) => t.worthReviewing).length
   const description = rows.length === 0
-    ? 'Nothing to show yet — this fills in after your first update.'
-    : `Pooled over your last ${updates} update${updates === 1 ? '' : 's'}. Found = posts the term surfaced · kept = the ones about your market · with comments = the ones worth reading · insights = findings they led to.${flagged > 0 ? ` ${flagged} term${flagged === 1 ? '' : 's'} worth a look.` : ''}`
+    ? 'Nothing to show yet: this fills in after your first update.'
+    : `Pooled over your last ${updates} update${updates === 1 ? '' : 's'}.${flagged > 0 ? ` ${flagged} term${flagged === 1 ? '' : 's'} worth a look.` : ''}`
 
   // FULL WIDTH, NOT IN THE LABEL GUTTER (ST5). This sits inside the terms
   // section, where every other row is laid out against the page's 172px label
@@ -105,6 +112,8 @@ export function TermPerformance({ rows, updates, months = [] }: { rows: TermSumm
                 {([['Term', 'str'], ['Group', 'str'], ['Where', null], ['Found', 'num'], ['Kept', 'num'], ['Kept rate', 'num'], ['Month by month', null], ['With comments', 'num'], ['Insights', 'num'], ['Worth reviewing', 'num']] as [string, string | null][]).map(([h, sort], i) => (
                   <th
                     key={h}
+                    // Column definitions are header hovers (copy de-clutter C110).
+                    title={HEAD_HELP[h]}
                     data-sort={sort ?? undefined}
                     scope="col"
                     className={`pb-1.5 pr-3 font-semibold ${(i >= 3 && i <= 5) || i === 7 || i === 8 ? 'text-right' : 'text-left'}`}

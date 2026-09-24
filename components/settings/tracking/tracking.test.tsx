@@ -197,13 +197,13 @@ describe('the communities section', () => {
     expect(words).toContain('watched by hand, never sampled')
     expect(words).toContain('proposed, and measured')
     expect(words).toContain('sampled 2026-08-11: 9 of 40 on topic')
-    expect(words).toContain('a state is what was decided, never a count of what it brought')
+    expect(words).not.toContain('a state is what was decided, never a count of what it brought')
   })
 
   it('draws both controls — stop watching, and add one', () => {
     expect(words).toContain('Stop watching')
     expect(words).toContain('Watch this community')
-    expect(words).toContain('capped at 40 per thread')
+    expect(words).not.toContain('capped at 40 per thread')
   })
 
   it('heads a column of sentences over its first word, not its last', () => {
@@ -295,8 +295,10 @@ describe('the rivals section', () => {
 
   it('heads the own-posts column by its month and names the clock under it', () => {
     expect(words).toContain('Own posts · Sep 2026')
-    expect(words).toContain('dated by the day the post went up')
-    expect(words).toContain('posts published in September 2026')
+    // The clock rides on the column head as a hover (copy de-clutter C113).
+    expect(render(section)).toContain('dated by the day the post went up')
+    expect(words).not.toContain('dated by the day the post went up')
+    expect(render(section)).toContain('posts published in September 2026')
   })
 
   it('badges a rival that arrived this month and says what it refuses', () => {
@@ -315,8 +317,6 @@ describe('the rivals section', () => {
     const markup = render(section)
     const tail = markup.slice(markup.lastIndexOf('Add a rival'))
     expect(tail.match(/<p /g)?.length ?? 0).toBe(1)
-    expect(words).toContain('earliest evidence in our own data')
-    expect(words).toContain('dated by the day the post went up')
   })
 
   it('says the account-less reason once, not once per rival', () => {
@@ -325,7 +325,7 @@ describe('the rivals section', () => {
     // where nothing is configured, each wrapping to three lines. The cell keeps
     // the STATE; the consequence, which does not differ row to row, is a
     // section note, exactly as the own-posts reason already is.
-    const why = 'No account is configured for this rival, so nothing they publish is read — add their accounts in Settings and this starts counting.'
+    const why = 'No account is configured for this rival, so nothing they publish is read. Add their accounts in Settings and this starts counting.'
     const none = renderText(
       <RivalsSection
         rows={['Poler', 'Cotopaxi', 'Patagonia'].map((name) => rival({ name, ownPostsWhy: why }))}
@@ -334,7 +334,7 @@ describe('the rivals section', () => {
     )
     // The state, three times — it is what the row is.
     expect(none.split(NO_ACCOUNTS_SHORT).length - 1).toBe(3)
-    expect(none).not.toContain('no accounts configured — nothing they publish is being read')
+    expect(none).not.toContain('no accounts configured, so nothing they publish is being read')
     // The consequence, once, in the section's one paragraph.
     expect(none.split(why).length - 1).toBe(1)
     // And where no month was passed there is no own-posts column to carry it,
@@ -350,7 +350,8 @@ describe('the rivals section', () => {
 
   it('keeps the capture-versus-read census and the earliest-evidence footnote', () => {
     expect(words).toContain('28 captured, 0 read')
-    expect(words).toContain('earliest evidence in our own data')
+    // A hover on the "Tracked since" head (copy de-clutter C91).
+    expect(render(section)).toContain('earliest evidence in our own data')
     expect(words).toContain('removing one is a break, not a zero')
   })
 
@@ -460,7 +461,8 @@ describe('the cadence section', () => {
   it('prints the hour as a fact and promises no next date', () => {
     expect(words).toContain(SLOT_NOTE)
     expect(words).not.toContain('next')
-    expect(words).toContain(FREEZE_NOTE)
+    // The freeze rule is How to read's (copy de-clutter C19).
+    expect(words).not.toContain(FREEZE_NOTE)
     expect(words).not.toContain('28th')
     // M2: once, and not dressed as the disabled twin of the select beside it.
     expect(words.split(SLOT_NOTE).length - 1).toBe(1)
@@ -468,7 +470,7 @@ describe('the cadence section', () => {
   })
 
   it('evidences the cadence with the updates that actually landed', () => {
-    expect(words).toContain('4 updates in September — 27 Sep, 20 Sep, 13 Sep, 6 Sep')
+    expect(words).toContain('4 updates in September: 27 Sep, 20 Sep, 13 Sep, 6 Sep')
     expect(words).toContain('last 27 Sep')
   })
 
@@ -576,7 +578,7 @@ describe('the save state', () => {
 
   it('renders the absence where M1 has not been applied', () => {
     const words = renderText(<LastSaveStrip state={saveState({ lastChange: change, affectsRecorded: false })} note="Poler was added." />)
-    expect(words).toContain('Last save 3 Sep — Poler was added.')
+    expect(words).toContain('Last save 3 Sep: Poler was added.')
     expect(words).toContain(BREAK_NOT_RECORDED)
     expect(words).not.toContain('Broke:')
   })
@@ -604,7 +606,7 @@ describe('the save state', () => {
       affectsRecorded: false,
     })
     const words = renderText(<SaveStateLine state={state} />)
-    expect(words).toContain('1 change waiting to be saved — category terms')
+    expect(words).toContain('1 change waiting to be saved: category terms')
     expect(words).toContain('last saved 3 Sep')
     // M3: the break half is the rail's, and it is drawn once.
     expect(words).not.toContain('was not written down')
@@ -612,9 +614,9 @@ describe('the save state', () => {
     expect(words).not.toContain('A save names the series it breaks')
   })
 
-  it('prints the rule only where a break can be named', () => {
+  it('prints no self-description where a break can be named (copy de-clutter C89)', () => {
     const words = renderText(<SaveStateLine state={saveState({ lastChange: change, affectsRecorded: true })} />)
-    expect(words).toContain('A save names the series it breaks')
+    expect(words).not.toContain('A save names the series it breaks')
     expect(words).toContain('Nothing waiting to be saved')
   })
 })

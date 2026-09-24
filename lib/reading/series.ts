@@ -198,15 +198,16 @@ const round1 = (n: number): number => Math.round(n * 10) / 10
 function fillingLabel(month: string): MonthLabel {
   return {
     kind: 'still_filling',
-    text: `Still filling — this month is still taking comments, and settles on ${fullDate(freezeBoundary(month))}.`,
+    // A hover clause on the chart point. The page never prints it as a note:
+    // "still filling" is said once, in the page-bar context line (ruling F).
+    text: `Still filling, settles on ${fullDate(freezeBoundary(month))}.`,
   }
 }
 
 const BACK_READ: MonthLabel = {
   kind: 'read_back_at_setup',
-  text:
-    'Read back at setup — this month had already closed when we started, so this is what it reads today, ' +
-    'not what we would have reported at the time.',
+  // A64: the short form; why is How to read's ("read at setup").
+  text: 'Read at setup.',
 }
 
 /**
@@ -460,7 +461,7 @@ export function buildSeries(input: BuildSeriesInput): MonthSeries {
         // touches a comment count. Naming conversations broke the
         // copy-matches-code rule in the direction a reader cannot detect — and
         // "videos" is the word the new reading surfaces say anyway.
-        text: 'Thin month — far fewer videos than usual, so a share moves on very little here.',
+        text: 'Thin month: far fewer videos than usual, so a share moves on very little here.',
       })
     }
 
@@ -560,6 +561,11 @@ export function mergeNotes(lists: readonly (readonly MonthLabel[])[]): MonthLabe
         if (unknownSlot < 0) { unknownSlot = out.length; out.push(note) }
         continue
       }
+      // Ruling F: "still filling" is the page-bar context line's, said once.
+      if (note.kind === 'still_filling') continue
+      // The change record's own boundary is a fact about our bookkeeping; it is
+      // Settings › The record's to say, never a reading page's foot (A24, C63).
+      if (note.kind === 'no_change_record_before') continue
       const key = `${note.kind}\u0000${note.text}`
       if (seen.has(key)) continue
       seen.add(key)

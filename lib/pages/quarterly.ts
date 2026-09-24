@@ -12,7 +12,6 @@ import {
   loadRecordInputs,
   recordLines,
   refusals,
-  refusedSentence,
   totalPlatformMix,
   type RecordInputs,
   type RecordWindow,
@@ -452,8 +451,8 @@ export interface MovesPage {
   movesNote: string | null
   advice: AdviceRow[]
   /** The Market page's own sentence, over the WHOLE ledger and not the twelve
-   *  rows drawn: "You have acted on 7 of 64 — every piece of advice this
-   *  product has ever given you." Never quarter-scoped; see buildMoves. */
+   *  rows drawn: "You have acted on 7 of 64." Never quarter-scoped; see
+   *  buildMoves. */
   actedLine: string
   adviceNote: string | null
   claims: ClaimRow[]
@@ -709,7 +708,7 @@ export function confidenceOf(verdicts: readonly Verdict[], unlocked: boolean): {
   if (!unlocked) {
     return {
       word: 'partly',
-      why: `The category side is read month by month; your own side is not, because a quarter-on-quarter comparison needs six monthly readings. ${fmtInt(answered.length)} of ${fmtInt(total)} comparisons on these pages were answered.`,
+      why: `The category side is read month by month; your own side is not yet. ${fmtInt(answered.length)} of ${fmtInt(total)} comparisons on these pages were answered.`,
     }
   }
   if (share >= 0.66) {
@@ -762,11 +761,9 @@ export function coverBody(input: {
   // category of 1,134. Each audience counts the same corpus from a different
   // side, so a sum of them is not a count of anything.
   parts.push(`The category was read across [[quarter_videos]] videos in ${input.quarterLabel}.`)
-  parts.push(
-    input.unlocked
-      ? 'Your own side is compared with the quarter before it on every page that has both sides.'
-      : `Your own side is not compared with the quarter before it yet: ${quarterGateSentence(input.readings).slice(0, 1).toLowerCase()}${quarterGateSentence(input.readings).slice(1)}`,
-  )
+  // THE GATE IS ON THE STAT CARD BESIDE THIS PARAGRAPH (copy de-clutter
+  // 2026-09-24): the locked arm said it a third time on one sheet.
+  if (input.unlocked) parts.push('Your own side is compared with the quarter before it on every page that has both sides.')
   return parts.join(' ')
 }
 
@@ -798,7 +795,7 @@ export function monthBasisClause(month: string, quarter: Quarter): string | null
  *  headed Q3 can let a month figure speak for itself. */
 export function monthOutsideNote(month: string, quarter: Quarter): string | null {
   if (month >= quarter.from && month <= quarter.to) return null
-  return `${longMonth(month)} is outside this quarter — it is the month the product is in now.`
+  return `${longMonth(month)} is outside this quarter: it is the month the product is in now.`
 }
 
 /**
@@ -819,8 +816,8 @@ export function monthOutsideNote(month: string, quarter: Quarter): string | null
 export function flagOutcome(flag: { objectKind: string; objectId: string }, later: readonly Verdict[]): string {
   const match = later.find((v) => v.objectKind === flag.objectKind && v.objectId === flag.objectId)
   if (!match) return 'no later reading of the same object has been taken'
-  if (match.state === 'moved') return `the month's own reading agreed — it cleared its band`
-  if (match.state === 'no_clear_change') return `the month's own reading did not agree — inside the band`
+  if (match.state === 'moved') return `the month's own reading agreed: it cleared its band`
+  if (match.state === 'no_clear_change') return `the month's own reading did not agree: inside the band`
   // "LANDED", NOT "FELL". `fell` is in DIRECTION_WORDS, and `method.tsx` prints
   // these unmarked ("What it turned out to be: …"), so three of these five
   // branches broke rule (c) in all three modes. The calendar sense is not a
@@ -1572,7 +1569,7 @@ function buildCover(a: {
       token: `gap_${gap.objectId}`,
       kind: apart ? 'figure' : 'word',
       value: apart ? `${Math.round(Math.abs(gap.gapPts as number) * 10) / 10} pts` : GAP_WORDS[gap.state],
-      label: `${gap.objectLabel} — you against ${midSentence(gap.b.label)}, ${quarterLabel(a.quarter, false)}`,
+      label: `${gap.objectLabel}: you against ${midSentence(gap.b.label)}, ${quarterLabel(a.quarter, false)}`,
       caption: gapLine(gap, { period: true }),
       basis: gapBasisLine(gap) ?? undefined,
     })
@@ -1670,7 +1667,6 @@ function buildCover(a: {
       `as at ${fullDate(a.readingAt)}`,
       quarterFilling(a.quarter, a.readingAt) ? `${quarterLabel(a.quarter, false)} still filling` : null,
       monthBasisClause(overview.month, a.quarter),
-      readingCounter(a.readings),
     ]
       .filter(Boolean)
       .join(' · '),
@@ -1728,7 +1724,7 @@ function buildRead(a: {
     // THE COUNTS AND THE COUNTER — never the cover's own line again. See
     // `corpusCounts`: the platform mix stays on page 1 and this is the half
     // that belongs beside the argument.
-    meta: [a.cover.counts, readingCounter(a.readings)].filter(Boolean).join(' · '),
+    meta: a.cover.counts,
     figures: a.cover.figures,
     verdicts: a.verdicts,
     quotes,
@@ -1878,7 +1874,7 @@ function buildSubjects(a: {
     monthLabel: a.monthLabel,
     monthNote: a.monthNote,
     note: block.note,
-    notRecorded: block.state === 'not_recorded' ? 'Subjects are not recorded for this workspace yet, so there is no quarter-on-quarter table to draw.' : null,
+    notRecorded: block.state === 'not_recorded' ? 'Subjects are not recorded for this workspace yet.' : null,
     gate: a.unlocked ? null : a.gate,
     // WHY THE LAST TWO COLUMNS ARE EMPTY, SAID ONCE UNDER THE TABLE. A page
     // that heads two columns "this quarter against the one before it" and then
@@ -2011,7 +2007,7 @@ function buildCategory(a: {
     // measurement. The fourth used to be folded into the last, which stated a
     // measurement about a question nobody asked.
     quarterNote: !a.windowApplied
-      ? 'The quarter-on-quarter reading is not recorded for this workspace yet, so only the month is compared.'
+      ? 'The quarter-on-quarter reading is not recorded for this workspace yet.'
       : !a.themesAsked
         ? `Nothing moved clearly in ${a.monthLabel}, so no theme was named to follow across this quarter.`
         : !a.themesRead
@@ -2209,10 +2205,12 @@ function buildMethod(a: {
       ? checks.ran === 0
         ? 'No unusual-week check has run inside this quarter.'
         : null
-      : 'The unusual-week check is not recorded for this workspace yet, so this quarter has no check record to print.',
+      : 'The unusual-week check is not recorded for this workspace yet.',
     numbers: methodNumbers(inputs, a.quarter, a.overview, a.readingAt),
     unit: 'A video with an analysed comment written in the month.',
-    refusedLine: refused.length ? refusedSentence(refused) : null,
+    // THE REFUSALS ARE PAGE 8's WHOLE SUBJECT (copy de-clutter 2026-09-24);
+    // the count stays in the numbers card.
+    refusedLine: null,
     // THE FOOTNOTE IS THE PAGE'S, NOT THE MONTH'S — composed over the quarter
     // window this method page already holds, so its coverage clause is the
     // quarter's and its read-depth clause still says it is all-time.
@@ -2296,13 +2294,13 @@ export function methodNumbers(
   }
   const videos = inputs.coverage.reduce((sum, c) => sum + c.videos, 0)
   const comments = inputs.coverage.reduce((sum, c) => sum + c.comments, 0)
-  out.push({ id: 'videos', label: 'Videos', value: fmtInt(videos), note: 'distinct videos with an analysed comment in the quarter' })
+  out.push({ id: 'videos', label: 'Videos', value: fmtInt(videos) })
   // "COMMENTS", NOT "CONVERSATIONS". `lib/calibration.ts` fixes a conversation
   // as one video and the comments it sparked, and says comments are always
   // counted separately as comments — so this row under a Videos row labelled
   // Conversations said the quarter held 1,388 videos and 11,840 conversations,
   // where the glossary makes the conversations 1,388.
-  out.push({ id: 'comments', label: 'Comments', value: fmtInt(comments), note: 'comments read across those videos' })
+  out.push({ id: 'comments', label: 'Comments', value: fmtInt(comments) })
   out.push({
     id: 'updates',
     label: 'Updates',
@@ -2317,7 +2315,7 @@ export function methodNumbers(
   const mix: PlatformMix = {}
   for (const c of inputs.coverage) for (const [k, n] of Object.entries(c.platformMix)) mix[k] = (mix[k] ?? 0) + n
   const sources = platformShareLine(mix)
-  if (sources) out.push({ id: 'sources', label: 'Sources', value: sources, note: 'of the videos read in this quarter' })
+  if (sources) out.push({ id: 'sources', label: 'Sources', value: sources })
   if (inputs.discard.readable && inputs.discard.judged > 0) {
     out.push({
       id: 'held_back',
@@ -2347,7 +2345,7 @@ export function methodNumbers(
       id: 'refused',
       label: 'Refused',
       value: inputs.comparisonsRefused === 1 ? '1 comparison' : `${fmtInt(inputs.comparisonsRefused)} comparisons`,
-      note: 'held back rather than drawn — the reasons are under this table',
+      note: 'each named under What we could not settle',
     })
   }
   return out
@@ -2494,7 +2492,7 @@ function buildUnsettled(a: {
   const gate = a.method.numbers.find((r) => r.id === 'held_back')
   if (gate) {
     heldBack.push(
-      `${gate.value[0].toUpperCase()}${gate.value.slice(1)} of what the search plan gathered — read, but not counted into a subject${
+      `${gate.value[0].toUpperCase()}${gate.value.slice(1)} of what the search plan gathered: read, but not counted into a subject${
         gate.note ? ` (${gate.note})` : ''
       }.`,
     )
@@ -2524,7 +2522,7 @@ function buildUnsettled(a: {
   const notAsked = !a.windowApplied
     ? 'No quarter-on-quarter comparison was attempted. This quarter is not counted as one window for this workspace yet, so nothing below is a reading of the quarter against the one before it.'
     : !a.subjectsRead
-      ? 'Your subjects were not compared across this quarter — they are not counted as one window for this workspace yet, so no subject comparison was attempted.'
+      ? 'Your subjects were not compared across this quarter.'
       : null
   const allItems = unsettledItems(a.verdicts, { side: audienceSideIn(a.overview) })
   // WHAT FITS, AND THE COUNT OF WHAT DOES NOT. The two lists share one column
@@ -2541,8 +2539,10 @@ function buildUnsettled(a: {
     heldBack,
     settles: quarterUnlocked(a.readings)
       ? 'Every comparison this quarter could answer is on the pages before this one.'
-      : `${quarterGateSentence(a.readings)} The first quarter-on-quarter verdict for your own audience lands once six stand behind it${
-          settlesIn ? ` — at one reading a month, with ${monthName(settlesIn)}` : ''
+      : // THE GATE ITSELF IS THE ROW ABOVE (copy de-clutter 2026-09-24); this
+        // line keeps only what the row does not say: when it lands.
+        `The first quarter-on-quarter verdict for your own audience lands once six readings stand behind it${
+          settlesIn ? `, with ${monthName(settlesIn)}` : ''
         }.`,
   }
 }

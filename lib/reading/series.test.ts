@@ -546,22 +546,21 @@ describe('mergeSeriesNotes — a set of series says its caveats once', () => {
   const one = (objectId: string) =>
     buildSeries({ axis, audience: 'industry-other', denominators: rows, objectId })
 
+  // What a reading page's foot keeps: the still-filling line is the page
+  // bar's and the change-record boundary is Settings › The record's.
+  const shown = (notes: readonly { kind: string }[]) =>
+    notes.filter((n) => n.kind !== 'still_filling' && n.kind !== 'no_change_record_before')
+
   it('collapses the same sentence across twenty series into one', () => {
     const series = Array.from({ length: 20 }, (_, i) => one(`t${i}`))
     expect(series[0].notes.length).toBeGreaterThan(0)
-    expect(mergeSeriesNotes(series)).toEqual(series[0].notes)
+    expect(mergeSeriesNotes(series)).toEqual(shown(series[0].notes))
   })
 
   it('keeps two DIFFERENT notes, first occurrence first', () => {
-    const other = buildSeries({
-      axis,
-      audience: 'client',
-      denominators: [den('2026-06-01', 400, { audience: 'client', clustering_key: 'a=v5' })],
-      changeLogFrom: '2026-09-15T07:22:47.000Z',
-    })
-    const merged = mergeSeriesNotes([one('t1'), other])
-    expect(merged.length).toBeGreaterThan(one('t1').notes.length)
-    expect(merged.slice(0, one('t1').notes.length)).toEqual(one('t1').notes)
+    const a = { kind: 'tracking_change', text: 'Poler was added on 3 Sep.' } as const
+    const b = { kind: 'renamed', text: 'Topo was renamed Topo Designs.' } as const
+    expect(mergeNotes([[a], [b, a]])).toEqual([a, b])
   })
 
   it('says ONE unrecorded-grouping sentence for series covering different months', () => {

@@ -43,7 +43,7 @@ describe('composeInterpretation — the three labelled slots', () => {
     const out = composeInterpretation('interpretation_monthly', [verdict()], figures, [], { draft })
     expect(out.fallback).toBe(true)
     expect(out.reason).toBe('nothing_usable')
-    expect(out.note).toBe('We wrote this read ourselves this month.')
+    expect(out.note).toBeUndefined()
     expect(out.scrub.droppedDirection).toBe(1)
   })
 

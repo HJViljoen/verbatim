@@ -157,7 +157,7 @@ export function Line({ label, figure, badge, note, mode = 'app' }: {
     return (
       <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink, padding: '3px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
         <strong>{label}</strong>
-        {figure ? <> — {figure}</> : null}
+        {figure ? <>: {figure}</> : null}
         {badge ? <> {badge}</> : null}
         {note ? <div style={{ fontSize: 10.5, color: EMAIL.muted }}>{note}</div> : null}
       </div>
@@ -346,7 +346,7 @@ export function TableRow({ template, cells, mode = 'app' }: { template: string; 
 
 /** The cell that says a column was not drawn — the artboard's "— not compared".
  *  Code's words, so unmarked. */
-export function NotDrawn({ children = '— not compared', mode = 'app' }: { children?: ReactNode; mode?: RenderMode }) {
+export function NotDrawn({ children = 'not compared', mode = 'app' }: { children?: ReactNode; mode?: RenderMode }) {
   if (mode === 'email') return <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>{children}</span>
   return <span className="text-[12px] text-muted-foreground">{children}</span>
 }

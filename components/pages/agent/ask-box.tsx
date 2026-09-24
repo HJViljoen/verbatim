@@ -23,20 +23,6 @@ import { ClaimChip } from './marks'
 // artboard's meta carries ONE, and it is the one a question is about to be
 // answered against. The others are a click away in the record.
 
-/**
- * "n monthly readings searchable", or what is true instead.
- *
- * `AskBasis.monthlyReadings` is months that CLEAR the video floor in a
- * non-rival audience, not rows held (its own docstring, and the reason Sealand
- * reads two where the mock draws three). Null is "not recorded", which is a
- * different fact from none and says so.
- */
-export function readingsMeta(basis: AskBasis): string {
-  if (basis.monthlyReadings == null) return 'monthly readings not recorded here'
-  if (basis.monthlyReadings === 0) return 'no month yet carries enough videos'
-  return `${fmtInt(basis.monthlyReadings)} monthly ${basis.monthlyReadings === 1 ? 'reading' : 'readings'} searchable`
-}
-
 /** The plan chip's own footer rail: what was checked, when, and how its claims
  *  read on the newest re-reading. */
 function PlanRail({ plan }: { plan: AskPlanChip }) {
@@ -68,7 +54,7 @@ function PlanRail({ plan }: { plan: AskPlanChip }) {
 }
 
 export function AskBoxTile({
-  basis,
+  basis: _basis,
   plan,
   composer,
   row = 2,
@@ -81,7 +67,7 @@ export function AskBoxTile({
   row?: number
 }) {
   return (
-    <Tile col={12} row={row} eyebrow="Ask the conversation" meta={readingsMeta(basis)}>
+    <Tile col={12} row={row} eyebrow="Ask the conversation">
       {composer}
       {plan ? (
         <PlanRail plan={plan} />

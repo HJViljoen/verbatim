@@ -94,10 +94,10 @@ export function deliveryRecord(args: {
     : null
 
   const caveats: string[] = []
+  // The standing "a slot nothing ran for leaves no trace" disclaimer is gone
+  // (copy de-clutter C101); the not-recorded state stays.
   if (!slotsRecorded) {
     caveats.push('Which scheduled slot each update served is not recorded yet, so a missed slot cannot be told from an update run by hand.')
-  } else {
-    caveats.push('A slot nothing ran for leaves no trace here, so this counts the updates that happened and not the ones that should have.')
   }
 
   const line = total === 0

@@ -157,7 +157,7 @@ describe('the six-month gate', () => {
   })
 
   it('says the sentence the plan asks for, with the count', () => {
-    expect(quarterGateSentence(3)).toBe('Quarter against quarter needs six months — you have 3.')
+    expect(quarterGateSentence(3)).toBe('Quarter against quarter needs six months: you have 3.')
     expect(quarterGateSentence(0)).toContain('you have 0.')
   })
 
@@ -196,8 +196,8 @@ describe('what the artefact says about itself', () => {
 
   it('says in the subject line when the tenant’s own side is not readable yet', () => {
     const q = quarterFor(2026, 3)
-    expect(quarterlySubject('Sealand', q, 3)).toBe('Sealand: your quarterly review — Q3 2026 (your own side is still forming)')
-    expect(quarterlySubject('Össur', q, 8)).toBe('Össur: your quarterly review — Q3 2026')
+    expect(quarterlySubject('Sealand', q, 3)).toBe('Sealand: your quarterly review · Q3 2026 (your own side is still forming)')
+    expect(quarterlySubject('Össur', q, 8)).toBe('Össur: your quarterly review · Q3 2026')
   })
 
   it('puts no direction word and no digit-bearing claim in the subject line', () => {

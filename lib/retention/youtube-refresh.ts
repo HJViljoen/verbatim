@@ -241,6 +241,6 @@ export function distinctIds<T extends { comment_id?: string; video_id?: string }
  *  nothing found at all, or more than half gone across a real batch, is not
  *  churn — it is a broken key, a changed API, or a bug. Throws. */
 export function assertPlausibleGoneRate(kind: 'comments' | 'videos', requested: number, found: number): void {
-  if (requested >= 10 && found === 0) throw new Error(`refresh ${kind}: 0 of ${requested} ids found — refusing to treat that as deletions`)
-  if (requested >= 50 && found / requested < 0.5) throw new Error(`refresh ${kind}: only ${found} of ${requested} ids found (${Math.round((1 - found / requested) * 100)}% gone) — refusing to delete at that rate`)
+  if (requested >= 10 && found === 0) throw new Error(`refresh ${kind}: 0 of ${requested} ids found; refusing to treat that as deletions`)
+  if (requested >= 50 && found / requested < 0.5) throw new Error(`refresh ${kind}: only ${found} of ${requested} ids found (${Math.round((1 - found / requested) * 100)}% gone); refusing to delete at that rate`)
 }

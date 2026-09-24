@@ -385,7 +385,7 @@ export async function freezeEvidenceRefs(
     stored = await storedEvidenceRefs(admin, opts.clientId, months)
   } catch (e) {
     if (isMissingEvidenceRefs(e)) {
-      console.log(`[evidence-refs] ${TABLE_EVIDENCE_REFS}/${RPC_EVIDENCE_REFS} do not exist yet — apply supabase/migrations/20260918095000_quote_translations.sql. The months are frozen without their ids; nothing else is affected.`)
+      console.log(`[evidence-refs] ${TABLE_EVIDENCE_REFS}/${RPC_EVIDENCE_REFS} do not exist yet; apply supabase/migrations/20260918095000_quote_translations.sql. The months are frozen without their ids; nothing else is affected.`)
       out.missing = true
       return out
     }

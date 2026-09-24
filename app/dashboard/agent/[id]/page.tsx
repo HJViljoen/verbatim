@@ -120,7 +120,7 @@ export default async function AgentThreadPage({
               claims={doc.claims}
               summary={doc.summary}
               judgement={doc.judgement}
-              quotesByClaim={new Map(Object.entries(doc.quotesByClaim).map(([ref, qs]) => [ref, qs.map((q) => q.text)]))}
+              quotesByClaim={new Map(Object.entries(doc.quotesByClaim).map(([ref, qs]) => [ref, qs.map((q) => ({ text: q.text, lang: q.lang, english: q.english }))]))}
               segments={doc.segments}
               anchored={doc.anchored}
               notice={doc.notice}

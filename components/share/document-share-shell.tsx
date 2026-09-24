@@ -4,6 +4,7 @@ import { FitWidth } from '@/components/reports/fit-width'
 import { audienceLabel } from '@/lib/reports/cover'
 import { documentSheetCount } from '@/lib/reports/documents/compose'
 import type { DocumentSnapshotData } from '@/lib/reports/documents/types'
+import { withCurrentWords } from '@/lib/reports/legacy-words'
 
 // A shared DOCUMENT (2026-08-31): the written pages exactly as printed, one
 // under the other, scaled to the reader's screen. A document carries no
@@ -13,6 +14,9 @@ import type { DocumentSnapshotData } from '@/lib/reports/documents/types'
 // Client-led, as the arranged share: the client's name leads, Verbatim is
 // the provenance line and the one link at the foot.
 export function DocumentShareShell({ data, appUrl }: { data: DocumentSnapshotData; appUrl: string }) {
+  // A snapshot built before the em-dash sweep re-renders with today's words
+  // (lib/reports/legacy-words.ts), the same walk the decks and emails take.
+  data = withCurrentWords(data)
   // THE SHEETS THE DECK BELOW ACTUALLY PRINTS. This header counted the written
   // pages plus a cover — a number the deck stopped drawing when a borrowed
   // block became a sheet of its own (WP19) and again when the cover folded

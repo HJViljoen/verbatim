@@ -455,12 +455,6 @@ export interface CastBlock {
   profileDate: string | null
   stale: boolean
   floorNote: string
-  /** The other half of the artboard's footer: what this whole block is a
-   *  reading OF. It is the page's one exception to the comment clock, and the
-   *  mock's words for it ("current state, not a trend") cannot be printed — a
-   *  trend is a direction claim and "trend" is on the product's own direction
-   *  list, so the note says the thing itself instead. */
-  stateNote: string
   empty: string | null
 }
 
@@ -761,7 +755,7 @@ export function heardLine(input: {
   const month = `${longMonth(input.firstHeard)} ${input.firstHeard.slice(0, 4)}`
   return input.firstHeardOnAxis
     ? `first heard ${month} · ${seen}`
-    : `first heard ${month}, before the months drawn here · ${seen}`
+    : `first heard ${month} · ${seen}`
 }
 
 /**
@@ -821,7 +815,7 @@ export function onCameraScope(videoEvidenceCount: number | null | undefined, evi
   const total = Math.max(0, Math.trunc(Number(evidenceCount)))
   const n = Math.min(Math.trunc(Number(videoEvidenceCount ?? 0)), total)
   if (!Number.isFinite(n) || n <= 0) return null
-  return `${fmtInt(n)} of the ${fmtInt(total)} ${VOICES_WORD} behind this theme ${n === 1 ? 'was' : 'were'} said on camera rather than typed — counted over the whole update, not over this month.`
+  return `${fmtInt(n)} of ${fmtInt(total)} ${VOICES_WORD} behind this theme ${n === 1 ? 'was' : 'were'} said on camera, whole update.`
 }
 
 /**
@@ -836,7 +830,7 @@ export function onCameraReach(input: { videos: number; reddit: number | null }):
   if (input.reddit == null) return null
   const readable = Math.max(0, input.videos - input.reddit)
   if (input.reddit === 0) return null
-  return `read from ${fmtInt(readable)} of ${fmtInt(input.videos)} videos — Reddit carries no speech and no on-screen text`
+  return `read from ${fmtInt(readable)} of ${fmtInt(input.videos)} videos; Reddit carries no speech and no on-screen text`
 }
 
 /**
@@ -899,7 +893,7 @@ export function searchRegistry<T extends { id: string; canonical_label: string |
 export function repliesNote(replies: RepliesRead | null): string {
   if (!replies) return 'How much of this month was argued rather than said once is not readable here.'
   if (replies.reddit != null && replies.replies > 0 && replies.reddit === replies.replies) {
-    return 'Every reply we can see is a Reddit reply: Reddit is the only source that records one, so this counts arguing on Reddit and nothing else. Counted across every audience — a comment carries no audience of its own.'
+    return 'Every reply we can see is a Reddit reply: Reddit is the only source that records one, so this counts arguing on Reddit and nothing else. Counted across every audience, since a comment carries no audience of its own.'
   }
   return 'Counted across every audience: a comment carries no audience of its own, and replies are materially a Reddit signal.'
 }
@@ -1316,8 +1310,11 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     }),
     // `theme_observations.reread_share` lands with M2. Until then the page
     // cannot tell a theme whose members were re-read this month from one whose
-    // conversation moved, and says so once rather than marking nothing.
-    rereadNote: 'Whether a theme’s members were re-read this month is not recorded here yet, so a change that is really a re-reading cannot be marked.',
+    // conversation moved. That limit is a standing one, so it is written once
+    // in Settings › How to read (Voice, "what it cannot tell you") rather than
+    // printed under the movers on every visit and in every monthly email
+    // (copy de-clutter B26 / D40).
+    rereadNote: null,
   }
 
   // ── the theme in full ───────────────────────────────────────────────────
@@ -1438,7 +1435,7 @@ function denominatorFor(
 /** Said by VO2 and VO3 in the same words, because it is one fact about the
  *  reader's link and not two facts about the month. */
 export const DEEP_LINK_EMPTY =
-  'None of this month’s themes sit behind that insight — clear the filter to see the whole conversation.'
+  'None of this month’s themes sit behind that insight. Clear the filter to see the whole conversation.'
 
 /**
  * Why no theme is open — and it is never "the month was empty" when the answer
@@ -1464,8 +1461,8 @@ export function openRefusal(
       ? `${DEEP_LINK_EMPTY} Nothing is open until it is cleared.`
       : 'No theme in this audience carried enough of this month to be opened.'
   }
-  if (!asked.label) return 'The theme this link asks for is not in this workspace’s register — clear it from the link to see what this month did carry.'
-  return `“${asked.label}” was not said in ${audienceLabel.toLowerCase()} this month, so there is nothing to open — clear it from the link to see what was.`
+  if (!asked.label) return 'The theme this link asks for is not in this workspace’s register. Clear it from the link to see what this month did carry.'
+  return `“${asked.label}” was not said in ${audienceLabel.toLowerCase()} this month, so there is nothing to open. Clear it from the link to see what was.`
 }
 
 /**
@@ -1606,7 +1603,7 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
     const curr = input.statsRows.find((r) => monthStartOf(r.month) === month && r.audience === audience) ?? null
     const prev = input.statsRows.find((r) => monthStartOf(r.month) === input.prevMonth && r.audience === audience) ?? null
     if (!curr) toneNote = 'Nothing in this month has been judged yet.'
-    else if (curr.judged < TONE_FLOOR) toneNote = `Too few videos judged this month to read a tone — ${fmtInt(curr.judged)} of the ${fmtInt(TONE_FLOOR)} a point needs.`
+    else if (curr.judged < TONE_FLOOR) toneNote = `Too few videos judged this month to read a tone: ${fmtInt(curr.judged)} of the ${fmtInt(TONE_FLOOR)} a point needs.`
     else {
       const counts = {
         judged: curr.judged, positive: curr.positive, negative: curr.negative,
@@ -1814,7 +1811,6 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
   // Unwindowed is cheap here: one theme in one audience has as many rows as it
   // has months (Össur's lead theme, 12; Sealand's, 21), on the
   // (client_id, theme_id, month) index.
-  let themeReddit: number | null = null
   let recordFirstHeard: string | null = null
   try {
     const monthRows = await selectAll<{ month: string; videos: number | null; platform_mix: Record<string, number> | null }>(() =>
@@ -1824,8 +1820,6 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
         .order('month', { ascending: true }))
     const heard = monthRows.find((r) => (r.videos ?? 0) > 0)
     recordFirstHeard = heard ? monthStartOf(heard.month) : null
-    const mix = monthRows.find((r) => monthStartOf(r.month) === input.month)?.platform_mix ?? null
-    if (mix) themeReddit = Number(mix.reddit ?? 0)
   } catch (error) {
     if (!isMissingMonthTable(error)) throw error
   }
@@ -1833,11 +1827,11 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
   const notes: string[] = []
   if (!input.themedRunId) notes.push('No update has grouped this month’s conversation into themes yet, so the evidence behind this theme cannot be shown.')
   if (!spoken && !onScreen && input.themedRunId) notes.push('No video behind this theme carries readable speech or on-screen text.')
-  // The two scopes stand together, each saying which it is: the update's
-  // on-camera count, then this month's speech-readable reach.
+  // The on-camera count only. The month's speech-readable reach ("read from
+  // 118 of 130 videos, Reddit carries no speech") was a third Reddit-mechanics
+  // line on the page and is cut (copy de-clutter B29); `onCameraReach` stays
+  // exported and tested for any surface that still wants it.
   if (onCamera) notes.push(onCamera)
-  const reach = onCameraReach({ videos: input.mover?.k ?? 0, reddit: themeReddit })
-  if (reach) notes.push(`This month it was ${reach}.`)
 
   return {
     state: 'ready',
@@ -1919,13 +1913,14 @@ async function buildCast(input: CastInput): Promise<CastBlock> {
   // The floor is a fact about which groups are named; the state is a fact about
   // what the whole block is a reading of, and it belongs in the mono note at
   // the right-hand end rather than trailing a sentence about the floor.
-  const floorNote = `A group is named only where at least ${fmtInt(PERSONA_VIDEO_FLOOR)} videos carry it.`
-  const stateNote = 'this month as it stands, never compared with another month'
+  // The floor in the artboard's two words (copy de-clutter B38); the rule
+  // itself is written once in Settings › How to read.
+  const floorNote = `${fmtInt(PERSONA_VIDEO_FLOOR)}-video floor`
   const overlapNote = 'A video can carry more than one group, so these counts overlap and do not add up to a whole.'
   if (!input.profile) {
     return {
       state: 'not_run', personas: [], selected: null, population: null,
-      overlapNote, profileDate: null, stale: false, floorNote, stateNote,
+      overlapNote, profileDate: null, stale: false, floorNote,
       empty: 'Reading who is talking is not switched on for this workspace yet.',
     }
   }
@@ -1936,7 +1931,7 @@ async function buildCast(input: CastInput): Promise<CastBlock> {
     return {
       state: 'no_personas', personas: [], selected: null,
       population: input.profile.insight_population ?? null,
-      overlapNote, profileDate: input.profile.run_date, stale: false, floorNote, stateNote,
+      overlapNote, profileDate: input.profile.run_date, stale: false, floorNote,
       empty: 'Too little conversation in this update to describe who is talking.',
     }
   }
@@ -1990,7 +1985,6 @@ async function buildCast(input: CastInput): Promise<CastBlock> {
     profileDate: input.profile.run_date,
     stale: Boolean(input.newestRunId) && input.profile.run_id !== input.newestRunId,
     floorNote,
-    stateNote,
     empty: null,
   }
 }
@@ -1999,7 +1993,8 @@ async function buildCast(input: CastInput): Promise<CastBlock> {
  *  named, because the cast is dated by an update and the rest of the page is
  *  dated by the comment. */
 export function castMasthead(cast: CastBlock): string | null {
-  if (!cast.profileDate) return null
-  const base = `Who is talking, as read on ${weekdayDate(cast.profileDate)}`
-  return cast.stale ? `${base} — a later update has landed since.` : `${base}.`
+  // Only the stale arm prints: the plain date was noise, the warning that a
+  // later update has landed is what a reader acts on (copy de-clutter B40).
+  if (!cast.profileDate || !cast.stale) return null
+  return `Who is talking, as read on ${weekdayDate(cast.profileDate)}: a later update has landed since.`
 }

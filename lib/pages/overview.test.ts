@@ -153,8 +153,8 @@ describe('fillingLine', () => {
   })
 
   it('names a thin month and says the changes are suppressed', () => {
-    expect(fillingLine({ ...base, thin: true })).toContain('thin month — every change below is suppressed')
-    expect(fillingLine({ ...base, early: true })).toContain('early in the month — every change below is suppressed')
+    expect(fillingLine({ ...base, thin: true })).toContain('thin month: every change below is suppressed')
+    expect(fillingLine({ ...base, early: true })).toContain('early in the month: every change below is suppressed')
     // A thin month is the worse of the two and keeps its own words.
     expect(fillingLine({ ...base, thin: true, early: true })).not.toContain('early in the month')
   })
@@ -394,7 +394,7 @@ describe('subjectsNote', () => {
   // it; what the note adds is the count and which column to read instead.
   it('names the video count your own side reads on, without re-quoting the column', () => {
     expect(subjectsNote([row(84, null)])).toBe(
-      'Your side carried 84 videos this month, too few for its column to answer — the category column carries the month.',
+      'Your side carried 84 videos this month, too few for its column to answer; the category column carries the month.',
     )
     expect(subjectsNote([row(84, null)])).not.toContain('too few to compare')
   })
@@ -923,7 +923,7 @@ describe('rivalsLead', () => {
     // would say — and on a tenant tracking one rival it read "of 1 compared".
     expect(lead).toBe(
       'Of the 2 rivals compared, Freitag is the one whose share of attention moved beyond its band this month'
-      + ' \u2014 the change and the band are on each row.',
+      + '; the change and the band are on each row.',
     )
     // The mock's "took 3 points" and "slipped 2" are both refused: a magnitude
     // is printed by the badge with its band, and `slipped` is a direction word
@@ -1186,8 +1186,8 @@ describe('fillingNote', () => {
   })
 
   it('carries the gate, with a thin month winning over an early one', () => {
-    expect(fillingNote({ ...base, thin: true })).toContain('thin month — every change below is suppressed')
-    expect(fillingNote({ ...base, early: true })).toContain('early in the month — every change below is suppressed')
+    expect(fillingNote({ ...base, thin: true })).toContain('thin month: every change below is suppressed')
+    expect(fillingNote({ ...base, early: true })).toContain('early in the month: every change below is suppressed')
     expect(fillingNote({ ...base, thin: true, early: true })).not.toContain('early in the month')
   })
 

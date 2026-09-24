@@ -58,7 +58,7 @@ describe('the quarterly card', () => {
   // document one click away cannot print different numbers under it.
   it('carries the artefact’s own gate sentence in the footer', () => {
     expect(renderText(<QuarterlyCardTile card={formingCardFixture()} />))
-      .toContain('Quarter against quarter needs six months — you have 3.')
+      .toContain('Quarter against quarter needs six months: you have 3.')
   })
 
   // ONE NUMBER, THREE PLACES, AND THEY AGREE. The pill was the gate CONSTANT

@@ -34,7 +34,7 @@ describe('rows / row', () => {
   it('refuses a single row sent through rows(), instead of failing at render', () => {
     const log = spy()
     expect(rows({ data: { id: 'a' }, error: null }, 'market.summary')).toEqual([])
-    expect(log).toHaveBeenCalledWith('[pages] market.summary: expected rows, got object — use row() for a single read')
+    expect(log).toHaveBeenCalledWith('[pages] market.summary: expected rows, got object; use row() for a single read')
   })
 
   it('trusts the error over the data, when a driver sends both', () => {

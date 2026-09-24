@@ -95,7 +95,7 @@ export function contextLine(
   ownHandles: Set<string>,
   roleByAccount: Map<string, VoiceRole>,
 ): string {
-  if (src.category === 'misinformation') return 'awareness only — never a reply prompt'
+  if (src.category === 'misinformation') return 'awareness only, never a reply prompt'
   const acct = src.account ? normHandle(src.account) : null
   let where: string
   if (acct && (ownHandles.has(acct) || roleByAccount.get(acct) === 'you')) where = 'under your post'

@@ -7,7 +7,7 @@ import { fullDate } from '@/lib/format'
 import { gateAccessFor } from '@/lib/gate-record'
 import { computeReadiness } from '@/lib/readiness/compute'
 import { loadReadiness } from '@/lib/readiness/load'
-import { clientReadiness, withheldLine } from '@/lib/settings/readiness-view'
+import { clientReadiness, NOT_BUILT } from '@/lib/settings/readiness-view'
 
 // Settings › Readiness (Phase 1 WP16, design ST1, decision V) — what each part
 // of the product needs from THIS workspace, what is there, and who closes the
@@ -54,7 +54,6 @@ export default async function SettingsReadinessPage() {
     : null
 
   const view = clientReadiness(all, { by: { retention: due } })
-  const held = withheldLine(view.withheld)
 
   return (
     <SettingsFrame
@@ -68,9 +67,19 @@ export default async function SettingsReadinessPage() {
         <ReadinessTable
           rows={view.rows}
           title="What each part of the product needs from this workspace"
-          description={`Read ${fullDate(now.toISOString())}. A month counts when it carries ${inputs.floor} videos — the same floor the product compares on; comments are shown beside it because the two do not agree.`}
+          description={`Read ${fullDate(now.toISOString())}. A month counts when it carries ${inputs.floor} videos, the same floor the product compares on.`}
         />
-        {held && <p className="text-[12px] text-muted-foreground">{held}</p>}
+        <section className="rounded-md bg-inner px-4 py-3.5">
+          <h3 className="text-[14px] font-semibold">Not built yet on the reading pages</h3>
+          <ul className="mt-2 flex flex-col gap-1">
+            {NOT_BUILT.map((n) => (
+              <li key={n.what} className="flex gap-2 text-[12px] leading-[1.45] text-secondary-foreground">
+                <span className="w-[84px] shrink-0 font-mono text-[11px] text-muted-foreground">{n.page}</span>
+                {n.what}
+              </li>
+            ))}
+          </ul>
+        </section>
       </div>
     </SettingsFrame>
   )

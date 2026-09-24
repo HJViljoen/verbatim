@@ -222,7 +222,7 @@ describe('rival accounts', () => {
     expect(row.status).toBe('missing')
     expect(row.owner).toBe('client')
     expect(row.detail).toContain('No accounts configured for 1 tracked rival')
-    expect(row.notes).toEqual(['Ottobock — no accounts configured'])
+    expect(row.notes).toEqual(['Ottobock: no accounts configured'])
   })
 
   it('is only partly there when every rival is configured and one is read', () => {
@@ -230,7 +230,7 @@ describe('rival accounts', () => {
     expect(row.status).toBe('partial')
     expect(row.detail).toContain('3 of 3 tracked rivals have accounts configured')
     expect(row.detail).toContain('73 posts of their own captured, 3 read')
-    expect(row.notes[0]).toBe('Cotopaxi — Instagram, TikTok & YouTube · 31 posts captured, 31 in the last 30 days, 3 read')
+    expect(row.notes[0]).toBe('Cotopaxi: Instagram, TikTok & YouTube · 31 posts captured, 31 in the last 30 days, 3 read')
     expect(row.notes[2]).toContain('Rareform')
     expect(row.notes[2]).toContain('none read yet')
   })
@@ -248,7 +248,7 @@ describe('tracked terms', () => {
     const row = find(computeReadiness(ossur()), 'tracked-terms')
     expect(row.status).toBe('partial')
     expect(row.detail).toBe(
-      '1 brand term, 1 rival term, 5 category terms · last stamped 18 Aug 2026 — not every edit stamps that date, so they may have changed since.',
+      '1 brand term, 1 rival term, 5 category terms · last stamped 18 Aug 2026; not every edit stamps that date, so they may have changed since.',
     )
     expect(row.notes[0]).toContain('No configuration change has been recorded yet')
   })
@@ -319,9 +319,9 @@ describe('watched communities', () => {
     expect(row.status).toBe('partial')
     expect(row.detail).toBe('3 watched, 5 proposed and not yet sampled, 9 ruled out · 66% of stored Reddit posts come from communities nobody configured.')
     expect(row.notes).toEqual([
-      'r/amputee — 23 posts',
-      'r/bionics — nothing stored from it yet',
-      'r/prosthetics — 26 posts',
+      'r/amputee: 23 posts',
+      'r/bionics: nothing stored from it yet',
+      'r/prosthetics: 26 posts',
     ])
   })
 
@@ -329,9 +329,9 @@ describe('watched communities', () => {
     const row = find(computeReadiness(sealand()), 'communities')
     expect(row.detail).toContain('3 watched, 2 proposed and not yet sampled, 15 ruled out')
     expect(row.notes).toEqual([
-      'r/backpacks — 41 posts',
-      'r/onebag — 17 posts · watched by hand, never sampled',
-      'r/travelgear — nothing stored from it yet',
+      'r/backpacks: 41 posts',
+      'r/onebag: 17 posts · watched by hand, never sampled',
+      'r/travelgear: nothing stored from it yet',
     ])
   })
 
@@ -344,7 +344,7 @@ describe('watched communities', () => {
     // is the client's. And not dropped: it is on the list and the row accounts
     // for the list.
     expect(row.detail).toContain('9 ruled out, 1 you stopped watching')
-    expect(row.notes).not.toContain('r/onebag — 31 posts')
+    expect(row.notes).not.toContain('r/onebag: 31 posts')
   })
 
   it('is missing when nothing is watched', () => {
@@ -389,7 +389,7 @@ describe('the subject set', () => {
     const row = find(computeReadiness(ossur()), 'subject-set')
     expect(row.status).toBe('missing')
     expect(row.owner).toBe('engineering')
-    expect(row.detail).toBe('There is no subject set — the product holds no such thing yet.')
+    expect(row.detail).toBe('There is no subject set yet.')
   })
 
   it('reads the count once there is one', () => {
@@ -411,9 +411,9 @@ describe('months of history', () => {
     // other two. Comment counts are the fixture's — its filler months carry
     // 20 comments each, where production's carry enough for two more.
     expect(row.notes).toEqual([
-      'Your own brand — 0 of 44 months clear 100 videos (3 clear 100 comments)',
-      'Ottobock — 0 of 20 months clear 100 videos (3 clear 100 comments)',
-      'The category — 4 of 55 months clear 100 videos (4 clear 100 comments)',
+      'Your own brand: 0 of 44 months clear 100 videos (3 clear 100 comments)',
+      'Ottobock: 0 of 20 months clear 100 videos (3 clear 100 comments)',
+      'The category: 4 of 55 months clear 100 videos (4 clear 100 comments)',
     ])
   })
 
@@ -421,7 +421,7 @@ describe('months of history', () => {
     const row = find(computeReadiness(sealand()), 'months-of-history')
     expect(row.status).toBe('partial')
     expect(row.detail).toBe('2 months clear 100 videos in the category; 1 of 5 audiences clear any.')
-    expect(row.notes).toContain('Rareform — 0 of 0 months clear 100 videos (0 clear 100 comments) · no month at all')
+    expect(row.notes).toContain('Rareform: 0 of 0 months clear 100 videos (0 clear 100 comments) · no month at all')
   })
 
   it('says "not seeded yet" rather than throwing when the reading has not landed', () => {
@@ -435,7 +435,7 @@ describe('months of history', () => {
     const thin = { tracked: ['client'], months: [{ month: '2026-08-01', audience: 'client', videos: 20, comments: 30 }] }
     const row = find(computeReadiness(ossur({ monthly: thin })), 'months-of-history')
     expect(row.status).toBe('missing')
-    expect(row.detail).toBe('No month yet carries 100 videos in any audience — the biggest holds 20.')
+    expect(row.detail).toBe('No month yet carries 100 videos in any audience; the biggest holds 20.')
   })
 
   // `audience` is `competitor:<name>` and part of the frozen rows' primary key,
@@ -452,8 +452,8 @@ describe('months of history', () => {
       ],
     }
     const notes = find(computeReadiness(ossur({ monthly: renamed })), 'months-of-history').notes
-    expect(notes.find((n) => n.startsWith('Cotopaxi —'))).toContain('no longer tracks')
-    expect(notes.find((n) => n.startsWith('Cotopaxi Inc —'))).not.toContain('no longer tracks')
+    expect(notes.find((n) => n.startsWith('Cotopaxi:'))).toContain('no longer tracks')
+    expect(notes.find((n) => n.startsWith('Cotopaxi Inc:'))).not.toContain('no longer tracks')
     expect(notes.find((n) => n.startsWith('Your own brand'))).not.toContain('no longer tracks')
   })
 })
@@ -464,21 +464,21 @@ describe('the baseline behind an unusual week', () => {
     expect(row.status).toBe('exists')
     expect(row.detail).toBe('Baseline ready in 1 of 3 audiences; the rest are still forming.')
     expect(row.notes).toEqual([
-      'Your own brand — baseline forming — 0 of 3 months',
-      'Ottobock — baseline forming — 0 of 3 months',
-      'The category — baseline ready',
-      'Flags raised — none in the 11 updates compared so far.',
+      'Your own brand: baseline forming: 0 of 3 months',
+      'Ottobock: baseline forming: 0 of 3 months',
+      'The category: baseline ready',
+      'Flags raised: none in the 11 updates compared so far.',
     ])
   })
 
   it('tells "nothing has been unusual" apart from "nobody was writing it down"', () => {
     const never = find(computeReadiness(ossur({ anomaly: { available: false, checks: [], flags: [] } })), 'anomaly-baseline')
-    expect(never.notes.at(-1)).toBe('Flags raised — not recorded yet.')
+    expect(never.notes.at(-1)).toBe('Flags raised: not recorded yet.')
 
     // The tables exist and no update has reached the check yet — a third
     // answer, and the one the first week after M7 is applied will give.
     const unrun = find(computeReadiness(ossur({ anomaly: { available: true, checks: [], flags: [] } })), 'anomaly-baseline')
-    expect(unrun.notes.at(-1)).toBe('Flags raised — no update has run the check yet.')
+    expect(unrun.notes.at(-1)).toBe('Flags raised: no update has run the check yet.')
 
     // A week the check REFUSED to compare is counted apart from the weeks it
     // compared: a thin update cannot support "nothing was unusual".
@@ -498,7 +498,7 @@ describe('the baseline behind an unusual week', () => {
       'anomaly-baseline',
     )
     expect(thin.notes.at(-1)).toBe(
-      'Flags raised — none in the one update compared so far. One update was not compared with the months behind it.',
+      'Flags raised: none in the one update compared so far. One update was not compared with the months behind it.',
     )
 
     const noneCompared = find(
@@ -509,7 +509,7 @@ describe('the baseline behind an unusual week', () => {
       ),
       'anomaly-baseline',
     )
-    expect(noneCompared.notes.at(-1)).toMatch(/^Flags raised — none: no update has been compared yet\./)
+    expect(noneCompared.notes.at(-1)).toMatch(/^Flags raised: none, because no update has been compared yet\./)
 
     const raised = find(
       computeReadiness(
@@ -532,24 +532,24 @@ describe('the baseline behind an unusual week', () => {
     // The label is framed, because a kind's label is a verb phrase — the
     // pipeline writes "Pushing back", not "Objections" — and the sentence
     // around it assumed a noun.
-    expect(raised.notes.at(-1)).toMatch(/^Flags raised — 2 in the 2 updates compared so far, the most recent about “Objections” in the week of /)
+    expect(raised.notes.at(-1)).toMatch(/^Flags raised: 2 in the 2 updates compared so far, the most recent about “Objections” in the week of /)
   })
 
   it('is one month of three on the trial workspace', () => {
     const row = find(computeReadiness(sealand()), 'anomaly-baseline')
     expect(row.status).toBe('partial')
-    expect(row.notes).toContain('The category — baseline forming — 1 of 3 months')
-    expect(row.detail).toBe('No audience has a baseline yet — the fullest is 1 of 3 months.')
+    expect(row.notes).toContain('The category: baseline forming: 1 of 3 months')
+    expect(row.detail).toBe('No audience has a baseline yet; the fullest is 1 of 3 months.')
   })
 
   it('reads the three months behind the instant it is given, not the month it is in', () => {
     // At 15 Sep, June/July/August are the complete months; September is still
     // filling and must not count even though it carries 388 videos.
     const august = find(computeReadiness(ossur({ now: '2026-09-01T00:00:00.000Z' })), 'anomaly-baseline')
-    expect(august.notes).toContain('The category — baseline ready')
+    expect(august.notes).toContain('The category: baseline ready')
     const july = find(computeReadiness(ossur({ now: '2026-08-01T00:00:00.000Z' })), 'anomaly-baseline')
     // May, June, July: only two of the three are read at all, and only two clear.
-    expect(july.notes).toContain('The category — baseline forming — 2 of 3 months')
+    expect(july.notes).toContain('The category: baseline forming: 2 of 3 months')
   })
 
   it('says "not seeded yet" rather than throwing when the reading has not landed', () => {
@@ -566,7 +566,7 @@ describe('how much was read', () => {
     const row = find(computeReadiness(ossur()), 'read-depth')
     expect(row.status).toBe('partial')
     expect(row.detail).toBe('Speech read on 798 of 1,596 videos (50.0%), translated 208 (13.0%), on-screen text 269 (16.9%) · Reddit excluded.')
-    expect(row.notes[0]).toBe('38.2% of what was looked at was set aside — recorded only from 23 Aug 2026, so no month before that can show it.')
+    expect(row.notes[0]).toBe('38.2% of what was looked at was set aside, recorded only from 23 Aug 2026, so no month before that can show it.')
   })
 
   it('reads the trial workspace’s own shares', () => {
@@ -610,20 +610,20 @@ describe('the update record', () => {
     expect(row.status).toBe('partial')
     expect(row.detail).toContain('6 of the last 8 updates finished')
     expect(row.notes.slice(0, 3)).toEqual([
-      '13 Sep 2026 — finished',
-      '6 Sep 2026 — finished',
-      '30 Aug 2026 — finished',
+      '13 Sep 2026: finished',
+      '6 Sep 2026: finished',
+      '30 Aug 2026: finished',
     ])
-    expect(row.notes).toContain('30 Aug 2026 — did not finish')
-    expect(row.notes).toContain('23 Aug 2026 — finished, with gaps')
+    expect(row.notes).toContain('30 Aug 2026: did not finish')
+    expect(row.notes).toContain('23 Aug 2026: finished, with gaps')
     expect(row.notes.at(-1)).toBe('Which scheduled slot each update served is not recorded yet, so a missed slot cannot be told from a manual update.')
   })
 
   it('marks each update scheduled or by hand once the slot is recorded', () => {
     const updates = ossur().updates.map((u, k) => ({ ...u, scheduledFor: k < 3 ? '2026-09-13T04:00:00Z' : null }))
     const row = find(computeReadiness(ossur({ slotsRecorded: true, updates })), 'update-record')
-    expect(row.notes[0]).toBe('13 Sep 2026 — finished · on schedule')
-    expect(row.notes[3]).toBe('30 Aug 2026 — did not finish · by hand')
+    expect(row.notes[0]).toBe('13 Sep 2026: finished · on schedule')
+    expect(row.notes[3]).toBe('30 Aug 2026: did not finish · by hand')
     expect(row.notes).toHaveLength(8)
   })
 
@@ -631,7 +631,7 @@ describe('the update record', () => {
     const updates = ossur().updates.map((u, k) => ({ ...u, stalled: k === 0 }))
     const row = find(computeReadiness(ossur({ updates })), 'update-record')
     expect(row.status).toBe('partial')
-    expect(row.notes[0]).toBe('13 Sep 2026 — finished · took longer than the stretch it covered')
+    expect(row.notes[0]).toBe('13 Sep 2026: finished · took longer than the stretch it covered')
   })
 
   it('is missing when nothing has finished', () => {
@@ -653,7 +653,7 @@ describe('the update record', () => {
     // position. Pinned here because the collision is invisible in an array
     // comparison and costs a dropped line in the browser.
     const notes = find(computeReadiness(sealand()), 'update-record').notes
-    const repeated = notes.filter((n) => n === '17 Aug 2026 — finished')
+    const repeated = notes.filter((n) => n === '17 Aug 2026: finished')
     expect(repeated).toHaveLength(3)
     expect(new Set(notes).size).toBeLessThan(notes.length)
   })
@@ -687,7 +687,7 @@ describe('delivery', () => {
     const row = find(computeReadiness(sealand()), 'delivery')
     expect(row.status).toBe('missing')
     expect(row.detail).toBe('Updates are paused for this workspace, so nothing is sent.')
-    expect(row.notes).toEqual(['Weekly digest — off, no addresses'])
+    expect(row.notes).toEqual(['Weekly digest: off, no addresses'])
   })
 
   it('is only partly there when a live schedule has never sent', () => {
@@ -704,7 +704,7 @@ describe('the change record', () => {
   it('says it is not recorded yet, and carries the boundary sentence', () => {
     const row = find(computeReadiness(ossur()), 'change-record')
     expect(row.status).toBe('missing')
-    expect(row.detail).toBe('Not recorded yet — nothing in the product writes down a configuration change.')
+    expect(row.detail).toBe('Not recorded yet: nothing in the product writes down a configuration change.')
     expect(row.notes[0]).toContain('reconstructed from what each update searched')
   })
 
@@ -786,13 +786,13 @@ describe('retention', () => {
     const row = find(computeReadiness(ossur()), 'retention')
     expect(row.status).toBe('exists')
     expect(row.detail).toBe(
-      '768 comments fall due to be read again on 17 Sep 2026 — one night’s re-read budget is 5,000 comments, shared across every workspace.',
+      '768 comments fall due to be read again on 17 Sep 2026. One night’s re-read budget is 5,000 comments, shared across every workspace.',
     )
   })
 
   it('reads the trial workspace’s own batch', () => {
     expect(find(computeReadiness(sealand()), 'retention').detail)
-      .toBe('351 comments fall due to be read again on 18 Sep 2026 — one night’s re-read budget is 5,000 comments, shared across every workspace.')
+      .toBe('351 comments fall due to be read again on 18 Sep 2026. One night’s re-read budget is 5,000 comments, shared across every workspace.')
   })
 
   it('never promises this workspace a night of its own', () => {

@@ -1,10 +1,10 @@
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { fullDate } from '@/lib/format'
-import { QUARTERLY_RULE } from '@/lib/reports/quarterly'
 import { staleQuarterlySnapshot, type QuarterlySnapshotData } from '@/lib/reports/quarterly-build'
 import { quarterlyBlocksFor } from '@/components/blocks/quarterly'
 import { Slide } from './slide'
+import { withCurrentWords } from '@/lib/reports/legacy-words'
 
 // The quarterly review on paper (Phase 1 WP20).
 //
@@ -56,6 +56,8 @@ const QUARTERLY_TYPE_FLOOR = 'deferred' as const
 const fmtDate = (d: Date) => fullDate(d.toISOString())
 
 export function QuarterlyDeck({ data, date = fmtDate(new Date()) }: { data: QuarterlySnapshotData; date?: string }) {
+  // A snapshot built before the em-dash sweep re-renders in the current words.
+  data = withCurrentWords(data)
   const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
   // Asked before anything dereferences `data.reading`, whose shape changed
   // incompatibly in block D (`QUARTERLY_SNAPSHOT_VERSION`).
@@ -63,16 +65,11 @@ export function QuarterlyDeck({ data, date = fmtDate(new Date()) }: { data: Quar
   const blocks = stale ? [] : quarterlyBlocksFor(data.keys)
   const chrome = {
     context: `${data.company} · ${data.period} · reading as at ${fullDate(data.readingAt)}`,
-    // TWO LINES, NOT ONE, BECAUSE THE SECOND SENTENCE IS THE GATE. The weekly
-    // deck's one-line `truncate` footer carries a 134-character rule; this one
-    // is 195, and the clause ellipsed on every sheet was "A quarter is
-    // compared with the quarter before it only where six monthly readings
-    // stand behind both sides" — the artefact's central fact, and the reason
-    // half its columns are empty.
+    // THE DATE ALONE. The six-month gate is said once, on the cover's stat
+    // card beside the count it depends on (copy de-clutter 2026-09-24); eight
+    // copies of it in the footer were the loudest repetition in the document.
     footer: (
-      <p className="line-clamp-2 font-mono text-[10.5px] leading-[1.3] text-muted-foreground">
-        <span className="text-secondary-foreground">{QUARTERLY_RULE}</span>
-        <span aria-hidden> · </span>
+      <p className="font-mono text-[10.5px] leading-[1.3] text-muted-foreground">
         <span>{date}</span>
       </p>
     ),

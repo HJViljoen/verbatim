@@ -43,12 +43,9 @@ describe('voiceCast', () => {
     expect(draw()).toContain('Drives')
   })
 
-  it('never calls its population "comments" — it is not a comment count', () => {
-    // `insight_population` counts the points Pass A extracted and the
-    // workspace holds: Össur's 3,129 against 10,534 comments in the September
-    // category. "Comments" has a fixed meaning in this product's copy.
+  it('never calls its population "comments", and no longer narrates it (copy de-clutter B37)', () => {
     const text = draw()
-    expect(text).toContain('read over 3,129 separate points people made')
+    expect(text).not.toContain('separate points people made')
     expect(text).not.toContain("comments' worth")
   })
 
@@ -78,16 +75,16 @@ describe('voiceCast', () => {
     // page's one exception to the comment clock. The mock's words for it —
     // "current state, not a trend" — cannot be printed: "trend" is on the
     // product's own direction list.
-    expect(draw()).toContain('A group is named only where at least 3 videos carry it.')
-    expect(draw()).toContain('this month as it stands, never compared with another month')
+    expect(draw()).toContain('3-video floor')
+    expect(draw()).not.toContain('never compared with another month')
   })
 
   it('sets the groups as three cards abreast, the way the artboard does', () => {
     expect(render(voiceCast.render(voiceFixture(), 'app', ctx))).toContain('xl:grid-cols-3')
   })
 
-  it('dates the cast by the update that wrote it — this block is the one exception on the page', () => {
-    expect(draw()).toContain('Who is talking, as read on')
+  it('prints no masthead date while the cast is current (copy de-clutter B40)', () => {
+    expect(draw()).not.toContain('Who is talking, as read on')
   })
 
   it('says when a later update has landed since the profile was written', () => {
@@ -131,7 +128,7 @@ describe('voiceCast', () => {
   })
 
   it('still prints the floor note when it has nothing to show — the floor is why', () => {
-    expect(draw(refusedVoiceFixture())).toContain('A group is named only where at least 3 videos carry it')
+    expect(draw(refusedVoiceFixture())).toContain('3-video floor')
   })
 
   it('declares one figure, and it is a count — the cast is a description, not a ladder', () => {
@@ -159,7 +156,7 @@ describe('voiceCast', () => {
     // real links and an arrow. A sentence about how the reading was made is
     // not a destination.
     const markup = render(voiceCast.render(voiceFixture(), 'app', ctx))
-    expect(markup).toContain('A group is named only where at least')
+    expect(markup).toContain('3-video floor')
     expect(markup).not.toContain('/dashboard/voice#cast')
   })
 })

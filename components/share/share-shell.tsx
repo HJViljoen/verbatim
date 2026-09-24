@@ -5,12 +5,16 @@ import { LinkGuard } from '@/components/share/link-guard'
 import { sectionSlides } from '@/lib/reports/compose'
 import { audienceLabel, substituteFigures } from '@/lib/reports/cover'
 import { methodOf, type ReportSnapshotData } from '@/lib/reports/types'
+import { withCurrentWords } from '@/lib/reports/legacy-words'
 
 // A shared report, read live from its snapshot (D5): the cover, then every
 // section as its APP-mode tiles — the evidence popovers work, which is what
 // a link is for and a PDF cannot do. Client-led: the client's name leads,
 // Verbatim is the provenance line and the one link at the foot.
 export function ShareShell({ data, appUrl }: { data: ReportSnapshotData; appUrl: string }) {
+  // A snapshot built before the em-dash sweep re-renders with today's words
+  // (lib/reports/legacy-words.ts), the same walk the decks and emails take.
+  data = withCurrentWords(data)
   const parts = substituteFigures(data.cover.body, data.figures)
   return (
     <LinkGuard appUrl={appUrl}>
@@ -31,7 +35,6 @@ export function ShareShell({ data, appUrl }: { data: ReportSnapshotData; appUrl:
           const mod = pageModule(sec.section.page)
           if (!mod) return null
           const slides = sectionSlides(mod, sec.section, sec.data)
-          const method = methodOf(sec.data)
           return (
             <section key={sec.section.id} className="flex flex-col gap-3" aria-labelledby={`sec-${i}`}>
               <div className="flex flex-col gap-1 px-1">
@@ -57,14 +60,20 @@ export function ShareShell({ data, appUrl }: { data: ReportSnapshotData; appUrl:
                   </div>
                 ),
               )}
-              {method && <div className="px-1"><MethodNote data={method} /></div>}
             </section>
           )
         })}
 
+        {/* ONE method note per document, not one per section (copy
+            de-clutter C79): every section of one build reads the same update. */}
+        {(() => {
+          const method = data.sections.map((s) => methodOf(s.data)).find((m) => m != null)
+          return method ? <div className="px-1"><MethodNote data={method} /></div> : null
+        })()}
+
         <footer className="flex flex-wrap items-baseline justify-between gap-3 border-t border-border/70 px-1 pt-4 font-mono text-[11px] text-muted-foreground">
           <span>Prepared by {data.company} · with Verbatim</span>
-          <a href={appUrl} className="underline underline-offset-2 hover:text-foreground">Verbatim — what your customers say, with the receipts</a>
+          <a href={appUrl} className="underline underline-offset-2 hover:text-foreground">Verbatim: what your customers say, with the receipts</a>
         </footer>
       </div>
     </LinkGuard>

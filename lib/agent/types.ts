@@ -77,7 +77,7 @@ export interface AgentAnswer {
  *  the silence sentence: a promise about what we can see is not something to
  *  let a model rephrase each time. */
 export const OUT_OF_CORPUS_NOTICE =
-  'This asks about your own numbers, which we cannot see — we only read public conversation. What follows is what people are saying around the subject, not an answer about your results.'
+  'This asks about your own numbers, which we cannot see. We only read public conversation. What follows is what people are saying around the subject, not an answer about your results.'
 
 export type AgentOutcome = 'answered' | 'partial' | 'silent'
 

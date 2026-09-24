@@ -133,7 +133,7 @@ describe('gapBetween — a side that was never read', () => {
     expect(gap.state).toBe('too_little_data')
     expect(gap.gapPts).toBeNull()
     expect(gap.bandPts).toBeNull()
-    expect(gapLine(gap)).toContain('Freitag — not tracked')
+    expect(gapLine(gap)).toContain('Freitag · not tracked')
   })
 
   it('is too few to compare where neither side was read — the M3/M4-unapplied state', () => {
@@ -315,7 +315,7 @@ describe('gapPrintsLevel', () => {
       window: SEP,
     })
     expect(gapPrintsLevel(neither)).toBe(false)
-    expect(gapLine(neither)).toBe('you — not tracked · Freitag — not tracked · too few to compare')
+    expect(gapLine(neither)).toBe('you · not tracked · Freitag · not tracked · too few to compare')
   })
 
   it('agrees with what the line actually printed, on every shape the module makes', () => {
@@ -544,10 +544,10 @@ describe('gapLevels', () => {
   // "31% of 84", "31.0% of 84" and "31% (84 videos)" reach one document.
   it('tells an audience nothing was read for apart from one that carried no row', () => {
     const unread = gapAt({ b: them({ observed: false, pct: null, value: { k: 0, n: 0 } }) })
-    expect(gapLevels(unread)).toContain('Freitag — not tracked')
+    expect(gapLevels(unread)).toContain('Freitag · not tracked')
     expect(gapLevels(unread)).not.toContain('Freitag 0')
     const noRow = gapAt({ b: them({ observed: true, pct: null, value: { k: 0, n: 0 } }) })
-    expect(gapLevels(noRow)).toContain('Freitag — no reading')
+    expect(gapLevels(noRow)).toContain('Freitag · no reading')
   })
 })
 

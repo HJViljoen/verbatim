@@ -155,10 +155,10 @@ export const RIVAL_PRECEDENCE =
 
 /** What a row says about itself. Three states, said as three sentences. */
 export function rivalState(row: RivalRow): string {
-  if (row.retiredAt) return `no longer tracked — its months stay under this name and the line ends here, on ${row.retiredAt.slice(0, 10)}`
-  if (row.noAccounts) return 'no accounts configured — nothing they publish is being read'
+  if (row.retiredAt) return `no longer tracked. Its months stay under this name and the line ends here, on ${row.retiredAt.slice(0, 10)}`
+  if (row.noAccounts) return 'no accounts configured, so nothing they publish is being read'
   if (row.captured === 0) return 'accounts configured, nothing captured from them yet'
-  if (row.read === 0) return `${row.captured} of their posts captured, none read — worth checking the handles are the right accounts`
+  if (row.read === 0) return `${row.captured} of their posts captured, none read. Worth checking the handles are the right accounts`
   return `${row.captured} of their posts captured, ${row.read} read`
 }
 
@@ -198,7 +198,7 @@ export function rivalsMeta(
  *  saved. The mirror of the added row's sentence: a removal that only removed
  *  its own `x` was the one edit on this page with no visible consequence. */
 export const RIVAL_REMOVED_PENDING =
-  'taken off here, not yet saved — their months stay under this name and the line ends when you save'
+  'taken off here, not yet saved. Their months stay under this name and the line ends when you save'
 
 /** The rule beside it. Taking a rival off the list does not zero their
  *  standing — it ends the line, and the months already counted stay where they

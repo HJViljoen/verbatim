@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import { AgentDocumentView } from '@/components/agent-document'
 import type { ClaimResult, Judgement, AskSummary } from '@/lib/ask/types'
 import type { Segment } from '@/lib/ask/anchor'
+import type { QuoteItem } from '@/components/quotes'
 
 // The check on the left, their document on the right — the artifact-panel
 // shape, and Heinrich's idea. It resolves the thing that made "notes inside the
@@ -32,7 +33,7 @@ export function AgentDocumentSplit({
   claims: ClaimResult[]
   summary: AskSummary
   judgement: Judgement[]
-  quotesByClaim: Map<string, string[]>
+  quotesByClaim: Map<string, (string | QuoteItem)[]>
   segments: Segment[]
   anchored: string[]
   notice: string | null

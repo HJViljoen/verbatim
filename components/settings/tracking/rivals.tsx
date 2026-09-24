@@ -52,7 +52,17 @@ export interface RivalsSectionProps {
 export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: RivalsSectionProps) {
   const [draft, setDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const head = ['Rival', 'Accounts we read', 'Tracked since', `Own posts · ${monthName(month)}`, ''] as const
+  // The clock notes ride on the column heads as hovers (copy de-clutter C91,
+  // C113): each is the definition of one column, and a paragraph under the
+  // table said it on every visit.
+  const ownBasis = rows.find((r) => r.ownPosts)?.ownPosts?.basis
+  const head = [
+    'Rival',
+    'Accounts we read',
+    <span key="since" title={TRACKED_SINCE_NOTE} className="cursor-help underline decoration-dotted underline-offset-2">Tracked since</span>,
+    <span key="own" title={`Own posts are dated by the day the post went up, a different clock from everything else on this page${ownBasis ? `: ${ownBasis}` : ''}.`} className="cursor-help underline decoration-dotted underline-offset-2">{`Own posts · ${monthName(month)}`}</span>,
+    '',
+  ] as const
   const refusal = rivalRefusalNote(rows, month)
 
   function add() {
@@ -127,7 +137,7 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
                           {/* No `@` on YouTube: it is read by CHANNEL ID and an
                               @name reads nothing at all, so printing one as a
                               handle teaches a client the wrong shape to paste. */}
-                          {platformLabel(p.platform)} {p.handle ? (p.platform === 'youtube' ? p.handle : `@${p.handle}`) : '— not tracked'}
+                          {platformLabel(p.platform)} {p.handle ? (p.platform === 'youtube' ? p.handle : `@${p.handle}`) : 'not tracked'}
                           {p.captured > 0 ? ` · ${p.captured} captured, ${p.read} read` : ''}
                         </span>
                       ))}
@@ -144,7 +154,7 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
                   // and five copies of it down a 132px column is five rows of
                   // three-line text saying one thing. The dash says there is no
                   // census; the note under the table says why, once.
-                  : <span key="o" className="block text-right text-[11.5px] text-muted-foreground">— not read</span>,
+                  : <span key="o" className="block text-right text-[11.5px] text-muted-foreground">not read</span>,
                 dropped && canEdit
                   ? (
                     <span key="r" className="block text-right">
@@ -177,9 +187,9 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
                   <span className="min-w-0 truncate text-[12.5px] font-medium">{name}</span>
                   <input type="hidden" name="competitor_names" value={name} />
                 </span>,
-                <span key="h" className="block text-[12.5px] text-muted-foreground">added here, not yet saved — nothing of theirs is read until it is</span>,
-                <span key="t" className="block text-right font-mono text-[11.5px] text-muted-foreground">—</span>,
-                <span key="o" className="block text-right text-[11.5px] text-muted-foreground">—</span>,
+                <span key="h" className="block text-[12.5px] text-muted-foreground">added here, not yet saved. Nothing of theirs is read until it is</span>,
+                <span key="t" className="block text-right font-mono text-[11.5px] text-muted-foreground">{'—'}</span>,
+                <span key="o" className="block text-right text-[11.5px] text-muted-foreground">{'—'}</span>,
                 <span key="r" />,
               ]}
             />
@@ -210,7 +220,6 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
       <SectionNotes
         notes={[
           HANDLE_FORMAT_CAVEAT,
-          TRACKED_SINCE_NOTE,
           // ST12: the reason, ONCE. `rivalState`'s account-less sentence is
           // the same 52 characters on every rival with no handles — three
           // copies down a `minmax(0,1fr)` column here, five on a workspace
@@ -226,10 +235,7 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
           // caller that passed no month, where that column is not drawn and
           // the sentence would otherwise go unsaid.
           rows.some((r) => r.noAccounts && !r.retiredAt) && !rows.some((r) => r.ownPostsWhy)
-            ? 'Where no account is configured for a rival, nothing they publish is being read — only what a search finds.'
-            : null,
-          rows.some((r) => r.ownPosts)
-            ? `Own posts are dated by the day the post went up, which is a different clock from everything else on this page — ${rows.find((r) => r.ownPosts)?.ownPosts?.basis}.`
+            ? 'Where no account is configured for a rival, nothing they publish is being read, only what a search finds.'
             : null,
           ...[...new Set(rows.map((r) => r.ownPostsWhy).filter((w): w is string => w != null))],
         ]}
@@ -249,4 +255,4 @@ export const NO_ACCOUNTS_SHORT = 'no accounts configured'
 export const RENAME_UNAVAILABLE = 'renaming needs their identity, which has not shipped here yet'
 
 export const TRACKED_SINCE_NOTE =
-  '“Tracked since” is the earliest evidence in our own data that we were reading the name — not the day you asked for it, which nothing recorded until now.'
+  '“Tracked since” is the earliest evidence in our own data that we were reading the name, not the day you asked for it, which nothing recorded until now.'

@@ -197,17 +197,15 @@ describe('calendarBandsFor', () => {
     const bands = calendarBandsFor([s])
     expect(bands).toHaveLength(1)
     expect(bands[0].months).toEqual(['2026-04-01', '2026-05-01'])
-    expect(bands[0].label).toContain('Read back at setup')
-    // The band is a run of months, so it counts them rather than lifting the
-    // point's "this month" sentence over five years of axis.
-    expect(bands[0].label).toContain('these 2 months had already closed')
-    expect(bands[0].label).not.toContain('this month had already closed')
+    // The band is a run of months, so it counts them; the reason is How to
+    // read's (copy de-clutter A64).
+    expect(bands[0].label).toBe('2 months read at setup')
   })
 
   it('keeps the singular sentence when the band is one month', () => {
     const back: MonthLabel = { kind: 'read_back_at_setup', text: 'x' }
     const one = calendarBandsFor([series([point('2026-04-01', { labels: [back] })])])
-    expect(one[0].label).toContain('this month had already closed')
+    expect(one[0].label).toBe('Read at setup')
   })
 
   it('draws two bands when a month we read live sits between two back-reads', () => {
@@ -220,7 +218,7 @@ describe('calendarBandsFor', () => {
     ])
     const bands = calendarBandsFor([s])
     expect(bands.map((b) => b.months)).toEqual([['2026-01-01', '2026-02-01'], ['2026-04-01']])
-    expect(bands[1].label).toContain('this month had already closed')
+    expect(bands[1].label).toBe('Read at setup')
   })
 
   it('does NOT break the band on a month nobody has a row for', () => {

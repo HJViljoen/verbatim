@@ -218,7 +218,7 @@ export function spanOf(months: readonly string[]): string {
  */
 export function voiceNote(input: { citations: number; readable: number; inMonth: number }): string {
   if (input.citations === 0) return 'nothing has been said about this one yet'
-  if (input.readable === 0) return 'what was said about this one could not be quoted — too short, or nothing but a handle'
+  if (input.readable === 0) return 'what was said about this one could not be quoted: too short, or nothing but a handle'
   if (input.inMonth === 0) return 'nothing quotable was said about this one this month'
   return 'the voices from this month are already quoted above'
 }
@@ -688,7 +688,7 @@ async function loadConfirming(
   // 7.1%" while August was still filling.
   const closed = point?.pct == null ? null : { value: point.pct, frozen: point.state === 'frozen' }
   const line = confirmingLine(last, sentReadingOf(led), closed)
-  return line ? `${led.label} — ${line}` : null
+  return line ? `${led.label}: ${line}` : null
 }
 
 /** A sent row whose object CAN be re-read as a month series. The narrowing is
@@ -716,4 +716,4 @@ export function pickLed(rows: readonly ReadableSent[]): ReadableSent | null {
 }
 
 export const briefStaleLine = (brief: BriefLink): string =>
-  `Built ${shortDate(brief.builtAt)}, before this reading — the numbers in it are that day’s.`
+  `Built ${shortDate(brief.builtAt)}, before this reading. The numbers in it are that day’s.`

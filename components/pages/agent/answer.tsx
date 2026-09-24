@@ -118,7 +118,7 @@ function OwnSide({ f }: { f: FindingMeasure }) {
       <span data-copy="figure">
         {fmtInt(f.own.value.k)} of {fmtInt(f.own.value.n)} videos
       </span>
-      {f.own.thin ? <> — <span className="text-[12px] font-medium text-muted-foreground">{TOO_FEW}</span></> : null}
+      {f.own.thin ? <> · <span className="text-[12px] font-medium text-muted-foreground">{TOO_FEW}</span></> : null}
     </p>
   )
 }
@@ -167,8 +167,8 @@ function FindingChart({ f }: { f: FindingMeasure }) {
         <p className="m-0 font-mono text-[11px] text-muted-foreground">{label}</p>
         <p className="m-0 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
           {readable === 0
-            ? 'No month on this axis carries a reading, so there is no line to draw.'
-            : 'Two readings are not a trend, so the months are named rather than drawn.'}
+            ? 'No month on this axis carries a reading.'
+            : 'Two readings: months named, not drawn.'}
         </p>
       </div>
     )
@@ -247,7 +247,7 @@ function MonthTrail({ f }: { f: FindingMeasure }) {
                 {when} {p.pct}% ({fmtInt(p.k as number)} of {fmtInt(p.n as number)})
               </span>
             ) : (
-              <span data-copy="figure" className="whitespace-nowrap">{when} —</span>
+              <span data-copy="figure" className="whitespace-nowrap">{when}:</span>
             )}
           </Fragment>
         )

@@ -225,7 +225,7 @@ export async function loadProfile(scope: Scope): Promise<ProfileData | ProfileEm
       platforms,
       videos: null,
       comments: null,
-      note: `${personas.length} ${personas.length === 1 ? 'persona' : 'personas'} built from this update's insight population — each one's share is of this profile, not of the whole tracked category.`,
+      note: `${personas.length} ${personas.length === 1 ? 'persona' : 'personas'} built from this update's insight population. Each one's share is of this profile, not of the whole tracked category.`,
     },
   }
 }

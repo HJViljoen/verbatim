@@ -17,7 +17,7 @@ import type { Verdict, VerdictFlag } from './verdicts'
 // S; Phase 0's replay found 17 of 20 themes in that position). The band is then corrected for
 // the size of that set (Holm), at most three flags are shown, largest first,
 // and while fewer than three of the trailing months clear the floor the whole
-// check reads "baseline forming — {n} of 3 months" and flags nothing.
+// check reads "baseline forming: {n} of 3 months" and flags nothing.
 //
 // WHY THE CORRECTION IS PART OF THE RULE AND NOT A REFINEMENT. Run weekly over
 // a few hundred themes at an uncorrected band, the check would flag roughly a
@@ -179,9 +179,9 @@ export interface WeekVsBaselineOptions {
 
 // ---- The sentence the check prints while it is asleep ------------------------
 
-/** "baseline forming — 2 of 3 months", or "baseline ready". */
+/** "baseline forming: 2 of 3 months", or "baseline ready". */
 export function baselineLabel(monthsClearing: number, required: number = BASELINE_MONTHS): string {
-  return monthsClearing >= required ? 'baseline ready' : `baseline forming — ${monthsClearing} of ${required} months`
+  return monthsClearing >= required ? 'baseline ready' : `baseline forming: ${monthsClearing} of ${required} months`
 }
 
 /** The state of one denominator's baseline: how many of the trailing months

@@ -71,7 +71,7 @@ describe('communityRows', () => {
     const amputee = rows.find((r) => r.key === 'amputee')!
     expect(amputee.unconfigured).toBe(true)
     expect(amputee.status).toBeNull()
-    expect(communityWords(amputee)).toBe('not on your list — the search found it')
+    expect(communityWords(amputee)).toBe('not on your list; the search found it')
     expect(unconfiguredShare(rows)).toEqual({ posts: 49, fromUnconfigured: 23, pct: 46.9 })
   })
 
@@ -144,7 +144,7 @@ describe('rivalRows', () => {
   it('tells named, configured and read apart — three states, not two', () => {
     const ottobock = rows.find((r) => r.name === 'Ottobock')!
     expect(ottobock.noAccounts).toBe(true)
-    expect(rivalState(ottobock)).toBe('no accounts configured — nothing they publish is being read')
+    expect(rivalState(ottobock)).toBe('no accounts configured, so nothing they publish is being read')
 
     const freitag = rows.find((r) => r.name === 'Freitag')!
     expect(rivalState(freitag)).toContain('28 of their posts captured, none read')

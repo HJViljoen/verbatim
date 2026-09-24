@@ -45,7 +45,7 @@ describe('WK1 · unusual this week', () => {
     // decomposes a flag by audience. What is printed in that slot is the
     // banded k-of-n the code can actually write — the object, both levels, the
     // difference and the band it cleared — inside a verdict node.
-    expect(text).toContain('Objections ran at 13.7% of this update against 3.5% across Jun 2026, Jul 2026, Aug 2026 — a difference of 10.2 points, on a band of 4.9.')
+    expect(text).toContain('Objections ran at 13.7% of this update against 3.5% across Jun 2026, Jul 2026, Aug 2026, a difference of 10.2 points, on a band of 4.9.')
     expect(text).not.toContain('×')
   })
 
@@ -97,12 +97,12 @@ describe('WK1 · unusual this week', () => {
     expect(text).toContain('August had not finished when this was read')
   })
 
-  it('marks a baseline that was not read under one grouping', () => {
-    // `baseline_regime` exists so a surface can say this; printing the
-    // filling-months caveat and not this one tells a reader the comparison
-    // will move without telling them it may not be like for like.
+  it('leaves the grouping caveat to the page-foot note, said once for the page', () => {
+    // Copy de-clutter C34: the regime caveat is the page foot's; the flag
+    // keeps only its own filling caveat.
     const text = renderText(weekUnusual.render(weekFixture(), 'app', ctx))
-    expect(text).toContain('not all read under one grouping, so the comparison is not strictly like for like')
+    expect(text).not.toContain('not all read under one grouping')
+    expect(text).toContain('August had not finished when this was read')
   })
 
   it('says nothing about the grouping where the check read one', () => {
@@ -155,7 +155,7 @@ describe('WK1 · unusual this week', () => {
 
   it('says "nothing unusual in this update" in full, with the set it watched', () => {
     const text = renderText(weekUnusual.render(withState('nothing_unusual'), 'app', ctx))
-    expect(text).toContain('Nothing unusual in this update. Every one of the 31 objects this check watches read inside its usual band.')
+    expect(text).toContain('Nothing unusual in this update (31 watched).')
     // ONE CLOCK PER SENTENCE (design review F8). The question, the metas and
     // the footer all say "update"; these three said "week", on a page where
     // Sealand's newest update covers thirty days. The block's TITLE keeps the
@@ -169,8 +169,8 @@ describe('WK1 · unusual this week', () => {
 
   it('says when the check can first speak, rather than "forming" and nothing', () => {
     const text = renderText(weekUnusual.render(thinFixture(), 'app', ctx))
-    expect(text).toContain('baseline forming — 1 of 3 months; the check starts with the November reading.')
-    expect(text).toContain('does not have three yet')
+    expect(text).toContain('baseline forming: 1 of 3 months; the check starts with the November reading.')
+    expect(text).toContain('Not checked in this update.')
     // AND NEVER SAYS THE WEEK WAS QUIET. A baseline that cannot speak has not
     // found nothing; it has not looked.
     expect(text).not.toContain('Nothing unusual this week')
@@ -198,7 +198,7 @@ describe('WK1 · unusual this week', () => {
 
   it('tells "nobody has looked" apart from "nothing was unusual"', () => {
     const text = renderText(weekUnusual.render(withState('not_checked', { setSize: null, tested: null }), 'app', ctx))
-    expect(text).toContain('No update has run this check for this workspace yet — which is not the same as nothing being unusual.')
+    expect(text).toContain('No update has run this check for this workspace yet.')
   })
 
   it('declares the week’s n and every figure of every flag', () => {
@@ -246,14 +246,17 @@ describe('WK1 · unusual this week', () => {
         expect(text, mode).toContain('the 9 updates behind it that found anything ran')
         expect(text, mode).toContain('1–559 videos')
         expect(text, mode).toContain('typical 462')
-        expect(text, mode).toContain('3 of them found nothing at all, drawn off the line and left out of the range')
+        expect(text, mode).toContain('3 found nothing')
         // ONCE, not twice — the defect F4 named.
         expect(text.match(/1–559/g) ?? [], mode).toHaveLength(1)
-        expect(text.match(/found nothing at all/g) ?? [], mode).toHaveLength(1)
+        expect(text.match(/found nothing at all/g) ?? [], mode).toHaveLength(0)
       }
       // The axis's own words, which are the whole deviation: thirteen
       // deliveries, not thirteen weeks.
-      expect(text, mode).toContain('the last 13 updates · what each one brought in')
+      // Where the chart is drawn its meta names the updates; the email arm,
+      // which draws no chart, prints the basis in words (C30).
+      if (mode === 'email') expect(text, mode).toContain('the last 13 updates · what each one brought in')
+      else expect(text, mode).toContain('13 updates to')
       expect(text, mode).not.toContain('weeks')
       // And no multiple: the mock's "3.1× its usual rate" has no honest form.
       expect(text, mode).not.toContain('×')
@@ -267,7 +270,6 @@ describe('WK1 · unusual this week', () => {
     for (const mode of MODES) {
       const text = renderText(weekUnusual.render(weekFixture(), mode, ctx))
       expect(text, mode).toContain('this update’s contribution to September so far: 205 of 449')
-      expect(text, mode).toContain('each point is one delivery’s own days, never a month')
     }
   })
 
@@ -299,8 +301,9 @@ describe('WK1 · unusual this week', () => {
     // counts are all still true, and the contribution is a sentence.
     const text = renderText(weekUnusual.render(absentReadingFixture(), 'app', ctx))
     expect(text).toContain('1,098 videos this update found')
-    expect(text).toContain('cannot be stated here, so every figure above is of the delivery’s own days alone')
-    expect(text).toContain('The windowed reading is not installed for this workspace')
+    // Said once, in §4 "What came in" (copy de-clutter C25, C27).
+    expect(text).not.toContain('cannot be stated here')
+    expect(text).not.toContain('The windowed reading is not installed for this workspace')
     expect(text).not.toContain('contribution to September so far')
   })
 
@@ -313,7 +316,7 @@ describe('WK1 · unusual this week', () => {
     const text = renderText(weekUnusual.render(
       { ...d, unusual: { ...d.unusual, series: { ...series, points } } }, 'app', ctx,
     ))
-    expect(text).toContain('cannot be stated here, so every figure above is of the delivery’s own days alone')
+    expect(text).not.toContain('cannot be stated here')
     expect(text).not.toContain('contribution to September so far')
   })
 
@@ -323,14 +326,14 @@ describe('WK1 · unusual this week', () => {
     // our reading, true whether or not there are three months to compare it
     // with, and the honest half of "baseline forming".
     const text = renderText(weekUnusual.render(thinFixture(), 'app', ctx))
-    expect(text).toContain('baseline forming — 1 of 3 months')
+    expect(text).toContain('baseline forming: 1 of 3 months')
     expect(text).toContain('1,098 videos this update found')
-    expect(text).toContain('the last 13 updates · what each one brought in')
+    expect(text).toContain('13 updates to')
     // SEVEN OF SEALAND'S TWELVE FOUND NOTHING. The band stands on five, and the
     // seven are drawn rather than dropped.
     // The legend's words, because the chart is drawn on this arm (F4).
     expect(text).toContain('the 5 updates behind it that found anything ran')
-    expect(text).toContain('7 of them found nothing at all, drawn off the line and left out of the range')
+    expect(text).toContain('7 found nothing')
   })
 
   it('says nothing about the series where no update carries a window', () => {
@@ -373,12 +376,12 @@ describe('the thirteen-point chart (Block D wave 2)', () => {
     const muted = markup.match(/class="m-0 text-\[11\.5px\] text-muted-foreground"/g) ?? []
     const reading = markup.match(/class="m-0 text-\[12px\] text-secondary-foreground"/g) ?? []
     expect(reading.length).toBe(2)
-    expect(muted.length).toBe(2)
-    // And the joined paragraph still carries every sentence it used to.
+    expect(muted.length).toBe(1)
+    // And the joined paragraph still carries every caveat; the basis is the
+    // chart meta's once the chart is drawn (C30).
     const text = markupText(markup)
-    expect(text).toContain('each point is one delivery’s own days, never a month.')
+    expect(text).not.toContain('the last 13 updates · what each one brought in.')
     expect(text).toContain('this update’s contribution to September so far: 205 of 449')
-    expect(text).toContain('Those months were not all read under one grouping')
     expect(text).toContain('August had not finished when this was read')
   })
 
@@ -410,7 +413,7 @@ describe('the thirteen-point chart (Block D wave 2)', () => {
     // dot at zero and not the reserved ring; the legend's swatch is the same
     // square, and its sentence ("drawn off the line") is now true of them.
     expect(markup).toContain('found nothing · the 7 days to 5 Jul')
-    expect(markup).toContain('drawn off the line and left out of the range')
+    expect(markup).toContain('3 found nothing')
   })
 
   it('names its axis as updates and never as weeks', () => {
@@ -420,7 +423,6 @@ describe('the thirteen-point chart (Block D wave 2)', () => {
     const text = renderText(weekUnusual.render(weekFixture(), 'app', ctx))
     expect(text).toContain('What each update found')
     expect(text).toContain('13 updates to 13 Sep')
-    expect(text).toContain('each point is one delivery’s own days, never a month')
     expect(text).not.toContain('per week')
     expect(text).not.toContain('a typical week')
   })
@@ -430,7 +432,7 @@ describe('the thirteen-point chart (Block D wave 2)', () => {
     // videos. This one says "videos"; the flag's says "points".
     const text = renderText(weekUnusual.render(weekFixture(), 'app', ctx))
     expect(text).toContain('1–559 videos')
-    expect(text).toContain('3 of them found nothing at all, drawn off the line and left out of the range')
+    expect(text).toContain('3 found nothing')
     expect(text).toContain('on a band of 4.9')
   })
 

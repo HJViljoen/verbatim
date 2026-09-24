@@ -77,9 +77,6 @@ export const weekRising: Block<WeekData> = {
         // face is where a reader's eye skips it until it wants it. It prints
         // only while the window read cannot answer: once M3 is applied the
         // baseline is a window and the sentence would be false.
-        footerNote={r.rows.length > 0 && r.pooledBaseline
-          ? 'the three months behind are added together, so a video talked about in two of them counts in both'
-          : undefined}
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         {r.rows.length > 0 ? (
@@ -119,8 +116,8 @@ export const weekRising: Block<WeekData> = {
                 month has four or more. The sentence now says which half it is
                 counting, in VO2's own words ("a larger share"). */}
             {r.moved > r.rows.length
-              ? `${fmtInt(r.moved)} themes cleared their band with a larger share in this month’s reading; the ${fmtInt(r.rows.length)} largest are printed.`
-              : `Nothing else of the ${fmtInt(r.pooled)} themes read against their band this month moved clearly.`}
+              ? `${fmtInt(r.rows.length)} of ${fmtInt(r.moved)} with a larger share shown, the largest first`
+              : `Nothing else of the ${fmtInt(r.pooled)} themes moved clearly this month.`}
           </Note>
         ) : null}
       </BlockFrame>
@@ -130,9 +127,9 @@ export const weekRising: Block<WeekData> = {
   figures(data): FigureTable {
     const out: FigureTable = {}
     data.rising.rows.forEach((r, i) => {
-      out[`riser_${i + 1}_videos`] = { value: r.month.k, unit: 'videos', label: `${r.label} — videos this month` }
+      out[`riser_${i + 1}_videos`] = { value: r.month.k, unit: 'videos', label: `${r.label} — videos this month` } // em-dash-ok: FigureTable label (a record key, never printed)
       if (r.verdict.changePts != null) {
-        out[`riser_${i + 1}_change`] = { value: r.verdict.changePts, unit: 'pts', label: `${r.label} — the difference` }
+        out[`riser_${i + 1}_change`] = { value: r.verdict.changePts, unit: 'pts', label: `${r.label} — the difference` } // em-dash-ok: FigureTable label (a record key, never printed)
       }
     })
     return out
@@ -152,7 +149,7 @@ export const weekRising: Block<WeekData> = {
     // THE DESIGN'S OWN ANSWER. "Nothing moved clearly" is a legitimate reading
     // and reads differently from "we could not look": the comparisons were
     // drawn and came back inside their bands.
-    return `Nothing moved clearly in ${longMonth(data.rising.month)}’s reading so far. A month that is still filling moves late, and a theme that has not cleared its band has not moved.`
+    return `Nothing moved clearly in ${longMonth(data.rising.month)}’s reading so far.`
   },
 }
 

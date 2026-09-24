@@ -11,7 +11,7 @@ import { engageDeepLink, engageVocab, loadEngageCandidates, rankEngageCandidates
 import { citationLink } from '../evidence-cite'
 import { cap, fmtInt, longMonth, platformLabel, shortDate } from '../format'
 import { rowWindow } from '../pipeline/run-bookkeeping'
-import { cleanQuote, fetchQuoteCitationsByAudience, readsAsHeroQuote, type QuoteCitation } from '../quotes'
+import { cleanQuote, fetchQuoteCitationsByAudience, readingOf, readsAsHeroQuote, readTranslations, type QuoteCitation } from '../quotes'
 import { audienceLabel } from '../readiness/types'
 import {
   BASELINE_MONTHS,
@@ -162,16 +162,6 @@ export const RIVAL_POSTS_CONSIDERED = 6
 
 /** How much of a caption stands in for the title `videos` does not have. */
 export const RIVAL_CAPTION_CHARS = 90
-
-/**
- * The two sections the mock draws and Phase 1 does not.
- *
- * Named, dated by the thing that moves them, and NOT by a calendar date: a
- * month computed at render is a promise to a paying client that is recomputed
- * every month (the OV5 precedent).
- */
-export const LATER_LINE =
-  'Comments worth a reply, and the claims flagged for awareness, are read here and on the Content page until that page retires — one digest read twice, so the two can never disagree about what is worth answering.'
 
 /**
  * Rows the reply block shows before the footer takes over.
@@ -742,7 +732,6 @@ export interface WeekData {
    * exactly as Overview prints its own, and not inside §3.
    */
   notes: MonthLabel[]
-  laterLine: string
 }
 
 // ---- the pure half -----------------------------------------------------------
@@ -810,7 +799,10 @@ export function audienceContributionLine(
  *  every time (Sealand's newest update covers 11 Aug – 10 Sep). Without it the
  *  contribution line above silently drops two thirds of what was read. */
 export function crossingLine(month: string, crossesInto: string): string {
-  return `This update also covered days of ${longMonth(crossesInto)}; the contribution above counts only its ${longMonth(month)} days.`
+  // Short form (copy de-clutter C29): the contribution line above already
+  // names its month, so "counts only its September days" restated it.
+  void month
+  return crossedIntoLine(crossesInto)
 }
 
 /** The same fact where NO contribution was printed above it — production today,
@@ -825,7 +817,7 @@ export function crossedIntoLine(crossesInto: string): string {
   return `This update also covered days of ${longMonth(crossesInto)}.`
 }
 
-/** "baseline forming — 1 of 3 months; the check starts with the November
+/** "baseline forming: 1 of 3 months; the check starts with the November
  *  reading." — the design's wording, plus the one thing it leaves out: WHEN.
  *
  *  The month named is the month in which the third complete month will have
@@ -860,7 +852,7 @@ export function newThemesLine(seen: number, shown: number, floor: number = NEW_T
   if (shown > 0) {
     return `${fmtInt(shown)} of the ${fmtInt(seen)} themes first heard in this update carried ${fmtInt(floor)} videos or more this month.`
   }
-  return `${fmtInt(seen)} themes were heard for the first time in this update and none carried ${fmtInt(floor)} videos this month. The grouping is re-made over everything we have read for you every update, so most new names are the same conversation under a new label; below the floor there is nothing a reader can hold.`
+  return `${fmtInt(seen)} themes were heard for the first time in this update and none carried ${fmtInt(floor)} videos this month.`
 }
 
 /** "above typical" / "about typical" — the mock's tag on a subject row.
@@ -918,21 +910,17 @@ export function typicalContribution(input: {
  * it into "of 6" would count a silence as a comparison that came back "not
  * above".
  */
-export function subjectLead(rows: readonly SubjectWeekRow[], month: string): string | null {
+export function subjectLead(rows: readonly SubjectWeekRow[], _month: string): string | null {
   const tagged = rows.filter((r) => r.tag != null)
   if (tagged.length === 0) return null
   const above = tagged.filter((r) => r.tag === 'above typical')
   const of = tagged.length === rows.length
     ? `your ${fmtInt(tagged.length)} ${tagged.length === 1 ? 'subject' : 'subjects'}`
     : `the ${fmtInt(tagged.length)} of your ${fmtInt(rows.length)} subjects this update could be read against`
-  const basis = `${longMonth(month)} so far`
-  if (above.length === 0) {
-    return `None of ${of} ran above typical in this update — none took a larger share of it than it holds of ${basis}.`
-  }
-  const clause = above.length === 1
-    ? `took a larger share of it than it holds of ${basis}`
-    : `each took a larger share of it than they hold of ${basis}`
-  return `${fmtInt(above.length)} of ${of} ran above typical in this update — ${namesOf(above.map((r) => r.label))} ${clause}.`
+  // The definition of "above typical" is the legend's, beside the bars
+  // (copy de-clutter C54); the lead keeps the count, the denominator, the names.
+  if (above.length === 0) return `None of ${of} ran above typical in this update.`
+  return `${fmtInt(above.length)} of ${of} ran above typical in this update: ${namesOf(above.map((r) => r.label))}.`
 }
 
 /** Up to three names, then "and N more" — never a list that runs off the line. */
@@ -1016,15 +1004,16 @@ export const PRIVACY_LINE =
  */
 export function flagFigures(flag: UnusualFlag, n: number): FigureTable {
   const k = `flag_${n}`
+  // em-dash-ok: FigureTable labels below are record keys, never printed
   return {
-    [`${k}_week_share`]: { value: round1(share(flag.week.k, flag.week.n)), unit: 'pct', label: `${flag.label} — share of this update` },
-    [`${k}_baseline_share`]: { value: round1(share(flag.baseline.k, flag.baseline.n)), unit: 'pct', label: `${flag.label} — share across the three months behind it` },
-    [`${k}_week_videos`]: { value: flag.week.k, unit: 'videos', label: `${flag.label} — videos this update` },
-    [`${k}_week_of`]: { value: flag.week.n, unit: 'videos', label: `${flag.label} — videos this update covered` },
-    [`${k}_baseline_videos`]: { value: flag.baseline.k, unit: 'videos', label: `${flag.label} — videos across the three months behind it` },
-    [`${k}_baseline_of`]: { value: flag.baseline.n, unit: 'videos', label: `${flag.label} — videos in those months` },
-    [`${k}_change`]: { value: round1(flag.changePts), unit: 'pts', label: `${flag.label} — the difference` },
-    [`${k}_band`]: { value: round1(flag.bandPts), unit: 'pts', label: `${flag.label} — the band it cleared` },
+    [`${k}_week_share`]: { value: round1(share(flag.week.k, flag.week.n)), unit: 'pct', label: `${flag.label} — share of this update` }, // em-dash-ok: FigureTable label
+    [`${k}_baseline_share`]: { value: round1(share(flag.baseline.k, flag.baseline.n)), unit: 'pct', label: `${flag.label} — share across the three months behind it` }, // em-dash-ok: FigureTable label
+    [`${k}_week_videos`]: { value: flag.week.k, unit: 'videos', label: `${flag.label} — videos this update` }, // em-dash-ok: FigureTable label
+    [`${k}_week_of`]: { value: flag.week.n, unit: 'videos', label: `${flag.label} — videos this update covered` }, // em-dash-ok: FigureTable label
+    [`${k}_baseline_videos`]: { value: flag.baseline.k, unit: 'videos', label: `${flag.label} — videos across the three months behind it` }, // em-dash-ok: FigureTable label
+    [`${k}_baseline_of`]: { value: flag.baseline.n, unit: 'videos', label: `${flag.label} — videos in those months` }, // em-dash-ok: FigureTable label
+    [`${k}_change`]: { value: round1(flag.changePts), unit: 'pts', label: `${flag.label} — the difference` }, // em-dash-ok: FigureTable label
+    [`${k}_band`]: { value: round1(flag.bandPts), unit: 'pts', label: `${flag.label} — the band it cleared` }, // em-dash-ok: FigureTable label
   }
 }
 
@@ -1278,18 +1267,21 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
     // §3's per-theme ones. `mergeSeriesNotes` collapses a run of months into
     // ONE sentence rather than repeating it per object, which is the whole
     // point of merging them here rather than printing each set's own.
-    notes: mergeSeriesNotes([...monthSet.series, ...risingRead.series]),
-    laterLine: LATER_LINE,
+    // The month's state is the page bar's ("still filling"), and where the
+    // change record begins is the record's (Settings › The record): neither
+    // is a This week fact (copy de-clutter C20, C63).
+    notes: mergeSeriesNotes([...monthSet.series, ...risingRead.series])
+      .filter((n) => n.kind !== 'still_filling' && n.kind !== 'no_change_record_before'),
   }
 }
 
 // ---- §2 · worth a reply, and §8 · flagged for awareness -----------------------
 
 const REPLIES_UNREAD =
-  'The comments this update read could not be sorted into a reply queue just now, which is not the same as there being nothing to answer.'
+  'The comments this update read could not be sorted into a reply queue just now.'
 
 const REPLIES_NO_WINDOW =
-  'This update covered no window, so there are no days for a comment worth answering to have been written in.'
+  'This update covered no window.'
 
 /**
  * The work queue, from the SAME digest the Content page reads.
@@ -1378,7 +1370,11 @@ async function buildReplies(input: {
     // from it and this page prints a date instead, but a shape whose unused
     // field is nonsense is a shape the next reader will trust.
     const shaped = shapeInbox([...worthReplying, ...awareness], { now: window.to, ownHandles, roleByAccount: roles })
-    const all = shaped.map(toReplyRow)
+    // THE TRANSLATION CACHE, like every other quote path (sweep 2026-09-24):
+    // the reply queue printed a comment's raw words, so a Korean question read
+    // untranslated where the same words elsewhere carried their English.
+    const translations = await readTranslations(supabase, shaped.map((r) => r.src.comment.text ?? ''))
+    const all = shaped.map((r) => toReplyRow(r, translations))
     const rowsOut = all.filter((r) => r.intent !== 'misinformation')
     return {
       rows: rowsOut,
@@ -1397,7 +1393,10 @@ async function buildReplies(input: {
 /** One shaped candidate as this page's row: a date where Content has an age,
  *  and the insight's own theme as the reason, humanised here so the page, the
  *  slide and the email print one string. */
-function toReplyRow(shaped: InboxRow<EngageCandidate & InboxSource>): ReplyRow {
+function toReplyRow(
+  shaped: InboxRow<EngageCandidate & InboxSource>,
+  translations: Map<string, { lang: string; english: string | null }> = new Map(),
+): ReplyRow {
   const c = shaped.src
   const link = c.category === 'misinformation' ? { href: null } : engageDeepLink(c.comment)
   return {
@@ -1407,7 +1406,7 @@ function toReplyRow(shaped: InboxRow<EngageCandidate & InboxSource>): ReplyRow {
     context: shaped.context,
     reason: cap(pretty(c.theme)),
     platform: c.comment.platform,
-    quote: { ref: quoteRef.message(c.comment.id), text: cleanQuote(c.comment.text) },
+    quote: { ref: quoteRef.message(c.comment.id), text: cleanQuote(c.comment.text), ...readingOf(translations, c.comment.text) },
     href: link.href,
     insightId: c.insightId,
   }
@@ -1986,13 +1985,13 @@ async function buildCameIn(input: {
 }
 
 const QUOTES_UNREAD =
-  'Quotes are counted against your subjects once subjects are recorded for this workspace. Until then this update’s comments are read, grouped and counted — they are simply not yours to name.'
+  'Quotes are counted against your subjects once subjects are recorded for this workspace. Until then this update’s comments are read, grouped and counted.'
 
 /** §4's own sentence for a run with no window. It used to borrow §5's, which
  *  is about objections, and printed it under the heading "New on your
  *  subjects" — one string, wrong noun. */
 const QUOTES_NO_WINDOW =
-  'This update covered no window, so there are no days for a new comment on your subjects to have been written in.'
+  'This update covered no window.'
 
 /**
  * The comments this update's window carried that sit under one of the client's
@@ -2874,7 +2873,7 @@ function mergeMix(mixes: readonly PlatformMix[]): PlatformMix {
  * The pooled baseline this page states the check's readiness from.
  *
  * Every audience together, three complete months, the same slice the check
- * itself pools (decision S) — so the sentence "baseline forming — 1 of 3
+ * itself pools (decision S) — so the sentence "baseline forming: 1 of 3
  * months" on this page and the one the check writes into `anomaly_checks` are
  * the same reading and not two.
  */

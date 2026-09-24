@@ -104,7 +104,7 @@ export async function openBillingPortal(
     .maybeSingle()
 
   if (!client?.stripe_customer_id) {
-    return { ok: false, message: 'No billing account yet — subscribe first.' }
+    return { ok: false, message: 'No billing account yet. Subscribe first.' }
   }
 
   const baseUrl = await getBaseUrl()

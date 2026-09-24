@@ -11,6 +11,7 @@ import { HowToRead } from '@/components/how-to-read'
 import { ExportMenu, ExportScope } from '@/components/export-menu'
 import { PageFrame, PageGrid, PageBar, BarPill } from '@/components/shell/page-grid'
 import { Tile, TileEmpty } from '@/components/shell/tile'
+import { Verbatim } from '@/components/shell/master-list'
 import { DetailDrawer } from '@/components/shell/detail-drawer'
 import { DrawerLink } from '@/components/shell/drawer-link'
 import { TrackThisButton } from '@/components/initiative-sheet'
@@ -144,7 +145,7 @@ function ThemeBody({ t, showNew }: { t: ThemeDetail; showNew: boolean }) {
           <div className="space-y-2 border-t border-border/70 pt-3">
             <p className="text-[10.5px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">The voices behind it</p>
             {t.quotes.map((q, n) => (
-              <blockquote key={n} className="border-l-2 border-border pl-2 text-[12.5px] italic leading-[1.4] text-foreground/90">“{q.text}”</blockquote>
+              <Verbatim key={n} quote={q.text} lang={q.lang} english={q.english} />
             ))}
             <p className="text-[11px] text-muted-foreground">a sample of the conversations behind this theme</p>
           </div>
@@ -184,7 +185,7 @@ const movers: R = (d, mode) => {
       {d.updatesCount < 2 ? (
         <TileEmpty>Movement lands with your second update.</TileEmpty>
       ) : rows.length === 0 ? (
-        <TileEmpty>No theme has moved clearly yet — {steadyCount > 0 ? `${steadyCount} heard in more than one update, all steady so far` : 'the themes heard so far are all new this update'}.</TileEmpty>
+        <TileEmpty>No theme has moved clearly yet: {steadyCount > 0 ? `${steadyCount} heard in more than one update, all steady so far` : 'the themes heard so far are all new this update'}.</TileEmpty>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col justify-between overflow-hidden">
           {rows.slice(0, MOVER_ROWS).map((t) => <MoverRow key={t.key} t={t} />)}
@@ -248,6 +249,7 @@ const ribbon: R = (d, mode) => {
                 <span className={`${chip} max-w-full self-start truncate ${categoryChip(c.themeCategory)}`}>{c.themeLabel}</span>
                 <blockquote className="min-h-0 border-l-2 border-border pl-2.5 text-[12.5px] italic leading-[1.4] text-foreground/90">
                   <span className="line-clamp-4">“{c.quote.text}”</span>
+                  {c.quote.english ? <span className="mt-1 block text-[11.5px] not-italic text-muted-foreground line-clamp-3">{c.quote.english}</span> : null}
                   {c.who && <span className="mt-1 block text-[10.5px] not-italic text-muted-foreground">{c.who}</span>}
                 </blockquote>
               </>
@@ -259,7 +261,7 @@ const ribbon: R = (d, mode) => {
           })}
         </div>
       ) : (
-        <TileEmpty>{d.map.totalThemes === 0 ? 'Verbatim voices land with your first analysed update.' : 'No quotable voices under these filters yet — the list has every theme.'}</TileEmpty>
+        <TileEmpty>{d.map.totalThemes === 0 ? 'Verbatim voices land with your first analysed update.' : 'No quotable voices under these filters yet. The list has every theme.'}</TileEmpty>
       )}
     </Tile>
   )
@@ -410,7 +412,7 @@ export function VoicePage({ data: d, detail, params }: { data: VoiceData | Voice
         </PageBar>
         <PageGrid>
           <Tile col={12} row={2} eyebrow="The conversation, by theme">
-            <TileEmpty>Your customer voices land with your first update — check back then.</TileEmpty>
+            <TileEmpty>Your customer voices land with your first update.</TileEmpty>
           </Tile>
         </PageGrid>
       </PageFrame>
@@ -472,7 +474,7 @@ export function VoicePage({ data: d, detail, params }: { data: VoiceData | Voice
       </DetailDrawer>
       )}
 
-      <DetailDrawer open={detail === 'language'} closeHref={closeHref} title="How your customers talk" description={`${fmtInt(d.phrases.total)} phrases, verbatim — the words to borrow`}>
+      <DetailDrawer open={detail === 'language'} closeHref={closeHref} title="How your customers talk" description={`${fmtInt(d.phrases.total)} phrases, verbatim: the words to borrow`}>
         <div className="flex flex-wrap gap-1.5">
           {d.phrases.all.map((s, i) => (
             <span key={i} title={s.platform ? platformLabel(s.platform) : undefined} className="rounded-[4px] bg-inner px-2.5 py-1 text-[12px] italic leading-[1.35] text-foreground/80">{s.text}</span>

@@ -106,7 +106,7 @@ export function EnhancedTable({ children, filterPlaceholder = 'Filter rows…', 
           />
         </div>
         <span className="shrink-0 font-mono text-[10.5px] tabular-nums text-muted-foreground" role="status">
-          {shown ? `${shown.visible} of ${shown.total}` : sort ? <span className="inline-flex items-center gap-1">sorted {sort.dir === 'asc' ? <ArrowUp className="size-3" aria-hidden /> : <ArrowDown className="size-3" aria-hidden />}</span> : 'click a heading to sort'}
+          {shown ? `${shown.visible} of ${shown.total}` : sort ? <span className="inline-flex items-center gap-1">sorted {sort.dir === 'asc' ? <ArrowUp className="size-3" aria-hidden /> : <ArrowDown className="size-3" aria-hidden />}</span> : null}
         </span>
       </div>
       {/* Bounded so the header actually sticks: this box is the scroller. */}

@@ -67,6 +67,18 @@ describe('the archive', () => {
       .toContain('Nothing was exported in those dates.')
   })
 
+  // Nothing anywhere is one line, not three headed columns of "nothing yet"
+  // (sweep 2026-09-24: an absence is a state, never a card's whole body).
+  it('says an empty archive in one line', () => {
+    const text = renderText(tile([
+      column({ items: [], held: 0 }),
+      column({ key: 'built', label: 'Built', meta: 'documents', items: [], held: 0, empty: 'Nothing built by hand yet.' }),
+      column({ key: 'exported', label: 'Exported', meta: 'pages and cards', items: [], held: 0, empty: 'Nothing exported yet.' }),
+    ]))
+    expect(text).toContain('Nothing sent yet. Nothing built by hand yet. Nothing exported yet.')
+    expect(text).not.toContain('to your inbox')
+  })
+
   // A SILENT TRUNCATION IS THE DEFECT `listCap` EXISTS TO STOP, one level up.
   // A column holding more than it draws says so — counted in the rows it
   // HOLDS under the filter the reader has set, never in the group's all-time

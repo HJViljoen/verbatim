@@ -239,10 +239,10 @@ const termList = (what: string) =>
   z.array(z.string())
     .max(MAX_TERMS_PER_BUCKET, `keep at most ${MAX_TERMS_PER_BUCKET} ${what}`)
     .refine((xs) => xs.every((x) => x.trim().length >= MIN_KEYWORD_CHARS), {
-      message: `each term needs at least ${MIN_KEYWORD_CHARS} characters — shorter words find the whole internet`,
+      message: `each term needs at least ${MIN_KEYWORD_CHARS} characters, because shorter words find the whole internet`,
     })
     .refine((xs) => xs.every((x) => x.trim().length <= MAX_TERM_CHARS), {
-      message: `keep each term under ${MAX_TERM_CHARS} characters — a search box does not read a sentence`,
+      message: `keep each term under ${MAX_TERM_CHARS} characters, because a search box does not read a sentence`,
     })
 
 const termsSchema = z.object({
@@ -306,7 +306,7 @@ export async function updateSearchTerms(
   // declining silently. Reporting "Saved." on a write that did nothing is the
   // failure mode this catches.
   if (count === 0) {
-    return { ok: false, message: 'Nothing was saved — this workspace has no tracking setup yet. Talk to us and we’ll set it up.' }
+    return { ok: false, message: 'Nothing was saved. This workspace has no tracking setup yet. Talk to us and we’ll set it up.' }
   }
 
   const { error: exclErr } = await updateWithActor(
@@ -328,7 +328,7 @@ export async function updateSearchTerms(
     // column does not exist yet. Everything else is ours to chase, not theirs.
     return isMissingColumn(exclErr, 'exclude_terms')
       ? { ok: true, message: 'Saved. Exclusions need a database update that hasn’t shipped yet.' }
-      : { ok: true, message: 'Saved — except the “Not this” list, which we could not store. Try that part again.' }
+      : { ok: true, message: 'Saved, except the “Not this” list, which we could not store. Try that part again.' }
   }
   return { ok: true, message: 'Saved. Your next update searches these terms.' }
 }
@@ -384,7 +384,7 @@ export async function updateCommunity(
     return { ok: false, message: 'Could not read what we watch right now. Try again.' }
   }
   if (!current) {
-    return { ok: false, message: 'Nothing was saved — this workspace has no tracking setup yet. Talk to us and we’ll set it up.' }
+    return { ok: false, message: 'Nothing was saved. This workspace has no tracking setup yet. Talk to us and we’ll set it up.' }
   }
 
   const entries = Array.isArray(current.subreddits) ? (current.subreddits as SubredditEntry[]) : []
@@ -406,7 +406,7 @@ export async function updateCommunity(
     return { ok: false, message: 'Could not save that. Try again, and tell us if it keeps happening.' }
   }
   if (count === 0) {
-    return { ok: false, message: 'Nothing was saved — this workspace has no tracking setup yet. Talk to us and we’ll set it up.' }
+    return { ok: false, message: 'Nothing was saved. This workspace has no tracking setup yet. Talk to us and we’ll set it up.' }
   }
 
   // WHAT IT BREAKS, WRITTEN DOWN AT WRITE TIME. Changing where we look changes
@@ -449,7 +449,7 @@ export async function updateCommunity(
       ? 'Saved. Your next update reads that community too.'
       : refused
         ? 'Saved. We will not start reading that community.'
-        : 'Saved. Your next update stops reading that community — what we already read stays.',
+        : 'Saved. Your next update stops reading that community. What we already read stays.',
   }
 }
 

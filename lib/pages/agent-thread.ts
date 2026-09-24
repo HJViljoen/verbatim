@@ -865,10 +865,10 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
       videos: null,
       comments: citations.length || null,
       note: document
-        ? `${document.summary.supported} supported · ${document.summary.contradicted} contradicted · ${document.summary.untested} untested. A claim is untested when nothing in the conversation speaks to it — the blank is the information.`
+        ? `${document.summary.supported} supported · ${document.summary.contradicted} contradicted · ${document.summary.untested} untested.`
         : findings.size > 0
           ? `Every quoted voice is a real comment, listed in the appendix. This answer rests on ${findings.size} distinct findings; our own reading is marked as such.`
-          : 'Nothing in the conversation analysed related to what was asked — a real result, not a gap in the tool.',
+          : 'Nothing in the conversation analysed related to what was asked.',
     },
   }
 }
@@ -912,7 +912,7 @@ export function agentThreadSlides(d: AgentThreadData): Slide[] {
     for (let p = 0; p < parts; p++) slides.push({ title: i === 0 ? d.title : `Follow-up ${i}`, keys: [`agent.turn:${i}:${p}`], layout: 'single' })
     if (t.answer && (t.answer.nearest.length || t.answer.judgement.length)) slides.push({ title: `${NEAREST_HEADING}, and ${JUDGEMENT_HEADING.charAt(0).toLowerCase()}${JUDGEMENT_HEADING.slice(1)}`, keys: [`agent.turn:${i}:more`], layout: 'single' })
   })
-  for (let c = 0; c < Math.ceil(d.citations.length / CITATIONS_PER_SLIDE); c++) slides.push({ title: c === 0 ? 'Evidence — every quoted voice' : 'Evidence (continued)', keys: [`agent.citations:${c}`], layout: 'single' })
+  for (let c = 0; c < Math.ceil(d.citations.length / CITATIONS_PER_SLIDE); c++) slides.push({ title: c === 0 ? 'Evidence: every quoted voice' : 'Evidence (continued)', keys: [`agent.citations:${c}`], layout: 'single' })
   if (d.silentQuestions.length) slides.push({ title: 'Nothing in the data speaks to this', keys: ['agent.silent'], layout: 'single' })
   return slides
 }

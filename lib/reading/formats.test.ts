@@ -279,7 +279,7 @@ describe('formatMatrix · three audiences, one table', () => {
       // AND IT ONLY RANKS WHAT IT SEPARATES (design review 7). `review` is read
       // off FOUR rated videos, which is under the n a distribution-free median
       // band exists at, so the verb is "and" and the sentence says why.
-      'review ran at 9.7% and story at 3.4% — measured over 4 and 40 of the category’s 144 classified videos published in September.' +
+      'review ran at 9.7% and story at 3.4%: measured over 4 and 40 of the category’s 144 classified videos published in September.' +
         ' Too few rated videos on one side for a range, so this reading does not separate them.',
     )
     // …and "what not to make" reaches past the table too. The category's own

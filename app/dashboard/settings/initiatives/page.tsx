@@ -5,7 +5,6 @@ import { getSessionContext } from '@/lib/auth'
 import { weekdayDate } from '@/lib/format'
 import { rows as readRows, row } from '@/lib/pages/read'
 import { toInitiative, type InitiativeDbRow } from '@/lib/initiatives/types'
-import { initiativePromise } from '@/lib/initiatives/measure'
 import { OldPageBanner } from '@/components/shell/old-page-banner'
 import { PARKED_INITIATIVES } from '@/lib/nav'
 
@@ -62,7 +61,7 @@ export default async function InitiativesSettingsPage() {
         <OldPageBanner page={PARKED_INITIATIVES} />
         <SettingsCard
           title="What you are trying to move"
-          description={`Each one is measured on the themes it was declared with, from the day you declared it. ${initiativePromise()}`}
+          description="Each one is measured on the themes it was declared with, from the day you declared it."
         >
           {initiatives.length === 0 ? (
             <p className="text-[12px] text-muted-foreground">

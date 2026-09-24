@@ -128,7 +128,7 @@ describe('measureAnswer', () => {
     expect(m.findings[0].audience).toBe(INDUSTRY_AUDIENCE)
     expect(m.caveats[0]).toBe(INTERPRETATION_CAVEAT)
     expect(m.caveats[1]).toBe(
-      `Your own side of Will it survive a wet commute is 26 of 84 videos in September — ${TOO_FEW}.`,
+      `Your own side of Will it survive a wet commute is 26 of 84 videos in September, ${TOO_FEW}.`,
     )
   })
 

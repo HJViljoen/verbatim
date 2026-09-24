@@ -376,7 +376,6 @@ function GapCard({ gap, row, categoryLabel }: { gap: Gap | null; row: SubjectRow
     return (
       <div className={`${CARD} flex flex-col justify-center gap-1.5`}>
         <p className={BODY}>No subject carries a reading on both sides this month.</p>
-        <p className={TRAIL}>A gap needs your own side and a tracked rival read in the same month.</p>
       </div>
     )
   }
@@ -423,7 +422,7 @@ function GapCard({ gap, row, categoryLabel }: { gap: Gap | null; row: SubjectRow
             <span data-copy="level" className="flex items-start gap-1.5 text-[10.5px] leading-[1.3] text-muted-foreground">
               <Dot tone="cat" />
               <span className="min-w-0">
-                the line is {gap.objectLabel.toLowerCase()} across {categoryLabel.toLowerCase()}, of {fmtInt(row.category.n ?? 0)} videos — not the gap
+                the line is {gap.objectLabel.toLowerCase()} across {categoryLabel.toLowerCase()}, of {fmtInt(row.category.n ?? 0)} videos, not the gap
               </span>
             </span>
           </div>
@@ -447,12 +446,16 @@ function GapCard({ gap, row, categoryLabel }: { gap: Gap | null; row: SubjectRow
  * panel videos), and the panel's SIZE — `accountCount`, built since the panel
  * shipped and rendered nowhere — is the population the level is stated over.
  */
-function AttentionCard({ attention, note }: { attention: AttentionBlock | null; note: string | null }) {
+function AttentionCard({ attention }: { attention: AttentionBlock | null }) {
   const latest = attention?.months[attention.months.length - 1] ?? null
+  // AN ABSENCE IS A STATE, NOT A CARD OF PROSE (copy sweep 3): the card keeps
+  // its caption and says "not recorded" where the level would be, the bare
+  // state L8 asks for; why it is missing is the record's to say.
   if (!attention || !latest) {
     return (
       <div className={`${CARD} flex flex-col justify-center gap-1.5`}>
-        <p className={BODY}>{note ?? 'How much attention the category held is not recorded for this workspace yet.'}</p>
+        <span className="text-[12.5px] leading-[1.35] text-foreground">Attention across the panel</span>
+        <p className={TRAIL}>not recorded</p>
       </div>
     )
   }
@@ -598,7 +601,6 @@ function Decide({ ledger, company }: { ledger: LedgerRow | null; company: string
         <Chip tone={ledger.decidedAt ? 'good' : 'plain'}>
           {ledger.decidedAt ? `${ledger.statusLabel} · ${shortDate(ledger.decidedAt)}` : `${ledger.statusLabel} · no decision recorded`}
         </Chip>
-        <span className={`${TRAIL} min-w-0`}>what the conversation did afterwards is read on the advice ledger, not here</span>
       </div>
     </div>
   )
@@ -753,7 +755,7 @@ function Moves({ data }: { data: OverviewData }) {
           one-pager says there were two moves; this says how many there were
           and where the rest are. */}
       {over > 0 ? <p className={TRAIL}>{moreLine(over, 'move', 'What was decided')}</p> : null}
-      {m.acted ? <p className={TRAIL}>{m.acted.line}</p> : null}
+      {m.acted ? <p className={TRAIL}>{m.acted.line.replace(/ — every piece of advice this product has ever given you\.$/, '.')}</p> : null}
     </div>
   )
 }
@@ -837,8 +839,6 @@ function SheetFooter({ data, company, date }: { data: OverviewData; company: str
           reach it. */}
       <p className="line-clamp-2 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
         <span className="text-secondary-foreground">Coverage</span>
-        <span aria-hidden> · </span>
-        <span>in full on “How this was read”</span>
         <span aria-hidden> · </span>
         <span>{coverage}</span>
       </p>
@@ -961,7 +961,7 @@ export function LeadershipSheet({
       <div className="flex h-full min-h-0 flex-col gap-2.5">
         <div className="grid shrink-0 grid-cols-[5fr_3.5fr_3.5fr] gap-4">
           <GapCard gap={gap} row={gapRow} categoryLabel={overview.subjects.categoryLabel} />
-          <AttentionCard attention={overview.category.attention} note={overview.category.attentionNote} />
+          <AttentionCard attention={overview.category.attention} />
           <SubjectCard row={subject} categoryLabel={overview.subjects.categoryLabel} />
         </div>
         {/* THE COLUMNS STACK FROM THE TOP; THEY DO NOT DISTRIBUTE.

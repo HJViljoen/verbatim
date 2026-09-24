@@ -4,6 +4,7 @@ import { BlockFrame, FigureCell } from '@/components/blocks/frame'
 import { fmtInt, shortDate } from '@/lib/format'
 import type { QuarterlyData } from '@/lib/pages/quarterly'
 import { QUARTER_PAGE_QUESTION, QUARTER_PAGE_TITLE, quarterLabel } from '@/lib/reports/quarterly'
+import { MOVE_PROMISE } from '@/lib/subjects/types'
 import { Card, Column, Columns, DefList, Eyebrow, Figure, Note, Row, Rule } from './parts'
 
 // QR7 · Coverage and method (mock page 7).
@@ -57,6 +58,15 @@ function inFour(lines: readonly string[]): string[][] {
   return out
 }
 
+/** The numbers card's notes, as printed. Snapshots frozen before 2026-09-24
+ *  carry a basis note on Videos, Comments and Sources that the unit row already
+ *  says, and a refused note with an em dash; render reads the new copy. */
+function noteFor(row: { id?: string; note?: string }): string | undefined {
+  if (row.id === 'videos' || row.id === 'comments' || row.id === 'sources') return undefined
+  if (row.id === 'refused') return 'each named under What we could not settle'
+  return row.note
+}
+
 export const quarterlyMethod: Block<QuarterlyData> = {
   key: 'quarterly.method',
   title: QUARTER_PAGE_TITLE.method,
@@ -80,7 +90,10 @@ export const quarterlyMethod: Block<QuarterlyData> = {
     const left = (
       <Column mode={mode} gap={6}>
         <Eyebrow mode={mode}>How this review was made</Eyebrow>
-        <Note mode={mode} tone="body">{m.line}</Note>
+        {/* THE COVERAGE LINE ONLY WHERE THE PARAGRAPHS ARE ABSENT: it restated
+            every clause below it (copy de-clutter E67), and is kept for the one
+            case it is the only thing said, a coverage that could not be read. */}
+        {m.lines.length === 0 ? <Note mode={mode} tone="body">{m.line}</Note> : null}
         {/* FOUR PARAGRAPHS, WHICH IS WHAT THE ARTBOARD SETS — not thirteen
             free-standing lines a pixel apart, which is what this read as: a
             log, in a 674px column, each entry one line long with 100px of
@@ -129,7 +142,9 @@ export const quarterlyMethod: Block<QuarterlyData> = {
           ))}
         </div>
 
-        {m.refusedLine ? <Note mode={mode}>{m.refusedLine}</Note> : null}
+        {/* ONCE PER FORWARDED DOCUMENT, HERE (ruling L6, 2026-09-24): the
+            moves page no longer carries it over its ledger. */}
+        <Note mode={mode}>{MOVE_PROMISE}</Note>
       </Column>
     )
 
@@ -145,7 +160,7 @@ export const quarterlyMethod: Block<QuarterlyData> = {
                 value: (
                   <>
                     <FigureCell mode={mode} value={row.value} />
-                    {row.note ? <Note mode={mode}>{row.note}</Note> : null}
+                    {noteFor(row) ? <Note mode={mode}>{noteFor(row)}</Note> : null}
                   </>
                 ),
               })),

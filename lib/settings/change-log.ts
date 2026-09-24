@@ -129,7 +129,7 @@ export function breakClause(change: Pick<ConfigChange, 'affects_audiences' | 'af
   const months = monthsOfRange(change.affects_months)
   if (audiences.length === 0 && !months) {
     return change.source === 'reconstructed'
-      ? 'Not known — this change was worked out afterwards, not written down at the time.'
+      ? 'Not known: this change was worked out afterwards, not written down at the time.'
       : 'Not recorded.'
   }
   // IN THE READER'S WORDS, like every other audience in the product. This

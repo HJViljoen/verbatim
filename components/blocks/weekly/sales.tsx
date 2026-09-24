@@ -214,7 +214,7 @@ function nameRest(groups: readonly SalesGroup[], total: number | null): { head: 
   const names = named.map((g) => g.label.toLowerCase())
   const head = rest === 1 ? 'One more objection' : `${fmtInt(rest)} more objections`
   return {
-    head: `${head}${rest > named.length ? ', including' : ''} —`,
+    head: `${head}${rest > named.length ? ', including' : ''}:`,
     names: names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`,
   }
 }
@@ -292,7 +292,7 @@ export const forSales: Block<{ sales: ForSalesData }> = {
             // and is printed there; this line's job is to say which pool
             // these videos come from and that they are not a second count to
             // be added to the first.
-            of="under that rival’s content, never under yours — and inside the count above"
+            of="under their content"
             denominated={false}
             last={s.switchingTotal == null}
           />
@@ -307,7 +307,7 @@ export const forSales: Block<{ sales: ForSalesData }> = {
             // D14: the mock says "both toward Sealand · 7 toward, 5 away", and
             // nothing on this branch records which way a switch points. The
             // "N below" clause is true because the card below now DRAWS them.
-            of={`comments this update${s.switching.length > 0 && s.switchingTotal > s.switching.length ? ` · ${fmtInt(s.switching.length)} below` : ''} · which way they point is not recorded`}
+            of={`comments this update${s.switching.length > 0 && s.switchingTotal > s.switching.length ? ` · ${fmtInt(s.switching.length)} below` : ''} · direction: not recorded`}
             // A COUNT OF COMMENTS, NOT A SHARE OF THE VIDEO DENOMINATOR. Every
             // other row here counts videos; this one counts comments, and
             // `videos` is not its n (FigureCell's rule for an omitted "of").
@@ -342,7 +342,7 @@ export const forSales: Block<{ sales: ForSalesData }> = {
         />
 
         {s.videos == null ? <Note mode={mode}>{NO_DENOMINATOR}</Note> : null}
-        <Note mode={mode}>{groupingLine(s.grouping)}</Note>
+        {groupingLine(s.grouping) != null ? <Note mode={mode}>{groupingLine(s.grouping)}</Note> : null}
       </div>,
     )
   },
@@ -354,6 +354,7 @@ export const forSales: Block<{ sales: ForSalesData }> = {
     const out: FigureTable = {}
     if (s.videos != null) out.sales_videos = { value: s.videos, unit: 'videos', label: 'videos this update covered' }
     s.objections.forEach((g, i) => {
+      // em-dash-ok: FigureTable label, a sent-figures record key and never printed
       out[`objection_${i + 1}_videos`] = { value: g.videos, unit: 'videos', label: `${g.label} — videos carrying it` }
     })
     if (s.switchingTotal != null) {

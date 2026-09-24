@@ -82,7 +82,7 @@ describe('the contribution line', () => {
 
   it('says so when the window reached back past the month', () => {
     expect(crossingLine('2026-09-01', '2026-08-01')).toContain('also covered days of August')
-    expect(crossingLine('2026-09-01', '2026-08-01')).toContain('counts only its September days')
+    expect(crossingLine('2026-09-01', '2026-08-01')).toBe('This update also covered days of August.')
   })
 
   it('says the crossing alone where no contribution was printed above it', () => {
@@ -108,12 +108,12 @@ describe('the baseline sentence', () => {
   })
 
   it('carries the design’s own wording', () => {
-    expect(forming.label).toBe('baseline forming — 1 of 3 months')
+    expect(forming.label).toBe('baseline forming: 1 of 3 months')
   })
 
   it('says WHEN the check can first speak, which "forming" alone does not', () => {
     expect(baselineFormingLine(forming, '2026-09-01')).toBe(
-      'baseline forming — 1 of 3 months; the check starts with the November reading.',
+      'baseline forming: 1 of 3 months; the check starts with the November reading.',
     )
     expect(baselineStartsWith(forming, '2026-09-01')).toBe('2026-11-01')
   })
@@ -167,7 +167,7 @@ describe('new themes, and the floor that makes them readable', () => {
     const line = newThemesLine(592, 0)
     expect(line).toContain('592 themes were heard for the first time')
     expect(line).toContain('none carried 10 videos this month')
-    expect(line).toContain('the same conversation under a new label')
+    expect(line).not.toContain('the same conversation under a new label')
   })
 
   it('says the plain thing when nothing was new at all', () => {
@@ -218,12 +218,12 @@ describe('the subjects lead', () => {
 
   it('counts the rows that ran above typical, k of n, and names them', () => {
     const lead = subjectLead([row('Comfort', 'above typical'), row('Price', 'above typical'), row('Durability', 'below typical')], '2026-09-01')
-    expect(lead).toBe('2 of your 3 subjects ran above typical in this update — Comfort and Price each took a larger share of it than they hold of September so far.')
+    expect(lead).toBe('2 of your 3 subjects ran above typical in this update: Comfort and Price.')
   })
 
   it('reads as one subject when one ran above', () => {
     const lead = subjectLead([row('Comfort', 'above typical'), row('Price', 'about typical')], '2026-09-01')
-    expect(lead).toBe('1 of your 2 subjects ran above typical in this update — Comfort took a larger share of it than it holds of September so far.')
+    expect(lead).toBe('1 of your 2 subjects ran above typical in this update: Comfort.')
   })
 
   it('says none rather than leaving the sentence out', () => {

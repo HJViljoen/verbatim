@@ -927,7 +927,7 @@ export async function runClusteringKey(admin: SupabaseClient, runId: string | nu
     .from('pipeline_runs').select('clustering_key').eq('id', runId).maybeSingle()
   if (error) {
     if (isMissingColumnError(error, 'clustering_key')) {
-      console.warn('[monthly-reading] pipeline_runs.clustering_key does not exist — apply supabase/migrations/20260918091000_theme_key.sql. Months are written without it; a reader reads that as "regime unknown".')
+      console.warn('[monthly-reading] pipeline_runs.clustering_key does not exist; apply supabase/migrations/20260918091000_theme_key.sql. Months are written without it; a reader reads that as "regime unknown".')
       return null
     }
     throw new Error(`read clustering key: ${(error as { message?: string }).message ?? String(error)}`)
@@ -1099,7 +1099,7 @@ export async function freezeMonths(
           // dry run has to say so rather than only "would read nothing".
           console.warn(
             `[monthly-reading] the attention half of every month this visit CLOSES for ${opts.clientId} will be ` +
-            'written with no panel, permanently — a closed audience-month takes no later row. Freeze a panel first ' +
+            'written with no panel, permanently; a closed audience-month takes no later row. Freeze a panel first ' +
             '(an account first seen before the cutoff) if the attention half is wanted for the history at all.',
           )
         }
@@ -1175,7 +1175,7 @@ export async function freezeMonths(
       // has not reached — including production between a deploy and its apply
       // window, which is a gap measured in days here.
       if (!isMissingMonthTable(e)) throw e
-      console.log(`[monthly-reading] ${side.table.table} does not exist yet — skipped, the other sides were written`)
+      console.log(`[monthly-reading] ${side.table.table} does not exist yet; skipped, the other sides were written`)
       continue
     }
     const merge = mergeMonthRows<MonthNumeratorRow>({
@@ -1241,7 +1241,7 @@ export async function freezeMonths(
     if (merge.emptyReading && merge.heldStale > 0) {
       console.error(
         `[monthly-reading] the ${what} reading for ${opts.clientId} came back EMPTY over ` +
-        `${months.join(' ')} — ${merge.heldStale} filling rows held rather than deleted. ` +
+        `${months.join(' ')}; ${merge.heldStale} filling rows held rather than deleted. ` +
         'Nothing was written for those months; find out why before the next run freezes them.',
       )
     }
@@ -1343,7 +1343,7 @@ export async function freezeMonths(
       const already = merges.filter((m) => m.rows.length > 0).map((m) => `${m.rows.length} ${m.side.table.table} rows`)
       const wrote = already.length > 0 ? `${already.join(', ')} were already written; ` : ''
       throw new Error(
-        `${TABLE_DENOMINATORS} write failed after the numerator side of the same visit — ${wrote}` +
+        `${TABLE_DENOMINATORS} write failed after the numerator side of the same visit; ${wrote}` +
         `months ${months.join(' ')} are half-written and the denominators are NOT frozen. ` +
         `Re-run the freeze for this tenant; the frozen numerator rows are kept. Cause: ${e instanceof Error ? e.message : String(e)}`,
       )

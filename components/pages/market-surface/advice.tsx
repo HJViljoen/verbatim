@@ -5,17 +5,16 @@ import { BlockQuote } from '@/components/blocks/quote'
 import { MovementBadge } from '@/components/delta-badge'
 import { RecStatusMenu, RecStatusWord } from '@/components/rec-status'
 import { TileBlock } from '@/components/shell/tile'
-import { Derivation } from './derivation'
 import { FLAG_NOTE } from '@/lib/agent/movement'
 import { fmtInt, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import {
-  ADVICE_AFTERWARDS_UNRECORDED, ADVICE_UNRECORDED, GROUNDED_CORPUS_LINE, LEDGER_FIRST_TIME_LINE,
+  ADVICE_AFTERWARDS_UNRECORDED, ADVICE_UNRECORDED, LEDGER_FIRST_TIME_LINE,
   adviceAnchor, ageInMonths, madeInMonth, marketSurfaceHref, repeatCell,
   type AdviceRow, type MarketSurfaceData,
 } from '@/lib/pages/market-surface'
-import type { Afterwards } from '@/lib/reading/afterwards'
+import { GROUNDED_BASIS, type Afterwards } from '@/lib/reading/afterwards'
 
 // MK2 · The advice, and what you decided — the ledger (design §3 MK2; ported to
 // the artboard, Block D wave 2).
@@ -142,7 +141,7 @@ function RepeatCell({ row, isNew, mode }: { row: AdviceRow; isNew: boolean; mode
     return <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>{isNew ? 'First time' : updates}</span>
   }
   if (isNew) {
-    return <span className="inline-block whitespace-nowrap rounded-full bg-warning/15 px-2 py-0.5 text-[11.5px] font-semibold text-warning">First time</span>
+    return <span title={LEDGER_FIRST_TIME_LINE} className="inline-block cursor-help whitespace-nowrap rounded-full bg-warning/15 px-2 py-0.5 text-[11.5px] font-semibold text-warning">First time</span>
   }
   return (
     <span className="flex min-w-0 flex-col gap-px">
@@ -239,7 +238,7 @@ function AfterwardsCell({ row, mode, folded = false }: { row: AdviceRow; mode: R
   return (
     <span data-copy="verdict" className="flex min-w-0 flex-col gap-0.5">
       <span className="text-[11.5px] leading-[1.35] text-secondary-foreground">{a.verdict.objectLabel}: {a.line}</span>
-      <MovementBadge verdict={a.verdict} unit="pts" good="neutral" />
+      <MovementBadge verdict={a.verdict} unit="pts" good="neutral" bandTip={mode === 'app'} />
       {notes.map((n) => <span key={n} className="text-[10.5px] leading-[1.3] text-muted-foreground">{n}</span>)}
     </span>
   )
@@ -292,9 +291,6 @@ export const marketAdvice: Block<MarketSurfaceData> = {
     // sentence is printed only while no row on the page has a reading in it —
     // which is production today, and is the honest naming of that absence.
     const anyReading = a.rows.some((r) => r.afterwards?.state === 'reading')
-    // The chip's basis, printed where a reader meets it rather than left in a
-    // `title` no keyboard and no touch reaches.
-    const anyFirstTime = a.rows.some((r) => r.firstMade.slice(0, 7) === data.month.slice(0, 7))
 
     // THE READER'S OWN ANSWER STAYS ON THE PAGE; THE DERIVATION IS ONE PRESS
     // AWAY. `requestedLine` answers a link the reader followed and the two
@@ -325,24 +321,19 @@ export const marketAdvice: Block<MarketSurfaceData> = {
             {state}
           </p>
         ) : null}
-        {/* THE POPULATION STAYS ON THE PAGE, for the same reason it does one
-            block above: `GROUNDED_CORPUS_LINE` is what makes each "3 videos"
-            in the Grounded in column a share of something a reader can name,
-            and inside `Derivation` — a SHUT `<details>` in mode `app` — the
-            one mode a reader can act in named nothing. `LEDGER_FIRST_TIME_LINE`
-            rides with it because the amber "First time" chip is dated by the
-            UPDATE's clock against a page dated by the comment's, and that is
-            the one place on this page the two clocks meet. What stays behind
-            the disclosure is how the Repeated column counts. */}
-        <p
-          className={email ? undefined : 'm-0 text-[11px] leading-[1.35] text-muted-foreground'}
-          style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 } : undefined}
-        >
-          {GROUNDED_CORPUS_LINE}{anyFirstTime ? ` ${LEDGER_FIRST_TIME_LINE}` : ''}
-        </p>
-        <Derivation mode={mode} label="How the Repeated column counts">
-          {a.repeatLine}
-        </Derivation>
+        {mode !== 'app' ? (
+          // Paper and email have no tooltip, so the basis prints once here.
+          <p
+            className={email ? undefined : 'm-0 text-[11px] leading-[1.35] text-muted-foreground'}
+            style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 } : undefined}
+          >
+            Grounded in: {GROUNDED_BASIS.charAt(0).toLowerCase() + GROUNDED_BASIS.slice(1)}
+          </p>
+        ) : null}
+        {/* The all-time basis rides on the "Grounded in" column header as a
+            tooltip, the one place this page says it (copy de-clutter ruling
+            C); the "First time" chip carries its clock as a tooltip (B57); the
+            "How the Repeated column counts" disclosure is cut (B58). */}
       </div>
     )
 
@@ -351,7 +342,9 @@ export const marketAdvice: Block<MarketSurfaceData> = {
         title={marketAdvice.title}
         question={marketAdvice.question}
         mode={mode}
-        meta={a.total > 0 ? `${fmtInt(a.total)} recommendations · oldest first · # is the identity, kept for life` : undefined}
+        // THE TOTAL ONCE (copy slip 4a): where the footer says "12 of 67
+        // shown", the meta does not say "67 recommendations" as well.
+        meta={a.total > 0 ? (more > 0 ? 'oldest first' : `${fmtInt(a.total)} recommendations · oldest first`) : undefined}
         // THE WHOLE LEDGER, NEVER A QUARTER (D12). `actedLine`'s own docstring
         // argues it: the denominator is every identity ever recommended and has
         // no quarter at all, so the artboard's "Jul → Sep 2026" note beside it
@@ -365,7 +358,7 @@ export const marketAdvice: Block<MarketSurfaceData> = {
         // arm is the same defect the other way — `ledgerRowsShown` APPENDS the
         // named row, so 13 are drawn under a note claiming 12. Both halves are
         // now read off the same array.
-        footerNote={more > 0 ? `${fmtInt(a.rows.length)} shown · ${fmtInt(more)} behind them` : undefined}
+        footerNote={more > 0 ? `${fmtInt(a.rows.length)} of ${fmtInt(a.rows.length + more)} shown` : undefined}
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         {email ? (
@@ -401,7 +394,9 @@ export const marketAdvice: Block<MarketSurfaceData> = {
                     <th className="py-1 pr-3 font-semibold">First raised</th>
                     <th className="py-1 pr-3 font-semibold">Repeated</th>
                     <th className="py-1 pr-3 font-semibold">Your decision</th>
-                    <th className="py-1 pr-3 font-semibold">Grounded in</th>
+                    <th className="py-1 pr-3 font-semibold">
+                      <span title={GROUNDED_BASIS} className="cursor-help">Grounded in</span>
+                    </th>
                     <th className="py-1 font-semibold">Afterwards</th>
                   </tr>
                 </thead>

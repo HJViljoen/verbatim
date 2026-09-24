@@ -57,8 +57,7 @@ export function forSalesBlock<D>(key: string, pick: (data: D) => ForSalesData): 
             <Section title="The objections this update heard" mode={mode}>
               <BlockRanked mode={mode} countWidth={80} barWidth={64} rows={rank(d.objections, d.videos)} />
               {d.videos == null ? <Note mode={mode}>{NO_DENOMINATOR}</Note> : null}
-              <Note mode={mode}>{groupingLine(d.grouping)}</Note>
-              <Note mode={mode}>Grounded answers to these sit in the sales brief.</Note>
+              {groupingLine(d.grouping) ? <Note mode={mode}>{groupingLine(d.grouping)}</Note> : null}
               <Quotes quotes={d.objections[0]?.quotes ?? []} mode={mode} />
             </Section>
           ) : null}
@@ -97,7 +96,7 @@ export function forSalesBlock<D>(key: string, pick: (data: D) => ForSalesData): 
                   // was cut off the page. A denominator clipped away is the
                   // measurement nobody made, arrived at by layout.
                   baseWrap
-                  base={`someone said they were moving between brands — ${of}${
+                  base={`someone said they were moving between brands · ${of}${
                     d.switchingTotal > d.switching.length ? ` · ${fmtInt(d.switching.length)} below` : ''
                   }`}
                 />
@@ -111,7 +110,7 @@ export function forSalesBlock<D>(key: string, pick: (data: D) => ForSalesData): 
                   comment sat under, which is where it was said, not where the
                   commenter was going. */}
               <Note mode={mode}>
-                Which way each switch ran — toward you or away — is not read from the comment, so it is not stated here.
+                Direction not read.
               </Note>
               <Quotes quotes={d.switching} mode={mode} />
             </Section>
@@ -154,7 +153,7 @@ export function forSalesBlock<D>(key: string, pick: (data: D) => ForSalesData): 
         out.sales_videos = { value: d.videos, unit: 'videos', label: 'videos this update covered' }
       }
       d.objections.forEach((g, i) => {
-        out[`objection_${i + 1}_videos`] = { value: g.videos, unit: 'videos', label: `${g.label} — videos carrying it` }
+        out[`objection_${i + 1}_videos`] = { value: g.videos, unit: 'videos', label: `${g.label} — videos carrying it` } // em-dash-ok: FigureTable label (a record key, never printed)
       })
       if (d.switchingTotal != null) {
         out.switching_comments = { value: d.switchingTotal, unit: 'comments', label: 'comments naming a switch' }

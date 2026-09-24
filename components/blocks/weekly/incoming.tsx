@@ -163,7 +163,7 @@ function NewTheme({ theme, mode }: { theme: { label: string; videos: number }; m
       className={mode === 'email' ? undefined : 'mt-1 first:mt-0'}
     >
       {/* The theme's own name — `pass_b_theme`, never scrubbed. */}
-      <strong data-copy="subject" data-slot="pass_b_theme">{theme.label}</strong> — heard for the first time in this update, in <span data-copy="figure">{fmtInt(theme.videos)}</span> {theme.videos === 1 ? 'video' : 'videos'}.
+      <strong data-copy="subject" data-slot="pass_b_theme">{theme.label}</strong> · first heard in this update, in <span data-copy="figure">{fmtInt(theme.videos)}</span> {theme.videos === 1 ? 'video' : 'videos'}.
       {/* NOT the mock's "26 of 1,388 category videos · first heard September":
           that denominator is a MONTH figure attached to a count of THIS
           UPDATE, which is two units in one sentence. The update's own count is
@@ -245,7 +245,9 @@ export const weeklyIncoming: Block<WeeklyData> = {
           // beside it names the other clock, and the contrast between when we
           // LOOKED and when people WROTE is the whole point of the row.
           label={i.gathered === 1 ? 'video found' : 'videos found'}
-          note={i.monthVideos != null ? `the month so far holds ${fmtInt(i.monthVideos)} videos, dated by when people wrote` : null}
+          // NO MONTH-SO-FAR NOTE (copy de-clutter, D54): §1's meta prints the
+          // month's own total, and the clock rule lives in How to read.
+          note={null}
         />
         <StatRow
           mode={mode}
@@ -331,11 +333,6 @@ export const weeklyIncoming: Block<WeeklyData> = {
             real total; the quotes below it are the shown few. */}
         {i.quotes.length > 0 ? (
           <div style={mode === 'email' ? { marginTop: 10 } : undefined} className={mode === 'email' ? undefined : 'mt-2 flex min-w-0 flex-col gap-2'}>
-            {i.quotesTotal != null ? (
-              <Note mode={mode}>
-                <span data-copy="figure">{fmtInt(i.quotesTotal)}</span> {i.quotesTotal === 1 ? 'comment' : 'comments'} on your subjects {i.quotesTotal === 1 ? 'was' : 'were'} written in these days; {i.quotes.length === 1 ? 'one is' : <><span data-copy="figure">{fmtInt(i.quotes.length)}</span> are</>} below in full.
-              </Note>
-            ) : null}
             {i.quotes.map((q, n) => <BlockQuote key={n} quote={q.quote} cite={`${q.subject} · ${q.cite}`} mode={mode} />)}
           </div>
         ) : i.quotesNote && i.quotesTotal != null ? (
@@ -372,7 +369,7 @@ export const weeklyIncoming: Block<WeeklyData> = {
 
   emptyState(data) {
     return data.incoming.gathered === 0
-      ? 'This update found no videos in the days it covered — the section is here so the shape of the report does not change.'
+      ? 'This update found no videos in the days it covered.'
       : null
   },
 }

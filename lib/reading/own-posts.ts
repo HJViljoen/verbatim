@@ -197,7 +197,7 @@ export interface OwnPostInput {
  * E-main port owns both files, so the string lives here, in the leaf, and
  * Overview re-exports it under the name its callers already use.
  */
-export const OWN_POSTS_UNREADABLE = '— not tracked · their own posts are not readable yet · Settings › Readiness'
+export const OWN_POSTS_UNREADABLE = '· not tracked · Settings › Readiness'
 
 /** The same absence WITHOUT the pointer, for a reader outside the workspace.
  *
@@ -209,7 +209,7 @@ export const OWN_POSTS_UNREADABLE = '— not tracked · their own posts are not 
  *  reader outside the workspace has no Settings to open, so they get the
  *  absence and no pointer, which is what this constant is for — a brief's PDF
  *  and a `/r/<token>` share page, which is what WP19 put it in front of. */
-export const OWN_POSTS_UNREADABLE_OUTSIDE = '— not tracked · their own posts are not readable yet'
+export const OWN_POSTS_UNREADABLE_OUTSIDE = '· not tracked'
 
 /**
  * This week's clause for the same shelf, and it is NOT the two above — read
@@ -243,7 +243,7 @@ export const OWN_POSTS_UNREAD_OUTSIDE = 'their own posts are not read yet'
  *  publish is read, so there is no census to take — which is a different
  *  sentence from "we read them and found nothing". */
 export const OWN_POSTS_NO_ACCOUNTS =
-  'No account is configured for this rival, so nothing they publish is read — add their accounts in Settings and this starts counting.'
+  'No account is configured for this rival, so nothing they publish is read. Add their accounts in Settings and this starts counting.'
 
 /**
  * What the client's own census says while `video_claims` is closed to a tenant
@@ -284,7 +284,7 @@ export const ECHO_NOT_COUNTED =
 /** No subject is named, so the posts were matched against nothing. The rail's
  *  own empty state, said where the census prints its share of it. */
 export const SUBJECTS_NONE_NAMED =
-  'No subject is named yet, so these posts were matched against nothing — name one and this starts counting.'
+  'No subject is named yet, so these posts were matched against nothing. Name one and this starts counting.'
 
 /** The posts are counted and none of them has been read for what its audience
  *  said, so there is nothing for a subject to match. The failure this sentence
@@ -300,7 +300,7 @@ export const SUBJECTS_MATCHED_NONE =
 export const ECHO_SILENT = 'The audience was read this month and nobody carried what this claim rests on.'
 
 /** The census's own empty state. */
-export const CENSUS_EMPTY = (basis: string): string => `No post was published in this period — ${basis}.`
+export const CENSUS_EMPTY = (basis: string): string => `No post was published in this period: ${basis}.`
 
 /** The basis line, and the only sentence that makes an upload-dated figure
  *  safe to print beside comment-dated ones. */
@@ -362,10 +362,10 @@ export function claimEcho(input: ClaimEchoInput): ClaimEcho {
   const word = (a: 'echoes' | 'contradicts' | 'silent'): string => claimVerdict(a).label
   const base = { audience: input.audience, audienceLabel: input.audienceLabel }
   if (input.tracked === false) {
-    return { ...base, state: 'not_tracked', value: { k: 0, n: 0 }, label: '— not tracked', why: input.why ?? OWN_POSTS_UNREADABLE }
+    return { ...base, state: 'not_tracked', value: { k: 0, n: 0 }, label: 'not tracked', why: input.why ?? OWN_POSTS_UNREADABLE }
   }
   if (input.reading == null || input.reading.n <= 0) {
-    return { ...base, state: 'not_tracked', value: input.reading ?? { k: 0, n: 0 }, label: '— not tracked', why: input.why ?? ECHO_NOT_COUNTED }
+    return { ...base, state: 'not_tracked', value: input.reading ?? { k: 0, n: 0 }, label: 'not tracked', why: input.why ?? ECHO_NOT_COUNTED }
   }
   if (input.reading.k <= 0) {
     return { ...base, state: 'silent', value: input.reading, label: word('silent'), why: input.why ?? ECHO_SILENT }

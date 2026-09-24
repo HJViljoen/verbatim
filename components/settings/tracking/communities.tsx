@@ -1,7 +1,6 @@
 import { Dot, Figure, gridIntrinsic, GridRow, GridTable, Section, SectionHead, SectionNotes } from '@/components/settings/chrome'
 import { shortDate } from '@/lib/format'
-import { REDDIT_CAP_LINE } from '@/lib/reading/method'
-import { COMMUNITY_STATE_RULE, communitiesMeta, communityWords, type CommunityRow } from '@/lib/settings/communities'
+import { communitiesMeta, communityWords, type CommunityRow } from '@/lib/settings/communities'
 import { CommunityAction, CommunityAdd } from './community-controls'
 
 // `settings.reddit.*` — the watched communities, at the artboard's density.
@@ -61,7 +60,7 @@ export function CommunitiesSection({
 }) {
   return (
     <Section>
-      <SectionHead title="Watched communities" meta={communitiesMeta(rows)} rule={COMMUNITY_STATE_RULE} />
+      <SectionHead title="Watched communities" meta={communitiesMeta(rows)} />
 
       {rows.length === 0 ? (
         <p className="text-[12.5px] text-muted-foreground">No community is watched for this workspace.</p>
@@ -122,19 +121,20 @@ export function CommunitiesSection({
         </GridTable>
       )}
 
-      <CommunityAdd canEdit={canEdit} note={REDDIT_CAP_LINE} />
+      {/* The Reddit cap is the record's and How to read's (copy de-clutter C17). */}
+      <CommunityAdd canEdit={canEdit} />
 
       {/* One paragraph, not three stacked blocks (design H2). */}
       <SectionNotes
         notes={[
           hidden > 0
-            ? `${hidden} further communit${hidden === 1 ? 'y is' : 'ies are'} not shown, between them carrying ${hiddenPosts.toLocaleString('en-GB')} post${hiddenPosts === 1 ? '' : 's'} — one or two each, dragged in by a search and not by anyone’s choice.`
+            ? `${hidden} further communit${hidden === 1 ? 'y is' : 'ies are'} not shown, between them carrying ${hiddenPosts.toLocaleString('en-GB')} post${hiddenPosts === 1 ? '' : 's'}.`
             : null,
           unconfigured.posts > 0 && unconfigured.fromUnconfigured > 0
-            ? `${unconfigured.pct.toFixed(0)}% of the Reddit posts we hold for you came from communities nobody put on the list — the search found them. They are counted the same way, and they are the first place to look when a Reddit figure looks wrong.`
+            ? `${unconfigured.pct.toFixed(0)}% of the Reddit posts we hold for you came from communities nobody put on the list; the search found them.`
             : null,
           keptClosed
-            ? 'How much of each community we kept is shown to owners and admins only — it is read off the accounts other people posted from, and the fewer copies of those we hand around the better.'
+            ? 'How much of each community we kept is shown to owners and admins only.'
             : null,
         ]}
       />

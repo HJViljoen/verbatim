@@ -14,6 +14,16 @@ import {
 } from '@/lib/reading/moves'
 import { groundingFor } from '@/lib/reading/afterwards'
 import { methodFixture, methodRecordFixture, methodRefusedFixture, recordBandFixture } from '@/lib/test/method-fixture'
+import { howSoundLine, soundFigures } from '@/lib/reading/record'
+
+/** The two refusals the page's own verdicts carry, as TOKENS. */
+const OV_RECORD_INPUTS = () =>
+  methodRecordFixture({
+    refusals: [
+      { state: 'refused', reason: 'clustering_changed' },
+      { state: 'too_little_data', reason: null },
+    ],
+  })
 
 // The Overview's block fixtures (Phase 1 WP11).
 //
@@ -456,7 +466,6 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
         quotes: [{ ref: 'c:1' }],
         fallback: true,
         reason: 'no_model',
-        note: 'We wrote this read ourselves this month.',
         scrub: { text: '', dropped: 0, droppedDigits: 0, droppedDirection: 0, flaggedDirection: 0, leaked: false },
       },
       ledger: {
@@ -500,7 +509,7 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
       candidates: [],
       rivalLabel: 'Freitag',
       categoryLabel: 'The category',
-      note: 'Your side carried 84 videos this month, too few for its column to answer — the category column carries the month.',
+      note: 'Your side carried 84 videos this month, too few for its column to answer; the category column carries the month.',
       // The earliest `subjects.named_at` on the rows — the artboard's
       // "six named 19 Aug".
       namedAt: '2026-08-19',
@@ -631,14 +640,9 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
       // because the two sides were grouped differently and 1 because too
       // little was read on one side or both" rather than the fixture asserting
       // that sentence and the composer being able to disagree with it.
-      ...recordBandFixture(
-        methodRecordFixture({
-          refusals: [
-            { state: 'refused', reason: 'clustering_changed' },
-            { state: 'too_little_data', reason: null },
-          ],
-        }),
-      ),
+      ...recordBandFixture(OV_RECORD_INPUTS()),
+      figures: soundFigures(OV_RECORD_INPUTS()),
+      bandLine: howSoundLine(OV_RECORD_INPUTS(), { updates: false }),
       href: '/dashboard/settings',
       freezesOn: '2026-10-31',
     },

@@ -3,6 +3,8 @@ import { sparkMonths, spanOf } from '@/lib/pages/monthly'
 import { monthlySubject, seriesTrail } from '@/lib/reports/monthly'
 import type { Mover } from '@/lib/pages/overview'
 import { overviewFixture, refusedFixture } from '@/components/pages/overview/fixture'
+import { methodRecordFixture } from '@/lib/test/method-fixture'
+import { monthlySoundFigures } from '@/lib/reports/monthly'
 import { voiceFixture } from '@/components/pages/voice-surface/fixture'
 
 // The monthly report's fixtures (Phase 1 WP18).
@@ -89,7 +91,14 @@ function voicesFixture(): VoicesSection {
 }
 
 export function monthlyFixture(over: Partial<MonthlyData> = {}): MonthlyData {
-  const overview = overviewFixture()
+  const base = overviewFixture()
+  // §8's figures, as the loader composes them from the record's inputs
+  // (`monthlySoundFigures`). A snapshot frozen before the field existed has
+  // none, which `soundFallbackFixture` covers.
+  const overview = {
+    ...base,
+    record: { ...base.record, sound: monthlySoundFigures(methodRecordFixture(), { expected: base.bar.expected, readings: base.bar.readings }) },
+  }
   const voice = voiceFixture()
   const growing = voice.movers.growing.map((m, i) =>
     moverRow(m, i === 0 ? [3.1, 4.0, 5.1, 6.8, 9.4, 9.4] : [null, 1.8, 2.4, 3.2, 5.1, 5.1]),

@@ -61,7 +61,7 @@ function Option({ option, mode }: { option: RivalOption; mode: RenderMode }) {
           one — which puts 319 straight back into contradiction with 42 of 449.
           So the pill names its span outright, in the words the page bar
           already uses for it, and "in all" is left to the footer. */}
-      {option.analysed != null && option.analysed > 0 ? <> · <span data-copy="figure">{fmtInt(option.analysed)}</span> of their videos read since we started</> : null}
+      {option.analysed != null && option.analysed > 0 ? <> · <span data-copy="figure">{fmtInt(option.analysed)}</span> of their videos read</> : null}
     </span>
   </>
 

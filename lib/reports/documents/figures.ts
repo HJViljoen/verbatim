@@ -205,7 +205,7 @@ export function crosscheckLine(
   return (
     `${fmtInt(figure.toward.k)} of ${fmtInt(figure.pool)} (${fmtPct(towardPct)}) leaned toward you among the videos that named both; ` +
     `${objection.label.toLowerCase()} ran at ${fmtInt(objection.value.k)} of ${fmtInt(objection.value.n)} (${fmtPct(objectionPct)}) of the category\u2019s month. ` +
-    'Two populations, two denominators — read them side by side, not against each other.'
+    'Two populations, two denominators: read them side by side, not against each other.'
   )
 }
 

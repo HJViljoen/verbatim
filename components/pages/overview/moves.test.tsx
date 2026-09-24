@@ -5,7 +5,7 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, copyNodes, copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { MOVES_UNLOCK } from '@/lib/pages/overview'
-import { CARD_CONFIRM_OFF_APP, CARD_CONFIRM_SLOT, REGIME_BREAK, claimText, movesMeta, overviewMoves, seriesLine } from './moves'
+import { REGIME_BREAK, claimText, movesMeta, overviewMoves, seriesLine } from './moves'
 import { overviewRecord } from './record'
 import { overviewFixture, refusedFixture } from './fixture'
 
@@ -20,13 +20,11 @@ describe('OV5 · your moves', () => {
   // the reader has no page to look for. What the sentence is FOR — that a
   // count is not a move until the reader says it is — is true on paper too, so
   // only the clause about the control goes.
-  it('does not name a control the reader cannot press, off the app', () => {
-    const app = renderText(overviewMoves.render(overviewFixture(), 'app', ctx))
-    expect(app).toContain(CARD_CONFIRM_SLOT)
-    for (const mode of ['print', 'email'] as const) {
+  it('does not apologise for a control the page does not have (A54)', () => {
+    for (const mode of MODES) {
       const text = renderText(overviewMoves.render(overviewFixture(), mode, ctx))
       expect(text, mode).not.toContain('button this page does not have')
-      expect(text, mode).toContain(CARD_CONFIRM_OFF_APP)
+      expect(text, mode).not.toContain('Every count above is real')
     }
   })
   it('renders in all three modes and keeps the copy contract', () => {
@@ -63,19 +61,18 @@ describe('OV5 · your moves', () => {
   // earns — so the old string would be a copy claim the code contradicts,
   // which is the defect AGENTS.md names ("a page once claimed 'no email is
   // sent' while Resend sent"). It still names NO MONTH, for the old reason.
-  it('names what the block does rather than a delivery date it cannot know', () => {
+  it('leaves the scoring rule to How to read, and names no delivery date (A51)', () => {
     const text = renderText(overviewMoves.render(overviewFixture(), 'app', ctx))
-    expect(text).toContain(MOVES_UNLOCK)
-    expect(text).toContain('read from the month after it was dated')
+    expect(text).not.toContain(MOVES_UNLOCK)
     expect(text).not.toMatch(/not built yet/)
     expect(text).not.toMatch(/bottom section/)
     // No month, no quarter, no promised date.
     expect(MOVES_UNLOCK).not.toMatch(/January|February|March|April|May|June|July|August|September|October|November|December|quarter/)
   })
 
-  it('carries the masthead that stops every line reading as a causal claim', () => {
+  it('does not repeat the no-causation promise in the app (L6)', () => {
     const text = renderText(overviewMoves.render(overviewFixture(), 'app', ctx))
-    expect(text).toContain('We never claim you caused it')
+    expect(text).not.toContain('We never claim you caused it')
   })
 
   it('is honest rather than empty when nothing has been dated', () => {
@@ -119,23 +116,20 @@ describe('OV6 · how sound is this month', () => {
     // The meta slot is not empty — it carries "the record →", which is four
     // words and fits — but nothing long is passed through it any more.
     expect(text).toContain('the record →')
-    expect(text).toContain('2,359 videos carried conversation in this window')
+    expect(text).toContain('comments read 18,020')
   })
 
-  it('counts the comparisons this page refused, and dates the freeze', () => {
+  it('counts the comparisons this page refused, and leaves the freeze to the page bar (ruling F)', () => {
     const text = renderText(overviewRecord.render(overviewFixture(), 'app', ctx))
-    expect(text).toContain('2 comparisons were refused on this page')
-    expect(text).toContain('This month stops moving on 31 Oct 2026')
+    expect(text).toContain('comparisons refused 2')
+    expect(text).not.toContain('This month stops moving')
   })
 
   it('says so when nothing was refused', () => {
     const data = overviewFixture()
-    const lines = data.record.lines.filter((l) => !l.includes('refused on this page'))
-    const text = renderText(overviewRecord.render(
-      { ...data, record: { ...data.record, lines: [...lines, 'Every comparison this page asked for was drawn.'] } },
-      'app', ctx,
-    ))
-    expect(text).toContain('Every comparison this page asked for was drawn.')
+    const figures = data.record.figures.map((f) => (f.label === 'comparisons refused' ? { ...f, value: '0' } : f))
+    const text = renderText(overviewRecord.render({ ...data, record: { ...data.record, figures } }, 'app', ctx))
+    expect(text).toContain('comparisons refused 0')
   })
 
   it('prints each refusal\u2019s reason, in every mode — not only in a hover title', () => {
@@ -186,9 +180,8 @@ describe('OV5, ported to the artboard', () => {
     const text = renderText(overviewMoves.render(overviewFixture(), 'app', ctx))
     expect(text).toContain('17 posts published')
     expect(text).toContain('8 of 17 cleared the comment floor')
-    expect(text).toContain('every count above is dated by the post itself — posts published in September')
-    // Said once, not four times.
-    expect(text.split('posts published in September').length - 1).toBe(1)
+    // The card title names the month; no basis line under the counts (A52).
+    expect(text).not.toContain('every count above is dated by the post itself')
     expect(text).not.toContain('posts published · posts published in September')
   })
 
@@ -235,20 +228,16 @@ describe('OV5, ported to the artboard', () => {
     // its own badge.
     const text = renderText(overviewMoves.render(overviewFixture(), 'app', ctx))
     expect(text).toContain('your audience too few to compare')
-    expect(text).toContain('the category ▲ 3 pts · band ±1.9 pts')
-  })
-
-  it('keeps the button’s slot with an honest sentence in it, and names no date', () => {
-    const text = renderText(overviewMoves.render(overviewFixture(), 'app', ctx))
-    expect(text).toContain(CARD_CONFIRM_SLOT)
-    expect(CARD_CONFIRM_SLOT).not.toMatch(/\b(Oct|Nov|Dec|Jan|Q[1-4])\b/)
+    expect(text).toContain('the category ▲ 3 pts')
+    expect(renderText(overviewMoves.render(overviewFixture(), 'print', ctx))).toContain('the category ▲ 3 pts · band ±1.9 pts')
   })
 
   it('counts the whole ledger, never a quarter', () => {
     // D12: a quarter of a table deleted and reinserted every update is a
     // window over a table with no history in it.
     const text = renderText(overviewMoves.render(overviewFixture(), 'app', ctx))
-    expect(text).toContain('every piece of advice this product has ever given you')
+    expect(text).toContain('You have acted on 1 of 64.')
+    expect(text).not.toContain('every piece of advice this product has ever given you')
     expect(text).not.toContain('this quarter')
   })
 

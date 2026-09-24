@@ -106,7 +106,9 @@ export function askBasisLine(
   // measured against, ellipsized, with no title and no hover. The bar states
   // the ONE fact that is about this page (which update), and the other three
   // stay where a reader can read them whole.
-  if (opts.short) return lead
+  // An answer's footer carries only the update it was answered against; the
+  // index census ("Today: …") is the draws tile's (copy de-clutter C13).
+  if (opts.short || opts.asked) return lead
 
   const months =
     basis.monthlyReadings == null
@@ -141,9 +143,7 @@ export function askBasisLine(
   // monthly readings · 3,129 of 3,129 findings searchable" — and a reader has
   // no seam to notice. A full stop and one word give them one. The unasked
   // form needs none: everything in it is now.
-  return opts.asked
-    ? `${lead}. Today: ${[months, searchable, embedded].join(' · ')}`
-    : [lead, months, searchable, embedded].join(' · ')
+  return [lead, months, searchable, embedded].join(' · ')
 }
 
 /** True when a question asked now cannot reach a single finding — the state

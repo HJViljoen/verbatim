@@ -64,7 +64,7 @@ export function PlatformMix({ rows, platforms }: { rows: PlatformRow[]; platform
     // its own mix and does not depend on them.
     return (
       <p className="text-[12.5px] leading-relaxed text-muted-foreground">
-        Where each one turns up is not on record for this profile — the conversations it was drawn from have since been superseded. The next profile carries its own count.
+        Where each one turns up is not on record for this profile: the conversations it was drawn from have since been superseded. The next profile carries its own count.
       </p>
     )
   }

@@ -61,7 +61,7 @@ describe('OV2 · your subjects', () => {
     const data = overviewFixture()
     const rows = data.subjects.rows.map((r) => ({ ...r, rival: null }))
     const text = renderText(overviewSubjects.render({ ...data, subjects: { ...data.subjects, rows } }, 'app', ctx))
-    expect(text).toContain('— not tracked')
+    expect(text).toContain('not tracked')
   })
 
   it('offers the proposer’s candidates rather than a blank form', () => {
@@ -108,7 +108,7 @@ describe('OV2 · your subjects', () => {
     expect(markup).not.toContain('<svg')
   })
 
-  it('prints "at this point last month" on the category side, in both drawn modes', () => {
+  it('prints the same point last month on the category side, named once, in both drawn modes', () => {
     for (const mode of ['app', 'email'] as const) {
       const text = renderText(overviewSubjects.render(overviewFixture(), mode, ctx))
       // The two figures are separated (design review Medium 18): they ran
@@ -118,7 +118,9 @@ describe('OV2 · your subjects', () => {
       // 20.5% a reader who subtracted the row's own two levels got 1.5 pts
       // against a band of ±2.1 — the verdict refuted by the sheet built to be
       // checked.
-      expect(text, mode).toContain('at this point last month 18.8% · 243 of 1,290')
+      expect(text, mode).toContain('18.8% · 243 of 1,290')
+      // L4: named once as a legend, never per row.
+      expect(text.split('at this point last month').length - 1, mode).toBe(1)
     }
   })
 })
@@ -178,7 +180,7 @@ describe('OV2, ported to the artboard', () => {
     // month as its own dated reading. "narrowed" is not built.
     const data = overviewFixture()
     const text = renderText(overviewSubjects.render(data, 'app', ctx))
-    expect(text).toContain('Durability — you 31.0% of 84 · Freitag 44.0% of 142 · too few to compare')
+    expect(text).toContain('Durability: you 31.0% of 84 · Freitag 44.0% of 142 · too few to compare')
     expect(text).not.toContain('narrowed')
   })
 

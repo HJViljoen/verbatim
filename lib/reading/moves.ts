@@ -1,5 +1,5 @@
 import { PASS_A_MIN_COMMENTS_DEFAULT } from '../config'
-import { fmtInt, longMonth, monthName, shortDate } from '../format'
+import { fmtInt, longMonth, monthName } from '../format'
 import { monthChange } from './bands'
 import { monthStartOf, nextMonth } from './month-key'
 import type { Counted, FigureTable, Verdict, VerdictWindow } from './verdicts'
@@ -537,7 +537,7 @@ const countWord = (n: number): string =>
   n === 1 ? 'the one month since' : n === 0 ? 'no complete month since' : `the ${fmtInt(n)} months since`
 
 /** Said when the client side has no month on one or other side of the line. */
-export const MOVE_TOO_YOUNG = 'One monthly reading so far — the first comparison lands with the month after this one.'
+export const MOVE_TOO_YOUNG = 'One monthly reading so far. The first comparison lands with the month after this one.'
 export const MOVE_NO_CLIENT_SERIES = 'Your own side carries no reading for this move yet.'
 /** A move on a piece of advice names no countable object — a recommendation is
  *  not a thing the corpus can be counted for — so there is no series to read
@@ -640,7 +640,8 @@ export function readMove(input: MoveReadingInput): MoveReading {
     figures,
     months,
     window: input.window,
-    line: `declared ${shortDate(input.move.declared_at)} · read against ${countWord(since)}`,
+    // A55: the row prints its own "declared 2 Aug" stamp, so not here too.
+    line: `read against ${countWord(since)}`,
     chartNote: moveChartNote(touched),
     unread,
   }
@@ -660,6 +661,6 @@ export function actedTally(decided: number, total: number): { decided: number; o
   const line =
     total === 0
       ? 'Nothing has been recommended yet.'
-      : `You have acted on ${fmtInt(decided)} of ${fmtInt(total)} — every piece of advice this product has ever given you.`
+      : `You have acted on ${fmtInt(decided)} of ${fmtInt(total)}.`
   return { decided, of: total, line }
 }

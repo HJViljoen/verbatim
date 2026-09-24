@@ -94,14 +94,20 @@ export default async function AgentPage({
         }
         tiles={
           <>
-            <EarlierQuestionsTile history={history} col={4} row={ASK_TILE_ROW} />
-            <DrawsTile
-              draws={askDraws(basis, delivered)}
-              asAt={basis.lastEmbeddedAt ? shortDate(basis.lastEmbeddedAt) : null}
-              col={4}
-              row={ASK_TILE_ROW}
-            />
-            <NotAnsweredTile notAnswered={notAnswered} col={4} row={ASK_TILE_ROW} />
+            {/* THE TWO SHORT TILES STACK BESIDE THE TALL ONE (layout sweep
+                2026-09-24). Three columns of four let the history set the
+                row's height and left most of the other two white; stacked in
+                one column they sit level with it. */}
+            <EarlierQuestionsTile history={history} col={7} row={ASK_TILE_ROW} />
+            <div className="flex min-w-0 flex-col gap-4 xl:col-span-5">
+              <DrawsTile
+                draws={askDraws(basis, delivered)}
+                asAt={basis.lastEmbeddedAt ? shortDate(basis.lastEmbeddedAt) : null}
+                col={12}
+                row={ASK_TILE_ROW}
+              />
+              <NotAnsweredTile notAnswered={notAnswered} col={12} row={ASK_TILE_ROW} />
+            </div>
           </>
         }
       />

@@ -89,7 +89,8 @@ export function metaLine(s: StandingsBlock): string {
       ? monthName(s.months[0])
       : `${shortMonth(s.months[0])} → ${monthName(s.months[s.months.length - 1])}`
     : null
-  return ['share of the tracked set', span, 'both denominators printed'].filter((x): x is string => x != null).join(' · ')
+  // No "both denominators printed": a builder's note, not a reader's (J).
+  return ['share of the tracked set', span].filter((x): x is string => x != null).join(' · ')
 }
 
 /** One change cell: the banded verdict, or the reason there is none. */
@@ -144,7 +145,7 @@ function Change({ verdict, observed, prevMonthLabel, mode }: {
  * the month, and an empty track beside it reads as a measured zero.
  */
 export const BAR_BASIS =
-  'Each bar is drawn against the largest brand share in its own column, never against 100% — the percentage beside it is the share itself. The rest of the category carries no bar: it is the remainder of the month, not a brand, and at its size every other bar sits on the floor beside it.'
+  'Each bar is drawn against the largest brand share in its own column, never against 100%; the percentage beside it is the share itself. The rest of the category carries no bar: it is the remainder of the month, not a brand.'
 
 function Share({ share, role, top, mode }: { share: StandingShare | null; role: StandingRow['role']; top: number; mode: RenderMode }) {
   if (share == null || share.pct == null) {
@@ -283,7 +284,7 @@ export const CATEGORY_NOT_DRAWN =
 export const monthsRead = (series: StandingsSeries | null): number =>
   series ? series.points.filter((p) => p.content != null || p.attention != null).length : 0
 
-function SharedLegend({ series, axis, drops }: { series: readonly StandingsSeries[]; axis: readonly string[]; drops: boolean }) {
+function SharedLegend({ series, axis }: { series: readonly StandingsSeries[]; axis: readonly string[] }) {
   if (series.length === 0) return null
   return (
     <div className="flex min-w-0 flex-col gap-1">
@@ -305,7 +306,8 @@ function SharedLegend({ series, axis, drops }: { series: readonly StandingsSerie
       </div>
       <p className="m-0 font-mono text-[10px] leading-[1.4] text-muted-foreground">
         Each chart is scaled to its own highest month, so the two are read separately and never against each other.
-        {drops ? <> {CATEGORY_NOT_DRAWN}</> : null}
+        {/* CATEGORY_NOT_DRAWN is not printed: the legend simply omits the
+            category (copy de-clutter B88). */}
       </p>
     </div>
   )
@@ -380,15 +382,12 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
           className={apron}
           style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 } : undefined}
         >
-          {s.precedence}
-          {/* THE COUNT, OR THE WORD. The sentence promises the number is beside
-              it, so a zero has to be said out loud — "the count of those is
-              beside this table." with nothing after it is the sentence
-              breaking its own promise. Null is a third state: the month holds
-              no client row at all, and there is nothing to count. */}
+          {/* THE COUNT, NOT THE RULE (copy de-clutter B85). The precedence
+              rule is written once in Settings › How to read; the page keeps
+              the figure. Null: the month holds no client row to count. */}
           {s.dualMention == null ? null : s.dualMention > 0
-            ? <> <span data-copy="figure">{fmtInt(s.dualMention)}</span> did this month.</>
-            : <> None did this month.</>}
+            ? <><span data-copy="figure">{fmtInt(s.dualMention)}</span> of your videos also named a rival this month.</>
+            : <>None of your videos also named a rival this month.</>}
         </p>
         ) : null}
         {s.caveat ? (
@@ -407,22 +406,8 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
             {s.rules.map((r) => r.text).join(' ')}
           </p>
         ) : null}
-        {/* THE UNLOCK EXPLAINS THE TABLE'S RIGHT-HAND COLUMN, SO IT WAITS FOR
-            THE TABLE TOO. `ATTENTION_UNLOCK` ends "…so the right-hand share is
-            of the comments we kept", and it rendered ungated while the two
-            sentences above it were already gated on `hasTable` — so the
-            degraded tile said there are no standings to draw and then
-            explained that table's right-hand column. The unlock is a real
-            absence and still prints wherever there is a share for it to be
-            about; where there is not, it is describing nothing. */}
-        {hasTable ? (
-        <p
-          className={apron}
-          style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 } : undefined}
-        >
-          {s.unlock}
-        </p>
-        ) : null}
+        {/* No ATTENTION_UNLOCK: the denominator line above already names the
+            population of the right-hand share (copy de-clutter B86). */}
       </div>
     )
 
@@ -460,7 +445,6 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
             ? <Link href="/dashboard/settings?detail=record" className="hover:underline">Open the full record in Settings →</Link>
             : 'Open the full record in Settings.'
         }
-        footerNote="no rank is printed"
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         {s.behind ? (
@@ -494,9 +478,6 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
                 format={(v) => fmtPct(v)}
                 label="Share of the month’s videos, by brand"
               />
-              {s.series.length !== chartSeries(s.series).length ? (
-                <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted, marginTop: 4 }}>{CATEGORY_NOT_DRAWN}</div>
-              ) : null}
             </div>
           ) : (
             <div className="flex min-w-0 flex-col gap-2">
@@ -518,7 +499,7 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
                   chartKey={`${competitiveStandings.key}.content`}
                 />
               </div>
-              <SharedLegend series={chartSeries(s.series)} axis={s.months} drops={s.series.length !== chartSeries(s.series).length} />
+              <SharedLegend series={chartSeries(s.series)} axis={s.months} />
             </div>
           )
         ) : null}
@@ -527,7 +508,7 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
             className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'}
             style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}
           >
-            A line needs more than one month, and this reading is one — each brand is drawn as its single dated point.{' '}
+            One month only.{' '}
             {mode === 'app'
               ? <Link href={`${ctx.appUrl}${horizonHref('/dashboard/competitive', ctx.params ?? {}, 'last_3')}`} className="hover:underline">Open {HORIZON_LABEL.last_3} →</Link>
               : <>Open {HORIZON_LABEL.last_3} to draw it.</>}
@@ -559,8 +540,10 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
                         reader who took the left chart and dropped to the first
                         share column compared the wrong pair. */}
                     <th className="py-1 pr-3 font-semibold">Brand</th>
-                    <th className="py-1 pr-3 font-semibold">Share of comments</th>
-                    <th className="py-1 pr-3 font-semibold">Share of videos</th>
+                    {/* The bar basis rides on the two bar columns as a tooltip
+                        (copy de-clutter B87). */}
+                    <th className="py-1 pr-3 font-semibold"><span title={BAR_BASIS} className="cursor-help">Share of comments</span></th>
+                    <th className="py-1 pr-3 font-semibold"><span title={BAR_BASIS} className="cursor-help">Share of videos</span></th>
                     <th className="py-1 pr-3 font-semibold">Months in the set</th>
                     <th className="py-1 pr-3 font-semibold">Comments, on last month</th>
                     <th className="py-1 font-semibold">Videos, on last month</th>
@@ -587,7 +570,6 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
                   })}
                 </tbody>
               </table>
-              <p className="m-0 pt-1.5 font-mono text-[10px] text-muted-foreground">{BAR_BASIS}</p>
             </div>
           )
         ) : null}

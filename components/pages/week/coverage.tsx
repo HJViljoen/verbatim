@@ -42,9 +42,8 @@ export const weekCoverage: Block<WeekData> = {
             lines with the "Prepared by" half in darker ink; these are the same
             two lines and they take the same face, a little larger because they
             sit inside a tile rather than under the page. */}
-        <Line mode={mode} strong mono>{data.coverage.line}</Line>
+        <Line mode={mode} strong mono>{mode === 'app' ? undated(data.coverage.line) : data.coverage.line}</Line>
         <Line mode={mode} mono>{data.coverage.privacy}</Line>
-        <Line mode={mode}>{data.laterLine}</Line>
       </BlockFrame>
     )
   },
@@ -56,6 +55,12 @@ export const weekCoverage: Block<WeekData> = {
   emptyState() {
     return null
   },
+}
+
+/** On screen the page bar already names the update and the one before it
+ *  (copy de-clutter C61); paper and email have no page bar and keep them. */
+function undated(line: string): string {
+  return line.split(' · ').filter((p) => !/^(update of |previous |no previous update$)/.test(p)).join(' · ')
 }
 
 function Line({ mode, strong, mono, children }: { mode: 'app' | 'print' | 'email'; strong?: boolean; mono?: boolean; children: React.ReactNode }) {

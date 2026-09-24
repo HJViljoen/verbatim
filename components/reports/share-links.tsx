@@ -79,7 +79,7 @@ export function ShareLinks({ snapshotId, links }: { snapshotId: string | null; l
             </p>
           )}
           {error && <p className="text-negative" aria-live="polite">{error}</p>}
-          <p className="text-[11px] text-muted-foreground/80">Anyone with the link can read this build, no account needed. Figures are frozen; quoted voices are read live. Revoke any time.</p>
+          <p className="text-[11px] text-muted-foreground/80">Anyone with the link can read this build, no account needed. Revoke any time.</p>
         </div>
       ) : (
         <p className="text-muted-foreground">Build the report first; a link points at a build.</p>

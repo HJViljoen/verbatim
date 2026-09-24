@@ -75,7 +75,7 @@ export function TrackThisButton({ registryId, themeLabel }: { registryId: string
           <form action={formAction} className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
             <input type="hidden" name="registry_ids" value={registryId} />
             <fieldset disabled={pending} className="space-y-4">
-              <Field label="What you are trying to move" hint="Yours to rename — it starts as the theme's name.">
+              <Field label="What you are trying to move" hint="Yours to rename. It starts as the theme's name.">
                 <Input name="title" defaultValue={themeLabel} maxLength={120} required />
               </Field>
               <Field label="Progress looks like">
