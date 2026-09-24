@@ -55,33 +55,42 @@ export function calibrationQuota(subjects: number, total = SUBJECT_CALIBRATION_S
   return Math.max(1, Math.floor(total / subjects))
 }
 
-/** The lowest similarity any candidate threshold pair would call a member.
- *
- *  Below it the shipped procedure answers "not a member" at every pair in the
- *  table, so a label there changes no precision figure — it can only ever move
- *  `missed`, and the sheet cannot measure recall over a corpus of thousands
- *  from a sample of hundreds anyway. Labelling above the floor is where the
- *  person's time buys an answer. */
-export function calibrationScoreFloor(thresholds = candidateThresholds()): number {
-  return Math.min(...thresholds.map((t) => t.low))
-}
-
 /**
- * The pairs of one subject a person is asked about.
+ * The pairs of one subject a person is asked about: a hashed sample of its
+ * PREDICTED MEMBERS — the pairs the shipped procedure calls members at
+ * (`high`, `low`): at or above `high` by vector, or inside the band with the
+ * judge's yes on file.
+ *
+ * DRAWN FROM THE PREDICTED MEMBERS, NOT FROM THE SCORE RANGE (Heinrich's
+ * ruling, 2026-09-24). The sheet used to be a hash over every pair at or above
+ * the lowest threshold the table tries, and precision is correct / predicted —
+ * so a subject whose judge rejects most of its band put two or three predicted
+ * members in a 33-pair sheet and its "precision" was one pair out of two
+ * (Sealand, Waterproofing 1/2 and Repair & warranty 1/3). Every label on this
+ * sheet is now a label on something the product would count, which is what
+ * `calibration_precision` claims to be: at the shipped pair, precision is
+ * correct / sampled. What that costs is stated rather than hidden: the sheet
+ * holds no pair the procedure says NO to, so it does not measure recall at
+ * all, and a threshold row LOOSER than the shipped pair can only re-score the
+ * members already drawn.
+ *
+ * A band pair with no judge decision on file is not a predicted member and is
+ * not drawn — nobody has said yes to it. Run the membership pass first.
  *
  * Deterministic in the subject as well as the insight — the hash is over the
  * PAIR — so two subjects do not receive the same insights just because those
- * insights hash low, and re-emitting the sheet asks the same questions.
- * Ordered by score so the reader walks from the obvious members down into the
- * band, which is where their attention is worth most.
+ * insights hash low, and re-emitting the sheet asks the same questions. Fewer
+ * predicted members than `quota` means all of them. Ordered by score so the
+ * reader walks from the obvious members down into the band.
  */
-export function pickCalibrationPairs<T extends { audienceInsightId: string; score: number }>(
+export function pickCalibrationPairs<T extends { audienceInsightId: string; score: number; judged: boolean | null }>(
   subjectId: string,
   scored: readonly T[],
   quota: number,
-  floor = calibrationScoreFloor(),
+  high = SUBJECT_MATCH_HIGH,
+  low = SUBJECT_MATCH_LOW,
 ): T[] {
-  const eligible = scored.filter((r) => r.score >= floor)
+  const eligible = scored.filter((r) => predictAt(r, high, low) === true)
   const keep = new Set(
     sampleForCalibration(eligible.map((r) => `${subjectId}|${r.audienceInsightId}`), quota),
   )

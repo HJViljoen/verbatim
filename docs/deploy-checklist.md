@@ -1239,6 +1239,59 @@ where s.status='active' group by 1,2 order by 1,2;
 Every active subject should have members. One with zero is a real answer
 (nobody talks about it) — but check it is not a coverage failure first.
 
+### 5.1b · Subject calibration, per tenant
+
+**Until this runs, every subject reads "calibrating" and its share is hidden**
+wherever a subject's share would print. That is the precision gate
+doing its job, not a fault: `subjectCalibration` wants a `calibrated_at`, a
+`calibration_precision` of 85% or more and a `calibration_judge_version` equal
+to the live `JUDGE_VERSION`, and a production subject has none of the three.
+It comes straight after 5.1 because it reads 5.1's judge decisions: the sheet
+is drawn from each subject's PREDICTED MEMBERS (at or above 0.60, or in the
+band with the judge's yes on file), so a membership pass that has not finished
+leaves members out of the draw. Numbered 5.1b rather than 5.2 so that 5.4 stays
+the one-shot everywhere it is already called that.
+
+```
+# 1 · emit the sheet — reads vectors and judge decisions, spends nothing
+node --env-file=.env.local --import tsx scripts/subject-calibration.ts --client <uuid> --emit calibration-<tenant>.jsonl
+# 2 · label it: replace every "label": null with true or false
+# 3 · score it, dry — prints the precision table per subject, writes nothing
+node --env-file=.env.local --import tsx scripts/subject-calibration.ts --client <uuid> --score calibration-<tenant>.jsonl
+# 4 · record it
+node --env-file=.env.local --import tsx scripts/subject-calibration.ts --client <uuid> --score calibration-<tenant>.jsonl --apply
+```
+
+Keep the sheet out of the repo (the status folder, beside
+`calibration-sealand-2026-09-24.csv`). Expected, per subject at emit:
+`[subject-calibration] Comfort: 33 of 87 predicted members` — 200 pairs split
+evenly, so 33 each at six subjects — and `(all of them — fewer than the
+quota)` for a subject with fewer. A line ending `band pairs have no judge
+decision on file` means 5.1 did not finish: go back, do not label. At score,
+each subject prints its table and `→ READY` or `→ CALIBRATING` on the
+`<- shipped` row; with `--apply`, `recorded: 91.7% over 33 pairs` and a
+`config_changes` row under surface `subjects`. At the shipped row `predicted`
+should equal the labelled count, because every pair on the sheet is a member
+the product would count; precision there is correct over sampled, and the
+sheet says nothing about recall.
+
+**Heinrich spot-checks 20–30 borderline rows before the Sealand demo.** The
+labels on 2026-09-24 were the model's (Opus), not a person's, and a model
+grading its own family's judge shares its blind spots. Read the CSV
+(`subject, insight_id, score, label, reason`), starting with the calls that
+turn on a subject's exclusions — purchase intent as Looks & style,
+"convenient" as Comfort, shipping as Price, durability praise as Repair &
+warranty. A subject whose `ready` rests on labels he disagrees with is
+re-labelled and re-scored with `--apply`, not argued with.
+
+Verify:
+```sql
+select client_id, name, calibration_precision, calibration_n, calibration_judge_version
+from public.subjects where status='active' order by 1,2;
+```
+Every active subject has a figure stamped with today's `JUDGE_VERSION`. One
+under 0.85 is a real answer and stays "calibrating" on the pages.
+
 ### 5.2 · Quote translations, per tenant
 
 ```
@@ -1705,7 +1758,7 @@ and the action's own `config_changes` row is never reached, so the failure
 leaves no record either, while the identical click from a platform admin
 succeeds. A control that tests green for every operator and is dead for every
 paying client is the worst thing to leave standing across a split. · step 3 · step 4 ·
-backfills 5.1, 5.2, 5.3 · **5.4 the one-shot** · 5.5 · rehearsal · screenshots ·
+backfills 5.1, 5.1b, 5.2, 5.3 · **5.4 the one-shot** · 5.5 · rehearsal · screenshots ·
 **recipients NOT set** · the Sunday watch minus items 4 and 5. The code-then-
 migrations order is the same here and for the same reason (§1's first
 paragraph): R1's window is where `main`'s flat-chunk freeze writer would meet

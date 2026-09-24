@@ -4,12 +4,12 @@ import { recordConfigChange, scriptActor } from '../lib/config-log'
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
 import {
   calibrationQuota,
-  calibrationScoreFloor,
   clearsPrecisionGate,
   formatPrecisionTable,
   pickCalibrationPairs,
   precisionAt,
   precisionTable,
+  predictAt,
   type LabelledPair,
 } from '../lib/subjects/calibration'
 import { loadActiveSubjects } from '../lib/subjects/membership'
@@ -36,11 +36,19 @@ import {
 //      about a pair, so 200 insights crossed with every active subject is
 //      1,000-1,600 labels — days of reading, not the afternoon the design
 //      budgets. The sheet is split evenly across the subjects instead (40 each
-//      at five, 25 at eight) and drawn only from pairs at or above the lowest
-//      threshold the table tries: below that the shipped procedure answers "not
-//      a member" whatever the label says, so those labels buy nothing. What
-//      that costs is honest and stated — recall below the floor is NOT measured
-//      by this sheet, and `missed` counts only the members it could have found.
+//      at five, 33 at six, 25 at eight).
+//
+//      DRAWN FROM EACH SUBJECT'S PREDICTED MEMBERS (2026-09-24), not from its
+//      score range: the pairs the shipped pair calls members — at or above
+//      SUBJECT_MATCH_HIGH, or in the band with the judge's yes on file under
+//      the live JUDGE_VERSION. So run scripts/subject-membership.ts --apply
+//      first; an undecided band pair is not a member and is not drawn. A
+//      subject with fewer predicted members than its quota gets all of them.
+//      Precision at the shipped pair is then correct / sampled, which is what
+//      `calibration_precision` means. What that costs is honest and stated —
+//      the sheet holds no pair the procedure says no to, so it does NOT
+//      measure recall, and the threshold rows looser than the shipped pair
+//      can only re-score the members already drawn.
 //
 //   2. …edit labels.jsonl, replacing every null with true or false…
 //
@@ -90,6 +98,27 @@ function parseArgs(argv: string[]): Args {
 
 type Admin = ReturnType<typeof createAdminClient>
 
+/** The judge decisions on file under the live key, keyed `subject|insight`.
+ *  Both halves read them: --emit to know which band pairs are members, and
+ *  --score to predict each labelled pair the way the shipped procedure would. */
+async function loadDecisions(admin: Admin, clientId: string, subjectIds: readonly string[]) {
+  const decisions = new Map<string, boolean>()
+  for (const subjectId of subjectIds) {
+    const mem = await selectAll<{ audience_insight_id: string; member: boolean }>(() =>
+      admin
+        .from(TABLE_SUBJECT_MEMBERSHIPS)
+        .select('audience_insight_id, member')
+        .eq('client_id', clientId)
+        .eq('subject_id', subjectId)
+        .eq('judge_version', JUDGE_VERSION)
+        .eq('method', 'judge')
+        .order('audience_insight_id', { ascending: true }),
+    )
+    for (const m of mem) decisions.set(`${subjectId}|${m.audience_insight_id}`, m.member)
+  }
+  return decisions
+}
+
 /** Every live insight's similarity to one subject, at no threshold at all —
  *  p_low 0 makes subject_band a plain scorer, which is what a calibration needs
  *  and a membership pass must never do. p_judge is a version nothing has ever
@@ -128,14 +157,26 @@ async function main() {
     )
     const text = new Map(ids.map((r) => [r.id, r]))
     const quota = calibrationQuota(subjects.length, sample)
-    const floor = calibrationScoreFloor()
+    const decisions = await loadDecisions(admin, clientId, subjects.map((s) => s.id))
     const lines: string[] = []
     const insights = new Set<string>()
     for (const s of subjects) {
       const scored = (await scoreAll(admin, clientId, s.id))
         .filter((row) => text.has(row.audience_insight_id))
-        .map((row) => ({ audienceInsightId: row.audience_insight_id, score: row.score }))
-      for (const row of pickCalibrationPairs(s.id, scored, quota, floor)) {
+        .map((row) => ({
+          audienceInsightId: row.audience_insight_id,
+          score: row.score,
+          judged: decisions.get(`${s.id}|${row.audience_insight_id}`) ?? null,
+        }))
+      const predicted = scored.filter((r) => predictAt(r, SUBJECT_MATCH_HIGH, SUBJECT_MATCH_LOW) === true).length
+      const undecided = scored.filter((r) => predictAt(r, SUBJECT_MATCH_HIGH, SUBJECT_MATCH_LOW) === null).length
+      const picked = pickCalibrationPairs(s.id, scored, quota)
+      console.log(
+        `[subject-calibration] ${s.name}: ${picked.length} of ${predicted} predicted members` +
+        (picked.length < quota ? ' (all of them — fewer than the quota)' : '') +
+        (undecided > 0 ? ` · ${undecided} band pairs have no judge decision on file and are not drawn; run scripts/subject-membership.ts --apply first` : ''),
+      )
+      for (const row of picked) {
         const t = text.get(row.audienceInsightId)!
         insights.add(row.audienceInsightId)
         lines.push(JSON.stringify({
@@ -151,10 +192,10 @@ async function main() {
     writeFileSync(emit, lines.join('\n') + '\n')
     console.log(
       `[subject-calibration] ${lines.length} pairs to label — up to ${quota} for each of ${subjects.length} subjects, ` +
-      `over ${insights.size} distinct insights, all at or above ${floor} → ${emit}`,
+      `over ${insights.size} distinct insights, every one a predicted member at ${SUBJECT_MATCH_HIGH}/${SUBJECT_MATCH_LOW} → ${emit}`,
     )
     console.log('[subject-calibration] replace every "label": null with true or false, then re-run with --score.')
-    console.log(`[subject-calibration] pairs below ${floor} are not asked about: no threshold pair in the table would call them members, so a label there changes nothing. Recall below it is not measured.`)
+    console.log('[subject-calibration] only predicted members are asked about, so precision is measured and recall is not.')
     return
   }
 
@@ -166,20 +207,7 @@ async function main() {
 
   // The judge decisions already on file, so a band pair is scored by what the
   // shipped procedure would actually say rather than by the vector alone.
-  const decisions = new Map<string, boolean>()
-  for (const s of subjects) {
-    const mem = await selectAll<{ audience_insight_id: string; member: boolean }>(() =>
-      admin
-        .from(TABLE_SUBJECT_MEMBERSHIPS)
-        .select('audience_insight_id, member')
-        .eq('client_id', clientId)
-        .eq('subject_id', s.id)
-        .eq('judge_version', JUDGE_VERSION)
-        .eq('method', 'judge')
-        .order('audience_insight_id', { ascending: true }),
-    )
-    for (const m of mem) decisions.set(`${s.id}|${m.audience_insight_id}`, m.member)
-  }
+  const decisions = await loadDecisions(admin, clientId, subjects.map((s) => s.id))
 
   const bySubject = new Map<string, LabelledPair[]>()
   for (const r of rows) {
