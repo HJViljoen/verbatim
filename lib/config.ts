@@ -1038,13 +1038,34 @@ export const PASS_A_ERROR_RATIO = 0.05
  * showed the model 29 comments and a 2.6 kB prompt), so a smaller batch fixes
  * nothing; a bound does.
  *
- * 4,000 is sized to the SCHEMA, not to the corpus: the widest honest Pass A
- * answer measured on this tenant is an order of magnitude under it, so a call
- * that reaches this ceiling is a runaway and not a rich video. It costs ~8 s
- * instead of ~220 s to find that out, and `PASS_A_LENGTH_RETRY_REFS` decides
- * what happens next.
+ * 8,000, AND THE FIRST NUMBER WAS 4,000 ON A CLAIM THE LEDGER REFUSES. That
+ * claim was "the widest honest Pass A answer measured on this tenant is an
+ * order of magnitude under it". It is not. Every non-zero `pass_a` row in
+ * `ai_call_log` on the Phase 1 preview branch, read-only 2026-09-24:
+ *
+ *   calls 8,291 · median 445 · p99 1,425 · p99.9 2,162 · max 5,912
+ *   calls at or over 4,000: 1   ·   calls at or over 8,000: 0
+ *
+ * and the 5,912 row is not a failure — `validation_status = 'ok'`, no error,
+ * `pass_a_v4`, 2026-08-17, on a 2,040-token prompt. So the widest honest
+ * answer on record sits 1.48x OVER the old ceiling, and 4,000 would have
+ * truncated it, thrown LengthFinishReasonError, and re-asked that video on
+ * half its comments — reading the richest video in the corpus on less than it
+ * has, silently, for a bound that was never measured against the table it was
+ * reasoning about.
+ *
+ * 8,000 is above everything the ledger has ever seen and still a quarter of
+ * the model's 32,768-token window, which is the whole job of the number: a
+ * degenerate generation is stopped in ~16 s instead of running ~220 s to the
+ * window, and `PASS_A_LENGTH_RETRY_REFS` decides what happens next. It is
+ * sized to the MEASURED corpus with headroom, not to the schema — a ceiling
+ * sized to a schema nobody measured is how the first one came out under the
+ * data.
+ *
+ * Re-read this the next time the Pass A prompt version moves: the widest
+ * answer is a property of the prompt, and the query above is one line.
  */
-export const PASS_A_MAX_OUTPUT_TOKENS = 4000
+export const PASS_A_MAX_OUTPUT_TOKENS = 8000
 
 /** Share of a video's comments the ONE length-limit retry shows the model.
  *  Halving is the in-call analogue of halving a batch: the unit of a Pass A

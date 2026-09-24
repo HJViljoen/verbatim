@@ -685,6 +685,23 @@ describe('the Pass A length limit', () => {
     expect(PASS_A_MAX_OUTPUT_TOKENS).toBeLessThan(32_768)
   })
 
+  // I3. The first ceiling was 4,000, on a comment claiming the widest honest
+  // answer was "an order of magnitude under it". `ai_call_log` says the widest
+  // is 5,912 completion tokens with validation_status 'ok' — a real answer the
+  // ceiling would have truncated and re-asked on half its comments. Both
+  // numbers are here so lowering the ceiling has to argue with the ledger
+  // rather than with a sentence.
+  const WIDEST_LOGGED_PASS_A_ANSWER = 5912 // ai_call_log, preview branch, 2026-09-24
+  it('is above the widest answer the ledger has ever recorded', () => {
+    expect(PASS_A_MAX_OUTPUT_TOKENS).toBeGreaterThan(WIDEST_LOGGED_PASS_A_ANSWER)
+  })
+
+  it('still leaves the runaway far short of the model window — the point of having one', () => {
+    // A quarter of the window: a degenerate generation is stopped in ~16 s
+    // rather than the ~220 s four calls on run b67b56de spent reaching 32,768.
+    expect(PASS_A_MAX_OUTPUT_TOKENS).toBeLessThanOrEqual(32_768 / 4)
+  })
+
   it('recognises the SDK error by class name and by message', () => {
     const byName = Object.assign(new Error('some other text'), { name: 'LengthFinishReasonError' })
     expect(isLengthLimitError(byName)).toBe(true)
