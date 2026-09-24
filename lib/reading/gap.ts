@@ -332,9 +332,9 @@ export function inheritRefusal(
 /** A side as a level: the share and the denominator it is a share of, or the
  *  silence in the page's own words. Every level prints its "of N". */
 function levelOf(side: GapSide): string {
-  if (!side.observed) return `${side.label} — not tracked`
+  if (!side.observed) return `${side.label} · not tracked`
   const p = sidePct(side)
-  if (p == null) return `${side.label} — no reading`
+  if (p == null) return `${side.label} · no reading`
   return `${side.label} ${fmtPct(p)} of ${fmtInt(side.value.n)}`
 }
 

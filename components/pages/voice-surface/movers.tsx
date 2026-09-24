@@ -254,7 +254,22 @@ export const voiceMovers: Block<VoiceSurfaceData> = {
                 drew an empty half and ruled a hairline down the middle of it,
                 against nothing. An arm with no rows is absent, and the arm that
                 is left keeps the column width it would have had. */}
-            {email || !both ? (
+            {!email && !both && m.flat.length > 0 && m.growing.length + m.fading.length > 0 ? (
+              // ONE MOVING ARM: IT AND "NO CLEAR CHANGE" SIT SIDE BY SIDE
+              // (layout sweep, 2026-09-24). Stacked in the left half, the two
+              // left the right half of a full-width card white for the whole
+              // list's height. Each keeps its own heading, and the column rule
+              // between them is the boundary of the comparison.
+              <TileColumns of={2}>
+                <div className="min-w-0 xl:pr-6">
+                  <Arm label="Larger share than last month" rows={arm(m.growing, m.shown)} mode={mode} ctx={ctx} />
+                  <Arm label="Smaller share than last month" rows={arm(m.fading, m.shown)} mode={mode} ctx={ctx} />
+                </div>
+                <div className="min-w-0 xl:pl-6">
+                  <Arm label="No clear change" rows={arm(m.flat, m.shown)} mode={mode} ctx={ctx} />
+                </div>
+              </TileColumns>
+            ) : email || !both ? (
               <div className={email ? undefined : 'xl:w-1/2 xl:pr-6'}>
                 <Arm label="Larger share than last month" rows={arm(m.growing, m.shown)} mode={mode} ctx={ctx} />
                 <Arm label="Smaller share than last month" rows={arm(m.fading, m.shown)} mode={mode} ctx={ctx} />
@@ -282,10 +297,14 @@ export const voiceMovers: Block<VoiceSurfaceData> = {
                 other two. The rule runs the FULL width of the block, across
                 both columns, so it is the boundary of the comparison and not a
                 divider inside one column of it. */}
-            {m.flat.length > 0 && !email ? <div className="border-t border-border/70" /> : null}
-            <div className={email ? undefined : 'xl:w-1/2 xl:pr-6'}>
-              <Arm label="No clear change" rows={arm(m.flat, m.shown)} mode={mode} ctx={ctx} />
-            </div>
+            {!email && !both && m.flat.length > 0 && m.growing.length + m.fading.length > 0 ? null : (
+              <>
+                {m.flat.length > 0 && !email ? <div className="border-t border-border/70" /> : null}
+                <div className={email ? undefined : 'xl:w-1/2 xl:pr-6'}>
+                  <Arm label="No clear change" rows={arm(m.flat, m.shown)} mode={mode} ctx={ctx} />
+                </div>
+              </>
+            )}
 
             {/* ONE FLAGS ROW, the mock's, rather than two more arms: neither
                 flag is a reading of this month's change, so neither belongs in

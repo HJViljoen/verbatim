@@ -127,20 +127,48 @@ const COLS: Record<string, number> = {
 // 190px of ink). The start stays explicit so a line whose spans do not fill
 // twelve columns can never have a later tile flowed up into it.
 
-/** The page's two grids, each as its own lines of tile keys, in order: the two
- *  full-width readings; then the artboard's moves row, the three narrow cards,
- *  and the button strip. Tiles named on one line share one grid row and start
- *  level; each ends at its own content. */
+/** The readings grid as its lines of tile keys: the two full-width readings,
+ *  one row each. The moves grid is `MOVES_STACKS` below, then the button
+ *  strip across the full width. */
 const GRIDS: readonly (readonly (readonly string[])[])[] = [
   [['market.conclusions'], ['market.advice']],
-  [
-    ['market.card', 'market.moves'],
-    // "Not on this page yet" is gone from the reading page: the roadmap is
-    // listed once, in Settings › Readiness (copy de-clutter ruling G).
-    ['market.sayhear', 'market.plans'],
-    ['market.ways'],
-  ],
 ]
+
+/**
+ * THE MOVES GRID IS TWO STACKS, NOT TWO ROWS (layout sweep, 2026-09-24).
+ *
+ * As rows, each line was as tall as its tallest tile: the card (5) stood
+ * ~300px beside a ~110px "Your moves" (7), and say-vs-hear (4) and plans (4)
+ * left four columns empty beside them once "Not on this page yet" left the
+ * page. On Sealand at 1440 that was two blocks of white each taller than a
+ * short card, which the layout rule forbids. Stacked, the left column is the
+ * card over say-vs-hear and the right is your moves over plans, and the two
+ * columns end within a few lines of each other. Below xl the stacks dissolve
+ * (`contents`) and `order` keeps the reading order card, moves, say-vs-hear,
+ * plans.
+ */
+export const MOVES_STACKS: readonly { col: number; keys: readonly string[] }[] = [
+  { col: 5, keys: ['market.card', 'market.sayhear'] },
+  { col: 7, keys: ['market.moves', 'market.plans'] },
+]
+/** Where each stacked tile sits in the single-column reading order below xl. */
+const MOBILE_ORDER: Record<string, string> = {
+  'market.card': 'order-1', 'market.moves': 'order-2', 'market.sayhear': 'order-3', 'market.plans': 'order-4',
+}
+const STACK_SPAN: Record<number, string> = { 5: 'xl:col-span-5', 7: 'xl:col-span-7' }
+
+/**
+ * AN ABSENCE IS A LINE, NEVER A CARD (layout sweep 3). With no plan uploaded,
+ * "Plans re-checked" was a card whose whole body said nothing had been
+ * uploaded; with no claim read, "Say vs hear" was the same. The "Upload a plan"
+ * and "Register a claim you make" buttons in "How a move is made" already
+ * carry that state and the act that ends it, so the page draws no card.
+ */
+export function drawnOnMarket(key: string, data: MarketSurfaceData): boolean {
+  if (key === 'market.plans') return data.plans.length > 0
+  if (key === 'market.sayhear') return data.ways.claims.length > 0
+  return true
+}
 
 /** The grid lines of the moves grid, kept exported-shaped for the test that
  *  reads which tiles sit beside which. */
@@ -255,7 +283,26 @@ export function MarketSurfacePage({
 
       <PageGrid>{READINGS.map(tile)}</PageGrid>
 
-      <PageGrid className="xl:items-start">{MOVES.map(tile)}</PageGrid>
+      <PageGrid className="xl:items-start">
+        {MOVES_STACKS.map((stack) => (
+          <div key={stack.keys.join()} className={`contents xl:flex xl:min-w-0 xl:flex-col xl:gap-4 ${STACK_SPAN[stack.col]}`}>
+            {stack.keys.map((key) => {
+              const block = MOVES.find((b) => b.key === key)
+              if (!block || !drawnOnMarket(key, data)) return null
+              return (
+                <Tile key={block.key} col={12} row={1} className={`${MOBILE_ORDER[key] ?? ''} xl:order-none`} distribute="between">
+                  {block.render(data, 'app', ctx)}
+                </Tile>
+              )
+            })}
+          </div>
+        ))}
+        {MOVES.filter((b) => !MOVES_STACKS.some((st) => st.keys.includes(b.key))).map((block) => (
+          <Tile key={block.key} col={COLS[block.key] ?? 12} row={1} className="order-5 xl:order-none" distribute="between">
+            {block.render(data, 'app', ctx)}
+          </Tile>
+        ))}
+      </PageGrid>
 
       {/* No method footnote: soundness lives in the page bar's "How sound is
           this" pill and its record modal (copy de-clutter ruling B). The

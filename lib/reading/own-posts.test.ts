@@ -234,7 +234,7 @@ describe('claimEcho', () => {
   it('names a rival with no account as not tracked, in the product’s own sentence', () => {
     const e = claimEcho({ audience: 'competitor:Patagonia', audienceLabel: 'Patagonia', reading: null, tracked: false })
     expect(e.state).toBe('not_tracked')
-    expect(e.label).toBe('— not tracked')
+    expect(e.label).toBe('not tracked')
     expect(e.why).toBe(OWN_POSTS_UNREADABLE)
   })
 })

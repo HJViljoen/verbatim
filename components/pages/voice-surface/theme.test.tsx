@@ -270,7 +270,7 @@ describe('voiceTheme', () => {
   })
 
   it('counts the withheld evidence, refuses to quote it, and hides the row at zero', () => {
-    expect(draw()).toContain('Who these commenters are — counted, not quoted')
+    expect(draw()).toContain('Who these commenters are: counted, not quoted')
     expect(draw()).toContain('4 comments describe who these commenters are.')
     // At zero the row is hidden rather than printing an empty sentence (B34).
     const none = voiceFixture()

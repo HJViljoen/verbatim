@@ -596,11 +596,11 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
           {t.withheld > 0 ? <div className={email ? undefined : 'flex flex-wrap items-baseline justify-between gap-3 border-t border-border/70 pt-2.5'}>
             {email ? (
               <span style={{ fontFamily: FONT.sans, fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: EMAIL.muted }}>
-                Who these commenters are — counted, not quoted
+                Who these commenters are: counted, not quoted
               </span>
             ) : (
               <h4 className="m-0 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">
-                Who these commenters are — counted, not quoted
+                Who these commenters are: counted, not quoted
               </h4>
             )}
             <span className={email ? undefined : 'min-w-0 flex-1 text-[12px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted } : undefined}>
@@ -664,7 +664,7 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
               of twelve. */}
           {search.total > search.rows.length ? (
             <p className={email ? undefined : 'm-0 text-[11px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}>
-              Showing <span data-copy="figure">{fmtInt(search.rows.length)} of {fmtInt(search.total)}</span> matches — type more of the phrase to narrow it.
+              Showing <span data-copy="figure">{fmtInt(search.rows.length)} of {fmtInt(search.total)}</span> matches. Type more of the phrase to narrow it.
             </p>
           ) : null}
         </div>

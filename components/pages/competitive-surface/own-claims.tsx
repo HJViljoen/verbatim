@@ -130,7 +130,7 @@ function Claim({ row, mode }: { row: OwnClaimRow; mode: RenderMode }) {
 const censusSilent = (basis: string): string => `We read their accounts and found no ${basis}.`
 
 /** One rival's census, or the reason there is not one. */
-function Census({ census, mode }: { census: OwnPostCensus; mode: RenderMode }) {
+function Census({ census, mode, basisInMeta = false }: { census: OwnPostCensus; mode: RenderMode; basisInMeta?: boolean }) {
   const email = mode === 'email'
   const head = (
     <div className={email ? undefined : 'flex flex-wrap items-center gap-2'} style={email ? { marginBottom: 2 } : undefined}>
@@ -143,7 +143,7 @@ function Census({ census, mode }: { census: OwnPostCensus; mode: RenderMode }) {
           comment; the two must not be read as one clock (D9). It is dropped on
           an absence, where there is no figure to date and where `CENSUS_EMPTY`
           already ends in the same words ("— posts published in September"). */}
-      {census.unread ? null : (
+      {census.unread || basisInMeta ? null : (
         <span className={email ? undefined : 'font-mono text-[10.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.muted } : undefined}>
           {census.basis}
         </span>
@@ -165,7 +165,10 @@ function Census({ census, mode }: { census: OwnPostCensus; mode: RenderMode }) {
     )
     return email
       ? <div style={{ padding: '5px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>{head}{line}</div>
-      : <div className="flex min-w-0 flex-col gap-1 border-t border-border/70 pt-2">{head}{line}</div>
+      // ONE LINE A RIVAL (layout sweep): the name and its state side by side,
+      // so the list sits level with the head-to-head beside it instead of
+      // running a second screen of two-line cards.
+      : <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 border-t border-border/70 pt-1.5">{head}{line}</div>
   }
 
   const counts = (
@@ -193,8 +196,26 @@ function Census({ census, mode }: { census: OwnPostCensus; mode: RenderMode }) {
   )
 
   if (email) return <div style={{ padding: '6px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>{body}</div>
-  // The mock's tinted inner block — the second and last nesting level.
+  // A census with no claims to show is two facts, a name and its counts, and
+  // takes one line; the tinted inner block is for a census that carries claims.
+  if (census.claims.length === 0 && !(census.claimsNote && census.claimsNote !== RIVAL_CLAIMS_WITHHELD)) {
+    return (
+      <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 border-t border-border/70 pt-1.5">
+        {head}
+        {counts}
+      </div>
+    )
+  }
+  // The mock's tinted inner block, the second and last nesting level.
   return <TileBlock className="flex min-w-0 flex-col gap-1.5">{body}</TileBlock>
+}
+
+/** The basis every counted census shares, said once in the block's meta
+ *  rather than on each rival (D9: the figures are dated by the post). Null
+ *  where the censuses carry different bases, which then stay on each row. */
+export function sharedBasis(censuses: readonly OwnPostCensus[]): string | null {
+  const bases = new Set(censuses.filter((c) => !c.unread).map((c) => c.basis))
+  return bases.size === 1 ? [...bases][0] : null
 }
 
 /** "2 of 5 tracked" — the censuses that have an account configured, of all of
@@ -218,6 +239,7 @@ export const competitiveOwnClaims: Block<CompetitiveSurfaceData> = {
     const email = mode === 'email'
     const empty = competitiveOwnClaims.emptyState(data)
     const missing = censuses.some((c) => c.unread === OWN_POSTS_NO_ACCOUNTS)
+    const basis = sharedBasis(censuses)
 
     return (
       <BlockFrame
@@ -231,7 +253,9 @@ export const competitiveOwnClaims: Block<CompetitiveSurfaceData> = {
         className={mode === 'app' ? 'h-full' : undefined}
         question={competitiveOwnClaims.question}
         mode={mode}
-        // No meta: the heading and the "N of M tracked" footer say it (B100).
+        // The one meta is the posts' own clock, said once for every rival
+        // (the heading and the "N of M tracked" footer say the rest, B100).
+        meta={basis ?? undefined}
         footer={
           missing
             ? mode === 'app'
@@ -242,8 +266,8 @@ export const competitiveOwnClaims: Block<CompetitiveSurfaceData> = {
         footerNote={censuses.length > 0 ? trackedLine(censuses) : undefined}
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
-        <div className={email ? undefined : 'flex min-w-0 flex-col gap-2.5'}>
-          {censuses.map((c) => <Census key={c.audience} census={c} mode={mode} />)}
+        <div className={email ? undefined : 'flex min-w-0 flex-col gap-1.5'}>
+          {censuses.map((c) => <Census key={c.audience} census={c} mode={mode} basisInMeta={basis != null} />)}
         </div>
         {censuses.some((c) => c.claimsNote === RIVAL_CLAIMS_WITHHELD) ? (
           <p className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}>

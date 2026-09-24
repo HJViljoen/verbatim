@@ -6,7 +6,7 @@ import { fmtInt, platformLabel } from '@/lib/format'
 import { horizonHref } from '@/lib/shell/bar'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import { mixLine, type CompetitiveSurfaceData, type QuestionRow } from '@/lib/pages/competitive-surface'
+import { SAID_ABOUT_UNREAD_LINE, mixLine, saidAboutUnread, type CompetitiveSurfaceData, type QuestionRow } from '@/lib/pages/competitive-surface'
 
 // CO5 · What the category asks under their content (design §3 CO5).
 //
@@ -139,20 +139,28 @@ export const competitiveQuestions: Block<CompetitiveSurfaceData> = {
         }
         footerNote={q.rival ? `of the videos about ${q.rival}` : undefined}
       >
-        {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
+        {/* ONE COUNT LINE (copy slip 4a). Under the floor, the empty state's
+            sentence is the count line's tail rather than a second statement
+            of the same count above it. */}
+        {empty && q.videos === 0 ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         {q.videos > 0 ? (
           <p
             className={email ? undefined : 'm-0 text-[12px]'}
             style={email ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink } : undefined}
           >
             <span data-copy="figure">{fmtInt(q.insights)}</span> {q.insights === 1 ? 'question' : 'questions'} under{' '}
-            <span data-copy="figure">{fmtInt(q.videos)}</span> of {q.rival}’s videos, with{' '}
-            <span data-copy="figure">{fmtInt(q.quotes)}</span> {q.quotes === 1 ? 'comment' : 'comments'} behind them
+            <span data-copy="figure">{fmtInt(q.videos)}</span> of {q.rival}’s videos,{' '}
+            <span data-copy="figure">{fmtInt(q.quotes)}</span> {q.quotes === 1 ? 'comment' : 'comments'}
             {Object.keys(q.platformMix).length > 0 ? <> · {mixLine(q.platformMix)}</> : null}.
+            {empty ? <> {empty}</> : null}
           </p>
         ) : null}
 
-        <div className={email ? undefined : 'flex min-w-0 flex-col gap-2'}>
+        {/* TWO COLUMNS OF QUESTIONS AT xl (layout sweep). The block runs the
+            page's full width, and a single column of question lines there
+            would run past 90 characters; two columns keep each line readable
+            and halve the tile's height. */}
+        <div className={email ? undefined : 'grid min-w-0 grid-cols-1 gap-x-6 gap-y-2 xl:grid-cols-2'}>
           {q.rows.map((row) => <Question key={row.id} row={row} mode={mode} />)}
         </div>
 
@@ -173,6 +181,17 @@ export const competitiveQuestions: Block<CompetitiveSurfaceData> = {
             style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 } : undefined}
           >
             A question asked in a community is a different thing from a question typed under a video. The communities watched for you: {q.subreddits.map((s) => `r/${s}`).join(' · ')}.
+          </p>
+        ) : null}
+
+        {/* The page draws no "Said about them, by others" tile while nothing
+            about any rival can be read; its state is this one line. */}
+        {saidAboutUnread(data.saidAbout) ? (
+          <p
+            className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'}
+            style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 } : undefined}
+          >
+            {SAID_ABOUT_UNREAD_LINE}
           </p>
         ) : null}
       </BlockFrame>

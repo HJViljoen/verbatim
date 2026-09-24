@@ -1,8 +1,8 @@
 import { horizonWindow } from '@/lib/reading/horizon'
 import {
-  PRECEDENCE_RULE, ATTENTION_UNLOCK, CORPUS_DENOMINATOR_LINE, QUESTIONS_GROUPING_NOTE,
+  CORPUS_DENOMINATOR_LINE, QUESTIONS_GROUPING_NOTE,
   QUESTIONS_SUBJECTS_NOTE, STANDINGS_UNREAD, buildStandingsBlock, competitiveSurfaceHref,
-  buildSaidAbout, competitiveUnlockRows, questionsEmpty,
+  buildSaidAbout, questionsEmpty,
   type CompetitiveSurfaceData,
 } from '@/lib/pages/competitive-surface'
 import { methodRecordFixture, recordBandFixture } from '@/lib/test/method-fixture'
@@ -425,7 +425,6 @@ export function competitiveFixture(over: Partial<CompetitiveSurfaceData> = {}): 
     ),
     // Read off the censuses above: accounts ARE configured for these rivals, so
     // CO4 no longer says nobody is watching them.
-    unlocks: { rows: competitiveUnlockRows(ownClaimsFixture()) },
     // COMPOSED, NOT WRITTEN (CO8). See `ossurRecord` above: the band and the
     // method footnote are two readings of one record and may not state two
     // language shares.
@@ -544,8 +543,6 @@ export function unreadMonthsFixture(): CompetitiveSurfaceData {
       dualMention: null,
       caveat: null,
       denominatorLine: CORPUS_DENOMINATOR_LINE,
-      precedence: PRECEDENCE_RULE,
-      unlock: ATTENTION_UNLOCK,
       empty: STANDINGS_UNREAD,
     },
     // THE CENSUS DOES NOT DEPEND ON THE MONTH TABLES and does not vanish with
@@ -620,7 +617,6 @@ export function claimsReadFixture(): CompetitiveSurfaceData {
     // THE READINESS ROWS ARE RECOMPUTED OVER THIS ARM'S OWN CENSUSES. They were
     // inherited from the base fixture, so this state printed six of Ottobock's
     // claims in the second tile and "is not printed here" in the fifth.
-    unlocks: { rows: competitiveUnlockRows(ownClaims) },
     saidAbout: buildSaidAbout(
       [{ name: 'Ottobock' }, { name: 'Rareform' }],
       (a) => (a === 'competitor:Ottobock' ? 42 : 0),

@@ -7,7 +7,7 @@ import { PageFrame, PageGrid } from '@/components/shell/page-grid'
 import { SurfacePageBar } from '@/components/shell/page-bar'
 import { Tile, TileEmpty } from '@/components/shell/tile'
 import type { GlossaryKey } from '@/lib/calibration'
-import type { CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
+import { saidAboutUnread, type CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
 import { competitiveRivals } from './rivals'
 import { competitiveStandings } from './standings'
 import { competitiveHeadToHead } from './head-to-head'
@@ -70,7 +70,10 @@ const SPAN: Record<string, { col: number; row: number }> = {
   'competitive.ownclaims': { col: 5, row: 4 },
   // The two in one grid row share its height. "Not on this page yet" (5 cols)
   // is off the reading page, so the pair takes the row: the roadmap is listed
-  // once in Settings › Readiness (copy de-clutter ruling G).
+  // once in Settings › Readiness (copy de-clutter ruling G). While nothing
+  // about any rival can be read, "Said about them" draws no tile (its state
+  // is a line in the questions block) and the questions take the full width
+  // with a two-column list: see `tilesFor`.
   'competitive.saidabout': { col: 5, row: 5 },
   'competitive.questions': { col: 7, row: 5 },
   'competitive.playbook': { col: 12, row: 5 },
@@ -113,6 +116,29 @@ const SPAN: Record<string, { col: number; row: number }> = {
  * inside a card that looks like it lost its content.
  */
 export const GRID_ROWS = 'xl:auto-rows-[minmax(116px,auto)] xl:items-start'
+
+/**
+ * THE TILES THIS DATA DRAWS, WITH THEIR SPANS (layout sweep, 2026-09-24).
+ *
+ * An absence is a line inside the section it belongs to, never a card: a
+ * "Said about them" tile whose whole body explained why nothing was read sat
+ * as a 250px-wide stub beside a questions list several times its height, the
+ * white beside the tall tile being the gap the owner saw on Sealand. Without
+ * that stub the questions block runs the full width, and its list goes two
+ * columns at xl (questions.tsx).
+ */
+export function tilesFor(data: CompetitiveSurfaceData): { block: Block<CompetitiveSurfaceData>; col: number; row: number }[] {
+  const saidAboutDrawn = !saidAboutUnread(data.saidAbout) && data.saidAbout.length > 0
+  return COMPETITIVE_TILES
+    .filter((b) => b !== competitiveSaidAbout || saidAboutDrawn)
+    .map((block) => {
+      const span = SPAN[block.key] ?? { col: 12, row: 2 }
+      const col = block === competitiveQuestions && !saidAboutDrawn ? 12 : span.col
+      // A REFUSAL DOES NOT CLAIM FOUR ROWS: a tile that has just said it has
+      // no reading takes one row and lets its own content size it.
+      return { block, col, row: emptyRow(block, data) ? 1 : span.row }
+    })
+}
 
 /** Has this block nothing to draw? `emptyState` is every block's own answer and
  *  the one the block itself renders (`BlockEmpty`), so the tile and the block
@@ -161,7 +187,7 @@ export function CompetitiveSurfacePage({
 
   const ctx = competitiveContext(params)
   return (
-    <ExportScope page="competitive" params={params} tiles={COMPETITIVE_TILES.map((b) => ({ key: b.key, title: b.title }))}>
+    <ExportScope page="competitive" params={params} tiles={tilesFor(data).map(({ block: b }) => ({ key: b.key, title: b.title }))}>
       <PageFrame>
         <SurfacePageBar
           nav="competitive"
@@ -176,28 +202,14 @@ export function CompetitiveSurfacePage({
             outside any card. */}
         {competitiveRivals.render(data, 'app', ctx)}
         <PageGrid className={GRID_ROWS}>
-          {COMPETITIVE_TILES.map((block) => {
-            const span = SPAN[block.key] ?? { col: 12, row: 2 }
-            // A REFUSAL DOES NOT CLAIM FOUR ROWS. `PageGrid` is
-            // `auto-rows-[minmax(116px,auto)]`, so a `row-span-4` tile has a
-            // FLOOR of 4 × 116 + 3 × 16 = 512px whatever is in it — and until
-            // M3/M5 are applied every tenant's standings tile is the refusal,
-            // three lines of text, first thing on the page: measured at 1440,
-            // 512px of tile under 120px of content. The span is the artboard's
-            // rhythm for a tile that HAS a reading; a tile that has just said
-            // it has none takes one row and lets its own content size it.
-            const row = emptyRow(block, data) ? 1 : span.row
-            // NO `distribute`: every tile has exactly ONE child — the block's
-            // own `<section>` — so `justify-between` had nothing to spread and
-            // the prop read as a fix that was never applied. What actually puts
-            // a footer on the floor is the block filling the tile (`h-full` on
-            // its own `BlockFrame`), which is where each block now does it.
-            return (
-              <Tile key={block.key} col={span.col} row={row} exportKey={block.key} className={STACKED}>
-                {block.render(data, 'app', ctx)}
-              </Tile>
-            )
-          })}
+          {tilesFor(data).map(({ block, col, row }) => (
+            // NO `distribute`: every tile has exactly ONE child, the block's
+            // own `<section>`; what puts a footer on the floor is the block
+            // filling the tile (`h-full` on its own `BlockFrame`).
+            <Tile key={block.key} col={col} row={row} exportKey={block.key} className={STACKED}>
+              {block.render(data, 'app', ctx)}
+            </Tile>
+          ))}
         </PageGrid>
         {/* No method footnote: soundness lives in the page bar's "How sound
             is this" pill and its record modal (copy de-clutter ruling B). The

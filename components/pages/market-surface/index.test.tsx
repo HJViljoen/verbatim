@@ -9,7 +9,7 @@ import { GROUNDED_BASIS } from '@/lib/reading/afterwards'
 import { MOVES_UNLOCK } from '@/lib/pages/overview'
 import { pageModule } from '@/components/pages/registry'
 import type { AdviceRow } from '@/lib/pages/market-surface'
-import { MARKET_BLOCKS, MarketSurfacePage, startClasses, tileGrid } from './index'
+import { MARKET_BLOCKS, MOVES_STACKS, MarketSurfacePage, drawnOnMarket, startClasses, tileGrid } from './index'
 import { marketConclusions } from './conclusions'
 import { marketAdvice } from './advice'
 import { marketCard } from './card'
@@ -17,8 +17,6 @@ import { marketMoves } from './moves'
 import { marketPlans } from './plans'
 import { marketSayHear } from './sayhear'
 import { marketWays } from './ways'
-import { marketUnlocks } from './unlocks'
-import { CLOSED_BY_US, OWNER_LABEL } from '@/lib/readiness/types'
 import { deepLinkFixture, firstUpdateFixture, marketFixture, unrecordedFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
@@ -169,26 +167,21 @@ describe('the tiles are as tall as what they draw', () => {
     }
   })
 
-  it('puts the tiles on a line in one grid row, in the artboard\'s columns', () => {
-    // One row per line: the tiles on it start level, and the moves grid is
-    // `xl:items-start`, so each ends at its own content rather than being
-    // stretched into white by its tallest neighbour. The start is pinned so
-    // auto-placement cannot flow a later tile up into a line.
+  it('draws the two readings as rows and the moves as two level stacks', () => {
+    // The readings are one full-width row each. The moves grid is two stacks
+    // (card over say-vs-hear, your moves over plans) so no column leaves a
+    // short card's height of white beside its neighbour (layout sweep), and
+    // the button strip runs the full width under them.
     expect(render(<MarketSurfacePage data={marketFixture()} />)).toContain('xl:items-start')
     const grid = tileGrid()
     expect(grid['market.conclusions'].rowStart).toBe(1)
     expect(grid['market.advice'].rowStart).toBe(2)
-    expect(grid['market.card'].rowStart).toBe(1)
-    expect(grid['market.moves'].rowStart).toBe(1)
-    for (const k of ['market.sayhear', 'market.plans']) expect(grid[k].rowStart).toBe(2)
-    // The roadmap tile is off the reading page (copy de-clutter ruling G).
     expect(grid['market.unlocks']).toBeUndefined()
-    expect(grid['market.ways'].rowStart).toBe(3)
-    expect(grid['market.card'].colStart).toBe(1)
-    expect(grid['market.moves'].colStart).toBe(6)
-    expect(grid['market.sayhear'].colStart).toBe(1)
-    expect(grid['market.plans'].colStart).toBe(5)
-    expect(grid['market.ways'].colStart).toBe(1)
+    expect(MOVES_STACKS.map((st) => st.keys)).toEqual([['market.card', 'market.sayhear'], ['market.moves', 'market.plans']])
+    expect(MOVES_STACKS.reduce((n, st) => n + st.col, 0)).toBe(12)
+    const markup = render(<MarketSurfacePage data={marketFixture()} />)
+    expect(markup).toContain('contents xl:flex xl:min-w-0 xl:flex-col xl:gap-4 xl:col-span-5')
+    expect(markup).toContain('contents xl:flex xl:min-w-0 xl:flex-col xl:gap-4 xl:col-span-7')
   })
 
   it('gives every start a class Tailwind can see', () => {
@@ -203,7 +196,10 @@ describe('the tiles are as tall as what they draw', () => {
 
   it('answers for every block on the page', () => {
     const grid = tileGrid()
-    for (const block of MARKET_BLOCKS) expect(grid[block.key]?.row).toBe(1)
+    const stacked = MOVES_STACKS.flatMap((st) => st.keys)
+    for (const block of MARKET_BLOCKS) {
+      expect(grid[block.key] != null || stacked.includes(block.key) || block.key === 'market.ways', block.key).toBe(true)
+    }
   })
 
   it('spends the dotted underline only on something that opens', () => {
@@ -852,7 +848,7 @@ describe('MK4 · a move, read', () => {
     // The rule's tick carries the declaration's own day, drawn on the axis it
     // belongs to, beside the meta that already named it.
     const text = renderText(marketMoves.render(marketFixture(), 'app', ctx))
-    expect(text).toContain('Move declared — Push repairability 12 Aug')
+    expect(text).toContain('Move declared: Push repairability 12 Aug')
     expect(text).toContain('declared 12 Aug')
     expect(text).toContain('before it was declared')
   })
@@ -863,43 +859,6 @@ describe('MK4 · a move, read', () => {
     expect(text).not.toMatch(/net of|adjusted for|minus the category/i)
   })
 })
-
-describe('the sections that are not built', () => {
-  it('names MK3, says what closes it, and invents no date', () => {
-    const text = renderText(marketUnlocks.render(marketFixture(), 'app', ctx))
-    // THE CARD IS BUILT; THE PRESS IS NOT — so the row that is listed here as
-    // missing names the confirming, not the card (Phase 1 D2 fix pass). MK6 is
-    // not asserted here: this fixture now carries a checked plan, so D4 drops
-    // that row — the test below owns it.
-    expect(text).toContain('Confirming this month’s card')
-    expect(text).toContain('The card is read above')
-    expect(text).not.toMatch(/by \d{1,2} \w+/)
-    // AND THE OWNER IS OFF THE PAGE (the vocabulary ruling; see `CLOSED_BY_US`,
-    // lib/readiness/types.ts). This line asserted that "Verbatim engineering"
-    // PRINTS, and it was right about what the code did and wrong about what a
-    // client may be handed: an internal team name, no link, nothing to act on,
-    // on a page they pay for. What replaces it is the WP19 split every brief
-    // has printed since — what is missing, then what closes it.
-    expect(text).toContain(CLOSED_BY_US.engineering)
-    for (const mode of MODES) {
-      const t = renderText(marketUnlocks.render(marketFixture(), mode, ctx))
-      expect(t, mode).not.toContain(OWNER_LABEL.engineering)
-      expect(t, mode).not.toContain(OWNER_LABEL.ops)
-    }
-    // MK6 is the row that still names somebody, and they are on the reader's
-    // side of the desk — which is WP19's client branch, not an owner.
-    expect(renderText(marketUnlocks.render(unrecordedFixture(), 'app', ctx))).toContain('You, on Ask')
-  })
-
-  // MK6 IS NAMED ONLY WHERE IT IS ABSENT (D4). A workspace with a checked plan
-  // sees the card; one with none still sees the row, now owned by the reader
-  // rather than by engineering, because uploading is the thing that is missing.
-  it('names MK6 for a workspace with no plan, and drops it once there is one', () => {
-    expect(renderText(marketUnlocks.render(unrecordedFixture(), 'app', ctx))).toContain('Plans re-checked')
-    expect(renderText(marketUnlocks.render(marketFixture(), 'app', ctx))).not.toContain('Plans re-checked')
-  })
-})
-
 // ---- the masthead · the artboard's ruling ---------------------------------
 
 /**
@@ -933,5 +892,18 @@ describe('the masthead', () => {
     const markup = render(MarketSurfacePage({ data: marketFixture() }))
     expect(markup).not.toContain('font-serif text-[17px]')
     expect(markupOf(markup)).not.toContain('We never claim you caused it')
+  })
+})
+
+describe('absences are lines, not cards (sweep 2026-09-24)', () => {
+  it('draws no plans card with no plan, and no say-vs-hear card with no claim', () => {
+    const base = marketFixture()
+    const bare = { ...base, plans: [], ways: { ...base.ways, claims: [] } }
+    expect(drawnOnMarket('market.plans', bare)).toBe(false)
+    expect(drawnOnMarket('market.sayhear', bare)).toBe(false)
+    expect(drawnOnMarket('market.card', bare)).toBe(true)
+    const markup = render(<MarketSurfacePage data={bare} />)
+    expect(markup).not.toContain('Plans re-checked')
+    expect(markup).not.toContain('Say vs hear')
   })
 })

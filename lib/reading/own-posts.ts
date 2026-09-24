@@ -284,7 +284,7 @@ export const ECHO_NOT_COUNTED =
 /** No subject is named, so the posts were matched against nothing. The rail's
  *  own empty state, said where the census prints its share of it. */
 export const SUBJECTS_NONE_NAMED =
-  'No subject is named yet, so these posts were matched against nothing — name one and this starts counting.'
+  'No subject is named yet, so these posts were matched against nothing. Name one and this starts counting.'
 
 /** The posts are counted and none of them has been read for what its audience
  *  said, so there is nothing for a subject to match. The failure this sentence
@@ -300,7 +300,7 @@ export const SUBJECTS_MATCHED_NONE =
 export const ECHO_SILENT = 'The audience was read this month and nobody carried what this claim rests on.'
 
 /** The census's own empty state. */
-export const CENSUS_EMPTY = (basis: string): string => `No post was published in this period — ${basis}.`
+export const CENSUS_EMPTY = (basis: string): string => `No post was published in this period: ${basis}.`
 
 /** The basis line, and the only sentence that makes an upload-dated figure
  *  safe to print beside comment-dated ones. */
@@ -362,10 +362,10 @@ export function claimEcho(input: ClaimEchoInput): ClaimEcho {
   const word = (a: 'echoes' | 'contradicts' | 'silent'): string => claimVerdict(a).label
   const base = { audience: input.audience, audienceLabel: input.audienceLabel }
   if (input.tracked === false) {
-    return { ...base, state: 'not_tracked', value: { k: 0, n: 0 }, label: '— not tracked', why: input.why ?? OWN_POSTS_UNREADABLE }
+    return { ...base, state: 'not_tracked', value: { k: 0, n: 0 }, label: 'not tracked', why: input.why ?? OWN_POSTS_UNREADABLE }
   }
   if (input.reading == null || input.reading.n <= 0) {
-    return { ...base, state: 'not_tracked', value: input.reading ?? { k: 0, n: 0 }, label: '— not tracked', why: input.why ?? ECHO_NOT_COUNTED }
+    return { ...base, state: 'not_tracked', value: input.reading ?? { k: 0, n: 0 }, label: 'not tracked', why: input.why ?? ECHO_NOT_COUNTED }
   }
   if (input.reading.k <= 0) {
     return { ...base, state: 'silent', value: input.reading, label: word('silent'), why: input.why ?? ECHO_SILENT }

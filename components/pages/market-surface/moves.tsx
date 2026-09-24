@@ -153,7 +153,7 @@ function Move({ reading, index, mode }: { reading: MoveReading; index: number; m
   const email = mode === 'email'
   const r = reading
   const meta = `declared ${shortDate(r.declaredAt)} · ${r.on}`
-  const heading = `Move ${fmtInt(index)} — ${r.title}`
+  const heading = `Move ${fmtInt(index)}: ${r.title}`
 
   const body = (
     <>
@@ -186,7 +186,7 @@ function Move({ reading, index, mode }: { reading: MoveReading; index: number; m
           // built for and a fifth cannot be added from here (components/charts
           // is the subjects package's), so the declaration borrows the dashed
           // grey rule and says what it is in its own label and tick.
-          rules={[{ month: r.declaredAt.slice(0, 7) + '-01', label: `Move declared — ${r.title}`, kind: 'tracking_change', at: r.declaredAt }]}
+          rules={[{ month: r.declaredAt.slice(0, 7) + '-01', label: `Move declared: ${r.title}`, kind: 'tracking_change', at: r.declaredAt }]}
           label={`${r.title}, month by month`}
           id={`move-${r.moveId}`}
         />
@@ -198,7 +198,7 @@ function Move({ reading, index, mode }: { reading: MoveReading; index: number; m
         >
           {/* A LINE NEEDS THREE READINGS IN ONE REGIME, and this one has fewer.
               The months it does have are named rather than drawn. */}
-          {r.chartNote} — too few readings to draw a line
+          {r.chartNote}: too few readings to draw a line
         </span>
       ) : null}
 

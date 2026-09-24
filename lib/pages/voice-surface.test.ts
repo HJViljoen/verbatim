@@ -252,7 +252,7 @@ describe('openRefusal', () => {
     // audience-month, and every other register id — 1,046 of them on Össur —
     // silently opened the first mover instead.
     expect(openRefusal({ asked: { id: 'r1', label: 'Filip’s storytelling stands out', found: false } }, 'The category'))
-      .toBe('“Filip’s storytelling stands out” was not said in the category this month, so there is nothing to open — clear it from the link to see what was.')
+      .toBe('“Filip’s storytelling stands out” was not said in the category this month, so there is nothing to open. Clear it from the link to see what was.')
   })
 
   it('tells a register id nobody has named apart from a theme nobody said', () => {
@@ -327,7 +327,7 @@ describe('onCameraScope', () => {
 describe('onCameraReach', () => {
   it('names the videos the speech read could not reach', () => {
     expect(onCameraReach({ videos: 130, reddit: 12 }))
-      .toBe('read from 118 of 130 videos — Reddit carries no speech and no on-screen text')
+      .toBe('read from 118 of 130 videos; Reddit carries no speech and no on-screen text')
   })
 
   it('says nothing where no Reddit thread is in the count — there is nothing to warn about', () => {

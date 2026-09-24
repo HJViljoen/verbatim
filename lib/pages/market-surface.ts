@@ -10,9 +10,6 @@ import { inheritedStatus, isMissingRecDecisions, REC_DECISIONS_TABLE, type RecDe
 import { methodLines, type MethodLines } from '../reading/method'
 import { PLAN_EMPTY, loadPlanChecks, type PlanCheckCard } from '../ask/plan-cards'
 import { scrubProse } from '../prose/scrub'
-// The client-facing half of the readiness vocabulary — what a surface says
-// where the readiness page names the team. See `CLOSED_BY_US`'s own docblock.
-import { CLOSED_BY_US } from '../readiness/types'
 import { afterwardsFor, groundingFor, type Afterwards, type Grounding } from '../reading/afterwards'
 import { recurrenceOf, type Recurrence } from '../reading/head-to-head'
 import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordInputs } from '../reading/record'
@@ -301,27 +298,6 @@ export interface WaysBlock {
   empty: string | null
 }
 
-export interface UnlockRow {
-  section: string
-  title: string
-  line: string
-  /**
-   * WHO THE READER CAN GO TO, and null where that is nobody they can go to —
-   * Competitive's `CompetitiveUnlockRow.closes`, same field, same reason, and
-   * the two renderers print it the same way.
-   *
-   * It was `owner` and carried "Verbatim engineering", a readiness OWNER on a
-   * paying reader's page (`CLOSED_BY_US`, lib/readiness/types.ts). Null means
-   * the row is ours, and the row's `line` then ends in the sentence that says
-   * what closes it.
-   */
-  closes: string | null
-}
-
-export interface UnlocksBlock {
-  rows: UnlockRow[]
-}
-
 export interface MarketRecord {
   line: string
   lines: string[]
@@ -338,7 +314,6 @@ export interface MarketSurfaceData {
   advice: AdviceBlock
   moves: MovesBlock
   ways: WaysBlock
-  unlocks: UnlocksBlock
   record: MarketRecord
   /**
    * The method footnote, composed once for every surface (block D, D9).
@@ -738,50 +713,6 @@ export function waysOfMoving(acceptable: WaysBlock['acceptable'], plansChecked =
 export const CLAIMS_CAVEAT =
   'This is how each claim reads in the latest update. A claim’s verdict per month, held across two updates before it is printed, is not built yet.'
 
-/** MK3 and MK6: the two sections of this surface that are not built, each
- *  naming what it waits for and who owns it. Neither invents a date — a
- *  delivery date computed from the calendar is wrong the first time it is read
- *  (the defect OV5's unlock had). */
-export function unlockRows(plansChecked = 0): UnlockRow[] {
-  const rows: UnlockRow[] = [
-    {
-      // WHAT IS NOT BUILT IS THE PRESS. The card itself is read on this page
-      // now (Phase 1 D2) and the renderer prints "— not built yet" under every
-      // row here, so this row names the confirming rather than the card.
-      section: 'MK3',
-      title: 'Confirming this month’s card',
-      // AND THE OWNER IS OFF THE CLIENT'S PAGE (the vocabulary ruling). The
-      // renderer printed "— not built yet · Verbatim engineering" under this
-      // row: an internal team name in front of the paying reader, with no link
-      // and nothing they could do with it. The row keeps the WP19 shape the
-      // briefs have used since — what is missing, then what closes it — and
-      // the sentence is `CLOSED_BY_US`'s, not a second wording of it.
-      line: `The card is read above — everything you published this month, how much of it drew enough comment to read, and the claims you made in it. Turning it into a move in one press is what is missing. ${CLOSED_BY_US.engineering}`,
-      closes: null,
-    },
-  ]
-  // MK6 LEAVES THIS LIST WHEN IT HAS SOMETHING TO SHOW. The row's own sentence
-  // promised a verdict "held for two consecutive updates", which D4 measured
-  // and refused: claims flip between readings often enough that holding one
-  // back for two would print almost nothing. What the block prints instead is
-  // the current reading, the date each verdict last moved and how many readings
-  // have carried it — with `PLAN_HOLD_CAVEAT` saying the hold is not there. A
-  // workspace with no uploaded plan keeps the row, because for them it really
-  // is absent.
-  if (plansChecked === 0) {
-    rows.push({
-      section: 'MK6',
-      title: 'Plans re-checked',
-      line: 'Upload a campaign brief on Ask and it is re-read against every update — each claim supported, contradicted or untested, with what moved since you uploaded it.',
-      // UNTOUCHED BY THE RULING: "You, on Ask" is the reader and a page of
-      // theirs, which is the client branch of WP19's split — the act, named
-      // where they do it. The ruling is about OUR queue names.
-      closes: 'You, on Ask',
-    })
-  }
-  return rows
-}
-
 // ---- the loader ---------------------------------------------------------------
 
 interface InsightRow {
@@ -1155,7 +1086,6 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
     advice,
     moves: movesBlock,
     ways,
-    unlocks: { rows: unlockRows(plans.length) },
     record: { line: howSoundLine(recordInputs), lines: recordLines(recordInputs), href: '/dashboard/settings' },
     method: methodLines(recordInputs, { brand }),
     plans,

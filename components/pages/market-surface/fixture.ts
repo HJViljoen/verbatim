@@ -1,7 +1,7 @@
 import type { AdviceRow, MarketSurfaceData } from '@/lib/pages/market-surface'
 import {
   ADVICE_EMPTY, ADVICE_REQUESTED_LINE, ADVICE_UNLOCK, CLAIMS_CAVEAT, LEDGER_AUDIENCE, MOVES_EMPTY_MK4, MOVES_UNRECORDED,
-  actedLine, moveLedgerLine, repeatLine, unlockRows, waysOfMoving,
+  actedLine, moveLedgerLine, repeatLine, waysOfMoving,
 } from '@/lib/pages/market-surface'
 import { MOVES_MASTHEAD, MOVES_UNLOCK } from '@/lib/pages/overview'
 import { cardFixture, moveReadingFixture } from '@/components/pages/overview/fixture'
@@ -253,7 +253,6 @@ export function marketFixture(over: Partial<MarketSurfaceData> = {}): MarketSurf
       acceptable,
       empty: null,
     },
-    unlocks: { rows: unlockRows(1) },
     record: {
       line: 'your 3rd monthly reading · 3 updates · 2,359 videos · 27% of what was said on camera was not in English',
       // THE REFUSAL LINE IS READ OFF THE ROWS BESIDE IT, never typed. The full
@@ -333,7 +332,6 @@ export function unrecordedFixture(): MarketSurfaceData {
     // gone rather than printing "0 videos" twelve times; nothing is marked Done
     // with months either side of it, so "Afterwards" is a sentence; and no
     // hero quote can be vouched for. This is the state wave 2 is reviewed in.
-    unlocks: { rows: unlockRows(0) },
     plans: [],
     plansEmpty: PLAN_EMPTY,
     advice: {
@@ -371,7 +369,6 @@ export function firstUpdateFixture(): MarketSurfaceData {
     advice: { rows: [], highlight: null, requestedLine: null, total: 0, acted: 0, actedLine: actedLine(0, 0), repeatLine: repeatLine([]), recorded: true, unlock: ADVICE_UNLOCK, empty: ADVICE_EMPTY },
     moves: { rows: [], masthead: MOVES_MASTHEAD, unlock: MOVES_UNLOCK, recorded: true, empty: MOVES_EMPTY_MK4, card: cardFixture(), readings: [] },
     ways: { ...base.ways, ways: waysOfMoving(null, 0), acceptable: null },
-    unlocks: { rows: unlockRows(0) },
     plans: [],
     plansEmpty: PLAN_EMPTY,
   }

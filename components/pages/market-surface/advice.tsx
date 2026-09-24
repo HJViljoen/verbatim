@@ -342,7 +342,9 @@ export const marketAdvice: Block<MarketSurfaceData> = {
         title={marketAdvice.title}
         question={marketAdvice.question}
         mode={mode}
-        meta={a.total > 0 ? `${fmtInt(a.total)} recommendations · oldest first` : undefined}
+        // THE TOTAL ONCE (copy slip 4a): where the footer says "12 of 67
+        // shown", the meta does not say "67 recommendations" as well.
+        meta={a.total > 0 ? (more > 0 ? 'oldest first' : `${fmtInt(a.total)} recommendations · oldest first`) : undefined}
         // THE WHOLE LEDGER, NEVER A QUARTER (D12). `actedLine`'s own docstring
         // argues it: the denominator is every identity ever recommended and has
         // no quarter at all, so the artboard's "Jul → Sep 2026" note beside it

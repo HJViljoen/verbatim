@@ -54,7 +54,7 @@ import { castMasthead } from '@/lib/pages/voice-surface'
 // under the cards.
 
 /** The floor is a fact about the reading and is printed, not implied. */
-function Persona({ persona, mode }: { persona: CastPersona; mode: RenderMode }) {
+function Persona({ persona, mode, className }: { persona: CastPersona; mode: RenderMode; className?: string }) {
   const email = mode === 'email'
   const head = email ? (
     <>
@@ -154,10 +154,23 @@ function Persona({ persona, mode }: { persona: CastPersona; mode: RenderMode }) 
     )
   }
   return (
-    <div className="flex min-w-0 flex-col gap-2 rounded bg-inner px-3.5 py-3">
+    <div className={`flex min-w-0 flex-col gap-2 rounded bg-inner px-3.5 py-3 ${className ?? ''}`}>
       {body}
     </div>
   )
+}
+
+/**
+ * NO EMPTY CELL IN THE LAST ROW (layout sweep, 2026-09-24). Five personas in
+ * three columns left a persona-sized hole beside the last two, white a whole
+ * card tall. The last card takes the leftover columns instead: two left over,
+ * it spans two; one left over, it spans the row. Classes are literal so
+ * Tailwind's scanner sees them.
+ */
+export function lastRowSpan(i: number, n: number): string {
+  if (i !== n - 1) return ''
+  const left = n % 3
+  return left === 2 ? 'xl:col-span-2' : left === 1 && n > 1 ? 'xl:col-span-3' : ''
 }
 
 export const voiceCast: Block<VoiceSurfaceData> = {
@@ -223,7 +236,7 @@ export const voiceCast: Block<VoiceSurfaceData> = {
             ? c.personas.map((p) => <Persona key={p.key} persona={p} mode={mode} />)
             : (
               <TileColumns of={3} rule={false}>
-                {c.personas.map((p) => <Persona key={p.key} persona={p} mode={mode} />)}
+                {c.personas.map((p, i) => <Persona key={p.key} persona={p} mode={mode} className={lastRowSpan(i, c.personas.length)} />)}
               </TileColumns>
             )}
           {/* NOT the mock's "No persona 16% of category videos". That figure is

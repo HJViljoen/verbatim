@@ -830,7 +830,7 @@ export function onCameraReach(input: { videos: number; reddit: number | null }):
   if (input.reddit == null) return null
   const readable = Math.max(0, input.videos - input.reddit)
   if (input.reddit === 0) return null
-  return `read from ${fmtInt(readable)} of ${fmtInt(input.videos)} videos — Reddit carries no speech and no on-screen text`
+  return `read from ${fmtInt(readable)} of ${fmtInt(input.videos)} videos; Reddit carries no speech and no on-screen text`
 }
 
 /**
@@ -1435,7 +1435,7 @@ function denominatorFor(
 /** Said by VO2 and VO3 in the same words, because it is one fact about the
  *  reader's link and not two facts about the month. */
 export const DEEP_LINK_EMPTY =
-  'None of this month’s themes sit behind that insight — clear the filter to see the whole conversation.'
+  'None of this month’s themes sit behind that insight. Clear the filter to see the whole conversation.'
 
 /**
  * Why no theme is open — and it is never "the month was empty" when the answer
@@ -1461,8 +1461,8 @@ export function openRefusal(
       ? `${DEEP_LINK_EMPTY} Nothing is open until it is cleared.`
       : 'No theme in this audience carried enough of this month to be opened.'
   }
-  if (!asked.label) return 'The theme this link asks for is not in this workspace’s register — clear it from the link to see what this month did carry.'
-  return `“${asked.label}” was not said in ${audienceLabel.toLowerCase()} this month, so there is nothing to open — clear it from the link to see what was.`
+  if (!asked.label) return 'The theme this link asks for is not in this workspace’s register. Clear it from the link to see what this month did carry.'
+  return `“${asked.label}” was not said in ${audienceLabel.toLowerCase()} this month, so there is nothing to open. Clear it from the link to see what was.`
 }
 
 /**
@@ -1603,7 +1603,7 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
     const curr = input.statsRows.find((r) => monthStartOf(r.month) === month && r.audience === audience) ?? null
     const prev = input.statsRows.find((r) => monthStartOf(r.month) === input.prevMonth && r.audience === audience) ?? null
     if (!curr) toneNote = 'Nothing in this month has been judged yet.'
-    else if (curr.judged < TONE_FLOOR) toneNote = `Too few videos judged this month to read a tone — ${fmtInt(curr.judged)} of the ${fmtInt(TONE_FLOOR)} a point needs.`
+    else if (curr.judged < TONE_FLOOR) toneNote = `Too few videos judged this month to read a tone: ${fmtInt(curr.judged)} of the ${fmtInt(TONE_FLOOR)} a point needs.`
     else {
       const counts = {
         judged: curr.judged, positive: curr.positive, negative: curr.negative,

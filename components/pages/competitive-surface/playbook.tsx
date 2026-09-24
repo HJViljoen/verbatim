@@ -150,7 +150,7 @@ function Matrix({
         <div style={{ fontFamily: FONT.mono, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', color: EMAIL.muted, paddingBottom: 4 }}>{label}</div>
         {matrix.keys.map((key) => (
           <div key={key.key} style={{ padding: '3px 0', borderTop: `1px solid ${EMAIL.hairline}`, fontFamily: FONT.sans, fontSize: 12 }}>
-            {key.label}{' — '}
+            {key.label}{' · '}
             {[lead, ...rest].map((side) => (
               <span key={side.audience}>
                 {side.label}{' '}<Cell side={side} formatKey={key.key} mode={mode} />{' '}
