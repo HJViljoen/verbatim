@@ -31,7 +31,8 @@ export const VOICE_BLOCKS: readonly Block<VoiceSurfaceData>[] = [
 /**
  * NO FIXED-HEIGHT TILES ON THIS PAGE, and the first production render is why.
  *
- * `PageGrid` is `auto-rows-[116px]` and `Tile` is `overflow-hidden`, so a tile
+ * `PageGrid` WAS `auto-rows-[116px]` (content-sized since 2026-09-24) and `Tile`
+ * is `overflow-hidden`, so a tile
  * is exactly as tall as the row span it asks for and everything past that is
  * CUT — not scrolled, not shrunk, not marked. Drawn that way, Sealand's page
  * lost three of the theme's six quotes, the spoken line, the on-screen text,

@@ -3,11 +3,34 @@ import { cn } from '@/lib/utils'
 
 // The page frame. Inside the app shell's <main> (h-dvh, 24px padding) the page
 // is a flex column: PageBar on top, then the grid. On ≥xl the grid is 12
-// columns; rows are 116px units and a tile spans as many as it asks for. The
-// 2026-08-22 rule that every page must fit one screen is retired (MASTER rule
-// 7, 2026-08-28): the grid grows with its content and the page scrolls when it
-// has to — whether a given page fits one screen is that page's own judgment.
-// Below xl the grid becomes a single column of tiles.
+// columns and a tile spans as many rows as it asks for. The 2026-08-22 rule
+// that every page must fit one screen is retired (MASTER rule 7, 2026-08-28):
+// the grid grows with its content and the page scrolls when it has to —
+// whether a given page fits one screen is that page's own judgment. Below xl
+// the grid becomes a single column of tiles.
+//
+// A BLOCK'S HEIGHT IS ITS CONTENT'S HEIGHT; THE 116px RHYTHM IS A MINIMUM, NOT
+// A SIZE (2026-09-24). The rows were `auto-rows-[116px]`, a fixed track, and a
+// `Tile` is `overflow-hidden`, so every span was a hard ceiling AND a hard
+// floor at once: a block taller than its span was cut (Market's insights lost
+// its last line under the next section) and a block shorter than it sat in
+// white (Market's ledger ended 600px above its own card's edge). Pages then
+// estimated their content's height in px to pick a span, which is the same bug
+// moved into arithmetic. The track is now `minmax(116px, auto)` — the
+// artboards' rhythm as a floor, content as the size — so a span says "at least
+// N rows" (N × 116 + (N − 1) × 16 px) and the rows it covers grow to whatever
+// the tallest tile on them draws. Tiles sharing a row still stretch to that
+// row's height (`align-items: stretch`, the grid default), which is how a
+// two-column pair stays level. Screen only: printed artefacts lay out on
+// `.vb-print-grid` (app/globals.css), not on this component.
+export const ROW_UNIT_PX = 116
+export const ROW_GAP_PX = 16
+/** The least a tile spanning `rows` grid rows can be: N units and the N − 1
+ *  gaps between them. A floor, never a height. */
+export const rowFloorPx = (rows: number): number =>
+  Math.max(1, Math.floor(rows)) * ROW_UNIT_PX + (Math.max(1, Math.floor(rows)) - 1) * ROW_GAP_PX
+/** The grid's own classes — exported so the test pins the floor-not-size rule. */
+export const PAGE_GRID_CLASSES = 'grid grid-cols-1 gap-4 xl:grid-cols-12 xl:auto-rows-[minmax(116px,auto)]'
 
 export function PageFrame({ children, className }: { children: ReactNode; className?: string }) {
   return (
@@ -19,7 +42,7 @@ export function PageFrame({ children, className }: { children: ReactNode; classN
 
 export function PageGrid({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className={cn('grid grid-cols-1 gap-4 xl:grid-cols-12 xl:auto-rows-[116px]', className)}>
+    <div className={cn(PAGE_GRID_CLASSES, className)}>
       {children}
     </div>
   )

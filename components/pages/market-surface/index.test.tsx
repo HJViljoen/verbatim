@@ -8,7 +8,7 @@ import { ADVICE_REQUESTED_GONE } from '@/lib/pages/market-surface'
 import { MOVES_UNLOCK } from '@/lib/pages/overview'
 import { pageModule } from '@/components/pages/registry'
 import type { AdviceRow } from '@/lib/pages/market-surface'
-import { MARKET_BLOCKS, MarketSurfacePage, startClasses, tileGrid, tileRows } from './index'
+import { MARKET_BLOCKS, MarketSurfacePage, startClasses, tileGrid } from './index'
 import { marketConclusions } from './conclusions'
 import { marketAdvice } from './advice'
 import { marketCard } from './card'
@@ -139,16 +139,13 @@ describe('Market · every block, every mode, every state', () => {
 })
 
 describe('the tiles are as tall as what they draw', () => {
-  // A tile is `overflow-hidden` over a fixed N × 116px grid area at >= xl, so a
-  // block taller than its span is CUT with no scrollbar and no affordance, and
-  // a block shorter than it shows empty ground. The port set one table of
-  // constants from a fixture thinner than the page: the ledger draws three rows
-  // in the fixture and twelve in production, where it wanted 1,435px of a 644px
-  // box — rows 5 to 12, the acted line and the grounding note all gone.
-  //
-  // These are the RULES the estimate has to keep. The pixel constants behind it
-  // were measured in a browser at 1280 (the low end of the primary range, where
-  // these tiles are tallest); this asserts the arithmetic and the shape.
+  // 2026-09-24. The page used to estimate each block's height in px from its
+  // data and turn that into a row span, because `PageGrid`'s rows were a fixed
+  // 116px under an `overflow-hidden` tile. Production found both failure
+  // directions: the conclusions tile's last row sat under the next section's
+  // heading, and the ledger (67 recommendations, a span of twelve) ended 600px
+  // above its own card's bottom edge. The grid's rows are `minmax(116px, auto)`
+  // now; these are the rules that replace the estimate.
   const twelveRowLedger = () => {
     const base = marketFixture()
     const rows: AdviceRow[] = Array.from({ length: 12 }, (_, i) => ({
@@ -160,74 +157,51 @@ describe('the tiles are as tall as what they draw', () => {
     return { ...base, advice: { ...base.advice, rows } }
   }
 
-  it('grows the ledger with its rows, up to the twelve production draws', () => {
-    const three = tileRows(marketFixture())['market.advice']
-    const twelve = tileRows(twelveRowLedger())['market.advice']
-    expect(three).toBe(5)
-    // 11 row units is 1,436px, which is what twelve rows measured.
-    expect(twelve).toBe(11)
-    expect(twelve).toBeGreaterThan(three)
-  })
-
-  it('shrinks the arm every new workspace starts in', () => {
-    // The gather fills up over time, so this is the first weeks of every
-    // account rather than an edge case: half a page of white inside shadowed
-    // boxes is what a client met.
-    const full = tileRows(marketFixture())
-    const thin = tileRows(firstUpdateFixture())
-    const total = (r: Record<string, number>) => Object.values(r).reduce((a, b) => a + b, 0)
-    expect(total(thin)).toBeLessThan(total(full))
-    expect(thin['market.advice']).toBe(2)
-  })
-
-  it('starts the tiles on a line together and lets each spend its own height', () => {
-    // A per-tile span used to be refused because CSS grid's auto-placement
-    // flows a later tile up into the gap beside a short one, which reorders
-    // the page. Auto-placement only moves a tile with no explicit position, so
-    // the start is PINNED instead: every tile on a grid line begins on the
-    // same row and in the artboard's own column, and its height is its own.
-    // That is what stops `market.unlocks` being handed 644px because
-    // `market.plans` sits beside it.
-    for (const data of STATES) {
-      const grid = tileGrid(data)
-      expect(grid['market.card'].rowStart).toBe(grid['market.moves'].rowStart)
-      expect(grid['market.sayhear'].rowStart).toBe(grid['market.plans'].rowStart)
-      expect(grid['market.plans'].rowStart).toBe(grid['market.unlocks'].rowStart)
-      // The artboard's columns, left to right, with no overlap.
-      expect(grid['market.card'].colStart).toBe(1)
-      expect(grid['market.moves'].colStart).toBe(6)
-      expect(grid['market.sayhear'].colStart).toBe(1)
-      expect(grid['market.plans'].colStart).toBe(5)
-      expect(grid['market.unlocks'].colStart).toBe(9)
-      expect(grid['market.ways'].colStart).toBe(1)
-      // The strip begins under the tallest of the three cards above it, so a
-      // ragged bottom edge inside a line cannot run a tile into the next one.
-      const narrow = ['market.sayhear', 'market.plans', 'market.unlocks']
-        .map((k) => grid[k].rowStart + grid[k].row)
-      expect(grid['market.ways'].rowStart).toBe(Math.max(...narrow))
+  it('claims one row unit per tile as a floor, whatever the data', () => {
+    // A span computed from the data is a guess at what the grid now measures.
+    for (const place of Object.values(tileGrid())) expect(place.row).toBe(1)
+    for (const data of [...STATES, twelveRowLedger()]) {
+      const markup = render(<MarketSurfacePage data={data} />)
+      expect(markup).not.toMatch(/xl:row-span-(?:[2-9]|1[0-2])\b/)
+      expect(markup).not.toMatch(/min-h-\[(?!116px)\d+px\]/)
+      expect(markup).toContain('xl:auto-rows-[minmax(116px,auto)]')
     }
+  })
+
+  it('puts the tiles on a line in one grid row, in the artboard\'s columns', () => {
+    // One row per line: the tiles on it start level, and the moves grid is
+    // `xl:items-start`, so each ends at its own content rather than being
+    // stretched into white by its tallest neighbour. The start is pinned so
+    // auto-placement cannot flow a later tile up into a line.
+    expect(render(<MarketSurfacePage data={marketFixture()} />)).toContain('xl:items-start')
+    const grid = tileGrid()
+    expect(grid['market.conclusions'].rowStart).toBe(1)
+    expect(grid['market.advice'].rowStart).toBe(2)
+    expect(grid['market.card'].rowStart).toBe(1)
+    expect(grid['market.moves'].rowStart).toBe(1)
+    for (const k of ['market.sayhear', 'market.plans', 'market.unlocks']) expect(grid[k].rowStart).toBe(2)
+    expect(grid['market.ways'].rowStart).toBe(3)
+    expect(grid['market.card'].colStart).toBe(1)
+    expect(grid['market.moves'].colStart).toBe(6)
+    expect(grid['market.sayhear'].colStart).toBe(1)
+    expect(grid['market.plans'].colStart).toBe(5)
+    expect(grid['market.unlocks'].colStart).toBe(9)
+    expect(grid['market.ways'].colStart).toBe(1)
   })
 
   it('gives every start a class Tailwind can see', () => {
     // Class strings are written out in full, never interpolated (the rule
     // components/shell/tile.tsx follows). A start the map has no entry for
     // would silently fall back and stack two tiles in one column.
-    for (const data of [...STATES, twelveRowLedger()]) {
-      for (const place of Object.values(tileGrid(data))) {
-        const classes = startClasses(place)
-        expect(classes, JSON.stringify(place)).toBe(`xl:col-start-${place.colStart} xl:row-start-${place.rowStart}`)
-      }
+    for (const place of Object.values(tileGrid())) {
+      const classes = startClasses(place)
+      expect(classes, JSON.stringify(place)).toBe(`xl:col-start-${place.colStart} xl:row-start-${place.rowStart}`)
     }
   })
 
-  it('never asks for a span the grid cannot draw', () => {
-    for (const data of [...STATES, twelveRowLedger()]) {
-      for (const [key, span] of Object.entries(tileRows(data))) {
-        expect(span, key).toBeGreaterThanOrEqual(2)
-        expect(span, key).toBeLessThanOrEqual(12)
-        expect(Number.isInteger(span)).toBe(true)
-      }
-    }
+  it('answers for every block on the page', () => {
+    const grid = tileGrid()
+    for (const block of MARKET_BLOCKS) expect(grid[block.key]?.row).toBe(1)
   })
 
   it('spends the dotted underline only on something that opens', () => {
@@ -247,10 +221,6 @@ describe('the tiles are as tall as what they draw', () => {
     }
   })
 
-  it('answers for every block on the page', () => {
-    const rows = tileRows(marketFixture())
-    for (const block of MARKET_BLOCKS) expect(rows[block.key]).toBeGreaterThan(0)
-  })
 })
 
 describe('MK1 · what we concluded', () => {
@@ -486,8 +456,8 @@ describe('MK2 · the ledger', () => {
       expect(text).toContain('This was saved before we recorded what happened afterwards')
       expect(text).not.toContain('too few to compare')
     }
-    // And the page still measures a box for it.
-    expect(tileRows(frozen)['market.advice']).toBeGreaterThanOrEqual(2)
+    // And the page still draws a tile for it.
+    expect(render(<MarketSurfacePage data={frozen} />)).toContain('This was saved before we recorded what happened afterwards')
   })
 
   it('says how many of the whole ledger have been acted on, and never claims a quarter', () => {

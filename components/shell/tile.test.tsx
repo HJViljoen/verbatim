@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { Tile, TileBlock, StripCell, TileEmpty } from './tile'
-import { PageBar, PageGrid, TileColumns } from './page-grid'
+import { PAGE_GRID_CLASSES, PageBar, PageGrid, TileColumns, rowFloorPx } from './page-grid'
 
 // The grid's unit, tested at the level it is a promise: what a tile PRINTS.
 //
@@ -208,13 +208,50 @@ describe('PageBar', () => {
 })
 
 describe('PageGrid', () => {
-  it('is twelve columns of 116px rows above xl, and one column below', () => {
+  it('is twelve columns above xl, and one column below', () => {
     const markup = render(<PageGrid><Tile col={5} row={2}><p>body</p></Tile></PageGrid>)
     expect(markup).toContain('xl:grid-cols-12')
-    expect(markup).toContain('xl:auto-rows-[116px]')
     expect(markup).toContain('grid-cols-1')
     expect(markup).toContain('gap-4')
     expect(markup).toContain('xl:col-span-5')
     expect(markup).toContain('xl:row-span-2')
+  })
+
+  it('makes the 116px rhythm a floor, never a size — a block is as tall as its content', () => {
+    // 2026-09-24. `auto-rows-[116px]` was a fixed track under an
+    // `overflow-hidden` tile, so a span was a ceiling (Market's insights lost
+    // its last row under the next heading) and a floor (the ledger ended 600px
+    // above its own card's edge) at once. `minmax(116px, auto)` keeps the
+    // artboards' rhythm as the least a row is and lets content decide the rest.
+    const markup = render(<PageGrid><Tile col={12} row={3}><p>body</p></Tile></PageGrid>)
+    expect(PAGE_GRID_CLASSES).toContain('xl:auto-rows-[minmax(116px,auto)]')
+    expect(markup).toContain('xl:auto-rows-[minmax(116px,auto)]')
+    expect(markup).not.toContain('xl:auto-rows-[116px]')
+    // Nothing holds a tile to the grid: no fixed height, no max-height, at any
+    // width. `overflow-hidden` stays for the rounded corners only; with no
+    // height to overflow it clips nothing.
+    expect(markup).not.toMatch(/(?:^|[\s":])h-\[\d+px\]/)
+    expect(markup).not.toMatch(/max-h-\[/)
+    expect(markup).not.toMatch(/(?:^|[\s"])(?:\w+:)?h-(?:\d|full|screen)/)
+  })
+
+  it('computes a span\'s floor as N units and the N − 1 gaps between them', () => {
+    expect(rowFloorPx(1)).toBe(116)
+    expect(rowFloorPx(2)).toBe(248)
+    expect(rowFloorPx(5)).toBe(644)
+    expect(rowFloorPx(12)).toBe(1568)
+    // Nonsense in, one unit out: a tile always claims at least a row.
+    expect(rowFloorPx(0)).toBe(116)
+  })
+
+  it('gives every span a stacked MIN-height equal to its floor, and steps it aside above xl', () => {
+    // The class maps are written out in full for Tailwind's scanner; this pins
+    // them to the arithmetic, so the two cannot drift apart.
+    for (let n = 1; n <= 12; n++) {
+      const markup = render(<Tile col={12} row={n}><p>body</p></Tile>)
+      expect(markup, `row ${n}`).toContain(`min-h-[${rowFloorPx(n)}px]`)
+      expect(markup, `row ${n}`).toContain('xl:min-h-0')
+      expect(markup, `row ${n}`).toContain(`xl:row-span-${n}`)
+    }
   })
 })
