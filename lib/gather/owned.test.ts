@@ -447,12 +447,47 @@ describe('planSourceFlips', () => {
     expect(flip.label).toBe('competitor:Freitag')
   })
 
-  it('repairs a competitor_owned row whose tag went missing', () => {
+  it('repairs a competitor_owned row whose is_competitor went missing', () => {
     const [flip] = planSourceFlips(
       [row({ source: 'competitor_owned', account_name: 'freitaglab', competitor_name: 'Freitag', is_competitor: false })],
       [rival],
     )
     expect(flip.set.is_competitor).toBe(true)
+  })
+
+  // I2. The case the comment above the guard names, and the case the guard
+  // skipped: a row already stamped `competitor_owned` by an owned read of this
+  // account, whose `competitor_name` is the thing that went missing. The old
+  // clause compared the absent tag against the rival's name, found them
+  // different and `continue`d — so the one row nothing else will ever revisit
+  // (the census reads a window) was the one row this function refused to
+  // repair. `norm(null)` is '', which is why it read as a mismatch.
+  it('repairs a competitor_owned row whose competitor_name went missing', () => {
+    const [flip] = planSourceFlips(
+      [row({ source: 'competitor_owned', account_name: 'freitaglab', competitor_name: null, is_competitor: true })],
+      [rival],
+    )
+    expect(flip.set).toEqual({
+      source: 'competitor_owned', is_client: false, is_competitor: true, competitor_name: 'Freitag',
+    })
+  })
+
+  it('repairs a competitor_owned row tagged to the WRONG rival, from the account', () => {
+    const [flip] = planSourceFlips(
+      [row({ source: 'competitor_owned', account_name: 'freitaglab', competitor_name: 'Cotopaxi', is_competitor: true })],
+      [rival],
+    )
+    expect(flip.set.competitor_name).toBe('Freitag')
+  })
+
+  // The source is what exempts a row from the tag test, so a row that is NOT
+  // already stamped still has to carry the tag — otherwise any account whose
+  // name collides with a rival's would be claimed by it.
+  it('still demands the tag on a discovered row', () => {
+    expect(planSourceFlips(
+      [row({ source: 'discovered', account_name: 'freitaglab', competitor_name: null })],
+      [rival],
+    )).toEqual([])
   })
 
   it('never claims an account nobody owns, or another rival’s name', () => {

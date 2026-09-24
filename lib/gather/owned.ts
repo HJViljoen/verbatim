@@ -249,12 +249,24 @@ export function planSourceFlips(
       if (!idt.names.get(r.platform)?.has(norm(r.account_name))) continue
       // A competitor's own post must also be tagged to that competitor, or the
       // row is some other account that happens to share a name. A row already
-      // stamped 'competitor_owned' for this rival passes on its source alone —
-      // that IS the stamp, and demanding the tag too would skip the rows whose
-      // tag is the thing that went missing.
-      const stampedHere = r.source === 'competitor_owned' && idt.entity.kind === 'competitor'
-        && norm(r.competitor_name) === norm(idt.entity.name)
-      if (idt.entity.kind === 'competitor' && !stampedHere && norm(r.competitor_name) !== norm(idt.entity.name)) continue
+      // stamped 'competitor_owned' passes on its SOURCE alone — that is the
+      // stamp, and it was written by an owned read of this account, so the tag
+      // is not needed as a second opinion. Demanding it too would skip exactly
+      // the rows whose tag is the thing that went missing, which is the damage
+      // this function exists to repair.
+      //
+      // IT USED TO SAY THAT AND NOT DO IT. The clause was written as
+      // `!stampedHere && norm(r.competitor_name) !== norm(idt.entity.name)`
+      // with `stampedHere` itself requiring the names to be equal — so
+      // `stampedHere` was true only in the case the second half already let
+      // through, false only in the case the second half already skipped, and
+      // it never changed an outcome. A `competitor_owned` row with
+      // `competitor_name` null reads `norm(...) = ''`, differs from the rival
+      // name, and was skipped: never repaired by anything, because the census
+      // reads a window and will not revisit it either.
+      if (idt.entity.kind === 'competitor'
+        && r.source !== 'competitor_owned'
+        && norm(r.competitor_name) !== norm(idt.entity.name)) continue
       const set = entityIdentity(idt.entity)
       const settled = r.source === set.source
         && Boolean(r.is_client) === set.is_client
