@@ -133,6 +133,32 @@ describe('OV4 · rivals', () => {
     expect(markup).not.toContain('var(--')
   })
 
+  // A HEADER OVER A COLUMN OF WHITESPACE (polish pass, 2026-09-24). No creator
+  // panel is frozen on either live tenant, so `attentionVerdict` is null on
+  // every row and `BlockMovement` answered with nothing at all — eleven blank
+  // cells under "Attention change", which reads as a column that failed to
+  // load rather than as one the reading has no answer for. The artboards' own
+  // mark for an empty cell is an em dash.
+  it('draws an em dash where a change cell has no reading, never whitespace', () => {
+    const data = overviewFixture()
+    const rows = data.rivals.rows.map((r) => ({ ...r, attentionVerdict: null }))
+    const markup = render(overviewRivals.render({ ...data, rivals: { ...data.rivals, rows } }, 'app', ctx))
+    expect(markup).toContain('\u2014')
+    // And it is a mark, not a word a screen reader should read as "dash".
+    expect(markup).toContain('no change is read for this brand')
+  })
+
+  // THE COLUMN-WIDE ABSENCE IS SAID ONCE (polish pass, 2026-09-24). Nine rivals
+  // got the same 47-word sentence nine times down one column, 340px wide,
+  // beside the column that carries the block's content.
+  it('folds the own-posts absence into the footer note while it is true of every rival', () => {
+    const data = overviewFixture()
+    const markup = render(overviewRivals.render(data, 'app', ctx))
+    // Once, in the footer note — and the cells carry the dash.
+    expect((markup.match(/not readable yet/g) ?? []).length).toBe(1)
+    expect(markup).toContain('every rival row reads')
+  })
+
   it('says why a rival\u2019s own posts are not read, and says nothing of the kind about you or the category', () => {
     const markup = render(overviewRivals.render(overviewFixture(), 'app', ctx))
     // One rival row, one client row, in the fixture.

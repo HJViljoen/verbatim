@@ -459,3 +459,35 @@ export function BlockEmpty({ children, mode = 'app' }: { children: ReactNode; mo
   }
   return <p className="m-0 text-[12px] text-muted-foreground">{children}</p>
 }
+
+/**
+ * The artboards' em dash: a table cell that has nothing in it (polish pass,
+ * 2026-09-24).
+ *
+ * A CELL WITH NOTHING IN IT IS NOT THE SAME AS A COLUMN WITH NOTHING IN IT.
+ * Overview's subjects table heads a column "Your change" and Overview's rivals
+ * table heads one "Attention change"; on the live tenant both are refused on
+ * every row — your own audience is under the floor, and no creator panel has
+ * been frozen — and `BlockMovement` answers a null verdict with `null`. So the
+ * page prints a header over eleven rows of whitespace, which reads as a column
+ * that failed to load rather than as one the reading has no answer for.
+ *
+ * The artboards' own answer to an empty cell is an em dash (Settings' Reddit
+ * table draws one on every no-yield row, and this block's own "Raised most"
+ * cell has drawn one since it was written). It is muted, it is the same width
+ * wherever it appears, and it says "asked, no answer" without spending a
+ * sentence on it — the sentence, where there is one to say, belongs once in the
+ * footer note and not once per row.
+ *
+ * NOT A DEFAULT INSIDE `BlockMovement`. Most of that primitive's call sites are
+ * inline in a flex row beside a level or a direction word, where a dash for an
+ * absent verdict would be furniture. It is a TABLE CELL's answer, so the table
+ * cell asks for it.
+ */
+export function NoValue({ mode = 'app', label = 'no reading' }: { mode?: RenderMode; label?: string }) {
+  // The dash is decoration to a screen reader — one glyph that reads as
+  // "dash" — so the cell carries the words and hides the mark.
+  return mode === 'email'
+    ? <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>—</span>
+    : <span className="text-[12px] text-muted-foreground"><span aria-hidden>—</span><span className="sr-only">{label}</span></span>
+}

@@ -2,7 +2,7 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { openLink } from '@/components/blocks/open-link'
-import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
+import { BlockEmpty, BlockFrame, FigureCell, NoValue } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
 import { Sparkline } from '@/components/charts/sparkline'
 import { fmtInt, fmtPct, shortDate } from '@/lib/format'
@@ -256,7 +256,14 @@ function Row({ row, mode, appUrl = '', sentLine = null, domain }: { row: Subject
         <AtLastMonth at={row.categoryAtLastMonth} mode={mode} />
         <SentLine line={sentLine} mode={mode} />
       </td>
-      <td className="py-1.5 pr-3 align-top"><BlockMovement verdict={row.you.verdict} unit="pts" mode={mode} /></td>
+      {/* THE COLUMN ANSWERS ON EVERY ROW OR IT IS NOT A COLUMN (polish pass).
+          Your own audience is under the floor on both live tenants, so
+          `row.you.verdict` is null on every row and `BlockMovement` drew
+          nothing — a header over six rows of whitespace. The artboard's own
+          mark for a cell with no answer is an em dash. */}
+      <td className="py-1.5 pr-3 align-top">
+        {row.you.verdict ? <BlockMovement verdict={row.you.verdict} unit="pts" mode={mode} /> : <NoValue mode={mode} label="no change is read for your side" />}
+      </td>
       <td className="py-1.5 pr-3 align-top">
         <span className="flex flex-wrap items-center gap-1.5">
           <BlockMovement verdict={row.category.verdict} unit="pts" mode={mode} />
