@@ -191,3 +191,31 @@ describe('tagWithoutJudge — the strict fallback', () => {
     expect(tagWithoutJudge(video('cotopaxi backpack on the volcano, Ecuador'), sealand)).toEqual(rival('Cotopaxi'))
   })
 })
+
+// An @-mention of the company's own handle is evidence that the post is about
+// the company, even beside an excluded sense (2026-09-24). JoelWestBarish's
+// "@COTOPAXI apparel … Cotopaxi volcano in Ecuador" was being stripped.
+describe('excludedTag — an @-mention of the bare name is evidence', () => {
+  const COTOPAXI = { is_client: false, is_competitor: true, competitor_name: 'Cotopaxi' }
+  const TNF = { is_client: false, is_competitor: true, competitor_name: 'The North Face' }
+  const volcano = config({ exclude_terms: ['volcano', 'ecuador'], competitor_names: ['Cotopaxi', 'The North Face'] })
+
+  it('keeps a tag whose text @-mentions the company’s handle', () => {
+    expect(tagAfterExclusions(video('@COTOPAXI apparel and backpack at Cotopaxi volcano in Ecuador'), COTOPAXI, volcano)).toEqual(COTOPAXI)
+    expect(tagAfterExclusions(video('restock from @freitag.bangkok'), { ...COTOPAXI, competitor_name: 'Freitag' }, config({ exclude_terms: ['bangkok'] })))
+      .toEqual({ ...COTOPAXI, competitor_name: 'Freitag' })
+  })
+
+  it('reads a multi-word name as its handle', () => {
+    expect(tagAfterExclusions(video('gear from @thenorthface on the volcano'), TNF, volcano)).toEqual(TNF)
+  })
+
+  it('does not count a handle that only CONTAINS the name, or an address', () => {
+    expect(tagAfterExclusions(video('@secretgardencotopaxi hostel under the volcano'), COTOPAXI, volcano)).toEqual(UNTAGGED)
+    expect(tagAfterExclusions(video('tours: info@cotopaxi.com, Ecuador'), COTOPAXI, volcano)).toEqual(UNTAGGED)
+  })
+
+  it('does not count a hashtag — #cotopaxi is the volcano as often as the brand', () => {
+    expect(tagAfterExclusions({ account_name: 'alexa', caption: '', hashtags: ['#cotopaxi', '#ecuador', '#travel'] }, COTOPAXI, volcano)).toEqual(UNTAGGED)
+  })
+})

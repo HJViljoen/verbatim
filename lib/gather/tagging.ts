@@ -106,12 +106,27 @@ function bareName(hay: string, tag: VideoTags, config: GatherConfig): string | n
 }
 
 /**
+ * True when the text @-mentions this handle at the START of a token — "@cotopaxi",
+ * "@freitag.bangkok" — and not inside a longer handle ("@secretgardencotopaxi",
+ * someone else's account) or an address ("info@cotopaxi.com").
+ */
+function atMention(hay: string, handle: string): boolean {
+  const escaped = handle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(^|[^\\p{L}\\p{N}_.@])@${escaped}`, 'u').test(hay)
+}
+
+/**
  * Configured terms present in the text, other than the bare name.
  *
  * `competitor_keywords` counts here even though the v4.1 rule forbids TAGGING
  * from it: this set never creates a tag, it only decides whether an exclusion
  * may take one away, and "cotopaxi jacket" is exactly the evidence that says
  * the post is about the bag company.
+ *
+ * So does an @-mention of the bare name (2026-09-24): "@COTOPAXI apparel and
+ * backpack at Cotopaxi volcano in Ecuador" names the company's own handle, and
+ * without this the volcano and Ecuador stripped it. Token-initial only, so a
+ * hostel account that merely CONTAINS the name is not evidence.
  */
 function otherEvidence(hay: string, config: GatherConfig, bare: string | null): string[] {
   const terms = [
@@ -126,6 +141,8 @@ function otherEvidence(hay: string, config: GatherConfig, bare: string | null): 
     if (term === '' || term === bare) continue
     if (hay.includes(term)) out.add(term)
   }
+  const handle = (bare ?? '').replace(/[\s#@]+/g, '')
+  if (handle !== '' && atMention(hay, handle)) out.add(`@${handle}`)
   return [...out]
 }
 

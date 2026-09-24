@@ -182,3 +182,16 @@ describe('attributeVideos — no silent substring fallback', () => {
     expect(r.gptJudged).toBe(0)
   })
 })
+
+describe('attributeVideos — the exclusions still have the last word over a verdict', () => {
+  it('strips a GPT "Cotopaxi" on the volcano, and keeps one that @-mentions the company', async () => {
+    parse.mockResolvedValueOnce(answer([{ index: 0, entity: 'Cotopaxi' }, { index: 1, entity: 'Cotopaxi' }]))
+    const r = await attributeVideos([
+      cand('alexa', '', { account_name: 'alexa', hashtags: ['#cotopaxi', '#ecuador', '#travel'] }),
+      cand('joel', '@COTOPAXI apparel and backpack at Cotopaxi volcano in Ecuador', { account_name: 'JoelWestBarish' }),
+    ], { method: 'gpt', config })
+    expect(r.tags.get('alexa')).toEqual(UNTAGGED)
+    expect(r.tags.get('joel')).toEqual(rival('Cotopaxi'))
+    expect(r.rejected).toBe(1)
+  })
+})
