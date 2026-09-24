@@ -37,6 +37,48 @@ describe('the sidebar’s icons', () => {
     expect(markup).toContain('height="16"')
   })
 
+  it('draws the artboard’s glyph on each of the nine, not a near-enough one', () => {
+    // THE MOCK IS THE SPEC (the lead's ruling, 2026-09-19), and five of these
+    // nine were something else until 2026-09-24 — Layers, MessageCircle,
+    // Swords, Sparkles and a gear. A name in a map is not a shape, so each
+    // line below is a fragment of the path lucide actually emits, chosen to be
+    // unique to that glyph: swap the component back and the fragment goes.
+    //
+    // The artboard's own paths are quoted beside each, read off
+    // `mock-sealand/artboards/Main.dc.html`, where the sidebar is static HTML.
+    // Lucide's coordinates differ by a pixel or two from the mock's redrawn
+    // ones — the test pins the GLYPH, which is what a reader sees, not a
+    // byte-match the mock never promised.
+    const draw = (key: keyof typeof NAV_ICON) =>
+      renderToStaticMarkup(createElement(NAV_ICON[key], { width: 16, height: 16 }))
+
+    // M8 6h13 / M8 12h13 / M8 18h13 + three dots — a list, not stacked planes.
+    expect(draw('subjects')).toContain('M8 12h13')
+    expect(draw('subjects')).not.toContain('lucide-layers')
+    // circle cx9 cy7 r4 with a second figure behind — people, not a bubble.
+    expect(draw('voice')).toContain('cx="9"')
+    expect(draw('voice')).toContain('cy="7"')
+    // M6 20v-5 / M12 20V8 / M18 20v-9 / M3 20h18 — three columns on an axis.
+    expect(draw('competitive')).toContain('M13 17V5')
+    expect(draw('competitive')).not.toContain('lucide-swords')
+    // circle r9 + a question hook + M12 17h.01 — a question, not a sparkle.
+    expect(draw('ask')).toContain('M12 17h.01')
+    expect(draw('ask')).not.toContain('lucide-sparkles')
+    // Three VERTICAL tracks crossed by horizontal handles. `SlidersHorizontal`
+    // is the same glyph turned 90° and would pass a looser assertion, so the
+    // one pinned here is a track the vertical form has and the horizontal
+    // form does not.
+    expect(draw('settings')).toContain('M12 21v-9')
+    expect(draw('settings')).not.toContain('lucide-sliders-horizontal')
+
+    // The four that already matched, so a future sweep cannot quietly move
+    // them either.
+    expect(draw('overview')).toContain('lucide-layout-dashboard')
+    expect(draw('market')).toContain('lucide-target')
+    expect(draw('week')).toContain('lucide-calendar-days')
+    expect(draw('reports')).toContain('lucide-file-text')
+  })
+
   it('keeps the parked pages and the Studio in the same map', () => {
     // They are not surfaces and have no `NavKey`, so they are keyed by href
     // with a fallback — but they are still sidebar icons and still have to be

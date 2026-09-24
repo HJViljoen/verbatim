@@ -4,6 +4,7 @@ import {
   PROPOSE_CANDIDATE_TARGET,
   attachClaimVideos,
   buildProposeSystemPrompt,
+  PROPOSE_PROMPT_VERSION,
   buildProposeUserPrompt,
   claimSources,
   proposalSummary,
@@ -97,6 +98,32 @@ describe('the prompt', () => {
     expect(system).toContain('audience identities and amputation types')
     expect(system).toContain('admiration for personal resilience')
     expect(system).toContain(String(PROPOSE_CANDIDATE_TARGET))
+  })
+
+  it('asks for a positive description and refuses the exclusion clause by name', () => {
+    // v1 asked for "what counts as this subject and what does not", and got
+    // "Comments about X, excluding Y" on all six of Sealand's subjects. A
+    // vector has no negation, so the clause put Y into the phrase positively —
+    // and the two subjects carrying the longest ones are the two the judge
+    // rejects most (16% and 17% yes-rate against 87-95%). `subjectEmbedInput`
+    // strips it downstream; this stops it at the source.
+    const system = buildProposeSystemPrompt()
+    expect(system).toContain('POSITIVE sentence')
+    expect(system).toContain('says only what BELONGS')
+    // The four phrasings the model actually reached for, named so it cannot
+    // route around the rule with a synonym.
+    for (const phrase of ['excluding X', 'not including X', 'but not X', 'except X']) {
+      expect(system, phrase).toContain(phrase)
+    }
+    // And the v1 instruction is gone, not merely contradicted later in the
+    // prompt — a prompt that asks for both gets both.
+    expect(system).not.toContain('and what does not')
+  })
+
+  it('bumps its version with the change, so a logged call says which prompt wrote it', () => {
+    // Every `ai_call_log` row this pass writes carries it; a description shape
+    // that changed under an unchanged version is a change nobody can date.
+    expect(PROPOSE_PROMPT_VERSION).toBe('subject_propose_v2')
   })
 })
 

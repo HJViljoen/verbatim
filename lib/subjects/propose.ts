@@ -66,7 +66,32 @@ export const PROPOSE_THEME_CAP = 15
  *  returns exactly the number that will be kept has made the choice itself. */
 export const PROPOSE_CANDIDATE_TARGET = 12
 
-export const PROPOSE_PROMPT_VERSION = 'subject_propose_v1'
+/**
+ * The prompt's identity, on every `ai_call_log` row this pass writes.
+ *
+ * v2 (2026-09-24): THE DESCRIPTION IS POSITIVE ONLY. v1 asked for "one sentence
+ * saying what counts as this subject AND WHAT DOES NOT", and the model did
+ * exactly that — all six of Sealand's confirmed subjects read "Comments about
+ * X, excluding Y", the two longest running to a second and third clause.
+ *
+ * It cost in both directions. On the vector: an embedding has no negation, so
+ * "excluding general durability" puts *durability* into the phrase, positively
+ * — which is why `subjectEmbedInput` v2 now strips the clause before embedding
+ * (`subjectPositiveGloss`, lib/subjects/types.ts). On the judge, which reads the
+ * description as written and CAN act on a negation: the two subjects carrying
+ * the longest exclusion clauses are the two the judge rejects most —
+ * Waterproofing 16% and Repair & warranty 17% yes-rate, against 87-95% for the
+ * three with the shortest bodies (status/subject-band-2026-09-23.md PART
+ * THREE). Whatever the clause is doing there, it is not earning its place.
+ *
+ * So the clause is stopped at the source rather than only stripped downstream.
+ * There is nowhere to put it instead: `subjects` has no judge-notes column, and
+ * the insert grant is six columns wide by design (M4). A description a person
+ * writes by hand may still carry one — Settings takes what they type, and it is
+ * their sentence — and `subjectPositiveGloss` still catches it before the
+ * vector. This is the other half of that repair, not a replacement for it.
+ */
+export const PROPOSE_PROMPT_VERSION = 'subject_propose_v2'
 export const PROPOSE_PASS = 'subject_propose'
 
 /** One thing the proposer was shown, with the ref the model answers by. */
@@ -210,7 +235,9 @@ export function buildProposeSystemPrompt(): string {
     '',
     'You are shown two kinds of block. [c#] blocks are the brand speaking in its own posts — the register a subject should be named in. [t#] blocks are what the category is actually talking about, with the share of videos each one carries — the evidence a subject would be measured against. The best candidates draw on both.',
     '',
-    `Return ${PROPOSE_CANDIDATE_TARGET} candidates, best first. For each: a short lowercase "name" (1-4 words, no brand names), a "description" of one sentence saying what counts as this subject and what does not — it will be read by a model deciding which customer comments belong to it, so be concrete — a "refs" array naming every block it draws on, and a one-line "rationale" a person can judge it by.`,
+    `Return ${PROPOSE_CANDIDATE_TARGET} candidates, best first. For each: a short lowercase "name" (1-4 words, no brand names), a "description" of one POSITIVE sentence saying what this subject is about, in the words a customer would use — it will be read by a model deciding which customer comments belong to it, so be concrete — a "refs" array naming every block it draws on, and a one-line "rationale" a person can judge it by.`,
+    '',
+    'The description says only what BELONGS. Never write what does not belong: no "excluding X", no "not including X", no "but not X", no "except X". If two candidates overlap, the answer is a sharper positive sentence for each, not a boundary clause on either.',
     '',
     'Never invent a ref. If a candidate is your own synthesis and rests on no block, return an empty refs array and say so in the rationale.',
   ].join('\n')

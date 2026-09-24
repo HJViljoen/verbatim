@@ -1,4 +1,4 @@
-import { LayoutDashboard, Target, MessageCircle, Swords, Play, FileText, Layers, CalendarDays, Sparkles, Settings, LayoutTemplate, type LucideIcon } from "lucide-react"
+import { LayoutDashboard, Target, Users, Swords, ChartColumn, Play, FileText, List, CalendarDays, CircleHelp, SlidersVertical, LayoutTemplate, type LucideIcon } from "lucide-react"
 
 import type { NavKey } from "@/lib/nav"
 
@@ -21,17 +21,50 @@ import type { NavKey } from "@/lib/nav"
  * group, order. This is the presentation half, kept out of it so `lib/nav`
  * stays free of a UI dependency and every consumer of the icons resolves them
  * through the same `NavKey`.
+ *
+ * THE GLYPHS ARE THE ARTBOARD'S, and five of the nine were not (the lead's
+ * ruling, 2026-09-19: "sidebar glyphs → the artboard's five … the mock is the
+ * spec"). Read off `mock-sealand/artboards/Main.dc.html`, where the sidebar is
+ * static HTML and therefore carries the paths verbatim:
+ *
+ *   surface      artboard path (Main.dc.html)                  was          now
+ *   subjects     M8 6h13 / M8 12h13 / M8 18h13 + three dots    Layers       List
+ *   voice        circle cx9 cy7 r4 + a second figure behind    MessageCircle Users
+ *   competitive  M6 20v-5 / M12 20V8 / M18 20v-9 / M3 20h18    Swords       ChartColumn
+ *   ask          circle r9 + question hook + M12 17h.01        Sparkles     CircleHelp
+ *   settings     three VERTICAL tracks, horizontal handles     Settings     SlidersVertical
+ *
+ * THEY STAY LUCIDE COMPONENTS, which is what the design system asks for —
+ * MASTER.md §Anti-patterns says "Emojis as icons (use Lucide SVGs)" and the
+ * mock's §0 rule 10 repeats it; the sidebar spec adds `16px`, `stroke-width:2`,
+ * `#6E7378` → `#26292C` when active, which is exactly what `app-sidebar.tsx`
+ * and `scripts/wave2-shots.ts` draw them at. A lucide component IS an inline
+ * `<svg>` in the output, so nothing here is a sprite or an image file; the
+ * artboard's hand-written paths are a consequence of it being a static HTML
+ * file, not a rule to copy. The one place the repo hand-inlines paths is
+ * `components/charts/platform-icon.tsx`, for platform marks lucide has no
+ * glyph for — and the five below all have one.
+ *
+ * SETTINGS IS `SlidersVertical`, AND THE RULING SAID `SlidersHorizontal`.
+ * The artboard draws `M4 21v-6 / M4 11V3 / M12 21v-9 / M12 8V3 / M20 21v-4 /
+ * M20 13V3` with handles `M1 15h6 / M9 8h6 / M17 17h6` — three VERTICAL tracks
+ * crossed by HORIZONTAL handles, which is lucide `SlidersVertical`.
+ * `SlidersHorizontal` is that glyph turned 90°. The ruling's own sentence says
+ * the mock is the spec, so the mock decides and the name in the note is the
+ * thing that was loose. One word to reverse if the name was meant literally.
+ *
+ * The parked pages below keep `Swords` deliberately — see their own note.
  */
 export const NAV_ICON: Record<NavKey, LucideIcon> = {
   overview: LayoutDashboard,
-  subjects: Layers,
-  voice: MessageCircle,
+  subjects: List,
+  voice: Users,
   market: Target,
-  competitive: Swords,
+  competitive: ChartColumn,
   week: CalendarDays,
-  ask: Sparkles,
+  ask: CircleHelp,
   reports: FileText,
-  settings: Settings,
+  settings: SlidersVertical,
 }
 
 /** The parked pages keep the icons they had, so a reader recognises the page

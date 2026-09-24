@@ -68,9 +68,19 @@ async function main() {
   const calls = plan.reduce((n, r) => n + r.calls, 0)
   const priced = plan.reduce((n, r) => n + r.costUsd, 0)
   for (const r of plan) console.log(`  ${membershipSummary(r)}`)
+  // A total that mixes a plan read off a real band with an estimate for a
+  // subject that has no vector yet is not the same number, and saying which is
+  // the whole reason the estimate exists. The estimated subjects contribute
+  // their MIDPOINT; the range per subject is on its own line above.
+  const estimated = plan.filter((r) => r.estimated)
+  const estimatedNote = estimated.length === 0
+    ? ''
+    : ` · INCLUDES AN ESTIMATE for ${estimated.length} subject(s) with no phrase vector yet ` +
+      `(~$${estimated.reduce((n, r) => n + (r.estimated?.costUsd.low ?? 0), 0).toFixed(4)}-` +
+      `$${estimated.reduce((n, r) => n + (r.estimated?.costUsd.high ?? 0), 0).toFixed(4)} across them)`
   console.log(
     `[subject-membership] judge ${JUDGE_VERSION} · ${calls} call(s) · ~$${priced.toFixed(4)} ` +
-    `· pass ceiling $${(budget || subjectBudgetUsd()).toFixed(2)}`,
+    `· pass ceiling $${(budget || subjectBudgetUsd()).toFixed(2)}${estimatedNote}`,
   )
 
   if (!apply) {

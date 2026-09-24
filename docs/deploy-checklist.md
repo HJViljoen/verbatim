@@ -360,6 +360,32 @@ control). The full list, in order, is:
 | M10 | `20260918099000_reading_indexes.sql` | WP23's two indexes |
 | M11 | `20260918099500_report_family_grants.sql` | the TRUNCATE posture fix |
 | M12 | `20260919090000_communities_control.sql` | **new in wave 3** — the communities grant + the subreddits ceilings |
+| M13 | `20260924090000_tracking_configs_truncate.sql` | **added 2026-09-24, after the thirteen were verified** — the one-line `revoke truncate` M12's section records as its known gap. Apply it last; see the M12 section below. |
+| M14 | `20260924091000_subjects_insert_audit.sql` | **added 2026-09-24, after the thirteen were verified** — M4's audit trigger extended to INSERT, so a subject born `active` is recorded. Apply after M13. |
+
+**M14 · `20260924091000_subjects_insert_audit.sql`.** M4 installed
+`subjects_status_audit` as `after update of status`, which covers the
+retirement it was written for and nothing else: a row INSERTED already `active`
+never moves, so nothing records that the thing the workspace is measured on was
+ever decided. Read on the preview branch `zfmxrrugaihxpubunleu` (read-only,
+2026-09-24): Sealand's six subjects all `active`, all `created_by = null`, and
+every `config_changes` row on surface `subjects` is `field = 'calibration'` —
+none of the six creations recorded. M14 adds a second trigger,
+`subjects_insert_audit`, on the same function, firing only when
+`created_by IS NULL`; the product's own insert path (`nameSubject`) pins
+`created_by` and writes its own row, so nothing is logged twice. It back-fills
+nothing: the six already on the branch stay unrecorded rather than acquire an
+invented actor. Verify with
+```sql
+select tgname, pg_get_triggerdef(oid) from pg_trigger
+ where tgrelid = 'public.subjects'::regclass and not tgisinternal order by tgname;
+```
+— **five** triggers, `subjects_insert_audit` among them with its
+`WHEN (new.created_by IS NULL)` clause, and M4's `subjects_status_audit`,
+`subjects_retirement_freeze` and `subjects_retirement_is_final` unchanged. Both
+arms were exercised on a throwaway PostgreSQL 17.11 cluster built from the
+baseline plus every migration in filename order, including a re-apply twice
+over; the migration's own footer carries the probes.
  A regex character class inside a migration must be
 written with `chr()` — the MCP transport decodes `\u` escapes (Phase 0's
 lesson, proven harmless once and not worth proving twice).
@@ -908,6 +934,24 @@ migration does not close it either. Nothing reaches it through PostgREST, which
 issues no TRUNCATE verb. **Recorded here as a known gap, not fixed in the
 deploy window** — it is a one-line `revoke truncate` in a later migration, and
 adding it now would put an unreviewed statement in the last file of thirteen.
+
+**CLOSED on 2026-09-24 by M13, which is the FOURTEENTH file and is NOT one of
+the thirteen this document counts.** `20260924090000_tracking_configs_truncate.sql`
+revokes TRUNCATE on `tracking_configs` from `authenticated` and `anon`, and
+nothing else. Every "thirteen" elsewhere in this file is the set that was
+re-applied and catalogue-diffed on the throwaway PostgreSQL 17.11 cluster on
+19 September; M13 was written after that and has not been through it, so the
+count is left alone deliberately rather than quietly incremented. **Apply it
+last, after M12**, in filename order like the rest — it is one statement, it
+depends on nothing, and it is idempotent. The gap was re-measured before the
+file was written, on the preview branch `zfmxrrugaihxpubunleu` (read-only,
+2026-09-24): both tenant roles still hold
+`DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE`, M12's eight update
+columns are in place and `anon`'s column UPDATE count is 0. The verification
+query is in the migration's own footer; after the apply, TRUNCATE must be
+absent from the `anon` and `authenticated` rows of `role_table_grants` and
+still present on `service_role`, with every SELECT and M12's column list
+unmoved.
 
 **The ceilings bite on an UPDATE, so check the two tenants can still be
 saved.** The constraint is restated whole (the only way to extend one) and
