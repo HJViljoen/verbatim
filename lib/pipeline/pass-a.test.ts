@@ -725,6 +725,19 @@ describe('the Pass A length limit', () => {
     expect(smaller![6].realId).toBe('id7')
   })
 
+  // I4. `lengthRetries` was counted on the summary and read by nothing: the
+  // wave step did not return it, so the only trace of a video read on half its
+  // comments was a console.warn inside runPassA — which is the record that is
+  // gone from the host's retention within the hour, the same defect
+  // `noteFinding` was added for one commit earlier. Pinned by reading the
+  // source, as B1 is: the wave is I/O glue and mocking it would test the mock.
+  it('is carried out of the wave and onto the run as a finding', () => {
+    const pipeline = readFileSync(new URL('../../inngest/functions/pipeline.ts', import.meta.url), 'utf8')
+    expect(pipeline).toContain('lengthRetries: s.lengthRetries')
+    expect(pipeline).toContain('passA.lengthRetries += r.lengthRetries ?? 0')
+    expect(pipeline).toMatch(/if \(passA\.lengthRetries > 0\)[\s\S]{0,400}?noteFinding\('pass-a'/)
+  })
+
   it('refuses a second attempt when there is nothing left to halve', () => {
     // The claims lane shows no comments, and one comment cannot run away less.
     expect(lengthRetryRefs([])).toBeNull()

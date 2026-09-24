@@ -49,7 +49,7 @@ import { buildConfigSnapshot, openRunBookkeeping, isMissingBookkeepingColumn, is
 import { computeMetrics, isDiscoveredVideo } from '@/lib/pipeline/metrics'
 import { sendAlertEmail } from '@/lib/email'
 import { billingAccess, type BillingClient } from '@/lib/billing'
-import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, PASS_A_ERROR_RATIO, ISOLATED_BATCH_ERROR_RATIO, RUN_MODEL_BUDGET_USD, TRANSCRIBE_PARALLEL, BACKFILL_PARALLEL, TRANSLATE_PARALLEL, TRANSLATE_QUOTES_PARALLEL, OCR_PARALLEL, OCR_CAP, captureRunFlags, periodSince, effectivePeriod, type RunFlags } from '@/lib/config'
+import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, PASS_A_ERROR_RATIO, PASS_A_MAX_OUTPUT_TOKENS, ISOLATED_BATCH_ERROR_RATIO, RUN_MODEL_BUDGET_USD, TRANSCRIBE_PARALLEL, BACKFILL_PARALLEL, TRANSLATE_PARALLEL, TRANSLATE_QUOTES_PARALLEL, OCR_PARALLEL, OCR_CAP, captureRunFlags, periodSince, effectivePeriod, type RunFlags } from '@/lib/config'
 import type { Platform } from '@/lib/gather/types'
 import type { CommentRow, SynthesisVideoRow } from '@/lib/pipeline/types'
 import { SYNTHESIS_VIDEO_COLUMNS } from '@/lib/pipeline/types'
@@ -1207,7 +1207,7 @@ export const runPipeline = inngest.createFunction(
     }
 
     const batches = passAPlan.batches
-    const passA = { analyzed: 0, claimsOnly: 0, skipped: 0, errored: 0, refused: 0, alreadyDone: 0, rateLimited: false, errors: [] as string[], batchesFailed: 0, insights: 0, languageSamples: 0, cost: 0, planned: passAPlan.selected, considered: passAPlan.considered, unchanged: passAPlan.reasons.unchanged, planReasons: passAPlan.reasons }
+    const passA = { analyzed: 0, claimsOnly: 0, skipped: 0, errored: 0, refused: 0, alreadyDone: 0, lengthRetries: 0, rateLimited: false, errors: [] as string[], batchesFailed: 0, insights: 0, languageSamples: 0, cost: 0, planned: passAPlan.selected, considered: passAPlan.considered, unchanged: passAPlan.reasons.unchanged, planReasons: passAPlan.reasons }
     // Batches dispatch in parallel waves — batches are disjoint video sets, so
     // ordering is irrelevant to output; this is purely wall-time (a serial
     // pass over a depth-100 corpus measured ~3 videos/min). Wave size stays
@@ -1231,13 +1231,13 @@ export const runPipeline = inngest.createFunction(
               // and this one would stamp half the corpus with the other
               // version and force a full re-read next run.
               const s = await runPassA({ clientId, runId, videoIds, persist: true, transcripts: flags.transcripts, ownPostAudience: flags.ownPostAudience })
-              return { analyzed: s.videosAnalyzed, claimsOnly: s.videosClaimsOnly, skipped: s.videosSkipped, errored: s.videosErrored, refused: s.videosRefused, alreadyDone: s.videosAlreadyAnalyzed, rateLimited: s.rateLimited, errors: s.errors, insights: s.insightsKept, languageSamples: s.languageSamples, cost: s.costUsd, stepFailed: false }
+              return { analyzed: s.videosAnalyzed, claimsOnly: s.videosClaimsOnly, skipped: s.videosSkipped, errored: s.videosErrored, refused: s.videosRefused, alreadyDone: s.videosAlreadyAnalyzed, lengthRetries: s.lengthRetries, rateLimited: s.rateLimited, errors: s.errors, insights: s.insightsKept, languageSamples: s.languageSamples, cost: s.costUsd, stepFailed: false }
             })
             .catch((e: unknown) => {
               const message = e instanceof Error ? e.message : String(e)
               console.error(`[pass-a] batch ${w + j + 1}-of-${batches.length} out of retries: ${message}`)
               noteError(`pass-a:${w + j + 1}-of-${batches.length}`, e)
-              return { analyzed: 0, claimsOnly: 0, skipped: 0, errored: videoIds.length, refused: 0, alreadyDone: 0, rateLimited: false, errors: [message.slice(0, 200)], insights: 0, languageSamples: 0, cost: 0, stepFailed: true }
+              return { analyzed: 0, claimsOnly: 0, skipped: 0, errored: videoIds.length, refused: 0, alreadyDone: 0, lengthRetries: 0, rateLimited: false, errors: [message.slice(0, 200)], insights: 0, languageSamples: 0, cost: 0, stepFailed: true }
             }),
         ),
       )
@@ -1248,6 +1248,7 @@ export const runPipeline = inngest.createFunction(
         passA.errored += r.errored ?? 0
         passA.refused += r.refused ?? 0
         passA.alreadyDone += r.alreadyDone ?? 0
+        passA.lengthRetries += r.lengthRetries ?? 0
         passA.rateLimited = passA.rateLimited || Boolean(r.rateLimited)
         if (r.stepFailed) passA.batchesFailed++
         for (const m of r.errors ?? []) if (passA.errors.length < 5 && !passA.errors.includes(m)) passA.errors.push(m)
@@ -1273,6 +1274,20 @@ export const runPipeline = inngest.createFunction(
     if (passADegraded && passA.batchesFailed === 0) noteError('pass-a', passADegraded)
     else if (passADegraded) console.warn(`[pass-a] ${passADegraded} (already recorded as failed batch steps)`)
     else if (passA.errored > 0) console.warn(`[pass-a] ${passA.errored} video call(s) failed under the ${PASS_A_ERROR_RATIO * 100}% ratio; re-read next run. First: ${passA.errors[0] ?? ''}`)
+
+    // A VIDEO READ ON HALF ITS COMMENTS IS A FINDING, NOT AN ERROR. A call that
+    // hit PASS_A_MAX_OUTPUT_TOKENS was re-asked on half its refs and succeeded,
+    // so nothing failed and the status must not move — but the video's
+    // insights come from less of it than the denominator counts, and until now
+    // the only trace was a console.warn inside runPassA, which is the record
+    // that is gone from the host's retention within the hour (the same defect
+    // noteFinding was added for, one commit over, for nine dead caption
+    // actors). Recorded here, where the run can carry it.
+    if (passA.lengthRetries > 0) {
+      const say = `${passA.lengthRetries} video(s) hit the ${PASS_A_MAX_OUTPUT_TOKENS}-token output ceiling and were re-asked once on half their comments — their insights are read from less than the denominator counts`
+      console.warn(`[pass-a] ${say}`)
+      noteFinding('pass-a', say)
+    }
 
     // 4g. QUOTE TRANSLATION (Phase 1 WP6, design item 8, 2026-09-18). Every
     //     comment this tenant's CURRENT analysis cites gets a detected language
