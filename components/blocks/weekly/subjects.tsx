@@ -54,8 +54,8 @@ import { CONTRIBUTIONS_NOT_RECORDED, subjectsLead } from '@/lib/reports/weekly'
 function Side({ side, mode }: { side: SideReading | null; mode: RenderMode }): ReactNode {
   if (!side || !side.observed || side.pct == null) {
     return mode === 'email'
-      ? <span style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted }}>— not tracked</span>
-      : <span className="text-[11px] text-muted-foreground">— not tracked</span>
+      ? <span style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted }}>not tracked</span>
+      : <span className="text-[11px] text-muted-foreground">not tracked</span>
   }
   const body = <><span data-copy="figure">{fmtPct(side.pct)}</span>{' '}<span data-copy="figure">{fmtInt(side.k ?? 0)} of {fmtInt(side.n ?? 0)}</span></>
   return mode === 'email'

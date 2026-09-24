@@ -609,7 +609,7 @@ describe('the five sections that are Overview’s', () => {
       },
     }
     const text = renderText(MONTHLY_BLOCKS['monthly.rivals'].render(quiet, 'email', ctx))
-    expect(text).toContain('Cotopaxi — nothing was raised under their content this month.')
+    expect(text).toContain('Cotopaxi: nothing was raised under their content this month.')
   })
 
   // AND THE VERDICTS ARE A COLUMN TOO (the wave-3 review, finding [Minor]).

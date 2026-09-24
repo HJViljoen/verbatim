@@ -5,6 +5,7 @@ import { WEEKLY_CANVAS_GUTTER, WEEKLY_CARD_WIDTH, weeklyDateLine, weeklyEyebrow,
 import { staleWeeklySnapshot, type WeeklySnapshotData } from '@/lib/reports/weekly-build'
 import { weeklyBlocksFor } from '@/components/blocks/weekly'
 import { Button, Hairline, text } from './primitives'
+import { withCurrentWords } from '@/lib/reports/legacy-words'
 
 /**
  * The weekly report as an email (Phase 1 WP17, design §3 Artefact WR).
@@ -42,6 +43,8 @@ const presentation = { role: 'presentation', cellPadding: 0, cellSpacing: 0, bor
 
 
 export function WeeklyEmail({ data, shareUrl, appUrl, attached, ctx, preheader }: WeeklyEmailProps) {
+  // A snapshot built before the em-dash sweep re-renders in the current words.
+  data = withCurrentWords(data)
   // A ROW AN OLDER BUILD WROTE IS A SENTENCE, NOT A STACK TRACE. `data.reading`
   // changed incompatibly in block D wave 2 and every line below dereferences
   // the new fields (`WEEKLY_SNAPSHOT_VERSION`), so this is asked before any of

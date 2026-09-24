@@ -191,7 +191,7 @@ export function latestBriefLine(
   card: Pick<BriefCard, 'latest' | 'everBuilt' | 'poolCappedAt'>,
 ): string {
   if (card.latest) return card.latest.readingLine
-  if (card.everBuilt) return 'Built before — the last one is not among the recent builds we looked at.'
+  if (card.everBuilt) return 'Built before, but not among the recent builds we looked at.'
   if (card.poolCappedAt != null) return `Not among the ${card.poolCappedAt} most recent builds we looked at.`
   return NOT_BUILT_YET
 }

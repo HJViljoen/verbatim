@@ -263,7 +263,7 @@ export const quarterlyCategory: Block<QuarterlyData> = {
                 <span data-copy="verdict"><Chip tone="plain" mode={mode}>gone quiet</Chip></span>
                 <span>
                   <ObjectLabel label={q.label} model mode={mode} />
-                  {q.lastHeard ? ` — last read ${monthName(q.lastHeard)}` : ''}
+                  {q.lastHeard ? ` · last read ${monthName(q.lastHeard)}` : ''}
                 </span>
               </p>
             ))

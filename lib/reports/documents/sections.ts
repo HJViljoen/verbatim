@@ -400,7 +400,7 @@ export const SALES_MAP: readonly BriefEntry[] = [
     // for no stated reason.
     pane: 'confidence',
     paneTitle: 'How to read these',
-    paneLead: 'These are comparisons the audience put, counted in the videos we read — not comparisons we drew. A pairing appearing here says it was asked about, and says nothing about which side the asker settled on.',
+    paneLead: 'These are comparisons the audience put, counted in the videos we read, not comparisons we drew. A pairing appearing here says it was asked about, and says nothing about which side the asker settled on.',
     needs: [],
   }),
   page('switching'),

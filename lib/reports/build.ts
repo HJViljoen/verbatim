@@ -57,8 +57,8 @@ export async function loadReportSections(supabase: unknown, clientId: string, re
     const mod = pageModule(section.page)
     const data = loaded[i] as unknown
     if (!mod) { out.skipped.push({ section, reason: 'That page cannot be included.' }); return }
-    if (data && typeof data === 'object' && '__error' in (data as object)) { out.skipped.push({ section, reason: 'This page could not be loaded just now — try the build again.' }); return }
-    if (!data) { out.skipped.push({ section, reason: 'Nothing to show yet — this page has no update behind it.' }); return }
+    if (data && typeof data === 'object' && '__error' in (data as object)) { out.skipped.push({ section, reason: 'This page could not be loaded just now. Try the build again.' }); return }
+    if (!data) { out.skipped.push({ section, reason: 'Nothing to show yet: this page has no update behind it.' }); return }
     // A key the catalogue does not know is dropped, not fatal (a renamed tile
     // degrades a template rather than breaking it).
     const keys = section.keys?.filter((k) => Boolean(mod.renderables[k]))
@@ -92,7 +92,7 @@ export async function snapshotReport(args: {
   company: string
 }): Promise<SnapshotReportResult> {
   const { sections, skipped } = await loadReportSections(args.supabase, args.clientId, args.report)
-  if (!sections.length) throw new BuildEmptyError(skipped[0]?.reason ?? 'Nothing to build yet — your first update has not landed.')
+  if (!sections.length) throw new BuildEmptyError(skipped[0]?.reason ?? 'Nothing to build yet: your first update has not landed.')
 
   const slideCount = deckSlides({ sections }, (p) => pageModule(p)).length
   if (slideCount > REPORT_MAX_SLIDES) throw new BuildEmptyError(`That is ${slideCount} slides; a report holds at most ${REPORT_MAX_SLIDES}. Take "every item" off a section or drop one.`)

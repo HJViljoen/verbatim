@@ -770,7 +770,7 @@ describe('the artboard port (Block D wave 2)', () => {
       const cover = renderText(QUARTERLY_BLOCKS['quarterly.cover'].render(state, 'print', ctx))
       const page3 = renderText(QUARTERLY_BLOCKS['quarterly.subjects'].render(state, 'print', ctx))
       expect(cover).toContain(lead.objectLabel)
-      expect(page3).toContain(`${lead.objectLabel} — `)
+      expect(page3).toContain(`${lead.objectLabel}: `)
     }
   })
 
@@ -782,7 +782,7 @@ describe('the artboard port (Block D wave 2)', () => {
     // the month's. `gapLine` carries no object label of its own, so without
     // this the page's opening line read as the page's gap when it is one
     // subject's.
-    expect(t).toContain('Durability — The quarter from July 2026 · you 30.1% of 249')
+    expect(t).toContain('Durability: The quarter from July 2026 · you 30.1% of 249')
     // The chart, and the rival's own month as a level beside it.
     expect(render(QUARTERLY_BLOCKS['quarterly.subjects'].render(data, 'print', ctx))).toContain('<svg')
     expect(t).toContain('Freitag, September:')
@@ -926,7 +926,7 @@ describe('the artboard port (Block D wave 2)', () => {
 
   it('qr.p5.whatasked · the brand prefix and the occurrence count', () => {
     const t = text('quarterly.rivals')
-    expect(t).toContain('Ottobock — Viewers ask about')
+    expect(t).toContain('Ottobock: Viewers ask about')
     expect(t).toContain('41 comments behind it in this window')
   })
 

@@ -340,6 +340,6 @@ function latestMonthOf(quarter: Quarter, readingAt: string): string | null {
  * opening it is whether their own half is readable yet.
  */
 export function quarterlySubject(company: string, quarter: Quarter, readings: number): string {
-  const head = `${company}: your quarterly review — ${quarterLabel(quarter, false)}`
+  const head = `${company}: your quarterly review · ${quarterLabel(quarter, false)}`
   return quarterUnlocked(readings) ? head : `${head} (your own side is still forming)`
 }

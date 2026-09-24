@@ -108,7 +108,7 @@ describe('the weekly email', () => {
   it('prints the three mono footer lines, and promises no next update', () => {
     const text = words(snapshot())
     expect(text).toContain('Prepared for Sealand · with Verbatim · update of 13 Sep 2026')
-    expect(text).toContain('— this update’s 271 videos')
+    expect(text).toContain('· this update’s 271 videos')
     expect(text).toContain('Commenters are never identified; quotes carry platform and date only.')
     // A cadence is not a promise about when a run lands, and nothing in this
     // product computes one.
@@ -121,9 +121,9 @@ describe('the weekly email', () => {
   // the artboard's headline does not open with it.
   it('leads with the same claim as the inbox line, minus the tenant', () => {
     const data = snapshot()
-    expect(data.subject).toBe('Sealand: Objections is unusual this week — 29 of 205 videos')
+    expect(data.subject).toBe('Sealand: Objections is unusual this week · 29 of 205 videos')
     const text = words(data)
-    expect(text).toContain('Objections is unusual this week — 29 of 205 videos')
+    expect(text).toContain('Objections is unusual this week · 29 of 205 videos')
     // The preheader carries the full subject; the masthead headline does not.
     expect(text.split('Sealand: Objections').length - 1).toBe(1)
   })

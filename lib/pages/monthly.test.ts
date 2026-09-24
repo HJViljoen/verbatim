@@ -99,7 +99,7 @@ describe('why a subject shows no voice', () => {
     expect(voiceNote({ citations: 0, readable: 0, inMonth: 0 }))
       .toBe('nothing has been said about this one yet')
     expect(voiceNote({ citations: 12, readable: 0, inMonth: 0 }))
-      .toBe('what was said about this one could not be quoted — too short, or nothing but a handle')
+      .toBe('what was said about this one could not be quoted: too short, or nothing but a handle')
     expect(voiceNote({ citations: 12, readable: 4, inMonth: 0 }))
       .toBe('nothing quotable was said about this one this month')
   })
@@ -141,7 +141,7 @@ describe('the brief attached by link', () => {
   })
 
   it('says when the attached brief is not this reading’s', () => {
-    expect(briefStaleLine(brief())).toBe('Built 12 Sep, before this reading — the numbers in it are that day’s.')
+    expect(briefStaleLine(brief())).toBe('Built 12 Sep, before this reading. The numbers in it are that day’s.')
   })
 })
 

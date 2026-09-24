@@ -64,8 +64,8 @@ const TEMPLATE = 'minmax(0,116fr) minmax(0,136fr) minmax(0,136fr) minmax(0,126fr
 function Side({ side, mode }: { side: SubjectQuarterRow['you']; mode: RenderMode }): ReactNode {
   if (!side) {
     return mode === 'email'
-      ? <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>— not read</span>
-      : <span className="text-[12px] text-muted-foreground">— not read</span>
+      ? <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>not read</span>
+      : <span className="text-[12px] text-muted-foreground">not read</span>
   }
   return (
     <FigureCell
@@ -240,7 +240,7 @@ export const quarterlySubjects: Block<QuarterlyData> = {
                 when it is one subject's. The label is the operator's own
                 word from Settings, so it is unmarked, exactly as the table's
                 first column is. */}
-            <span className={email ? undefined : 'font-sans not-italic'}>{gap.objectLabel} — </span>
+            <span className={email ? undefined : 'font-sans not-italic'}>{gap.objectLabel}: </span>
             <span data-copy="level">{gapLine(gap, { period: true })}</span>
             {/* THE BASIS LINE IS NOT A LEVEL AND IS NOT MARKED AS ONE. It is
                 a DIFFERENCE with its band — "7.8 points apart in the quarter

@@ -310,7 +310,7 @@ function AskedPanel({ rows }: { rows: readonly RivalRow[] }) {
         <div key={row.audience} style={{ marginTop: 8 }}>
           {row.raisedMost == null ? (
             <div style={{ fontFamily: FONT.sans, fontSize: 12.5, lineHeight: '1.5', color: EMAIL.muted }}>
-              {row.label} — nothing was raised under their content this month.
+              {row.label}: nothing was raised under their content this month.
             </div>
           ) : (
           <div style={{ fontFamily: FONT.serif, fontSize: 16, lineHeight: '1.45', color: EMAIL.ink }}>

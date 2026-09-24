@@ -311,7 +311,7 @@ export const quarterlyMoves: Block<QuarterlyData> = {
                 />
               ))}
               {m.plan.moved.slice(0, 2).map((row, i) => (
-                <Note key={`moved-${i}`} mode={mode}>{row.claim} — {row.from} → {row.to} · {row.on}</Note>
+                <Note key={`moved-${i}`} mode={mode}>{row.claim}: {row.from} → {row.to} · {row.on}</Note>
               ))}
               {/* THE THREE SENTENCES THAT MUST TRAVEL WITH THESE COUNTS, as one
                   note rather than three: what the counts are of (D15), the floor

@@ -28,6 +28,7 @@ import { appBaseUrl } from '@/lib/site'
 import { concludedBasisLine, coverCarriesSummary, findingCards, leadGap, overviewTiles, slugOf } from '@/lib/reports/documents/overview'
 import { shownTrajectory, type DocBlock, type DocBriefSection, type DocLens, type DocPage, type DocumentSnapshotData } from '@/lib/reports/documents/types'
 import type { FigureTable } from '@/lib/reports/types'
+import { withCurrentWords } from '@/lib/reports/legacy-words'
 
 // A document's deck from its (hydrated) snapshot data: the cover, then one
 // slide per skeleton page, numbered once across the document. The same
@@ -561,7 +562,7 @@ function StatTile({ value, label, verdict, note, level = false, word = false }: 
  * told. Adding "the model" to the glossary is `lib`'s call, not a render fix.
  */
 export const CALIBRATION_NOTE =
-  'Every calibrated word here — up, down, no clear change, too few to compare, comparison refused, and a finding’s solid, reasonable or thin — is assigned by a fixed rule from counted videos, never worded by the model.'
+  'Every calibrated word here (up, down, no clear change, too few to compare, comparison refused, and a finding’s solid, reasonable or thin) is assigned by a fixed rule from counted videos, never worded by the model.'
 
 /**
  * WHAT THIS SHEET WAS READ FROM, along the foot (`mkt.p1.title`'s corpus line).
@@ -1597,7 +1598,7 @@ function ScriptedPage({ data }: { data: DocumentSnapshotData }) {
         {rows.map((b, i) => (
           <li key={i} className="flex gap-2.5 text-[14.5px] leading-[1.45] text-foreground">
             <span className="mt-[7px] inline-block h-[6px] w-[6px] shrink-0 rounded-full bg-primary" aria-hidden />
-            <span>{b.label} — <Counted k={fmtCount(b.value.k)} n={fmtCount(b.value.n)} of="videos" /></span>
+            <span>{b.label}: <Counted k={fmtCount(b.value.k)} n={fmtCount(b.value.n)} of="videos" /></span>
           </li>
         ))}
       </ul>
@@ -1820,7 +1821,7 @@ function MethodPage({ page, data }: { page: DocPage; data: DocumentSnapshotData 
             artboard asks for the sentence; the product only ever printed the
             half about identification. */}
         <p className={`max-w-[66ch] ${BODY}`}>
-          Quotes carry the platform, the date and where they were found. The words are printed as they were written, with an English rendering underneath — marked as a {MACHINE_TRANSLATION_STAMP} — where they were not in English.
+          Quotes carry the platform, the date and where they were found. The words are printed as they were written, with an English rendering underneath, marked as a {MACHINE_TRANSLATION_STAMP}, where they were not in English.
         </p>
         <CannotTell data={data} />
       </div>
@@ -2235,7 +2236,7 @@ export function GapCard({ gap, saidBy = false }: { gap: Gap; saidBy?: boolean })
       <Eyebrow>{concluded ? 'The gap that matters' : 'What the two sides read'}</Eyebrow>
       <p className={`m-0 ${BODY_SM}`}>
         <span className="font-medium">{gap.objectLabel}</span>
-        {' — '}
+        {': '}
         <span {...(carriesLevel ? { 'data-copy': 'level' as const } : {})}>{saidBy && !concluded ? gapLevels(gap) : gapLine(gap)}</span>
         {/* UNMARKED, and deliberately. `gapLine` is two levels and their
             banded difference, which is a `level` node; the basis line is a
@@ -2339,6 +2340,8 @@ function SheetSection({ section, data, framing = false }: { section: DocBriefSec
 }
 
 export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: DocumentSnapshotData; date?: string }) {
+  // A snapshot built before the em-dash sweep re-renders in the current words.
+  data = withCurrentWords(data)
   // THE LEADERSHIP ONE-PAGER TAKES THE COVER'S PLACE, AND NOTHING ELSE'S
   // (Block D wave 2, E-leadership). The artboard is one sheet with no cover, so
   // where the sheet can be drawn it REPLACES the 58px cover — a page a director

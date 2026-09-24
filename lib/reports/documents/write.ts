@@ -103,6 +103,7 @@ export function writerSchema(t: DocumentTemplate, kinds: DocPageKind[] = t.skele
         shape.competitors ??= z.array(z.object({
         name: z.string(),
         pitch: z.string().describe(`What they are pitching in their own videos, as a read not a list. Under ${cap('pitch')} characters.`),
+        // em-dash-ok: model prompt (a schema description the writer model reads)
         about: z.string().describe(`What others say about them: how creators, reviewers and retailers describe this brand when the brand is not speaking, as a read not a list. These are not the brand's own words — never write them as something the brand claims or promises. Under ${cap('about')} characters.`),
         praise: z.string().describe(`What their users praise. Under ${cap('praise')} characters.`),
         hurt: z.string().describe(`Where their users hurt. Under ${cap('hurt')} characters.`),

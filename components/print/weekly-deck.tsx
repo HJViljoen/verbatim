@@ -7,6 +7,7 @@ import { staleWeeklySnapshot, type WeeklySnapshotData } from '@/lib/reports/week
 import { weeklyBlocksFor } from '@/components/blocks/weekly'
 import { Slide } from './slide'
 import { STALE_ARTEFACT_LINE } from '@/lib/reports/stale'
+import { withCurrentWords } from '@/lib/reports/legacy-words'
 
 // The weekly report on paper (Phase 1 WP17).
 //
@@ -32,6 +33,8 @@ import { STALE_ARTEFACT_LINE } from '@/lib/reports/stale'
 const fmtDate = (d: Date) => fullDate(d.toISOString())
 
 export function WeeklyDeck({ data, date = fmtDate(new Date()) }: { data: WeeklySnapshotData; date?: string }) {
+  // A snapshot built before the em-dash sweep re-renders in the current words.
+  data = withCurrentWords(data)
   const ctx = blockContext(appBaseUrl(), EMAIL)
   // Asked before anything dereferences `data.reading` (`WEEKLY_SNAPSHOT_VERSION`).
   const stale = staleWeeklySnapshot(data)

@@ -422,7 +422,7 @@ function GapCard({ gap, row, categoryLabel }: { gap: Gap | null; row: SubjectRow
             <span data-copy="level" className="flex items-start gap-1.5 text-[10.5px] leading-[1.3] text-muted-foreground">
               <Dot tone="cat" />
               <span className="min-w-0">
-                the line is {gap.objectLabel.toLowerCase()} across {categoryLabel.toLowerCase()}, of {fmtInt(row.category.n ?? 0)} videos — not the gap
+                the line is {gap.objectLabel.toLowerCase()} across {categoryLabel.toLowerCase()}, of {fmtInt(row.category.n ?? 0)} videos, not the gap
               </span>
             </span>
           </div>
@@ -446,12 +446,16 @@ function GapCard({ gap, row, categoryLabel }: { gap: Gap | null; row: SubjectRow
  * panel videos), and the panel's SIZE — `accountCount`, built since the panel
  * shipped and rendered nowhere — is the population the level is stated over.
  */
-function AttentionCard({ attention, note }: { attention: AttentionBlock | null; note: string | null }) {
+function AttentionCard({ attention }: { attention: AttentionBlock | null }) {
   const latest = attention?.months[attention.months.length - 1] ?? null
+  // AN ABSENCE IS A STATE, NOT A CARD OF PROSE (copy sweep 3): the card keeps
+  // its caption and says "not recorded" where the level would be, the bare
+  // state L8 asks for; why it is missing is the record's to say.
   if (!attention || !latest) {
     return (
       <div className={`${CARD} flex flex-col justify-center gap-1.5`}>
-        <p className={BODY}>{note ?? 'How much attention the category held is not recorded for this workspace yet.'}</p>
+        <span className="text-[12.5px] leading-[1.35] text-foreground">Attention across the panel</span>
+        <p className={TRAIL}>not recorded</p>
       </div>
     )
   }
@@ -957,7 +961,7 @@ export function LeadershipSheet({
       <div className="flex h-full min-h-0 flex-col gap-2.5">
         <div className="grid shrink-0 grid-cols-[5fr_3.5fr_3.5fr] gap-4">
           <GapCard gap={gap} row={gapRow} categoryLabel={overview.subjects.categoryLabel} />
-          <AttentionCard attention={overview.category.attention} note={overview.category.attentionNote} />
+          <AttentionCard attention={overview.category.attention} />
           <SubjectCard row={subject} categoryLabel={overview.subjects.categoryLabel} />
         </div>
         {/* THE COLUMNS STACK FROM THE TOP; THEY DO NOT DISTRIBUTE.

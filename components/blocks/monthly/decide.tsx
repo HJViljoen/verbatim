@@ -262,7 +262,7 @@ function ledgerMeta(l: LedgerRow): string {
   parts.push(
     l.decidedAt
       ? `you marked it ${l.statusLabel} on ${shortDate(l.decidedAt)}`
-      : `no decision recorded — it stands at ${l.statusLabel}`,
+      : `no decision recorded; it stands at ${l.statusLabel}`,
   )
   return parts.join(' · ')
 }

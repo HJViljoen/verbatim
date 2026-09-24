@@ -318,11 +318,11 @@ function daysInMonth(month: string): number {
 export function monthlySubject(company: string, month: string, lead: Verdict | null): string {
   const head = `${company}: ${longMonth(month)}`
   if (!lead || lead.state !== 'moved' || lead.changePts == null) {
-    return `${head} — where you stand`
+    return `${head} · where you stand`
   }
   const size = `${Math.abs(round1(lead.changePts))} ${Math.abs(round1(lead.changePts)) === 1 ? 'point' : 'points'}`
   const word = lead.changePts > 0 ? 'up' : 'down'
-  return `${head} — ${lead.objectLabel} ${word} ${size}`
+  return `${head} · ${lead.objectLabel} ${word} ${size}`
 }
 
 const round1 = (n: number): number => Math.round(n * 10) / 10

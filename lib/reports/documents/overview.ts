@@ -96,7 +96,7 @@ export { concludedBasisLine }
 export function gapTile(gap: Gap): OverviewTile {
   const basis = concludedBasisLine(gap)
   if (gap.state === 'apart' && gap.gapPts != null) {
-    return { value: `${round1(Math.abs(gap.gapPts))} pts`, label: `${gap.objectLabel} — ${gapLine(gap)}${basis ? `. ${basis}` : ''}` }
+    return { value: `${round1(Math.abs(gap.gapPts))} pts`, label: `${gap.objectLabel}: ${gapLine(gap)}${basis ? `. ${basis}` : ''}` }
   }
   // THROUGH `gapLevels`, NOT A FOURTH SPELLING OF IT (Block D wave 3b,
   // `decks`). This composed the two levels by hand and got "— not tracked" for
@@ -104,7 +104,7 @@ export function gapTile(gap: Gap): OverviewTile {
   // for from one that was read and carried no row — the distinction
   // `GapSide.observed` and `sidePct` exist to make, spelled two ways in two
   // files. One composer, and the deck's gap card reads the same one.
-  return { value: GAP_WORDS[gap.state], label: `${gap.objectLabel} — ${gapLevels(gap)}${basis ? `. ${basis}` : ''}`, word: true }
+  return { value: GAP_WORDS[gap.state], label: `${gap.objectLabel}: ${gapLevels(gap)}${basis ? `. ${basis}` : ''}`, word: true }
 }
 
 /**
@@ -170,7 +170,7 @@ export function verdictTile(v: Verdict): OverviewTile {
   const of = `${fmtInt(v.value.k)} of ${fmtInt(v.value.n)}`
   return {
     value: `${arrow} ${round1(Math.abs(v.changePts ?? 0))} pts`,
-    label: `${v.objectLabel} — ${pct}%, ${of}. Band ${round1(v.bandPts ?? 0)}.`,
+    label: `${v.objectLabel}: ${pct}%, ${of}. Band ${round1(v.bandPts ?? 0)}.`,
   }
 }
 
@@ -321,7 +321,7 @@ export function overviewTiles(data: DocumentSnapshotData): OverviewTile[] {
         }
       : {
           value: 'not read yet',
-          label: `${r.monthLabel} — ${denominatorLine(r.denominators)} Nothing on this sheet is a share of a counted population until it is.`,
+          label: `${r.monthLabel}: ${denominatorLine(r.denominators)}`,
           word: true,
         }
     // The order is the merge's decision — see the header. A concluded gap and

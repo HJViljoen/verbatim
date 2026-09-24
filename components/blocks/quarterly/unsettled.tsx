@@ -204,7 +204,7 @@ export const quarterlyUnsettled: Block<QuarterlyData> = {
                 {m.changeLog.rows.map((row, n) => (
                   <Row key={row.id ?? n} mode={mode}>
                     <span className={email ? undefined : 'font-mono text-[10.5px] text-muted-foreground'}>{fullDate(row.on)}</span>{' '}
-                    {row.what} — {row.said}
+                    {row.what}: {row.said}
                     {/* WHO, AS A ROLE. `ClientChange.who` is `actorWords`'
                         output, which is what identity resolved to and never a
                         name a browser claimed (lib/config-log.ts). */}
@@ -213,7 +213,7 @@ export const quarterlyUnsettled: Block<QuarterlyData> = {
                 ))}
                 {m.changeLog.showing ? <Note mode={mode}>{m.changeLog.showing}</Note> : null}
                 {m.changeLog.affectsRecorded ? null : (
-                  <Note mode={mode}>What each change broke is not recorded for this workspace, so only the change is listed.</Note>
+                  <Note mode={mode}>What each change broke is not recorded for this workspace.</Note>
                 )}
                 {m.changeLog.rows.length === 0 ? (
                   <Note mode={mode}>Nothing that was logged changed what we track inside this quarter.</Note>

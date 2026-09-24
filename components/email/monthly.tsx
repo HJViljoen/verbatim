@@ -14,6 +14,7 @@ import {
 import type { MonthlySnapshotData } from '@/lib/reports/monthly-build'
 import { monthlyBlocksFor } from '@/components/blocks/monthly'
 import { Button, Hairline, text } from './primitives'
+import { withCurrentWords } from '@/lib/reports/legacy-words'
 
 /**
  * The monthly report as an email (Phase 1 WP18, design item 13).
@@ -51,6 +52,8 @@ export interface MonthlyEmailProps {
 const presentation = { role: 'presentation', cellPadding: 0, cellSpacing: 0, border: 0 } as const
 
 export function MonthlyEmail({ data, shareUrl, appUrl, attached, ctx, preheader }: MonthlyEmailProps) {
+  // A snapshot built before the em-dash sweep re-renders in the current words.
+  data = withCurrentWords(data)
   const blocks = monthlyBlocksFor(data.keys)
   const caveat = readingCaveat(data.reading.notes)
   const method = data.reading.overview.method

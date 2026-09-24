@@ -348,7 +348,7 @@ function Flags({ heading, rows, mode }: { heading: string; rows: readonly Mover[
   const email = mode === 'email'
   const line = (r: Mover) => (
     <>
-      <span data-copy="subject" data-slot="pass_b_theme">{r.label}</span>{' — '}
+      <span data-copy="subject" data-slot="pass_b_theme">{r.label}</span>{': '}
       <Level k={r.k} n={r.n} pct={r.pct} />
     </>
   )

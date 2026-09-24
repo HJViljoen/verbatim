@@ -305,6 +305,7 @@ export function weekSentence(input: WeekSentenceInput): WeekSentence {
   const share = weekFigureKey(input.objectId, 'share')
   const of = weekFigureKey(input.objectId, 'of')
   const figures: FigureTable = {
+    // em-dash-ok: FigureTable label, a sent-figures record key and never printed
     [share]: { value: pctOf(input.k, input.n), unit: 'pct', label: `${input.label} — share of the month so far` },
     [of]: { value: input.n, unit: 'videos', label: `videos read for ${input.audience} this month` },
   }
@@ -323,6 +324,7 @@ export function weekSentence(input: WeekSentenceInput): WeekSentence {
   figures[last] = {
     value: pctOf(input.atLastMonth.k, input.atLastMonth.n),
     unit: 'pct',
+    // em-dash-ok: FigureTable label, a sent-figures record key and never printed
     label: `${input.label} — share at this point last month`,
   }
   return { body: `${head}, against [[${last}]] at this point in ${longMonth(prevMonth(input.month))}.`, figures }
@@ -469,8 +471,11 @@ function flaggedLine(n: number, noun: PeriodNoun): string {
 export function flagFigures(flag: WeekFlag, index: number): FigureTable {
   const n = index + 1
   return {
+    // em-dash-ok: FigureTable label, a sent-figures record key and never printed
     [`flag_${n}_week_share`]: { value: pctOf(flag.weekK, flag.weekN), unit: 'pct', label: `${flag.label} — share of the week` },
+    // em-dash-ok: FigureTable label, a sent-figures record key and never printed
     [`flag_${n}_baseline_share`]: { value: pctOf(flag.baselineK, flag.baselineN), unit: 'pct', label: `${flag.label} — share across the three months behind it` },
+    // em-dash-ok: FigureTable label, a sent-figures record key and never printed
     [`flag_${n}_change`]: { value: flag.changePts, unit: 'pts', label: `${flag.label} — the movement, against a band of ${flag.bandPts}` },
   }
 }
@@ -576,18 +581,18 @@ export function subjectsLead(
   if (compared.length === 0) {
     return {
       level: null,
-      body: `No ${rows.length === 1 ? 'subject' : 'subject'} carried a comparison this month — the readings are here, the months to read them against are not.`,
+      body: `No ${rows.length === 1 ? 'subject' : 'subject'} carried a comparison this month: the readings are here, the months to read them against are not.`,
     }
   }
   if (moved.length === 0) {
     return {
       level: `0 of ${fmtInt(rows.length)}`,
-      body: ` ${noun} moved beyond their band this month — every change is inside the margin of the measurement.`,
+      body: ` ${noun} moved beyond their band this month: every change is inside the margin of the measurement.`,
     }
   }
   return {
     level: `${fmtInt(moved.length)} of ${fmtInt(rows.length)}`,
-    body: ` ${noun} moved beyond their band this month — ${nameList(moved.map((r) => r.label.toLowerCase()))}.`,
+    body: ` ${noun} moved beyond their band this month: ${nameList(moved.map((r) => r.label.toLowerCase()))}.`,
   }
 }
 
@@ -743,7 +748,7 @@ export function weeklyFooterLines(input: {
       input.updateDate ? `update of ${fullDate(input.updateDate)}` : null,
       `read ${fullDate(input.readingAt)}`,
     ].filter((s): s is string => s != null).join(' · '),
-    mix: share ? `${share} — this update’s ${fmtInt(videos)} ${videos === 1 ? 'video' : 'videos'}` : null,
+    mix: share ? `${share} · this update’s ${fmtInt(videos)} ${videos === 1 ? 'video' : 'videos'}` : null,
     privacy: PRIVACY_LINE,
   }
 }
@@ -795,7 +800,7 @@ export function weeklyHeadline(check: WeekCheck): string {
     case 'flagged': {
       // A flagged check with nothing printable is not "nothing unusual": the
       // check fired and the detail did not survive the read. Say that much.
-      if (check.flags.length === 0) return `${head} — something ${inPeriod(check.noun)} is unusual`
+      if (check.flags.length === 0) return `${head} · something ${inPeriod(check.noun)} is unusual`
       const flag = check.flags[0]
       // THE OBJECT, AND THE COUNT IT RESTS ON (weekly.headline, block D wave 2).
       // The mock's subject is "Zip failures 3× usual this week, under Freitag
@@ -811,27 +816,27 @@ export function weeklyHeadline(check: WeekCheck): string {
       // with the sentence not saying which. Two flags get the objects and no
       // count, and the artefact's own §1 carries both flags in full.
       const level = check.flags.length === 1 && flag.weekN > 0
-        ? ` — ${fmtInt(flag.weekK)} of ${fmtInt(flag.weekN)} videos`
+        ? ` · ${fmtInt(flag.weekK)} of ${fmtInt(flag.weekN)} videos`
         : ''
       return check.flags.length === 1
         ? `${flag.label} is unusual ${inPeriod(check.noun)}${level}`
         : `${flag.label} and ${fmtInt(check.flags.length - 1)} more are unusual ${inPeriod(check.noun)}`
     }
     case 'nothing_unusual':
-      return `${head} — nothing unusual ${inPeriod(check.noun)}`
+      return `${head} · nothing unusual ${inPeriod(check.noun)}`
     case 'baseline_forming':
       // THE NOUN, HERE TOO. Sealand's window is thirty days and its subject
       // read "the weekly check is still forming"; Össur's read "the weekly
       // check is not recorded yet", which lands on a client as a system fault
       // rather than as a young workspace. These two branches were the last
       // fixed "weekly" in a composer whose every sibling already took the noun.
-      return `${head} — ${check.noun === 'week' ? 'the weekly check' : 'this update’s check'} is still forming`
+      return `${head} · ${check.noun === 'week' ? 'the weekly check' : 'this update’s check'} is still forming`
     case 'suppressed':
-      return `${head} — ${check.noun === 'week' ? 'this week' : 'this update'} was not compared`
+      return `${head} · ${check.noun === 'week' ? 'this week' : 'this update'} was not compared`
     case 'no_window':
-      return `${head} — no window was recorded for it`
+      return `${head} · no window was recorded for it`
     case 'not_recorded':
-      return `${head} — ${check.noun === 'week' ? 'the weekly check' : 'this update’s check'} is not recorded yet`
+      return `${head} · ${check.noun === 'week' ? 'the weekly check' : 'this update’s check'} is not recorded yet`
   }
 }
 

@@ -214,7 +214,7 @@ function nameRest(groups: readonly SalesGroup[], total: number | null): { head: 
   const names = named.map((g) => g.label.toLowerCase())
   const head = rest === 1 ? 'One more objection' : `${fmtInt(rest)} more objections`
   return {
-    head: `${head}${rest > named.length ? ', including' : ''} —`,
+    head: `${head}${rest > named.length ? ', including' : ''}:`,
     names: names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`,
   }
 }
@@ -354,6 +354,7 @@ export const forSales: Block<{ sales: ForSalesData }> = {
     const out: FigureTable = {}
     if (s.videos != null) out.sales_videos = { value: s.videos, unit: 'videos', label: 'videos this update covered' }
     s.objections.forEach((g, i) => {
+      // em-dash-ok: FigureTable label, a sent-figures record key and never printed
       out[`objection_${i + 1}_videos`] = { value: g.videos, unit: 'videos', label: `${g.label} — videos carrying it` }
     })
     if (s.switchingTotal != null) {

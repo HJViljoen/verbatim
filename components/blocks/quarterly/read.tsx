@@ -181,7 +181,7 @@ export const quarterlyRead: Block<QuarterlyData> = {
               r.advice.map((a) => (
                 <Bullet key={a.id} mode={mode}>
                   <Stored slot="pass_d_b_recommendation">{a.title}</Stored>
-                  {' — '}{a.age}{'. '}
+                  {' · '}{a.age}{'. '}
                   {/* `qr.p2.standingadvice` · the grounding count, and the
                       PRUNED sentence where a later update replaced every row
                       the advice cited. `Grounding.line` names the population

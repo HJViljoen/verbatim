@@ -6,6 +6,7 @@ import { QUARTER_PAGE_IN_SENTENCE, quarterPageKindOf } from '@/lib/reports/quart
 import { staleQuarterlySnapshot, type QuarterlySnapshotData } from '@/lib/reports/quarterly-build'
 import { quarterlyBlocksFor } from '@/components/blocks/quarterly'
 import { Button, Hairline, text } from './primitives'
+import { withCurrentWords } from '@/lib/reports/legacy-words'
 
 /**
  * The quarterly review as an email (Phase 1 WP20).
@@ -85,6 +86,8 @@ function pageNames(keys: readonly string[]): string[] {
 }
 
 export function QuarterlyEmail({ data, shareUrl, appUrl, attached, ctx, preheader }: QuarterlyEmailProps) {
+  // A snapshot built before the em-dash sweep re-renders in the current words.
+  data = withCurrentWords(data)
   // Asked before anything dereferences `data.reading`, whose shape changed
   // incompatibly in block D (`QUARTERLY_SNAPSHOT_VERSION`). An email cannot be
   // recalled, so a send over a row this build cannot redraw carries the

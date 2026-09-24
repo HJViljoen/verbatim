@@ -328,7 +328,7 @@ describe('WR2 · where things stand', () => {
   it('leads with how many subjects cleared their band, and names them', () => {
     for (const mode of MODES) {
       const text = renderText(block.render(weeklyFixture(), mode, ctx))
-      expect(text, mode).toContain('2 of 2 subjects moved beyond their band this month — durability and price.')
+      expect(text, mode).toContain('2 of 2 subjects moved beyond their band this month: durability and price.')
       // Not the mock's "ran above a typical week", which nothing computes, and
       // not a direction word in a lead no row below has earned (rule (c)).
       expect(text, mode).not.toMatch(/typical/i)
@@ -611,13 +611,13 @@ describe('WR4 · for sales', () => {
   // tenant with three or more groups, whatever the real number was.
   it('names the objections it did not give a row to, and counts them all', () => {
     expect(renderText(block.render(weeklyFixture(), 'app', ctx)))
-      .toContain('6 more objections, including — is it really recycled and zips')
+      .toContain('6 more objections, including: is it really recycled and zips')
   })
 
   it('says how many objections there were, not how many it could name', () => {
     const { sales } = weeklyFixture()
     const three = { sales: { ...sales, objectionsTotal: 3 } }
-    expect(renderText(forSales.render(three, 'app', ctx))).toContain('2 more objections — is it really recycled and zips')
+    expect(renderText(forSales.render(three, 'app', ctx))).toContain('2 more objections: is it really recycled and zips')
     expect(renderText(forSales.render(three, 'app', ctx))).not.toContain('including')
   })
 

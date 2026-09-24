@@ -4,6 +4,7 @@ import { fullDate } from '@/lib/format'
 import { staleQuarterlySnapshot, type QuarterlySnapshotData } from '@/lib/reports/quarterly-build'
 import { quarterlyBlocksFor } from '@/components/blocks/quarterly'
 import { Slide } from './slide'
+import { withCurrentWords } from '@/lib/reports/legacy-words'
 
 // The quarterly review on paper (Phase 1 WP20).
 //
@@ -55,6 +56,8 @@ const QUARTERLY_TYPE_FLOOR = 'deferred' as const
 const fmtDate = (d: Date) => fullDate(d.toISOString())
 
 export function QuarterlyDeck({ data, date = fmtDate(new Date()) }: { data: QuarterlySnapshotData; date?: string }) {
+  // A snapshot built before the em-dash sweep re-renders in the current words.
+  data = withCurrentWords(data)
   const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
   // Asked before anything dereferences `data.reading`, whose shape changed
   // incompatibly in block D (`QUARTERLY_SNAPSHOT_VERSION`).

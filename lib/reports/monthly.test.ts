@@ -114,20 +114,20 @@ describe('the masthead', () => {
 describe('the subject line', () => {
   it('leads with the largest banded change, its size and its direction', () => {
     expect(monthlySubject('Sealand', '2026-09', verdict({ changePts: 3 })))
-      .toBe('Sealand: September — Durability up 3 points')
+      .toBe('Sealand: September · Durability up 3 points')
   })
 
   it('says down for a fall, and prints one point in the singular', () => {
     expect(monthlySubject('Sealand', '2026-09', verdict({ objectLabel: 'Price', changePts: -1 })))
-      .toBe('Sealand: September — Price down 1 point')
+      .toBe('Sealand: September · Price down 1 point')
   })
 
   it('does not manufacture a movement when nothing cleared a band', () => {
-    expect(monthlySubject('Sealand', '2026-09', null)).toBe('Sealand: September — where you stand')
+    expect(monthlySubject('Sealand', '2026-09', null)).toBe('Sealand: September · where you stand')
     expect(monthlySubject('Sealand', '2026-09', verdict({ state: 'no_clear_change' })))
-      .toBe('Sealand: September — where you stand')
+      .toBe('Sealand: September · where you stand')
     expect(monthlySubject('Sealand', '2026-09', verdict({ state: 'too_little_data', changePts: null })))
-      .toBe('Sealand: September — where you stand')
+      .toBe('Sealand: September · where you stand')
   })
 
   it('never prints a bare share', () => {

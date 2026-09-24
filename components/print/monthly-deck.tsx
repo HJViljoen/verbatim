@@ -8,6 +8,7 @@ import { monthlyBlocksFor } from '@/components/blocks/monthly'
 import { staleMonthlySnapshot } from '@/lib/reports/monthly-build'
 import { Slide } from './slide'
 import { STALE_ARTEFACT_LINE } from '@/lib/reports/stale'
+import { withCurrentWords } from '@/lib/reports/legacy-words'
 
 // The monthly report on paper (Phase 1 WP18).
 //
@@ -27,6 +28,8 @@ import { STALE_ARTEFACT_LINE } from '@/lib/reports/stale'
 const fmtDate = (d: Date) => fullDate(d.toISOString())
 
 export function MonthlyDeck({ data, date = fmtDate(new Date()) }: { data: MonthlySnapshotData; date?: string }) {
+  // A snapshot built before the em-dash sweep re-renders in the current words.
+  data = withCurrentWords(data)
   const ctx = blockContext(appBaseUrl(), EMAIL)
   const stale = staleMonthlySnapshot(data)
   const blocks = stale ? [] : monthlyBlocksFor(data.keys)

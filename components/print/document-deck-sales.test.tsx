@@ -356,7 +356,7 @@ describe('sales.p6 — the “Say this” sheet', () => {
   it('prints counted context under “Also running”, never under “Because”', () => {
     const w = words(sheet())
     expect(w).toContain('Also running this month')
-    expect(w).toContain('Durability — 46 of 205 videos')
+    expect(w).toContain('Durability: 46 of 205 videos')
     expect(w).not.toContain('Because')
   })
 
@@ -405,7 +405,7 @@ describe('sales.p6 — the “Say this” sheet', () => {
     }))
     const w = words(sheet(salesBriefFixture({ slideFigures: { ...base.slideFigures!, scripted } })))
     expect(w).toContain('Because')
-    expect(w).toContain('Price talk in the category — 34 of 205 videos')
+    expect(w).toContain('Price talk in the category: 34 of 205 videos')
   })
 })
 
@@ -522,7 +522,7 @@ describe('sales.p7 — the method sheet', () => {
   })
 
   it('states how a quote is printed, not only that nobody is named', () => {
-    expect(words(sheet())).toContain('with an English rendering underneath — marked as a machine translation')
+    expect(words(sheet())).toContain('with an English rendering underneath, marked as a machine translation')
   })
 
   // Every Sales brief on production predates the frozen footnote.

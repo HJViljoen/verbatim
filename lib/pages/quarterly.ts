@@ -795,7 +795,7 @@ export function monthBasisClause(month: string, quarter: Quarter): string | null
  *  headed Q3 can let a month figure speak for itself. */
 export function monthOutsideNote(month: string, quarter: Quarter): string | null {
   if (month >= quarter.from && month <= quarter.to) return null
-  return `${longMonth(month)} is outside this quarter — it is the month the product is in now.`
+  return `${longMonth(month)} is outside this quarter: it is the month the product is in now.`
 }
 
 /**
@@ -816,8 +816,8 @@ export function monthOutsideNote(month: string, quarter: Quarter): string | null
 export function flagOutcome(flag: { objectKind: string; objectId: string }, later: readonly Verdict[]): string {
   const match = later.find((v) => v.objectKind === flag.objectKind && v.objectId === flag.objectId)
   if (!match) return 'no later reading of the same object has been taken'
-  if (match.state === 'moved') return `the month's own reading agreed — it cleared its band`
-  if (match.state === 'no_clear_change') return `the month's own reading did not agree — inside the band`
+  if (match.state === 'moved') return `the month's own reading agreed: it cleared its band`
+  if (match.state === 'no_clear_change') return `the month's own reading did not agree: inside the band`
   // "LANDED", NOT "FELL". `fell` is in DIRECTION_WORDS, and `method.tsx` prints
   // these unmarked ("What it turned out to be: …"), so three of these five
   // branches broke rule (c) in all three modes. The calendar sense is not a
@@ -1569,7 +1569,7 @@ function buildCover(a: {
       token: `gap_${gap.objectId}`,
       kind: apart ? 'figure' : 'word',
       value: apart ? `${Math.round(Math.abs(gap.gapPts as number) * 10) / 10} pts` : GAP_WORDS[gap.state],
-      label: `${gap.objectLabel} — you against ${midSentence(gap.b.label)}, ${quarterLabel(a.quarter, false)}`,
+      label: `${gap.objectLabel}: you against ${midSentence(gap.b.label)}, ${quarterLabel(a.quarter, false)}`,
       caption: gapLine(gap, { period: true }),
       basis: gapBasisLine(gap) ?? undefined,
     })
@@ -1874,7 +1874,7 @@ function buildSubjects(a: {
     monthLabel: a.monthLabel,
     monthNote: a.monthNote,
     note: block.note,
-    notRecorded: block.state === 'not_recorded' ? 'Subjects are not recorded for this workspace yet, so there is no quarter-on-quarter table to draw.' : null,
+    notRecorded: block.state === 'not_recorded' ? 'Subjects are not recorded for this workspace yet.' : null,
     gate: a.unlocked ? null : a.gate,
     // WHY THE LAST TWO COLUMNS ARE EMPTY, SAID ONCE UNDER THE TABLE. A page
     // that heads two columns "this quarter against the one before it" and then
@@ -2007,7 +2007,7 @@ function buildCategory(a: {
     // measurement. The fourth used to be folded into the last, which stated a
     // measurement about a question nobody asked.
     quarterNote: !a.windowApplied
-      ? 'The quarter-on-quarter reading is not recorded for this workspace yet, so only the month is compared.'
+      ? 'The quarter-on-quarter reading is not recorded for this workspace yet.'
       : !a.themesAsked
         ? `Nothing moved clearly in ${a.monthLabel}, so no theme was named to follow across this quarter.`
         : !a.themesRead
@@ -2205,7 +2205,7 @@ function buildMethod(a: {
       ? checks.ran === 0
         ? 'No unusual-week check has run inside this quarter.'
         : null
-      : 'The unusual-week check is not recorded for this workspace yet, so this quarter has no check record to print.',
+      : 'The unusual-week check is not recorded for this workspace yet.',
     numbers: methodNumbers(inputs, a.quarter, a.overview, a.readingAt),
     unit: 'A video with an analysed comment written in the month.',
     // THE REFUSALS ARE PAGE 8's WHOLE SUBJECT (copy de-clutter 2026-09-24);
@@ -2492,7 +2492,7 @@ function buildUnsettled(a: {
   const gate = a.method.numbers.find((r) => r.id === 'held_back')
   if (gate) {
     heldBack.push(
-      `${gate.value[0].toUpperCase()}${gate.value.slice(1)} of what the search plan gathered — read, but not counted into a subject${
+      `${gate.value[0].toUpperCase()}${gate.value.slice(1)} of what the search plan gathered: read, but not counted into a subject${
         gate.note ? ` (${gate.note})` : ''
       }.`,
     )
@@ -2522,7 +2522,7 @@ function buildUnsettled(a: {
   const notAsked = !a.windowApplied
     ? 'No quarter-on-quarter comparison was attempted. This quarter is not counted as one window for this workspace yet, so nothing below is a reading of the quarter against the one before it.'
     : !a.subjectsRead
-      ? 'Your subjects were not compared across this quarter — they are not counted as one window for this workspace yet, so no subject comparison was attempted.'
+      ? 'Your subjects were not compared across this quarter.'
       : null
   const allItems = unsettledItems(a.verdicts, { side: audienceSideIn(a.overview) })
   // WHAT FITS, AND THE COUNT OF WHAT DOES NOT. The two lists share one column
