@@ -85,7 +85,7 @@ describe('voiceTheme', () => {
     // the two-row legend four segments produce at this width had never been
     // rendered — although production returns four on every judged month.
     const text = draw()
-    for (const label of ['Warm', 'Both ways', 'Matter-of-fact', 'Cold']) expect(text, label).toContain(label)
+    for (const label of ['Positive', 'Mixed', 'Neutral', 'Negative']) expect(text, label).toContain(label)
   })
 
   it('says what is not recorded instead of a tone line when M5 is unapplied', () => {
@@ -360,7 +360,7 @@ describe('voiceTheme', () => {
     expect(text).toContain('not read in the category · 4 updates have carried it')
   })
 
-  it('declares its share, its count and the cold share as figures', () => {
+  it('declares its share, its count and the negative share as figures', () => {
     const table = blockAnswers(voiceTheme, voiceFixture()).figures
     expect(table.theme_share.value).toBe(9.4)
     expect(table.theme_videos).toMatchObject({ value: 130, unit: 'videos' })

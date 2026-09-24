@@ -11,6 +11,7 @@ import { TileColumns } from '@/components/shell/page-grid'
 import { fmtInt, fmtPct, monthName, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { PANEL_EXCLUDES_NOTE } from '@/lib/reading/attention'
+import { moodLabel } from '@/lib/reading/mood'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { AttentionBlock, CategoryBlock, Mover, OverviewData, Voice } from '@/lib/pages/overview'
 import { DirectionWord } from './subjects'
@@ -410,7 +411,7 @@ export const overviewCategory: Block<OverviewData> = {
           of="videos"
           segments={c.mood.shares
             .filter((s) => s.pct != null)
-            .map((s) => ({ label: s.label, count: s.videos, pct: s.pct as number, color: MOOD_COLOR[s.mood] ?? 'var(--neutral-seg)' }))}
+            .map((s) => ({ label: moodLabel(s), count: s.videos, pct: s.pct as number, color: MOOD_COLOR[s.mood] ?? 'var(--neutral-seg)' }))}
         />
         <p className={email ? undefined : 'm-0 flex flex-wrap items-center gap-2 text-[11.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 4 } : undefined}>
           <span data-copy="figure">of {fmtInt(c.mood.judged)} judged</span>

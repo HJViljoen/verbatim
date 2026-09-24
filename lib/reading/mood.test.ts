@@ -9,6 +9,7 @@ import {
   isAudienceSentiment,
   moodChange,
   moodCountsBalance,
+  moodLabel,
   moodShares,
 } from './mood'
 
@@ -72,6 +73,18 @@ describe('the four-way distribution', () => {
     for (const label of Object.values(MOOD_LABELS)) {
       expect(directions).not.toContain(label.toLowerCase())
     }
+  })
+
+  // Heinrich's ruling, 2026-09-24: the mock's words, in reading order.
+  it('names the four moods in the mock\'s words', () => {
+    expect(MOODS.map((m) => MOOD_LABELS[m])).toEqual(['Positive', 'Mixed', 'Neutral', 'Negative'])
+  })
+
+  // A snapshot frozen before the rename carries the old word in `label`; the
+  // render reads the key, so it prints today's word without touching the row.
+  it('draws a frozen share by its key, not by the word it was frozen with', () => {
+    expect(moodLabel({ mood: 'negative', label: 'Cold' })).toBe('Negative')
+    expect(moodLabel({ mood: 'mixed', label: 'Both ways' })).toBe('Mixed')
   })
 
   it('has no share at all when nothing was judged', () => {

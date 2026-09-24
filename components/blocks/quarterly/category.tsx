@@ -10,6 +10,7 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, fmtPct, monthName } from '@/lib/format'
 import type { CalendarSeries } from '@/lib/charts/calendar'
 import { monthlyLineLabel, type Mover } from '@/lib/pages/overview'
+import { moodLabel } from '@/lib/reading/mood'
 import { hasQuote } from '@/lib/renderables/quotes-freeze'
 import type { CategoryPage, QuarterlyData, QuarterMover } from '@/lib/pages/quarterly'
 import { QUARTER_PAGE_QUESTION, QUARTER_PAGE_TITLE } from '@/lib/reports/quarterly'
@@ -383,13 +384,13 @@ export const quarterlyCategory: Block<QuarterlyData> = {
                 mode={mode}
                 segments={c.mood.shares
                   .filter((m) => m.pct != null)
-                  .map((m) => ({ label: m.label, pct: m.pct as number, color: MOOD_COLOR[m.mood] ?? 'var(--neutral-seg)' }))}
+                  .map((m) => ({ label: moodLabel(m), pct: m.pct as number, color: MOOD_COLOR[m.mood] ?? 'var(--neutral-seg)' }))}
               />
               {c.mood.shares.map((m) => (
                 <Line
                   key={m.mood}
                   mode={mode}
-                  label={<><Swatch color={MOOD_COLOR[m.mood] ?? 'var(--neutral-seg)'} mode={mode} />{m.label}</>}
+                  label={<><Swatch color={MOOD_COLOR[m.mood] ?? 'var(--neutral-seg)'} mode={mode} />{moodLabel(m)}</>}
                   figure={
                     <FigureCell
                       mode={mode}

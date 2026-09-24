@@ -15,6 +15,7 @@ import { PREVALENCE_LABEL } from '@/lib/calibration'
 import { fmtInt, fmtPct, monthName } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { QuoteRef } from '@/lib/blocks/types'
+import { moodLabel } from '@/lib/reading/mood'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { OnScreenLine, SpokenLine, ThemeBlock, VoiceSurfaceData } from '@/lib/pages/voice-surface'
 import { VOICES_WORD, earnedDirection, heardLine, reachAxisMax } from '@/lib/pages/voice-surface'
@@ -682,7 +683,7 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
     if (t.k != null) out.theme_videos = { value: t.k, unit: 'videos', label: `videos that raised ${t.label}` }
     if (t.tone) {
       const negative = t.tone.shares.find((s) => s.mood === 'negative')
-      if (negative?.pct != null) out.theme_tone_negative = { value: negative.pct, unit: 'pct', label: 'the cold share of what this audience said' }
+      if (negative?.pct != null) out.theme_tone_negative = { value: negative.pct, unit: 'pct', label: 'the negative share of what this audience said' }
     }
     return out
   },
@@ -728,15 +729,15 @@ function Tone({ t, mode }: { t: ThemeBlock; mode: RenderMode }) {
         of="videos"
         segments={t.tone.shares
           .filter((s) => s.pct != null)
-          .map((s) => ({ label: s.label, count: s.videos, pct: s.pct as number, color: MOOD_COLOR[s.mood] ?? 'var(--neutral-seg)' }))}
+          .map((s) => ({ label: moodLabel(s), count: s.videos, pct: s.pct as number, color: MOOD_COLOR[s.mood] ?? 'var(--neutral-seg)' }))}
       />
       <p className={email ? undefined : 'm-0 flex flex-wrap items-center gap-2 text-[11.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 4 } : undefined}>
         {/* THE OTHER SIDE OF THE BADGE'S COMPARISON, with its own judged count.
-            The mock prints "Aug 16% → Sep 18%"; the cold share's baseline is on
+            The mock prints "Aug 16% → Sep 18%"; the negative share's baseline is on
             the verdict and was rendered nowhere, so "no clear change" stood
             beside nothing. */}
         {prev != null && prevMonth && t.tone.verdict?.baseline?.n != null ? (
-          <span data-copy="figure">cold {monthName(prevMonth)} {fmtPct(prev)} of {fmtInt(t.tone.verdict.baseline.n)}</span>
+          <span data-copy="figure">negative {monthName(prevMonth)} {fmtPct(prev)} of {fmtInt(t.tone.verdict.baseline.n)}</span>
         ) : null}
         <BlockMovement verdict={t.tone.verdict} unit="pts" mode={mode} />
       </p>

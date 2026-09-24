@@ -49,16 +49,20 @@ export const MOODS = ['positive', 'mixed', 'neutral', 'negative'] as const
 export type Mood = (typeof MOODS)[number]
 
 /** What a reader is shown. Calibrated: no "sentiment", no "judged corpus" —
- *  the noun is the conversation, not the classifier. */
+ *  the noun is the conversation, not the classifier.
+ *
+ *  THE MOCK'S WORDS (Heinrich's ruling, 2026-09-24). These read Warm / Both
+ *  ways / Matter-of-fact / Cold until then. Display only: the keys are the
+ *  values `videos.sentiment` stores and nothing persisted changes with them. */
 export const MOOD_LABELS: Record<Mood, string> = {
-  positive: 'Warm',
-  mixed: 'Both ways',
+  positive: 'Positive',
+  mixed: 'Mixed',
   // NOT "Flat". `Direction` (lib/reading/bands.ts) already owns that word for a
   // different claim — three readings that exist and do not agree — and the two
   // will sit on the same block: a mood line under a direction word reading
   // "Flat / flat" would be two answers to two questions wearing one label.
-  neutral: 'Matter-of-fact',
-  negative: 'Cold',
+  neutral: 'Neutral',
+  negative: 'Negative',
 }
 
 /** The date `videos.sentiment` changed meaning. A series crossing it is
@@ -101,11 +105,19 @@ export interface MoodShare {
   label: string
   videos: number
   judged: number
-  /** Null when nothing was judged: a mood of no videos is not 0% warm. */
+  /** Null when nothing was judged: a mood of no videos is not 0% positive. */
   pct: number | null
 }
 
 const round1 = (n: number): number => Math.round(n * 10) / 10
+
+/** The word a share is DRAWN with: read off its key, never off the label it
+ *  carries. A frozen snapshot (`report_snapshots.data`) holds the whole share,
+ *  label included, so one frozen before the 2026-09-24 rename still carries
+ *  "Warm" or "Cold"; rendering by key prints today's word over it without
+ *  touching the stored row. Falls back to the carried label for a key this
+ *  file does not know. */
+export const moodLabel = (s: Pick<MoodShare, 'mood' | 'label'>): string => MOOD_LABELS[s.mood] ?? s.label
 
 /** All four shares of the judged videos, in reading order. */
 export function moodShares(counts: MoodCounts): MoodShare[] {

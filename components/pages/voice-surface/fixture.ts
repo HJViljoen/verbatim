@@ -189,8 +189,8 @@ export function voiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurface
       points: [point('2026-07-01', 71, 1200), point(PREV, 82, 1200), point(MONTH, 130, 1388)],
       tone: {
         // ALL FOUR MOODS, FROM THE REAL FUNCTION. The fixture listed three, in
-        // an order `moodShares` does not produce and without `mixed` ("Both
-        // ways") at all — so the fourth segment, and the two-row legend four
+        // an order `moodShares` does not produce and without `mixed` ("Mixed")
+        // at all — so the fourth segment, and the two-row legend four
         // segments produce at this width, had never been rendered or reviewed
         // although production returns them on every judged month. The counts
         // balance, which is what `moodCountsBalance` says a real row does.
@@ -198,9 +198,9 @@ export function voiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurface
         judged: 1112,
         // THE MOOD VERDICT'S TWO SIDES ARE JUDGED VIDEOS, not the theme's. It
         // inherited the theme's 130-of-1,388 and its 82-of-1,200, so the block
-        // printed the cold share's baseline as a count of a different thing.
+        // printed the negative share's baseline as a count of a different thing.
         verdict: verdict({
-          objectKind: 'mood', objectId: 'negative', objectLabel: 'Cold', state: 'no_clear_change', changePts: 2,
+          objectKind: 'mood', objectId: 'negative', objectLabel: 'Negative', state: 'no_clear_change', changePts: 2,
           value: { k: 201, n: 1112 }, baseline: { k: 168, n: 1050 },
         }),
       },
