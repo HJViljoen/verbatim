@@ -7,12 +7,19 @@
 // state.
 
 import { Bone } from '@/components/shell/skeleton'
+import { AskCrowd } from '@/components/pages/agent/crowd'
 
 export default function AgentLoading() {
   return (
     <div className="flex flex-col gap-3">
       <span role="status" className="sr-only">Loading…</span>
+      {/* The crowd `AskShell` draws behind the tiles, and the one place its
+          entrance plays: this paints first, the page lands on the arrived ring. */}
+      <AskCrowd enter />
+      {/* The page bar, and under it the record band — the index passes
+          `AskShell` a record too. */}
       <Bone className="h-8 w-64 rounded-md" />
+      <Bone className="h-[30px] w-[340px] max-w-full rounded-2xl" />
       {/* The INDEX's shape, which is not the thread's: the box over three
           tiles, not the box beside a rail (`AskIndexColumns`). A skeleton in
           the wrong shape is a layout shift dressed as a loading state, and this

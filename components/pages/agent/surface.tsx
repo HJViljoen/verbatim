@@ -5,6 +5,7 @@ import { HowToRead } from '@/components/how-to-read'
 import { ExportMenu } from '@/components/export-menu'
 import { hasRecord, surface } from '@/lib/nav'
 import { THIRTEEN_WORDS, READER_FLAGS } from '@/lib/calibration'
+import { AskCrowd } from '@/components/pages/agent/crowd'
 
 // Ask's shell (Block D wave 2, E-ask · `ask.shell`, `ask.bar.question`).
 //
@@ -64,6 +65,9 @@ export function AskShell({
   const s = surface('ask')
   return (
     <PageFrame>
+      {/* The crowd behind the tiles (MASTER rule 6: Ask may keep it). Fixed and
+          out of flow, so it takes no gap in this column; see `AskCrowd`. */}
+      <AskCrowd />
       <div className="flex shrink-0 flex-col gap-1.5">
         <PageBar title={s.label} context={context} subtitle={s.question ?? undefined}>
           <HowToRead items={ASK_LEGEND} basePath={s.href} anchor="ask" />

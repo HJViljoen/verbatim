@@ -22,6 +22,8 @@ import { ASK_TILE_ROW, AskIndexColumns, AskShell } from '@/components/pages/agen
 // absent or hidden behind a hover. The artboard draws the ask box as a tile
 // with three tiles beside it, which is the same composition the thread page
 // wears; this page is that page without an answer in it yet.
+// The crowd came back (2026-09-24) as a backdrop BEHIND the tiles, not as the
+// stage: `AskShell` mounts `AskCrowd`, so this page and every thread wear it.
 //
 // SIX READS, ONE WAVE. Round trips are the cost on this database — it pays a
 // ~0.5s wake-up on the first request after idle and every sequential wave pays
