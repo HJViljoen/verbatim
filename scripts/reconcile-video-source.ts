@@ -18,12 +18,12 @@ import { SEALAND_CLIENT_ID } from '../lib/config'
 // that platform. is_client is NOT the test — it is true of a stranger's review.
 // It IS part of the WRITE: a flipped row takes the whole identity the fresh
 // owned read would have stamped (entityIdentity, via planSourceFlips), because
-// `source` alone leaves the row filed under industry-other while its comments
-// are already out of Pass A's full lane. See planSourceFlips' header for the
-// 13 Sealand posts that landed in exactly that hole.
+// `source` alone leaves the row filed under industry-other. See
+// planSourceFlips' header for the 13 Sealand posts that landed in that hole.
 //
-// What --apply costs, beyond the column: a flipped row's Pass A lane changes
-// (passALane sends owned/competitor_owned to claims-only or skip), plan-pass-a
+// What --apply costs, beyond the column: a flipped row's Pass A lane can change
+// (passALane sends competitor_owned to claims-only or skip; a client own post
+// takes the full lane when it clears the comment floor), plan-pass-a
 // re-selects it on the lane change, and both the skip and the claims lane move
 // videos.analyzed_run_id — so the video's OLD audience_insights become stale
 // and close-run's prune DELETES them, cascading to insight_evidence. On both

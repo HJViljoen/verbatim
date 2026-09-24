@@ -2,7 +2,7 @@ import { zodResponseFormat } from 'openai/helpers/zod'
 import { createAdminClient, selectAll } from '../supabase-admin'
 import { chunk } from '../chunk'
 import { openai } from '../openai'
-import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, PASS_A_OCR_MIN_QUOTE_CHARS, PASS_A_VIDEO_QUOTE_MAX, estimateCost, passAMinComments, transcriptsEnabled } from '../config'
+import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, PASS_A_OCR_MIN_QUOTE_CHARS, PASS_A_VIDEO_QUOTE_MAX, estimateCost, ownPostAudienceEnabled, passAMinComments, transcriptsEnabled } from '../config'
 import { PassAVideoSchema, PassAVideoSchemaV4, CLASSIFIED_TYPES, CLASSIFIED_TYPE_DEFS, HOOK_STYLES, HOOK_STYLE_DEFS, enumDefLines, type PassAVideoOutput, type PassAInsight, type PassAClaim } from './schemas'
 import { filterComments } from './spam-filter'
 import { computeQualityScore } from './metrics'
@@ -176,6 +176,10 @@ export interface RunPassAOptions {
   /** Read transcripts (Pass A v4). Defaults to TRANSCRIPTS_ENABLED — explicit
    *  override exists for the A/B measurement harness. */
   transcripts?: boolean
+  /** Let the client's own posts take the full lane. Defaults to
+   *  ownPostAudienceEnabled(clientId) — the run's frozen flag when the
+   *  pipeline calls, the env/tenant answer when a script does. */
+  ownPostAudience?: boolean
   /** Inspection hook: called with each video's VALIDATED output (what would be
    *  persisted), whether or not `persist` is on. For harnesses and prompt
    *  spot-checks; never used by the pipeline. */
@@ -302,19 +306,36 @@ export const COMMENTS_READ_LANE: PassALane = 'full'
  *                 are where brand claims live, and the floor hid every one.
  *   skip        — everything else.
  * Pass `transcript_status: null` when transcripts are off to disable the lane.
+ *
+ * `ownPostAudience` is the switch (config.ownPostAudienceEnabled, default ON,
+ * frozen per run). Taken as an ARGUMENT rather than read here, so both answers
+ * stay tested — AGENTS.md's rule for a gated pure function.
  */
 export function passALane(
   v: { platform: string; is_client: boolean | null; is_competitor: boolean | null; transcript_status: string | null; source?: string | null },
   comments: number,
   floor: number = passAMinComments(v.platform),
+  opts: { ownPostAudience?: boolean } = {},
 ): PassALane {
-  // An ACCOUNT's own posts (Brand Voice, 2026-08-16; competitors 2026-09-09):
-  // claims lane or nothing. Never the full lane — a brand's own fans' comments
-  // would contaminate audience themes (Owned-Data-Plan guardrail: segment,
-  // never blend), and that is as true of a competitor's fans as of the
-  // client's. Their words are the purest "say" side there is; the client's own
-  // comments stay Step 2c's.
-  if (v.source === 'owned' || v.source === 'competitor_owned') {
+  // A COMPETITOR's own posts (Brand Voice, 2026-08-16; competitors 2026-09-09):
+  // claims lane or nothing, always. A rival's followers are not our audience
+  // under any reading, and nothing on the product asks what they said under
+  // the rival's post. Their words are the purest "say" side there is.
+  if (v.source === 'competitor_owned') {
+    return v.transcript_status === 'ok' ? 'claims_only' : 'skip'
+  }
+  // THE CLIENT's own posts. Until 2026-09-24 they took this same branch, and
+  // the `client` audience could therefore never hold a single theme — the
+  // Subjects rail's "You" side was structurally empty while its denominator
+  // counted the comments anyway. The guardrail that put them there was
+  // worried about BLENDING a brand's fans into category themes; the audience
+  // key already segments (an own post's insights key under `client` and can
+  // never reach `industry-other`), so the invariant is now: SEGMENTED BY
+  // AUDIENCE KEY, NEVER BLENDED. The comment floor still governs the audience
+  // side, and the transcript still yields the same brand claims — claims are
+  // computed on both lanes, so nothing say-vs-hear reads is lost.
+  if (v.source === 'owned') {
+    if ((opts.ownPostAudience ?? true) && comments >= floor) return 'full'
     return v.transcript_status === 'ok' ? 'claims_only' : 'skip'
   }
   if (comments >= floor) return 'full'
@@ -751,6 +772,7 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
   const persist = opts.persist ?? !dryRun
   const trackAnalysis = opts.trackAnalysis ?? true
   const useTranscripts = opts.transcripts ?? transcriptsEnabled()
+  const ownPostAudience = opts.ownPostAudience ?? ownPostAudienceEnabled(clientId)
   const promptVersion = passAPromptVersion(useTranscripts)
   const responseSchema = useTranscripts ? PassAVideoSchemaV4 : PassAVideoSchema
   const admin = createAdminClient()
@@ -927,6 +949,7 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
       { ...v, transcript_status: useTranscripts ? (v.transcript_status ?? null) : null },
       kept.length,
       minComments ?? passAMinComments(v.platform),
+      { ownPostAudience },
     )
     if (lane === 'skip') {
       summary.videosSkipped++

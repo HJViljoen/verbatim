@@ -65,6 +65,16 @@ export interface PassAInputs {
   transcripts: boolean
   translation: boolean
   ocr: boolean
+  /** Own posts took Pass A's full lane (fix/client-audience, 2026-09-24).
+   *  OPTIONAL because every regime recorded before that date has no answer to
+   *  the question — absent reads as off, which is what those runs did. It
+   *  belongs in the key because flipping it changes WHICH VIDEOS produce
+   *  insights, so the themes on either side are clustered from different
+   *  corpora: exactly the re-grouping a direction word may not be spoken
+   *  across. The first run after this ships therefore opens a new regime and
+   *  the boundary prints, which is the conservative answer and the intended
+   *  one. */
+  ownPostAudience?: boolean
 }
 
 /** The knobs that define a run's clustering. */
@@ -87,7 +97,7 @@ export interface ClusteringRegime {
 /** The enabled inputs, in a fixed order, as one legible token. `none` rather
  *  than an empty field so a key never has two adjacent separators. */
 function inputsField(inputs: PassAInputs): string {
-  const on = (['transcripts', 'translation', 'ocr'] as const).filter((k) => inputs[k])
+  const on = (['transcripts', 'translation', 'ocr', 'ownPostAudience'] as const).filter((k) => inputs[k])
   return on.length ? on.join('+') : 'none'
 }
 

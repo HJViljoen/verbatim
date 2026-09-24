@@ -168,9 +168,12 @@ export function emptyProfileIsGlitch(postsCount: number | null, recentPosts: num
  * of it would have faked a share decline. Share has counted everything BY and
  * ABOUT a brand since 2026-09-10 (`6ccca80`), so the continuity argument is
  * spent, and what was left was a column that lied — and one reader,
- * `passALane`, that acts on the lie by putting a brand's own fans' comments
- * through the audience lane. Every post here came off this entity's own
- * profile read; identity is not in doubt, so the row says so.
+ * `passALane`, that acts on it: a row saying 'discovered' when it is a
+ * COMPETITOR's own post puts that rival's fans into the category's audience
+ * themes, which is the one blend the guardrail still forbids. (The client's
+ * own posts took the full lane back on 2026-09-24, keyed under `client`;
+ * see passALane.) Every post here came off this entity's own profile read;
+ * identity is not in doubt, so the row says so.
  * `scripts/reconcile-video-source.ts` is the same correction for history.
  */
 export function stampOwnedSource<T extends { video_id: string }>(

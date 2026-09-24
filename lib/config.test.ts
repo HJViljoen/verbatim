@@ -58,7 +58,7 @@ describe('captureRunFlags — a run must not change flags underneath itself (Tie
     process.env.OCR_ENABLED = '1'
     expect(captureRunFlags()).toEqual({
       transcripts: true, incrementalPassA: true, themeRegistry: false, redditDiscovery: true,
-      consumerProfile: true, translation: true, ocr: true,
+      consumerProfile: true, translation: true, ocr: true, ownPostAudience: true,
     })
   })
 

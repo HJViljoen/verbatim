@@ -294,7 +294,7 @@ export const runPipeline = inngest.createFunction(
       // Frozen here, inside the memoised step: every later step replays these
       // values instead of re-reading an environment (or a tenant config) that
       // may have moved.
-      const flags = captureRunFlags()
+      const flags = captureRunFlags(clientId)
       // The run's effective period — the trigger's override, else the tenant's
       // configured cadence. Resolved ONCE, here, so gather, the owned window,
       // the synthesis slice, the census and run_summary.period cannot disagree
@@ -330,7 +330,7 @@ export const runPipeline = inngest.createFunction(
         // 'translated' and 'ocr' SelectReasons) without moving
         // passAPromptVersion, which is exactly what happened between 29a56395
         // and d346b0f7.
-        passAInputs: { transcripts: flags.transcripts, translation: flags.translation, ocr: flags.ocr },
+        passAInputs: { transcripts: flags.transcripts, translation: flags.translation, ocr: flags.ocr, ownPostAudience: flags.ownPostAudience },
         mergePromptVersion: THEME_MERGE_PROMPT_VERSION,
       }))
       // The bookkeeping migration is applied by hand (a schema change on a live
@@ -426,7 +426,7 @@ export const runPipeline = inngest.createFunction(
     const runId: string | null = typeof opened === 'string' ? opened : opened.runId
     // A run opened before this shipped has no snapshot; read the environment,
     // which is exactly what it was doing anyway.
-    const flags: RunFlags = (typeof opened === 'string' ? undefined : opened.flags) ?? captureRunFlags()
+    const flags: RunFlags = (typeof opened === 'string' ? undefined : opened.flags) ?? captureRunFlags(clientId)
     // The run's effective period (options.period ?? tracking_configs.report_period),
     // frozen by open-run. A run opened before 2026-09-09 has no frozen value:
     // it falls back to its own options and then, at each use site, to reading
@@ -1201,7 +1201,7 @@ export const runPipeline = inngest.createFunction(
               // decides passAPromptVersion, and a flip between the plan step
               // and this one would stamp half the corpus with the other
               // version and force a full re-read next run.
-              const s = await runPassA({ clientId, runId, videoIds, persist: true, transcripts: flags.transcripts })
+              const s = await runPassA({ clientId, runId, videoIds, persist: true, transcripts: flags.transcripts, ownPostAudience: flags.ownPostAudience })
               return { analyzed: s.videosAnalyzed, claimsOnly: s.videosClaimsOnly, skipped: s.videosSkipped, errored: s.videosErrored, refused: s.videosRefused, alreadyDone: s.videosAlreadyAnalyzed, rateLimited: s.rateLimited, errors: s.errors, insights: s.insightsKept, languageSamples: s.languageSamples, cost: s.costUsd, stepFailed: false }
             })
             .catch((e: unknown) => {
@@ -2059,10 +2059,13 @@ export interface PassAPlan {
 
 async function planPassABatches(clientId: string, runId: string, force: boolean, flags: RunFlags): Promise<PassAPlan> {
   const admin = createAdminClient()
-  // Discovered corpus + the client's OWN posts. Owned posts never take the
-  // full lane (their fans' comments would contaminate audience themes; Step 2c
-  // is their consumer) — passALane admits them to the claims lane only, when
-  // they carry a usable transcript (Brand Voice, 2026-08-16).
+  // Discovered corpus + the client's OWN posts. An own post takes the full
+  // lane like any other video when it clears the comment floor and
+  // `flags.ownPostAudience` is on (default): its insights key under the
+  // `client` audience and can never reach another — segmented by audience key,
+  // never blended (fix/client-audience, 2026-09-24). With the flag off it
+  // falls back to the claims lane when it carries a usable transcript (Brand
+  // Voice, 2026-08-16). A COMPETITOR's own posts are claims-lane always.
   type PlanVideo = {
     id: string; platform: string; video_id: string; is_client: boolean | null; is_competitor: boolean | null
     transcript_status: string | null; source: string | null; run_id: string | null
@@ -2180,7 +2183,7 @@ async function planPassABatches(clientId: string, runId: string, force: boolean,
     // is a title card is the case this exists for — but it IS read only on the
     // v4 prompt, so the transcripts flag still governs whether Pass A sees it.
     const ocrUsableNow = withTranscripts && withOcrText.has(v.id)
-    const lane = passALane({ ...v, transcript_status: withTranscripts ? v.transcript_status : null }, n)
+    const lane = passALane({ ...v, transcript_status: withTranscripts ? v.transcript_status : null }, n, undefined, { ownPostAudience: flags.ownPostAudience })
     if (lane === 'skip') continue
     considered++
     if (!incremental && lane === 'claims_only' && v.run_id !== runId) { reasons.unchanged++; continue }
@@ -2615,10 +2618,12 @@ async function runSynthesisHalf(
   })
 
   // The sentiment distribution stays MARKET-ONLY. It answers "how did the
-  // audience receive videos about this brand", and a census row carries either
-  // no audience sentiment at all (own posts never take Pass A's full lane) or a
-  // framing sentiment read off the brand's own caption — the brand rating
-  // itself. Widening share did not widen this, so the filter is explicit here
+  // audience receive videos about this brand", and a census row carries a
+  // sentiment about the brand's OWN post — the audience under the brand's own
+  // caption, or, on the claims lane, the brand rating itself. Either way it is
+  // not the market's reception of a video about the brand, and since
+  // 2026-09-24 own posts DO take the full lane, so this filter carries more
+  // weight than it used to rather than less. Widening share did not widen this, so the filter is explicit here
   // rather than inherited from the corpus.
   const marketVideos = videos.filter(isDiscoveredVideo)
   const marketPeriodVideos = periodVideos.filter(isDiscoveredVideo)
