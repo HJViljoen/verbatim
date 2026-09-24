@@ -316,9 +316,12 @@ export type PassALane = 'full' | 'claims_only' | 'skip'
  * `videos.analyzed_lane` records which lane produced a video's current
  * analysis, and only `full` puts comments in the prompt: `claims_only` enters
  * with NO comments (see passALane below) and `skip` never entered at all.
- * Measured on the Phase 1 preview branch 2026-09-24, across both live tenants:
- * 1,081 `full` videos carry all 3,719 audience insights; 298 `claims_only` and
- * 91 `skip` videos carry ZERO, and always will.
+ * Measured on the Phase 1 preview branch 2026-09-24. Across both live tenants:
+ * 2,303 `full` videos carry all 6,848 audience insights; 588 `claims_only` and
+ * 278 `skip` videos carry ZERO, and always will. (Sealand alone is
+ * 1,081 / 3,719 · 298 / 0 · 91 / 0, which is what this docstring used to give
+ * under the words "both tenants" — one tenant's numbers wearing both tenants'
+ * label. The claim is true either way; the label was not.)
  *
  * That is why the audience denominators filter on it. `analyzed_run_id is not
  * null` was the old test, and its own rationale — "counting it would put a

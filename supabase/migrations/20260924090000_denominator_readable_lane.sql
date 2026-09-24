@@ -10,10 +10,20 @@
 -- exists to read a brand-side transcript for claims — so a claims-lane video's
 -- comments are in n and structurally absent from k. So are a skip-lane video's.
 --
--- MEASURED, read-only, on the Phase 1 preview branch 2026-09-24, both tenants:
---   analyzed_lane = 'full'        1,081 videos   3,719 audience insights
---   analyzed_lane = 'claims_only'   298 videos           0
---   analyzed_lane = 'skip'           91 videos           0
+-- MEASURED, read-only, on the Phase 1 preview branch 2026-09-24. The rows
+-- below are SEALAND's -- this block said "both tenants" and gave one tenant's
+-- numbers, which is a mislabel worth correcting because these are the figures
+-- the decision rests on. Both tenants, and then each:
+--
+--   lane           both tenants          Ossur              Sealand
+--   full           2,303 v / 6,848 i   1,222 / 3,129     1,081 / 3,719
+--   claims_only      588 v /     0 i     290 /     0       298 /     0
+--   skip             278 v /     0 i     187 /     0        91 /     0
+--
+-- The CLAIM holds on both and on each, which is the only thing that had to:
+-- a claims-lane and a skip-lane video carry ZERO audience insights, always.
+-- (Counted over audience_insights_current joined on source_video_id.)
+--
 -- and on Sealand's own audiences, all-time dated comments:
 --   client            16 videos /   194 comments  ->   8 /   126
 --   industry-other 1,104 videos / 30,268 comments -> 1,012 / 29,581
@@ -30,7 +40,33 @@
 -- JOIN FILTER on videos that produced insights; a claims-lane video has none,
 -- so the filter is already a no-op there and the functions are left alone
 -- rather than churned. `monthly_audience_stats` counts `videos.sentiment`,
--- which the claims lane leaves untouched, so its `judged` is already right.
+-- which the claims lane leaves untouched (lib/pipeline/pass-a.ts omits
+-- `sentiment` entirely on that lane), so its `judged` is already right.
+--
+-- ONE RESIDUAL THERE, NAMED RATHER THAN CHASED. `monthly_audience_stats`
+-- (20260918094000_kind_mood_attention.sql) still opens on `analyzed_run_id is
+-- not null`, under a comment calling it "The month_denominators video set,
+-- exactly". After this file the two sets differ: `judged` is unaffected for
+-- the reason above, but `judged_framing`, `panel_videos` and
+-- `attention_comments` are counted over the wider set. NOTHING RENDERED MIXES
+-- THEM -- `framingShare` (lib/reading/mood.ts) is a ratio inside one stats
+-- row, and `attentionSplit` / `standings` divide by `attentionTotals`, never
+-- by a denominator row -- so this is a stale sentence in an APPLIED migration
+-- and not a wrong number. It is recorded here instead of edited there: that
+-- comment sits inside a function body, so changing it would change
+-- `pg_get_functiondef` on a file already applied to the branch and break the
+-- byte-identical catalogue diff the thirteen were checked with.
+--
+-- A SECOND RESIDUAL, IN THE OTHER DIRECTION, AND IT IS THIS FILE'S OWN RULE
+-- BENDING. A video that hit PASS_A_MAX_OUTPUT_TOKENS is re-asked once on half
+-- its comments (lib/pipeline/pass-a.ts lengthRetryRefs) and is still stamped
+-- `analyzed_lane = 'full'`, so every one of its comments enters n while only
+-- half were ever in a prompt -- the same shape as the claims-lane defect, at a
+-- few videos a run rather than 298. Not worth a column: the honest fix would
+-- be to record how many comments a video was actually read on, and that is a
+-- schema change with its own migration. It is reported instead -- the run
+-- records a finding naming the count (`noteFinding('pass-a', …)`), so a month
+-- read over a run that retried is explainable after the fact.
 --
 -- FROZEN MONTHS ARE NOT REWRITTEN. The three guards stand: a frozen
 -- audience-month keeps the number that was read at the time. Only `filling`
