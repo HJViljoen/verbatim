@@ -330,7 +330,11 @@ async function insertRuns(): Promise<void> {
     started_at: iso(w.startedAt),
     completed_at: iso(w.completedAt),
     errors: [],
-    steps_completed: ['gather', 'pass_a', 'cross_reference', 'themes', 'synthesize', 'run_summary'],
+    // `steps_completed` is NOT written here any more (2026-09-24). Nothing in
+    // the pipeline has ever written it and nothing anywhere reads it — this
+    // seed was its only writer in the whole repo, so demo data was the one
+    // place in the product where the column looked alive. See
+    // 20260924090000_steps_completed_dead.sql.
   }))
   await insertRows('pipeline_runs', rows)
 }
