@@ -1,4 +1,4 @@
--- M13 · the one line M12 left, named as a gap in its own deploy section:
+-- M15 · the one line M12 left, named as a gap in its own deploy section:
 -- TRUNCATE on `tracking_configs` for `anon` and `authenticated`.
 --
 -- WHY IT IS STILL OPEN AFTER M11 AND M12. M11

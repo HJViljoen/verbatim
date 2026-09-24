@@ -21,6 +21,19 @@ Heinrich chose on 19 September is now a section of its own, before §1.
 due Sunday 06:00 SAST — so every production figure here carries the date it was
 read and none of them is today's.
 
+**The count moved once more on 2026-09-24, and SEVENTEEN is the current
+number.** The fix pass after wave 3b added four files, all dated 2026-09-24 and
+all applied in filename order with the other thirteen: M13
+`denominator_readable_lane`, M14 `subjects_insert_audit`, M15
+`tracking_configs_truncate`, M16 `steps_completed_dead`. Nothing about M1–M12
+moves. Where a sentence below still says "thirteen" it is reporting what the
+**19 September** throwaway-cluster run re-applied and catalogue-diffed, and it
+is left alone rather than quietly restated — the four were built and applied,
+twice each, on their own throwaway PostgreSQL 17 cluster on 2026-09-24
+(`schema-baseline.sql` plus every migration in filename order), and the tables
+counting what the thirteen create are unchanged because three of the four
+create no object at all.
+
 **This file lives in the repo on purpose.** It is the one Phase 1 artefact an
 operator needs at the keyboard, it names migrations and scripts that are in
 version control, and a checklist that drifts from the branch it deploys is
@@ -81,7 +94,7 @@ recipient**, and on 2026-09-18 neither schedule was both — Össur active with
 zero recipients and `report_period = paused`, Sealand with one recipient and
 `active = false`. The old line, "both weekly schedules have none", is no longer
 true; the conclusion survives it, but only while Sealand's schedule stays
-inactive, so **§0's first paragraph asks you to re-read that row before step 1.** So the code, all thirteen migrations and every
+inactive, so **§0's first paragraph asks you to re-read that row before step 1.** So the code, all seventeen migrations and every
 backfill go out in one window, the recipients go on last and on purpose, and
 the first email is a decision rather than a consequence of a deploy. The two
 -window version is kept at the bottom, unchanged, in case something in step 1
@@ -103,9 +116,9 @@ rehearsal) and 0.8–0.9 — and do not start until all thirteen hold.
 
 | # | Precondition | How you know |
 |---|---|---|
-| 0.0a | **The database answers first time** | `select count(*) from clients;` through the MCP. If it times out, STOP. On 16 Sep the instance returned roughly one query in four while reporting `ACTIVE_HEALTHY`; applying thirteen migrations through a transport that drops one connection in four is how you end up not knowing which of them landed. |
+| 0.0a | **The database answers first time** | `select count(*) from clients;` through the MCP. If it times out, STOP. On 16 Sep the instance returned roughly one query in four while reporting `ACTIVE_HEALTHY`; applying seventeen migrations through a transport that drops one connection in four is how you end up not knowing which of them landed. |
 | 0.0b | **PostgREST answers too — it is a SEPARATE path and it can be down while SQL works** | `node --env-file=.env.local --import tsx scripts/stored-artefacts-smoke.ts`. On 16 Sep the MCP's direct SQL connection was intermittently fine while PostgREST returned `Could not query the database for the schema cache. Retrying.` on every attempt. **Every operator script in step 5 goes through PostgREST** (`createAdminClient`), so a green MCP query proves nothing about whether the backfills can run. Check both. |
-| 0.0c | **The disk-IO budget is healthy — or the compute tier has been upgraded** | Supabase dashboard → Reports → **Disk IO**, and the burst balance in particular. 0.0a and 0.0b are the symptom; this is the cause. On 16 Sep five agents reading at once, one of them counting a vector column, spent the budget by 09:10 UTC and it had not come back by 15:16 SAST — `select 1` returned while the next catalog query timed out and PostgREST still refused its schema cache. **A restart does not refill an IO budget; hours do, or a larger instance.** This deploy is thirteen migrations, two backfills that read the whole corpus and a rehearsal run, and the reading pages already load in 8–12 s on this tier (41–69 s when it is starved) — so **the recommendation is to upgrade compute before the deploy, not after it** (plan §Status, "Known and open after Block B", item 1 — where the 8–12 s page load is the R1 blocker and the fix is WP23's performance pass; the compute upgrade itself is a RECOMMENDATION, the plan's Status line of 2026-09-16 ~12:05, not a gate anybody has signed off). If you deploy on the current tier anyway, do it on a day nothing else is reading and expect step 5 to be slow rather than broken. |
+| 0.0c | **The disk-IO budget is healthy — or the compute tier has been upgraded** | Supabase dashboard → Reports → **Disk IO**, and the burst balance in particular. 0.0a and 0.0b are the symptom; this is the cause. On 16 Sep five agents reading at once, one of them counting a vector column, spent the budget by 09:10 UTC and it had not come back by 15:16 SAST — `select 1` returned while the next catalog query timed out and PostgREST still refused its schema cache. **A restart does not refill an IO budget; hours do, or a larger instance.** This deploy is seventeen migrations, two backfills that read the whole corpus and a rehearsal run, and the reading pages already load in 8–12 s on this tier (41–69 s when it is starved) — so **the recommendation is to upgrade compute before the deploy, not after it** (plan §Status, "Known and open after Block B", item 1 — where the 8–12 s page load is the R1 blocker and the fix is WP23's performance pass; the compute upgrade itself is a RECOMMENDATION, the plan's Status line of 2026-09-16 ~12:05, not a gate anybody has signed off). If you deploy on the current tier anyway, do it on a day nothing else is reading and expect step 5 to be slow rather than broken. |
 | 0.1 | **No run in flight** on either tenant | `select id, client_id, status, started_at from pipeline_runs where status not in ('completed','failed','partial') order by started_at desc;` → zero rows (**verified 0 on 2026-09-16**). A run mid-flight when the code deploys replays completed steps by id, and M3's INSERT guard would meet Phase 0's writer inside an open freeze. |
 | 0.2 | **Outside 04:00–09:00 SAST** | The retention sweep runs at 04:00 (live since 24 Aug) and the Sunday dispatcher wakes in that band. Deploy after 09:00 and before 22:00 SAST, and not on a Sunday. |
 | 0.3 | **OpenAI credits present** | The balance has been zero all week and a model call fails 429. Three backfills spend: subject-membership ($0.14–0.25/tenant), translate-quotes ($0.7–1.8/tenant), propose-subjects ($0.002/tenant). Check the dashboard, not a note. |
@@ -113,7 +126,7 @@ rehearsal) and 0.8–0.9 — and do not start until all thirteen hold.
 | 0.5 | **All four gates green on the merged head** | `npx vitest run` (**291 files / 6,314 tests**, measured on the Block D wave 3 merge head `f333f63`, 2026-09-19; the 242 / 4,514 that stood here predates Block D, and the 241 / 4,432 in the first draft predates WP18–WP21 and WP23 — the number only ever goes up, so a SMALLER count is a test file that stopped being collected) · `npx tsc --noEmit` · `npm run lint` · `npx next build --webpack`. If `tsc` reports `Cannot find module '…/route.js'` from `.next/types/`, rebuild first — stale generated types, not a defect. |
 | 0.6 | **The Turbopack build green too** | `TURBOPACK_ROOT=/Users/heinrichviljoen/Documents/code npx next build`. This is the bundler Vercel runs and the only gate that catches a bundler-only break before a deploy does. |
 | 0.7 | **`stored-artefacts-smoke` green — against a FRESH baseline, not 36** | `node --env-file=.env.local --import tsx scripts/stored-artefacts-smoke.ts`. **This one is still owed, and its number changed.** 36/36 was the Block B baseline and it is dead: `purge-reports.ts` ran on 17 Sep and production now holds Össur 1 snapshot / 1 sent send / 1 share link and Sealand 0 / 0 / 0 (read 18 Sep). So the smoke has roughly two artefacts to render, not thirty-six — **record what it prints on the first green run and make THAT the number**; a count short of 36 is the purge, not a regression, and anyone who treats 36 as the gate will either block the deploy or stop reading the output. Attempted three times on 16 Sep — once during the Block C merge (~10:30) and twice in WP22's second pass (15:12 and 15:16 SAST): every attempt died on its FIRST read, `reports: Could not query the database for the schema cache. Retrying.`, while `select 1` through the MCP returned in about two seconds. That is 0.0b's case, live. WP19 REPLACED the Reports page, and this is the check that catches a stored page key breaking silently. Do not deploy without it — and with two artefacts left it proves less than it used to, which is a reason to run it on the preview branch (where the dump still holds the pre-purge rows) as well as here. |
-| 0.7b | **The preview-branch rehearsal has been done, or deliberately skipped** | The section immediately below §0. Heinrich chose it on 2026-09-19 ("go with the branch"). It is the only place the thirteen migrations and both backfills meet real data before they meet production, and it is the only place `monthly-reading.ts --write` can be run twice. Skipping it is a decision an operator may make; not knowing it exists is not. |
+| 0.7b | **The preview-branch rehearsal has been done, or deliberately skipped** | The section immediately below §0. Heinrich chose it on 2026-09-19 ("go with the branch"). It is the only place the seventeen migrations and both backfills meet real data before they meet production, and it is the only place `monthly-reading.ts --write` can be run twice. Skipping it is a decision an operator may make; not knowing it exists is not. |
 | 0.8 | **The Inngest step-id diff is five insertions and nothing else** | `git diff origin/main..HEAD -- inngest/functions/pipeline.ts` and read the ids. **`grep -c '\.run(' inngest/functions/pipeline.ts` → 48 on `main`, 53 on the branch** (49 and 54 if you also count `step.sendEvent('request-report')`, which Inngest memoises the same way — both pairs appear in the notes, so say which you counted). In their own positions: `plan-translate-quotes` / `translate-quotes:N-of-M` (after the Pass A wave, before `embed-insights`), `plan-subject-membership` / `subject-membership:N-of-M` (before `cross-reference`), `anomaly-check` (after `freeze-months`). Zero removals, zero reorderings. |
 | 0.9 | **A whole-branch review has run** (plan §3.2) | Fresh eyes, never an author. |
 
@@ -125,7 +138,7 @@ rehearsal) and 0.8–0.9 — and do not start until all thirteen hold.
 Supabase project and not a local dump — a **Supabase preview branch on the
 production project** (`mkwjlckescdveosvrvaq`), which is the only staging that
 carries production's own extensions, roles and RLS without anybody re-creating
-them by hand. It is where the thirteen migrations, both OpenAI backfills and
+them by hand. It is where the seventeen migrations, both OpenAI backfills and
 the reading pages meet real numbers for the first time, and it is the ONLY
 place `monthly-reading.ts --write` can be run, read, and run again.
 
@@ -146,7 +159,7 @@ pointed at before every write step, out loud, the way you would check a
    `SUPABASE_SERVICE_ROLE_KEY` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` there, so a
    forgotten shell cannot point a `--apply` at production.
 2. **Restore a production dump into it.** A dump is the step that makes the
-   rehearsal worth doing — without it you are testing thirteen migrations
+   rehearsal worth doing — without it you are testing seventeen migrations
    against empty tables, which the throwaway cluster already did for free.
    The dump is also the last copy of the artefacts `purge-reports.ts` removed
    on 17 Sep, which is what makes 0.7's smoke meaningful here and thin on
@@ -188,7 +201,7 @@ pointed at before every write step, out loud, the way you would check a
      `invitations.invited_by → auth.users` and
      `platform_admins.user_id → auth.users`. (`public.users` does NOT, but a
      dev-server login needs the auth rows anyway, so it is wanted twice over.)
-   - **Data BEFORE the thirteen migrations — never the other way round.** M3
+   - **Data BEFORE the seventeen migrations — never the other way round.** M3
      (`20260918092000_reading_windows.sql`) installs
      `month_denominators_frozen_insert_guard` /
      `month_theme_readings_frozen_insert_guard`, whose whole job is that no NEW
@@ -234,9 +247,10 @@ pointed at before every write step, out loud, the way you would check a
    `DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE` that M11
    exists to strip, `share_links` arrives holding that set MINUS `SELECT`, and
    `tracking_configs` arrives with M12's seven starting columns. After the
-   thirteen: **ten rows reading `SELECT` and nothing else, `share_links`
+   seventeen: **ten rows reading `SELECT` and nothing else, `share_links`
    absent, `token` and `password_hash` still withheld from its column grant,
-   and `auth_update_cols` reading all eight.**
+   `auth_update_cols` reading all eight, and TRUNCATE gone from `anon` and
+   `authenticated` on `tracking_configs` (M15) while `service_role` keeps it.**
 
    **The price is four restore errors, all harmless, and you list them rather
    than suppress them:** one `ERROR: schema "public" already exists` (above),
@@ -246,7 +260,7 @@ pointed at before every write step, out loud, the way you would check a
    `supabase_admin` creates in `public` LATER; you connect as `postgres`, which
    may not alter another role's defaults, and **no ACL on any restored table is
    affected** — confirmed by reading the grants back before applying anything.
-3. **Apply the thirteen**, §2's files in §2's order, with §2's verification
+3. **Apply the seventeen**, §2's files in §2's order, with §2's verification
    query after each. Every expectation in §2 holds on the branch, with one
    substitution: M1's row count is the branch's tracked list, so run the
    reconciliation query rather than checking a number.
@@ -332,18 +346,21 @@ So: ship, confirm READY, then apply — and keep the gap short.
 
 **Only once §1 reads READY.** See §1's first paragraph for why the apply
 follows the deploy rather than leading it. Do not leave the gap open longer
-than it takes to read thirteen verification queries: between §1 and §2 every
+than it takes to read seventeen verification queries: between §1 and §2 every
 Phase 1 surface says "not recorded", and a Sunday dispatcher or a manual
 trigger in that gap runs the new pipeline against a Phase 0 schema — which its
 steps no-op against by design, but it is a run that does less than it should.
 
-**Thirteen files**, **in filename order**, one at a time through the Supabase MCP
+**Seventeen files**, **in filename order**, one at a time through the Supabase MCP
 (project `mkwjlckescdveosvrvaq`). Read the verification query's answer before
 starting the next file. **The count was twelve until Block D wave 3** (2026-09-19),
 which edited M3 (`20260918092000_reading_windows.sql`, +120/−14: a grouped span
 RPC and a window predicate) and added M12
 (`20260919090000_communities_control.sql`, the Settings Reddit-communities
-control). The full list, in order, is:
+control). **It became seventeen on 2026-09-24**, when the fix pass after wave 3b
+added M13–M16 — four files sharing the date `20260924`, numbered `090000`,
+`091000`, `092000` and `093000` so that filename order is apply order and no two
+versions collide. The full list, in order, is:
 
 | | file | what it is |
 |---|---|---|
@@ -360,33 +377,12 @@ control). The full list, in order, is:
 | M10 | `20260918099000_reading_indexes.sql` | WP23's two indexes |
 | M11 | `20260918099500_report_family_grants.sql` | the TRUNCATE posture fix |
 | M12 | `20260919090000_communities_control.sql` | **new in wave 3** — the communities grant + the subreddits ceilings |
-| M13 | `20260924090000_tracking_configs_truncate.sql` | **added 2026-09-24, after the thirteen were verified** — the one-line `revoke truncate` M12's section records as its known gap. Apply it last; see the M12 section below. |
-| M14 | `20260924091000_subjects_insert_audit.sql` | **added 2026-09-24, after the thirteen were verified** — M4's audit trigger extended to INSERT, so a subject born `active` is recorded. Apply after M13. |
+| M13 | `20260924090000_denominator_readable_lane.sql` | **added 2026-09-24** — the three audience denominators count only videos whose comments Pass A READ (`analyzed_lane = 'full'`). Data-reading fix, so it goes first of the four |
+| M14 | `20260924091000_subjects_insert_audit.sql` | **added 2026-09-24** — M4's audit trigger extended to INSERT, so a subject born `active` is recorded |
+| M15 | `20260924092000_tracking_configs_truncate.sql` | **added 2026-09-24** — the one-line `revoke truncate` M12's section records as its known gap |
+| M16 | `20260924093000_steps_completed_dead.sql` | **added 2026-09-24** — `pipeline_runs.steps_completed` commented as dead. One `comment on column`; no schema change, no grant change |
 
-**M14 · `20260924091000_subjects_insert_audit.sql`.** M4 installed
-`subjects_status_audit` as `after update of status`, which covers the
-retirement it was written for and nothing else: a row INSERTED already `active`
-never moves, so nothing records that the thing the workspace is measured on was
-ever decided. Read on the preview branch `zfmxrrugaihxpubunleu` (read-only,
-2026-09-24): Sealand's six subjects all `active`, all `created_by = null`, and
-every `config_changes` row on surface `subjects` is `field = 'calibration'` —
-none of the six creations recorded. M14 adds a second trigger,
-`subjects_insert_audit`, on the same function, firing only when
-`created_by IS NULL`; the product's own insert path (`nameSubject`) pins
-`created_by` and writes its own row, so nothing is logged twice. It back-fills
-nothing: the six already on the branch stay unrecorded rather than acquire an
-invented actor. Verify with
-```sql
-select tgname, pg_get_triggerdef(oid) from pg_trigger
- where tgrelid = 'public.subjects'::regclass and not tgisinternal order by tgname;
-```
-— **five** triggers, `subjects_insert_audit` among them with its
-`WHEN (new.created_by IS NULL)` clause, and M4's `subjects_status_audit`,
-`subjects_retirement_freeze` and `subjects_retirement_is_final` unchanged. Both
-arms were exercised on a throwaway PostgreSQL 17.11 cluster built from the
-baseline plus every migration in filename order, including a re-apply twice
-over; the migration's own footer carries the probes.
- A regex character class inside a migration must be
+A regex character class inside a migration must be
 written with `chr()` — the MCP transport decodes `\u` escapes (Phase 0's
 lesson, proven harmless once and not worth proving twice).
 
@@ -395,7 +391,7 @@ tables that rely on the same function; M6's delete guard installs triggers on
 all six month tables and therefore needs M4 and M5 to have created theirs.
 
 **There is no separate index step, and that is deliberate.** **Thirty**
-indexes are created across the thirteen files — competitors 3, subjects 7,
+indexes are created across the thirteen Phase 1 files — competitors 3, subjects 7,
 kind_mood_attention 5, quote_translations 3, anomaly_flags 3, settings 4,
 sent_figures 3, reading_indexes 2, **five** of them `unique`
 (`competitors_client_slug_live_idx`, `subjects_live_name_idx`,
@@ -422,6 +418,18 @@ policies, constraints with `pg_get_constraintdef`, columns, RLS flags and every
 table/column/routine grant — 3,784 rows) taken before and after: **byte-identical.**
 They are idempotent. Re-running one after a partial failure is safe.
 
+**The four files added on 2026-09-24 were put through the same thing, on their
+own throwaway PostgreSQL 17 cluster** (built the same way — `schema-baseline.sql`
+then every `supabase/migrations/2026*.sql` dated after 2026-08-09 in name order,
+now 68 files — stopped and deleted afterwards; no production call). Each of
+M13–M16 was then applied a **second** time over itself: 0 errors, and the
+catalogue reads the same after the second apply as after the first. They are
+idempotent by construction — M13 is three `create or replace function`, M14 is
+`drop trigger if exists` then `create trigger`, M15 is a `revoke`, M16 is a
+`comment on column`. The 19 September catalogue-diff figures above are NOT
+restated for the wider set; that run covered the thirteen and is quoted as what
+it was.
+
 **One nuance, so nobody reads a diff as a failure.** On a dump that also
 carries `pg_attribute.attacl` the SECOND application reorders one aclitem
 array — `plan_checks.notice`'s `authenticated` and `service_role` swap places.
@@ -431,15 +439,15 @@ empty on a 15,261-row catalogue including tables, functions and policies. The
 shows that one reordering and nothing else.
 
 **The thirteen PRE-BASELINE files (dated on or before 2026-08-09) are NOT
-re-applied** — a different thirteen, and the collision is unlucky rather than
-meaningful — the
+re-applied** — a different thirteen from the Phase 1 set, which was thirteen
+when this paragraph was written and has been seventeen since 2026-09-24 — the
 baseline supersedes them and says so in its own header. Two of them fail over
 it (`20260629090000_phase5_invitations.sql`: `relation "invitations" already
 exists`; `20260808120000_transcript_evidence.sql`: `constraint
 "insight_evidence_source_shape" ... already exists`), which is the baseline
 being the baseline and not a defect. On the real project none of this applies:
 the 64 post-baseline files are already in the migration history and only the
-thirteen are new.
+seventeen are new.
 
 ### The verification query per migration
 
@@ -935,23 +943,16 @@ issues no TRUNCATE verb. **Recorded here as a known gap, not fixed in the
 deploy window** — it is a one-line `revoke truncate` in a later migration, and
 adding it now would put an unreviewed statement in the last file of thirteen.
 
-**CLOSED on 2026-09-24 by M13, which is the FOURTEENTH file and is NOT one of
-the thirteen this document counts.** `20260924090000_tracking_configs_truncate.sql`
-revokes TRUNCATE on `tracking_configs` from `authenticated` and `anon`, and
-nothing else. Every "thirteen" elsewhere in this file is the set that was
-re-applied and catalogue-diffed on the throwaway PostgreSQL 17.11 cluster on
-19 September; M13 was written after that and has not been through it, so the
-count is left alone deliberately rather than quietly incremented. **Apply it
-last, after M12**, in filename order like the rest — it is one statement, it
-depends on nothing, and it is idempotent. The gap was re-measured before the
-file was written, on the preview branch `zfmxrrugaihxpubunleu` (read-only,
-2026-09-24): both tenant roles still hold
-`DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE`, M12's eight update
-columns are in place and `anon`'s column UPDATE count is 0. The verification
-query is in the migration's own footer; after the apply, TRUNCATE must be
-absent from the `anon` and `authenticated` rows of `role_table_grants` and
-still present on `service_role`, with every SELECT and M12's column list
-unmoved.
+**CLOSED on 2026-09-24 by M15**, `20260924092000_tracking_configs_truncate.sql`,
+one of the four files that took this deploy from thirteen migrations to
+seventeen. It revokes TRUNCATE on `tracking_configs` from `authenticated` and
+`anon`, and nothing else. **It is applied in filename order like the rest**, in
+its numbered place after M14 — it is one statement, it depends on nothing, and
+it is idempotent. Its verification query is with the others in §2, under
+**M15**. The gap was re-measured before the file was written, on the preview
+branch `zfmxrrugaihxpubunleu` (read-only, 2026-09-24): both tenant roles still
+hold `DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE`, M12's eight
+update columns are in place and `anon`'s column UPDATE count is 0.
 
 **The ceilings bite on an UPDATE, so check the two tenants can still be
 saved.** The constraint is restated whole (the only way to extend one) and
@@ -962,6 +963,84 @@ null. Production held 20 known and 3 active on the larger tenant on 2026-09-19,
 far under both bounds. Exercised on the 19 Sep cluster: 100 known accepted and
 101 refused, 20 active accepted and 21 refused, a non-array refused, the
 not-null holding.
+
+**M13 · `20260924090000_denominator_readable_lane.sql`** — the first of the four
+files added on 2026-09-24, and the only one that changes what a reader is told.
+`monthly_denominators`, `window_denominators` and `window_span_denominators`
+each opened on `v.analyzed_run_id is not null`, which is set by BOTH Pass A
+lanes; the claims lane enters with no comments in the prompt, so its videos'
+comments sat in n and could never reach k. Measured on the preview branch
+`zfmxrrugaihxpubunleu` (read-only, 2026-09-24): 1,081 `full` videos carry all
+3,719 audience insights, 298 `claims_only` and 91 `skip` videos carry zero.
+```sql
+select p.proname,
+       pg_get_functiondef(p.oid) like '%analyzed_lane = ''full''%'   as reads_lane,
+       pg_get_functiondef(p.oid) like '%analyzed_run_id is not null%' as old_test
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+ where n.nspname = 'public'
+   and p.proname in ('monthly_denominators','window_denominators','window_span_denominators')
+ order by 1;
+```
+Expect **three rows**, `reads_lane = t` on all three and `old_test = f` on all
+three. It replaces three functions and creates nothing, so §2's object counts do
+not move. **Denominators fall where a tenant has claims-lane or skip-lane
+videos** — on Sealand's `client` audience, 194 comments in n became 126 — and
+that is the fix, not a loss: a share read over the old n was low by
+construction. Any already-FROZEN month keeps its stored numbers; this changes
+what a new read counts, never a closed record.
+
+**M14 · `20260924091000_subjects_insert_audit.sql`.** M4 installed
+`subjects_status_audit` as `after update of status`, which covers the
+retirement it was written for and nothing else: a row INSERTED already `active`
+never moves, so nothing records that the thing the workspace is measured on was
+ever decided. Read on the preview branch `zfmxrrugaihxpubunleu` (read-only,
+2026-09-24): Sealand's six subjects all `active`, all `created_by = null`, and
+every `config_changes` row on surface `subjects` is `field = 'calibration'` —
+none of the six creations recorded. M14 adds a second trigger,
+`subjects_insert_audit`, on the same function, firing only when
+`created_by IS NULL`; the product's own insert path (`nameSubject`) pins
+`created_by` and writes its own row, so nothing is logged twice. It back-fills
+nothing: the six already on the branch stay unrecorded rather than acquire an
+invented actor.
+```sql
+select tgname, pg_get_triggerdef(oid) from pg_trigger
+ where tgrelid = 'public.subjects'::regclass and not tgisinternal order by tgname;
+```
+— **five** triggers, `subjects_insert_audit` among them with its
+`WHEN (new.created_by IS NULL)` clause, and M4's `subjects_status_audit`,
+`subjects_retirement_freeze` and `subjects_retirement_is_final` unchanged. Both
+arms were exercised on the 24 Sep throwaway cluster, including a re-apply twice
+over; the migration's own footer carries the probes.
+
+**M15 · `20260924092000_tracking_configs_truncate.sql`** — the one-line
+`revoke truncate` M12's section records as its known gap, and nothing else.
+```sql
+select grantee, string_agg(privilege_type, ',' order by privilege_type)
+  from information_schema.role_table_grants
+ where table_schema='public' and table_name='tracking_configs'
+   and grantee in ('anon','authenticated','service_role') group by 1 order by 1;
+```
+Expect `anon` and `authenticated` reading
+`DELETE,INSERT,REFERENCES,SELECT,TRIGGER` — **TRUNCATE absent** — and
+`service_role` reading `DELETE,INSERT,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE`.
+SELECT must still be on all three, and **M12's column grants must be unmoved**
+(`auth_update_cols` = the eight, `anon_update_cols` = 0): this file is a no-op
+against them, so a change there is a bug in this file, not a correction. The
+migration's own footer carries both queries.
+
+**M16 · `20260924093000_steps_completed_dead.sql`** — one `comment on column`
+and no schema change at all. `pipeline_runs.steps_completed` has never been
+written by the pipeline (0 of 49 production rows held anything but the `'{}'`
+default) and is read by nothing; the comment stops the next operator reading an
+empty array as a finding. **Not dropped, deliberately** — the migration's head
+says why.
+```sql
+select col_description('public.pipeline_runs'::regclass, attnum) is not null as commented
+  from pg_attribute
+ where attrelid = 'public.pipeline_runs'::regclass and attname = 'steps_completed';
+```
+Expect **one row, `commented = t`**. No grant, index, policy or column moves, so
+there is nothing else to check.
 
 ### The two guards, proven rather than counted
 
@@ -983,7 +1062,10 @@ on.**
 ### What the thirteen actually create
 
 Measured on the 19 Sep cluster by diffing a full catalogue dump around each
-file in turn, not read off the migrations. Indexes are **all** of them, primary
+file in turn, not read off the migrations. **M13–M16 are not in this table and
+add almost nothing to it:** M13 replaces three existing functions, M14 adds one
+trigger on `subjects` (taking M4's seven to eight), M15 changes grants only and
+M16 changes a comment only. No new table, view, index or policy among the four. Indexes are **all** of them, primary
 keys and unique constraints included, which is why the numbers here are larger
 than the thirty `create index` statements counted above. "Grants" changes are
 summarised rather than listed; every file's are in its own verification query.
@@ -1032,7 +1114,9 @@ wave-3b merge, which is false on any dump carrying `pg_attribute.attacl`.)*
 
 **No Phase 1 migration creates a view.** The `*_current` views
 (`audience_insights_current`, `language_samples_current`) are August's and
-already on production; nothing in the thirteen redefines them.
+already on production; nothing in the seventeen redefines them. (M13 replaces
+three FUNCTIONS — `monthly_denominators`, `window_denominators`,
+`window_span_denominators` — which are not views and are not these.)
 
 ### Then load the two pages again
 
@@ -1591,7 +1675,7 @@ The first Sunday after the deploy, in this order:
 | What went wrong | What you do |
 |---|---|
 | **The code is bad, the migrations are fine** | Revert the merge on `main` (`git revert -m 1 <merge sha>`), push, wait for READY, `curl -X PUT …/api/inngest`. **The migrations stay.** They are additive — new tables, new columns, new functions, new triggers — **except for four grant tightenings and one new CHECK, none of which a code revert needs undone**: M2 revokes write grants on `themes`, `theme_registry` and `theme_observations` from `authenticated` and `anon`; M8 does the same on `gate_verdicts` and `video_claims`; M9 on `plan_checks` and `plan_check_evaluations`; and **M12 revokes UPDATE on `tracking_configs` from `anon`** — inert under RLS, which names only `{authenticated}` on both policies, so Phase 0's Settings page is unaffected. M12 also WIDENS one thing, `authenticated`'s UPDATE on `tracking_configs.subreddits`, which a revert leaves granted and which Phase 0 has no page that writes; and it adds the three `subreddits` arms to `tracking_configs_cost_ceilings_check`, which Phase 0's discovery path cannot breach (it converges at 20 known against a bound of 100, and 5 active against 20). Every writer of those tables on `main` goes through the service role (`lib/readiness/load.ts`, `lib/gather/gate-verdicts.ts`), and the tenant SELECTs are re-granted in the same statement — so Phase 0's code loses nothing. Checked, so that nobody has to check it at 22:00. The rest of the case is the easy one, and it is the one you are most likely to be in. |
-| **A migration failed halfway** | Re-run the same file. They are idempotent (`if not exists` throughout; all thirteen re-applied over themselves on a clean PostgreSQL 17.11 cluster with 0 errors and a byte-identical catalogue diff — bar one aclitem reordering on a wider dump, see §2). Do not hand-patch the half-applied state. |
+| **A migration failed halfway** | Re-run the same file. They are idempotent (`if not exists` throughout; all thirteen re-applied over themselves on a clean PostgreSQL 17.11 cluster with 0 errors and a byte-identical catalogue diff — bar one aclitem reordering on a wider dump, see §2 — and M13–M16 applied twice each on their own cluster on 2026-09-24). Do not hand-patch the half-applied state. |
 | **A migration applied and you want it gone** | You mostly do not. Dropping `month_subject_readings` or `month_evidence_refs` destroys the one-shot's output and it cannot be recreated. If a table genuinely must go, it goes by name and by hand, and the seed for that tenant is spent regardless. |
 | **The one-shot ran wrong** | **There is no rollback.** `month_reading_frozen_guard` refuses the UPDATE and `month_reading_delete_guard` refuses the DELETE, which is the whole point. The 201 audience-months keep whatever the shot wrote. This is why step 5.4 has a dry run and four things to read in it. |
 | **Recipients went out too early** | Clear `report_schedules.recipients` in Settings. An email already sent is sent. |
@@ -1688,7 +1772,7 @@ stands as of that earlier pass.
   the preview branch (whose dump still carries the pre-purge rows) as well.
 - **The instance's health is itself a precondition.** If a `select count(*)`
   through the MCP does not return first time, do not start step 2. Applying
-  thirteen migrations through a transport that drops one connection in four is
+  seventeen migrations through a transport that drops one connection in four is
   how you end up not knowing which of them landed.
 - **The For-sales duplication is still open.** Two blocks say the same thing to
   a salesperson and a change has to be made twice. It has no owner.

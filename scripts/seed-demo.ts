@@ -334,7 +334,7 @@ async function insertRuns(): Promise<void> {
     // the pipeline has ever written it and nothing anywhere reads it — this
     // seed was its only writer in the whole repo, so demo data was the one
     // place in the product where the column looked alive. See
-    // 20260924090000_steps_completed_dead.sql.
+    // 20260924093000_steps_completed_dead.sql.
   }))
   await insertRows('pipeline_runs', rows)
 }

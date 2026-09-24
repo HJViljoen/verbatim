@@ -1,4 +1,4 @@
--- pipeline_runs.steps_completed is dead, and says so (2026-09-24).
+-- M16 · pipeline_runs.steps_completed is dead, and says so (2026-09-24).
 --
 -- Run b67b56de closed with steps_completed = '{}' while embed-insights wrote
 -- 1,162 embeddings and freeze-months wrote its month_denominators, which reads

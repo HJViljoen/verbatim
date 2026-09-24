@@ -1,5 +1,5 @@
--- The audience denominator counts the comments Pass A READ, not the comments
--- it was handed. (Phase 1, fix/client-audience, 2026-09-24.)
+-- M13 · the audience denominator counts the comments Pass A READ, not the
+-- comments it was handed. (Phase 1, fix/client-audience, 2026-09-24.)
 --
 -- WHAT WAS WRONG. `monthly_denominators`, `window_denominators` and
 -- `window_span_denominators` each opened with `where v.analyzed_run_id is not
