@@ -52,10 +52,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           instead of the document, so the sidebar stays put while content
           scrolls (this also stopped the mobile browser toolbar from animating,
           which used to shift the old window-fixed crowd backdrop).
-          2026-08-28 (MASTER.md rules 6 + 8): the crowd art left the shell and
-          the 48px header — which only ever held the mobile sidebar trigger —
-          is gone; on phones the trigger floats in the top-left corner. */}
+          2026-08-28 (MASTER.md rule 8): the 48px header — which only ever held
+          the mobile sidebar trigger — is gone; on phones the trigger floats in
+          the top-left corner.
+          2026-09-24 (MASTER.md rule 6, Heinrich's call): the crowd backdrop is
+          BACK on every dashboard page, reversing its 2026-08-28 removal. It is
+          absolute inside this pane, not inside <main>: the pane does not
+          scroll, so the crowd stays put while <main> scrolls over it, adds no
+          scroll height, and follows the sidebar because the pane is the space
+          right of it. <main> is `relative z-10`, so every tile paints on top. */}
       <div className="relative flex flex-col flex-1 min-w-0 h-dvh overflow-hidden">
+        <div className="crowd-bg" aria-hidden />
         <SidebarTrigger
           aria-label="Open navigation"
           className="absolute left-3 top-3 z-20 size-9 rounded-full bg-tile text-foreground shadow-tile md:hidden"
