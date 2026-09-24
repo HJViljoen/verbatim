@@ -1,9 +1,11 @@
-import { PageFrame } from '@/components/shell/page-grid'
-import { SkeletonPageBar, Bone, BoneLines, BoneBars } from '@/components/shell/skeleton'
+import { SkeletonSurface, Bone, BoneLines, BoneBars } from '@/components/shell/skeleton'
 import { GrowingTile } from '@/components/pages/voice-surface'
 
-// Mirrors app/dashboard/voice/page.tsx (Phase 1 WP13): the audience and where
-// it was said · what moved · a theme in full · who is talking.
+// Mirrors app/dashboard/voice/page.tsx (Phase 1 WP13): the surface bar (How
+// to read, the horizon row with its range, the "how sound" band: the bar used
+// to be a bare title, which jumped the whole page down by two rows when the
+// real one landed), then the audience and where it was said · what moved · a
+// theme in full · who is talking.
 //
 // FOUR GROWING SECTIONS AND NO ROW SPANS, because that is what the page draws.
 // The first cut of this file was four SkeletonTiles at spans 2/4/6/4 under the
@@ -20,9 +22,7 @@ import { GrowingTile } from '@/components/pages/voice-surface'
 // months of the comment-dated series, and it is always drawn.
 export default function VoiceLoading() {
   return (
-    <PageFrame>
-      <span role="status" className="sr-only">Loading Voice…</span>
-      <SkeletonPageBar title="Voice" pills={1} />
+    <SkeletonSurface nav="voice" pills={1} band>
 
       {/* VO1 · the audience switch, then the platform mix */}
       <GrowingTile>
@@ -65,6 +65,6 @@ export default function VoiceLoading() {
           ))}
         </div>
       </GrowingTile>
-    </PageFrame>
+    </SkeletonSurface>
   )
 }
