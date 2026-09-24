@@ -1033,7 +1033,7 @@ export const runPipeline = inngest.createFunction(
         .run('plan-translate', () => planTranslateBatches(clientId))
         .catch((e) => {
           noteError('plan-translate', e)
-          return { batches: [] as string[][], needing: 0, deferred: 0, retrying: 0, excluded: { english: 0, exhausted: 0 }, byLang: {} as Record<string, number> }
+          return { batches: [] as string[][], offered: 0, needing: 0, deferred: 0, retrying: 0, excluded: { english: 0, exhausted: 0 }, byLang: {} as Record<string, number> }
         })
       translate.batches = plan.batches.length
       translate.needing = plan.needing
@@ -1093,7 +1093,7 @@ export const runPipeline = inngest.createFunction(
         // of which 178 were candidates and all 178 were attempted — the cap
         // deferred nothing. Without this line that reads as 178 of a 400 cap.
         console.log(
-          `[translate] ${plan.needing} needed of ${plan.needing + plan.excluded.english + plan.excluded.exhausted} offered ` +
+          `[translate] ${plan.needing} needed of ${plan.offered} offered ` +
           `(${plan.excluded.english} already English, ${plan.excluded.exhausted} out of attempts) · ` +
           `${plan.retrying} re-attempts of a recorded failure · ${translate.translated} translated · ${translate.english} detected English · ` +
           `${translate.failed} failed · ${plan.deferred} deferred by the cap · ~$${translate.cost.toFixed(3)} · ${langs}`,

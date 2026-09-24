@@ -222,6 +222,57 @@ export function planTranslation(
   return chunk(videos.slice(0, cap).map((v) => v.id), batch)
 }
 
+/**
+ * What the DB pre-filter OFFERED, and what the selection rule kept.
+ *
+ * PURE, AND SEPARATE FROM THE READ, because the number it produces is the one
+ * that was misread on 2026-09-20. The pre-filter is
+ * `transcript_status = 'ok' and transcript_en is null` — which is also the
+ * predicate `videos_translate_pending_v2_idx` is defined on — so anyone
+ * measuring the backlog with the index's own predicate counts every English
+ * transcript as pending translation. On Sealand that was 1,564 rows against
+ * 178 real candidates, and the run was read as attempting 11% of its cap when
+ * it had attempted all of them.
+ *
+ * `offered` is `rows.length` and not a sum of the parts, so the three
+ * categories cannot drift apart from the total they are supposed to partition:
+ * every row is English, or out of attempts, or a candidate.
+ */
+export function translatePlanCounts<T extends { transcript_lang: string | null; transcript_en_error: string | null }>(
+  rows: readonly T[],
+): {
+  offered: number
+  pending: T[]
+  excluded: { english: number; exhausted: number }
+  retrying: number
+  byLang: Record<string, number>
+} {
+  const pending: T[] = []
+  const excluded = { english: 0, exhausted: 0 }
+  for (const r of rows) {
+    if (isEnglishLang(r.transcript_lang)) { excluded.english++; continue }
+    if (translateAttempts(r.transcript_en_error) >= TRANSLATE_MAX_ATTEMPTS) { excluded.exhausted++; continue }
+    pending.push(r)
+  }
+  const byLang: Record<string, number> = {}
+  for (const r of pending) {
+    const k = (r.transcript_lang ?? '').trim().toLowerCase() || 'unknown'
+    byLang[k] = (byLang[k] ?? 0) + 1
+  }
+  return {
+    offered: rows.length,
+    pending,
+    excluded,
+    retrying: pending.filter((r) => r.transcript_en_error !== null).length,
+    byLang,
+  }
+}
+
+/** How many candidates the cap leaves for the next run. The one place this
+ *  subtraction is written, so a report of it cannot be a different sum from
+ *  the plan's own. */
+export const translateDeferred = (candidates: number, cap: number): number => Math.max(0, candidates - cap)
+
 export interface TranslateResult {
   translated: number
   /** Detected as English: language written, no translation stored, no re-read. */
@@ -294,6 +345,10 @@ export async function translateTranscript(text: string, lang: string | null): Pr
  */
 export async function planTranslateBatches(clientId: string, cap = TRANSLATE_CAP): Promise<{
   batches: string[][]
+  /** Rows the DB pre-filter matched, before the selection rule ran — the
+   *  number the index's predicate gives, reported so it can never again be
+   *  read as the number of candidates. `needing + excluded.*` by construction. */
+  offered: number
   needing: number
   deferred: number
   /** Of `needing`, how many are re-attempts of a recorded failure — the rows
@@ -325,25 +380,15 @@ export async function planTranslateBatches(clientId: string, cap = TRANSLATE_CAP
       .order('id', { ascending: true }),
   )
   // Unknown-language rows are candidates: the model reports what it detected,
-  // and an English one costs one call and stores only its language.
-  const pending = rows.filter((r) =>
-    !isEnglishLang(r.transcript_lang) && translateAttempts(r.transcript_en_error) < TRANSLATE_MAX_ATTEMPTS)
-  const excluded = {
-    english: rows.filter((r) => isEnglishLang(r.transcript_lang)).length,
-    exhausted: rows.filter((r) =>
-      !isEnglishLang(r.transcript_lang) && translateAttempts(r.transcript_en_error) >= TRANSLATE_MAX_ATTEMPTS).length,
-  }
-  const byLang: Record<string, number> = {}
-  for (const r of pending) {
-    const k = (r.transcript_lang ?? '').trim().toLowerCase() || 'unknown'
-    byLang[k] = (byLang[k] ?? 0) + 1
-  }
+  // and an English one costs one call and stores only its language. The
+  // counting is `translatePlanCounts`, pure and tested — this function is the
+  // read around it.
+  const { offered, pending, excluded, retrying, byLang } = translatePlanCounts(rows)
   // Richest-first, so a capped first run takes the videos whose analysis
   // carries the most weight and the tail comes next run.
   pending.sort((a, b) => (b.comments_count ?? 0) - (a.comments_count ?? 0))
   const batches = planTranslation(pending, { cap })
-  const retrying = pending.filter((r) => r.transcript_en_error !== null).length
-  return { batches, needing: pending.length, deferred: Math.max(0, pending.length - cap), retrying, excluded, byLang }
+  return { batches, offered, needing: pending.length, deferred: translateDeferred(pending.length, cap), retrying, excluded, byLang }
 }
 
 /**
