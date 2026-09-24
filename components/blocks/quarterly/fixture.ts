@@ -74,15 +74,15 @@ const SUBJECT_SHARES: readonly { id: string; share: number; yours: number | null
   { id: 's3', share: 0.19, yours: 0.11 },
   { id: 's4', share: 0.14, yours: 0.02 },
   { id: 's5', share: 0.09, yours: 0.06 },
-  // `yours: null` — THE SIDE NOBODY READ. One subject carries the category
-  // column and no "you" column, because that is a real state and because a
-  // table of six rows all of which compare is a fixture that never draws the
-  // arm `gapBetween` refuses on ("draws no gap where a column could not be
-  // drawn"). Before the table went to six, `s2` was that row by accident.
-  { id: 's6', share: 0.05, yours: null },
+  // `s6` USED TO CARRY `yours: null` as "the side nobody read". That is not a
+  // state `window_subject_readings` can produce: it emits no row for a subject
+  // no video of an audience mentioned, and with the side read and its
+  // denominator present that is a ZERO, which `buildQuarterVerdicts` now
+  // reads as one. `unmentionedFixture()` below draws that state honestly.
+  { id: 's6', share: 0.05, yours: 0.01 },
 ]
 
-const subjectWindow = (videos: number, share: number): SubjectWindowReading[] =>
+const subjectWindow = (videos: number, share: number, noOwnRow: readonly string[] = []): SubjectWindowReading[] =>
   SUBJECT_SHARES.flatMap((s) => {
     // `s1` is the row the gap line and the chart are drawn from, so it keeps
     // the share the caller passes; the rest carry their own.
@@ -90,7 +90,7 @@ const subjectWindow = (videos: number, share: number): SubjectWindowReading[] =>
     const both: SubjectWindowReading[] = [
       { audience: INDUSTRY_AUDIENCE, subject_id: s.id, videos: Math.round(videos * cat), comments: 0, platform_mix: {}, excluded_on_camera: 0, excluded_undated: 0 },
     ]
-    if (s.yours != null) {
+    if (s.yours != null && !noOwnRow.includes(s.id)) {
       both.push({ audience: CLIENT_AUDIENCE, subject_id: s.id, videos: Math.round(videos * 0.06 * (cat + s.yours)), comments: 0, platform_mix: {}, excluded_on_camera: 0, excluded_undated: 0 })
     }
     return both
@@ -101,8 +101,8 @@ const subjectWindow = (videos: number, share: number): SubjectWindowReading[] =>
  *
  * `buildSubjects` reads `overview.subjects.rows` for the labels and the month
  * columns and `subjectWindow` for the quarter columns; a subject in one and
- * not the other draws no row at all (`if (!was || !n || !priorN || !label)
- * continue`). So the two lists are built together here, from one place.
+ * not the other draws no row at all. So the two lists are built together here,
+ * from one place.
  */
 const SIX_SUBJECTS: readonly { id: string; label: string; you: [number, number]; rival: [number, number]; category: [number, number]; spark: number[] }[] = [
   { id: 's3', label: 'Sizing and fit', you: [14, 84], rival: [31, 142], category: [241, 1388], spark: [15, 16, 16, 17, 17, 17] },
@@ -275,6 +275,33 @@ export function quarterlyFixture(over: Partial<QuarterlyData> = {}): QuarterlyDa
     }),
     ...over,
   }
+}
+
+/**
+ * The same quarter, where no video of YOURS mentioned `s6` on either side —
+ * so the subject window carries no own-audience row for it at all, which is
+ * what the RPC answers for a count of zero (Sealand's Q1 2026: six of seven
+ * subjects). The row must still be drawn, as 0 of N, not dropped.
+ */
+export function unmentionedFixture(): QuarterlyData {
+  const overview = withSixSubjects(overviewFixture())
+  return composeQuarterly({
+    overview: { ...overview, bar: { ...overview.bar, readings: 8 } },
+    market: marketFixture(),
+    competitive: competitiveFixture(),
+    quarter: QUARTER,
+    prior: PRIOR,
+    readingAt: NOW,
+    thisQuarter: windowRead(4147, 33000),
+    lastQuarter: windowRead(3810, 29000),
+    subjectsNow: subjectWindow(4147, 0.22, ['s6']),
+    subjectsBefore: subjectWindow(3810, 0.18, ['s6']),
+    checks: checksRan,
+    record: record(13),
+    quiet: QUIET,
+    searchPlan: SEARCH_PLAN,
+    changeLog: CHANGE_LOG,
+  })
 }
 
 /**

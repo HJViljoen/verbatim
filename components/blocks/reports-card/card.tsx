@@ -41,7 +41,7 @@ import { quarterUnlocked } from '@/lib/reports/quarterly'
  *    The legend names the one series drawn rather than promising two.
  *
  * AND THE BARS ARE LEVELS, NOT A DIRECTION CLAIM. Each bar is this quarter's
- * share, scaled against the largest on the card, with a tick at the quarter
+ * share, on one scale the legend prints (`barCeiling`), with a tick at the quarter
  * before it — the same two numbers the verdict beside it divides. A chart is a
  * direction claim too (AGENTS.md), and nothing here draws a line through time:
  * two readings, side by side, with the band between them printed as a word.
@@ -61,8 +61,25 @@ export function QuarterlyCardTile({
   // card. The note in the body names the real cause; the pill and the footnote
   // below take their lead from this rather than from `readings`.
   const drawn = card.series.length > 0
-  const max = Math.max(...card.series.map((s) => share(s.value.k, s.value.n)), 1)
   const baselineOf = (label: string) => card.rows.find((r) => r.label === label)?.verdict.baseline ?? null
+  // ONE SCALE FOR EVERY BAR AND EVERY TICK ON THE CARD, and never the largest
+  // bar itself. Scaled against the largest level, a card with one row drew its
+  // 2.0% ("1 of 49", Sealand's Price) as a FULL bar — the one level on the card
+  // is always its own maximum — and a tick above that level clamped to the
+  // end of the track. `barCeiling` takes both sides into account and never
+  // falls under 25%, so the width says roughly how big the share is.
+  const ceiling = barCeiling(
+    card.series.flatMap((s) => {
+      const base = baselineOf(s.label)
+      return [share(s.value.k, s.value.n), ...(base ? [share(base.k, base.n)] : [])]
+    }),
+  )
+  // HERE THE ROWS WOULD SAY NOTHING THE GATE DOES NOT. Below the gate every
+  // `quarterChange` answers `baseline_forming`, so every row's badge read "not
+  // enough months yet" — a column of refusals that a three-month user read as
+  // the product. The card then carries ONE line, when the first comparison
+  // arrives, and nothing else; once the gate is open the rows are back.
+  const formingOnly = !unlocked && card.rows.length > 0 && card.rows.every((r) => r.verdict.state === 'baseline_forming')
   // IS THERE A TICK ON THIS CARD AT ALL? Below `QUARTER_UNLOCKS_AT`
   // `quarterChange` carries no baseline — correctly — so `baselineOf` is null
   // on every row and the chart draws no marks. The legend keyed its second
@@ -94,8 +111,12 @@ export function QuarterlyCardTile({
       // have 9", and a card held up by an unapplied migration blame the
       // reading count for it. A refusal under a card that is not refusing
       // teaches a reader to stop reading the footnote.
-      footerNote={drawn && !unlocked ? card.gate : undefined}
+      footerNote={drawn && !unlocked && !formingOnly ? card.gate : undefined}
     >
+      {formingOnly ? (
+        <p className="m-0 text-[12.5px] leading-[1.45] text-foreground">{card.firstComparison ?? card.gate}</p>
+      ) : (
+      <>
       <div className="flex flex-col items-start gap-1.5 sm:flex-row sm:items-center sm:gap-2.5">
         {pill && (
         /* THE AMBER IS IN THE TINT AND THE RING, NOT IN THE TEXT.
@@ -145,7 +166,7 @@ export function QuarterlyCardTile({
                   </span>
                   <span className="flex flex-none items-center gap-2 pl-3.5 sm:pl-0">
                     <span className="hidden sm:flex">
-                      <QuarterBar pct={(pct / max) * 100} baseline={base ? (share(base.k, base.n) / max) * 100 : null} />
+                      <QuarterBar pct={(pct / ceiling) * 100} baseline={base ? (share(base.k, base.n) / ceiling) * 100 : null} />
                     </span>
                     <span className="w-[104px] flex-none">
                       <FigureCell value={fmtPct(pct, 1)} of={`${fmtInt(s.value.k)} of ${fmtInt(s.value.n)}`} align="right" />
@@ -183,7 +204,7 @@ export function QuarterlyCardTile({
           <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1">
             <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
               <span className="size-2 rounded-full" style={{ background: 'var(--cat)' }} aria-hidden />
-              bars: {card.quarter.label}, the category
+              bars: {card.quarter.label}, the category · scale 0–{ceiling}%
             </span>
             {anyBaseline && (
               <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
@@ -195,11 +216,13 @@ export function QuarterlyCardTile({
         )}
         {card.note ? <p className="m-0 text-[12px] text-muted-foreground">{card.note}</p> : null}
       </div>
+      </>
+      )}
     </Tile>
   )
 }
 
-/** One level, scaled against the largest on the card, with a tick where the
+/** One level, on the card's printed scale (`barCeiling`), with a tick where the
  *  quarter before it sat. No axis and no time: two readings beside each
  *  other. */
 function QuarterBar({ pct, baseline }: { pct: number; baseline: number | null }) {
@@ -219,6 +242,15 @@ function QuarterBar({ pct, baseline }: { pct: number; baseline: number | null })
 }
 
 const clamp = (n: number): number => Math.max(1.5, Math.min(100, n))
+
+/** The share a full bar stands for: the largest level or tick on the card,
+ *  rounded up to the next 5 points, and never under 25% — so a lone 2.0%
+ *  draws as a sliver and not as a full track. */
+export const BAR_CEILING_FLOOR = 25
+export function barCeiling(shares: readonly number[]): number {
+  const top = Math.max(0, ...shares.filter((v) => Number.isFinite(v)))
+  return Math.min(100, Math.max(BAR_CEILING_FLOOR, Math.ceil(top / 5) * 5))
+}
 const share = (k: number, n: number): number => (n > 0 ? (k / n) * 100 : 0)
 
 /** "Jul–Sep", from the quarter's own bounds. */

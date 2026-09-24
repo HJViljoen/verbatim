@@ -1392,28 +1392,38 @@ function buildQuarterVerdicts(a: {
   // cut looked its verdicts up under the first RIVAL's audience key, against
   // verdicts that were never built for a subject at all, so no quarter column
   // could ever be drawn.
-  const subjectsBefore = new Map((a.subjectsBefore ?? []).map((s) => [`${s.audience}:${s.subject_id}`, s]))
-  const subjectLabels = new Map(a.overview.subjects.rows.map((r) => [r.id, r.label]))
-  for (const s of a.subjectsNow ?? []) {
-    // The two columns the page draws, and no others: a subject's reading under
-    // a single rival's videos is a different question and has its own page.
-    if (s.audience !== CLIENT_AUDIENCE && s.audience !== a.overview.category.audience) continue
-    const was = subjectsBefore.get(`${s.audience}:${s.subject_id}`)
-    const n = denomNow.get(s.audience)
-    const priorN = denomBefore.get(s.audience)
-    const label = subjectLabels.get(s.subject_id)
-    if (!was || !n || !priorN || !label) continue
-    out.push(
-      quarterChange({
-        object: { kind: 'subject', id: s.subject_id, label },
-        audience: s.audience,
-        window: { kind: 'quarter', from: a.quarter.from, to: a.quarter.to },
-        basis: { from: a.prior.from, to: a.prior.to },
-        value: { k: s.videos, n },
-        baseline: { k: was.videos, n: priorN },
-        readings: a.readings,
-      }),
-    )
+  //
+  // A MISSING ROW IS A ZERO once the subject side was read at all.
+  // `window_subject_readings` groups over the videos a subject's members cite,
+  // so a subject nobody in an audience mentioned that quarter has NO ROW, not a
+  // row of 0. Walking `subjectsNow` and requiring a row on both sides dropped
+  // every such subject — on Sealand's Q2 2026 against a Q1 of seven category
+  // videos, six of seven — and the unsettled page then called them "neither
+  // side read". The walk is over the subjects the pages name, per drawn
+  // audience; only an unread side (null) or an absent denominator skips.
+  if (a.subjectsNow == null || a.subjectsBefore == null) return out
+  const subjectsNow = new Map(a.subjectsNow.map((s) => [`${s.audience}:${s.subject_id}`, s]))
+  const subjectsBefore = new Map(a.subjectsBefore.map((s) => [`${s.audience}:${s.subject_id}`, s]))
+  // The two columns the page draws, and no others: a subject's reading under a
+  // single rival's videos is a different question and has its own page.
+  const audiences = [...new Set([CLIENT_AUDIENCE, a.overview.category.audience])]
+  for (const audience of audiences) {
+    const n = denomNow.get(audience)
+    const priorN = denomBefore.get(audience)
+    if (!n || !priorN) continue
+    for (const row of a.overview.subjects.rows) {
+      out.push(
+        quarterChange({
+          object: { kind: 'subject', id: row.id, label: row.label },
+          audience,
+          window: { kind: 'quarter', from: a.quarter.from, to: a.quarter.to },
+          basis: { from: a.prior.from, to: a.prior.to },
+          value: { k: subjectsNow.get(`${audience}:${row.id}`)?.videos ?? 0, n },
+          baseline: { k: subjectsBefore.get(`${audience}:${row.id}`)?.videos ?? 0, n: priorN },
+          readings: a.readings,
+        }),
+      )
+    }
   }
   return out
 }

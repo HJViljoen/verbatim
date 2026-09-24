@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildQuarterlyCard, countReadings, eraTo, monthsBetween, quarterCaveat, quarterMonths, type QuarterlyCardInput } from './reports-card'
+import { buildQuarterlyCard, countReadings, eraTo, firstComparisonLine, monthsBetween, quarterCaveat, quarterMonths, type QuarterlyCardInput } from './reports-card'
 import { QUARTER_UNLOCKS_AT } from '../reading/bands'
 import type { DenominatorPoint } from '../reading/series'
 import type { WindowReading } from '../reading/read'
@@ -83,8 +83,39 @@ describe('buildQuarterlyCard', () => {
     expect(card?.series[0].value.n).toBe(card?.rows[0].verdict.value.n)
   })
 
-  it('drops a subject with no reading on one side rather than printing a zero', () => {
+  // A MISSING ROW ON A READ SIDE IS A ZERO. `window_subject_readings` emits no
+  // row for a subject no video mentioned, so the first cut read "no row" as
+  // "not read" and dropped the subject.
+  it('reads a subject with no row on a read side as zero, not as absent', () => {
     const card = buildQuarterlyCard(input({ subjectsBefore: [] }))
+    expect(card?.rows).toHaveLength(1)
+    expect(card?.rows[0].verdict.baseline).toEqual({ k: 0, n: 1200 })
+    expect(card?.note ?? '').not.toContain('No subject carried a reading on both sides')
+  })
+
+  // SEALAND IN PRODUCTION, 2026-09-24: Q2 2026 against a Q1 of seven category
+  // videos, where only Price had a Q1 row — so the card drew Price alone.
+  it('draws every active subject on Sealand’s shape, not just the one with a row on both sides', () => {
+    const names = ['Comfort', 'Community & purpose', 'Durability', 'Looks & style', 'Price', 'Repair & warranty', 'Waterproofing']
+    const subjects = names.map((name, i) => ({ id: `s${i}`, name }))
+    const q2 = [4, 1, 2, 4, 1, 6, 2]
+    const row = (id: string, videos: number): SubjectWindowReading =>
+      ({ audience: INDUSTRY_AUDIENCE, subject_id: id, videos, comments: 0, platform_mix: {}, excluded_on_camera: 0, excluded_undated: 0 })
+    const card = buildQuarterlyCard(input({
+      subjects,
+      thisQuarter: window(49),
+      lastQuarter: window(7),
+      subjectsNow: subjects.map((s, i) => row(s.id, q2[i])),
+      subjectsBefore: [row('s4', 1)],
+      readings: 4,
+    }))
+    expect(card?.rows.map((r) => r.label)).toEqual(names)
+    expect(card?.series.find((s) => s.label === 'Comfort')?.value).toEqual({ k: 4, n: 49 })
+    expect(card?.rows.every((r) => r.verdict.state === 'baseline_forming')).toBe(true)
+  })
+
+  it('draws no rows where a side has no denominator for the category', () => {
+    const card = buildQuarterlyCard(input({ lastQuarter: { denominators: [], themes: [] } }))
     expect(card?.rows).toHaveLength(0)
     expect(card?.note).toContain('No subject carried a reading on both sides')
   })
@@ -200,5 +231,26 @@ describe('the wave-2 fixtures', () => {
       expect(card.ready).toBeNull()
       expect([card.gate, card.note].filter(Boolean).join(' ')).not.toMatch(/\bready\b/i)
     }
+  })
+})
+
+describe('firstComparisonLine', () => {
+  it('names the reading month the sixth reading lands in, never a day', () => {
+    expect(firstComparisonLine(4, '2026-09-01')).toBe(
+      'The first quarter-on-quarter comparison arrives with the November 2026 reading: it needs six monthly readings and you have 4.',
+    )
+    expect(firstComparisonLine(4, '2026-09-01')).not.toMatch(/\b\d{1,2} (Nov|November)\b/)
+  })
+
+  it('is null once the gate is open, and says the count where no month is known', () => {
+    expect(firstComparisonLine(QUARTER_UNLOCKS_AT, '2026-09-01')).toBeNull()
+    expect(firstComparisonLine(3, null)).toBe(
+      'The first quarter-on-quarter comparison arrives once six monthly readings stand behind it: you have 3.',
+    )
+  })
+
+  it('rides on the built card below the gate and not above it', () => {
+    expect(buildQuarterlyCard(input({ readings: 4, readingMonth: '2026-09-01' }))?.firstComparison).toContain('November 2026')
+    expect(buildQuarterlyCard(input({ readings: 9, readingMonth: '2026-09-01' }))?.firstComparison).toBeNull()
   })
 })
