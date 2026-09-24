@@ -247,7 +247,10 @@ export const subjectsSubject: Block<SubjectsData> = {
         {/* CALIBRATING: THE SHARE IS HIDDEN, AND SAID ONCE (the 24 Sep ruling).
             The loader has already taken every figure of the subject out of the
             pane (withheldPane); this is the sentence in their place, rather
-            than three empty cells a reader would take for "no reading". */}
+            than three empty cells a reader would take for "no reading". A pane
+            frozen before the gate carries its calibration too, so it re-renders
+            hidden; an Overview row frozen before carries none and re-renders as
+            sent — the record decides (lib/pages/overview.ts SubjectRow). */}
         {pane.calibration !== 'ready' ? (
           <BlockEmpty mode={mode}>{CALIBRATING_LINE}</BlockEmpty>
         ) : email ? (
