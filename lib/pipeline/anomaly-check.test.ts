@@ -358,7 +358,8 @@ describe('the explanation, driven by a fake model', () => {
     const { explanation, rows } = explain('Objections are up 14% and climbing fast.')
     expect(explanation.fallback).toBe(true)
     expect(explanation.reason).toBe('nothing_usable')
-    expect(explanation.note).toMatch(/We wrote this read ourselves/)
+    // Ruling L9: the fallback carries no "we wrote this ourselves" note.
+    expect(explanation.note).toBeUndefined()
     // The model did not write the stored sentence, so no model is named on it.
     expect(rows[0].explanation_model).toBeNull()
   })

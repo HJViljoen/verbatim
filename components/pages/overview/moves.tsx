@@ -40,37 +40,8 @@ export const CARD_CLAIMS_SHOWN = 2
  *  own words off its own transcript, so it is CUT rather than re-worded. */
 export const CARD_CLAIM_MAX = 96
 
-/**
- * What stands in the primary button's place (`main.moves.card.confirm`).
- *
- * THE CARD IS BUILT AND THE WRITE PATH IS NOT. The artboard draws "Yes, count
- * this as a move" as the card's green primary; a button that cannot write is
- * worse than no button, so the SLOT is kept — same place, bottom of the card —
- * and the sentence says what the reader is waiting for. It does not name a
- * month: nothing in the product knows when that write ships, and a delivery
- * date computed from the calendar is a promise recomputed monthly, wrong the
- * first time it is read (the defect `MOVES_UNLOCK` was rewritten to end).
- */
-export const CARD_CONFIRM_SLOT =
-  'Every count above is real. Turning them into a move is a button this page does not have yet, so nothing here counts as one until you say so.'
-
-/**
- * The same sentence on PAPER (Block D wave 3, M25).
- *
- * A PDF SHEET MAY NOT TALK ABOUT A BUTTON. The sales and marketing briefs
- * borrow this card onto a printed sheet and onto `/r/<token>`, where "a button
- * this page does not have yet" is a sentence about a control the reader has no
- * page to look for — the rule `MONTHLY_MOVES_EMPTY` was written under, and the
- * rule E-marketing already applied to three app-only controls. This is the
- * fourth.
- *
- * THE HONESTY SURVIVES THE CLAUSE. What the sentence is FOR is the second half
- * — that a count is not a move until the reader says it is — and that is true
- * on paper and in an inbox as much as in the app. Only the clause about the
- * control goes.
- */
-export const CARD_CONFIRM_OFF_APP =
-  'Every count above is real. Nothing here counts as a move until you say so.'
+// A54: the card no longer apologises for the button it does not have yet;
+// `card.unread` still says why a card cannot be read where that is so.
 
 export function claimText(claim: string): string {
   const t = claim.replace(/\s+/g, ' ').trim()
@@ -119,20 +90,6 @@ function Count({ count, mode, basis = true }: { count: CardCount; mode: RenderMo
   )
 }
 
-/** The one basis the card's own-post rows share, said once under them.
- *
- *  D9 ASKS FOR THE BASIS BESIDE THE FIGURE, NOT FOUR TIMES IN ONE CARD (design
- *  review High 8). `buildMoveCandidate` gives `posts`, `overFloor` and `claims`
- *  the same basis string, so the first row printed "posts published · posts
- *  published in September" — the label and the basis in the same four words —
- *  and three later rows repeated it unchanged in a 240px card. The rows that
- *  share a clock name it once, together; the rows on a DIFFERENT clock
- *  (`subjectsBasis`, which is posts READ) still carry their own beside them,
- *  because that is the difference the rule exists to keep visible. */
-export function cardBasisLine(card: MoveCandidate): string {
-  return `every count above is dated by the post itself — ${card.posts.basis}`
-}
-
 /** The pre-filled card — the artboard's left column. */
 function Card({ card, mode }: { card: MoveCandidate; mode: RenderMode }) {
   const email = mode === 'email'
@@ -150,12 +107,6 @@ function Card({ card, mode }: { card: MoveCandidate; mode: RenderMode }) {
       <span className={email ? undefined : 'flex flex-wrap items-start gap-x-6 gap-y-2'}>
         <Count count={card.posts} mode={mode} basis={false} />
         <Count count={card.overFloor} mode={mode} basis={false} />
-      </span>
-      <span
-        className={email ? undefined : 'font-mono text-[10.5px] text-secondary-foreground'}
-        style={email ? { fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.ink2 } : undefined}
-      >
-        {cardBasisLine(card)}
       </span>
 
       {/* CLAIMS YOU MADE (`main.moves.card.claims`), IN THE SPEAKER'S OWN WORDS.
@@ -270,12 +221,14 @@ function Card({ card, mode }: { card: MoveCandidate; mode: RenderMode }) {
           artboard's place at the bottom of the card and states what it is
           waiting for — and `card.unread` is what distinguishes "there is
           nothing to confirm" from "this cannot be confirmed here yet". */}
-      <span
-        className={email ? undefined : 'mt-auto text-[11px] text-muted-foreground'}
-        style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}
-      >
-        {card.unread ?? (mode === 'app' ? CARD_CONFIRM_SLOT : CARD_CONFIRM_OFF_APP)}
-      </span>
+      {card.unread ? (
+        <span
+          className={email ? undefined : 'mt-auto text-[11px] text-muted-foreground'}
+          style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}
+        >
+          {card.unread}
+        </span>
+      ) : null}
     </>
   )
   if (email) {
@@ -459,12 +412,6 @@ export const overviewMoves: Block<OverviewData> = {
             <span data-copy="level">{m.acted.line}</span>
           </p>
         ) : null}
-        <p
-          className={email ? undefined : 'm-0 text-[11px] text-muted-foreground'}
-          style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 6 } : undefined}
-        >
-          {m.unlock}
-        </p>
       </div>
     )
 
@@ -487,7 +434,6 @@ export const overviewMoves: Block<OverviewData> = {
         // sentence that keeps every line above it from reading as a causal
         // claim, and the artboard sets it in the footer's mono slot where the
         // build printed it as a body paragraph among the findings.
-        footerNote={m.masthead}
       >
         {email ? (
           <div>{m.card ? <Card card={m.card} mode={mode} /> : null}{declared}</div>

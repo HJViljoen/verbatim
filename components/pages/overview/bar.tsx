@@ -54,48 +54,43 @@ export const overviewBar: Block<OverviewData> = {
         </BlockFrame>
       )
     }
+    // L10 (copy de-clutter 2026-09-24): ON SCREEN THE PAGE BAR OWNS THE
+    // SHARED FIGURES. The band prints the videos and the same point last month,
+    // the horizon range prints the updates and the dates, so the app tile keeps
+    // only what the bar does not: how far into the month, the trailing median
+    // and the gate, and what the last report read. Paper has no page bar, so
+    // the print sheet keeps every stat.
+    const paper = mode === 'print'
     return (
-      <BlockFrame title={overviewBar.title} mode={mode} meta={meta}>
+      <BlockFrame title={overviewBar.title} mode={mode} meta={paper ? meta : undefined}>
         <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
-          <BlockStat
-            value={b.videos == null ? '—' : fmtInt(b.videos)}
-            unit="videos"
-            mode={mode}
-            size="lg"
-            base={`${longMonth(b.month)}${b.daysIn == null ? ', complete' : `, ${b.daysIn} ${b.daysIn === 1 ? 'day' : 'days'} in`}`}
-          />
-          {/* Drawn only where the comparison exists. An em dash under "last
-              month at this point" is a stat that says nothing, beside a line
-              that already says why — and two ways of printing the same absence
-              is one too many. */}
-          {b.atLastMonthKnown && b.atLastMonth != null ? (
+          {paper ? (
+            <BlockStat
+              value={b.videos == null ? '—' : fmtInt(b.videos)}
+              unit="videos"
+              mode={mode}
+              size="lg"
+              base={`${longMonth(b.month)}${b.daysIn == null ? ', complete' : `, ${b.daysIn} ${b.daysIn === 1 ? 'day' : 'days'} in`}`}
+            />
+          ) : b.daysIn != null ? (
+            <BlockStat value={fmtInt(b.daysIn)} unit={b.daysIn === 1 ? 'day in' : 'days in'} mode={mode} size="lg" base={longMonth(b.month)} />
+          ) : (
+            <BlockStat value={longMonth(b.month)} unit="complete" mode={mode} size="lg" />
+          )}
+          {paper && b.atLastMonthKnown && b.atLastMonth != null ? (
             <BlockStat value={fmtInt(b.atLastMonth)} unit="videos" mode={mode} base="last month at this point" />
           ) : null}
-          <BlockStat
-            value={fmtInt(b.updates)}
-            unit={b.updates === 1 ? 'update' : 'updates'}
-            mode={mode}
-            base={b.updateDates.join(' · ') || 'none yet this month'}
-          />
+          {paper ? (
+            <BlockStat
+              value={fmtInt(b.updates)}
+              unit={b.updates === 1 ? 'update' : 'updates'}
+              mode={mode}
+              base={b.updateDates.join(' · ') || 'none yet this month'}
+            />
+          ) : null}
         </div>
-        {/* WHAT THE STATS DO NOT SAY, AND NOTHING ELSE (design review High 5).
-            This printed `b.line`, which restates the videos, the same point
-            last month and the update count in prose directly under the three
-            stats that had just drawn them — so the tile held no fact of its
-            own and the page's real lead, "In one sentence", began four hundred
-            pixels below the fold. `b.note` is the residual: the trailing
-            median, and the gate that suppresses every change below.
-
-            AND THE RAMP COUNTER IS GONE FROM HERE. It leads the soundness band
-            at the top of the page (`main.bar.soundness`), which is where the
-            artboard puts it and where the brief asked for it; printing it here
-            as well put the same sentence on the page twice. The email arm keeps
-            both, because an email has no band above it. */}
         {b.note ? <p className="m-0 text-[12px] text-secondary-foreground">{b.note}</p> : null}
-        {/* A PRINT SHEET HAS NO BAND ABOVE IT. `SurfacePageBar` is the app
-            shell's and does not travel into a PDF or a PNG, so on paper the
-            ramp counter has nowhere else to be printed and leads here. */}
-        {mode === 'print' ? <p className="m-0 text-[11.5px] text-secondary-foreground">{b.counter}</p> : null}
+        {paper ? <p className="m-0 text-[11.5px] text-secondary-foreground">{b.counter}</p> : null}
         {sentLine ? <p className="m-0 text-[11.5px] text-muted-foreground">{sentLine}</p> : null}
       </BlockFrame>
     )

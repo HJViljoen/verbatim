@@ -108,7 +108,7 @@ describe('OV2 · your subjects', () => {
     expect(markup).not.toContain('<svg')
   })
 
-  it('prints "at this point last month" on the category side, in both drawn modes', () => {
+  it('prints the same point last month on the category side, named once, in both drawn modes', () => {
     for (const mode of ['app', 'email'] as const) {
       const text = renderText(overviewSubjects.render(overviewFixture(), mode, ctx))
       // The two figures are separated (design review Medium 18): they ran
@@ -118,7 +118,9 @@ describe('OV2 · your subjects', () => {
       // 20.5% a reader who subtracted the row's own two levels got 1.5 pts
       // against a band of ±2.1 — the verdict refuted by the sheet built to be
       // checked.
-      expect(text, mode).toContain('at this point last month 18.8% · 243 of 1,290')
+      expect(text, mode).toContain('18.8% · 243 of 1,290')
+      // L4: named once as a legend, never per row.
+      expect(text.split('at this point last month').length - 1, mode).toBe(1)
     }
   })
 })

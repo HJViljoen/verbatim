@@ -71,7 +71,6 @@ export function HowSound({
             <CardContent className="pt-6">
               <div className="space-y-3 pr-6">
                 <h2 id="how-sound-title" className="text-base font-semibold">How sound is this?</h2>
-                <p className="text-sm text-muted-foreground">{line}</p>
                 {/* Unmarked on purpose: the copy contract's four kinds are
                     model prose, a code figure, a calibrated level and a
                     verdict, and these are none of them — every line is

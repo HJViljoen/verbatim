@@ -6,7 +6,7 @@ import { fmtInt, longMonth, monthName, platformLabel, shortDate } from '../forma
 import { inheritedStatus, REC_DECISIONS_TABLE, type RecDecision } from '../rec-decisions'
 import { composeInterpretation, type Interpretation } from '../prose/interpret'
 import { loadSentFigures, objectKey, sentMonthOf, type SentMonth } from '../reports/sent-figures'
-import { sentReadingLine } from '../reports/monthly'
+import { monthlySoundFigures, sentReadingLine, type MonthlySoundFigures } from '../reports/monthly'
 import { proseFigures } from '../prose/figures'
 import { cleanQuote, fetchQuoteCitationsByAudience, fetchQuoteResolutionsByRefs, readsAsHeroQuote, type QuoteCitation } from '../quotes'
 import { citationLink } from '../evidence-cite'
@@ -47,7 +47,7 @@ import {
 } from '../reading/moves'
 import { loadMonthSeries, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
 import { methodLines, type MethodLines } from '../reading/method'
-import { countRefused, howSoundLine, loadRecordInputs, monthRecordWindow, recordLines, refusals, type RecordInputs } from '../reading/record'
+import { countRefused, howSoundLine, loadRecordInputs, monthRecordWindow, recordLines, refusals, soundFigures, type RecordInputs, type SoundFigure } from '../reading/record'
 import {
   mergeSeriesNotes,
   monthAxis,
@@ -571,7 +571,14 @@ export interface BarBlock {
 
 export interface RecordBlock {
   line: string
+  /** The same line without the update count, which the horizon range beside
+   *  the band already prints (L10: no figure twice on one screen). */
+  bandLine: string
   lines: string[]
+  /** OV6's labelled figures: only those the page bar's line does not print. */
+  figures: SoundFigure[]
+  /** The monthly email's §8 figures (its three sentences), off the same inputs. */
+  sound?: MonthlySoundFigures | null
   href: string
   /** The day this month stops moving — the one fact about this month that a
    *  window-shaped record does not hold, and the only line OV6 adds of its
@@ -758,8 +765,8 @@ export function fillingLine(input: FillingLineInput): string {
   // no banded change at all" (§3 OV0) is a different fact from a thin month
   // and gets a different sentence; the thin rule's own words win when both are
   // true, because a thin month is the worse of the two.
-  if (input.thin) parts.push('thin month — every change below is suppressed')
-  else if (input.early) parts.push('early in the month — every change below is suppressed')
+  if (input.thin) parts.push('thin month: every change below is suppressed')
+  else if (input.early) parts.push('early in the month: every change below is suppressed')
   return parts.join(' · ')
 }
 
@@ -784,8 +791,8 @@ export function fillingNote(input: FillingLineInput): string | null {
   if (input.status === 'filling' && (!input.atLastMonthKnown || input.atLastMonth == null)) {
     parts.push(!input.atLastMonthKnown ? 'last month at this point: not recorded yet' : 'no reading of last month at this point')
   }
-  if (input.thin) parts.push('thin month — every change below is suppressed')
-  else if (input.early) parts.push('early in the month — every change below is suppressed')
+  if (input.thin) parts.push('thin month: every change below is suppressed')
+  else if (input.early) parts.push('early in the month: every change below is suppressed')
   return parts.length > 0 ? parts.join(' · ') : null
 }
 
@@ -814,12 +821,14 @@ export function earlyInMonth(month: string, now: string): boolean {
  * it is the count of monthly readings a window-against-window comparison needs
  * behind it before Last 3 may draw one at all.
  */
-export function readingsCounter(readings: number): string {
+export function readingsCounter(readings: number, opts: { quarter?: boolean } = {}): string {
   const n = Math.max(0, Math.floor(readings))
   const tens = n % 100
   const suffix = tens >= 11 && tens <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'
   const counter = n === 0 ? 'no monthly reading yet' : `your ${fmtInt(n)}${suffix} monthly reading`
-  return n >= QUARTER_UNLOCKS_AT ? counter : `${counter} · the quarter view needs ${QUARTER_UNLOCKS_AT}`
+  // The quarter gate is said once per surface (ruling E): the Overview band
+  // prints the bare counter, so it passes `quarter: false`.
+  return n >= QUARTER_UNLOCKS_AT || opts.quarter === false ? counter : `${counter} · the quarter view needs ${QUARTER_UNLOCKS_AT}`
 }
 
 /**
@@ -1306,8 +1315,8 @@ export function subjectsNote(rows: readonly SubjectRow[]): string | null {
   const thin = rows.every((r) => r.you.verdict == null || !isAnswer(r.you.verdict.state))
   if (!thin) return null
   return yourN == null
-    ? 'Your own side carries no reading this month — the category column carries the month.'
-    : `Your side carried ${fmtInt(yourN)} ${yourN === 1 ? 'video' : 'videos'} this month, too few for its column to answer — the category column carries the month.`
+    ? 'Your own side carries no reading this month; the category column carries the month.'
+    : `Your side carried ${fmtInt(yourN)} ${yourN === 1 ? 'video' : 'videos'} this month, too few for its column to answer; the category column carries the month.`
 }
 
 /** The "not a blank form" line (design §3 OV2, empty state). */
@@ -1808,7 +1817,10 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     // page's own `SurfacePageBar` call, and it is printed nowhere else on the
     // app surface.
     line: howSoundLine(recordInputs),
+    bandLine: howSoundLine(recordInputs, { updates: false }),
     lines: recordLines(recordInputs),
+    figures: soundFigures(recordInputs),
+    sound: monthlySoundFigures(recordInputs, { expected: bar.expected, readings: bar.readings }),
     href: '/dashboard/settings',
     freezesOn: freezesOn(month),
   }
@@ -3483,7 +3495,7 @@ export function buildRivals(input: RivalsInput): RivalsBlock {
       })),
       recorded: false,
       standingsNote:
-        'How much attention each brand drew is not recorded month by month for this workspace yet — what is printed here is what was raised under their content.',
+        'How much attention each brand drew is not recorded month by month for this workspace yet.',
       dualMention: input.dualMention,
       caveat,
       // No panel was read, so no verdict was drawn and there is nothing to

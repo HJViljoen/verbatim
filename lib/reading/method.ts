@@ -179,7 +179,7 @@ export function methodLines(inputs: RecordInputs, opts: MethodOptions = {}): Met
     // record drawer and the footnote are read on one page by one reader; two
     // wordings of one share is how a reader comes to believe they are two
     // measures.
-    ? `Of everything we have ever read for you, not just this window, speech was read on ${share(r.speech, r.analysed)} of ${fmtInt(r.analysed)} videos, translated on ${share(r.translated, r.analysed)}, and on-screen text read on ${share(r.onScreenText, r.analysed)} — Reddit excluded, which has neither audio nor a cover frame.`
+    ? `Of everything we have ever read for you, not just this window, speech was read on ${share(r.speech, r.analysed)} of ${fmtInt(r.analysed)} videos, translated on ${share(r.translated, r.analysed)}, and on-screen text read on ${share(r.onScreenText, r.analysed)}, Reddit excluded, which has neither audio nor a cover frame.`
     : 'How much of each video we managed to read is not recorded yet.'
 
   const lang = inputs.language
@@ -191,7 +191,7 @@ export function methodLines(inputs: RecordInputs, opts: MethodOptions = {}): Met
     // nothing about the language a comment was written in. The mock prints it
     // as a fact about this month's videos and it is neither this month's nor
     // about the comments.
-    : `${share(lang.notEnglish, known)} of what was said on camera was not in English — ${fmtInt(lang.notEnglish)} of ${fmtInt(known)} videos whose language we know${lang.unknown > 0 ? `, and ${fmtInt(lang.unknown)} with no language recorded at all` : ''}.`
+    : `${share(lang.notEnglish, known)} of what was said on camera was not in English: ${fmtInt(lang.notEnglish)} of ${fmtInt(known)} videos whose language we know${lang.unknown > 0 ? `, and ${fmtInt(lang.unknown)} with no language recorded at all` : ''}.`
 
   const redditCap = REDDIT_CAP_LINE
 

@@ -100,10 +100,10 @@ describe('SU1 · the subjects list', () => {
     expect(text).toContain('26.9%')
   })
 
-  it('prints the supersede rule wherever the editing happens', () => {
+  it('leaves the supersede rule to the Add and Rename dialogs (L3)', () => {
     for (const mode of MODES) {
       expect(renderText(subjectsList.render(subjectsFixture(), mode, ctx)), mode)
-        .toContain('Renaming or adding a subject starts a new line. The old line is kept.')
+        .not.toContain('Renaming or adding a subject starts a new line.')
     }
   })
 
@@ -336,7 +336,7 @@ describe('SU2 · the monthly line', () => {
 describe('SU2 · the kind mix', () => {
   it('names the denominator it used — the audience’s videos, not the subject’s', () => {
     const text = renderText(subjectsKinds.render(subjectsFixture(), 'app', ctx))
-    expect(text).toContain('every video in the audience')
+    expect(text).not.toContain('every video in the audience')
     expect(text).toContain('of 1,388 videos')
     expect(text).toContain('of 84 videos')
   })
@@ -372,10 +372,10 @@ describe('SU2 · the kind mix', () => {
   // in the mono face, not a body paragraph that reads as one of the block's
   // findings. The overlap caveat stays in the body, beside the shares it is
   // about.
-  it('names Reddit’s share of the question-and-objection videos, as a basis', () => {
+  it('says the kinds overlap once, and prints no Reddit split (A40, L2)', () => {
     const text = renderText(subjectsKinds.render(subjectsFixture(), 'app', ctx))
-    expect(text).toContain('Reddit · 236 of 736 question videos')
-    expect(text).toContain('counted in each')
+    expect(text).not.toContain('Reddit · 236 of 736 question videos')
+    expect(text.split('counted in each').length - 1).toBe(1)
   })
 
   // THREE AUDIENCES IN ONE COLUMN, ON ONE TRACK. Each group was scaled to its
@@ -414,7 +414,8 @@ describe('SU2 · the kind mix', () => {
     const data = subjectsFixture()
     const text = renderText(subjectsKinds.render(data, 'app', ctx))
     expect(text).toContain('Category — no brand, since Aug:')
-    expect(text).toContain('band')
+    // Ruling I: printed on paper, a tooltip on screen.
+    expect(renderText(subjectsKinds.render(data, 'print', ctx))).toContain('band')
     const verdicts = blockAnswers(subjectsKinds, data).verdicts
     expect(verdicts.length).toBeGreaterThan(0)
     // THE MONTH IS THE VERDICTS' OWN. It was re-derived off `pane.series[0]`,
@@ -445,7 +446,8 @@ describe('SU2 · the kind mix', () => {
 describe('SU2 · the kind mix, on its own month', () => {
   it('names the month, because it is one month among twelve months of furniture', () => {
     const text = renderText(subjectsKinds.render(subjectsFixture(), 'app', ctx))
-    expect(text).toContain('Sep · every video in the audience')
+    expect(text).toContain('Sep')
+    expect(text).not.toContain('every video in the audience')
   })
 })
 
@@ -780,7 +782,8 @@ describe('the mock’s own shape, where the data allows it', () => {
     // Both sides of this merge touched this line: `lib`'s fmtPct now keeps an
     // exact .0 so a decimal column lines up, and `main`'s M13 moved the fixture's
     // September reading from 24.5 to 22. Take both.
-    expect(text).toContain('Jul 17.0% → Aug 19.0% → Sep 22.0% in the category')
+    // A59: the chart below draws these points; the trail is not repeated.
+    expect(text).not.toContain('Jul 17.0% → Aug 19.0% → Sep 22.0% in the category')
   })
 
   // AND THE OTHER HALF OF THE SAME RULE. The fixture no longer carries a
@@ -831,9 +834,8 @@ describe('the mock’s own shape, where the data allows it', () => {
     // band beside `no_clear_change`, and this merge's R2 keeps them off
     // `too_little_data`, where the band can be a floor rather than a margin.
     expect(text).toContain('too few to compare Aug 31.0%')
-    expect(text).toContain('no clear change · ±0 pts · band ±11.8 pts Aug 43.7%')
-    expect(text).toContain('no clear change · +3 pts · band ±3.1 pts growing, 3rd month Aug 19.0%')
-    expect(text).toContain('Jul 17.0% → Aug 19.0% → Sep 22.0% in the category')
+    expect(text).toContain('no clear change · ±0 pts Aug 43.7%')
+    expect(text).toContain('no clear change · +3 pts growing, 3rd month Aug 19.0%')
   })
 
   it('names the axis the chart spans, and what the shading over it means', () => {
@@ -873,7 +875,9 @@ describe('the mock’s own shape, where the data allows it', () => {
     // D15. What is recorded is the language of what was said ON CAMERA,
     // all-time; "27% of this month's videos" would restate a different
     // denominator.
-    expect(text).toContain('said on camera was not in English')
+    // A45: on screen the page bar carries it; a travelling block keeps it.
+    expect(text).not.toContain('said on camera was not in English')
+    expect(renderText(subjectsVoices.render(subjectsFixture(), 'print', ctx))).toContain('said on camera was not in English')
   })
 
   // THE PLATFORM IS DRAWN ONCE. The cite led with `m.platform` — the raw stored
@@ -1076,27 +1080,14 @@ describe('SU2 · the two-audience gap the pane carries', () => {
 // ---- the page, not the blocks ------------------------------------------------
 
 describe('the Subjects page', () => {
-  // D15's sentence belongs to the tile it qualifies — the artboard puts "27%
-  // of this month's videos are not in English" at the foot of VOICES ON
-  // DURABILITY and keeps it out of the page's own footer line. The method
-  // footnote arrived after commit 0894c90 ("the page says each of its
-  // sentences once") and printed it a second time, byte for byte, ~110px
-  // below, both inside one screenful at 1440.
-  it('says the language sentence once, on the tile that qualifies it', () => {
-    const data = subjectsFixture()
-    const language = data.method!.language!
-    const text = markupText(render(<SubjectsPage data={data} />))
-    expect(text.split(language).length - 1).toBe(1)
-  })
-
-  // AND THE REST OF THE FOOTNOTE SURVIVES. The filter drops one line, not the
-  // paragraph: a reader still gets who prepared it, what was read, the
-  // read-depth basis, the Reddit cap and the privacy line.
-  it('keeps every other method line in the footnote', () => {
+  // Copy de-clutter (ruling B, A45, A71): the page bar's How-sound pill is
+  // the one home for soundness, so neither the language sentence nor the
+  // method footnote prints on the page.
+  it('prints no method footnote and no language sentence', () => {
     const data = subjectsFixture()
     const text = markupText(render(<SubjectsPage data={data} />))
-    for (const line of data.method!.lines.filter((l) => l !== data.method!.language)) {
-      expect(text).toContain(line)
-    }
+    expect(text).not.toContain(data.method!.language!)
+    expect(text).not.toContain(data.method!.preparedBy)
+    expect(text).not.toContain(data.method!.redditCap)
   })
 })

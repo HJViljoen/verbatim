@@ -60,7 +60,7 @@ describe('originLine', () => {
 
 describe('railNote', () => {
   it('tells the method’s silence apart from the record’s', () => {
-    expect(railNote('calibrating', true)).toBe('still checking how often we get this right')
+    expect(railNote('calibrating', true)).toBe('provisional')
     expect(railNote('ready', false)).toBe('no reading yet')
     expect(railNote('ready', true)).toBeNull()
   })
@@ -297,7 +297,7 @@ describe('axisNote', () => {
     const note = axisNote([side({}), side({ label: 'Category', kind: 'category', n: 1388, k: 305, audience: INDUSTRY_AUDIENCE })], 100)!
     expect(note).toContain('You carried too few videos this month to compare (84)')
     expect(note).not.toContain('Category carried too few')
-    expect(note.split('—').length).toBe(2)
+    expect(note).not.toContain('drawn hollow')
   })
 
   it('collapses several hollow lines into one clause rather than one each', () => {

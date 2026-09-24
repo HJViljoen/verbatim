@@ -509,7 +509,8 @@ export function railNote(
   status: Subject['status'] = 'active',
 ): string | null {
   if (status === 'proposed') return 'not counted yet — confirm it and counting starts with the next update'
-  if (calibration === 'calibrating') return 'still checking how often we get this right'
+  // A67: the pane says it in full; the rail says the one word.
+  if (calibration === 'calibrating') return 'provisional'
   if (!read) return 'no reading yet'
   return null
 }
@@ -552,10 +553,10 @@ export function voicesAcross<T>(
 /** The voices block's meta line. Where the pool was capped it says so rather
  *  than printing a denominator nobody counted. */
 export function voicesMeta(shown: number, from: number, sampled: boolean): string {
-  const tail = 'original first, English beneath when translated'
+  // A44: the quotes show their own layout, so the meta is the count alone.
   return sampled
-    ? `${fmtInt(shown)} shown, drawn from a sample of what was said on this subject · ${tail}`
-    : `${fmtInt(shown)} of ${fmtInt(from)} · ${tail}`
+    ? `${fmtInt(shown)} shown, drawn from a sample of what was said on this subject`
+    : `${fmtInt(shown)} of ${fmtInt(from)}`
 }
 
 /**
@@ -870,7 +871,7 @@ export function axisNote(
   if (hollow.length > 0) {
     parts.push(
       `${names(hollow)} carried too few videos this month to compare ` +
-      `(${hollow.map((s) => `${fmtInt(s.n ?? 0)}`).join(', ')}) — drawn hollow, with a level and no change.`,
+      `(${hollow.map((s) => `${fmtInt(s.n ?? 0)}`).join(', ')}).`,
     )
   }
   // TWO SILENCES, TWO SENTENCES. An audience we never read is "not tracked";

@@ -278,7 +278,7 @@ export const NOT_DRAWN_WHY: Record<string, string> = {
 }
 
 /**
- * "3 comparisons were refused on this page: 2 because … and 1 because …"
+ * "3 comparisons were refused: 2 because … and 1 because …"
  *
  * THE REASON IS PRINTED, NOT PROMISED. The line said "N comparisons on this
  * page could not be drawn and say why in their place" while the why reached
@@ -288,8 +288,20 @@ export const NOT_DRAWN_WHY: Record<string, string> = {
  * inbox, on the block that is the page's guarantee. The design asks OV6 for
  * "comparisons refused this month and why"; this is the why.
  */
+/** "1 because …, 1 because …": each reason with its count, largest first. */
+export function refusalReasons(refusals: readonly Refusal[]): string[] {
+  const counts = new Map<string, number>()
+  for (const r of refusals) {
+    const why = (r.state === 'refused' && r.reason ? REFUSAL_WHY[r.reason] : NOT_DRAWN_WHY[r.state]) ?? NOT_DRAWN_WHY.refused
+    counts.set(why, (counts.get(why) ?? 0) + 1)
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([why, n]) => `${fmtInt(n)} because ${why}`)
+}
+
 export function refusedSentence(refusals: readonly Refusal[]): string {
-  if (refusals.length === 0) return 'Every comparison this page asked for was drawn.'
+  if (refusals.length === 0) return 'Every comparison asked for was drawn.'
   const counts = new Map<string, number>()
   for (const r of refusals) {
     const why = (r.state === 'refused' && r.reason ? REFUSAL_WHY[r.reason] : NOT_DRAWN_WHY[r.state]) ?? NOT_DRAWN_WHY.refused
@@ -297,8 +309,8 @@ export function refusedSentence(refusals: readonly Refusal[]): string {
   }
   const head =
     refusals.length === 1
-      ? '1 comparison was refused on this page'
-      : `${fmtInt(refusals.length)} comparisons were refused on this page`
+      ? '1 comparison was refused'
+      : `${fmtInt(refusals.length)} comparisons were refused`
   const reasons = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
   if (reasons.length === 1 && refusals.length === 1) return `${head}, because ${reasons[0][0]}.`
   const parts = reasons.map(([why, n]) => `${fmtInt(n)} because ${why}`)
@@ -926,9 +938,9 @@ const plural = (n: number, word: string): string => `${fmtInt(n)} ${word}${n ===
  * that ends "→ the record" reads as an instruction wherever it is printed
  * without one, which is what the record page itself did.
  */
-export function howSoundLine(input: RecordInputs): string {
+export function howSoundLine(input: RecordInputs, opts: { updates?: boolean } = {}): string {
   const parts: string[] = []
-  parts.push(plural(input.delivery.delivered, 'update'))
+  if (opts.updates !== false) parts.push(plural(input.delivery.delivered, 'update'))
 
   // THE PLATFORM MIX IS THE RECORD'S, NOT THE BAND'S — it is said ONCE, and
   // `recordLines` is where. This line used to carry "(TikTok 896 · YouTube 684
@@ -1025,7 +1037,7 @@ export function recordLines(input: RecordInputs): string[] {
   else if (input.coverage.length > 0) {
     const videos = totalVideos(input.coverage)
     const mix = platformMixLine(totalPlatformMix(input.coverage))
-    lines.push(`${plural(videos, 'video')} carried conversation in this window${mix ? ` — ${mix}` : ''}.`)
+    lines.push(`${plural(videos, 'video')} carried conversation in this window${mix ? `: ${mix}` : ''}.`)
     const dual = input.coverage.reduce((n, c) => n + c.dualMention, 0)
     if (dual > 0) lines.push(`${plural(dual, 'video')} of your own named a tracked rival as well as you.`)
     const undated = input.coverage.reduce((n, c) => n + c.excludedUndated, 0)
@@ -1043,7 +1055,7 @@ export function recordLines(input: RecordInputs): string[] {
       // consistent — all three numerators are head counts over the same
       // `analysed` denominator — so this was a basis that was not stated rather
       // than a share that was wrong.
-      `Of everything we have ever read for you, not just this window, speech was read on ${share(r.speech, r.analysed)}, translated on ${share(r.translated, r.analysed)}, and on-screen text read on ${share(r.onScreenText, r.analysed)} — Reddit excluded, which has neither audio nor a cover frame.`,
+      `Of everything we have ever read for you, not just this window, speech was read on ${share(r.speech, r.analysed)}, translated on ${share(r.translated, r.analysed)}, and on-screen text read on ${share(r.onScreenText, r.analysed)}, Reddit excluded, which has neither audio nor a cover frame.`,
     )
     if (r.unflagged > 0) lines.push(`${plural(r.unflagged, 'video')} were read before the product recorded which of the three it managed.`)
   }
@@ -1070,7 +1082,7 @@ export function recordLines(input: RecordInputs): string[] {
       : g.recordedFrom == null
       ? 'What was looked at and set aside is not recorded at all, so the share left out cannot be drawn for any month.'
       : g.judged === 0
-        ? `Nothing was looked at and set aside in this window — the record of it begins ${fullDate(g.recordedFrom)}.`
+        ? `Nothing was looked at and set aside in this window; the record of it begins ${fullDate(g.recordedFrom)}.`
         : `${share(g.setAside, g.judged)} of what was looked at was set aside, recorded only from ${fullDate(g.recordedFrom)}, so no month before that can show it${discardCaveat(g)}.`,
   )
 
@@ -1104,8 +1116,46 @@ export function recordLines(input: RecordInputs): string[] {
   if (input.comparisonsRefused != null) lines.push(refusedSentence(input.refusals))
 
   lines.push(`Reading as at ${fullDate(input.readingAt)}.`)
-  lines.push(input.frozenAt == null ? 'No month in this window has been frozen yet — they are still filling.' : `The newest month here was frozen ${fullDate(input.frozenAt)}.`)
+  lines.push(input.frozenAt == null ? 'No month in this window has been frozen yet; they are still filling.' : `The newest month here was frozen ${fullDate(input.frozenAt)}.`)
   return lines
+}
+
+/**
+ * OV6 as FIGURES (copy de-clutter 2026-09-24, ruling B). The page bar's
+ * how-sound line owns the updates, the videos, the share not in English and the
+ * tracking changes; the record modal and Settings › The record own the
+ * sentences. What the Overview block keeps is the labelled figures neither of
+ * those prints on the page, with no prose around them.
+ */
+export interface SoundFigure { label: string; value: string }
+
+export function soundFigures(input: RecordInputs): SoundFigure[] {
+  const out: SoundFigure[] = []
+  if (input.coverage != null && input.coverage.length > 0) {
+    const comments = input.coverage.reduce((n, c) => n + c.comments, 0)
+    if (comments > 0) out.push({ label: 'comments read', value: fmtInt(comments) })
+    const mix = platformMixLine(totalPlatformMix(input.coverage))
+    if (mix) out.push({ label: 'videos by platform', value: mix })
+    const dual = input.coverage.reduce((n, c) => n + c.dualMention, 0)
+    if (dual > 0) out.push({ label: 'your videos also naming a rival', value: fmtInt(dual) })
+  }
+  const r = input.readDepth
+  if (r.analysed > 0) {
+    out.push({
+      label: 'read depth, all time',
+      value: `speech ${share(r.speech, r.analysed)} · translated ${share(r.translated, r.analysed)} · on-screen text ${share(r.onScreenText, r.analysed)} · Reddit excluded`,
+    })
+  }
+  const g = input.discard
+  if (g.readable && g.recordedFrom != null && g.judged > 0) out.push({ label: 'set aside by the relevance check', value: share(g.setAside, g.judged) })
+  if (input.instrument.themesPerVideo != null) out.push({ label: 'themes per video', value: String(input.instrument.themesPerVideo) })
+  if (input.comparisonsRefused != null) {
+    // The count and each reason: a refusal is printed with its why, never only
+    // in a hover title.
+    const reasons = refusalReasons(input.refusals)
+    out.push({ label: 'comparisons refused', value: `${fmtInt(input.comparisonsRefused)}${reasons.length ? ` (${reasons.join(', ')})` : ''}` })
+  }
+  return out
 }
 
 // ---- The record as ROWS (block E wave 2, `record.coverage.rows`) -------------
@@ -1317,15 +1367,12 @@ export function recordRows(input: RecordInputs, extra: RecordExtras = {}): Recor
   // video and a video belongs to a month through its comments, so there is no
   // such thing as "speech read on 71% of September" — the same sentence
   // `recordLines` and `methodLines` both print, in the same words.
-  const allTime = 'of everything we have ever read for you, not just this window — Reddit excluded, which has neither audio nor a cover frame'
-  // THE SECOND READ-DEPTH ROW CARRIES THE SAME BASIS, SHORTER, and that is not
-  // a weakening of D15 (design review finding 5). Both figures are all-time and
-  // both owe a reader that basis, so both carry one — but the two rows sit side
-  // by side in the grid and the first port attached this twenty-word sentence
-  // VERBATIM to each, so six lines at one eye level said one thing twice. The
-  // short form is self-contained rather than a reference to the row beside it,
-  // which would be false the moment the grid reflowed.
-  const allTimeAgain = 'of everything we have ever read, not just this window — Reddit excluded'
+  const allTime = 'of everything we have ever read for you, not just this window; Reddit excluded, which has neither audio nor a cover frame'
+  // THE SECOND READ-DEPTH ROW CARRIES THE BASIS AS TWO WORDS (copy de-clutter
+  // 2026-09-24, C15). Both figures are all-time and both owe a reader that
+  // basis (D15), but the full sentence is said once, on the speech row beside
+  // it; "all time" is self-contained, so it stays true if the grid reflows.
+  const allTimeAgain = 'all time'
   push(
     'speech', 'Speech read', r.analysed > 0 ? share(r.speech, r.analysed) : null,
     r.analysed > 0 ? `of videos · translated on ${share(r.translated, r.analysed)}` : 'How much of each video we managed to read is not recorded yet.',
@@ -1347,7 +1394,7 @@ export function recordRows(input: RecordInputs, extra: RecordExtras = {}): Recor
       : g.recordedFrom == null
         ? 'What was looked at and set aside is not recorded at all, so the share left out cannot be drawn for any month.'
         : g.judged === 0
-          ? `Nothing was looked at and set aside in this window — the record of it begins ${fullDate(g.recordedFrom)}.`
+          ? `Nothing was looked at and set aside in this window; the record of it begins ${fullDate(g.recordedFrom)}.`
           : 'of what was looked at',
     g.readable && g.recordedFrom != null && g.judged > 0
       ? {
@@ -1389,9 +1436,9 @@ export function recordRows(input: RecordInputs, extra: RecordExtras = {}): Recor
     c.loggedFrom == null
       ? 'No change to what we track has been recorded yet, so no comparison can be checked against one.'
       : '',
-    c.loggedFrom != null && c.reconstructed > 0
-      ? { basis: `${fmtInt(c.reconstructed)} earlier ${c.reconstructed === 1 ? 'entry was' : 'entries were'} worked out afterwards from what each update searched` }
-      : {},
+    // C94: the reconstructed-entries count is the change log's own section
+    // note on this page; it is not repeated on the coverage row.
+    {},
   )
 
   push(

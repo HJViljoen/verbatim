@@ -9,7 +9,7 @@ import { SurfacePageBar } from '@/components/shell/page-bar'
 import { Tile, TileEmpty } from '@/components/shell/tile'
 import { fmtInt, shortDate } from '@/lib/format'
 import type { OverviewData } from '@/lib/pages/overview'
-import { atThisPointLine, sentLineForToken } from '@/lib/pages/overview'
+import { atThisPointLine, readingsCounter } from '@/lib/pages/overview'
 import { overviewBar } from './bar'
 import { overviewSentence } from './sentence'
 import { overviewSubjects } from './subjects'
@@ -143,7 +143,9 @@ export const OVERVIEW_LEGEND = [...THIRTEEN_WORDS, ...READER_FLAGS]
  */
 export function bandLine(data: OverviewData): string {
   const at = atThisPointLine(data.bar)
-  return [data.bar.counter, data.record.line, at].filter(Boolean).join(' · ')
+  // The bare counter: the quarter gate is said on Reports and the quarterly,
+  // and the update count is the horizon range's (A9, A11).
+  return [readingsCounter(data.bar.readings, { quarter: false }), data.record.bandLine, at].filter(Boolean).join(' · ')
 }
 
 export function OverviewPage({
@@ -185,11 +187,7 @@ export function OverviewPage({
             month: data.month,
             status: data.monthStatus,
             readingAt: data.readingAt,
-            // WHAT THE LAST REPORT READ (WP18, item 13). The month's own size is
-            // the figure the bar is about, so it is the one the bar quotes; null
-            // — and printed as nothing — where nothing was sent, where it has not
-            // moved, or where the month had already closed when it went out.
-            sent: sentLineForToken(data.sent, 'month_videos', data.bar.videos),
+            // "The report of 1 Oct read …" is OV0's line, printed once there (A56).
           }}
           // THE RAMP COUNTER LEADS THE BAND (`main.bar.soundness`), and this
           // is the ONE place on the app surface it is printed. It used to be

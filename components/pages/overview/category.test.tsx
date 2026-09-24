@@ -63,11 +63,11 @@ describe('OV3 · what the category is saying', () => {
     }
   })
 
-  it('states each kind against one denominator and names the Reddit share', () => {
+  it('states each kind against one denominator, and leaves the Reddit split to Voice (A38)', () => {
     const text = renderText(overviewCategory.render(overviewFixture(), 'app', ctx))
     expect(text).toContain('470 of 1,388')
-    expect(text).toContain('Reddit carried 200 of 590')
-    expect(text).toContain('a video carrying both is counted in each')
+    expect(text).not.toContain('Reddit carried')
+    expect(text).not.toContain('a video carrying both is counted in each')
   })
 
   // A CHANGE WITHOUT ITS BAND OR ITS BASIS IS A NUMBER A READER CANNOT WEIGH.
@@ -78,8 +78,11 @@ describe('OV3 · what the category is saying', () => {
   it('prints the band and the basis, not a tooltip', () => {
     for (const mode of MODES) {
       const text = renderText(overviewCategory.render(overviewFixture(), mode, ctx))
-      expect(text).toContain('band')
-      expect(text).toContain('What moved most · Sep 2026 against Aug 2026')
+      // Ruling I: the band is text on paper and in email, a tooltip on screen.
+      if (mode === 'app') expect(render(overviewCategory.render(overviewFixture(), mode, ctx))).toContain('pt margin of this measurement')
+      else expect(text).toContain('band')
+      expect(text).toContain('What moved most')
+      expect(text).not.toContain('What moved most · Sep 2026')
     }
   })
 
@@ -93,7 +96,7 @@ describe('OV3 · what the category is saying', () => {
   it('prints the mood with its judged denominator and the framing footnote', () => {
     const text = renderText(overviewCategory.render(overviewFixture(), 'app', ctx))
     expect(text).toContain('of 1,112 judged')
-    expect(text).toContain('judged on the video’s own framing instead')
+    expect(text).toContain('9.7% judged on the video’s framing')
   })
 
   it('says what is not recorded rather than printing zeros', () => {
@@ -108,7 +111,9 @@ describe('OV3 · what the category is saying', () => {
   it('draws the attention line as a month chart and names its exclusion', () => {
     const markup = render(overviewCategory.render(overviewFixture(), 'app', ctx))
     expect(markup).toContain('<svg')
-    expect(markup).toContain('Reddit is left out of this comparison')
+    // Why Reddit is left out is How to read's; the panel note says that it is.
+    expect(markup).toContain('excl. Reddit')
+    expect(markup).not.toContain('Reddit is left out of this comparison')
   })
 
   it('falls back to the numbers in an email with no image', () => {
@@ -171,7 +176,7 @@ describe('OV3 · what the category is saying', () => {
     // them now, with its date, and the second month says which panel it is on.
     const text = renderText(overviewCategory.render(overviewFixture(), 'app', ctx))
     expect(text).toContain(
-      'a fixed panel of 214 accounts · first seen before 1 Apr · Jul 2026 50,300 comments · panel re-frozen 3 Sep · Sep 2026 41,200 comments under the new panel',
+      'a fixed panel of 214 accounts · first seen before 1 Apr · excl. Reddit · Jul 2026 50,300 comments · panel re-frozen 3 Sep · Sep 2026 41,200 comments under the new panel',
     )
     expect(text).not.toContain('18% since June')
     expect(text).not.toContain('50,300 → 41,200')
@@ -258,8 +263,9 @@ describe('OV3, ported to the artboard', () => {
   it('heads the two mover arms with a band, never with a direction word', () => {
     const markup = render(overviewCategory.render(overviewFixture(), 'app', ctx))
     const text = renderText(overviewCategory.render(overviewFixture(), 'app', ctx))
-    expect(text).toContain('Cleared their band · a larger share than last month')
-    expect(text).toContain('Cleared their band · a smaller share than last month')
+    expect(text).toContain('Larger share than last month')
+    expect(text).toContain('Smaller share than last month')
+    expect(text).not.toContain('Cleared their band')
     // The mock's own headings would have failed rule (c) outright.
     expect(copyViolations(markup).filter((v) => v.rule === 'direction-word')).toEqual([])
   })
@@ -283,7 +289,7 @@ describe('OV3, ported to the artboard', () => {
     // paragraph, so in a 380px column the verdict landed alone on a third line
     // as "comparison refused" with nothing naming what was refused.
     const text = renderText(overviewCategory.render(overviewFixture(), 'app', ctx))
-    expect(text).toContain('month on month')
+    expect(text).not.toContain('month on month')
     // And the panel's date is printed in ONE format, in one place (High 7a).
     expect(text).not.toContain('2026-09-03')
   })
@@ -295,7 +301,7 @@ describe('OV3, ported to the artboard', () => {
     // pinned that rather than catching it. A control under N rows either
     // belongs on each row or belongs to none of them.
     const markup = render(overviewCategory.render(overviewFixture(), 'app', ctx))
-    expect(markup).toContain('more — one click down →')
+    expect(markup).toContain('more · one click down →')
     expect(markup).not.toContain('/dashboard/voice?type=')
   })
 

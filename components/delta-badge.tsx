@@ -106,13 +106,13 @@ function band(value: number, unit?: string): string {
  * refused for a bookkeeping break, or a reading with no two sides — the word
  * stands alone, as it did.
  */
-function NonAnswer({ word, title, change, bandPts, unit }: { word: string; title: string; change?: number | null; bandPts?: number | null; unit?: string }) {
+function NonAnswer({ word, title, change, bandPts, unit, bandTip = false }: { word: string; title: string; change?: number | null; bandPts?: number | null; unit?: string; bandTip?: boolean }) {
   const showable = change != null && bandPts != null
   return (
     <span className={NON_ANSWER} title={title}>
       {word}
       {showable ? (
-        <span className="font-normal"> · {change > 0 ? '+' : change < 0 ? '−' : '±'}{Math.abs(change).toLocaleString('en-US')}{unit ? ` ${unit}` : ''} · {band(bandPts, unit)}</span>
+        <span className="font-normal"> · {change > 0 ? '+' : change < 0 ? '−' : '±'}{Math.abs(change).toLocaleString('en-US')}{unit ? ` ${unit}` : ''}{bandTip ? '' : ` · ${band(bandPts, unit)}`}</span>
       ) : null}
     </span>
   )
@@ -127,7 +127,7 @@ function NonAnswer({ word, title, change, bandPts, unit }: { word: string; title
  *  the movement in muted ink: it moved, and we are not saying whether that is
  *  good. The default stays `up`, which is what every call site meant before
  *  the axis existed. */
-function Moved({ change, unit, band: bandPts, title, good = 'up' }: { change: number; unit?: string; band?: number | null; title: string; good?: Good }) {
+function Moved({ change, unit, band: bandPts, title, good = 'up', bandTip = false }: { change: number; unit?: string; band?: number | null; title: string; good?: Good; bandTip?: boolean }) {
   const fav = favourability(change, good)
   return (
     <span title={title} className={`${MOVED} ${fav === null ? 'text-muted-foreground' : fav ? 'text-positive' : 'text-negative'}`}>
@@ -136,7 +136,10 @@ function Moved({ change, unit, band: bandPts, title, good = 'up' }: { change: nu
           comment says "this product never prints a change without the band it
           cleared" — and on a printed page, in an email, and for anyone not
           using a mouse, a `title` attribute is not printed at all. */}
-      {bandPts != null ? <span className="font-normal text-muted-foreground"> · {band(bandPts, unit)}</span> : null}
+      {/* RULING I (copy de-clutter 2026-09-24): on SCREEN the band moves into
+          the badge's tooltip (`bandTip`), where the `title` already states it;
+          on paper and in email it stays printed inline. */}
+      {bandPts != null && !bandTip ? <span className="font-normal text-muted-foreground"> · {band(bandPts, unit)}</span> : null}
     </span>
   )
 }
@@ -155,12 +158,12 @@ function Moved({ change, unit, band: bandPts, title, good = 'up' }: { change: nu
  * magnitude and a sign, and the words "growing" and "fading" are earned over
  * three readings and printed by the surface, not by a badge.
  */
-export function MovementBadge({ verdict, unit, good = 'up' }: { verdict: Verdict | DeltaVerdict | null | undefined; unit?: string; good?: Good }) {
+export function MovementBadge({ verdict, unit, good = 'up', bandTip = false }: { verdict: Verdict | DeltaVerdict | null | undefined; unit?: string; good?: Good; /** On screen: the band rides in the tooltip, not the text (ruling I). */ bandTip?: boolean }) {
   if (!verdict) return null
   const change = 'changePts' in verdict ? verdict.changePts : verdict.change
   const bandPts = 'bandPts' in verdict ? verdict.bandPts : verdict.band
   if (verdict.state === 'moved' && change != null) {
-    return <Moved change={change} unit={unit} band={bandPts} good={good} title={bandPts != null ? `moved beyond the ${bandPts} pt margin of this measurement` : 'moved'} />
+    return <Moved change={change} unit={unit} band={bandPts} good={good} bandTip={bandTip} title={bandPts != null ? `moved beyond the ${bandPts} pt margin of this measurement` : 'moved'} />
   }
   const why = 'refusedReason' in verdict && verdict.refusedReason ? REFUSED_WHY[verdict.refusedReason] : null
   const inside = change != null && bandPts != null
@@ -194,7 +197,7 @@ export function MovementBadge({ verdict, unit, good = 'up' }: { verdict: Verdict
   // The numbers stay in `title` for both, where they are an explanation and not
   // a claim.
   const withholds = verdict.state === 'refused' || verdict.state === 'too_little_data'
-  return <NonAnswer word={word} title={why ?? inside} change={withholds ? null : change} bandPts={withholds ? null : bandPts} unit={unit} />
+  return <NonAnswer word={word} title={why ?? inside} change={withholds ? null : change} bandPts={withholds ? null : bandPts} unit={unit} bandTip={bandTip} />
 }
 
 /**

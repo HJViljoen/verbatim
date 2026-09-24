@@ -66,20 +66,13 @@ export interface Interpretation {
   /** True when the product wrote this, not the model. */
   fallback: boolean
   reason?: FallbackReason
-  /** The line that says who wrote it, when the product did. Printed. */
+  /** Retired 2026-09-24 (copy de-clutter L9): "We wrote this read ourselves"
+   *  is an internal distinction a reader cannot act on, so nothing sets it. */
   note?: string
   scrub: ProseScrub
 }
 
 const EMPTY_SCRUB: ProseScrub = { text: '', dropped: 0, droppedDigits: 0, droppedDirection: 0, flaggedDirection: 0, leaked: false }
-
-/** What a slot says when the product wrote it. Calibrated: it names the
- *  mechanism, not the machinery — no "model", no "fallback", no pass names. */
-const FALLBACK_NOTE: Record<InterpretationSlot, string> = {
-  interpretation_monthly: 'We wrote this read ourselves this month.',
-  interpretation_quarterly: 'We wrote this read ourselves this quarter.',
-  interpretation_anomaly: 'We wrote this read ourselves this week.',
-}
 
 /** How many quotes each slot shows beside its prose. WK1 says two. Exported
  *  because a caller that groups refs per object has to cap each group at the
@@ -167,7 +160,7 @@ function fallbackFor(
     // mid-sentence use in listObjects; reusing it to OPEN a sentence shipped
     // "two of these carried…" in lower case, and the refusal sentence shipped
     // "two could have been compared and WAS not". Both in prose the product
-    // signs as its own ("We wrote this read ourselves this quarter.").
+    // signs as its own.
     if (thin.length > 0) {
       sentences.push(
         thin.length === 1
@@ -202,7 +195,6 @@ function fallbackFor(
     quotes: [...quotes],
     fallback: true,
     reason: reason === 'no_model' && moved.length === 0 ? 'nothing_moved' : reason,
-    note: FALLBACK_NOTE[slot],
     scrub: EMPTY_SCRUB,
   }
 }

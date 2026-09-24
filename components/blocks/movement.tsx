@@ -111,7 +111,8 @@ export function BlockMovement({
   good?: Good
 }) {
   if (!verdict) return null
-  if (mode !== 'email') return <span data-copy="verdict"><MovementBadge verdict={verdict} unit={unit} good={good} /></span>
+  // Ruling I: in the app the band is the badge's tooltip; print keeps it inline.
+  if (mode !== 'email') return <span data-copy="verdict"><MovementBadge verdict={verdict} unit={unit} good={good} bandTip={mode === 'app'} /></span>
 
   const change = 'changePts' in verdict ? verdict.changePts : verdict.change
   const band = 'bandPts' in verdict ? verdict.bandPts : verdict.band

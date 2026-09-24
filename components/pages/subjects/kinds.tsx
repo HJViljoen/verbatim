@@ -179,16 +179,13 @@ export const subjectsKinds: Block<SubjectsData> = {
         // video in the audience"). This block is always ONE month while the
         // rest of the page follows the horizon, so on Last 12 months an
         // unlabelled one-month kind mix sat among twelve-month furniture.
-        meta={`${monthName(data.month).split(' ')[0]} · every video in the audience`}
+        meta={monthName(data.month).split(' ')[0]}
         footer={footer}
         truncateFooter
         // THE REDDIT READ INTO THE FOOTER NOTE, where the mock puts it — a
         // basis, in the mono face a reader skips until they want it. It was a
         // body paragraph of raw counts, which reads as one of the block's
         // findings rather than as a caveat about where they came from.
-        footerNote={reddit && reddit.pct != null ? (
-          <span data-copy="level">Reddit · {fmtInt(reddit.reddit)} of {fmtInt(reddit.videos)} question videos</span>
-        ) : undefined}
       >
         {withKinds.map((s) => <Audience key={s.audience} side={s} brand={data.brand} mode={mode} max={trackMax} />)}
         {category ? <KindMovement side={category} brand={data.brand} mode={mode} /> : null}

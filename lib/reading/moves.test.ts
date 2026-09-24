@@ -339,7 +339,7 @@ describe('readMove — the one movement claim a move earns', () => {
     // A move never earns a direction word.
     expect(r.verdict?.direction ?? null).toBeNull()
     expect(r.months).toEqual(['2026-07-01', '2026-08-01', '2026-09-01'])
-    expect(r.line).toBe('declared 12 Aug · read against the one month since')
+    expect(r.line).toBe('read against the one month since')
     expect(r.unread).toBeNull()
     // The window the caller LOADED over is recorded, and it is not the
     // verdict's own one-month-against-one-month window.
@@ -409,7 +409,7 @@ describe('readMove — the one movement claim a move earns', () => {
     expect(r.control).toEqual([])
     expect(r.figures).toEqual({})
     expect(r.unread).toBe(MOVE_TOO_YOUNG)
-    expect(r.line).toBe('declared 2 Sep · read against no complete month since')
+    expect(r.line).toBe('read against no complete month since')
   })
 
   it('a move whose own side carries nothing says that instead', () => {
@@ -513,7 +513,7 @@ describe('actedTally — the whole ledger, never a quarter', () => {
     expect(t).toEqual({
       decided: 2,
       of: 5,
-      line: 'You have acted on 2 of 5 — every piece of advice this product has ever given you.',
+      line: 'You have acted on 2 of 5.',
     })
     expect(t.line).not.toMatch(/quarter/i)
   })

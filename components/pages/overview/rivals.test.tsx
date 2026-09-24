@@ -4,7 +4,7 @@ import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
-import { brandLabel, caveatLine, overviewRivals, rowInk } from './rivals'
+import { brandLabel, overviewRivals, rowInk } from './rivals'
 import { overviewFixture, refusedFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
@@ -59,7 +59,7 @@ describe('OV4 · rivals', () => {
 
   it('prints no rank and says so', () => {
     const text = renderText(overviewRivals.render(overviewFixture(), 'app', ctx))
-    expect(text).toContain('no rank is printed')
+    expect(text).not.toContain('no rank is printed')
     expect(text).not.toMatch(/\b(1st|2nd|3rd|ranked|leader|leads)\b/i)
   })
 
@@ -90,8 +90,9 @@ describe('OV4 · rivals', () => {
 
   it('carries the precedence caveat with its count', () => {
     const text = renderText(overviewRivals.render(overviewFixture(), 'app', ctx))
-    expect(text).toContain('counts in your audience only')
-    expect(text).toContain('41 did this month')
+    // A27: the rule is Competitive's and the count is OV6's.
+    expect(text).not.toContain('counts in your audience only')
+    expect(text).not.toContain('41 did this month')
   })
 
   it('keeps a retired rival’s row and dates the retirement', () => {
@@ -155,15 +156,14 @@ describe('OV4 · rivals', () => {
     const data = overviewFixture()
     const markup = render(overviewRivals.render(data, 'app', ctx))
     // Once, in the footer note — and the cells carry the dash.
-    expect((markup.match(/not readable yet/g) ?? []).length).toBe(1)
+    expect((markup.match(/not tracked · Settings › Readiness/g) ?? []).length).toBe(1)
     expect(markup).toContain('every rival row reads')
   })
 
   it('says why a rival\u2019s own posts are not read, and says nothing of the kind about you or the category', () => {
     const markup = render(overviewRivals.render(overviewFixture(), 'app', ctx))
     // One rival row, one client row, in the fixture.
-    expect((markup.match(/not readable yet/g) ?? []).length).toBe(1)
-    expect(markup).toContain('their own posts are not readable yet · Settings › Readiness')
+    expect((markup.match(/not tracked · Settings › Readiness/g) ?? []).length).toBe(1)
   })
 })
 
@@ -178,9 +178,9 @@ describe('OV4 · rivals, read from outside the workspace', () => {
   it('names the absence without pointing a stranger at a page they cannot open', () => {
     const print = renderText(overviewRivals.render(overviewFixture(), 'print', ctx))
     const app = renderText(overviewRivals.render(overviewFixture(), 'app', ctx))
-    expect(app).toContain('their own posts are not readable yet')
+    expect(app).toContain('not tracked')
     expect(app).toContain('Settings › Readiness')
-    expect(print).toContain('their own posts are not readable yet')
+    expect(print).toContain('not tracked')
     expect(print).not.toContain('Settings')
     expect(print).not.toContain('Verbatim engineering')
   })
@@ -213,12 +213,4 @@ describe('OV4, ported to the artboard', () => {
     expect(text).toContain('6,200 of 41,200')
   })
 
-  it('puts the dual-mention caveat in the footer note, with its count only where there is one', () => {
-    const r = overviewFixture().rivals
-    expect(caveatLine(r)).toBe(`${r.caveat} 41 did this month.`)
-    expect(caveatLine({ ...r, dualMention: 0 })).toBe(r.caveat)
-    expect(caveatLine({ ...r, dualMention: null })).toBe(r.caveat)
-    const markup = render(overviewRivals.render(overviewFixture(), 'app', ctx))
-    expect(markup).toContain('font-normal text-muted-foreground">')
-  })
 })

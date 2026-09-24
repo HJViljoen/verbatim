@@ -93,9 +93,9 @@ describe('countRefused', () => {
 
 describe('refusedSentence', () => {
   it('pools the repeats and names every reason', () => {
-    expect(refusedSentence([])).toBe('Every comparison this page asked for was drawn.')
+    expect(refusedSentence([])).toBe('Every comparison asked for was drawn.')
     expect(refusedSentence([{ state: 'baseline_forming', reason: null }])).toBe(
-      '1 comparison was refused on this page, because there are not enough months behind it yet.',
+      '1 comparison was refused, because there are not enough months behind it yet.',
     )
     expect(
       refusedSentence([
@@ -103,7 +103,7 @@ describe('refusedSentence', () => {
         { state: 'too_little_data', reason: null },
         { state: 'refused', reason: 'rename' },
       ]),
-    ).toBe('3 comparisons were refused on this page: 2 because too little was read on one side or both and 1 because the two sides are two names for one rival.')
+    ).toBe('3 comparisons were refused: 2 because too little was read on one side or both and 1 because the two sides are two names for one rival.')
   })
 })
 
@@ -259,8 +259,8 @@ describe('recordLines — every fact with its basis', () => {
     // The line used to promise the reason ("and say why in their place") while
     // the why reached the page only as the badge's hover title — invisible in
     // print, dropped in email. It is printed.
-    expect(has('2 comparisons were refused on this page: 1 because the two sides were grouped differently and 1 because too little was read on one side or both.')).toBe(true)
-    expect(recordLines(inputs({ comparisonsRefused: 0, refusals: [] })).some((l) => l.includes('Every comparison this page asked for was drawn'))).toBe(true)
+    expect(has('2 comparisons were refused: 1 because the two sides were grouped differently and 1 because too little was read on one side or both.')).toBe(true)
+    expect(recordLines(inputs({ comparisonsRefused: 0, refusals: [] })).some((l) => l.includes('Every comparison asked for was drawn'))).toBe(true)
     expect(recordLines(inputs({ comparisonsRefused: null })).some((l) => l.includes('comparison'))).toBe(false)
   })
 
@@ -269,9 +269,9 @@ describe('recordLines — every fact with its basis', () => {
   })
 
   it('agrees its verbs with its subjects on both plural paths', () => {
-    expect(has('2 comparisons were refused on this page')).toBe(true)
+    expect(has('2 comparisons were refused')).toBe(true)
     expect(recordLines(inputs({ comparisonsRefused: 1, refusals: [{ state: 'too_little_data', reason: null }] }))
-      .some((l) => l.includes('1 comparison was refused on this page, because too little was read on one side or both.'))).toBe(true)
+      .some((l) => l.includes('1 comparison was refused, because too little was read on one side or both.'))).toBe(true)
     expect(recordLines(inputs({ changes: { inWindow: 2, loggedFrom: '2026-09-15', reconstructed: 9 } }))
       .some((l) => l.includes('2 changes to what we track were made inside this window'))).toBe(true)
     expect(has('1 change to what we track was made inside this window')).toBe(true)

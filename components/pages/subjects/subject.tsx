@@ -240,7 +240,6 @@ export const subjectsSubject: Block<SubjectsData> = {
         // The mock's right-hand note: the category's last three readings, so
         // the reader can see the series the chart below draws without reading
         // the chart. Levels, dated, in the category's own n.
-        footerNote={pane.trail}
       >
         {pane.notRecorded ? <BlockEmpty mode={mode}>{pane.notRecorded}</BlockEmpty> : null}
 

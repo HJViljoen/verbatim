@@ -83,7 +83,7 @@ describe('methodLines', () => {
   it('states the language share is about what was said on camera, with its k of n', () => {
     const m = methodLines(inputs())
     expect(m.language).toBe(
-      '34% of what was said on camera was not in English — 375 of 1,105 videos whose language we know, and 491 with no language recorded at all.',
+      '34% of what was said on camera was not in English: 375 of 1,105 videos whose language we know, and 491 with no language recorded at all.',
     )
   })
 

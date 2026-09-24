@@ -153,7 +153,6 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
             no sentence beside it reads as "you have not named any" — which is
             the opposite of what happened. */}
         <p className="m-0 text-[11.5px] text-muted-foreground">{SUBJECTS_UNREADABLE_WHY}</p>
-        <p className="m-0 text-[11px] text-muted-foreground">{SUPERSEDE_RULE}</p>
       </div>
     )
   }
@@ -335,8 +334,6 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
           </li>
         ))}
       </ul>
-
-      <p className="m-0 text-[11px] text-muted-foreground">{SUPERSEDE_RULE}</p>
 
       {said?.message ? (
         <p className={`m-0 text-[11.5px] ${said.ok ? 'text-positive' : 'text-negative'}`} aria-live="polite">

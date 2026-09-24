@@ -10,7 +10,6 @@ import { TileBlock } from '@/components/shell/tile'
 import { TileColumns } from '@/components/shell/page-grid'
 import { fmtInt, fmtPct, monthName, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { PANEL_EXCLUDES_NOTE } from '@/lib/reading/attention'
 import { moodLabel } from '@/lib/reading/mood'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { AttentionBlock, CategoryBlock, Mover, OverviewData, Voice } from '@/lib/pages/overview'
@@ -194,6 +193,8 @@ export function panelNote(a: AttentionBlock | null): string | null {
   }
   const cutoff = a.panel?.cutoff
   if (cutoff) parts.push(`first seen before ${shortDate(cutoff)}`)
+  // A31: why Reddit is left out is How to read's; the panel says only that it is.
+  if (parts.length > 0) parts.push('excl. Reddit')
   const months = a.months
   if (months.length >= 2) {
     const first = months[0]
@@ -228,8 +229,9 @@ export function panelNote(a: AttentionBlock | null): string | null {
 /** "What moved most · Sep 2026 against Aug 2026", or the heading alone where
  *  no printed row carries a basis. */
 export function moversLabel(c: CategoryBlock): string {
-  const basis = moversBasis(c)
-  return basis ? `What moved most · ${basis}` : 'What moved most'
+  // A34: the month pair is the block meta's; said once.
+  void c
+  return 'What moved most'
 }
 
 /**
@@ -358,13 +360,7 @@ export const overviewCategory: Block<OverviewData> = {
             behaviour rather than catching it. A control under N rows either
             belongs on each row or belongs to none of them; this one goes to
             the page unfiltered, and the reader chooses there. */}
-        {openLink(mode, `${ctx.appUrl}/dashboard/voice`, 'more — one click down →')}
-        {c.reddit && c.reddit.pct != null ? (
-          <p className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}>
-            Reddit carried <span data-copy="figure">{fmtInt(c.reddit.reddit)} of {fmtInt(c.reddit.videos)}</span> of the question-and-objection videos
-            {c.reddit.exact ? '' : ' (a video carrying both is counted in each)'}.
-          </p>
-        ) : null}
+        {openLink(mode, `${ctx.appUrl}/dashboard/voice`, 'more · one click down →')}
       </>
     ) : (
       <BlockEmpty mode={mode}>{c.kindsNote ?? 'No kind carried a reading this month.'}</BlockEmpty>
@@ -390,8 +386,8 @@ export const overviewCategory: Block<OverviewData> = {
     )
     const movers = c.growing.length > 0 || c.fading.length > 0 ? (
       <div className={email ? undefined : 'flex flex-col gap-2.5'}>
-        {c.growing.length > 0 ? arm('Cleared their band · a larger share than last month', c.growing) : null}
-        {c.fading.length > 0 ? arm('Cleared their band · a smaller share than last month', c.fading) : null}
+        {c.growing.length > 0 ? arm('Larger share than last month', c.growing) : null}
+        {c.fading.length > 0 ? arm('Smaller share than last month', c.fading) : null}
       </div>
     ) : (
       <BlockEmpty mode={mode}>{c.moversNote ?? 'Nothing moved clearly this month.'}</BlockEmpty>
@@ -418,7 +414,7 @@ export const overviewCategory: Block<OverviewData> = {
           <BlockMovement verdict={c.mood.verdict} unit="pts" mode={mode} />
           {c.mood.framingPct != null ? (
             <span>
-              <span data-copy="figure">{fmtPct(c.mood.framingPct)}</span> of what was judged at all was judged on the video’s own framing instead
+              <span data-copy="figure">{fmtPct(c.mood.framingPct)}</span> judged on the video’s framing
             </span>
           ) : null}
         </p>
@@ -485,7 +481,6 @@ export const overviewCategory: Block<OverviewData> = {
           // else in this product's client-facing copy. The date lives in the
           // note, in the reader's own format; the caption says what the axis is
           // drawn over and stops there.
-          caption={c.attention?.panel ? 'a fixed panel of accounts' : undefined}
           // THE COLUMN SAYS HOW WIDE IT IS (Block D wave 3, M2 / SH1).
           // `CalendarLine` emits its viewBox at `width="100%"` with every
           // `fontSize` in viewBox UNITS, so the intrinsic width is the scale
@@ -529,12 +524,6 @@ export const overviewCategory: Block<OverviewData> = {
             it as it reaches any unmarked markup on the block. */}
         {/* WHAT THE LINE LEAVES OUT, under the line and not inside its legend.
             See `attentionSeries`. */}
-        <p
-          className={email ? undefined : 'm-0 text-[10.5px] leading-[1.35] text-muted-foreground'}
-          style={email ? { fontFamily: FONT.sans, fontSize: 10.5, color: EMAIL.muted, marginTop: 2 } : undefined}
-        >
-          {PANEL_EXCLUDES_NOTE}
-        </p>
         {panelNote(c.attention) ? (
           <p
             className={email ? undefined : 'm-0 font-mono text-[10.5px] leading-[1.35] tabular-nums text-secondary-foreground'}
@@ -547,7 +536,6 @@ export const overviewCategory: Block<OverviewData> = {
           className={email ? undefined : 'm-0 flex flex-wrap items-baseline gap-2 text-[11.5px] text-secondary-foreground'}
           style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 } : undefined}
         >
-          <span>month on month</span>
           <BlockMovement verdict={c.attention?.verdict ?? null} unit="pts" mode={mode} />
         </p>
       </>

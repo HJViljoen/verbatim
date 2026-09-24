@@ -127,14 +127,6 @@ function Raised({ row, mode }: { row: RivalRow; mode: RenderMode }): ReactNode {
  * NO TINT AND NO RANK, which is the block's own rule — the row is a reading,
  * not a league table — so the marker is a word rather than a colour.
  */
-/** The dual-mention caveat, as one string for the footer note — the count
- *  appended only where there is one, never "0 did this month". */
-export function caveatLine(r: OverviewData['rivals']): string {
-  return r.dualMention != null && r.dualMention > 0
-    ? `${r.caveat} ${fmtInt(r.dualMention)} did this month.`
-    : r.caveat
-}
-
 export function brandLabel(row: RivalRow): string {
   return row.role === 'client' ? `${row.label} (you)` : row.label
 }
@@ -218,7 +210,7 @@ export const overviewRivals: Block<OverviewData> = {
         // M5 defines as a FROZEN PANEL of accounts: upload-dated, Reddit
         // excluded by construction, re-based by a re-freeze. Different
         // population, different sentence.
-        meta="both shares of a frozen panel of accounts · no rank is printed"
+        meta="both shares of a frozen panel of accounts"
         footer={footer}
         // THE DUAL-MENTION CAVEAT INTO THE FOOTER NOTE
         // (`main.rivals.footer`). It is a statement about how the denominator
@@ -229,7 +221,9 @@ export const overviewRivals: Block<OverviewData> = {
         // about how the reading was built rather than findings, which is what
         // the footer note is for — and one of them was being printed once per
         // rival row until the polish pass folded it here.
-        footerNote={ownPostsNote ? <>{caveatLine(r)} On their own posts, every rival row reads {ownPostsNote}.</> : caveatLine(r)}
+        // A27: the dual-mention rule is Competitive's and its count is OV6's,
+        // so the footer keeps only the column-wide own-posts absence.
+        footerNote={ownPostsNote ? <>On their own posts, every rival row reads {ownPostsNote}.</> : undefined}
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         {r.standingsNote ? <BlockEmpty mode={mode}>{r.standingsNote}</BlockEmpty> : null}
