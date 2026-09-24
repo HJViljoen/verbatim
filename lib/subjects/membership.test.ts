@@ -7,11 +7,14 @@ import {
   coverageClears,
   emptyMembershipResult,
   membershipRows,
+  estimateFirstPass,
+  judgeCallCost,
   membershipSummary,
   planJudgeBatches,
   subjectBudgetUsd,
   subjectsNeedingVectors,
   validateJudgeResponse,
+  SUBJECT_BAND_SHARE,
   type JudgeCandidate,
 } from './membership'
 import { JUDGE_VERSION, SUBJECT_EMBED_INPUT_VERSION, SUBJECT_JUDGE_BATCH, SUBJECT_MIN_COVERAGE } from './types'
@@ -169,6 +172,52 @@ describe('subjectsNeedingVectors', () => {
   })
 })
 
+describe('estimateFirstPass', () => {
+  // The shares come from status/subject-band-2026-09-23.md: Sealand's 3,719
+  // embedded insights against all six subjects at the shipped 0.60/0.40 band
+  // with `subject_embed_v2` phrases — 44 pairs on Price (1.2%), 471 on Repair &
+  // warranty (12.7%), 1,298 across six (5.8% mean).
+  const SEALAND = 3719
+
+  it('brackets the six subjects that were actually measured', () => {
+    const e = estimateFirstPass(SEALAND)
+    // Scaled back up at the population they were measured on, the ends ARE the
+    // narrowest and the broadest subject — Price's 44 pairs and Repair &
+    // warranty's 471. That is the check that the shares were read off the
+    // table and not rounded into something tidier.
+    expect(e.pairs.low).toBe(44)
+    expect(e.pairs.high).toBe(471)
+    // And the midpoint is the measured mean (1,298 pairs over six subjects),
+    // not the middle of the two ends — the distribution is skewed and the mean
+    // is the honest centre.
+    expect(e.pairs.mid).toBe(Math.round(SEALAND * SUBJECT_BAND_SHARE.mid))
+    expect(e.pairs.mid).toBe(Math.round(1298 / 6))
+  })
+
+  it('turns pairs into whole calls, rounding up — a part batch is still a call', () => {
+    const e = estimateFirstPass(SEALAND)
+    expect(e.calls.low).toBe(Math.ceil(e.pairs.low / SUBJECT_JUDGE_BATCH))
+    expect(e.calls.high).toBe(Math.ceil(e.pairs.high / SUBJECT_JUDGE_BATCH))
+    expect(e.calls.low).toBeLessThan(e.calls.mid)
+    expect(e.calls.mid).toBeLessThan(e.calls.high)
+  })
+
+  it('prices through the same arithmetic the banded dry run uses', () => {
+    const e = estimateFirstPass(SEALAND)
+    expect(e.costUsd.mid).toBeCloseTo(judgeCallCost(e.calls.mid), 10)
+    // Still nowhere near the pass ceiling — the note's whole point is that
+    // cost is not what bounds this decision.
+    expect(e.costUsd.high).toBeLessThan(subjectBudgetUsd(60))
+  })
+
+  it('is zero for a tenant with nothing embedded, and says so as zero', () => {
+    const e = estimateFirstPass(0)
+    expect(e.pairs).toEqual({ low: 0, mid: 0, high: 0 })
+    expect(e.calls).toEqual({ low: 0, mid: 0, high: 0 })
+    expect(e.costUsd.mid).toBe(0)
+  })
+})
+
 describe('the pass ceiling', () => {
   it('is a fraction of the run budget, not a second copy of it', () => {
     expect(subjectBudgetUsd(60)).toBeCloseTo(60 * SUBJECT_BUDGET_SHARE)
@@ -205,6 +254,25 @@ describe('membershipSummary', () => {
     expect(text).toContain('31/60 by judge in 3 call(s)')
     expect(text).toContain('43 rows')
     expect(text).toContain('4 unanswered, still undecided')
+  })
+
+  it('calls a first-pass estimate an estimate, and never prints it as $0.00', () => {
+    const text = membershipSummary({
+      ...emptyMembershipResult('s', 'price'),
+      estimated: estimateFirstPass(3719),
+      calls: estimateFirstPass(3719).calls.mid,
+      costUsd: estimateFirstPass(3719).costUsd.mid,
+    })
+    // The three things a reader of a dry run has to be told.
+    expect(text).toContain('FIRST PASS, EMBEDDING REQUIRED')
+    expect(text).toContain('ESTIMATE, not a count')
+    expect(text).toContain('3,719 embedded insights')
+    // A range, not one number pretending to be known.
+    expect(text).toMatch(/~\d+-\d+ calls/)
+    expect(text).toMatch(/~\$0\.\d+-\$0\.\d+/)
+    // And the thing it used to say instead.
+    expect(text).not.toContain('nothing judged')
+    expect(text).not.toContain('0 by vector')
   })
 
   it('says out loud when the pass stopped at its ceiling', () => {

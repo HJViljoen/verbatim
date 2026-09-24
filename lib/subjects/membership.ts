@@ -233,6 +233,90 @@ export function subjectsNeedingVectors<
   return subjects.filter((s) => !s.embedded_at || s.embed_input_version !== version)
 }
 
+/**
+ * WHAT A FIRST PASS WOULD COST, WHEN THERE IS NOTHING TO READ IT OFF.
+ *
+ * A dry run embeds nothing — that is what makes it dry. So a subject that has
+ * never been embedded, or whose vector was built by a formula that is no longer
+ * the formula, has no vector for `subject_band()` to compare against, the band
+ * comes back empty, and the run reports **0 calls and $0.00** for the one pass
+ * that is guaranteed to be the most expensive one this tenant will ever do.
+ * That is not a cheap answer, it is a wrong one, and it is wrong in the
+ * direction that gets a budget approved.
+ *
+ * So the band is estimated instead, from the one number a dry run already has:
+ * the embedded insight population, which the coverage gate reads anyway. The
+ * share is MEASURED, not assumed — `status/subject-band-2026-09-23.md`, the
+ * whole of Sealand's 3,719 embedded insights scored against all six subjects at
+ * the shipped 0.60/0.40 band with `subject_embed_v2` phrases:
+ *
+ *   subject             judged pairs   share of 3,719
+ *   Repair & warranty        471           12.7%
+ *   Waterproofing            358            9.6%
+ *   Looks & style            202            5.4%
+ *   Comfort                  160            4.3%
+ *   Durability                63            1.7%
+ *   Price                     44            1.2%
+ *   six subjects           1,298            5.8% mean
+ *
+ * THE RANGE IS THE POINT, AND IT IS AN ORDER OF MAGNITUDE WIDE. A subject's
+ * band is a property of how broadly its phrase sits in the corpus, and nothing
+ * available before the vector exists predicts which end of that a new subject
+ * lands on. Printing the midpoint alone would be the same false precision this
+ * function exists to remove, so all three come back and the summary prints all
+ * three. `calls` and `costUsd` on the result carry the MIDPOINT, so that a pass
+ * total is an honest order of magnitude rather than zero.
+ *
+ * It is measured on ONE tenant's six subjects at ONE band. If the band moves
+ * (`SUBJECT_MATCH_LOW` is what binds here — the note says v2's natural floor is
+ * 0.33-0.38, which would roughly double the pool) these shares move with it,
+ * and this table has to be re-read rather than scaled.
+ *
+ * The three numbers are the measured ratios themselves — 44/3,719, 1,298/6/3,719
+ * and 471/3,719 — carried to four places rather than rounded to "about 1%", so
+ * that scaling them back up at Sealand's own population reproduces the rows in
+ * the table above exactly and the test can say so.
+ */
+export const SUBJECT_BAND_SHARE = { low: 0.0118, mid: 0.0582, high: 0.1267 } as const
+
+/** Input and output tokens a judge call has measured at. The two dry-run arms
+ *  price through the same pair so a "would have" and an "estimate" are the same
+ *  arithmetic on a different count, and not two numbers to reconcile. */
+export const JUDGE_CALL_TOKENS = { input: 1900, output: 500 } as const
+
+export const judgeCallCost = (calls: number): number =>
+  estimateCost(SUBJECT_JUDGE_MODEL, calls * JUDGE_CALL_TOKENS.input, calls * JUDGE_CALL_TOKENS.output)
+
+export interface FirstPassEstimate {
+  /** The population it was scaled from. */
+  embedded: number
+  pairs: { low: number; mid: number; high: number }
+  calls: { low: number; mid: number; high: number }
+  costUsd: { low: number; mid: number; high: number }
+}
+
+/** The band, the calls and the cost a first pass over `embedded` insights would
+ *  come to for one subject. Pure — every number in it is arithmetic on the
+ *  measured shares above. */
+export function estimateFirstPass(embedded: number): FirstPassEstimate {
+  const pairs = {
+    low: Math.round(embedded * SUBJECT_BAND_SHARE.low),
+    mid: Math.round(embedded * SUBJECT_BAND_SHARE.mid),
+    high: Math.round(embedded * SUBJECT_BAND_SHARE.high),
+  }
+  const calls = {
+    low: Math.ceil(pairs.low / SUBJECT_JUDGE_BATCH),
+    mid: Math.ceil(pairs.mid / SUBJECT_JUDGE_BATCH),
+    high: Math.ceil(pairs.high / SUBJECT_JUDGE_BATCH),
+  }
+  return {
+    embedded,
+    pairs,
+    calls,
+    costUsd: { low: judgeCallCost(calls.low), mid: judgeCallCost(calls.mid), high: judgeCallCost(calls.high) },
+  }
+}
+
 export interface SubjectMembershipResult {
   subjectId: string
   subjectName: string
@@ -254,6 +338,13 @@ export interface SubjectMembershipResult {
   /** The pass hit its own ceiling and stopped early; what is left is undecided
    *  next run. */
   budgetStopped: boolean
+  /** Set on a DRY RUN ONLY, and only for a subject whose phrase has to be
+   *  embedded before anything can be banded. There is no band to plan from, so
+   *  `calls` and `costUsd` above are this estimate's MIDPOINT rather than a
+   *  count of batches — `estimateFirstPass` for why, and `membershipSummary`
+   *  prints the whole range with the reason beside it. Absent on every real
+   *  pass and on any dry run that had a vector to read. */
+  estimated?: FirstPassEstimate
   error?: string
 }
 
@@ -275,6 +366,18 @@ export function membershipSummary(r: SubjectMembershipResult): string {
   }
   if (r.skipped === 'no_subjects') return 'no active subjects — nothing to judge'
   if (r.skipped === 'no_vector') return `${who}no phrase vector, and embedding it failed — nothing judged`
+  if (r.estimated) {
+    const e = r.estimated
+    return (
+      `${who}FIRST PASS, EMBEDDING REQUIRED — no phrase vector yet, so there is no band to plan from and this is ` +
+      `an ESTIMATE, not a count. Scaled from ${e.embedded.toLocaleString('en')} embedded insights at the band shares ` +
+      `measured on 2026-09-23 (${(SUBJECT_BAND_SHARE.low * 100).toFixed(1)}-${(SUBJECT_BAND_SHARE.high * 100).toFixed(1)}% of the corpus per subject, ` +
+      `${(SUBJECT_BAND_SHARE.mid * 100).toFixed(1)}% mean): ~${e.pairs.low.toLocaleString('en')}-${e.pairs.high.toLocaleString('en')} pairs to judge ` +
+      `(~${e.pairs.mid.toLocaleString('en')}) · ~${e.calls.low}-${e.calls.high} calls (~${e.calls.mid}) · ` +
+      `~$${e.costUsd.low.toFixed(4)}-$${e.costUsd.high.toFixed(4)} (~$${e.costUsd.mid.toFixed(4)}). ` +
+      `The real pass embeds the phrase first (~$0.0000005 for the set) and then plans off the band it actually gets.`
+    )
+  }
   const stopped = r.budgetStopped ? ` · STOPPED at the pass ceiling ($${subjectBudgetUsd().toFixed(2)})` : ''
   const unanswered = r.unanswered > 0 ? ` · ${r.unanswered} unanswered, still undecided` : ''
   return (
@@ -442,12 +545,30 @@ export async function judgeSubject(
   const out = emptyMembershipResult(subject.id, subject.name)
   const budget = opts.budgetUsd ?? subjectBudgetUsd()
 
+  let coverage = opts.coverage ?? null
   if (!opts.ignoreCoverage) {
-    const coverage = opts.coverage ?? (await embeddingCoverage(admin, opts.clientId))
+    coverage = coverage ?? (await embeddingCoverage(admin, opts.clientId))
     if (!coverageClears(coverage)) {
       out.skipped = 'coverage_short'
       return out
     }
+  }
+
+  // A DRY RUN CANNOT PLAN A SUBJECT IT HAS NOT EMBEDDED, and until 2026-09-24
+  // it reported that as $0.00. `judgeAllSubjects` skips `embedSubjects` on a
+  // dry run — correctly, a dry run writes nothing — so a subject with no vector
+  // or a stale one has nothing for `subject_band()` to compare against, the
+  // band comes back empty and `no_vector` prints "nothing judged" for the one
+  // pass that will cost the most this tenant ever spends here. Estimated
+  // instead, from the embedded population and the measured band shares, and
+  // said out loud as an estimate. The real pass is unchanged: it embeds first
+  // and reads the band it actually gets.
+  if (opts.dryRun && subjectsNeedingVectors([subject]).length === 1) {
+    const embedded = (coverage ?? (await embeddingCoverage(admin, opts.clientId))).embedded
+    out.estimated = estimateFirstPass(embedded)
+    out.calls = out.estimated.calls.mid
+    out.costUsd = out.estimated.costUsd.mid
+    return out
   }
 
   let band: BandedPair[]
@@ -477,8 +598,10 @@ export async function judgeSubject(
 
   if (opts.dryRun) {
     // Price it at the measured shape rather than pretending a dry run is free
-    // information: ~1,900 input and ~500 output tokens a call.
-    out.costUsd = estimateCost(SUBJECT_JUDGE_MODEL, batches.length * 1900, batches.length * 500)
+    // information: ~1,900 input and ~500 output tokens a call. This arm has a
+    // real band behind it, so it is a plan and not an estimate — the estimate
+    // arm is above, for the subject whose vector does not exist yet.
+    out.costUsd = judgeCallCost(batches.length)
     return out
   }
 
@@ -582,6 +705,9 @@ export async function judgeAllSubjects(
   })
   if (subjects === null) return [{ ...emptyMembershipResult(), skipped: 'migration' }]
   if (subjects.length === 0) return [{ ...emptyMembershipResult(), skipped: 'no_subjects' }]
+  // A dry run embeds nothing, which is what makes it dry — and which is why
+  // `judgeSubject` estimates rather than bands for any subject this call would
+  // have embedded. See `estimateFirstPass`.
   if (!opts.dryRun) await embedSubjects(admin, subjects)
   // Once for the pass, not once per subject.
   const coverage = opts.coverage ?? (opts.ignoreCoverage ? undefined : await embeddingCoverage(admin, opts.clientId))
