@@ -6,7 +6,6 @@ import { revalidatePath } from 'next/cache'
 import { getSessionContext } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { declareMove } from '@/lib/subjects/moves'
-import { isMissingSubjects } from '@/lib/subjects/types'
 import { setRecommendationStatus } from '@/lib/actions/rec-status'
 import { planAfterMove } from '@/lib/actions/accept-plan'
 
@@ -90,9 +89,3 @@ export async function acceptAdvice(lineageId: string, title: string): Promise<Ac
   return { ok: true, message: plan.message }
 }
 
-/** Is this the "M4 is not applied here" shape? Exported so a caller can tell a
- *  missing table apart from a refused write without matching on prose.
- *
- *  `declareMove` now returns `missing: true` itself, which is what this action
- *  reads; this stays for a caller holding a raw PostgREST error. */
-export const isMovesMissing = isMissingSubjects
