@@ -2328,18 +2328,7 @@ export function methodNumbers(
       }`,
     })
   }
-  if (inputs.language.analysed > 0 && inputs.language.notEnglish + inputs.language.english > 0) {
-    const known = inputs.language.notEnglish + inputs.language.english
-    out.push({
-      id: 'languages',
-      label: 'Languages',
-      value: `${fmtPct((inputs.language.notEnglish / known) * 100, 0)} not in English`,
-      // THE BASIS TRAVELS WITH THE FIGURE (D15). It is a share of the videos
-      // whose language we KNOW, not of everything read, and the two differ by
-      // however many videos carry no language at all.
-      note: `of ${fmtInt(known)} videos whose language is recorded`,
-    })
-  }
+  // No 'languages' row: no surface states a language share (2026-09-24).
   if (inputs.comparisonsRefused != null) {
     out.push({
       id: 'refused',

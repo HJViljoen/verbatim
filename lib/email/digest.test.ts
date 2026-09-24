@@ -56,7 +56,7 @@ describe('the delta block', () => {
     expect(html).toContain('Ottobock <strong>15%</strong>')
     expect(html).toContain('Socket pain and poor fit · Price and access questions and 1 more')
     expect(html).toContain('4,626')
-    expect(html).toContain('href="https://app.verbatimintel.com/dashboard/competitive-intel"')
+    expect(html).toContain('href="https://app.verbatimintel.com/dashboard/competitive"')
   })
   it('says "where you stand" when nothing cleared its band, and on a first update', () => {
     const flat = { ...delta, sentiment: { ...delta.sentiment!, verdict: { state: 'too_little_data' as const, change: 0.4, band: 2 } } }
@@ -152,7 +152,8 @@ describe('text helpers', () => {
   // 2026-09-13: the Össur digest's plain-text part was reported as
   // `…/dashboard/market?rec\ufffddd4fde-…` for `?rec=85dd4fde-…`. (That send said
   // /dashboard/market, which is what was in those four inboxes; WP9 moved the
-  // page to /dashboard/market-intel and the assertion below moved with it. The
+  // page to /dashboard/market-intel and the assertion moved with it; 2026-09-24
+  // pointed the email back at the new Market, which honours `?rec=`. The
   // record of what happened does not.) The raw MIME
   // of that send (DKIM-pass, so these are the bytes Resend signed) carries
   // `Content-Transfer-Encoding: quoted-printable` with the `=` correctly
@@ -165,7 +166,7 @@ describe('text helpers', () => {
     const d = { hero: { oneThing: { id, title: 'Launch an access navigator', reasoning: 'People start with practical access questions.', priority: 'high' }, voices: 96, platforms: ['youtube', 'tiktok', 'instagram', 'reddit'] } } as unknown as DashboardData
     const html = renderToStaticMarkup(createElement('div', null, dashboardEmail['dashboard.recommendation'](d, ctx)))
     const text = htmlToText(html)
-    expect(text).toContain(`(https://app.verbatimintel.com/dashboard/market-intel?rec=${id})`)
+    expect(text).toContain(`(https://app.verbatimintel.com/dashboard/market?rec=${id})`)
     expect(text).not.toContain('rec=3D')
   })
 

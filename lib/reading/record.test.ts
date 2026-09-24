@@ -17,6 +17,7 @@ import {
   monthRecordWindow,
   platformMixLine,
   recordLines,
+  recordRows,
   refusedSentence,
   totalPlatformMix,
   totalVideos,
@@ -125,7 +126,7 @@ describe('refusals', () => {
 describe('howSoundLine — one sentence, printed in the open', () => {
   it('is the design’s line', () => {
     expect(howSoundLine(inputs())).toBe(
-      '3 updates · 394 videos · 34% of what was said on camera was not in English · 1 tracking change',
+      '3 updates · 394 videos · 1 tracking change',
     )
   })
 
@@ -151,10 +152,10 @@ describe('howSoundLine — one sentence, printed in the open', () => {
     expect(howSoundLine(inputs())).not.toContain('the record')
   })
 
-  it('states the non-English share against what is KNOWN, not against everything', () => {
-    // 375 of the 1,105 whose language was recorded, not 375 of 1,596: unknown
-    // is not non-English, and 491 of Össur's analysed videos have no language.
-    expect(howSoundLine(inputs())).toContain('34%')
+  it('states no language share, though the record holds one (2026-09-24)', () => {
+    expect(inputs().language.notEnglish).toBe(375)
+    expect(howSoundLine(inputs())).not.toContain('34%')
+    expect(howSoundLine(inputs())).not.toContain('English')
   })
 
   it('says the reading is not recorded rather than printing a zero', () => {
@@ -229,8 +230,10 @@ describe('recordLines — every fact with its basis', () => {
     expect(line.some((l) => l.includes('we do not yet show it to you'))).toBe(true)
   })
 
-  it('says outright that the comment language is not recorded', () => {
-    expect(has('the comments have no language of their own recorded yet')).toBe(true)
+  it('states no language share in its lines or its rows (2026-09-24)', () => {
+    expect(has('not in English')).toBe(false)
+    expect(has('language')).toBe(false)
+    expect(recordRows(inputs()).map((r) => r.label)).not.toContain('Not in English')
   })
 
   it('prints the change log’s own boundary and how much of it was reconstructed', () => {

@@ -361,8 +361,9 @@ describe('content.record — the mock’s page 5', () => {
     expect(text).toContain('3 updates delivered, 1 Sep to 13 Sep 2026')
   })
 
-  it('states the language share on its own basis, never as a fact about comments (D15)', () => {
-    expect(text).toContain('of what was said on camera was not in English')
+  it('states no language share anywhere on the sheet (2026-09-24)', () => {
+    expect(text).not.toContain('not in English')
+    expect(text).not.toContain('whose language we know')
   })
 
   it('promises no future date and claims no start date (D14)', () => {

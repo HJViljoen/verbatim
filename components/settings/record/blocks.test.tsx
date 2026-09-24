@@ -349,7 +349,7 @@ describe('the coverage grid', () => {
     const markup = render(coverage)
     const text = renderText(coverage)
     for (const label of [
-      'UPDATES THIS WINDOW', 'COMMENTS READ', 'VIDEOS ANALYSED', 'NOT IN ENGLISH', 'SPEECH READ',
+      'UPDATES THIS WINDOW', 'COMMENTS READ', 'VIDEOS ANALYSED', 'SPEECH READ',
       'ON-SCREEN TEXT READ', 'RELEVANCE GATE', 'THEMES PER VIDEO', 'TRACKING CHANGES',
       'COMPARISONS REFUSED', 'DUAL-MENTION VIDEOS', 'PLATFORM MIX', 'REDDIT', 'BELOW THE FLOOR',
     ]) {
@@ -364,7 +364,9 @@ describe('the coverage grid', () => {
     const text = renderText(coverage)
     expect(text).toContain('of everything we have ever read for you, not just this window')
     expect(text).toContain('Reddit excluded')
-    expect(text).toContain('what was said on camera, not what was written in comments')
+    // No language share on the record either (2026-09-24).
+    expect(text).not.toContain('not in English')
+    expect(text).not.toContain('what was said on camera, not what was written in comments')
     // The two read-depth rows sit side by side and both owe a reader the
     // all-time basis; the twenty-word sentence is printed once and the second
     // row says it short (design review finding 5).

@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { createElement } from 'react'
 
 import { SURFACES } from '@/lib/nav'
-import { NAV_ICON, OLD_NAV_ICON, OLD_NAV_ICON_FALLBACK, STUDIO_ICON } from './nav-icons'
+import { NAV_ICON, STUDIO_ICON } from './nav-icons'
 
 // ONE ICON MAP, READ BY THE APP AND BY THE SHOT HARNESS.
 //
@@ -79,12 +79,9 @@ describe('the sidebar’s icons', () => {
     expect(draw('reports')).toContain('lucide-file-text')
   })
 
-  it('keeps the parked pages and the Studio in the same map', () => {
-    // They are not surfaces and have no `NavKey`, so they are keyed by href
-    // with a fallback — but they are still sidebar icons and still have to be
-    // reachable from outside a client component.
-    expect(Object.keys(OLD_NAV_ICON).length).toBeGreaterThan(0)
-    expect(OLD_NAV_ICON_FALLBACK).toBeTruthy()
+  it('keeps the Studio in the same map', () => {
+    // It is not a surface and has no `NavKey`, but it is still a sidebar icon
+    // and still has to be reachable from outside a client component.
     expect(STUDIO_ICON).toBeTruthy()
   })
 
@@ -93,6 +90,9 @@ describe('the sidebar’s icons', () => {
     const shots = readFileSync('scripts/wave2-shots.ts', 'utf8')
     expect(sidebar).toContain("from \"@/components/nav-icons\"")
     expect(sidebar).not.toMatch(/const (ICON|OLD_ICON)\s*[:=]/)
+    // The "Old pages (retiring …)" group was taken out on 2026-09-24; the
+    // parked pages answer by link and banner only.
+    expect(sidebar).not.toMatch(/OLD_PAGES|oldPagesGroupLabel|Old pages/)
     expect(shots).toContain("from '../components/nav-icons'")
     // And the harness draws them rather than a placeholder box. This exact
     // span is what stood where nine icons belong.

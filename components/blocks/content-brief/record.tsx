@@ -100,13 +100,15 @@ function Numbers({ rows, caveat, mode }: { rows: readonly NumberRow[]; caveat: s
  * numbers card prints them with their basis, so the sheet says each once.
  * Applied at render, so a brief frozen before the change prints the new copy.
  */
-function briefLines(lines: readonly string[], method: { basis?: string | null; language?: string | null } | null | undefined): string[] {
+function briefLines(lines: readonly string[], method: { basis?: string | null } | null | undefined): string[] {
   return lines.filter((l) =>
     !/themes? attached per analysed video/.test(l) &&
     !/^No change record before/.test(l) &&
     !/^Reading as at/.test(l) &&
     !(method?.basis && /^Of everything we have ever read for you/.test(l)) &&
-    !(method?.language && /of the videos whose language we know were not in English/.test(l)),
+    // No language share on any surface (2026-09-24), a frozen brief's included.
+    !/of the videos whose language we know were not in English/.test(l) &&
+    !/^No language was recorded for any video/.test(l),
   )
 }
 
@@ -149,7 +151,7 @@ export const contentRecord: Block<ContentBriefData> = {
             <Numbers rows={r.numbers} caveat={r.reddit} mode={mode} />
             {/* NO `redditCap` IN THIS LIST — see the note on the app/print arm
                 below. The caveat under the numbers card IS the Reddit cap. */}
-            {[r.method?.basis, r.method?.language, r.method?.privacy]
+            {[r.method?.basis, r.method?.privacy]
               .filter((l): l is string => !!l)
               .map((l, i) => (
                 <div key={i} style={{ fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.muted, marginTop: 6 }}>{l}</div>
@@ -238,7 +240,7 @@ export const contentRecord: Block<ContentBriefData> = {
                 once under the card"; the card's caveat is that printing. */}
             {r.method && (
               <div className="flex flex-col gap-1">
-                {[r.method.basis, r.method.language, r.method.privacy]
+                {[r.method.basis, r.method.privacy]
                   .filter((l): l is string => !!l)
                   .map((l, i) => (
                     <p key={i} className="m-0 font-mono text-[10px] leading-[1.45] text-muted-foreground">{l}</p>

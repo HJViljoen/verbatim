@@ -45,7 +45,7 @@ export function DeltaBlock({ delta, dashboard, appUrl }: { delta: RunDelta | nul
       const sh = delta.share
       const comp = sh.now.competitor
       rows.push(
-        <Row key="sh" label="Share of tracked conversation" chip={verdictChip(sh.verdict, ' pts')} href={`${appUrl}/dashboard/competitive-intel`} linkText="See the competitive picture">
+        <Row key="sh" label="Share of tracked conversation" chip={verdictChip(sh.verdict, ' pts')} href={`${appUrl}/dashboard/competitive`} linkText="See the competitive picture">
           You <strong>{sh.now.client}%</strong>{comp ? <> · {comp.name} <strong>{comp.pct}%</strong></> : null} of the {fmtInt(sh.now.totalVideos)} videos tracked
         </Row>,
       )
@@ -90,7 +90,7 @@ export function DeltaBlock({ delta, dashboard, appUrl }: { delta: RunDelta | nul
         </Row>
       ) : null}
       {sh?.client ? (
-        <Row label="Share of tracked conversation" href={`${appUrl}/dashboard/competitive-intel`} linkText="See the competitive picture">
+        <Row label="Share of tracked conversation" href={`${appUrl}/dashboard/competitive`} linkText="See the competitive picture">
           You <strong>{Math.round(sh.client.pct * 10) / 10}%</strong>{sh.topCompetitor ? <> · {sh.topCompetitor.name} <strong>{Math.round(sh.topCompetitor.pct * 10) / 10}%</strong></> : null} of the videos tracked
         </Row>
       ) : null}

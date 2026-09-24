@@ -127,15 +127,8 @@ export const subjectsVoices: Block<SubjectsData> = {
         mode={mode}
         meta={voicesMeta(pane.voices.length, pane.voicesFrom, pane.voicesSampled)}
         footer={footer}
-        // D15 · THE LANGUAGE SHARE MAY ONLY PRINT WITH ITS REAL BASIS. The mock
-        // writes "27% of this month's videos are not in English"; what is
-        // recorded is the language of what was said ON CAMERA, all-time, and
-        // comments have no language of their own recorded at all. `methodLines`
-        // composes that sentence once for every surface — so the slot prints
-        // the measure the product actually holds, or stays empty.
-        // A45: on screen the page bar's how-sound line carries the language
-        // share; a block that travels alone (print, email) keeps its basis.
-        footerNote={mode === 'app' ? undefined : data.method?.language ?? undefined}
+        // No language share, on any surface (2026-09-24): the slot that
+        // printed `methodLines.language` in print and email is gone.
       >
         {mode === 'email' ? (
           <BlockQuotes

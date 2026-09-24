@@ -1547,9 +1547,8 @@ export function methodRows(data: DocumentSnapshotData): [string, string][] {
     // is comparable with every other: the unit is a VIDEO, never a comment.
     ['The unit', 'a video with at least one analysed comment'],
   ]
-  // THE FOOTNOTE CARRIES THE SHARE WITH ITS BASIS (D15) where the reading has
-  // a method; the row is for a brief without one, so the sheet says it once.
-  if (m.languages && !data.reading?.method?.language) rows.push(['Languages', m.languages])
+  // No 'Languages' row: no surface states a language share (2026-09-24), and
+  // a frozen brief that still carries `languages` does not print it either.
   return rows
 }
 
@@ -1752,7 +1751,7 @@ function NumbersCard({ data }: { data: DocumentSnapshotData }) {
           clause that says which (D15). */}
       {data.reading?.method && (
         <p className="mt-4 border-t border-border pt-3 font-mono text-[11.5px] leading-[1.5] text-muted-foreground">
-          {[data.reading.method.basis, data.reading.method.language, data.reading.method.redditCap, data.reading.method.privacy]
+          {[data.reading.method.basis, data.reading.method.redditCap, data.reading.method.privacy]
             .filter(Boolean)
             .join(' ')}
         </p>

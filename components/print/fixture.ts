@@ -550,7 +550,6 @@ function deck(surfaces: Record<string, unknown>, over: Partial<DocumentSnapshotD
       heldBack: 14,
       thin: false,
       findingsBelow: 5,
-      languages: '27% of what was said on camera was not in English',
       delivery: '23 updates since 6 Apr 2026 · longest gap 35 days · last on 27 Sep 2026 — your 3rd monthly reading, the quarter view needs 6',
     },
     notSureYet: [],

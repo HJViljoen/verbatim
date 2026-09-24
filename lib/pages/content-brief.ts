@@ -208,7 +208,8 @@ export function commentsRow(r: RecordInputs): NumberRow | null {
 }
 
 /** The language row, with its basis stated (D15). Null where no language was
- *  ever recorded — which is not "all English". */
+ *  ever recorded — which is not "all English". NOT IN `numberRows` since
+ *  2026-09-24: no surface states a language share. */
 export function languageRow(r: RecordInputs['language']): NumberRow | null {
   const known = r.english + r.notEnglish
   if (r.analysed === 0 || known === 0) return null
@@ -285,7 +286,7 @@ export function numberRows(r: RecordInputs | null): NumberRow[] {
   // PERIOD AND COMMENTS LEAD (design review 10): the window this reading is of,
   // then what was read in it, then what the reading is made of. The unit stays
   // first because every row under it is counted in that unit.
-  const maybe = [periodRow(r), videosRow(r), commentsRow(r), sourcesRow(r), languageRow(r.language), instrumentRow(r), heldBackRow(r)]
+  const maybe = [periodRow(r), videosRow(r), commentsRow(r), sourcesRow(r), instrumentRow(r), heldBackRow(r)]
   for (const row of maybe) if (row) rows.push(row)
   return rows
 }

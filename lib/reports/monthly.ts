@@ -559,7 +559,8 @@ export interface MonthlySoundFigures {
   comments: number | null
   videos: number | null
   trailingMedian: number | null
-  /** Share not in English, of videos whose language is known, 0–100. */
+  /** Share not in English, of videos whose language is known, 0–100. Recorded,
+   *  never printed (2026-09-24). */
   notEnglishPct: number | null
   /** Read depth, all time, non-Reddit, 0–100. */
   speechPct: number | null
@@ -626,7 +627,8 @@ export function monthlySoundLines(f: MonthlySoundFigures): string[] {
   }
 
   const two: string[] = []
-  if (f.notEnglishPct != null) two.push(`${fmtPct(f.notEnglishPct, 0)} not in English`)
+  // `notEnglishPct` stays on the figures (a frozen snapshot carries it) and is
+  // never printed: no surface states a language share (2026-09-24).
   if (f.speechPct != null) two.push(`speech read on ${fmtPct(f.speechPct, 0)} of videos`)
   if (f.onScreenPct != null) two.push(`on-screen text on ${fmtPct(f.onScreenPct, 0)}`)
 

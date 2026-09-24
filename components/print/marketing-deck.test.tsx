@@ -493,10 +493,10 @@ describe('the method sheet', () => {
     expect(rows.Sources).toBe('TikTok, YouTube, Instagram, Reddit')
   })
 
-  it('prints eight rows, with the unit and the language share', () => {
+  it('prints seven rows, with the unit and no language share (2026-09-24)', () => {
     const rows = methodRows(marketingDeckFixture())
     expect(rows.map(([k]) => k)).toEqual([
-      'Period', 'Comments', 'Videos', 'Sources', 'Held back', 'Findings', 'The unit', 'Languages',
+      'Period', 'Comments', 'Videos', 'Sources', 'Held back', 'Findings', 'The unit',
     ])
     expect(Object.fromEntries(rows)['The unit']).toBe('a video with at least one analysed comment')
   })

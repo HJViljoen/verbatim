@@ -959,15 +959,8 @@ export function howSoundLine(input: RecordInputs, opts: { updates?: boolean } = 
   else if (input.coverage.length === 0) parts.push('nothing read in this window')
   else parts.push(plural(totalVideos(input.coverage), 'video'))
 
-  const lang = input.language
-  if (lang.analysed > 0) {
-    const known = lang.english + lang.notEnglish
-    parts.push(
-      known > 0
-        ? `${share(lang.notEnglish, known)} of what was said on camera was not in English`
-        : 'no language recorded on what was said on camera',
-    )
-  }
+  // NO LANGUAGE SHARE IS PRINTED (Heinrich, 2026-09-24): how much of what was
+  // said was not in English is kept in the record inputs and printed nowhere.
 
   if (input.changes.inWindow > 0) parts.push(plural(input.changes.inWindow, 'tracking change'))
   return parts.join(' · ')
@@ -1060,15 +1053,8 @@ export function recordLines(input: RecordInputs): string[] {
     if (r.unflagged > 0) lines.push(`${plural(r.unflagged, 'video')} were read before the product recorded which of the three it managed.`)
   }
 
-  const lang = input.language
-  const known = lang.english + lang.notEnglish
-  if (lang.analysed > 0) {
-    lines.push(
-      known === 0
-        ? 'No language was recorded for any video, so the share not in English cannot be drawn.'
-        : `${share(lang.notEnglish, known)} of the videos whose language we know were not in English${lang.unknown > 0 ? `, and ${plural(lang.unknown, 'video')} have no language recorded at all` : ''}. This is what was said in videos; the comments have no language of their own recorded yet.`,
-    )
-  }
+  // NO LANGUAGE SHARE IS PRINTED (Heinrich, 2026-09-24): how much of what was
+  // said was not in English is kept in the record inputs and printed nowhere.
 
   const g = input.discard
   lines.push(
@@ -1345,22 +1331,8 @@ export function recordRows(input: RecordInputs, extra: RecordExtras = {}): Recor
     if (undated > 0) push('undated', 'Comments with no date', fmtInt(undated), 'in no month, and in no reading', { dash: true })
   }
 
-  const lang = input.language
-  const known = lang.english + lang.notEnglish
-  push(
-    'language', 'Not in English',
-    lang.analysed > 0 && known > 0 ? share(lang.notEnglish, known) : null,
-    lang.analysed === 0
-      ? 'No video has been analysed for this workspace yet.'
-      : known === 0
-        ? 'No language was recorded for any video, so the share not in English cannot be drawn.'
-        : `of the ${fmtInt(known)} videos whose language we know`,
-    lang.analysed > 0 && known > 0
-      ? {
-        basis: `what was said on camera, not what was written in comments${lang.unknown > 0 ? `; ${fmtInt(lang.unknown)} videos have no language recorded at all` : ''}`,
-      }
-      : {},
-  )
+  // NO LANGUAGE SHARE IS PRINTED (Heinrich, 2026-09-24): how much of what was
+  // said was not in English is kept in the record inputs and printed nowhere.
 
   const r = input.readDepth
   // D15: the basis is part of the figure. `analyzed_with_*` is a fact about a

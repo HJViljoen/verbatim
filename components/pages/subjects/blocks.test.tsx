@@ -875,15 +875,13 @@ describe('the mock’s own shape, where the data allows it', () => {
     expect(markup).not.toContain('apart')
   })
 
-  it('names the subject in the voices title and states the language basis, not the mock’s', () => {
+  it('names the subject in the voices title and states no language share in any mode', () => {
     const text = renderText(subjectsVoices.render(subjectsFixture(), 'app', ctx))
     expect(text).toContain('Voices on durability')
-    // D15. What is recorded is the language of what was said ON CAMERA,
-    // all-time; "27% of this month's videos" would restate a different
-    // denominator.
-    // A45: on screen the page bar carries it; a travelling block keeps it.
-    expect(text).not.toContain('said on camera was not in English')
-    expect(renderText(subjectsVoices.render(subjectsFixture(), 'print', ctx))).toContain('said on camera was not in English')
+    // No surface states how much was not in English (2026-09-24).
+    for (const mode of ['app', 'print', 'email'] as const) {
+      expect(renderText(subjectsVoices.render(subjectsFixture(), mode, ctx))).not.toContain('not in English')
+    }
   })
 
   // THE PLATFORM IS DRAWN ONCE. The cite led with `m.platform` — the raw stored

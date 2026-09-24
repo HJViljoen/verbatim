@@ -173,7 +173,7 @@ const recommendation: E<DashboardData> = ({ hero: h }, ctx) => {
       <div style={{ ...text.body, fontSize: 15, fontWeight: 600, lineHeight: '1.3', marginTop: 4 }}>{h.oneThing.title}</div>
       {why ? <p style={{ ...text.body, fontSize: 13, margin: '6px 0 0', color: EMAIL.ink2 }}>{why}</p> : null}
       <div style={{ marginTop: 6 }}>
-        <a href={`${ctx.appUrl}/dashboard/market-intel?rec=${encodeURIComponent(h.oneThing.id)}`} style={{ color: EMAIL.link, fontFamily: FONT.sans, fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
+        <a href={`${ctx.appUrl}/dashboard/market?rec=${encodeURIComponent(h.oneThing.id)}`} style={{ color: EMAIL.link, fontFamily: FONT.sans, fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
           {h.voices > 0 ? `Grounded in ${fmtInt(h.voices)} voices${h.platforms.length > 1 ? ` · ${h.platforms.length} platforms` : ''}` : 'Why, and the voices'} →
         </a>
       </div>

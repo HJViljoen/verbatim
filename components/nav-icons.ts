@@ -1,4 +1,4 @@
-import { LayoutDashboard, Target, Users, Swords, ChartColumn, Play, FileText, List, CalendarDays, CircleHelp, SlidersVertical, LayoutTemplate, type LucideIcon } from "lucide-react"
+import { LayoutDashboard, Target, Users, ChartColumn, FileText, List, CalendarDays, CircleHelp, SlidersVertical, LayoutTemplate, type LucideIcon } from "lucide-react"
 
 import type { NavKey } from "@/lib/nav"
 
@@ -52,8 +52,6 @@ import type { NavKey } from "@/lib/nav"
  * `SlidersHorizontal` is that glyph turned 90°. The ruling's own sentence says
  * the mock is the spec, so the mock decides and the name in the note is the
  * thing that was loose. One word to reverse if the name was meant literally.
- *
- * The parked pages below keep `Swords` deliberately — see their own note.
  */
 export const NAV_ICON: Record<NavKey, LucideIcon> = {
   overview: LayoutDashboard,
@@ -66,18 +64,6 @@ export const NAV_ICON: Record<NavKey, LucideIcon> = {
   reports: FileText,
   settings: SlidersVertical,
 }
-
-/** The parked pages keep the icons they had, so a reader recognises the page
- *  they are being moved off. Keyed by href, because a parked page is not one
- *  of the nine and has no `NavKey`. */
-export const OLD_NAV_ICON: Record<string, LucideIcon> = {
-  "/dashboard/market-intel": Target,
-  "/dashboard/competitive-intel": Swords,
-  "/dashboard/videos": Play,
-}
-
-/** What an old page gets when it is not in the map above. */
-export const OLD_NAV_ICON_FALLBACK: LucideIcon = Play
 
 /** The Studio is not one of the nine and is in no group list — it arrives
  *  through its own slot, for a session that may see it. */
