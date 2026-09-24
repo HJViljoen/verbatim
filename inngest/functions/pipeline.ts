@@ -1013,7 +1013,7 @@ export const runPipeline = inngest.createFunction(
         .run('plan-translate', () => planTranslateBatches(clientId))
         .catch((e) => {
           noteError('plan-translate', e)
-          return { batches: [] as string[][], needing: 0, deferred: 0, retrying: 0, byLang: {} as Record<string, number> }
+          return { batches: [] as string[][], needing: 0, deferred: 0, retrying: 0, excluded: { english: 0, exhausted: 0 }, byLang: {} as Record<string, number> }
         })
       translate.batches = plan.batches.length
       translate.needing = plan.needing
@@ -1064,10 +1064,19 @@ export const runPipeline = inngest.createFunction(
       )
       if (translateDegraded && translate.batchesFailed === 0) noteError('translate', translateDegraded)
       else if (translate.failed > 0) console.warn(`[translate] ${translate.failed} translation(s) failed${translate.batchesFailed ? ' (batch steps already recorded)' : ` under the ${PASS_A_ERROR_RATIO * 100}% ratio`}. First: ${firstTranslateError ?? ''}`)
-      if (plan.needing) {
+      if (plan.needing || plan.excluded.english) {
         const langs = Object.entries(plan.byLang).sort((a, b) => b[1] - a[1]).map(([l, n]) => `${l}:${n}`).join(' ')
+        // `offered` is printed beside `needed` because the two are read as one
+        // number otherwise: the DB pre-filter (and the index that serves it) is
+        // status='ok' AND transcript_en IS NULL, which counts every English
+        // transcript as pending. Sealand's 2026-09-20 run offered 1,564 rows,
+        // of which 178 were candidates and all 178 were attempted — the cap
+        // deferred nothing. Without this line that reads as 178 of a 400 cap.
         console.log(
-          `[translate] ${plan.needing} needed (${plan.retrying} re-attempts of a recorded failure) · ${translate.translated} translated · ${translate.english} already English · ${translate.failed} failed · ${plan.deferred} deferred by the cap · ~$${translate.cost.toFixed(3)} · ${langs}`,
+          `[translate] ${plan.needing} needed of ${plan.needing + plan.excluded.english + plan.excluded.exhausted} offered ` +
+          `(${plan.excluded.english} already English, ${plan.excluded.exhausted} out of attempts) · ` +
+          `${plan.retrying} re-attempts of a recorded failure · ${translate.translated} translated · ${translate.english} detected English · ` +
+          `${translate.failed} failed · ${plan.deferred} deferred by the cap · ~$${translate.cost.toFixed(3)} · ${langs}`,
         )
       }
       // A translation changes what Pass A sees on exactly those videos, and the
