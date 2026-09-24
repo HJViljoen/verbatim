@@ -2,6 +2,8 @@ import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { PageFrame, PageGrid, PageBar } from '@/components/shell/page-grid'
 import { Tile, StripCell, type TileVariant } from '@/components/shell/tile'
+import { hasHorizon, surface, type NavKey } from '@/lib/nav'
+import { HORIZONS } from '@/lib/reading/horizon'
 
 // Skeletons for the one-screen pages. Each route's loading.tsx composes these
 // into the SAME grid its page renders (same col/row spans, same variants), so
@@ -134,6 +136,48 @@ export function SkeletonPage({ title, pills, children }: { title: string; pills?
       <span role="status" className="sr-only">Loading {title}…</span>
       <SkeletonPageBar title={title} pills={pills} />
       <PageGrid>{children}</PageGrid>
+    </PageFrame>
+  )
+}
+
+/** The bar every Phase 1 surface wears (components/shell/page-bar.tsx), in its
+ *  loading state: the title and the question are read from the same
+ *  `lib/nav.ts` row the real bar reads, so the words on screen do not change
+ *  when the page lands. The horizon row appears only where the surface has
+ *  one (`hasHorizon`), and the "how sound is this" band only where the page
+ *  passes a record (`band`), because a bone the page will not draw is a jump
+ *  the moment it arrives. `pills` is the right-hand controls (How to read,
+ *  Export) the page mounts. */
+export function SkeletonSurfaceBar({ nav, pills = 0, band = false }: { nav: NavKey; pills?: number; band?: boolean }) {
+  const s = surface(nav)
+  return (
+    <div className="flex shrink-0 flex-col gap-1.5">
+      <PageBar title={s.label} context={<Bone className="h-3 w-48" />} subtitle={s.question ?? undefined}>
+        {pills > 0 && Array.from({ length: pills }, (_, i) => <Bone key={i} className="h-[26px] w-20 rounded-full" />)}
+      </PageBar>
+      {hasHorizon(s) && (
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1">
+            {Array.from({ length: HORIZONS.length }, (_, i) => <Bone key={i} className="h-[26px] w-[84px] rounded-full" />)}
+          </div>
+          <Bone className="h-3 w-40" />
+        </div>
+      )}
+      {band && <Bone className="h-[30px] w-full max-w-[520px] rounded-2xl" />}
+    </div>
+  )
+}
+
+/** A reading surface's scaffold: its own bar, then whatever sits under it.
+ *  Unlike `SkeletonPage` it draws no grid of its own, because the surfaces
+ *  do not share one: Overview is a single column, Subjects a rail and a main
+ *  column, Market two grids, Competitive a pill row above its grid. */
+export function SkeletonSurface({ nav, pills, band, children }: { nav: NavKey; pills?: number; band?: boolean; children: ReactNode }) {
+  return (
+    <PageFrame>
+      <span role="status" className="sr-only">Loading {surface(nav).label}…</span>
+      <SkeletonSurfaceBar nav={nav} pills={pills} band={band} />
+      {children}
     </PageFrame>
   )
 }
