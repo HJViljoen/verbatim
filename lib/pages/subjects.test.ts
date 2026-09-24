@@ -23,6 +23,7 @@ import {
   voiceFrom,
   voicesAcross,
   voicesMeta,
+  withheldPane,
   UNANSWERED_BASIS,
   VOICES_SHOWN,
   type StoredKindRow,
@@ -60,7 +61,8 @@ describe('originLine', () => {
 
 describe('railNote', () => {
   it('tells the method’s silence apart from the record’s', () => {
-    expect(railNote('calibrating', true)).toBe('provisional')
+    // The 24 Sep ruling's word, shared with every surface that hides a share.
+    expect(railNote('calibrating', true)).toBe('calibrating')
     expect(railNote('ready', false)).toBe('no reading yet')
     expect(railNote('ready', true)).toBeNull()
   })
@@ -542,7 +544,7 @@ describe('buildSides', () => {
 describe('sideFigures', () => {
   it('declares a share and a count per observed side, and nothing for an absent one', () => {
     const sides = fixtureSides()
-    const pane = { name: 'Durability', sides } as unknown as SubjectPane
+    const pane = { name: 'Durability', calibration: 'ready', sides } as unknown as SubjectPane
     const figures = sideFigures(pane)
     expect(Object.keys(figures).sort()).toEqual([
       'subject_category_industry_other_share', 'subject_category_industry_other_videos',
@@ -563,6 +565,12 @@ describe('sideFigures', () => {
 
   it('declares nothing at all without a selected subject', () => {
     expect(sideFigures(null)).toEqual({})
+  })
+
+  // Even off a pane frozen before withheldPane: a calibrating subject's share
+  // is never a figure a cover prompt may cite.
+  it('declares nothing for a calibrating subject', () => {
+    expect(sideFigures({ name: 'Repair & warranty', calibration: 'calibrating', sides: fixtureSides() } as unknown as SubjectPane)).toEqual({})
   })
 })
 
@@ -708,5 +716,46 @@ describe('endReadings', () => {
   it('skips a side with no series and a series with no reading at all', () => {
     expect(endReadings([side({})], [])).toBeNull()
     expect(endReadings([side({})], [line(CLIENT_AUDIENCE, [null, null, null], [null, null, null])])).toBeNull()
+  })
+})
+
+// Heinrich's 24 Sep ruling: a CALIBRATING subject reads "calibrating" with its
+// share hidden — on every surface, not only the rail. The pane is where the
+// share was still printed (buildSides sets pct whatever the calibration).
+describe('withheldPane', () => {
+  const pane = (calibration: 'ready' | 'calibrating') => ({
+    id: 's1', name: 'Repair & warranty', calibration,
+    sides: fixtureSides(),
+    series: [{}], chartSeries: [{}],
+    gap: { state: 'apart' }, trail: 'the category read 12% in July', axisNote: 'a note',
+    behind: { videos: 26, href: '/dashboard/videos?subject=s1' },
+    voices: [{ cite: 'x' }], unanswered: { rows: [] }, move: null,
+  }) as unknown as SubjectPane
+
+  it('takes every figure of a calibrating subject out of the data', () => {
+    const p = withheldPane(pane('calibrating'))
+    for (const s of p.sides) {
+      expect(s).toMatchObject({ k: null, pct: null, observed: false, verdict: null, direction: null, previous: null })
+    }
+    expect(p.series).toEqual([])
+    expect(p.chartSeries).toEqual([])
+    expect(p.gap).toBeNull()
+    expect(p.trail).toBeNull()
+    expect(p.axisNote).toBeNull()
+    expect(p.behind).toBeNull()
+    expect(sideFigures(p)).toEqual({})
+  })
+
+  it('keeps what is not the subject’s share: the audiences’ counts and kinds, the voices', () => {
+    const before = pane('calibrating')
+    const p = withheldPane(before)
+    expect(p.sides.map((s) => s.n)).toEqual(before.sides.map((s) => s.n))
+    expect(p.sides.map((s) => s.kinds)).toEqual(before.sides.map((s) => s.kinds))
+    expect(p.voices).toBe(before.voices)
+  })
+
+  it('leaves a ready subject exactly as it was', () => {
+    const ready = pane('ready')
+    expect(withheldPane(ready)).toBe(ready)
   })
 })

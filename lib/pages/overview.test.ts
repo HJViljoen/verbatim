@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 
 import { buildSeries, type DenominatorPoint, type NumeratorPoint } from '../reading/series'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '../rivals'
-import type { Move, Subject } from '../subjects/types'
+import { CALIBRATING_WORD, JUDGE_VERSION, type Move, type Subject } from '../subjects/types'
 import { actedTally } from '../reading/moves'
 import { gapLine, type Gap } from '../reading/gap'
 import { cardFixture, moveReadingFixture } from '../../components/pages/overview/fixture'
@@ -421,7 +421,9 @@ describe('candidateLine', () => {
 
 // ---- the three block builders --------------------------------------------------
 
-const subject = (id: string, name: string, status: Subject['status'] = 'active'): Subject =>
+/** A confirmed subject, CALIBRATED under the live judge unless asked — the
+ *  share logic below is about subjects whose share may print. */
+const subject = (id: string, name: string, status: Subject['status'] = 'active', calibrated = true): Subject =>
   ({
     id,
     client_id: 'c',
@@ -434,10 +436,10 @@ const subject = (id: string, name: string, status: Subject['status'] = 'active')
     superseded_by: null,
     embedded_at: null,
     embed_input_version: null,
-    calibrated_at: null,
-    calibration_precision: null,
-    calibration_n: null,
-    calibration_judge_version: null,
+    calibrated_at: calibrated ? '2026-09-25T10:00:00.000Z' : null,
+    calibration_precision: calibrated ? 0.92 : null,
+    calibration_n: calibrated ? 25 : null,
+    calibration_judge_version: calibrated ? JUDGE_VERSION : null,
   }) as Subject
 
 const AXIS = ['2026-07-01', '2026-08-01', '2026-09-01']
@@ -1199,5 +1201,58 @@ describe('fillingNote', () => {
 
   it('says nothing was read, where nothing was', () => {
     expect(fillingNote({ ...base, videos: null })).toContain('nothing read into this month yet')
+  })
+})
+
+// Heinrich's 24 Sep ruling on Overview: a CALIBRATING subject's row keeps its
+// name and link and carries no figure — every surface that prints these rows
+// says "calibrating" instead (components/pages/overview/subjects.tsx).
+describe('buildSubjects — a calibrating subject carries no figure', () => {
+  const perAudience = new Map<string, number>([
+    ['2026-08-01|industry-other', 1200], ['2026-09-01|industry-other', 1388],
+    ['2026-08-01|client', 80], ['2026-09-01|client', 84],
+    ['2026-08-01|competitor:Freitag', 140], ['2026-09-01|competitor:Freitag', 142],
+  ])
+  const months = ['s1', 's2'].flatMap((id) => ['2026-08-01', '2026-09-01'].flatMap((month) => [
+    { month, audience: INDUSTRY_AUDIENCE, subject_id: id, videos: 300, comments: 900 },
+    { month, audience: CLIENT_AUDIENCE, subject_id: id, videos: 26, comments: 60 },
+    { month, audience: rivalKey('Freitag'), subject_id: id, videos: 60, comments: 120 },
+  ]))
+  const b = buildSubjects({
+    subjects: [subject('s1', 'Repair & warranty', 'active', false), subject('s2', 'Price')],
+    months, denominators: new Map(), perAudience,
+    axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01', leadRival: 'Freitag',
+    atLastMonth: { bySubject: new Map([['industry-other|s1', 280]]), perAudience: new Map([['industry-other', 1290]]) },
+    thin: false,
+  })
+  const repair = b.rows.find((r) => r.id === 's1')!
+  const price = b.rows.find((r) => r.id === 's2')!
+
+  it('keeps the row, its name and its link, and marks it calibrating', () => {
+    expect(repair).toMatchObject({ label: 'Repair & warranty', calibration: 'calibrating', href: '/dashboard/subjects?item=s1' })
+    expect(price.calibration).toBe('ready')
+  })
+
+  it('carries no share, count, change, direction, spark or last-month level on any side', () => {
+    for (const side of [repair.you, repair.rival!, repair.category]) {
+      expect(side).toEqual({ k: null, n: null, pct: null, verdict: null, observed: false })
+    }
+    expect(repair.direction).toBeNull()
+    expect(repair.spark.every((v) => v === null)).toBe(true)
+    expect(repair.categoryAtLastMonth).toBeNull()
+    expect(b.gaps.s1).toBeNull()
+    // The ready row beside it reads as it always did.
+    expect(price.category.pct).not.toBeNull()
+    expect(b.gaps.s2).not.toBeNull()
+  })
+
+  it('leaves the footer note to the rows that print a figure', () => {
+    const only = buildSubjects({
+      subjects: [subject('s1', 'Repair & warranty', 'active', false)],
+      months, denominators: new Map(), perAudience,
+      axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01', leadRival: null, atLastMonth: null, thin: false,
+    })
+    expect(only.note).toBeNull()
+    expect(CALIBRATING_WORD).toBe('calibrating')
   })
 })

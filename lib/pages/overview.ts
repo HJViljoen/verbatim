@@ -59,7 +59,7 @@ import {
 import { buildStandings, type StandingRow } from '../reading/standings'
 import type { MonthStatus } from '../reading/types'
 import { isAnswer, type FigureTable, type Verdict } from '../reading/verdicts'
-import { isMissingSubjects, MOVE_PROMISE, RPC_WINDOW_SUBJECT_READINGS, TABLE_MOVES, TABLE_SUBJECT_MEMBERSHIPS, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
+import { isMissingSubjects, MOVE_PROMISE, RPC_WINDOW_SUBJECT_READINGS, subjectCalibration, TABLE_MOVES, TABLE_SUBJECT_MEMBERSHIPS, TABLE_SUBJECTS, type Move, type Subject, type SubjectCalibration } from '../subjects/types'
 import { chunk, mapWithLimit, MULTI_ROW_IN_CHUNK, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import { selectAll } from '../supabase-admin'
 import { row, rows } from './read'
@@ -161,6 +161,16 @@ export interface SubjectRow {
    *  when the month is complete, or when M4/M3 cannot answer the window. */
   categoryAtLastMonth: { k: number; n: number; pct: number | null } | null
   href: string
+  /**
+   * Whether this subject's share may be printed (lib/subjects/types.ts
+   * subjectCalibration). A `calibrating` row carries NO figure of the subject —
+   * every side blank, no spark, no gap (`buildSubjects`) — and every surface
+   * that prints these rows (Overview, the weekly and monthly emails, the
+   * leadership sheet) says "calibrating" in its place: Heinrich's 24 Sep
+   * ruling. Optional because a snapshot frozen before the field has none, and
+   * such a row is read as it was frozen.
+   */
+  calibration?: SubjectCalibration
 }
 
 export interface SubjectCandidate {
@@ -3118,7 +3128,29 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
     })
   }
 
+  const blank = (): SideReading => ({ k: null, n: null, pct: null, verdict: null, observed: false })
   const rows: SubjectRow[] = active.map((s) => {
+    // A CALIBRATING SUBJECT CARRIES NO FIGURE AT ALL, not a figure a component
+    // is trusted to hide: this block is frozen into snapshots, handed to the
+    // cover prompt through `figures()` and read by two emails and a print
+    // sheet. Its row keeps its name and its link.
+    const calibration = subjectCalibration(s)
+    if (calibration !== 'ready') {
+      const months = input.axis.slice(-SPARK_MONTHS)
+      return {
+        id: s.id,
+        label: s.name,
+        you: blank(),
+        rival: rivalAudience ? blank() : null,
+        category: blank(),
+        direction: null,
+        spark: months.map(() => null),
+        sparkMonths: [...months],
+        categoryAtLastMonth: null,
+        href: `/dashboard/subjects?item=${encodeURIComponent(s.id)}`,
+        calibration,
+      }
+    }
     const you = side(s.id, CLIENT_AUDIENCE, input.month)
     const rival = rivalAudience ? side(s.id, rivalAudience, input.month) : null
     const category = side(s.id, INDUSTRY_AUDIENCE, input.month)
@@ -3156,11 +3188,12 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
       sparkMonths: axisPoints.slice(-SPARK_MONTHS).map((p) => p.month),
       categoryAtLastMonth: atLastMonthFor(input, s.id),
       href: `/dashboard/subjects?item=${encodeURIComponent(s.id)}`,
+      calibration,
     }
   })
 
   const gaps: Record<string, Gap | null> = {}
-  for (const row of rows) gaps[row.id] = gapFor(row.id, row.label, row.you, row.rival)
+  for (const row of rows) gaps[row.id] = row.calibration === 'ready' ? gapFor(row.id, row.label, row.you, row.rival) : null
 
   return {
     state: 'ready',
@@ -3168,7 +3201,9 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
     candidates: [],
     rivalLabel,
     categoryLabel,
-    note: subjectsNote(rows),
+    // Over the rows that print a figure: a calibrating row's blank side is
+    // not "your side carries no reading this month".
+    note: subjectsNote(rows.filter((r) => r.calibration === 'ready')),
     // THE EARLIEST OF THE ACTIVE ROWS. One date for the block, because the meta
     // is about the block: "six named 19 Aug" says the set has been measured
     // since then, and the earliest is the only date that is true of all six.

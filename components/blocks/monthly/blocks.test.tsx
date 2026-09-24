@@ -14,6 +14,9 @@ import { OWN_POSTS_UNREADABLE_OUTSIDE } from '@/lib/pages/overview'
 import { MOVERS_UNREAD_NOTE } from '@/lib/pages/monthly'
 import { ALL_MONTHLY_BLOCKS, MONTHLY_BLOCKS, monthlyBlocksFor } from './index'
 import { formingMonthlyFixture, monthlyFixture, refusedMonthlyFixture } from './fixture'
+import { monthlySubjectsEmail } from './subjects'
+import { calibratingRow } from '@/components/pages/overview/fixture'
+import { CALIBRATING_WORD } from '@/lib/subjects/types'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -846,5 +849,19 @@ describe('what the artefact printed and what the record keeps', () => {
       const keys = recorded(data).map((r) => `${r.audience}/${r.objectKind}/${r.objectId}/${r.measure}`)
       expect(new Set(keys).size).toBe(keys.length)
     }
+  })
+})
+
+// Heinrich's 24 Sep ruling, in the monthly email's own subjects section.
+describe('MR2 · a calibrating subject', () => {
+  it('prints "calibrating" once across its three columns, and no share', () => {
+    const data = monthlyFixture()
+    const overview = { ...data.overview, subjects: { ...data.overview.subjects, rows: [...data.overview.subjects.rows, calibratingRow()], gaps: { ...data.overview.subjects.gaps, s9: null } } }
+    const markup = render(monthlySubjectsEmail(overview, ctx))
+    assertCopyContract(markup)
+    const text = renderText(monthlySubjectsEmail(overview, ctx))
+    const row = text.slice(text.indexOf('Repair & warranty'))
+    expect(row).toContain(CALIBRATING_WORD)
+    expect(row).not.toMatch(/not tracked|\d%/)
   })
 })

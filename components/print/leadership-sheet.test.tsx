@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import { markupText, render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
-import { overviewFixture, refusedFixture } from '@/components/pages/overview/fixture'
+import { calibratingFixture, calibratingRow, overviewFixture, refusedFixture } from '@/components/pages/overview/fixture'
+import { CALIBRATING_WORD } from '@/lib/subjects/types'
 import { competitiveFixture } from '@/components/pages/competitive-surface/fixture'
 import type { OverviewData } from '@/lib/pages/overview'
 import type { Gap } from '@/lib/reading/gap'
@@ -539,5 +540,20 @@ describe('the sheet inside the deck', () => {
     }
     const words = markupText(render(<DocumentDeck data={blocked} date="18 Sep 2026" />))
     expect(words).toContain('Name your subjects in Settings — an operator confirms them.')
+  })
+})
+
+// Heinrich's 24 Sep ruling, on the leadership sheet's subjects table and card.
+describe('the leadership sheet — a calibrating subject', () => {
+  it('prints "calibrating" once on its table row, never three "not tracked" cells', () => {
+    const text = renderText(sheet(calibratingFixture()))
+    const row = text.slice(text.indexOf('Repair & warranty'))
+    expect(row).toContain(CALIBRATING_WORD)
+    expect(row.slice(0, 40)).not.toMatch(/not tracked|\d%/)
+  })
+
+  it('never puts a calibrating subject on the lead card', () => {
+    expect(leadSubject([calibratingRow()])).toBeNull()
+    expect(leadSubject([calibratingRow(), ...overviewFixture().subjects.rows], 's1')?.id).toBe('s2')
   })
 })

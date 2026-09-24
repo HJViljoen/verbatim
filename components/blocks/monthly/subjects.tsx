@@ -9,6 +9,7 @@ import { gapBasisLine, gapLine, gapPrintsLevel, type Gap } from '@/lib/reading/g
 import type { OverviewData, SideReading, SubjectRow } from '@/lib/pages/overview'
 import { sentLineFor } from '@/lib/pages/overview'
 import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
+import { CALIBRATING_WORD } from '@/lib/subjects/types'
 import { presentation, T } from './email-table'
 
 /**
@@ -252,6 +253,13 @@ function SubjectBlock({ row, sentLine }: { row: SubjectRow; sentLine: string | n
           <td style={{ paddingBottom: 12 }}>
             <table width="100%" {...presentation} style={{ ...T, tableLayout: 'fixed' }}>
               <tbody>
+                {/* A calibrating subject's share is hidden, and said once
+                    across the three columns (the 24 Sep ruling). */}
+                {row.calibration === 'calibrating' ? (
+                  <tr>
+                    <td colSpan={3} style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>{CALIBRATING_WORD}</td>
+                  </tr>
+                ) : (
                 <tr>
                   <td style={{ verticalAlign: 'top', paddingRight: 12 }}><Side side={row.you} /></td>
                   <td style={{ verticalAlign: 'top', paddingRight: 12 }}><Side side={row.rival} /></td>
@@ -268,6 +276,7 @@ function SubjectBlock({ row, sentLine }: { row: SubjectRow; sentLine: string | n
                     {sentLine ? <div style={{ fontFamily: FONT.sans, fontSize: 10.5, lineHeight: '1.4', color: EMAIL.muted, marginTop: 3 }}>{sentLine}</div> : null}
                   </td>
                 </tr>
+                )}
               </tbody>
             </table>
           </td>

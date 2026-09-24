@@ -13,6 +13,7 @@ import { DIRECTION_RUN_LABEL, type Direction } from '@/lib/reading/bands'
 import { gapBasisLine, gapLine } from '@/lib/reading/gap'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import { sideCaption, sideEyebrow, sideFigures, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
+import { CALIBRATING_LINE } from '@/lib/subjects/types'
 
 // SU2 · One subject, in full — the hero (design §3 SU2, the mock's (a) header).
 //
@@ -243,7 +244,13 @@ export const subjectsSubject: Block<SubjectsData> = {
       >
         {pane.notRecorded ? <BlockEmpty mode={mode}>{pane.notRecorded}</BlockEmpty> : null}
 
-        {email ? (
+        {/* CALIBRATING: THE SHARE IS HIDDEN, AND SAID ONCE (the 24 Sep ruling).
+            The loader has already taken every figure of the subject out of the
+            pane (withheldPane); this is the sentence in their place, rather
+            than three empty cells a reader would take for "no reading". */}
+        {pane.calibration !== 'ready' ? (
+          <BlockEmpty mode={mode}>{CALIBRATING_LINE}</BlockEmpty>
+        ) : email ? (
           <div>{pane.sides.map((s) => <Side key={s.audience} side={s} brand={data.brand} mode={mode} />)}</div>
         ) : (
           // THE MOCK'S VERTICAL HAIRLINES, from the primitive that owns them
@@ -270,7 +277,8 @@ export const subjectsSubject: Block<SubjectsData> = {
   },
 
   verdicts(data): Verdict[] {
-    return (data.selected?.sides ?? []).map((s) => s.verdict).filter((v): v is Verdict => v != null)
+    if (data.selected?.calibration !== 'ready') return []
+    return data.selected.sides.map((s) => s.verdict).filter((v): v is Verdict => v != null)
   },
 
   emptyState(data) {

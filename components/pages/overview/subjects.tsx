@@ -14,6 +14,7 @@ import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { OverviewData, SideReading, SubjectRow } from '@/lib/pages/overview'
 import { candidateLine, monthlyLineLabel, monthlySpanLabel, sentLineFor } from '@/lib/pages/overview'
 import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
+import { CALIBRATING_WORD } from '@/lib/subjects/types'
 
 // OV2 · Your subjects — the hero (design §3 OV2).
 //
@@ -233,6 +234,19 @@ export function sparkDomain(rows: readonly SubjectRow[]): [number, number] | und
 }
 
 function Row({ row, mode, appUrl = '', sentLine = null, domain }: { row: SubjectRow; mode: RenderMode; appUrl?: string; sentLine?: string | null; domain?: [number, number] }) {
+  // CALIBRATING: THE ROW NAMES THE SUBJECT AND SAYS SO ONCE, across the six
+  // figure columns (the 24 Sep ruling). The loader carries no figure for it;
+  // six "not tracked" cells would say the audience was never read.
+  if (row.calibration === 'calibrating') {
+    return (
+      <tr className="border-t border-border/60 first:border-t-0">
+        <th scope="row" className="py-1.5 pr-3 text-left align-top text-[12.5px] font-medium">
+          <Link href={`${appUrl}${row.href}`} className="underline-offset-2 hover:underline">{row.label}</Link>
+        </th>
+        <td colSpan={6} className="py-1.5 align-top text-[12px] text-muted-foreground">{CALIBRATING_WORD}</td>
+      </tr>
+    )
+  }
   return (
     // THE HAIRLINE BETWEEN ROWS (design review Medium 17). The artboard rules
     // its rows and the port dropped it, while the rows themselves are ragged —
@@ -380,9 +394,13 @@ export const overviewSubjects: Block<OverviewData> = {
           {s.rows.map((r) => (
             <div key={r.id} style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '4px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
               <strong>{r.label}</strong>
-              <div style={{ marginTop: 2 }}>
-                you <Side side={r.you} mode={mode} /> · {s.rivalLabel ?? 'rival'} <Side side={r.rival} mode={mode} /> · {s.categoryLabel.toLowerCase()} <Side side={r.category} mode={mode} />
-              </div>
+              {r.calibration === 'calibrating' ? (
+                <div style={{ marginTop: 2, color: EMAIL.muted }}>{CALIBRATING_WORD}</div>
+              ) : (
+                <div style={{ marginTop: 2 }}>
+                  you <Side side={r.you} mode={mode} /> · {s.rivalLabel ?? 'rival'} <Side side={r.rival} mode={mode} /> · {s.categoryLabel.toLowerCase()} <Side side={r.category} mode={mode} />
+                </div>
+              )}
               <AtLastMonth at={r.categoryAtLastMonth} mode={mode} />
               <SentLine line={sentLineFor(data.sent, INDUSTRY_AUDIENCE, 'subject', r.id, r.category.pct)} mode={mode} />
               <div style={{ marginTop: 2 }}>

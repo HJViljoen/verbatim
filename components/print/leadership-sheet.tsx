@@ -14,6 +14,7 @@ import { GAP_WORDS, gapBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
 import type { MoveReading } from '@/lib/reading/moves'
 import { monthAndYear } from '@/lib/reports/documents/reading'
 import type { DocumentSnapshotData } from '@/lib/reports/documents/types'
+import { CALIBRATING_WORD } from '@/lib/subjects/types'
 import { INTERPRETATION_LABEL } from '@/lib/prose/interpret'
 
 /**
@@ -349,8 +350,10 @@ export function leadSubject(rows: readonly SubjectRow[], exceptId?: string | nul
   // subject. Where the gap card has already taken a subject this one steps over
   // it — and where that is the only subject there is, it takes it anyway,
   // because a repeated card says more than an empty one.
-  const other = exceptId ? rows.filter((r) => r.id !== exceptId) : [...rows]
-  const pool = other.length > 0 ? other : [...rows]
+  // A calibrating subject has no share to put on a card.
+  const readable = rows.filter((r) => r.calibration !== 'calibrating')
+  const other = exceptId ? readable.filter((r) => r.id !== exceptId) : [...readable]
+  const pool = other.length > 0 ? other : [...readable]
   const moved = pool.filter((r) => r.category.verdict?.state === 'moved' && r.category.verdict.changePts != null)
   if (moved.length > 0) {
     return [...moved].sort((a, b) => Math.abs(b.category.verdict!.changePts!) - Math.abs(a.category.verdict!.changePts!))[0]
@@ -675,13 +678,21 @@ function SubjectsTable({ data }: { data: OverviewData }) {
             {shown.map((r, i) => (
               <tr role="row" key={r.id} className={`${COLS} py-[2px] text-[12.5px] text-foreground ${i === shown.length - 1 ? '' : 'border-b border-border/70'}`}>
                 <th role="rowheader" scope="row" className="min-w-0 truncate font-normal">{r.label}</th>
-                <td role="cell"><Cell side={r.you} /></td>
-                <td role="cell"><Cell side={r.rival} /></td>
-                <td role="cell"><Cell side={r.category} /></td>
-                <td role="cell" className="flex min-w-0 flex-wrap items-center gap-1.5">
-                  <BlockMovement verdict={r.category.verdict} unit="pts" good="neutral" />
-                  <DirectionWord direction={r.direction} />
-                </td>
+                {/* A calibrating subject's share is hidden and said once
+                    (the 24 Sep ruling) — not three "not tracked" cells. */}
+                {r.calibration === 'calibrating' ? (
+                  <td role="cell" className="col-span-4 text-[11.5px] text-muted-foreground">{CALIBRATING_WORD}</td>
+                ) : (
+                  <>
+                    <td role="cell"><Cell side={r.you} /></td>
+                    <td role="cell"><Cell side={r.rival} /></td>
+                    <td role="cell"><Cell side={r.category} /></td>
+                    <td role="cell" className="flex min-w-0 flex-wrap items-center gap-1.5">
+                      <BlockMovement verdict={r.category.verdict} unit="pts" good="neutral" />
+                      <DirectionWord direction={r.direction} />
+                    </td>
+                  </>
+                )}
               </tr>
             ))}
           </tbody>

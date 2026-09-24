@@ -651,6 +651,39 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
   }
 }
 
+/** A subject whose share may not be printed yet — what `buildSubjects` hands
+ *  every surface for a CALIBRATING subject (Heinrich's 24 Sep ruling): its name
+ *  and link, and no figure at all. */
+export function calibratingRow(id = 's9', label = 'Repair & warranty'): SubjectRow {
+  const blank = { k: null, n: null, pct: null, verdict: null, observed: false }
+  return {
+    id,
+    label,
+    you: { ...blank },
+    rival: { ...blank },
+    category: { ...blank },
+    direction: null,
+    spark: [null, null, null, null, null, null],
+    sparkMonths: ['2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01', REAL_MONTH],
+    categoryAtLastMonth: null,
+    href: `/dashboard/subjects?item=${id}`,
+    calibration: 'calibrating',
+  }
+}
+
+/** Overview with a calibrating subject after the two that read. */
+export function calibratingFixture(): OverviewData {
+  const base = overviewFixture()
+  return {
+    ...base,
+    subjects: {
+      ...base.subjects,
+      rows: [...base.subjects.rows, calibratingRow()],
+      gaps: { ...base.subjects.gaps, s9: null },
+    },
+  }
+}
+
 /** Production today: M3–M7 unapplied, so five of the seven blocks answer with a
  *  sentence instead of a number. */
 export function refusedFixture(): OverviewData {

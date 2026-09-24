@@ -11,6 +11,7 @@ import type { SideReading, SubjectRow } from '@/lib/pages/overview'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { WeeklyData } from '@/lib/pages/weekly'
 import { CONTRIBUTIONS_NOT_RECORDED, subjectsLead } from '@/lib/reports/weekly'
+import { CALIBRATING_WORD } from '@/lib/subjects/types'
 
 // WR2 · Where things stand (design §3 WR section 2).
 //
@@ -118,6 +119,27 @@ function Row({ row, contribution, rivalLabel, share, mode, appUrl }: {
   const label = mode === 'email'
     ? <span style={{ fontFamily: FONT.sans, fontSize: 13.5, color: EMAIL.ink }}>{row.label}</span>
     : <Link href={`${appUrl}${row.href}`} className="text-[13.5px] underline-offset-2 hover:underline">{row.label}</Link>
+  // CALIBRATING: no bar, no figure, no sides — the word, once (the 24 Sep
+  // ruling). A 2% stub and "not tracked" twice would each be a false reading.
+  if (row.calibration === 'calibrating') {
+    return mode === 'email'
+      ? (
+        <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} border={0} style={{ borderCollapse: 'collapse', borderSpacing: 0, marginTop: 14 }}>
+          <tbody>
+            <tr>
+              <td width="28%" style={{ width: '28%', verticalAlign: 'middle' }}>{label}</td>
+              <td style={{ verticalAlign: 'middle', padding: '0 12px', fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted }}>{CALIBRATING_WORD}</td>
+            </tr>
+          </tbody>
+        </table>
+      )
+      : (
+        <div className="mt-3.5 grid grid-cols-[150px_minmax(0,1fr)_78px] items-center gap-x-3 gap-y-1.5">
+          <span className="col-start-1">{label}</span>
+          <span className="col-span-2 col-start-2 text-[11px] text-muted-foreground">{CALIBRATING_WORD}</span>
+        </div>
+      )
+  }
   const figure = (
     <FigureCell
       mode={mode}
@@ -217,7 +239,9 @@ export const weeklySubjects: Block<WeeklyData> = {
   render(data, mode = 'app', ctx) {
     const s = data.subjects
     const href = `${ctx.appUrl}/dashboard/subjects`
-    const lead = subjectsLead(s.rows)
+    // Over the rows that print a figure: "0 of 8 moved" must not count a
+    // calibrating subject, whose share nobody may read, as inside its band.
+    const lead = subjectsLead(s.rows.filter((r) => r.calibration !== 'calibrating'))
     const frame = (children: ReactNode) => (
       <BlockFrame
         title={data.section1.check.noun === 'week' ? 'Your subjects this week' : 'Your subjects in this update'}
