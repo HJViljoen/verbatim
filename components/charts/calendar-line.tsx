@@ -2,9 +2,9 @@ import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { shortDate, monthName } from '@/lib/format'
 import {
-  axisLabels, calendarGeometry, chartId, collapseRules, columnTitle, lastReading, legendEveryMonth,
-  legendMonths, legendStates, lineSegments, monthColumns, spanOf, spreadLabels, STATE_LABEL,
-  undrawnNote, valueScale,
+  axisLabels, calendarGeometry, chartId, chartReady, CHART_WAITING, collapseRules, columnTitle, drawsLine,
+  figureLines, lastReading, legendEveryMonth, legendMonths, legendStates, lineSegments, MIN_CHART_MONTHS,
+  monthColumns, spanOf, spreadLabels, STATE_LABEL, undrawnLine, valueScale,
   type CalendarBand, type CalendarPoint, type CalendarRule, type CalendarSeries,
 } from '@/lib/charts/calendar'
 
@@ -144,10 +144,10 @@ export function niceTop(max: number, hi: number): number | null {
 }
 
 export function CalendarLine({
-  axis, series, rules = [], bands = [], format = (v) => `${v}`,
+  axis, series: given, rules = [], bands = [], format = (v) => `${v}`,
   width = 880, height = 210, padL = 56, padR = 180,
   zeroBase = true, legend = true, maxLabels = 12, endLabels = true,
-  annotate = null, caption, label, id, className,
+  annotate = null, caption, label, id, className, minMonths = MIN_CHART_MONTHS,
 }: {
   /** Every month to draw, ascending — `monthAxis(from, to)`. */
   axis: readonly string[]
@@ -201,9 +201,26 @@ export function CalendarLine({
   /** Unique per chart on a page; derived from the series labels when omitted. */
   id?: string
   className?: string
+  /** The fewest readable months any one series needs before a LINE is drawn;
+   *  under it the chart prints the figures instead (`MIN_CHART_MONTHS`). */
+  minMonths?: number
 }) {
   const months = axis.map((m) => m)
-  if (!months.length || !series.length) return null
+  if (!months.length || !given.length) return null
+
+  // TOO FEW MONTHS FOR A LINE (2026-09-24). One or two dots under a line
+  // chart's furniture read as a trend; the figures say the same thing without
+  // claiming one, and a sentence says when the line arrives.
+  if (!chartReady(given, minMonths)) {
+    return <CalendarFigures series={given} format={format} caption={caption} className={className} />
+  }
+
+  // ONLY THE SERIES THAT DRAW TAKE PART IN THE PICTURE (2026-09-24). A series
+  // with no plotted month has no key entry, no end label, no gutter marks and
+  // no line in the hover: every one of those was a place ten empty rivals
+  // printed over each other. They are named once, in `undrawnLine`.
+  const series = given.filter(drawsLine)
+  const missing = undrawnLine(given)
 
   const g = calendarGeometry({ axis: months, width, height, padL, padR })
   // THE GUTTER TRACK, AND WHY IT IS NOT FIVE UNITS LOWER (SH14, amended at the
@@ -251,14 +268,19 @@ export function CalendarLine({
   const columns = monthColumns(months, series)
   // End labels are placed by the CHART, not by each series: two lines ending a
   // couple of points apart would otherwise print two 11px labels on one line.
+  //
+  // THE GAP IS SIZED FOR THE LARGEST THE LABEL GETS, not for its size at k=1:
+  // `tsEnd` grows the 11-unit label by up to 1.6 in a narrow container, and a
+  // 13-unit gap under a 17.6-unit label is an overprint. A label that cannot
+  // be placed without overlapping is dropped (the key still names its line).
   const labelYs = spreadLabels(
     series.map((s) => {
       const end = lastReading(s.points)
       return end?.value != null ? scale.y(end.value) + 4 : null
     }),
-    { min: g.top + 4, max: g.baseline },
+    { min: g.top + 4, max: g.baseline, gap: 18 },
   )
-  const showLegend = legend && (series.length >= 2 || states.length > 0)
+  const showLegend = legend && (series.length >= 2 || states.length > 0 || missing != null)
   // The gutter tokens are drawn in the ENTITY's colour, so the legend swatch is
   // too — while there is one entity to be. With several lines on the axis no
   // single colour is the right one and the swatch goes neutral, which is also
@@ -288,21 +310,13 @@ export function CalendarLine({
     <div className={cn('vb-cal flex min-w-0 flex-col gap-2', className)} style={{ '--cal-w': String(width) } as React.CSSProperties}>
       {showLegend && (
         <div className="flex flex-wrap gap-x-4 gap-y-1">
-          {series.map((s) => {
-            // A KEY THAT PROMISES A LINE THE CHART DOES NOT DRAW IS THE WRONG
-            // WAY ROUND. At 100% floor coverage the ink appears only as gutter
-            // rings, so the key says so rather than leaving a reader to decide
-            // whether a flat row of hollow marks on the 0% rule is the series.
-            const undrawn = undrawnNote(s)
-            return (
-              <span key={s.label} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                <span className={cn('size-2 rounded-full', undrawn && 'bg-tile')} style={undrawn ? { boxShadow: `inset 0 0 0 1.5px ${s.color}` } : { background: s.color }} aria-hidden />
-                {s.labelSlot ? <span data-copy="subject" data-slot={s.labelSlot}>{s.legendLabel ?? s.label}</span> : (s.legendLabel ?? s.label)}
-                {s.excludes ? <span className="text-[10.5px]">· {s.excludes}</span> : null}
-                {undrawn ? <span className="text-[10.5px]">· {undrawn}</span> : null}
-              </span>
-            )
-          })}
+          {series.map((s) => (
+            <span key={s.label} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <span className="size-2 rounded-full" style={{ background: s.color }} aria-hidden />
+              {s.labelSlot ? <span data-copy="subject" data-slot={s.labelSlot}>{s.legendLabel ?? s.label}</span> : (s.legendLabel ?? s.label)}
+              {s.excludes ? <span className="text-[10.5px]">· {s.excludes}</span> : null}
+            </span>
+          ))}
           {states.map((state) => {
             const months = legendMonths(series, state)
             // Named while the list is short; "every month" where the token
@@ -317,6 +331,7 @@ export function CalendarLine({
               </span>
             )
           })}
+          {missing ? <span className="basis-full text-[11px] text-muted-foreground">{missing}</span> : null}
         </div>
       )}
 
@@ -355,7 +370,7 @@ export function CalendarLine({
           return span ? bandRect(span, `band${i}`, `url(#${hatch})`, b.label) : null
         })}
 
-        <FillingBars months={months} series={series} geometry={g} y={scale.y} />
+        <FillingTint months={months} series={series} geometry={g} />
 
         <line x1={g.padL} y1={g.baseline} x2={g.padR} y2={g.baseline} stroke="var(--border)" strokeWidth={1} />
         {/* THE GUTTER IS ITS OWN TRACK (Block D wave 3, SH14). A below-floor
@@ -527,29 +542,37 @@ function SeriesMarks({
   const runs = lineSegments(points)
   const at = (p: CalendarPoint): number | null => g.x(p.month)
   const lastPlotted = runs.length ? runs[runs.length - 1][runs[runs.length - 1].length - 1] : null
-  const undrawn = undrawnNote(series)
   const end = lastPlotted != null ? points[lastPlotted] : null
   const endX = end ? at(end) : null
 
   return (
     <g>
-      {runs.map((run, i) => {
+      {runs.flatMap((run, i) => {
         const coords = run
-          .map((k) => ({ x: at(points[k]), v: points[k].value }))
-          .filter((c): c is { x: number; v: number } => c.x != null && c.v != null)
-        if (coords.length < 2) return null
-        return (
+          .map((k) => ({ x: at(points[k]), v: points[k].value, filling: points[k].state === 'filling' }))
+          .filter((c): c is { x: number; v: number; filling: boolean } => c.x != null && c.v != null)
+        if (coords.length < 2) return []
+        // THE STRETCH INTO A STILL-FILLING MONTH IS DASHED (2026-09-24): the
+        // quiet half of the filling mark, with the tint behind the month. The
+        // number at its end may still be rewritten, so the line to it is drawn
+        // as provisional rather than as a settled step.
+        const f = coords.findIndex((c) => c.filling)
+        const solid = f < 0 ? coords : coords.slice(0, Math.max(1, f))
+        const dashed = f < 0 ? [] : coords.slice(Math.max(0, f - 1))
+        const line = (cs: typeof coords, key: string, dash?: string) => cs.length < 2 ? null : (
           <polyline
-            key={`seg${i}`}
-            points={coords.map((c) => `${c.x.toFixed(1)},${y(c.v).toFixed(1)}`).join(' ')}
+            key={key}
+            points={cs.map((c) => `${c.x.toFixed(1)},${y(c.v).toFixed(1)}`).join(' ')}
             fill="none"
             stroke={series.color}
             strokeWidth={2}
             strokeLinejoin="round"
             strokeLinecap="round"
             vectorEffect="non-scaling-stroke"
+            {...(dash ? { strokeDasharray: dash } : {})}
           />
         )
+        return [line(solid, `seg${i}`), line(dashed, `seg${i}f`, '4 3')]
       })}
 
       {/* The marks. Nothing here is a hover target: the chart's one hover layer
@@ -575,7 +598,7 @@ function SeriesMarks({
         return (
           <g key={`m${i}`}>
             {/* THE BAR IS THE CHART'S, NOT THE SERIES' (Block D wave 3,
-                SH21) — see `FillingBars`. The tick is the series': "what this
+                SH21) — see `FillingTint`. The tick is the series': "what this
                 same month read at this point last month" is a reading, and two
                 series filling together have two of them. */}
             {p.state === 'filling' && p.atLastMonth != null && (
@@ -586,18 +609,13 @@ function SeriesMarks({
         )
       })}
 
-      {/* A SERIES WITH NO LINE SAYS SO ON THE PLOT (Block D wave 3, SH14).
-          Its only explanation was the legend key — 9.5px, at the other end of
-          a printed sheet, and absent entirely where a caller turned the legend
-          off — so a row of hollow rings under the zero rule read as six months
-          at zero. The words are `undrawnNote`'s, the same ones the key uses. */}
-      {endLabel && !end && undrawn ? (
-        <text x={padR + 10} y={gutterY + 3} style={tsEnd(9.5)} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">
-          {series.label}
-        </text>
-      ) : null}
-      {endLabel && end && endX != null && end.value != null && (
-        <text x={padR + 10} y={labelY ?? y(end.value) + 4} style={tsEnd(11)} fontWeight={600} fontFamily="var(--font-plex-sans), sans-serif" fill="var(--foreground)">
+      {/* A SERIES WITH NO LINE HAS NO END LABEL (2026-09-24). It used to
+          print its name on the gutter track, and ten empty rivals printed ten
+          names on one spot. It is no longer drawn at all — the chart names it
+          once, above the plot (`undrawnLine`). A label the chart could not
+          place without an overlap (`spreadLabels` → null) is dropped too. */}
+      {endLabel && end && endX != null && end.value != null && labelY != null && (
+        <text x={padR + 10} y={labelY} style={tsEnd(11)} fontWeight={600} fontFamily="var(--font-plex-sans), sans-serif" fill="var(--foreground)">
           {series.labelSlot ? <tspan data-copy="subject" data-slot={series.labelSlot}>{series.label}</tspan> : series.label}{' '}
           <tspan data-copy="figure" fontFamily="var(--font-plex-mono), monospace" fontWeight={500}>{format(end.value)}</tspan>
           {series.endNote ? <tspan data-copy="figure" fontFamily="var(--font-plex-mono), monospace" fontWeight={400} style={tsEnd(9.5)} fill="var(--muted-foreground)"> {series.endNote}</tspan> : null}
@@ -608,70 +626,82 @@ function SeriesMarks({
 }
 
 /**
- * The still-filling month: a part-height bar under the newest reading, and —
- * where the caller actually computed it — a tick at what the same month read
- * at this point last month.
+ * THE STILL-FILLING MONTHS ARE A LIGHT TINT BEHIND THE PLOT (2026-09-24).
  *
- * The bar is the affordance item 6 asks for and §3.9 forbids ("no filled
- * areas"); it is part of the amendment. It is the ONE filled shape on the
- * chart and it means one thing: this number is not finished.
- *
- * AND IT IS AXIS FURNITURE, NOT A SERIES (fix pass). It was painted in the
- * entity's own colour, so on a chart where a rival held the only visible point
- * the newest month rendered as a solid peach column running the full plot
- * height — the loudest coloured shape on the page, encoding "incomplete" and
- * reading as the rival's ink. It takes the neutral token every other piece of
- * furniture on this chart takes (the dated rules, the midline), so the
- * coloured inks on the plot belong to the data alone.
- *
- * SO IT IS PAINTED ONCE PER MONTH, NOT ONCE PER SERIES (Block D wave 3,
- * SH21). It was drawn inside `SeriesMarks`, so two filling series painted the
- * September column TWICE below the lower of the two points and once above:
- * sampled RGB (240,241,241) above y≈690 and (226,228,228) below, a false
- * horizontal step landing exactly on one category's end point, inside a shape
- * whose only meaning is "this month is not finished". One bar per month, from
- * the HIGHEST filling reading down to the baseline, is the whole of what the
- * shape has to say.
- *
- * AND IT IS CLAMPED INSIDE THE PLOT. The filling month is by construction the
- * last one, whose x IS the plot's right edge, so half the bar hung outside it
- * — which on Voice, where the caller turns the legend off, read as a clipped
- * band rather than as a column. It is pulled in by its own half-width.
+ * It was a part-height bar from the highest filling reading down to the
+ * baseline, in `--muted-foreground` at .1 — on a chart with one point it was a
+ * tall grey block around a single dot, the loudest shape in the tile, saying
+ * "unfinished". Now the month's slot carries a faint wash the full height of
+ * the plot (furniture, like the affected-months band, and in the neutral ink
+ * for the same reason SH21 gave the bar: the coloured inks belong to the
+ * data), and the line INTO the month is dashed (`SeriesMarks`). One wash per
+ * month however many series are filling, clamped inside the plot.
  */
 const FILLING_INK = 'var(--muted-foreground)'
+const FILLING_OPACITY = 0.05
 
-function FillingBars({
-  months, series, geometry: g, y,
+function FillingTint({
+  months, series, geometry: g,
 }: {
   months: readonly string[]
   series: readonly CalendarSeries[]
   geometry: ReturnType<typeof calendarGeometry>
-  y: (v: number) => number
 }) {
-  const tops = new Map<number, number>()
+  const filling = new Set<number>()
   for (const s of series) {
     for (const p of s.points) {
       if (p.state !== 'filling' || p.value == null) continue
       const i = months.indexOf(p.month)
-      if (i < 0) continue
-      const top = y(p.value)
-      const held = tops.get(i)
-      if (held == null || top < held) tops.set(i, top)
+      if (i >= 0) filling.add(i)
     }
   }
-  if (tops.size === 0) return null
-  const w = Math.max(6, Math.min(18, g.slot * 0.36))
+  if (filling.size === 0) return null
+  const half = g.slot / 2
   return (
     <g>
-      {[...tops].map(([i, top]) => {
-        const x = Math.min(Math.max(g.xAt(i), g.padL + w / 2), g.padR - w / 2)
+      {[...filling].map((i) => {
+        const x1 = Math.max(g.padL, g.xAt(i) - half)
+        const x2 = Math.min(g.padR, g.xAt(i) + half)
         return (
-          <rect key={`fill${i}`} x={x - w / 2} y={top} width={w} height={Math.max(0, g.baseline - top)} fill={FILLING_INK} opacity={0.1}>
+          <rect key={`fill${i}`} className="vb-cal-filling" x={x1} y={g.top} width={Math.max(2, x2 - x1)} height={g.baseline - g.top} fill={FILLING_INK} opacity={FILLING_OPACITY}>
             <title>Still filling: this month is still taking comments</title>
           </rect>
         )
       })}
     </g>
+  )
+}
+
+/**
+ * The figures a chart prints instead of a line while no series has
+ * `MIN_CHART_MONTHS` readable months — each series' readings, newest first,
+ * each with its "of N", then the missing lines in one sentence and the line
+ * saying when the chart appears.
+ */
+function CalendarFigures({
+  series, format, caption, className,
+}: {
+  series: readonly CalendarSeries[]
+  format: (v: number) => string
+  caption?: ReactNode
+  className?: string
+}) {
+  const rows = figureLines(series, format)
+  const missing = undrawnLine(series)
+  return (
+    <div className={cn('vb-cal-figures flex min-w-0 flex-col gap-1.5', className)}>
+      {rows.map((r) => (
+        <p key={r.label} className="m-0 text-[13px] leading-[1.45] text-foreground">
+          <span className="font-medium">
+            {r.labelSlot ? <span data-copy="subject" data-slot={r.labelSlot}>{r.label}</span> : r.label}
+          </span>{' '}
+          <span data-copy="figure" className="font-mono text-[12px] tabular-nums">{r.text}</span>
+        </p>
+      ))}
+      {missing ? <p className="m-0 text-[11px] text-muted-foreground">{missing}</p> : null}
+      <p className="m-0 text-[11px] text-muted-foreground">{CHART_WAITING}</p>
+      {caption ? <p className="m-0 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">{caption}</p> : null}
+    </div>
   )
 }
 
@@ -730,7 +760,7 @@ function LegendToken({ state, color }: { state: 'below_floor' | 'below_numerator
     return <span className="size-2 bg-tile" style={{ boxShadow: `inset 0 0 0 1.5px ${color}` }} aria-hidden />
   }
   if (state === 'filling') {
-    return <span className="h-2 w-2.5 rounded-[1px]" style={{ background: FILLING_INK, opacity: 0.35 }} aria-hidden />
+    return <span className="h-2 w-2.5 rounded-[1px]" style={{ background: FILLING_INK, opacity: 0.18 }} aria-hidden />
   }
   return <span className="h-2 w-2.5 rounded-[1px]" style={{ background: color, opacity: 0.3 }} aria-hidden />
 }

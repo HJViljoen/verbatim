@@ -115,11 +115,11 @@ describe('CalendarLine', () => {
   })
 
   it('breaks the rival line rather than drawing through four missing months', () => {
-    const markup = render(CalendarLine({ axis: AXIS, series: [rival] }))
-    const polylines = markup.match(/<polyline/g) ?? []
+    const markup = render(CalendarLine({ axis: AXIS, series: [you, rival] }))
+    const polylines = markup.match(/<polyline[^>]*stroke="var\(--comp\)"/g) ?? []
     // One run: August and September. April–July are a gap, not a line.
     expect(polylines).toHaveLength(1)
-    expect(markup).not.toContain('56.0,')
+    expect(polylines[0]).not.toContain('56.0,')
   })
 
   it('puts the below-floor month in the gutter under the baseline, never on the line', () => {
@@ -139,22 +139,66 @@ describe('CalendarLine', () => {
   })
 
   it('gives the below-numerator month its own token, not the below-floor one', () => {
-    const markup = render(CalendarLine({ axis: AXIS, series: [rival] }))
+    const markup = render(CalendarLine({ axis: AXIS, series: [you, rival] }))
     expect(markup).toContain('<rect class="vb-cal-gutter-mark" x="311.1" y="183.5" width="5" height="5" fill="var(--tile)" stroke="var(--comp)"')
     expect(markup).toContain('too few of this one to read')
   })
 
-  it('names a series that has no line, on the plot and not only in the key (SH14)', () => {
-    // On the marketing sheet a wholly below-floor series read as six months
-    // at zero: its only explanation was a 9.5px legend note three inches away,
-    // and where a caller turns the legend off there was none at all.
-    const floored: CalendarSeries = {
-      label: 'Sealand',
-      color: 'var(--you)',
-      points: AXIS.map((m) => p(m, null, 'below_floor', { n: 22 })),
+  // 2026-09-24: a series that draws nothing has no key entry, no end label
+  // and no gutter marks. Ten empty rivals printed ten names on one spot at the
+  // plot's right edge and ten "no line: …" entries above it; they are named
+  // once, in one short line.
+  it('names every series with no line in ONE short line, and draws nothing for them', () => {
+    const floored = (label: string): CalendarSeries => ({
+      label,
+      color: 'var(--comp)',
+      points: AXIS.map((m) => p(m, null, 'below_floor', { k: 1, n: 22 })),
+    })
+    const markup = render(CalendarLine({ axis: AXIS, series: [you, floored('Patagonia'), floored('Freitag')] }))
+    const words = markupText(markup)
+    expect(words).toContain('No line yet: Patagonia, Freitag (too few videos)')
+    expect(words).not.toContain('no line:')
+    // No end label, no ring, no hover line for either.
+    expect(markup).not.toMatch(/<text x="710"[^>]*>Patagonia/)
+    expect(markup).not.toContain('stroke="var(--comp)"')
+    expect(markup).not.toContain('Patagonia · too few')
+    assertCopyContract(markup)
+  })
+
+  it('leaves out a series that was never read and one that asks to be, entirely', () => {
+    const untracked: CalendarSeries = { label: 'Old School', color: 'var(--comp)', points: AXIS.map((m) => p(m, null, 'hollow')) }
+    const stopped: CalendarSeries = { label: 'Poler · stopped', color: 'var(--comp)', omitWhenUndrawn: true, points: AXIS.map((m) => p(m, null, 'below_floor', { n: 3 })) }
+    const words = markupText(render(CalendarLine({ axis: AXIS, series: [you, untracked, stopped] })))
+    expect(words).not.toContain('Old School')
+    expect(words).not.toContain('Poler')
+    expect(words).not.toContain('No line yet')
+  })
+
+  it('prints the figures instead of a line under three readable months', () => {
+    const cat: CalendarSeries = {
+      label: 'Category',
+      color: 'var(--cat)',
+      points: [
+        p('2026-08-01', 6.3, 'filling', { k: 37, n: 590 }),
+        p('2026-09-01', 6.1, 'filling', { k: 38, n: 626 }),
+      ],
     }
-    const markup = render(CalendarLine({ axis: AXIS, series: [floored], legend: false }))
-    expect(markup).toContain('>Sealand<')
+    const floored: CalendarSeries = { label: 'Freitag', color: 'var(--comp)', points: [p('2026-08-01', null, 'below_floor', { n: 12 }), p('2026-09-01', null, 'below_floor', { n: 9 })] }
+    const markup = render(CalendarLine({ axis: monthAxis('2026-08-01', '2026-09-01'), series: [cat, floored], format: (v) => `${v}%` }))
+    expect(markup).not.toContain('<svg')
+    const words = markupText(markup)
+    expect(words).toContain('Category 6.1% of 626 in Sep (still filling) · 6.3% of 590 in Aug (still filling)')
+    expect(words).toContain('No line yet: Freitag (too few videos)')
+    expect(words).toContain('The chart appears from the third month.')
+    assertCopyContract(markup)
+  })
+
+  it('dashes the stretch of line into a still-filling month', () => {
+    const markup = render(CalendarLine({ axis: AXIS, series: [you] }))
+    const dashed = markup.match(/<polyline[^>]*stroke-dasharray="4 3"/g) ?? []
+    expect(dashed).toHaveLength(1)
+    // It starts at August's x (571.2) and ends on September's (700).
+    expect(dashed[0]).toMatch(/points="571\.2,[\d.]+ 700\.0,/)
   })
 
   it('hovers with k of n on every read month, one column answering for every line', () => {
@@ -228,14 +272,14 @@ describe('CalendarLine', () => {
   // filling in one month drew two overlapping colours for one fact.
   it('paints the still-filling month in the neutral token, never in the entity’s ink', () => {
     const markup = render(CalendarLine({ axis: AXIS, series: [you] }))
-    expect(markup).toContain('fill="var(--muted-foreground)" opacity="0.1"')
+    expect(markup).toContain('fill="var(--muted-foreground)" opacity="0.05"')
     expect(markup).not.toContain('fill="var(--you)" opacity')
-    expect(markup).toContain('background:var(--muted-foreground);opacity:0.35')
+    expect(markup).toContain('background:var(--muted-foreground);opacity:0.18')
   })
 
   it('draws no legend for one ordinary series with nothing to explain', () => {
-    const one: CalendarSeries = { label: 'Category', color: 'var(--cat)', points: [p('2026-08-01', 20), p('2026-09-01', 22)] }
-    const markup = render(CalendarLine({ axis: monthAxis('2026-08-01', '2026-09-01'), series: [one] }))
+    const one: CalendarSeries = { label: 'Category', color: 'var(--cat)', points: [p('2026-07-01', 19), p('2026-08-01', 20), p('2026-09-01', 22)] }
+    const markup = render(CalendarLine({ axis: monthAxis('2026-07-01', '2026-09-01'), series: [one] }))
     const words = markupText(markup)
     // The legend's own words, not the utility class it happens to be styled
     // with: a restyled legend would pass a class assertion while drawing one.
@@ -335,7 +379,7 @@ describe('CalendarLine', () => {
     // The filling month is by construction the last one, whose x IS the plot's
     // right edge — on Voice, with the legend off, that read as a clipped band.
     const markup = render(CalendarLine({ axis: AXIS, series: [you], legend: false }))
-    const bar = markup.match(/<rect x="([0-9.]+)" y="[0-9.]+" width="([0-9.]+)"[^>]*opacity="0.1"/)
+    const bar = markup.match(/<rect class="vb-cal-filling" x="([0-9.]+)" y="[0-9.]+" width="([0-9.]+)"/)
     expect(bar).not.toBeNull()
     const [x, w] = [Number((bar as RegExpMatchArray)[1]), Number((bar as RegExpMatchArray)[2])]
     // padR in viewBox terms is width - padR = 880 - 180 = 700.
@@ -350,9 +394,19 @@ describe('CalendarLine', () => {
   it('survives a series in which no month has a reading at all', () => {
     const empty: CalendarSeries = { label: 'Rareform', color: 'var(--cat)', points: AXIS.map((m) => p(m, null, 'hollow')) }
     const markup = render(CalendarLine({ axis: AXIS, series: [empty] }))
-    expect(markup).toContain('<svg')
     expect(markup).not.toContain('<polyline')
+    expect(markupText(markup)).toContain('The chart appears from the third month.')
     assertCopyContract(markup)
+  })
+
+  it('never overprints two end labels, dropping the ones the box cannot hold', () => {
+    const flat = (label: string, v: number): CalendarSeries => ({ label, color: 'var(--comp)', points: AXIS.map((m) => p(m, v, 'read', { k: 5, n: 100 })) })
+    const many = Array.from({ length: 14 }, (_, i) => flat(`Rival ${String.fromCharCode(65 + i)}`, 10 + i * 0.1))
+    const markup = render(CalendarLine({ axis: AXIS, series: many, format: (v) => `${v}%` }))
+    const ys = [...markup.matchAll(/<text x="710" y="([\d.]+)"/g)].map((m) => Number(m[1])).sort((a, b) => a - b)
+    expect(ys.length).toBeGreaterThan(1)
+    expect(ys.length).toBeLessThan(14)
+    for (let i = 1; i < ys.length; i++) expect(ys[i] - ys[i - 1]).toBeGreaterThanOrEqual(18)
   })
 })
 

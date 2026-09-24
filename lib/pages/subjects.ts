@@ -11,7 +11,7 @@ import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, loadTrackedRivals, rivalKey, type T
 import { audienceLabel } from '../readiness/types'
 import { SHARE_BAND } from '../report-bands'
 import { directionWord, monthChange, thinMonth, type Direction, type SeriesPoint } from '../reading/bands'
-import { horizonWindow, HORIZON_LABEL, parseHorizon, sinceStart, type Horizon } from '../reading/horizon'
+import { chartMonths, horizonWindow, HORIZON_LABEL, parseHorizon, sinceStart, type Horizon } from '../reading/horizon'
 import { kindChange, kindShares, redditRead, type KindShare, type RedditRead } from '../reading/kinds'
 import {
   claimEcho,
@@ -387,8 +387,16 @@ export interface SubjectPane {
   index: number
   of: number
   sides: SubjectSide[]
-  /** The chart's lines, one per side, in axis order. */
+  /** The sides' months over the page's READ axis (the horizon, plus the month
+   *  before it) — what the hero's sentences are built from. */
   series: MonthSeries[]
+  /**
+   * The chart's lines, one per side, over `SubjectsData.chartAxis` — the
+   * trailing twelve months whatever the horizon (`chartMonths`). Optional
+   * because a snapshot frozen before 2026-09-24 has none; the block then draws
+   * `series` over `axis`, as it always did.
+   */
+  chartSeries?: MonthSeries[]
   voices: SubjectVoice[]
   voicesFrom: number
   /** True where the pool the six were drawn from was capped — then the block
@@ -432,6 +440,11 @@ export interface SubjectsData {
   readingAt: string
   horizon: Horizon
   axis: string[]
+  /** The chart's own axis — the trailing twelve months, or from the tenant's
+   *  first readable month where that is later (`chartMonths`). Not the
+   *  horizon's: the horizon changes the figures, not how much line is drawn.
+   *  Optional for the same snapshot reason as `SubjectPane.chartSeries`. */
+  chartAxis?: string[]
   substrate: Substrate
   notes: MonthLabel[]
   list: SubjectListBlock
@@ -1555,6 +1568,14 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   const prevMonth = previousMonthOf(month)
   const readAxis = axis[0] <= prevMonth ? axis : [prevMonth, ...axis]
   const monthStatus = freezeStateFor(month, readingAt)
+  // The chart's axis is its own (`chartMonths`). Where it reaches further back
+  // than the read axis, the selected subject is read a second time over it —
+  // for the chart alone — so the hero, the rail, the gap and the notes read
+  // exactly the months they read before the chart was widened.
+  const chartAxis = chartMonths(readingAt, started.from)
+  const chartSet = new Set(chartAxis)
+  const onChart = (s: MonthSeries): MonthSeries =>
+    ({ ...s, points: s.points.filter((p) => chartSet.has(monthStartOf(p.month))) })
 
   // The record's reads depend on the month alone; its refusals are arithmetic
   // over verdicts the page has not made yet and are added below.
@@ -1596,7 +1617,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   ownPostsAhead.catch(() => {})
   sayHearAhead.catch(() => {})
 
-  const [subjectSet, kindRows] = await Promise.all([
+  const [subjectSet, kindRows, chartRead] = await Promise.all([
     selectedId
       ? loadMonthSeries(reading.client, clientId, {
           from: readAxis[0],
@@ -1613,10 +1634,24 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       reading.client, 'month_kind_readings', clientId, readAxis,
       ['month', 'audience', 'kind'], isMissingKindMoodAttention,
     ),
+    selectedId && chartAxis[0] < readAxis[0]
+      ? loadMonthSeries(reading.client, clientId, {
+          from: chartAxis[0],
+          to: month,
+          audiences,
+          objectKind: 'subject',
+          objectIds: [selectedId],
+          updatesByMonth,
+          firstRunMonth,
+          changeLogFrom: history.changeLogFrom,
+        })
+      : Promise.resolve(null),
   ])
 
   const seriesFor = (subjectId: string, audience: string): MonthSeries | null =>
     subjectSet?.series.find((s) => s.objectId === subjectId && s.audience === audience) ?? null
+  const chartSeriesFor = (subjectId: string, audience: string): MonthSeries | null =>
+    (chartRead ?? subjectSet)?.series.find((s) => s.objectId === subjectId && s.audience === audience) ?? null
 
   // CONFIRMED FIRST, THEN NAMED-BUT-NOT-CONFIRMED, and both in the ONE list.
   // A proposed subject was kept out of the rail at first and listed underneath
@@ -1691,6 +1726,10 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       thin,
     })
     const series = sides.map((side) => seriesFor(subject.id, side.audience)).filter((s): s is MonthSeries => s != null)
+    const chartSeries = sides
+      .map((side) => chartSeriesFor(subject.id, side.audience))
+      .filter((s): s is MonthSeries => s != null)
+      .map(onChart)
 
     const memberIds = await loadMemberInsightIds(supabase, clientId, subject.id)
     const themedRunId = themedRunAhead ? await themedRunAhead : null
@@ -1749,6 +1788,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       of: active.length,
       sides,
       series,
+      chartSeries,
       voices: voices.voices,
       voicesFrom: voices.from,
       voicesSampled: voices.sampled,
@@ -1798,6 +1838,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     readingAt,
     horizon,
     axis,
+    chartAxis,
     substrate: subjectSet?.numeratorSubstrate ?? history.substrate,
     notes: subjectNotes(subjectSet?.notes),
     list,

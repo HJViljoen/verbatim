@@ -286,6 +286,21 @@ baseline, and rules drawn behind the lines.
 - **Legend whenever there are ≥2 series or any gutter token**; identity is never colour-alone. A
   series that excludes Reddit says so there, in its own entry.
 
+### Amended 2026-09-24 — a quieter calendar line (Subjects "comfort" review)
+
+- **Under three readable months on every series, no line is drawn.** The chart prints each series'
+  readings with their "of N", newest first, plus one line: "The chart appears from the third month."
+  (`MIN_CHART_MONTHS`, `figureLines`, `CHART_WAITING` in `lib/charts/calendar.ts`; the email arm too.)
+- **Only series that draw a point are keyed, labelled, ringed or hovered.** Every series with no
+  line is named once — "No line yet: A, B, C (too few videos)" (`undrawnLine`), no per-series reason.
+  A series never read on the axis (all `hollow`) and a stopped rival (`omitWhenUndrawn`) are left out.
+- **End labels never overlap**: 18-unit minimum gap (sized for `--cal-ke` 1.6); a label the plot
+  cannot hold is dropped and its line stays in the key.
+- **`filling` is a light tint, not a bar**: the month's slot washed in `--muted-foreground` at .05,
+  and the line INTO the month dashed `4 3`. The "at this point last month" tick is unchanged.
+- **The Subjects chart axis is its own**: trailing twelve months, or from the tenant's first
+  readable month (`chartMonths`, lib/reading/horizon.ts), whatever the horizon control says.
+
 ### `MovementBadge` — the one badge (`components/delta-badge.tsx`)
 
 - One component, three visual states: a movement that cleared its band (arrowed, coloured, `title`

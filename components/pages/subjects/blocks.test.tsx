@@ -851,7 +851,9 @@ describe('the mock’s own shape, where the data allows it', () => {
 
   it('keys the chart by audience AND kind, and paints a second rival its own ink', () => {
     const markup = render(subjectsLine.render(subjectsFixture(), 'app', ctx))
-    expect(markup).toContain('Sealand · you')
+    // Your own series draws nothing in the fixture, so it is not keyed as a
+    // line — it is named in the one "No line yet" sentence (2026-09-24).
+    expect(markup).not.toContain('Sealand · you')
     expect(markup).toContain('Freitag · rival')
     expect(markup).toContain('Category · no brand')
     // The end label keeps the SHORT name and its denominator — the one part of
@@ -862,10 +864,29 @@ describe('the mock’s own shape, where the data allows it', () => {
   // THE STATE THE PAYING TENANT IS IN. Sealand carries 84 videos against a
   // 100-video floor, so the client's own series never reaches the plot on any
   // subject — six hollow rings on the 0% rule under a key promising a line.
-  it('says in the key that your own ink draws no line, and which months', () => {
+  //
+  // 2026-09-24: ONE short line for every ink with no line, and no per-series
+  // reason. The rings on the gutter track belonged to a series that drew
+  // nothing, so they are gone with it and the key no longer explains them.
+  it('says in one short line that your own ink draws no line yet', () => {
     const text = renderText(subjectsLine.render(subjectsFixture(), 'app', ctx))
-    expect(text).toContain('no line: every month is below the floor')
-    expect(text).toContain('below the floor (every month)')
+    expect(text).toContain('No line yet: You (too few videos)')
+    expect(text).not.toContain('no line:')
+    expect(text).not.toContain('below the floor')
+  })
+
+  it('draws the trailing twelve months whatever the horizon, and figures under three', () => {
+    const base = subjectsFixture()
+    const pane = base.selected!
+    // A "this month" page whose chart axis holds only two readable months.
+    const two = pane.series.map((s) => ({ ...s, points: s.points.slice(-2) }))
+    const data = { ...base, axis: base.axis.slice(-1), chartAxis: base.axis.slice(-2), selected: { ...pane, chartSeries: two } }
+    const markup = render(subjectsLine.render(data, 'app', ctx))
+    expect(markup).not.toContain('<svg')
+    const text = renderText(subjectsLine.render(data, 'app', ctx))
+    expect(text).toContain('The chart appears from the third month.')
+    expect(text).toContain('monthly · Aug → Sep 2026')
+    assertCopyContract(markup)
   })
 
   it('draws the gap bracket only where the band earned a magnitude (D1)', () => {

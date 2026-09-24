@@ -3,7 +3,7 @@ import { openLink } from '@/components/blocks/open-link'
 import { BlockCalendar } from '@/components/blocks/calendar'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { calendarBandsFor, calendarRulesFor, seriesToCalendar } from '@/lib/charts/from-series'
-import { backReadBandLabel, type CalendarSeries } from '@/lib/charts/calendar'
+import { backReadBandLabel, chartReady, type CalendarSeries } from '@/lib/charts/calendar'
 import { fmtPct, monthName } from '@/lib/format'
 import { GAP_WORDS } from '@/lib/reading/gap'
 import { endReadings, sideLegend, type SubjectsData } from '@/lib/pages/subjects'
@@ -52,15 +52,25 @@ export const subjectsLine: Block<SubjectsData> = {
     // denominator to the clip, which is the one part of an end label that may
     // not go missing.
     const legendOf = new Map(pane.sides.map((s) => [s.audience, sideLegend(s, data.brand)]))
+    // THE CHART'S OWN AXIS AND LINES (2026-09-24): the trailing twelve months
+    // whatever the horizon (`chartMonths`, lib/reading/horizon.ts). A snapshot
+    // frozen before that carries neither and draws what it always drew.
+    const axis = data.chartAxis ?? data.axis
+    const chartSeries = pane.chartSeries ?? pane.series
     const lines: CalendarSeries[] = pane.sides
       .map((side) => {
-        const series = pane.series.find((s) => s.audience === side.audience)
+        const series = chartSeries.find((s) => s.audience === side.audience)
         if (!series) return null
-        return seriesToCalendar(series, {
-          color: side.color,
-          label: side.label,
-          legendLabel: legendOf.get(side.audience) ?? side.label,
-        })
+        return {
+          ...seriesToCalendar(series, {
+            color: side.color,
+            label: side.label,
+            legendLabel: legendOf.get(side.audience) ?? side.label,
+          }),
+          // A stopped rival with no line is not news; it is left out rather
+          // than listed under "No line yet" (lib/charts/calendar.ts).
+          ...(side.label.endsWith(' · stopped') ? { omitWhenUndrawn: true } : {}),
+        }
       })
       .filter((s): s is CalendarSeries => s != null)
 
@@ -78,18 +88,18 @@ export const subjectsLine: Block<SubjectsData> = {
 
     // The mock's axis meta: the months the axis actually spans, named, rather
     // than a count of them — "Apr → Sep 2026" tells a reader which six.
-    const first = data.axis[0]
-    const last = data.axis[data.axis.length - 1]
-    const span = data.axis.length === 0
+    const first = axis[0]
+    const last = axis[axis.length - 1]
+    const span = axis.length === 0
       ? null
-      : data.axis.length === 1
+      : axis.length === 1
         ? monthName(last)
         : `${monthName(first).split(' ')[0]} → ${monthName(last)}`
 
     // The back-read band's own words, in the footer's mono slot — the artboard's
     // "Apr–Jun read at setup". The band is still shaded on the axis; this is
     // the sentence that says what the shading means without a hover.
-    const bands = calendarBandsFor(pane.series)
+    const bands = calendarBandsFor(chartSeries)
     const backRead = bands.length === 1
       ? `${bands[0].months.map((m) => monthName(m).split(' ')[0]).filter((_, i, a) => i === 0 || i === a.length - 1).join('–')} read at setup`
       : bands.length > 1
@@ -110,7 +120,7 @@ export const subjectsLine: Block<SubjectsData> = {
       : null
 
     // What the chart's end labels say, for the print arm that turns them off.
-    const ends = endReadings(pane.sides, pane.series)
+    const ends = endReadings(pane.sides, chartSeries)
 
     return (
       <BlockFrame
@@ -124,9 +134,9 @@ export const subjectsLine: Block<SubjectsData> = {
         {lines.length > 0 ? (
           <BlockCalendar
             blockKey={subjectsLine.key}
-            axis={data.axis}
+            axis={axis}
             series={lines}
-            rules={calendarRulesFor(pane.series)}
+            rules={calendarRulesFor(chartSeries)}
             bands={bands}
             annotate={annotate}
             format={(v) => fmtPct(v)}
@@ -158,7 +168,9 @@ export const subjectsLine: Block<SubjectsData> = {
         ) : (
           <BlockEmpty mode={mode}>No audience carried a reading of this subject on this axis.</BlockEmpty>
         )}
-        {mode === 'print' && lines.length > 0 && ends ? (
+        {/* Only under a drawn chart: under too few months the chart prints
+            these figures itself (`CalendarLine`'s figures arm). */}
+        {mode === 'print' && lines.length > 0 && chartReady(lines) && ends ? (
           <p data-copy="level" className="m-0 font-mono text-[12px] leading-[1.4] tabular-nums text-muted-foreground">{ends}</p>
         ) : null}
       </BlockFrame>
