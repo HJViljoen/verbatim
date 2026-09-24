@@ -227,11 +227,16 @@ describe('composeDocument', () => {
     expect(p.items).toEqual(['At the start.', 'Confidence.', 'Cost.', 'Plain answers.'])
     expect(data.pages[5].blocks[0].items).toEqual(['"no excuses": the category jokes about batteries.'])
     const method = data.pages[6].blocks[0].items!
-    expect(method).toHaveLength(4)
+    // The held-back phrases and the "how each page is made" paragraph are
+    // gone (copy de-clutter E48/E51): the numbers card prints the first and
+    // the sheets name themselves.
+    expect(method).toHaveLength(3)
     expect(method[0]).toContain('3,270 conversations on 469 videos')
     expect(method[0]).toContain('Ottobock')
-    expect(method[2]).toContain('192 phrases in other languages')
-    expect(method[3]).toContain('update 5')
+    expect(method.join(' ')).not.toContain('phrases in other languages')
+    expect(method[2]).toContain('update 5')
+    expect(method[2]).not.toContain('new this update')
+    expect(method[2]).not.toContain('three updates')
     expect(data.method.heldBack).toBe(192)
   })
 
@@ -364,12 +369,12 @@ describe('a document composed from a section map', () => {
     }
   })
 
-  it('still describes the pages the template alone would print', () => {
+  it('no longer narrates how each page is made (copy de-clutter E48)', () => {
     const items = composeDocument({
       template: MARKET_BRIEF, settings: DEFAULT_DOCUMENT_SETTINGS, reportId: 'rep', title: 'Marketing brief', period: 'p',
       signals, answers, written, figures: documentFigures(signals, answers), model: 'm', promptVersion: 'v', costUsd: 0, timings: {},
     }).data.pages.find((p) => p.kind === 'method')!.blocks[0].items!.join(' ')
-    expect(items).toContain('Competitor pages read')
+    expect(items).not.toContain('Competitor pages read')
   })
 })
 
@@ -667,10 +672,10 @@ describe('the competitor page keeps the two voices apart', () => {
     expect(schema.about.description).toContain('never write them as something the brand claims')
   })
 
-  it('the method page says where the two came from', () => {
+  it('the method page leaves the two voices to the competitor sheet (copy de-clutter E48)', () => {
     const d = compose(signals, written)
     const method = d.pages.find((p) => p.kind === 'method')!.blocks[0].items!
-    expect(method.join(' ')).toContain('videos other people posted about it for what others say')
+    expect(method.join(' ')).not.toContain('videos other people posted about it for what others say')
   })
 })
 

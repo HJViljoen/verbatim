@@ -4,10 +4,10 @@ import { readsAsHeroQuote } from '../../quotes'
 import type { Quote, Slide } from '../../renderables/types'
 import type { FigureTable } from '../types'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../../rivals'
-import { CLUSTERING_CAVEAT, briefStamp, commentsRead, denominatorLine, platformLine, type BriefReading } from './reading'
+import { CLUSTERING_CAVEAT, briefStamp, commentsRead, type BriefReading } from './reading'
 import { SECTION_SLIDE_PREFIX, type DocBriefSection, type DocLayoutEntry, type DocumentReading } from './types'
 import type { BriefEntry } from './sections'
-import { UNFILLED_SHEET, foldsCoverSheet, groupsUnfilledSections, missingSentence, missingSummary, pageKindsOf } from './sections'
+import { UNFILLED_SHEET, foldsCoverSheet, groupsUnfilledSections, missingSummary, pageKindsOf } from './sections'
 import type { Signals } from './signals'
 import type { ResearchAnswer, ResearchPoint } from './research'
 import { ASKED_MAX, CLAIMS_PER_PAGE, PAGE_TITLE, PERSONAS_PER_PAGE, SAY_HEAR_MAX, type DocumentTemplate } from './templates'
@@ -622,23 +622,41 @@ function sourcesOf(s: Signals): string[] {
 
 const PLATFORM_NAME: Record<string, string> = { tiktok: 'TikTok', instagram: 'Instagram', youtube: 'YouTube', reddit: 'Reddit' }
 
+/**
+ * Sentences a brief's method sheet printed before 2026-09-24 and no longer
+ * does: five "how each page is made" lines the sheets' own titles carry (E48),
+ * the held-back count the numbers card prints on the same sheet (E51), and a
+ * definition of "new" that was not the product's and a movement rule that
+ * contradicted the band sentence beside it (E24, ruling N). A method sheet is
+ * STORED as prose, so the deck passes a frozen brief's items through this and
+ * an old brief prints the new copy.
+ */
+const RETIRED_METHOD_SENTENCES: readonly (string | RegExp)[] = [
+  "Competitor pages read each competitor's own videos for what it pitches, videos other people posted about it for what others say, and its audience's comments for praise and complaint.",
+  'Standing is measured as share of the tracked video conversation, and movement is called only where the numbers can carry it.',
+  "The claims page sets what the company says in its own videos against what the tracked conversation does with it; a claim it does not take up is recorded as not taken up, never answered on its behalf.",
+  'Personas come from the consumer profile, which groups the whole conversation by who is speaking and where they are in the journey.',
+  'The questions page carries what the conversation asks and does not settle, in the wording the audience uses.',
+  /[\d,]+ phrases in other languages were read for the counts but not quoted\./,
+  / "new this update" means the theme was first seen now\. Movement is called only after three updates\./,
+]
+
+export function currentMethodItems(items: readonly string[]): string[] {
+  return items
+    .map((it) => {
+      let out = it
+      for (const r of RETIRED_METHOD_SENTENCES) out = typeof r === 'string' ? out.split(r).join('') : out.replace(r, '')
+      return out.replace(/it says so;$/, 'it says so.').replace(/\s{2,}/g, ' ').trim()
+    })
+    .filter(Boolean)
+}
+
 /** The report's basis, in code: what was read, how findings are ordered,
  *  how confidence is judged, what was held back. Not evidence per line; the
  *  page a professional report ends on. */
-export function methodItems(s: Signals, period: string, thin: boolean, updatesCount: number, kinds: DocPageKind[] = ['competitor', 'personas'], brief?: string): string[] {
+export function methodItems(s: Signals, period: string, thin: boolean, updatesCount: number, _kinds: DocPageKind[] = ['competitor', 'personas'], brief?: string): string[] {
   const sources = sourcesOf(s).map((p) => PLATFORM_NAME[p] ?? p)
   const competitors = s.competitors.map((c) => c.name)
-  const has = (k: DocPageKind) => kinds.includes(k)
-  // The third paragraph explains the pages this brief ACTUALLY has. It used
-  // to describe competitor pages and personas unconditionally, which on a
-  // leadership brief (neither) was a method note for a different document.
-  const wherePagesComeFrom = [
-    has('competitor') ? "Competitor pages read each competitor's own videos for what it pitches, videos other people posted about it for what others say, and its audience's comments for praise and complaint." : '',
-    has('standing') ? 'Standing is measured as share of the tracked video conversation, and movement is called only where the numbers can carry it.' : '',
-    has('say_hear') ? "The claims page sets what the company says in its own videos against what the tracked conversation does with it; a claim it does not take up is recorded as not taken up, never answered on its behalf." : '',
-    has('personas') ? 'Personas come from the consumer profile, which groups the whole conversation by who is speaking and where they are in the journey.' : '',
-    has('asked') ? 'The questions page carries what the conversation asks and does not settle, in the wording the audience uses.' : '',
-  ].filter(Boolean).join(' ')
   // A custom brief says what it was asked, first: a reader of the PDF (and a
   // reader of the snapshot later) can otherwise not tell what this document
   // was written to answer. Operator prose, printed as written.
@@ -656,7 +674,7 @@ export function methodItems(s: Signals, period: string, thin: boolean, updatesCo
   const r = s.reading ?? null
   const missing = s.missing ?? []
   const basis = r
-    ? `This brief is a reading of ${r.monthLabel}, written from public conversation around ${s.company}, ${competitors.length ? `${competitors.join(', ')} ` : ''}and the wider category. ${denominatorLine(r.denominators)}${platformLine(r.platformMix) ? ` Across ${platformLine(r.platformMix)}.` : ''} A month is dated by when the comment was written, not by when we looked${r.monthStatus === 'filling' ? ', and this month is still filling' : ''}. ${briefStamp(r)}.`
+    ? `This brief is a reading of ${r.monthLabel}, written from public conversation around ${s.company}, ${competitors.length ? `${competitors.join(', ')} ` : ''}and the wider category. A month is dated by when the comment was written, not by when we looked${r.monthStatus === 'filling' ? ', and this month is still filling' : ''}. ${briefStamp(r)}.`
     : `This brief is written from public conversation around ${s.company}, ${competitors.length ? `${competitors.join(', ')} ` : ''}and the wider category: ${fmtCount(s.run.conversations)} conversations on ${fmtCount(s.run.videos)} videos in the ${period.replace(/^Update/, 'update')}${sources.length ? `, on ${sources.join(', ')}` : ''}. The month-by-month reading is not recorded for this workspace yet, so these are the update's own numbers. A conversation is one comment or spoken line the analysis cited; the analysis reads what people said in public, not sales calls or surveys.`
 
   return [
@@ -664,11 +682,17 @@ export function methodItems(s: Signals, period: string, thin: boolean, updatesCo
     basis,
     r && sources.length ? `The words quoted in it were read on ${sources.join(', ')}.` : '',
     r?.crossesClustering ? CLUSTERING_CAVEAT : '',
-    ...(missing.length ? [missingSummary(missing) ?? '', ...missing.map(missingSentence)] : []),
+    // THE SUMMARY ONLY: each missing input is named beside the section it
+    // shortens, and saying it again here was the same sentence twice (E93).
+    ...(missing.length ? [missingSummary(missing) ?? ''] : []),
     `Findings are the researcher's readings of that conversation, ordered by the evidence behind them. Each rests on grounded points the analysis extracted and verified; confidence is judged from how many conversations and how many independent strands support the reading (solid, reasonable or thin), never by the writer.${thin ? ' This update was thin, so fewer findings were written rather than stretch the evidence.' : ''}`,
-    `${wherePagesComeFrom}${wherePagesComeFrom && s.heldBackPhrases ? ' ' : ''}${s.heldBackPhrases ? `${fmtCount(s.heldBackPhrases)} phrases in other languages were read for the counts but not quoted.` : ''}`,
     updatesCount > 1
-      ? `This is update ${updatesCount} for ${s.company}. Where a finding carries from the previous brief it says so; "new this update" means the theme was first seen now. Movement is called only after three updates.`
+      ? // NO DEFINITION OF "NEW" AND NO MOVEMENT RULE HERE (copy de-clutter
+        // 2026-09-24). The brief's "new this update" is first seen in this
+        // UPDATE, which is not the product's one definition of New (no earlier
+        // month in the record), so it is not defined as if it were; and the
+        // band sentence on this sheet is the movement rule.
+        `This is update ${updatesCount} for ${s.company}. Where a finding carries from the previous brief it says so.`
       : `This is the first update for ${s.company}; there is nothing yet to compare with.`,
     // ── the method footnote, at last on a document (block D, D9) ──────────
     //
@@ -682,7 +706,7 @@ export function methodItems(s: Signals, period: string, thin: boolean, updatesCo
     //   · the delivery line is RUN-dated, and names the updates;
     //   · the read-depth and language shares are ALL-TIME, and say so;
     //   · the caveat is this month's, about the client's own side.
-    r?.delivery ? `${r.delivery}${r.counter ? ` — ${r.counter}.` : '.'}` : '',
+    r?.delivery ? `${r.delivery}${r.counter ? ` · ${r.counter}.` : '.'}` : '',
     // THE OTHER FIVE MOVED TO THE CARD (E-sales). `methodLines`' read-depth,
     // language, Reddit and privacy sentences are the artboard's FOOTNOTE — the
     // mono rule under the numbers card, which is where a reader looks for the

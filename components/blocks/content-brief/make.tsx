@@ -133,6 +133,12 @@ export function provenance(row: AdviceRow): string {
   return parts.join(' · ')
 }
 
+/** "You have acted on 7 of 64." The all-time trailer a brief frozen before
+ *  2026-09-24 still carries is dropped (copy de-clutter ruling D). */
+function withoutActedTrailer(line: string): string {
+  return line.replace(/ — every piece of advice this product has ever given you\.$/, '.')
+}
+
 export const GROUNDING_BASIS =
   'A card’s grounding is counted over everything we have read for you, not over one month.'
 
@@ -332,11 +338,15 @@ function Card({ row, n, mode }: { row: AdviceRow; n: number | null; mode: Render
           Pushed down, the evidence lands near a common baseline across the row
           and the slack is one interior gap. */}
       <div className="mt-auto flex flex-col gap-1 pt-1">
-        <div className="flex flex-col gap-1 rounded-md bg-inner px-3 py-2.5">
-          <p className="m-0 font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">What the conversation did after</p>
-          <Reading verdict={row.afterwards.verdict} mode={mode} />
-          <p className="m-0 text-[11.5px] leading-[1.4] text-secondary-foreground">{row.afterwards.line}</p>
-        </div>
+        {/* AN UNDECIDED CARD HAS NO "AFTER" (copy de-clutter E87): its chip
+            already says so, and the same sentence stacked on every card. */}
+        {row.decidedAt ? (
+          <div className="flex flex-col gap-1 rounded-md bg-inner px-3 py-2.5">
+            <p className="m-0 font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">What the conversation did after</p>
+            <Reading verdict={row.afterwards.verdict} mode={mode} />
+            <p className="m-0 text-[11.5px] leading-[1.4] text-secondary-foreground">{row.afterwards.line}</p>
+          </div>
+        ) : null}
         {/* THE QUOTE BEFORE THE ARGUMENT, WHICH IS THE ARTBOARD'S ORDER: a
             commenter's own words are on this page or nowhere. */}
         {row.quote ? <BlockQuote quote={row.quote} mode={mode} /> : null}
@@ -374,7 +384,7 @@ function EmailCard({ row, n }: { row: AdviceRow; n: number | null }) {
         {row.title}
       </div>
       <div style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted, marginTop: 3 }}>{provenance(row)}</div>
-      <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink2, marginTop: 4 }}>{row.afterwards.line}</div>
+      {row.decidedAt ? <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink2, marginTop: 4 }}>{row.afterwards.line}</div> : null}
       {row.quote ? <BlockQuote quote={row.quote} mode="email" /> : null}
     </div>
   )
@@ -427,7 +437,7 @@ export const contentMake: Block<MarketSurfaceData> = {
 
     if (mode === 'email') {
       return (
-        <BlockFrame title={contentMake.title} question={contentMake.question} mode={mode} meta={meta} footerNote={data.advice.actedLine}>
+        <BlockFrame title={contentMake.title} question={contentMake.question} mode={mode} meta={meta} footerNote={withoutActedTrailer(data.advice.actedLine)}>
           <div>
             {make.map((r, i) => <EmailCard key={r.lineageId} row={r} n={i + 1} />)}
             {stop ? <EmailCard row={stop} n={null} /> : null}
@@ -450,7 +460,7 @@ export const contentMake: Block<MarketSurfaceData> = {
         // block to 653px at a 375px viewport, which is the document scroll the
         // finding measured. `footer` is the `min-w-0` half and is where the
         // playbook block already puts its own long basis sentence.
-        footer={`${data.advice.actedLine} ${GROUNDING_BASIS}`}
+        footer={`${withoutActedTrailer(data.advice.actedLine)} ${GROUNDING_BASIS}`}
         // THE COUNT REACHES A PRINTED SHEET (design review 8). `header={mode
         // !== 'print'}` drops the whole header row on a slide — the meta with
         // it — and `DocumentCover` prints only "{stamp} · {pages} pages", so

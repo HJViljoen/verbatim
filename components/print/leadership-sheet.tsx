@@ -376,7 +376,6 @@ function GapCard({ gap, row, categoryLabel }: { gap: Gap | null; row: SubjectRow
     return (
       <div className={`${CARD} flex flex-col justify-center gap-1.5`}>
         <p className={BODY}>No subject carries a reading on both sides this month.</p>
-        <p className={TRAIL}>A gap needs your own side and a tracked rival read in the same month.</p>
       </div>
     )
   }
@@ -598,7 +597,6 @@ function Decide({ ledger, company }: { ledger: LedgerRow | null; company: string
         <Chip tone={ledger.decidedAt ? 'good' : 'plain'}>
           {ledger.decidedAt ? `${ledger.statusLabel} · ${shortDate(ledger.decidedAt)}` : `${ledger.statusLabel} · no decision recorded`}
         </Chip>
-        <span className={`${TRAIL} min-w-0`}>what the conversation did afterwards is read on the advice ledger, not here</span>
       </div>
     </div>
   )
@@ -753,7 +751,7 @@ function Moves({ data }: { data: OverviewData }) {
           one-pager says there were two moves; this says how many there were
           and where the rest are. */}
       {over > 0 ? <p className={TRAIL}>{moreLine(over, 'move', 'What was decided')}</p> : null}
-      {m.acted ? <p className={TRAIL}>{m.acted.line}</p> : null}
+      {m.acted ? <p className={TRAIL}>{m.acted.line.replace(/ — every piece of advice this product has ever given you\.$/, '.')}</p> : null}
     </div>
   )
 }
@@ -837,8 +835,6 @@ function SheetFooter({ data, company, date }: { data: OverviewData; company: str
           reach it. */}
       <p className="line-clamp-2 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
         <span className="text-secondary-foreground">Coverage</span>
-        <span aria-hidden> · </span>
-        <span>in full on “How this was read”</span>
         <span aria-hidden> · </span>
         <span>{coverage}</span>
       </p>

@@ -308,8 +308,9 @@ describe('sales.p5 — the switching sheet', () => {
     expect(thin).toContain('Too few to compare: 35 videos where a banded reading needs 100.')
   })
 
-  it('says what nothing measured, rather than labelling a voice', () => {
-    expect(words(sheet())).toContain('no quote on this sheet is labelled toward or away')
+  // Copy de-clutter E36: the sentence explained an absence nobody asks about.
+  it('does not explain why no quote carries a toward/away label', () => {
+    expect(words(sheet())).not.toContain('no quote on this sheet is labelled toward or away')
   })
 
   // The two populations are put beside each other and no arithmetic is drawn
@@ -319,8 +320,10 @@ describe('sales.p5 — the switching sheet', () => {
   })
 
   // `measurement_changed` rides this figure by construction.
-  it('says the tone column has been written twice', () => {
-    expect(words(sheet())).toContain('two different readings of tone')
+  // Copy de-clutter E37: the caveat stays, the plumbing behind it goes.
+  it('says the tone split is a lead, without the column’s history', () => {
+    expect(words(sheet())).toContain('The split is a lead, not a rule.')
+    expect(words(sheet())).not.toContain('two different readings of tone')
   })
 
   // A sheet whose material is missing is not printed at all — the composer's
@@ -359,9 +362,10 @@ describe('sales.p6 — the “Say this” sheet', () => {
 
   // One row, and the sheet says why rather than leaving a reader to wonder
   // where the other three objections went.
-  it('says why there is one row', () => {
-    expect(words(sheet())).toContain('the register that names themes carries no kind')
-    expect(words(sheet())).toContain('Counted as a kind of thing said')
+  // Copy de-clutter E33/E34: the register's schema is not the reader's.
+  it('does not explain the register behind the one row', () => {
+    expect(words(sheet())).not.toContain('the register that names themes carries no kind')
+    expect(words(sheet())).not.toContain('Counted as a kind of thing said')
   })
 
   // …AND SAYS IT ON A SURFACE (wave 3, `sales`-9). With fewer than three
@@ -371,13 +375,8 @@ describe('sales.p6 — the “Say this” sheet', () => {
   // padding on the tint this deck uses for apparatus, and not the card's
   // border and white ground: it is the reason there is one answer, not a
   // second answer.
-  it('draws the reason on the apparatus tint, not on bare paper', () => {
-    const w = sheet()
-    const i = w.indexOf('Why there is one of these')
-    expect(i).toBeGreaterThan(-1)
-    const panel = w.slice(w.lastIndexOf('<div', i), i)
-    expect(panel).toContain('rounded-lg bg-inner')
-    expect(panel).not.toContain('border-border bg-tile')
+  it('draws no "why there is one of these" panel', () => {
+    expect(sheet()).not.toContain('Why there is one of these')
   })
 
   it('is absent where no objection cleared the floor', () => {
@@ -599,7 +598,7 @@ describe('the borrowed sheets carry the artboard’s chrome', () => {
     // with two month names under it and no magnitude is decoration.
     expect(w).toContain('Jun 2026 18%')
     expect(w).toContain('Sep 2026 20%')
-    expect(w).toContain('Your own audience carries no month-by-month series on a subject')
+    expect(w).toContain('Your side has no monthly series yet.')
   })
 
   // D3: a chart is a direction claim too, and two points are not a direction.

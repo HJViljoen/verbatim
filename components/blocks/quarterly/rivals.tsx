@@ -347,9 +347,6 @@ export const quarterlyRivals: Block<QuarterlyData> = {
               "both shares are of the month's tracked set" — is `r.caveat`'s
               own subject, said more precisely two lines down, and one sheet
               does not need it twice. */}
-          {months.length > 0 ? (
-            <Note mode={mode}>The newest month is the bold column, and the counts under each cell are that month’s ({newestLabel}).</Note>
-          ) : null}
           {/* `qr.p5.standings.note` · the two denominators as figures, and the
               per-month tracking rules with their dates. Both were carried on
               `StandingsBlock` and neither was rendered. */}
@@ -373,12 +370,9 @@ export const quarterlyRivals: Block<QuarterlyData> = {
               and the fifth was the row this table lost off the sheet. Where
               the count exists it is the sentence that carries both; where it
               does not, the rule still prints on its own. */}
-          {r.dualMention != null ? (
-            <Note mode={mode}>
-              <span data-copy="figure">{fmtInt(r.dualMention)}</span> of your own videos also named a tracked rival;
-              each is counted once, in one audience.
-            </Note>
-          ) : r.standings ? (
+          {/* THE DUAL-MENTION COUNT IS ON THE METHOD PAGE (the record's own
+              line there), so where it exists nothing is said here (E82). */}
+          {r.dualMention == null && r.standings ? (
             <Note mode={mode}>{r.standings.precedence}</Note>
           ) : null}
           {r.standings?.caveat ? <Note mode={mode}>{r.standings.caveat}</Note> : null}

@@ -158,6 +158,21 @@ function MoveCard({ move, reading, sideOf, mode }: { move: MoveRow; reading: Mov
   )
 }
 
+/** The basis of every "N videos behind it" above, said once under the ledger
+ *  rather than on each row (copy de-clutter ruling C, 2026-09-24). */
+const GROUNDED_BASIS_LINE = 'Videos behind a piece of advice are counted over everything we have read for you, not over one month.'
+
+/** The row's grounding, without the basis clause a snapshot frozen before
+ *  2026-09-24 still carries: the basis is said once, under the ledger. */
+function shortGrounded(line: string): string {
+  return line.replace(/,? counted over everything we have read for you.*$/, '')
+}
+
+/** "You have acted on 7 of 64." The trailer on older snapshots is dropped. */
+function withoutActedTrailer(line: string): string {
+  return line.replace(/ — every piece of advice this product has ever given you\.$/, '.')
+}
+
 export const quarterlyMoves: Block<QuarterlyData> = {
   key: 'quarterly.moves',
   title: QUARTER_PAGE_TITLE.moves,
@@ -222,13 +237,17 @@ export const quarterlyMoves: Block<QuarterlyData> = {
                     </span>
                   </span>
                   <Note mode={mode}>
-                    {a.grounded ? <span data-copy="figure">{a.grounded.line}</span> : 'Nothing was recorded as the evidence behind this.'}
-                    {' '}Afterwards: {a.afterwards.line}
+                    {a.grounded ? <span data-copy="figure">{shortGrounded(a.grounded.line)}</span> : 'Nothing was recorded as the evidence behind this.'}
+                    {/* AN UNDECIDED ROW SAYS NOTHING HERE: its status chip
+                        already reads "not decided", and the same sentence
+                        stacked on every such row (copy de-clutter E87). */}
+                    {a.decidedAt ? <>{' '}Afterwards: {a.afterwards.line}</> : null}
                   </Note>
                 </span>
               </div>
             ))}
-            <Note mode={mode} tone="body">{m.actedLine}</Note>
+            <Note mode={mode}>{GROUNDED_BASIS_LINE}</Note>
+            <Note mode={mode} tone="body">{withoutActedTrailer(m.actedLine)}</Note>
           </>
         ) : (
           <Note mode={mode}>{m.adviceNote ?? 'No advice stands on this workspace yet.'}</Note>
@@ -258,7 +277,7 @@ export const quarterlyMoves: Block<QuarterlyData> = {
                   the rows, so a reader does not take the silence for a zero. */}
               <Note mode={mode}>
                 How many videos echoed a claim and how many pushed back is not counted yet, so each row carries the
-                verdict word alone. {m.claimsLine} {m.claimsCaveat}
+                verdict word alone.
               </Note>
             </>
           ) : (
@@ -297,7 +316,7 @@ export const quarterlyMoves: Block<QuarterlyData> = {
               {/* THE THREE SENTENCES THAT MUST TRAVEL WITH THESE COUNTS, as one
                   note rather than three: what the counts are of (D15), the floor
                   a verdict is drawn at, and the hold this card does not have. */}
-              <Note mode={mode}>{m.plan.basis} {m.plan.floorLine} {m.plan.caveat}</Note>
+              <Note mode={mode}>{m.plan.basis}</Note>
               {m.plan.notice ? <Note mode={mode}>{m.plan.notice}</Note> : null}
             </Card>
           ) : (
@@ -311,13 +330,8 @@ export const quarterlyMoves: Block<QuarterlyData> = {
 
     return frame(
       <div className={email ? undefined : 'flex min-h-0 flex-1 flex-col gap-2'}>
-        {/* `qr.p6.masthead` · ABOVE the moves, not an italic rule at the foot. */}
-        <p
-          className={email ? undefined : 'm-0 font-serif text-[12.5px] italic leading-[18px] text-secondary-foreground'}
-          style={email ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink2, marginBottom: 6 } : undefined}
-        >
-          {m.rule}
-        </p>
+        {/* NO MASTHEAD RULE. "We never claim you caused it" is said once per
+            forwarded document, on the method page (ruling L6, 2026-09-24). */}
         <Columns weights={[5.4, 6.2, 12]} gap={12} mode={mode}>
           {moves}
           {ledger}

@@ -36,21 +36,25 @@ export function WeeklyDeck({ data, date = fmtDate(new Date()) }: { data: WeeklyS
   // Asked before anything dereferences `data.reading` (`WEEKLY_SNAPSHOT_VERSION`).
   const stale = staleWeeklySnapshot(data)
   const blocks = stale ? [] : weeklyBlocksFor(data.keys)
-  // THE RULE ON EVERY SHEET. A reader of a PDF has no masthead to scroll back
-  // to, which is the same reason the method note is on every slide of a report.
-  const chrome = {
+  // THE RULE ONCE, ON SHEET 1 (copy de-clutter 2026-09-24). Truncated on
+  // every footer it read as half a sentence eight times.
+  const chromeFor = (first: boolean) => ({
     context: `${data.company} · ${data.period} · reading as at ${fullDate(data.readingAt)}`,
     footer: (
       <p className="truncate font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
-        <span className="text-secondary-foreground">{stale ? '' : weeklyRuleFor(periodNounFor(data.reading.window))}</span>
-        <span aria-hidden> · </span>
+        {first && !stale ? (
+          <>
+            <span className="text-secondary-foreground">{weeklyRuleFor(periodNounFor(data.reading.window))}</span>
+            <span aria-hidden> · </span>
+          </>
+        ) : null}
         <span>{date}</span>
       </p>
     ),
-  }
+  })
   if (blocks.length === 0) {
     return (
-      <Slide title={data.subject} chrome={chrome} page={1} pages={1} layout="single">
+      <Slide title={data.subject} chrome={chromeFor(true)} page={1} pages={1} layout="single">
         <p className="m-0 text-[13px] text-muted-foreground">{stale ?? STALE_ARTEFACT_LINE}</p>
       </Slide>
     )
@@ -63,7 +67,7 @@ export function WeeklyDeck({ data, date = fmtDate(new Date()) }: { data: WeeklyS
           // The subject heads the first sheet, where the reader meets the
           // report; every sheet after it is headed by the section it carries.
           title={i === 0 ? data.subject : block.title}
-          chrome={chrome}
+          chrome={chromeFor(i === 0)}
           page={i + 1}
           pages={blocks.length}
           layout="single"

@@ -72,9 +72,6 @@ export const quarterlyUnsettled: Block<QuarterlyData> = {
     const left = (
       <Column mode={mode} gap={8}>
         <Eyebrow mode={mode}>Not settled this quarter</Eyebrow>
-        <Note mode={mode} tone="body">
-          Where the count is too thin, we say so rather than round it into a verdict.
-        </Note>
 
         {/* WHAT WAS NEVER ASKED COMES FIRST, and it is not the same claim as
             a comparison that was drawn. An empty list on a workspace whose
@@ -99,8 +96,7 @@ export const quarterlyUnsettled: Block<QuarterlyData> = {
         )}
         {u.itemsMore > 0 ? (
           <Note mode={mode}>
-            <span data-copy="figure">{u.itemsMore}</span> more were drawn and did not clear their band; each carries its
-            badge on the page that measured it.
+            <span data-copy="figure">{u.itemsMore}</span> more were drawn and did not clear their band.
           </Note>
         ) : null}
 
@@ -130,8 +126,7 @@ export const quarterlyUnsettled: Block<QuarterlyData> = {
                 failure mode this artefact is arranged to avoid. */}
             {u.waitingMore > 0 ? (
               <Note mode={mode}>
-                <span data-copy="figure">{u.waitingMore}</span> more are waiting on a reading; each is named on the page
-                that measured it.
+                <span data-copy="figure">{u.waitingMore}</span> more are waiting on a reading.
               </Note>
             ) : null}
           </div>
@@ -186,7 +181,7 @@ export const quarterlyUnsettled: Block<QuarterlyData> = {
               {m.searchPlan.noYield > 0 ? (
                 <Note mode={mode}>
                   <span data-copy="figure">{fmtInt(m.searchPlan.noYield)}</span> of the terms found something and kept
-                  nothing — worth reviewing, because a term pulling in the wrong videos costs money to gather.
+                  nothing, worth reviewing.
                 </Note>
               ) : null}
               <Note mode={mode}>{m.searchPlan.basis}</Note>

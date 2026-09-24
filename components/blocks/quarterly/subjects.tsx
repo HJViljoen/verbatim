@@ -166,7 +166,7 @@ export const quarterlySubjects: Block<QuarterlyData> = {
           </Note>
           {s.note ? <Note mode={mode}>{s.note}</Note> : null}
           {s.quarterNote ? <Note mode={mode}>{s.quarterNote}</Note> : null}
-          {s.gate ? <Note mode={mode}>{s.gate} Until then the quarter columns say so rather than printing a change.</Note> : null}
+          {s.gate ? <Note mode={mode}>{s.gate}</Note> : null}
         </div>
       </Column>
     )

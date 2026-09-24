@@ -12,7 +12,6 @@ import {
   loadRecordInputs,
   recordLines,
   refusals,
-  refusedSentence,
   totalPlatformMix,
   type RecordInputs,
   type RecordWindow,
@@ -452,8 +451,8 @@ export interface MovesPage {
   movesNote: string | null
   advice: AdviceRow[]
   /** The Market page's own sentence, over the WHOLE ledger and not the twelve
-   *  rows drawn: "You have acted on 7 of 64 — every piece of advice this
-   *  product has ever given you." Never quarter-scoped; see buildMoves. */
+   *  rows drawn: "You have acted on 7 of 64." Never quarter-scoped; see
+   *  buildMoves. */
   actedLine: string
   adviceNote: string | null
   claims: ClaimRow[]
@@ -709,7 +708,7 @@ export function confidenceOf(verdicts: readonly Verdict[], unlocked: boolean): {
   if (!unlocked) {
     return {
       word: 'partly',
-      why: `The category side is read month by month; your own side is not, because a quarter-on-quarter comparison needs six monthly readings. ${fmtInt(answered.length)} of ${fmtInt(total)} comparisons on these pages were answered.`,
+      why: `The category side is read month by month; your own side is not yet. ${fmtInt(answered.length)} of ${fmtInt(total)} comparisons on these pages were answered.`,
     }
   }
   if (share >= 0.66) {
@@ -762,11 +761,9 @@ export function coverBody(input: {
   // category of 1,134. Each audience counts the same corpus from a different
   // side, so a sum of them is not a count of anything.
   parts.push(`The category was read across [[quarter_videos]] videos in ${input.quarterLabel}.`)
-  parts.push(
-    input.unlocked
-      ? 'Your own side is compared with the quarter before it on every page that has both sides.'
-      : `Your own side is not compared with the quarter before it yet: ${quarterGateSentence(input.readings).slice(0, 1).toLowerCase()}${quarterGateSentence(input.readings).slice(1)}`,
-  )
+  // THE GATE IS ON THE STAT CARD BESIDE THIS PARAGRAPH (copy de-clutter
+  // 2026-09-24): the locked arm said it a third time on one sheet.
+  if (input.unlocked) parts.push('Your own side is compared with the quarter before it on every page that has both sides.')
   return parts.join(' ')
 }
 
@@ -1670,7 +1667,6 @@ function buildCover(a: {
       `as at ${fullDate(a.readingAt)}`,
       quarterFilling(a.quarter, a.readingAt) ? `${quarterLabel(a.quarter, false)} still filling` : null,
       monthBasisClause(overview.month, a.quarter),
-      readingCounter(a.readings),
     ]
       .filter(Boolean)
       .join(' · '),
@@ -1728,7 +1724,7 @@ function buildRead(a: {
     // THE COUNTS AND THE COUNTER — never the cover's own line again. See
     // `corpusCounts`: the platform mix stays on page 1 and this is the half
     // that belongs beside the argument.
-    meta: [a.cover.counts, readingCounter(a.readings)].filter(Boolean).join(' · '),
+    meta: a.cover.counts,
     figures: a.cover.figures,
     verdicts: a.verdicts,
     quotes,
@@ -2212,7 +2208,9 @@ function buildMethod(a: {
       : 'The unusual-week check is not recorded for this workspace yet, so this quarter has no check record to print.',
     numbers: methodNumbers(inputs, a.quarter, a.overview, a.readingAt),
     unit: 'A video with an analysed comment written in the month.',
-    refusedLine: refused.length ? refusedSentence(refused) : null,
+    // THE REFUSALS ARE PAGE 8's WHOLE SUBJECT (copy de-clutter 2026-09-24);
+    // the count stays in the numbers card.
+    refusedLine: null,
     // THE FOOTNOTE IS THE PAGE'S, NOT THE MONTH'S — composed over the quarter
     // window this method page already holds, so its coverage clause is the
     // quarter's and its read-depth clause still says it is all-time.
@@ -2296,13 +2294,13 @@ export function methodNumbers(
   }
   const videos = inputs.coverage.reduce((sum, c) => sum + c.videos, 0)
   const comments = inputs.coverage.reduce((sum, c) => sum + c.comments, 0)
-  out.push({ id: 'videos', label: 'Videos', value: fmtInt(videos), note: 'distinct videos with an analysed comment in the quarter' })
+  out.push({ id: 'videos', label: 'Videos', value: fmtInt(videos) })
   // "COMMENTS", NOT "CONVERSATIONS". `lib/calibration.ts` fixes a conversation
   // as one video and the comments it sparked, and says comments are always
   // counted separately as comments — so this row under a Videos row labelled
   // Conversations said the quarter held 1,388 videos and 11,840 conversations,
   // where the glossary makes the conversations 1,388.
-  out.push({ id: 'comments', label: 'Comments', value: fmtInt(comments), note: 'comments read across those videos' })
+  out.push({ id: 'comments', label: 'Comments', value: fmtInt(comments) })
   out.push({
     id: 'updates',
     label: 'Updates',
@@ -2317,7 +2315,7 @@ export function methodNumbers(
   const mix: PlatformMix = {}
   for (const c of inputs.coverage) for (const [k, n] of Object.entries(c.platformMix)) mix[k] = (mix[k] ?? 0) + n
   const sources = platformShareLine(mix)
-  if (sources) out.push({ id: 'sources', label: 'Sources', value: sources, note: 'of the videos read in this quarter' })
+  if (sources) out.push({ id: 'sources', label: 'Sources', value: sources })
   if (inputs.discard.readable && inputs.discard.judged > 0) {
     out.push({
       id: 'held_back',
@@ -2347,7 +2345,7 @@ export function methodNumbers(
       id: 'refused',
       label: 'Refused',
       value: inputs.comparisonsRefused === 1 ? '1 comparison' : `${fmtInt(inputs.comparisonsRefused)} comparisons`,
-      note: 'held back rather than drawn — the reasons are under this table',
+      note: 'each named under What we could not settle',
     })
   }
   return out
@@ -2541,8 +2539,10 @@ function buildUnsettled(a: {
     heldBack,
     settles: quarterUnlocked(a.readings)
       ? 'Every comparison this quarter could answer is on the pages before this one.'
-      : `${quarterGateSentence(a.readings)} The first quarter-on-quarter verdict for your own audience lands once six stand behind it${
-          settlesIn ? ` — at one reading a month, with ${monthName(settlesIn)}` : ''
+      : // THE GATE ITSELF IS THE ROW ABOVE (copy de-clutter 2026-09-24); this
+        // line keeps only what the row does not say: when it lands.
+        `The first quarter-on-quarter verdict for your own audience lands once six readings stand behind it${
+          settlesIn ? `, with ${monthName(settlesIn)}` : ''
         }.`,
   }
 }

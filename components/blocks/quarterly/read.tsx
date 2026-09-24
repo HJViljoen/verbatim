@@ -7,7 +7,7 @@ import { fullDate } from '@/lib/format'
 import { splitSentences } from '@/lib/prose/scrub'
 import { hasQuote } from '@/lib/renderables/quotes-freeze'
 import type { QuarterlyData, ReadPage } from '@/lib/pages/quarterly'
-import { QUARTER_PAGE_QUESTION, QUARTER_PAGE_TITLE, quarterLabel } from '@/lib/reports/quarterly'
+import { QUARTER_PAGE_QUESTION, QUARTER_PAGE_TITLE, quarterLabel, withoutReadingCounter } from '@/lib/reports/quarterly'
 import { Bullet, Card, Chip, Column, Columns, Dots, Eyebrow, Level, Note, Row, Stored } from './parts'
 
 // QR2 · Our read — the interpretation slot, labelled (design §7 item 9).
@@ -87,9 +87,6 @@ export const quarterlyRead: Block<QuarterlyData> = {
     const left = (
       <Column mode={mode} gap={9}>
         <Eyebrow mode={mode} aside={<Chip tone="amber" mode={mode}>{i.label}</Chip>}>The quarter in one argument</Eyebrow>
-        <Note mode={mode}>
-          Our reading of the counted data, not a counted result. Every figure below is printed with what it is out of.
-        </Note>
         {/* THE ARTBOARD'S OWN SIZE, THROUGH THE DECK'S ZOOM.
             `.vb-slide-body` lays out at 1168px and is zoomed to 0.902 to fit
             the 297mm sheet, so a nominal px value lands at 90% of the drawing
@@ -160,7 +157,7 @@ export const quarterlyRead: Block<QuarterlyData> = {
           <p className={email ? undefined : 'm-0 font-mono text-[11.5px] leading-[1.5] text-muted-foreground'}
             style={email ? { fontFamily: FONT.mono, fontSize: 11.5, lineHeight: 1.5, color: EMAIL.muted } : undefined}
           >
-            <span data-copy="figure">{r.meta}</span>
+            <span data-copy="figure">{withoutReadingCounter(r.meta)}</span>
           </p>
 
           {means ? (
@@ -175,7 +172,8 @@ export const quarterlyRead: Block<QuarterlyData> = {
               />
             </div>
           ) : null}
-          {i.note ? <Note mode={mode}>{i.note}</Note> : null}
+          {/* NO PROVENANCE NOTE (copy de-clutter L9): a review frozen with one
+              still carries it, and it is not printed. */}
 
           <div className={email ? undefined : 'flex flex-col gap-2'}>
             <Eyebrow mode={mode}>Standing advice, by age</Eyebrow>
@@ -190,7 +188,7 @@ export const quarterlyRead: Block<QuarterlyData> = {
                       it is a count of; a zero with no explanation would be a
                       claim about the evidence rather than about our own
                       re-analysis. */}
-                  {a.grounded ? <><span data-copy="figure">{a.grounded.line}</span>{' '}</> : null}
+                  {a.grounded ? <><span data-copy="figure">{a.grounded.line.replace(/,? counted over everything we have read for you.*$/, '')}</span>{' '}</> : null}
                   {a.status}{a.decidedAt ? ` · you decided ${fullDate(a.decidedAt)}` : ' · no decision yet'}
                 </Bullet>
               ))

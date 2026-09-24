@@ -92,6 +92,33 @@ function Numbers({ rows, caveat, mode }: { rows: readonly NumberRow[]; caveat: s
   )
 }
 
+/**
+ * THE RECORD'S LINES, LESS WHAT THIS SHEET SAYS ELSEWHERE OR NOBODY ACTS ON
+ * (copy de-clutter E58, 2026-09-24). "Themes per video", "no change record
+ * before …" and "reading as at …" go (the stamp is on every sheet); the
+ * read-depth and language sentences go where the method footnote under the
+ * numbers card prints them with their basis, so the sheet says each once.
+ * Applied at render, so a brief frozen before the change prints the new copy.
+ */
+function briefLines(lines: readonly string[], method: { basis?: string | null; language?: string | null } | null | undefined): string[] {
+  return lines.filter((l) =>
+    !/themes? attached per analysed video/.test(l) &&
+    !/^No change record before/.test(l) &&
+    !/^Reading as at/.test(l) &&
+    !(method?.basis && /^Of everything we have ever read for you/.test(l)) &&
+    !(method?.language && /of the videos whose language we know were not in English/.test(l)),
+  )
+}
+
+/** Four paragraphs in the record's own order, as `recordParagraphs` makes them. */
+function inParagraphs(lines: readonly string[], paragraphs = 4): string[] {
+  if (lines.length === 0) return []
+  const per = Math.ceil(lines.length / paragraphs)
+  const out: string[] = []
+  for (let i = 0; i < lines.length; i += per) out.push(lines.slice(i, i + per).join(' '))
+  return out
+}
+
 export const contentRecord: Block<ContentBriefData> = {
   key: 'content.record',
   title: 'The record behind this brief',
@@ -110,12 +137,13 @@ export const contentRecord: Block<ContentBriefData> = {
       )
     }
     const tail = [r.delivery, r.counter].filter((x): x is string => !!x)
+    const lines = briefLines(r.lines, r.method)
 
     if (mode === 'email') {
       return (
         <BlockFrame title={contentRecord.title} question={contentRecord.question} mode={mode} meta={r.monthLabel}>
           <div>
-            {r.lines.map((l, i) => (
+            {lines.map((l, i) => (
               <div key={i} style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink2, marginTop: 4 }}>{l}</div>
             ))}
             <Numbers rows={r.numbers} caveat={r.reddit} mode={mode} />
@@ -170,7 +198,7 @@ export const contentRecord: Block<ContentBriefData> = {
                 which is the opposite of what a measure is for. The numbers card
                 beside it is the artboard's exactly: 130px label column, 14.5px
                 values. */}
-            {r.paragraphs.map((l, i) => (
+            {inParagraphs(lines).map((l, i) => (
               <p key={i} className="m-0 max-w-[76ch] text-[14.5px] leading-[1.5] text-foreground">{l}</p>
             ))}
             <p className="m-0 max-w-[76ch] text-[14px] leading-[1.5] text-muted-foreground">{r.labels}</p>

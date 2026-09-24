@@ -157,7 +157,7 @@ describe('the six-month gate', () => {
   })
 
   it('says the sentence the plan asks for, with the count', () => {
-    expect(quarterGateSentence(3)).toBe('Quarter against quarter needs six months — you have 3.')
+    expect(quarterGateSentence(3)).toBe('Quarter against quarter needs six months: you have 3.')
     expect(quarterGateSentence(0)).toContain('you have 0.')
   })
 

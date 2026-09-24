@@ -124,12 +124,14 @@ describe('briefPeriod', () => {
 describe('the method page', () => {
   const kinds = ['method' as const]
 
-  it('prints the month, its denominator per audience and the platform mix', () => {
+  it('prints the month and its dating rule, leaving the counts to the numbers card', () => {
     const items = methodItems(signals({ reading: reading() }), briefPeriod(signals({ reading: reading() })), false, 5, kinds)
     const basis = items.find((i) => i.includes('reading of September 2026'))
     expect(basis).toBeTruthy()
-    expect(basis).toContain('388 videos in the category · 158 videos in your own brand · 41 videos in Ottobock · 1,667 comments read.')
-    expect(basis).toContain('TikTok 161 · YouTube 135')
+    // The denominators and the mix are the numbers card's rows on the same
+    // sheet (copy de-clutter E49).
+    expect(basis).not.toContain('1,667 comments read')
+    expect(basis).toContain('dated by when the comment was written')
     expect(basis).toContain('reading as at 16 Sep 2026')
     expect(basis).toContain('still filling')
   })
@@ -194,7 +196,7 @@ describe('the method page', () => {
     expect(items.join(' ')).toContain('not like for like')
   })
 
-  it('names every missing input and who closes it', () => {
+  it('summarises what is missing, and leaves each input to the section it shortens', () => {
     const items = methodItems(
       signals({ reading: reading(), missing: [{ id: 'subject-set', input: 'the subjects', owner: 'Client', ownerRole: 'client', unlocks: 'Name them in Settings › Subjects.', sections: ['Your subjects'], labels: ['Your subjects'] }] }),
       'x', false, 5, kinds,
@@ -204,9 +206,9 @@ describe('the method page', () => {
     // "The Your subjects section could not be filled" — a section is named as a
     // section now, because the sentence splices a name into running prose and
     // the map's titles are headings (see `labelOf`).
-    expect(joined).toContain('The Your subjects section could not be filled')
-    expect(joined).toContain('This one is yours to close')
-    expect(joined).toContain('Name them in Settings › Subjects')
+    // Each blocked section prints `missingSentence` where it would have been
+    // (`briefSections`), so the method sheet keeps the summary only (E93).
+    expect(joined).not.toContain('The Your subjects section could not be filled')
     // The method page is a printed page behind a share link: it names the act,
     // never our own readiness screen.
     expect(joined).not.toContain('Settings › Readiness')

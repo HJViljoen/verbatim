@@ -48,9 +48,12 @@ describe('the deck', () => {
     expect(markup).toContain('8')
   })
 
-  it('prints the rule on every sheet, because a PDF has no masthead to scroll back to', () => {
+  // Copy de-clutter ruling E: the six-month gate is said once, on the
+  // cover's stat card; eight footer copies were the loudest repetition.
+  it('prints the date, not the rule, in every sheet footer', () => {
     const markup = render(<QuarterlyDeck data={snapshot} date="16 Sep 2026" />)
-    expect((markup.split(QUARTERLY_RULE).length - 1)).toBeGreaterThanOrEqual(QUARTERLY_BLOCK_KEYS.length)
+    expect(markup).not.toContain(QUARTERLY_RULE)
+    expect((markup.split('16 Sep 2026').length - 1)).toBeGreaterThanOrEqual(QUARTERLY_BLOCK_KEYS.length)
     // AND IT PRINTS THE WHOLE RULE. On one `truncate` line the clause ellipsed
     // on every sheet was the second sentence — the six-month gate, which is
     // why half the artefact's columns are empty.
@@ -115,10 +118,12 @@ describe('the deck', () => {
 })
 
 describe('the share link', () => {
-  it('renders the eight pages in the app’s own mode, with the rule and the freeze note', () => {
+  it('renders the eight pages in the app’s own mode, with the freeze note and the gate at most once', () => {
     const text = renderText(<QuarterlyShareShell data={snapshot} appUrl={APP} />)
     expect(text).toContain(snapshot.title)
-    expect(text).toContain(QUARTERLY_RULE)
+    // Ruling E: the six-month gate is the cover's to say; no header rule repeats it.
+    expect(text).not.toContain(QUARTERLY_RULE)
+    expect(text.match(/quarter view needs/g)?.length ?? 0).toBeLessThanOrEqual(1)
     expect(text).toContain('quoted voices read live')
     assertCopyContract(render(<QuarterlyShareShell data={snapshot} appUrl={APP} />))
   })
@@ -167,7 +172,7 @@ describe('the email', () => {
       appUrl: APP,
       attached: false,
     })
-    expect(four.html).toContain('the other 2 — your subjects and how the quarter was read — are in the review itself')
+    expect(four.html).toContain('the other 2 (your subjects and how the quarter was read) are in the review itself')
     expect(four.html).not.toContain('the rivals')
     const three = renderQuarterlyEmail({
       data: { ...snapshot, keys: ['quarterly.cover', 'quarterly.read', 'quarterly.unsettled'] },
@@ -175,7 +180,7 @@ describe('the email', () => {
       appUrl: APP,
       attached: false,
     })
-    expect(three.html).toContain('the other one — what we could not settle — is in the review itself')
+    expect(three.html).toContain('the other one (what we could not settle) is in the review itself')
   })
 
   // AND IT NAMES THE PAGES IT IS CARRYING, for the same reason. "the first 2

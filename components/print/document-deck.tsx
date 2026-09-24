@@ -18,7 +18,7 @@ import type { Good } from '@/components/charts/stat'
 import type { DeltaVerdict } from '@/lib/report-bands'
 import type { ShareSide } from '@/lib/report-delta'
 import { substituteFigures } from '@/lib/reports/cover'
-import { documentCoverSheet, documentSheetCount, documentSlides, sectionOfSlide } from '@/lib/reports/documents/compose'
+import { currentMethodItems, documentCoverSheet, documentSheetCount, documentSlides, sectionOfSlide } from '@/lib/reports/documents/compose'
 import { briefStampShort, commentsRead } from '@/lib/reports/documents/reading'
 import { blocksFor } from '@/lib/reports/documents/load-reading'
 import { UNFILLED_FRAMING, UNFILLED_SHEET, type BriefSurface } from '@/lib/reports/documents/sections'
@@ -933,13 +933,12 @@ function CompetitorPage({ page, figures, data }: { page: DocPage; figures: Figur
   // unconditional "other people's videos" would have them claiming a reading
   // they never did, beside three columns rather than four. A document says
   // what it read, not what today's pipeline reads.
-  const aboutShown = Boolean(b('about'))
   return (
     <div className="flex h-full min-h-0 flex-col gap-5">
       <div className="flex items-start justify-between gap-8">
         <div className="flex flex-col gap-1.5">
           <h2 className="text-[35.5px] font-semibold leading-[1.1] tracking-[-0.02em] text-foreground">{name}</h2>
-          <p className="text-[15.5px] text-muted-foreground">As their own videos{aboutShown ? ', other people’s videos' : ''} and their audience tell it this update{page.meta?.thin === 'true' ? ', on few videos, read with care' : ''}.</p>
+          {page.meta?.thin === 'true' ? <p className="text-[15.5px] text-muted-foreground">On few videos, read with care.</p> : null}
         </div>
         <ShareStrip data={data} name={name} />
       </div>
@@ -1212,7 +1211,7 @@ function SayHearPage({ page, figures, company }: { page: DocPage; figures: Figur
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
       <p className="max-w-[92ch] text-[16.5px] leading-[1.5] text-secondary-foreground">
-        {`What ${company} says in its own videos, set against what the conversation does with it. The verdict is the analysis’s; the reading is the researcher’s.`}
+        {`What ${company} says in its own videos, set against what the conversation does with it.`}
       </p>
       <ul className="grid min-h-0 grid-cols-2 items-start gap-6">
         {page.blocks.map((b) => {
@@ -1428,20 +1427,11 @@ function SwitchingPage({ data }: { data: DocumentSnapshotData }) {
           {f.unread && <p className="text-[14px] leading-[1.45] text-muted-foreground">{f.unread}</p>}
         </div>
 
-        {/* THE BASIS SITS AT THE FOOT, where the artboard's confidence rail
-            does (P0 item 2's `distribute="between"`, applied to a sheet). The
-            column packs to the top and this block takes the slack, rather than
-            the whole column spreading and opening a hole between the figure
-            and its own bar. */}
-        <div className="mt-auto flex flex-col gap-2 border-t border-border/70 pt-3">
-          {/* THE BASIS, BESIDE THE NUMBER. A third clock on a month-stamped
-              sheet, and a reader who is not told will read it as the month's. */}
-          <p className="text-[14px] leading-[1.45] text-muted-foreground">Counted over {f.audienceLabel}, {f.basis}.</p>
-          {/* The one thing the artboard asks for that nothing measured. */}
-          <p className="text-[14px] leading-[1.45] text-muted-foreground">
-            Which way a video leaned is read from what was stored about the video, not from any one comment under it, so no quote on this sheet is labelled toward or away.
-          </p>
-        </div>
+        {/* THE BASIS, BESIDE THE NUMBER, AT THE FOOT. A third clock on a
+            month-stamped sheet (D9), and a reader who is not told will read it
+            as the month's; it stays where the "no quote is labelled" line went
+            (copy de-clutter E36). */}
+        <p className="mt-auto border-t border-border/70 pt-3 text-[14px] leading-[1.45] text-muted-foreground">Counted over {f.audienceLabel}, {f.basis}.</p>
       </div>
 
       <div className={`${CARD} flex min-h-0 flex-col gap-3.5 px-6 py-5`}>
@@ -1458,7 +1448,7 @@ function SwitchingPage({ data }: { data: DocumentSnapshotData }) {
               (figures.ts): `videos.sentiment` is the one production column two
               writers have written with two meanings. */}
           <p className="text-[14px] leading-[1.45] text-muted-foreground">
-            What was stored about each video. That column has been written by two different readings of tone, so the split is a lead rather than a rule.
+            What was stored about each video. The split is a lead, not a rule.
           </p>
         </div>
       </div>
@@ -1556,7 +1546,9 @@ export function methodRows(data: DocumentSnapshotData): [string, string][] {
     // is comparable with every other: the unit is a VIDEO, never a comment.
     ['The unit', 'a video with at least one analysed comment'],
   ]
-  if (m.languages) rows.push(['Languages', m.languages])
+  // THE FOOTNOTE CARRIES THE SHARE WITH ITS BASIS (D15) where the reading has
+  // a method; the row is for a brief without one, so the sheet says it once.
+  if (m.languages && !data.reading?.method?.language) rows.push(['Languages', m.languages])
   return rows
 }
 
@@ -1630,7 +1622,7 @@ function ScriptedPage({ data }: { data: DocumentSnapshotData }) {
           <p className="font-mono text-[11.5px] uppercase tracking-[0.06em] text-muted-foreground">Say this</p>
           {line.say
             ? <blockquote className="m-0 rounded-md bg-inner px-3.5 py-3 font-serif text-[15.5px] italic leading-[1.5] text-secondary-foreground">{line.say}</blockquote>
-            : <p className={BODY_SM}>No sentence has been written for this one yet. The counts under it are the reading; the line to say is not something this brief will make up.</p>}
+            : <p className={BODY_SM}>No sentence has been written for this one yet.</p>}
           {line.because.length > 0 && list('Because', line.because)}
           {line.alsoRunning.length > 0 && list('Also running this month', line.alsoRunning)}
           {line.quote?.text && (
@@ -1641,32 +1633,8 @@ function ScriptedPage({ data }: { data: DocumentSnapshotData }) {
               <QuoteBlock quote={line.quote} mode="print" />
             </div>
           )}
-          <p className="border-t border-border pt-2.5 font-mono text-[11.5px] leading-[1.4] text-muted-foreground">
-            {line.objection.source === 'kind'
-              ? 'Counted as a kind of thing said, over the whole month — not as a theme of the register.'
-              : 'Counted as a theme of the register.'}
-          </p>
         </div>
       ))}
-      {lines.length < 3 && (
-        // A NOTE IN A DECK OF CARDS IS STILL ON A CARD (wave 3, `sales`-9).
-        // With fewer than three scripted lines this column was a naked eyebrow
-        // and a paragraph laid straight on the sheet beside a bordered card —
-        // the only bare column in the whole deck, and on the sales brief it is
-        // two thirds of the sheet's width. It takes the sibling card's
-        // padding, on the TINT this deck already uses for apparatus ("Not
-        // settled this update"), and not the card's border and white ground:
-        // it is the reason there is one answer, not a second answer.
-        <div
-          className="flex min-h-0 flex-col gap-2 self-start rounded-lg bg-inner px-[22px] py-5"
-          style={{ gridColumn: `span ${3 - Math.min(lines.length, 3)}` }}
-        >
-          <Eyebrow>Why there is one of these</Eyebrow>
-          <p className={BODY_SM}>
-            An objection is counted as a kind of thing said, and the register that names themes carries no kind. So this sheet has one row per month rather than one per objection, and it will have more the day a theme can be an objection.
-          </p>
-        </div>
-      )}
     </div>
   )
 }
@@ -1831,7 +1799,7 @@ function CannotTell({ data }: { data: DocumentSnapshotData }) {
 }
 
 function MethodPage({ page, data }: { page: DocPage; data: DocumentSnapshotData }) {
-  const items = page.blocks.find((b) => b.field === 'method')?.items ?? []
+  const items = currentMethodItems(page.blocks.find((b) => b.field === 'method')?.items ?? [])
   return (
     <div className="grid h-full min-h-0 grid-cols-[7fr_5fr] gap-x-12">
       <div className="flex min-h-0 flex-col gap-3">
@@ -1920,10 +1888,10 @@ const PAGE_CONTEXT: Partial<Record<DocPage['kind'], string>> = {
  * deck that still frames itself in its body.
  */
 const PAGE_NOTE: Partial<Record<DocPage['kind'], string>> = {
-  switching: 'The videos that name both you and a rival, and which way each of them leaned — a small number, printed as it stands.',
+  switching: 'The videos that name both you and a rival, and which way each of them leaned.',
   scripted: 'The sentence to say is a writer\u2019s; every figure under it is counted.',
-  language: 'Words and claims the conversation pushes back on or contradicts. Each is a phrase a buyer will hear as a promise; the note says what the audience already knows about it.',
-  asked: 'Questions the conversation puts and does not settle. Each is asked in the audience\u2019s own framing, not the company\u2019s; the note says what is behind it.',
+  language: 'Words and claims the conversation pushes back on or contradicts.',
+  asked: 'Questions the conversation puts and does not settle.',
 }
 
 /** The lens the document was written under. Older snapshots (before
@@ -2036,7 +2004,7 @@ function SectionPane({ section, data, why }: {
                 month series on a subject row, which is a schema limitation and
                 not a missing render. */}
             <p className="text-[12px] leading-[1.35] text-muted-foreground">
-              One side. Your own audience carries no month-by-month series on a subject, so there is nothing to draw against this.
+              Your side has no monthly series yet.
             </p>
           </div>
         ) : (
@@ -2058,21 +2026,15 @@ function SectionPane({ section, data, why }: {
   // its own lead prints the lead instead, so no two panes in the deck are the
   // same card.
   const untracked = (data.slideFigures?.untracked ?? []).filter((n) => n.sections.includes(section.title))
+  // NO DENOMINATOR FALLBACK (copy de-clutter E39, 2026-09-24): the same three
+  // counts sat on every section sheet, and every sheet's footer and the method
+  // card already carry them. A pane with nothing of its own prints no heading.
+  const hasBody = Boolean(section.paneLead) || untracked.length > 0
+  if (!hasBody && !rail) return null
   return (
     <div className={card}>
-      <Eyebrow>{section.paneTitle ?? 'What this rests on'}</Eyebrow>
-      {section.paneLead
-        ? <p className={BODY_SM}>{section.paneLead}</p>
-        : data.reading && (
-          <p className="font-mono text-[13.5px] leading-[1.5] text-muted-foreground">
-            {data.reading.denominators.map((d) => (
-              <Fragment key={d.audience}>
-                <span className="text-foreground">{fmtCount(d.videos)}</span> {d.label}{' · '}
-              </Fragment>
-            ))}
-            <span className="text-foreground">{fmtCount(commentsRead(data.reading.denominators))}</span> comments read
-          </p>
-        )}
+      {hasBody && <Eyebrow>{section.paneTitle ?? 'What this rests on'}</Eyebrow>}
+      {section.paneLead ? <p className={BODY_SM}>{section.paneLead}</p> : null}
       {/* `sales.p4.untracked` — what is NOT tracked, beside the section rather
           than in place of it, naming the ROLE and no date (D14). Composed by
           `untrackedNotes` on every brief since wave 1 and printed by nothing. */}

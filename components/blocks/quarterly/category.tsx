@@ -219,14 +219,7 @@ export const quarterlyCategory: Block<QuarterlyData> = {
             `<p>` is closed by the parser before it opens — the aside came out
             as a sibling on its own line and cost the sheet 24px instead of
             nothing. */}
-        <Eyebrow
-          mode={mode}
-          aside={
-            mode === 'email'
-              ? <span style={{ textTransform: 'none', letterSpacing: 0 }}>each cleared its own band</span>
-              : <span className="font-sans text-[11px] normal-case tracking-normal text-muted-foreground">each cleared its own band</span>
-          }
-        >
+        <Eyebrow mode={mode}>
           What moved most
         </Eyebrow>
         {anyMover ? (
@@ -308,7 +301,7 @@ export const quarterlyCategory: Block<QuarterlyData> = {
             // `quarterly.read` renumbers the deck and moves the pointer
             // silently. The page's own title resolves everywhere and does
             // not move.
-            note={`against ${fmtInt(c.quarterVolume.before)} in the quarter before it · the three largest quarter readings are under ${QUARTER_PAGE_TITLE.read}`}
+            note={`against ${fmtInt(c.quarterVolume.before)} in the quarter before it`}
           />
         ) : null}
         {c.quarterNote ? <Note mode={mode}>{c.quarterNote}</Note> : null}
@@ -478,9 +471,8 @@ export const quarterlyCategory: Block<QuarterlyData> = {
                 <BlockMovement verdict={c.attention?.verdict ?? null} unit="pts" mode={mode} />
                 <Note mode={mode}>
                   {c.attention?.accountCount != null
-                    ? <>Comments under a fixed panel of <span data-copy="figure">{fmtInt(c.attention.accountCount)}</span> accounts;</>
-                    : 'Comments under a fixed panel of accounts;'}
-                  {' '}the rule marks where it was re-frozen.
+                    ? <>Comments under a fixed panel of <span data-copy="figure">{fmtInt(c.attention.accountCount)}</span> accounts.</>
+                    : 'Comments under a fixed panel of accounts.'}
                 </Note>
               </div>
             </Card>
@@ -493,7 +485,7 @@ export const quarterlyCategory: Block<QuarterlyData> = {
 
     return frame(
       <div className={email ? undefined : 'flex min-h-0 flex-1 flex-col gap-2'}>
-        <Note mode={mode} tone="body">{c.gate ? `${c.basis} ${c.gate}` : c.basis}</Note>
+        <Note mode={mode} tone="body">{c.basis}</Note>
         <Columns weights={[7, 5]} mode={mode}>
           {movers}
           {aside}

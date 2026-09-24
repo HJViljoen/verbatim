@@ -59,7 +59,9 @@ describe('confidenceOf', () => {
   it('is never better than "partly" while the tenant’s own side is locked', () => {
     const all = [verdict(), verdict({ objectId: 't2' }), verdict({ objectId: 't3' })]
     expect(confidenceOf(all, false).word).toBe('partly')
-    expect(confidenceOf(all, false).why).toContain('six monthly readings')
+    expect(confidenceOf(all, false).why).toContain('your own side is not yet')
+    // The gate is the cover's stat card; the why does not restate it.
+    expect(confidenceOf(all, false).why).not.toContain('six monthly readings')
   })
 
   it('reads "reasonable" once two thirds of the comparisons were answered', () => {
@@ -99,11 +101,12 @@ describe('coverBody', () => {
     expect(body.replace(/\[\[[a-z_]+\]\]/g, '').replace(/Q3 2026/g, '')).not.toMatch(/\d/)
   })
 
-  it('says the gate in its own words when the quarter is locked', () => {
+  it('leaves the gate to the stat card when the quarter is locked (copy de-clutter)', () => {
     const body = coverBody({ lead: verdict(), monthLabel: 'September', quarterLabel: 'Q3 2026', unlocked: false, readings: 3 })
-    // Lower-cased mid-sentence: the gate is a clause here, not a heading.
-    expect(body).toContain('quarter against quarter needs six months')
-    expect(body).toContain('you have 3')
+    // The cover's stat card carries "your 3rd monthly reading, the quarter
+    // view needs 6"; the body saying it again was the third copy on one sheet.
+    expect(body).not.toContain('needs six months')
+    expect(body).not.toContain('you have 3')
   })
 
   it('says the month the lead is of is not a month of the quarter, when it is not', () => {

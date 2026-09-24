@@ -257,7 +257,7 @@ export const MARKETING_MAP: readonly BriefEntry[] = [
   }),
   block({
     id: 'mk.month', block: 'overview.sentence', surface: 'overview',
-    title: 'The month', framing: 'Where the month stands, with the band it cleared and the count behind it.',
+    title: 'The month', framing: 'Where the month stands.',
     needs: ['months-of-history'],
   }),
   block({
@@ -291,7 +291,7 @@ export const LEADERSHIP_MAP: readonly BriefEntry[] = [
   page('in_short'),
   block({
     id: 'ld.month', block: 'overview.sentence', surface: 'overview',
-    title: 'The month', framing: 'The month in one reading, with the band and the count behind it.',
+    title: 'The month', framing: 'The month in one reading.',
     needs: ['months-of-history'],
   }),
   block({
@@ -360,10 +360,10 @@ export const SALES_MAP: readonly BriefEntry[] = [
   }),
   block({
     id: 'sl.voices', block: 'subjects.voices', surface: 'subjects',
-    title: 'What sells, in their words', framing: 'What customers actually said about each subject this month — say it back, in their words.',
+    title: 'What sells, in their words', framing: 'What customers actually said about each subject this month: say it back, in their words.',
     context: 'Selling points', eyebrow: 'In their own words', pane: 'confidence',
     paneTitle: 'How to use these',
-    paneLead: 'Say these back in the customer\u2019s own words rather than in ours. Every phrase carries the count it was heard in and the population that count is of, so the one with the most behind it is the one to open with — and a phrase with a thin count is a lead to test, not a line to build on.',
+    paneLead: 'Say these back in the customer\u2019s own words rather than in ours. Open with the one with the most behind it; a phrase with a thin count is a lead to test, not a line to build on.',
     needs: ['subject-set'],
   }),
   block({
@@ -383,7 +383,7 @@ export const SALES_MAP: readonly BriefEntry[] = [
     title: 'Who is being talked about, rival by rival', framing: 'Who is being talked about this month, and how much of the reading rests on each.',
     context: 'Rivals', eyebrow: 'Who is being talked about', pane: 'confidence',
     paneTitle: 'What is on this sheet',
-    paneLead: 'Who is being talked about, and how much of the month was read of each. What is SAID about a rival is not yet counted rival by rival, so there are no per-rival complaints on this sheet.',
+    paneLead: 'What is SAID about a rival is not yet counted rival by rival, so there are no per-rival complaints on this sheet.',
     needs: ['months-of-history'],
     // `sales.p4.untracked` — the mock's readiness line. NOT a `needs`: this
     // block reads the category corpus either way, and refusing it would drop a
@@ -461,7 +461,7 @@ export const CONTENT_MAP: readonly BriefEntry[] = [
   // brief's own reading — see the `content` surface above.
   block({
     id: 'ct.playbook', block: 'content.playbook', surface: 'content',
-    title: 'Hooks and formats that worked', framing: 'What the category makes, what you make, and what is rated highest — every row with the number it is counted from.',
+    title: 'Hooks and formats that worked', framing: 'What the category makes, what you make, and what is rated highest.',
     needs: [],
   }),
   block({
