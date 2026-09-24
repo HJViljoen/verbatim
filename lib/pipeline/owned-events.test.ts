@@ -79,3 +79,28 @@ describe('detectAccountEvents on a daily series', () => {
     expect(events.filter((e) => e.metric === 'followers')).toHaveLength(0)
   })
 })
+
+describe('detectAccountEvents — a post caption bound for the Step 2c prompt', () => {
+  // The same UTF-16 slice that 400'd attribution and relevance batches: an
+  // emoji straddling unit 120 left half of itself in the fact line.
+  it('cuts by code point and leaves no lone surrogate', () => {
+    const caption = `${'a'.repeat(119)}👜 and the rest of the caption`
+    const post = (id: string, likes: number, date: string, cap: string | null = null) => ({
+      id, run_id: null, platform: 'instagram', caption: cap, views: null, likes, comments_count: 0, upload_date: date,
+    })
+    const events = detectAccountEvents({
+      snapshots: [],
+      ownedVideos: [
+        post('p1', 100, '2026-07-01T00:00:00Z'), post('p2', 100, '2026-07-02T00:00:00Z'),
+        post('p3', 100, '2026-07-03T00:00:00Z'), post('p4', 100, '2026-07-04T00:00:00Z'),
+        post('hit', 1000, '2026-07-20T00:00:00Z', caption),
+      ],
+      runDates: new Map(),
+      windowStart: '2026-07-15T06:00:00Z',
+      windowEnd: '2026-07-22T06:00:00Z',
+    })
+    const line = events.find((e) => e.metric === 'post_performance')!.factLine
+    expect(line).toContain(`(caption: "${'a'.repeat(119)}👜")`)
+    expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(line)).toBe(false)
+  })
+})
