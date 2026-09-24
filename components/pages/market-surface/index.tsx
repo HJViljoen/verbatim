@@ -9,7 +9,7 @@ import type { GlossaryKey } from '@/lib/calibration'
 import type { MarketSurfaceData } from '@/lib/pages/market-surface'
 import { marketConclusions } from './conclusions'
 import { marketAdvice } from './advice'
-import { CARD_CLAIMS_SHOWN, marketCard } from './card'
+import { marketCard } from './card'
 import { marketMoves } from './moves'
 import { marketSayHear } from './sayhear'
 import { marketPlans } from './plans'
@@ -108,153 +108,32 @@ const COLS: Record<string, number> = {
   'market.ways': 12,
 }
 
-// ── how tall each tile is, and where it starts ────────────────────────────────
+// ── where each tile starts, and why none of them is given a height ──────────
 //
-// A TILE IS A FIXED BOX AND ITS CONTENT IS NOT, WHICH IS ONE DECISION SEEN FROM
-// TWO ENDS. `Tile` is `overflow-hidden` over an `N × 116px` grid area at ≥xl:
-// a block taller than its span is CUT — no scrollbar, no fade, no affordance —
-// and a block shorter than it shows empty ground. Both ends shipped in the
-// port, from one table of constants tuned against a fixture thinner than the
-// page:
+// A TILE IS AS TALL AS WHAT IT DRAWS (2026-09-24). This page used to estimate
+// every block's height in px from its data — rows, claims, readings — and turn
+// the estimate into a row span, because `PageGrid`'s rows were a fixed 116px
+// and a span was both the tile's ceiling and its floor. The estimate could only
+// be wrong in two directions and production found both: the conclusions tile
+// ran past its box and its last row ("1 below the bar this update") sat under
+// the next section's heading, and the ledger — twelve rows estimated, a handful
+// drawn — ended 600px above the bottom of its own white card. `PageGrid`'s rows
+// are now `minmax(116px, auto)`, so a tile claims ONE row unit as its floor and
+// the row grows to its content; there is nothing left to estimate.
 //
-//   * the ledger draws THREE rows in the fixture and TWELVE in production.
-//     Measured at 1440, twelve rows want 1,435px of a 644px box, so rows 5–12,
-//     the "you have acted on 2 of 64" line and the grounding note were gone
-//     from the page the block is named after;
-//   * and in the arm every new workspace starts in — the gather is meant to
-//     fill up over time, so this is the first weeks of every account, not an
-//     edge case — the same constants held Plans re-checked at 644px for two
-//     sentences, Say vs hear at 380 for one, and more than half the page was
-//     white ground inside shadowed boxes.
-//
-// SO THE SPAN IS READ OFF THE DATA. Each block estimates the height it is
-// about to draw from what it is about to draw — rows, claims, readings,
-// series — in px measured at 1440 through the dashboard shell's own geometry
-// (sidebar 14rem, main p-6), and the span is that height in row units, rounded
-// up. The estimate errs HIGH by design: a row of slack is 132px of white and a
-// row short is a table with its bottom cut off.
-//
-// AND EVERY TILE NOW SPENDS ITS OWN SLACK, NOT ITS NEIGHBOUR'S. The first cut
-// of this rule gave every tile on a grid line the TALLEST estimate on that
-// line, to keep CSS grid's auto-placement from flowing a later tile up into the
-// gap beside a short one. Measured at 1440 on the populated fixture that cost
-// 1,407px of white inside 4,888px of tile — a third of the page — and its worst
-// case was not the fixture but the arm production is in: `market.unlocks` draws
-// ~200px of ink and was handed a 644px box because `market.plans` sits beside
-// it, and Say vs hear ran 54% blank for the same reason.
-//
-// THE REORDERING THAT JUSTIFIED IT CANNOT HAPPEN ONCE THE START IS PINNED.
-// Auto-placement only moves a tile that has no explicit position; `Tile` set
-// `xl:col-span-N` / `xl:row-span-N` and never a col-start or a row-start, so
-// every tile was auto-placed and the argument held. `tileGrid` now hands each
-// tile the column AND the row it begins on — the artboard's own grid, written
-// down — so the layout is fixed by the page rather than by whichever tile
-// happens to be tallest, and a per-tile height is free. The artboard does the
-// same thing with no arithmetic at all: `repeat(12, minmax(0, 1fr))` and no
-// `auto-rows`, so each of its rows is as tall as its own tallest card.
-//
-// A LINE STILL SHARES ITS ROW START, so the three narrow cards begin level with
-// each other and `market.ways` begins under all three; what they no longer
-// share is their BOTTOM. A ragged bottom edge inside one grid line is the cost,
-// and it is 600px of white cheaper than the alternative.
-const ROW_UNIT = 116
-const ROW_GAP = 16
-const spanFor = (px: number): number =>
-  Math.min(12, Math.max(2, Math.ceil((px + ROW_GAP) / (ROW_UNIT + ROW_GAP))))
-
-/**
- * What each block is about to draw, in px.
- *
- * MEASURED AT 1280, NOT AT 1440 — the low end of MASTER's stated primary range
- * ("verified at 1280–1440px") and the width at which these tiles are TALLEST,
- * because the grid is still twelve columns there and every column is narrower.
- * Tuning at 1440 is how the Plans tile came to drop its own footer — "See the
- * claim-by-claim verdicts → · as re-read on 13 Sep" — at 1280 and only at
- * 1280: present at the width it was reviewed at, gone at the width nobody
- * re-checked. The cost of measuring at the narrow end is some white at the
- * wide one, which `distribute="between"` spreads through the tile rather than
- * pooling under it.
- *
- * Every constant here was measured with the fix pass's own probe against all
- * five fixture states, and the comment beside each says what it counts.
- */
-const HEIGHT: Record<string, (d: MarketSurfaceData) => number> = {
-  // Chrome, then one row of two-abreast cards per pair above the bar, then the
-  // population line that no longer sits behind the disclosure (two lines at
-  // 1280) and the disclosure's own summary.
-  'market.conclusions': (d) => 155 + Math.ceil(d.conclusions.rows.filter((r) => r.tier !== 'archive').length / 2) * 137,
-  // Chrome + header, a table row each, a taller row wherever the Afterwards
-  // cell holds a verdict (two months, the badge and the caveat), and the one
-  // expanded row's argument and comment.
-  'market.advice': (d) => {
-    const rows = d.advice.rows
-    if (rows.length === 0) return 150
-    const verdicts = rows.filter((r) => r.afterwards?.state === 'reading').length
-    const expanded = rows.some((r) => r.why || r.quote) ? 130 : 0
-    // The chrome carries the population line as well as the summary now: it is
-    // outside the disclosure in every mode, so it is always drawn.
-    //
-    // AND `requestedLine`, WHICH THIS NEVER COUNTED (market V1). It is the
-    // sentence answering a link the reader followed from a sent digest
-    // (`?rec=<id>`), it is drawn outside the disclosure like the rest of the
-    // notes, and only the `deepLink` arm has it — which is how an estimate
-    // written against the other three arms came to leave it out. It costs
-    // nothing today: measured with scripts/tile-overflow.ts at 1440 and 1280,
-    // this tile clips by 0px on every one of the four arms, because the slack
-    // fix 3 was thought to have eaten came back with the merge. It is counted
-    // anyway, because "the clip is absorbed by something else's slack" is not
-    // a property an estimate may rely on.
-    const requested = d.advice.requestedLine ? 22 : 0
-    return 155 + rows.length * 80 + verdicts * 45 + expanded + requested
-  },
-  // The card's parts, each counted: the lead figure and the floor, the claims
-  // at up to three lines each, the hooks row, the subjects row and its basis, and a
-  // movement row per side.
-  'market.card': (d) => {
-    const card = d.moves.card
-    if (!card) return 150
-    const claims = Math.min(card.claimRows.length, CARD_CLAIMS_SHOWN)
-    const movements = [card.movement.yours, card.movement.category].filter(Boolean).length
-    return 289 + claims * 56 + (card.hooks.some((h) => h.value.k > 0) ? 26 : 0) + 60 + movements * 62
-  },
-  // A read move is a chart, its legend and one line per side; a declared move
-  // with nothing read yet is a sentence.
-  'market.moves': (d) => {
-    const read = d.moves.readings ?? []
-    const sides = read.reduce((n, r) => n + (r.verdict ? 1 : 0) + r.control.length, 0)
-    const charts = read.filter((r) => r.chartNote == null && r.months.length > 0).length
-    const unscored = d.moves.rows.length - read.length
-    return 110 + charts * 250 + read.length * 60 + sides * 40 + Math.max(0, unscored) * 24 + 60
-  },
-  // A claim is the client's line, its verdict and the audience's answer.
-  'market.sayhear': (d) => 90 + d.ways.claims.length * 70 + 60,
-  // The plan's title row, the bar, the three counts, the lead claim with its
-  // comment, and a line per claim that moved.
-  'market.plans': (d) => {
-    const card = d.plans[0]
-    if (!card) return 110
-    const lead = card.claims.length > 0 ? 215 : 0
-    return 260 + lead + card.moved.length * 48
-  },
-  // One block per section that is not built, each with its owner.
-  'market.unlocks': (d) => 105 + d.unlocks.rows.length * 95,
-  // TWO LINES OF 44px SLOTS AT 1280, ONE AT 1440, and under each the sentence a
-  // dead way now prints for itself. Measured: the five slots want 1,024px and
-  // the grid gives 1,136 at 1440 and 976 at 1280, so the row is 126px wide-open
-  // and 180–199px at the narrow end. The box is budgeted for the narrow end,
-  // which is this table's stated rule.
-  'market.ways': (d) => {
-    const ways = d.ways.ways
-    const lines = Math.max(1, Math.ceil(ways.length / 4))
-    const note = ways.some((w) => !w.live) ? 77 : ways.some((w) => w.unlock) ? 45 : 0
-    return 60 + lines * (44 + note)
-  },
-}
+// EACH LINE IS ONE GRID ROW, WITH ITS START PINNED. Tiles named on one line
+// share that row, so they begin level; the row is as tall as the tallest of
+// them and the next line starts under it, so nothing can run into anything.
+// They do NOT end level: the moves grid is `xl:items-start`, because this page
+// already chose a ragged bottom edge over white inside a card (Sealand at 1440:
+// stretched to Plans re-checked, "Not on this page yet" would be 658px around
+// 190px of ink). The start stays explicit so a line whose spans do not fill
+// twelve columns can never have a later tile flowed up into it.
 
 /** The page's two grids, each as its own lines of tile keys, in order: the two
  *  full-width readings; then the artboard's moves row, the three narrow cards,
- *  and the button strip. Tiles named on one line START on the same grid row —
- *  they no longer END on the same one. */
+ *  and the button strip. Tiles named on one line share one grid row and start
+ *  level; each ends at its own content. */
 const GRIDS: readonly (readonly (readonly string[])[])[] = [
   [['market.conclusions'], ['market.advice']],
   [
@@ -269,42 +148,31 @@ const GRIDS: readonly (readonly (readonly string[])[])[] = [
 export const GRID_ROWS: readonly (readonly string[])[] = GRIDS.flat()
 
 /** Where a tile sits and how big it is: the artboard's column, the column it
- *  starts in, its own height in 116px row units, and the row its line starts
- *  on. Exported so the rule is testable without a browser. */
+ *  starts in, the rows it claims as a FLOOR (always one — the grid sizes it to
+ *  its content), and the row its line sits on. Exported so the rule is
+ *  testable without a browser. */
 export interface TilePlacement { col: number; colStart: number; row: number; rowStart: number }
 
-export function tileGrid(data: MarketSurfaceData): Record<string, TilePlacement> {
+export function tileGrid(): Record<string, TilePlacement> {
   const out: Record<string, TilePlacement> = {}
   for (const grid of GRIDS) {
-    let rowStart = 1
-    for (const line of grid) {
+    grid.forEach((line, i) => {
       let colStart = 1
-      let tallest = 2
       for (const key of line) {
         const col = COLS[key] ?? 12
-        const row = spanFor(HEIGHT[key]?.(data) ?? 248)
-        out[key] = { col, colStart, row, rowStart }
+        // One row unit: the floor. The row grows to whatever the tile draws.
+        out[key] = { col, colStart, row: 1, rowStart: i + 1 }
         colStart += col
-        tallest = Math.max(tallest, row)
       }
-      rowStart += tallest
-    }
+    })
   }
-  return out
-}
-
-/** How tall each block's tile is, in the grid's 116px row units — computed from
- *  the data it is about to draw. */
-export function tileRows(data: MarketSurfaceData): Record<string, number> {
-  const out: Record<string, number> = {}
-  for (const [key, place] of Object.entries(tileGrid(data))) out[key] = place.row
   return out
 }
 
 // THE START CLASSES ARE WRITTEN OUT IN FULL, never interpolated, so Tailwind
 // v4's scanner sees them — the rule `components/shell/tile.tsx` follows for its
-// own span maps. Rows run past twelve because a row start is CUMULATIVE: the
-// ledger alone can ask for eleven units, so `market.ways` can begin on row 25.
+// own span maps. A row start is the LINE's index, so three are all a grid of
+// this page's lines uses.
 const COL_START: Record<number, string> = {
   1: 'xl:col-start-1', 2: 'xl:col-start-2', 3: 'xl:col-start-3', 4: 'xl:col-start-4',
   5: 'xl:col-start-5', 6: 'xl:col-start-6', 7: 'xl:col-start-7', 8: 'xl:col-start-8',
@@ -314,10 +182,6 @@ const ROW_START: Record<number, string> = {
   1: 'xl:row-start-1', 2: 'xl:row-start-2', 3: 'xl:row-start-3', 4: 'xl:row-start-4',
   5: 'xl:row-start-5', 6: 'xl:row-start-6', 7: 'xl:row-start-7', 8: 'xl:row-start-8',
   9: 'xl:row-start-9', 10: 'xl:row-start-10', 11: 'xl:row-start-11', 12: 'xl:row-start-12',
-  13: 'xl:row-start-13', 14: 'xl:row-start-14', 15: 'xl:row-start-15', 16: 'xl:row-start-16',
-  17: 'xl:row-start-17', 18: 'xl:row-start-18', 19: 'xl:row-start-19', 20: 'xl:row-start-20',
-  21: 'xl:row-start-21', 22: 'xl:row-start-22', 23: 'xl:row-start-23', 24: 'xl:row-start-24',
-  25: 'xl:row-start-25', 26: 'xl:row-start-26',
 }
 
 /** The two start classes for one tile — nothing below xl, where the page is a
@@ -359,9 +223,9 @@ export function MarketSurfacePage({
   }
 
   const ctx = marketContext(params)
-  const grid = tileGrid(data)
+  const grid = tileGrid()
   const tile = (block: Block<MarketSurfaceData>) => {
-    const place = grid[block.key] ?? { col: COLS[block.key] ?? 12, colStart: 1, row: 2, rowStart: 1 }
+    const place = grid[block.key] ?? { col: COLS[block.key] ?? 12, colStart: 1, row: 1, rowStart: 1 }
     return (
       <Tile
         key={block.key}
@@ -407,7 +271,7 @@ export function MarketSurfacePage({
 
       <PageGrid>{READINGS.map(tile)}</PageGrid>
 
-      <PageGrid>{MOVES.map(tile)}</PageGrid>
+      <PageGrid className="xl:items-start">{MOVES.map(tile)}</PageGrid>
 
       {data.method ? (
         <p className="m-0 flex flex-col gap-0.5 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">

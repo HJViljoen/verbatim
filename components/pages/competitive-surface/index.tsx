@@ -83,7 +83,9 @@ const SPAN: Record<string, { col: number; row: number }> = {
 /**
  * THE ROWS ARE CONTENT-SIZED, WHICH IS WHAT THE ARTBOARD'S OWN GRID DOES.
  *
- * `PageGrid` is `xl:auto-rows-[116px]` and a `Tile` is `overflow-hidden`, so a
+ * `PageGrid` WAS `xl:auto-rows-[116px]` (every page's rows are `minmax(116px,
+ * auto)` since 2026-09-24, so GRID_ROWS's first half is now the default) and a
+ * `Tile` is `overflow-hidden`, so a
  * hard-coded integer row span is a hard ceiling: any block taller than its span
  * is CUT, with no scroll and no indication. The numbers above were fitted to
  * one fixture by eye and four of the six states fell outside them — measured at

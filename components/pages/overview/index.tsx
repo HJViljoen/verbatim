@@ -217,7 +217,9 @@ export function OverviewPage({
           <ExportMenu />
         </SurfacePageBar>
         {/* THE GRID SIZES TO ITS CONTENT ON THIS PAGE, and that is a fix
-            rather than a preference. `PageGrid`'s rows are a fixed 116px track
+            rather than a preference. `PageGrid`'s rows WERE a fixed 116px track
+            (they are `minmax(116px, auto)` everywhere since 2026-09-24; this
+            page keeps `auto` so its spans set no floor above xl)
             and `Tile` is `overflow-hidden`, so a block taller than its span is
             CUT OFF — which is what the first side-by-side of this port showed:
             Moves lost the bottom of its card and the record lost most of its

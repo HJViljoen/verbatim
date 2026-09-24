@@ -1076,50 +1076,26 @@ describe('the page', () => {
     expect(renderText(weekCoverage.render(weekFixture(), 'email', ctx))).toContain('What this reading rests on')
   })
 
-  it('gives every tile the span its tallest reading needs at 1008, and no more', () => {
-    // Design review F1 and F3, pinned. The spans were set against the widest
-    // the grid ever is (1440 → a 1216 content column) and clipped at 1280 →
-    // 1008, which is the NARROWEST the twelve-column grid gets: below it the
-    // page stacks and tiles size to their content. Every number here is a
-    // measured `scrollHeight - clientHeight` of zero at 1008 and at 1216, on
-    // the arm named — and the shorter readings take shorter spans, because a
-    // tile holding 248px for 71px of content is the other half of the finding.
+  it('gives no tile a height: each claims one row unit and grows to its content', () => {
+    // 2026-09-24. These spans were a measured table (design review F1/F3, W3)
+    // per arm and per width, and two blocks computed theirs from the rows they
+    // drew — because the grid's rows were a fixed 116px and a span was the
+    // tile's ceiling as well as its floor. `PageGrid` is `minmax(116px, auto)`
+    // now, so every arm and every rival count draws the same geometry and the
+    // browser measures the rest.
     const spans = (data: WeekData) => {
       const markup = render(<WeekPage data={data} />)
       return [...markup.matchAll(/data-col="(\d+)" data-row="(\d+)"/g)].map((m) => `${m[1]}x${m[2]}`)
     }
-    // Össur, flagged: §1 takes five rows because its right column wraps to
-    // 553px at 1008, where it fitted 496 at 1216.
-    // §4 takes FOUR on this arm and five on the others: it prints a sentence
-    // wherever a figure is absent, and a sentence is taller than the number it
-    // replaces, so the degraded arms are the tall ones (`cameInRows`).
-    expect(spans(weekFixture())).toEqual(['12x5', '12x4', '12x3', '12x4', '12x3', '5x4', '7x4', '12x2', '12x3'])
-    // Sealand, and the arm both tenants render today: five of these blocks
-    // stand on one sentence, and they take one or two rows rather than three.
-    // §5 takes FOUR here and three on Össur (review W3, `rivalPostsRows`):
-    // three tracked rivals draw three rival groups, 429px at 1008 against a
-    // 3-row box of 380 — so the tile's own footer, "Open Competitive →" and
-    // the note beside it, rendered 34px below the clip on both arms.
-    expect(spans(thinFixture())).toEqual(['12x4', '12x1', '12x2', '12x5', '12x4', '5x3', '7x2', '12x1', '12x2'])
-    expect(spans(absentReadingFixture())).toEqual(['12x4', '12x1', '12x2', '12x5', '12x4', '5x3', '7x2', '12x1', '12x2'])
-  })
-
-  it('sizes §5 from its rivals and its post rows, not from a constant', () => {
-    // REVIEW W3. The sixteen shapes measured in a 1008 column — 1–4 rivals ×
-    // 0–3 posts — and the row each natural height needs. `rivalPostsRows`
-    // reproduces all sixteen; a constant 3 clipped every one of the last five.
+    const shape = ['12x1', '12x1', '12x1', '12x1', '12x1', '5x1', '7x1', '12x1', '12x1']
+    expect(spans(weekFixture())).toEqual(shape)
+    expect(spans(thinFixture())).toEqual(shape)
+    expect(spans(absentReadingFixture())).toEqual(shape)
     const d = weekFixture()
     const rival = d.cameIn.rivals[0]
-    const spanFor = (n: number, posts: number) => {
-      const rivals = Array.from({ length: n }, (_, i) => ({ ...rival, audience: `competitor:r${i}`, posts: rival.posts.slice(0, posts) }))
-      const markup = render(<WeekPage data={{ ...d, cameIn: { ...d.cameIn, rivals } }} />)
-      return Number([...markup.matchAll(/data-col="12" data-row="(\d+)"/g)][4][1])
-    }
-    // measured 233 253 278 / 298 339 388 / 364 424 499 / 458 538 638
-    expect([spanFor(1, 0), spanFor(1, 1), spanFor(1, 2)]).toEqual([2, 3, 3])
-    expect([spanFor(2, 0), spanFor(2, 1), spanFor(2, 2)]).toEqual([3, 3, 4])
-    expect([spanFor(3, 0), spanFor(3, 1), spanFor(3, 2)]).toEqual([3, 4, 4])
-    expect([spanFor(4, 0), spanFor(4, 1), spanFor(4, 2)]).toEqual([4, 5, 5])
+    const rivals = Array.from({ length: 4 }, (_, i) => ({ ...rival, audience: `competitor:r${i}`, posts: rival.posts.slice(0, 3) }))
+    expect(spans({ ...d, cameIn: { ...d.cameIn, rivals } })).toEqual(shape)
+    expect(render(<WeekPage data={d} />)).toContain('xl:auto-rows-[minmax(116px,auto)]')
   })
 
   it('takes no horizon and no soundness band — it is dated by the update', () => {
