@@ -1,20 +1,31 @@
 import { describe, expect, it } from 'vitest'
 import {
+  accountLookalikes,
+  accountStems,
+  applyLabel,
   applyRefusals,
   configFingerprint,
   decideApply,
+  driftRefusal,
   editPlan,
   identitySkip,
   judgeable,
   movedAudiences,
   pairTotals,
   passAConsequences,
+  planAudited,
+  planId,
+  planMarker,
   planRetag,
   PRODUCTION_REF,
   projectRefOf,
+  retagAudit,
   retagIdentities,
+  sparedByAccount,
+  sparedByReason,
   STAGING_REF,
   tagsForAudience,
+  type ApplyDecision,
   type RetagPlan,
   type RetagRow,
 } from './retag'
@@ -153,7 +164,7 @@ const basePlan = (o: Partial<RetagPlan> = {}): RetagPlan => ({
   clientId: SEALAND,
   project: STAGING_REF,
   createdAt: '2026-09-25T10:00:00.000Z',
-  gitSha: 'abc123',
+  gitSha: '3adbc670a1b2c3d4e5f60718293a4b5c6d7e8f90',
   method: 'gpt',
   promptVersion: 'attribution_v2',
   configFingerprint: 'f00d',
@@ -222,7 +233,7 @@ describe('applyRefusals — the guards', () => {
     supabaseUrl: `https://${STAGING_REF}.supabase.co`,
     configFingerprint: 'f00d',
     inflight: [] as { id: string; status: string }[],
-    allowInflight: false,
+    allowInflight: null as string | null,
   }
 
   it('lets a clean apply through', () => {
@@ -249,21 +260,160 @@ describe('applyRefusals — the guards', () => {
       .toEqual(['a run is in flight for this client: ddbbffe4 (analyzing)'])
   })
 
-  it('accepts --allow-inflight for the staging ref only', () => {
-    expect(applyRefusals({ ...ok, inflight: [{ id: 'ddbbffe4', status: 'analyzing' }], allowInflight: true })).toEqual([])
+  it('accepts --allow-inflight for the staging ref only, and only for the run it names', () => {
+    const stale = { id: 'ddbbffe4-0000-4000-8000-000000000000', status: 'analyzing' }
+    expect(applyRefusals({ ...ok, inflight: [stale], allowInflight: 'ddbbffe4' })).toEqual([])
+    // Any OTHER run in flight still refuses — the flag looks past one run.
+    expect(applyRefusals({ ...ok, inflight: [stale, { id: 'aa11bb22-1', status: 'running' }], allowInflight: 'ddbbffe4' }))
+      .toEqual(['a run is in flight for this client: aa11bb22-1 (running)'])
+    // A prefix too short to name one run names none.
+    expect(applyRefusals({ ...ok, inflight: [stale], allowInflight: 'd' })).toEqual([
+      '--allow-inflight names one run by its id (at least 8 characters), not "d"',
+      `a run is in flight for this client: ${stale.id} (analyzing)`,
+    ])
   })
 
   it('refuses --allow-inflight against production, run or no run', () => {
-    const prod = { ...ok, plan: basePlan({ project: PRODUCTION_REF }), project: PRODUCTION_REF, supabaseUrl: `https://${PRODUCTION_REF}.supabase.co`, allowInflight: true }
+    const prod = { ...ok, plan: basePlan({ project: PRODUCTION_REF }), project: PRODUCTION_REF, supabaseUrl: `https://${PRODUCTION_REF}.supabase.co`, allowInflight: 'r1r1r1r1' }
     expect(applyRefusals(prod)).toEqual(['--allow-inflight is refused against production'])
-    expect(applyRefusals({ ...prod, inflight: [{ id: 'r1', status: 'running' }] })).toEqual([
+    expect(applyRefusals({ ...prod, inflight: [{ id: 'r1r1r1r1', status: 'running' }] })).toEqual([
       '--allow-inflight is refused against production',
-      'a run is in flight for this client: r1 (running)',
+      'a run is in flight for this client: r1r1r1r1 (running)',
     ])
+  })
+
+  // Review step (d) says stop; the apply stops too. Each row would be safe —
+  // a row with no verdict is never in `changes` — but the change-log row would
+  // say the corpus was re-checked when part of it was not.
+  it('refuses a plan whose judge had failed batches', () => {
+    expect(applyRefusals({ ...ok, plan: basePlan({ failedBatches: 1 }) }))
+      .toEqual(['1 judge batch(es) failed while the plan was built, so part of the corpus was never re-checked; build a new plan'])
+  })
+
+  it('refuses a plan built from uncommitted or unknown code', () => {
+    expect(applyRefusals({ ...ok, plan: basePlan({ gitSha: '3adbc670+dirty' }) })[0]).toBe('the plan was built from uncommitted code (3adbc670+dirty); build it from a clean checkout')
+    expect(applyRefusals({ ...ok, plan: basePlan({ gitSha: 'unknown' }) })[0]).toContain('does not name the commit')
+  })
+
+  it('refuses a substring plan against production — judged plans only there', () => {
+    const prod = { ...ok, plan: basePlan({ project: PRODUCTION_REF, method: 'substring', promptVersion: 'substring' }), project: PRODUCTION_REF, supabaseUrl: `https://${PRODUCTION_REF}.supabase.co` }
+    expect(applyRefusals(prod)).toEqual(['a substring plan is refused against production; judge it with --method gpt'])
+  })
+
+  // The design's own fallback: a pre-Sunday plan applied after Sunday. Its
+  // gather may have tagged rows the plan never saw; drift only covers the rows
+  // the plan knows about.
+  it('refuses a plan older than a run that started since', () => {
+    expect(applyRefusals({ ...ok, runsSince: [{ id: 'run-sun', status: 'completed', started_at: '2026-09-27T04:00:00Z' }] }))
+      .toEqual(['a run started after the plan was judged (run-sun completed); build a new plan'])
   })
 
   it('refuses a plan that carries a row tagged without a judge', () => {
     expect(applyRefusals({ ...ok, plan: basePlan({ fallbackIds: ['erda'] }) })[0]).toContain('tagged without a judge')
+  })
+})
+
+describe('driftRefusal — a plan the corpus has moved under', () => {
+  const d = (verdict: ApplyDecision['verdict']) => ({ verdict })
+  it('lets a little drift through and reports it; refuses more than the share', () => {
+    const twenty = [...Array(19).fill(d('write')), d('drift')]
+    expect(driftRefusal(twenty)).toBeNull()
+    const stale = [...Array(18).fill(d('write')), d('drift'), d('missing')]
+    expect(driftRefusal(stale)).toBe('2 of 20 planned rows moved or vanished since the plan was judged (more than 5%); build a new plan')
+  })
+  it('does not count rows already applied as drift', () => {
+    expect(driftRefusal([d('already'), d('already'), d('write')])).toBeNull()
+  })
+})
+
+describe('the change-log row for an apply — named, found, and finished by a re-run', () => {
+  it('names a judged pass by what made it, not by its file — an edited plan keeps the id', () => {
+    const plan = basePlan()
+    const edited = editPlan(plan, { drop: ['erda'], set: [] }, config.competitor_names)
+    expect(planId(edited)).toBe(planId(plan))
+    expect(planId(basePlan({ createdAt: '2026-09-26T10:00:00.000Z' }))).not.toBe(planId(plan))
+    expect(planMarker(plan)).toMatch(/^plan id [0-9a-f]{12}$/)
+  })
+
+  it('finds this pass’s row on actor_label, and only this pass’s', () => {
+    const plan = basePlan()
+    const label = applyLabel(plan, 'retag-sealand-prod.json')
+    expect(planAudited([null, 'scripts/run-tagging.ts --write --method gpt', label], plan)).toBe(true)
+    expect(planAudited([label], basePlan({ createdAt: '2026-09-26T10:00:00.000Z' }))).toBe(false)
+    expect(planAudited([], plan)).toBe(false)
+  })
+
+  it('carries the plan’s file name — never a path — its id, the commit and every row a reviewer overrode', () => {
+    const edited = editPlan(basePlan(), { drop: ['erda'], set: [{ id: 'otto', audience: 'industry-other' }] }, config.competitor_names)
+    const label = applyLabel(edited, 'retag.edited.json')
+    expect(label).toBe(`scripts/run-tagging.ts --apply <plan> · plan retag.edited.json · ${planMarker(edited)} built at 3adbc670a1b2 · reviewer edits on 2 row(s): erda, otto`)
+    expect(applyLabel(basePlan(), 'retag.json')).not.toContain('reviewer')
+  })
+
+  const plan = basePlan()
+  const rows = plan.changes.map((c) => row({ caption: '', id: c.id, ...c.before }))
+  const other = row({ caption: '', is_competitor: true, competitor_name: 'Freitag' })
+  const corpus = [...rows, other]
+
+  it('records only this apply’s own writes when the pass is already on file', () => {
+    const decisions = decideApply(plan, new Map(rows.map((r) => [r.id, r])), [])
+    const audit = retagAudit(corpus, decisions, new Set(['erda']), true)
+    expect(audit.moves.map((m) => m.change.id)).toEqual(['erda'])
+    expect(audit.before).toEqual(['competitor:Freitag', 'competitor:Cotopaxi', 'competitor:Cotopaxi', 'competitor:Freitag'])
+    expect(audit.after).toEqual(['industry-other', 'competitor:Cotopaxi', 'competitor:Cotopaxi', 'competitor:Freitag'])
+  })
+
+  // The review's failure: the writes land, the change-log insert fails, and a
+  // re-run finds every row 'already' — it used to log nothing, ever.
+  it('counts the rows an earlier, unlogged apply wrote — before-buckets rebuilt from the plan', () => {
+    const afterFirst = rows.map((r, i) => (i < 2 ? { ...r, ...plan.changes[i].after } : r))
+    const decisions = decideApply(plan, new Map(afterFirst.map((r) => [r.id, r])), [])
+    expect(decisions.map((d) => d.verdict)).toEqual(['already', 'already', 'write'])
+    const audit = retagAudit([...afterFirst, other], decisions, new Set(['reddit']), false)
+    expect(audit.moves.map((m) => m.change.id).sort()).toEqual(['alexa', 'erda', 'reddit'])
+    expect(audit.before).toEqual(['competitor:Freitag', 'competitor:Cotopaxi', 'competitor:Cotopaxi', 'competitor:Freitag'])
+    expect(audit.after).toEqual(['industry-other', 'industry-other', 'competitor:Patagonia', 'competitor:Freitag'])
+  })
+
+  it('does not count a write that did not land', () => {
+    const decisions = decideApply(plan, new Map(rows.map((r) => [r.id, r])), [])
+    expect(retagAudit(corpus, decisions, new Set(), true).moves).toEqual([])
+  })
+})
+
+describe('review check (g) — account names that look like an own or tracked-rival account', () => {
+  const stems = accountStems(config, competitorHandles)
+
+  it('builds stems from handles, brand words and rival names, with and without "the"', () => {
+    const of = (audience: string) => stems.filter((s) => s.audience === audience).map((s) => s.stem).sort()
+    expect(of('client')).toEqual(['sealand', 'sealandbag', 'sealandgear'])
+    expect(of('competitor:The North Face')).toEqual(['northface', 'thenorthface'])
+    expect(of('competitor:Freitag')).toEqual(['freitag', 'freitaglab'])
+  })
+
+  // What identitySkip cannot see: a display name the owned read never stored,
+  // a platform missing from own_handles, a '_za' variant.
+  it('lists the lookalikes identitySkip did not know, with what they matched', () => {
+    const rows = [
+      row({ caption: '', account_name: 'Sealand Gear ZA' }),
+      row({ caption: '', account_name: 'freitaglab_za' }),
+      row({ caption: '', account_name: 'The North Face Kids' }),
+      row({ caption: '', account_name: 'backpack_reviews' }),
+      row({ caption: '', account_name: null }),
+    ]
+    const hits = accountLookalikes(rows, stems)
+    expect(hits.map((h) => [h.row.account_name, h.stem.stem, h.stem.audience])).toEqual([
+      ['Sealand Gear ZA', 'sealandgear', 'client'],
+      ['freitaglab_za', 'freitaglab', 'competitor:Freitag'],
+      ['The North Face Kids', 'thenorthface', 'competitor:The North Face'],
+    ])
+  })
+
+  it('counts spared rows by why, and tells sparing by account from sparing by source', () => {
+    const spared = [{ reason: 'source owned' }, { reason: 'the client’s own account' }, { reason: 'source owned' }]
+    expect(sparedByReason(spared)).toEqual([['source owned', 2], ['the client’s own account', 1]])
+    expect(sparedByAccount('the client’s own account')).toBe(true)
+    expect(sparedByAccount('source competitor_owned')).toBe(false)
   })
 })
 
@@ -291,6 +441,15 @@ describe('editPlan — a reviewer can correct a plan, exactly', () => {
     const p = editPlan(basePlan(), { drop: ['erda', 'v-alexa'], set: [] }, names)
     expect(p.changes.map((c) => c.id)).toEqual(['reddit'])
     expect(p.edits).toEqual(['dropped erda (competitor:Freitag → industry-other)', 'dropped alexa (competitor:Cotopaxi → industry-other)'])
+    // The ROW ids, whatever key named them — they go on the change log.
+    expect(p.editedIds).toEqual(['erda', 'alexa'])
+  })
+
+  it('keeps an earlier review’s edits when a plan is edited again', () => {
+    const once = editPlan(basePlan(), { drop: ['erda'], set: [] }, names)
+    const twice = editPlan(once, { drop: [], set: [{ id: 'otto', audience: 'industry-other' }] }, names)
+    expect(twice.edits).toHaveLength(2)
+    expect(twice.editedIds).toEqual(['erda', 'otto'])
   })
 
   it('re-points a planned change, keeping its recorded before-state', () => {

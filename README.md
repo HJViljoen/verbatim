@@ -388,7 +388,7 @@ carry them in their own flags.
 | `run-cd.ts` | Back half locally: metrics → A2 → Pass B/C/D → run_summary (A2 reads the corpus's *current* insights via `audience_insights_current`; `--run` is the run the output is written under) |
 | `run-recs.ts` | Regenerate one run's recommendations only |
 | `run-relevance.ts` | Relevance gate dry-run over stored videos — no Apify spend and no writes without `--prune`, but `--method` defaults to `gpt` and that call is real OpenAI money; `--method heuristic` is the free one |
-| `run-tagging.ts` | Entity-tagging strategy comparison; `--write` re-stamps the stored corpus after `competitor_names` changes |
+| `run-tagging.ts` | Corpus re-tag after tracking changes: the dry run (`--plan-out <file>`, the only judged pass) writes a reviewable plan; `--apply <file> --project <ref>` replays it with no OpenAI call and one change-log row; reviewer edits make a new plan (`--check --plan-out`). `--write` is gone |
 | `run-owned-events.ts` | Owned-account event detection |
 | `diagnose-owned.ts` | Replays the owned-posts step outside Inngest — prints the in-window census per platform with dates; read-only unless `--commit` |
 | `sealand-config-2026-09.ts` | Sealand's tracking config for the census pass (keywords, subreddits, competitor handles); dry by default, `--apply` writes |
