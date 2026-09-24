@@ -102,7 +102,9 @@ export function buildSystemPrompt(config: GatherConfig): string {
     // ihr von diesen Freitag" — a real verdict, not a fallback, that took 45
     // August comments into a rival's bucket. The second is the round-ups and
     // gear lists; the third, the judge confirming names it was never shown.
-    'A name that is also a common word, a day, a date, a place or a person needs visible sign of the company or its products (bags, clothing, gear, a store, the brand’s own handle); otherwise NONE — German day phrasings such as "am/ab/diesen/jeden Freitag", "Freitag 21.8.", "#friday" or "Freitagskracher" are the day, not the brand.',
+    // The products are the tenant's own (the category line above), never a
+    // list written for one client: every tenant shares this prompt.
+    'A name that is also a common word, a day, a date, a place or a person needs visible sign of the company or its products (what the brand and its competitors make, above), a store, or the company’s own handle; otherwise NONE — German day phrasings such as "am/ab/diesen/jeden Freitag", "Freitag 21.8.", "#friday" or "Freitagskracher" are the day, not the brand.',
     'A video that lists, ranks or rounds up many brands, or names the company only in a gear list or affiliate links, is NONE unless that company is its main subject.',
     'If the candidate name is not visible in the text shown for that video (account, caption, hashtags or mentions), answer NONE.',
     '',

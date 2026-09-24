@@ -129,6 +129,11 @@ describe('buildSystemPrompt — the v2 rules', () => {
     expect(prompt).toContain('a common word, a day, a date, a place or a person needs visible sign of the company')
     expect(prompt).toContain('am/ab/diesen/jeden Freitag')
   })
+  it('names the tenant’s own products, not one client’s — every tenant shares this prompt', () => {
+    expect(prompt).not.toMatch(/bags, clothing/)
+    expect(prompt).toContain('its products (what the brand and its competitors make, above)')
+    expect(prompt).toContain('The brand and its competitors make: eco backpack, upcycled bag, travel gear.')
+  })
   it('makes a round-up or gear list NONE unless the company is its main subject', () => {
     expect(prompt).toContain('lists, ranks or rounds up many brands')
   })
