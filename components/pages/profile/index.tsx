@@ -342,7 +342,7 @@ export function ProfilePage({ data: d, params }: { data: ProfileData | ProfileEm
       <div className="space-y-6">
         <EmptyState>
           {d.reason === 'no-run'
-            ? 'Your consumer profile lands with your first update — check back then.'
+            ? 'Your consumer profile lands with your first update.'
             : 'There is not yet enough conversation to describe who is talking. The profile appears once a few kinds of person are clearly distinguishable in the data.'}
         </EmptyState>
       </div>

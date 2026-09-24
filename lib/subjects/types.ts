@@ -247,6 +247,7 @@ export const JUDGE_VERSION =
  */
 const EXCLUSION_OPENERS = 'excluding|not including|but not|and not|except for|except'
 const EXCLUSION_VERBS = 'excludes|exclude|ignoring'
+// em-dash-ok: a regex character class matching the dash in a buyer's words
 const CLAUSE_BOUNDARY = String.raw`\s*[,;:(–—-]+\s*|\s*\.\s+`
 
 const EXCLUSION_CLAUSE = new RegExp(

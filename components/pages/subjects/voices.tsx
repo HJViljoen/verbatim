@@ -45,7 +45,7 @@ import { voiceCite, voicesMeta, type SubjectsData, type SubjectVoice } from '@/l
 
 /** What a frame whose evidence row no longer resolves says. The speaker's own
  *  words have `BlockQuote`'s sentence; this is the frame's. */
-const FRAME_GONE = 'counted, not quotable — this frame has since been removed'
+const FRAME_GONE = 'counted, not quotable: this frame has since been removed'
 
 const SOURCE_FLAG: Record<string, string | null> = {
   comment: null,

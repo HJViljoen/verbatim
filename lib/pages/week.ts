@@ -11,7 +11,7 @@ import { engageDeepLink, engageVocab, loadEngageCandidates, rankEngageCandidates
 import { citationLink } from '../evidence-cite'
 import { cap, fmtInt, longMonth, platformLabel, shortDate } from '../format'
 import { rowWindow } from '../pipeline/run-bookkeeping'
-import { cleanQuote, fetchQuoteCitationsByAudience, readsAsHeroQuote, type QuoteCitation } from '../quotes'
+import { cleanQuote, fetchQuoteCitationsByAudience, readingOf, readsAsHeroQuote, readTranslations, type QuoteCitation } from '../quotes'
 import { audienceLabel } from '../readiness/types'
 import {
   BASELINE_MONTHS,
@@ -1004,15 +1004,16 @@ export const PRIVACY_LINE =
  */
 export function flagFigures(flag: UnusualFlag, n: number): FigureTable {
   const k = `flag_${n}`
+  // em-dash-ok: FigureTable labels below are record keys, never printed
   return {
-    [`${k}_week_share`]: { value: round1(share(flag.week.k, flag.week.n)), unit: 'pct', label: `${flag.label} — share of this update` },
-    [`${k}_baseline_share`]: { value: round1(share(flag.baseline.k, flag.baseline.n)), unit: 'pct', label: `${flag.label} — share across the three months behind it` },
-    [`${k}_week_videos`]: { value: flag.week.k, unit: 'videos', label: `${flag.label} — videos this update` },
-    [`${k}_week_of`]: { value: flag.week.n, unit: 'videos', label: `${flag.label} — videos this update covered` },
-    [`${k}_baseline_videos`]: { value: flag.baseline.k, unit: 'videos', label: `${flag.label} — videos across the three months behind it` },
-    [`${k}_baseline_of`]: { value: flag.baseline.n, unit: 'videos', label: `${flag.label} — videos in those months` },
-    [`${k}_change`]: { value: round1(flag.changePts), unit: 'pts', label: `${flag.label} — the difference` },
-    [`${k}_band`]: { value: round1(flag.bandPts), unit: 'pts', label: `${flag.label} — the band it cleared` },
+    [`${k}_week_share`]: { value: round1(share(flag.week.k, flag.week.n)), unit: 'pct', label: `${flag.label} — share of this update` }, // em-dash-ok: FigureTable label
+    [`${k}_baseline_share`]: { value: round1(share(flag.baseline.k, flag.baseline.n)), unit: 'pct', label: `${flag.label} — share across the three months behind it` }, // em-dash-ok: FigureTable label
+    [`${k}_week_videos`]: { value: flag.week.k, unit: 'videos', label: `${flag.label} — videos this update` }, // em-dash-ok: FigureTable label
+    [`${k}_week_of`]: { value: flag.week.n, unit: 'videos', label: `${flag.label} — videos this update covered` }, // em-dash-ok: FigureTable label
+    [`${k}_baseline_videos`]: { value: flag.baseline.k, unit: 'videos', label: `${flag.label} — videos across the three months behind it` }, // em-dash-ok: FigureTable label
+    [`${k}_baseline_of`]: { value: flag.baseline.n, unit: 'videos', label: `${flag.label} — videos in those months` }, // em-dash-ok: FigureTable label
+    [`${k}_change`]: { value: round1(flag.changePts), unit: 'pts', label: `${flag.label} — the difference` }, // em-dash-ok: FigureTable label
+    [`${k}_band`]: { value: round1(flag.bandPts), unit: 'pts', label: `${flag.label} — the band it cleared` }, // em-dash-ok: FigureTable label
   }
 }
 
@@ -1369,7 +1370,11 @@ async function buildReplies(input: {
     // from it and this page prints a date instead, but a shape whose unused
     // field is nonsense is a shape the next reader will trust.
     const shaped = shapeInbox([...worthReplying, ...awareness], { now: window.to, ownHandles, roleByAccount: roles })
-    const all = shaped.map(toReplyRow)
+    // THE TRANSLATION CACHE, like every other quote path (sweep 2026-09-24):
+    // the reply queue printed a comment's raw words, so a Korean question read
+    // untranslated where the same words elsewhere carried their English.
+    const translations = await readTranslations(supabase, shaped.map((r) => r.src.comment.text ?? ''))
+    const all = shaped.map((r) => toReplyRow(r, translations))
     const rowsOut = all.filter((r) => r.intent !== 'misinformation')
     return {
       rows: rowsOut,
@@ -1388,7 +1393,10 @@ async function buildReplies(input: {
 /** One shaped candidate as this page's row: a date where Content has an age,
  *  and the insight's own theme as the reason, humanised here so the page, the
  *  slide and the email print one string. */
-function toReplyRow(shaped: InboxRow<EngageCandidate & InboxSource>): ReplyRow {
+function toReplyRow(
+  shaped: InboxRow<EngageCandidate & InboxSource>,
+  translations: Map<string, { lang: string; english: string | null }> = new Map(),
+): ReplyRow {
   const c = shaped.src
   const link = c.category === 'misinformation' ? { href: null } : engageDeepLink(c.comment)
   return {
@@ -1398,7 +1406,7 @@ function toReplyRow(shaped: InboxRow<EngageCandidate & InboxSource>): ReplyRow {
     context: shaped.context,
     reason: cap(pretty(c.theme)),
     platform: c.comment.platform,
-    quote: { ref: quoteRef.message(c.comment.id), text: cleanQuote(c.comment.text) },
+    quote: { ref: quoteRef.message(c.comment.id), text: cleanQuote(c.comment.text), ...readingOf(translations, c.comment.text) },
     href: link.href,
     insightId: c.insightId,
   }

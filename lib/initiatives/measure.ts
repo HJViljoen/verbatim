@@ -178,8 +178,8 @@ export function initiativeLine(m: InitiativeMeasure, startedLabel: string, direc
   const updates = m.points.length
   if (m.verdict === 'too_early') {
     return updates === 0
-      ? `Nothing heard on this since ${startedLabel} — it lands with the next update.`
-      : `One update in since ${startedLabel} — movement needs a second.`
+      ? `Nothing heard on this since ${startedLabel}. It lands with the next update.`
+      : `One update in since ${startedLabel}. Movement needs a second.`
   }
   if (!directionWords) return trackedLine(startedLabel, updates)
   const size = Math.abs(m.delta ?? 0).toFixed(1)
@@ -208,8 +208,8 @@ export const trackedLine = (startedLabel: string, updates: number): string =>
  */
 export function initiativePromise(directionWords = directionWordsFor('initiatives')): string {
   return directionWords
-    ? 'Every update from today on says whether its share of its own group’s conversation grew or shrank — never whether you succeeded.'
-    : 'Every update from today on reports its share of its own group’s conversation — never whether you succeeded.'
+    ? 'Every update from today on says whether its share of its own group’s conversation grew or shrank, never whether you succeeded.'
+    : 'Every update from today on reports its share of its own group’s conversation, never whether you succeeded.'
 }
 
 /** Whether a movement went the way the client said they wanted. Null when

@@ -81,7 +81,8 @@ const MIN_H: Record<string, string> = {
   'subjects.subject': 'lg:min-h-[216px]',
   'subjects.line': 'lg:min-h-[340px]',
   'subjects.kinds': 'lg:min-h-[280px]',
-  'subjects.unanswered': 'lg:min-h-[280px]',
+  // No floor: it sits in the rail now, at the height of what it says.
+  'subjects.unanswered': '',
   'subjects.voices': 'lg:min-h-[300px]',
 }
 
@@ -243,24 +244,19 @@ export function SubjectsPage({
               {tile(subjectsList)}
               {tile(subjectsOwnPosts)}
               {tile(subjectsSayHear)}
+              {drawn.has(subjectsUnanswered.key) ? tile(subjectsUnanswered, 'min-w-0') : null}
             </div>
             <div className="flex min-w-0 flex-col gap-4">
               {tile(subjectsSubject)}
               {tile(subjectsLine)}
-              {/* The mock's 1.35 : 1 pair — the kind mix reads as three rows of
-                  bars and needs the width; the questions list is a list.
-                  FLEX, NOT A GRID, and that is not a preference: `Tile` carries
-                  `xl:col-span-N` for the PAGE's twelve columns, and a Tile
-                  dropped into a two-column grid spans six of two and takes the
-                  whole row. Flex ignores the span, so the two tiles sit side by
-                  side and the same Tile still addresses itself correctly on a
-                  printed slide. */}
-              {drawn.has(subjectsKinds.key) ? (
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-stretch">
-                  {tile(subjectsKinds, 'h-full min-w-0 xl:basis-0 xl:grow-[1.35]')}
-                  {tile(subjectsUnanswered, 'h-full min-w-0 xl:basis-0 xl:grow')}
-                </div>
-              ) : null}
+              {/* THE KIND MIX TAKES THE MAIN COLUMN; ITS AUDIENCES FLOW INTO
+                  TWO COLUMNS where the tile is wide enough (a container query
+                  in the block). The mock's 1.35 : 1 pair with the questions
+                  list assumed a list as tall as the bars; on real data the
+                  list is often one line, and the pair left ~700px of white
+                  beside five audiences of bars (layout sweep, 2026-09-24). The
+                  questions now stack in the rail with the other short cards. */}
+              {drawn.has(subjectsKinds.key) ? tile(subjectsKinds, 'min-w-0') : null}
             </div>
           </div>
           {tile(subjectsVoices)}

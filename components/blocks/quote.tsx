@@ -30,7 +30,7 @@ import type { Quote } from '@/lib/renderables/types'
  * a share-link render.
  */
 export function BlockQuote({
-  quote, cite, mode = 'app', gone = 'counted, not quotable — this comment has since been removed',
+  quote, cite, mode = 'app', gone = 'counted, not quotable: this comment has since been removed',
 }: {
   quote: (Pick<Quote, 'text'> & Partial<Pick<Quote, 'lang' | 'english'>>) | null
   cite?: ReactNode

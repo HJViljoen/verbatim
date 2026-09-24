@@ -48,9 +48,9 @@ const ORIGIN =
 
 export const metadata: Metadata = {
   metadataBase: new URL(ORIGIN),
-  title: "Verbatim — Consumer Intelligence",
+  title: "Verbatim · Consumer Intelligence",
   description:
-    "Media-based consumer intelligence for D2C brands — market research-grade insights from real audience conversations.",
+    "Media-based consumer intelligence for D2C brands: market research-grade insights from real audience conversations.",
 };
 
 export default function RootLayout({

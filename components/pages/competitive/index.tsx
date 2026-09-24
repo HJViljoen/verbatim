@@ -78,7 +78,7 @@ const standings: R = (d, mode) => {
   if (!s) {
     return (
       <Tile exportKey="competitive.standings" col={12} row={2} eyebrow="Where you stand" meta={d.layerWord}>
-        <TileEmpty>The face-off starts once a competitor’s videos are tracked — add competitors in Settings, and the next update compares you side by side.</TileEmpty>
+        <TileEmpty>The face-off starts once a competitor’s videos are tracked. Add competitors in Settings, and the next update compares you side by side.</TileEmpty>
       </Tile>
     )
   }
@@ -139,7 +139,7 @@ const faceoff: R = (d, mode) => {
           />
           <div className="flex flex-col gap-3"><FaceOff rows={fo.rows} /></div>
         </div>
-      ) : <TileEmpty>Nothing to compare against {fo.lead} yet — the face-off fills in as their videos are tracked and analysed.</TileEmpty>}
+      ) : <TileEmpty>Nothing to compare against {fo.lead} yet. The face-off fills in as their videos are tracked and analysed.</TileEmpty>}
     </Tile>
   )
 }
@@ -169,7 +169,7 @@ const shareLine: R = (d) => {
             width={620} height={150} padL={40} padR={110}
           />
         </div>
-      ) : <TileEmpty>Two updates are needed to draw a line — the first comparison lands with the next update.</TileEmpty>}
+      ) : <TileEmpty>Two updates are needed to draw a line. The first comparison lands with the next update.</TileEmpty>}
     </Tile>
   )
 }
@@ -211,7 +211,7 @@ const table: R = (d) => {
       ) : <TileEmpty>The comparison fills in with the next update.</TileEmpty>}
       {rows.length > 0 && (
         <p className="text-[10.5px] leading-[1.45] text-muted-foreground">
-          Videos and share are {d.layerWord === 'this update' ? 'this update’s' : 'all-time'} tracked conversation by who posted. Comments as platforms report them; engagement is the mean rate across this update’s videos that carry one. Positive is the share of rated videos, shown only with {SENTIMENT_MIN_JUDGED}+ rated{rows.some((r) => r.judged > 0) ? ` — ${rows.filter((r) => r.judged > 0).map((r) => `${r.label.replace(' · you', '')} ${fmtInt(r.judged)}`).join(', ')} rated` : ''}. Themes are those heard under each group’s videos in the latest analysed update.
+          Videos and share are {d.layerWord === 'this update' ? 'this update’s' : 'all-time'} tracked conversation by who posted. Comments as platforms report them; engagement is the mean rate across this update’s videos that carry one. Positive is the share of rated videos, shown only with {SENTIMENT_MIN_JUDGED}+ rated{rows.some((r) => r.judged > 0) ? `: ${rows.filter((r) => r.judged > 0).map((r) => `${r.label.replace(' · you', '')} ${fmtInt(r.judged)}`).join(', ')} rated` : ''}. Themes are those heard under each group’s videos in the latest analysed update.
         </p>
       )}
     </Tile>
@@ -309,7 +309,7 @@ const detail: R = (d, mode) => {
             <DetailSection label="Grounded in">
               <p className="text-[12.5px] text-secondary-foreground">
                 {f.voices > 0 ? <><span className="font-mono font-semibold text-foreground">{fmtInt(f.voices)}</span> {f.voices === 1 ? 'voice' : 'voices'}</> : 'its supporting themes'}
-                {f.coverage?.thin && <span className="text-warning"> · thin coverage — a hint, not a finding</span>}
+                {f.coverage?.thin && <span className="text-warning"> · thin coverage, a hint and not a finding</span>}
               </p>
               {f.platforms.length > 0 && (
                 <p className="mt-1 flex flex-wrap gap-x-3 font-mono text-[10.5px] tabular-nums text-muted-foreground">
@@ -347,7 +347,7 @@ function FindingBody({ f }: { f: FindingDetail }) {
         {f.quotes.length > 0 && (
           <div className="space-y-2 border-t border-border/70 pt-3">
             <p className="text-[10.5px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">{f.competitorName ? `${f.competitorName}’s audience, in their words` : 'In their words'}</p>
-            {f.quotes.map((q, i) => <blockquote key={i} className="border-l-2 border-border pl-2.5 text-[12.5px] italic leading-[1.4] text-foreground/90">“{q.text}”</blockquote>)}
+            {f.quotes.map((q, i) => <Verbatim key={i} quote={q.text} lang={q.lang} english={q.english} />)}
           </div>
         )}
       </div>
@@ -442,7 +442,7 @@ export function CompetitivePage({ data: d, detail: detailParam, params }: { data
       <PageFrame>
         <PageBar title="Competitive Intelligence" context={d.brand} />
         <section className="rounded-lg bg-tile p-6 shadow-tile">
-          <p className="text-[12px] text-muted-foreground">Your first comparison lands with {d.nextUpdate} — check back then.</p>
+          <p className="text-[12px] text-muted-foreground">Your first comparison lands with {d.nextUpdate}.</p>
         </section>
       </PageFrame>
     )

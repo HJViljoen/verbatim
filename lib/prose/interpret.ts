@@ -268,6 +268,7 @@ function refusedBecause(refused: readonly Verdict[]): string {
  */
 export function verdictBlock(verdicts: readonly Verdict[], figures: FigureTable): string {
   const lines: string[] = []
+  // em-dash-ok: model prompt
   lines.push('VERDICTS — the only movement claims you may make. Each is ours, not yours.')
   if (verdicts.length === 0) lines.push('- none. You may not say anything moved, in any direction.')
   for (const v of verdicts) {
@@ -277,6 +278,7 @@ export function verdictBlock(verdicts: readonly Verdict[], figures: FigureTable)
       v.changePts != null ? `change=${v.changePts}pts` : 'change=none',
       v.bandPts != null ? `band=±${v.bandPts}pts` : 'band=none',
       `n=${v.value.n}`,
+      // em-dash-ok: model prompt
       v.direction ? `direction=${v.direction}` : 'direction=NONE — you may not say which way it is going',
       v.flags.length ? `flags=${v.flags.join(',')}` : '',
       v.refusedReason ? `refused=${v.refusedReason}` : '',
@@ -284,9 +286,11 @@ export function verdictBlock(verdicts: readonly Verdict[], figures: FigureTable)
     lines.push(parts.join(' · '))
   }
   lines.push('')
+  // em-dash-ok: model prompt
   lines.push('FIGURES — cite by placeholder, exactly as written. You do not know their values.')
   const keys = Object.keys(figures)
   if (keys.length === 0) lines.push('- none. Any digit you type deletes the sentence it is in.')
+  // em-dash-ok: model prompt
   for (const key of keys) lines.push(`- [[${key}]] — ${figures[key].label}`)
   return lines.join('\n')
 }

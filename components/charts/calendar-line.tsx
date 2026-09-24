@@ -298,8 +298,8 @@ export function CalendarLine({
               <span key={s.label} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                 <span className={cn('size-2 rounded-full', undrawn && 'bg-tile')} style={undrawn ? { boxShadow: `inset 0 0 0 1.5px ${s.color}` } : { background: s.color }} aria-hidden />
                 {s.labelSlot ? <span data-copy="subject" data-slot={s.labelSlot}>{s.legendLabel ?? s.label}</span> : (s.legendLabel ?? s.label)}
-                {s.excludes ? <span className="text-[10.5px]">— {s.excludes}</span> : null}
-                {undrawn ? <span className="text-[10.5px]">— {undrawn}</span> : null}
+                {s.excludes ? <span className="text-[10.5px]">· {s.excludes}</span> : null}
+                {undrawn ? <span className="text-[10.5px]">· {undrawn}</span> : null}
               </span>
             )
           })}
@@ -347,7 +347,7 @@ export function CalendarLine({
         {/* The months a change moved, behind everything. */}
         {drawn.map((r, i) => {
           const span = r.affects?.length ? spanOf(months, r.affects) : null
-          return span ? bandRect(span, `aff${i}`, 'var(--inner)', `${r.label} — affects ${monthName(months[span.from])} to ${monthName(months[span.to])}`) : null
+          return span ? bandRect(span, `aff${i}`, 'var(--inner)', `${r.label}: affects ${monthName(months[span.from])} to ${monthName(months[span.to])}`) : null
         })}
         {/* Months that had already closed when we started. */}
         {bands.map((b, i) => {
@@ -667,7 +667,7 @@ function FillingBars({
         const x = Math.min(Math.max(g.xAt(i), g.padL + w / 2), g.padR - w / 2)
         return (
           <rect key={`fill${i}`} x={x - w / 2} y={top} width={w} height={Math.max(0, g.baseline - top)} fill={FILLING_INK} opacity={0.1}>
-            <title>Still filling — this month is still taking comments</title>
+            <title>Still filling: this month is still taking comments</title>
           </rect>
         )
       })}

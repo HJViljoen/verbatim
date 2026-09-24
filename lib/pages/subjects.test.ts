@@ -225,7 +225,7 @@ describe('unansweredLead', () => {
     // the block can mark Pass B's label as the model value it is;
     // `unansweredLeadText` is the same sentence for a caller with no markup.
     const line = unansweredLeadText(unansweredLead([row], 9, 'in Sep'))!
-    expect(line).toBe('Questions grouped as “Will it survive a wet commute” came up in 130 of the videos we have read — none of your 9 posts in Sep touched it.')
+    expect(line).toBe('Questions grouped as “Will it survive a wet commute” came up in 130 of the videos we have read: none of your 9 posts in Sep touched it.')
     expect(line).not.toContain('%')
   })
 
@@ -261,7 +261,7 @@ describe('subjectNotes', () => {
     text: 'We did not record how themes were grouped for Apr 2021 to Sep 2026, so those months are not strictly comparable with the ones after them.',
     months: ['2021-04-01'],
   }
-  const filling = { kind: 'still_filling' as const, text: 'Still filling — this month is still taking comments.' }
+  const filling = { kind: 'still_filling' as const, text: 'Still filling: this month is still taking comments.' }
 
   it('drops the theme-clustering caveat a subject\u2019s own arithmetic refuses', () => {
     // buildSides puts `regime: 'n/a'` on every point because a subject's
@@ -307,7 +307,7 @@ describe('axisNote', () => {
 
   it('says "— not tracked" for an audience with no row, never a zero', () => {
     const note = axisNote([side({ label: 'Poler', kind: 'rival', observed: false, silence: 'not_tracked', n: null, k: null, pct: null })], 100)!
-    expect(note).toContain('Poler — not tracked.')
+    expect(note).toContain('Poler: not tracked.')
   })
 
   it('tells "no reading yet" apart from "not tracked" — the audience was read, this subject was not in it', () => {
@@ -319,8 +319,8 @@ describe('axisNote', () => {
       side({ observed: false, silence: 'no_reading', n: 84, k: null, pct: null }),
       side({ label: 'Poler', kind: 'rival', observed: false, silence: 'not_tracked', n: null, k: null, pct: null }),
     ], 100)!
-    expect(note).toContain('You — no reading yet on this subject.')
-    expect(note).toContain('Poler — not tracked.')
+    expect(note).toContain('You: no reading yet on this subject.')
+    expect(note).toContain('Poler: not tracked.')
   })
 
   it('is silent when every line carries its n', () => {
@@ -569,7 +569,7 @@ describe('sideFigures', () => {
 describe('railNote, on a subject nobody has confirmed', () => {
   it('says what is missing is the CONSENT, not the data', () => {
     expect(railNote('calibrating', false, 'proposed'))
-      .toBe('not counted yet — confirm it and counting starts with the next update')
+      .toBe('not counted yet: confirm it and counting starts with the next update')
     // and it outranks both other silences: nothing has ever looked at it.
     expect(railNote('ready', true, 'proposed')).toContain('not counted yet')
   })
@@ -656,7 +656,7 @@ describe('paneGap', () => {
   it('says "not tracked" rather than nothing where the rival audience was never read', () => {
     const gap = paneGap(args({ b: gapSideOf(rival({ k: null, n: null, pct: null, observed: false })) }))!
     expect(gap.state).toBe('too_little_data')
-    expect(gapLine(gap)).toContain('Freitag — not tracked')
+    expect(gapLine(gap)).toContain('Freitag · not tracked')
   })
 })
 

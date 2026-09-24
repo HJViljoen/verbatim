@@ -509,12 +509,14 @@ export function headToHeadFigures(h2h: HeadToHead | null): FigureTable {
       out[`h2h_${who}_${m.key}_k`] = {
         value: level.value.k,
         unit: m.countUnit.k,
+        // em-dash-ok: FigureTable label, matched by words in sent-figures
         label: `${m.label}, ${whose} — the count behind it`,
       }
       if (level.value.n > 0) {
         out[`h2h_${who}_${m.key}_n`] = {
           value: level.value.n,
           unit: m.countUnit.n,
+          // em-dash-ok: FigureTable label, matched by words in sent-figures
           label: `${m.label}, ${whose} — what it is of`,
         }
       }

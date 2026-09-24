@@ -95,8 +95,8 @@ function OwnPosts({ row, mode, folded }: { row: RivalRow; mode: RenderMode; fold
 function Raised({ row, mode }: { row: RivalRow; mode: RenderMode }): ReactNode {
   if (!row.raisedMost) {
     return mode === 'email'
-      ? <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>—</span>
-      : <span className="text-[12px] text-muted-foreground">—</span>
+      ? <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>{'—'}</span>
+      : <span className="text-[12px] text-muted-foreground">{'—'}</span>
   }
   // THE LABEL AND THE COUNT ARE TWO THINGS (design review High 9). They were
   // concatenated with a bare space, so a theme whose label is a question read
@@ -188,6 +188,24 @@ export const overviewRivals: Block<OverviewData> = {
     // The own-posts column's absence, said once instead of once per row.
     const folded = ownPostsAllUnreadable(r.rows)
     const ownPostsNote = folded ? (mode === 'print' ? OWN_POSTS_UNREADABLE_OUTSIDE : OWN_POSTS_UNREADABLE) : null
+    // A COLUMN THAT ANSWERS NOTHING ON ANY ROW IS NOT DRAWN (absence sweep,
+    // 2026-09-24). On a tenant with no frozen panel the table was four columns
+    // of "not observed" and "—" beside the one column that had anything in
+    // it. Each empty column is said once, as one line, and the table keeps
+    // the columns that carry a reading.
+    const cols = {
+      attention: r.rows.some((x) => x.attention?.pct != null),
+      content: r.rows.some((x) => x.content?.pct != null),
+      change: r.rows.some((x) => x.attentionVerdict != null),
+      own: !folded,
+    }
+    const absentWord = r.recorded ? NOT_OBSERVED : NOT_RECORDED
+    const shares = [!cols.attention ? 'attention' : null, !cols.content ? 'content' : null].filter(Boolean)
+    const absences = [
+      shares.length ? `${shares.join(' and ').replace(/^./, (c) => c.toUpperCase())}: ${absentWord}` : null,
+      !cols.change ? 'Attention change: not read' : null,
+      !cols.own ? `On their own posts: not tracked${mode === 'print' ? '' : ' · Settings › Readiness'}` : null,
+    ].filter(Boolean).join(' · ')
 
     return (
       <BlockFrame
@@ -210,7 +228,7 @@ export const overviewRivals: Block<OverviewData> = {
         // M5 defines as a FROZEN PANEL of accounts: upload-dated, Reddit
         // excluded by construction, re-based by a re-freeze. Different
         // population, different sentence.
-        meta="both shares of a frozen panel of accounts"
+        meta={email || cols.attention || cols.content ? 'both shares of a frozen panel of accounts' : undefined}
         footer={footer}
         // THE DUAL-MENTION CAVEAT INTO THE FOOTER NOTE
         // (`main.rivals.footer`). It is a statement about how the denominator
@@ -223,7 +241,7 @@ export const overviewRivals: Block<OverviewData> = {
         // rival row until the polish pass folded it here.
         // A27: the dual-mention rule is Competitive's and its count is OV6's,
         // so the footer keeps only the column-wide own-posts absence.
-        footerNote={ownPostsNote ? <>On their own posts, every rival row reads {ownPostsNote}.</> : undefined}
+        footerNote={email ? (ownPostsNote ? <>On their own posts, every rival row reads {ownPostsNote}.</> : undefined) : absences ? `${absences}.` : undefined}
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         {r.standingsNote ? <BlockEmpty mode={mode}>{r.standingsNote}</BlockEmpty> : null}
@@ -250,10 +268,10 @@ export const overviewRivals: Block<OverviewData> = {
                         reader reads a row of figures and can name the column
                         none of them belongs to. */}
                     <th scope="col" className="py-1 pr-3 font-semibold">Brand</th>
-                    <th scope="col" className="py-1 pr-3 font-semibold">Attention</th>
-                    <th scope="col" className="py-1 pr-3 font-semibold">Content</th>
-                    <th scope="col" className="py-1 pr-3 font-semibold">Attention change</th>
-                    <th scope="col" className="py-1 pr-3 font-semibold">On their own posts</th>
+                    {cols.attention ? <th scope="col" className="py-1 pr-3 font-semibold">Attention</th> : null}
+                    {cols.content ? <th scope="col" className="py-1 pr-3 font-semibold">Content</th> : null}
+                    {cols.change ? <th scope="col" className="py-1 pr-3 font-semibold">Attention change</th> : null}
+                    {cols.own ? <th scope="col" className="py-1 pr-3 font-semibold">On their own posts</th> : null}
                     <th scope="col" className="py-1 font-semibold">Raised most under their content</th>
                   </tr>
                 </thead>
@@ -279,16 +297,18 @@ export const overviewRivals: Block<OverviewData> = {
                         </span>
                         {row.retiredAt ? <span className="ml-1 text-[11px] font-normal text-muted-foreground">tracked until {shortDate(row.retiredAt)}</span> : null}
                       </th>
-                      <td className="py-1.5 pr-3"><Share share={row.attention} recorded={r.recorded} mode={mode} /></td>
-                      <td className="py-1.5 pr-3"><Share share={row.content} recorded={r.recorded} mode={mode} /></td>
+                      {cols.attention ? <td className="py-1.5 pr-3"><Share share={row.attention} recorded={r.recorded} mode={mode} /></td> : null}
+                      {cols.content ? <td className="py-1.5 pr-3"><Share share={row.content} recorded={r.recorded} mode={mode} /></td> : null}
                       {/* THE COLUMN ANSWERS ON EVERY ROW (polish pass). No
                           creator panel is frozen on either live tenant, so
                           `attentionVerdict` is null on all eleven rows and the
                           header stood over a column of whitespace. */}
-                      <td className="py-1.5 pr-3">
-                        {row.attentionVerdict ? <BlockMovement verdict={row.attentionVerdict} unit="pts" mode={mode} /> : <NoValue mode={mode} label="no change is read for this brand" />}
-                      </td>
-                      <td className="py-1.5 pr-3"><OwnPosts row={row} mode={mode} folded={folded} /></td>
+                      {cols.change ? (
+                        <td className="py-1.5 pr-3">
+                          {row.attentionVerdict ? <BlockMovement verdict={row.attentionVerdict} unit="pts" mode={mode} /> : <NoValue mode={mode} label="no change is read for this brand" />}
+                        </td>
+                      ) : null}
+                      {cols.own ? <td className="py-1.5 pr-3"><OwnPosts row={row} mode={mode} folded={folded} /></td> : null}
                       <td className="py-1.5"><Raised row={row} mode={mode} /></td>
                     </tr>
                   ))}

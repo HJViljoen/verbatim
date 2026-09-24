@@ -1453,7 +1453,7 @@ export function recordRows(input: RecordInputs, extra: RecordExtras = {}): Recor
     const f = extra.belowFloor
     push(
       'floor', 'Below the floor', fmtInt(f.videos),
-      `videos in ${f.label} — ${f.who}`,
+      `videos in ${f.label}: ${f.who}`,
       {
         basis: `under the ${fmtInt(f.floor)} a banded reading needs${f.more > 0 ? `, and ${fmtInt(f.more)} other ${f.more === 1 ? 'month is' : 'months are'} under it too` : ''}`,
       },

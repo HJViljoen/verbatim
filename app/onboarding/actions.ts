@@ -64,7 +64,7 @@ export async function suggestTerms(_prev: SuggestTermsState, formData: FormData)
   // without the same guard this action was the one signed-in, model-spending
   // endpoint any account could call for a tenant it does not belong to.
   const { data: existing } = await admin.from('users').select('id').eq('id', user.id).maybeSingle()
-  if (existing) return { ok: false, message: 'Your workspace is already set up — change search terms in Settings.', suggestions: null }
+  if (existing) return { ok: false, message: 'Your workspace is already set up. Change search terms in Settings.', suggestions: null }
 
   const companyName = String(formData.get('company_name') ?? '').trim()
   if (!companyName) return { ok: false, message: 'Enter your company name first.', suggestions: null }
@@ -83,7 +83,7 @@ export async function suggestTerms(_prev: SuggestTermsState, formData: FormData)
     console.log(`[onboarding] search-term suggestions for "${companyName}": $${s.costUsd.toFixed(4)}`)
     const suggestions = { brand: s.brand, competitors: flattenCompetitorTerms(s), category: s.category }
     const total = suggestions.brand.length + suggestions.competitors.length + suggestions.category.length
-    if (total === 0) return { ok: false, message: 'Nothing to suggest from that yet — name a competitor and try again.', suggestions: null }
+    if (total === 0) return { ok: false, message: 'Nothing to suggest from that yet. Name a competitor and try again.', suggestions: null }
     return { ok: true, message: 'Keep the ones that sound like your buyers.', suggestions }
   } catch (e) {
     return { ok: false, message: `Could not suggest terms right now: ${e instanceof Error ? e.message : String(e)}`, suggestions: null }

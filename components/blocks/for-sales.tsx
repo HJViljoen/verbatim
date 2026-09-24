@@ -96,7 +96,7 @@ export function forSalesBlock<D>(key: string, pick: (data: D) => ForSalesData): 
                   // was cut off the page. A denominator clipped away is the
                   // measurement nobody made, arrived at by layout.
                   baseWrap
-                  base={`someone said they were moving between brands — ${of}${
+                  base={`someone said they were moving between brands · ${of}${
                     d.switchingTotal > d.switching.length ? ` · ${fmtInt(d.switching.length)} below` : ''
                   }`}
                 />
@@ -153,7 +153,7 @@ export function forSalesBlock<D>(key: string, pick: (data: D) => ForSalesData): 
         out.sales_videos = { value: d.videos, unit: 'videos', label: 'videos this update covered' }
       }
       d.objections.forEach((g, i) => {
-        out[`objection_${i + 1}_videos`] = { value: g.videos, unit: 'videos', label: `${g.label} — videos carrying it` }
+        out[`objection_${i + 1}_videos`] = { value: g.videos, unit: 'videos', label: `${g.label} — videos carrying it` } // em-dash-ok: FigureTable label (a record key, never printed)
       })
       if (d.switchingTotal != null) {
         out.switching_comments = { value: d.switchingTotal, unit: 'comments', label: 'comments naming a switch' }

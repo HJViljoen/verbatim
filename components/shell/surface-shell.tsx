@@ -27,7 +27,7 @@ export function SurfaceShell({ nav }: { nav: NavKey }) {
       <PageBar title={s.label} subtitle={s.question ?? undefined} />
       <PageGrid>
         <Tile col={12} row={2} eyebrow={s.label}>
-          <TileEmpty>This page is still being built — nothing here is a reading yet.</TileEmpty>
+          <TileEmpty>This page is still being built. Nothing here is a reading yet.</TileEmpty>
         </Tile>
       </PageGrid>
     </PageFrame>

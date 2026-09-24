@@ -63,8 +63,8 @@ export function DirectionWord({ direction, mode = 'app' }: { direction: Directio
 function Side({ side, mode = 'app' }: { side: SideReading | null; mode?: RenderMode }): ReactNode {
   if (!side || !side.observed || side.pct == null) {
     return mode === 'email'
-      ? <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>— not tracked</span>
-      : <span className="text-[12px] text-muted-foreground">— not tracked</span>
+      ? <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>not tracked</span>
+      : <span className="text-[12px] text-muted-foreground">not tracked</span>
   }
   // P0'S CELL, NOT A HAND-ROLLED PAIR (`main.subjects.col.*`). The artboard
   // stacks the share over its "n of N" — mono 13/600 at `line-height:1` with
@@ -186,7 +186,7 @@ function GapHeadline({ gap, mode }: { gap: Gap; mode: RenderMode }) {
   const body = (
     <>
       <span className={mode === 'email' ? undefined : 'text-[12.5px] font-medium'}>
-        {gap.objectLabel} — <span data-copy="level" className={mode === 'email' ? undefined : 'font-mono tabular-nums'}>{gapLine(gap)}</span>
+        {gap.objectLabel}: <span data-copy="level" className={mode === 'email' ? undefined : 'font-mono tabular-nums'}>{gapLine(gap)}</span>
       </span>
       {basis ? (
         <span
@@ -361,7 +361,7 @@ export const overviewSubjects: Block<OverviewData> = {
             <ul className={email ? undefined : 'm-0 flex list-none flex-col gap-1 p-0'}>
               {s.candidates.map((c) => (
                 <li key={c.name} className={email ? undefined : 'text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}>
-                  {c.name} — <span className={email ? undefined : 'text-muted-foreground'} style={email ? { color: EMAIL.muted } : undefined}>{c.because}</span>
+                  {c.name}: <span className={email ? undefined : 'text-muted-foreground'} style={email ? { color: EMAIL.muted } : undefined}>{c.because}</span>
                 </li>
               ))}
             </ul>

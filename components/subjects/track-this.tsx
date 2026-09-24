@@ -98,7 +98,7 @@ export function TrackThisSubject({
                 <span className="text-xs font-medium text-muted-foreground">What you are trying to move</span>
                 <Input name="title" defaultValue={subjectName} maxLength={120} required autoComplete="off" />
                 <span className="block text-[11px] text-muted-foreground/70">
-                  Yours to rename — it starts as the subject’s name.
+                  Yours to rename. It starts as the subject’s name.
                 </span>
               </label>
               <label className="block space-y-1.5">

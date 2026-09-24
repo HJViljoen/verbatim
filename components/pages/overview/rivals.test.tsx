@@ -85,7 +85,7 @@ describe('OV4 · rivals', () => {
 
   it('says their own posts are not tracked rather than implying they said nothing', () => {
     const text = renderText(overviewRivals.render(overviewFixture(), 'app', ctx))
-    expect(text).toContain('— not tracked')
+    expect(text).toContain('On their own posts: not tracked')
   })
 
   it('carries the precedence caveat with its count', () => {
@@ -142,7 +142,10 @@ describe('OV4 · rivals', () => {
   // mark for an empty cell is an em dash.
   it('draws an em dash where a change cell has no reading, never whitespace', () => {
     const data = overviewFixture()
-    const rows = data.rivals.rows.map((r) => ({ ...r, attentionVerdict: null }))
+    // One row keeps its reading, so the column is drawn and the others' cells
+    // carry the mark; a column with no reading on ANY row is not drawn at all
+    // and is said once instead (absence sweep).
+    const rows = data.rivals.rows.map((r, i) => (i === 0 ? r : { ...r, attentionVerdict: null }))
     const markup = render(overviewRivals.render({ ...data, rivals: { ...data.rivals, rows } }, 'app', ctx))
     expect(markup).toContain('\u2014')
     // And it is a mark, not a word a screen reader should read as "dash".
@@ -152,12 +155,20 @@ describe('OV4 · rivals', () => {
   // THE COLUMN-WIDE ABSENCE IS SAID ONCE (polish pass, 2026-09-24). Nine rivals
   // got the same 47-word sentence nine times down one column, 340px wide,
   // beside the column that carries the block's content.
+  it('draws no column that answers nothing on any row, and says that column once', () => {
+    const data = overviewFixture()
+    const rows = data.rivals.rows.map((r) => ({ ...r, attentionVerdict: null }))
+    const text = renderText(overviewRivals.render({ ...data, rivals: { ...data.rivals, rows } }, 'app', ctx))
+    expect(text).not.toMatch(/Attention change(?!:)/)
+    expect(text.match(/Attention change: not read/g) ?? []).toHaveLength(1)
+  })
+
   it('folds the own-posts absence into the footer note while it is true of every rival', () => {
     const data = overviewFixture()
     const markup = render(overviewRivals.render(data, 'app', ctx))
     // Once, in the footer note — and the cells carry the dash.
     expect((markup.match(/not tracked · Settings › Readiness/g) ?? []).length).toBe(1)
-    expect(markup).toContain('every rival row reads')
+    expect(markup).toContain('On their own posts: not tracked')
   })
 
   it('says why a rival\u2019s own posts are not read, and says nothing of the kind about you or the category', () => {

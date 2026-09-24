@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { Verbatim } from '@/components/shell/master-list'
 import type { ReactNode } from 'react'
 import { Tile, TileEmpty } from '@/components/shell/tile'
 import { PlatformIcon } from '@/components/charts/platform-icon'
@@ -121,7 +122,7 @@ export function inboxTile(d: ContentData, mode: RenderMode): ReactNode {
       {windowDays == null ? (
         <TileEmpty>Your first reply inbox lands with your first analysed update.</TileEmpty>
       ) : total === 0 ? (
-        <TileEmpty>Nothing fresh to jump into this update — new conversations land with the next one.</TileEmpty>
+        <TileEmpty>Nothing fresh to jump into this update. New conversations land with the next one.</TileEmpty>
       ) : (
         <>
           <div className="flex items-center gap-1 overflow-hidden">
@@ -199,7 +200,7 @@ export function repliesBody(d: ContentData, mode: RenderMode): ReactNode {
       {listed.length === 0 && <p className="text-muted-foreground">Nothing fresh to jump into this update.</p>}
       {app && (
         <p className="text-[11px] text-muted-foreground">
-          The commenter’s own handle is never shown — the link is how a reply gets written.
+          The commenter’s own handle is never shown; the link is how a reply gets written.
         </p>
       )}
     </div>
@@ -215,10 +216,7 @@ export function EngageDetailBody({ detail }: { detail: EngageInsightDetail }) {
       <div className="space-y-1.5">
         <p className="text-[10.5px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">In their words</p>
         {detail.quotes.map((q, i) => (
-          <p key={i} className="border-l-2 border-border/80 pl-2 text-[12.5px] italic leading-[1.45]">
-            “{q.text}”
-            <span className="ml-2 not-italic text-[11px] text-muted-foreground">{platformLabel(q.platform)}</span>
-          </p>
+          <Verbatim key={i} quote={q.text} lang={q.lang} english={q.english} cite={platformLabel(q.platform)} />
         ))}
       </div>
     </div>

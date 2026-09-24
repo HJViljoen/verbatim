@@ -61,7 +61,7 @@ describe('OV2 · your subjects', () => {
     const data = overviewFixture()
     const rows = data.subjects.rows.map((r) => ({ ...r, rival: null }))
     const text = renderText(overviewSubjects.render({ ...data, subjects: { ...data.subjects, rows } }, 'app', ctx))
-    expect(text).toContain('— not tracked')
+    expect(text).toContain('not tracked')
   })
 
   it('offers the proposer’s candidates rather than a blank form', () => {
@@ -180,7 +180,7 @@ describe('OV2, ported to the artboard', () => {
     // month as its own dated reading. "narrowed" is not built.
     const data = overviewFixture()
     const text = renderText(overviewSubjects.render(data, 'app', ctx))
-    expect(text).toContain('Durability — you 31.0% of 84 · Freitag 44.0% of 142 · too few to compare')
+    expect(text).toContain('Durability: you 31.0% of 84 · Freitag 44.0% of 142 · too few to compare')
     expect(text).not.toContain('narrowed')
   })
 

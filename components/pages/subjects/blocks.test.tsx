@@ -19,7 +19,7 @@ import { calendarRulesFor } from '@/lib/charts/from-series'
 import { freezeQuotes } from '@/lib/renderables/quotes-freeze'
 import { gapBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
 import { SUBJECTS_NONE_NAMED } from '@/lib/reading/own-posts'
-import { voiceCite } from '@/lib/pages/subjects'
+import { axisNote, voiceCite } from '@/lib/pages/subjects'
 import { candidatesFixture, refusedFixture, retiredRivalFixture, subjectsFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
@@ -280,9 +280,13 @@ describe('SU2 · the subject in full', () => {
         sides: [{ ...own, k: null, pct: null, observed: false, silence: 'no_reading' as const }, ...rest],
       },
     }
+    unread.selected.axisNote = axisNote(unread.selected.sides, 100)
+    // On screen an unread side gets no cell; the note under the grid names
+    // it once. The email arm still prints every side's line.
     const text = renderText(subjectsSubject.render(unread, 'app', ctx))
-    expect(text).toContain('— no reading yet')
-    expect(text).not.toContain('— not tracked')
+    expect(text).toContain('no reading yet')
+    expect(text).not.toContain('not tracked')
+    expect(renderText(subjectsSubject.render(unread, 'email', ctx))).toContain('no reading yet')
   })
 
   it('says the subject is provisional while its precision is unmeasured', () => {
@@ -413,7 +417,7 @@ describe('SU2 · the kind mix', () => {
   it('prints a banded verdict per kind on the category, and names the month it is against', () => {
     const data = subjectsFixture()
     const text = renderText(subjectsKinds.render(data, 'app', ctx))
-    expect(text).toContain('Category — no brand, since Aug:')
+    expect(text).toContain('Category · no brand, since Aug:')
     // Ruling I: printed on paper, a tooltip on screen.
     expect(renderText(subjectsKinds.render(data, 'print', ctx))).toContain('band')
     const verdicts = blockAnswers(subjectsKinds, data).verdicts
@@ -578,9 +582,11 @@ describe('SU3 · questions your posts did not answer', () => {
     expect(text).toContain('not readable yet')
   })
 
-  it('names Reddit’s 40-comment cap where the questions lean on it', () => {
+  // Ruling H (copy de-clutter): the Reddit cap is said once, in Settings ›
+  // How to read, not on each block that leans on Reddit.
+  it('leaves Reddit’s 40-comment cap to How to read', () => {
     expect(renderText(subjectsUnanswered.render(subjectsFixture(), 'app', ctx)))
-      .toContain('we read up to 40 comments on each')
+      .not.toContain('40 comments')
   })
 
   it('refuses to rank a gap under the gate, and says how many videos there were', () => {
@@ -733,7 +739,7 @@ describe('SU5 · say vs hear', () => {
     // The own-posts sentence belongs to the tile above; this one is about the
     // ledger it could not read.
     expect(text).not.toContain('These are the posts you published')
-    expect(text).toContain('there is no ledger to report')
+    expect(text).toContain('What your posts claim is not readable on this page yet.')
   })
 
   it('names the half it cannot read rather than drawing it as nothing', () => {
@@ -751,15 +757,15 @@ describe('the mock’s own shape, where the data allows it', () => {
   it('leads the pane with the banded gap and never with "narrowed"', () => {
     const text = renderText(subjectsSubject.render(subjectsFixture(), 'app', ctx))
     // D1: both levels with both denominators, and the refusal the band earned.
-    expect(text).toContain('Durability — You 31.0% of 84 · Freitag 43.7% of 142 · too few to compare')
+    expect(text).toContain('Durability: You 31.0% of 84 · Freitag 43.7% of 142 · too few to compare')
     expect(text).not.toContain('narrowed')
   })
 
   it('qualifies each side and says what its figure is a share of', () => {
     const text = renderText(subjectsSubject.render(subjectsFixture(), 'app', ctx))
-    expect(text).toContain('You — Sealand')
-    expect(text).toContain('Freitag — rival')
-    expect(text).toContain('Category — no brand')
+    expect(text).toContain('You · Sealand')
+    expect(text).toContain('Freitag · rival')
+    expect(text).toContain('Category · no brand')
     expect(text).toContain('of your videos')
     expect(text).toContain('of their videos')
     expect(text).toContain('of category videos')
@@ -845,9 +851,9 @@ describe('the mock’s own shape, where the data allows it', () => {
 
   it('keys the chart by audience AND kind, and paints a second rival its own ink', () => {
     const markup = render(subjectsLine.render(subjectsFixture(), 'app', ctx))
-    expect(markup).toContain('Sealand — you')
-    expect(markup).toContain('Freitag — rival')
-    expect(markup).toContain('Category — no brand')
+    expect(markup).toContain('Sealand · you')
+    expect(markup).toContain('Freitag · rival')
+    expect(markup).toContain('Category · no brand')
     // The end label keeps the SHORT name and its denominator — the one part of
     // an end label that may not be lost to the gutter's clip.
     expect(markup).toContain('of 142')
@@ -981,7 +987,7 @@ describe('the Subjects blocks, read from outside the workspace', () => {
     const data = subjectsFixture()
     for (const mode of MODES) {
       const text = renderText(subjectsUnanswered.render(data, mode, ctx))
-      expect(text, mode).toContain('What your posts claim is not readable yet')
+      expect(text, mode).toContain('what they claim is not readable yet')
       expect(text, mode).not.toContain('Verbatim engineering')
     }
   })
@@ -1000,7 +1006,7 @@ describe('the Subjects blocks, read from outside the workspace', () => {
     const data = refusedFixture()
     for (const mode of MODES) {
       const text = renderText(subjectsSayHear.render(data, mode, ctx))
-      expect(text, mode).toContain('there is no ledger to report')
+      expect(text, mode).toContain('What your posts claim is not readable on this page yet.')
       expect(text, mode).not.toContain('Verbatim engineering')
 
       const own = renderText(subjectsOwnPosts.render(data, mode, ctx))
@@ -1050,7 +1056,7 @@ describe('SU2 · the two-audience gap the pane carries', () => {
     // on the earlier one.
     // The side names itself stopped — the fixture now carries the rival's own
     // `retiredAt`, not just a refusal reason.
-    expect(gapLine(gap)).toBe('You 31.0% of 84 · Freitag — stopped 43.7% of 142 · comparison refused')
+    expect(gapLine(gap)).toBe('You 31.0% of 84 · Freitag · stopped 43.7% of 142 · comparison refused')
     expect(gapBasisLine(gap)).toBe('comparison refused in August')
   })
 
@@ -1065,7 +1071,7 @@ describe('SU2 · the two-audience gap the pane carries', () => {
     expect(rules.map((r) => r.kind)).toContain('tracking_change')
     expect(rules.find((r) => r.kind === 'tracking_change')!.month).toBe('2026-08-01')
     expect(calendarRulesFor(live.selected!.series)).toEqual([])
-    expect(renderText(subjectsLine.render(retired, 'app', ctx))).toContain('Freitag — stopped')
+    expect(renderText(subjectsLine.render(retired, 'app', ctx))).toContain('Freitag · stopped')
   })
 
   it('renders every block on the retired-rival reading and keeps the copy contract', () => {

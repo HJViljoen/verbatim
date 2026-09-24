@@ -177,7 +177,7 @@ const field: R = (d, mode) => {
                         </span>
                         <span className="font-mono text-[11.5px] tabular-nums">{fmtPct(r.avgEng)}</span>
                       </span>
-                    ) : <span className="text-muted-foreground">—</span>}
+                    ) : <span className="text-muted-foreground">{'—'}</span>}
                   </td>
                 </tr>
                 </Fragment>
@@ -187,9 +187,9 @@ const field: R = (d, mode) => {
           {f.sentence && <p className="line-clamp-3 text-[12px] leading-[1.45] text-muted-foreground">{f.sentence}</p>}
         </>
       ) : f.totalVideos > 0 ? (
-        <TileEmpty>The field fills in once a competitor or your own posts are tracked — this update has {fmtInt(f.totalVideos)} category videos.</TileEmpty>
+        <TileEmpty>The field fills in once a competitor or your own posts are tracked. This update has {fmtInt(f.totalVideos)} category videos.</TileEmpty>
       ) : (
-        <TileEmpty>No videos in this update yet — the next one lands soon.</TileEmpty>
+        <TileEmpty>No videos in this update yet. The next one lands soon.</TileEmpty>
       )}
     </Tile>
   )
@@ -265,7 +265,7 @@ const accounts: R = (d) => {
               <span className="line-clamp-2">
                 {a.topEvent.explained && a.topEvent.explanation
                   ? a.topEvent.explanation
-                  : `${a.topEvent.magnitude_label} on ${platformLabel(a.topEvent.platform)} — the conversation we track doesn’t account for it, so it stays unexplained.`}
+                  : `${a.topEvent.magnitude_label} on ${platformLabel(a.topEvent.platform)} . The conversation we track doesn’t account for it, so it stays unexplained.`}
               </span>
             </p>
           )}
@@ -302,7 +302,7 @@ const playbooksBody: R = (d) => (
                     </span>
                   ))}
                 </span>
-              ) : <span className="text-muted-foreground">—</span>}
+              ) : <span className="text-muted-foreground">{'—'}</span>}
             </td>
             <td className="py-2 pr-3 capitalize text-muted-foreground">{p.topHook ? `${pretty(p.topHook.k)} (${p.topHook.count})` : '—'}</td>
             <td className="whitespace-nowrap py-2 text-right text-[11px] text-muted-foreground">{p.classified} of {p.total} videos</td>
@@ -310,7 +310,7 @@ const playbooksBody: R = (d) => (
         ))}
       </tbody>
     </table>
-    <p className="mt-3 text-[11px] text-muted-foreground">Hooks are read from each video’s caption, its speech transcript when captured, and the comments written under it — never the footage.</p>
+    <p className="mt-3 text-[11px] text-muted-foreground">Hooks are read from each video’s caption, its speech transcript when captured, and the comments written under it, never the footage.</p>
   </>
 )
 
@@ -368,9 +368,9 @@ function CatalogTable({ rows }: { rows: ContentCatalogRow[] }) {
             <td className="py-1.5 pr-2 text-right font-mono tabular-nums" data-v={v.views || ''}>{v.views > 0 ? fmtCompact(v.views) : '—'}</td>
             <td className="py-1.5 pr-2 text-right font-mono tabular-nums text-muted-foreground" data-v={v.likes ?? ''}>{v.likes != null ? fmtCompact(v.likes) : '—'}</td>
             <td className="py-1.5 pr-2 text-right font-mono tabular-nums" data-v={v.engagementRate ?? ''}>{v.engagementRate != null ? `${v.engagementRate}%` : '—'}</td>
-            <td className="py-1.5 pr-2">{v.sentiment ? <span className={`inline-block rounded-full px-2 py-0.5 text-[10.5px] font-medium capitalize ${SENTIMENT_BADGE[v.sentiment] ?? 'bg-inner text-muted-foreground'}`}>{v.sentiment}</span> : <span className="text-muted-foreground">—</span>}</td>
-            <td className="py-1.5 pr-2 capitalize">{v.format ? pretty(v.format) : <span className="text-muted-foreground">—</span>}</td>
-            <td className="py-1.5 pr-2 capitalize">{v.hook ? pretty(v.hook) : <span className="text-muted-foreground">—</span>}</td>
+            <td className="py-1.5 pr-2">{v.sentiment ? <span className={`inline-block rounded-full px-2 py-0.5 text-[10.5px] font-medium capitalize ${SENTIMENT_BADGE[v.sentiment] ?? 'bg-inner text-muted-foreground'}`}>{v.sentiment}</span> : <span className="text-muted-foreground">{'—'}</span>}</td>
+            <td className="py-1.5 pr-2 capitalize">{v.format ? pretty(v.format) : <span className="text-muted-foreground">{'—'}</span>}</td>
+            <td className="py-1.5 pr-2 capitalize">{v.hook ? pretty(v.hook) : <span className="text-muted-foreground">{'—'}</span>}</td>
             <td className="py-1.5 text-muted-foreground">{v.topics.slice(0, 3).join(', ') || '—'}</td>
           </tr>
         ))}
@@ -384,7 +384,7 @@ function CatalogTable({ rows }: { rows: ContentCatalogRow[] }) {
  *  renders the plain table it wraps. */
 const catalogBody: R = (d, mode) => {
   const table = <CatalogTable rows={d.catalog.rows} />
-  return mode === 'app' ? <EnhancedTable filterPlaceholder="Filter videos — account, who, format, hook, topic…">{table}</EnhancedTable> : table
+  return mode === 'app' ? <EnhancedTable filterPlaceholder="Filter videos: account, who, format, hook, topic…">{table}</EnhancedTable> : table
 }
 
 const renderables: Record<string, Renderable<D>> = {
@@ -416,7 +416,7 @@ export function contentSlides(d: D, variant: PrintVariant): Slide[] {
   ]
   if (variant === 'full') {
     const replies = d.inbox.rows.length
-    for (let n = 0; n < Math.ceil(replies / REPLIES_PER_SLIDE); n++) slides.push({ title: `Worth a reply — the full inbox${n ? ' (continued)' : ''}`, keys: [`content.replies:${n}`], layout: 'single' })
+    for (let n = 0; n < Math.ceil(replies / REPLIES_PER_SLIDE); n++) slides.push({ title: `Worth a reply: the full inbox${n ? ' (continued)' : ''}`, keys: [`content.replies:${n}`], layout: 'single' })
     const videos = d.catalog.rows.length
     for (let n = 0; n < Math.ceil(videos / CATALOG_PER_SLIDE); n++) slides.push({ title: `All videos · ${n * CATALOG_PER_SLIDE + 1}–${Math.min(videos, (n + 1) * CATALOG_PER_SLIDE)} of ${videos}`, keys: [`content.catalog:${n}`], layout: 'single' })
   }
@@ -456,7 +456,7 @@ export function ContentPage({ data: d, params }: { data: ContentData | ContentEm
         <PageBar title="Content" context="What content works, and who to answer?" />
         <PageGrid>
           <Tile col={12} row={2} eyebrow="Your first update">
-            <TileEmpty>Your content intelligence lands with your first update — check back then.</TileEmpty>
+            <TileEmpty>Your content intelligence lands with your first update.</TileEmpty>
           </Tile>
         </PageGrid>
       </PageFrame>
@@ -483,7 +483,7 @@ export function ContentPage({ data: d, params }: { data: ContentData | ContentEm
 
       {/* ── drawers: one click deeper ────────────────────────────────── */}
 
-      <DetailDrawer value="playbooks" closeHref={closeHref} title="Content playbooks, side by side" description="what each player leans on this update — coverage shown per row, because not every video can be read confidently">
+      <DetailDrawer value="playbooks" closeHref={closeHref} title="Content playbooks, side by side" description="what each player leans on this update · coverage shown per row">
         {playbooksBody(d, 'app')}
       </DetailDrawer>
 

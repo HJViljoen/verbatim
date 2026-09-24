@@ -923,7 +923,7 @@ describe('rivalsLead', () => {
     // would say — and on a tenant tracking one rival it read "of 1 compared".
     expect(lead).toBe(
       'Of the 2 rivals compared, Freitag is the one whose share of attention moved beyond its band this month'
-      + ' \u2014 the change and the band are on each row.',
+      + '; the change and the band are on each row.',
     )
     // The mock's "took 3 points" and "slipped 2" are both refused: a magnitude
     // is printed by the badge with its band, and `slipped` is a direction word

@@ -152,7 +152,7 @@ describe('the fixture, rendered', () => {
   })
 
   it('prints the filling month as a bar on the screen and as a marked number in the email', () => {
-    expect(render(block('app'))).toContain('Still filling — this month is still taking comments')
+    expect(render(block('app'))).toContain('Still filling: this month is still taking comments')
     const email = markupText(render(block('email')))
     expect(email).toContain('43.7%')
     // And not as though it were finished: the email says so in a word.

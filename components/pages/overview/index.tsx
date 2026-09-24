@@ -48,10 +48,13 @@ const ROWS: Record<string, number> = {
   'overview.bar': 1,
   'overview.sentence': 3,
   'overview.subjects': 3,
-  'overview.category': 4,
+  // Floors, not sizes. Lowered in the layout sweep (2026-09-24): the category
+  // block lost its absence-only column and OV6 is a few labelled figures, so
+  // the old floors left a tile of white under them below xl.
+  'overview.category': 3,
   'overview.rivals': 3,
-  'overview.moves': 4,
-  'overview.record': 2,
+  'overview.moves': 3,
+  'overview.record': 1,
 }
 
 /**

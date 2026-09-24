@@ -537,7 +537,7 @@ const countWord = (n: number): string =>
   n === 1 ? 'the one month since' : n === 0 ? 'no complete month since' : `the ${fmtInt(n)} months since`
 
 /** Said when the client side has no month on one or other side of the line. */
-export const MOVE_TOO_YOUNG = 'One monthly reading so far — the first comparison lands with the month after this one.'
+export const MOVE_TOO_YOUNG = 'One monthly reading so far. The first comparison lands with the month after this one.'
 export const MOVE_NO_CLIENT_SERIES = 'Your own side carries no reading for this move yet.'
 /** A move on a piece of advice names no countable object — a recommendation is
  *  not a thing the corpus can be counted for — so there is no series to read

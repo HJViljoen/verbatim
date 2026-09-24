@@ -358,8 +358,8 @@ export async function loadCompetitive(scope: Scope): Promise<CompetitiveData | C
   }
 
   const emptyFindingsReason = competitors.length === 0
-    ? 'No competitor videos drew enough comments this update — the consumer voice about them mostly lives in creator and category content not yet tied to a competitor.'
-    : 'Competitor videos were tracked, but not enough of them drew comments to form a comparable theme — so there was only one brand to read, and the cross-brand analysis waited.'
+    ? 'No competitor videos drew enough comments this update. The consumer voice about them mostly lives in creator and category content not yet tied to a competitor.'
+    : 'Competitor videos were tracked, but not enough of them drew comments to form a comparable theme, so there was only one brand to read, and the cross-brand analysis waited.'
 
   const layerWord = faceLayer === 'period' ? 'this update' : 'all updates'
   const context = `${lead ? `Where do we stand vs ${lead}?` : 'Where do we stand?'} · ${weekdayDate(runDate)}`

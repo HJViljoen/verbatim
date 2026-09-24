@@ -568,10 +568,10 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
 
   const legendItems: GlossaryKey[] = showNew ? [...LEGEND_ITEMS, 'new'] : LEGEND_ITEMS
   const mapEmptyLine = themes.length === 0
-    ? 'Your customer voices are being organised into themes — they land with your next update.'
+    ? 'Your customer voices are being organised into themes. They land with your next update.'
     : deepLinked && shown.length === 0
-      ? 'None of this update’s themes sit behind that insight any more — clear the filter to see the whole conversation.'
-      : shown.length === 0 ? 'No themes match these filters.' : 'No confirmed theme matches these filters — the early signals and single mentions are in the list.'
+      ? 'None of this update’s themes sit behind that insight any more. Clear the filter to see the whole conversation.'
+      : shown.length === 0 ? 'No themes match these filters.' : 'No confirmed theme matches these filters. The early signals and single mentions are in the list.'
 
   const listRow = (t: ThemeRow): ThemeListRow => ({ id: t.id, label: t.label, kind: bucketKind(t.bucket), category: t.category, isNew: showNew && t.first_seen, count: t.evidence_count })
   const platformsSeen = [...new Set([...insightMeta.values()].map((i) => i.platform).filter((p): p is string => !!p))]

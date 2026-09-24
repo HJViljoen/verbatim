@@ -418,7 +418,7 @@ function SubjectSheet({
               <span className="text-xs font-medium text-muted-foreground">The subject</span>
               <Input name="name" defaultValue={defaultName} maxLength={60} required autoComplete="off" />
               <span className="block text-[11px] text-muted-foreground/70">
-                A noun phrase a buyer would say out loud — “durability”, not “product longevity perception”.
+                A noun phrase a buyer would say out loud: “durability”, not “product longevity perception”.
               </span>
             </label>
             <label className="block space-y-1.5">

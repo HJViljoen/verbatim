@@ -31,7 +31,7 @@ export function rows<T>(res: QueryResult, label: string): T[] {
   // and casting it to T[] moves the failure to the first `.map` at render time.
   // Say it here, where the label names the read.
   if (!Array.isArray(res.data)) {
-    say(label, { message: `expected rows, got ${typeof res.data} — use row() for a single read` })
+    say(label, { message: `expected rows, got ${typeof res.data}; use row() for a single read` })
     return []
   }
   return res.data as T[]

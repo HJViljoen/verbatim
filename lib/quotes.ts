@@ -451,7 +451,7 @@ export async function readTranslations(client: unknown, texts: readonly string[]
   try {
     await translationsReachable(client)
   } catch (e) {
-    console.warn(`[quotes] translation read degraded — ${hashes.length} texts on this page show with no English: ${e instanceof Error ? e.message : String(e)}`)
+    console.warn(`[quotes] translation read degraded: ${hashes.length} texts on this page show with no English: ${e instanceof Error ? e.message : String(e)}`)
     return out
   }
   try {
@@ -476,7 +476,7 @@ export async function readTranslations(client: unknown, texts: readonly string[]
     // is ever said, and it says how much was lost rather than only that
     // something was. A whole page's worth here means every non-English quote on
     // it showed bare.
-    console.warn(`[quotes] translation read degraded — ${hashes.length} texts on this page show with no English: ${e instanceof Error ? e.message : String(e)}`)
+    console.warn(`[quotes] translation read degraded: ${hashes.length} texts on this page show with no English: ${e instanceof Error ? e.message : String(e)}`)
   }
   return out
 }
@@ -641,7 +641,7 @@ function refReader(mode: QuoteRefReadErrors) {
     }
   }
   const settle = () => {
-    if (failed.length) throw new Error(`[quotes] ${failed.length} ref read(s) failed — ${failed.join(' · ')}`)
+    if (failed.length) throw new Error(`[quotes] ${failed.length} ref read(s) failed: ${failed.join(' · ')}`)
   }
   return { read, settle }
 }
@@ -856,7 +856,7 @@ export async function fetchLiveBucketsByAudience(
   // anyone hears of it.
   if (rows.length < videoIds.length) {
     console.warn(
-      `[quotes] live entity read resolved ${rows.length}/${videoIds.length} videos — ` +
+      `[quotes] live entity read resolved ${rows.length}/${videoIds.length} videos; ` +
       `insights whose video did not resolve fall back to their stored theme bucket`,
     )
   }

@@ -943,7 +943,7 @@ export function headline(input: HeadlineInput): Headline {
     [denominator]: { value: lead.value.n, unit: 'videos', label: `videos read for ${audienceInLabel(lead.audience)}` },
   }
   const body =
-    `${lead.objectLabel} came up in [[${share}]] of ${audience} this month — ` +
+    `${lead.objectLabel} came up in [[${share}]] of ${audience} this month, ` +
     `[[${videos}]] of [[${denominator}]] videos.`
   return { lead, body, figures }
 }
@@ -1080,7 +1080,7 @@ export const MOVES_EMPTY =
 // delivery date computed from the calendar is a promise to a paying client,
 // recomputed monthly, wrong the first time it is read.
 export const MOVES_UNLOCK =
-  'A move is read from the month after it was dated, so its first comparison lands one reading later — and it is read beside the audiences you did not touch, never against them.'
+  'A move is read from the month after it was dated, so its first comparison lands one reading later, and it is read beside the audiences you did not touch, never against them.'
 
 /**
  * OV5, composed (Block D · D2).
@@ -1216,7 +1216,7 @@ export function rivalsLead(rows: readonly RivalRow[]): string | null {
   const claim = names.length === 1
     ? `${who} is the one whose share of attention moved beyond its band this month`
     : `${who} are the ${names.length} whose shares of attention moved beyond their bands this month`
-  return `${compared}, ${claim} \u2014 the change and the band are on each row.`
+  return `${compared}, ${claim}; the change and the band are on each row.`
 }
 
 /**
@@ -1322,7 +1322,7 @@ export function subjectsNote(rows: readonly SubjectRow[]): string | null {
 /** The "not a blank form" line (design §3 OV2, empty state). */
 export function candidateLine(candidates: readonly SubjectCandidate[]): string {
   return candidates.length === 0
-    ? 'No subjects are named yet, and nothing has been proposed — name the five to eight things you want to be known for in Settings.'
+    ? 'No subjects are named yet, and nothing has been proposed. Name the five to eight things you want to be known for in Settings.'
     : `We have proposed ${fmtInt(candidates.length)} ${candidates.length === 1 ? 'subject' : 'subjects'} from your own claims and your category's top themes. Confirm, rename or replace them.`
 }
 

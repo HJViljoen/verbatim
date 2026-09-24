@@ -33,7 +33,7 @@ import { TokenProse } from '@/components/blocks/prose'
  *  it. ("Nothing unusual this week" is printed on This week and on the weekly
  *  report, where it answers a question the reader arrived with.) */
 function anomalySentence(a: AnomalyLine): string {
-  return `${a.label} — ${fmtInt(a.k)} of ${fmtInt(a.n)} ${a.denominator} in the week of ${shortDate(a.weekStart)}, against the three months behind it (band ±${Math.abs(a.bandPts)} points).`
+  return `${a.label}: ${fmtInt(a.k)} of ${fmtInt(a.n)} ${a.denominator} in the week of ${shortDate(a.weekStart)}, against the three months behind it (band ±${Math.abs(a.bandPts)} points).`
 }
 
 /**

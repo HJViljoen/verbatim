@@ -587,33 +587,58 @@ export const overviewCategory: Block<OverviewData> = {
                 artboard draws it; the movers take the second; the attention
                 line takes the third. `TileColumns` collapses all three to one
                 stacked column under `xl`. */}
-            <TileColumns of={3}>
-              <div className="flex min-w-0 flex-col gap-3">
-                <Line label="Kind of thing said" mode={mode}>{kinds}</Line>
-                <div className="border-t border-border/70 pt-2.5">
-                  <Line label="Mood" mode={mode}>{mood}</Line>
+            {series ? (
+              <TileColumns of={3}>
+                <div className="flex min-w-0 flex-col gap-3">
+                  <Line label="Kind of thing said" mode={mode}>{kinds}</Line>
+                  <div className="border-t border-border/70 pt-2.5">
+                    <Line label="Mood" mode={mode}>{mood}</Line>
+                  </div>
                 </div>
-              </div>
-              <div className="min-w-0 xl:pl-4">
-                {/* NOT "Growing / fading", which the mock prints as two
-                    headings. Both are direction words, and a heading is not a
-                    verdict: rule (c) refuses them outside a node that carries a
-                    band. The two arms below keep the mock's layout and take the
-                    build's banded headings instead.
-                    AND WHAT IT MOVED AGAINST. Voice states its basis in the
-                    block meta ("Sep 2026 against Aug 2026"); OV3 printed
-                    "▲ 5.3 pts" with nothing saying what the two sides
-                    were, so a reader who opens Overview and This week in one
-                    session sees one theme move by two different amounts with
-                    only one page saying why. Taken off a printed row's own
-                    verdict, so the heading can never describe a comparison the
-                    block did not draw. */}
-                <Line label={moversLabel(c)} mode={mode}>{movers}</Line>
-              </div>
-              <div className="min-w-0 xl:pl-4">
-                <Line label="Attention" mode={mode}>{attention}</Line>
-              </div>
-            </TileColumns>
+                <div className="min-w-0 xl:pl-4">
+                  {/* NOT "Growing / fading", which the mock prints as two
+                      headings. Both are direction words, and a heading is not a
+                      verdict: rule (c) refuses them outside a node that carries a
+                      band. The two arms below keep the mock's layout and take the
+                      build's banded headings instead.
+                      AND WHAT IT MOVED AGAINST. Voice states its basis in the
+                      block meta ("Sep 2026 against Aug 2026"); OV3 printed
+                      "▲ 5.3 pts" with nothing saying what the two sides
+                      were, so a reader who opens Overview and This week in one
+                      session sees one theme move by two different amounts with
+                      only one page saying why. Taken off a printed row's own
+                      verdict, so the heading can never describe a comparison the
+                      block did not draw. */}
+                  <Line label={moversLabel(c)} mode={mode}>{movers}</Line>
+                </div>
+                <div className="min-w-0 xl:pl-4">
+                  <Line label="Attention" mode={mode}>{attention}</Line>
+                </div>
+              </TileColumns>
+            ) : (
+              // NO ATTENTION TO DRAW, NO COLUMN FOR IT (layout sweep,
+              // 2026-09-24). A third column whose whole body was one sentence
+              // about a panel nobody froze left two columns of white beside
+              // the kind rows. The absence is one line under the columns; the
+              // mood moves under the movers so the two columns stand level.
+              <TileColumns of={2}>
+                <div className="flex min-w-0 flex-col gap-3">
+                  <Line label="Kind of thing said" mode={mode}>{kinds}</Line>
+                </div>
+                <div className="flex min-w-0 flex-col gap-3 xl:pl-4">
+                  <Line label={moversLabel(c)} mode={mode}>{movers}</Line>
+                  <div className="border-t border-border/70 pt-2.5">
+                    <Line label="Mood" mode={mode}>{mood}</Line>
+                  </div>
+                </div>
+              </TileColumns>
+            )}
+            {!series ? (
+              <p className="m-0 text-[11.5px] text-secondary-foreground">
+                <span className="font-semibold uppercase tracking-[0.06em] text-[10px]">Attention</span>{' '}
+                {c.attentionNote ?? 'Attention is not read for this workspace yet.'}
+              </p>
+            ) : null}
             {/* THE FLAG ROW ALONG THE BOTTOM (`main.category.flag.quiet` /
                 `.flag.new`). The artboard draws a tinted strip carrying the
                 month's flags; a flag is not a direction (lib/calibration.ts

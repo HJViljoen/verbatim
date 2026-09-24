@@ -125,7 +125,7 @@ export const UNANSWERED_GATE = 10
  *  count whose period nobody states is a count a reader will assume is the
  *  one on the control. */
 export const UNANSWERED_BASIS =
-  'Counted in the videos we have read on this subject over the period shown, each placed by the day it was posted — not by the calendar month the rest of this page reads. So these are counts, not shares, and carry no change.'
+  'Over the period shown, each video placed by the day it was posted: counts, not shares.'
 
 /**
  * THE READINESS OWNER IS NEVER THE CLIENT'S WORD — the vocabulary call, made
@@ -163,7 +163,7 @@ export const UNANSWERED_BASIS =
  * as a zero.
  */
 export const UNANSWERED_CLAIMS_UNREADABLE =
-  'We match these against what your posts are about. What your posts claim is not readable yet.'
+  'Matched against what your posts are about; what they claim is not readable yet.'
 
 /**
  * What SU5 says when it cannot read the claims ledger at all.
@@ -178,7 +178,7 @@ export const UNANSWERED_CLAIMS_UNREADABLE =
  * And it carries no readiness owner either, for the reason above.
  */
 export const SAY_HEAR_CLAIMS_UNREADABLE =
-  'What your posts claim is not readable on this page yet, so there is no ledger to report.'
+  'What your posts claim is not readable on this page yet.'
 
 /** Reddit's own caveat wherever a question count leans on it (design §3 SU3). */
 export const REDDIT_THREAD_CAP =
@@ -508,7 +508,7 @@ export function railNote(
   read: boolean,
   status: Subject['status'] = 'active',
 ): string | null {
-  if (status === 'proposed') return 'not counted yet — confirm it and counting starts with the next update'
+  if (status === 'proposed') return 'not counted yet: confirm it and counting starts with the next update'
   // A67: the pane says it in full; the rail says the one word.
   if (calibration === 'calibrating') return 'provisional'
   if (!read) return 'no reading yet'
@@ -719,7 +719,7 @@ export function unansweredLead(
 /** The same sentence as one string, for a caller with no JSX to mark up. */
 export function unansweredLeadText(lead: UnansweredLead | null): string | null {
   return lead
-    ? `Questions grouped as “${lead.label}” came up in ${fmtInt(lead.videos)} of the videos we have read — ${lead.posts}.`
+    ? `Questions grouped as “${lead.label}” came up in ${fmtInt(lead.videos)} of the videos we have read: ${lead.posts}.`
     : null
 }
 
@@ -762,9 +762,9 @@ export function unansweredMeta(questionVideos: number, yourPosts: number): strin
  * A retired rival keeps the label's own "— stopped" and takes no second dash.
  */
 export function sideEyebrow(side: Pick<SubjectSide, 'kind' | 'label'>, brand: string): string {
-  if (side.kind === 'you') return brand ? `You — ${brand}` : 'You'
-  if (side.kind === 'category') return 'Category — no brand'
-  return side.label.includes(' — ') ? side.label : `${side.label} — rival`
+  if (side.kind === 'you') return brand ? `You · ${brand}` : 'You'
+  if (side.kind === 'category') return 'Category · no brand'
+  return side.label.includes(' · ') ? side.label : `${side.label} · rival`
 }
 
 /** What the figure beside it is a share OF, in the reader's words — the mock's
@@ -780,7 +780,7 @@ export function sideCaption(side: Pick<SubjectSide, 'kind'>): string {
 /** A side's name on the chart's legend — the audience first, its kind after,
  *  as the mock keys its lines ("Sealand — you"). */
 export function sideLegend(side: Pick<SubjectSide, 'kind' | 'label'>, brand: string): string {
-  if (side.kind === 'you') return brand ? `${brand} — you` : 'You'
+  if (side.kind === 'you') return brand ? `${brand} · you` : 'You'
   return sideEyebrow(side, brand)
 }
 
@@ -866,7 +866,12 @@ export function axisNote(
   series: readonly MonthSeries[] = [],
 ): string | null {
   const hollow = sides.filter((s) => s.observed && (s.n ?? 0) < floorN)
-  const names = (of: readonly SubjectSide[]) => of.map((s) => s.label).join(' and ')
+  // "A, B and C", not "A and B and C": ten sides joined by "and" read as one
+  // breathless name (layout sweep).
+  const names = (of: readonly SubjectSide[]) => {
+    const l = of.map((s) => s.label)
+    return l.length <= 2 ? l.join(' and ') : `${l.slice(0, -1).join(', ')} and ${l[l.length - 1]}`
+  }
   const parts: string[] = []
   if (hollow.length > 0) {
     parts.push(
@@ -880,8 +885,8 @@ export function axisNote(
   // client's OWN side.
   const noReading = sides.filter((s) => s.silence === 'no_reading')
   const notTracked = sides.filter((s) => s.silence === 'not_tracked')
-  if (noReading.length > 0) parts.push(`${names(noReading)} — no reading yet on this subject.`)
-  if (notTracked.length > 0) parts.push(`${names(notTracked)} — not tracked.`)
+  if (noReading.length > 0) parts.push(`${names(noReading)}: no reading yet on this subject.`)
+  if (notTracked.length > 0) parts.push(`${names(notTracked)}: not tracked.`)
 
   // A LINE THAT STARTS LATE SAYS WHEN. The axis's own first month is the
   // yardstick: a series whose first reading is later than everyone else's is
@@ -1928,7 +1933,7 @@ export function buildSides(input: SidesInput): SubjectSide[] {
     // this palette has and a sixth invented hue would leave the bucket.
     ...input.rivals.map((r, i) => ({
       audience: rivalKey(r.name),
-      label: r.retiredAt ? `${r.name} — stopped` : r.name,
+      label: r.retiredAt ? `${r.name} · stopped` : r.name,
       kind: 'rival' as const,
       color: RIVAL_INKS[Math.min(i, RIVAL_INKS.length - 1)],
     })),
@@ -2456,7 +2461,7 @@ async function loadUnanswered(
       questionVideos,
       yourPosts: ownVideos.length,
       refusal:
-        `${fmtInt(questionVideos)} video${questionVideos === 1 ? '' : 's'} asked something about this subject — ` +
+        `${fmtInt(questionVideos)} video${questionVideos === 1 ? '' : 's'} asked something about this subject; ` +
         `we do not rank a gap under ${fmtInt(UNANSWERED_GATE)}.`,
     }
   }
@@ -2469,7 +2474,7 @@ async function loadUnanswered(
       yourPosts: ownVideos.length,
       refusal:
         `${fmtInt(questionVideos)} videos asked something about this subject, and no update has grouped those ` +
-        'questions yet — they are counted here and named with the next update.',
+        'questions yet. They are counted here and named with the next update.',
     }
   }
 

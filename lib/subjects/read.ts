@@ -168,20 +168,20 @@ export function backReadBlockers(subjects: readonly SubjectBackReadState[]): str
   const out: string[] = []
   if (active.length === 0) {
     out.push(
-      'no subject is confirmed yet — a back-read now would write no subject months, ' +
+      'no subject is confirmed yet; a back-read now would write no subject months, ' +
       'and every subject confirmed afterwards would start at the first month still open',
     )
   }
   if (proposed.length > 0) {
     out.push(
-      `${proposed.length} named but not confirmed (${proposed.map((s) => s.name).join(', ')}) — ` +
+      `${proposed.length} named but not confirmed (${proposed.map((s) => s.name).join(', ')}); ` +
       'confirm the whole set first, because a subject confirmed after the back-read has no history at all',
     )
   }
   const unjudged = active.filter((s) => s.decided === 0)
   if (unjudged.length > 0) {
     out.push(
-      `${unjudged.length} confirmed but never judged (${unjudged.map((s) => s.name).join(', ')}) — ` +
+      `${unjudged.length} confirmed but never judged (${unjudged.map((s) => s.name).join(', ')}); ` +
       'run scripts/subject-membership.ts --apply to completion first; a subject with no members writes no row, ' +
       'and a month that closes without its row refuses it for ever',
     )
@@ -191,7 +191,7 @@ export function backReadBlockers(subjects: readonly SubjectBackReadState[]): str
     out.push(
       `${partial.length} judged only in part (` +
       partial.map((s) => `${s.name}: ${s.undecided} pair(s) still undecided`).join(', ') +
-      ') — finish scripts/subject-membership.ts --apply; a reading taken now is short by whatever they turn out to be, ' +
+      '); finish scripts/subject-membership.ts --apply; a reading taken now is short by whatever they turn out to be, ' +
       'and short is exactly what a frozen month keeps',
     )
   }
@@ -245,7 +245,7 @@ export function subjectFreezeHold(results: readonly MembershipOutcome[]): string
   if (reasons.length === 0) return null
   return (
     `${reasons.join('; ')}. The membership on file is short by an amount nobody can state, ` +
-    'and a month frozen around it could never be corrected — the frozen guard refuses the UPDATE. ' +
+    'and a month frozen around it could never be corrected; the frozen guard refuses the UPDATE. ' +
     'Nothing was written for the subjects this visit; the pairs come back next run.'
   )
 }

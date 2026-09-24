@@ -277,7 +277,7 @@ const movement: R = ({ movement: mv, updatesCount }, mode) => (
           return <Mover key={r.key} label={r.label} series={r.series} value={st.fmt(r.value)} delta={r.delta} unit={st.unit} good={st.good} color={st.color} />
         })}
       </div>
-    ) : <TileEmpty>Your first comparison lands with the next update — two updates are needed to show movement.</TileEmpty>}
+    ) : <TileEmpty>Your first comparison lands with the next update.</TileEmpty>}
   </Tile>
 )
 
@@ -538,7 +538,7 @@ export function DashboardPage({ data: d, detail, params }: { data: DashboardData
         <PageBar title="Dashboard" context={d.brand} />
         <PageGrid>
           <Tile col={12} row={2} eyebrow="Your first update">
-            <TileEmpty>Your first analysis {d.nextUpdate ? `lands with the ${d.nextUpdate.replace('next update ', '')} update` : 'is on its way'} — check back then.</TileEmpty>
+            <TileEmpty>Your first analysis {d.nextUpdate ? `lands with the ${d.nextUpdate.replace('next update ', '')} update` : 'is on its way'}.</TileEmpty>
           </Tile>
         </PageGrid>
       </PageFrame>
@@ -562,7 +562,7 @@ export function DashboardPage({ data: d, detail, params }: { data: DashboardData
         <BriefBody d={d} mode="app" />
       </DetailDrawer>
 
-      <DetailDrawer value="funnel" closeHref="/dashboard" title="How this update was built" description="every figure is counted from stored data — nothing is estimated">
+      <DetailDrawer value="funnel" closeHref="/dashboard" title="How this update was built" description="every figure is counted from stored data">
         <FunnelBody d={d} />
       </DetailDrawer>
     </PageFrame>

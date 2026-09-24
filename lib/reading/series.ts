@@ -461,7 +461,7 @@ export function buildSeries(input: BuildSeriesInput): MonthSeries {
         // touches a comment count. Naming conversations broke the
         // copy-matches-code rule in the direction a reader cannot detect — and
         // "videos" is the word the new reading surfaces say anyway.
-        text: 'Thin month — far fewer videos than usual, so a share moves on very little here.',
+        text: 'Thin month: far fewer videos than usual, so a share moves on very little here.',
       })
     }
 

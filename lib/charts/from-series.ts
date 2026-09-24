@@ -93,7 +93,7 @@ export function seriesToCalendar(series: MonthSeries, opts: ToCalendarOptions): 
       return { month: p.month, value: null, state: 'below_floor', k: p.k, n: p.videos, ...(note ? { note } : {}) }
     }
     if (minK != null && p.k != null && p.k < minK) {
-      const filling = p.state === 'filling' ? 'Still filling — this month is still taking comments.' : null
+      const filling = p.state === 'filling' ? 'Still filling: this month is still taking comments.' : null
       const both = [filling, note].filter(Boolean).join(' ')
       return { month: p.month, value: null, state: 'below_numerator', k: p.k, n: p.videos, ...(both ? { note: both } : {}) }
     }
