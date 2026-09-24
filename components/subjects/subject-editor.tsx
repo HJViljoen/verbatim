@@ -8,11 +8,11 @@ import { Input } from '@/components/ui/input'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import {
   confirmSubjectAction,
-  EMPTY_STATE,
   nameSubjectAction,
   retireSubjectAction,
   type SubjectFormState,
 } from '@/lib/actions/subjects'
+import { EMPTY_STATE } from '@/lib/subjects/form-state'
 import { MovementBadge } from '@/components/delta-badge'
 import { fmtInt, fmtPct, fullDate } from '@/lib/format'
 import { SUBJECTS_UNREADABLE_WHY, SUPERSEDE_RULE } from '@/lib/pages/subjects'

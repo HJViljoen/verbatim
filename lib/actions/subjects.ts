@@ -61,7 +61,6 @@ export interface SubjectFormState {
   id?: string
 }
 
-export const EMPTY_STATE: SubjectFormState = { ok: false, message: '' }
 
 const uuid = z.string().uuid()
 

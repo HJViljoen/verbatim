@@ -7,10 +7,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import {
-  EMPTY_STATE,
   setMoveStatusAction,
   trackSubjectAction,
 } from '@/lib/actions/subjects'
+import { EMPTY_STATE } from '@/lib/subjects/form-state'
 import { fullDate } from '@/lib/format'
 import { MOVE_DIRECTIONS, MOVE_PROMISE, type MoveStatus } from '@/lib/subjects/types'
 
