@@ -73,6 +73,37 @@ describe('JUDGE_VERSION', () => {
 describe('subjectPositiveGloss', () => {
   // The six real Sealand descriptions are the fixtures, because they are what
   // the formula was measured on (status/subject-band-2026-09-23.md PART THREE).
+
+  // WHY m8's CHANGE TO THE MARKER RULE DOES NOT BUMP
+  // SUBJECT_EMBED_INPUT_VERSION. The version exists so a stored vector built
+  // by an older formula is visible to `subjectsNeedingVectors` and re-embedded
+  // — the repair d1ce6302 paid for. It earns that only if some STORED vector's
+  // input actually moved. All six live subjects write the clause with a comma,
+  // which the boundary arm already matched and still matches first, so every
+  // one of them glosses byte-for-byte as it did under `subject_embed_v2`.
+  // These are those six, read off the preview branch 2026-09-24, verbatim.
+  // If a line here ever has to change, the version bumps in the same commit.
+  const LIVE_DESCRIPTIONS: [string, string][] = [
+    ['Comments about how comfortable the products are to use or carry, excluding style or weight complaints.',
+      'How comfortable the products are to use or carry.'],
+    ['Comments about how long the products last, their toughness, or ability to withstand outdoor use, excluding comments about style or comfort.',
+      'How long the products last, their toughness, or ability to withstand outdoor use.'],
+    ['Comments about the aesthetic appeal, beauty, or fashionability of the products, excluding functionality or comfort.',
+      'The aesthetic appeal, beauty, or fashionability of the products.'],
+    ['Comments about product pricing, sales, discounts, or value for money, excluding unrelated purchasing logistics.',
+      'Product pricing, sales, discounts, or value for money.'],
+    ['Comments about whether owners can get bags repaired, how the repair or warranty promise holds up in practice, turnaround time and cost, and what happens when straps, zips or seams fail, excluding general durability praise or complaints about price.',
+      'Whether owners can get bags repaired, how the repair or warranty promise holds up in practice, turnaround time and cost, and what happens when straps, zips or seams fail.'],
+    ['Comments about how well the bags keep their contents dry in rain and travel, the water resistance of the fabric, zips and seams, and whether owners trust them in wet conditions, excluding general durability or material sourcing.',
+      'How well the bags keep their contents dry in rain and travel, the water resistance of the fabric, zips and seams, and whether owners trust them in wet conditions.'],
+  ]
+
+  it('glosses every live subject exactly as subject_embed_v2 did — no vector moves, so no version bump', () => {
+    for (const [description, expected] of LIVE_DESCRIPTIONS) {
+      expect(subjectPositiveGloss(description)).toBe(expected)
+    }
+  })
+
   it('drops the exclusion clause — a vector has no negation, so "excluding X" puts X in it', () => {
     expect(subjectPositiveGloss('Comments about product pricing, sales, discounts, or value for money, excluding unrelated purchasing logistics.'))
       .toBe('Product pricing, sales, discounts, or value for money.')
@@ -99,6 +130,33 @@ describe('subjectPositiveGloss', () => {
       .toBe('An exclusive finish on the leather.')
   })
 
+  // m8. The boundary was required of EVERY marker, so a member who typed the
+  // sentence without a comma — which is most of them — kept the negation in
+  // the vector, positively, which is the one thing this function exists to
+  // stop. `subject_propose_v2` cannot reach a description a person types in
+  // Settings; this is what catches it.
+  it('takes an opener with no comma in front of it — a member does not type the comma', () => {
+    expect(subjectPositiveGloss('Comments about price excluding shipping')).toBe('Price.')
+    expect(subjectPositiveGloss('Comments about durability but not looks')).toBe('Durability.')
+    expect(subjectPositiveGloss('Comments about fit and not fabric')).toBe('Fit.')
+    expect(subjectPositiveGloss('Comments about everything except delivery')).toBe('Everything.')
+    expect(subjectPositiveGloss('Comments about the straps except for the buckles')).toBe('The straps.')
+    expect(subjectPositiveGloss('Comments about seams not including zips')).toBe('Seams.')
+  })
+
+  it('still refuses to cut a marker that is an ordinary verb mid-sentence', () => {
+    // These three are the reason the boundary exists at all: cutting here
+    // would take the subject's own words with the marker.
+    expect(subjectPositiveGloss('Comments about prices that exclude VAT'))
+      .toBe('Prices that exclude VAT.')
+    expect(subjectPositiveGloss('Comments about a brand ignoring its customers'))
+      .toBe('A brand ignoring its customers.')
+    expect(subjectPositiveGloss('Comments about a policy that excludes resellers'))
+      .toBe('A policy that excludes resellers.')
+    // And they are still cut when they DO open a clause.
+    expect(subjectPositiveGloss('Prices, excluding VAT')).toBe('Prices.')
+  })
+
   it('leaves a sentence, not a fragment — the shape the corpus vectors were built from', () => {
     expect(subjectPositiveGloss('comments about the zips and the seams and, excluding X'))
       .toBe('The zips and the seams.')
@@ -112,6 +170,11 @@ describe('subjectPositiveGloss', () => {
     expect(subjectPositiveGloss('   ')).toBe('')
     // Nothing but a frame and an exclusion: the name alone is the honest phrase.
     expect(subjectPositiveGloss('Comments about, excluding everything.')).toBe('')
+    // And a description that opens ON the exclusion, which the docstring
+    // promises returns '' and which used to come back whole because there was
+    // no boundary in front of a marker at position 0.
+    expect(subjectPositiveGloss('Excluding everything.')).toBe('')
+    expect(subjectPositiveGloss('Except the zips')).toBe('')
     // A frame with something after it keeps that something, however thin.
     expect(subjectPositiveGloss('Comments about anything, excluding everything.')).toBe('Anything.')
   })

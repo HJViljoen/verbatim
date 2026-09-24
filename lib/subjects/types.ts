@@ -158,7 +158,20 @@ export const SUBJECT_JUDGE_PROMPT_VERSION = 'subject_judge_v1'
  *
  *  Declared HERE, above JUDGE_VERSION, rather than beside the function it
  *  names: it is part of the comparability key, and a `const` used in that
- *  template has to be initialised before it. */
+ *  template has to be initialised before it.
+ *
+ *  NOT BUMPED FOR THE 2026-09-24 MARKER CHANGE, and the reason is measured
+ *  rather than asserted. `EXCLUSION_CLAUSE` now takes an opener with no comma
+ *  in front of it, so the FORMULA moved — but the version's job is to make a
+ *  stored vector whose input moved visible to `subjectsNeedingVectors`, and no
+ *  stored vector's input moved: all six live subjects write the clause with a
+ *  comma, which the boundary arm matched before and still matches first.
+ *  `lib/subjects/types.test.ts` pins all six descriptions to their v2 gloss
+ *  byte-for-byte, so this stays a claim someone can fail. Bumping anyway would
+ *  re-embed six identical phrases and re-judge the whole corpus (~$0.14-0.25,
+ *  and 1,298 decided pairs back to undecided) to repair nothing. If a live
+ *  description ever glosses differently, that test fails and the version bumps
+ *  in the same commit — which is the rule working, not an exception to it. */
 export const SUBJECT_EMBED_INPUT_VERSION = 'subject_embed_v2'
 
 /**
@@ -212,15 +225,35 @@ export const JUDGE_VERSION =
  * directions on 2026-09-23 — 12% judge yes-rate at the new band, and 551 and
  * 692 pairs dragged in to keep 67 and 86.
  *
- * Anchored on a clause boundary (a comma, a semicolon, a dash, an opening
- * bracket or a sentence end) so that a description which happens to contain the
- * word mid-phrase — "an exclusive finish" — is not cut. `exclusive` is not in
- * the list for the same reason the boundary is required: a marker is a word
- * that OPENS a clause, and this list is deliberately short. A marker nobody
- * writes is a regex nobody can reason about.
+ * TWO LISTS, BECAUSE ONE BOUNDARY RULE FITTED ONLY HALF THE MARKERS. Until
+ * 2026-09-24 every marker required a clause boundary in front of it (a comma,
+ * semicolon, colon, dash, opening bracket, or a sentence end). That is right
+ * for a marker which is also an ordinary verb mid-sentence — "prices that
+ * exclude VAT", "a brand ignoring its customers" — where cutting would take
+ * the subject's own words with it. It is wrong for a marker that can only ever
+ * open an exclusion: "Comments about price excluding shipping" and "Comments
+ * about durability but not looks" carry no comma and were not cut at all, so
+ * the negation went into the vector positively, which is the whole thing this
+ * function exists to stop. A member typing a sentence in Settings is exactly
+ * the writer most likely to leave the comma out, and Settings is the one path
+ * `subject_propose_v2` cannot reach.
+ *
+ * So the openers take plain whitespace (or the start of the description, in
+ * which case there is no positive half and the name alone is the phrase), and
+ * the verbs keep the boundary. `exclusive` is in neither list and matches
+ * neither — "exclude" and "exclusive" diverge at the fifth letter — so "an
+ * exclusive finish" was never at risk from the markers, only from a rule
+ * loose enough to catch the verbs.
  */
-const EXCLUSION_CLAUSE =
-  /(?:\s*[,;:(–—-]+\s*|\s*\.\s+)(?:excluding|excludes|exclude|not including|but not|except for|except|ignoring|and not)\b/i
+const EXCLUSION_OPENERS = 'excluding|not including|but not|and not|except for|except'
+const EXCLUSION_VERBS = 'excludes|exclude|ignoring'
+const CLAUSE_BOUNDARY = String.raw`\s*[,;:(–—-]+\s*|\s*\.\s+`
+
+const EXCLUSION_CLAUSE = new RegExp(
+  `(?:^|${CLAUSE_BOUNDARY}|\\s+)(?:${EXCLUSION_OPENERS})\\b` +
+  `|(?:${CLAUSE_BOUNDARY})(?:${EXCLUSION_VERBS})\\b`,
+  'i',
+)
 
 /**
  * The meta-register frame a subject description opens with.
