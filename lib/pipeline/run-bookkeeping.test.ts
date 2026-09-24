@@ -6,6 +6,7 @@ import {
   isMissingClusteringKeyColumn,
   openRunBookkeeping,
   previousRunEnd,
+  gatheredNothing,
   rowWindow,
   reconstructWindow,
   closingMessage,
@@ -142,12 +143,53 @@ describe('previousRunEnd — what the next window anchors on', () => {
     expect(previousRunEnd([{ id: 'a', window_end: 'not a date' }], [])).toBeNull()
   })
 
+  it('never anchors on a fresh skipGather run — it gathered nothing', () => {
+    // Sealand 2026-09-24: rehearsal e80e9347 ({skipGather:true}, its own row)
+    // opened an anchored window 20 → 24 Sep, scraped nothing and closed
+    // partial. Anchoring on it would start Sunday's run on the 24th.
+    const rows = [
+      { id: 'e80e9347', window_end: '2026-09-24T09:00:00.000Z', completed_at: '2026-09-24T10:00:00.000Z', options: { skipGather: true } },
+      { id: 'b67b56de', window_end: '2026-09-20T04:02:57.874Z', completed_at: '2026-09-20T06:00:00.000Z', options: { sendReport: true, scheduledFor: '2026-09-20T04:00:00.000Z' } },
+    ]
+    expect(previousRunEnd(rows, [])).toBe('2026-09-20T04:02:57.874Z')
+  })
+
+  it('still anchors on a resumed run — its window is the gather it already did', () => {
+    // {runId: <itself>, skipGather: true} is the resume lever; open-run
+    // overwrites the row's options, but the window is the original gather's.
+    const rows = [
+      { id: '5a2ebc43', window_end: '2026-09-13T10:03:04.451Z', options: { runId: '5a2ebc43', skipGather: true } },
+      { id: 'older', window_end: '2026-09-06T10:03:04.451Z', options: {} },
+    ]
+    expect(previousRunEnd(rows, [])).toBe('2026-09-13T10:03:04.451Z')
+  })
+
+  it('is null when the only closed runs gathered nothing', () => {
+    expect(previousRunEnd([{ id: 'r', window_end: '2026-09-24T09:00:00.000Z', options: { skipGather: true } }], [])).toBeNull()
+  })
+
   it('compares instants, not strings — PostgREST spells them with +00', () => {
     const rows = [
       { id: 'a', window_end: '2026-09-13 04:06:38.483+00' },
       { id: 'b', window_end: '2026-09-06T04:00:00.000Z' },
     ]
     expect(previousRunEnd(rows, [])).toBe('2026-09-13 04:06:38.483+00')
+  })
+})
+
+describe('gatheredNothing — which closed runs cannot anchor a window', () => {
+  it('a fresh skipGather run gathered nothing', () => {
+    expect(gatheredNothing({ id: 'a', options: { skipGather: true } })).toBe(true)
+    // A skipGather run naming ANOTHER row is not a resume of itself either.
+    expect(gatheredNothing({ id: 'a', options: { skipGather: true, runId: 'b' } })).toBe(true)
+  })
+
+  it('a resume of itself, a gathering run and a row without options did gather', () => {
+    expect(gatheredNothing({ id: 'a', options: { skipGather: true, runId: 'a' } })).toBe(false)
+    expect(gatheredNothing({ id: 'a', options: { skipGather: false } })).toBe(false)
+    expect(gatheredNothing({ id: 'a', options: { sendReport: true } })).toBe(false)
+    expect(gatheredNothing({ id: 'a', options: null })).toBe(false)
+    expect(gatheredNothing({ id: 'a' })).toBe(false)
   })
 })
 
