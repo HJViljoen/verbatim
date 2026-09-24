@@ -1,10 +1,8 @@
 import Link from 'next/link'
 import { PageFrame, PageBar, BarPill } from '@/components/shell/page-grid'
 import { PaneHeader, PaneBody } from '@/components/shell/master-list'
-import { starterTemplates } from '@/lib/reports/templates'
 import { CUSTOM_KEY, DOCUMENT_STARTERS } from '@/lib/reports/documents/templates'
 import { AUDIENCES } from '@/lib/reports/types'
-import { catalogueTitle } from '@/lib/reports/catalogue'
 import { createReport } from '@/app/dashboard/studio/actions'
 
 // New report (Heinrich, 2026-08-30): pick a template to start from, or go
@@ -27,7 +25,7 @@ export default function NewReportPage() {
         <Link href="/dashboard/studio"><BarPill>Back to the Studio</BarPill></Link>
       </PageBar>
       <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <PaneHeader title="Templates" meta="written from the update, or arranged from the pages" />
+        <PaneHeader title="Templates" meta="written from the update" />
         <PaneBody className="px-1 py-4">
           <form action={createReport} className="flex flex-col gap-6">
             <div className="flex flex-col gap-3">
@@ -52,32 +50,6 @@ export default function NewReportPage() {
                 ))}
               </ul>
             </div>
-            <p className="px-1 font-mono text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground">Arranged from the pages</p>
-            <ul className="grid gap-3 md:grid-cols-2">
-              {starterTemplates().map((t) => (
-                <li key={t.key} className="flex flex-col gap-2 rounded-lg bg-tile p-4 shadow-tile">
-                  <div>
-                    <p className="text-[14px] font-semibold">{t.name}</p>
-                    <p className="font-mono text-[10.5px] text-muted-foreground">for {audienceLabel(t.audience)} · {t.sections.length} section{t.sections.length === 1 ? '' : 's'} · {[...new Set(t.sections.map((s) => catalogueTitle(s.page)))].join(' · ')}</p>
-                  </div>
-                  <p className="text-[12.5px] leading-relaxed text-secondary-foreground">{t.description}</p>
-                  <button type="submit" name="template" value={t.key}
-                    className="mt-1 inline-flex h-[26px] w-fit items-center rounded-full bg-primary px-3 text-[12px] font-medium text-primary-foreground hover:bg-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                    Use this template
-                  </button>
-                </li>
-              ))}
-              <li className="flex flex-col gap-2 rounded-lg bg-tile p-4 shadow-tile">
-                <div>
-                  <p className="text-[14px] font-semibold">Custom</p>
-                  <p className="font-mono text-[10.5px] text-muted-foreground">start empty</p>
-                </div>
-                <p className="text-[12.5px] leading-relaxed text-secondary-foreground">Choose the pages and tiles yourself, name the reader, and add a line of framing per section.</p>
-                <button type="submit" className="mt-1 inline-flex h-[26px] w-fit items-center rounded-full bg-tile px-3 text-[12px] font-medium text-secondary-foreground ring-1 ring-border hover:bg-inner">
-                  Start custom
-                </button>
-              </li>
-            </ul>
           </form>
         </PaneBody>
       </section>
