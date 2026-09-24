@@ -178,10 +178,20 @@ create trigger subjects_insert_audit
 --    where tgrelid = 'public.subjects'::regclass and not tgisinternal
 --    order by tgname;
 --
--- Expect FOUR rows — `subjects_insert_audit` (AFTER INSERT … WHEN new.created_by
--- IS NULL), `subjects_status_audit` (AFTER UPDATE OF status …),
--- `subjects_retirement_freeze` and `subjects_retirement_is_final`, the last two
--- M4's and untouched.
+-- Expect FIVE rows, which is this file's head and not the FOUR this block used
+-- to say — it listed four names and left out M4's `subjects_lineage_same_tenant`
+-- (20260918093000_subjects.sql), so an operator running the query as written
+-- got a count that disagreed with the step that told them to run it:
+--
+--   subjects_insert_audit          AFTER INSERT … WHEN (new.created_by IS NULL)
+--   subjects_lineage_same_tenant   M4, untouched
+--   subjects_retirement_freeze     M4, untouched
+--   subjects_retirement_is_final   M4, untouched
+--   subjects_status_audit          AFTER UPDATE OF status …
+--
+-- Measured on the preview branch `zfmxrrugaihxpubunleu` BEFORE this file is
+-- applied (read-only, 2026-09-24): four triggers — the four M4 installed —
+-- so this file takes it to five and `docs/deploy-checklist.md` says five too.
 --
 -- 2 · The two paths, on a THROWAWAY cluster only — this inserts rows:
 --

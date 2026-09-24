@@ -1006,9 +1006,11 @@ invented actor.
 select tgname, pg_get_triggerdef(oid) from pg_trigger
  where tgrelid = 'public.subjects'::regclass and not tgisinternal order by tgname;
 ```
-— **five** triggers, `subjects_insert_audit` among them with its
-`WHEN (new.created_by IS NULL)` clause, and M4's `subjects_status_audit`,
-`subjects_retirement_freeze` and `subjects_retirement_is_final` unchanged. Both
+— **five** triggers, and all five named so the count and the list agree:
+`subjects_insert_audit` (with its `WHEN (new.created_by IS NULL)` clause) plus
+M4's `subjects_lineage_same_tenant`, `subjects_retirement_freeze`,
+`subjects_retirement_is_final` and `subjects_status_audit`, unchanged. The
+branch carries M4's four today, so this file is what makes it five. Both
 arms were exercised on the 24 Sep throwaway cluster, including a re-apply twice
 over; the migration's own footer carries the probes.
 
