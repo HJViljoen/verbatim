@@ -155,10 +155,11 @@ describe('the in-app arm', () => {
     expect(html).not.toContain('border-border')
   })
 
-  it('leans the words, in the voice face, at the artboards\' size', () => {
+  it('leans the words, in the voice face, at 15px (the ruling, over the artboards\' 14)', () => {
     expect(html).toContain('font-serif')
     expect(html).toContain('italic')
-    expect(html).toContain('text-[14px]')
+    expect(html).toContain('text-[15px]')
+    expect(html).not.toContain('text-[14px]')
     expect(html).toContain('leading-[1.375]')
   })
 

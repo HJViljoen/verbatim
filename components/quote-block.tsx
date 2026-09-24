@@ -168,6 +168,11 @@ export function QuoteBlock({ quote, mode = 'app', cite }: QuoteBlockProps): Reac
   // in quotes, the 'you' tile, supported claims", so it is not a fifth job for
   // the green — with the words italic at 14px/1.375 in ink at 85%.
   //
+  // NOW 15PX, NOT THE ARTBOARDS' 14 (Heinrich's ruling, 2026-09-24): serif
+  // italic stays and the size steps up one, which is also paper's size, so a
+  // quote reads the same on screen and on a printed sheet. The leading stays
+  // 1.375, proportional. Email keeps 14.
+  //
   // THE FACE STAYS SERIF, and that is a deliberate departure from the mock's
   // §3.15, which asks for sans italic here. It contradicts its own §1 four
   // pages earlier ("verbatim quotes ONLY — quotes are speech"), the MASTER.md
@@ -192,7 +197,7 @@ export function QuoteBlock({ quote, mode = 'app', cite }: QuoteBlockProps): Reac
           and a customer who writes "I'm a double below knee" is not claiming a
           movement. `directionHits` has skipped quoted spans since WP0 for the
           same reason; a rendered quote needed the marker to say so. */}
-      <p data-copy="quote" className={big ? 'font-serif text-[15px] italic leading-[1.5] text-secondary-foreground' : 'font-serif text-[14px] italic leading-[1.375] text-foreground/85'}>“{quote.text}”</p>
+      <p data-copy="quote" className={big ? 'font-serif text-[15px] italic leading-[1.5] text-secondary-foreground' : 'font-serif text-[15px] italic leading-[1.375] text-foreground/85'}>“{quote.text}”</p>
       {/* THE LABEL INTRODUCES THE ENGLISH, AS A PILL (Block D wave 3, SB8).
           The artboards set "German · machine-translated" as a filled pill
           BETWEEN the original and the rendering; the build set it as a bare
