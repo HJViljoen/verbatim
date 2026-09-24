@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, it, expect } from 'vitest'
 import { summariseRunErrors, partialRunAlert, passADegradation, runCloseStatus, closingErrors, missingRunRows, RUN_ERROR_CAP, ALERT_ERROR_LIST_CAP } from './run-errors'
 
@@ -223,5 +224,34 @@ describe('partialRunAlert carries the row counts (2026-09-20)', () => {
     expect(text).toContain('- transcribe:youtube: 9 of 72 caption batches run-failed')
     // The count still counts STEPS THAT FAILED.
     expect(text).toContain('1 step error: owned-posts:instagram:rareform')
+  })
+})
+
+// ---- B1: the counts the alert prints have to be readable at all -------------
+//
+// `runRowCounts` (inngest/functions/pipeline.ts) fed `missingRunRows` above,
+// and it counted with `.select('id', { count: 'exact', head: true })`.
+// `run_costs` is keyed by `run_id` and has NO `id` column, so PostgREST
+// answered 42703, `head()` returned null, runRowCounts returned null for every
+// run, and the alert printed "(not counted — reading them failed)" on EVERY
+// partial run — the one arm of `rowLines` that says nothing. The three tests
+// above all pass with that bug in place, because they hand the counts in.
+//
+// Pinned by reading the source, the way `lib/subjects/moves.test.ts` pins the
+// two halves of the subject-audit dedupe: the function is not exported and
+// importing the pipeline module would drag Inngest in behind it.
+describe('runRowCounts counts a column all three tables have (B1)', () => {
+  const pipeline = readFileSync(new URL('../../inngest/functions/pipeline.ts', import.meta.url), 'utf8')
+  const body = pipeline.slice(pipeline.indexOf('async function runRowCounts('))
+
+  it('counts on run_id, never on id', () => {
+    expect(body).toContain(".select('run_id', { count: 'exact', head: true }).eq('run_id', runId)")
+    expect(body.slice(0, body.indexOf('\n}\n'))).not.toContain(".select('id'")
+  })
+
+  it('still counts the three tables the alert names', () => {
+    for (const t of ['theme_observations', 'recommendations', 'run_costs']) {
+      expect(body).toContain(`head('${t}')`)
+    }
   })
 })

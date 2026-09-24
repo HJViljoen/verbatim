@@ -2015,9 +2015,16 @@ async function runRowCounts(
   admin: ReturnType<typeof createAdminClient>,
   runId: string,
 ): Promise<{ observations: number; recommendations: number; costs: number } | null> {
+  // COUNT THE COLUMN EVERY ONE OF THE THREE HAS, WHICH IS `run_id` AND NOT
+  // `id`. `run_costs` is keyed by run_id alone and carries no `id` column, so
+  // selecting that one made PostgREST answer 42703, `head` returned null, and
+  // the whole of runRowCounts returned null — the alert printed "(not counted)" on
+  // EVERY partial run and never once stated what the run left behind. The
+  // column that is always there is the one being filtered on; it is also what
+  // `app/api/cron/ops-check/route.ts`'s head() has selected since WP2.
   const head = async (table: string): Promise<number | null> => {
     const { count, error } = await admin.from(table)
-      .select('id', { count: 'exact', head: true }).eq('run_id', runId)
+      .select('run_id', { count: 'exact', head: true }).eq('run_id', runId)
     if (error) {
       console.warn(`[alert-partial] counting ${table} for run ${runId}: ${error.message}`)
       return null
