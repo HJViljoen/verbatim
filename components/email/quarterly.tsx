@@ -2,7 +2,7 @@
 import type { BlockContext } from '@/lib/blocks/types'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fullDate } from '@/lib/format'
-import { QUARTERLY_RULE, QUARTER_PAGE_IN_SENTENCE, quarterPageKindOf } from '@/lib/reports/quarterly'
+import { QUARTER_PAGE_IN_SENTENCE, quarterPageKindOf } from '@/lib/reports/quarterly'
 import { staleQuarterlySnapshot, type QuarterlySnapshotData } from '@/lib/reports/quarterly-build'
 import { quarterlyBlocksFor } from '@/components/blocks/quarterly'
 import { Button, Hairline, text } from './primitives'
@@ -126,7 +126,9 @@ export function QuarterlyEmail({ data, shareUrl, appUrl, attached, ctx, preheade
                         <div style={text.eyebrow}>{data.company} · consumer intelligence</div>
                         <div style={{ fontFamily: FONT.serif, fontSize: 22, fontWeight: 500, lineHeight: '1.25', color: EMAIL.ink, marginTop: 8 }}>{data.subject}</div>
                         <div style={{ ...text.mono, color: EMAIL.muted, fontSize: 12, marginTop: 6 }}>{data.period} · reading as at {fullDate(data.readingAt)}</div>
-                        <div style={{ ...text.small, fontStyle: 'italic', marginTop: 10 }}>{QUARTERLY_RULE}</div>
+                        {/* NO RULE UNDER THE MASTHEAD (copy de-clutter, ruling E): the
+                            cover's own stat card states the six-month gate, and a
+                            covering note says it once. */}
                       </td>
                     </tr>
                     <tr>
@@ -149,11 +151,11 @@ export function QuarterlyEmail({ data, shareUrl, appUrl, attached, ctx, preheade
                           {stale ? '' : held > 0
                             ? `This note carries ${carriedNames.length ? andList(carriedNames) : 'none of the review’s pages'}; ${
                                 held === 1 ? 'the other one' : `the other ${held}`
-                              } — ${andList(heldNames)} — ${held === 1 ? 'is' : 'are'} in the review itself.`
+                              } (${andList(heldNames)}) ${held === 1 ? 'is' : 'are'} in the review itself.`
                             : 'The review itself carries every page.'}
                         </div>
                         <div style={{ ...text.small, fontSize: 11, marginTop: 10, color: EMAIL.faint }}>
-                          Prepared for {data.company} · with Verbatim. You are receiving this because you are on {data.company}’s update list; an owner or admin changes it in Verbatim, in Settings.
+                          Prepared for {data.company} · with Verbatim. You are receiving this because you are on {data.company}’s update list; an owner or admin changes it in the Studio.
                         </div>
                       </td>
                     </tr>

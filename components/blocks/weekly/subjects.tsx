@@ -10,7 +10,7 @@ import { candidateLine } from '@/lib/pages/overview'
 import type { SideReading, SubjectRow } from '@/lib/pages/overview'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { WeeklyData } from '@/lib/pages/weekly'
-import { subjectsLead } from '@/lib/reports/weekly'
+import { CONTRIBUTIONS_NOT_RECORDED, subjectsLead } from '@/lib/reports/weekly'
 
 // WR2 · Where things stand (design §3 WR section 2).
 //
@@ -204,10 +204,6 @@ function Row({ row, contribution, rivalLabel, share, mode, appUrl }: {
   )
 }
 
-/** What the bar is, said once — the mock's legend, with the fact it can stand
- *  behind in place of the typical-week mark it draws. */
-const BAR_LEGEND = 'the bar is each subject’s share of the category this month, against the largest of them'
-
 export const weeklySubjects: Block<WeeklyData> = {
   key: 'weekly.subjects',
   // THE ARTBOARD'S OWN HEADING (`weekly.s2.header`). It read "Where things
@@ -230,10 +226,12 @@ export const weeklySubjects: Block<WeeklyData> = {
         footer={mode === 'email'
           ? <a href={href} style={{ color: EMAIL.ink }}>Open Subjects →</a>
           : <Link href={href} className="hover:underline">Open Subjects →</Link>}
-        // THE ARTBOARD'S QUIET MONO NOTE, in the slot P0 built for it: what
-        // these numbers are a share of, where the eye can skip it until it
-        // wants it.
-        footerNote={s.rows.length > 0 ? 'mentions in your audience' : undefined}
+        // ONE LEGEND, AND A CORRECT ONE (copy de-clutter, D56/D57). The block
+        // printed two: "mentions in your audience" in the footer and a bar
+        // legend saying the bar was the CATEGORY's share, which contradicted
+        // it. Each cell prints its own "k of n"; what is left to say is what
+        // the share is of and whose the bar is.
+        footerNote={s.rows.length > 0 ? 'share of videos where the subject came up · the bar is the category’s' : undefined}
       >
         {children}
       </BlockFrame>
@@ -242,7 +240,7 @@ export const weeklySubjects: Block<WeeklyData> = {
     const empty = weeklySubjects.emptyState(data)
     if (empty) return frame(<BlockEmpty mode={mode}>{empty}</BlockEmpty>)
 
-    const note = [s.note, data.contributions ? null : data.contributionsNote].filter(Boolean).join(' ')
+    const note = [s.note, data.contributions ? null : CONTRIBUTIONS_NOT_RECORDED].filter(Boolean).join(' ')
     const top = Math.max(0.1, ...s.rows.map((r) => r.category.pct ?? 0))
     return frame(
       <div>
@@ -272,12 +270,6 @@ export const weeklySubjects: Block<WeeklyData> = {
             appUrl={ctx.appUrl}
           />
         ))}
-        <div
-          style={mode === 'email' ? { fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.muted, marginTop: 14 } : undefined}
-          className={mode === 'email' ? undefined : 'mt-3.5 font-mono text-[10.5px] text-muted-foreground'}
-        >
-          {BAR_LEGEND}
-        </div>
         {note
           ? mode === 'email'
             ? <div style={{ fontFamily: FONT.sans, fontSize: 12.5, lineHeight: 1.5, color: EMAIL.muted, marginTop: 6 }}>{note}</div>

@@ -9,7 +9,6 @@ import {
   MONTHLY_CARD_WIDTH,
   monthlyContext,
   monthlyEyebrow,
-  monthlyRuleFor,
   readingCaveat,
 } from '@/lib/reports/monthly'
 import type { MonthlySnapshotData } from '@/lib/reports/monthly-build'
@@ -129,7 +128,10 @@ export function MonthlyEmail({ data, shareUrl, appUrl, attached, ctx, preheader 
                             </tr>
                           </tbody>
                         </table>
-                        <div style={{ ...text.small, fontStyle: 'italic', marginTop: 10 }}>{monthlyRuleFor(data.monthStatus)}</div>
+                        {/* NO RULE UNDER THE MASTHEAD (copy de-clutter, ruling F):
+                            the eyebrow above already says the month is still
+                            filling and until when, which is the one home the
+                            freeze has on this artefact. */}
                         {/* AND WHAT THE READING CANNOT SUPPORT, beside the rule
                             that says how to read it. One sentence for the whole
                             artefact (lib/reading/series.ts mergeNotes), on the
@@ -171,9 +173,7 @@ export function MonthlyEmail({ data, shareUrl, appUrl, attached, ctx, preheader 
                           {shareUrl ? <span style={{ marginRight: 10 }}><Button href={shareUrl} primary>Open the {longMonth(data.month)} reading</Button></span> : null}
                           <Button href={`${appUrl}/dashboard`}>Open Verbatim</Button>
                         </div>
-                        <div style={{ ...text.small, marginTop: 13 }}>
-                          {attached ? 'The PDF is attached. ' : ''}One link per section; the evidence behind each figure opens on the page.
-                        </div>
+                        {attached ? <div style={{ ...text.small, marginTop: 13 }}>The PDF is attached.</div> : null}
                         <Hairline />
                         {/* "Prepared FOR", not "by" — this is a list Verbatim
                             sends to the client's own staff. The share page says

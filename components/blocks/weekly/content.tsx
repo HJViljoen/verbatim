@@ -88,7 +88,7 @@ function CountedRow({ title, value, note, mode, children }: {
  */
 function MoverRows({ movers, mode }: { movers: readonly Mover[]; mode: RenderMode }) {
   const title = 'What moved most'
-  const note = `in the category ${movers.length === 1 ? 'this month' : 'this month, each against the band it cleared'}`
+  const note = 'in the category this month'
   const line = (m: Mover) => {
     // THE READING IS UNBREAKABLE, THE ROW IS NOT. A share and its denominator
     // may not be split across a line (`movers.tsx:291-305` made the trail
@@ -210,7 +210,6 @@ export const weeklyContent: Block<WeeklyData> = {
                 {c.worthAReply.length > 0 && c.surfaced > c.worthAReply.length
                   ? ` · ${fmtInt(c.worthAReply.length)} below in full`
                   : ''}
-                {' · '}the queue ranks and caps what it shows, so this is what was surfaced and not everything worth answering
               </>
             }
           >

@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-head-element, @next/next/no-page-custom-font -- an email document, not a page */
 import type { BlockContext } from '@/lib/blocks/types'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { WEEKLY_CANVAS_GUTTER, WEEKLY_CARD_WIDTH, periodNounFor, weeklyDateLine, weeklyEyebrow, weeklyFooterLines, weeklyHeadline, weeklyLinks, weeklyRuleFor } from '@/lib/reports/weekly'
+import { WEEKLY_CANVAS_GUTTER, WEEKLY_CARD_WIDTH, weeklyDateLine, weeklyEyebrow, weeklyFooterLines, weeklyHeadline, weeklyLinks } from '@/lib/reports/weekly'
 import { staleWeeklySnapshot, type WeeklySnapshotData } from '@/lib/reports/weekly-build'
 import { weeklyBlocksFor } from '@/components/blocks/weekly'
 import { Button, Hairline, text } from './primitives'
@@ -113,17 +113,10 @@ export function WeeklyEmail({ data, shareUrl, appUrl, attached, ctx, preheader }
                             </tr>
                           </tbody>
                         </table>
-                        {/* THE RULE, AND NOT IN A BORROWED FACE. It was sans
-                            italic at 12px — the artefact's ONLY non-speech
-                            italic, where every other lean on this page is a
-                            commenter's words in serif italic (`BlockQuote`).
-                            DESIGN.md: "Italic is semantic, never decorative",
-                            and `coverage.tsx` quotes that exact rule as its
-                            reason for not reprinting this sentence at the
-                            foot. The identity reserves the lean for speech;
-                            the sentence stays where a reader meets their first
-                            number, in the muted ink it already had. */}
-                        <div style={{ ...text.small, marginTop: 10 }}>{weeklyRuleFor(periodNounFor(data.reading.window))}</div>
+                        {/* NO RULE UNDER THE MASTHEAD (copy de-clutter, D53): §1's
+                            meta already prints the update beside the month so
+                            far, and the month-to-date rule lives in Settings ›
+                            How to read. */}
                       </td>
                     </tr>
                     <tr>

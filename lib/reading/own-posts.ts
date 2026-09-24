@@ -197,7 +197,7 @@ export interface OwnPostInput {
  * E-main port owns both files, so the string lives here, in the leaf, and
  * Overview re-exports it under the name its callers already use.
  */
-export const OWN_POSTS_UNREADABLE = '— not tracked · their own posts are not readable yet · Settings › Readiness'
+export const OWN_POSTS_UNREADABLE = '· not tracked · Settings › Readiness'
 
 /** The same absence WITHOUT the pointer, for a reader outside the workspace.
  *
@@ -209,7 +209,7 @@ export const OWN_POSTS_UNREADABLE = '— not tracked · their own posts are not 
  *  reader outside the workspace has no Settings to open, so they get the
  *  absence and no pointer, which is what this constant is for — a brief's PDF
  *  and a `/r/<token>` share page, which is what WP19 put it in front of. */
-export const OWN_POSTS_UNREADABLE_OUTSIDE = '— not tracked · their own posts are not readable yet'
+export const OWN_POSTS_UNREADABLE_OUTSIDE = '· not tracked'
 
 /**
  * This week's clause for the same shelf, and it is NOT the two above — read
@@ -243,7 +243,7 @@ export const OWN_POSTS_UNREAD_OUTSIDE = 'their own posts are not read yet'
  *  publish is read, so there is no census to take — which is a different
  *  sentence from "we read them and found nothing". */
 export const OWN_POSTS_NO_ACCOUNTS =
-  'No account is configured for this rival, so nothing they publish is read — add their accounts in Settings and this starts counting.'
+  'No account is configured for this rival, so nothing they publish is read. Add their accounts in Settings and this starts counting.'
 
 /**
  * What the client's own census says while `video_claims` is closed to a tenant

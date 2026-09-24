@@ -111,7 +111,7 @@ export function DigestEmail({ data, shareUrl, appUrl, attached, ctx, preheader }
                           <Button href={`${appUrl}/dashboard`}>Open Verbatim</Button>
                         </div>
                         <div style={{ ...text.small, marginTop: 12 }}>
-                          {attached ? 'The PDF is attached. ' : ''}{shareUrl ? 'The full report opens without an account; the evidence behind each figure opens on the page. ' : ''}
+                          {attached ? 'The PDF is attached. ' : ''}{shareUrl ? 'The full report opens without an account. ' : ''}
                         </div>
                         {method ? (
                           <div style={{ ...text.small, fontSize: 11, marginTop: 10, color: EMAIL.faint }}>
@@ -119,7 +119,7 @@ export function DigestEmail({ data, shareUrl, appUrl, attached, ctx, preheader }
                           </div>
                         ) : null}
                         <div style={{ ...text.small, fontSize: 11, marginTop: 10, color: EMAIL.faint }}>
-                          Prepared by {data.company} · with Verbatim. You are receiving this because you are on {data.company}’s update list; an owner or admin changes it in Verbatim in the Studio.
+                          Prepared by {data.company} · with Verbatim. You are receiving this because you are on {data.company}’s update list; an owner or admin changes it in the Studio.
                         </div>
                       </td>
                     </tr>

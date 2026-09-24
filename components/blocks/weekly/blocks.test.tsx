@@ -182,7 +182,10 @@ describe('WR1 · the week in one sentence', () => {
       expect(text, mode).toContain('Unusual this week · Objections')
       expect(text, mode).toContain('This week 14.1% 29 of 205')
       expect(text, mode).toContain('Three months behind 3.5% 38 of 1,089')
-      expect(text, mode).toMatch(/10\.7 pts · band ±5 pts/)
+      // Ruling I: on screen the band sits in the badge's hover title; print
+      // and email carry it inline.
+      if (mode === 'app') expect(text, mode).toMatch(/10\.7 pts/)
+      else expect(text, mode).toMatch(/10\.7 pts · band ±5 pts/)
       expect(text, mode).toContain('counted against every audience together')
       expect(text, mode).not.toMatch(/×\s*usual/)
     }
@@ -238,7 +241,7 @@ describe('WR1 · the week in one sentence', () => {
 
   it('says the baseline is forming rather than that nothing was unusual', () => {
     const text = renderText(block.render(formingFixture(), 'app', ctx))
-    expect(text).toContain('baseline forming — 1 of 3 months')
+    expect(text).toContain('baseline forming: 1 of 3 months')
     expect(text).not.toContain(NOTHING_UNUSUAL)
   })
 
@@ -279,7 +282,9 @@ describe('WR2 · where things stand', () => {
   it('says once that the contribution is not recorded, never "+0 videos"', () => {
     const data = quietFixture({ contributions: null })
     const text = renderText(block.render(data, 'app', ctx))
-    expect(text).toContain('not recorded for this workspace yet')
+    // The bare state (ruling L8), never the explanatory sentence after it.
+    expect(text.split('Arrivals since the last update: not recorded').length - 1).toBe(1)
+    expect(text).not.toContain('How much of each subject arrived')
     expect(text).not.toContain('+0 videos')
   })
 
@@ -293,10 +298,10 @@ describe('WR2 · where things stand', () => {
 
   // THE ARTBOARD'S ROW (block D wave 2): the month share leads, in its own
   // right-hand column with its "of N" under it, and the bar is drawn from it.
-  it('leads with the month share and says what the bar is', () => {
+  it('leads with the month share and says whose the bar is', () => {
     const markup = render(block.render(weeklyFixture(), 'app', ctx))
     expect(markup).toContain('data-copy="level"')
-    expect(markupText(markup)).toContain('the bar is each subject’s share of the category this month')
+    expect(markupText(markup)).toContain('the bar is the category’s')
   })
 
   // The mock draws a tick at "a typical week"; nothing on this artefact
@@ -331,8 +336,13 @@ describe('WR2 · where things stand', () => {
     expect(copyViolations(render(block.render(weeklyFixture(), 'app', ctx)))).toEqual([])
   })
 
-  it('names what these are mentions in, in the frame’s footer note', () => {
-    expect(renderText(block.render(weeklyFixture(), 'app', ctx))).toContain('mentions in your audience')
+  // ONE LEGEND, AND A CORRECT ONE (D56/D57): "mentions in your audience" in
+  // the footer contradicted a bar legend saying the bar was the category's.
+  it('names what the shares are of in one footer legend', () => {
+    const text = renderText(block.render(weeklyFixture(), 'app', ctx))
+    expect(text).toContain('share of videos where the subject came up · the bar is the category’s')
+    expect(text).not.toContain('mentions in your audience')
+    expect(text).not.toContain('against the largest of them')
   })
 
   it('says the subjects are not recorded rather than drawing an empty table', () => {
@@ -394,7 +404,8 @@ describe('WR3 · what came in this week', () => {
     const text = renderText(block.render(weeklyFixture(), 'app', ctx))
     expect(text).toContain('271 videos found')
     expect(text).toContain('264 analysed')
-    expect(text).toContain('the month so far holds 2,359 videos, dated by when people wrote')
+    // Not restated here (D54): §1's meta prints the month so far.
+    expect(text).not.toContain('the month so far holds')
   })
 
   // THE COUNTS OPEN TO THEIR EVIDENCE (weekly.s3.counts). `StatRow` rendered a
@@ -502,7 +513,7 @@ describe('WR3 · what came in this week', () => {
     for (const mode of MODES) {
       const text = renderText(block.render(weeklyFixture(), mode, ctx))
       expect(text, mode).toContain('New')
-      expect(text, mode).toContain('Zips failing after a year — heard for the first time in this update, in 12 videos.')
+      expect(text, mode).toContain('Zips failing after a year · first heard in this update, in 12 videos.')
       // Not the mock's "26 of 1,388 category videos": a month denominator on a
       // count of one update is two units in one sentence.
       expect(text, mode).not.toContain('category videos')
@@ -517,7 +528,7 @@ describe('WR3 · what came in this week', () => {
 
   it('names the new theme and the rival post with the comments read', () => {
     const text = renderText(block.render(weeklyFixture(), 'app', ctx))
-    expect(text).toContain('heard for the first time in this update')
+    expect(text).toContain('first heard in this update')
     expect(text).toContain('Freitag posted on Instagram')
     expect(text).toContain('310 comments read')
   })
@@ -548,7 +559,8 @@ describe('WR3 · what came in this week', () => {
   it('prints the new quotes on your subjects, with how many there were', () => {
     for (const mode of MODES) {
       const text = renderText(block.render(weeklyFixture(), mode, ctx))
-      expect(text, mode).toContain('41 comments on your subjects were written in these days')
+      // The count is the stat row's; the sentence restating it is gone (D65).
+      expect(text, mode).not.toContain('41 comments on your subjects were written in these days')
       expect(text, mode).toContain('Third winter on mine and the strap has not given at all')
       // The original and its English rendering are DIFFERENT sentences; the
       // fixture used to carry the English twice and read as a render bug.
@@ -637,15 +649,11 @@ describe('WR4 · for sales', () => {
   // `rivalComplaints` is the objection citations whose audience is a rival —
   // drawn from the same pool as the row above, so two adjacent counts over one
   // n invited a reader to add them.
-  it('says the rival row is inside the objections above, not beside them', () => {
-    expect(renderText(block.render(weeklyFixture(), 'app', ctx)))
-      .toContain('and inside the count above')
-  })
-
   it('counts the rival’s complaints under the rival’s own content', () => {
     const text = renderText(block.render(weeklyFixture(), 'app', ctx))
     expect(text).toContain('They complain about Freitag')
-    expect(text).toContain('under that rival’s content, never under yours')
+    expect(text).toContain('under their content')
+    expect(text).not.toContain('never under yours')
   })
 
   // D14: the mock says "both toward Sealand · 7 toward, 5 away", and nothing
@@ -654,7 +662,8 @@ describe('WR4 · for sales', () => {
     const text = renderText(block.render(weeklyFixture(), 'app', ctx))
     expect(text).toContain('Someone said they were moving between brands')
     expect(text).toContain('12')
-    expect(text).toContain('which way they point is not recorded')
+    expect(text).toContain('direction: not recorded')
+    expect(text).not.toContain('which way they point')
     expect(text).not.toMatch(/toward/i)
   })
 
@@ -768,14 +777,15 @@ describe('WR5 · for content', () => {
   // of a ranked, capped list — bounded at fifteen for every tenant forever by
   // `rankEngageCandidates` — so the row prints the queue's own verb and states
   // the cap, rather than printing a cap as a count of the week.
-  it('counts what the queue surfaced, says it is capped, and never the shown three', () => {
+  it('counts what the queue surfaced, and never the shown three', () => {
     for (const mode of MODES) {
       const text = renderText(block.render(weeklyFixture(), mode, ctx))
       expect(text, mode).toContain('Surfaced for a reply this week')
       expect(text, mode).not.toContain('Worth a reply this week')
       expect(text, mode).toContain('question 7 · objection 3 · buying signal 2')
       expect(text, mode).toContain('1 below in full')
-      expect(text, mode).toContain('the queue ranks and caps what it shows')
+      // The cap disclaimer is gone (D63); the counts and "N below in full" say it.
+      expect(text, mode).not.toContain('the queue ranks and caps what it shows')
       // D14: nothing records whether a comment was answered. ("answering" in
       // the cap clause is about the reader's own work, not a record of one.)
       expect(text, mode).not.toMatch(/answered|ignored/i)
@@ -859,9 +869,13 @@ describe('WR6 · coverage', () => {
   // THE ARTBOARD'S §6 (block D wave 2): the update's own videos lead the line,
   // "the record →" sits in the header opposite the label, and the Reddit cap —
   // the one `methodLines` line no reading surface has ever printed — is here.
-  it('leads with this update’s videos, on the clock they are on', () => {
+  // AND NO LONGER WITH THE UPDATE'S VIDEOS (D73): §1's meta and §3's stat row
+  // both print them; the line opens on the record's own figures.
+  it('does not restate this update’s videos, which §1 and §3 print', () => {
     for (const mode of MODES) {
-      expect(renderText(block.render(weeklyFixture(), mode, ctx))).toContain('271 videos found this week ·')
+      const text = renderText(block.render(weeklyFixture(), mode, ctx))
+      expect(text).not.toContain('videos found this week')
+      expect(text).toContain('3 updates')
     }
   })
 

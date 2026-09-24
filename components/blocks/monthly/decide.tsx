@@ -113,14 +113,9 @@ export const monthlyDecide: Block<MonthlyData> = {
     const readBody = (
       <>
         <TokenProse body={d.interpretation.sentences.join(' ')} figures={d.figures} mode={mode} model />
-        {d.interpretation.note ? (
-          <span
-            className={email ? undefined : 'text-[11px] text-muted-foreground'}
-            style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}
-          >
-            {d.interpretation.note}
-          </span>
-        ) : null}
+        {/* NO "we wrote this read ourselves" (ruling L9): the Interpretation
+            label already marks the paragraph, and who wrote it changes no
+            decision. A snapshot that stored the note is not printed either. */}
       </>
     )
     const read = d.interpretation.sentences.length > 0 ? (
@@ -238,7 +233,7 @@ function Brief({ brief, mode, appUrl }: { brief: BriefLink; mode: RenderMode; ap
   // the same email's footer says the reader-facing noun, "One link per
   // section", so one artefact carried two words for one thing.
   const lead = brief.public
-    ? 'The brief opens from the link below, one link per section.'
+    ? 'The brief opens from the link below.'
     : brief.locked
     ? 'The brief opens from the link below, which asks for the password your workspace set on it.'
     : 'The brief is in the workspace.'

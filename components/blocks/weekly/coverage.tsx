@@ -4,7 +4,6 @@ import { BlockFrame } from '@/components/blocks/frame'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt } from '@/lib/format'
 import type { WeeklyData } from '@/lib/pages/weekly'
-import { inPeriod } from '@/lib/reports/weekly'
 
 // WR6 · Coverage, in one line (design §3 WR section 6).
 //
@@ -72,7 +71,6 @@ export const weeklyCoverage: Block<WeeklyData> = {
     // Absolute in every mode: this link is drawn on paper and on a share page
     // as well as in the app (lib/blocks/types.ts, BlockContext.appUrl).
     const href = `${ctx.appUrl}${c.href}`
-    const gathered = data.incoming.gathered
     return (
       <BlockFrame
         title={weeklyCoverage.title}
@@ -86,7 +84,9 @@ export const weeklyCoverage: Block<WeeklyData> = {
             style={email ? { fontFamily: FONT.mono, fontSize: 11.5, color: EMAIL.ink2, lineHeight: 1.75 } : undefined}
             className={email ? undefined : 'font-mono text-[11.5px] leading-loose text-secondary-foreground'}
           >
-            <span data-copy="figure">{fmtInt(gathered)}</span> {gathered === 1 ? 'video' : 'videos'} found {inPeriod(data.section1.check.noun)} · {c.line}
+            {/* NO "N videos found" LEAD (copy de-clutter, D73): §1's meta and
+                §3's stat row both print it already. */}
+            {c.line}
             {/* THE REFUSALS, ON THE LINE — the artboard's own closing clause.
                 Null is not zero: a stored artefact frozen before the field
                 existed cannot say the number, and it says nothing rather than

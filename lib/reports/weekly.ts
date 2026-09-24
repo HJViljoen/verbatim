@@ -113,6 +113,12 @@ export function periodNounFor(window: { from: string; to: string } | null): Peri
  *  take the same preposition and half-substituted English is worse than either. */
 export const inPeriod = (noun: PeriodNoun): string => (noun === 'week' ? 'this week' : 'in this update')
 
+/** §2's arrivals per subject, as a state and nothing after it (ruling L8).
+ *  Printed at render for every snapshot, so one frozen with the old sentence
+ *  ("How much of each subject arrived … is not recorded for this workspace
+ *  yet.") prints this instead. */
+export const CONTRIBUTIONS_NOT_RECORDED = 'Arrivals since the last update: not recorded'
+
 /** Printed under the masthead, every week, in the design's own words.
  *
  *  The 'week' arm, and the constant every caller that has no window still
@@ -231,7 +237,7 @@ export interface WeekCheck {
   noun: PeriodNoun
   /** The one line for this state, in the reader's words. */
   line: string
-  /** "baseline forming — 2 of 3 months", on the forming state only. */
+  /** "baseline forming: 2 of 3 months", on the forming state only. */
   baseline: string | null
   /** Why the check was suppressed, machine-readable, on `suppressed` only. */
   reason: ThinUpdateReason | null
@@ -453,8 +459,8 @@ export function weekCheck(input: WeekCheckInput): WeekCheck {
 
 function flaggedLine(n: number, noun: PeriodNoun): string {
   return n === 1
-    ? `One thing ${inPeriod(noun)} is unusual against the three months behind it.`
-    : `${fmtInt(n)} things ${inPeriod(noun)} are unusual against the three months behind them.`
+    ? `One thing ${inPeriod(noun)} is unusual.`
+    : `${fmtInt(n)} things ${inPeriod(noun)} are unusual.`
 }
 
 // ---- The budget ---------------------------------------------------------------

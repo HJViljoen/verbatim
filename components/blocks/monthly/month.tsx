@@ -94,11 +94,15 @@ export const monthlyMonth: Block<MonthlyData> = {
     // LAST MONTH, CONFIRMED. The other half of item 13's loop, and it belongs
     // here rather than in the masthead: a reader meets the month's own numbers
     // first and is then told what the month before them settled at.
-    const confirming = data.confirming ? (
+    // A snapshot built before the copy de-clutter stored the line with its
+    // explanatory tail (D45); the figure pair is the finding, so the tail is
+    // not reprinted.
+    const confirmingText = data.confirming?.replace('; the rest of the month has since been counted.', '.') ?? null
+    const confirming = confirmingText ? (
       email ? (
-        <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 8 }}>{data.confirming}</div>
+        <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 8 }}>{confirmingText}</div>
       ) : (
-        <p className="m-0 text-[11.5px] text-muted-foreground">{data.confirming}</p>
+        <p className="m-0 text-[11.5px] text-muted-foreground">{confirmingText}</p>
       )
     ) : null
 
@@ -200,5 +204,5 @@ export const monthlyMonth: Block<MonthlyData> = {
  *  week" for the same sentence on a weekly surface, where the period is
  *  unambiguous. */
 function anomalySentence(a: AnomalyLine): string {
-  return `${a.label} — ${fmtInt(a.k)} of ${fmtInt(a.n)} ${a.denominator} in the week of ${shortDate(a.weekStart)}, against the three months behind it (band ±${Math.abs(a.bandPts)} points).`
+  return `${a.label}: ${fmtInt(a.k)} of ${fmtInt(a.n)} ${a.denominator} in the week of ${shortDate(a.weekStart)}, against the three months behind it (band ±${Math.abs(a.bandPts)} points).`
 }

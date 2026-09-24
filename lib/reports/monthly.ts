@@ -1,4 +1,5 @@
 import { fmtInt, fmtPct, fullDate, longMonth, shortDate } from '../format'
+import { QUARTER_UNLOCKS_AT } from '../reading/bands'
 import { freezeBoundary } from '../reading/monthly'
 import type { Verdict } from '../reading/verdicts'
 
@@ -111,44 +112,17 @@ export const MONTHLY_MOVERS = 10
  * that is still filling will still move.
  */
 export const MONTHLY_RULE =
-  'Every number below is one calendar month, counted by the day each comment was written — ' +
+  'Every number below is one calendar month, counted by the day each comment was written, ' +
   'not by the day we read it. A month keeps filling for thirty days after it ends.'
 
 /** The same claim once a month has stopped moving: nothing below will change
  *  again, which is a different and stronger thing to be able to say. */
 export const MONTHLY_RULE_FROZEN =
-  'Every number below is one calendar month, counted by the day each comment was written — ' +
+  'Every number below is one calendar month, counted by the day each comment was written, ' +
   'not by the day we read it. This month has closed; none of it will move again.'
 
 export const monthlyRuleFor = (status: MonthlyStatus): string =>
   status === 'frozen' ? MONTHLY_RULE_FROZEN : MONTHLY_RULE
-
-/**
- * What section 5 says about scoring, ON THE ARTEFACT.
- *
- * OV5's own sentence names a page a reader can click. That was argued for an
- * in-app surface,
- * where Market is a page the reader can click and the sentence answers "why is
- * this column empty here and not there?". Mailed to a client's staff it is
- * build status about an unshipped feature and a page name they have no account
- * for — pipeline jargon by the calibration rule, in the one artefact that goes
- * to people outside the workspace. WP17's weekly report never carried OV5, so
- * the monthly one is the first artefact that would have sent it.
- *
- * WHAT A CLIENT NEEDS FROM IT IS WHY THERE IS NO SCORE COLUMN, and that answer
- * is already on every row: a move is dated, and its first score lands with a
- * named reading. So the artefact says that, and says nothing about what is or
- * is not built.
- */
-// AND IT CHANGED WITH THE PAGE (Block D · D2). "Nothing here is scored yet"
-// was true when nothing scored a move; every move now carries the one banded
-// comparison it earns, so the sentence would be a copy claim the code
-// contradicts. What a client still needs from it is the same thing — WHY a
-// move that was dated this month has no comparison — and that answer has not
-// changed: a move is read from the month after it was dated. Said without
-// build status and without a page name, which is this artefact's own rule.
-export const MONTHLY_MOVES_UNLOCK =
-  'A move is read from the month after it was dated, and beside the audiences it did not touch. Each one carries the reading its first comparison lands with.'
 
 /** And the artefact's own words for a workspace that has dated nothing. OV5's
  *  say "Press Track this on a subject or a theme", which is a control on a page
@@ -563,6 +537,106 @@ export function confirmingLine(month: string, sent: SentReading | null, closed: 
   const wasLevel = sent.unit === 'pct' ? fmtPct(sent.value) : fmtInt(sent.value)
   const nowLevel = sent.unit === 'pct' ? fmtPct(closed.value) : fmtInt(closed.value)
   return movedSince(sent, closed.value)
-    ? `${name} has closed at ${nowLevel}. The report of ${shortDate(sent.readingAt)} read ${wasLevel}; the rest of the month has since been counted.`
+    ? `${name} has closed at ${nowLevel}. The report of ${shortDate(sent.readingAt)} read ${wasLevel}.`
     : `${name} has closed at ${nowLevel}, which is what the report of ${shortDate(sent.readingAt)} read.`
+}
+
+// ---- §8 · how sound is this month, in three sentences -------------------------
+
+/**
+ * The figures section 8 prints, and nothing else (copy de-clutter 2026-09-24,
+ * ruling B: "the monthly email §8 becomes exactly the three sentences the mock
+ * asked for", `MonthlyReport.dc.html`).
+ *
+ * Every field is nullable where the record can hold "not recorded", and a null
+ * clause is DROPPED rather than printed as a zero. The per-language split the
+ * artboard prints ("Afrikaans 14%, German 6%") has no field and is not printed;
+ * the tracking change's own description ("Poler added 3 Sep") is not in the
+ * record inputs either, so the count stands alone.
+ */
+export interface MonthlySoundFigures {
+  updates: number
+  comments: number | null
+  videos: number | null
+  trailingMedian: number | null
+  /** Share not in English, of videos whose language is known, 0–100. */
+  notEnglishPct: number | null
+  /** Read depth, all time, non-Reddit, 0–100. */
+  speechPct: number | null
+  onScreenPct: number | null
+  trackingChanges: number | null
+  refused: number | null
+  /** Monthly readings of the gathered era (`BarBlock.readings`). */
+  readings: number | null
+}
+
+/** The record's inputs, reduced to §8's figures. Pure; the record type is
+ *  structural here so this module keeps importing no loader. */
+export function monthlySoundFigures(
+  input: {
+    delivery: { delivered: number }
+    coverage: readonly { videos: number; comments: number }[] | null
+    readDepth: { analysed: number; speech: number; onScreenText: number }
+    language: { english: number; notEnglish: number }
+    changes: { inWindow: number }
+    comparisonsRefused: number | null
+  },
+  bar: { expected: number | null; readings: number },
+): MonthlySoundFigures {
+  const pct = (k: number, n: number): number | null => (n > 0 ? (k / n) * 100 : null)
+  const cov = input.coverage && input.coverage.length > 0 ? input.coverage : null
+  const known = input.language.english + input.language.notEnglish
+  return {
+    updates: input.delivery.delivered,
+    comments: cov ? cov.reduce((n, c) => n + c.comments, 0) : null,
+    videos: cov ? cov.reduce((n, c) => n + c.videos, 0) : null,
+    trailingMedian: bar.expected,
+    notEnglishPct: pct(input.language.notEnglish, known),
+    speechPct: pct(input.readDepth.speech, input.readDepth.analysed),
+    onScreenPct: pct(input.readDepth.onScreenText, input.readDepth.analysed),
+    trackingChanges: input.changes.inWindow,
+    refused: input.comparisonsRefused,
+    readings: bar.readings,
+  }
+}
+
+const count = (n: number, word: string): string => `${fmtInt(n)} ${word}${n === 1 ? '' : 's'}`
+
+function ordinal(n: number): string {
+  const tens = n % 100
+  const suffix = tens >= 11 && tens <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'
+  return `${fmtInt(n)}${suffix}`
+}
+
+/**
+ * The three sentences, in the mock's order: what was read · how deeply and in
+ * what language · what changed, what was refused, and where the ramp stands.
+ * A sentence with no clause left is dropped, so the section prints at most
+ * three and never an empty line.
+ */
+export function monthlySoundLines(f: MonthlySoundFigures): string[] {
+  const one: string[] = [count(f.updates, 'update')]
+  if (f.comments != null) one.push(`${fmtInt(f.comments)} comments read`)
+  if (f.videos != null) {
+    one.push(
+      f.trailingMedian != null
+        ? `${fmtInt(f.videos)} videos analysed, against a trailing median of ${fmtInt(f.trailingMedian)}`
+        : `${fmtInt(f.videos)} videos analysed`,
+    )
+  }
+
+  const two: string[] = []
+  if (f.notEnglishPct != null) two.push(`${fmtPct(f.notEnglishPct, 0)} not in English`)
+  if (f.speechPct != null) two.push(`speech read on ${fmtPct(f.speechPct, 0)} of videos`)
+  if (f.onScreenPct != null) two.push(`on-screen text on ${fmtPct(f.onScreenPct, 0)}`)
+
+  const three: string[] = []
+  if (f.trackingChanges != null && f.trackingChanges > 0) three.push(count(f.trackingChanges, 'tracking change'))
+  if (f.refused != null && f.refused > 0) three.push(`${count(f.refused, 'comparison')} refused`)
+  if (f.readings != null && f.readings > 0) {
+    const reading = `your ${ordinal(f.readings)} monthly reading`
+    three.push(f.readings < QUARTER_UNLOCKS_AT ? `${reading}, and the quarter view needs ${QUARTER_UNLOCKS_AT}` : reading)
+  }
+
+  return [one, two, three].filter((s) => s.length > 0).map((s) => `${s.join(' · ')}.`)
 }

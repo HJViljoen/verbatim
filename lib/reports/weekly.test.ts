@@ -213,7 +213,7 @@ describe('weekCheck', () => {
 
   it('names how many months the baseline has', () => {
     const c = weekCheck({ state: 'baseline_forming', flags: [], monthsClearing: 2 })
-    expect(c.baseline).toBe('baseline forming — 2 of 3 months')
+    expect(c.baseline).toBe('baseline forming: 2 of 3 months')
   })
 
   it('counts the flags it could not print', () => {

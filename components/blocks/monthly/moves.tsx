@@ -58,13 +58,11 @@ export function monthlyMovesEmail(data: OverviewData, ctx: BlockContext): ReactN
           the moves. */}
       {empty ? <BlockEmpty mode="email">{empty}</BlockEmpty> : (
         <>
-          {/* THE MASTHEAD LEADS, as the artboard has it: it is the one sentence
-              that keeps every line under it from reading as a causal claim, and
-              the built block printed it LAST, below the unlock, where a reader
-              has already read the rows. */}
-          <div style={{ fontFamily: FONT.sans, fontSize: 12.5, lineHeight: '1.5', color: EMAIL.muted, marginTop: 4 }}>{m.masthead}</div>
+          {/* NO MASTHEAD AND NO UNLOCK (copy de-clutter 2026-09-24, D32/D33,
+              ruling L6). The no-causation promise is said once per forwarded
+              document, on its method sheet; each row already carries the
+              reading its first comparison lands with. */}
           {m.rows.map((row) => <Row key={row.id} row={row} />)}
-          <div style={{ fontFamily: FONT.sans, fontSize: 11.5, lineHeight: '1.5', color: EMAIL.muted, marginTop: 8 }}>{m.unlock}</div>
         </>
       )}
       {m.acted ? <Acted acted={m.acted} /> : null}

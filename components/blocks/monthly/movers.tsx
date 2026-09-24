@@ -76,7 +76,11 @@ export const monthlyMovers: Block<MonthlyData> = {
     const empty = monthlyMovers.emptyState(data)
     if (empty) return frame(<BlockEmpty mode={mode}>{empty}</BlockEmpty>)
 
-    const notes = [m.note, m.rereadNote].filter(Boolean).join(' ')
+    // NOT THE RE-READ NOTE (copy de-clutter, D40): "whether a theme's members
+    // were re-read this month is not recorded" is a permanent fact about our
+    // bookkeeping, printed every month on every tenant. It lives in Settings ›
+    // How to read.
+    const notes = m.note ?? ''
     // THE ARM NAMES WHAT WAS DONE TO THE NUMBER; the row carries the word,
     // inside the node that holds the band. VO2's own wording, so a reader who
     // has seen the page reads the same two arms here.
@@ -200,7 +204,7 @@ function Side({ rows, mode, audience, arm }: {
           read as two copies of one heading. The one word that differs is now
           the dark one; the seven that do not stay muted. */}
       <Heading mode={mode}>
-        Cleared their band · a{' '}
+        A{' '}
         {email
           ? <span style={{ color: EMAIL.ink }}>{arm}</span>
           : <span className="text-foreground">{arm}</span>}

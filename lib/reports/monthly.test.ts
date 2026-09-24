@@ -241,7 +241,7 @@ describe('next month’s confirming line', () => {
 
   it('says what the month closed at, and what we had said', () => {
     expect(confirmingLine('2026-09', sent(), closed(22))).toBe(
-      'September has closed at 22.0%. The report of 1 Oct read 19.0%; the rest of the month has since been counted.',
+      'September has closed at 22.0%. The report of 1 Oct read 19.0%.',
     )
   })
 

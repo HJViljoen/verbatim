@@ -61,10 +61,14 @@ export function monthlyRivalsEmail(data: OverviewData, ctx: BlockContext): React
       accent
       meta="attention share"
       footer={<a href={href} style={{ color: EMAIL.ink }}>Open Competitive →</a>}
-      footerNote="both shares of a frozen panel of accounts · no rank is printed"
+      footerNote="both shares of a frozen panel of accounts"
     >
       {empty ? <BlockEmpty mode="email">{empty}</BlockEmpty> : null}
-      {r.standingsNote ? <BlockEmpty mode="email">{r.standingsNote}</BlockEmpty> : null}
+      {/* THE BARE STATE (ruling L8): the only arm that sets a standings note
+          is the one with no attention panel recorded, and its explanatory
+          tail restated the layout. The sentence stored in an older snapshot is
+          not reprinted. */}
+      {r.standingsNote ? <BlockEmpty mode="email">{ATTENTION_NOT_RECORDED}</BlockEmpty> : null}
       {r.lead ? (
         <div style={{ fontFamily: FONT.sans, fontSize: 15, lineHeight: '1.5', color: EMAIL.ink, marginTop: 6 }}>{r.lead}</div>
       ) : null}
@@ -82,12 +86,14 @@ export function monthlyRivalsEmail(data: OverviewData, ctx: BlockContext): React
           {r.rows.map((row) => <Row key={row.audience} row={row} recorded={r.recorded} />)}
         </tbody>
       </table>
-      <div style={{ fontFamily: FONT.sans, fontSize: 11.5, lineHeight: '1.5', color: EMAIL.muted, marginTop: 8 }}>
-        {r.caveat}
-        {r.dualMention != null && r.dualMention > 0 ? (
-          <> <span data-copy="figure">{fmtInt(r.dualMention)}</span> did this month.</>
-        ) : null}
-      </div>
+      {/* THE COUNT, NOT THE PRECEDENCE RULE (copy de-clutter, D35): the rule
+          never changes and lives in Settings › How to read; at month three
+          only the count is news. */}
+      {r.dualMention != null && r.dualMention > 0 ? (
+        <div style={{ fontFamily: FONT.sans, fontSize: 11.5, lineHeight: '1.5', color: EMAIL.muted, marginTop: 8 }}>
+          <span data-copy="figure">{fmtInt(r.dualMention)}</span> {r.dualMention === 1 ? 'video' : 'videos'} of your own also named a rival.
+        </div>
+      ) : null}
       <OwnPostsPanel rows={r.rows} />
       <AskedPanel rows={r.rows} />
     </BlockFrame>
@@ -246,6 +252,9 @@ function Share({ share, recorded }: { share: StandingShare | null; recorded: boo
  * pushed back in 9") ARE NOT HERE, because say-vs-hear is Market's reading
  * (`lib/pages/market-surface.ts`) and this block carries no field for it.
  */
+/** The attention panel's absence, as a state and nothing after it. */
+export const ATTENTION_NOT_RECORDED = 'Attention: not recorded'
+
 function OwnPostsPanel({ rows }: { rows: readonly RivalRow[] }) {
   const rivals = rows.filter((r) => isRivalAudience(r.audience))
   if (rivals.length === 0) return null
@@ -263,7 +272,7 @@ function OwnPostsPanel({ rows }: { rows: readonly RivalRow[] }) {
         <div key={row.audience} style={{ marginTop: 10 }}>
           <div style={{ fontFamily: FONT.sans, fontSize: 14, fontWeight: 600, color: EMAIL.ink }}>{row.label}</div>
           <div style={{ fontFamily: FONT.sans, fontSize: 12.5, lineHeight: '1.5', color: EMAIL.muted, marginTop: 2 }}>
-            {row.ownPosts ?? OWN_POSTS_UNREADABLE_OUTSIDE}
+            {row.ownPosts ?? OWN_POSTS_UNREADABLE_OUTSIDE.replace(/^·\s*/, '')}
           </div>
         </div>
       ))}

@@ -61,7 +61,6 @@ export function monthlySubjectsEmail(data: OverviewData, ctx: BlockContext): Rea
       accent
       meta={s.rows.length > 0 ? `${fmtInt(s.rows.length)} named` : undefined}
       footer={<a href={href} style={{ color: EMAIL.ink }}>Open Subjects →</a>}
-      footerNote={s.rows.length > 0 ? 'share of videos where the subject came up' : undefined}
     >
       {children}
     </BlockFrame>

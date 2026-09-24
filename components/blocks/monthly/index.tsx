@@ -2,7 +2,6 @@ import type { Block } from '@/lib/blocks/types'
 import {
   MONTHLY_BLOCK_KEYS,
   MONTHLY_MOVES_EMPTY,
-  MONTHLY_MOVES_UNLOCK,
   type MonthlyBlockKey,
 } from '@/lib/reports/monthly'
 import type { MonthlyData } from '@/lib/pages/monthly'
@@ -65,7 +64,7 @@ export const MONTHLY_BLOCKS: Record<MonthlyBlockKey, Block<MonthlyData>> = {
  * are untouched — only the two sentences change.
  */
 function artefactMoves(data: OverviewData): OverviewData {
-  return { ...data, moves: { ...data.moves, unlock: MONTHLY_MOVES_UNLOCK, empty: MONTHLY_MOVES_EMPTY } }
+  return { ...data, moves: { ...data.moves, unlock: '', empty: MONTHLY_MOVES_EMPTY } }
 }
 
 /**
