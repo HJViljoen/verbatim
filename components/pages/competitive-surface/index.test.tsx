@@ -1001,4 +1001,24 @@ describe('Freitag carries its note beside its rows and counts (market-first WP1.
       for (const mode of MODES) assertCopyContract(render(block.render(data, mode, ctx)))
     }
   })
+
+  it('CO5 puts the note on the noted rival’s group, above its counts, when the claims were read', () => {
+    // The same stand-in note on the claims-read arm, where Ottobock's group
+    // carries "k of n" rows and Rareform's is a named silence.
+    const note = 'mostly another word, not the brand'
+    const data = { ...claimsReadFixture(), homonyms: { 'competitor:Ottobock': note } }
+    for (const mode of MODES) {
+      const text = renderText(competitiveSaidAbout.render(data, mode, ctx))
+      expect(text).toContain(`Ottobock · ${note}`)
+      expect(count(text, note)).toBe(1)
+      assertCopyContract(render(competitiveSaidAbout.render(data, mode, ctx)))
+    }
+    // A noted rival whose group is a silence still wears it beside its name.
+    const quiet = { ...claimsReadFixture(), homonyms: { 'competitor:Rareform': note } }
+    expect(renderText(competitiveSaidAbout.render(quiet, 'app', ctx))).toContain(`Rareform · ${note}`)
+    // The email arm stays email-safe with the tag in it.
+    const email = render(competitiveSaidAbout.render(data, 'email', ctx))
+    expect(email).not.toContain('class=')
+    expect(email).not.toContain('var(--')
+  })
 })
