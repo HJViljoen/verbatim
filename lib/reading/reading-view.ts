@@ -153,6 +153,27 @@ export function readingViewFrom(input: ReadingViewInput): ReadingView {
   return { reading, other }
 }
 
+/**
+ * How current a page dated by the UPDATE is (This week): the last update, the
+ * next one the schedule promises, and whether updates have paused. The same
+ * rule the reading month applies (`readingMonthFor`), taken without a month,
+ * because none of the three depends on which month is read.
+ */
+export function updateClock(input: {
+  now: string
+  runs: readonly DeliveredRun[]
+  schedule?: ScheduleConfig | null
+}): { asAt: string | null; nextUpdate: string | null; paused: boolean } {
+  const r = readingMonthFor({
+    now: input.now,
+    updates: input.runs.map(updateInstant),
+    videosByMonth: new Map(),
+    firstRunMonth: monthStartOf(input.now),
+    nextUpdateAfter: input.schedule ? scheduledUpdateAfter(input.schedule) : undefined,
+  })
+  return { asAt: r.asAt, nextUpdate: r.nextUpdate, paused: r.paused }
+}
+
 /** The months the market has a row for, oldest first (the client's own posts
  *  are not the market). */
 export function marketMonths(

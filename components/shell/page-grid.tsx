@@ -184,15 +184,28 @@ export function TileColumns({ of, rule = true, rail, children, className }: {
   )
 }
 
-/** Page title · context · right-hand controls, in one slim row at the top of
- *  the page. `subtitle` (optional) is a one-line reading under the title —
- *  component-map §1: orientation and actions in one place. */
+/** Page title · right-hand controls, in one slim row at the top of the page,
+ *  and under them the bar's ONE context line where the page has one. */
 export function PageBar({
-  title, children,
-}: { title: ReactNode; context?: ReactNode; subtitle?: ReactNode; children?: ReactNode }) {
-  // TITLE ONLY (Heinrich, 2026-09-24): the question under the title and the
-  // context line beside it are no longer printed on any page. The props stay
-  // so callers compile; they are ignored.
+  title, line, children,
+}: {
+  title: ReactNode
+  /**
+   * THE CONTEXT LINE, PRINTED AGAIN (25 Sep rulings, market-first WP1.2): the
+   * brand, the month selector and "as at the {update} update · next update
+   * {date}" on a reading surface, or This week's update and comment window
+   * (`SurfacePageBar` composes it). The 24 Sep title-only bar had taken the
+   * month and "as at" off every page along with the explanation.
+   */
+  line?: ReactNode
+  /** IGNORED, as since 2026-09-24. A free-text context from a page that is
+   *  not a reading (Studio, Settings, the parked pages) is not the ruled line,
+   *  so it stays unprinted; the prop remains so those callers compile. */
+  context?: ReactNode
+  /** IGNORED: no question under the title (2026-09-24). */
+  subtitle?: ReactNode
+  children?: ReactNode
+}) {
   return (
     <div className="flex shrink-0 flex-col gap-0.5">
       {/* THE CONTEXT WRAPS (Block D wave 3, SH17). It was `truncate`, with no
@@ -200,14 +213,16 @@ export function PageBar({
           are OF: at 1024 This week read "update of 13 Sep · previous 6 …",
           losing the other half of every comparison the page makes; Reports
           read "…reading as at 2…"; Competitive at 768 read "Össur ·
-          September 20…". `components/shell/how-sound.tsx` already answers this
-          the right way — the band takes the lines it needs — and the bar is
-          the same kind of sentence. `min-h-8` rather than `h-8`, so a bar that
-          fits on one line is exactly what it was. */}
+          September 20…". The line under the title wraps for the same
+          reason and takes the lines it needs. `min-h-8` rather than `h-8`, so
+          a bar that fits on one line is exactly what it was. */}
       <div className="flex min-h-8 flex-wrap items-center gap-x-3 gap-y-1">
         <h1 className="text-[17px] font-semibold tracking-[-0.01em]">{title}</h1>
         {children && <div className="ml-auto flex shrink-0 items-center gap-2">{children}</div>}
       </div>
+      {line ? (
+        <p className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] leading-6 text-secondary-foreground">{line}</p>
+      ) : null}
     </div>
   )
 }

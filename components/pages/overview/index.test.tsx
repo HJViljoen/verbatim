@@ -161,8 +161,9 @@ describe('the Overview page', () => {
     expect(markup).toContain('still filling')
     expect((markup.match(/data-tile=""/g) ?? []).length).toBe(6)
     expect(markup).not.toContain('This month so far')
-    // And the one fact that tile carried alone is on the band.
-    expect(renderText(<OverviewPage data={overviewFixture()} />)).toContain('2,044 at this point last month')
+    // The band that carried that tile's one fact left the page with the 25 Sep
+    // rulings; the bar carries the month and "as at" instead.
+    expect(renderText(<OverviewPage data={overviewFixture()} />)).not.toContain('2,044 at this point last month')
     assertCopyContract(markup)
   })
 
@@ -222,11 +223,13 @@ describe('the page bar, ported', () => {
     expect(text).toContain('Export')
   })
 
-  it('leads the soundness band with where this tenant is in the ramp', () => {
-    // `main.bar.soundness`: the artboard opens "your 3rd monthly reading", and
-    // the counter used to be printed on the OV0 tile instead.
+  it('carries the month selector and the one line, and no "How sound is this" band (25 Sep rulings)', () => {
+    const markup = render(<OverviewPage data={overviewFixture()} />)
     const text = renderText(<OverviewPage data={overviewFixture()} />)
-    expect(text).toContain('How sound is this: your 3rd monthly reading')
+    expect(text).toContain('Sealand · September 2026 as at the 10 Sep update · next update Sun 20 Sep')
+    expect(markup).toContain('href="/dashboard?month=2026-08"')
+    expect(text.toLowerCase()).not.toContain('how sound is this:')
+    expect(text).not.toContain('your 3rd monthly reading')
   })
 
   it('draws its legend from the word list, not from a hand-picked subset', () => {

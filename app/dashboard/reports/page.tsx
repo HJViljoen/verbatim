@@ -176,7 +176,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
     loadReportsPage(supabase, clientId).catch(() => null),
   ])
 
-  // THE PAGE'S ONE READING HANDLE (Block D wave 2). The bar's context line, the
+  // THE PAGE'S ONE READING HANDLE (Block D wave 2). The
   // archive's delivery meta, the preset chips and the method footnote all come
   // from `loadReportsPageContext`; the quarterly card reads its own two windows
   // and answers null on a workspace with no confirmed subject, which is every
@@ -609,15 +609,13 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
 
   return (
     <PageFrame className="gap-4">
-      {/* THE BAR IS THE ARTBOARD'S, COMPOSED HERE (`reports.shell`,
-          `reports.bar.question`). `lib/nav.ts` still gives Reports
-          `bar: 'title'` — the horizon control and the soundness band stay off,
-          because this page still makes no reading of a period — so the page
-          takes the primitive and passes the two things the artboard draws that
-          the table would not: the month the archive is being read in, and the
-          question the surface answers, which has been in `SURFACES` verbatim
-          all along with nothing printing it. */}
-      <PageBar title={surface('reports').label} context={ctx.context} subtitle={surface('reports').question ?? undefined}>
+      {/* THE TITLE ALONE (`reports.shell`). `lib/nav.ts` gives Reports
+          `bar: 'title'`: this page makes no reading of a period, so it carries
+          no horizon and no reading line. The question left every bar on 24
+          Sep; the month-and-"as at" line it once passed here was never
+          printed after that, and the 25 Sep rulings' one line belongs to the
+          reading surfaces (market-first WP1.2). */}
+      <PageBar title={surface('reports').label}>
         <Suspense fallback={null}>
           <HowToRead items={['month', 'level', 'change', 'video']} basePath={BASE} />
         </Suspense>

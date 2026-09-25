@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { barLine, monthWords } from './reading-month'
-import { asAtOf, marketMonths, monthlyMonthFor, readingViewFrom, updateInstant, type DeliveredRun, type ReadingDenominator } from './reading-view'
+import { asAtOf, marketMonths, monthlyMonthFor, readingViewFrom, updateClock, updateInstant, type DeliveredRun, type ReadingDenominator } from './reading-view'
 
 // ---- Fixtures: Sealand's real rows ------------------------------------------------
 //
@@ -264,5 +264,26 @@ describe('monthlyMonthFor: the monthly reads the month that has just ended', () 
   it('a month holding only the client’s own posts is not a month with rows', () => {
     expect(marketMonths([row('2026-10-01', 'client', 1), ...SEALAND_ROWS]))
       .toEqual(['2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01'])
+  })
+})
+
+describe('updateClock: This week’s "next update", from its own two runs', () => {
+  it('the 20 Sep update, read on 22 Sep: next update Sun 27 Sep', () => {
+    const c = updateClock({ now: '2026-09-22T09:00:00.000Z', runs: [run('r5', '2026-09-10'), run('r6', '2026-09-20')], schedule: SUNDAY })
+    expect(c).toEqual({ asAt: '2026-09-20T12:00:00.000Z', nextUpdate: '2026-09-27T04:00:00.000Z', paused: false })
+  })
+
+  it('Össur, last updated 13 Sep: paused, and no next update promised', () => {
+    const c = updateClock({
+      now: '2026-10-02T06:00:00.000Z',
+      runs: [run('o1', '2026-04-06'), run('o2', '2026-09-13')],
+      schedule: { report_period: 'weekly', report_day: 'sunday' },
+    })
+    expect(c.paused).toBe(true)
+    expect(c.nextUpdate).toBeNull()
+  })
+
+  it('with no schedule it promises nothing', () => {
+    expect(updateClock({ now: '2026-09-22T09:00:00.000Z', runs: [run('r6', '2026-09-20')] }).nextUpdate).toBeNull()
   })
 })

@@ -6,6 +6,7 @@ import { shortDate } from '@/lib/format'
 import { READER_FLAGS, THIRTEEN_WORDS } from '@/lib/calibration'
 import { PageFrame, PageGrid } from '@/components/shell/page-grid'
 import { SurfacePageBar } from '@/components/shell/page-bar'
+import { barContext } from '@/lib/shell/bar'
 import { Tile, TileEmpty } from '@/components/shell/tile'
 import type { VoiceSurfaceData } from '@/lib/pages/voice-surface'
 import { voiceAudience } from './audience'
@@ -163,8 +164,7 @@ export function VoiceSurfacePage({
         nav="voice"
         params={params}
         range={voiceHorizonRange(data)}
-        context={{ brand: data.brand, month: data.month, status: data.monthStatus, readingAt: data.readingAt }}
-        record={{ line: data.record.line, lines: data.record.lines }}
+        context={barContext(data)}
       >
         {controls}
       </SurfacePageBar>

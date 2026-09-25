@@ -152,7 +152,10 @@ export function SkeletonSurfaceBar({ nav, pills = 0, band = false }: { nav: NavK
   const s = surface(nav)
   return (
     <div className="flex shrink-0 flex-col gap-1.5">
-      <PageBar title={s.label} context={<Bone className="h-3 w-48" />} subtitle={s.question ?? undefined}>
+      {/* The one line under the title, where the surface has one (a reading
+          surface's month and "as at", This week's update): a bone the page
+          will draw, so the page does not jump when it lands. */}
+      <PageBar title={s.label} line={s.bar === 'title' ? undefined : <Bone className="h-3 w-80 max-w-full" />}>
         {pills > 0 && Array.from({ length: pills }, (_, i) => <Bone key={i} className="h-[26px] w-20 rounded-full" />)}
       </PageBar>
       {hasHorizon(s) && (

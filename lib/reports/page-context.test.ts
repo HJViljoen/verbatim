@@ -178,7 +178,6 @@ describe('loadReportsPageContext', () => {
     )
     expect(ctx.brand).toBe('Sealand')
     expect(ctx.month).toBe('2026-09-01')
-    expect(ctx.context).toContain('Sealand')
     expect(ctx.delivery?.total).toBe(2)
     expect(ctx.presets.map((p) => p.updates)).toEqual([2, 0, 0, 2])
     expect(ctx.updatesUnread).toBe(false)

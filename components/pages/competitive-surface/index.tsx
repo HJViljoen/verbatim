@@ -5,6 +5,7 @@ import { ExportMenu, ExportScope } from '@/components/export-menu'
 import { HowToRead } from '@/components/how-to-read'
 import { PageFrame, PageGrid } from '@/components/shell/page-grid'
 import { SurfacePageBar } from '@/components/shell/page-bar'
+import { barContext } from '@/lib/shell/bar'
 import { Tile, TileEmpty } from '@/components/shell/tile'
 import type { GlossaryKey } from '@/lib/calibration'
 import { saidAboutUnread, type CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
@@ -192,8 +193,7 @@ export function CompetitiveSurfacePage({
         <SurfacePageBar
           nav="competitive"
           params={params}
-          context={{ brand: data.brand, month: data.month, status: data.monthStatus, readingAt: data.readingAt }}
-          record={{ line: data.record.line, lines: data.record.lines }}
+          context={barContext(data)}
         >
           <ExportMenu />
           <HowToRead items={LEGEND} basePath="/dashboard/competitive" anchor="competitive" />

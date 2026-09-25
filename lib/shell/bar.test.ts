@@ -1,54 +1,91 @@
 import { describe, expect, it } from 'vitest'
-import { contextLine, detailHref, horizonHref, horizonOptions, updateLine } from './bar'
+import { contextLine, detailHref, horizonHref, horizonOptions, monthHref, monthLabel, monthTitle, updateLabel, updateLine } from './bar'
+import { readingMonthFor } from '../reading/reading-month'
+import { sealandReading } from '../test/reading-fixture'
 import { directionHits } from '../calibration'
 
-describe('contextLine', () => {
-  it('names the brand, the month, that it is still filling, and when it was read', () => {
-    expect(contextLine({ brand: 'Össur', month: '2026-09-01', status: 'filling', readingAt: '2026-09-15T18:00:00Z' }))
-      .toBe('Össur · September 2026 · still filling · as at 15 Sep')
+// ---- The 25 Sep rulings' bar (market-first WP1.2) --------------------------------
+//
+// Sealand's real calendar (lib/test/reading-fixture.ts: DR F21's updates, the
+// schedule's Sunday updates from 27 Sep, production's pooled market) and
+// Össur's, paused since 13 Sep.
+const OSSUR = readingMonthFor({
+  now: '2026-10-02T06:00:00.000Z',
+  updates: ['2026-04-06T12:00:00.000Z', '2026-09-13T12:00:00.000Z'],
+  videosByMonth: new Map([['2026-08-01', 585], ['2026-09-01', 362]]),
+  firstRunMonth: '2026-04-01',
+})
+
+describe('contextLine: the bar\'s one line', () => {
+  it('is "as at the {update} update · next update {date}", dated by the update and never the clock', () => {
+    expect(contextLine({ brand: 'Sealand', reading: sealandReading('2026-09-24T18:00:00.000Z') }))
+      .toBe('as at the 24 Sep update · next update Sun 27 Sep')
+    expect(contextLine({ brand: 'Sealand', reading: sealandReading('2026-10-01T00:00:00.000Z') }))
+      .toBe('as at the 27 Sep update · next update Sun 4 Oct')
+    expect(contextLine({ brand: 'Össur', reading: OSSUR })).toBe('as at the 13 Sep update · updates paused')
   })
 
-  it('says nothing about filling once the month is frozen', () => {
-    expect(contextLine({ brand: 'Sealand', month: '2026-08-01', status: 'frozen', readingAt: '2026-10-02T06:00:00Z' }))
-      // BLOCK D WAVE 2, `main.bar.context`: the artboard writes the month LONG
-      // and the stamp SHORT, and drops "reading" (the question above the bar
-      // and the band below it both already say it).
-      .toBe('Sealand · August 2026 · as at 2 Oct')
-  })
-
-  it('separates the month read from the moment read', () => {
-    // The two dates are the point: a month that is still filling reads
-    // differently on Monday and on Friday.
-    const line = contextLine({ brand: 'Össur', month: '2026-09-01', status: 'filling', readingAt: '2026-09-01T00:00:00Z' })
-    expect(line).toContain('September 2026')
-    // The stamp keeps the DAY, which is the half that separates the two dates;
-    // it loses the year, which the month beside it has already settled.
-    expect(line).toContain('as at 1 Sep')
-  })
-
-  it('takes the year back when the stamp is not in the month’s year', () => {
-    // Code review m13. The short form is right while the two are in the same
-    // year — the month beside it carries one — but a frozen month read in a
-    // later year said "December 2026 · as at 4 Jan", which dates the reading to
-    // nothing. The month is unchanged; only the instant takes its year.
-    expect(contextLine({ brand: 'Sealand', month: '2026-12-01', status: 'frozen', readingAt: '2027-01-04T06:00:00Z' }))
-      .toBe('Sealand · December 2026 · as at 4 Jan 2027')
-  })
-
-  it('prints no direction word', () => {
-    expect(directionHits(contextLine({ brand: 'Össur', month: '2026-09-01', status: 'filling', readingAt: '2026-09-15T18:00:00Z' }))).toEqual([])
+  it('never says "so far, ", "still filling", "complete" or "how sound", and no direction word or em dash', () => {
+    const lines = [
+      '2026-09-24T18:00:00.000Z', '2026-10-01T00:00:00.000Z', '2026-10-11T12:00:00.000Z', '2026-10-16T12:00:00.000Z',
+    ].map((now) => contextLine({ brand: 'Sealand', reading: sealandReading(now) }))
+    lines.push(contextLine({ brand: 'Össur', reading: OSSUR }))
+    for (const line of lines) {
+      expect(line).not.toContain('so far, ')
+      expect(line).not.toContain('still filling')
+      expect(line.toLowerCase()).not.toContain('complete')
+      expect(line.toLowerCase()).not.toContain('how sound')
+      expect(line).not.toContain('\u2014')
+      expect(directionHits(line)).toEqual([])
+    }
   })
 })
 
-describe('updateLine', () => {
-  it('dates This week by the two updates it compares', () => {
-    expect(updateLine({ update: '2026-09-14T04:00:00Z', previous: '2026-09-07T04:00:00Z' }))
-      .toBe('update of 14 Sep · previous 7 Sep')
+describe('the month selector', () => {
+  it('names the month with its year', () => {
+    expect(monthLabel('2026-09-01')).toBe('September 2026')
   })
 
-  it('says there is no previous update rather than printing a blank', () => {
-    expect(updateLine({ update: '2026-06-28T04:00:00Z', previous: null })).toBe('update of 28 Jun · no previous update')
-    expect(updateLine({ update: '2026-06-28T04:00:00Z' })).toBe('update of 28 Jun · no previous update')
+  it('carries the month\'s state in its tooltip, never in the line', () => {
+    expect(monthTitle(sealandReading('2026-10-11T12:00:00.000Z')))
+      .toBe('September · ended · read to the 11 Oct update · still filling until the 1 Nov update')
+    expect(monthTitle(OSSUR)).toBe('September · read to the 13 Sep update · updates paused')
+  })
+
+  it('points at the other month, carrying the page\'s own selection', () => {
+    expect(monthHref('/dashboard', {}, { month: '2026-08-01', isDefault: false })).toBe('/dashboard?month=2026-08')
+    expect(monthHref('/dashboard/voice', { horizon: 'last_3', theme: 't1' }, { month: '2026-10-01', isDefault: false }))
+      .toBe('/dashboard/voice?horizon=last_3&theme=t1&month=2026-10')
+  })
+
+  it('back to the default month writes no parameter, and never doubles one', () => {
+    expect(monthHref('/dashboard', { month: '2026-10' }, { month: '2026-09-01', isDefault: true })).toBe('/dashboard')
+    expect(monthHref('/dashboard/subjects', { month: '2026-10', item: 's1' }, { month: '2026-09-01', isDefault: false }))
+      .toBe('/dashboard/subjects?item=s1&month=2026-09')
+  })
+})
+
+describe('This week\'s line (25 Sep rulings, item 2)', () => {
+  // Staging's 20 Sep update, `b67b56de`: a 9.9-day window, 10 Sep to 20 Sep
+  // (GR F58). The instants are stamped within those days; only the days print.
+  const window = { from: '2026-09-10T08:00:00.000Z', to: '2026-09-20T06:00:00.000Z' }
+
+  it('names the update in the slot and the comment window in place of "as at"', () => {
+    expect(updateLabel('2026-09-20T12:00:00.000Z')).toBe('The 20 Sep update')
+    expect(updateLine({ update: '2026-09-20T12:00:00.000Z', window, nextUpdate: '2026-09-27T04:00:00.000Z' }))
+      .toBe('comments written 10 to 20 Sep · next update Sun 27 Sep')
+  })
+
+  it('names both months when the window crosses one, and takes the day before a midnight end', () => {
+    expect(updateLine({ update: '2026-09-10T12:00:00.000Z', window: { from: '2026-08-11T00:00:00.000Z', to: '2026-09-10T00:00:00.000Z' } }))
+      .toBe('comments written 11 Aug to 9 Sep')
+  })
+
+  it('says "as at" where the run carries no window, and "updates paused" for a paused tenant', () => {
+    expect(updateLine({ update: '2026-09-20T12:00:00.000Z', window: null, nextUpdate: '2026-09-27T04:00:00.000Z' }))
+      .toBe('as at the 20 Sep update · next update Sun 27 Sep')
+    expect(updateLine({ update: '2026-09-13T12:00:00.000Z', window: null, paused: true }))
+      .toBe('as at the 13 Sep update · updates paused')
   })
 })
 

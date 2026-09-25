@@ -4,6 +4,7 @@ import { EMAIL } from '@/lib/email/theme'
 import { HowToRead } from '@/components/how-to-read'
 import { PageFrame, PageGrid } from '@/components/shell/page-grid'
 import { SurfacePageBar } from '@/components/shell/page-bar'
+import { barContext } from '@/lib/shell/bar'
 import { Tile, TileEmpty } from '@/components/shell/tile'
 import type { GlossaryKey } from '@/lib/calibration'
 import type { MarketSurfaceData } from '@/lib/pages/market-surface'
@@ -271,8 +272,7 @@ export function MarketSurfacePage({
       <SurfacePageBar
         nav="market"
         params={params}
-        context={{ brand: data.brand, month: data.month, status: data.monthStatus, readingAt: data.readingAt }}
-        record={{ line: data.record.line, lines: data.record.lines }}
+        context={barContext(data)}
       >
         <HowToRead items={LEGEND} basePath="/dashboard/market" anchor="market" />
       </SurfacePageBar>
