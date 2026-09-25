@@ -20,6 +20,7 @@ import {
   shareOf,
   VIEWS_BY_SURFACE,
   type OurChange,
+  type PairComparability,
   type PairRow,
 } from './comparability'
 import { scheduledUpdateAfter } from './reading-month'
@@ -165,6 +166,12 @@ const SAME_WAY: PairRow = {
   computedAt: '2026-12-07T09:00:00.000Z',
 }
 const LATER_NOV = { state: 'ended' as const, readToEnd: true, latestUpdateRunId: 'run-1206' }
+
+/** A reason's three pinned fields. WP1.3 added `changedAt` and `surface` to a
+ *  change reason (the words name the change's month); these tests pin the
+ *  rule's kinds, ids and shares, and the unmeasured test below pins the rest. */
+const core = (rs: readonly PairComparability['reasons'][number][]) =>
+  rs.map(({ kind, changeId, share }) => ({ kind, changeId, share }))
 
 // ---- The change log -----------------------------------------------------------------------
 
@@ -409,7 +416,7 @@ describe('comparabilityOf: the month states', () => {
   it('a so-far later month is never compared, whatever its row', () => {
     const r = comparabilityOf('2026-10-01', '2026-11-01', { row: SAME_WAY, changes: [], view: 'market', later: { ...LATER_NOV, state: 'so_far' } })
     expect(r.mode).toBe('refuse')
-    expect(r.reasons).toEqual([{ kind: 'incomplete', changeId: null, share: null }])
+    expect(core(r.reasons)).toEqual([{ kind: 'incomplete', changeId: null, share: null }])
   })
 
   it('Össur’s August against September: September was read only to 13 Sep', () => {
@@ -427,12 +434,14 @@ describe('comparabilityOf: unmeasured', () => {
   it('no row, with the 9, 13 and 17 Sep term changes in span: refused, and each named', () => {
     const r = comparabilityOf('2026-08-01', '2026-09-01', { row: null, changes: CHANGES, view: 'market', later: LATER_ENDED })
     expect(r.mode).toBe('refuse')
-    expect(r.reasons[0]).toEqual({ kind: 'unmeasured', changeId: null, share: null })
+    expect(core(r.reasons)[0]).toEqual({ kind: 'unmeasured', changeId: null, share: null })
+    // Each named WITH its date and surface (WP1.3): the refusal's words name
+    // the month of the change ("we changed what we search in September").
     expect(r.reasons.slice(1)).toEqual([
-      { kind: 'searches', changeId: 'subreddits-0909-onebag', share: null },
-      { kind: 'searches', changeId: 'terms-0909-in-0', share: null },
-      { kind: 'searches', changeId: 'terms-0913-competitor', share: null },
-      { kind: 'searches', changeId: 'terms-0917-competitor_keywords', share: null },
+      { kind: 'searches', changeId: 'subreddits-0909-onebag', share: null, changedAt: '2026-09-09T00:00:00.000Z', surface: 'subreddits' },
+      { kind: 'searches', changeId: 'terms-0909-in-0', share: null, changedAt: '2026-09-09T18:17:56.000Z', surface: 'terms' },
+      { kind: 'searches', changeId: 'terms-0913-competitor', share: null, changedAt: '2026-09-13T10:00:58.000Z', surface: 'terms' },
+      { kind: 'searches', changeId: 'terms-0917-competitor_keywords', share: null, changedAt: '2026-09-17T16:02:56.000Z', surface: 'terms' },
     ])
   })
 
@@ -492,7 +501,7 @@ describe('comparabilityOf: a pair read the same way', () => {
     for (const depth of [{ prevMedian: null, currMedian: 23 }, { prevMedian: 23, currMedian: Number.NaN }, { prevMedian: 0, currMedian: 23 }]) {
       const r = comparabilityOf('2026-10-01', '2026-11-01', { row: { ...SAME_WAY, depth }, changes: [], view: 'market', later: LATER_NOV })
       expect(r.mode).toBe('refuse')
-      expect(r.reasons).toEqual([{ kind: 'depth', changeId: null, share: null }])
+      expect(core(r.reasons)).toEqual([{ kind: 'depth', changeId: null, share: null }])
     }
   })
 
@@ -511,7 +520,7 @@ describe('comparabilityOf: a pair read the same way', () => {
       changes: [], view: 'market', later: LATER_NOV,
     })
     expect(r.mode).toBe('refuse')
-    expect(r.reasons[0]).toEqual({ kind: 'searches', changeId: null, share: null })
+    expect(core(r.reasons)[0]).toEqual({ kind: 'searches', changeId: null, share: null })
   })
 })
 
@@ -538,30 +547,30 @@ describe('comparabilityOf: changes of ours inside the span', () => {
   it('flags the market at 9.6% and refuses themes at 10.1% (category population)', () => {
     const market = comparabilityOf('2026-09-01', '2026-10-01', { row: SEP_OCT, changes: [GATE_FIX], view: 'market', later })
     expect(market.mode).toBe('flag')
-    expect(market.reasons).toEqual([{ kind: 'code_change', changeId: 'gate-fix', share: 63 / 655 }])
+    expect(core(market.reasons)).toEqual([{ kind: 'code_change', changeId: 'gate-fix', share: 63 / 655 }])
     const themes = comparabilityOf('2026-09-01', '2026-10-01', { row: SEP_OCT, changes: [GATE_FIX], view: 'themes', later })
     expect(themes.mode).toBe('refuse')
-    expect(themes.reasons).toEqual([{ kind: 'code_change', changeId: 'gate-fix', share: 63 / 626 }])
+    expect(core(themes.reasons)).toEqual([{ kind: 'code_change', changeId: 'gate-fix', share: 63 / 626 }])
   })
 
   it('with only the market entry, themes is unmeasured and refuses: 63 is never divided by 655 for themes (decision E)', () => {
     const marketOnly: PairRow = { ...SEP_OCT, codeChanges: SEP_OCT.codeChanges.filter((e) => e.population !== 'category') }
     const themes = comparabilityOf('2026-09-01', '2026-10-01', { row: marketOnly, changes: [GATE_FIX], view: 'themes', later })
     expect(themes.mode).toBe('refuse')
-    expect(themes.reasons).toEqual([{ kind: 'code_change', changeId: 'gate-fix', share: null }])
+    expect(core(themes.reasons)).toEqual([{ kind: 'code_change', changeId: 'gate-fix', share: null }])
     // The market still reads its own entry: 9.6%, a flag.
     const market = comparabilityOf('2026-09-01', '2026-10-01', { row: marketOnly, changes: [GATE_FIX], view: 'market', later })
-    expect(market.reasons).toEqual([{ kind: 'code_change', changeId: 'gate-fix', share: 63 / 655 }])
+    expect(core(market.reasons)).toEqual([{ kind: 'code_change', changeId: 'gate-fix', share: 63 / 655 }])
     // The same for a measure the caller was not handed.
     const orphan = comparabilityOf('2026-09-01', '2026-10-01', { row: marketOnly, changes: [], view: 'themes', later })
-    expect(orphan.reasons).toEqual([{ kind: 'code_change', changeId: 'gate-fix', share: null }])
+    expect(core(orphan.reasons)).toEqual([{ kind: 'code_change', changeId: 'gate-fix', share: null }])
   })
 
   it('an unmeasured attribution change refuses themes and brands, not the market', () => {
     for (const view of ['themes', 'brands'] as const) {
       const r = comparabilityOf('2026-10-01', '2026-11-01', { row: SAME_WAY, changes: [{ ...ATTRIBUTION, changedAt: '2026-10-20T12:00:00.000Z' }], view, later: LATER_NOV })
       expect(r.mode).toBe('refuse')
-      expect(r.reasons).toEqual([{ kind: 'code_change', changeId: 'attribution-v3', share: null }])
+      expect(core(r.reasons)).toEqual([{ kind: 'code_change', changeId: 'attribution-v3', share: null }])
     }
     const market = comparabilityOf('2026-10-01', '2026-11-01', { row: SAME_WAY, changes: [{ ...ATTRIBUTION, changedAt: '2026-10-20T12:00:00.000Z' }], view: 'market', later: LATER_NOV })
     expect(market.mode).toBe('comparable')
@@ -584,7 +593,7 @@ describe('comparabilityOf: changes of ours inside the span', () => {
     const knobs = changesFromLog([row({ id: 'knobs-1020', changed_at: '2026-10-20T12:00:00.000Z', surface: 'knobs', field: 'max_comments' })])
     const r = comparabilityOf('2026-10-01', '2026-11-01', { row: SAME_WAY, changes: knobs, view: 'market', later: LATER_NOV })
     expect(r.mode).toBe('refuse')
-    expect(r.reasons).toEqual([{ kind: 'code_change', changeId: 'knobs-1020', share: null }])
+    expect(core(r.reasons)).toEqual([{ kind: 'code_change', changeId: 'knobs-1020', share: null }])
   })
 
   it('a term change inside the span is read through the search-outside count, not refused unmeasured', () => {
@@ -595,12 +604,12 @@ describe('comparabilityOf: changes of ours inside the span', () => {
   it('matches a measure keyed on any row of the change', () => {
     const grouped: OurChange = { ...GATE_FIX, id: 'gate-fix-a', rowIds: ['gate-fix-a', 'gate-fix'] }
     const r = comparabilityOf('2026-09-01', '2026-10-01', { row: SEP_OCT, changes: [grouped], view: 'market', later })
-    expect(r.reasons).toEqual([{ kind: 'code_change', changeId: 'gate-fix-a', share: 63 / 655 }])
+    expect(core(r.reasons)).toEqual([{ kind: 'code_change', changeId: 'gate-fix-a', share: 63 / 655 }])
   })
 
   it('judges a measure for a change it was not handed by the measure’s own surface, and ignores one out of span', () => {
     const orphan = comparabilityOf('2026-09-01', '2026-10-01', { row: SEP_OCT, changes: [], view: 'market', later })
-    expect(orphan.reasons).toEqual([{ kind: 'code_change', changeId: 'gate-fix', share: 63 / 655 }])
+    expect(core(orphan.reasons)).toEqual([{ kind: 'code_change', changeId: 'gate-fix', share: 63 / 655 }])
     const outOfSpan = { ...GATE_FIX, changedAt: '2026-06-01T00:00:00.000Z' }
     expect(comparabilityOf('2026-09-01', '2026-10-01', { row: SEP_OCT, changes: [outOfSpan], view: 'market', later }).mode).toBe('comparable')
   })

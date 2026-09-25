@@ -277,6 +277,11 @@ const REFUSED_LINE: Record<RefusedReason, string> = {
   tracking_change: 'We cannot read this one afterwards: what we were tracking changed between the two months, so the two sides are not the same question.',
   clustering_changed: 'We cannot read this one afterwards: the two months were grouped differently, so a comparison would be about our grouping rather than about the conversation.',
   rename: 'We cannot read this one afterwards: the audience either side of your decision was renamed, and the months before the rename stay under the old name.',
+  // The month-pair rule's three (decision D, WP1.3). A verdict that carries
+  // its pair prints the pair's own sentence instead (`pairSentence`).
+  incomplete: 'We cannot read this one afterwards yet: the newest month is not over, or has not been read to its end.',
+  depth: 'We cannot read this one afterwards yet: the newest month has not been read to the same depth as the month before your decision.',
+  unmeasured: 'We cannot read this one afterwards yet: we have not checked that the two months were read the same way.',
 }
 
 /**

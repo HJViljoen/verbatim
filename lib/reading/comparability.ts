@@ -3,7 +3,7 @@ import { subredditKey } from '../gather/subreddits'
 import { monthStartOf, nextMonth, prevMonth } from './month-key'
 import { freezeBoundary, monthEndInstant } from './monthly'
 import type { MonthState } from './reading-month'
-import type { Counted } from './verdicts'
+import type { Counted, RefusedReason, VerdictPairNote } from './verdicts'
 
 // Comparability v1: our own changes refuse a comparison (market-first
 // decision D, plan §4.2, WP1.3).
@@ -161,9 +161,16 @@ export interface PairComparability {
   mode: ComparabilityMode
   /** Every reason that flags or refuses, in rule order. `share` is the measured
    *  share for `searches` and `code_change` (null: not measured, which
-   *  refuses), and the depth ratio for `depth`. */
-  reasons: { kind: PairReason; changeId: string | null; share: number | null }[]
+   *  refuses), and the depth ratio for `depth`. `changedAt` and `surface` name
+   *  the change behind a `searches` or `code_change` reason when it is one the
+   *  caller passed (WP1.3: the refusal's words name the month of the change);
+   *  a measure for a change the caller did not pass carries its surface only. */
+  reasons: { kind: PairReason; changeId: string | null; share: number | null; changedAt?: string | null; surface?: OurChangeSurface | null }[]
   row: PairRow | null
+  /** The update the pair is next read with ("checked with the {date} update"),
+   *  set by `pairJudge` from the tenant's schedule; null when none is scheduled
+   *  (a paused tenant). Absent from `comparabilityOf`, which knows no schedule. */
+  checkWith?: string | null
 }
 
 type Reason = PairComparability['reasons'][number]
@@ -418,7 +425,13 @@ export function comparabilityOf(prevMonth: string, month: string, input: {
   if (!row || !measured) {
     return answer([
       bare('unmeasured'),
-      ...inSpan.map((c): Reason => ({ kind: isSearchSurface(c.surface) ? 'searches' : 'code_change', changeId: c.id, share: null })),
+      ...inSpan.map((c): Reason => ({
+        kind: isSearchSurface(c.surface) ? 'searches' : 'code_change',
+        changeId: c.id,
+        share: null,
+        changedAt: c.changedAt,
+        surface: c.surface,
+      })),
     ])
   }
 
@@ -428,7 +441,13 @@ export function comparabilityOf(prevMonth: string, month: string, input: {
   const searchShare = pairShare(row.searchOutside.prev, row.searchOutside.curr)
   const latestSearch = inSpan.filter((c) => isSearchSurface(c.surface)).at(-1) ?? null
   if (searchShare == null || !(searchShare < COMPARE_FLAG_SHARE)) {
-    reasons.push({ kind: 'searches', changeId: latestSearch?.id ?? null, share: searchShare })
+    reasons.push({
+      kind: 'searches',
+      changeId: latestSearch?.id ?? null,
+      share: searchShare,
+      changedAt: latestSearch?.changedAt ?? null,
+      surface: latestSearch?.surface ?? null,
+    })
   }
 
   // 4b. Every other change of ours, each on its own measure.
@@ -436,21 +455,21 @@ export function comparabilityOf(prevMonth: string, month: string, input: {
   // A search change with no entry of its own is read through the search-outside
   // count above; any change with entries, but none this view divides by, is
   // unmeasured.
-  const judge = (entries: readonly CodeEntry[], changeId: string, surface: string): void => {
+  const judge = (entries: readonly CodeEntry[], changeId: string, surface: OurChangeSurface, changedAt: string | null): void => {
     const search = isSearchSurface(surface)
     if (entries.length === 0) {
-      if (!search) reasons.push({ kind: 'code_change', changeId, share: null })
+      if (!search) reasons.push({ kind: 'code_change', changeId, share: null, changedAt, surface })
       return
     }
     const entry = entryForView(entries, view)
     const share = entry ? pairShare(entry.prev, entry.curr) : null
     if (share == null || !(share < COMPARE_FLAG_SHARE)) {
-      reasons.push({ kind: search ? 'searches' : 'code_change', changeId, share })
+      reasons.push({ kind: search ? 'searches' : 'code_change', changeId, share, changedAt, surface })
     }
   }
   for (const c of inSpan) {
     const ids = idsOf(c)
-    judge(row.codeChanges.filter((e) => ids.includes(e.changeId)), c.id, c.surface)
+    judge(row.codeChanges.filter((e) => ids.includes(e.changeId)), c.id, c.surface, c.changedAt)
   }
   // A measure for a change the caller did not pass is judged by its own surface.
   const orphans = new Map<string, CodeEntry[]>()
@@ -458,7 +477,7 @@ export function comparabilityOf(prevMonth: string, month: string, input: {
     if (known.has(e.changeId) || !viewsForSurface(e.surface).includes(view)) continue
     orphans.set(e.changeId, [...(orphans.get(e.changeId) ?? []), e])
   }
-  for (const [changeId, entries] of orphans) judge(entries, changeId, entries[0].surface)
+  for (const [changeId, entries] of orphans) judge(entries, changeId, entries[0].surface, null)
 
   // 5. Depth.
   const { prevMedian, currMedian } = row.depth
@@ -571,3 +590,70 @@ function measuredRefusal(row: PairRow, view: ComparabilityView): boolean {
   }
   return false
 }
+
+// ---- From a pair to a verdict (WP1.3) -------------------------------------------------------
+
+/** What a pair judgement does to one month verdict: the reason it is refused
+ *  (null: not refused), whether it carries the `tracking_change` flag, and the
+ *  tokens its words are built from (`pairSentence`, lib/calibration.ts). */
+export interface PairOnVerdict {
+  refused: RefusedReason | null
+  flag: boolean
+  note: VerdictPairNote | null
+}
+
+const monthOfInstant = (iso: string | null | undefined): string | null => safeMonth(iso ?? null)
+
+/**
+ * A pair judgement, as it lands on a verdict.
+ *
+ * A REFUSAL NAMES ITS REAL CAUSE. When a change of ours refuses the pair (a
+ * measured share of 10% or more, or an in-span change nobody has measured,
+ * which counts as 10%), the verdict is refused `tracking_change` and the words
+ * name that change's month: the latest search change first, because what we
+ * search is the change a reader can check against the page, then the latest
+ * other change. A search share measured at 10% or more with no logged search
+ * change to name (a community dropped by our own discovery) names the pair's
+ * newer month. Otherwise the pair is not read far enough, or not measured, to
+ * be compared: `incomplete` (a so-far month, or one not read past its end),
+ * `depth`, or `unmeasured`, all worded "not compared yet".
+ *
+ * A FLAG IS A CHANGE OF OURS AT 1% TO UNDER 10%: `tracking_change` on the
+ * verdict, with a note naming the month. A pair flagged only for run health
+ * (`gather`, a partial run or a searches shortfall) is not a change of ours
+ * and adds no verdict flag; the pair keeps it for the surfaces that print the
+ * pair itself.
+ */
+export function pairOnVerdict(pair: PairComparability | null | undefined): PairOnVerdict {
+  if (!pair || pair.mode === 'comparable') return { refused: null, flag: false, note: null }
+  const changeReasons = pair.reasons.filter((r) => r.kind === 'searches' || r.kind === 'code_change')
+  const latest = (rs: readonly Reason[]): Reason | null =>
+    rs.slice().sort((a, b) => (msOf(a.changedAt ?? '') || 0) - (msOf(b.changedAt ?? '') || 0)).at(-1) ?? null
+  const named = (rs: readonly Reason[]): Reason | null =>
+    latest(rs.filter((r) => r.kind === 'searches')) ?? latest(rs.filter((r) => r.kind === 'code_change'))
+  const noteFor = (r: Reason, mode: 'flag' | 'refuse'): VerdictPairNote => ({
+    mode,
+    cause: r.kind === 'searches' ? 'searches' : 'ours',
+    changeMonth: monthOfInstant(r.changedAt) ?? monthStartOf(pair.month),
+    checkWith: null,
+  })
+
+  if (pair.mode === 'refuse') {
+    const refusing = named(changeReasons.filter((r) => modeForShare(r.share) === 'refuse'))
+    if (refusing) return { refused: 'tracking_change', flag: false, note: noteFor(refusing, 'refuse') }
+    const kinds = new Set(pair.reasons.map((r) => r.kind))
+    const refused: RefusedReason = kinds.has('incomplete') || kinds.has('not_read_to_end')
+      ? 'incomplete'
+      : kinds.has('depth')
+        ? 'depth'
+        : 'unmeasured'
+    return { refused, flag: false, note: { mode: 'refuse', cause: 'not_yet', changeMonth: null, checkWith: pair.checkWith ?? null } }
+  }
+
+  const flagging = named(changeReasons)
+  return flagging ? { refused: null, flag: true, note: noteFor(flagging, 'flag') } : { refused: null, flag: false, note: null }
+}
+
+/** A pair that may be joined or compared: comparable, or flagged. */
+export const joins = (pair: Pick<PairComparability, 'mode'> | null | undefined): boolean =>
+  pair != null && pair.mode !== 'refuse'

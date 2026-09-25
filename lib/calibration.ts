@@ -1,4 +1,6 @@
 import { directionWordsFor } from './config'
+import { longMonth, shortDate } from './format'
+import type { VerdictPairNote } from './reading/verdicts'
 
 // Calibrated language (Calibrated-Language doc 2026-07-04) — the companion to
 // lib/curation.ts. Every "how much / how strong / how sure" word shown to a
@@ -494,3 +496,41 @@ export const REC_STATUS_LABEL: Record<RecStatus, string> = {
  *  (status has a DB default but is nullable). */
 export const recStatus = (value: string | null | undefined): RecStatus =>
   (REC_STATUSES as readonly string[]).includes(value ?? '') ? (value as RecStatus) : 'new'
+
+// ---- The month-pair words (market-first decision D, WP1.3) -------------------
+// Two months are compared only when they were read the same way
+// (lib/reading/comparability.ts). A pair that was not is refused, and a pair a
+// change of ours touched a little of is read with a note. These are the words
+// for both, stated once, so a badge, a chart's figure line and an email say the
+// same thing about one pair. The verdict carries tokens (`Verdict.pair`); this
+// is the one place they become a sentence.
+//
+// NO "threads are still filling" WORDING (Heinrich, 25 Sep): a pair refused on
+// depth reads as one not compared yet, with the update it is read with next.
+
+/** The note under a pair a change of ours touched from 1% to under 10% of. */
+export const PAIR_FLAG_NOTE = (month: string | null): string =>
+  `Read with a note: a change of ours${month ? ` in ${longMonth(month)}` : ''} touched under a tenth of the videos.`
+
+/** A pair refused because we changed what we search. */
+export const PAIR_REFUSED_SEARCHES = (month: string): string =>
+  `Not read as a change: we changed what we search in ${longMonth(month)}.`
+
+/** A pair refused because we changed how we check or file videos (the
+ *  relevance check, the filing judge, a re-tag, the reader). */
+export const PAIR_REFUSED_OURS = (month: string): string =>
+  `Not read as a change: we changed how we check or file videos in ${longMonth(month)}.`
+
+/** A pair that is not read far enough, or not measured, to be compared: the
+ *  newer month is so far or was not read to its end, its threads are shallow,
+ *  or nobody has measured it. With no scheduled update (a paused tenant) there
+ *  is no date to name, and none is promised. */
+export const PAIR_NOT_YET = (checkWith: string | null): string =>
+  checkWith ? `Not compared yet: checked with the ${shortDate(checkWith)} update.` : 'Not compared yet.'
+
+/** The sentence for a pair judgement on a verdict. */
+export function pairSentence(note: VerdictPairNote): string {
+  if (note.mode === 'flag') return PAIR_FLAG_NOTE(note.changeMonth)
+  if (note.cause === 'not_yet' || !note.changeMonth) return PAIR_NOT_YET(note.checkWith)
+  return note.cause === 'searches' ? PAIR_REFUSED_SEARCHES(note.changeMonth) : PAIR_REFUSED_OURS(note.changeMonth)
+}
