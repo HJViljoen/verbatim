@@ -60,7 +60,7 @@ import {
 } from '../reading/series'
 import { buildStandings, type StandingRow } from '../reading/standings'
 import type { MonthStatus } from '../reading/types'
-import { isAnswer, type FigureTable, type Verdict } from '../reading/verdicts'
+import { isAnswer, type FigureTable, type Verdict, type VerdictPairNote } from '../reading/verdicts'
 import { isMissingSubjects, MOVE_PROMISE, RPC_WINDOW_SUBJECT_READINGS, TABLE_MOVES, TABLE_SUBJECT_MEMBERSHIPS, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
 import { chunk, mapWithLimit, MULTI_ROW_IN_CHUNK, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import { selectAll } from '../supabase-admin'
@@ -882,6 +882,14 @@ export const figureKey = (objectId: string, suffix: string): string =>
 export interface HeadlineInput {
   /** The verdicts OV1 chooses its sentence from — subjects and themes. */
   verdicts: readonly Verdict[]
+  /**
+   * The month pair the sentence reads (market-first decision D, WP1.3): the
+   * category's month against the one before it, as the rule's words
+   * (`pairOnVerdict(...).note`). A REFUSED pair is not "nothing moved": no
+   * comparison was drawn, so the sentence says why in the pair's own words.
+   * Absent or null where no pair applies (no previous month, a fixture).
+   */
+  monthPair?: VerdictPairNote | null
 }
 
 /**
@@ -927,8 +935,10 @@ export interface Headline {
  *
  * `moved` only. A change that did not clear its band is not a change this
  * product will name, and the design's own gate sentence is what stands in its
- * place: "Nothing moved clearly this month. Here is where you stand." Neither
- * sentence carries a direction word — the word is the badge's, drawn from the
+ * place: "Nothing moved clearly this month. Here is where you stand." Unless
+ * the month pair was refused (`monthPair`, decision D): then nothing was
+ * compared, and the pair's own words stand where "Nothing moved clearly" would.
+ * Neither sentence carries a direction word — the word is the badge's, drawn from the
  * verdict beside it, which is the only place rule (c) allows one.
  */
 export function headline(input: HeadlineInput): Headline {
@@ -938,6 +948,12 @@ export function headline(input: HeadlineInput): Headline {
   )[0] ?? null
 
   if (!lead) {
+    // A REFUSED PAIR IS NOT "NOTHING MOVED" (decision D, WP1.3), the guard OV3,
+    // Voice and This week carry: "Nothing moved clearly" says a comparison was
+    // drawn and came back inside its band, and on a refused pair none was.
+    if (input.monthPair?.mode === 'refuse') {
+      return { lead: null, body: `${pairSentence(input.monthPair)} Here is where you stand.`, figures: {} }
+    }
     return { lead: null, body: 'Nothing moved clearly this month. Here is where you stand.', figures: {} }
   }
 
@@ -1791,7 +1807,12 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     ...category.growing.map((m) => m.verdict),
     ...category.fading.map((m) => m.verdict),
   ]
-  const head = headline({ verdicts: suppress ? [] : sentenceVerdicts })
+  const head = headline({
+    verdicts: suppress ? [] : sentenceVerdicts,
+    // The category's month pair: the audience most of the sentence's verdicts
+    // are on, and the one OV3 already words its refusal from.
+    monthPair: pairOnVerdict(pair(prevMonth, month, INDUSTRY_AUDIENCE)).note,
+  })
   const [voices, anomaly] = await Promise.all([
     loadVoices(supabase, clientId, head.lead, top, themedRunId),
     flags.length > 0 ? buildAnomaly(supabase, flags[0]) : Promise.resolve(null),

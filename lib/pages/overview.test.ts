@@ -55,6 +55,7 @@ import { substituteFigures } from '../reports/cover'
 import { FIXTURE_ENDED } from '../test/pair-fixture'
 import { sealandJudge } from '../test/sealand-pairs'
 import { pairOn } from '../reading/pairs'
+import { pairOnVerdict } from '../reading/comparability'
 
 // The Overview's pure half (Phase 1 WP11). Everything here is shape and words:
 // the loader's I/O is exercised against production read-only and the blocks are
@@ -275,6 +276,32 @@ describe('headline', () => {
     expect(h.lead).toBeNull()
     expect(h.body).toBe('Nothing moved clearly this month. Here is where you stand.')
     expect(h.figures).toEqual({})
+  })
+
+  // A REFUSED PAIR IS NOT "NOTHING MOVED" (decision D, WP1.3 review fix): on
+  // Sealand at deploy 1 every verdict is refused, and "Nothing moved clearly"
+  // would say a comparison was drawn and came back inside its band.
+  for (const now of ['2026-09-20T12:00:00.000Z', '2026-10-02T06:00:00.000Z']) {
+    it(`says why nothing was compared when the category's Aug→Sep pair is refused (${now.slice(0, 10)})`, () => {
+      const note = pairOnVerdict(pairOn(sealandJudge(now))('2026-08-01', '2026-09-01', INDUSTRY_AUDIENCE)).note
+      const refused: Verdict = { ...moved('t1', 'Durability', 5.4), state: 'refused', changePts: null, refusedReason: 'tracking_change' }
+      const h = headline({ verdicts: [refused], monthPair: note })
+      expect(h.lead).toBeNull()
+      expect(h.body).toBe('Not read as a change: we changed what we search in September. Here is where you stand.')
+      expect(h.body).not.toContain('Nothing moved')
+    })
+  }
+
+  it('keeps "Nothing moved clearly" where the pair was compared, with or without a note', () => {
+    const unbanded: Verdict = { ...moved('t1', 'Durability', 5.4), state: 'no_clear_change' }
+    const flagged = headline({ verdicts: [unbanded], monthPair: { mode: 'flag', cause: 'searches', changeMonth: '2026-09-01', checkWith: null } })
+    expect(flagged.body).toBe('Nothing moved clearly this month. Here is where you stand.')
+    expect(headline({ verdicts: [unbanded], monthPair: null }).body).toBe('Nothing moved clearly this month. Here is where you stand.')
+  })
+
+  it('leads with a banded change even beside a refused pair note', () => {
+    const h = headline({ verdicts: [moved('t1', 'Price', 2.0)], monthPair: { mode: 'refuse', cause: 'not_yet', changeMonth: null, checkWith: null } })
+    expect(h.lead?.objectId).toBe('t1')
   })
 })
 
