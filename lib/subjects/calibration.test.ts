@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  calibrationNote,
   calibrationQuota,
+  calibrationRecorded,
+  lastCalibrationLogged,
   candidateThresholds,
   pickCalibrationPairs,
   clearsPrecisionGate,
   formatPrecisionTable,
+  parseLabelledSheet,
   precisionAt,
   precisionTable,
   predictAt,
@@ -228,5 +232,114 @@ describe('pickCalibrationPairs', () => {
     const row = precisionAt(labelled)
     expect(row.predicted).toBe(picked.length)
     expect(row.precision).toBe(labelled.filter((p) => p.label).length / picked.length)
+  })
+})
+
+describe('parseLabelledSheet — a label is a JSON boolean or it is refused', () => {
+  const line = (label: unknown, extra: Record<string, unknown> = {}) =>
+    JSON.stringify({ subjectId: 's1', subject: 'Price', audienceInsightId: 'i1', said: 'x', score: 0.62, label, ...extra })
+
+  it('reads true, false and null, and ignores blank lines and extra keys', () => {
+    const { rows, refused } = parseLabelledSheet([line(true, { reason: 'about price' }), '', line(false), line(null)])
+    expect(refused).toEqual([])
+    expect(rows.map((r) => r.label)).toEqual([true, false, null])
+    expect(rows[0]).toEqual({ subjectId: 's1', audienceInsightId: 'i1', score: 0.62, label: true })
+  })
+
+  // What it was for: `if (p.label) correct++` counted every one of these as a
+  // CORRECT prediction, so a sheet written in the CSV's own words scored its
+  // "not" answers as yeses.
+  it('refuses a string, a number or a missing label, by line number', () => {
+    const noLabel = JSON.stringify({ subjectId: 's1', audienceInsightId: 'i2', score: 0.7 })
+    const { refused } = parseLabelledSheet([line('false'), line('not'), line('member'), line(0), line(1), noLabel, line(true)])
+    expect(refused).toEqual([
+      'line 1: label "false" is not true, false or null',
+      'line 2: label "not" is not true, false or null',
+      'line 3: label "member" is not true, false or null',
+      'line 4: label 0 is not true, false or null',
+      'line 5: label 1 is not true, false or null',
+      'line 6: label missing is not true, false or null',
+    ])
+  })
+
+  it('refuses a line that is not JSON', () => {
+    expect(parseLabelledSheet(['{"label": tru']).refused).toEqual(['line 1: not JSON'])
+  })
+
+  // A lost id was scored as the subject "undefined" and dropped silently; a
+  // lost or edited score became NaN — 'unknown' at score time, while
+  // calibration_n still counted it.
+  it('refuses a line whose ids or score were lost or rewritten, by line number', () => {
+    const noSubject = JSON.stringify({ audienceInsightId: 'i1', score: 0.62, label: true })
+    const blankInsight = line(true, { audienceInsightId: ' ' })
+    const stringScore = line(true, { score: '0.62' })
+    const noScore = JSON.stringify({ subjectId: 's1', audienceInsightId: 'i1', label: false })
+    const nanScore = line(false, { score: null })
+    expect(parseLabelledSheet([noSubject, blankInsight, stringScore, noScore, nanScore, line(true)]).refused).toEqual([
+      'line 1: subjectId missing is not an id',
+      'line 2: audienceInsightId " " is not an id',
+      'line 3: score "0.62" is not a number',
+      'line 4: score missing is not a number',
+      'line 5: score null is not a number',
+    ])
+  })
+
+  it('is the gate the scorer needed: a string "false" scores as correct without it', () => {
+    const hazard = precisionAt([pair({ score: 0.9, label: 'false' as unknown as boolean })])
+    expect(hazard.correct).toBe(1)
+  })
+})
+
+describe('calibrationRecorded — a re-run of --apply completes only what is missing', () => {
+  const next = { calibration_precision: 22 / 25, calibration_n: 25, calibration_judge_version: 'j1' }
+  const none = { calibration_precision: null, calibration_n: null, calibration_judge_version: null }
+
+  it('skips a subject whose figure is stored AND logged', () => {
+    // numeric comes back from the database as a number, or as its string.
+    expect(calibrationRecorded({ ...next, calibration_precision: '0.88' }, next, next)).toBe(true)
+  })
+
+  it('writes a subject whose update landed but whose change-log row did not — the one the re-run is for', () => {
+    expect(calibrationRecorded(next, undefined, next)).toBe(false)
+    expect(calibrationRecorded(next, none, next)).toBe(false)
+  })
+
+  it('writes a subject whose figure is new or whose key moved', () => {
+    expect(calibrationRecorded(none, null, next)).toBe(false)
+    expect(calibrationRecorded({ ...next, calibration_n: 24 }, next, next)).toBe(false)
+    expect(calibrationRecorded({ ...next, calibration_judge_version: 'j0' }, { ...next, calibration_judge_version: 'j0' }, next)).toBe(false)
+  })
+
+  it('reads each subject’s NEWEST logged figure', () => {
+    const rows = [
+      { after: { id: 's1', calibration_precision: 0.88, calibration_n: 25, calibration_judge_version: 'j1' } },
+      { after: { id: 's1', calibration_precision: 0.5, calibration_n: 33, calibration_judge_version: 'j0' } },
+      { after: null },
+      { after: { id: 's2', calibration_precision: null, calibration_n: 0, calibration_judge_version: 'j1' } },
+    ]
+    const last = lastCalibrationLogged(rows)
+    expect(last.get('s1')).toEqual({ calibration_precision: 0.88, calibration_n: 25, calibration_judge_version: 'j1' })
+    expect(last.get('s2')?.calibration_n).toBe(0)
+    expect(last.size).toBe(2)
+  })
+})
+
+describe('calibrationNote — the tenant-readable change-log line', () => {
+  it('is plain words: no "by hand", no threshold', () => {
+    const note = calibrationNote('Looks & style', 25)
+    expect(note).toBe('Matching checked for Looks & style on 25 sampled viewer points.')
+    expect(note).not.toMatch(/by hand/i)
+    expect(note).not.toMatch(/\d\.\d|\d\/\d|precision|pair/i)
+  })
+
+  // A sampled pair is an audience insight — one point drawn from one video's
+  // comments — and "comments" has a fixed meaning on client copy (GLOSSARY).
+  it('does not call the sampled unit a comment', () => {
+    expect(calibrationNote('Looks & style', 25)).not.toMatch(/comment/i)
+    expect(calibrationNote('Price', 1)).not.toMatch(/comment/i)
+  })
+
+  it('counts one sample as one', () => {
+    expect(calibrationNote('Price', 1)).toBe('Matching checked for Price on 1 sampled viewer point.')
   })
 })

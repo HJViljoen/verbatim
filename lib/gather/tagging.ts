@@ -106,12 +106,27 @@ function bareName(hay: string, tag: VideoTags, config: GatherConfig): string | n
 }
 
 /**
+ * True when the text @-mentions this handle at the START of a token — "@cotopaxi",
+ * "@freitag.bangkok" — and not inside a longer handle ("@secretgardencotopaxi",
+ * someone else's account) or an address ("info@cotopaxi.com").
+ */
+function atMention(hay: string, handle: string): boolean {
+  const escaped = handle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(^|[^\\p{L}\\p{N}_.@])@${escaped}`, 'u').test(hay)
+}
+
+/**
  * Configured terms present in the text, other than the bare name.
  *
  * `competitor_keywords` counts here even though the v4.1 rule forbids TAGGING
  * from it: this set never creates a tag, it only decides whether an exclusion
  * may take one away, and "cotopaxi jacket" is exactly the evidence that says
  * the post is about the bag company.
+ *
+ * So does an @-mention of the bare name (2026-09-24): "@COTOPAXI apparel and
+ * backpack at Cotopaxi volcano in Ecuador" names the company's own handle, and
+ * without this the volcano and Ecuador stripped it. Token-initial only, so a
+ * hostel account that merely CONTAINS the name is not evidence.
  */
 function otherEvidence(hay: string, config: GatherConfig, bare: string | null): string[] {
   const terms = [
@@ -126,6 +141,8 @@ function otherEvidence(hay: string, config: GatherConfig, bare: string | null): 
     if (term === '' || term === bare) continue
     if (hay.includes(term)) out.add(term)
   }
+  const handle = (bare ?? '').replace(/[\s#@]+/g, '')
+  if (handle !== '' && atMention(hay, handle)) out.add(`@${handle}`)
   return [...out]
 }
 
@@ -154,6 +171,43 @@ export function excludedTag(v: TagCandidate, tag: VideoTags, config: GatherConfi
  */
 export function tagAfterExclusions(v: TagCandidate, tag: VideoTags, config: GatherConfig): VideoTags {
   return excludedTag(v, tag, config) ? { is_client: false, is_competitor: false, competitor_name: null } : tag
+}
+
+/**
+ * The tag a video gets when the attribution judge gave no verdict for it — a
+ * batch that failed, or an index the model skipped (lib/gather/attribution.ts).
+ *
+ * NOT tagVideo. That takes the first substring match at face value, and it is
+ * what turned every "Freitag 21.8.2026" and "Freitag ❤️ #food" into a rival
+ * post the day a batch 400'd. With no judge, a tag needs evidence that could
+ * not be a homonym:
+ *   - the client when a brand keyword is present (the configured forms are
+ *     specific phrases — "sealand gear", "sealand bag");
+ *   - a competitor only when a configured competitor KEYWORD that contains its
+ *     name is present ("freitag bag", "cotopaxi backpack"). The v4.1 rule holds:
+ *     a keyword never tags on its own, it only vouches for the name inside it.
+ *     So a keyword that does not contain the name never tags — "north face
+ *     backpack" does not contain "The North Face", and The North Face is never
+ *     tagged without a judge;
+ *   - untagged otherwise, and then the client's exclusions as always.
+ * It costs recall during an outage, not precision — logged, and a re-tag
+ * recovers it.
+ */
+export function tagWithoutJudge(v: TagCandidate, config: GatherConfig): VideoTags {
+  const untagged: VideoTags = { is_client: false, is_competitor: false, competitor_name: null }
+  if (matchEntities(v, config).brand) {
+    return tagAfterExclusions(v, { is_client: true, is_competitor: false, competitor_name: null }, config)
+  }
+  const hay = fold(tagText(v))
+  const vouched = (config.competitor_names ?? []).map((c) => str(c)).find((name) => {
+    const n = fold(name)
+    return n !== '' && (config.competitor_keywords ?? []).some((k) => {
+      const kw = fold(k)
+      return kw.includes(n) && hay.includes(kw)
+    })
+  })
+  if (!vouched) return untagged
+  return tagAfterExclusions(v, { is_client: false, is_competitor: true, competitor_name: vouched }, config)
 }
 
 /** Single-bucket substring tags (priority client > competitor). */

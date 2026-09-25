@@ -238,3 +238,150 @@ export function formatPrecisionTable(rows: readonly PrecisionRow[]): string {
   })
   return [head, ...body].join('\n')
 }
+
+/** One line of a labelled calibration sheet, as the scorer reads it. */
+export interface SheetLine {
+  subjectId: string
+  audienceInsightId: string
+  score: number
+  /** true / false, or null for a pair nobody has labelled yet. */
+  label: boolean | null
+}
+
+/**
+ * Read a labelled sheet — and REFUSE it if any label is not a JSON boolean, or
+ * any line has lost its ids or its score.
+ *
+ * THE SCORER COUNTED A STRING AS A YES (calibration skeptic, 2026-09-24).
+ * `precisionAt` counts `if (p.label) correct++`, and the scorer skipped only
+ * `label === null`, so a sheet whose labels were written "false", "not" or
+ * "member" — the spot-check CSV's own words — scored every one of those pairs
+ * as CORRECT, and a subject could go READY on answers that said no. Null is
+ * still "not labelled yet" and is skipped with a warning; anything else that is
+ * not `true` or `false` (a string, a number, a missing key, a line that is not
+ * JSON) is refused by line number, and nothing is scored from the sheet.
+ *
+ * THE IDS AND THE SCORE ARE CHECKED TOO. A line with no subjectId became the
+ * string "undefined" and was dropped silently as "(nothing labelled)"; a score
+ * edited or lost became NaN, which predictAt reads as band → 'unknown' while
+ * calibration_n still counted it. The skeptic named a dropped or rewritten
+ * score as a real hazard; the labeller's diff against the .emitted copy was
+ * the only guard. Each is refused by line number now.
+ */
+export function parseLabelledSheet(lines: readonly string[]): { rows: SheetLine[]; refused: string[] } {
+  const rows: SheetLine[] = []
+  const refused: string[] = []
+  lines.forEach((text, i) => {
+    if (!text.trim()) return
+    let line: Record<string, unknown>
+    try {
+      line = JSON.parse(text) as Record<string, unknown>
+    } catch {
+      refused.push(`line ${i + 1}: not JSON`)
+      return
+    }
+    if (!line || typeof line !== 'object') {
+      refused.push(`line ${i + 1}: not a sheet line`)
+      return
+    }
+    const label = line.label
+    if (label !== null && typeof label !== 'boolean') {
+      refused.push(`line ${i + 1}: label ${label === undefined ? 'missing' : JSON.stringify(label)} is not true, false or null`)
+      return
+    }
+    for (const key of ['subjectId', 'audienceInsightId'] as const) {
+      if (typeof line[key] !== 'string' || !(line[key] as string).trim()) {
+        refused.push(`line ${i + 1}: ${key} ${line[key] === undefined ? 'missing' : JSON.stringify(line[key])} is not an id`)
+        return
+      }
+    }
+    if (typeof line.score !== 'number' || !Number.isFinite(line.score)) {
+      refused.push(`line ${i + 1}: score ${line.score === undefined ? 'missing' : JSON.stringify(line.score)} is not a number`)
+      return
+    }
+    rows.push({
+      subjectId: line.subjectId as string,
+      audienceInsightId: line.audienceInsightId as string,
+      score: line.score,
+      label,
+    })
+  })
+  return { rows, refused }
+}
+
+/** What a recorded calibration writes on a subject, beside `calibrated_at`. */
+export interface CalibrationFigures {
+  calibration_precision: number | string | null
+  calibration_n: number | null
+  calibration_judge_version: string | null
+}
+
+const samePrecision = (a: number | string | null, b: number | string | null): boolean =>
+  a === null || b === null ? a === b : Math.abs(Number(a) - Number(b)) < 1e-9
+
+const sameFigures = (a: CalibrationFigures, b: CalibrationFigures): boolean =>
+  samePrecision(a.calibration_precision, b.calibration_precision) &&
+  (a.calibration_n ?? null) === (b.calibration_n ?? null) &&
+  (a.calibration_judge_version ?? null) === (b.calibration_judge_version ?? null)
+
+/**
+ * Each subject's newest 'calibration' change-log `after`, by subject id, off
+ * rows read newest first.
+ */
+export function lastCalibrationLogged(
+  rows: readonly { after: unknown }[],
+): Map<string, CalibrationFigures> {
+  const out = new Map<string, CalibrationFigures>()
+  for (const r of rows) {
+    const after = r.after as (Partial<CalibrationFigures> & { id?: unknown }) | null
+    if (!after || typeof after.id !== 'string' || out.has(after.id)) continue
+    out.set(after.id, {
+      calibration_precision: after.calibration_precision ?? null,
+      calibration_n: after.calibration_n ?? null,
+      calibration_judge_version: after.calibration_judge_version ?? null,
+    })
+  }
+  return out
+}
+
+/**
+ * Is this subject's calibration already RECORDED with exactly these figures —
+ * on the subject AND on the change log?
+ *
+ * A RE-RUN OF --apply DUPLICATED TENANT-VISIBLE ROWS. The script stops at the
+ * first subject whose change-log row fails and says re-run; the re-run then
+ * re-wrote and re-logged every subject that had already succeeded, and
+ * Sealand's change log showed two identical "Matching checked for…" lines for
+ * each. So a subject is skipped only when BOTH agree with the new figure. The
+ * subject alone is not enough: the one whose UPDATE landed and whose log row
+ * failed has the new figure stored and no row, and it is exactly the one the
+ * re-run exists to finish.
+ */
+export function calibrationRecorded(
+  stored: CalibrationFigures,
+  lastLogged: CalibrationFigures | null | undefined,
+  next: CalibrationFigures,
+): boolean {
+  return lastLogged != null && sameFigures(stored, next) && sameFigures(lastLogged, next)
+}
+
+/**
+ * The change-log note a recorded calibration leaves — TENANT-READABLE, on
+ * Settings › The record (lib/settings/change-log.ts prints `note` verbatim).
+ *
+ * It used to read "precision measured by hand on 25 labelled pairs at 0.6/0.4":
+ * "by hand" was false once the labels were a model's (the 24 Sep ruling), and
+ * "0.6/0.4" is a raw threshold, which client copy never prints. Plain words,
+ * and only what is true of every way the sheet can be labelled.
+ *
+ * NOT "COMMENTS". What is sampled is a (subject, audience insight) pair, and an
+ * insight is one point drawn from ONE video's comments — several per video,
+ * never one comment. "Comments" has a fixed meaning on every client surface
+ * (lib/calibration.ts GLOSSARY: comments are counted separately, as comments),
+ * so a note saying "25 sampled comments" is a copy claim the code does not
+ * make. Once --apply writes it the row cannot be corrected without rewriting
+ * history.
+ */
+export function calibrationNote(subject: string, pairs: number): string {
+  return `Matching checked for ${subject} on ${pairs} sampled ${pairs === 1 ? 'viewer point' : 'viewer points'}.`
+}

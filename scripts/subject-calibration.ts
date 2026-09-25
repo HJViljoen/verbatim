@@ -1,15 +1,21 @@
-import { readFileSync, writeFileSync } from 'fs'
+import { existsSync, readFileSync, writeFileSync } from 'fs'
 
-import { recordConfigChange, scriptActor } from '../lib/config-log'
+import { CONFIG_CHANGES_TABLE, recordConfigChange, scriptActor } from '../lib/config-log'
+import { projectRefOf } from '../lib/gather/retag'
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
 import {
   calibrationQuota,
+  calibrationNote,
+  calibrationRecorded,
   clearsPrecisionGate,
   formatPrecisionTable,
+  lastCalibrationLogged,
   pickCalibrationPairs,
   precisionAt,
   precisionTable,
+  parseLabelledSheet,
   predictAt,
+  type CalibrationFigures,
   type LabelledPair,
 } from '../lib/subjects/calibration'
 import { loadActiveSubjects } from '../lib/subjects/membership'
@@ -53,11 +59,24 @@ import {
 //   2. …edit labels.jsonl, replacing every null with true or false…
 //
 //   3. node --env-file=.env.local --import tsx scripts/subject-calibration.ts \
-//        --client <uuid> --score labels.jsonl [--apply]
+//        --client <uuid> --score labels.jsonl [--apply --project <ref>]
 //      Prints precision at every threshold pair, and with --apply records the
 //      shipped pair's figure on each subject. A subject whose figure is under
-//      85% — or absent — prints "calibrating" everywhere and its share is not
-//      shown to a client.
+//      85% — or absent — is 'calibrating' (lib/subjects/types.ts): on this
+//      code the Subjects rail reads "provisional" and withholds its share,
+//      while the pane, Overview, the report emails and the leadership sheet
+//      still print it. Hiding it on every surface is held on
+//      hold/calibrating-share-hidden, not merged.
+//
+//      THE FIRST LINE IS THE PROJECT, and --apply names the one it means to
+//      write: it refuses when the Supabase URL is not --project <ref>. `node
+//      --env-file` does not override a variable already exported in the
+//      shell, so a shell holding the other project's values would otherwise
+//      write there silently. --apply also refuses a sheet with any label still
+//      null, and skips a subject whose figure is already on the subject AND on
+//      the change log — so a re-run after a failed change-log row completes
+//      only what is missing instead of logging every subject twice. --emit
+//      never overwrites a sheet (it may already hold labels).
 //
 // WHY A PERSON. Nothing here can tell whether an insight really is about
 // "comfort"; that IS the question the whole mechanism answers, so there is no
@@ -74,25 +93,28 @@ import {
 // have already been paid for. A pair inside the band with no decision on file
 // is counted as `unknown` and printed, never scored as a miss.
 
-interface Args { clientId: string; emit: string | null; score: string | null; apply: boolean; sample: number }
+interface Args { clientId: string; emit: string | null; score: string | null; apply: boolean; sample: number; project: string | null }
 
 // `sample` is the tenant's WHOLE sheet in pairs, split across its subjects —
 // see calibrationQuota.
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { clientId: '', emit: null, score: null, apply: false, sample: SUBJECT_CALIBRATION_SAMPLE }
+  const args: Args = { clientId: '', emit: null, score: null, apply: false, sample: SUBJECT_CALIBRATION_SAMPLE, project: null }
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--client') args.clientId = argv[++i]
     else if (argv[i] === '--emit') args.emit = argv[++i]
     else if (argv[i] === '--score') args.score = argv[++i]
     else if (argv[i] === '--apply') args.apply = true
     else if (argv[i] === '--sample') args.sample = Number(argv[++i])
+    else if (argv[i] === '--project') args.project = argv[++i] ?? null
     else throw new Error(`unknown flag: ${argv[i]}`)
   }
   if (!args.clientId) throw new Error('--client <uuid> is required')
   if (!args.emit && !args.score) throw new Error('one of --emit <file> or --score <file> is required')
   if (args.emit && args.score) throw new Error('--emit and --score are two different runs; pass one')
   if (!Number.isFinite(args.sample) || args.sample <= 0) throw new Error('--sample must be a positive integer')
+  if (args.apply && !args.score) throw new Error('--apply goes with --score <file>')
+  if (args.apply && !args.project) throw new Error('--apply requires --project <ref>: the project it is meant to write')
   return args
 }
 
@@ -141,7 +163,16 @@ async function scoreAll(admin: Admin, clientId: string, subjectId: string) {
 }
 
 async function main() {
-  const { clientId, emit, score, apply, sample } = parseArgs(process.argv.slice(2))
+  const { clientId, emit, score, apply, sample, project } = parseArgs(process.argv.slice(2))
+  // WHICH PROJECT, FIRST — before anything is read or written.
+  const host = projectRefOf(process.env.NEXT_PUBLIC_SUPABASE_URL)
+  console.log(`project ${host ?? 'none (NEXT_PUBLIC_SUPABASE_URL is not a Supabase project URL)'}`)
+  if (project && host !== project) {
+    throw new Error(`REFUSED: the Supabase URL points at ${host ?? 'no Supabase project'}, not --project ${project}. Nothing read, nothing written.`)
+  }
+  // A sheet is never overwritten: a re-emit over a labelled file would
+  // destroy the labels (and the .emitted copy is the pristine one).
+  if (emit && existsSync(emit)) throw new Error(`${emit} exists; --emit never overwrites a sheet — name a new file`)
   const admin = createAdminClient()
   const subjects = await loadActiveSubjects(admin, clientId)
   if (subjects.length === 0) throw new Error('no active subjects for this tenant — confirm a set in Settings first')
@@ -189,7 +220,7 @@ async function main() {
         }))
       }
     }
-    writeFileSync(emit, lines.join('\n') + '\n')
+    writeFileSync(emit, lines.join('\n') + '\n', { flag: 'wx' })
     console.log(
       `[subject-calibration] ${lines.length} pairs to label — up to ${quota} for each of ${subjects.length} subjects, ` +
       `over ${insights.size} distinct insights, every one a predicted member at ${SUBJECT_MATCH_HIGH}/${SUBJECT_MATCH_LOW} → ${emit}`,
@@ -199,10 +230,20 @@ async function main() {
     return
   }
 
-  // --score
-  const raw = readFileSync(score!, 'utf8').split('\n').filter((l) => l.trim())
-  const rows = raw.map((l) => JSON.parse(l) as { subjectId: string; audienceInsightId: string; score: number; label: boolean | null })
+  // --score. A label that is not a JSON boolean is REFUSED, whole sheet, before
+  // anything is scored: `if (p.label) correct++` counted "false" as a yes.
+  const { rows, refused } = parseLabelledSheet(readFileSync(score!, 'utf8').split('\n'))
+  if (refused.length > 0) {
+    throw new Error(
+      `REFUSED: ${refused.length} line(s) of ${score} carry a label that is not true, false or null — nothing scored, nothing written.\n  ` +
+      refused.slice(0, 20).join('\n  ') + (refused.length > 20 ? `\n  … +${refused.length - 20} more` : ''),
+    )
+  }
   const unlabelled = rows.filter((r) => r.label === null).length
+  // A half-labelled sheet would RECORD figures on fewer pairs than it says.
+  if (apply && unlabelled > 0) {
+    throw new Error(`REFUSED: ${unlabelled} pair(s) of ${score} are still unlabelled — nothing written. Label every pair, then --apply.`)
+  }
   if (unlabelled > 0) console.warn(`[subject-calibration] ${unlabelled} pair(s) still unlabelled — they are skipped, not counted as no.`)
 
   // The judge decisions already on file, so a band pair is scored by what the
@@ -224,6 +265,22 @@ async function main() {
     bySubject.set(r.subjectId, list)
   }
 
+  // Each subject's newest logged calibration, so a re-run of --apply skips a
+  // subject already recorded on the subject AND the change log. A read that
+  // fails writes nothing: without it a re-run would log every subject twice.
+  let lastLogged = new Map<string, CalibrationFigures>()
+  if (apply) {
+    const { data, error } = await admin
+      .from(CONFIG_CHANGES_TABLE)
+      .select('changed_at, after')
+      .eq('client_id', clientId)
+      .eq('surface', 'subjects')
+      .eq('field', 'calibration')
+      .order('changed_at', { ascending: false })
+    if (error) throw new Error(`config_changes (calibration): ${error.message} — nothing written`)
+    lastLogged = lastCalibrationLogged((data ?? []) as { after: unknown }[])
+  }
+
   console.log(`[subject-calibration] judge ${JUDGE_VERSION} · floor ${Math.round(SUBJECT_PRECISION_FLOOR * 100)}%\n`)
   for (const s of subjects) {
     const pairs = bySubject.get(s.id) ?? []
@@ -240,6 +297,10 @@ async function main() {
         calibration_n: pairs.length,
         calibration_judge_version: JUDGE_VERSION,
       }
+      if (calibrationRecorded(s, lastLogged.get(s.id), after)) {
+        console.log(`  already recorded: ${shipped.precision === null ? 'no precision' : `${(100 * shipped.precision).toFixed(1)}%`} over ${pairs.length} pairs, on the subject and the change log — skipped\n`)
+        continue
+      }
       const { error } = await admin
         .from(TABLE_SUBJECTS)
         .update({ ...after, updated_at: new Date().toISOString() })
@@ -248,7 +309,7 @@ async function main() {
       // Every configuration write carries an actor (AGENTS.md). There is no
       // trigger on `subjects` to catch this one, and it is the write that
       // decides whether a client sees a share at all.
-      await recordConfigChange(admin, {
+      const logged = await recordConfigChange(admin, {
         clientId,
         surface: 'subjects',
         field: 'calibration',
@@ -267,8 +328,18 @@ async function main() {
         // not — the same line attention_panels draws when it withholds
         // created_by from the tenant.
         actor: scriptActor(`scripts/subject-calibration.ts --client ${clientId} --score <file> --apply`),
-        note: `precision measured by hand on ${pairs.length} labelled pairs at ${SUBJECT_MATCH_HIGH}/${SUBJECT_MATCH_LOW}`,
+        // Tenant-readable: no "by hand", no thresholds (calibrationNote).
+        note: calibrationNote(s.name, pairs.length),
       })
+      // The figure is on the subject already; a calibration with no audit row
+      // must not pass quietly, and the next subject must not follow it.
+      if (!logged) {
+        throw new Error(
+          `${s.name}: the calibration was written but its change-log row was NOT recorded — stopped before the next subject. ` +
+          'Fix the change log and re-run the same --apply: a subject whose figure is already on the subject and the change log is skipped, ' +
+          'so only this subject and the ones after it are written and logged.',
+        )
+      }
       console.log(`  recorded: ${shipped.precision === null ? 'no precision' : `${(100 * shipped.precision).toFixed(1)}%`} over ${pairs.length} pairs`)
     }
     console.log('')

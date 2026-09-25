@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { excludedByTerms, matchEntities, tagAfterExclusions, tagVideo } from './tagging'
+import { excludedByTerms, matchEntities, tagAfterExclusions, tagVideo, tagWithoutJudge } from './tagging'
 import type { GatherConfig, VideoInsert } from './types'
 
 // The two real homonym cases this exists for:
@@ -134,5 +134,88 @@ describe('tagAfterExclusions — the post-filter over the attribution judge', ()
 
   it('is a no-op for a client with no exclusions', () => {
     expect(tagAfterExclusions(video('Climbing Cotopaxi volcano'), COMPETITOR, config())).toEqual(COMPETITOR)
+  })
+})
+
+// What a video is tagged when the attribution judge gave no verdict for it (a
+// failed batch, a skipped index). The substring tag it used to get is how a
+// 400 on one cut emoji turned every "Freitag 21.8.2026" into a rival post.
+describe('tagWithoutJudge — the strict fallback', () => {
+  /** Sealand's 2026-09-17 terms (scripts/sealand-config-2026-09-17.ts). */
+  const sealand = config({
+    brand_keywords: ['sealand gear', '#sealandgear', 'sealand bag'],
+    competitor_names: ['Cotopaxi', 'Freitag', 'Rareform', 'The North Face', 'Patagonia', 'Freedom of Movement', 'Old School'],
+    competitor_keywords: ['cotopaxi backpack', 'freitag bag', 'frtg', 'rareform bag', 'north face backpack', 'patagonia black hole', 'fombrand'],
+    exclude_terms: ['ecuador', 'volcano'],
+  })
+  const rival = (name: string) => ({ is_client: false, is_competitor: true, competitor_name: name })
+  const CLIENT = { is_client: true, is_competitor: false, competitor_name: null }
+
+  it('tags the client on a brand keyword', () => {
+    expect(tagWithoutJudge(video('first trip with my sealand bag'), sealand)).toEqual(CLIENT)
+    expect(tagWithoutJudge(video('restock day #sealandgear'), sealand)).toEqual(CLIENT)
+  })
+
+  it('tags a competitor only through a configured keyword that contains its name', () => {
+    expect(tagWithoutJudge(video('my freitag bag after five years'), sealand)).toEqual(rival('Freitag'))
+    expect(tagWithoutJudge(video('Cotopaxi backpack review'), sealand)).toEqual(rival('Cotopaxi'))
+    expect(tagWithoutJudge(video('the patagonia black hole duffel'), sealand)).toEqual(rival('Patagonia'))
+  })
+
+  it('leaves a bare name untagged — the homonyms the judge exists for', () => {
+    expect(tagWithoutJudge(video('Freitag 21 .8.2026'), sealand)).toEqual(UNTAGGED)
+    expect(tagWithoutJudge(video('Freitag ❤️🫶 #food #reels'), sealand)).toEqual(UNTAGGED)
+    expect(tagWithoutJudge(video('Patagonia road trip, week two'), sealand)).toEqual(UNTAGGED)
+    // …which tagVideo, the old fallback, would have called a rival post.
+    expect(tagVideo(video('Freitag 21 .8.2026'), sealand)).toEqual(rival('Freitag'))
+  })
+
+  it('never tags from a keyword that does not contain a name — frtg, fombrand', () => {
+    expect(tagWithoutJudge(video('frtg drop'), sealand)).toEqual(UNTAGGED)
+    expect(tagWithoutJudge(video('fombrand new season'), sealand)).toEqual(UNTAGGED)
+  })
+
+  // THE TRUE BEHAVIOUR, NOT A LOOSENED RULE. "north face backpack" does not
+  // contain "the north face", so it vouches for nobody: without a judge, The
+  // North Face is never tagged. That is the cost of the rule, stated here.
+  it('never tags The North Face without a judge — its keyword does not contain its name', () => {
+    expect(tagWithoutJudge(video('The North Face north face backpack review'), sealand)).toEqual(UNTAGGED)
+  })
+
+  it('still lets the client’s exclusions have the last word', () => {
+    // A brand keyword with an exclusion term and nothing else configured.
+    expect(tagWithoutJudge(video('sealand bag at the volcano'), config({
+      brand_keywords: ['sealand bag'], exclude_terms: ['volcano'],
+    }))).toEqual(UNTAGGED)
+    // The competitor keyword IS other evidence, so this one keeps its tag.
+    expect(tagWithoutJudge(video('cotopaxi backpack on the volcano, Ecuador'), sealand)).toEqual(rival('Cotopaxi'))
+  })
+})
+
+// An @-mention of the company's own handle is evidence that the post is about
+// the company, even beside an excluded sense (2026-09-24). JoelWestBarish's
+// "@COTOPAXI apparel … Cotopaxi volcano in Ecuador" was being stripped.
+describe('excludedTag — an @-mention of the bare name is evidence', () => {
+  const COTOPAXI = { is_client: false, is_competitor: true, competitor_name: 'Cotopaxi' }
+  const TNF = { is_client: false, is_competitor: true, competitor_name: 'The North Face' }
+  const volcano = config({ exclude_terms: ['volcano', 'ecuador'], competitor_names: ['Cotopaxi', 'The North Face'] })
+
+  it('keeps a tag whose text @-mentions the company’s handle', () => {
+    expect(tagAfterExclusions(video('@COTOPAXI apparel and backpack at Cotopaxi volcano in Ecuador'), COTOPAXI, volcano)).toEqual(COTOPAXI)
+    expect(tagAfterExclusions(video('restock from @freitag.bangkok'), { ...COTOPAXI, competitor_name: 'Freitag' }, config({ exclude_terms: ['bangkok'] })))
+      .toEqual({ ...COTOPAXI, competitor_name: 'Freitag' })
+  })
+
+  it('reads a multi-word name as its handle', () => {
+    expect(tagAfterExclusions(video('gear from @thenorthface on the volcano'), TNF, volcano)).toEqual(TNF)
+  })
+
+  it('does not count a handle that only CONTAINS the name, or an address', () => {
+    expect(tagAfterExclusions(video('@secretgardencotopaxi hostel under the volcano'), COTOPAXI, volcano)).toEqual(UNTAGGED)
+    expect(tagAfterExclusions(video('tours: info@cotopaxi.com, Ecuador'), COTOPAXI, volcano)).toEqual(UNTAGGED)
+  })
+
+  it('does not count a hashtag — #cotopaxi is the volcano as often as the brand', () => {
+    expect(tagAfterExclusions({ account_name: 'alexa', caption: '', hashtags: ['#cotopaxi', '#ecuador', '#travel'] }, COTOPAXI, volcano)).toEqual(UNTAGGED)
   })
 })

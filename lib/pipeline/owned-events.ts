@@ -7,6 +7,7 @@ import { logAiCall } from './ai-log'
 import { allowTokens } from '../prose/scrub'
 import { CALIBRATED_PROSE_RULE, slotScrubber } from './prose-rules'
 import { followerFloorPct } from '../gather/owned'
+import { promptText } from '../gather/transcript'
 
 // Step 2c — owned-account events (Architecture/Owned-Data-Plan 2026-07-08).
 // "Code rates, AI explains", a third time: code detects events on the client's
@@ -195,6 +196,9 @@ export function detectAccountEvents(args: {
       const eng = engagement(v)
       if (eng < typical * POST_BASELINE_MULTIPLE) continue
       const ratio = eng / typical
+      // The caption goes into the Step 2c prompt: cut by CODE POINT and
+      // cleared of lone surrogates (promptText), because a UTF-16 slice that
+      // halves an emoji 400s the whole call — the attribution/relevance bug.
       events.push({
         platform,
         metric: 'post_performance',
@@ -204,7 +208,7 @@ export function detectAccountEvents(args: {
         magnitudeLabel: `A post on ${cap(platform)} reached ${round1(ratio)}× your typical engagement`,
         severity: ratio >= POST_BASELINE_MULTIPLE * 2 ? 3 : 2,
         videoId: v.id,
-        factLine: `An owned ${cap(platform)} post drew ${fmtInt(eng)} engagements — ${round1(ratio)}× the account's median post${v.caption ? ` (caption: "${v.caption.slice(0, 120)}")` : ''}`,
+        factLine: `An owned ${cap(platform)} post drew ${fmtInt(eng)} engagements — ${round1(ratio)}× the account's median post${v.caption ? ` (caption: "${promptText(v.caption, 120)}")` : ''}`,
       })
     }
   }

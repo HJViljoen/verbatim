@@ -1,0 +1,1564 @@
+{
+ "tenant": {
+  "name": "ossur",
+  "config": {
+   "brand_keywords": [
+    "ossur"
+   ],
+   "competitor_names": [
+    "Ottobock"
+   ],
+   "competitor_keywords": [
+    "ottobock"
+   ],
+   "industry_keywords": [
+    "amputee",
+    "prosthetic leg",
+    "prosthetic arm",
+    "#runningblade",
+    "#prosthetics"
+   ],
+   "exclude_terms": []
+  },
+  "fullRetagJudged": 1143
+ },
+ "labelling": "Össur tracking config as on staging zfmxrrugaihxpubunleu 2026-09-25 (client e52cac94). 54 rows, a stratified sample of the 1,143 judgeable name-matched videos (4,450 stored; identity rows spared as a re-tag spares them), by stored bucket and by where the name sits (in the caption words, or only as a #hashtag; both names), at most one row per account, drawn in sha256(id) order. Labelled under the single-bucket rule by two independent model labellers (this session, and a fresh Claude Sonnet with no tools) on the full caption, all hashtags, and the transcript and on-screen text where stored; 47 of 54 agreed (Cohen kappa 0.79); the 7 disagreements went to a third independent labeller (Claude Opus, no tools) and take the majority of three (contested=true). Split by ACCOUNT (sha256 of the folded account name): train 33 / holdout 21. stored is the audience the row held on staging.",
+ "sample": {
+  "drawnFrom": 1143,
+  "strata": {
+   "competitor:Ottobock|comp-hashtag": 224,
+   "industry-other|both": 148,
+   "client|brand-text": 119,
+   "competitor:Ottobock|comp-text": 326,
+   "industry-other|comp-hashtag": 39,
+   "client|brand-hashtag": 108,
+   "industry-other|brand-text": 40,
+   "client|both": 54,
+   "industry-other|brand-hashtag": 34,
+   "industry-other|comp-text": 41,
+   "competitor:Ottobock|both": 10
+  }
+ },
+ "rows": [
+  {
+   "id": "d1adef1f-0ecf-4d74-94c6-f8ff72b96085",
+   "split": "train",
+   "gold": "none",
+   "reason": "Motivation/life story; #ossur is one of 20 hashtags.",
+   "contested": false,
+   "platform": "instagram",
+   "account_name": "denizyardimm",
+   "caption": "Bahane yok, Sadece bütün zorlukları kaldırabileceğine dair derin bir inanç var💪🏻😭\n\n.\n\n.\n\n.\n\n.\n\n.\n\n.\n\n.\n\n.\n\n#lifestory #shortstory #motivation #bodytransformation #nevergiveup #amputeelife #prostheticlegs #ossur #fitnessmotivation #brokenheart #emotional #mylifestyle #hope #love #surgeryrecovery #gymmotivation #transformation #gainmuscle #lifechanging #lifelessons",
+   "hashtags": [
+    "lifestory",
+    "shortstory",
+    "motivation",
+    "bodytransformation",
+    "nevergiveup",
+    "amputeelife",
+    "prostheticlegs",
+    "ossur",
+    "fitnessmotivation",
+    "brokenheart",
+    "emotional",
+    "mylifestyle",
+    "hope",
+    "love",
+    "surgeryrecovery",
+    "gymmotivation",
+    "transformation",
+    "gainmuscle",
+    "lifechanging",
+    "lifelessons"
+   ],
+   "match_entities": {
+    "brand": true,
+    "competitors": []
+   },
+   "stored": "client",
+   "stratum": "client|brand-hashtag"
+  },
+  {
+   "id": "97b3442e-6a29-46e7-a24b-ec9bb62e0fa9",
+   "split": "train",
+   "gold": "client",
+   "reason": "Provider showing Össur's Direct Socket technology (#directsocket #ossur), the only brand named.",
+   "contested": false,
+   "platform": "tiktok",
+   "account_name": "kedidikakipalsu",
+   "caption": "Teknologi ini mudah alih maksudnya kami boleh datang buat terus ke rumah anda. #directsocket #ossur #kedidikakipalsu #kakipalsubawahlutut #prostheticleg",
+   "hashtags": [
+    "directsocket",
+    "ossur",
+    "kedidikakipalsu",
+    "kakipalsubawahlutut",
+    "prostheticleg"
+   ],
+   "match_entities": {
+    "brand": true,
+    "competitors": []
+   },
+   "stored": "client",
+   "stratum": "client|brand-hashtag"
+  },
+  {
+   "id": "4dcbd966-5202-4dfa-982f-6fc9190c9387",
+   "split": "train",
+   "gold": "client",
+   "reason": "Össur's own TikTok on the Power Knee.",
+   "contested": false,
+   "platform": "tiktok",
+   "account_name": "Össur",
+   "caption": "More Functionality, More Freedom!💡 What started as one steady step turned into unstoppable strides. With the Power Knee, Josh didn’t just regain movement, he rediscovered independence. 🦾 Link in bio 🔗 #ThePowerOfNaturalMovement #Bionics #Össur #LifeWithoutLimitations",
+   "hashtags": [
+    "thepowerofnaturalmovement",
+    "bionics",
+    "össur",
+    "lifewithoutlimitations"
+   ],
+   "match_entities": {
+    "brand": true,
+    "competitors": []
+   },
+   "stored": "client",
+   "stratum": "client|brand-hashtag"
+  },
+  {
+   "id": "a174ce2c-b00f-4de3-8a3b-d6fe3bfc5d1b",
+   "split": "train",
+   "gold": "none",
+   "reason": "A fun competition with a friend; #ossur only in the hashtags.",
+   "contested": false,
+   "platform": "instagram",
+   "account_name": "florinmihut098",
+   "caption": "Competiție între mine și @dandenisa 🦿🧑🏻‍🦽\n\n#disability #learningeveryday #disabilityandproud #europe #ossur #lifewithprothesis #wheelchair #activelife #romania",
+   "hashtags": [
+    "disability",
+    "learningeveryday",
+    "disabilityandproud",
+    "europe",
+    "ossur",
+    "lifewithprothesis",
+    "wheelchair",
+    "activelife",
+    "romania"
+   ],
+   "match_entities": {
+    "brand": true,
+    "competitors": []
+   },
+   "stored": "client",
+   "stratum": "client|brand-hashtag"
+  },
+  {
+   "id": "f537055c-588b-4a13-aaee-f6a7dac532ba",
+   "split": "holdout",
+   "gold": "client",
+   "reason": "Össur Korea's channel promoting the Power Knee.",
+   "contested": false,
+   "platform": "youtube",
+   "account_name": "오서코리아",
+   "caption": "[오서코리아] 한계를 뛰어넘는 힘찬 걸음, 파워 니 작은 한 걸음으로\n더 큰 여정을 만들어갑니다! 🚶‍♂️\n\n이제 Josh는 Power Knee와 함께\n이전까지 상상하지 못했던\n더 먼 곳으로 자신 있게 나아갑니다. ✨\n \n[POWER KNEE™ 자세히 알아보기]\nhttps://m.site.naver.com/1Vs0H\n \n#ThePowerOfNaturalMovement #Bionics #Össur #LifeWithoutLimitations #제한없는삶 #자연스러운움직임의힘 #바이오닉 #오서코리아 #의족 #의지 #발목의족 #프로프리오풋 #파워니 #나비 #레오니 #무릎의지\n \n🏷 상담 및 구매 문의\n✱ 02-6951-5492\n✱ 카카오톡 | 오서코리아 친구 추가\n✱ 지금 상담하여 자세한 정보 문의하세요.",
+   "hashtags": [],
+   "match_entities": {
+    "brand": true,
+    "competitors": []
+   },
+   "stored": "client",
+   "stratum": "client|brand-hashtag"
+  },
+  {
+   "id": "90b705f6-42a9-4b70-b242-b72f3e469a75",
+   "split": "holdout",
+   "gold": "none",
+   "reason": "Clinic's generic above-knee fitting (H1-type knee); #ossur only as a hashtag.",
+   "contested": false,
+   "platform": "youtube",
+   "account_name": "Ideal Artificial Limbs Solution - Prosthetics Care",
+   "caption": "👉🏻🦿 Above knee Prosthetic Leg | Waterproof Artificial Leg | Pneumatic Knee Joint #ossur #viral #ArtificialLeg #NakliTang #ProstheticLeg #ArtificialLimb #AboveKneeProsthesis #AboveKneeAmputee #Amputee #ProstheticsIndia #AboveKneeProstheticLeg #AboveKneeAmputee #AboveKneeAmputation #Amputee #AmputeeLife #Prosthetics #ProstheticsIndia #ArtificialLegIndia #ArtificialLimbIndia #ProstheticLegIndia #LinerLock #LinerLockSystem #ProstheticKnee #KneeJoint #ProstheticSocket #CustomProsthesis #WaterproofProsthesis #WaterproofArtificialLeg #ProstheticWalking #AmputeeRehabilitation #ArtificialLegDelhi #ProstheticLegDelhi #ProstheticClinic #ProstheticCentre\n\nIn this video, we showcase an Above Knee Amputee who received a customised Above Knee Prosthetic Leg at Ideal Artificial Limbs Solution, Delhi.\n\nThe prosthetic setup includes a knee joint and Liner Lock Suspension System, with the prosthetic socket customised according to the patient's individual requirements, comfort and mobility needs.\n\nThe patient was able to walk very well with the prosthetic leg on Day 1, showing an encouraging result after fitting and alignment.\n\nThis is also a waterproof artificial leg, making it a practical prosthetic solution for everyday use where water exposure is a concern.\n\n🦿 Prosthetic Setup\n\n• Above Knee Prosthetic Leg\n• Prosthetic Knee Joint\n• Liner Lock System\n• Customised Prosthetic Socket\n• Waterproof Prosthetic Leg\n• Day-1 Prosthetic Walking\n\nEvery prosthetic leg is customised according to the individual's amputation level, residual limb condition, comfort and mobility requirements.\n\n📍 Ideal Artificial Limbs Solution – Delhi\nProsthetics & Orthotics Health Care Clinic\n📞 Call / WhatsApp: 7835880155",
+   "hashtags": [
+    "Artificial Leg",
+    "Nakli Tang",
+    "Artificial Limb",
+    "Prosthetic Leg",
+    "Prosthetic Limb",
+    "Above Knee Artificial Leg",
+    "Above Knee Prosthetic Leg",
+    "Above Knee Prosthesis",
+    "Above Knee Amputee",
+    "Above Knee Artificial Limb",
+    "Above Knee Prosthetic",
+    "Artificial Leg for Amputee",
+    "Prosthetic Leg for Amputee",
+    "Custom Prosthetic Leg",
+    "Custom Artificial Leg",
+    "Waterproof Artificial Leg",
+    "Waterproof Prosthetic Leg",
+    "Waterproof Prosthesis",
+    "Prosthetic Knee Joint"
+   ],
+   "match_entities": {
+    "brand": true,
+    "competitors": []
+   },
+   "stored": "client",
+   "stratum": "client|brand-hashtag"
+  },
+  {
+   "id": "71832bc4-33d0-42ef-a225-b0573c0f1ad8",
+   "split": "train",
+   "gold": "client",
+   "reason": "Adjudicated, majority of three (client / none / client): The video shows off the creator's prosthetic hand doing a 360 rotation, and Ossur is the only prosthetics brand tagged, so it reads as an Össur product showcase (borderline: the device isn't named).",
+   "contested": true,
+   "platform": "instagram",
+   "account_name": "mou_meneses",
+   "caption": "The real 360 rotation’s hand.\n\n#Reels #Instagram #360 #360Rotation #Challenge #Prosthetic #ProstheticArm #ShamrockStrong #Ossur #Dance #Music #Enjoy #ProstheticLife #fyp #Rotation",
+   "hashtags": [
+    "Reels",
+    "Instagram",
+    "360",
+    "360Rotation",
+    "Challenge",
+    "Prosthetic",
+    "ProstheticArm",
+    "ShamrockStrong",
+    "Ossur",
+    "Dance",
+    "Music",
+    "Enjoy",
+    "ProstheticLife",
+    "fyp",
+    "Rotation"
+   ],
+   "match_entities": {
+    "brand": true,
+    "competitors": []
+   },
+   "stored": "client",
+   "stratum": "client|brand-hashtag"
+  },
+  {
+   "id": "2795fb86-b3ab-4c8c-873e-c105fc718e13",
+   "split": "train",
+   "gold": "client",
+   "reason": "Clinic at Össur Korea's AeroFit / Icon seminar with an Össur ambassador.",
+   "contested": false,
+   "platform": "youtube",
+   "account_name": "실로바이오닉 의수 의족 클리닉",
+   "caption": "구독자 3.2만명! 의족 유튜버 '이모니'님과 땀과 습기를 줄인 의족 기술, 에어로핏(AeroFit)을 직접 만나봤습니다｜OSSUR 세미나 #의족 #전자의족 #실로바이오닉 오서코리아의 에어로핏(AeroFit)과\nMPK 무릎 아이콘(Icon) 세미나에 다녀왔습니다 :)\n\n이번 세미나에서는 의족 착용 시 발생하는\n땀과 습기 문제를 개선한 에어로핏 시스템과,\n다양한 지형에서 안정적인 보행을 지원하는\nMPK 무릎 아이콘의 기술을 살펴봤습니다.\n\n의족 착용자로서 다양한 활동을 이어가고 있는\n오서의 앰버서더, 구독자 3.2만명 인플루언서 '이모니' 님도 함께해\n실제 착용자의 관점에서 기술을 경험했습니다.\n\n앞으로도 실로바이오닉은 더 편안한 일상을 위한\n의족 기술과 맞춤 솔루션을 꾸준히 살펴보겠습니다.\n\n맞춤 의수족 전문 실로바이오닉\n📞 문의: 1877-8930\n🔗 홈페이지: www.silobionic.com\n📺 유튜브: www.youtube.com/@silobionic\n📸 인스타: instagram.com/silobionic\n\n#에어로핏의족 #MPK무릎아이콘 #맞춤의족전문제작 #의족피팅상담 #실로바이오닉 #의족 #신기술 #전자의족 #맞춤의족 #aerofit #icon #mpk #mpk무릎 #아이콘",
+   "hashtags": [
+    "의족",
+    "의수",
+    "prosthetic leg",
+    "실리콘의수",
+    "실리콘의족",
+    "하퇴의족",
+    "대퇴의족",
+    "전자의수",
+    "기능의수",
+    "다리의족",
+    "의족 제작",
+    "의족가격",
+    "손 의수",
+    "절단장애",
+    "손가락 의수",
+    "발목 의족",
+    "의족 업체",
+    "서울 의족",
+    "부산 의족",
+    "경남 의족",
+    "의수족",
+    "발 의족",
+    "편한 의족",
+    "발가락 의족",
+    "맞춤 의족",
+    "3D 프린터 의족",
+    "의족 가격",
+    "의족 비용",
+    "실리콘 발",
+    "실리콘 발가락",
+    "당뇨발",
+    "당뇨발 절단",
+    "당뇨 절단",
+    "당뇨 의족",
+    "당뇨발 의족",
+    "당뇨발 관리",
+    "의족 재활",
+    "의족 브이로그",
+    "의족 제작 과정",
+    "맞춤 의족 제작",
+    "3D 의족",
+    "prosthetic foot",
+    "prosthesis foot",
+    "prosthetic feet",
+    "silicone foot",
+    "족관절의족",
+    "족관절 의족",
+    "가죽 의족",
+    "씰리콘",
+    "써울 의수족",
+    "의쑤족",
+    "써울 클리닉",
+    "족관절 발",
+    "a/s",
+    "에이에스",
+    "as",
+    "하퇴의족as",
+    "의족as",
+    "finger prosthesis",
+    "hand prosthesis"
+   ],
+   "match_entities": {
+    "brand": true,
+    "competitors": []
+   },
+   "stored": "client",
+   "stratum": "client|brand-text"
+  },
+  {
+   "id": "5605af79-9dd7-4814-99ba-70398c614cb7",
+   "split": "holdout",
+   "gold": "none",
+   "reason": "Turkish meme gibberish ('ossurada'), not the company.",
+   "contested": false,
+   "platform": "tiktok",
+   "account_name": "sürüngen",
+   "caption": "#btsanti #btsdisband2027  #idle #keşfet  Boyun ağrısı boyun ağrısı 67 canavarı geliyoo tung tung sahur vs titan camera man ossurada ossurada ben ossurada skibidi tuvalet ossurasa 67 canavarı ahhhh! Altmış yedi!!! Bugün size yeni beyin çürümemi gostercem! DÜNYANIN EN BÜYÜK ŞEHİTLERİNDEN BİRİNDE! DÜNYANIN EN BÜYÜK GODZİLLASI İLE DÜNYANIN EM BÜYÜK PİNK LABUBUSU FİGHTLARKEN PİNK LABUBUNUN GERÇEK DÜŞMANLARI GELİR! AMAN TANRIM BUNLARDA KİM? BUNLAR BAZUZULAR! PİNK LABUBU HEMEN GİZLİ BİR SİNYAL İLE KENDİ ARKADAŞLARINI ÇAĞIRIR \"HEY LABUBULAR! MEVZU VAR AMUAGOYAM\"",
+   "hashtags": [
+    "btsanti",
+    "btsdisband2027",
+    "idle",
+    "keşfet"
+   ],
+   "match_entities": {
+    "brand": true,
+    "competitors": []
+   },
+   "stored": "client",
+   "stratum": "client|brand-text"
+  },
+  {
+   "id": "643f094a-b151-4e3f-bfba-1528951fe03e",
+   "split": "holdout",
+   "gold": "none",
+   "reason": "'ossur dilerim' is a misspelt Turkish 'özür dilerim' (sorry).",
+   "contested": false,
+   "platform": "youtube",
+   "account_name": "itoshi hanim",
+   "caption": "ossur dilerim 2 kere attim ama siz gormuyorsunuz 🤍🤍 #ddlc #ytdayibenionecikarnolur #anime 😍",
+   "hashtags": [],
+   "match_entities": {
+    "brand": true,
+    "competitors": []
+   },
+   "stored": "client",
+   "stratum": "client|brand-text"
+  },
+  {
+   "id": "d5656286-6a7b-440e-a683-875c53be6982",
+   "split": "train",
+   "gold": "client",
+   "reason": "Reseller's fitting video for the Össur OA Ease knee brace.",
+   "contested": false,
+   "platform": "youtube",
+   "account_name": "Rehabmart Products",
+   "caption": "The OSSUR OA Ease Knee Brace | User Fitting Video See this product on Rehabmart:\nhttps://www.rehabmart.com/product/ossur-oa-ease-knee-brace-52001.html \n------------------------------------------------------------------------------------------------------------------------------------------------------------------\n\nWelcome to Rehabmart Product Demos!\n\nDiscover product demonstrations and tutorials for medical, therapy, and assistive equipment available at Rehabmart.com.\n\nOur videos are sourced from trusted manufacturers and highlight the features, setup, and real-world use of the products we offer — helping you make confident, informed decisions.\n\n------------------------------------------------------------------------------------------------------------------------------------------------------------------\n\n👥 Who We Serve:\n- Hospitals & clinics\n- Therapists & caregivers\n- Schools & rehabilitation centers\n- Individuals and families seeking adaptive living solutions\n\n------------------------------------------------------------------------------------------------------------------------------------------------------------------\n\n♿ About Rehabmart:\n- Rehabmart is a leading online distributor of medical and rehabilitation supplies, dedicated to improving accessibility, comfort, and quality of life for people of all abilities.\n\n------------------------------------------------------------------------------------------------------------------------------------------------------------------\n\nContact Us:\n- 🌐 Website: https://www.rehabmart.com\n- 📧 Email: customerservice@rehabmart.com\n- 📞 Phone: 1-800-827-8283\n- 📍 Location: Watkinsville, Georgia, USA",
+   "hashtags": [
+    "#rehabmart",
+    "#ossur",
+    "#ossuramericas",
+    "#oakneebrace",
+    "#kneebrace"
+   ],
+   "match_entities": {
+    "brand": true,
+    "competitors": []
+   },
+   "stored": "client",
+   "stratum": "client|brand-text"
+  },
+  {
+   "id": "023d13a3-5a71-44b1-b4ea-fc45108d7600",
+   "split": "train",
+   "gold": "none",
+   "reason": "Turkish gibberish ('ossura ossura'), not the company.",
+   "contested": false,
+   "platform": "tiktok",
+   "account_name": "∞★~𝘼𝙧𝙙𝙖𝙘ı𝙠★~∞",
+   "caption": "@sadebirRaze:dediklerin hepsi gerçek olsun armut hediyesi bim poşeti asit yağlanması osuruk yağlanması koca dudaklar petrol artışları ossura ossura gotuma girdi@:]:yanlıs kitleye dusmus✌🏿😭@𝑴𝒊𝒓𝒂𝒚:Cananın camı kırıldı Camcı cananın camına cam taktik       a       n      k       a        s      e      n      i   s                  i               k                  i           m a       n        nı        s    i  k      i    m",
+   "hashtags": [],
+   "match_entities": {
+    "brand": true,
+    "competitors": []
+   },
+   "stored": "client",
+   "stratum": "client|brand-text"
+  },
+  {
+   "id": "4e67858b-432b-4ee3-9430-03424c48de0f",
+   "split": "holdout",
+   "gold": "client",
+   "reason": "A child's new running blade, the subject, with thanks to @ossur (the only maker named).",
+   "contested": false,
+   "platform": "instagram",
+   "account_name": "bradensfhjourney",
+   "caption": "Testing out Braden’s new running blade! It brought tears to my eyes when he said “this is the best day ever and this leg will always be my favorite!” \n\nAfter a year, we were finally able to connect with some amazing people from SPS, @ops_colorado @cafoundation and @ossur to make his running leg happen. This was the happiest I have ever seen him about a new leg and kept saying how springy it was! \n\nThank you to those that made this happen. We will get the final leg next week, so stay tuned! \n\n#runningleg #runningblade #adaptive #adaptiveathlete #adaptivesports #abilitynotdisability #adaptivefitness #running #athlete #fibularhemimelia #fibularhemimeliawarrior #fibularhemimeliaawareness #adventure #challengedathletesfoundation #caf #cafgrant #ossur #cafathlete #bestdayever #kidmodel #inspire #earlychristmaspresent",
+   "hashtags": [
+    "runningleg",
+    "runningblade",
+    "adaptive",
+    "adaptiveathlete",
+    "adaptivesports",
+    "abilitynotdisability",
+    "adaptivefitness",
+    "running",
+    "athlete",
+    "fibularhemimelia",
+    "fibularhemimeliawarrior",
+    "fibularhemimeliaawareness",
+    "adventure",
+    "challengedathletesfoundation",
+    "caf",
+    "cafgrant",
+    "ossur",
+    "cafathlete",
+    "bestdayever",
+    "kidmodel",
+    "inspire",
+    "earlychristmaspresent"
+   ],
+   "match_entities": {
+    "brand": true,
+    "competitors": []
+   },
+   "stored": "client",
+   "stratum": "client|brand-text"
+  },
+  {
+   "id": "2cc3df2f-c38b-458a-aac2-db71875add1c",
+   "split": "train",
+   "gold": "none",
+   "reason": "IKEA vlog by an amputee; no Össur subject.",
+   "contested": false,
+   "platform": "youtube",
+   "account_name": "1 LEG AT A TIME",
+   "caption": "Things I Never Thought I'd Say at IKEA 😂 Giant Elevators, Dance Party & Getting Lost! What happens when an amputee gets sent into IKEA with one mission... find a mysterious LED \"donut\" light? 😂\n\nMy medical trip took an unexpected turn when my wife gave me an IKEA shopping list. First, I discovered the biggest elevators I've ever seen and couldn't resist having a dance party. Then I successfully found the famous \"donut\" light... only to follow the blue arrows straight into IKEA's massive warehouse maze of flat-packed furniture. If you've ever been trapped by those arrows, you'll understand!\n\nHave you ever escaped IKEA with ONLY the item you went in for? 😅\n\n👍 Like, Comment & Subscribe for more real-life adventures from 1 Leg At A Time.\n\nSEO Timeline\n\n0:00 Dance party in IKEA's giant elevators 🕺\n0:15 My wife's IKEA mission: find the LED \"donut\" light 💡\n0:38 Success! I actually found it ✅\n0:53 Following the famous blue arrows... ➡️\n1:10 Welcome to the giant IKEA warehouse 😳\n1:32 Every guy's nightmare: endless flat-pack furniture 📦\n1:54 Things I never thought I'd say at IKEA 😂\n\nThank you so much for taking the time to watch my adventure. I truly hope this video brought you a few laughs, some inspiration, and a reminder that life’s challenges can still lead to incredible moments and memories.\n\nPlease remember my goal for 2026 is to raise $1,000 for the Terry Fox Foundation in support of cancer research and keeping Terry’s legacy alive. \nEvery donation helps make a difference, and all contributions receive an official tax-deductible receipt.\n\nSUPPORT THE TERRY FOX FOUNDATION HERE:\nhttps://run.terryfox.ca/team/1-leg-at-a-time\n\nIf you enjoyed the video and feel it was worth your valuable time, please consider hitting the LIKE button, SUBSCRIBING to the channel, and sharing the video. Your support truly encourages me to keep creating and sharing this journey.\n\nAnd always remember:\n\n“TAKE LIFE’S CHALLENGES ON… 1 LEG AT A TIME.”\n\nFOLLOW & CONNECT WITH ME:\n\nFacebook Group – 1 Leg At A Time\nhttps://www.facebook.com/groups/1209695976416984\n\nInstagram\nhttps://www.instagram.com/1legatatim/\n\nTikTok\nhttps://www.tiktok.com/@1.legatatime?is_from_webapp=1&sender_device=pc\n\nCONTENT CREATION SETUP:\n\nVideo Editing\n\nCapCut Professional – https://www.capcut.com/\nAI Thumbnail Assistance ChatGPT\n\nComputer Setup\n\n• 2024 MacBook Pro – Apple M2 Processor\n• 2026 Apple Studio – M4\n\nCAMERA & AUDIO GEAR:\n\n• Insta360 X3 – https://www.insta360.com\n• DJI Action 3 – https://www.dji.com\n• DJI Mini Mic 2 – https://www.dji.com\n• DJI Mini 4 Pro Drone – https://www.dji.com\n\nMOBILITY EQUIPMENT:\n\nFront Drive Wheelchairs\n\n• “Lieutenant” – Triride Mad Max\nhttps://www.trirideitalia.com\n• “GUMP” – Batec Scrambler\nhttps://batec-mobility.com\n\nManual Wheelchair\n• TiLite Aero T\n\nProsthetics;\n\n• Ottobock Genium Microprocessor Knee\nhttps://shop.ottobock.ca/en/\n• Ossur Total Knee\nhttps://www.ossur.com\n\nAll prosthetic work proudly done by Leah Campbell at Barbers Prosthetics\nhttps://www.barberprosthetics.com/\n\nVEHICLES & TRAVEL:\n\n• \"Vador\" 2026 Toyota Tundra Limited Hybrid\n• “Grover” – 2023 Toyota Sienna XSE Hybrid AWD VMI Wheelchair Conversion\nhttps://www.vantagemobility.com\n• RV – 2022 Grand Design Imagine 23BHE\nhttps://www.granddesignrv.com/\n\nMERCH STORE:\n\nSticker Mule Design Store\nhttps://www.stickermule.com/ca/1legatatime\n\nCHANNEL MAILING INFO:\n\nC/O Andrew Abley\nKamloops, BC, Canada\nV1S 2B2\n\nFor security reasons, please message me directly before sending anything to the channel.\nEmail: 1legatatim@gmail.com",
+   "hashtags": [
+    "IKEA",
+    "IKEA shopping",
+    "IKEA funny",
+    "IKEA warehouse",
+    "IKEA elevators",
+    "giant elevator",
+    "IKEA maze",
+    "shopping fail",
+    "funny shopping",
+    "LED donut light",
+    "donut lamp",
+    "IKEA Canada",
+    "medical trip",
+    "travel vlog",
+    "amputee",
+    "above knee amputee",
+    "prosthetic leg",
+    "disability awareness",
+    "accessibility",
+    "comedy shorts",
+    "funny moments",
+    "relatable humor",
+    "husband shopping",
+    "wife shopping list",
+    "IKEA adventure",
+    "warehouse shopping",
+    "viral shorts",
+    "YouTube Shorts",
+    "1 Leg At A Time",
+    "funny vlog"
+   ],
+   "match_entities": {
+    "brand": true,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "client",
+   "stratum": "client|both"
+  },
+  {
+   "id": "891e7edc-2f30-4636-b46f-3f61031e14ac",
+   "split": "train",
+   "gold": "none",
+   "reason": "Adjudicated, majority of three (none / competitor:Ottobock / none): A multi-brand clinic video comparing Ottobock's 3R80 with a non-Össur Capital Knee, mostly about fitting time; it lists many manufacturers and isn't about any single brand.",
+   "contested": true,
+   "platform": "youtube",
+   "account_name": "Credence Prosthetic India",
+   "caption": "Ottobock 3R80 vs Capital Knee | Best Artificial Leg | Waterproof Artificial Leg #ottobock #ossur Welcome to Credence Prosthetic India, one of India’s most innovative and trusted names in prosthetic technology and artificial limb care. Our mission is to bring global prosthetic excellence closer to every amputee, ensuring that each person—regardless of background, location, or financial condition—can walk with comfort, stability, and dignity. Based in Gurgaon, our clinics and partner centers across India and South Asia combine advanced engineering, international partnerships, and compassionate clinical expertise to redefine rehabilitation for amputees.\n\nCredence is a proud collaborator with some of the world’s most reputed prosthetic manufacturers — Össur (Iceland), Ottobock (Germany), Endolite (India & UK), Intalimb (China), Wagner Polymertechnik (Germany), and InstaLimb (Japan) — bringing you the very best in limb technology, socket design, and 3D-printing innovation. Through these collaborations, we provide complete prosthetic and orthotic solutions that meet international standards of fit, alignment, and durability.\n\nWe specialize in below-knee (BK) and above-knee (AK) prosthetic legs, upper-limb myoelectric hands, bionic prosthetic systems, and custom silicone liner technology designed for long-term comfort. Whether you need an Össur Pro-Flex XC for dynamic movement, a Flex-Foot Assure for stability, an Ottobock 3R80 hydraulic knee, a Total Knee 2000, or an Endolite hydraulic leg, our clinical team ensures each fitting is personalized for your lifestyle and activity level. Our in-house brand CredPro also produces precision silicone liners, carbon-fiber sockets, and 3D-printed cosmetic covers that blend lightweight design with perfect comfort and strength.\n\nWhat makes Credence Prosthetic India stand out is our human-centered approach to prosthetic care. Every patient receives an individual assessment covering stump health, mobility goals, weight distribution, socket fit, and alignment. Our prosthetists and physiotherapists then design a rehabilitation plan combining socket optimization, component selection, gait training, and emotional counseling. We believe a prosthetic leg isn’t just a mechanical device — it’s an extension of one’s identity, freedom, and self-confidence.\n\nThrough our partnership with InstaLimb Japan, we are also among the first clinics in Asia to integrate AI-driven 3D-scanning and printing for prosthetic sockets. This digital process ensures precise fit, reduced fabrication time, and enhanced comfort, especially for first-time amputees. Each 3D-printed socket is customized to replicate the user’s residual limb contour, reducing pressure points and improving balance. When paired with high-performance feet such as the Össur Pro-Flex XC or the Ottobock Taleo Low Profile, patients experience natural motion, better energy return, and reduced fatigue.\n\nCredence also understands the emotional and physical transitions that accompany limb loss. That’s why we focus not just on walking but on comprehensive rehabilitation — covering stump hygiene, liner maintenance, gait balance, muscle strengthening, and long-term socket adjustments. We offer both in-clinic and tele-consultation services, allowing patients from remote cities and neighboring countries like Bangladesh, Nepal, Sri Lanka, and Kenya to receive professional guidance through secure video sessions. Our AI-enabled gait analysis system and digital follow-up program allow us to monitor patient progress even from afar, ensuring that every prosthesis remains perfectly aligned and comfortable\n\nWhy Credence Prosthetic India is the Best Artificial Limb Clinic in India:\nWe combine global technology with local expertise. Our facilities include an ISO-certified lab, CAD-CAM design suite, 3D printing infrastructure, and full-scale gait-training studio. We have served over 500 amputees successfully, achieving excellent patient satisfaction and long-term functional outcomes. Our multilingual team provides care in English, Hindi, Bengali, Tamil, and Arabic, ensuring communication never becomes a barrier to mobility.\n\n📍 Locations: Gurgaon | Delhi | Lucknow | Kolkata | Dhaka | Nairobi\n📞 Contact: +91 9958111629\n🌐 Website: www.credprosthetics.in\nprosthetic leg India, artificial limb clinic India, best prosthetic clinic India, prosthetic leg cost India, below knee prosthesis, above knee prosthesis, prosthetic socket India, Ossur ProFlex XC, Endolite prosthetic leg, Ottobock liner India, Intalimb China prosthetic, InstaLimb Japan 3D printed socket, custom silicone liner, carbon fiber socket, bionic hand India, myoelectric prosthesis India, 3D printed prosthetic cover, hydraulic knee joint, carbon foot prosthesis, artificial limb centre Delhi, prosthetic rehabilitation India, prosthetic care Bangladesh, prosthetic training Gurgaon, best artificial leg in India, Credence Prosthetic India, CredPro, SHWE Foundation, prosthetic socket fabrication, silicone liner manufacturing India, 3D printed artificial limb India.",
+   "hashtags": [
+    "artificial limb",
+    "prosthetic leg",
+    "Ossur prosthetic joint",
+    "Alps gel liner",
+    "carbon fiber foot",
+    "hydraulic knee joint",
+    "pneumatic knee joint",
+    "microprocessor knee",
+    "below knee amputee",
+    "above knee amputee",
+    "prosthetic rehabilitation",
+    "best prosthetic clinics in India",
+    "prosthetic limb price",
+    "waterproof prosthetic leg",
+    "Credence Prosthetic India",
+    "affordable artificial limb",
+    "prosthetic foot for running",
+    "Ossur",
+    "Ottobock",
+    "Above Knee Prosthetic",
+    "Below Knee Prosthetic",
+    "Nakli Tang",
+    "Nakli Hath"
+   ],
+   "match_entities": {
+    "brand": true,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "client",
+   "stratum": "client|both"
+  },
+  {
+   "id": "5f18dff4-956c-43fe-bc9a-decc578878e9",
+   "split": "train",
+   "gold": "none",
+   "reason": "Walking in heels on a C-Leg (Ottobock) with a Pro-Flex Align (Össur) foot: two brands' products.",
+   "contested": false,
+   "platform": "instagram",
+   "account_name": "lauraa.hlx",
+   "caption": "dreams come true 🤍🦿\n\n#prostheticleg #heels #cleg #ottobock #ossur #össur #proflexalign #amputee",
+   "hashtags": [
+    "prostheticleg",
+    "heels",
+    "cleg",
+    "ottobock",
+    "ossur",
+    "össur",
+    "proflexalign",
+    "amputee"
+   ],
+   "match_entities": {
+    "brand": true,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "client",
+   "stratum": "client|both"
+  },
+  {
+   "id": "31b6de4b-b0cd-4f78-8140-80d445714e95",
+   "split": "train",
+   "gold": "none",
+   "reason": "Clinic patient story; #OSSUR and #Ottobock both as hashtags.",
+   "contested": false,
+   "platform": "youtube",
+   "account_name": "Bornlife Artificial Limbs Center",
+   "caption": "Above knee artificial leg #aboveknee #viralvideo #carbonfoot #OSSUR #Ottobock #bornlife #naklitang In this video, you will meet a brave above-knee amputee patient who came to Bornlife Artificial Limbs Center with just one hope in his heart—to walk again and live an independent life. ❤️\nAfter losing his leg, even simple daily activities became a challenge. But he never gave up on his dream of standing, walking, and returning to his normal routine. After a detailed assessment and our doctors’ expert recommendation, he was provided with a suitable above-knee artificial leg.\nWith time, practice, and determination, he gradually started walking with his new artificial leg and performing his daily activities independently. 🦿❤️\nToday, the happiness and confidence on his face tell a beautiful story—a story of courage, hope, and a new beginning.\n“He lost a leg, but never lost the courage to move forward.” 💪❤️\n\n📞 Contact: +91 7703 813 639 \n📍 H-2, Opposite Krishna Market Gurudwara, Lajpat Nagar Part 1, New Delhi-110024, India \n#AboveKneeArtificialLeg #ArtificialLeg #ProstheticLeg #OSSUR #TransfemoralProsthesis #ArtificialLimbs #Prosthetics #MicroprocessorKnee #HydraulicKnee #Mobility #Rehabilitation #WalkingAgain #AmputeeSupport #AmputeeLife #DisabilitySupport #Naklitang #CustomProsthesis #Bornlife #BornlifeArtificialLimbs #mechanicalleg #carbonfoot #Delhi #India #ProstheticCare #Mobility #AdvancedProsthetics #Naturalwalk #Pneumaticleg #hydraulicleg #naturalwalk #viralvideo #ottobock #carbonleg \nAbove Knee Artificial Leg, Artificial Leg, OSSUR, Above Knee Prosthetic Leg, Transfemoral Prosthesis, Artificial Limb, Microprocessor Knee, Hydraulic Knee Prosthesis, Prosthetic Rehabilitation, Carbon Foot, Hydraulic leg, Pneumatic Leg, Advanced Prosthetics, Nakli tang, Natural Walk, Custom Prosthesis, Lightweight Prosthetic Leg, Prosthetic Solutions, Amputee Rehabilitation, Mobility Solutions, Best Prosthetic Leg India, Natural walk, Prosthetic Clinic Delhi, Artificial Leg Delhi, Bornlife Artificial Limbs Center, Above Knee Amputee, Amputation, Ottobock, Carbon Leg",
+   "hashtags": [],
+   "match_entities": {
+    "brand": true,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "client",
+   "stratum": "client|both"
+  },
+  {
+   "id": "039d3ab6-bbd9-4677-bf49-f55c34aa70e6",
+   "split": "train",
+   "gold": "none",
+   "reason": "Clinic post of hashtags only, naming Ottobock and Össur.",
+   "contested": false,
+   "platform": "tiktok",
+   "account_name": "Prótesis y Ortesis Córdoba",
+   "caption": "#protesistransfemoral #protesis #metiz #ottobock #ossur",
+   "hashtags": [
+    "protesistransfemoral",
+    "protesis",
+    "metiz",
+    "ottobock",
+    "ossur"
+   ],
+   "match_entities": {
+    "brand": true,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "client",
+   "stratum": "client|both"
+  },
+  {
+   "id": "25d0f590-432e-40f4-9a42-51086089e166",
+   "split": "holdout",
+   "gold": "none",
+   "reason": "Physiotherapy after amputation; both brands only in the hashtag pile.",
+   "contested": false,
+   "platform": "youtube",
+   "account_name": "Stella Pocher - Aktiv nach Amputation",
+   "caption": "Ein kleiner Einblick in die Physiotherapie nach einer Amputation Ein kleiner Einblick in die Physiotherapie 💪\nBeim Prothesentraining geht es nicht nur ums Laufen sondern darum, Bewegungen sicher und kontrolliert auszuführen, ohne das Gleichgewicht zu verlieren. 🦿⚖️\n\nWenn auf der Gegenseite noch eine Orthese getragen wird, wird’s zur echten Herausforderung.\nAber Keanu meistert das großartig, ein echter Halbmond-Profi! 🌙👏\n\n👉 Folg mir für mehr Einblicke in das Training mit Prothese!\n\n#Beruf #Selbstständigkeit #Praxis #Hamburg #Norderstedt #Physio #Physiotherapie #beforeandafter #vorhernachher #Amputation #Orthopädietechnik #Ergotherapie #Renovierung #Rehabilitation #rehabilitación #physiopraxis #amputee #össur #ottobockde #prothese #beinamputation #beinprothese #amputeetraining #prothesentraining #amputiert #sanitätshaus #physicaltherapy #beinamputiert",
+   "hashtags": [],
+   "match_entities": {
+    "brand": true,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "client",
+   "stratum": "client|both"
+  },
+  {
+   "id": "d3475fbd-cd4a-45ae-86c7-d594bd234237",
+   "split": "train",
+   "gold": "competitor:Ottobock",
+   "reason": "Adjudicated, majority of three (none / competitor:Ottobock / competitor:Ottobock): The creator is learning to walk in an Ottobock C-Brace and tracking progress on a walk test, so the Ottobock product is the main subject.",
+   "contested": true,
+   "platform": "instagram",
+   "account_name": "paulastorm",
+   "caption": "Day 5 vs 39. The dreaded 6 minute walk test. I was not looking forward to it but all the walking I did over Xmas payed off! Maybe I need to try jogging lol @turiapitt could you help me with that? #motivated #cbrace #ottobock #ottobockaustralia #disabled #disability #disabilityawareness #letsgo #icandoit #learningtowalkagain #bionic #bioniclimb #legginglegs",
+   "hashtags": [
+    "motivated",
+    "cbrace",
+    "ottobock",
+    "ottobockaustralia",
+    "disabled",
+    "disability",
+    "disabilityawareness",
+    "letsgo",
+    "icandoit",
+    "learningtowalkagain",
+    "bionic",
+    "bioniclimb",
+    "legginglegs"
+   ],
+   "match_entities": {
+    "brand": false,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "competitor:Ottobock",
+   "stratum": "competitor:Ottobock|comp-hashtag"
+  },
+  {
+   "id": "c8f27362-9316-41f8-b5d3-f264ef2fbb02",
+   "split": "holdout",
+   "gold": "competitor:Ottobock",
+   "reason": "Adjudicated, majority of three (none / competitor:Ottobock / competitor:Ottobock): The creator is practising walking in an Ottobock C-Brace, the only product tagged, which makes the Ottobock orthosis the focus.",
+   "contested": true,
+   "platform": "instagram",
+   "account_name": "sidcharise",
+   "caption": "Sept 9 Wednesday. All I do is walk! I walk with 2 sticks and I walk with 1 stick. I am constantly practicing! I do my hard resistance and weight workout and then I walk! I am determined to get this…. #ottobock #cbrace",
+   "hashtags": [
+    "ottobock",
+    "cbrace"
+   ],
+   "match_entities": {
+    "brand": false,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "competitor:Ottobock",
+   "stratum": "competitor:Ottobock|comp-hashtag"
+  },
+  {
+   "id": "a18234aa-a2b8-4b19-82df-12537c558ad8",
+   "split": "train",
+   "gold": "none",
+   "reason": "Adjudicated, majority of three (none / competitor:Ottobock / none): A fun wedding-entrance clip by an amputee that mentions Ottobock/3R85 only in hashtags; it isn't about the company or product.",
+   "contested": true,
+   "platform": "tiktok",
+   "account_name": "meltemcekin22",
+   "caption": "Bizim düğün ortamlarına giriş😅  #amputee #ottobock #3r85 @BENSU❤️‍🔥 @EMRE❤️‍🔥",
+   "hashtags": [
+    "amputee",
+    "ottobock",
+    "3r85"
+   ],
+   "match_entities": {
+    "brand": false,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "competitor:Ottobock",
+   "stratum": "competitor:Ottobock|comp-hashtag"
+  },
+  {
+   "id": "52678b45-d6d8-49c8-87ca-a379df58b0c0",
+   "split": "train",
+   "gold": "competitor:Ottobock",
+   "reason": "Ottobock Poland's own post about its double-amputee camp.",
+   "contested": false,
+   "platform": "instagram",
+   "account_name": "ottobock_poland",
+   "caption": "Dwa dni, mnóstwo ćwiczeń i wiele przełamanych barier! 💪🦿\n\nZa nami pierwszy w Polsce camp dla osób po podwójnej amputacji nóg. Były schody, wzniesienia, nierówne podłoże, ćwiczenia równowagi oraz nauka bezpiecznego upadania i podnoszenia się.\n\nDla jednych oznaczało to pierwsze kroki bez kul lub chodzika. Dla innych – możliwość sprawdzenia nowych rozwiązań protetycznych. Każdy pracował we własnym tempie, ale wszyscy z ogromnym zaangażowaniem!\n\nByło dużo praktyki, wzajemnej motywacji, rozmów i dobrej energii. 💙 Dziękujemy wszystkim uczestnikom za zaufanie i stworzenie wyjątkowej atmosfery!\n\nTo był pierwszy taki camp, ale mamy nadzieję, że nie ostatni!\n\nŚledźcie nasze profile, bo już niedługo film z tego wyjątkowego wydarzenia!\n\n#Ottobock #OttobockPolska #PodwójnaAmputacja #ŻyciePoAmputacji #ProtezyNóg #TreningChodu #Mobilność #Protetyka",
+   "hashtags": [
+    "Ottobock",
+    "OttobockPolska",
+    "PodwójnaAmputacja",
+    "ŻyciePoAmputacji",
+    "ProtezyNóg",
+    "TreningChodu",
+    "Mobilność",
+    "Protetyka"
+   ],
+   "match_entities": {
+    "brand": false,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "competitor:Ottobock",
+   "stratum": "competitor:Ottobock|comp-hashtag"
+  },
+  {
+   "id": "506674a0-ecf4-4bd1-be65-c24223b8cc7b",
+   "split": "holdout",
+   "gold": "none",
+   "reason": "Hashtags only (#amputeegirl #ottobock); no product subject.",
+   "contested": false,
+   "platform": "tiktok",
+   "account_name": "Mamá de Hanna",
+   "caption": "#discapacidad #amputeegirl #ottobock #amorpropio",
+   "hashtags": [
+    "discapacidad",
+    "amputeegirl",
+    "ottobock",
+    "amorpropio"
+   ],
+   "match_entities": {
+    "brand": false,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "competitor:Ottobock",
+   "stratum": "competitor:Ottobock|comp-hashtag"
+  },
+  {
+   "id": "48fea2b7-bfd8-42a8-92f1-267b2a53d51f",
+   "split": "train",
+   "gold": "competitor:Ottobock",
+   "reason": "Transcript demos the stance-lock of his Ottobock knees; #ottobock the only brand (caption alone reads as motivation).",
+   "contested": false,
+   "platform": "youtube",
+   "account_name": "EDUARDO GÓMEZ RODRIGUEZ",
+   "caption": "Adelante sin bloqueos mentales♿🦿🦿🇪🇦 #ottobock #motivacion #shorst #deporte #amputados",
+   "hashtags": [],
+   "match_entities": {
+    "brand": false,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "competitor:Ottobock",
+   "stratum": "competitor:Ottobock|comp-hashtag"
+  },
+  {
+   "id": "1912f6f3-b8cc-4ca8-936f-e482bd6db40e",
+   "split": "train",
+   "gold": "competitor:Ottobock",
+   "reason": "Hip disarticulation prosthesis tagged #Ottobockhipkneeandfoot (borderline: #carbonfiberproflex).",
+   "contested": false,
+   "platform": "tiktok",
+   "account_name": "AKPOLY",
+   "caption": "Hip Disarticulation #Ottobockhipkneeandfoot#readytorideagain#carbonfiberproflex",
+   "hashtags": [
+    "ottobockhipkneeandfoot",
+    "readytorideagain",
+    "carbonfiberproflex"
+   ],
+   "match_entities": {
+    "brand": false,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "competitor:Ottobock",
+   "stratum": "competitor:Ottobock|comp-hashtag"
+  },
+  {
+   "id": "767517e5-1011-493a-bc6b-8e058ce3f35e",
+   "split": "train",
+   "gold": "competitor:Ottobock",
+   "reason": "Ottobock's own channel.",
+   "contested": false,
+   "platform": "youtube",
+   "account_name": "ottobock",
+   "caption": "Progress looks different for everyone. Keep going! 💚 | Ottobock Your body, your pace. For Unuuu (@unaiseee), some days movement means a full workout. Other days, simply showing up for himself is enough. Progress looks different for everyone. Keep going! 💚\n#Ottobock #WeEmpowerPeople #SCI #SpinalCordInjury\n\nWeb | https://www.ottobock.com\nCommunity | https://movao.community\nYouTube | https://www.youtube.com/ottobock\nYouTube Professionals | https://www.youtube.com/ottobockprofessionals\nInstagram | https://www.instagram.com/ottobock\nTikTok | https://www.tiktok.com/@ottobock\nFacebook | https://de-de.facebook.com/OttobockGlobal\n\n*Not all products and services are approved or available for sale in all countries. Please refer to the Ottobock website for your country to check which products are available there.\n\nAbout Ottobock\nOttobock, a global MedTech champion, combines over 100 years of tradition with outstanding innovative strength in the fields of prosthetics, neuro-orthotics and exoskeletons. Ottobock develops innovative fitting solutions for people with limited mobility and is driving the digitalisation of the industry. Founded in Berlin in 1919, the company has business activities in 45 countries with nearly 9,300 employees (FTEs) worldwide and operates the largest international patient care network with around 400 patient care clinics. Ottobock is shaping the future of human bionics with a strong R&D ratio in the products and components business and over 2,600 patents and patent applications. Ottobock’s mission of improving freedom of movement, quality of life and independence is deeply rooted in the company's DNA, as is its social commitment: Ottobock has been a partner and supporter of the Paralympics since 1988.",
+   "hashtags": [],
+   "match_entities": {
+    "brand": false,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "competitor:Ottobock",
+   "stratum": "competitor:Ottobock|comp-text"
+  },
+  {
+   "id": "dce70bf2-e820-4933-a033-b78a8a3e1a99",
+   "split": "holdout",
+   "gold": "competitor:Ottobock",
+   "reason": "Prosthesis with C-Leg 4 knee and Taleo foot, both Ottobock.",
+   "contested": false,
+   "platform": "instagram",
+   "account_name": "il.protesista",
+   "caption": "Flex-carbon prosthesis with knee CLEG4 @ottobock_italy and foot taleo.\n\n#ortho #ottobock #udine #innovation #amputee",
+   "hashtags": [
+    "ortho",
+    "ottobock",
+    "udine",
+    "innovation",
+    "amputee"
+   ],
+   "match_entities": {
+    "brand": false,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "competitor:Ottobock",
+   "stratum": "competitor:Ottobock|comp-text"
+  },
+  {
+   "id": "21764528-ca32-40e7-a4eb-85f68bd5af57",
+   "split": "train",
+   "gold": "competitor:Ottobock",
+   "reason": "Reseller presenting the Ottobock Juvo B4 powered wheelchair.",
+   "contested": false,
+   "platform": "tiktok",
+   "account_name": "www.superfisio.com.br",
+   "caption": "Você está procurando uma cadeira de rodas motorizada Ottobock? 👀♿ Conheça a Ottobock Juvo B4, uma cadeira elétrica que pode ser configurada com diferentes recursos e acessórios de acordo com as necessidades de cada pessoa. Porque cada usuário é diferente e a configuração da cadeira precisa acompanhar sua rotina, postura, conforto e necessidades de mobilidade. 📍 SuperFisio — São Paulo 📲 WhatsApp: (11) 94113-7464 🌐 superfisio.com.br #cadeiraderodas #cadeiramotorizada #ottobock #juvob4 #pcd",
+   "hashtags": [
+    "cadeiraderodas",
+    "cadeiramotorizada",
+    "ottobock",
+    "juvob4",
+    "pcd"
+   ],
+   "match_entities": {
+    "brand": false,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "competitor:Ottobock",
+   "stratum": "competitor:Ottobock|comp-text"
+  },
+  {
+   "id": "823a9bb1-9b1d-4b15-82ab-9e4b77dca16c",
+   "split": "holdout",
+   "gold": "competitor:Ottobock",
+   "reason": "Ottobock Professionals' michelangelo hand service video.",
+   "contested": false,
+   "platform": "youtube",
+   "account_name": "Ottobock Professionals",
+   "caption": "michelangelo small. Replacing the inner hand shell. | Ottobock Professionals Learn how to replace the inner hand (hand shell) of the small michelangelo hand.\n\nMaterials and tools:\n •  8X50=*-S michelangelo inner hand (small) \n •  711M1 Mounting tool\n •  711M3 Mounting tool\n •  640F18 Donning spray\n\nproducts: michelangelo hand 8E5=*, michelangelo inner hand 8X50=*\n\nVoice-over generated with AI. Visuals are authentic.\n\n#weempowerpeople #ottobock\n\nWeb | https://www.ottobock.com\nCommunity | https://movao.community\nYouTube | https://www.youtube.com/ottobock\nYouTube Professionals | https://www.youtube.com/ottobockprofessionals\nInstagram | https://www.instagram.com/ottobock\nTikTok | https://www.tiktok.com/@ottobock\nFacebook | https://de-de.facebook.com/OttobockGlobal\n\n*Not all products and services are approved or available for sale in all countries. Please refer to the Ottobock website for your country to check which products are available there.\n\nAbout Ottobock\nOttobock, a global MedTech champion, combines over 100 years of tradition with outstanding innovative strength in the fields of prosthetics, neuro-orthotics and exoskeletons. Ottobock develops innovative fitting solutions for people with limited mobility and is driving the digitalisation of the industry. Founded in Berlin in 1919, the company has business activities in 45 countries with nearly 9,300 employees (FTEs) worldwide and operates the largest international patient care network with around 400 patient care clinics. Ottobock is shaping the future of human bionics with a strong R&D ratio in the products and components business and over 2,600 patents and patent applications. Ottobock’s mission of improving freedom of movement, quality of life and independence is deeply rooted in the company's DNA, as is its social commitment: Ottobock has been a partner and supporter of the Paralympics since 1988.",
+   "hashtags": [
+    "Ottobock Professionals",
+    "Ottobock",
+    "Otto Bock",
+    "orthotics",
+    "prosthetics",
+    "orthoptist",
+    "prosthetic leg",
+    "prosthetic arm",
+    "prosthetic hand",
+    "bionics",
+    "amputation",
+    "amputee",
+    "stroke products",
+    "knee brace",
+    "ankle brace",
+    "wheelchairs",
+    "michelangelo hand",
+    "arm prosthetics",
+    "michelangelo inner hand",
+    "hand shell"
+   ],
+   "match_entities": {
+    "brand": false,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "competitor:Ottobock",
+   "stratum": "competitor:Ottobock|comp-text"
+  },
+  {
+   "id": "75b55b11-34ac-4441-9945-282d9fa95013",
+   "split": "holdout",
+   "gold": "competitor:Ottobock",
+   "reason": "Review of the Ottobock Harmony and the Ottobock Hong Kong centre.",
+   "contested": false,
+   "platform": "youtube",
+   "account_name": "LOKA日記",
+   "caption": "五天做一隻科技義肢，值得嗎？Ottobock Harmony 真實心得 Special Thanks For  @ottobock_hongkong    @ottobock  \n\n如果有任何想了解更多關於 Ottobock 香港義肢中心 ，可以到以下網站看更多介紹 🦾\n https://www.ottobock.com/zh-hk/ottobock-care-hk \n\n\n00:00 Intro — Ottobock Hung Hom, Hong Kong 開場\n00:15 The location & training center 介紹位置與訓練中心\n00:36 Inside the office & fitting rooms 辦公室與打模室\n01:11 Meet the CPO technician (30 years' experience) 義肢技師\n02:07 Custom-made prosthesis process 客製化過程\n02:19 Leg care & the education mindset 受傷後的居家護理\n02:50 Comparing feet: Taiwan vs. Ottobock 台灣與香港義肢公司差異\n03:22 Walking posture & gait 走路姿勢\n03:33 The tech force / weight-balance test 科技儀器\n\n\n\n🔔🔔訂閱小鈴鐺🔔🔔\nhttps://reurl.cc/NpAGOe\n\n🦿🦿Instagram🦿🦿\nhttps://www.instagram.com/tall1130/\n\n🦿🤝合作與商業🦿🤝\nloka.dairy@gmail.com\n \n \n\n使用器材設備與軟體：\nDji pocket 2\nIphone 15pro\nIphone 16pro\nRode wireless go ii\nPremiere\nArtlist",
+   "hashtags": [
+    "ottobock",
+    "prosthetics",
+    "amputee",
+    "paralympic"
+   ],
+   "match_entities": {
+    "brand": false,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "competitor:Ottobock",
+   "stratum": "competitor:Ottobock|comp-text"
+  },
+  {
+   "id": "27ef64f1-2c7d-4c24-aad6-8b160bbd795a",
+   "split": "train",
+   "gold": "none",
+   "reason": "About a new (Xenon) wheelchair; the old Ottobock only in passing.",
+   "contested": false,
+   "platform": "reddit",
+   "account_name": "r/wheelchairs",
+   "caption": "new wheelchair adaptation\n\nso i just received my new chair! and it’s lovely. it actually fits my width and everything is great except it feels SO weird.. \n\ni’ve been using the same hand-me-down ottobock for the past 6 years and it’s definitely not a super active chair, and i don’t consider this xenon to be super active either. but the difference is like, blaring. \n\nthe backrest height is lower (actually to my level of injury now), with gekko rims and marathon plus tyres. i even got scissor brakes fitted for free. \n\ni’m wondering how long it’ll take me to get used to this chair? i’m not someone who can freely do wheelies",
+   "hashtags": [],
+   "match_entities": {
+    "brand": false,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "competitor:Ottobock",
+   "stratum": "competitor:Ottobock|comp-text"
+  },
+  {
+   "id": "417a45ce-dffd-4910-9008-8a9dd5833c01",
+   "split": "holdout",
+   "gold": "competitor:Ottobock",
+   "reason": "Shop showing the Ottobock 50R233 back brace; #ossur only in the pile.",
+   "contested": false,
+   "platform": "youtube",
+   "account_name": "強生義肢輔具公司",
+   "caption": "強生義肢 | 透氣短背架 Ottobock 50R233 護腰 | 義肢專門取模訂做#義肢#義足 #prosthetic#ottobock#ossur#義肢裝具#腰椎手術#假肢#復健#奧托博克#護腰 透氣短背架 Ottobock 50R233 (護腰）\n\n需要固定腰薦椎的情形可用：\n\n下背部不適、運動傷害\n腰椎不穩定、腰椎突出\n\n腰椎手術後恢復期使用\n\n強生義肢公司：台北市內湖區舊宗路二段95號二樓\n\n#輔具 #中風 #垂足 #神經損傷  #prosthetic #義肢 #prosthetics #截肢 #3r80ottobock #義足 #artificial#ossur #amputation #義肢裝具學 #義肢装具士 #大腿截肢 #大腿義肢 #小腿義肢#運動義肢 #amputeestyle #強生義肢 #ottobock1e95 #amputeelife#amputee #假肢 #ottobock #ottobocklove #膝上義肢 #cleg4 #ottobockcleg #膝下義肢 #小腿截肢 #運動假肢#背架#護腰",
+   "hashtags": [
+    "義肢",
+    "義肢公司",
+    "義肢推薦",
+    "強生義肢"
+   ],
+   "match_entities": {
+    "brand": true,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "competitor:Ottobock",
+   "stratum": "competitor:Ottobock|both"
+  },
+  {
+   "id": "acd64c21-69c4-424c-86fa-b0dfd10d26e9",
+   "split": "train",
+   "gold": "none",
+   "reason": "A court fight for a water orthosis; both brands only in hashtags.",
+   "contested": false,
+   "platform": "instagram",
+   "account_name": "by.ricardajulia",
+   "caption": "Ich musste vor Gericht.\nNicht wegen einer Straftat, sondern für meine eigene Selbstständigkeit.\n\nZwei Jahre lang habe ich dafür gekämpft: Widerspruch, Klage, Gerichtstermin.\nIch habe mich oft unverstanden gefühlt. Ich war wütend, habe geweint und trotzdem weitergekämpft.\n\nSo viel Energie für etwas, das für viele selbstverständlich ist: selbstständig und selbstbestimmt duschen zu können.\n\nHeute habe ich nicht nur die Anerkennung meines Bedarfs bekommen – sondern auch ein Stück Selbstständigkeit zurück. Und eine Erweiterung meiner Teilhabemöglichkeiten.\n\nUnd ich weiß: Ich bin nicht allein.\nEs geht vielen anderen genauso.\n\nDeshalb möchte ich dir sagen:\nDu bist stark. Du bist wichtig. Und du darfst für deine Selbstbestimmung kämpfen. 💪\n\n#SelbstbestimmtLeben #BarrierenAbbauen  #kämpfenlohntsich #inklusionjetzt #Wasserorthese  #Ottobock #orthese #orthesis #orthopädietechnik #cbrace #gehschule #neurorehabilitation #sanitätshaus #physiotherapie #physicaltherapy\n#neurorehab #neurorehabilitation #rehab #physicaltherapist  #rehabilitation #training \n#schlaganfall #hilfsmittel #Lähmung #strokesurvivor #disability #fiorgentz #össur",
+   "hashtags": [
+    "SelbstbestimmtLeben",
+    "BarrierenAbbauen",
+    "kämpfenlohntsich",
+    "inklusionjetzt",
+    "Wasserorthese",
+    "Ottobock",
+    "orthese",
+    "orthesis",
+    "orthopädietechnik",
+    "cbrace",
+    "gehschule",
+    "neurorehabilitation",
+    "sanitätshaus",
+    "physiotherapie",
+    "physicaltherapy",
+    "neurorehab",
+    "rehab",
+    "physicaltherapist",
+    "rehabilitation",
+    "training",
+    "schlaganfall",
+    "hilfsmittel",
+    "Lähmung",
+    "strokesurvivor",
+    "disability",
+    "fiorgentz",
+    "össur"
+   ],
+   "match_entities": {
+    "brand": true,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "competitor:Ottobock",
+   "stratum": "competitor:Ottobock|both"
+  },
+  {
+   "id": "aba82bc6-b075-402c-8d13-c0f0b0448cb8",
+   "split": "train",
+   "gold": "none",
+   "reason": "Adjudicated, majority of three (none / competitor:Ottobock / none): A Pakistani limb clinic promotes a below-knee leg built from mixed parts (Turkish system, College Park Breeze foot, German liner), and Ottobock appears only in hashtag stuffing.",
+   "contested": true,
+   "platform": "youtube",
+   "account_name": "AL REHMAN  LIMB CENTER  LAHORE",
+   "caption": "Below knee silicongel liner leg #ottobock #prosthetics #artificialintelligence #viral #doctor #limbs Below knee silicongel liner leg #ottobock #prosthetics #artificialintelligence #viral #doctor #limbs\n\n\n@alrehmanartificiallimbcent4223   LAHORE  PAKISTAN    03224103286 \n\n@artificialleghandcenterinl4173 \n\n\nBELOW KNEE silicon gel liner leg #prosthetics #leg #hospital #ottobock #artificialleg #limb #doctor \n\n\n@alrehmanartificiallimbcent4223  LAHORE PAKISTAN 0322 4103286 \n\n\nBelow knee #prosthetics  imported Turkish Systam #ottobock #artificialleg #limb #leg #viralvideo \n\n\n @alrehmanartificiallimbcent4223   LAHORE PAKISTAN 0322 4103286 \n\n\nbelow  knee silicon liner leg artificialleg #prosthetics #ottobock3r15 #breezefoot #collegeparkindustries #limb #leg \n\n\n‎@alrehmanartificiallimbcent4223   LAHORE PAKISTAN  0322 4103286 \n\n\nBelow knee prosthetic  silicon liner leg 0322 4103286 #Garmany  liner #ottobock #prosthetics #leg \n#collegeparkindustries #breeze #breezefoot #constantfrictionkneejoint #ottobock3r15 #3R15ottobock   #OTTOBOCK3R15\n\n‎@alrehmanartificiallimbcent4223   LAHORE PAKISTAN   0322 4103286 \n\nBelow knee prosthetic  silicon liner leg 0322 4103286 #Garmany  liner #ottobock #prosthetics #leg \n\n‎@AL REHMAN ARTIFICIAL  LIMB CENTER  LAHORE   \nLAHORE PAKISTAN  0322 4103286 \n\n\nbelow knee prosthesis leg #prosthesis 0322 4103286 turkey systam#ottobock #limb #prosthetics#leg  \n\n\nAL REHMAN ARTIFICIAL LIMB CENTER LAHORE PAKISTAN 0322 4103286 \n\n#ottobock #limb #leg #ossur #bionest #prosthesis #prosthetics #abovekneeprosthesis #artificialleg #leg #imported #viral #cleg #china #affordable #abovekneeamputee #endolite #siliconliner #wagner #garmanliner #shuttellock #pinlock \n\n\nBelow knee Prosthetic Artificial leg imported مصنوعی ٹانگ REVIEW#leg #ottobock #limb 0322 4103286 \n\n\nAL REHMAN ARTIFICIAL LIMB CENTER LAHORE PAKISTAN  0322 4103286 \n\n\n#ottobock #leg #limb #artificial #artificialleg #prosthesis #belowkneeamputee #china #madular #cleg #ottobockgenium #ossur  #collegeparkindustries #garmany  #4r57 #rotationadoptr #siliconlinerleg #silicongelliner #pinlockliner #belowkneesiliconlinerlega\n\nhttps://www.instagram.com/p/Cb8lCchoLwS/?igshid=YmMyMTA2M2Y=\n\nhttps://fb.watch/cpPcgZauhp/\n\nhttps://fb.watch/cpPde2yGis/\n\nhttps://www.facebook.com/1063811460428309/postns/2327176960758413/\n\n\nhttps://fb.watch/cpPfwHW4St/\n\nhttps://www.facebook.com/1063811460428309/posts/2322754044534038/",
+   "hashtags": [
+    "Prosthetic",
+    "prosthesis",
+    "artificial leg",
+    "below knee",
+    "silicon liner leg",
+    "naqli tang",
+    "artificial leg in lahore",
+    "hope limb center",
+    "fauji foundation",
+    "c-leg",
+    "ottobock",
+    "ottobock genium",
+    "ottobock harmony",
+    "usa liner",
+    "alps silicon liner",
+    "indus hospital",
+    "Below knee prosthetic leg",
+    "limb center lahore",
+    "ampute",
+    "shuttellock",
+    "Affordable leg",
+    "patient",
+    "ghurki hospital",
+    "chal foundation",
+    "pinlock",
+    "Collegparkindustries.collegeparkfoot.breezefoot.carbonfiberfoot.ottobock pylontube.",
+    "Viral.",
+    "Silicon ki tang"
+   ],
+   "match_entities": {
+    "brand": true,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "competitor:Ottobock",
+   "stratum": "competitor:Ottobock|both"
+  },
+  {
+   "id": "ea184197-552c-46a7-83ff-a6ecf6cccd11",
+   "split": "holdout",
+   "gold": "none",
+   "reason": "Asking Ottobock, Össur and Open Bionics for a new arm: several brands.",
+   "contested": false,
+   "platform": "youtube",
+   "account_name": "Charlie Hanley",
+   "caption": "Help a brother out! @Ottobock @Össur @OpenBionicsFoundation #fyp #onearm #motivation #prosthetic",
+   "hashtags": [],
+   "match_entities": {
+    "brand": true,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "none",
+   "stratum": "industry-other|both"
+  },
+  {
+   "id": "2597ce77-00b8-4076-bc0a-a7b0a4e740cd",
+   "split": "holdout",
+   "gold": "none",
+   "reason": "Adjudicated, majority of three (none / client / none): A clinic case study of a below-knee fitting that combines a Kinterra foot (not Össur) with an Össur liner and generic parts; it's a multi-brand build, and Ottobock appears only as a hashtag.",
+   "contested": true,
+   "platform": "youtube",
+   "account_name": "Bionis Rehabilitation Centre (Dr. hardik sharma)",
+   "caption": "Bionis - Trans-tibial prosthesis Every step tells a story of resilience. Every component makes a difference.\n\nWalking isn't just about moving forward-it's about feeling secure, comfortable, and confident on every surface.\nIn this case, our patient has been fitted with a Kinterra® Hydraulic Foot combined with a vacuum suspension system using an Össur Dermo Cushion Silicone Liner, a one-way auto expulsion valve, and a silicone knee sleeve to achieve a secure and reliable suspension.\nWhy this combination?\n2 Kinterra® Hydraulic Foot\nSmooth plantarflexion at heel strike\nPassive dorsiflexion for easier walking on slopes and\nuneven terrain\nV Better ground compliance\nReduced impact transmitted to the residual limb\nMore natural and energy-efficient gait. \n\n Vacuum Socket System\nStable and secure suspension throughout the day\nMinimizes pistoning inside the socket\n/ Improves proprioception and limb control\nEnhanced comfort during prolonged walking\nHelps maintain consistent socket fit by improving residual\nlimb volume management\nÖssur Dermo Cushion Silicone Liner\nExcellent cushioning for sensitive residual limbs\nV Superior skin protection ~ Comfortable load distribution\nReliable suspension with vacuum\n• One-Way Auto Expulsion Valve + Silicone Knee Sleeve\nCreates an effective passive vacuum seal\nKeeps the prosthesis securely attached during every step\nImproves confidence while walking on uneven terrain\nReduces unwanted movement between the socket and\nresidual limb. \n\nWatching our patient confidently walk over uneven surfaces reminds us that the right prosthetic prescription is not just about advanced components-it's about selecting components that work together to restore mobility, independence, and confidence.\nAt Bionis Prosthetics & Orthotics, every prosthesis is customized to match the patient's lifestyle, functional goals, and comfort requirements.\nBecause the best prosthesis is the one that lets you forget you're wearing it.\n\n• Bionis Prosthetics & Orthotics\nAhmedabad, India +917984364403\nRestoring Mobility. Rebuilding Confidence.\n\n#amputee # #abovekneeamputee #akprosthesis #artificiallimb #gaittraining #mobility #prostheticsocket #prosthetics ahmedabad #mobility #prosthesis",
+   "hashtags": [
+    "#amputee",
+    "#getbak",
+    "#ottobock"
+   ],
+   "match_entities": {
+    "brand": true,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "none",
+   "stratum": "industry-other|both"
+  },
+  {
+   "id": "c7903c4b-077f-4521-b82a-c161134899f1",
+   "split": "train",
+   "gold": "none",
+   "reason": "Amputee crutching video; both brands in a huge hashtag pile.",
+   "contested": false,
+   "platform": "youtube",
+   "account_name": "CrutchQueens",
+   "caption": "LAK Amputee woman crutching with underarm crutches #amputee #amputeelife #amputeestrong #prosthetics #prostheticleg #amplife #amputation #amputeegirl #adaptiveathlete #limbloss #amputeefitness #prosthetic #amputees #motivation #inspiration #prosthesis #amputeemodel #disability #iamadaptive #adaptive #amputeeswholift #ottobock #amputeelifestyle #disabled #amputeewoman #fitness #doubleamputee #limbdifference #amputeeproblems #nolegsnolimits #amputados #adaptivesports #amputeeathlete #wheelchair #bionic #oneleg #limblossawareness #amputeepride #o #bilateralstrong #lifewithoutlimitations #disabilityawareness #adaptivesport #amputeesolutions #noexcuses #powerlifting #bilateralamputee #limbdifferenceawareness #nevergiveup #fitnessmotivation #amputeecoalition #belowkneeamputee #amputeewarrior #amputeepowerlifter #amputeeman #ossur #legamputee #amputeesofinstagram #amputeeleg #amputado #Amputee #AmputeeWomen #CrutchQueens #NoLegs #CrutchesWalking #AmputeeLife #CrutchModel #AmputeeBeauty #WalkingWithCrutches #FemaleAmputee #ElegantWalk #LAK #RAK #DAK",
+   "hashtags": [
+    "amputee",
+    "amputeelife",
+    "amputeestrong",
+    "prosthetics",
+    "prostheticleg",
+    "amputation",
+    "adaptiveathlete",
+    "disability",
+    "limbloss",
+    "amputeegirl",
+    "amputeemodel",
+    "prosthesis",
+    "doubleamputee",
+    "nolegsnolimits",
+    "amputeepride",
+    "adaptive",
+    "amputeefitness",
+    "oneleg",
+    "amputeelifestyle"
+   ],
+   "match_entities": {
+    "brand": true,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "none",
+   "stratum": "industry-other|both"
+  },
+  {
+   "id": "17a60556-42e8-4e56-b442-99985edb4f64",
+   "split": "train",
+   "gold": "none",
+   "reason": "A walk around Plovdiv; #ottobock #ossur hashtags.",
+   "contested": false,
+   "platform": "youtube",
+   "account_name": "Bobi Bozveliev life without limits",
+   "caption": "walk around Plovdiv #Bulgaria#ottobock #ossur #Пловдив#България 🇧🇬❤️🦿 Лека разходка из Пловдив с временната ми гилза на протезата🙂😉❤️Щом АЗ мога и ти Можеш ❤️❤️❤️ ако клипчето ви е харесало...Абонирайте се за канала 🔔 и много 👍👍👍❤️❤️❤️",
+   "hashtags": [],
+   "match_entities": {
+    "brand": true,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "none",
+   "stratum": "industry-other|both"
+  },
+  {
+   "id": "4fb5d87a-69f5-4ecc-abdf-bcaabbc011c9",
+   "split": "train",
+   "gold": "none",
+   "reason": "Inspirational quote; both brands in hashtags.",
+   "contested": false,
+   "platform": "instagram",
+   "account_name": "charlescostabh",
+   "caption": "“…certifica-te que és fator de soma para as pessoas de cuja vida participas…”\n#love #amor #inspiration #inspiração #escolha #life #vida #proteses #prosthetist #vidasemlimitações #lifewithoutlimitations #reels #ottobock #ottobockbrasil #ossur #ossurbrasil",
+   "hashtags": [
+    "love",
+    "amor",
+    "inspiration",
+    "inspiração",
+    "escolha",
+    "life",
+    "vida",
+    "proteses",
+    "prosthetist",
+    "vidasemlimitações",
+    "lifewithoutlimitations",
+    "reels",
+    "ottobock",
+    "ottobockbrasil",
+    "ossur",
+    "ossurbrasil"
+   ],
+   "match_entities": {
+    "brand": true,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "none",
+   "stratum": "industry-other|both"
+  },
+  {
+   "id": "ea881ae6-5023-433a-b83c-2e01309a7409",
+   "split": "train",
+   "gold": "none",
+   "reason": "Patient walking in heels; #ossur #ottobock both.",
+   "contested": false,
+   "platform": "tiktok",
+   "account_name": "RPN ORTHOPEDIC SOLUTIONS",
+   "caption": "Ogni passo che fai racconta una storia di coraggio; la tua bellezza è la somma di tutte le battaglie vinte ❤️🦿👠 #prosthetic #protesi #ossur #ottobock #fyp",
+   "hashtags": [
+    "prosthetic",
+    "protesi",
+    "ossur",
+    "ottobock",
+    "fyp"
+   ],
+   "match_entities": {
+    "brand": true,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "none",
+   "stratum": "industry-other|both"
+  },
+  {
+   "id": "9801ae30-8123-4408-ad1a-c17730e278df",
+   "split": "holdout",
+   "gold": "none",
+   "reason": "Clinic's generic below-knee prosthesis; #ossur #ottobock both.",
+   "contested": false,
+   "platform": "youtube",
+   "account_name": "HPS India",
+   "caption": "Below knee prosthetic #artificiallimbs #naklitang #belowkneeprosthesis #ossur #ottobock घुटने से नीचे पैर खो चुके लोगों के लिए आधुनिक Below Knee Prosthesis — बेहतर comfort, fit और walking support के लिए तैयार किया गया कृत्रिम पैर।\nSilicone Liner • Carbon Foot • Customized Design\n📞 संपर्क: 8979798582\nHashtags:\n#BelowKneeProsthesis #ArtificialLeg #ProstheticLeg #Prosthesis #BelowKneeAmputation #KritrimPair #NakliPair #ArtificialLimb #ProstheticFoot #SiliconeLiner #CarbonFoot #HPSProsthetic #HPSIndia #AmputeeSupport #ProstheticRehabilitation #WalkingAgain #Mobility #Jaipur #India #shorts #reels",
+   "hashtags": [],
+   "match_entities": {
+    "brand": true,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "none",
+   "stratum": "industry-other|both"
+  },
+  {
+   "id": "9f3fb0df-1045-4568-8446-6822f55d1d10",
+   "split": "train",
+   "gold": "none",
+   "reason": "Multi-maker foot-testing event (Fillauer, Össur, Proteor, Ottobock).",
+   "contested": false,
+   "platform": "youtube",
+   "account_name": "Sahva Ottobock Care",
+   "caption": "Trin & Terræn - NYT EVENT! NYT EVENT!\nDrømmer du om at kunne mere med din protesefod?\n\nTest på egen krop, hvilke fødder der fungerer bedst for dig – både på trapper og i ujævnt terræn. \nFlere førende proteseleverandører vil sammen med Sahvas’ rehabiliteringsteam danne rammen om en aktiv eftermiddag og aften. Her får du en unik mulighed for at afprøve et bredt udvalg af protesefødder på markedet. Vi får besøg af både Fillauer, Össur, Proteor og Ottobock.\nDagen byder også på inspirerende oplæg om protesefødder og skoens betydning. Efter en fælles opvarmning er du klar til stationstræning med fokus på stabilitet.\nHerefter starter \"Trin & Terræn\" for alvor med afprøvning af en masse protesefødder. Du kan teste fødderne både inde og ude, op ad trapper og gennem forhindringsbaner. Der vil naturligvis også være rig mulighed for at netværke gennem hele eventet, både med andre protesebrugere, fagfolk og proteseleverandørerne.\n\nVælg mellem:\nKOLDING - Tirsdag d. 8. september 2026\nBRØNDBY - Tirsdag d. 29. september 2026\n\nHvorfor Trin & Terræn?\nHos Sahva har vi vores populære “Sahvas Løbeskole” … men den kommer kun hvert andet år. Og lad os være ærlige – det er jo næsten lige så lang tid som at vente på næste sæson af din yndlingsserie 😅\n\nSå vi tænkte:\nHvorfor ikke lave noget i mellemtiden? Noget HELT andet. Noget, der ikke kun handler om at løbe – men om hverdagen, udfordringerne og alle de små (og store) trin indimellem.\n\nDerfor har vi skabt Trin & Terræn 🦿\nEt event med fokus på livet som protesebruger – ude i virkeligheden, hvor underlaget ikke altid er lige.\n\nVi håber, du vil med 👇🏻\nOBS: Begrænset antal pladser\n\nTilmelding via https://www.sahva.dk/aktiviteter/trin-terraen/",
+   "hashtags": [
+    "Sahva",
+    "bandagist",
+    "ortopædist"
+   ],
+   "match_entities": {
+    "brand": true,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "none",
+   "stratum": "industry-other|both"
+  },
+  {
+   "id": "eaf8cd88-207f-44f2-bf19-01630ccd600c",
+   "split": "holdout",
+   "gold": "none",
+   "reason": "Cosmetic silicone hand/finger clinic; #ossur only in the pile.",
+   "contested": false,
+   "platform": "youtube",
+   "account_name": "Rebuilt Limbs",
+   "caption": "Silicon hand 🤚 Silicone hand 🖐🏾 \n\nDELHI BRANCH :\n\nDelhi No.-9810802188 ,8796500388\n\nRebuiltlimbs@gmail.com\nwwwrebuiltclinics.com.\n\nAddress:- A-3/22, Janak Puri, opp.KFC,\nNew Delhi -110058\n\n#SiliconeFinger #SiliconeProsthesis #FingerProsthesis #ArtificialFinger #CosmeticProsthesis CustomProsthesis ProstheticFinger Rebuilt RebuiltLimbs ProstheticSolution HandProsthesis LifeWithoutLimits ConfidenceRestored MobilitySupport ProstheticCare IndiaProsthetics DelhiProsthetics\n\nSilicone finger ✌️\n\nDELHI BRANCH :\n\nDelhi No.-9810802188 ,8796500388\n\nRebuiltlimbs@gmail.com\nwwwrebuiltclinics.com.\n\nAddress:- A-3/22, Janak Puri, opp.KFC,\nNew Delhi -110058\n\n#SiliconeFinger #SiliconeProsthesis #FingerProsthesis #ArtificialFinger #CosmeticProsthesis CustomProsthesis ProstheticFinger Rebuilt RebuiltLimbs ProstheticSolution HandProsthesis LifeWithoutLimits ConfidenceRestored MobilitySupport ProstheticCare IndiaProsthetics DelhiProsthetics\n\n#limbs #viralvideos #trendingsong #trendingreel #prostheticsindia #rebuiltcompany #ossur #cosmeticprosthesis #siliconeprosthesis #nakalihand #nakalitang",
+   "hashtags": [],
+   "match_entities": {
+    "brand": true,
+    "competitors": []
+   },
+   "stored": "none",
+   "stratum": "industry-other|brand-hashtag"
+  },
+  {
+   "id": "9bd7602d-5c9b-456e-bcfe-19787c3bd9ba",
+   "split": "train",
+   "gold": "client",
+   "reason": "Distributor presenting Össur's Pro-Flex LP Junior foot.",
+   "contested": false,
+   "platform": "instagram",
+   "account_name": "pacific_os",
+   "caption": "🌈令和8年度新規完成用部品\n「プロフレックスLPジュニア」\n\n子どもたちの日常は、毎日が冒険の連続です。\n\n学校の廊下を歩き、公園を駆け回り、時には水辺で遊ぶことも。\n\nそんな成長期のアクティブな動きを支えるために、オズールの先進技術を凝縮した小児用足部\n\n「プロフレックスLP ジュニア」が\n登場しました。\n\n✅ 3枚ブレードテクノロジー\n大人用モデルで定評のある構造をジュニア向けに最適化。\nスムーズな体重移動と力強い推進力を生み出します。\n\n✅ 多軸構造 ✕ スプリット・トウ\n不整地でも接地感が良く、安定した歩行をサポート。\n坂道や遊び場でも自信を持って動けます。\n\n✅ 防水仕様でお手入れも安心\n水辺のアクティビティにも対応。\n\nフットカバーは取り外し可能で、砂遊びの後なども簡単にお手入れいただけます。\n\n---\n\n「もっと遠くへ、もっと自由に」\n子どもたちの「やってみたい」を、足元から支えます。\n\n---\n\n🦶 デモ機について\n今後、順次デモ機を取り揃えてまいります。\n\nご興味のある方は、ぜひ一度、担当の義肢装具士様へご相談ください😊\n\n#パシフィックサプライ \n#オズール #ossur \n#義足 #義肢装具士\n\n#令和8年度新規完成用部品\n#プロフレックスLPジュニア\n#小児義足\n#成長期サポート\n#子どもの歩行\n#アクティブキッズ\n#安心して動ける",
+   "hashtags": [
+    "パシフィックサプライ",
+    "オズール",
+    "ossur",
+    "義足",
+    "義肢装具士",
+    "令和8年度新規完成用部品",
+    "プロフレックスLPジュニア",
+    "小児義足",
+    "成長期サポート",
+    "子どもの歩行",
+    "アクティブキッズ",
+    "安心して動ける"
+   ],
+   "match_entities": {
+    "brand": true,
+    "competitors": []
+   },
+   "stored": "none",
+   "stratum": "industry-other|brand-hashtag"
+  },
+  {
+   "id": "5c2982bc-48ba-404f-878f-7b7f0bc6264d",
+   "split": "train",
+   "gold": "none",
+   "reason": "A fight with an insurer over prosthesis costs; Össur only in hashtags.",
+   "contested": false,
+   "platform": "instagram",
+   "account_name": "ys__bang",
+   "caption": "🦿 사고 후 남은 건 보험사와 싸움뿐입니다\n2022년, 교통사고로 저는 무릎 위 절단이라는 평생 지울 수 없는 상처를 입었습니다.\n의학적 신체 감정을 통해 **노동상실률 69%**가 인정될 만큼, 제 삶은 송두리째 바뀌었습니다.\n저는 지금 수천에서 억대의 전자식 의족을 착용해야 겨우 안전하게 걷고,\n계단을 오르내리고, 사회 속에서 다시 살아갈 수 있습니다.\n그런데 가해 차량의 보험사는 저 같은 피해자가 필요한 의족 비용을 단 190만 원이라고 산정한다고 합니다 \n190만 원… 그것으로 저는 어떻게 생활을 하라는 걸까요?\n낙상 위험이 높고, 계단조차 제대로 내려갈 수 없는 수동 의족으로 가족을 부양하고 사회로 복귀하라는 말입니까?\n피해자의 현실은 숫자가 아니라 삶의 무게입니다.\n사람을 비용으로만 바라보는 시선 앞에서, 저는 오늘도 제 존재를 증명하기 위해 끝까지 싸우고 있습니다.\n이 글이 단순히 제 억울한 하소연이 아니라,\n비슷한 피해를 겪는 분들이 더 이상 190만 원짜리 사람으로 취급되지 않기를 바라는 작은 목소리가 되길 바랍니다.\n#교통사고소송 #교통사고 #의족 #절단장애 #억울한현실 #절단장애인 #억울한현실 #소송중 #amputeelife #ossur #ossurkorea #오서코리아",
+   "hashtags": [
+    "교통사고소송",
+    "교통사고",
+    "의족",
+    "절단장애",
+    "억울한현실",
+    "절단장애인",
+    "소송중",
+    "amputeelife",
+    "ossur",
+    "ossurkorea",
+    "오서코리아"
+   ],
+   "match_entities": {
+    "brand": true,
+    "competitors": []
+   },
+   "stored": "none",
+   "stratum": "industry-other|brand-hashtag"
+  },
+  {
+   "id": "7d540c8c-2616-49c8-af2c-d6d936a0adcb",
+   "split": "holdout",
+   "gold": "client",
+   "reason": "Review of his new Össur Pro-Flex Terra foot.",
+   "contested": false,
+   "platform": "instagram",
+   "account_name": "chohaesungc",
+   "caption": "다리 절단 10년 만에 의족을 바꿨다.\n프로플렉스 테라.\n미국 오셔ossur사에서 가장 최근에 나온 의족 발이다.\n무게는 기존에 썼던 Pro-Flex XC Tortion보다 조금 가볍고\n발구름이 편하며 방수 기능까지 있다.\n\n가장 큰 장점은 발구름의 편안함이다. 오르막 내리막 길이 부담이 없다. 고급세단을 탄듯 부드럽고 편안하고 부담없는 발구름이 예술이다. 이걸 신고 마라톤은 물론이고 트레일러닝도 거뜬히 할 수 있을것만 같은 기분이 든다.(말 나온 김에 조만간 도전할 생각이다.)\n방수기능도 마음에 든다. 지금껏 수영장이나 워터파크에 갈 때면 목발을 짚거나 휠체어를 탔는데 이제 의족을 신고도 갈 수 있게 되었다. \n발목의 탄력이 어찌나 좋은지 이걸 신다가 기존 의족을 잠깐 신었더니 방방(트램플린)을 뛰다가 맨 바닥에 내려온 기분이다. 즉 테라를 신다가 다른 의족은 못 신을것 같다. \n\n처음 절단장애인이 됐을 때는 갑자기 인생이 리셋되어 걸음마부터 다시 시작한 기분이었다.(실제로 걸음마부터 다시 배웠다.) 의족생활에 적응하고 보니 내 원래 다리만큼은 아니지만 그래서 좀 불편하고 느리지만 그래도 할 수 있는 것들이 많았다. 챌린지를 하듯 달리기를 하고 자전거를 타고 수영을 하고 클라이밍을 하고 설악산을 다녀왔다. (앞으로도 계속 할 계획이다.)\n이 토션 의족으로는 조금 덜 힘들게 이런 활동들을 할 수 있을것 같다. 활동성에 부담이 덜하다. 그리고 가볍고 편하다. 덜 힘들고 덜 아플것 같다. 아마도 의족 생활하는 모든 절단 장애인들이 바라는 바겠지. \n\n의족 장식(파이프 부분)에 커버를 씌울 수 없는 부분은 좀 아쉽다. 가짜 다리가 더 티나는건 어쩔 수 없다. 그러나 미관이 떨어진만큼 기능은 너무도 훌륭하다. 그럼 됐다. \n좋은 의족 만들고 연구해준 오셔사에 감사하다. 그리고 예쁜 의족 소켓 제작해주신 에스앤피의족케어센터의 서병철사장님께도 감사하다. 이 의족을 신고 더 다양한 활동에 도전하겠다.\n\n세상 모든 절단장애인 여러분 힘내세요\n화이팅!\n\n#하퇴의족\n#에스앤피의족케어센터\n#프로플렉스테라 \n#ossur\n#절단장애인",
+   "hashtags": [
+    "하퇴의족",
+    "에스앤피의족케어센터",
+    "프로플렉스테라",
+    "ossur",
+    "절단장애인"
+   ],
+   "match_entities": {
+    "brand": true,
+    "competitors": []
+   },
+   "stored": "none",
+   "stratum": "industry-other|brand-text"
+  },
+  {
+   "id": "f3c36dc6-ccf4-4211-aa31-ee545d858128",
+   "split": "holdout",
+   "gold": "client",
+   "reason": "Shop selling the Össur Formfit walker boot.",
+   "contested": false,
+   "platform": "youtube",
+   "account_name": "Total Surgical System . 9M Views . 2 Weeks Ago...",
+   "caption": "Ossur Formfit Walker Boot Rs 10000/- Aircast USA How to use Walker Boot #shorts #explore #tranding Ossur Formfit Walker Boot Walking Boot Rs 10000/-\r\nMade in USA.\r\nOrder on Whatsapp 03142007167 \r\n10/10 Condition minute condition\r\nAmazon ebay Temu Product\r\nSize All size available 5 to 13 foot size S/M/L/XL\r\nDelivery all over Pakistan To Pay Billty/Courier\r\nSame day delivery through bykea only for Karachi.\r\nAvailable on Rafiq Plaza Lucky Star Saddar Opposite Shall petrol pump Near Agha Khan & IDC Laboratory also Orangi Town Iqbal Markit Sector 11½ Karachi.\r\n\nDescriptions:\n\nThe Ossur Formfit Walker Boot is a high-quality orthopedic device engineered for lower limb immobilization. It features a robust design that balances structural support with patient comfort during rehabilitation. Support and management of edema for acute, ankle sprains, Stable fractures of the foot and ankle, Bunionectomies, Metatarsal fracture, fore foot, mid foot and ,hind foot injury.\nQuality FeaturesUpgraded Premium Materials: Constructed with a transition to premium polypropylene, reducing overall shell weight by approximately 25% compared to older legacy styles while maintaining strong structural rigidity.\nPremium Shock Absorption: Built with a specialized shock-absorbing EVA sole that dampens impact forces at heel strike, shielding the injury site during early weight-bearing stages.\nWashable Seamless Liner: Equipped with a highly breathable, two-layer seamless inner fabric liner to prevent localized skin breakdown and moisture buildup.\nRefined Strapping System: Features integrated D-rings paired with hook-and-loop closures featuring symmetrical rounded ends for smooth adjustments as local swelling changes.\nTherapeutic Benefits Promotes Natural Gait: Engineered with a low-profile, wide orthopedic rocker bottom designed to closely mimic regular footwear heights, preserving normal hip and knee alignment during stride transitions.Rigid Cast-Free Immobilization: Serves as a lightweight alternative to conventional plaster casting, locking the foot and ankle firmly at 90 degrees to speed up recoveries.\nVentilation & Assessment Tracking: The open-toe configuration offers optimal airflow to keep the lower foot cool while enabling clinicians or users to monitor circulatory health and toe placement quickly.\nVersatile Universal Fit: Accommodates variable anatomy by utilizing the separate foam pad inserts included in the package for personalized padding along sensitive bony prominences. The shell is universally designed to fit either the left or right foot seamlessly.\n\n\n#shorts #trending #explore #shortsvideo  #viral #anzaboots #ai #Shorts #YouTubeShorts #ShortVideos #ViralShorts #InstaShorts #FunnyShorts #CreativeShorts #LifeHacksShorts #MiniVlogsShorts #ShortFilm #TrendyShorts #DanceShorts #CookingShorts #AdventureShorts #ShortsChallenge #MotivationShorts #DIYShorts #BestShorts #ShortsCommunity #EntertainmentShorts\n#Viral #ViralVideo #Trending #MustWatch #GoingViral #ViralContent #SocialMediaStars #FunnyVideos #CreativeContent #InstaFamous #ViralChallenge #ContentCreator #ShareTheLove #EngagementBoost #BoostYourReach #LaughOutLoud #EpicMoments #OnlineFame #ViralMoments\n#shorts #shortvideo #viral #explore #millionviews #short\n#Aircast #Airboot #BootWalker #WalkingBoot #AircastBoot #InjurySupport #FootRecovery #OrthopedicAid #PostSurgeryCare #ComfortOnTheGo #AnkleSupport #MobilityAid #InjuryRecovery #FootHealth #SafetyFirst #RehabJourney #StayActive #WellnessGoals #HealthCareAccessories\n#Ossur #FormfitWalker #WalkerBoot #WalkingBoot #MedicalBoot #OrthopedicBoot #AnkleSupport #FootSupport #AnkleInjury #FootInjury #FractureRecovery #SprainedAnkle #Orthopedic #OrthopedicProducts #MedicalEquipment #Rehabilitation #InjuryRecovery #FootCare #MobilitySupport #Healthcare #YouTubeShorts #Shorts #ViralShorts #Trending #Pakistan",
+   "hashtags": [
+    "Walking Boot",
+    "Walker Boot",
+    "Ossar",
+    "USA",
+    "AI",
+    "Video",
+    "YouTube"
+   ],
+   "match_entities": {
+    "brand": true,
+    "competitors": []
+   },
+   "stored": "none",
+   "stratum": "industry-other|brand-text"
+  },
+  {
+   "id": "bdde3147-26fb-466c-aa81-b90a95b7a5f2",
+   "split": "holdout",
+   "gold": "client",
+   "reason": "Clinic trialling an Össur hybrid liner (Iceross) and Össur foot/vacuum system.",
+   "contested": false,
+   "platform": "youtube",
+   "account_name": "engrama",
+   "caption": "Cada muñon es único: amputación transtibial y su toma de molde🫵🙂 Cada muñón es un universo único y requiere una solución biomecánica a su medida. 🦾✨\n\nEn esta valoración, nuestro ortoprotesista Alberto realiza la prueba de un liner híbrido de @ossur (membrana Iceross + pin) en un caso de amputación transtibial de tercio proximal.\nEste tipo de anatomía presenta un reto especial: en el área distal contamos con mayor presencia de tejido blando y redundante. Si utilizamos una prótesis tradicional, ese tejido suele generar fricción, falta de estabilidad o pistoneo incómodo al caminar.\n\n¿Por qué este sistema híbrido es ideal aquí?\n✅ Doble Fijación: Combinamos el anclaje del pin con la sujeción hermética del sello por membrana de vacío.\n✅ Estabilización de Tejidos: Ayuda a contener el tejido distal blando evitando movimientos indeseados dentro del socket.\n✅ Cuidado de la Piel: Alberto nos muestra cómo el lubricante e hidratante natural del liner ayuda a proteger la piel durante los primeros 6 meses de uso.\n\nEn Engrama no creemos en soluciones genéricas. Realizamos pruebas y ajustes milimétricos previos a la toma de molde para asegurar que tu prótesis definitiva te brinde máxima estabilidad, confort y libertad de movimiento.\n\n📍 Te esperamos en nuestras sedes: CDMX (Matriz) | Satélite | Cuernavaca.\n\n🗓️ ¿Eres usuario de prótesis y sientes que tu muñón se mueve o no tienes la sujeción adecuada? Agenda una reevaluación biomecánica con nuestros especialistas.\n\n👉 Da clic en el enlace de nuestra biografía o envíanos un DM para agendar tu cita.\n\n#ProtesisTranstibial #LinerOssur #Iceross #SocketProtesico #ortoprotesica Biomecanica AmputeeLife Rehabilitacion CDMX Satelite Cuernavaca TecnologiaMedica",
+   "hashtags": [],
+   "match_entities": {
+    "brand": true,
+    "competitors": []
+   },
+   "stored": "none",
+   "stratum": "industry-other|brand-text"
+  },
+  {
+   "id": "ee02b0c9-2694-4765-a143-515cebd34eb4",
+   "split": "train",
+   "gold": "competitor:Ottobock",
+   "reason": "Demo of changing modes on a 3R-series Ottobock knee.",
+   "contested": false,
+   "platform": "youtube",
+   "account_name": "에스앤피(S&P)의족케어센터",
+   "caption": "3R84 대퇴의족 모드변경 참 쉽습니다#의족#의족재활#의족보행#3R84#ottobock#에스앤피의족케어센터#Shorts",
+   "hashtags": [],
+   "match_entities": {
+    "brand": false,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "none",
+   "stratum": "industry-other|comp-hashtag"
+  },
+  {
+   "id": "beaf0899-1b63-418e-a758-833b9b89a0b7",
+   "split": "holdout",
+   "gold": "none",
+   "reason": "Winter outfit idea; bebionic/Ottobock only as hashtags.",
+   "contested": false,
+   "platform": "instagram",
+   "account_name": "silvana.hir",
+   "caption": "Winteroutfits Idee🎄🤍\n•\n•\n•\n•\n#prothese #Inklusion #Lebensfreude #Stärke #Unabhängigkeit #Technologie #PositiveVibes #Motivation #Selbstbewusstsein #GlücklichSein #LifeWithProsthetics #Empowerment #Resilience #OvercomingChallenges #bebionic #ottobock #proud #bebionichand #dysmelie #winterfashion #ootdfashion #ootd #winterfashion",
+   "hashtags": [
+    "prothese",
+    "Inklusion",
+    "Lebensfreude",
+    "Stärke",
+    "Unabhängigkeit",
+    "Technologie",
+    "PositiveVibes",
+    "Motivation",
+    "Selbstbewusstsein",
+    "GlücklichSein",
+    "LifeWithProsthetics",
+    "Empowerment",
+    "Resilience",
+    "OvercomingChallenges",
+    "bebionic",
+    "ottobock",
+    "proud",
+    "bebionichand",
+    "dysmelie",
+    "winterfashion",
+    "ootdfashion",
+    "ootd"
+   ],
+   "match_entities": {
+    "brand": false,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "none",
+   "stratum": "industry-other|comp-hashtag"
+  },
+  {
+   "id": "d3bb80f5-6b47-49a1-8015-48aadcffa79e",
+   "split": "train",
+   "gold": "competitor:Ottobock",
+   "reason": "Giving away his Ottobock C-Leg (and a new X3).",
+   "contested": false,
+   "platform": "tiktok",
+   "account_name": "Paralympian Jorge Sanchez",
+   "caption": "🦿 I’M GIVING AWAY MY C-LEG. FREE. Prosthetics can cost more than a CAR… and that’s a problem. Mobility, independence and access to sports shouldn’t depend on how much money you have or what your insurance decides to cover. I’ve been blessed with new prosthetics, so it’s time to give back. ❤️ If you or someone you know needs an Ottobock C-Leg, DM me.  PLEASE SHARE so we can get this leg to someone who truly needs it. 🙏🏽🦿♿️ ACCESS TO ALL. English + Español 🇺🇸🇲🇽 #prosthetic #amputee #giveaway #fyppppppppppppppppppppppp #parati",
+   "hashtags": [
+    "prosthetic",
+    "amputee",
+    "giveaway",
+    "fyppppppppppppppppppppppp",
+    "parati"
+   ],
+   "match_entities": {
+    "brand": false,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "none",
+   "stratum": "industry-other|comp-text"
+  },
+  {
+   "id": "a94f3635-f288-43cf-9766-8a2fd283260d",
+   "split": "holdout",
+   "gold": "none",
+   "reason": "Trade-fair round-up of many upper-limb makers.",
+   "contested": false,
+   "platform": "instagram",
+   "account_name": "armprosthesiscommunity",
+   "caption": "EXPOLIFE International 2025 – Messe Kassel, Germany\n@MesseKassel ,  https://expolife.de \n\n(company links & time frame below)\n\nThe Arm Prosthesis Community would like to express its gratitude to all upper-limb prosthetic manufacturers at the Expolife International trade fair with an initial overview for their outstanding and heartfelt commitment! Amazing innovations, excellent products! Masterpieces of design, engineering, and biomedical technology! Thank you for being there!\n\n00:01 – Zeus Hand by aether biomedical\nInstagram: @aether_biomedical\nHomepage: https://www.aetherbiomedical.com\n#aetherbiomedical #zeushand #prostheticinnovations #orthopedictechnology\n\n00:38 – Prosthetic Cover by Anatomic Studios \nInstagram: @anatomic.studios\nHomepage: https://anatomic-studios.com\n#prostheticfashion #prostheticcovers #anatomicstudios #amputeestyle #embody #bodypositivity \n\n01:03 – Threedee Hand by Schubert und Braun \nInstagram: @prothesenwerk\nHomepage: www.prothesenwerk.com\n#threedee #threedeeflex #threedeevolume \n\n01:26 – Adam’s Hand by Bionit Labs\nInstagram: @bionitlabs\nHomepage: https://bento.me/bionitlabs\n#AdamsHand #BionITLabs #BionicHand \n\n02:25 – COVVI Hand by Ortho-Reha Neuhof\nInstagram: @orthorehaneuhof ,  @covvi \nHomepage: https://www.ortho-reha-neuhof.de ,  https://www.covvi.com\n#WeInnovateToMobilize #covvi #covvihand \n\n02:24 – Ottobock\nInstagram: @ottobock ,  @ottobock_germany\nHomepage: https://www.ottobock.com\n#WeEmpowerPeople #Ottobock #bebionic #michelangelo\n\n02:49 – BADAL X  OTN Implants\nInstagram: @badalx_otnimplants\nHomepage: www.otnimplants.nl\n#BADALX  #lifewithoutlimitations #otnimplants #iamadaptive #osseointegration\n\n@armprosthesiscommunity , @lara._.wilkin\n#ArmProsthesisCommunity #yourethepower",
+   "hashtags": [
+    "aetherbiomedical",
+    "zeushand",
+    "prostheticinnovations",
+    "orthopedictechnology",
+    "prostheticfashion",
+    "prostheticcovers",
+    "anatomicstudios",
+    "amputeestyle",
+    "embody",
+    "bodypositivity",
+    "threedee",
+    "threedeeflex",
+    "threedeevolume",
+    "AdamsHand",
+    "BionITLabs",
+    "BionicHand",
+    "WeInnovateToMobilize",
+    "covvi",
+    "covvihand",
+    "WeEmpowerPeople",
+    "Ottobock",
+    "bebionic",
+    "michelangelo",
+    "BADALX",
+    "lifewithoutlimitations",
+    "otnimplants",
+    "iamadaptive",
+    "osseointegration",
+    "ArmProsthesisCommunity",
+    "yourethepower"
+   ],
+   "match_entities": {
+    "brand": false,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "none",
+   "stratum": "industry-other|comp-text"
+  },
+  {
+   "id": "7169521e-dd29-41e3-a35f-6488eccfb377",
+   "split": "train",
+   "gold": "competitor:Ottobock",
+   "reason": "Royal-granted prosthetic legs built from Ottobock components, the only maker named (borderline: a programme story).",
+   "contested": false,
+   "platform": "youtube",
+   "account_name": "AramBoy",
+   "caption": "1107 ขาเทียมพระราชทาน มาตรฐานระดับโลก คืนโอกาสให้ทหารผู้เสียสละ ก้าวเดินอย่างมั่นใจ ภายใต้พระมหากรุณาธิคุณของพระบาทสมเด็จพระเจ้าอยู่หัว ทรงพระราชทานกายอุปกรณ์เทียมแก่กำลังพลที่ได้รับบาดเจ็บจากการปฏิบัติหน้าที่บริเวณชายแดนไทย–กัมพูชา\n\nขาเทียมพระราชทานใช้ชิ้นส่วนมาตรฐานสากลจาก Ottobock ประเทศเยอรมนี ประกอบและปรับให้เหมาะกับสรีระของแต่ละบุคคลโดยทีมนักกายอุปกรณ์และทีมเวชศาสตร์ฟื้นฟู โรงพยาบาลพระมงกุฎเกล้า\n\nหัวใจสำคัญคือเท้าเทียมคาร์บอนไฟเบอร์ที่แข็งแรง น้ำหนักเบา และรองรับการเดินบนพื้นผิวหลากหลาย ขณะที่เบ้าขาเทียมผลิตเฉพาะบุคคล เพื่อความกระชับ สบาย และเหมาะสมกับการใช้งาน\n\nขาเทียมพระราชทานจึงไม่ใช่เพียงอุปกรณ์ทดแทนอวัยวะ แต่คือการส่งต่อโอกาสให้ผู้เสียสละได้กลับมายืน เดิน และใช้ชีวิตอย่างมั่นใจอีกครั้ง สะท้อนพระมหากรุณาธิคุณที่ทรงห่วงใยกำลังพลผู้ปฏิบัติหน้าที่เพื่อประเทศชาติ\n\nก้าวต่อไปด้วยหัวใจที่ไม่ยอมแพ้ 🇹🇭\n\nแฮชแท็ก\n\n#ขาเทียมพระราชทาน #ผู้เสียสละของชาติ #ทหาร #Ottobock #กรมแพทย์ทหารบก #โรงพยาบาลพระมงกุฎเกล้า #ทีมโฆษกกอรมน #กอรมน #พระมหากรุณาธิคุณ #ชายแดนไทยกัมพูชา",
+   "hashtags": [],
+   "match_entities": {
+    "brand": false,
+    "competitors": [
+     "Ottobock"
+    ]
+   },
+   "stored": "none",
+   "stratum": "industry-other|comp-text"
+  }
+ ]
+}

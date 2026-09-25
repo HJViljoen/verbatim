@@ -4,6 +4,7 @@ import { zodResponseFormat } from 'openai/helpers/zod'
 import { openai } from '../openai'
 import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, estimateCost } from '../config'
 import { GATE_DEFAULT_REASONS } from './gate-verdicts'
+import { promptText } from './transcript'
 import { fold, str } from './util'
 import type { GatherConfig, VideoInsert } from './types'
 
@@ -40,6 +41,12 @@ export interface ClassifyResult {
   costUsd: number
   promptTokens: number
   completionTokens: number
+  /** GPT batches that threw. Every video in one was KEPT unjudged (fail-open),
+   *  and until 2026-09-24 nothing counted them: gate_verdicts source='default'
+   *  in exact multiples of 60 was the only trace. */
+  failedBatches: number
+  /** One line per failed batch, for the log row. */
+  errors: string[]
 }
 
 // High-precision off-market substrings: almost never genuine consumer signal for
@@ -121,12 +128,15 @@ function buildSystemPrompt(config: GatherConfig): string {
   ].join('\n')
 }
 
-function buildUserPrompt(candidates: RelevanceCandidate[]): string {
+/** Exported for tests. Every scraped string goes through promptText — a
+ *  UTF-16 `.slice` here once cut an emoji in half and 400'd whole batches. */
+export function buildUserPrompt(candidates: RelevanceCandidate[]): string {
   const lines = ['VIDEOS — judge each by index:']
   candidates.forEach((c, i) => {
-    const caption = str(c.caption).replace(/\s+/g, ' ').trim().slice(0, 200)
-    const tags = (c.hashtags ?? []).slice(0, 8).join(' ')
-    lines.push(`[${i}] account=${str(c.account_name) || '(none)'} | caption=${caption || '(none)'} | hashtags=${tags || '(none)'}`)
+    const caption = promptText(str(c.caption), 200)
+    const tags = (c.hashtags ?? []).slice(0, 8).map((h) => promptText(str(h), 60)).filter(Boolean).join(' ')
+    const account = promptText(str(c.account_name), 100)
+    lines.push(`[${i}] account=${account || '(none)'} | caption=${caption || '(none)'} | hashtags=${tags || '(none)'}`)
   })
   return lines.join('\n')
 }
@@ -141,7 +151,7 @@ export async function classifyRelevance(
   opts: { method: RelevanceMethod; config: GatherConfig },
 ): Promise<ClassifyResult> {
   const verdicts = new Map<string, RelevanceVerdict>()
-  const result: ClassifyResult = { verdicts, costUsd: 0, promptTokens: 0, completionTokens: 0 }
+  const result: ClassifyResult = { verdicts, costUsd: 0, promptTokens: 0, completionTokens: 0, failedBatches: 0, errors: [] }
 
   if (opts.method === 'off') {
     for (const c of candidates) verdicts.set(c.video_id, { relevant: true, reason: GATE_DEFAULT_REASONS.off, source: 'default' })
@@ -171,7 +181,8 @@ export async function classifyRelevance(
   // run sent ~460 videos in ONE call — judgment quality degrades at that size,
   // and if the structured output hits the completion cap the verdict array
   // truncates, silently KEEPING every unjudged video via the fail-open default.
-  for (const batch of chunk(undecided, GPT_BATCH)) {
+  const batches = chunk(undecided, GPT_BATCH)
+  for (const [b, batch] of batches.entries()) {
     try {
       const completion = await openai.chat.completions.parse({
         model: ANALYSIS_MODEL,
@@ -192,8 +203,13 @@ export async function classifyRelevance(
         const cand = batch[v.index]
         if (cand) verdicts.set(cand.video_id, { relevant: v.relevant, reason: v.reason, source: 'gpt' })
       }
-    } catch {
-      // On any failure, fail OPEN for this batch — keep rather than drop real signal.
+    } catch (e) {
+      // On any failure, fail OPEN for this batch — keep rather than drop real
+      // signal. But COUNTED: the gate still keeps, and the log row says so.
+      const message = e instanceof Error ? e.message : String(e)
+      result.failedBatches++
+      result.errors.push(`batch ${b + 1} of ${batches.length} (${batch.length} kept unjudged): ${message}`)
+      console.warn(`[relevance] batch ${b + 1} of ${batches.length} failed; ${batch.length} videos kept unjudged: ${message}`)
     }
   }
   keepUndecided()

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { inWindow, resolveGatherWindow, resolveScrapeCap, capSearchPlan, buildPlatformTasks, searchStepId, searchLabel } from './gather'
+import { inWindow, resolveGatherWindow, resolveScrapeCap, capSearchPlan, buildPlatformTasks, searchStepId, searchLabel, attributionReport, relevanceReport } from './gather'
 import type { SearchTask } from './gather'
 import { periodWindowDays, periodSince } from '../config'
 import type { RunWindow } from '../pipeline/window'
@@ -463,5 +463,53 @@ describe('periodSince — the one date the gather agrees on', () => {
     expect(periodSince('weekly')).toMatch(/^\d{4}-\d{2}-\d{2}$/)
     expect(inWindow(periodSince('weekly'), periodSince('weekly'))).toBe(true)
     expect(inWindow(periodSince('monthly'), periodSince('weekly'))).toBe(false)
+  })
+})
+
+// The two gates' ledger rows (2026-09-24). Attribution wrote no row at all and
+// its failures fell back to substring tags in silence; the relevance gate
+// logged its tokens but not the batches it kept unjudged.
+describe('attributionReport — the attribution ai_call_log row', () => {
+  it('carries the counts: judged, tagged by a verdict, rejected, fallback, failed batches', () => {
+    const r = attributionReport('youtube', {
+      gptJudged: 86, rejected: 20, fallbackIds: new Set(['a', 'b', 'c']), failedBatches: 1, errors: ['batch 2 of 2 (3 videos): 400'],
+    })
+    expect(r.response).toEqual({ platform: 'youtube', judged: 86, tagged: 63, rejected: 20, fallback: 3, failedBatches: 1 })
+    expect(r.error).toBe('batch 2 of 2 (3 videos): 400')
+    expect(r.validationStatus).toBe('call_failed')
+  })
+
+  it('puts a line on errors[] whenever a video was tagged without a judge', () => {
+    const r = attributionReport('instagram', { gptJudged: 106, rejected: 0, fallbackIds: new Set(Array.from({ length: 60 }, (_, i) => `v${i}`)), failedBatches: 1, errors: ['x'] })
+    expect(r.errorLine).toBe('attribution: 60 videos tagged without a judge (1 batch failed)')
+  })
+
+  it('names a skipped index too — no batch failed, but a video had no verdict', () => {
+    const r = attributionReport('tiktok', { gptJudged: 10, rejected: 2, fallbackIds: new Set(['a']), failedBatches: 0, errors: ['batch 1 of 1: no verdict for 1 of 10 videos'] })
+    expect(r.errorLine).toBe('attribution: 1 video tagged without a judge (0 batches failed)')
+    expect(r.validationStatus).toBe('ok')
+  })
+
+  it('says nothing on errors[] on a clean call', () => {
+    const r = attributionReport('youtube', { gptJudged: 12, rejected: 5, fallbackIds: new Set(), failedBatches: 0, errors: [] })
+    expect(r.errorLine).toBeNull()
+    expect(r.error).toBeNull()
+    expect(r.response.tagged).toBe(7)
+  })
+})
+
+describe('relevanceReport — the relevance_gate ai_call_log row', () => {
+  it('carries the failed batches beside judged, kept and dropped; the gate still kept them', () => {
+    const r = relevanceReport('instagram', { judged: 519, kept: 480, dropped: 39 }, { failedBatches: 5, errors: ['batch 1 of 9 (60 kept unjudged): 400'] })
+    expect(r.response).toEqual({ platform: 'instagram', judged: 519, kept: 480, dropped: 39, failedBatches: 5 })
+    expect(r.validationStatus).toBe('call_failed')
+    expect(r.error).toContain('kept unjudged')
+  })
+
+  it('reads clean when nothing failed', () => {
+    const r = relevanceReport('youtube', { judged: 60, kept: 50, dropped: 10 }, { failedBatches: 0, errors: [] })
+    expect(r.response.failedBatches).toBe(0)
+    expect(r.error).toBeNull()
+    expect(r.validationStatus).toBe('ok')
   })
 })
