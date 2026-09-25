@@ -34,6 +34,13 @@ const OV_RECORD_INPUTS = () =>
 // and the "at this point last month" tick all come back as sentences saying
 // what is not recorded yet. Every block is rendered in both, in all three
 // modes, because the refusal is the reading a client sees first.
+//
+// THE VOLUMES ARE THE MOCK'S, NOT SEALAND'S (F12, corrected with market-first
+// WP1.2). "Real" above is the two states, not the counts: the 1,388 category
+// videos, the rival rows and the attention panel are the mock's figures under
+// Sealand's name. Production's September is 655 market videos, 626 of them in
+// the category (plan decision E). The calendar (`reading`) is Sealand's own.
+// No copy is approved on these numbers.
 
 const REAL_MONTH = '2026-09-01'
 const NOW = '2026-09-18T09:00:00.000Z'
