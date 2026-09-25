@@ -897,13 +897,28 @@ export function regroupedLine(r: Regrouped): string {
  *
  * YES WHEN ITS `clustering_key` DIFFERS FROM THE PREVIOUS THEMED UPDATE'S,
  * the complement of plan §4.2's `identityNewThisRun` ("that run's
- * clustering_key equals the previous themed run's"), so the front page and
- * this page draw one line between a re-grouping and a new theme. A missing or
- * empty key reads as null: two null keys are equal (every run before the key
- * existed, and every run where the column is not applied), and a keyed update
- * after a null-keyed one differs, because nothing says the regime held. No
- * previous themed update (a tenant's first) opens nothing: there was no
- * regime to leave.
+ * clustering_key equals the previous themed run's"). A missing or empty key
+ * reads as null: two null keys are equal (every run before the key existed,
+ * and every run where the column is not applied), and a keyed update after a
+ * null-keyed one differs, because nothing says the regime held. No previous
+ * themed update (a tenant's first) opens nothing: there was no regime to
+ * leave.
+ *
+ * THIS DEPARTS FROM `sameRegime`'S NULL RULE ON PURPOSE (lib/pipeline/
+ * clustering.ts). There two nulls are never one regime and null then a key is
+ * `unknown`, "not a break", which is right for a reading series that must not
+ * compare across a regime it cannot see. It is wrong here: under it every
+ * update of a null-keyed tenant (staging's, and the paused Össur's) would
+ * re-group, and "heard for the first time" would never print for them. And
+ * the key's first appearance IS a new regime: the 27 Sep run is the first
+ * with `ownPostAudience` in the key (24 Sep), so "Re-grouped with the 27 Sep
+ * update" is the intended outcome, not a false positive.
+ *
+ * ONE LINE ON TWO PAGES ONLY IF BOTH CALL THIS. The front page and this page
+ * draw the same line between a re-grouping and a new theme only while WP1.6's
+ * `identityNewThisRun` and WP2.7's arrivals block call `opensClusteringRegime`
+ * rather than `sameRegime`; with `sameRegime`, staging's null-keyed updates
+ * would count as re-grouped on the front page and not here.
  */
 export function opensClusteringRegime(
   current: string | null | undefined,
