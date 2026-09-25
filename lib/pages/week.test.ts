@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { CLASSIFIED_TYPES, HOOK_STYLES } from '../pipeline/schemas'
 import { baselineStateOf } from '../reading/anomaly'
@@ -16,6 +17,9 @@ import {
   newThemesLine,
   NEW_THEME_FLOOR,
   opensClusteringRegime,
+  loadNewThemes,
+  previousThemedRegime,
+  regroupedFor,
   regroupedLine,
   pooledBaseline,
   refsOf,
@@ -484,5 +488,143 @@ describe('the re-grouped rule — a regime-opening update mints, it does not hea
     const line = regroupedLine({ update: '2026-09-20T08:33:47.358Z', themes: 468 })
     expect(line).not.toContain('\u2014')
     expect(line).not.toMatch(directionRe())
+  })
+})
+
+// ---- the re-grouped decision, and the reads that feed it (WP1.9 review) ----------
+//
+// No staging render reaches this branch: every staging update so far carries a
+// null `clustering_key`, and null equals null. So the decision is tested pure,
+// and the two reads behind it against a client that records every call.
+
+describe('regroupedFor — the loader’s decision, pure', () => {
+  const K1 = 'a=v4;c=0.58'
+  const K2 = 'a=v5;c=0.58'
+  const regime = (clusteringKey: string | null) => ({ clusteringKey, date: '2026-09-20T08:33:47.358Z' })
+
+  it('counts every minted identity as re-grouped when the update opened a regime', () => {
+    expect(regroupedFor(['r1', 'r2'], regime(K2), { key: K1 })).toEqual({ update: '2026-09-20T08:33:47.358Z', themes: 2 })
+  })
+
+  it('keeps the first-heard list under the same regime, on a first update, and with nothing minted', () => {
+    expect(regroupedFor(['r1'], regime(K1), { key: K1 })).toBeNull()
+    expect(regroupedFor(['r1'], regime(null), { key: null })).toBeNull()
+    expect(regroupedFor(['r1'], regime(K2), null)).toBeNull()
+    expect(regroupedFor([], regime(K2), { key: K1 })).toBeNull()
+  })
+})
+
+type Op = [string, unknown[]]
+
+/** A client that records each query's calls and answers from `answer`. */
+function recordingClient(answer: (table: string, ops: Op[]) => unknown[]) {
+  const calls: { table: string; ops: Op[] }[] = []
+  const client = {
+    from(table: string) {
+      const call = { table, ops: [] as Op[] }
+      calls.push(call)
+      const chain: Record<string, unknown> = {}
+      for (const method of ['select', 'eq', 'neq', 'not', 'lt', 'in', 'order', 'limit', 'range']) {
+        chain[method] = (...args: unknown[]) => {
+          call.ops.push([method, args])
+          return chain
+        }
+      }
+      chain.maybeSingle = () => {
+        call.ops.push(['maybeSingle', []])
+        return Promise.resolve({ data: answer(table, call.ops)[0] ?? null, error: null })
+      }
+      chain.then = (resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) =>
+        Promise.resolve({ data: answer(table, call.ops), error: null }).then(resolve, reject)
+      return chain
+    },
+  } as unknown as SupabaseClient
+  return { client, calls }
+}
+
+describe('loadNewThemes — the reads behind the re-grouped rule (market-first WP1.9)', () => {
+  const K1 = 'a=v4;c=0.58'
+  const K2 = 'a=v5;c=0.58'
+  const CLIENT = 'client-1'
+  const NOW = 'run-now'
+  const BEFORE = 'run-before'
+  const STARTED = '2026-09-20T08:00:00.000Z'
+  const MONTH = '2026-09-01'
+  const regime = (clusteringKey: string | null) => ({ clusteringKey, startedAt: STARTED, date: '2026-09-20T08:33:47.358Z' })
+  // Three stand-in identities; the first two cross the floor this month.
+  const FRESH = [
+    { registry_id: 'reg-a', label: 'Theme a' },
+    { registry_id: 'reg-b', label: 'Theme b' },
+    { registry_id: 'reg-c', label: 'Theme c' },
+  ]
+  const READINGS = [
+    { theme_id: 'reg-a', videos: NEW_THEME_FLOOR },
+    { theme_id: 'reg-b', videos: NEW_THEME_FLOOR + 1 },
+    { theme_id: 'reg-c', videos: NEW_THEME_FLOOR - 1 },
+  ]
+  const has = (ops: Op[], method: string, ...args: unknown[]) =>
+    ops.some(([m, a]) => m === method && JSON.stringify(a) === JSON.stringify(args))
+
+  const world = (opts: { fresh?: unknown[]; before?: unknown[]; run?: unknown[] }) =>
+    recordingClient((table, ops) => {
+      if (table === 'themes') return has(ops, 'eq', 'first_seen', true) ? opts.fresh ?? FRESH : opts.before ?? []
+      if (table === 'pipeline_runs') return opts.run ?? []
+      if (table === 'month_theme_readings') return READINGS
+      return []
+    })
+
+  it('asks for the newest theme row from another run written before this update started, then that run’s key', async () => {
+    const { client, calls } = world({ before: [{ run_id: BEFORE, created_at: '2026-09-15T09:00:00.000Z' }], run: [{ id: BEFORE, clustering_key: K1 }] })
+    expect(await previousThemedRegime(client, CLIENT, NOW, STARTED)).toEqual({ key: K1 })
+    const [themes, run] = calls
+    expect(themes.table).toBe('themes')
+    expect(has(themes.ops, 'eq', 'client_id', CLIENT)).toBe(true)
+    expect(has(themes.ops, 'neq', 'run_id', NOW)).toBe(true)
+    expect(has(themes.ops, 'not', 'run_id', 'is', null)).toBe(true)
+    expect(has(themes.ops, 'lt', 'created_at', STARTED)).toBe(true)
+    expect(has(themes.ops, 'order', 'created_at', { ascending: false })).toBe(true)
+    expect(has(themes.ops, 'limit', 1)).toBe(true)
+    expect(run.table).toBe('pipeline_runs')
+    expect(has(run.ops, 'eq', 'client_id', CLIENT)).toBe(true)
+    expect(has(run.ops, 'eq', 'id', BEFORE)).toBe(true)
+  })
+
+  it('answers null with no start to bound by, or no themed update before it', async () => {
+    const unbounded = world({})
+    expect(await previousThemedRegime(unbounded.client, CLIENT, NOW, null)).toBeNull()
+    expect(unbounded.calls).toHaveLength(0)
+    const first = world({ before: [] })
+    expect(await previousThemedRegime(first.client, CLIENT, NOW, STARTED)).toBeNull()
+    expect(first.calls.map((c) => c.table)).toEqual(['themes'])
+  })
+
+  it('reads a previous run without the column as a null key', async () => {
+    const { client } = world({ before: [{ run_id: BEFORE, created_at: '2026-09-15T09:00:00.000Z' }], run: [{ id: BEFORE }] })
+    expect(await previousThemedRegime(client, CLIENT, NOW, STARTED)).toEqual({ key: null })
+  })
+
+  it('counts a regime-opening update’s identities as re-grouped and reads no month for them', async () => {
+    const { client, calls } = world({ before: [{ run_id: BEFORE, created_at: '2026-09-15T09:00:00.000Z' }], run: [{ id: BEFORE, clustering_key: K1 }] })
+    const out = await loadNewThemes(client, CLIENT, NOW, MONTH, regime(K2))
+    expect(out).toEqual({ seen: 0, shown: [], regrouped: { update: '2026-09-20T08:33:47.358Z', themes: 3 } })
+    expect(calls.map((c) => c.table)).toEqual(['themes', 'themes', 'pipeline_runs'])
+    expect(has(calls[0].ops, 'eq', 'run_id', NOW)).toBe(true)
+  })
+
+  it('keeps the first-heard list under the same regime', async () => {
+    const { client, calls } = world({ before: [{ run_id: BEFORE, created_at: '2026-09-15T09:00:00.000Z' }], run: [{ id: BEFORE, clustering_key: K2 }] })
+    const out = await loadNewThemes(client, CLIENT, NOW, MONTH, regime(K2))
+    expect(out.regrouped).toBeNull()
+    expect(out.seen).toBe(3)
+    expect(out.shown.map((t) => t.id)).toEqual(['reg-b', 'reg-a'])
+    expect(calls.map((c) => c.table)).toEqual(['themes', 'themes', 'pipeline_runs', 'month_theme_readings'])
+  })
+
+  it('keeps it on a tenant’s first themed update, and reads nothing more when nothing was minted', async () => {
+    const first = world({ before: [] })
+    expect((await loadNewThemes(first.client, CLIENT, NOW, MONTH, regime(K2))).regrouped).toBeNull()
+    const none = world({ fresh: [] })
+    expect(await loadNewThemes(none.client, CLIENT, NOW, MONTH, regime(K2))).toEqual({ seen: 0, shown: [], regrouped: null })
+    expect(none.calls.map((c) => c.table)).toEqual(['themes'])
   })
 })

@@ -914,6 +914,26 @@ export function opensClusteringRegime(
   return norm(current) !== norm(previous.key)
 }
 
+/**
+ * What §4 does with the identities an update minted (market-first WP1.9): the
+ * re-grouped count when the update opened a new clustering regime, else null,
+ * which keeps "heard for the first time".
+ *
+ * THE LOADER'S WHOLE DECISION, PURE. `loadNewThemes` reads the minted ids and
+ * the previous themed update's regime (`previousThemedRegime`) and hands both
+ * here, so the branch a staging render never reaches (every staging update so
+ * far carries a null key, and null equals null) is tested on its own. Nothing
+ * minted is nothing re-grouped.
+ */
+export function regroupedFor(
+  ids: readonly string[],
+  regime: { clusteringKey: string | null | undefined; date: string },
+  previous: { key: string | null | undefined } | null,
+): Regrouped | null {
+  if (ids.length === 0) return null
+  return opensClusteringRegime(regime.clusteringKey, previous) ? { update: regime.date, themes: ids.length } : null
+}
+
 /** "above typical" / "about typical" — the mock's tag on a subject row.
  *
  *  NOT A DIRECTION WORD. It compares this update's contribution with what an
@@ -2561,8 +2581,9 @@ async function loadUpdateVideos(supabase: SupabaseClient, clientId: string, runI
  * matched against. Bounded by this update's start, so a run in flight after
  * it is never "before" it. Two small reads, and only when the update minted
  * anything. A read that fails answers null, which keeps today's list.
+ * Exported for its test (lib/pages/week.test.ts).
  */
-async function previousThemedRegime(
+export async function previousThemedRegime(
   supabase: SupabaseClient,
   clientId: string,
   runId: string,
@@ -2587,9 +2608,10 @@ async function previousThemedRegime(
  *
  * AN UPDATE THAT OPENED A NEW CLUSTERING REGIME HEARD NOTHING FOR THE FIRST
  * TIME (market-first WP1.9). Its minted identities are the corpus re-grouped,
- * so they leave the list and are counted as `regrouped` instead.
+ * so they leave the list and are counted as `regrouped` instead. Exported for
+ * its test, which runs it against a stubbed client (lib/pages/week.test.ts).
  */
-async function loadNewThemes(
+export async function loadNewThemes(
   supabase: SupabaseClient,
   clientId: string,
   runId: string,
@@ -2604,10 +2626,8 @@ async function loadNewThemes(
   const ids = [...new Set(fresh.map((t) => t.registry_id).filter((id): id is string => Boolean(id)))]
   if (ids.length === 0) return { seen: 0, shown: [], regrouped: null }
 
-  const previous = await previousThemedRegime(supabase, clientId, runId, regime.startedAt)
-  if (opensClusteringRegime(regime.clusteringKey, previous)) {
-    return { seen: 0, shown: [], regrouped: { update: regime.date, themes: ids.length } }
-  }
+  const regrouped = regroupedFor(ids, regime, await previousThemedRegime(supabase, clientId, runId, regime.startedAt))
+  if (regrouped) return { seen: 0, shown: [], regrouped }
 
   let readings: { theme_id: string; videos: number }[] = []
   try {
