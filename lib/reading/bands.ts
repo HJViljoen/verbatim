@@ -151,6 +151,14 @@ export interface MonthChangeInput {
  * kept so the levels still print and no change drawn. A rename still refuses
  * first: two names is the more specific break. A pair a change of ours
  * touched a little of carries `tracking_change` and is banded as usual.
+ *
+ * BUT ONLY A PAIR THAT COULD HAVE BEEN COMPARED IS REFUSED FOR IT (deploy 1
+ * review). Where a side is under the band's floors, or there is no earlier
+ * side at all, the band itself answers `too_little_data` ("too few to
+ * compare"), and that is the true reason: our search change did not stop
+ * Cotopaxi's 0 of 12 being compared, and Patagonia has no August reading to
+ * refuse. The pair's refusal is printed only where the band would otherwise
+ * have drawn a change. Never a "moved" either way.
  */
 export function monthChange(input: MonthChangeInput): Verdict {
   const flags = [...(input.flags ?? [])]
@@ -170,6 +178,21 @@ export function monthChange(input: MonthChangeInput): Verdict {
   if (renamed && !flags.includes('renamed')) flags.push('renamed')
 
   const refused = renamed ? ('rename' as const) : pair.refused
+  if (refused && !renamed) {
+    const band = bandVerdict({
+      objectKind: input.object.kind,
+      objectId: input.object.id,
+      objectLabel: input.object.label,
+      audience: input.audience,
+      window: monthWindowOf(input.curr.month),
+      basis: { from: monthStartOf(input.prev.month), to: nextMonth(input.prev.month) },
+      value: counted(input.curr),
+      baseline: counted(input.prev),
+      flags,
+      floor: input.floor,
+    })
+    if (band.state === 'too_little_data') return band
+  }
   const verdict = bandVerdict({
     objectKind: input.object.kind,
     objectId: input.object.id,
@@ -202,6 +225,11 @@ export function pairedVerdict(input: BandVerdictInput, pair: PairComparability |
   const flags = [...(input.flags ?? [])]
   if (judged.flag && !flags.includes('tracking_change')) flags.push('tracking_change')
   const refused = input.refused ?? judged.refused ?? undefined
+  // Only a pair that could have been compared is refused for it (`monthChange`).
+  if (!input.refused && judged.refused) {
+    const band = bandVerdict({ ...input, flags })
+    if (band.state === 'too_little_data') return band
+  }
   const verdict = bandVerdict({ ...input, flags, ...(refused ? { refused } : {}) })
   return judged.note && !input.refused ? { ...verdict, pair: judged.note } : verdict
 }

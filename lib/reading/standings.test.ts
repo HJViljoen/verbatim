@@ -202,15 +202,23 @@ describe('buildStandings under the month-pair rule (decision D, WP1.3)', () => {
     pairOn(pairJudge({ now: '2026-10-02T06:00:00.000Z', changes: [], rows: [], updates: OSSUR_UPDATES }))('2026-08-01', '2026-09-01', BRANDS_PANEL)
 
   it('refuses both verdicts on every row where the brands view refuses the pair, keeping the shares', () => {
+    // A row whose sides clear the band's floors is refused for the pair; one
+    // under them reads "too few to compare", the true reason (deploy 1
+    // review). Neither is ever "moved".
     const pair = ossurPair()
     const rows = buildStandings({ ...base, comparability: pair })
-    for (const r of rows.filter((x) => x.observed)) {
-      expect(r.contentVerdict?.state).toBe('refused')
-      expect(r.attentionVerdict?.state).toBe('refused')
-      expect(r.contentVerdict?.refusedReason).toBe('incomplete')
-      expect(r.contentVerdict?.pair?.cause).toBe('not_yet')
-      expect(r.content).not.toBeNull()
+    const verdicts = rows.filter((x) => x.observed).flatMap((r) => [r.contentVerdict, r.attentionVerdict])
+    const refused = verdicts.filter((v) => v?.state === 'refused')
+    expect(refused.length).toBeGreaterThan(0)
+    for (const v of refused) {
+      expect(v?.refusedReason).toBe('incomplete')
+      expect(v?.pair?.cause).toBe('not_yet')
     }
+    for (const v of verdicts.filter((x) => x?.state !== 'refused')) {
+      expect(v?.state).toBe('too_little_data')
+      expect(v?.pair).toBeUndefined()
+    }
+    for (const r of rows.filter((x) => x.observed)) expect(r.content).not.toBeNull()
   })
 
   it('a re-frozen panel still refuses first, as the panel\'s own rule', () => {

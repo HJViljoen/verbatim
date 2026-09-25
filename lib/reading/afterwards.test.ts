@@ -376,13 +376,28 @@ describe('afterwardsFor — the small true things', () => {
 
 describe('afterwardsFor under the month-pair rule (decision D, WP1.3)', () => {
   it('a refused pair is the cell\'s answer, in the pair\'s own words', () => {
+    // HYPOTHETICAL: June raised from 8 to 11 of 110, so both sides clear the
+    // band's floor of 10 and only the pair can refuse them.
+    const clears = SERIES.map((p) => (p.month === '2026-06-01' ? { ...p, k: 11 } : p))
+    const judge = pairOn(sealandJudge('2026-10-02T06:00:00.000Z'))
+    const a = afterwardsFor({
+      pair: (prev, month) => judge(prev, month, 'client'),
+      decidedAt: '2026-07-04', targetIds: ['reg-1'], objectLabel: 'Repair & warranty', series: clears, audience: 'client',
+    })
+    expect(a.state).toBe('refused')
+    expect(a.verdict).toBeNull()
+    expect(a.line).toBe('Not read as a change: we changed our searches in September.')
+  })
+
+  it('a pair that could not have been compared anyway reads as too few, not as our change (deploy 1 review)', () => {
+    // SERIES's June is 8 of 110, under the band's floor of 10.
     const judge = pairOn(sealandJudge('2026-10-02T06:00:00.000Z'))
     const a = afterwardsFor({
       pair: (prev, month) => judge(prev, month, 'client'),
       decidedAt: '2026-07-04', targetIds: ['reg-1'], objectLabel: 'Repair & warranty', series: SERIES, audience: 'client',
     })
-    expect(a.state).toBe('refused')
-    expect(a.verdict).toBeNull()
-    expect(a.line).toBe('Not read as a change: we changed our searches in September.')
+    expect(a.verdict?.state).toBe('too_little_data')
+    expect(a.verdict?.pair).toBeUndefined()
+    expect(a.line).not.toContain('Not read as a change')
   })
 })

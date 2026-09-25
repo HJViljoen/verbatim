@@ -363,12 +363,18 @@ describe('headToHead · the month-pair rule', () => {
       readPreviousMonth: 597,
       pair: judge,
     })
+    // The positive share is 17 of 19 judged against 42 of 48: under the
+    // band's floor of 100 either side, so it reads "too few to compare", the
+    // true reason, and carries no pair words (deploy 1 review).
     const mood = r.measures.find((m) => m.key === 'sentiment')!.rivalVerdict!
-    expect(mood.state).toBe('refused')
-    expect(mood.refusedReason).toBe('incomplete')
-    expect(pairSentence(mood.pair!)).toBe('Not compared yet.')
+    expect(mood.state).toBe('too_little_data')
+    expect(mood.pair).toBeUndefined()
+    // The video share, 24 of 369 against 48 of 597, clears the floors: refused
+    // for the pair, with no update promised (paused).
     const share = r.measures.find((m) => m.key === 'videos')!.rivalVerdict!
     expect(share.state).toBe('refused')
+    expect(share.refusedReason).toBe('incomplete')
+    expect(pairSentence(share.pair!)).toBe('Not compared yet.')
   })
 })
 

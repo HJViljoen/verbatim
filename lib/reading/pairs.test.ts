@@ -232,6 +232,41 @@ describe('an October search change inside August against September\'s span', () 
   })
 })
 
+// ONLY A PAIR THAT COULD HAVE BEEN COMPARED IS REFUSED FOR IT (deploy 1
+// review). Staging's Subjects hero at 2 Oct: Patagonia's Looks & style cell is
+// 0 of its 5 September videos with no August reading at all, and Cotopaxi's 0
+// of 12; the refusal named our September searches on cells no band could ever
+// have compared.
+describe('monthChange: a side under the floor reads "too few to compare", not the pair', () => {
+  const PATAGONIA = 'competitor:Patagonia'
+  it('no earlier side: too little data, no pair words', () => {
+    const v = monthChange({
+      object: LOOKS, audience: PATAGONIA,
+      curr: { month: '2026-09-01', videos: 5, k: 0, audience: PATAGONIA, regime: 'n/a' },
+      prev: { month: '2026-08-01', videos: 0, k: 0, audience: PATAGONIA, regime: 'n/a' },
+      comparability: judgeAt('2026-10-02T06:00:00.000Z')('2026-08-01', '2026-09-01', 'brands'),
+    })
+    expect(v.state).toBe('too_little_data')
+    expect(v.pair).toBeUndefined()
+  })
+
+  it('both sides over the floor: refused for the pair, as before', () => {
+    const v = change(judgeAt('2026-10-02T06:00:00.000Z')('2026-08-01', '2026-09-01', 'themes'))
+    expect(v.state).toBe('refused')
+    expect(pairSentence(v.pair!)).toBe(PAIR_REFUSED_SEARCHES('2026-09-01'))
+  })
+
+  it('a rename still refuses first, whatever the sides', () => {
+    const v = monthChange({
+      object: LOOKS, audience: PATAGONIA,
+      curr: { month: '2026-09-01', videos: 5, k: 0, audience: PATAGONIA, regime: 'n/a' },
+      prev: { month: '2026-08-01', videos: 0, k: 0, audience: 'competitor:Patagonia Inc', regime: 'n/a' },
+      comparability: judgeAt('2026-10-02T06:00:00.000Z')('2026-08-01', '2026-09-01', 'brands'),
+    })
+    expect(v.refusedReason).toBe('rename')
+  })
+})
+
 describe('the views (decision E)', () => {
   const at = '2026-12-07T12:00:00.000Z'
   const inOct = (surface: OurChange['surface']): OurChange => ({ id: `${surface}-1015`, surface, changedAt: '2026-10-15T12:00:00.000Z', note: null, affects: VIEWS_BY_SURFACE[surface] })

@@ -571,10 +571,26 @@ describe('moveChartNote — two readings are not a line', () => {
 
 describe('readMove under the month-pair rule (decision D, WP1.3)', () => {
   it('refuses a comparison across our own search changes, and breaks the chart\'s steps', () => {
+    // Sides that clear the band's floors, so only the pair can refuse them.
+    // August and September are Looks & style's real 38 of 351 and 104 of 626
+    // (research §1); July is HYPOTHETICAL, August's re-dated (no July reading
+    // clears the floor: Sealand's July is 35 videos).
     const judge = pairOn(sealandJudge('2026-10-02T06:00:00.000Z'))
-    const r = reading({ pair: judge })
+    const r = reading({
+      pair: judge,
+      series: [series({ points: [{ month: '2026-07-01', k: 38, n: 351, pct: 10.8 }, { month: '2026-08-01', k: 38, n: 351, pct: 10.8 }, { month: '2026-09-01', k: 104, n: 626, pct: 16.6 }] })],
+    })
     expect(r.verdict?.state).toBe('refused')
     expect(r.verdict?.refusedReason).toBe('tracking_change')
+    expect(r.series[0].refusedSteps?.['2026-09-01']).toBe('Not read as a change: we changed our searches in September.')
+  })
+
+  it('a pair that could not have been compared anyway reads "too few to compare", its step still broken (deploy 1 review)', () => {
+    // The fixture's own side: 8 of 110 in July, under the band's 10.
+    const judge = pairOn(sealandJudge('2026-10-02T06:00:00.000Z'))
+    const r = reading({ pair: judge })
+    expect(r.verdict?.state).toBe('too_little_data')
+    expect(r.verdict?.pair).toBeUndefined()
     expect(r.series[0].refusedSteps?.['2026-09-01']).toBe('Not read as a change: we changed our searches in September.')
   })
 
