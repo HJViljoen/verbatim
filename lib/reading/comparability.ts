@@ -489,9 +489,14 @@ function refuses(r: Reason): boolean {
 /**
  * The first pair of months that no change of ours (as logged so far) can have
  * moved, for this view: the earlier month starts after the latest change that
- * can move the view. A pair whose measured row already refuses on a share
- * (searches, or a change) is skipped for the one after it; depth never skips a
- * pair, because depth fills with time.
+ * can move the view, and never before the pair being read (the reading month
+ * against the month before it), so the answer is never a pair already behind
+ * the page. A pair whose measured row already refuses on a share (searches, or
+ * a change) is skipped for the one after it; depth never skips a pair, because
+ * depth fills with time.
+ *
+ * `readingMonth` is the month the page reads (`readingMonthFor`). Without it,
+ * the latest ended month (the one before `now`'s) stands in.
  *
  * It ASSUMES NOTHING FURTHER CHANGES, and says so (`assumes`): one edit to the
  * search set moves the answer on by a month.
@@ -501,22 +506,23 @@ function refuses(r: Reason): boolean {
  * the later month settles: the first scheduled update after its freeze line.
  * With no schedule handed in, each is the instant itself. Sealand on 24 Sep:
  * October against November, from the 6 Dec update, in full around the 3 Jan
- * update.
+ * update. On 4 Jan, with nothing changed since: November against December.
  */
 export function nextComparablePair(
   now: string,
   changes: readonly OurChange[],
   rows: readonly PairRow[],
-  opts: { view?: ComparabilityView; nextUpdateAfter?: (instant: string) => string | null } = {},
+  opts: { view?: ComparabilityView; nextUpdateAfter?: (instant: string) => string | null; readingMonth?: string } = {},
 ): { prevMonth: string; month: string; sameAgeFrom: string; inFullExpected: string; assumes: 'no_further_change' } | null {
   const view = opts.view ?? 'market'
+  const reading = opts.readingMonth ? monthStartOf(opts.readingMonth) : prevMonth(monthStartOf(now))
+  const floor = prevMonth(reading)
   const times = changes
     .filter((c) => c.affects.includes(view))
     .map((c) => msOf(c.changedAt))
     .filter((t) => Number.isFinite(t))
-  let p = times.length > 0
-    ? nextMonth(monthStartOf(new Date(Math.max(...times)).toISOString()))
-    : prevMonth(monthStartOf(now))
+  const afterChange = times.length > 0 ? nextMonth(monthStartOf(new Date(Math.max(...times)).toISOString())) : null
+  let p = afterChange != null && afterChange > floor ? afterChange : floor
 
   for (let guard = 0; guard < 36; guard++) {
     const m = nextMonth(p)

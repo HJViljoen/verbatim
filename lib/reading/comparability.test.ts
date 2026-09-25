@@ -640,8 +640,39 @@ describe('nextComparablePair', () => {
     expect(nextComparablePair('2026-12-07T12:00:00.000Z', CHANGES, [shallow])?.prevMonth).toBe('2026-10-01')
   })
 
-  it('with no change of ours logged, the month before now against now', () => {
-    expect(nextComparablePair('2026-09-24T18:00:00.000Z', [], [])?.prevMonth).toBe('2026-08-01')
+  it('never a pair already behind the page: on 4 Jan 2027, November against December', () => {
+    // Nothing logged since 17 Sep. October against November was read from the
+    // 6 Dec update; on 4 Jan December has ended and leads.
+    expect(nextComparablePair('2027-01-04T06:00:00.000Z', CHANGES, [], { nextUpdateAfter: sunday })).toEqual({
+      prevMonth: '2026-11-01',
+      month: '2026-12-01',
+      sameAgeFrom: '2027-01-03T04:00:00.000Z',
+      inFullExpected: '2027-01-31T04:00:00.000Z',
+      assumes: 'no_further_change',
+    })
+    expect(nextComparablePair('2027-01-04T06:00:00.000Z', CHANGES, [], { nextUpdateAfter: sunday, readingMonth: '2026-12-01' })?.prevMonth).toBe('2026-11-01')
+  })
+
+  it('on 1 Mar 2027, January against February', () => {
+    expect(nextComparablePair('2027-03-01T06:00:00.000Z', CHANGES, [], { nextUpdateAfter: sunday })).toEqual({
+      prevMonth: '2027-01-01',
+      month: '2027-02-01',
+      sameAgeFrom: '2027-03-07T04:00:00.000Z',
+      inFullExpected: '2027-04-04T04:00:00.000Z',
+      assumes: 'no_further_change',
+    })
+  })
+
+  it('a month so far that leads moves the floor to it: December against January', () => {
+    expect(nextComparablePair('2027-01-20T06:00:00.000Z', CHANGES, [], { readingMonth: '2027-01-01' })?.prevMonth).toBe('2026-12-01')
+  })
+
+  it('with no change of ours logged, the pair being read', () => {
+    // 24 Sep: September so far leads. 1 Oct: September, ended, still leads.
+    expect(nextComparablePair('2026-09-24T18:00:00.000Z', [], [], { readingMonth: '2026-09-01' })?.prevMonth).toBe('2026-08-01')
+    expect(nextComparablePair('2026-10-01T06:00:00.000Z', [], [], { readingMonth: '2026-09-01' })?.prevMonth).toBe('2026-08-01')
+    // Without the reading month, the latest ended month stands in for it.
+    expect(nextComparablePair('2026-09-24T18:00:00.000Z', [], [])?.prevMonth).toBe('2026-07-01')
   })
 })
 
