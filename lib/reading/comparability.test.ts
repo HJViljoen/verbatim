@@ -268,6 +268,66 @@ describe('changesFromLog: subreddits rows move a comparison only when the search
   })
 })
 
+// 4 Oct: the 4 Oct run's freeze-months step freezes Sealand's first attention
+// panel (plan §3.0: cutoff 1 Jul, October's three months of lead), and
+// `freezePanel` logs it on other/attention_panel with the pipeline's actor.
+// 08:20 UTC stands in for the step's time inside the run (06:00 SAST start,
+// about 4.5 h); the account count the row also carries is not knowable before
+// the run, so it is left out.
+const PANEL_1004 = row({
+  id: 'panel-1004', changed_at: '2026-10-04T08:20:00.000Z', surface: 'other', field: 'attention_panel',
+  source: 'logged', actor_kind: 'pipeline', after: { cutoff: '2026-07-01', reason: 'first_freeze' },
+})
+
+describe('changesFromLog: an attention-panel freeze moves no view', () => {
+  const WITH_PANEL = changesFromLog([...SEALAND_LOG, PANEL_1004])
+  const sunday = scheduledUpdateAfter({ report_period: 'weekly', report_day: 'sunday' })
+
+  it('is kept as a change, moving nothing', () => {
+    const panel = WITH_PANEL.find((c) => c.id === 'panel-1004')
+    expect(panel?.surface).toBe('other')
+    expect(panel?.affects).toEqual([])
+  })
+
+  it('leaves the 5 Oct next pair at October against November, from the 6 Dec update', () => {
+    expect(nextComparablePair('2026-10-05T06:00:00.000Z', WITH_PANEL, [], { nextUpdateAfter: sunday })).toEqual({
+      prevMonth: '2026-10-01',
+      month: '2026-11-01',
+      sameAgeFrom: '2026-12-06T04:00:00.000Z',
+      inFullExpected: '2027-01-03T04:00:00.000Z',
+      assumes: 'no_further_change',
+    })
+  })
+
+  it('leaves October against November comparable on every view', () => {
+    for (const view of ['market', 'themes', 'brands', 'lens'] as const) {
+      const r = comparabilityOf('2026-10-01', '2026-11-01', { row: SAME_WAY, changes: WITH_PANEL, view, later: LATER_NOV })
+      expect(r.mode, view).toBe('comparable')
+    }
+  })
+
+  // A re-freeze after a tracking change (reason `tracking_change`), stood in on
+  // the 8 Nov run with November's cutoff.
+  const REFREEZE = row({ id: 'panel-1108', changed_at: '2026-11-08T08:20:00.000Z', surface: 'other', field: 'attention_panel', source: 'logged', actor_kind: 'pipeline', after: { cutoff: '2026-08-01', reason: 'tracking_change' } })
+
+  it('a re-freeze moves nothing either', () => {
+    expect(changesFromLog([REFREEZE])[0].affects).toEqual([])
+  })
+
+  it('any other `other` row is still a change of every view, and is never grouped with a panel freeze', () => {
+    // Stage 3's operator-only columns are logged on `other` (plan §4.2, MF3):
+    // what they move is not settled, so they refuse rather than pass. Thirty
+    // seconds after the re-freeze, inside one grouping window, to show the two
+    // stay apart.
+    const brands = row({ id: 'watched-1108', changed_at: '2026-11-08T08:20:30.000Z', surface: 'other', field: 'watched_brands', actor_kind: 'operator', source: 'logged' })
+    const out = changesFromLog([REFREEZE, brands])
+    expect(out.map((c) => [c.id, c.affects])).toEqual([
+      ['panel-1108', []],
+      ['watched-1108', ['market', 'themes', 'brands', 'lens']],
+    ])
+  })
+})
+
 describe('changesFromLog: other surfaces', () => {
   it('a knobs row is a change of every view', () => {
     const knobs = changesFromLog([row({ changed_at: '2026-10-05T09:00:00.000Z', surface: 'knobs', field: 'max_comments', source: 'trigger' })])

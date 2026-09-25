@@ -58,7 +58,8 @@ const FILING_VIEWS: readonly ComparabilityView[] = ['themes', 'brands']
  * The views each surface can move, mapped explicitly (plan §4.2):
  *   terms (incl. exclude_terms), platforms, knobs, subreddits, other,
  *   gate_rule, regate, prompt_version → every view. (subreddits only when the
- *   set of ACTIVE communities moved; see `changesFromLog`.)
+ *   set of ACTIVE communities moved, and other not for an attention-panel
+ *   freeze, which moves none; see `changesFromLog`.)
  *   rivals, handles, rival_rename, entity_retag, attribution → themes and
  *   brands: re-filing a video does not move the pooled market (decision E),
  *   and themes are grouped per audience, so they do move.
@@ -85,6 +86,21 @@ export const VIEWS_BY_SURFACE: Readonly<Record<OurChangeSurface, readonly Compar
  *  goes out, whether a schedule is active, which subjects are followed. They
  *  move nothing a month is read from (`TRACKING_SURFACES`, lib/config-log.ts). */
 export const NOT_OUR_CHANGES: readonly string[] = ['cadence', 'schedule', 'subjects']
+
+/** The `other` field an attention-panel freeze is logged on (`freezePanel`,
+ *  lib/reading/attention.ts). The pipeline's freeze-months step writes one on a
+ *  tenant's first freeze (Sealand's: the 4 Oct run, cutoff 1 Jul) and on every
+ *  re-freeze after a tracking change. A panel moves only the attention figures,
+ *  and those are compared only inside one panel era (`samePanelEra`); it moves
+ *  nothing the market, themes, brands or lens views read. So its change is
+ *  kept, moving no view, as `segment` is. Every other `other` row stays a
+ *  change of every view. (A departure from §4.2's "other → every view", for
+ *  Heinrich's ruling: without it the first freeze falls inside October against
+ *  November and refuses the first pair read the same way, §2.11.) */
+export const PANEL_FREEZE_FIELD = 'attention_panel'
+
+const isPanelFreeze = (r: Pick<ConfigChange, 'surface' | 'field'>): boolean =>
+  r.surface === 'other' && r.field === PANEL_FREEZE_FIELD
 
 /** Surfaces that change WHAT WE SEARCH. Their reach is the pair row's
  *  search-outside count ("not surfaced by a search that ran unchanged through
@@ -225,7 +241,8 @@ export function movesActiveSet(row: Pick<ConfigChange, 'before' | 'after'>): boo
  * (three) term changes are, and a community edit's trigger row and its logged
  * row are one. A `subreddits` group that never moved the active set is
  * dropped. A row whose `changed_at` does not parse cannot be placed in any
- * span and is dropped.
+ * span and is dropped. An attention-panel freeze (`PANEL_FREEZE_FIELD`) is
+ * grouped apart from any other `other` row and moves no view.
  */
 export function changesFromLog(rows: readonly ConfigChange[]): OurChange[] {
   const kept = rows
@@ -237,14 +254,15 @@ export function changesFromLog(rows: readonly ConfigChange[]): OurChange[] {
   const groups: { startMs: number; rows: ConfigChange[] }[] = []
   const open = new Map<string, { startMs: number; rows: ConfigChange[] }>()
   for (const { row, ms } of kept) {
-    const g = open.get(row.surface)
+    const key = isPanelFreeze(row) ? `other/${PANEL_FREEZE_FIELD}` : row.surface
+    const g = open.get(key)
     if (g && ms - g.startMs <= CHANGE_GROUP_WINDOW_MS) {
       g.rows.push(row)
       continue
     }
     const fresh = { startMs: ms, rows: [row] }
     groups.push(fresh)
-    open.set(row.surface, fresh)
+    open.set(key, fresh)
   }
 
   const out: OurChange[] = []
@@ -257,7 +275,7 @@ export function changesFromLog(rows: readonly ConfigChange[]): OurChange[] {
       surface,
       changedAt: first.changed_at,
       note: g.rows.map((r) => r.note?.trim()).find((n): n is string => !!n) ?? null,
-      affects: VIEWS_BY_SURFACE[surface],
+      affects: isPanelFreeze(first) ? [] : VIEWS_BY_SURFACE[surface],
       rowIds: g.rows.map((r) => r.id),
     })
   }
