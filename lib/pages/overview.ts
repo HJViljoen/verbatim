@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { recStatus, REC_STATUS_LABEL, type RecStatus } from '../calibration'
+import { SEALAND_CLIENT_ID } from '../config'
 import { topRecommendation } from '../dashboard-tiles'
 import { fmtInt, longMonth, monthName, platformLabel, shortDate } from '../format'
 import { inheritedStatus, REC_DECISIONS_TABLE, type RecDecision } from '../rec-decisions'
@@ -1975,8 +1976,9 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
           })
         : Promise.resolve(null),
       // MF1's maker shares, one read for the list and the headline. Null until
-      // MF1 is applied; every level then reads "not yet marked" and no theme
-      // may lead the headline (`mayLead`).
+      // MF1 is applied, and always for a tenant without a maker rule (Össur);
+      // every level then reads "not yet marked" and no theme may lead the
+      // headline (`mayLead`).
       loadMakerShares(reading.client, clientId, month, themedRunId),
     ])
 
@@ -2879,17 +2881,18 @@ async function loadLevelPool(client: SupabaseClient, clientId: string, month: st
  * the call failed, which is logged. Never an empty map standing in for "no
  * makers anywhere".
  *
- * TENANT RULE: the plan enables the maker rule per tenant (WP1.4's
- * `SEGMENT_RULES_ENABLED`, Össur off). That list lands with WP1.4, and until
- * then this reads whatever MF1's function returns for the tenant.
+ * AND NULL, WITH NO READ, FOR A TENANT WITHOUT A MAKER RULE
+ * (`makerRuleEnabled`). The function computes the segments_v1 rule inline for
+ * any video with no stored row (§4.2), so it would answer for Össur too, off
+ * Sealand's word list, and flip its list to "Makers" and "mostly makers".
  */
-async function loadMakerShares(
+export async function loadMakerShares(
   client: SupabaseClient,
   clientId: string,
   month: string,
   runId: string | null,
 ): Promise<Map<string, number | null> | null> {
-  if (!runId) return null
+  if (!runId || !makerRuleEnabled(clientId)) return null
   const res = await client.rpc('theme_maker_shares', { p_client: clientId, p_month: month, p_run: runId })
   if (res.error) {
     if (!isMissingThemeMakerShares(res.error)) console.error(`[pages] overview.makerShares: ${res.error.message}`)
@@ -3723,6 +3726,23 @@ export function makerSharesOf(rows: readonly ThemeMakerShareRow[]): Map<string, 
     out.set(String(r.registry_id), ok ? maker / videos : null)
   }
   return out
+}
+
+/**
+ * The tenants whose maker rule is on, by client id: plan WP1.4's
+ * `SEGMENT_RULES_ENABLED = { sealand: true }`, with Össur off, because its
+ * non-buyer content is lived experience, not making (§2.13, CQ F105).
+ *
+ * A STAND-IN UNTIL WP1.4 MERGES. `lib/segments/rules.ts` is WP1.4's file and
+ * holds the one list; the integration commit points `makerRuleEnabled` at it
+ * and deletes this constant, so the rule is enabled in one place.
+ */
+export const MAKER_RULE_CLIENTS: readonly string[] = [SEALAND_CLIENT_ID]
+
+/** Does this tenant have a maker rule? Without one no theme is ever marked,
+ *  whatever `theme_maker_shares` would compute for it. */
+export function makerRuleEnabled(clientId: string, enabled: readonly string[] = MAKER_RULE_CLIENTS): boolean {
+  return enabled.includes(clientId)
 }
 
 /** `theme_maker_shares` is not there: MF1 is not applied here yet. Narrow by

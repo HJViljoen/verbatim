@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
 
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '../config'
 import type { ConfigChange } from '../config-log'
 import { changesFromLog, comparabilityOf, type OurChange, type PairComparability } from '../reading/comparability'
 import { buildSeries, type DenominatorPoint, type MonthSeries } from '../reading/series'
@@ -14,6 +17,8 @@ import {
   isMissingThemeMakerShares,
   levelRows,
   LEVELS_SHOWN,
+  loadMakerShares,
+  makerRuleEnabled,
   makerSharesOf,
   laterSide,
   marketSizeOf,
@@ -622,6 +627,47 @@ describe('isMissingThemeMakerShares', () => {
     expect(isMissingThemeMakerShares(null)).toBe(false)
     expect(isMissingThemeMakerShares({ code: '57014', message: 'canceling statement due to statement timeout' })).toBe(false)
     expect(isMissingThemeMakerShares({ code: 'PGRST202', message: 'Could not find the function public.market_segment_counts' })).toBe(false)
+  })
+})
+
+describe('the maker rule, per tenant', () => {
+  /** A client that records each call of `theme_maker_shares` and answers with
+   *  one row: "Ready to buy handmade bags", 50 of 140 makers (CQ F29). */
+  function fakeClient() {
+    const calls: unknown[] = []
+    const client = {
+      rpc: async (fn: string, args: unknown) => {
+        calls.push({ fn, args })
+        return { data: [{ registry_id: 'th-ready-to-buy', videos: 140, maker: 50, noise: 0, labelled: 140 }], error: null }
+      },
+    } as unknown as SupabaseClient
+    return { client, calls }
+  }
+
+  it('is on for Sealand and off for Össur and any tenant not listed', () => {
+    expect(makerRuleEnabled(SEALAND_CLIENT_ID)).toBe(true)
+    expect(makerRuleEnabled(OSSUR_CLIENT_ID)).toBe(false)
+    expect(makerRuleEnabled('00000000-0000-4000-8000-000000000000')).toBe(false)
+  })
+
+  it('never asks MF1 for a tenant without a rule, which keeps its list at "not yet marked"', async () => {
+    const { client, calls } = fakeClient()
+    const shares = await loadMakerShares(client, OSSUR_CLIENT_ID, SEP, 'run-0913')
+    expect(shares).toBeNull()
+    expect(calls).toEqual([])
+    const c = buildCategory({
+      audience: INDUSTRY_AUDIENCE, axis: [AUG, SEP], month: SEP, prevMonth: AUG, series: [], kindRows: null, statsRows: null,
+      panel: null, perAudience: new Map(), recordFrom: AUG, attentionVerdict: null, dormant: [], thin: false,
+      levelSeries: levelSeries(), makerShares: shares,
+    })
+    expect(c.levels?.every((l) => l.makerShare === null)).toBe(true)
+  })
+
+  it('reads the shares for a tenant with a rule', async () => {
+    const { client, calls } = fakeClient()
+    const shares = await loadMakerShares(client, SEALAND_CLIENT_ID, SEP, 'run-0920')
+    expect(calls).toEqual([{ fn: 'theme_maker_shares', args: { p_client: SEALAND_CLIENT_ID, p_month: SEP, p_run: 'run-0920' } }])
+    expect(shares?.get('th-ready-to-buy')).toBeCloseTo(50 / 140)
   })
 })
 
