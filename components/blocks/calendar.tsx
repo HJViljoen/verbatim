@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import type { BlockContext, RenderMode } from '@/lib/blocks/types'
 import { CalendarLine } from '@/components/charts/calendar-line'
 import type { CalendarBand, CalendarRule, CalendarSeries } from '@/lib/charts/calendar'
-import { CAL_PAD_L, CAL_PAD_R, CAL_PAPER_K, chartId, chartReady, CHART_WAITING, drawsLine, figureLines, STATE_SHORT, undrawnLine } from '@/lib/charts/calendar'
+import { brokenStepLine, CAL_PAD_L, CAL_PAD_R, CAL_PAPER_K, chartId, chartReady, CHART_WAITING, drawsLine, figureLines, STATE_SHORT, undrawnLine } from '@/lib/charts/calendar'
 import { monthName } from '@/lib/format'
 import { EMAIL, FONT, tokenHex } from '@/lib/email/theme'
 
@@ -137,6 +137,13 @@ export function BlockCalendar({
     )
   }
 
+  // WHY A STEP IS NOT JOINED, IN AN EMAIL TOO (WP1.3 review fix): the app and
+  // paper arms print the newest refused step's sentence under the chart
+  // (`brokenStepLine`); an inbox is owed the same sentence under the picture,
+  // the figures and the table, or a reader sees months side by side with no
+  // word that the two were not read the same way.
+  const broken = brokenStepLine(chartReady(series) ? series.filter(drawsLine) : series)
+
   // TOO FEW MONTHS FOR A LINE, IN AN EMAIL TOO (2026-09-24). The app and
   // paper arms print the figures instead of a chart (`CalendarLine`); a
   // picture of those figures, or a month table of one or two columns, would
@@ -151,6 +158,7 @@ export function BlockCalendar({
           </div>
         ))}
         {undrawnLine(series) ? <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted, marginTop: 4 }}>{undrawnLine(series)}</div> : null}
+        {broken ? <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted, marginTop: 2 }}>{broken}</div> : null}
         <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted, marginTop: 2 }}>{CHART_WAITING}</div>
       </div>
     )
@@ -162,6 +170,7 @@ export function BlockCalendar({
     return (
       <div>
         <img src={src} alt={alt} width={544} style={{ display: 'block', width: '100%', maxWidth: 544, border: 0 }} />
+        {broken ? <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted, marginTop: 6 }}>{broken}</div> : null}
         {caption ? <div style={{ fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.muted, marginTop: 6 }}>{caption}</div> : null}
       </div>
     )
@@ -212,6 +221,11 @@ export function BlockCalendar({
         {undrawnLine(series) ? (
           <tr>
             <td colSpan={months.length + 1} style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted, paddingTop: 6 }}>{undrawnLine(series)}</td>
+          </tr>
+        ) : null}
+        {broken ? (
+          <tr>
+            <td colSpan={months.length + 1} style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted, paddingTop: 6 }}>{broken}</td>
           </tr>
         ) : null}
         {caption ? (

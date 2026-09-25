@@ -66,6 +66,22 @@ describe('SU2 · the monthly line, under the month-pair rule', () => {
     expect(markupText(markup)).toContain(WHY)
   })
 
+  // AND IN AN EMAIL (WP1.3 review fix): the inbox gets the picture the runner
+  // rendered, or the month table when it rendered none. Neither draws a join,
+  // and both used to drop the sentence saying why the months are not compared.
+  it('says why in an email, under the picture and under the month table', () => {
+    const pair = pairOn(sealandJudge('2026-10-02T06:00:00.000Z'))
+    const data = judged(subjectsFixture(), (line) => refusedSteps(line.points.map((p) => p.month), (a, b) => pair(a, b, line.audience)))
+    const withImage = { ...ctx, image: () => 'cid:subjects-line' }
+    for (const c of [ctx, withImage]) {
+      const markup = render(subjectsLine.render(data, 'email', c))
+      assertCopyContract(markup)
+      expect(markupText(markup)).toContain(WHY)
+    }
+    expect(render(subjectsLine.render(data, 'email', withImage))).toContain('cid:subjects-line')
+    expect(markupText(render(subjectsLine.render(subjectsFixture(), 'email', ctx)))).not.toContain(WHY)
+  })
+
   it('a pane read before the rule draws as it was sent', () => {
     const markup = render(subjectsLine.render(subjectsFixture(), 'app', ctx))
     expect(markup).toContain('<polyline')
