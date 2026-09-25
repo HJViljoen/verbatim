@@ -1206,6 +1206,6 @@ describe('fillingNote', () => {
   })
 
   it('says nothing was read, where nothing was', () => {
-    expect(fillingNote({ ...base, videos: null })).toContain('nothing read into this month yet')
+    expect(fillingNote({ ...base, videos: null })).toContain('nothing read into September yet')
   })
 })

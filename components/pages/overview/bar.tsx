@@ -28,9 +28,24 @@ import { longMonth, sentLineForToken } from '@/lib/pages/overview'
  * period key for anything (AGENTS.md). It is printed, because a reader needs to
  * know how many times we looked; it is not a figure a model may cite.
  */
+/**
+ * The tile's title, by the state of the month it reads (market-first WP1.2).
+ *
+ * NOT "THIS MONTH". From decision A every page reads the month that has just
+ * ended for the first half of the next, so on 1 to 15 October this tile reads
+ * September; "This month so far" above "September, ended" claimed a month the
+ * page no longer reads. "The month so far" while it has days left in it,
+ * "The month" once it has none: the month's name is the stat's, beneath.
+ */
+export function overviewBarTitle(data: Pick<OverviewData, 'bar'>): string {
+  return data.bar.daysIn != null ? 'The month so far' : 'The month'
+}
+
 export const overviewBar: Block<OverviewData> = {
   key: 'overview.bar',
-  title: 'This month so far',
+  // The registry's name for the tile, true in every state; the drawn title is
+  // `overviewBarTitle`'s.
+  title: 'The month',
 
   render(data, mode = 'app', ctx) {
     void ctx
@@ -44,7 +59,7 @@ export const overviewBar: Block<OverviewData> = {
     const sentLine = sentLineForToken(data.sent, 'month_videos', b.videos)
     if (mode === 'email') {
       return (
-        <BlockFrame title={overviewBar.title} mode={mode} meta={meta}>
+        <BlockFrame title={overviewBarTitle(data)} mode={mode} meta={meta}>
           <div style={{ fontFamily: FONT.sans, fontSize: 13, color: EMAIL.ink }}>{b.line}</div>
           <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 }}>{b.counter}</div>
           {b.updateDates.length > 0 ? (
@@ -62,7 +77,7 @@ export const overviewBar: Block<OverviewData> = {
     // the print sheet keeps every stat.
     const paper = mode === 'print'
     return (
-      <BlockFrame title={overviewBar.title} mode={mode} meta={paper ? meta : undefined}>
+      <BlockFrame title={overviewBarTitle(data)} mode={mode} meta={paper ? meta : undefined}>
         <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
           {paper ? (
             <BlockStat
@@ -85,7 +100,7 @@ export const overviewBar: Block<OverviewData> = {
               value={fmtInt(b.updates)}
               unit={b.updates === 1 ? 'update' : 'updates'}
               mode={mode}
-              base={b.updateDates.join(' · ') || 'none yet this month'}
+              base={b.updateDates.join(' · ') || `none yet in ${longMonth(b.month)}`}
             />
           ) : null}
         </div>
@@ -109,6 +124,6 @@ export const overviewBar: Block<OverviewData> = {
   },
 
   emptyState(data) {
-    return data.bar.videos == null ? 'Nothing has been read into this month yet.' : null
+    return data.bar.videos == null ? `Nothing has been read into ${longMonth(data.bar.month)} yet.` : null
   },
 }

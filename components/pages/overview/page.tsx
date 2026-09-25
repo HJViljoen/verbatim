@@ -56,9 +56,11 @@ const renderables: Record<string, Renderable<OverviewData>> = Object.fromEntries
  * nothing — Overview has no per-item detail pane to append, which is what that
  * variant is for on Competitive and Market.
  */
-function overviewSlides(_data: OverviewData, _variant: PrintVariant): Slide[] {
+function overviewSlides(data: OverviewData, _variant: PrintVariant): Slide[] {
   return [
-    { title: 'This month’s reading', keys: ['overview.bar', 'overview.sentence', 'overview.subjects'], layout: 'grid' },
+    // THE MONTH BY NAME, NOT "THIS MONTH" (market-first WP1.2): on 1 to 15
+    // October the sheet is September's, printed in October.
+    { title: `The ${longMonth(data.month)} reading`, keys: ['overview.bar', 'overview.sentence', 'overview.subjects'], layout: 'grid' },
     { title: 'The category and the rivals', keys: ['overview.category', 'overview.rivals'], layout: 'grid' },
     { title: 'What we are doing', keys: ['overview.moves'], layout: 'grid' },
   ]

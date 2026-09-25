@@ -762,7 +762,9 @@ export function fillingLine(input: FillingLineInput): string {
     parts.push(`${name}, ${input.daysIn} ${input.daysIn === 1 ? 'day' : 'days'} in`)
   }
   parts.push(`${fmtInt(input.updates)} ${input.updates === 1 ? 'update' : 'updates'}`)
-  if (input.videos == null) parts.push('nothing read into this month yet')
+  // The line opens with the month's name: "this month" would name the wrong
+  // one on 1 to 15 October, when the month read has ended (WP1.2).
+  if (input.videos == null) parts.push('nothing read into it yet')
   else {
     parts.push(`${fmtInt(input.videos)} ${input.videos === 1 ? 'video' : 'videos'}`)
     // NOT "of an expected ~N". The design writes the median as a projection,
@@ -805,7 +807,7 @@ export function fillingLine(input: FillingLineInput): string {
  */
 export function fillingNote(input: FillingLineInput): string | null {
   const parts: string[] = []
-  if (input.videos == null) parts.push('nothing read into this month yet')
+  if (input.videos == null) parts.push(`nothing read into ${longMonth(input.month)} yet`)
   else if (input.expected != null && input.expected > 0) parts.push(`trailing median ${fmtInt(Math.round(input.expected))}`)
   // THE ABSENT COMPARISON IS STILL NAMED. The tile draws "last month at this
   // point" as a stat only where the comparison EXISTS — an em dash under it
