@@ -12,6 +12,7 @@ import { isMissingSubjects, type SubjectWindowReading } from '../subjects/types'
 import { loadActiveSubjects } from '../subjects/membership'
 import { INDUSTRY_AUDIENCE } from '../rivals'
 import type { Scope } from '../renderables/types'
+import { loadDeliveredRuns, readingViewFrom } from '../reading/reading-view'
 import {
   firstQuarterVerdictMonth,
   previousQuarter,
@@ -93,8 +94,10 @@ export interface QuarterlyCardInput {
   /** Monthly readings behind the tenant, on Overview's own rule: months of the
    *  GATHERED era carrying a denominator row. */
   readings: number
-  /** The month the card is read in (`monthStartOf(readingAt)`) — what
-   *  `firstQuarterVerdictMonth` counts forward from. */
+  /** The month the card is read in — the reading month every page reads
+   *  (market-first decision A, `readingMonthFor`), no longer the calendar
+   *  month of the clock — and what `firstQuarterVerdictMonth` counts forward
+   *  from. */
   readingMonth?: string | null
   href?: string
 }
@@ -280,7 +283,7 @@ export async function loadQuarterlyCard(scope: Scope): Promise<QuarterlyCard | n
     subjectsBefore,
     monthsInQuarter: era.monthsInQuarter,
     readings: era.readings,
-    readingMonth: monthStartOf(readingAt),
+    readingMonth: era.readingMonth ?? monthStartOf(readingAt),
   })
 }
 
@@ -317,14 +320,19 @@ const nextDay = (day: string): string => {
  * hold every row at `baseline_forming` on a workspace whose artefact draws
  * banded verdicts. The series therefore runs to the month the reading is
  * taken in, which is Overview's `month` (`lib/pages/overview.ts`).
+ *
+ * AND OVERVIEW'S MONTH IS NOW THE READING MONTH (market-first decision A). On
+ * 1–15 October Overview reads September, so the card counts to September too:
+ * the series is still read to the clock's month (the rule needs to see whether
+ * October has a row yet), and the count stops at the month the pages read.
  */
 async function readEra(
   admin: SupabaseClient,
   clientId: string,
   quarter: Quarter,
   readingAt: string,
-): Promise<{ readings: number; monthsInQuarter: { month: string; videos: number | null; backRead: boolean }[] }> {
-  const empty = { readings: 0, monthsInQuarter: [] as { month: string; videos: number | null; backRead: boolean }[] }
+): Promise<{ readings: number; readingMonth: string | null; monthsInQuarter: { month: string; videos: number | null; backRead: boolean }[] }> {
+  const empty = { readings: 0, readingMonth: null, monthsInQuarter: [] as { month: string; videos: number | null; backRead: boolean }[] }
   try {
     const runRes = await admin
       .from('pipeline_runs')
@@ -335,8 +343,16 @@ async function readEra(
     const firstRun = (runRes.data?.[0] as { started_at?: string } | undefined)?.started_at ?? null
     if (!firstRun) return empty
     const firstRunMonth = monthStartOf(firstRun)
-    const set = await loadMonthSeries(admin, clientId, { from: firstRunMonth, to: eraTo(firstRunMonth, readingAt) })
-    return { readings: countReadings(set.denominators, firstRunMonth), monthsInQuarter: quarterMonths(set.denominators, quarter) }
+    const [set, runs] = await Promise.all([
+      loadMonthSeries(admin, clientId, { from: firstRunMonth, to: eraTo(firstRunMonth, readingAt) }),
+      loadDeliveredRuns(admin, clientId),
+    ])
+    const readingMonth = readingViewFrom({ now: readingAt, runs, denominators: set.denominators }).reading.month
+    return {
+      readings: countReadings(set.denominators, firstRunMonth, readingMonth),
+      readingMonth,
+      monthsInQuarter: quarterMonths(set.denominators, quarter),
+    }
   } catch (error) {
     if (!isMissingMonthlyReading(error)) console.error(`[reports-card] era: ${(error as { message?: string })?.message ?? String(error)}`)
     return empty
@@ -359,12 +375,13 @@ export function eraTo(firstRunMonth: string, readingAt: string): string {
 }
 
 /** Overview's rule, verbatim: months of the gathered era carrying a
- *  denominator row, pooled across audiences (a video sits in exactly one). */
-export function countReadings(denominators: readonly DenominatorPoint[], firstRunMonth: string): number {
+ *  denominator row, pooled across audiences (a video sits in exactly one), up
+ *  to the month the pages read (`to`, inclusive) where one is given. */
+export function countReadings(denominators: readonly DenominatorPoint[], firstRunMonth: string, to?: string | null): number {
   const months = new Set<string>()
   for (const d of denominators) {
     const m = monthStartOf(d.month)
-    if (m >= firstRunMonth) months.add(m)
+    if (m >= firstRunMonth && (to == null || m <= monthStartOf(to))) months.add(m)
   }
   return months.size
 }

@@ -20,6 +20,8 @@ import { directionWord, monthChange, thinMonth, type Direction, type SeriesPoint
 import { horizonWindow, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
 import { KIND_ORDER, kindShares, redditRead, kindChange, type KindShare, type RedditRead } from '../reading/kinds'
 import { freezeStateFor, isMissingMonthTable } from '../reading/monthly'
+import { MONTH_PARAM, readingAnchor, type ReadingMonth } from '../reading/reading-month'
+import { loadDeliveredRuns, loadReadingSchedule, readingViewFrom, type OtherMonth } from '../reading/reading-view'
 import { monthStartOf, nextMonth } from '../reading/month-key'
 import { isMissingKindMoodAttention } from '../reading/attention'
 import { moodChange, moodShares, type MoodShare } from '../reading/mood'
@@ -119,6 +121,8 @@ export type VoiceSurfaceParams = {
   /** The search box in VO3. */
   q?: string
   persona?: string
+  /** `?month=YYYY-MM`: another month with a row (market-first WP1.2). */
+  month?: string
 }
 
 /** One entry in the audience switch. */
@@ -469,6 +473,11 @@ export interface VoiceSurfaceData {
   month: string
   monthStatus: MonthStatus
   readingAt: string
+  /** The reading month (market-first decision A) and the bar's other month.
+   *  Always set by the loader; optional because a stored snapshot taken
+   *  before WP1.2 has neither. */
+  reading?: ReadingMonth
+  otherMonth?: OtherMonth | null
   horizon: Horizon
   window: HorizonWindow
   axis: string[]
@@ -918,8 +927,6 @@ export function audienceFigures(block: AudienceBlock): FigureTable {
 
 // ---- the reads ----------------------------------------------------------------
 
-type RunRow = { id: string; started_at: string }
-
 /** A stored month table, read straight. Null — never [] — when the migration
  *  that creates it has not been applied here (WP11's own helper, same shape). */
 async function readStoredMonths<T>(
@@ -1033,14 +1040,12 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   // Wave 1 is above the empty-state guard, so it holds only what the guard
   // needs and what the page cannot be shaped without. The rest starts on the
   // line after it.
-  const [clientRes, runsRaw, rivals] = await Promise.all([
+  const [clientRes, runsRaw, rivals, schedule] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
-    selectAll<RunRow>(() =>
-      supabase.from('pipeline_runs').select('id, started_at')
-        .eq('client_id', clientId).in('status', ['completed', 'partial'])
-        .order('started_at', { ascending: true }),
-    ),
+    // With their finish instants, for the reading month (market-first WP1.2).
+    loadDeliveredRuns(supabase, clientId),
     loadRivals(supabase, clientId),
+    loadReadingSchedule(supabase, clientId),
   ])
   const client = row<{ company_name: string | null }>(clientRes, 'voice.client')
   const brand = client?.company_name ?? 'Your brand'
@@ -1067,7 +1072,20 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     from: '2019-01-01', to: readingAt, updatesByMonth, firstRunMonth,
   })
   const started = sinceStart(history.denominators.map((d) => ({ month: d.month, videos: d.videos })))
-  const window = horizonWindow(horizon, readingAt, started.from)
+  const rivalAudiences = rivals.map((r) => rivalKey(r.name))
+  // THE READING MONTH (market-first decision A): the month that has just ended
+  // until the new one is half over with two updates, or `?month=`. The horizon
+  // is anchored on it, so `month` below is `reading.month`.
+  const view = readingViewFrom({
+    now: readingAt,
+    runs: runsRaw,
+    denominators: history.denominators,
+    rivalAudiences,
+    schedule,
+    explicit: params[MONTH_PARAM] ?? null,
+  })
+  const rm = view.reading
+  const window = horizonWindow(horizon, readingAnchor(rm), started.from)
   const axis = window.months
   const month = axis[axis.length - 1]
   // The page reads one month wider than it draws: "this month" is a one-month
@@ -1075,9 +1093,9 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   // the horizon says (WP11's rule, kept).
   const prevMonth = previousMonthOf(month)
   const readAxis = axis[0] <= prevMonth ? axis : [prevMonth, ...axis]
-  const monthStatus = freezeStateFor(month, readingAt)
+  // Frozen once an UPDATE has passed its freeze line, not the clock.
+  const monthStatus = freezeStateFor(month, rm.asAt ?? readingAt)
 
-  const rivalAudiences = rivals.map((r) => rivalKey(r.name))
   const audiences = [CLIENT_AUDIENCE, ...rivalAudiences, INDUSTRY_AUDIENCE]
   // `MonthSeriesSet.denominators` is typed `DenominatorPoint`, which does not
   // name `platform_mix` — but the rows are `select('*')` off
@@ -1411,6 +1429,8 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     month,
     monthStatus,
     readingAt,
+    reading: rm,
+    otherMonth: view.other,
     horizon,
     window,
     axis,

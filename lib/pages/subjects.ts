@@ -23,6 +23,8 @@ import { claimCounts, ledgerRows, type ClaimCounts } from '../market-tiles'
 import type { SayVsHearEntry } from '../pipeline/schemas'
 import { isMissingKindMoodAttention } from '../reading/attention'
 import { freezeStateFor, isMissingMonthTable } from '../reading/monthly'
+import { MONTH_PARAM, readingAnchor, type ReadingMonth } from '../reading/reading-month'
+import { loadDeliveredRuns, loadReadingSchedule, readingViewFrom, type OtherMonth } from '../reading/reading-view'
 import { monthStartOf, nextMonth } from '../reading/month-key'
 import { gapBetween, type Gap, type GapSide } from '../reading/gap'
 import { loadMonthSeries, type ReadingHandle } from '../reading/read'
@@ -434,6 +436,11 @@ export interface SubjectsData {
   month: string
   monthStatus: MonthStatus
   readingAt: string
+  /** The reading month (market-first decision A) and the bar's other month.
+   *  Always set by the loader; optional because a stored snapshot taken
+   *  before WP1.2 has neither. */
+  reading?: ReadingMonth
+  otherMonth?: OtherMonth | null
   horizon: Horizon
   axis: string[]
   /** The chart's own axis — the trailing twelve months, or from the tenant's
@@ -969,11 +976,6 @@ export function subjectNotes(notes: readonly MonthLabel[] | null | undefined): M
 
 // ---- the rows the loader reads -------------------------------------------------
 
-interface RunRow {
-  id: string
-  started_at: string
-}
-
 /** A stored `month_kind_readings` row, as the side builder takes it. Exported
  *  for the fixture — a block test has to be able to build one. */
 export type StoredKindRow = {
@@ -1436,16 +1438,14 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   // Wave 1 holds what the empty-state guard itself needs and what the page
   // cannot be shaped without; anything else starts on the line after the guard,
   // so a tenant that draws nothing pays for nothing.
-  const [clientRes, runsRaw, rivals, subjectRows, moveRows] = await Promise.all([
+  const [clientRes, runsRaw, rivals, subjectRows, moveRows, schedule] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
-    selectAll<RunRow>(() =>
-      supabase.from('pipeline_runs').select('id, started_at')
-        .eq('client_id', clientId).in('status', ['completed', 'partial'])
-        .order('started_at', { ascending: true }),
-    ),
+    // With their finish instants, for the reading month (market-first WP1.2).
+    loadDeliveredRuns(supabase, clientId),
     loadTrackedRivals(supabase, clientId),
     loadSubjectRows(supabase, clientId),
     loadSubjectMoves(supabase, clientId),
+    loadReadingSchedule(supabase, clientId),
   ])
   const brand = (clientRes.data as { company_name?: string | null } | null)?.company_name ?? 'Your brand'
   if (runsRaw.length === 0) return null
@@ -1491,19 +1491,32 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     firstRunMonth,
   })
   const started = sinceStart(history.denominators.map((d) => ({ month: d.month, videos: d.videos })))
-  const window = horizonWindow(horizon, readingAt, started.from)
+  // THE READING MONTH (market-first decision A): the month that has just ended
+  // until the new one is half over with two updates, or `?month=`. The horizon
+  // and the chart are anchored on it, so `month` below is `reading.month`.
+  const view = readingViewFrom({
+    now: readingAt,
+    runs: runsRaw,
+    denominators: history.denominators,
+    rivalAudiences: rivals.map((r) => rivalKey(r.name)),
+    schedule,
+    explicit: params[MONTH_PARAM] ?? null,
+  })
+  const rm = view.reading
+  const window = horizonWindow(horizon, readingAnchor(rm), started.from)
   const axis = window.months
   const month = axis[axis.length - 1]
   // The page reads one month wider than it draws: "this month" is a one-month
   // axis, and the comparison is the calendar's, not the horizon's (OV0's rule).
   const prevMonth = previousMonthOf(month)
   const readAxis = axis[0] <= prevMonth ? axis : [prevMonth, ...axis]
-  const monthStatus = freezeStateFor(month, readingAt)
+  // Frozen once an UPDATE has passed its freeze line, not the clock.
+  const monthStatus = freezeStateFor(month, rm.asAt ?? readingAt)
   // The chart's axis is its own (`chartMonths`). Where it reaches further back
   // than the read axis, the selected subject is read a second time over it —
   // for the chart alone — so the hero, the rail, the gap and the notes read
   // exactly the months they read before the chart was widened.
-  const chartAxis = chartMonths(readingAt, started.from)
+  const chartAxis = chartMonths(readingAnchor(rm), started.from)
   const chartSet = new Set(chartAxis)
   const onChart = (s: MonthSeries): MonthSeries =>
     ({ ...s, points: s.points.filter((p) => chartSet.has(monthStartOf(p.month))) })
@@ -1765,6 +1778,8 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     month,
     monthStatus,
     readingAt,
+    reading: rm,
+    otherMonth: view.other,
     horizon,
     axis,
     chartAxis,

@@ -8,6 +8,8 @@ import { fetchQuoteCitationsByAudience } from '../quotes'
 import { attentionTotals, type AttentionRow } from '../reading/attention'
 import { horizonWindow, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
 import { freezeStateFor, monthStartOf } from '../reading/monthly'
+import { readingAnchor, type ReadingMonth } from '../reading/reading-month'
+import { loadDeliveredRuns, loadReadingSchedule, readingViewFrom, type OtherMonth } from '../reading/reading-view'
 import { loadMonthSeries, type MonthSeriesSet, type ReadingHandle } from '../reading/read'
 import { methodLines, type MethodLines } from '../reading/method'
 import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordInputs } from '../reading/record'
@@ -58,7 +60,7 @@ import { row } from './read'
 // sentence on it is rival, because that is the word the rest of the product
 // uses and a page title is not a vocabulary change (design §3 CO).
 
-export type CompetitiveSurfaceParams = { vs?: string; horizon?: string; item?: string }
+export type CompetitiveSurfaceParams = { vs?: string; horizon?: string; item?: string; /** `?month=YYYY-MM` (market-first WP1.2). */ month?: string }
 
 /** Question rows drawn in full before the rest are counted. */
 export const QUESTIONS_SHOWN = 12
@@ -222,6 +224,11 @@ export interface CompetitiveSurfaceData {
   month: string
   monthStatus: MonthStatus
   readingAt: string
+  /** The reading month (market-first decision A) and the bar's other month.
+   *  Always set by the loader; optional because a stored snapshot taken
+   *  before WP1.2 has neither. */
+  reading?: ReadingMonth
+  otherMonth?: OtherMonth | null
   horizon: Horizon
   window: HorizonWindow
   rivals: RivalsBlock
@@ -532,12 +539,17 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
   // THE CHANGE LOG, THE ANALYSED COUNTS AND "ARE THERE SUBJECTS" JOIN WAVE 1
   // (WP23). None of the three depends on the axis, and each was awaited alone
   // on the critical path further down.
-  const [clientRes, rivals, subreddits, changes, subjectsNamed] = await Promise.all([
+  //
+  // THE RUNS AND THE SCHEDULE JOIN IT TOO (market-first WP1.2): the reading
+  // month is decided by the updates, and this page read none until now.
+  const [clientRes, rivals, subreddits, changes, subjectsNamed, runs, schedule] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     loadRivals(supabase, clientId),
     loadSubreddits(supabase, clientId),
     loadConfigChanges(reading.client, clientId),
     subjectsExist(supabase, clientId),
+    loadDeliveredRuns(supabase, clientId),
+    loadReadingSchedule(supabase, clientId),
   ])
   const analysedAhead = countAnalysedByRival(supabase, clientId, rivals.rivals)
   analysedAhead.catch(() => {})
@@ -548,10 +560,23 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
   // started" means (decision M) and therefore what every horizon's window is.
   const history = await loadMonthSeries(reading.client, clientId, { from: '2019-01-01', to: readingAt, updatesByMonth: {} })
   const started = sinceStart(history.denominators.map((d) => ({ month: d.month, videos: d.videos })))
-  const window = horizonWindow(horizon, readingAt, started.from)
+  // THE READING MONTH (market-first decision A): on 1–15 October this page
+  // reads September's content, not an October with nothing in it (GR F56
+  // measured an 86% drop here). The horizon is anchored on it, so `month` below
+  // is `reading.month`, and the month is frozen once an UPDATE passed its line.
+  const view = readingViewFrom({
+    now: readingAt,
+    runs,
+    denominators: history.denominators,
+    rivalAudiences: rivals.rivals.map((r) => rivalKey(r.name)),
+    schedule,
+    explicit: params.month ?? null,
+  })
+  const rm = view.reading
+  const window = horizonWindow(horizon, readingAnchor(rm), started.from)
   const axis = window.months
   const month = axis[axis.length - 1]
-  const monthStatus = freezeStateFor(month, readingAt)
+  const monthStatus = freezeStateFor(month, rm.asAt ?? readingAt)
   // THE COMPARISON IS THE CALENDAR'S, NOT THE HORIZON'S — the Overview's own
   // correction: taking the previous month off the axis left the default reading
   // with no month-on-month comparison at all.
@@ -674,6 +699,8 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
     month,
     monthStatus,
     readingAt,
+    reading: rm,
+    otherMonth: view.other,
     horizon,
     window,
     rivals: {

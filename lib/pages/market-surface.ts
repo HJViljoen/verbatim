@@ -17,6 +17,8 @@ import { loadMonthSeries, type ReadingHandle } from '../reading/read'
 import type { Verdict } from '../reading/verdicts'
 import type { Quote } from '../renderables/types'
 import { freezeStateFor, monthStartOf } from '../reading/monthly'
+import { type ReadingMonth } from '../reading/reading-month'
+import { loadDeliveredRuns, loadReadingSchedule, readingViewFrom, type OtherMonth } from '../reading/reading-view'
 import type { MonthStatus } from '../reading/types'
 import type { Scope } from '../renderables/types'
 import { selectAll } from '../supabase-admin'
@@ -65,7 +67,7 @@ import { fetchThemedRunId } from './themed-run'
 /** The URL parameters this surface honours. `?rec=` is the legacy deep link
  *  four sent emails and every digest until WP17 still carry; it selects a
  *  LINEAGE here, resolved from the recommendation id it names. */
-export type MarketSurfaceParams = { rec?: string; item?: string }
+export type MarketSurfaceParams = { rec?: string; item?: string; /** `?month=YYYY-MM` (market-first WP1.2). */ month?: string }
 
 /** How many ledger rows are drawn before the rest are counted. 64 rows of
  *  advice nobody has acted on is a filing cabinet, not a page; the oldest are
@@ -309,6 +311,11 @@ export interface MarketSurfaceData {
   month: string
   monthStatus: MonthStatus
   readingAt: string
+  /** The reading month (market-first decision A) and the bar's other month.
+   *  Always set by the loader; optional because a stored snapshot taken
+   *  before WP1.2 has neither. */
+  reading?: ReadingMonth
+  otherMonth?: OtherMonth | null
   masthead: string
   conclusions: ConclusionsBlock
   advice: AdviceBlock
@@ -742,7 +749,6 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   // THE THEMED RUN JOINS WAVE 1 (WP23). It waits on the running-run ids and on
   // nothing else, and was a serial wait beside the one Promise.all this loader
   // had. The record starts below, as soon as the empty state is ruled out.
-  const month = monthStartOf(readingAt)
   const [clientRes, latestRunRes, themedRunId] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     supabase.from('pipeline_runs').select('id, started_at')
@@ -757,6 +763,27 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   const latestRun = row<{ id: string; started_at: string }>(latestRunRes, 'market-surface.latestRun')
   if (!latestRun) return null
 
+  // THE READING MONTH (market-first decision A). This page read the calendar
+  // month the clock was in (`monthStartOf(new Date())`), so on 1 October its
+  // card and its record were an October with nothing in it. It now reads the
+  // month every other page reads: the runs, the schedule and the denominator
+  // history (the same whole-history ask the reading pages make, memoised),
+  // after the empty state so a tenant with nothing delivered pays for none.
+  const [runs, schedule, history] = await Promise.all([
+    loadDeliveredRuns(supabase, clientId),
+    loadReadingSchedule(supabase, clientId),
+    loadMonthSeries(reading.client, clientId, { from: '2019-01-01', to: readingAt, updatesByMonth: {} }),
+  ])
+  const view = readingViewFrom({
+    now: readingAt,
+    runs,
+    denominators: history.denominators,
+    schedule,
+    explicit: params.month ?? null,
+  })
+  const rm = view.reading
+  const month = rm.month
+
   // AFTER THE EMPTY STATE, NOT BEFORE IT. The record's window is this month
   // whatever the page finds, so it can start as soon as the page is going to be
   // drawn at all — but not sooner: a tenant with no delivered update returns
@@ -768,7 +795,8 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   recordAhead.catch(() => {})
 
   const runId = latestRun.id
-  const monthStatus = freezeStateFor(month, readingAt)
+  // Frozen once an UPDATE has passed its freeze line, not the clock.
+  const monthStatus = freezeStateFor(month, rm.asAt ?? readingAt)
 
   const [insightRes, recRows, decisions, summaryRes, bucketRows, moves, subjects, themeLabels, corpusVideos] = await Promise.all([
     supabase.from('market_insights')
@@ -1081,6 +1109,8 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
     month,
     monthStatus,
     readingAt,
+    reading: rm,
+    otherMonth: view.other,
     masthead: MOVES_MASTHEAD,
     conclusions,
     advice,
