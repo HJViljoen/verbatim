@@ -273,3 +273,16 @@ describe('Overview as an exportable page', () => {
     }
   })
 })
+
+describe('the exported slide header (market-first WP1.2)', () => {
+  it('says "as at" the last update, never the clock', () => {
+    const data = overviewFixture()
+    expect(overviewPage.printContext?.(data)).toBe('Sealand · September · as at the 10 Sep update')
+    expect(overviewPage.printContext?.(data)).not.toContain('18 Sep')
+  })
+
+  it('a snapshot stored before the reading month keeps the words it was built with', () => {
+    const { reading: _reading, ...stored } = overviewFixture()
+    expect(overviewPage.printContext?.(stored as OverviewData)).toBe('Sealand · September · as at Fri 18 Sep')
+  })
+})

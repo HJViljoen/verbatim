@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { barLine, monthWords } from './reading-month'
-import { readingViewFrom, updateInstant, type DeliveredRun, type ReadingDenominator } from './reading-view'
+import { asAtOf, marketMonths, monthlyMonthFor, readingViewFrom, updateInstant, type DeliveredRun, type ReadingDenominator } from './reading-view'
 
 // ---- Fixtures: Sealand's real rows ------------------------------------------------
 //
@@ -232,5 +232,37 @@ describe('updateInstant', () => {
       schedule: SUNDAY,
     })
     expect(barLine(v.reading)).toBe('as at the 24 Sep update · next update Sun 27 Sep')
+  })
+})
+
+describe('asAtOf', () => {
+  it('agrees with the reading month’s "as at" on every clock, and is never the clock', () => {
+    const runs = [...SEALAND_RUNS, ...SUNDAYS]
+    for (const now of ['2026-09-24T18:00:00.000Z', '2026-09-27T07:00:00.000Z', '2026-10-02T06:00:00.000Z', '2026-10-11T12:00:00.000Z']) {
+      const v = readingViewFrom({ now, runs, denominators: SEALAND_ROWS })
+      expect(asAtOf(runs, now)).toBe(v.reading.asAt)
+      expect(asAtOf(runs, now)).not.toBe(now)
+    }
+    expect(asAtOf(runs, '2026-06-01T00:00:00.000Z')).toBeNull()
+  })
+})
+
+describe('monthlyMonthFor: the monthly reads the month that has just ended', () => {
+  it('a monthly built at a 4 Oct clock is September’s, not October’s', () => {
+    expect(monthlyMonthFor('2026-10-04T08:30:00.000Z', [...SEALAND_ROWS, OCTOBER_ROW])).toBe('2026-09')
+  })
+
+  it('on 12 Oct, the day it is sent, it is still September', () => {
+    expect(monthlyMonthFor('2026-10-12T09:00:00.000Z', [...SEALAND_ROWS, OCTOBER_ROW])).toBe('2026-09')
+  })
+
+  it('a month the caller names wins', () => {
+    expect(monthlyMonthFor('2026-10-04T08:30:00.000Z', SEALAND_ROWS, '2026-08')).toBe('2026-08')
+    expect(monthlyMonthFor('2026-10-04T08:30:00.000Z', SEALAND_ROWS, 'not a month')).toBe('2026-09')
+  })
+
+  it('a month holding only the client’s own posts is not a month with rows', () => {
+    expect(marketMonths([row('2026-10-01', 'client', 1), ...SEALAND_ROWS]))
+      .toEqual(['2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01'])
   })
 })

@@ -6,7 +6,7 @@ import { selectAll } from '../supabase-admin'
 import { marketAudiences, pooledDenominators } from './market'
 import { memoRead } from './memo'
 import { monthStartOf } from './month-key'
-import { readingMonthFor, scheduledUpdateAfter, type ReadingMonth } from './reading-month'
+import { closedMonthFor, parseMonthParam, readingMonthFor, scheduledUpdateAfter, type ReadingMonth } from './reading-month'
 import type { MonthOrigin, MonthStatus } from './types'
 
 // The reading month, from what a page loader holds (market-first WP1.2).
@@ -79,6 +79,21 @@ export interface ReadingViewInput {
 /** A run's finish instant: `completed_at`, else `started_at`. */
 export const updateInstant = (r: DeliveredRun): string => r.completed_at ?? r.started_at
 
+/** "As at": the finish instant of the latest update on or before `now`, or
+ *  null when none has finished yet. The same answer `ReadingMonth.asAt` gives,
+ *  for a caller that needs it before the month is decided. */
+export function asAtOf(runs: readonly DeliveredRun[], now: string): string | null {
+  const nowMs = Date.parse(now)
+  let best: { iso: string; ms: number } | null = null
+  for (const r of runs) {
+    const iso = updateInstant(r)
+    const ms = Date.parse(iso)
+    if (Number.isNaN(ms) || ms > nowMs) continue
+    if (!best || ms > best.ms) best = { iso, ms }
+  }
+  return best?.iso ?? null
+}
+
 /**
  * The reading month and the selector's other month, from the rows a loader
  * holds.
@@ -136,6 +151,31 @@ export function readingViewFrom(input: ReadingViewInput): ReadingView {
     other = { month: reading.current.month, isDefault: false }
   }
   return { reading, other }
+}
+
+/** The months the market has a row for, oldest first (the client's own posts
+ *  are not the market). */
+export function marketMonths(
+  denominators: readonly ReadingDenominator[],
+  rivalAudiences?: readonly string[] | null,
+): string[] {
+  const rivals = rivalAudiences ?? [...new Set(denominators.map((d) => d.audience).filter(isRivalAudience))]
+  const pooled = pooledDenominators(
+    denominators.map((d) => ({ month: d.month, audience: d.audience, videos: d.videos, comments: d.comments ?? 0 })),
+    rivals,
+  )
+  return [...pooled.keys()]
+}
+
+/**
+ * The month the monthly report reads (decision A): the one a caller names, or
+ * the month that has just ended, never the month it is built in. Built on
+ * 4 October it is September's report, not four days of October's
+ * (`closedMonthFor`). Returned as the `?month=` value the page loaders take.
+ */
+export function monthlyMonthFor(now: string, denominators: readonly ReadingDenominator[], explicit?: string | null): string {
+  const named = parseMonthParam(explicit)
+  return (named ?? closedMonthFor(now, marketMonths(denominators))).slice(0, 7)
 }
 
 // ---- The two reads ------------------------------------------------------------

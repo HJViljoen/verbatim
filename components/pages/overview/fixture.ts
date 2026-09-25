@@ -15,6 +15,7 @@ import {
 import { groundingFor } from '@/lib/reading/afterwards'
 import { methodFixture, methodRecordFixture, methodRefusedFixture, recordBandFixture } from '@/lib/test/method-fixture'
 import { howSoundLine, soundFigures } from '@/lib/reading/record'
+import { sealandReading } from '@/lib/test/reading-fixture'
 
 /** The two refusals the page's own verdicts carry, as TOKENS. */
 const OV_RECORD_INPUTS = () =>
@@ -425,6 +426,10 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
     month: REAL_MONTH,
     monthStatus: 'filling',
     readingAt: NOW,
+    // Sealand's own calendar at the fixture's clock: September so far, as at
+    // the 10 Sep update, August one click away (lib/test/reading-fixture.ts).
+    reading: sealandReading(NOW),
+    otherMonth: { month: '2026-08-01', isDefault: false },
     horizon: 'this_month',
     window,
     axis: window.months,

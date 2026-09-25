@@ -70,12 +70,12 @@ export const overviewBar: Block<OverviewData> = {
               unit="videos"
               mode={mode}
               size="lg"
-              base={`${longMonth(b.month)}${b.daysIn == null ? ', complete' : `, ${b.daysIn} ${b.daysIn === 1 ? 'day' : 'days'} in`}`}
+              base={`${longMonth(b.month)}${b.daysIn == null ? `, ${b.status === 'frozen' ? 'final' : 'ended'}` : `, ${b.daysIn} ${b.daysIn === 1 ? 'day' : 'days'} in`}`}
             />
           ) : b.daysIn != null ? (
             <BlockStat value={fmtInt(b.daysIn)} unit={b.daysIn === 1 ? 'day in' : 'days in'} mode={mode} size="lg" base={longMonth(b.month)} />
           ) : (
-            <BlockStat value={longMonth(b.month)} unit="complete" mode={mode} size="lg" />
+            <BlockStat value={longMonth(b.month)} unit={b.status === 'frozen' ? 'final' : 'ended'} mode={mode} size="lg" />
           )}
           {paper && b.atLastMonthKnown && b.atLastMonth != null ? (
             <BlockStat value={fmtInt(b.atLastMonth)} unit="videos" mode={mode} base="last month at this point" />

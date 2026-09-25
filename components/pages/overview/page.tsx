@@ -1,7 +1,7 @@
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { appBaseUrl } from '@/lib/site'
-import { weekdayDate } from '@/lib/format'
+import { shortDate, weekdayDate } from '@/lib/format'
 import { loadOverview, longMonth, type OverviewData } from '@/lib/pages/overview'
 import type { PageModule, PrintVariant, Renderable, Slide } from '@/lib/renderables/types'
 import { OVERVIEW_BLOCKS } from './index'
@@ -70,5 +70,10 @@ export const overviewPage: PageModule<OverviewData> = {
   slides: overviewSlides,
   renderables,
   snapshotTitle: (d) => `Overview · ${d.brand} · ${longMonth(d.month)}`,
-  printContext: (d) => `${d.brand} · ${longMonth(d.month)} · as at ${weekdayDate(d.readingAt)}`,
+  // "AS AT" IS THE LAST UPDATE, NEVER THE CLOCK (market-first WP1.2). A
+  // snapshot taken before the reading month existed carries no `reading`, and
+  // keeps the words it was built with.
+  printContext: (d) => d.reading?.asAt
+    ? `${d.brand} · ${longMonth(d.month)} · as at the ${shortDate(d.reading.asAt)} update`
+    : `${d.brand} · ${longMonth(d.month)} · as at ${weekdayDate(d.readingAt)}`,
 }

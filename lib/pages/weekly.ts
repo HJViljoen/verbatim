@@ -442,7 +442,11 @@ export async function loadWeekly(scope: Scope): Promise<WeeklyData | null> {
   const { clientId } = scope
   const readingAt = new Date().toISOString()
 
-  const overview = await loadOverview(scope)
+  // THE CALENDAR MONTH, PINNED (market-first WP1.2). Every page now reads the
+  // reading month (decision A), which on 1–15 October is September; the weekly
+  // is unchanged until WP3.7 and its preview is the parity gate for deploys 1
+  // and 2, so it keeps reading the month the clock is in, row or no row.
+  const overview = await loadOverview(scope, { pinCalendarMonth: true })
   if (!overview) return null
 
   const month = overview.month

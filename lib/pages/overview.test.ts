@@ -146,10 +146,14 @@ describe('fillingLine', () => {
     expect(line).not.toContain(': 0')
   })
 
-  it('says nothing about last month once the month is complete', () => {
-    const line = fillingLine({ ...base, status: 'frozen', daysIn: null })
-    expect(line).toContain('September, complete')
-    expect(line).not.toContain('last month at this point')
+  it('says nothing about last month once the month has ended, and never calls it complete', () => {
+    const frozen = fillingLine({ ...base, status: 'frozen', daysIn: null })
+    expect(frozen).toContain('September, final')
+    expect(frozen).not.toContain('last month at this point')
+    // Ended and still filling: the month every page reads on 1–15 October.
+    const ended = fillingLine({ ...base, status: 'filling', daysIn: null })
+    expect(ended).toContain('September, ended')
+    for (const line of [frozen, ended]) expect(line).not.toContain('complete')
   })
 
   it('names a thin month and says the changes are suppressed', () => {
