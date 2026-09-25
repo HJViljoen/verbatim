@@ -13,8 +13,11 @@ import { rows } from './read'
 // update that actually produced themes. Every other read stays on the latest
 // update.
 //
-// `themes` is fully replaced each run and its rows carry the run's identity,
-// so the presence of a row IS the evidence that the run themed.
+// Each run replaces only its own `themes` rows (lib/pipeline/themes.ts deletes
+// by the run's id before it writes), so every themed run's rows stay, and they
+// carry the run's identity: the presence of a row IS the evidence that the run
+// themed. This week's "themed update before this one" (lib/pages/week.ts,
+// `previousThemedRegime`) depends on the older runs' rows staying.
 
 export interface ThemedRunRow {
   run_id: string | null

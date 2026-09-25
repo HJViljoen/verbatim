@@ -8,8 +8,15 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import type { ConclusionRow, MarketSurfaceData } from '@/lib/pages/market-surface'
 
-// MK1 · What we concluded this month (design §3 MK1; ported to the artboard,
-// Block D wave 2).
+// MK1 · What we concluded (design §3 MK1; ported to the artboard, Block D
+// wave 2).
+//
+// NOT "THIS MONTH" (market-first WP1.9). The conclusions are an update's, read
+// over everything to date: on 2 Oct the title still said "this month" about
+// the 20 Sep update (GR F33). The title is the preview's, "What we concluded",
+// and the update's date rides as the block's row tag at the head of the cards,
+// "Read over everything to date, concluded with the update of {date}", never
+// as header meta or a footer note (the 25 Sep rulings, plan §2.6 Y5).
 //
 // THE ARTBOARD'S SHAPE IS TWO ABREAST, not one stacked column. Each conclusion
 // is a tinted inner block carrying its tier chip and its count on one line, the
@@ -148,6 +155,11 @@ function Row({ row, mode, appUrl, corpus }: { row: ConclusionRow; mode: RenderMo
   )
 }
 
+/** The row tag at the head of the conclusions: what they are read over, and
+ *  the update that reached them (market-first WP1.9, plan §2.6 Y5). */
+export const concludedTag = (concludedOn: string): string =>
+  `Read over everything to date, concluded with the update of ${shortDate(concludedOn)}`
+
 /** The artboard's footer control, counted by name — over EVERY row below the
  *  bar (`ConclusionsBlock.belowBar`), not over the ones this block happened to
  *  draw. `rows` is capped at `CONCLUSIONS_SHOWN`, so counting the drawn ones
@@ -160,7 +172,7 @@ const belowBarShown = (drawn: number, all: number): string | null =>
 
 export const marketConclusions: Block<MarketSurfaceData> = {
   key: 'market.conclusions',
-  title: 'What we concluded this month',
+  title: 'What we concluded',
   question: 'What has the conversation told us?',
 
   render(data, mode = 'app', ctx) {
@@ -174,8 +186,10 @@ export const marketConclusions: Block<MarketSurfaceData> = {
     const row = (r: ConclusionRow) => <Row key={r.id} row={r} mode={mode} appUrl={ctx.appUrl} corpus={c.corpusVideos} />
     // THE RUN'S OWN DATE, WEARING THE WORD "UPDATE" (D9). It is the one thing
     // on this block dated by delivery rather than by a comment, and a reader
-    // has to be able to tell it from the month in the page bar.
-    const concluded = c.concludedOn ? `concluded with the update of ${shortDate(c.concludedOn)}` : undefined
+    // has to be able to tell it from the month in the page bar. A row tag at
+    // the head of the cards since WP1.9, not the footer's right-hand note: a
+    // footer holds links only (the 25 Sep rulings).
+    const concluded = c.concludedOn && !empty ? concludedTag(c.concludedOn) : null
 
     return (
       <BlockFrame
@@ -213,9 +227,16 @@ export const marketConclusions: Block<MarketSurfaceData> = {
               </details>
             )
             : belowBarWord(c.belowBar)}
-        footerNote={concluded}
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
+        {concluded ? (
+          <p
+            className={email ? undefined : 'm-0 font-mono text-[10.5px] leading-[1.35] text-muted-foreground'}
+            style={email ? { fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.muted, margin: '0 0 4px' } : undefined}
+          >
+            {concluded}
+          </p>
+        ) : null}
         <div className={email ? undefined : 'grid min-w-0 grid-cols-1 gap-2.5 xl:grid-cols-2'}>
           {above.map(row)}
           {/* PAPER AND EMAIL HAVE NOTHING TO PRESS, so the rows below the bar

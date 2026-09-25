@@ -11,7 +11,7 @@ import { pageModule } from '@/components/pages/registry'
 import type { AdviceRow } from '@/lib/pages/market-surface'
 import { MARKET_BLOCKS, MOVES_STACKS, MarketSurfacePage, drawnOnMarket, startClasses, tileGrid } from './index'
 import { marketConclusions } from './conclusions'
-import { marketAdvice } from './advice'
+import { CURRENT_TAG, marketAdvice } from './advice'
 import { marketCard } from './card'
 import { marketMoves } from './moves'
 import { marketPlans } from './plans'
@@ -289,6 +289,26 @@ describe('MK1 · what we concluded', () => {
     expect(text).toContain('concluded with the update of 27 Sep')
   })
 
+  it('never says "this month": the title is the preview’s, and the update rides as a row tag (market-first WP1.9)', () => {
+    expect(marketConclusions.title).toBe('What we concluded')
+    for (const mode of ['app', 'print', 'email'] as const) {
+      const markup = render(marketConclusions.render(marketFixture(), mode, ctx))
+      const text = renderText(markup)
+      expect(text).not.toMatch(/this month/i)
+      // At the head of the cards, before the first conclusion, not a footer note.
+      const tag = 'Read over everything to date, concluded with the update of 27 Sep'
+      expect(text).toContain(tag)
+      expect(text.indexOf(tag)).toBeLessThan(text.indexOf('Comfort and personalisation remain the real proof of value'))
+      assertCopyContract(markup)
+    }
+  })
+
+  it('draws no tag where there is nothing concluded', () => {
+    const base = marketFixture()
+    const data = { ...base, conclusions: { ...base.conclusions, rows: [], empty: 'Conclusions land with your next update.' } }
+    expect(renderText(marketConclusions.render(data, 'app', ctx))).not.toContain('concluded with the update')
+  })
+
   it('links each conclusion’s themes into Voice by slug', () => {
     const markup = render(marketConclusions.render(marketFixture(), 'app', ctx))
     expect(markup).toContain('/dashboard/voice?themes=comfort_and_fit')
@@ -423,7 +443,10 @@ describe('MK2 · the ledger', () => {
     // The comment is its own node with its own ref — never a span inside the
     // scrubbed argument, because a number in a quotation is still refused.
     expect(markup).toContain('Wat gebeur as')
-    expect(renderText(markup)).toContain('Repair and warranty questions arrive as questions')
+    // The first row with an argument, in the ledger's order since WP1.9: the
+    // current recommendation has none here, so the row after it opens.
+    expect(renderText(markup)).toContain('Nobody in the category shows the repair path on camera')
+    expect(renderText(markup)).not.toContain('Repair and warranty questions arrive as questions')
   })
 
   it('prints the status word on a row still marked New, where the parked page prints nothing', () => {
@@ -905,5 +928,46 @@ describe('absences are lines, not cards (sweep 2026-09-24)', () => {
     const markup = render(<MarketSurfacePage data={bare} />)
     expect(markup).not.toContain('Plans re-checked')
     expect(markup).not.toContain('Say vs hear')
+  })
+})
+
+// ---- market-first WP1.9: the current recommendation first ------------------------
+
+describe('MK2 · the current recommendation first (market-first WP1.9)', () => {
+  it('tags the first row "current recommendation", and no other, in every mode', () => {
+    const data = marketFixture()
+    expect(data.advice.rows[0].lineageId).toBe(data.advice.current)
+    for (const mode of ['app', 'print', 'email'] as const) {
+      const text = renderText(marketAdvice.render(data, mode, ctx))
+      expect(text.split(CURRENT_TAG).length - 1).toBe(1)
+      // The tag follows the first row's title, before the second row's.
+      expect(text.indexOf(CURRENT_TAG)).toBeGreaterThan(text.indexOf(data.advice.rows[0].title))
+      expect(text.indexOf(CURRENT_TAG)).toBeLessThan(text.indexOf(data.advice.rows[1].title))
+    }
+  })
+
+  it('numbers the rows in that order, the current recommendation as 1', () => {
+    const text = renderText(marketAdvice.render(marketFixture(), 'app', ctx))
+    expect(text).toMatch(/1 Increase Content Volume to Improve Share of Voice current recommendation/)
+  })
+
+  it('no longer says "oldest first" anywhere on the block', () => {
+    for (const data of [marketFixture(), unrecordedFixture(), deepLinkFixture()]) {
+      for (const mode of ['app', 'print', 'email'] as const) {
+        expect(renderText(marketAdvice.render(data, mode, ctx))).not.toMatch(/oldest first/i)
+      }
+    }
+  })
+
+  it('a copy stored before WP1.9 carries no current lineage, and draws no tag', () => {
+    const { current: _current, ...stored } = marketFixture().advice
+    const data = { ...marketFixture(), advice: stored }
+    expect(renderText(marketAdvice.render(data, 'app', ctx))).not.toContain(CURRENT_TAG)
+  })
+
+  it('keeps the copy contract with the tag on', () => {
+    for (const mode of ['app', 'print', 'email'] as const) {
+      assertCopyContract(render(marketAdvice.render(marketFixture(), mode, ctx)))
+    }
   })
 })

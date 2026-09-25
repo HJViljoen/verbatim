@@ -447,9 +447,9 @@ describe('content.make — the mock’s page 2', () => {
   })
 
   // WORK ALREADY DONE IS NOT A THING TO MAKE (design review 2, code review 2).
-  // The ledger is oldest-first and `acted_on` reads "Done", so the three oldest
-  // rows won regardless of status and a client read two finished items as their
-  // top two instructions.
+  // The ledger ran oldest-first and `acted_on` reads "Done", so the three
+  // oldest rows won regardless of status and a client read two finished items
+  // as their top two instructions. The filter holds in any ledger order.
   it('leads with what is still open, never with what is already done', () => {
     const shown = toMake(data.advice.rows)
     expect(shown.length).toBeGreaterThan(0)

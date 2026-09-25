@@ -40,7 +40,7 @@ import { isMissingSubjects, TABLE_SUBJECTS, type Subject } from '../subjects/typ
 import { selectAll } from '../supabase-admin'
 import { row, rows } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
-import { fetchThemedRunId } from './themed-run'
+import { fetchThemedRunId, pickThemedRunId, type ThemedRunRow } from './themed-run'
 import { loadOwnPublishedVideos, ownSides, type PlaybookVideo } from './playbook'
 import type { FormatMatrix } from '../reading/formats'
 
@@ -475,6 +475,14 @@ export interface AudienceRow {
   comments: number | null
 }
 
+/** The identities an update minted when it opened a new clustering regime. */
+export interface Regrouped {
+  /** The update's date (`WeekUpdate.date`). */
+  update: string
+  /** Theme identities it minted, every one of them a re-grouping. */
+  themes: number
+}
+
 /** A theme first heard in this update that cleared the floor. */
 export interface NewTheme {
   id: string
@@ -577,6 +585,15 @@ export interface CameInBlock {
   newThemes: NewTheme[]
   /** How many themes were first heard at all, before the floor. */
   newThemesSeen: number
+  /**
+   * Set when this update opened a new clustering regime: its
+   * `pipeline_runs.clustering_key` differs from the previous themed update's
+   * (market-first WP1.9). Every identity it minted is then a re-grouping, not
+   * a theme heard for the first time, so `newThemes` is empty, `newThemesSeen`
+   * is 0 and the minted identities are counted here. OPTIONAL, so a copy
+   * stored before the field existed renders as it was.
+   */
+  regrouped?: Regrouped | null
   rivals: RivalPosts[]
   /** New quotes on the client's subjects, where subjects are recorded. */
   quotes: { subject: string; quote: Quote; cite: string; href: string | null }[]
@@ -859,12 +876,89 @@ export function baselineStartsWith(baseline: BaselineState, month: string): stri
  * why — because "no new themes" would be false (303 were first heard) and "303
  * new themes" would be the clustering's churn dressed as a finding.
  */
-export function newThemesLine(seen: number, shown: number, floor: number = NEW_THEME_FLOOR): string {
+export function newThemesLine(
+  seen: number,
+  shown: number,
+  floor: number = NEW_THEME_FLOOR,
+  regrouped: Regrouped | null = null,
+): string {
+  if (regrouped) return regroupedLine(regrouped)
   if (seen === 0) return 'Nothing was heard for the first time in this update.'
   if (shown > 0) {
     return `${fmtInt(shown)} of the ${fmtInt(seen)} themes first heard in this update carried ${fmtInt(floor)} videos or more this month.`
   }
   return `${fmtInt(seen)} themes were heard for the first time in this update and none carried ${fmtInt(floor)} videos this month.`
+}
+
+/**
+ * What §4 says when the update opened a new clustering regime (market-first
+ * WP1.9): "Re-grouped with the 20 Sep update: 468 themes."
+ *
+ * The first update under a new regime re-groups the whole corpus, so the
+ * registry matcher mints hundreds of identities that are not new
+ * conversations (staging's 20 Sep update minted 468). Listing them as heard
+ * for the first time would print the regrouping as news, so they are counted
+ * here and named nowhere.
+ */
+export function regroupedLine(r: Regrouped): string {
+  return `Re-grouped with the ${shortDate(r.update)} update: ${fmtInt(r.themes)} ${r.themes === 1 ? 'theme' : 'themes'}.`
+}
+
+/**
+ * Did this update open a new clustering regime (market-first WP1.9)?
+ *
+ * YES WHEN ITS `clustering_key` DIFFERS FROM THE PREVIOUS THEMED UPDATE'S,
+ * the complement of plan §4.2's `identityNewThisRun` ("that run's
+ * clustering_key equals the previous themed run's"). A missing or empty key
+ * reads as null: two null keys are equal (every run before the key existed,
+ * and every run where the column is not applied), and a keyed update after a
+ * null-keyed one differs, because nothing says the regime held. No previous
+ * themed update (a tenant's first) opens nothing: there was no regime to
+ * leave.
+ *
+ * THIS DEPARTS FROM `sameRegime`'S NULL RULE ON PURPOSE (lib/pipeline/
+ * clustering.ts). There two nulls are never one regime and null then a key is
+ * `unknown`, "not a break", which is right for a reading series that must not
+ * compare across a regime it cannot see. It is wrong here: under it every
+ * update of a null-keyed tenant (staging's, and the paused Össur's) would
+ * re-group, and "heard for the first time" would never print for them. And
+ * the key's first appearance IS a new regime: the 27 Sep run is the first
+ * with `ownPostAudience` in the key (24 Sep), so "Re-grouped with the 27 Sep
+ * update" is the intended outcome, not a false positive.
+ *
+ * ONE LINE ON TWO PAGES ONLY IF BOTH CALL THIS. The front page and this page
+ * draw the same line between a re-grouping and a new theme only while WP1.6's
+ * `identityNewThisRun` and WP2.7's arrivals block call `opensClusteringRegime`
+ * rather than `sameRegime`; with `sameRegime`, staging's null-keyed updates
+ * would count as re-grouped on the front page and not here.
+ */
+export function opensClusteringRegime(
+  current: string | null | undefined,
+  previous: { key: string | null | undefined } | null,
+): boolean {
+  if (previous == null) return false
+  const norm = (k: string | null | undefined): string | null => (k == null || k === '' ? null : k)
+  return norm(current) !== norm(previous.key)
+}
+
+/**
+ * What §4 does with the identities an update minted (market-first WP1.9): the
+ * re-grouped count when the update opened a new clustering regime, else null,
+ * which keeps "heard for the first time".
+ *
+ * THE LOADER'S WHOLE DECISION, PURE. `loadNewThemes` reads the minted ids and
+ * the previous themed update's regime (`previousThemedRegime`) and hands both
+ * here, so the branch a staging render never reaches (every staging update so
+ * far carries a null key, and null equals null) is tested on its own. Nothing
+ * minted is nothing re-grouped.
+ */
+export function regroupedFor(
+  ids: readonly string[],
+  regime: { clusteringKey: string | null | undefined; date: string },
+  previous: { key: string | null | undefined } | null,
+): Regrouped | null {
+  if (ids.length === 0) return null
+  return opensClusteringRegime(regime.clusteringKey, previous) ? { update: regime.date, themes: ids.length } : null
 }
 
 /** "above typical" / "about typical" — the mock's tag on a subject row.
@@ -1036,6 +1130,9 @@ interface RunRow {
   status: string
   started_at: string | null
   completed_at: string | null
+  /** The regime the update clustered under (M2). Absent where the column is
+   *  not applied, which `select('*')` returns as a missing key. */
+  clustering_key?: string | null
   window_start?: string | null
   window_end?: string | null
   window_basis?: string | null
@@ -1228,6 +1325,9 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
     // ── §4 · what came in ────────────────────────────────────────────────
     buildCameIn({
       supabase, clientId, runId: anchor.id, window, month, videos, rivals,
+      // What the re-grouped rule reads (WP1.9): this update's regime, when it
+      // started (the bound for "the themed update before it") and its date.
+      regime: { clusteringKey: anchor.clustering_key, startedAt: anchor.started_at, date: update.date },
       windowRead,
       // The window clipped to the month where it crosses one, and the window
       // itself where it does not — per audience, which is what the plan's
@@ -1870,6 +1970,7 @@ async function buildCameIn(input: {
   monthVideos: number
   subjects: Subject[] | null
   themedRunId: string | null
+  regime: { clusteringKey: string | null | undefined; startedAt: string | null; date: string }
 }): Promise<CameInBlock> {
   const { supabase, clientId, runId, window, month, videos, rivals, windowRead } = input
 
@@ -2004,7 +2105,7 @@ async function buildCameIn(input: {
   .filter((r) => !r.retired && !(r.ownPostsUnread && r.byThem === 0 && r.aboutThem === 0))
   .map(({ retired: _retired, ...r }) => r)
 
-  const newThemes = await loadNewThemes(supabase, clientId, runId, month)
+  const newThemes = await loadNewThemes(supabase, clientId, runId, month, input.regime)
   const subjectQuotes = window
     ? await loadSubjectQuotes(supabase, clientId, input.subjects, window)
     : { shown: [], total: null, unread: QUOTES_NO_WINDOW }
@@ -2021,6 +2122,7 @@ async function buildCameIn(input: {
     crossesInto: window && window.from < month ? previousMonthOf(month) : null,
     newThemes: newThemes.shown,
     newThemesSeen: newThemes.seen,
+    regrouped: newThemes.regrouped,
     rivals: rivalRows,
     quotes: subjectQuotes.shown,
     quotesTotal: subjectQuotes.total,
@@ -2524,20 +2626,64 @@ async function loadUpdateVideos(supabase: SupabaseClient, clientId: string, runI
   )
 }
 
-/** Themes first heard in this update, and the ones that clear the floor. */
-async function loadNewThemes(
+/**
+ * The themed update before this one, and the regime it clustered under, or
+ * null when there is none to compare with.
+ *
+ * THE NEWEST THEME ROW WRITTEN BEFORE THIS UPDATE STARTED, from any other
+ * run: `themes` keeps each run's rows (persist deletes only its own run's), so
+ * the row IS the evidence that run themed, which is `pickThemedRunId`'s rule.
+ * A failed run that wrote themes counts: it moved the registry this update
+ * matched against. Bounded by this update's start, so a run in flight after
+ * it is never "before" it. Two small reads, and only when the update minted
+ * anything. A read that fails answers null, which keeps today's list.
+ * Exported for its test (lib/pages/week.test.ts).
+ */
+export async function previousThemedRegime(
+  supabase: SupabaseClient,
+  clientId: string,
+  runId: string,
+  startedAt: string | null,
+): Promise<{ key: string | null } | null> {
+  if (!startedAt) return null
+  const themeRes = await supabase.from('themes').select('run_id, created_at')
+    .eq('client_id', clientId).neq('run_id', runId).not('run_id', 'is', null)
+    .lt('created_at', startedAt)
+    .order('created_at', { ascending: false }).limit(1)
+  const previousId = pickThemedRunId(rows<ThemedRunRow>(themeRes, 'week.previousThemedRun'))
+  if (!previousId) return null
+  // `*`, for the reason `loadWeek` reads the anchor that way: an absent column
+  // arrives as an absent key rather than a 42703.
+  const runRes = await supabase.from('pipeline_runs').select('*').eq('client_id', clientId).eq('id', previousId).maybeSingle()
+  const previous = row<RunRow>(runRes, 'week.previousThemedRegime')
+  return previous ? { key: previous.clustering_key ?? null } : null
+}
+
+/**
+ * Themes first heard in this update, and the ones that clear the floor.
+ *
+ * AN UPDATE THAT OPENED A NEW CLUSTERING REGIME HEARD NOTHING FOR THE FIRST
+ * TIME (market-first WP1.9). Its minted identities are the corpus re-grouped,
+ * so they leave the list and are counted as `regrouped` instead. Exported for
+ * its test, which runs it against a stubbed client (lib/pages/week.test.ts).
+ */
+export async function loadNewThemes(
   supabase: SupabaseClient,
   clientId: string,
   runId: string,
   month: string,
-): Promise<{ seen: number; shown: NewTheme[] }> {
+  regime: { clusteringKey: string | null | undefined; startedAt: string | null; date: string },
+): Promise<{ seen: number; shown: NewTheme[]; regrouped: Regrouped | null }> {
   const fresh = await selectAll<{ registry_id: string | null; label: string | null }>(() =>
     supabase.from('themes').select('registry_id, label')
       .eq('client_id', clientId).eq('run_id', runId).eq('first_seen', true)
       .order('id', { ascending: true }),
   )
   const ids = [...new Set(fresh.map((t) => t.registry_id).filter((id): id is string => Boolean(id)))]
-  if (ids.length === 0) return { seen: 0, shown: [] }
+  if (ids.length === 0) return { seen: 0, shown: [], regrouped: null }
+
+  const regrouped = regroupedFor(ids, regime, await previousThemedRegime(supabase, clientId, runId, regime.startedAt))
+  if (regrouped) return { seen: 0, shown: [], regrouped }
 
   let readings: { theme_id: string; videos: number }[] = []
   try {
@@ -2561,7 +2707,7 @@ async function loadNewThemes(
     )
   } catch (error) {
     if (!isMissingMonthTable(error)) throw error
-    return { seen: ids.length, shown: [] }
+    return { seen: ids.length, shown: [], regrouped: null }
   }
 
   const videosById = new Map<string, number>()
@@ -2573,7 +2719,7 @@ async function loadNewThemes(
     .map((id) => ({ id, label: labelById.get(id) ?? 'An unnamed theme', videos: videosById.get(id) ?? 0 }))
     .filter((t) => t.videos >= NEW_THEME_FLOOR)
     .sort((a, b) => b.videos - a.videos)
-  return { seen: ids.length, shown }
+  return { seen: ids.length, shown, regrouped: null }
 }
 
 /** The citations behind one theme, as quotes with their cite line. */

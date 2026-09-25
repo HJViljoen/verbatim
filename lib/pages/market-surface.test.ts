@@ -4,11 +4,12 @@ import { createCitedQuotePicker } from '../quotes'
 import type { RecDecision } from '../rec-decisions'
 import { afterwardsFor } from '../reading/afterwards'
 import {
-  acceptableRow, actedLine, adviceAnchor, ageInMonths, buildAdviceRows, ledgerRowsShown, lineageKey, madeInMonth,
+  acceptableRow, actedLine, adviceAnchor, ageInMonths, buildAdviceRows, currentTopLineage, ledgerRowsShown, lineageKey, madeInMonth,
   marketSurfaceHref, monthsMadeIn, moveLedgerLine, moveTargetLabel, orderedTargets, recurrenceForTarget,
   registryIdsByInsight, repeatCell, repeatLine, waysOfMoving,
   type AdviceRow, type RecCopy, type TargetPoint,
 } from './market-surface'
+import { currentRecommendation, topRecommendation } from '../dashboard-tiles'
 
 const copy = (over: Partial<RecCopy> = {}): RecCopy => ({
   id: 'r1',
@@ -68,15 +69,16 @@ describe('the ledger’s identity', () => {
     expect(rows[0].repeatedWithinMonth).toBe(false)
   })
 
-  it('sorts by age, oldest first — not by evidence tier', () => {
+  it('runs newest first, not oldest first (market-first WP1.9, GR F34)', () => {
     const rows = buildAdviceRows(
       [
-        copy({ id: 'young', lineage_id: 'young', created_at: '2026-09-13T00:00:00.000Z' }),
-        copy({ id: 'old', lineage_id: 'old', created_at: '2026-06-13T00:00:00.000Z' }),
+        copy({ id: 'young', lineage_id: 'young', created_at: '2026-09-13T00:00:00.000Z', run_id: 'run-2' }),
+        copy({ id: 'old', lineage_id: 'old', created_at: '2026-06-13T00:00:00.000Z', run_id: 'run-1' }),
       ],
       [],
     )
-    expect(rows.map((r) => r.lineageId)).toEqual(['old', 'young'])
+    expect(rows.map((r) => r.lineageId)).toEqual(['young', 'old'])
+    expect(rows.map((r) => r.number)).toEqual([1, 2])
   })
 
   it('takes the status from the ledger, and the ledger’s date with it', () => {
@@ -234,24 +236,26 @@ describe('ledgerRowsShown — the row a deep link named', () => {
     why: null,
     quote: null,
   })
-  const rows = Array.from({ length: 20 }, (_, i) => rowAt(i)).sort((a, b) => a.firstMade.localeCompare(b.firstMade))
+  // In the ledger's order, which `number` is read off.
+  const rows = Array.from({ length: 20 }, (_, i) => rowAt(i))
+    .sort((a, b) => a.firstMade.localeCompare(b.firstMade))
+    .map((r, i) => ({ ...r, number: i + 1 }))
 
-  it('draws the oldest and nothing else when no link was followed', () => {
+  it('draws the first twelve and nothing else when no link was followed', () => {
     expect(ledgerRowsShown(rows, null, 12)).toHaveLength(12)
     expect(ledgerRowsShown(rows, null, 12)).toEqual(rows.slice(0, 12))
   })
 
-  it('adds the named row when it is not among the oldest', () => {
+  it('adds the named row when it is not among the twelve', () => {
     const named = rows[rows.length - 1]
     const shown = ledgerRowsShown(rows, named.lineageId, 12)
     expect(shown).toHaveLength(13)
     expect(shown.map((r) => r.lineageId)).toContain(named.lineageId)
   })
 
-  it('keeps the list oldest-first, because the block says it is', () => {
-    const shown = ledgerRowsShown(rows, rows[rows.length - 1].lineageId, 12)
-    expect([...shown].sort((a, b) => a.firstMade.localeCompare(b.firstMade) || a.lineageId.localeCompare(b.lineageId)))
-      .toEqual(shown)
+  it('keeps the ledger’s order: the named row takes its own place, the first row stays first', () => {
+    const shown = ledgerRowsShown(rows, rows[15].lineageId, 12)
+    expect(shown.map((r) => r.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 16])
   })
 
   it('adds nothing when the named row is already drawn, or names nothing at all', () => {
@@ -526,5 +530,125 @@ describe('a conclusion’s recurrence — the artboard’s "New" chip', () => {
     // gap in our own bookkeeping. This is the state production is in.
     expect(recurrenceForTarget('reg-1', points([]), '2026-09-01')).toBeNull()
     expect(recurrenceForTarget(null, points([['client|reg-1', [point('2026-09-01', 4)]]]), '2026-09-01')).toBeNull()
+  })
+})
+
+// ---- market-first WP1.9: the current recommendation first, then the newest ------
+//
+// SEALAND'S OWN ADVICE ON STAGING (to 20 Sep), read 25 Sep: the 20 Sep update's
+// four copies, the 13 Sep update's five, the 10 Sep copy that started lineage
+// a89fcdee, and the two older high-priority rows that rank beside it. Ids,
+// dates, priorities, lineages and the NUMBER of cited insights are the rows'
+// own; the insight ids themselves are stand-ins of the same count.
+
+const cited = (n: number) => ({ insight_ids: Array.from({ length: n }, (_, i) => `mi-${i}`) })
+const SEP20 = { created_at: '2026-09-20T08:31:54.388Z', run_id: 'b67b56de' }
+const SEP13 = { created_at: '2026-09-13T13:05:46.504Z', run_id: '5a2ebc43' }
+const SEALAND_COPIES: RecCopy[] = [
+  copy({ ...SEP20, id: '8196074b', lineage_id: 'a89fcdee', priority: 'high', based_on: cited(4), status: 'in_progress', title: 'Add a “fit and facts” layer to every Sealand bag page and shopping touchpoint' }),
+  copy({ ...SEP20, id: '750ffbc0', lineage_id: '750ffbc0', priority: 'medium', based_on: cited(4), title: 'Seed travel and family-routine creators with proof-led briefs, not just aesthetic gifting' }),
+  copy({ ...SEP20, id: '9e0e2dbc', lineage_id: '9e0e2dbc', priority: 'low', based_on: cited(2), title: 'Turn Sealand’s circular story into item-level proof' }),
+  copy({ ...SEP20, id: 'b3c74ac5', lineage_id: 'b3c74ac5', priority: 'medium', based_on: cited(2), title: 'Make carrying comfort a product claim Sealand can defend' }),
+  copy({ ...SEP13, id: '110bdfe8', lineage_id: '110bdfe8', priority: 'medium', based_on: cited(2), title: 'Publish a Sealand material passport that proves the sustainability story' }),
+  copy({ ...SEP13, id: '2f3d08ce', lineage_id: '2f3d08ce', priority: 'medium', based_on: cited(3), title: 'Reduce fit risk with clearer carry specs now and a larger, lighter next product revision' }),
+  copy({ ...SEP13, id: '85ae2afe', lineage_id: '85ae2afe', priority: 'low', based_on: cited(5), title: 'Compete where bag decisions are made by building a consideration-stage creator program' }),
+  copy({ ...SEP13, id: '85ecc340', lineage_id: '85ecc340', priority: 'low', based_on: cited(3), title: 'Make local buying and stockist access visible, then test retail partners' }),
+  copy({ ...SEP13, id: 'e3e03d0c', lineage_id: 'a89fcdee', priority: 'high', based_on: cited(4), title: 'Make every core Sealand bag easy to buy in one visit' }),
+  copy({ created_at: '2026-09-10T07:15:04.938Z', run_id: 'cb0d97b2', id: 'a89fcdee', lineage_id: 'a89fcdee', priority: 'high', based_on: cited(6), title: 'Add a “Know Before You Buy” standard to every Sealand bag page and social shop link' }),
+  copy({ created_at: '2026-07-18T10:18:18.889Z', run_id: '2039968a', id: 'bff7bb66', lineage_id: 'bff7bb66', priority: 'high', based_on: cited(6), title: 'Put a standard buyer-answer block on every core SKU and commerce post' }),
+  copy({ created_at: '2026-06-28T21:49:51.080Z', run_id: '2d17ac90', id: '061f442e', lineage_id: '061f442e', priority: 'high', based_on: cited(2), title: 'Develop Brand Loyalty and Product Enthusiasm Campaigns' }),
+]
+
+describe('MK2 · the current recommendation first, then the newest (market-first WP1.9)', () => {
+  it('leads with the current recommendation: the top of the newest update, in its newest wording', () => {
+    const rows = buildAdviceRows(SEALAND_COPIES, [])
+    expect(rows[0].lineageId).toBe('a89fcdee')
+    expect(rows[0].number).toBe(1)
+    expect(rows[0].title).toBe('Add a “fit and facts” layer to every Sealand bag page and shopping touchpoint')
+    expect(rows[0].timesMade).toBe(3)
+    expect(rows[0].firstMade).toBe('2026-09-10')
+    expect(currentTopLineage(SEALAND_COPIES)).toBe(rows[0].lineageId)
+  })
+
+  it('then runs newest first, each update’s rows in that update’s own ranking', () => {
+    const rows = buildAdviceRows(SEALAND_COPIES, [])
+    expect(rows.map((r) => r.lineageId)).toEqual([
+      // 20 Sep: high 4 · medium 4 · medium 2 · low 2
+      'a89fcdee', '750ffbc0', 'b3c74ac5', '9e0e2dbc',
+      // 13 Sep: medium 3 · medium 2 · low 5 · low 3 (its high one is a89fcdee's, above)
+      '2f3d08ce', '110bdfe8', '85ae2afe', '85ecc340',
+      // then July, then June
+      'bff7bb66', '061f442e',
+    ])
+    expect(rows.map((r) => r.number)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+  })
+
+  it('draws no June row in the first twelve while newer advice exists (GR F34)', () => {
+    const shown = ledgerRowsShown(buildAdviceRows(SEALAND_COPIES, []), null, 4)
+    expect(shown.every((r) => r.firstMade >= '2026-09-10')).toBe(true)
+    expect(shown.map((r) => r.lineageId)).toContain('a89fcdee')
+  })
+
+  it('dates a row by the update that last raised it, not the one that first made it', () => {
+    // A July row raised again by the newest update is current advice.
+    const again = copy({ ...SEP20, id: 'bff-again', lineage_id: 'bff7bb66', priority: 'low', based_on: cited(1) })
+    const rows = buildAdviceRows([...SEALAND_COPIES, again], [])
+    const at = rows.findIndex((r) => r.lineageId === 'bff7bb66')
+    expect(at).toBeLessThan(4 + 1)
+    expect(rows[at].firstMade).toBe('2026-07-18')
+  })
+
+  it('names the same advice, in the same words, as Overview’s recommendation block (review fix)', () => {
+    // Overview's `loadLedger` prints `currentRecommendation`'s newest copy. On
+    // staging's 20 Sep data both pages name a89fcdee in its 20 Sep wording and
+    // the copy a status write must name, not the 10 Sep "Know Before You Buy".
+    const overview = currentRecommendation(SEALAND_COPIES)!
+    const ledger = buildAdviceRows(SEALAND_COPIES, [])[0]
+    expect(overview.lineage).toBe(ledger.lineageId)
+    expect(overview.newest.id).toBe(ledger.recommendationId)
+    expect(overview.newest.title).toBe(ledger.title)
+    expect(overview.newest.title).toBe('Add a “fit and facts” layer to every Sealand bag page and shopping touchpoint')
+    expect(new Set(overview.copies.map((c) => c.run_id)).size).toBe(ledger.timesMade)
+  })
+
+  it('keeps the two pages on one piece of advice when a new top cites fewer insights than an old copy', () => {
+    // The case the old Overview rule (every copy ever written) got wrong: a
+    // new lineage leads the next update citing five insights, and the 10 Sep
+    // and July copies cite six.
+    const next = copy({ created_at: '2026-09-27T08:30:00.000Z', run_id: 'next', id: '0a0a0a0a', lineage_id: '0a0a0a0a', priority: 'high', based_on: cited(5), title: 'A new top' })
+    const copies = [...SEALAND_COPIES, next]
+    const everyCopy = topRecommendation([...copies].sort((a, b) => a.id.localeCompare(b.id)).map((c) => ({ ...c, priority: c.priority ?? null, based_on: c.based_on ?? null })))
+    expect(lineageKey(everyCopy!)).toBe('a89fcdee')
+    expect(currentRecommendation(copies)!.lineage).toBe('0a0a0a0a')
+    expect(buildAdviceRows(copies, [])[0].lineageId).toBe('0a0a0a0a')
+  })
+
+  it('leads with the tagged row when two of the newest update’s copies tie on priority and grounding', () => {
+    // The reviewer's case: copy `aaa` carries lineage `zzz`, copy `bbb` its own
+    // lineage, both high priority citing four insights. `topRecommendation` is
+    // handed the copies by id and keeps the first, so the current advice is
+    // `zzz`; the lineage id alone would have put `bbb` first, untagged.
+    const tied = [
+      copy({ ...SEP20, id: 'aaa', lineage_id: 'zzz', priority: 'high', based_on: cited(4) }),
+      copy({ ...SEP20, id: 'bbb', lineage_id: 'bbb', priority: 'high', based_on: cited(4) }),
+    ]
+    expect(currentTopLineage(tied)).toBe('zzz')
+    const rows = buildAdviceRows(tied, [])
+    expect(rows.map((r) => r.lineageId)).toEqual(['zzz', 'bbb'])
+    expect(rows[0].lineageId).toBe(currentTopLineage(tied))
+    expect(rows.map((r) => r.number)).toEqual([1, 2])
+    // The same with the rest of Sealand's ledger behind them.
+    const all = [...SEALAND_COPIES.filter((c) => c.run_id !== SEP20.run_id), ...tied]
+    expect(buildAdviceRows(all, [])[0].lineageId).toBe(currentTopLineage(all))
+  })
+
+  it('has no current recommendation when there is no advice', () => {
+    expect(currentTopLineage([])).toBeNull()
+    expect(buildAdviceRows([], [])).toEqual([])
+  })
+
+  it('offers the oldest undecided row to accept, whatever order the ledger runs in', () => {
+    const rows = buildAdviceRows(SEALAND_COPIES, [])
+    expect(acceptableRow(rows, null)!.lineageId).toBe('061f442e')
   })
 })

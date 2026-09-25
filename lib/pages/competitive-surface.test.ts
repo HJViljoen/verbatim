@@ -6,9 +6,11 @@ import {
   CORPUS_DENOMINATOR_LINE, QUESTIONS_GROUPING_NOTE,
   buildSaidAbout,
   buildStandingsBlock, changeNote, citationsInWindow, comparabilityCaveat, competitiveSurfaceHref,
+  homonymNote, homonymOf, homonymsFor,
   mixLine, questionsEmpty, rivalState, splitKeysCaveat, storedDenominators, trackingRules,
   type StandingsMonthRow,
 } from './competitive-surface'
+import { HOMONYM_NOTES } from '../config'
 
 const den = (over: Partial<{ month: string; audience: string; videos: number; comments: number; dual_mention: number; run_id: string | null }> = {}) => ({
   month: '2026-09-01',
@@ -424,5 +426,44 @@ describe('buildSaidAbout', () => {
     expect(row0.rows).toHaveLength(1)
     expect(row0.rows[0].value).toEqual({ k: 2, n: 42 })
     expect(row0.empty).toBeNull()
+  })
+})
+
+// ---- a rival name that is mostly another word (market-first WP1.9) -------------
+
+describe('homonym notes — Freitag is mostly the German word for Friday', () => {
+  it('carries the WP text for Freitag, and nothing for the other rivals', () => {
+    expect(HOMONYM_NOTES).toEqual({ Freitag: 'mostly the German word for Friday, not the brand' })
+    expect(homonymNote('Freitag')).toBe('mostly the German word for Friday, not the brand')
+    for (const name of ['Cotopaxi', 'Patagonia', 'The North Face', 'Rareform', 'Freedom of Movement', 'Old School']) {
+      expect(homonymNote(name)).toBeNull()
+    }
+  })
+
+  it('matches the tracked name as typed in Settings: trimmed, any case', () => {
+    expect(homonymNote('  freitag ')).toBe(HOMONYM_NOTES.Freitag)
+    expect(homonymNote('FREITAG')).toBe(HOMONYM_NOTES.Freitag)
+    // A name that only contains the word is a different rival.
+    expect(homonymNote('Freitag Bags')).toBeNull()
+    expect(homonymNote('')).toBeNull()
+    expect(homonymNote(null)).toBeNull()
+  })
+
+  it('keys the notes by audience, the key every row on the page carries', () => {
+    // Sealand's tracked list (research BC §9).
+    const tracked = ['Cotopaxi', 'Freitag', 'Rareform', 'The North Face', 'Patagonia', 'Freedom of Movement', 'Old School']
+    expect(homonymsFor(tracked)).toEqual({ 'competitor:Freitag': HOMONYM_NOTES.Freitag })
+    expect(homonymsFor([])).toEqual({})
+  })
+
+  it('reads nothing from data stored before the field existed', () => {
+    expect(homonymOf({}, 'competitor:Freitag')).toBeNull()
+    expect(homonymOf({ homonyms: { 'competitor:Freitag': 'x' } }, 'competitor:Freitag')).toBe('x')
+    expect(homonymOf({ homonyms: { 'competitor:Freitag': 'x' } }, 'competitor:Cotopaxi')).toBeNull()
+    expect(homonymOf({ homonyms: { 'competitor:Freitag': 'x' } }, null)).toBeNull()
+  })
+
+  it('stays until WP2.6 measures the name at 0.8 or more: a note is dropped by removing its entry', () => {
+    expect(homonymsFor(['Freitag'], {})).toEqual({})
   })
 })

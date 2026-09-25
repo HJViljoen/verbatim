@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { recStatus, REC_STATUS_LABEL, type RecStatus } from '../calibration'
 import { gateTier, type GateTier } from '../curation'
+import { currentTopLineage, recommendationOrder, recUpdateOf, recUpdateTimes } from '../dashboard-tiles'
 import { fmtInt, monthName, shortDate } from '../format'
 import { distinctVideos, groundedTier, insightTiers, labelsBySlug, ledgerRows, themeChips, tierCounts, type GroundingThemeRow, type ThemeChip } from '../market-tiles'
 import type { SayVsHearEntry } from '../pipeline/schemas'
@@ -71,8 +72,9 @@ import { fetchThemedRunId } from './themed-run'
 export type MarketSurfaceParams = { rec?: string; item?: string }
 
 /** How many ledger rows are drawn before the rest are counted. 64 rows of
- *  advice nobody has acted on is a filing cabinet, not a page; the oldest are
- *  the ones a ledger is read for. */
+ *  advice nobody has acted on is a filing cabinet, not a page; the current
+ *  recommendation and the newest after it are the ones a reader opens the
+ *  ledger for (market-first WP1.9). */
 export const LEDGER_SHOWN = 12
 
 /** How many conclusions MK1 prints in full. Both tenants produce six per
@@ -196,13 +198,14 @@ export interface AdviceRow {
    * The identity's place in the ledger's own order, 1-based (D4, the mock's
    * `#` column).
    *
-   * NOT A RANK AND NOT A ROW ID. The ledger is sorted oldest-first and the
-   * number is read off THAT order, so "number 3" said out loud names the same
-   * row for as long as the order holds — which is what the mock's "# is the
-   * identity, kept for life" is reaching for. A `recommendations.id` changes
-   * every update (Pass D-b deletes and reinserts), and a lineage uuid is not
-   * something a person says. It is counted over every identity, not over the
-   * twelve drawn, so the number on a deep-linked row is its real place.
+   * NOT A ROW ID. The ledger puts the current recommendation first and the
+   * newest after it (market-first WP1.9), and the number is read off THAT
+   * order, as the preview draws it ("1 · current recommendation"). It moves
+   * when an update raises new advice, which is what an order led by the
+   * current advice does. A `recommendations.id` changes every update (Pass D-b
+   * deletes and reinserts), and a lineage uuid is not something a person says.
+   * It is counted over every identity, not over the twelve drawn, so the
+   * number on a deep-linked row is its real place.
    */
   number: number
   /** The evidence ids the advice follows from — `based_on.insight_ids` of the
@@ -223,8 +226,16 @@ export interface AdviceRow {
 
 export interface AdviceBlock {
   rows: AdviceRow[]
+  /**
+   * The lineage of the current recommendation: the top of the newest update's
+   * advice by `topRecommendation`'s rule (`currentTopLineage`). The ledger's
+   * first row, tagged "current recommendation": `buildAdviceRows` sorts this
+   * lineage first by name, so the tag and the first row cannot part on a tie.
+   * OPTIONAL, so a copy stored before WP1.9 renders as it was, with no tag.
+   */
+  current?: string | null
   /** The lineage the URL named, when the ledger holds it. The row is drawn
-   *  whether or not it is among the oldest, and it is marked. */
+   *  whether or not it is among the twelve shown, and it is marked. */
   highlight: string | null
   /** One sentence about the link the reader followed, or null when they
    *  followed none. */
@@ -360,6 +371,10 @@ export interface RecCopy {
   status: string | null
   created_at: string | null
   run_id: string | null
+  /** Pass D-b's own ranking of the advice inside its update ('high' ·
+   *  'medium' · 'low'). The ledger ranks the rows one update raised by it,
+   *  with `topRecommendation`'s rule (WP1.9). */
+  priority?: string | null
   /** The market and competitive insights this advice follows from. The ledger's
    *  "Grounded in" column is counted from these (D4). */
   based_on?: { insight_ids?: string[] } | null
@@ -383,14 +398,33 @@ export function monthsMadeIn(copies: readonly RecCopy[]): string[] {
   return [...months].sort()
 }
 
+// The current recommendation, `currentTopLineage`, is decided in
+// lib/dashboard-tiles.ts beside `topRecommendation`, so Overview can name the
+// same advice without importing this page. Re-exported for this page's callers.
+export { currentTopLineage }
+
 /**
- * The ledger's rows, oldest first.
+ * The ledger's rows: the current recommendation first, then the newest first
+ * (market-first WP1.9, GR F34).
  *
- * SORTED BY AGE, which is the design's word and not `orderAgenda`'s. The parked
- * page sorts by evidence tier and priority, which is the right order for "what
- * should we do next"; a ledger answers "what has been sitting here", and the
- * answer to that is the oldest thing first. `number` is read off that order
- * once the sort has happened — see `AdviceRow.number`.
+ * THE FIRST ROW IS `currentTopLineage`'S ANSWER, SORTED THERE BY NAME. It is
+ * not left to fall out of the order below: two of the newest update's copies
+ * can tie on priority and on cited insights, and the row that leads and the
+ * row tagged "current recommendation" must be one row whichever way a tie
+ * breaks. So the one decision is taken once and both read it.
+ *
+ * NEWEST MEANS LAST RAISED. After the first row, a row is dated by the update
+ * that last carried it (its newest copy), so advice an update repeats is
+ * current advice however long ago it was first made. Inside one update the
+ * rows keep that update's own ranking, `topRecommendation`'s (priority, then
+ * how well grounded). Its ties fall to the newest copy's id, ascending, which
+ * is the order `topRecommendation` is handed its copies in, then to the
+ * lineage id, so the order is stable.
+ *
+ * THE LEDGER USED TO RUN OLDEST FIRST, and on Sealand that drew twelve June
+ * rows marked "evidence replaced" and left out the advice the headline was
+ * showing (GR F34). `number` is read off the order once the sort has happened,
+ * see `AdviceRow.number`.
  *
  * THE REASONING IS SCRUBBED AGAIN HERE, AND THE COST IS REAL. Pass D-b already
  * runs this slot's policy at write time WITH the run's allow-list, so a second
@@ -422,6 +456,10 @@ export function buildAdviceRows(
     byLineage.set(key, arr)
   }
 
+  const times = recUpdateTimes(copies)
+  /** What the order reads off each row: when it was last raised, and the
+   *  newest copy's own rank inside that update. */
+  const orderOf = new Map<string, { raisedAt: string; newest: RecCopy }>()
   const rows: AdviceRow[] = []
   for (const [lineageId, group] of byLineage) {
     // Newest copy first: its words are the current wording of the advice and
@@ -439,6 +477,7 @@ export function buildAdviceRows(
     const status = recStatus(inherited ?? newest.status)
     const decidedAt = decided?.decided_at ?? null
     const why = scrubProse('pass_d_b_recommendation', newest.reasoning ?? '').text
+    orderOf.set(lineageId, { raisedAt: times.get(recUpdateOf(newest)) ?? newest.created_at ?? '', newest })
     rows.push({
       lineageId,
       recommendationId: newest.id,
@@ -464,8 +503,15 @@ export function buildAdviceRows(
       quote: null,
     })
   }
+  const key = (r: AdviceRow) => orderOf.get(r.lineageId) as { raisedAt: string; newest: RecCopy }
+  const current = currentTopLineage(copies)
   return rows
-    .sort((a, b) => a.firstMade.localeCompare(b.firstMade) || a.lineageId.localeCompare(b.lineageId))
+    .sort((a, b) =>
+      (a.lineageId === current ? -1 : b.lineageId === current ? 1 : 0) ||
+      key(b).raisedAt.localeCompare(key(a).raisedAt) ||
+      recommendationOrder(key(a).newest, key(b).newest) ||
+      key(a).newest.id.localeCompare(key(b).newest.id) ||
+      a.lineageId.localeCompare(b.lineageId))
     .map((r, i) => ({ ...r, number: i + 1 }))
 }
 
@@ -551,29 +597,29 @@ export const ADVICE_REQUESTED_GONE =
   'The link you followed names a piece of advice this ledger no longer holds.'
 
 /**
- * The rows the ledger draws: the oldest, plus the one a link named.
+ * The rows the ledger draws: the first twelve in its order (the current
+ * recommendation, then the newest), plus the one a link named.
  *
  * THE DEEP LINK USED TO RESOLVE AND THEN VANISH. `?rec=<id>` is carried by four
  * sent emails and every digest until WP17; the loader resolved it to a lineage
- * and the only thing that lineage reached was MK5's accept button. MK2 drew the
- * twelve oldest of 56 or 64 with no anchor and no highlight, so a reader
- * following a link from a digest landed on a ledger that did not contain the
- * row they had clicked.
+ * and the only thing that lineage reached was MK5's accept button. MK2 drew
+ * twelve of 56 or 64 with no anchor and no highlight, so a reader following a
+ * link from a digest landed on a ledger that did not contain the row they had
+ * clicked.
  *
- * The named row is ADDED rather than promoted, and the list stays sorted by
- * age: the block's own meta line says "oldest first", and a newer row at the
- * top would make that sentence false to save a reader one glance.
+ * The named row is ADDED rather than promoted, and keeps its place in the
+ * ledger's order (`number`), so the current recommendation stays first.
  */
 export function ledgerRowsShown(
   rows: readonly AdviceRow[],
   requestedLineage: string | null,
   shown = LEDGER_SHOWN,
 ): AdviceRow[] {
-  const oldest = rows.slice(0, shown)
-  if (!requestedLineage) return oldest
+  const first = rows.slice(0, shown)
+  if (!requestedLineage) return first
   const named = rows.find((r) => r.lineageId === requestedLineage)
-  if (!named || oldest.some((r) => r.lineageId === named.lineageId)) return oldest
-  return [...oldest, named].sort((a, b) => a.firstMade.localeCompare(b.firstMade) || a.lineageId.localeCompare(b.lineageId))
+  if (!named || first.some((r) => r.lineageId === named.lineageId)) return first
+  return [...first, named].sort((a, b) => a.number - b.number)
 }
 
 /** A ledger row's anchor, so a link can land on the row it names. */
@@ -594,7 +640,11 @@ export function acceptableRow(
   requested: AdviceRow | null,
 ): AdviceRow | null {
   if (requested && requested.status === 'new') return requested
-  return rows.find((r) => r.status === 'new') ?? null
+  // THE OLDEST BY AGE, NOT THE LEDGER'S FIRST. MK5 prints "The oldest you have
+  // not decided on", and since WP1.9 the ledger runs current-first, so the age
+  // order is taken here rather than inherited from the rows' order.
+  const byAge = [...rows].sort((a, b) => a.firstMade.localeCompare(b.firstMade) || a.lineageId.localeCompare(b.lineageId))
+  return byAge.find((r) => r.status === 'new') ?? null
 }
 
 /**
@@ -825,7 +875,7 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
       // Three text columns over 121 rows is the weight; the ledger is what
       // reads them.
       supabase.from('recommendations')
-        .select('id, lineage_id, title, type, status, created_at, run_id, based_on, reasoning, hero_quote')
+        .select('id, lineage_id, title, type, status, priority, created_at, run_id, based_on, reasoning, hero_quote')
         .eq('client_id', clientId)
         .order('created_at', { ascending: true })
         .order('id', { ascending: true }),
@@ -887,7 +937,7 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
 
   // The market insights the drawn rows follow from. BY ID, not by run: a piece
   // of advice first made in June cites June's insights, and reading only the
-  // latest update's would leave eleven of the twelve oldest rows with no
+  // latest update's would leave every row an older update raised with no
   // grounding at all. Measured on production 2026-09-18: every recommendation
   // carrying any `based_on` keeps at least one id that still resolves, on both
   // tenants, so every drawn row can state a grounding.
@@ -1025,6 +1075,8 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   }
   const advice: AdviceBlock = {
     rows: await attachQuotes(supabase, withAfterwards, heroByLineage, evidenceByInsight, themeSlugById),
+    // The ledger's first row: `buildAdviceRows` sorts this same answer first.
+    current: currentTopLineage(recRows),
     highlight: requestedRow?.lineageId ?? null,
     requestedLine: !requested ? null : requestedRow ? ADVICE_REQUESTED_LINE : ADVICE_REQUESTED_GONE,
     total: adviceRows.length,

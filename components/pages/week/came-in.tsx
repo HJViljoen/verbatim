@@ -12,6 +12,7 @@ import {
   contributionLine,
   crossedIntoLine,
   crossingLine,
+  NEW_THEME_FLOOR,
   newThemesLine,
   windowDays,
   type CameInBlock,
@@ -385,6 +386,11 @@ function Cell({ label, children }: { label: string; children: React.ReactNode })
  * `newThemesLine` says how many were heard and why only the ones carrying ten
  * videos this month are named. The mock has no room for that sentence, which is
  * exactly why a port must keep it.
+ *
+ * AN UPDATE THAT OPENED A NEW CLUSTERING REGIME HEARD NOTHING FOR THE FIRST
+ * TIME (market-first WP1.9): its minted identities are the corpus re-grouped,
+ * so no chip is drawn and the sentence counts them instead ("Re-grouped with
+ * the 20 Sep update: 468 themes.").
  */
 function Themes({ block, mode }: { block: CameInBlock; mode: 'app' | 'print' | 'email' }) {
   const email = mode === 'email'
@@ -392,7 +398,7 @@ function Themes({ block, mode }: { block: CameInBlock; mode: 'app' | 'print' | '
     return (
       <div style={{ marginTop: 10 }}>
         <Heading mode={mode}>Heard for the first time</Heading>
-        <Note mode={mode}>{newThemesLine(block.newThemesSeen, block.newThemes.length)}</Note>
+        <Note mode={mode}>{newThemesLine(block.newThemesSeen, block.newThemes.length, NEW_THEME_FLOOR, block.regrouped ?? null)}</Note>
         {block.newThemes.map((t) => (
           <p key={t.id} style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink, padding: '2px 0' }}>
             {/* MARKED IN THIS ARM TOO (code review C10). The app arm marks the
@@ -421,7 +427,7 @@ function Themes({ block, mode }: { block: CameInBlock; mode: 'app' | 'print' | '
           </span>
         ))}
       </div>
-      <Note mode={mode}>{newThemesLine(block.newThemesSeen, block.newThemes.length)}</Note>
+      <Note mode={mode}>{newThemesLine(block.newThemesSeen, block.newThemes.length, NEW_THEME_FLOOR, block.regrouped ?? null)}</Note>
     </div>
   )
 }

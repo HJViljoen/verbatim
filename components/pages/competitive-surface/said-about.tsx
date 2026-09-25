@@ -7,7 +7,8 @@ import { fmtInt } from '@/lib/format'
 import { horizonHref } from '@/lib/shell/bar'
 import type { SaidAbout } from '@/lib/reading/own-posts'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import { SAID_ABOUT_WITHHELD, SAID_ABOUT_WITHHELD_ALL, type CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
+import { SAID_ABOUT_WITHHELD, SAID_ABOUT_WITHHELD_ALL, homonymOf, type CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
+import { HomonymTag } from './homonym'
 
 // CO5 · Said about them, by others (the artboard's `grid-column: span 3`).
 //
@@ -51,7 +52,7 @@ import { SAID_ABOUT_WITHHELD, SAID_ABOUT_WITHHELD_ALL, type CompetitiveSurfaceDa
 export const SAID_ABOUT_NONE =
   'No tracked rival carried a video in this window, so there is nothing said about one to read.'
 
-function Group({ group, mode }: { group: SaidAbout; mode: RenderMode }) {
+function Group({ group, mode, note = null }: { group: SaidAbout; mode: RenderMode; note?: string | null }) {
   const email = mode === 'email'
 
   const head = (
@@ -59,6 +60,10 @@ function Group({ group, mode }: { group: SaidAbout; mode: RenderMode }) {
       {email ? null : <span className="size-1.5 shrink-0 rounded-full bg-[var(--comp)]" aria-hidden />}
       <span className={email ? undefined : 'min-w-0 text-[12.5px] font-semibold'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, fontWeight: 600, color: EMAIL.ink } : undefined}>
         {group.label}
+        {/* A NAME THAT IS MOSTLY ANOTHER WORD SAYS SO ABOVE ITS COUNTS
+            (market-first WP1.9): every "k of n" in this group is a count of
+            videos filed under the name. */}
+        <HomonymTag note={note} mode={mode} />
       </span>
     </div>
   )
@@ -180,7 +185,7 @@ export const competitiveSaidAbout: Block<CompetitiveSurfaceData> = {
           </p>
         ) : (
           <div className={email ? undefined : 'flex min-w-0 flex-col gap-2.5'}>
-            {groups.map((g) => <Group key={g.audience} group={g} mode={mode} />)}
+            {groups.map((g) => <Group key={g.audience} group={g} mode={mode} note={homonymOf(data, g.audience)} />)}
           </div>
         )}
       </BlockFrame>

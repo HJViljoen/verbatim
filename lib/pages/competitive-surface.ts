@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { rangeCoversMonth } from '../config-affects'
 import { CONFIG_CHANGES_TABLE, isMissingConfigLog, isTrackingChange, type ConfigChange } from '../config-log'
-import { COMPETITIVE_MIN_VIDEOS } from '../config'
+import { COMPETITIVE_MIN_VIDEOS, HOMONYM_NOTES } from '../config'
 import { fmtInt, monthName, platformLabel } from '../format'
 import { fetchQuoteCitationsByAudience } from '../quotes'
 import { attentionTotals, type AttentionRow } from '../reading/attention'
@@ -274,6 +274,15 @@ export interface CompetitiveSurfaceData {
   /** CO7 — formats and hooks for the category, for you and for the selected
    *  rival, on the published clock, with the classified n per column. */
   playbook: PlaybookBlock | null
+  /**
+   * The note printed beside a rival whose name is mostly another word, keyed
+   * by audience (`competitor:Freitag` → "mostly the German word for Friday,
+   * not the brand"). From `HOMONYM_NOTES` (lib/config.ts, market-first WP1.9).
+   *
+   * OPTIONAL, so a copy of this data stored before the field existed renders
+   * as it was, with no note. Read it through `homonymOf`.
+   */
+  homonyms?: Readonly<Record<string, string>>
   record: { line: string; lines: string[]; href: string }
   /**
    * The method footnote, composed once for every surface (block D, D9).
@@ -752,10 +761,53 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
     // say "their accounts are not configured" above ten of Freitag's posts.
     headToHead,
     playbook,
+    // EVERY TRACKED NAME, not only the listed ones: a row keyed by a rival the
+    // selector does not list (a stitched rename) still wears its note.
+    homonyms: homonymsFor(rivals.rivals.map((r) => r.name)),
     record: { line: howSoundLine(recordInputs), lines: recordLines(recordInputs), href: '/dashboard/settings' },
     method: methodLines(recordInputs, { brand }),
   }
 }
+
+/**
+ * The note for a rival name that is mostly another word, or null.
+ *
+ * MATCHED ON THE NAME, TRIMMED AND CASE-FOLDED, because the tracked list is
+ * free text typed in Settings: "freitag " is the same rival as "Freitag".
+ */
+export function homonymNote(
+  name: string | null | undefined,
+  notes: Readonly<Record<string, string>> = HOMONYM_NOTES,
+): string | null {
+  const key = (name ?? '').trim().toLowerCase()
+  if (key === '') return null
+  for (const [word, note] of Object.entries(notes)) {
+    if (word.trim().toLowerCase() === key) return note
+  }
+  return null
+}
+
+/** The notes for these rivals, keyed by audience: the map every block on the
+ *  page reads, so the note is decided once and printed the same way beside
+ *  each of the rival's rows and counts. */
+export function homonymsFor(
+  names: readonly string[],
+  notes: Readonly<Record<string, string>> = HOMONYM_NOTES,
+): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const name of names) {
+    const note = homonymNote(name, notes)
+    if (note) out[rivalKey(name)] = note
+  }
+  return out
+}
+
+/** The note beside one audience's rows, or null (none, or data stored before
+ *  the field existed). */
+export const homonymOf = (
+  data: Pick<CompetitiveSurfaceData, 'homonyms'>,
+  audience: string | null | undefined,
+): string | null => (audience ? data.homonyms?.[audience] ?? null : null)
 
 /** The page's own address, keeping the reader's horizon. */
 export function competitiveSurfaceHref(rival: string | null, params: Record<string, string | undefined> = {}): string {

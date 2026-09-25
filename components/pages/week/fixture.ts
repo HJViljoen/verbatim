@@ -827,3 +827,28 @@ export function absentReadingFixture(): WeekData {
     },
   }
 }
+
+/**
+ * An update that opened a new clustering regime (market-first WP1.9).
+ *
+ * SEALAND'S 10 SEP UPDATE, AS IF ITS REGIME HAD CHANGED. It minted 592 theme
+ * identities (the `thinFixture` figure, measured) and none carried ten videos
+ * that month. Had its `clustering_key` differed from the 9 Sep update's, every
+ * one of the 592 would be the corpus re-grouped, not a theme heard for the
+ * first time: the list is empty, nothing is counted as first heard, and the
+ * block says "Re-grouped with the 10 Sep update: 592 themes." On staging both
+ * updates carry no key, so by the rule this one did not open a regime; the
+ * premise is the fixture's, the count is the run's own.
+ */
+export function regroupedFixture(): WeekData {
+  const d = thinFixture()
+  return {
+    ...d,
+    cameIn: {
+      ...d.cameIn,
+      newThemes: [],
+      newThemesSeen: 0,
+      regrouped: { update: d.update.date, themes: 592 },
+    },
+  }
+}
