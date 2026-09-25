@@ -18,6 +18,18 @@
 // or a tracking column call `assertTenantMay` before they write, and a sweep
 // test (lib/tenant-locks.test.ts) lists every such action and fails if one does
 // not, so a new action cannot quietly reopen what this closes.
+//
+// WHAT IT DOES NOT CLOSE: THE DATABASE. This is enforced in the app (the server
+// actions and the send-now route), not in Postgres. `report_schedules` has a
+// select-only policy for `authenticated`, so sending cannot be switched on
+// around it. But `authenticated` still holds column UPDATE on
+// `tracking_configs` (competitor_names, report_period, report_day: migration
+// 20260820120000; exclude_terms: 20260911140000; subreddits: 20260919090000)
+// under its own-row policy, so a Sealand user holding their session token could
+// PATCH those columns through PostgREST and never meet `assertTenantMay`. The
+// config audit trigger would still record it. Deploy 1 carries no migration;
+// revoking those column grants (the settings actions write with the service
+// role) or checking the lock in a trigger goes with MF1 or MF3.
 
 export type TenantLockKind = 'sends' | 'tracking'
 

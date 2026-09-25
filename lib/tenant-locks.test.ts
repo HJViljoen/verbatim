@@ -90,12 +90,15 @@ function files(dir: string): string[] {
 }
 
 /** Each top-level function of a module and its text, up to the next top-level
- *  declaration. */
+ *  declaration: a `function` declaration, or a `const`/`let` bound to an arrow
+ *  or a function expression (`export const save = async (…) => …`), which is a
+ *  server action just the same. */
 function topLevelFunctions(text: string): { name: string; body: string }[] {
   const lines = text.split('\n')
   const starts: { name: string | null; at: number }[] = []
   lines.forEach((line, i) => {
-    const fn = line.match(/^(?:export\s+)?(?:async\s+)?function\s+(\w+)/)
+    const fn = line.match(/^(?:export\s+)?(?:async\s+)?function\s*\*?\s*(\w+)/)
+      ?? line.match(/^(?:export\s+)?(?:const|let)\s+(\w+)\b.*?=\s*(?:async\s+)?(?:function\b|\(|\w+\s*=>)/)
     if (fn) starts.push({ name: fn[1], at: i })
     else if (/^(?:export\s+)?(?:const|let|interface|type|class)\s/.test(line)) starts.push({ name: null, at: i })
   })
@@ -115,6 +118,23 @@ const writers = serverActionModules.flatMap((f) => {
 })
 
 describe('the sweep: every server action that can switch sending on or change tracking calls the lock', () => {
+  // An arrow-function export is a server action too; a scan that saw only
+  // `function` declarations would skip one silently.
+  it('sees an action however it is declared', () => {
+    const text = [
+      "'use server'",
+      'export async function a() {}',
+      'export const b = async (x: string) => x',
+      'export const c: (x: string) => Promise<void> = async (x) => {}',
+      'const d = async function () {}',
+      'export const e = async x => x',
+      'export const LIMIT = 3',
+      'type T = string',
+    ].join('\n')
+    expect(topLevelFunctions(text).map((f) => f.name)).toEqual(['a', 'b', 'c', 'd', 'e'])
+    expect(topLevelFunctions(text).find((f) => f.name === 'e')?.body).not.toContain('LIMIT')
+  })
+
   it('finds the server actions it is checking', () => {
     expect(serverActionModules.length).toBeGreaterThan(10)
     for (const key of GUARDED) expect(writers.map((w) => w.key), key).toContain(key)
