@@ -27,9 +27,10 @@
 // 20260820120000; exclude_terms: 20260911140000; subreddits: 20260919090000)
 // under its own-row policy, so a Sealand user holding their session token could
 // PATCH those columns through PostgREST and never meet `assertTenantMay`. The
-// config audit trigger would still record it. Deploy 1 carries no migration;
-// revoking those column grants (the settings actions write with the service
-// role) or checking the lock in a trigger goes with MF1 or MF3.
+// config audit trigger would still record it. Deploy 1 carries no migration.
+// With MF1 or MF3: revoke those column grants (the settings actions write a
+// tenant's own change through those same grants, on the session's client, so
+// they would move to the admin client first) or check the lock in a trigger.
 
 export type TenantLockKind = 'sends' | 'tracking'
 
