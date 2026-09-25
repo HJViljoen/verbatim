@@ -322,7 +322,7 @@ describe('headToHead · the month-pair rule', () => {
       expect(v.refusedReason).toBe('tracking_change')
       expect(v.changePts).toBeNull()
       expect(v.pair).toBeDefined()
-      expect(pairSentence(v.pair!)).toBe('Not read as a change: we changed what we search in September.')
+      expect(pairSentence(v.pair!)).toBe('Not read as a change: we changed our searches in September.')
       // The levels still print.
       expect(v.value).toEqual({ k: 12, n: 654 })
     })

@@ -165,7 +165,7 @@ export function MovementBadge({ verdict, unit, good = 'up', bandTip = false }: {
   const bandPts = 'bandPts' in verdict ? verdict.bandPts : verdict.band
   // THE MONTH-PAIR RULE'S WORDS (WP1.3). A pair refused because the two months
   // were not read the same way prints its own sentence in place of the word,
-  // "Not read as a change: we changed what we search in September.", because
+  // "Not read as a change: we changed our searches in September.", because
   // "comparison refused" tells a reader something is wrong without saying
   // what, and that sentence is the whole point of the refusal. A pair read
   // with a note keeps its badge and carries the note in the title.

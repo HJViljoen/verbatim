@@ -178,7 +178,7 @@ describe('MovementBadge: the month-pair rule (WP1.3)', () => {
       pair: { mode: 'refuse', cause: 'searches', changeMonth: '2026-09-01', checkWith: null },
     })} />)
     assertCopyContract(markup)
-    expect(markupText(markup)).toBe('Not read as a change: we changed what we search in September.')
+    expect(markupText(markup)).toBe('Not read as a change: we changed our searches in September.')
     expect(markup).toContain('title="what we track changed inside this window"')
   })
 

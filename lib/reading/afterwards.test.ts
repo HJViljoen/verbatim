@@ -383,6 +383,6 @@ describe('afterwardsFor under the month-pair rule (decision D, WP1.3)', () => {
     })
     expect(a.state).toBe('refused')
     expect(a.verdict).toBeNull()
-    expect(a.line).toBe('Not read as a change: we changed what we search in September.')
+    expect(a.line).toBe('Not read as a change: we changed our searches in September.')
   })
 })

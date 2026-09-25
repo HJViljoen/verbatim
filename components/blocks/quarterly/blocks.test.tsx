@@ -1101,7 +1101,7 @@ describe('the artboard port (Block D wave 2)', () => {
 // quarterly dropped it. The sentence is Sealand's (our September search
 // changes); the fixture's months are the mock's.
 describe('quarterly lines under the month-pair rule', () => {
-  const WHY = 'Not read as a change: we changed what we search in September.'
+  const WHY = 'Not read as a change: we changed our searches in September.'
 
   it('qr.subjects · carries the Overview row\'s refused steps into the line and says why', () => {
     const broken = brokenStepFixture(WHY)

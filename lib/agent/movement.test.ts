@@ -255,7 +255,7 @@ describe('Ask\'s movement reader under the month-pair rule', () => {
     })
     const line = movementLine(reading({ verdict: refused }))
     expect(line).toContain('comparison refused')
-    expect(line).toContain('Not read as a change: we changed what we search in September.')
+    expect(line).toContain('Not read as a change: we changed our searches in September.')
     expect(line).not.toMatch(/\bmoved\b/)
   })
 

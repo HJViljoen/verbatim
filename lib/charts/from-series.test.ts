@@ -248,7 +248,7 @@ describe('calendarBandsFor', () => {
 
 describe('seriesToCalendar: the month-pair rule (WP1.3)', () => {
   it('carries each refused step onto its later month, and leaves the rest joined', () => {
-    const why = 'Not read as a change: we changed what we search in September.'
+    const why = 'Not read as a change: we changed our searches in September.'
     const s = series(
       [point('2026-07-01'), point('2026-08-01'), point('2026-09-01', { state: 'filling', status: 'filling' })],
       { refusedSteps: { '2026-09-01': why } },

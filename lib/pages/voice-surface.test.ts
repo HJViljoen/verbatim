@@ -222,7 +222,7 @@ describe('moversNote', () => {
   })
 
   it('names the month pair\'s refusal rather than blaming the month (decision D, WP1.3)', () => {
-    const refused = 'Not read as a change: we changed what we search in September.'
+    const refused = 'Not read as a change: we changed our searches in September.'
     expect(moversNote({ read: false, thin: false, any: false, refused })).toBe(refused)
     // A thin month is still said first; a drawn comparison is not overruled.
     expect(moversNote({ read: false, thin: true, any: false, refused })).toBe('Too little conversation this month to say what moved.')

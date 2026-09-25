@@ -301,7 +301,7 @@ describe('headline', () => {
       const refused: Verdict = { ...moved('t1', 'Durability', 5.4), state: 'refused', changePts: null, refusedReason: 'tracking_change' }
       const h = headline({ verdicts: [refused], monthPair: note })
       expect(h.lead).toBeNull()
-      expect(h.body).toBe('Not read as a change: we changed what we search in September. Here is where you stand.')
+      expect(h.body).toBe('Not read as a change: we changed our searches in September. Here is where you stand.')
       expect(h.body).not.toContain('Nothing moved')
     })
   }
@@ -361,14 +361,14 @@ describe('refusedPairInterpretation', () => {
     const verdicts = [refused()]
     expect(verdicts[0].state).toBe('refused')
     const out = refusedPairInterpretation(compose(verdicts), verdicts)
-    expect(out.sentences[0]).toBe('Not read as a change: we changed what we search in September.')
+    expect(out.sentences[0]).toBe('Not read as a change: we changed our searches in September.')
     expect(out.sentences.join(' ')).not.toContain('Nothing moved')
     expect(out.fallback).toBe(true)
   })
 
   it('with no verdict at all, the page\'s month pair decides, as the headline\'s does', () => {
     const note = pairOnVerdict(pairOn(sealandJudge('2026-10-02T06:00:00.000Z'))('2026-09-01', '2026-10-01', INDUSTRY_AUDIENCE)).note
-    expect(refusedPairInterpretation(compose([]), [], note).sentences[0]).toBe('Not read as a change: we changed what we search in September.')
+    expect(refusedPairInterpretation(compose([]), [], note).sentences[0]).toBe('Not read as a change: we changed our searches in September.')
     expect(refusedPairInterpretation(compose([]), [], null).sentences[0]).toBe(INTERPRETATION_NOTHING_MOVED)
   })
 

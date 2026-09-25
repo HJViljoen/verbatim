@@ -113,7 +113,7 @@ export function BlockMovement({
 }) {
   if (!verdict) return null
   // THE MONTH-PAIR RULE (market-first decision D, WP1.3). A refused pair prints
-  // its sentence ("Not read as a change: we changed what we search in
+  // its sentence ("Not read as a change: we changed our searches in
   // September."); a pair a change of ours touched under a tenth of carries its
   // note beside whatever the band said. Both in every mode: the note is a fact
   // about the comparison, and paper and an inbox are owed it as much as a

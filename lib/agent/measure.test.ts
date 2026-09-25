@@ -557,7 +557,7 @@ describe('measureAnswer under the month-pair rule', () => {
       expect(f.verdict?.refusedReason).toBe('tracking_change')
       expect(f.direction).toBeNull()
       // The chart beside the answer breaks the refused step.
-      expect(f.chart.line.points.find((p) => p.month === MONTH)?.brokenBefore).toBe('Not read as a change: we changed what we search in September.')
+      expect(f.chart.line.points.find((p) => p.month === MONTH)?.brokenBefore).toBe('Not read as a change: we changed our searches in September.')
     }
   })
 })

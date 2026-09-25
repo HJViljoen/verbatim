@@ -458,7 +458,7 @@ describe('Sparkline with gaps', () => {
 // moving subject, is 38 of August's 351 (10.8%) and 104 of September's 626
 // (16.6%): two months our own September search changes refuse to compare.
 describe('CalendarLine: a refused step is drawn broken', () => {
-  const WHY = 'Not read as a change: we changed what we search in September.'
+  const WHY = 'Not read as a change: we changed our searches in September.'
 
   it('with too few months for a line, prints the figures and the reason', () => {
     const looks: CalendarSeries = {

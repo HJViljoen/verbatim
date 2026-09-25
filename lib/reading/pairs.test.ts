@@ -105,7 +105,7 @@ describe('monthChange: August against September never reads "moved"', () => {
       expect(v.state).toBe('refused')
       expect(v.refusedReason).toBe('tracking_change')
       expect(v.pair).toEqual({ mode: 'refuse', cause: 'searches', changeMonth: '2026-09-01', checkWith: null })
-      expect(pairSentence(v.pair!)).toBe('Not read as a change: we changed what we search in September.')
+      expect(pairSentence(v.pair!)).toBe('Not read as a change: we changed our searches in September.')
       // The counts stay, so the levels print; no change is drawn.
       expect(v.value).toEqual({ k: 104, n: 626 })
       expect(v.baseline).toEqual({ k: 38, n: 351 })
@@ -345,7 +345,7 @@ describe('pairJudge', () => {
     expect(pairSentence(pairOnVerdict(measured).note!)).toBe('Not compared yet: checked with the 4 Oct update.')
     // With no row, the same pair names our September search change.
     const unmeasured = judgeAt('2026-09-20T13:30:00.000Z')('2026-08-01', '2026-09-01', 'market')
-    expect(pairSentence(pairOnVerdict(unmeasured).note!)).toBe('Not read as a change: we changed what we search in September.')
+    expect(pairSentence(pairOnVerdict(unmeasured).note!)).toBe('Not read as a change: we changed our searches in September.')
   })
 
   it('a change the row measures from 1% to under 10% is listed with its share and not named as the cause', () => {
@@ -440,7 +440,7 @@ describe('pairOnVerdict', () => {
 
   // THE PAIR'S OWN TWO MONTHS FIRST (WP1.3 review fix). July against August
   // spans to August's freeze line, so it holds September's changes too; the
-  // August point said "we changed what we search in September". The change
+  // August point said "we changed our searches in September". The change
   // dated inside July or August is named first: on the category, the 17 Aug
   // own-handles row. The market view, which re-filing does not move, holds no
   // change in those two months and names the later search change.
@@ -449,7 +449,7 @@ describe('pairOnVerdict', () => {
     expect(pairSentence(pairOnVerdict(judge('2026-07-01', '2026-08-01', 'themes')).note!))
       .toBe('Not read as a change: we changed how we check or file videos in August.')
     expect(pairSentence(pairOnVerdict(judge('2026-07-01', '2026-08-01', 'market')).note!))
-      .toBe('Not read as a change: we changed what we search in September.')
+      .toBe('Not read as a change: we changed our searches in September.')
   })
 
   it('an unmeasured pair with a code change and a search change in span names the search change', () => {
@@ -465,7 +465,7 @@ describe('refusedSteps', () => {
   it('breaks Aug→Sep with the sentence, and never judges months that are not neighbours', () => {
     const judge = pairOn(judgeAt('2026-10-02T06:00:00.000Z'))
     const steps = refusedSteps(['2026-07-01', '2026-08-01', '2026-09-01', '2026-11-01'], (a, b) => judge(a, b, INDUSTRY_AUDIENCE))
-    expect(steps['2026-09-01']).toBe('Not read as a change: we changed what we search in September.')
+    expect(steps['2026-09-01']).toBe('Not read as a change: we changed our searches in September.')
     // July to August names the change dated in those two months (17 Aug).
     expect(steps['2026-08-01']).toBe('Not read as a change: we changed how we check or file videos in August.')
     expect(steps['2026-11-01']).toBeUndefined()
@@ -496,7 +496,7 @@ describe('pairTools', () => {
     const t = pairTools(pairOn(judgeAt('2026-10-02T06:00:00.000Z')))
     expect(t.stepReasons(['2026-08-01', '2026-09-01', '2026-11-01'], INDUSTRY_AUDIENCE)).toEqual([
       null,
-      'Not read as a change: we changed what we search in September.',
+      'Not read as a change: we changed our searches in September.',
       // Not neighbours on the calendar: not a step, not judged.
       null,
     ])
@@ -516,7 +516,7 @@ describe('the pair words (lib/calibration.ts)', () => {
       PAIR_FLAG_NOTE('2026-09-01'),
       PAIR_FLAG_NOTE(null),
     ]
-    expect(all[0]).toBe('Not read as a change: we changed what we search in September.')
+    expect(all[0]).toBe('Not read as a change: we changed our searches in September.')
     expect(all[2]).toBe('Not compared yet: checked with the 4 Oct update.')
     for (const s of all) {
       expect(s).not.toMatch(/\u2014/)

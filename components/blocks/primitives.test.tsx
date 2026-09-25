@@ -322,7 +322,7 @@ describe('BlockMovement: the month-pair rule (market-first decision D, WP1.3)', 
     changePts: null, bandPts: null, state: 'refused', refusedReason: 'tracking_change', flags: [],
     pair: { mode: 'refuse', cause: 'searches', changeMonth: '2026-09-01', checkWith: null },
   }
-  const SENTENCE = 'Not read as a change: we changed what we search in September.'
+  const SENTENCE = 'Not read as a change: we changed our searches in September.'
 
   it('prints the refusal\'s own sentence in every mode, never "moved" and never a change', () => {
     for (const mode of MODES) {

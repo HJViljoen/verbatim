@@ -215,7 +215,7 @@ describe('changesFromLog: Sealand’s September', () => {
   // THE 6 JUL ROW IS WHERE THE RECORD BEGINS (WP1.3 review fix). The
   // reconstruction writes the earliest term set keyword_performance can show,
   // `before` null, and says in its own note that it "is not when these terms
-  // were configured". Read as a change it put "we changed what we search in
+  // were configured". Read as a change it put "we changed our searches in
   // July" on June against July; what June searched is unknown, not different.
   it('drops the reconstructed initial term set, and only that row', () => {
     expect(CHANGES.some((c) => c.id === 'terms-0706')).toBe(false)
@@ -454,7 +454,7 @@ describe('comparabilityOf: unmeasured', () => {
     expect(r.mode).toBe('refuse')
     expect(core(r.reasons)[0]).toEqual({ kind: 'unmeasured', changeId: null, share: null })
     // Each named WITH its date and surface (WP1.3): the refusal's words name
-    // the month of the change ("we changed what we search in September").
+    // the month of the change ("we changed our searches in September").
     expect(r.reasons.slice(1)).toEqual([
       { kind: 'searches', changeId: 'subreddits-0909-onebag', share: null, changedAt: '2026-09-09T00:00:00.000Z', surface: 'subreddits' },
       { kind: 'searches', changeId: 'terms-0909-in-0', share: null, changedAt: '2026-09-09T18:17:56.000Z', surface: 'terms' },

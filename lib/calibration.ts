@@ -512,9 +512,11 @@ export const recStatus = (value: string | null | undefined): RecStatus =>
 export const PAIR_FLAG_NOTE = (month: string | null): string =>
   `Read with a note: a change of ours${month ? ` in ${longMonth(month)}` : ''} touched under a tenth of the videos.`
 
-/** A pair refused because we changed what we search. */
+/** A pair refused because we changed our searches. The approved preview's
+ *  words (25 Sep), on every artboard, and decision D's own ("we changed our
+ *  searches, our relevance check or our filing"). */
 export const PAIR_REFUSED_SEARCHES = (month: string): string =>
-  `Not read as a change: we changed what we search in ${longMonth(month)}.`
+  `Not read as a change: we changed our searches in ${longMonth(month)}.`
 
 /** A pair refused because we changed how we check or file videos (the
  *  relevance check, the filing judge, a re-tag, the reader). */

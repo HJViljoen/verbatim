@@ -138,7 +138,7 @@ describe('lineSegments', () => {
   // style, the category's one moving subject: 38 of August's 351 (10.8%) and
   // 104 of September's 626 (16.6%), two months not read the same way.
   it('breaks the path at a refused step, keeping both points', () => {
-    const why = 'Not read as a change: we changed what we search in September.'
+    const why = 'Not read as a change: we changed our searches in September.'
     const points = [
       p('2026-08-01', 10.8, 'read', { k: 38, n: 351 }),
       p('2026-09-01', 16.6, 'read', { k: 104, n: 626, brokenBefore: why }),
@@ -158,11 +158,11 @@ describe('brokenStepLine', () => {
       { label: 'The category', color: 'var(--cat)', points: [
         p('2026-07-01', 5, 'read'),
         p('2026-08-01', 10.8, 'read', { brokenBefore: 'older' }),
-        p('2026-09-01', 16.6, 'read', { brokenBefore: 'Not read as a change: we changed what we search in September.' }),
+        p('2026-09-01', 16.6, 'read', { brokenBefore: 'Not read as a change: we changed our searches in September.' }),
       ] },
-      { label: 'You', color: 'var(--you)', points: [p('2026-09-01', 3, 'read', { brokenBefore: 'Not read as a change: we changed what we search in September.' })] },
+      { label: 'You', color: 'var(--you)', points: [p('2026-09-01', 3, 'read', { brokenBefore: 'Not read as a change: we changed our searches in September.' })] },
     ]
-    expect(brokenStepLine(series)).toBe('Not read as a change: we changed what we search in September.')
+    expect(brokenStepLine(series)).toBe('Not read as a change: we changed our searches in September.')
   })
 
   it('is null where no step is broken', () => {
@@ -170,9 +170,9 @@ describe('brokenStepLine', () => {
   })
 
   it('the hover on the broken month says why', () => {
-    const point = p('2026-09-01', 16.6, 'read', { k: 104, n: 626, brokenBefore: 'Not read as a change: we changed what we search in September.' })
+    const point = p('2026-09-01', 16.6, 'read', { k: 104, n: 626, brokenBefore: 'Not read as a change: we changed our searches in September.' })
     expect(hoverTitle({ label: 'Looks & style' }, point, (v) => `${v}%`)).toBe(
-      'Looks & style 16.6% · Sep 2026 · 104 of 626 videos · Not read as a change: we changed what we search in September.',
+      'Looks & style 16.6% · Sep 2026 · 104 of 626 videos · Not read as a change: we changed our searches in September.',
     )
   })
 })

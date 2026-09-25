@@ -575,7 +575,7 @@ describe('readMove under the month-pair rule (decision D, WP1.3)', () => {
     const r = reading({ pair: judge })
     expect(r.verdict?.state).toBe('refused')
     expect(r.verdict?.refusedReason).toBe('tracking_change')
-    expect(r.series[0].refusedSteps?.['2026-09-01']).toBe('Not read as a change: we changed what we search in September.')
+    expect(r.series[0].refusedSteps?.['2026-09-01']).toBe('Not read as a change: we changed our searches in September.')
   })
 
   it('no judge reads as before', () => {
