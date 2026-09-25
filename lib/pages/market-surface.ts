@@ -101,7 +101,7 @@ export const CONCLUSIONS_SHOWN = 8
  * printed under the table rather than left in a `title`.
  */
 export const LEDGER_FIRST_TIME_LINE =
-  'First time marks a row first raised by an update inside this month: the ledger’s own dates are the update’s clock, not the comment’s.'
+  'First time marks a row raised once, by an update inside the month the page reads: the ledger’s own dates are the update’s clock, not the comment’s.'
 
 /** What the ledger's "Grounded in" column counts, said once under the table
  *  because every row's cell is counted the same way (D8, and the same shape as

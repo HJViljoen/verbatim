@@ -144,11 +144,18 @@ function StatusCell({ row, mode }: { row: AdviceRow; mode: RenderMode }) {
  *  for a row nobody has decided on (`LEDGER_FIRST_TIME_LINE`). */
 function RepeatCell({ row, isNew, mode }: { row: AdviceRow; isNew: boolean; mode: RenderMode }) {
   const { updates, months } = repeatCell(row)
+  // "FIRST TIME" ONLY FOR A ROW RAISED ONCE, AND QUIET (deploy 1 review). Since
+  // MK2 runs newest first, every visible row on 2 Oct was first raised in
+  // September, and the amber chip printed twelve times, row 1 included, whose
+  // advice Overview's headline tile calls "repeated across 3 updates". A row
+  // raised by more than one update states its count, as every other row does;
+  // the chip, grey as the preview's row tags, marks only a first raising.
+  const first = isNew && row.timesMade === 1
   if (mode === 'email') {
-    return <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>{isNew ? 'First time' : updates}</span>
+    return <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>{first ? 'First time' : updates}</span>
   }
-  if (isNew) {
-    return <span title={LEDGER_FIRST_TIME_LINE} className="inline-block cursor-help whitespace-nowrap rounded-full bg-warning/15 px-2 py-0.5 text-[11.5px] font-semibold text-warning">First time</span>
+  if (first) {
+    return <span title={LEDGER_FIRST_TIME_LINE} className="inline-block cursor-help whitespace-nowrap rounded-full bg-inner px-2 py-0.5 text-[11.5px] font-medium text-secondary-foreground">First time</span>
   }
   return (
     <span className="flex min-w-0 flex-col gap-px">

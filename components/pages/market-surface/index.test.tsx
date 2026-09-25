@@ -398,13 +398,27 @@ describe('MK2 · the ledger', () => {
     // column apart, meaning "raised this month" and "you have not decided".
     // The chip is the one that moves, and its basis (and its clock) is printed
     // under the table rather than left in a title.
-    const text = renderText(marketAdvice.render(marketFixture(), 'app', ctx))
+    // The chip marks a row RAISED ONCE in the reading month (deploy 1
+    // review); the fixture's September row was raised by two updates, so it is
+    // made a first raising here.
+    const base = marketFixture()
+    const data = { ...base, advice: { ...base.advice, rows: base.advice.rows.map((r, i) => (i === 0 ? { ...r, timesMade: 1, monthsRepeated: 1 } : r)) } }
+    const text = renderText(marketAdvice.render(data, 'app', ctx))
     expect(text).toContain('First time')
     // Its clock rides as the chip's tooltip (copy de-clutter B57).
     expect(text).not.toContain('First time marks a row')
-    expect(render(marketAdvice.render(marketFixture(), 'app', ctx))).toContain('the update’s clock, not the comment’s')
+    expect(render(marketAdvice.render(data, 'app', ctx))).toContain('the update’s clock, not the comment’s')
     // "New" survives exactly where the status column puts it.
     expect((text.match(/\bNew\b/g) ?? [])).toHaveLength(1)
+  })
+
+  it('states the count, never "First time", on a September row raised by more than one update (deploy 1 review)', () => {
+    // Row 1 on staging's 2 Oct render: "First time" beside the advice the
+    // Overview's headline calls "repeated across 3 updates".
+    const text = renderText(marketAdvice.render(marketFixture(), 'app', ctx))
+    expect(text).not.toContain('First time')
+    expect(text).toMatch(/current recommendation Sep 2 updates running/)
+    expect(render(marketAdvice.render(marketFixture(), 'app', ctx))).not.toContain('text-warning')
   })
 
   it('counts the repeats in UPDATES, with the word updates on them', () => {
