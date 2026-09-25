@@ -543,6 +543,19 @@ describe('comparabilityOf: changes of ours inside the span', () => {
     expect(themes.reasons).toEqual([{ kind: 'code_change', changeId: 'gate-fix', share: 63 / 626 }])
   })
 
+  it('with only the market entry, themes is unmeasured and refuses: 63 is never divided by 655 for themes (decision E)', () => {
+    const marketOnly: PairRow = { ...SEP_OCT, codeChanges: SEP_OCT.codeChanges.filter((e) => e.population !== 'category') }
+    const themes = comparabilityOf('2026-09-01', '2026-10-01', { row: marketOnly, changes: [GATE_FIX], view: 'themes', later })
+    expect(themes.mode).toBe('refuse')
+    expect(themes.reasons).toEqual([{ kind: 'code_change', changeId: 'gate-fix', share: null }])
+    // The market still reads its own entry: 9.6%, a flag.
+    const market = comparabilityOf('2026-09-01', '2026-10-01', { row: marketOnly, changes: [GATE_FIX], view: 'market', later })
+    expect(market.reasons).toEqual([{ kind: 'code_change', changeId: 'gate-fix', share: 63 / 655 }])
+    // The same for a measure the caller was not handed.
+    const orphan = comparabilityOf('2026-09-01', '2026-10-01', { row: marketOnly, changes: [], view: 'themes', later })
+    expect(orphan.reasons).toEqual([{ kind: 'code_change', changeId: 'gate-fix', share: null }])
+  })
+
   it('an unmeasured attribution change refuses themes and brands, not the market', () => {
     for (const view of ['themes', 'brands'] as const) {
       const r = comparabilityOf('2026-10-01', '2026-11-01', { row: SAME_WAY, changes: [{ ...ATTRIBUTION, changedAt: '2026-10-20T12:00:00.000Z' }], view, later: LATER_NOV })

@@ -140,7 +140,8 @@ export interface PairRow {
    *  are over: the market's (the default) or the category's, which is the one
    *  a themes comparison divides by (themes are grouped within the category):
    *  the gate fix's 63 September videos are 9.6% of the market's 655 and 10.1%
-   *  of the category's 626 (plan §2.11). */
+   *  of the category's 626 (plan §2.11). A change with no category entry is
+   *  unmeasured for themes, so the writer (WP1.4) emits both. */
   codeChanges: { changeId: string; surface: OurChangeSurface; prev: Counted; curr: Counted; population?: 'market' | 'category' }[]
   depth: { prevMedian: number | null; currMedian: number | null }
   /** Run health per month. */
@@ -319,11 +320,16 @@ const idsOf = (c: OurChange): readonly string[] => c.rowIds && c.rowIds.length >
 
 type CodeEntry = PairRow['codeChanges'][number]
 
-/** The entry a view divides by: the category's population for themes, the
- *  market's for the rest; the other one when that is all there is. */
+/** The entry a view divides by. Themes divide by the category's population
+ *  only: a category count is never divided by the market's n (decision E), so
+ *  a change measured only over the market is unmeasured for themes (null),
+ *  which refuses. The gate fix shows why: 63 of the market's 655 is 9.6%, a
+ *  flag, and 63 of the category's 626 is 10.1%, a refusal (§2.11). The other
+ *  views divide by the market's, or by the category's when that is all there
+ *  is. */
 function entryForView(entries: readonly CodeEntry[], view: ComparabilityView): CodeEntry | null {
-  const want = view === 'themes' ? 'category' : 'market'
-  return entries.find((e) => (e.population ?? 'market') === want) ?? entries[0] ?? null
+  if (view === 'themes') return entries.find((e) => e.population === 'category') ?? null
+  return entries.find((e) => (e.population ?? 'market') === 'market') ?? entries[0] ?? null
 }
 
 /** A stored month ('YYYY-MM-DD', or an instant) as a month start; null when
@@ -427,20 +433,24 @@ export function comparabilityOf(prevMonth: string, month: string, input: {
 
   // 4b. Every other change of ours, each on its own measure.
   const known = new Set(input.changes.flatMap(idsOf))
-  const judge = (entry: CodeEntry | null, changeId: string, surface: string): void => {
+  // A search change with no entry of its own is read through the search-outside
+  // count above; any change with entries, but none this view divides by, is
+  // unmeasured.
+  const judge = (entries: readonly CodeEntry[], changeId: string, surface: string): void => {
     const search = isSearchSurface(surface)
-    if (!entry) {
+    if (entries.length === 0) {
       if (!search) reasons.push({ kind: 'code_change', changeId, share: null })
       return
     }
-    const share = pairShare(entry.prev, entry.curr)
+    const entry = entryForView(entries, view)
+    const share = entry ? pairShare(entry.prev, entry.curr) : null
     if (share == null || !(share < COMPARE_FLAG_SHARE)) {
       reasons.push({ kind: search ? 'searches' : 'code_change', changeId, share })
     }
   }
   for (const c of inSpan) {
     const ids = idsOf(c)
-    judge(entryForView(row.codeChanges.filter((e) => ids.includes(e.changeId)), view), c.id, c.surface)
+    judge(row.codeChanges.filter((e) => ids.includes(e.changeId)), c.id, c.surface)
   }
   // A measure for a change the caller did not pass is judged by its own surface.
   const orphans = new Map<string, CodeEntry[]>()
@@ -448,7 +458,7 @@ export function comparabilityOf(prevMonth: string, month: string, input: {
     if (known.has(e.changeId) || !viewsForSurface(e.surface).includes(view)) continue
     orphans.set(e.changeId, [...(orphans.get(e.changeId) ?? []), e])
   }
-  for (const [changeId, entries] of orphans) judge(entryForView(entries, view), changeId, entries[0].surface)
+  for (const [changeId, entries] of orphans) judge(entries, changeId, entries[0].surface)
 
   // 5. Depth.
   const { prevMedian, currMedian } = row.depth
