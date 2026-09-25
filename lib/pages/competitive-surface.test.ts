@@ -431,10 +431,13 @@ describe('buildSaidAbout', () => {
 
 // ---- a rival name that is mostly another word (market-first WP1.9) -------------
 
-describe('homonym notes — Freitag is mostly the German word for Friday', () => {
+describe('homonym notes: Freitag is also the German word for Friday', () => {
   it('carries the WP text for Freitag, and nothing for the other rivals', () => {
-    expect(HOMONYM_NOTES).toEqual({ Freitag: 'mostly the German word for Friday, not the brand' })
-    expect(homonymNote('Freitag')).toBe('mostly the German word for Friday, not the brand')
+    // True of every row it sits beside (deploy 1 review): September's six
+    // Freitag videos are two German "Friday" posts and four of the brand's.
+    expect(HOMONYM_NOTES).toEqual({ Freitag: 'the name is also German for Friday, so some videos filed here are not the brand' })
+    expect(homonymNote('Freitag')).toBe('the name is also German for Friday, so some videos filed here are not the brand')
+    expect(homonymNote('Freitag')).not.toMatch(/mostly/)
     for (const name of ['Cotopaxi', 'Patagonia', 'The North Face', 'Rareform', 'Freedom of Movement', 'Old School']) {
       expect(homonymNote(name)).toBeNull()
     }

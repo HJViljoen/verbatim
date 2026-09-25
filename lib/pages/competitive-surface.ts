@@ -275,9 +275,9 @@ export interface CompetitiveSurfaceData {
    *  rival, on the published clock, with the classified n per column. */
   playbook: PlaybookBlock | null
   /**
-   * The note printed beside a rival whose name is mostly another word, keyed
-   * by audience (`competitor:Freitag` → "mostly the German word for Friday,
-   * not the brand"). From `HOMONYM_NOTES` (lib/config.ts, market-first WP1.9).
+   * The note printed beside a rival whose name is also another word, keyed
+   * by audience (`competitor:Freitag` → "the name is also German for Friday,
+   * so some videos filed here are not the brand"). From `HOMONYM_NOTES` (lib/config.ts, market-first WP1.9).
    *
    * OPTIONAL, so a copy of this data stored before the field existed renders
    * as it was, with no note. Read it through `homonymOf`.

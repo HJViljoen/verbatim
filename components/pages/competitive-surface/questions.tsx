@@ -111,9 +111,9 @@ export const competitiveQuestions: Block<CompetitiveSurfaceData> = {
     const email = mode === 'email'
     const empty = competitiveQuestions.emptyState(data)
     const more = q.insights - q.rows.length
-    // A NAME THAT IS MOSTLY ANOTHER WORD SAYS SO BESIDE ITS COUNT
-    // (market-first WP1.9): Freitag's questions sit under videos that are
-    // mostly the German word for Friday.
+    // A NAME THAT IS ALSO ANOTHER WORD SAYS SO BESIDE ITS COUNT
+    // (market-first WP1.9): some of the videos Freitag's questions sit under
+    // are the German word for Friday.
     const note = q.rival ? homonymOf(data, rivalKey(q.rival)) : null
 
     return (

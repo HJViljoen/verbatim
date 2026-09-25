@@ -1012,20 +1012,27 @@ describe('Freitag carries its note beside its rows and counts (market-first WP1.
     }
   })
 
-  it('CO3, CO4, CO5 and CO7 print the note the data maps to the selected rival, beside its name', () => {
+  it('CO3, CO5 and CO7 print the note the data maps to the selected rival, beside its name', () => {
     // A wiring test on the base fixture: the note is a stand-in, attached to
     // the rival every one of these blocks is about, so each block is seen to
     // read the map by the right key.
-    const note = 'mostly another word, not the brand'
+    const note = 'also another word, so some are not the brand'
     const data = { ...competitiveFixture(), homonyms: { 'competitor:Ottobock': note } }
     for (const mode of MODES) {
       expect(renderText(competitiveHeadToHead.render(data, mode, ctx))).toContain(note)
       expect(renderText(competitivePlaybook.render(data, mode, ctx))).toContain(note)
-      expect(renderText(competitiveOwnClaims.render(data, mode, ctx))).toContain(note)
       expect(renderText(competitiveQuestions.render(data, mode, ctx))).toContain(`of Ottobock’s videos (${note})`)
     }
-    // Only beside Ottobock: Rareform's and Patagonia's censuses carry none.
-    expect(count(renderText(competitiveOwnClaims.render(data, 'app', ctx)), note)).toBe(1)
+  })
+
+  it('CO4 prints no note on a rival’s own posts: they are the brand’s, found by handle (deploy 1 review)', () => {
+    const note = 'also another word, so some are not the brand'
+    const data = { ...competitiveFixture(), homonyms: { 'competitor:Ottobock': note } }
+    for (const mode of MODES) {
+      const text = renderText(competitiveOwnClaims.render(data, mode, ctx))
+      expect(text).toContain('Ottobock')
+      expect(text).not.toContain(note)
+    }
     for (const block of COMPETITIVE_BLOCKS) {
       for (const mode of MODES) assertCopyContract(render(block.render(data, mode, ctx)))
     }
