@@ -5,6 +5,7 @@ import { median } from '../content-tiles'
 import { fmtInt, longMonth } from '../format'
 import { EXCLUDED_NOTE, ENGAGEMENT_EXCLUDED, belowMedian, formatMatrix, formatReading, labelInSentence, type FormatMatrix, type FormatRow, type FormatVideo } from '../reading/formats'
 import { headToHead, type HeadToHead, type HeadToHeadSide } from '../reading/head-to-head'
+import type { PairOn } from '../reading/pairs'
 import type { FigureTable } from '../reading/verdicts'
 import { monthStartOf, nextMonth, prevMonth } from '../reading/month-key'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, audienceOf, rivalKey } from '../rivals'
@@ -220,6 +221,10 @@ export function buildHeadToHead(input: {
   denominators: readonly { month: string; audience: string; videos: number; comments: number }[]
   /** As `buildPlaybook` — same default, threaded rather than hardcoded. */
   excludePlatforms?: readonly string[]
+  /** The page's month-pair judge (market-first decision D, WP1.3), handed to
+   *  `headToHead`: REQUIRED, and null only where no month pair applies (a
+   *  fixture), stated at the call site. */
+  pair: PairOn | null
 }): HeadToHead {
   const month = monthStartOf(input.month)
   const excludePlatforms = input.excludePlatforms ?? ENGAGEMENT_EXCLUDED
@@ -262,6 +267,7 @@ export function buildHeadToHead(input: {
     them: sideOf(rivalAudience, input.rival),
     readThisMonth: readIn(month),
     readPreviousMonth: readIn(previousMonth),
+    pair: input.pair,
   })
 }
 

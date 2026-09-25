@@ -229,11 +229,14 @@ function readingBetween(
   if (refused) return { ...base, gapPts: null, bandPts: null, state: 'refused' }
   if (!readable(a) || !readable(b)) return { ...base, gapPts: null, bandPts: null, state: 'too_little_data' }
 
-  // NOT UNDER THE MONTH-PAIR RULE (market-first decision D, WP1.3), on purpose:
-  // a gap is you against a rival in ONE month, and every Sealand side is under
-  // 100 videos a month (research F4, F71), so `readable` above answers
-  // `too_little_data` and nothing here prints "moved". Retired in Stage 3
-  // (deploy 5); the reason is stated rather than wired.
+  // NOT UNDER THE MONTH-PAIR RULE (market-first decision D, WP1.3), and why:
+  // a gap is two sides in ONE window, so it compares no month pair; its words
+  // are `apart` and `level`, never "moved". The one cross-month element is
+  // `basis`, the same gap in an earlier window, printed as a level beside this
+  // one. Every caller puts YOUR side as `a`, and your own side is under
+  // SHARE_BAND's 100 videos a month on both tenants (Sealand about 9, Össur
+  // about 20; research F1, F3), so the floor below answers `too_little_data`
+  // on both readings today. Retired in Stage 3 (deploy 5).
   const delta = proportionDelta(
     {
       nowPct: sidePct(a) as number,

@@ -382,6 +382,9 @@ export function competitiveFixture(over: Partial<CompetitiveSurfaceData> = {}): 
       rival: 'Ottobock',
       videos: PLAYBOOK_VIDEOS,
       denominators: OSSUR,
+      // No month pair applies in a fixture (decision D, WP1.3): the rule is
+      // pinned in lib/reading/head-to-head.test.ts.
+      pair: null,
     }),
     questions: {
       rival: 'Ottobock',
@@ -470,6 +473,9 @@ export function unreadRivalFixture(): CompetitiveSurfaceData {
       rival: 'Rareform',
       videos: PLAYBOOK_VIDEOS,
       denominators: OSSUR,
+      // No month pair applies in a fixture (decision D, WP1.3): the rule is
+      // pinned in lib/reading/head-to-head.test.ts.
+      pair: null,
     }),
     questions: {
       ...base.questions,

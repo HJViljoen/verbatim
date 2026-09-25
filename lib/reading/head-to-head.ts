@@ -1,8 +1,10 @@
 import { COMPETITIVE_MIN_VIDEOS } from '../config'
 import { fmtInt, fmtPct, longMonth, monthName } from '../format'
+import { pairedVerdict } from './bands'
 import { EXCLUDED_NOTE } from './formats'
 import { monthStartOf, nextMonth } from './month-key'
-import { bandVerdict, type Counted, type FigureTable, type Verdict } from './verdicts'
+import type { PairOn } from './pairs'
+import type { Counted, FigureTable, Verdict } from './verdicts'
 
 // CO3 — "Head to head, then and now", on the monthly reading (Phase 1 Block D,
 // D6).
@@ -179,9 +181,22 @@ export interface HeadToHeadInput {
   readPreviousMonth: number
   /** Videos on a side below which no comparison is attempted. */
   floor?: number
+  /**
+   * The page's month-pair judge (market-first decision D, WP1.3). REQUIRED, so
+   * every caller says which pair applies: each side's month-on-month verdict
+   * is judged on that side's audience (the brands view), and a pair spanning a
+   * change of ours is refused with the rule's words. `null` means "no month
+   * pair applies here" (a fixture), stated at the call site.
+   */
+  pair: PairOn | null
 }
 
 const round1 = (n: number): number => Math.round(n * 10) / 10
+
+/** The month pair one side's verdict is judged on, or null where no pair
+ *  applies (`HeadToHeadInput.pair`). */
+const pairFor = (input: HeadToHeadInput, month: string, audience: string) =>
+  input.pair ? input.pair(monthStartOf(input.previousMonth), month, audience) : null
 
 // THE READER'S WORDS, NOT THE ANALYST'S (CO18). These three sentences are
 // client-facing — they print on Competitive and on the quarterly review, in all
@@ -313,12 +328,14 @@ function videosMeasure(input: HeadToHeadInput, month: string, floor: number, bas
   const verdictFor = (side: HeadToHeadSide, level: FaceOffSide | null): Verdict | null => {
     if (!level || !level.prev) return null
     if (level.value.k < floor || level.prev.value.k < floor) return null
-    // NOT UNDER THE MONTH-PAIR RULE (market-first decision D, WP1.3), on
-    // purpose: this is you against a rival, and every Sealand side is under 100
-    // videos a month (research F4, F71), so neither side can print "moved"
-    // (SHARE_BAND's floor answers `too_little_data`). The surface retires in
-    // Stage 3 (deploy 5); WP1.3 states the reason here rather than wiring it.
-    return bandVerdict({
+    // UNDER THE MONTH-PAIR RULE (market-first decision D, WP1.3). The floor
+    // above is on the side's own k; its n is every video read in the month
+    // (`readThisMonth`), hundreds on Sealand, so SHARE_BAND's 100 never stops
+    // it. Cotopaxi's 22 of 377 in August against 12 of 663 in September bands
+    // as "moved" without the rule, over a pair that spans our 9 Sep re-tag and
+    // our own rival-list and search changes. So each side is judged on its own
+    // audience, the brands view.
+    return pairedVerdict({
       objectKind: 'audience',
       objectId: side.audience,
       objectLabel: side.label,
@@ -327,7 +344,7 @@ function videosMeasure(input: HeadToHeadInput, month: string, floor: number, bas
       basis: { from: monthStartOf(input.previousMonth), to: month },
       value: level.value,
       baseline: level.prev.value,
-    })
+    }, pairFor(input, month, side.audience))
   }
   const verdict = verdictFor(input.you, you)
   const rivalVerdict = verdictFor(input.them, them)
@@ -472,7 +489,10 @@ function sentimentMeasure(input: HeadToHeadInput, month: string, floor: number, 
   const verdictFor = (side: HeadToHeadSide, level: FaceOffSide | null): Verdict | null => {
     if (!level || !level.prev) return null
     if (level.value.n < floor || level.prev.value.n < floor) return null
-    return bandVerdict({
+    // UNDER THE MONTH-PAIR RULE too (decision D, WP1.3): the videos a mood is
+    // judged on are the videos we found, so a change to what we search or
+    // file moves them as it moves the share above.
+    return pairedVerdict({
       objectKind: 'mood',
       objectId: `${side.audience}:positive`,
       objectLabel: side.label,
@@ -482,7 +502,7 @@ function sentimentMeasure(input: HeadToHeadInput, month: string, floor: number, 
       value: level.value,
       baseline: level.prev.value,
       countedOver: { measure: 'videos', population: 'the videos a mood was judged on' },
-    })
+    }, pairFor(input, month, side.audience))
   }
   const verdict = verdictFor(input.you, you)
   const rivalVerdict = verdictFor(input.them, them)

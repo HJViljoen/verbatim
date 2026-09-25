@@ -1,16 +1,22 @@
 import { describe, it, expect } from 'vitest'
 
+import { pairSentence } from '../calibration'
 import { directionRe } from '../test/copy-contract'
+import { OSSUR_UPDATES, sealandJudge } from '../test/sealand-pairs'
 import { FACE_OFF_FLOOR, headToHead, recurrenceOf, type HeadToHeadSide } from './head-to-head'
+import { pairJudge, pairOn } from './pairs'
 
 // CO3 · the head-to-head, re-based on the months.
 //
-// The numbers are the artboard's (mock-sealand, Competitive §3): Sealand 84
-// videos against Freitag's 142, 21 and 34 comments a video, 3.1% and 4.4%
-// median engagement on 58 and 101 rated, 64% of 71 judged against 57% of 126,
-// 9 own posts against 14. What the artboard prints as "+2", "+0.2 pt" and
-// "▲ 2 pts" is asserted here as a refusal with a reason, which is what
-// deviations D2 and D3 rule.
+// The numbers in the first describe are the artboard's (mock-sealand,
+// Competitive §3): Sealand 84 videos against Freitag's 142, 21 and 34 comments
+// a video, 3.1% and 4.4% median engagement on 58 and 101 rated, 64% of 71
+// judged against 57% of 126, 9 own posts against 14. THAT VOLUME IS INVENTED
+// (research F12): Sealand's own month is about 9 videos and Freitag's about 6.
+// It pins the measures' arithmetic and nothing about the real months; the
+// month-pair rule's describe below runs on staging's real counts. What the
+// artboard prints as "+2", "+0.2 pt" and "▲ 2 pts" is asserted here as a
+// refusal with a reason, which is what deviations D2 and D3 rule.
 
 const side = (over: Partial<HeadToHeadSide> & { audience: string; label: string }): HeadToHeadSide => ({
   month: null,
@@ -60,6 +66,9 @@ const h2h = (over: Partial<Parameters<typeof headToHead>[0]> = {}) =>
     them: FREITAG,
     readThisMonth: 1388,
     readPreviousMonth: 1455,
+    // No month pair applies to the tests that pin the measures; the rule has
+    // its own describe below, on Sealand's real months.
+    pair: null,
     ...over,
   })
 
@@ -265,6 +274,101 @@ describe('headToHead · the five measures', () => {
       ...r.measures.flatMap((m) => [m.label, m.basisLine, m.verdictWhy ?? '', m.why ?? '']),
     ].join(' ')
     expect(directionRe().test(words)).toBe(false)
+  })
+})
+
+// THE MONTH-PAIR RULE ON THE FACE-OFF (market-first decision D, WP1.3 review
+// fix). The floor is on a side's own k, and its n is every video read in the
+// month, so SHARE_BAND's 100 never stops a rival with ten or more videos.
+// Staging's real months, read through the Competitive loader (?vs=Cotopaxi)
+// on 25 Sep: Cotopaxi 22 of the 377 videos read in August (category 351,
+// Cotopaxi 22, Freitag 4) and 12 of the 654 read in September (category 625,
+// Cotopaxi 12, Freitag 6, Patagonia 5, The North Face 6; staging holds no
+// stored row of Sealand's own). Without the rule that bands as "moved" (-4.0
+// points, band 2.6) across our own 9 Sep re-tag and the 9, 13 and 17 Sep
+// search and rival-list changes.
+describe('headToHead · the month-pair rule', () => {
+  const SEALAND_OWN = side({ audience: 'client', label: 'Sealand' })
+  const COTOPAXI = side({
+    audience: 'competitor:Cotopaxi',
+    label: 'Cotopaxi',
+    month: { videos: 12, comments: 206 },
+    previous: { videos: 22, comments: 389 },
+  })
+  const cotopaxi = (pair: Parameters<typeof headToHead>[0]['pair']) =>
+    headToHead({
+      month: '2026-09-01',
+      previousMonth: '2026-08-01',
+      you: SEALAND_OWN,
+      them: COTOPAXI,
+      readThisMonth: 654,
+      readPreviousMonth: 377,
+      pair,
+    }).measures.find((m) => m.key === 'videos')!
+
+  it('bands Cotopaxi’s August against September as "moved" when no pair is judged', () => {
+    const v = cotopaxi(null).rivalVerdict!
+    expect(v.value).toEqual({ k: 12, n: 654 })
+    expect(v.baseline).toEqual({ k: 22, n: 377 })
+    expect(v.state).toBe('moved')
+    expect(v.changePts).toBe(-4)
+    expect(v.bandPts).toBe(2.6)
+  })
+
+  for (const now of ['2026-09-20T12:00:00.000Z', '2026-10-02T06:00:00.000Z']) {
+    it(`refuses it on Sealand’s real change log at ${now.slice(0, 10)}, naming our September search change`, () => {
+      const v = cotopaxi(pairOn(sealandJudge(now))).rivalVerdict!
+      expect(v.state).toBe('refused')
+      expect(v.refusedReason).toBe('tracking_change')
+      expect(v.changePts).toBeNull()
+      expect(v.pair).toBeDefined()
+      expect(pairSentence(v.pair!)).toBe('Not read as a change: we changed what we search in September.')
+      // The levels still print.
+      expect(v.value).toEqual({ k: 12, n: 654 })
+    })
+  }
+
+  it('judges each side on its own audience, the brands view', () => {
+    const asked: string[] = []
+    const judge = pairOn(sealandJudge('2026-10-02T06:00:00.000Z'))
+    cotopaxi((prev, month, audience) => {
+      asked.push(`${prev}|${month}|${audience}`)
+      return judge(prev, month, audience)
+    })
+    expect(asked).toEqual(['2026-08-01|2026-09-01|competitor:Cotopaxi'])
+  })
+
+  // Össur's Ottobock, the same path on the positive share: staging's real
+  // months through the loader (?vs=Ottobock) on 25 Sep: 48 videos and 1,164
+  // comments in August, 24 and 601 in September, 42 of 48 judged in
+  // August and 17 of 19 in September. Össur is paused since its 13 Sep update,
+  // so September is never read past its end: refused as not read to its end,
+  // with no update promised. Össur's own updates; no change log is passed,
+  // because the month's state refuses before any change is consulted.
+  it('refuses Össur’s Ottobock positive share on a September not read to its end', () => {
+    const judge = pairOn(pairJudge({ now: '2026-10-02T06:00:00.000Z', changes: [], rows: [], updates: OSSUR_UPDATES }))
+    const r = headToHead({
+      month: '2026-09-01',
+      previousMonth: '2026-08-01',
+      you: side({ audience: 'client', label: 'Össur' }),
+      them: side({
+        audience: 'competitor:Ottobock',
+        label: 'Ottobock',
+        month: { videos: 24, comments: 601 },
+        previous: { videos: 48, comments: 1164 },
+        sentiment: { positive: 17, judged: 19 },
+        sentimentPrev: { positive: 42, judged: 48 },
+      }),
+      readThisMonth: 369,
+      readPreviousMonth: 597,
+      pair: judge,
+    })
+    const mood = r.measures.find((m) => m.key === 'sentiment')!.rivalVerdict!
+    expect(mood.state).toBe('refused')
+    expect(mood.refusedReason).toBe('incomplete')
+    expect(pairSentence(mood.pair!)).toBe('Not compared yet.')
+    const share = r.measures.find((m) => m.key === 'videos')!.rivalVerdict!
+    expect(share.state).toBe('refused')
   })
 })
 

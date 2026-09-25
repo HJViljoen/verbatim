@@ -668,6 +668,9 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
           rival: selected.name,
           videos: playbookVideos,
           denominators: denominators ?? [],
+          // Each side's month-on-month verdict is judged on its own audience
+          // (the brands view), as the standings are (decision D, WP1.3).
+          pair,
         })
       : null
 
