@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { recStatus, REC_STATUS_LABEL, type RecStatus } from '../calibration'
-import { topRecommendation } from '../dashboard-tiles'
+import { currentRecommendation } from '../dashboard-tiles'
 import { fmtInt, longMonth, monthName, platformLabel, shortDate } from '../format'
 import { inheritedStatus, REC_DECISIONS_TABLE, type RecDecision } from '../rec-decisions'
 import { composeInterpretation, type Interpretation } from '../prose/interpret'
@@ -2674,9 +2674,10 @@ async function loadLedger(
         // THE COLUMNS THE TABLE ACTUALLY HAS. There is no `first_seen_run_date`
         // and no `rank_score`: Pass D-b deletes and reinserts every
         // recommendation each update, so the row carries no history at all and
-        // `lineage_id` is the only thing about it that survives. Ordering is
-        // `topRecommendation`'s — priority, then how well grounded — so Overview
-        // and Market name the same top row.
+        // `lineage_id` is the only thing about it that survives. Which advice
+        // is current is `currentRecommendation`'s answer (below), the rule
+        // Market's ledger leads with, and `id` order is the order that rule
+        // hands `topRecommendation` its copies in.
         .select('id, title, lineage_id, status, priority, based_on, created_at, run_id')
         .eq('client_id', clientId)
         .order('id', { ascending: true }),
@@ -2698,16 +2699,22 @@ async function loadLedger(
   // whose every recommendation has been decided still has a ratio to print.
   const acted = ledgerTally(recRows, decisionRes)
 
-  const rec = topRecommendation(recRows)
-  if (!rec) return { top: null, acted }
-  const decided = rec.lineage_id
-    ? [...decisionRes].filter((d) => d.lineage_id === rec.lineage_id).sort((a, b) => (a.decided_at < b.decided_at ? 1 : -1))[0] ?? null
-    : null
-  const inherited = rec.lineage_id ? inheritedStatus(rec.lineage_id, decisionRes) : null
+  // THE CURRENT RECOMMENDATION, MARKET'S (market-first WP1.9 review): the top
+  // of the newest update's advice, printed in its NEWEST copy's words and
+  // naming that copy's id for a status write. This ranked every copy ever
+  // written, so on Sealand it printed the 10 Sep wording of a89fcdee beside a
+  // link to a ledger whose first row, tagged "current recommendation", read
+  // the 20 Sep one; and a new top citing fewer insights than an old copy would
+  // have put two different pieces of advice on the two pages.
+  const current = currentRecommendation(recRows)
+  if (!current) return { top: null, acted }
+  const rec = current.newest
+  const decided = [...decisionRes].filter((d) => d.lineage_id === current.lineage).sort((a, b) => (a.decided_at < b.decided_at ? 1 : -1))[0] ?? null
+  const inherited = inheritedStatus(current.lineage, decisionRes)
   // THE LINEAGE, NOT THE ROW. Everything the provenance line states is a fact
   // about the run of copies one lineage holds — how long it has been on record
   // and how many updates have carried it — and a single copy states neither.
-  const lineage = rec.lineage_id ? recRows.filter((r) => r.lineage_id === rec.lineage_id) : [rec]
+  const lineage = current.copies
   const top: LedgerRow = {
     id: rec.id,
     title: rec.title,

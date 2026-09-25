@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   themeTiers, topThemes, bucketKind, platformSplit, sentimentSplit, shareBreakdown, pointDelta,
-  movement, movementRows, movementShowsChange, accountSeries, topRecommendation, latestPerDay, type HistoryRow,
+  movement, movementRows, movementShowsChange, accountSeries, topRecommendation, latestPerDay, currentRecommendation, currentTopLineage, type HistoryRow,
 } from './dashboard-tiles'
 
 describe('themeTiers', () => {
@@ -243,5 +243,34 @@ describe('topRecommendation', () => {
     ]
     expect(topRecommendation(recs)?.id).toBe('c')
     expect(topRecommendation([])).toBeNull()
+  })
+})
+
+describe('currentRecommendation — the advice every page names as current (market-first WP1.9)', () => {
+  const at = (day: string) => `2026-09-${day}T08:00:00.000Z`
+  it('is the top of the newest update, not of every copy ever written', () => {
+    const copies = [
+      { id: 'old', lineage_id: 'L1', run_id: 'r1', created_at: at('10'), priority: 'high', based_on: { insight_ids: ['1', '2', '3'] } },
+      { id: 'new-a', lineage_id: 'L2', run_id: 'r2', created_at: at('20'), priority: 'high', based_on: { insight_ids: ['1'] } },
+      { id: 'new-b', lineage_id: 'L3', run_id: 'r2', created_at: at('20'), priority: 'low', based_on: { insight_ids: ['1', '2'] } },
+    ]
+    expect(currentTopLineage(copies)).toBe('L2')
+    expect(currentRecommendation(copies)).toMatchObject({ lineage: 'L2', newest: { id: 'new-a' } })
+  })
+
+  it('prints the lineage’s newest copy, and holds every copy of it', () => {
+    const copies = [
+      { id: 'first', lineage_id: 'L1', run_id: 'r1', created_at: at('10'), priority: 'high', based_on: { insight_ids: ['1', '2', '3'] } },
+      { id: 'again', lineage_id: 'L1', run_id: 'r2', created_at: at('20'), priority: 'high', based_on: { insight_ids: ['1'] } },
+    ]
+    const current = currentRecommendation(copies)!
+    expect(current.newest.id).toBe('again')
+    expect(current.copies.map((c) => c.id)).toEqual(['first', 'again'])
+  })
+
+  it('keys a copy with no lineage by its own id, and names nothing when there is no advice', () => {
+    const copies = [{ id: 'solo', lineage_id: null, run_id: null, created_at: at('20'), priority: 'medium', based_on: null }]
+    expect(currentRecommendation(copies)).toMatchObject({ lineage: 'solo', newest: { id: 'solo' } })
+    expect(currentRecommendation([])).toBeNull()
   })
 })

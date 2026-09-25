@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { recStatus, REC_STATUS_LABEL, type RecStatus } from '../calibration'
 import { gateTier, type GateTier } from '../curation'
-import { recommendationOrder, topRecommendation } from '../dashboard-tiles'
+import { currentTopLineage, recommendationOrder, recUpdateOf, recUpdateTimes } from '../dashboard-tiles'
 import { fmtInt, monthName, shortDate } from '../format'
 import { distinctVideos, groundedTier, insightTiers, labelsBySlug, ledgerRows, themeChips, tierCounts, type GroundingThemeRow, type ThemeChip } from '../market-tiles'
 import type { SayVsHearEntry } from '../pipeline/schemas'
@@ -390,51 +390,10 @@ export function monthsMadeIn(copies: readonly RecCopy[]): string[] {
   return [...months].sort()
 }
 
-/**
- * The update a copy came with: its run, or the copy itself where no run is
- * recorded (`timesMade`'s rule).
- */
-const updateOf = (c: Pick<RecCopy, 'id' | 'run_id'>): string => c.run_id ?? c.id
-
-/** When each update wrote its advice: the newest `created_at` among its copies
- *  (Pass D-b writes one update's rows in one insert, so they share it). */
-function updateTimes(copies: readonly RecCopy[]): Map<string, string> {
-  const at = new Map<string, string>()
-  for (const c of copies) {
-    const key = updateOf(c)
-    const t = c.created_at ?? ''
-    if ((at.get(key) ?? '') <= t) at.set(key, t)
-  }
-  return at
-}
-
-/**
- * The current recommendation: the top of the newest update's advice, as a
- * lineage (market-first WP1.9, GR F34).
- *
- * THE NEWEST UPDATE is the one whose copies were written last. Its advice is
- * ranked by `topRecommendation`, the rule Overview's headline uses, so on
- * Sealand's 20 Sep update both name lineage a89fcdee ("Add a 'fit and facts'
- * layer…", the newest wording of "Add a 'Know Before You Buy' standard…").
- * Overview ranks every copy ever written, not the newest update's; the two
- * agree while no older copy outranks the newest update's top, which holds on
- * staging's 20 Sep data. Null when there is no advice.
- */
-export function currentTopLineage(copies: readonly RecCopy[]): string | null {
-  const times = updateTimes(copies)
-  let newest: string | null = null
-  for (const [key, t] of times) {
-    const held = newest == null ? null : times.get(newest) ?? ''
-    if (held == null || t > held || (t === held && key > (newest as string))) newest = key
-  }
-  if (newest == null) return null
-  const carried = copies
-    .filter((c) => updateOf(c) === newest)
-    .sort((a, b) => a.id.localeCompare(b.id))
-    .map((c) => ({ ...c, priority: c.priority ?? null, based_on: c.based_on ?? null }))
-  const top = topRecommendation(carried)
-  return top ? lineageKey(top) : null
-}
+// The current recommendation, `currentTopLineage`, is decided in
+// lib/dashboard-tiles.ts beside `topRecommendation`, so Overview can name the
+// same advice without importing this page. Re-exported for this page's callers.
+export { currentTopLineage }
 
 /**
  * The ledger's rows: the current recommendation first, then the newest first
@@ -489,7 +448,7 @@ export function buildAdviceRows(
     byLineage.set(key, arr)
   }
 
-  const times = updateTimes(copies)
+  const times = recUpdateTimes(copies)
   /** What the order reads off each row: when it was last raised, and the
    *  newest copy's own rank inside that update. */
   const orderOf = new Map<string, { raisedAt: string; newest: RecCopy }>()
@@ -510,7 +469,7 @@ export function buildAdviceRows(
     const status = recStatus(inherited ?? newest.status)
     const decidedAt = decided?.decided_at ?? null
     const why = scrubProse('pass_d_b_recommendation', newest.reasoning ?? '').text
-    orderOf.set(lineageId, { raisedAt: times.get(updateOf(newest)) ?? newest.created_at ?? '', newest })
+    orderOf.set(lineageId, { raisedAt: times.get(recUpdateOf(newest)) ?? newest.created_at ?? '', newest })
     rows.push({
       lineageId,
       recommendationId: newest.id,

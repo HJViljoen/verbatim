@@ -9,7 +9,7 @@ import {
   registryIdsByInsight, repeatCell, repeatLine, waysOfMoving,
   type AdviceRow, type RecCopy, type TargetPoint,
 } from './market-surface'
-import { topRecommendation } from '../dashboard-tiles'
+import { currentRecommendation, topRecommendation } from '../dashboard-tiles'
 
 const copy = (over: Partial<RecCopy> = {}): RecCopy => ({
   id: 'r1',
@@ -597,11 +597,29 @@ describe('MK2 · the current recommendation first, then the newest (market-first
     expect(rows[at].firstMade).toBe('2026-07-18')
   })
 
-  it('names the same lineage Overview’s headline rule names on this data', () => {
-    // Overview ranks every copy ever written (`loadLedger`); the ledger ranks
-    // the newest update's. On staging's 20 Sep data both land on a89fcdee.
-    const headline = topRecommendation([...SEALAND_COPIES].sort((a, b) => a.id.localeCompare(b.id)).map((c) => ({ ...c, priority: c.priority ?? null, based_on: c.based_on ?? null })))
-    expect(lineageKey(headline!)).toBe(currentTopLineage(SEALAND_COPIES))
+  it('names the same advice, in the same words, as Overview’s recommendation block (review fix)', () => {
+    // Overview's `loadLedger` prints `currentRecommendation`'s newest copy. On
+    // staging's 20 Sep data both pages name a89fcdee in its 20 Sep wording and
+    // the copy a status write must name, not the 10 Sep "Know Before You Buy".
+    const overview = currentRecommendation(SEALAND_COPIES)!
+    const ledger = buildAdviceRows(SEALAND_COPIES, [])[0]
+    expect(overview.lineage).toBe(ledger.lineageId)
+    expect(overview.newest.id).toBe(ledger.recommendationId)
+    expect(overview.newest.title).toBe(ledger.title)
+    expect(overview.newest.title).toBe('Add a “fit and facts” layer to every Sealand bag page and shopping touchpoint')
+    expect(new Set(overview.copies.map((c) => c.run_id)).size).toBe(ledger.timesMade)
+  })
+
+  it('keeps the two pages on one piece of advice when a new top cites fewer insights than an old copy', () => {
+    // The case the old Overview rule (every copy ever written) got wrong: a
+    // new lineage leads the next update citing five insights, and the 10 Sep
+    // and July copies cite six.
+    const next = copy({ created_at: '2026-09-27T08:30:00.000Z', run_id: 'next', id: '0a0a0a0a', lineage_id: '0a0a0a0a', priority: 'high', based_on: cited(5), title: 'A new top' })
+    const copies = [...SEALAND_COPIES, next]
+    const everyCopy = topRecommendation([...copies].sort((a, b) => a.id.localeCompare(b.id)).map((c) => ({ ...c, priority: c.priority ?? null, based_on: c.based_on ?? null })))
+    expect(lineageKey(everyCopy!)).toBe('a89fcdee')
+    expect(currentRecommendation(copies)!.lineage).toBe('0a0a0a0a')
+    expect(buildAdviceRows(copies, [])[0].lineageId).toBe('0a0a0a0a')
   })
 
   it('leads with the tagged row when two of the newest update’s copies tie on priority and grounding', () => {
