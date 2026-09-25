@@ -237,17 +237,6 @@ export function moversLabel(c: CategoryBlock): string {
   return 'What moved most'
 }
 
-/**
- * "626 category videos this month · Sep vs Aug" (`main.category.header`;
- * Sealand's September, where the artboard's invented 1,388 stood, F12).
- *
- * THE SECOND HALF IS THE BASIS AND IT WAS NOWHERE IN THE HEADER. Every change
- * on this block is drawn against the month before, and the meta stated the
- * denominator alone — so the one line that could have said what the block
- * compares against said only how big it is. Taken off a printed row's own
- * verdict (`moversBasis`), never computed here, so the header can never name a
- * comparison the block did not draw.
- */
 // ---- the level list (market-first WP1.5) ------------------------------------
 
 /** The list's heading. */
@@ -354,6 +343,17 @@ function LevelList({ c, month, mode }: { c: CategoryBlock; month: string; mode: 
   )
 }
 
+/**
+ * "626 category videos this month · Sep vs Aug" (`main.category.header`;
+ * Sealand's September, where the artboard's invented 1,388 stood, F12).
+ *
+ * THE SECOND HALF IS THE BASIS AND IT WAS NOWHERE IN THE HEADER. Every change
+ * on this block is drawn against the month before, and the meta stated the
+ * denominator alone — so the one line that could have said what the block
+ * compares against said only how big it is. Taken off a printed row's own
+ * verdict (`moversBasis`), never computed here, so the header can never name a
+ * comparison the block did not draw.
+ */
 /** What a kind's change cell says when nothing compared it — never a blank,
  *  and never a state word, because no comparison reached a state. */
 export const KIND_NOT_COMPARED = 'not compared'
