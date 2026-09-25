@@ -15,6 +15,8 @@ import {
   isMissingAnomalyRecord,
   newThemesLine,
   NEW_THEME_FLOOR,
+  opensClusteringRegime,
+  regroupedLine,
   pooledBaseline,
   refsOf,
   postCaption,
@@ -436,5 +438,51 @@ describe('a flag’s quote refs', () => {
       commentIds: ['9f1c0e64-0000-4000-8000-000000000001'],
     })
     expect(refTargets([])).toEqual({ evidenceIds: [], commentIds: [] })
+  })
+})
+
+// ---- market-first WP1.9: the first update of a new clustering regime -------------
+
+describe('the re-grouped rule — a regime-opening update mints, it does not hear', () => {
+  // A key in lib/pipeline/clustering.ts's own shape.
+  const K1 = 'a=v4;c=0.58'
+  const K2 = 'a=v5;c=0.58'
+
+  it('opens a regime when the key differs from the previous themed update’s', () => {
+    expect(opensClusteringRegime(K2, { key: K1 })).toBe(true)
+    expect(opensClusteringRegime(K1, { key: K1 })).toBe(false)
+  })
+
+  it('reads two missing keys as one regime: every update before the key, and a database without the column', () => {
+    // Staging's 20 Sep and 15 Sep updates both carry no key.
+    expect(opensClusteringRegime(null, { key: null })).toBe(false)
+    expect(opensClusteringRegime(undefined, { key: undefined })).toBe(false)
+    expect(opensClusteringRegime('', { key: null })).toBe(false)
+  })
+
+  it('reads a keyed update after an unkeyed one as a new regime: nothing says it held (plan §4.2 identityNewThisRun)', () => {
+    expect(opensClusteringRegime(K1, { key: null })).toBe(true)
+    expect(opensClusteringRegime(null, { key: K1 })).toBe(true)
+  })
+
+  it('opens nothing on a tenant’s first themed update', () => {
+    expect(opensClusteringRegime(K1, null)).toBe(false)
+    expect(opensClusteringRegime(null, null)).toBe(false)
+  })
+
+  it('says how many identities the update re-grouped, dated by the update', () => {
+    // Staging's 20 Sep update minted 468 identities (b67b56de, first_seen).
+    const r = { update: '2026-09-20T08:33:47.358Z', themes: 468 }
+    expect(regroupedLine(r)).toBe('Re-grouped with the 20 Sep update: 468 themes.')
+    expect(regroupedLine({ ...r, themes: 1 })).toBe('Re-grouped with the 20 Sep update: 1 theme.')
+    // And the first-heard line gives way to it: nothing is counted as heard.
+    expect(newThemesLine(0, 0, NEW_THEME_FLOOR, r)).toBe('Re-grouped with the 20 Sep update: 468 themes.')
+    expect(newThemesLine(468, 9, NEW_THEME_FLOOR, null)).toContain('9 of the 468 themes first heard')
+  })
+
+  it('carries no em dash and no direction word', () => {
+    const line = regroupedLine({ update: '2026-09-20T08:33:47.358Z', themes: 468 })
+    expect(line).not.toContain('\u2014')
+    expect(line).not.toMatch(directionRe())
   })
 })

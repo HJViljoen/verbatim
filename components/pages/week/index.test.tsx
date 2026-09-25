@@ -19,7 +19,7 @@ import { weekSales } from './sales'
 import { weekWorked } from './worked'
 import { weekCoverage } from './coverage'
 import { weekPage } from './module'
-import { absentReadingFixture, thinFixture, weekFixture } from './fixture'
+import { absentReadingFixture, regroupedFixture, thinFixture, weekFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -27,7 +27,9 @@ const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
 // either tenant, so every figure off the windowed read is absent. A port
 // designed against the first two alone builds columns that render nothing on
 // both paying accounts.
-const FIXTURES: (() => WeekData)[] = [weekFixture, thinFixture, absentReadingFixture]
+// And a fourth since market-first WP1.9: an update that opened a new
+// clustering regime, whose minted identities are counted as re-grouped.
+const FIXTURES: (() => WeekData)[] = [weekFixture, thinFixture, absentReadingFixture, regroupedFixture]
 
 describe('every block on This week', () => {
   it('renders in all three modes on both tenants and keeps the copy contract', () => {
@@ -1211,5 +1213,36 @@ describe('the page module an export addresses', () => {
 
   it('titles a snapshot by the update it is a reading of', () => {
     expect(weekPage.snapshotTitle(weekFixture())).toContain('This week · Össur')
+  })
+})
+
+// ---- market-first WP1.9: an update that opened a new clustering regime ----------
+
+describe('What came in · a regime-opening update re-groups, it hears nothing first (market-first WP1.9)', () => {
+  it('counts the minted identities as re-grouped and names none of them as heard for the first time', () => {
+    for (const mode of MODES) {
+      const text = renderText(weekCameIn.render(regroupedFixture(), mode, ctx))
+      expect(text).toContain('Re-grouped with the 10 Sep update: 592 themes.')
+      expect(text).not.toMatch(/heard for the first time in this update/)
+      expect(text).not.toContain('592 themes were heard for the first time')
+      expect(text).not.toMatch(/\d+ heard for the first time/)
+    }
+  })
+
+  it('keeps the heading, so the section is still where a reader looks for it', () => {
+    expect(renderText(weekCameIn.render(regroupedFixture(), 'app', ctx))).toContain('Heard for the first time')
+  })
+
+  it('leaves an ordinary update as it was', () => {
+    const text = renderText(weekCameIn.render(thinFixture(), 'app', ctx))
+    expect(text).toContain('592 themes were heard for the first time')
+    expect(text).not.toContain('Re-grouped')
+  })
+
+  it('a copy stored before the field existed renders as it was', () => {
+    const d = thinFixture()
+    const { regrouped: _regrouped, ...cameIn } = d.cameIn
+    const text = renderText(weekCameIn.render({ ...d, cameIn }, 'app', ctx))
+    expect(text).toContain('592 themes were heard for the first time')
   })
 })
