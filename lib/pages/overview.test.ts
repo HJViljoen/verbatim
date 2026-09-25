@@ -24,6 +24,7 @@ import {
   onScreenText,
   ON_SCREEN_MAX,
   headline,
+  weeklyPhaseOne,
   INTERPRETATION_NOTHING_MOVED,
   refusedPairInterpretation,
   medianOf,
@@ -315,6 +316,24 @@ describe('headline', () => {
   it('leads with a banded change even beside a refused pair note', () => {
     const h = headline({ verdicts: [moved('t1', 'Price', 2.0)], monthPair: { mode: 'refuse', cause: 'not_yet', changeMonth: null, checkWith: null } })
     expect(h.lead?.objectId).toBe('t1')
+  })
+  // THE WEEKLY'S §1 FALLBACK TAKES NO PAIR (deploy 1 review, the parity gate).
+  // At the 4 Oct clock the weekly is pinned to a so-far October, so the Sep→Oct
+  // pair is always refused; the preview must still read exactly as main's.
+  for (const now of ['2026-10-02T06:00:00.000Z', '2026-10-04T06:00:00.000Z']) {
+    it(`keeps the weekly's Phase 1 gate sentence on a refused pair (${now.slice(0, 10)})`, () => {
+      const note = pairOnVerdict(pairOn(sealandJudge(now))('2026-09-01', '2026-10-01', INDUSTRY_AUDIENCE)).note
+      expect(note?.mode).toBe('refuse')
+      const refused: Verdict = { ...moved('t1', 'Durability', 5.4), state: 'refused', changePts: null, refusedReason: 'tracking_change' }
+      for (const verdicts of [[], [refused]]) {
+        const w = weeklyPhaseOne(verdicts)
+        expect(w).toEqual({ lead: null, body: 'Nothing moved clearly this month. Here is where you stand.', figures: {} })
+      }
+    })
+  }
+
+  it('gives the weekly the Phase 1 lead where a verdict moved', () => {
+    expect(weeklyPhaseOne([moved('t1', 'Price', 2.0)]).lead?.objectId).toBe('t1')
   })
 })
 

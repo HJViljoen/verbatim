@@ -355,6 +355,25 @@ export function weeklyHeadline(data: OverviewData): WeeklyHeadline {
   return s.forWeekly ?? { lead: s.lead, body: s.body, figures: s.figures }
 }
 
+/**
+ * The Overview's subjects block as the weekly stores it: WP1.3's chart-break
+ * fields (`sparkBreaks`, `sparkBreakWhy`) left off every row.
+ *
+ * `WeeklyData`'s shape is unchanged until WP3.7 (`WEEKLY_SNAPSHOT_VERSION`
+ * stays 2, and the parity gate diffs it): the weekly draws no subject
+ * sparkline, so the two optional fields the Overview's rows gained with deploy
+ * 1 would only grow a stored weekly snapshot (deploy 1 review).
+ */
+export function weeklySubjects(block: SubjectsBlock): SubjectsBlock {
+  return {
+    ...block,
+    rows: block.rows.map((row) => {
+      const { sparkBreaks: _breaks, sparkBreakWhy: _why, ...rest } = row
+      return rest
+    }),
+  }
+}
+
 /** The headline the week's sentence is about: the month's largest banded
  *  change where there is one, and otherwise the largest subject the category
  *  carries — a level is still a reading, and a sentence that refused to name
@@ -578,7 +597,7 @@ export async function loadWeekly(scope: Scope): Promise<WeeklyData | null> {
     },
     method: overview.method,
     section1,
-    subjects: overview.subjects,
+    subjects: weeklySubjects(overview.subjects),
     // THE CONTRIBUTION PER SUBJECT NEEDS M4's WINDOW FUNCTION, which is not
     // applied. Saying "+0 videos since the last update" for every subject would
     // be a claim about the conversation; saying it is not recorded is a claim

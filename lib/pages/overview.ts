@@ -608,6 +608,26 @@ export interface WeeklyHeadline {
   figures: FigureTable
 }
 
+/**
+ * The weekly's §1 fallback (`SentenceBlock.forWeekly`): the Phase 1 headline,
+ * the call OV1 made before WP1.5, on the same verdicts, and WITHOUT the month
+ * pair.
+ *
+ * THE PARITY GATE WINS OVER THE PAIR'S WORDS HERE (deploy 1 review, blocking).
+ * The weekly preview must stay byte for byte through deploys 1 and 2 (plan
+ * §4.0, §5.6, §7.4, WP1.2's done-when), and the review's 4 Oct staging render
+ * showed that handing this call WP1.3's month pair changed exactly one line:
+ * "Nothing moved clearly this month. Here is where you stand." became "Not read
+ * as a change: … Here is where you stand." for both tenants, because on 1–4 Oct
+ * the weekly is pinned to a so-far October and the Sep→Oct pair is always
+ * refused. The weekly is not sent in the trial and WP3.7 rebuilds it; the
+ * Overview's own sentence keeps the pair's words (`sentenceBlockFor`).
+ */
+export function weeklyPhaseOne(verdicts: readonly Verdict[]): WeeklyHeadline {
+  const phaseOne = headline({ verdicts })
+  return { lead: phaseOne.lead, body: phaseOne.body, figures: phaseOne.figures }
+}
+
 export interface BarBlock {
   month: string
   status: MonthStatus
@@ -2374,13 +2394,9 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
     loadVoices(supabase, clientId, head.lead, themedRunId),
     flags.length > 0 ? buildAnomaly(supabase, flags[0]) : Promise.resolve(null),
   ])
-  // The weekly keeps the Phase 1 headline until WP3.7 (the parity gate): the
-  // same call, on the same verdicts, that OV1 made before WP1.5, which WP1.3
-  // hands the month pair.
-  const phaseOne = headline({ verdicts: suppress ? [] : sentenceVerdicts, monthPair })
   const sentence: SentenceBlock = {
     ...sentenceBlockFor({ head, verdicts: sentenceVerdicts, voices, ledger: ledger.top, anomaly, monthPair }),
-    forWeekly: { lead: phaseOne.lead, body: phaseOne.body, figures: phaseOne.figures },
+    forWeekly: weeklyPhaseOne(suppress ? [] : sentenceVerdicts),
   }
 
   // ── OV6 · how sound is this ────────────────────────────────────────────

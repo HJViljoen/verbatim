@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { thinUpdate } from '../reading/anomaly'
-import { checkStateOf, headlineObject, humanTheme, risingMovers, RISING_NOW, weeklyHeadline, WORTH_A_REPLY } from './weekly'
+import { checkStateOf, headlineObject, humanTheme, risingMovers, RISING_NOW, weeklyHeadline, weeklySubjects, WORTH_A_REPLY } from './weekly'
 import type { Mover } from './overview'
 import type { OverviewData, SideReading, SubjectRow } from './overview'
 
@@ -228,6 +228,29 @@ describe('weeklyHeadline', () => {
   it('reads the block itself on a stored export that predates the field', () => {
     const data = overview()
     expect(weeklyHeadline(data)).toEqual({ lead: null, body: 'Nothing moved clearly this month. Here is where you stand.', figures: {} })
+  })
+})
+
+// THE SHAPE THE WEEKLY STORES IS UNCHANGED (deploy 1 review, parity gate):
+// WP1.3's two optional chart-break fields stay on the Overview's rows and off
+// the weekly's, whose snapshot version is still 2 and which draws no sparkline.
+describe('weeklySubjects', () => {
+  it('leaves sparkBreaks and sparkBreakWhy off every row, and keeps the rest', () => {
+    const row = {
+      id: 'looks-and-style',
+      label: 'Looks & style',
+      spark: [10.8, 16.6],
+      sparkMonths: ['2026-08-01', '2026-09-01'],
+      sparkBreaks: [false, true],
+      sparkBreakWhy: [null, 'Not read as a change: we changed our searches in September.'],
+    }
+    const block = { state: 'ok', rows: [row], candidates: [], rivalLabel: null, categoryLabel: 'Category', note: null } as unknown as Parameters<typeof weeklySubjects>[0]
+    const out = weeklySubjects(block)
+    expect(out.rows).toHaveLength(1)
+    expect(out.rows[0]).not.toHaveProperty('sparkBreaks')
+    expect(out.rows[0]).not.toHaveProperty('sparkBreakWhy')
+    expect(out.rows[0]).toMatchObject({ id: 'looks-and-style', spark: [10.8, 16.6], sparkMonths: ['2026-08-01', '2026-09-01'] })
+    expect({ ...out, rows: [] }).toEqual({ ...block, rows: [] })
   })
 })
 
