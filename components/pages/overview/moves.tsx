@@ -5,6 +5,8 @@ import type { Block, RenderMode } from '@/lib/blocks/types'
 import { openLink } from '@/components/blocks/open-link'
 import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
+import { PairChip } from '@/components/blocks/pair-chip'
+import { sharedPairNote } from '@/lib/calibration'
 import { TileBlock } from '@/components/shell/tile'
 import { TileColumns } from '@/components/shell/page-grid'
 import { fmtInt, shortDate } from '@/lib/format'
@@ -94,6 +96,9 @@ function Count({ count, mode, basis = true }: { count: CardCount; mode: RenderMo
 
 /** The pre-filled card — the artboard's left column. */
 function Card({ card, mode }: { card: MoveCandidate; mode: RenderMode }) {
+  // ONE REFUSAL, SAID ONCE (deploy 1 review): both sides refused for one pair
+  // printed the sentence twice on one line.
+  const cardShared = sharedPairNote([card.movement.yours, card.movement.category])
   const email = mode === 'email'
   const claims = card.claimRows.slice(0, CARD_CLAIMS_SHOWN)
   const moreClaims = card.claimRows.length - claims.length
@@ -209,13 +214,14 @@ function Card({ card, mode }: { card: MoveCandidate; mode: RenderMode }) {
       {card.movement.yours || card.movement.category ? (
         <span className={email ? undefined : 'flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground'}>
           {card.movement.yours ? (
-            <span className={email ? undefined : 'flex items-center gap-1.5'}>your audience <BlockMovement verdict={card.movement.yours} unit="pts" mode={mode} /></span>
+            <span className={email ? undefined : 'flex items-center gap-1.5'}>your audience <BlockMovement verdict={card.movement.yours} unit="pts" mode={mode} sharedRefusal={cardShared} /></span>
           ) : null}
           {card.movement.category ? (
-            <span className={email ? undefined : 'flex items-center gap-1.5'}>the category <BlockMovement verdict={card.movement.category} unit="pts" mode={mode} /></span>
+            <span className={email ? undefined : 'flex items-center gap-1.5'}>the category <BlockMovement verdict={card.movement.category} unit="pts" mode={mode} sharedRefusal={cardShared} /></span>
           ) : null}
         </span>
       ) : null}
+      <PairChip note={cardShared} mode={mode} />
 
       {/* THE PRIMARY BUTTON'S SLOT, WITH THE HONEST SENTENCE IN IT
           (`main.moves.card.confirm`). The card is built; the write path is not.
@@ -316,6 +322,8 @@ export const REGIME_BREAK = ' | grouped differently | '
 /** One declared move: the artboard's row — title, subject chip, declared stamp,
  *  the move's one movement claim, and the series beside it. */
 function MoveBody({ row, reading, mode }: { row: MoveRow; reading: MoveReading | null; mode: RenderMode }) {
+  // ONE REFUSAL, SAID ONCE (deploy 1 review), across the move and its controls.
+  const readingShared = reading ? sharedPairNote([reading.verdict, ...reading.control]) : null
   const email = mode === 'email'
   return (
     <div className={email ? undefined : 'flex min-w-0 flex-col gap-[3px]'}>
@@ -341,13 +349,14 @@ function MoveBody({ row, reading, mode }: { row: MoveRow; reading: MoveReading |
       {reading ? (
         <>
           <span className={email ? undefined : 'flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-secondary-foreground'}>
-            <span className={email ? undefined : 'flex items-center gap-1.5'}>your audience <BlockMovement verdict={reading.verdict} unit="pts" mode={mode} /></span>
+            <span className={email ? undefined : 'flex items-center gap-1.5'}>your audience <BlockMovement verdict={reading.verdict} unit="pts" mode={mode} sharedRefusal={readingShared} /></span>
             {reading.control.map((v) => (
               <span key={`${v.objectId}-${v.audience}`} className={email ? undefined : 'flex items-center gap-1.5'}>
-                {seriesLabel(reading, v.audience)} <BlockMovement verdict={v} unit="pts" mode={mode} />
+                {seriesLabel(reading, v.audience)} <BlockMovement verdict={v} unit="pts" mode={mode} sharedRefusal={readingShared} />
               </span>
             ))}
           </span>
+          <PairChip note={readingShared} mode={mode} />
           {/* MARKED `level`, so rule (b) reaches it (Block D wave 3, M5). The
               line is a run of banded LEVELS and it printed six bare shares;
               unmarked, the copy contract's denominator rule never looked at
