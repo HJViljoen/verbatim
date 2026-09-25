@@ -594,6 +594,17 @@ describe('levelRows', () => {
     const rows = levelRows({ series: [laundry, ...levelSeries(SEALAND_THEMES.slice(0, 2)), ...rival], audience: INDUSTRY_AUDIENCE, month: AUG, prevMonth: null })
     expect(rows.map((r) => [r.registryId, r.k, r.n, r.prevK])).toEqual([['th-upcycling', 42, 351, null], ['th-ready-to-buy', 23, 351, null]])
   })
+
+  it('leaves off a theme with no label rather than printing its registry id, and the next one takes its row', () => {
+    const series = levelSeries().map((s) => (s.objectId === 'th-upcycling' ? { ...s, objectLabel: null } : s.objectId === 'th-airline' ? { ...s, objectLabel: '  ' } : s))
+    const rows = levelRows({ series, audience: INDUSTRY_AUDIENCE, month: SEP, prevMonth: AUG })
+    expect(rows).toHaveLength(LEVELS_SHOWN)
+    expect(rows.map((r) => r.registryId)).not.toContain('th-upcycling')
+    expect(rows.map((r) => r.registryId)).not.toContain('th-airline')
+    expect(rows.some((r) => r.label === r.registryId)).toBe(false)
+    // The two at 15 tie; "Praise for practical packing tips" had more in August (8 to 6).
+    expect(rows.at(-1)?.registryId).toBe('th-packing')
+  })
 })
 
 describe('makerSharesOf', () => {

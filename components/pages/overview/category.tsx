@@ -268,10 +268,14 @@ export function makersTag(level: LevelRow, anyMeasured: boolean): string | null 
 }
 
 /** A share for a level cell, or the dot the artboards print where a month has
- *  no row. `levelText` decides share or count ("4 of 45" under 100). */
-function levelCell(k: number | null, n: number | null): string {
+ *  no row. `levelText` decides share or count: under 100 it is a count, and
+ *  the column head already carries the "(of 45)", so the cell prints the
+ *  count alone rather than "4 of 45" beneath "(of 45)". */
+export function levelCell(k: number | null, n: number | null): string {
   if (k == null || n == null) return '·'
-  return levelText(k, n)?.text ?? '·'
+  const level = levelText(k, n)
+  if (!level) return '·'
+  return level.kind === 'count' ? fmtInt(k) : level.text
 }
 
 /**

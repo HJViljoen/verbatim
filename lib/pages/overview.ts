@@ -3693,7 +3693,8 @@ interface CategoryInput {
  * beside each row as a level of its own, and the list prints whatever the
  * comparability of the pair. Ties at the same k go to the larger previous k,
  * then to the registry id, so the order never depends on how the rows came
- * back. A theme with no video this month is not on the list.
+ * back. A theme with no video this month is not on the list, nor is one with
+ * no label, whose id is no name for a reader.
  */
 export function levelRows(input: {
   series: readonly MonthSeries[]
@@ -3706,7 +3707,9 @@ export function levelRows(input: {
   const rows: LevelRow[] = []
   const seen = new Set<string>()
   for (const s of input.series) {
-    if (s.audience !== input.audience || !s.objectId || seen.has(s.objectId)) continue
+    // A theme with no label is left off rather than printed as its registry id.
+    const label = s.objectLabel?.trim()
+    if (s.audience !== input.audience || !s.objectId || !label || seen.has(s.objectId)) continue
     const byMonth = pointsByMonth(s)
     const curr = byMonth.get(input.month)
     if (!curr || curr.k == null || curr.k <= 0 || curr.videos == null || curr.videos <= 0) continue
@@ -3715,7 +3718,7 @@ export function levelRows(input: {
     const share = input.makerShares?.get(s.objectId) ?? null
     rows.push({
       registryId: s.objectId,
-      label: s.objectLabel ?? s.objectId,
+      label,
       k: curr.k,
       n: curr.videos,
       prevK: prev?.k ?? null,

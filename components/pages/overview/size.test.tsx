@@ -6,7 +6,7 @@ import { assertCopyContract, copyNodes } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { headline, sentenceBlockFor } from '@/lib/pages/overview'
 import { overviewSentence } from './sentence'
-import { LEVELS_LABEL, levelHead, makersHead, makersTag, overviewCategory } from './category'
+import { LEVELS_LABEL, levelCell, levelHead, makersHead, makersTag, overviewCategory } from './category'
 import { makersMarkedFixture, marketSizeFixture, overviewFixture, SEPTEMBER_CHIP } from './fixture'
 
 // Market-first WP1.5 on the existing Overview: OV1's size headline and OV3's
@@ -127,6 +127,14 @@ describe('OV3 · the level list', () => {
     }
     expect(levelHead('2026-09-01', 626)).toBe('Sep (of 626)')
     expect(levelHead('2026-08-01', null)).toBe('Aug')
+  })
+
+  it('prints a count under 100 alone, since its column head carries the base', () => {
+    expect(levelCell(4, 45)).toBe('4')
+    expect(levelCell(69, 626)).toBe('11%')
+    expect(levelCell(23, 351)).toBe('7%')
+    expect(levelCell(null, 351)).toBe('·')
+    expect(levelCell(4, null)).toBe('·')
   })
 
   it('says "makers not yet marked" until MF1 measures them, and marks no row', () => {
