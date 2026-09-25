@@ -112,9 +112,17 @@ export interface ReadingMonthInput {
   /** The pooled market denominators by month (decision E). A month present
    *  here "has a denominator row". */
   videosByMonth: ReadonlyMap<string, number>
-  /** The month of the tenant's first run: before it a month is read at setup,
-   *  and `thinMonth`'s trailing median counts only months from it on. */
+  /** The month of the tenant's first run: before it a month is read at setup
+   *  (when `rows` does not say), and `thinMonth`'s trailing median counts only
+   *  months from it on. */
   firstRunMonth: string
+  /** The stored status and origin of each month's row, where the loader has
+   *  them. They win over what is derived here: a month seeded at the one-shot
+   *  is back-read whenever the first run was (Össur's June), and a run that
+   *  finished past a month's freeze line without reaching freeze-months froze
+   *  nothing. A month missing here is derived: back-read before
+   *  `firstRunMonth`, frozen once an update finished past its freeze line. */
+  rows?: ReadonlyMap<string, { status: 'filling' | 'frozen'; origin: 'live' | 'back_read' }>
   /** `?month=`: honoured when it names a month with a row, ≤ current. */
   explicit?: string | null
   switchFraction?: number
@@ -315,10 +323,12 @@ export function readingMonthFor(input: ReadingMonthInput): ReadingMonth {
   const { reading, freezeRun } = updatesReading(month, done)
   const readToU = reading.length > 0 ? reading[reading.length - 1] : null
   const readToEnd = readToU != null && readToU.ms >= msOf(monthEndInstant(month))
-  const row = videos.has(month)
+  let stored: { status: 'filling' | 'frozen'; origin: 'live' | 'back_read' } | undefined
+  for (const [m, r] of input.rows ?? []) if (monthStartOf(m) === month) stored = r
+  const row = videos.has(month) || stored
     ? {
-        status: freezeRun ? 'frozen' as const : 'filling' as const,
-        origin: month < firstRun ? 'back_read' as const : 'live' as const,
+        status: stored?.status ?? (freezeRun ? 'frozen' as const : 'filling' as const),
+        origin: stored?.origin ?? (month < firstRun ? 'back_read' as const : 'live' as const),
         videos: videos.get(month) ?? null,
       }
     : null

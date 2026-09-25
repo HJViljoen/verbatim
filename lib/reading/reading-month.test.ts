@@ -267,6 +267,37 @@ describe('readingMonthFor: Össur, paused, reads September on every date (plan �
   })
 })
 
+describe('readingMonthFor: the stored row wins over the derived one', () => {
+  it('Össur’s June, back-read at the one-shot, reads "read at setup", not "final"', () => {
+    // Össur's first run was 6 Apr, so June is after it, and the 13 Sep update
+    // finished past June's freeze line: derived alone, June reads final. The
+    // stored row says what June is: 216 market videos, back-read (DR F12).
+    const at = { now: '2026-10-02T12:00:00.000Z', updates: OSSUR_UPDATES, videosByMonth: OSSUR, firstRunMonth: '2026-04-01', explicit: '2026-06' }
+    expect(readingMonthFor(at).state).toBe('final')
+    const r = readingMonthFor({ ...at, rows: new Map([['2026-06-01', { status: 'frozen' as const, origin: 'back_read' as const }]]) })
+    expect(r.month).toBe('2026-06-01')
+    expect(r.state).toBe('read_at_setup')
+    expect(r.settles).toBeNull()
+    expect(monthWords(r)).toBe('June · read at setup')
+  })
+
+  it('a run that finished past the freeze line without reaching freeze-months froze nothing', () => {
+    // If the 4 Oct run had stopped before freeze-months, August's row would
+    // still be filling on 5 Oct, although an update finished past its line.
+    const at = '2026-10-05T12:00:00.000Z'
+    expect(sealandAt(at, { explicit: '2026-08' }).state).toBe('final')
+    const r = sealandAt(at, { explicit: '2026-08', rows: new Map([['2026-08-01', { status: 'filling' as const, origin: 'live' as const }]]) })
+    expect(r.state).toBe('ended')
+    expect(r.settles?.boundary).toBe('2026-10-01T00:00:00.000Z')
+  })
+
+  it('a month the rows do not name is derived as before', () => {
+    const r = sealandAt('2026-10-11T12:00:00.000Z', { rows: new Map([['2026-06-01', { status: 'frozen' as const, origin: 'back_read' as const }]]) })
+    expect(r.month).toBe('2026-09-01')
+    expect(r.state).toBe('ended')
+  })
+})
+
 // ---- "As at" and the windows: the last update, never the clock ----------------------
 
 describe('as at is the last update, never the clock', () => {
