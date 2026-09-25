@@ -29,7 +29,16 @@ import {
   type PlatformMix,
 } from './types'
 import { isMissingSubjects, TABLE_SUBJECTS } from '../subjects/types'
-import type { ObjectKind } from './verdicts'
+import {
+  changesFromLog,
+  OUR_CHANGE_SURFACES,
+  type OurChange,
+  type OurChangeSurface,
+  type PairRow,
+} from './comparability'
+import { pairJudge, type PairJudge, type UpdateRun } from './pairs'
+import { scheduledUpdateAfter } from './reading-month'
+import type { Counted, ObjectKind } from './verdicts'
 
 // The reading layer's I/O — the only file here that touches a database
 // (decision N).
@@ -899,4 +908,146 @@ export async function loadTopObjects(
   const ranked = rankObjects([...weights.values()], limit)
   const labels = await loadLabels(client, clientId, objectKind, [...new Set(ranked.map((r) => r.objectId))])
   return ranked.map((r) => ({ ...r, label: labels.get(r.objectId) ?? null }))
+}
+
+// ---- The month-pair judge's inputs (market-first decision D, WP1.3) ----------------
+
+/** MF1's derived table (WP1.4): one row per (prev_month, month) per
+ *  computation; the newest `computed_at` wins. Absent until MF1 is applied,
+ *  and absence reads as "unmeasured", never as "no change". */
+export const TABLE_MONTH_PAIR_COMPARABILITY = 'month_pair_comparability'
+
+/** Is MF1's pair table missing? Named narrowly, the `isMissing*` shape: a
+ *  "does not exist" about some other object is still an error. */
+export function isMissingPairTable(error: unknown): boolean {
+  if (!error) return false
+  const { code, message } = (typeof error === 'object' ? error : {}) as { code?: string; message?: string }
+  const text = message ?? (error instanceof Error ? error.message : String(error))
+  if (!text.includes(TABLE_MONTH_PAIR_COMPARABILITY)) return false
+  if (code && ['PGRST205', 'PGRST204', '42P01', '42703'].includes(code)) return true
+  return /in the schema cache/i.test(text) || /does not exist/i.test(text)
+}
+
+type Json = Record<string, unknown>
+const num = (v: unknown): number => (typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : Number.NaN)
+const numOrNull = (v: unknown): number | null => (v == null ? null : num(v))
+const counted = (v: unknown): Counted => {
+  const o = (v && typeof v === 'object' ? v : {}) as Json
+  return { k: num(o.k), n: num(o.n) }
+}
+const asArray = (v: unknown): Json[] => (Array.isArray(v) ? (v.filter((e) => e && typeof e === 'object') as Json[]) : [])
+const isSurface = (v: unknown): v is OurChangeSurface => typeof v === 'string' && (OUR_CHANGE_SURFACES as readonly string[]).includes(v)
+
+/** One stored row as a `PairRow`. A value that is not a number stays NaN, which
+ *  `comparabilityOf` never reads as comparable; a code change on a surface this
+ *  build does not know is read as `other` (every view), so it refuses rather
+ *  than passes. */
+export function pairRowFromStored(r: Json): PairRow {
+  const late = r.late_capture && typeof r.late_capture === 'object' ? (r.late_capture as Json) : null
+  return {
+    prevMonth: String(r.prev_month ?? ''),
+    month: String(r.month ?? ''),
+    searchOutside: {
+      prev: { k: num(r.search_outside_prev), n: num(r.videos_prev) },
+      curr: { k: num(r.search_outside_curr), n: num(r.videos_curr) },
+    },
+    codeChanges: asArray(r.code_changes).map((e) => ({
+      changeId: String(e.change_id ?? e.changeId ?? ''),
+      surface: isSurface(e.surface) ? e.surface : 'other',
+      prev: counted(e.prev),
+      curr: counted(e.curr),
+      ...(e.population === 'market' || e.population === 'category' ? { population: e.population } : {}),
+    })),
+    depth: { prevMedian: numOrNull(r.depth_prev_median), currMedian: numOrNull(r.depth_curr_median) },
+    gather: asArray(r.gather).map((g) => ({
+      month: String(g.month ?? ''),
+      runs: num(g.runs),
+      partial: num(g.partial),
+      searchesShort: num(g.searches_short ?? g.searchesShort),
+    })),
+    lateCapture: late ? { month: String(late.month ?? ''), comments: num(late.comments), of: num(late.of) } : null,
+    readThroughRun: typeof r.read_through_run === 'string' ? r.read_through_run : null,
+    methodVersion: String(r.method_version ?? ''),
+    computedAt: String(r.computed_at ?? ''),
+  }
+}
+
+/**
+ * The stored pair rows whose later month is one of `months` (every row when
+ * null), every computation of each: `latestPairRow` picks the newest. An empty
+ * list until MF1 is applied (WP1.4, Wed 30 Sep), so every pair reads as
+ * unmeasured until then. Memoised: every block on a page asks.
+ */
+export function loadPairRows(client: SupabaseClient, clientId: string, months: readonly string[] | null): Promise<PairRow[]> {
+  const asked = months ? [...new Set(months.map(monthStartOf))].sort() : null
+  return memoRead(client, `reading:pairs:${clientId}:${asked ? idsKey(asked) : '*'}`, async () => {
+    try {
+      const rows = await selectAll<Json>(() => {
+        let q = client.from(TABLE_MONTH_PAIR_COMPARABILITY).select('*').eq('client_id', clientId)
+        if (asked) q = q.in('month', asked)
+        return q
+          .order('month', { ascending: true })
+          .order('prev_month', { ascending: true })
+          .order('computed_at', { ascending: true })
+      })
+      return rows.map(pairRowFromStored)
+    } catch (error) {
+      if (isMissingPairTable(error)) return []
+      throw error
+    }
+  })
+}
+
+/** The change log as changes of ours (`changesFromLog`), off the one memoised
+ *  read of `config_changes` every series already makes. */
+export async function loadOurChanges(client: SupabaseClient, clientId: string): Promise<OurChange[]> {
+  return changesFromLog(await loadChanges(client, clientId))
+}
+
+/** Every update (a completed or partial run, by `completed_at`): which run
+ *  read a month last, and whether a month was read past its end. */
+export function loadUpdateRuns(client: SupabaseClient, clientId: string): Promise<UpdateRun[]> {
+  return memoRead(client, `reading:update-runs:${clientId}`, async () => {
+    const rows = await selectAll<{ id: string; completed_at: string | null }>(() =>
+      client
+        .from('pipeline_runs')
+        .select('id, completed_at')
+        .eq('client_id', clientId)
+        .in('status', ['completed', 'partial'])
+        .not('completed_at', 'is', null)
+        .order('completed_at', { ascending: true })
+        .order('id', { ascending: true }),
+    )
+    return rows.filter((r) => r.completed_at).map((r) => ({ id: r.id, finishedAt: r.completed_at as string }))
+  })
+}
+
+/** The tenant's update schedule as `nextUpdateAfter`, or null when none is set. */
+async function loadScheduleAfter(client: SupabaseClient, clientId: string): Promise<((instant: string) => string | null) | null> {
+  const cfg = await memoRead(client, `reading:schedule:${clientId}`, async () => {
+    const { data, error } = await client
+      .from('tracking_configs')
+      .select('report_period, report_day')
+      .eq('client_id', clientId)
+      .maybeSingle()
+    if (error) throw new Error(`tracking_configs schedule: ${error.message}`)
+    return (data ?? null) as { report_period?: string | null; report_day?: string | null } | null
+  })
+  return cfg?.report_period ? scheduledUpdateAfter(cfg) : null
+}
+
+/**
+ * The page's month-pair judge (lib/reading/pairs.ts): the change log, every
+ * stored pair row and every update, read once per request, judged at `now`.
+ * Every month verdict and every chart step a loader draws asks it.
+ */
+export async function loadPairJudge(handle: ReadingHandle, now: string): Promise<PairJudge> {
+  const { client, clientId } = handle
+  const [changes, rows, updates, nextUpdateAfter] = await Promise.all([
+    loadOurChanges(client, clientId),
+    loadPairRows(client, clientId, null),
+    loadUpdateRuns(client, clientId),
+    loadScheduleAfter(client, clientId),
+  ])
+  return pairJudge({ now, changes, rows, updates, nextUpdateAfter })
 }
