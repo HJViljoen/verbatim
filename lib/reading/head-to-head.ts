@@ -137,7 +137,7 @@ export interface HeadToHead {
   rivalLabel: string
   month: string
   measures: FaceOffMeasure[]
-  /** "84 videos of theirs read this month" — `month_denominators.videos`. */
+  /** "6 videos of theirs read this month" (Freitag's September, research F12): `month_denominators.videos`. */
   footerLine: string
   /** The engagement exclusion note (Reddit, by the cap). */
   excludedNote: string
@@ -313,6 +313,11 @@ function videosMeasure(input: HeadToHeadInput, month: string, floor: number, bas
   const verdictFor = (side: HeadToHeadSide, level: FaceOffSide | null): Verdict | null => {
     if (!level || !level.prev) return null
     if (level.value.k < floor || level.prev.value.k < floor) return null
+    // NOT UNDER THE MONTH-PAIR RULE (market-first decision D, WP1.3), on
+    // purpose: this is you against a rival, and every Sealand side is under 100
+    // videos a month (research F4, F71), so neither side can print "moved"
+    // (SHARE_BAND's floor answers `too_little_data`). The surface retires in
+    // Stage 3 (deploy 5); WP1.3 states the reason here rather than wiring it.
     return bandVerdict({
       objectKind: 'audience',
       objectId: side.audience,

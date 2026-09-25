@@ -245,6 +245,8 @@ export async function computeRunDelta(
         prev: sides.prev.positive as number,
         nowJudged: sides.now.judged,
         prevJudged: sides.prev.judged,
+        // NOT UNDER THE MONTH-PAIR RULE (market-first decision D, WP1.3): a
+        // parked legacy page, compared update to update, not month to month.
         verdict: proportionDelta(
           {
             nowPct: sides.now.positive as number, nowN: sides.now.judged,
