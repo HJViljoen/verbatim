@@ -12,7 +12,7 @@ import { isMissingSubjects, type SubjectWindowReading } from '../subjects/types'
 import { loadActiveSubjects } from '../subjects/membership'
 import { INDUSTRY_AUDIENCE } from '../rivals'
 import type { Scope } from '../renderables/types'
-import { loadDeliveredRuns, readingViewFrom } from '../reading/reading-view'
+import { loadDeliveredRuns, loadMarketRivalAudiences, readingViewFrom } from '../reading/reading-view'
 import {
   firstQuarterVerdictMonth,
   previousQuarter,
@@ -343,11 +343,13 @@ async function readEra(
     const firstRun = (runRes.data?.[0] as { started_at?: string } | undefined)?.started_at ?? null
     if (!firstRun) return empty
     const firstRunMonth = monthStartOf(firstRun)
-    const [set, runs] = await Promise.all([
+    const [set, runs, rivalAudiences] = await Promise.all([
       loadMonthSeries(admin, clientId, { from: firstRunMonth, to: eraTo(firstRunMonth, readingAt) }),
       loadDeliveredRuns(admin, clientId),
+      // The one market every page pools (`marketRivalAudiences`).
+      loadMarketRivalAudiences(admin, clientId),
     ])
-    const readingMonth = readingViewFrom({ now: readingAt, runs, denominators: set.denominators }).reading.month
+    const readingMonth = readingViewFrom({ now: readingAt, runs, denominators: set.denominators, rivalAudiences }).reading.month
     return {
       readings: countReadings(set.denominators, firstRunMonth, readingMonth),
       readingMonth,

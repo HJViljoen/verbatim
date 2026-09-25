@@ -6,7 +6,7 @@ import type { Scope } from '../renderables/types'
 import { monthStartOf, nextMonth, prevMonth as previousMonthOf } from '../reading/month-key'
 import { loadMonthSeries, readingHandle, type ReadingHandle } from '../reading/read'
 import { MONTH_PARAM } from '../reading/reading-month'
-import { monthlyMonthFor } from '../reading/reading-view'
+import { loadMarketRivalAudiences, monthlyMonthFor } from '../reading/reading-view'
 import { isReadable, mergeNotes, mergeSeriesNotes, pointsByMonth, type MonthLabel, type MonthPoint } from '../reading/series'
 import type { MonthStatus } from '../reading/types'
 import { isAnswer, type FigureTable, type Verdict } from '../reading/verdicts'
@@ -294,8 +294,13 @@ export async function loadMonthly(scope: Scope): Promise<MonthlyData | null> {
   // page loaders as `?month=`. One denominator read, the same whole-history ask
   // Overview makes first (memoised: the same request pays for it once).
   const now = new Date().toISOString()
-  const history = await loadMonthSeries(reading.client, scope.clientId, { from: '2019-01-01', to: now, updatesByMonth: {} })
-  const monthParam = monthlyMonthFor(now, history.denominators, scope.params[MONTH_PARAM])
+  const [history, rivalAudiences] = await Promise.all([
+    loadMonthSeries(reading.client, scope.clientId, { from: '2019-01-01', to: now, updatesByMonth: {} }),
+    // The one market every page pools (`marketRivalAudiences`), so the month
+    // chosen here is a month the pages would call ended on the same rows.
+    loadMarketRivalAudiences(supabase, scope.clientId),
+  ])
+  const monthParam = monthlyMonthFor(now, history.denominators, scope.params[MONTH_PARAM], rivalAudiences)
   const monthScope: Scope = { ...scope, reading, params: { ...scope.params, horizon: 'this_month', [MONTH_PARAM]: monthParam } }
 
   const overview = await loadOverview(monthScope)

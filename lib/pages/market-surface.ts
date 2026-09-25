@@ -18,7 +18,7 @@ import type { Verdict } from '../reading/verdicts'
 import type { Quote } from '../renderables/types'
 import { freezeStateFor, monthStartOf } from '../reading/monthly'
 import { MONTH_PARAM, type ReadingMonth } from '../reading/reading-month'
-import { loadDeliveredRuns, loadReadingSchedule, readingViewFrom, type OtherMonth } from '../reading/reading-view'
+import { loadDeliveredRuns, loadMarketRivalAudiences, loadReadingSchedule, readingViewFrom, type OtherMonth } from '../reading/reading-view'
 import type { MonthStatus } from '../reading/types'
 import type { Scope } from '../renderables/types'
 import { selectAll } from '../supabase-admin'
@@ -769,15 +769,19 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   // month every other page reads: the runs, the schedule and the denominator
   // history (the same whole-history ask the reading pages make, memoised),
   // after the empty state so a tenant with nothing delivered pays for none.
-  const [runs, schedule, history] = await Promise.all([
+  // The rivals too: the market every page pools is the one list
+  // (`marketRivalAudiences`), not whatever rival audiences have a row.
+  const [runs, schedule, history, rivalAudiences] = await Promise.all([
     loadDeliveredRuns(supabase, clientId),
     loadReadingSchedule(supabase, clientId),
     loadMonthSeries(reading.client, clientId, { from: '2019-01-01', to: readingAt, updatesByMonth: {} }),
+    loadMarketRivalAudiences(supabase, clientId),
   ])
   const view = readingViewFrom({
     now: readingAt,
     runs,
     denominators: history.denominators,
+    rivalAudiences,
     schedule,
     explicit: scope.params[MONTH_PARAM] ?? null,
   })

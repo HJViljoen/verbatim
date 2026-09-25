@@ -9,7 +9,7 @@ import { attentionTotals, type AttentionRow } from '../reading/attention'
 import { horizonDates, horizonWindow, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
 import { freezeStateFor, monthStartOf } from '../reading/monthly'
 import { MONTH_PARAM, readingAnchor, type ReadingMonth } from '../reading/reading-month'
-import { loadDeliveredRuns, loadReadingSchedule, readingViewFrom, type OtherMonth } from '../reading/reading-view'
+import { loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, readingViewFrom, type OtherMonth } from '../reading/reading-view'
 import { loadMonthSeries, type MonthSeriesSet, type ReadingHandle } from '../reading/read'
 import { methodLines, type MethodLines } from '../reading/method'
 import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordInputs } from '../reading/record'
@@ -572,7 +572,7 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
     now: readingAt,
     runs,
     denominators: history.denominators,
-    rivalAudiences: rivals.rivals.map((r) => rivalKey(r.name)),
+    rivalAudiences: marketRivalAudiences(rivals.rivals),
     schedule,
     explicit: scope.params[MONTH_PARAM] ?? null,
   })

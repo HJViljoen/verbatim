@@ -1,7 +1,20 @@
+import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
 import { barLine, monthWords } from './reading-month'
-import { asAtOf, marketMonths, monthlyMonthFor, readingViewFrom, updateClock, updateInstant, type DeliveredRun, type ReadingDenominator } from './reading-view'
+import {
+  asAtOf,
+  marketMonths,
+  marketRivalAudiences,
+  monthlyMonthFor,
+  readingViewFrom,
+  updateClock,
+  updateInstant,
+  type DeliveredRun,
+  type ReadingDenominator,
+} from './reading-view'
 
 // ---- Fixtures: Sealand's real rows ------------------------------------------------
 //
@@ -296,3 +309,66 @@ describe('updateClock: This week’s "next update", from its own two runs', () =
     expect(updateClock({ now: '2026-09-22T09:00:00.000Z', runs: [run('r6', '2026-09-20')] }).nextUpdate).toBeNull()
   })
 })
+
+// ONE MARKET FOR EVERY PAGE (WP1.2 review). Overview and Subjects pooled the
+// tenant's rivals, Voice and Competitive their own copy of the same list, and
+// Market, the Reports card and the monthly inferred every rival audience with a
+// row, so a stopped rival's rows counted on three pages and not on four.
+describe('marketRivalAudiences: the one market every loader pools', () => {
+  // Cotopaxi is tracked; Poler was stopped on 9 Sep (lib/rivals.ts: "Poler not
+  // observed · tracked to 9 Sep 2026"). Poler's October row is a SHAPE, not a
+  // measurement: it carries Cotopaxi's September count as a stand-in, and
+  // nothing below turns on its size beyond "has a row".
+  const POLER = 'competitor:Poler'
+  const RIVALS = [
+    { name: 'Cotopaxi', retiredAt: null },
+    { name: 'Poler', retiredAt: '2026-09-09T00:00:00.000Z' },
+  ]
+  const ROWS = [...SEALAND_ROWS, row('2026-10-01', POLER, 29)]
+  const at = {
+    now: '2026-10-05T06:00:00.000Z',
+    runs: [...SEALAND_RUNS, ...SUNDAYS.slice(0, 2)],
+    denominators: ROWS,
+    schedule: SUNDAY,
+  }
+
+  it('is the tracked rivals, never a stopped one', () => {
+    expect(marketRivalAudiences(RIVALS)).toEqual([COTOPAXI])
+  })
+
+  it('Overview, Market, the Reports card and the monthly read one month on rows that include a stopped rival', () => {
+    const list = marketRivalAudiences(RIVALS)
+    const view = readingViewFrom({ ...at, rivalAudiences: list })
+    expect(view.reading.month).toBe('2026-09-01')
+    // A stopped rival's October row is not a market month: no page offers it.
+    expect(view.other).toBeNull()
+    expect(marketMonths(ROWS, list)).not.toContain('2026-10-01')
+    expect(monthlyMonthFor(at.now, ROWS, null, list)).toBe(view.reading.month.slice(0, 7))
+    // What the three inferring loaders drew before: October offered on a
+    // stopped rival's row alone.
+    expect(readingViewFrom(at).other).toEqual({ month: '2026-10-01', isDefault: false })
+  })
+
+  // THE SWEEP. Every loader that decides the reading month hands in the one
+  // list; a call that omits it infers, and pools a different market.
+  it('every page loader hands the view its rivals through the one rule', () => {
+    const dir = join(__dirname, '..', 'pages')
+    const calls: string[] = []
+    for (const file of readdirSync(dir).filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'))) {
+      const src = readFileSync(join(dir, file), 'utf8')
+      for (const m of src.matchAll(/readingViewFrom\(\{[\s\S]*?\}\)/g)) {
+        calls.push(file)
+        expect(m[0], file).toMatch(/rivalAudiences/)
+        expect(src, file).toMatch(/marketRivalAudiences\(|loadMarketRivalAudiences\(/)
+      }
+      for (const m of src.matchAll(/monthlyMonthFor\(([^)]*)\)/g)) {
+        calls.push(file)
+        expect(m[1].split(',').length, file).toBe(4)
+      }
+    }
+    expect([...new Set(calls)].sort()).toEqual([
+      'competitive-surface.ts', 'market-surface.ts', 'monthly.ts', 'overview.ts', 'reports-card.ts', 'subjects.ts', 'voice-surface.ts',
+    ])
+  })
+})
+

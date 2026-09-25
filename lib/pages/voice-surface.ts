@@ -21,7 +21,7 @@ import { horizonWindow, parseHorizon, sinceStart, type Horizon, type HorizonWind
 import { KIND_ORDER, kindShares, redditRead, kindChange, type KindShare, type RedditRead } from '../reading/kinds'
 import { freezeStateFor, isMissingMonthTable } from '../reading/monthly'
 import { MONTH_PARAM, readingAnchor, type ReadingMonth } from '../reading/reading-month'
-import { loadDeliveredRuns, loadReadingSchedule, readingViewFrom, type OtherMonth } from '../reading/reading-view'
+import { loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, readingViewFrom, type OtherMonth } from '../reading/reading-view'
 import { monthStartOf, nextMonth } from '../reading/month-key'
 import { isMissingKindMoodAttention } from '../reading/attention'
 import { moodChange, moodShares, type MoodShare } from '../reading/mood'
@@ -1078,7 +1078,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     now: readingAt,
     runs: runsRaw,
     denominators: history.denominators,
-    rivalAudiences,
+    rivalAudiences: marketRivalAudiences(rivals),
     schedule,
     explicit: scope.params[MONTH_PARAM] ?? null,
   })

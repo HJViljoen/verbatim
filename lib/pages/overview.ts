@@ -47,7 +47,7 @@ import {
 } from '../reading/moves'
 import { loadMonthSeries, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
 import { MONTH_PARAM, readingAnchor, type ReadingMonth } from '../reading/reading-month'
-import { asAtOf, loadDeliveredRuns, loadReadingSchedule, readingViewFrom, type OtherMonth } from '../reading/reading-view'
+import { asAtOf, loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, readingViewFrom, type OtherMonth } from '../reading/reading-view'
 import { methodLines, type MethodLines } from '../reading/method'
 import { countRefused, howSoundLine, loadRecordInputs, monthRecordWindow, recordLines, refusals, soundFigures, type RecordInputs, type SoundFigure } from '../reading/record'
 import {
@@ -1555,7 +1555,7 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
     now: readingAt,
     runs: runsRaw,
     denominators: history.denominators,
-    rivalAudiences: rivals.map((r) => rivalKey(r.name)),
+    rivalAudiences: marketRivalAudiences(rivals),
     schedule,
     explicit: pinned ? null : params[MONTH_PARAM] ?? null,
   })

@@ -24,7 +24,7 @@ import type { SayVsHearEntry } from '../pipeline/schemas'
 import { isMissingKindMoodAttention } from '../reading/attention'
 import { freezeStateFor, isMissingMonthTable } from '../reading/monthly'
 import { MONTH_PARAM, readingAnchor, type ReadingMonth } from '../reading/reading-month'
-import { loadDeliveredRuns, loadReadingSchedule, readingViewFrom, type OtherMonth } from '../reading/reading-view'
+import { loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, readingViewFrom, type OtherMonth } from '../reading/reading-view'
 import { monthStartOf, nextMonth } from '../reading/month-key'
 import { gapBetween, type Gap, type GapSide } from '../reading/gap'
 import { loadMonthSeries, type ReadingHandle } from '../reading/read'
@@ -1515,7 +1515,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     now: readingAt,
     runs: runsRaw,
     denominators: history.denominators,
-    rivalAudiences: rivals.map((r) => rivalKey(r.name)),
+    rivalAudiences: marketRivalAudiences(rivals),
     schedule,
     explicit: params[MONTH_PARAM] ?? null,
   })

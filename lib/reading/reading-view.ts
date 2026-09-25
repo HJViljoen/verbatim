@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import type { ScheduleConfig } from '../pipeline/schedule-due'
-import { isRivalAudience } from '../rivals'
+import { isRivalAudience, loadTrackedRivals, rivalKey } from '../rivals'
 import { selectAll } from '../supabase-admin'
 import { marketAudiences, pooledDenominators } from './market'
 import { memoRead } from './memo'
@@ -66,8 +66,10 @@ export interface ReadingViewInput {
   runs: readonly DeliveredRun[]
   /** Stored `month_denominators` rows, every audience. */
   denominators: readonly ReadingDenominator[]
-  /** The tracked rival audiences (`competitor:<name>`). Null or omitted: every
-   *  rival audience that has a row. */
+  /** The rival audiences the market pools (`competitor:<name>`): every loader
+   *  hands in `marketRivalAudiences` of the tenant's rivals, so every page
+   *  reads one market. Null or omitted: every rival audience that has a row
+   *  (the tests' default, and a loader whose rival read failed). */
   rivalAudiences?: readonly string[] | null
   /** The tenant's cadence (`tracking_configs.report_period`, `report_day`). */
   schedule?: ScheduleConfig | null
@@ -195,9 +197,31 @@ export function marketMonths(
  * 4 October it is September's report, not four days of October's
  * (`closedMonthFor`). Returned as the `?month=` value the page loaders take.
  */
-export function monthlyMonthFor(now: string, denominators: readonly ReadingDenominator[], explicit?: string | null): string {
+export function monthlyMonthFor(
+  now: string,
+  denominators: readonly ReadingDenominator[],
+  explicit?: string | null,
+  rivalAudiences?: readonly string[] | null,
+): string {
   const named = parseMonthParam(explicit)
-  return (named ?? closedMonthFor(now, marketMonths(denominators))).slice(0, 7)
+  return (named ?? closedMonthFor(now, marketMonths(denominators, rivalAudiences))).slice(0, 7)
+}
+
+/**
+ * The rival audiences the market pools, from the tenant's rivals: the brands it
+ * TRACKS, so a stopped rival (`retiredAt`) is out (decision E: the category
+ * plus "the videos filed under a brand the client tracks"; lib/reading/market.ts).
+ *
+ * ONE LIST FOR EVERY LOADER. Overview and Subjects held `loadTrackedRivals`,
+ * Voice and Competitive their own copies of it, and Market, the Reports card
+ * and the monthly passed nothing, so each pooled a different market: a stopped
+ * rival's rows, or an audience no longer on any list, counted on three pages
+ * and not on four, and at a boundary (the current month's thin test, "has a
+ * row") two pages could read two months. Every call site hands its rivals
+ * through this.
+ */
+export function marketRivalAudiences(rivals: readonly { name: string; retiredAt: string | null }[]): string[] {
+  return rivals.filter((r) => r.retiredAt == null).map((r) => rivalKey(r.name))
 }
 
 // ---- The two reads ------------------------------------------------------------
@@ -216,6 +240,23 @@ export function loadDeliveredRuns(supabase: SupabaseClient, clientId: string): P
         .order('id', { ascending: true }),
     ),
   )
+}
+
+/**
+ * `marketRivalAudiences` for a loader that does not already hold the tenant's
+ * rivals (Market, the Reports card, the monthly), memoised per request. Null
+ * where they cannot be read: the view then infers from the rows, which is what
+ * those loaders did before, rather than taking the page down.
+ */
+export function loadMarketRivalAudiences(supabase: SupabaseClient, clientId: string): Promise<string[] | null> {
+  return memoRead(supabase, `reading-view:market-rivals:${clientId}`, async () => {
+    try {
+      return marketRivalAudiences(await loadTrackedRivals(supabase, clientId))
+    } catch (error) {
+      console.error(`[reading-view] rivals: ${(error as { message?: string })?.message ?? String(error)}`)
+      return null
+    }
+  })
 }
 
 /**
