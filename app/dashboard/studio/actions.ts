@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase-admin'
+import { assertTenantMay } from '@/lib/tenant-locks'
 import { instantiate, starterTemplate } from '@/lib/reports/templates'
 import { CUSTOM_KEY, documentTemplate } from '@/lib/reports/documents/templates'
 import { DEFAULT_DOCUMENT_ROLE, DEFAULT_DOCUMENT_SETTINGS } from '@/lib/reports/documents/types'
@@ -174,6 +175,13 @@ export async function saveSchedule(args: { id?: string | null; input: ScheduleIn
     return { ok: false, message: written ?? 'That could not be saved. Check the fields and try again.' }
   }
   const s = parsed.data
+  // THE TENANT LOCK (market-first decision J, lib/tenant-locks.ts): a sending
+  // saved switched on, whether new or toggled on, is Verbatim's to make during
+  // the trial. Saved switched off, it goes through.
+  if (s.active) {
+    const may = assertTenantMay(session, clientId, 'sends')
+    if (!may.ok) return { ok: false, message: may.message }
+  }
   const admin = createAdminClient()
   if (s.starterKey && !starterTemplate(s.starterKey)) return { ok: false, message: 'Pick a template.' }
   const id = args.id ? z.uuid().safeParse(args.id).data ?? null : null

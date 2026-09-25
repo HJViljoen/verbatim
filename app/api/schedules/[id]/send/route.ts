@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { canManageTenant, getRouteSession } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase-admin'
+import { assertTenantMay } from '@/lib/tenant-locks'
 import { appBaseUrl } from '@/lib/site'
 import { renderBaseUrl } from '@/lib/render/render'
 import { deliverSend } from '@/lib/schedules/deliver'
@@ -32,6 +33,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const mode = body?.mode === 'test' ? 'test' : body?.mode === 'now' ? 'send' : body?.mode === 'deliver' ? 'deliver' : null
   if (!mode) return NextResponse.json({ error: 'Bad request.' }, { status: 400 })
   if (mode !== 'deliver' && !canManageTenant(session.role)) return NextResponse.json({ error: 'Only an owner or admin can send.' }, { status: 403 })
+  // THE TENANT LOCK (market-first decision J, lib/tenant-locks.ts). A send by
+  // hand to the list, or a held build delivered, is sending; during the trial
+  // that is Verbatim's. A test to the caller's own address is not, and stays.
+  if (mode !== 'test') {
+    const may = assertTenantMay(session, session.clientId, 'sends')
+    if (!may.ok) return NextResponse.json({ error: may.message }, { status: 403 })
+  }
   if (mode === 'test' && !session.email) return NextResponse.json({ error: 'Your account has no email address to send to.' }, { status: 400 })
 
   const admin = createAdminClient()

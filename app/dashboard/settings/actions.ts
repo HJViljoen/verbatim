@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { getSessionContext, canManageTenant } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase-admin'
+import { assertTenantMay } from '@/lib/tenant-locks'
 import { mergeCompetitorKeywords, cleanTerms, MIN_KEYWORD_CHARS, MAX_TERM_CHARS, MAX_TERMS_PER_BUCKET } from '@/lib/onboarding-config'
 import { actorStamp, recordConfigChange, updateWithActor } from '@/lib/config-log'
 import { applySubredditEdit } from '@/lib/settings/save-state'
@@ -110,6 +111,10 @@ export async function updateTrackingConfig(
   if (!canManageTenant(role)) {
     return { ok: false, message: 'You don’t have permission to change settings.' }
   }
+  // THE TENANT LOCK (market-first decision I, lib/tenant-locks.ts): the
+  // rivals and the cadence this writes are held still during the trial.
+  const may = assertTenantMay(session, clientId, 'tracking')
+  if (!may.ok) return { ok: false, message: may.message }
 
   // Read the stored config BEFORE validating: a paused tenant's form has no
   // period control at all (the select cannot represent 'paused'), so the field
@@ -261,6 +266,9 @@ export async function updateSearchTerms(
   if (!canManageTenant(role)) {
     return { ok: false, message: 'You don’t have permission to change search terms.' }
   }
+  // THE TENANT LOCK (market-first decision I, lib/tenant-locks.ts).
+  const may = assertTenantMay(session, clientId, 'tracking')
+  if (!may.ok) return { ok: false, message: may.message }
 
   const list = (name: string) => formData.getAll(name).map(String)
   const parsed = termsSchema.safeParse({
@@ -369,6 +377,9 @@ export async function updateCommunity(
   if (!canManageTenant(role)) {
     return { ok: false, message: 'You don’t have permission to change what we watch.' }
   }
+  // THE TENANT LOCK (market-first decision I, lib/tenant-locks.ts).
+  const may = assertTenantMay(session, clientId, 'tracking')
+  if (!may.ok) return { ok: false, message: may.message }
 
   const kind = formData.get('op') === 'stop' ? 'stop' : formData.get('op') === 'add' ? 'add' : null
   const name = String(formData.get('name') ?? '')

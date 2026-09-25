@@ -3,6 +3,7 @@ import { SCHEDULE_RECIPIENTS_MAX } from '../config'
 import { recordConfigChange, scriptActor, type ConfigActor } from '../config-log'
 import { WEEKLY_STARTER_KEY } from './artefact'
 import { normaliseRecipients } from './validate'
+import { tenantLocked } from '../tenant-locks'
 import type { ScheduleRow } from './types'
 
 /**
@@ -44,7 +45,10 @@ export async function ensureDefaultSchedule(admin: SupabaseClient, clientId: str
       recipients: normaliseRecipients(recipients),
       attach_pdf: true,
       share_days: 30,
-      active: true,
+      // Born switched off for a tenant whose sending is locked (market-first
+      // decision J, lib/tenant-locks.ts): an accepted invite on a workspace
+      // with no default schedule must not switch sending on by itself.
+      active: !tenantLocked(clientId, 'sends'),
       is_default: true,
       created_by: createdBy,
     })

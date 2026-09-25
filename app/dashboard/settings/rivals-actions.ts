@@ -8,6 +8,7 @@ import { affectsMonths } from '@/lib/config-affects'
 import { actorStamp } from '@/lib/config-log'
 import { isMissingCompetitors, renameRival } from '@/lib/rivals'
 import { createAdminClient } from '@/lib/supabase-admin'
+import { assertTenantMay } from '@/lib/tenant-locks'
 
 // Renaming a rival, from Settings › Tracking (Phase 1 WP16, design ST4, WP1's
 // affordance).
@@ -44,6 +45,10 @@ export async function renameTrackedRival(_prev: RenameState, formData: FormData)
   if (!canManageTenant(role)) {
     return { ok: false, message: 'Only an owner or an admin can rename a rival.' }
   }
+  // THE TENANT LOCK (market-first decision I, lib/tenant-locks.ts): a rename
+  // re-files a rival's months, which is a change to what we track.
+  const may = assertTenantMay(session, clientId, 'tracking')
+  if (!may.ok) return { ok: false, message: may.message }
 
   const parsed = schema.safeParse({ id: formData.get('id'), name: formData.get('name') })
   if (!parsed.success) {
