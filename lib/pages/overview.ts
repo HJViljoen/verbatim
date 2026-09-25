@@ -1,10 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { pairSentence, recStatus, REC_STATUS_LABEL, type RecStatus } from '../calibration'
+import { SEALAND_CLIENT_ID } from '../config'
 import { topRecommendation } from '../dashboard-tiles'
 import { fmtInt, longMonth, monthName, platformLabel, shortDate } from '../format'
 import { inheritedStatus, REC_DECISIONS_TABLE, type RecDecision } from '../rec-decisions'
-import { composeInterpretation, type Interpretation } from '../prose/interpret'
+import { composeInterpretation, INTERPRETATION_LABEL, type Interpretation } from '../prose/interpret'
 import { loadSentFigures, objectKey, sentMonthOf, type SentMonth } from '../reports/sent-figures'
 import { monthlySoundFigures, sentReadingLine, type MonthlySoundFigures } from '../reports/monthly'
 import { proseFigures } from '../prose/figures'
@@ -33,7 +34,7 @@ import { directionWord, monthChange, QUARTER_UNLOCKS_AT, thinMonth, type Directi
 import { gapBetween, type Gap, type GapSide } from '../reading/gap'
 import { horizonWindow, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
 import { kindShares, redditRead, kindChange, type KindShare, type RedditRead } from '../reading/kinds'
-import { freezeBoundary, freezeStateFor, isMissingMonthlyReading, isMissingMonthTable } from '../reading/monthly'
+import { freezeBoundary, freezeStateFor, isMissingMonthlyReading, isMissingMonthTable, monthEndInstant } from '../reading/monthly'
 import { monthStartOf, nextMonth, prevMonth as previousMonthOf } from '../reading/month-key'
 import { moodChange, moodShares, framingShare, type MoodShare } from '../reading/mood'
 import {
@@ -45,10 +46,8 @@ import {
   type MoveReading,
   type MoveSeries,
 } from '../reading/moves'
-import { pairOnVerdict } from '../reading/comparability'
 import { BRANDS_PANEL, pairTools, type PairOn } from '../reading/pairs'
-import { loadMonthSeries, loadPairOn, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
-import { MONTH_PARAM, readingAnchor, type ReadingMonth } from '../reading/reading-month'
+import { loadChanges, loadMonthSeries, loadPairOn, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
 import { asAtOf, loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, readingViewFrom, type OtherMonth } from '../reading/reading-view'
 import { methodLines, type MethodLines } from '../reading/method'
 import { countRefused, howSoundLine, loadRecordInputs, monthRecordWindow, recordLines, refusals, soundFigures, type RecordInputs, type SoundFigure } from '../reading/record'
@@ -61,7 +60,19 @@ import {
   type Substrate,
 } from '../reading/series'
 import { buildStandings, type StandingRow } from '../reading/standings'
-import type { MonthStatus } from '../reading/types'
+import {
+  changesFromLog,
+  comparabilityOf,
+  isSearchSurface,
+  modeForShare,
+  pairOnVerdict,
+  type ComparabilityView,
+  type OurChange,
+  type PairComparability,
+} from '../reading/comparability'
+import { pooledDenominators } from '../reading/market'
+import { MONTH_PARAM, monthStateOf, readingAnchor, type MonthState, type ReadingMonth } from '../reading/reading-month'
+import { TABLE_THEME_READINGS, type MonthStatus } from '../reading/types'
 import { isAnswer, type FigureTable, type Verdict, type VerdictPairNote } from '../reading/verdicts'
 import { isMissingSubjects, MOVE_PROMISE, RPC_WINDOW_SUBJECT_READINGS, TABLE_MOVES, TABLE_SUBJECT_MEMBERSHIPS, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
 import { chunk, mapWithLimit, MULTI_ROW_IN_CHUNK, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
@@ -290,8 +301,10 @@ export interface AttentionBlock {
    * `AttentionPanel.account_count` has been built since the panel shipped and
    * rendered nowhere (the caption says "a fixed panel, frozen {date}" and stops).
    * It is the denominator of the whole line in the only sense a reader can use:
-   * 41,200 comments is a number about a set, and a set with no size is not a
-   * measurement. Null where no panel is frozen.
+   * a comment count is a number about a set, and a set with no size is not a
+   * measurement. (The mock's "41,200 comments" was invented volume, research
+   * F12: Sealand has no panel before the 4 Oct run.) Null where no panel is
+   * frozen.
    */
   accountCount: number | null
   /**
@@ -347,6 +360,35 @@ export interface CategoryBlock {
   quiet: QuietTheme[]
   /** Said instead of the flags when the register could not be read. */
   quietNote: string | null
+  /**
+   * The market's biggest themes, as levels (market-first WP1.5): the top
+   * `LEVELS_SHOWN` category themes by the reading month's k, largest first,
+   * with the previous month's k beside. OPTIONAL, because a stored export
+   * predates it; a renderer reads it with `?? []`.
+   */
+  levels?: LevelRow[]
+  /** The previous month the level list prints beside, and its category n,
+   *  for the column head "Aug (of 351)". Null where there is no previous
+   *  month on the page. */
+  levelsPrev?: { month: string; n: number | null } | null
+}
+
+/** One row of OV3's level list (plan §4.2, `CategoryBlock.levels`). */
+export interface LevelRow {
+  /** `theme_registry.id`: the theme's identity, never its label. */
+  registryId: string
+  label: string
+  /** The theme's videos in the reading month, in the category. */
+  k: number
+  /** The category's videos in the reading month (never the pooled market's:
+   *  themes are grouped within the category, decision E). */
+  n: number
+  /** The theme's videos in the previous month; null where that month has no
+   *  category row at all, 0 where it has one and the theme is not in it. */
+  prevK: number | null
+  /** MF1's `theme_maker_shares`: the share of the theme's videos that are
+   *  makers'. Null: not measured (MF1 missing, or no rule for the tenant). */
+  makerShare: number | null
 }
 
 export interface RivalRow {
@@ -528,6 +570,13 @@ export interface SentenceBlock {
   /** The code sentence, with `[[token]]` figure placeholders. */
   body: string
   figures: FigureTable
+  /**
+   * Beside a size sentence: why this month is not read against the one before
+   * it ("not read as a change: we changed our searches in September";
+   * market-first WP1.5, `pairChip`). OPTIONAL, because a stored export
+   * predates it; null where nothing is refused or a change leads.
+   */
+  chip?: string | null
   anomaly: AnomalyLine | null
   interpretation: Interpretation
   ledger: LedgerRow | null
@@ -539,6 +588,24 @@ export interface SentenceBlock {
   voicesFrom: number
   /** Every comparison this block may speak from. */
   verdicts: Verdict[]
+  /**
+   * The Phase 1 headline, for the weekly alone (market-first WP1.5): the
+   * largest banded change of any subject or theme, else "Nothing moved clearly
+   * this month. Here is where you stand.". The weekly's preview must stay byte
+   * for byte through deploys 1 and 2 (plan §4.0, §7.4, the parity gate), and it
+   * built its §1 from this block's lead and body, which WP1.5 changed; so it
+   * reads this instead until WP3.7 rebuilds it. Not rendered on the Overview.
+   * OPTIONAL, because a stored export predates it: there `lead`, `body` and
+   * `figures` above are the Phase 1 ones already.
+   */
+  forWeekly?: WeeklyHeadline | null
+}
+
+/** OV1's Phase 1 headline, as the weekly reads it (`SentenceBlock.forWeekly`). */
+export interface WeeklyHeadline {
+  lead: Verdict | null
+  body: string
+  figures: FigureTable
 }
 
 export interface BarBlock {
@@ -784,7 +851,8 @@ export function fillingLine(input: FillingLineInput): string {
     // gathered months are 50, 36 and 407, so "475 of an expected ~50" claims a
     // forecast the number cannot support. The median is stated as what it is —
     // the trailing months' middle — which is also the mock's own wording on
-    // OV6 ("2,359 videos analysed (trailing median 2,240)").
+    // OV6 ("… videos analysed (trailing median …)"; the mock's 2,359 and 2,240
+    // were invented volume, research F12).
     if (input.expected != null && input.expected > 0) parts.push(`trailing median ${fmtInt(Math.round(input.expected))}`)
   }
   // Only a month still in progress has a "this point" to compare: an ended
@@ -947,6 +1015,108 @@ export interface HeadlineInput {
    * Absent or null where no pair applies (no previous month, a fixture).
    */
   monthPair?: VerdictPairNote | null
+  /**
+   * The market's size in the month (market-first WP1.5, decision E): what the
+   * sentence states when no comparable change may lead. Omitted, the sentence
+   * is the Phase 1 gate sentence, for a caller that predates WP1.5.
+   */
+  size?: MarketSize | null
+  /**
+   * Each category theme's MEASURED maker share, by registry id (MF1's
+   * `theme_maker_shares`). A theme absent here, or null, might be led by
+   * makers, so it never leads (`mayLead`). Null: nothing was measured.
+   */
+  makerShares?: ReadonlyMap<string, number | null> | null
+  /** The month pair's refusal chip (`pairChip`), printed beside the size. */
+  chip?: string | null
+}
+
+/** The market in one month, for the size headline: the pooled videos and
+ *  comments (the category plus the videos filed under a tracked brand; never
+ *  the client's own posts, decision E). Null where the month has no row. */
+export interface MarketSize {
+  month: string
+  /** The month has not ended yet: "September so far". */
+  soFar: boolean
+  videos: number | null
+  comments: number | null
+}
+
+/** How many biggest themes OV3's level list prints (WP1.5). */
+export const LEVELS_SHOWN = 8
+
+/**
+ * How many of the month's largest category themes the level list is chosen
+ * from. Wider than `LEVELS_SHOWN` so that a tie at the eighth row is broken by
+ * the previous month's k and then the registry id (`levelRows`), not by the
+ * order the database returned the rows in.
+ */
+export const LEVEL_POOL = 20
+
+/** At or above this measured maker share, a level row reads "mostly makers".
+ *  The same line as `MAKER_GROUP_SHARE` in plan §4.2 (WP1.6's makers line). */
+export const MOSTLY_MAKERS_SHARE = 0.5
+
+/**
+ * The most a theme's measured maker share may be for it to lead the headline,
+ * and so to supply its voices. The same line as `LEAD_MAX_MAKER_SHARE` in plan
+ * §4.2, and a stop condition in the plan's own terms (§7.11: "a voice or lead
+ * theme with a measured maker share over a quarter").
+ */
+export const HEADLINE_MAX_MAKER_SHARE = 0.25
+
+/**
+ * May this verdict lead the headline? (WP1.5.)
+ *
+ * THE HEADLINE STATES THE MARKET'S SIZE, NEVER A SUBJECT, AND NEVER A THEME
+ * THAT MIGHT BE MAKER-LED. Only a category theme that MOVED, and whose maker
+ * share is MEASURED at a quarter or less. A subject never leads (every one is
+ * unchecked or provisional through the trial, decision C); a kind, the mood or
+ * a rival never did; and a theme whose maker share was not measured might be
+ * one of September's maker-led four, so it does not lead either. Everything
+ * else falls through to the size.
+ */
+export function mayLead(v: Verdict, makerShares: ReadonlyMap<string, number | null> | null | undefined): boolean {
+  if (v.state !== 'moved' || v.changePts == null) return false
+  if (v.objectKind !== 'theme' || v.audience !== INDUSTRY_AUDIENCE) return false
+  const share = makerShares?.get(v.objectId)
+  return share != null && Number.isFinite(share) && share >= 0 && share <= HEADLINE_MAX_MAKER_SHARE
+}
+
+/**
+ * The market's size in one month, pooled (decision E, `pooledDenominators`).
+ *
+ * The client's own posts are never in it, and the rival audiences are the ones
+ * the tenant tracks. `soFar` is the clock's: the month has not ended at `now`.
+ */
+export function marketSizeOf(
+  denominators: readonly { month: string; audience: string; videos: number; comments: number }[],
+  rivalAudiences: readonly string[],
+  month: string,
+  now: string,
+): MarketSize {
+  const m = monthStartOf(month)
+  const counts = pooledDenominators(denominators, rivalAudiences).get(m) ?? null
+  return {
+    month: m,
+    soFar: Date.parse(now) < Date.parse(monthEndInstant(m)),
+    videos: counts?.videos ?? null,
+    comments: counts?.comments ?? null,
+  }
+}
+
+/** "Your market in September so far: [[market_videos]] videos and
+ *  [[market_comments]] comments." with its figures, or the honest absence. */
+export function sizeSentence(size: MarketSize): { body: string; figures: FigureTable } {
+  const name = longMonth(size.month)
+  const when = size.soFar ? `${name} so far` : name
+  if (size.videos == null) return { body: `Nothing has been read into ${name} yet.`, figures: {} }
+  const figures: FigureTable = {
+    market_videos: { value: size.videos, unit: 'videos', label: `videos in your market in ${name}` },
+  }
+  if (size.comments == null) return { body: `Your market in ${when}: [[market_videos]] videos.`, figures }
+  figures.market_comments = { value: size.comments, unit: 'comments', label: `comments in your market in ${name}` }
+  return { body: `Your market in ${when}: [[market_videos]] videos and [[market_comments]] comments.`, figures }
 }
 
 /**
@@ -957,7 +1127,8 @@ export interface HeadlineInput {
  * sentence cannot carry one hard-coded audience: the day your own side carries
  * the largest change, "Durability came up in 31% of the category's videos this
  * month — 26 of 84 videos" prints YOUR video count as the category's, in the
- * page's headline claim. A `Verdict` has said which audience it is a
+ * page's headline claim. (84 own videos a month is the mock's invented volume,
+ * research F12; Sealand's own side carried 9 in September.) A `Verdict` has said which audience it is a
  * proportion OF since WP3; this reads it.
  */
 export function audienceInSentence(audience: string): string {
@@ -984,6 +1155,15 @@ export interface Headline {
   lead: Verdict | null
   body: string
   figures: FigureTable
+  /** The pair's refusal chip, beside a size sentence only. */
+  chip: string | null
+  /**
+   * WP1.5's rule chose this sentence and nothing may lead: the market's size
+   * stands where a change would. Under it OV1 composes no interpretation and
+   * shows no voices (`sentenceBlockFor`). False for a change that leads, and
+   * for a caller that passed no size (the Phase 1 rule).
+   */
+  sized: boolean
 }
 
 /**
@@ -991,27 +1171,39 @@ export interface Headline {
  * and themes, with the figures left as tokens for the surface to substitute.
  *
  * `moved` only. A change that did not clear its band is not a change this
- * product will name, and the design's own gate sentence is what stands in its
- * place: "Nothing moved clearly this month. Here is where you stand." Unless
- * the month pair was refused (`monthPair`, decision D): then nothing was
- * compared, and the pair's own words stand where "Nothing moved clearly" would.
- * Neither sentence carries a direction word — the word is the badge's, drawn from the
- * verdict beside it, which is the only place rule (c) allows one.
+ * product will name. Neither sentence carries a direction word — the word is
+ * the badge's, drawn from the verdict beside it, which is the only place rule
+ * (c) allows one.
+ *
+ * WITH `size` (market-first WP1.5), ONLY `mayLead` MAY LEAD: a moved category
+ * theme whose maker share is measured at a quarter or less. Where none may,
+ * the sentence is the market's size, "Your market in September so far: 655
+ * videos and 16,233 comments.", with the month pair's refusal chip beside it.
+ * No path makes a subject or a theme that might be maker-led the headline.
+ * Without `size` the Phase 1 rule and its gate sentence stand ("Nothing moved
+ * clearly this month. Here is where you stand."), for a caller that predates
+ * WP1.5, unless the month pair was refused (`monthPair`, decision D, WP1.3):
+ * then nothing was compared, and the pair's own words stand where "Nothing
+ * moved clearly" would.
  */
 export function headline(input: HeadlineInput): Headline {
-  const moved = input.verdicts.filter((v) => v.state === 'moved' && v.changePts != null)
+  const sized = input.size !== undefined
+  const moved = input.verdicts.filter((v) =>
+    sized ? mayLead(v, input.makerShares) : v.state === 'moved' && v.changePts != null,
+  )
   const lead = [...moved].sort(
     (a, b) => Math.abs(b.changePts ?? 0) - Math.abs(a.changePts ?? 0) || a.objectId.localeCompare(b.objectId),
   )[0] ?? null
 
   if (!lead) {
+    if (input.size) return { lead: null, ...sizeSentence(input.size), chip: input.chip ?? null, sized: true }
     // A REFUSED PAIR IS NOT "NOTHING MOVED" (decision D, WP1.3), the guard OV3,
     // Voice and This week carry: "Nothing moved clearly" says a comparison was
     // drawn and came back inside its band, and on a refused pair none was.
     if (input.monthPair?.mode === 'refuse') {
-      return { lead: null, body: `${pairSentence(input.monthPair)} Here is where you stand.`, figures: {} }
+      return { lead: null, body: `${pairSentence(input.monthPair)} Here is where you stand.`, figures: {}, chip: null, sized }
     }
-    return { lead: null, body: 'Nothing moved clearly this month. Here is where you stand.', figures: {} }
+    return { lead: null, body: 'Nothing moved clearly this month. Here is where you stand.', figures: {}, chip: null, sized }
   }
 
   const audience = audienceInSentence(lead.audience)
@@ -1026,7 +1218,191 @@ export function headline(input: HeadlineInput): Headline {
   const body =
     `${lead.objectLabel} came up in [[${share}]] of ${audience} this month, ` +
     `[[${videos}]] of [[${denominator}]] videos.`
-  return { lead, body, figures }
+  return { lead, body, figures, chip: null, sized: false }
+}
+
+/**
+ * OV1's block, from its headline and the reads around it (market-first WP1.5).
+ * One function for the loader and the fixture, so the fixture state the render
+ * tests check is the loader's own output.
+ *
+ * UNDER A SIZE HEADLINE THE INTERPRETATION SAYS NOTHING, AND THERE ARE NO
+ * VOICES. The monthly composer's fallback is the Phase 1 gate sentence
+ * ("Nothing moved clearly this month. Here is where you stand."), which is the
+ * old headline WP1.5 replaces (plan §3.2), or "<label> moved clearly this
+ * month" wherever any verdict moved, a subject or a theme `mayLead` refused
+ * among them. Beside "not read as a change" the first claims a comparison was
+ * read, and the second names as the month's movement exactly what the
+ * headline refused to lead with (§7.11). So the slot and its label stay and
+ * its sentences and quotes are empty. The composer is shared with the monthly,
+ * the quarterly and the leadership sheet, so its fallback is left as it is and
+ * the size headline simply does not ask it.
+ *
+ * Off the size headline, a refused month pair is not "nothing moved" in the
+ * interpretation either (`refusedPairInterpretation`, decision D, WP1.3).
+ */
+export function sentenceBlockFor(input: {
+  head: Headline
+  /** Every comparison the block may speak from (`SentenceBlock.verdicts`). */
+  verdicts: readonly Verdict[]
+  voices: { voices: Voice[]; from: number }
+  ledger: LedgerRow | null
+  anomaly: AnomalyLine | null
+  /** The page's own month pair (`HeadlineInput.monthPair`, WP1.3). */
+  monthPair?: VerdictPairNote | null
+}): SentenceBlock {
+  const { head } = input
+  const voices = head.sized ? [] : input.voices.voices
+  const interpretation: Interpretation = head.sized
+    ? {
+        slot: 'interpretation_monthly',
+        label: INTERPRETATION_LABEL,
+        sentences: [],
+        quotes: [],
+        fallback: true,
+        reason: 'nothing_moved',
+        scrub: { text: '', dropped: 0, droppedDigits: 0, droppedDirection: 0, flaggedDirection: 0, leaked: false },
+      }
+    : refusedPairInterpretation(
+        composeInterpretation(
+          'interpretation_monthly',
+          input.verdicts,
+          proseFigures(head.figures),
+          voices.map((v) => ({ ref: v.quote.ref })),
+        ),
+        input.verdicts,
+        input.monthPair ?? null,
+      )
+  return {
+    lead: head.lead,
+    body: head.body,
+    figures: head.figures,
+    chip: head.chip,
+    anomaly: input.anomaly,
+    interpretation,
+    ledger: input.ledger,
+    voices,
+    voicesFrom: head.sized ? 0 : input.voices.from,
+    verdicts: [...input.verdicts],
+  }
+}
+
+// ---- the size headline's chip (market-first WP1.5) ---------------------------
+
+/**
+ * The later month of a pair, as `comparabilityOf` needs it (WP1.3), from what
+ * the Overview loader already holds: the month's stored row, the delivered
+ * updates and the clock.
+ *
+ * `readToEnd` is an update that STARTED once the month had ended, by `now`: a
+ * run that starts after the month's end finishes after it too, and the
+ * loader's run read carries start times. The latest update is the run
+ * the pair row must account for (`later.latestUpdateRunId`).
+ */
+export function laterSide(input: {
+  month: string
+  now: string
+  runs: readonly { id: string; started_at: string }[]
+  row: { status: MonthStatus; origin: 'live' | 'back_read'; videos: number | null } | null
+}): { state: MonthState; readToEnd: boolean; latestUpdateRunId: string | null } {
+  const nowMs = Date.parse(input.now)
+  const endMs = Date.parse(monthEndInstant(monthStartOf(input.month)))
+  const done = input.runs
+    .filter((r) => {
+      const t = Date.parse(r.started_at)
+      return Number.isFinite(t) && t <= nowMs
+    })
+    .sort((a, b) => Date.parse(a.started_at) - Date.parse(b.started_at) || a.id.localeCompare(b.id))
+  const readToEnd = done.some((r) => Date.parse(r.started_at) >= endMs)
+  return {
+    state: monthStateOf(input.month, input.now, input.row, readToEnd),
+    readToEnd,
+    latestUpdateRunId: done.at(-1)?.id ?? null,
+  }
+}
+
+/** What a change of ours did, in the chip's words. A search change is named
+ *  as one; the others by what they changed (lib/settings/change-log.ts names
+ *  the same surfaces for the record). */
+const CHANGE_WORDS: Record<OurChange['surface'], string> = {
+  terms: 'we changed our searches',
+  platforms: 'we changed our searches',
+  subreddits: 'we changed our searches',
+  gate_rule: 'we changed how we check relevance',
+  regate: 'we changed how we check relevance',
+  knobs: 'we changed how deeply we read',
+  prompt_version: 'we changed how we read comments',
+  rivals: 'we changed how videos are filed',
+  handles: 'we changed how videos are filed',
+  rival_rename: 'we changed how videos are filed',
+  entity_retag: 'we changed how videos are filed',
+  attribution: 'we changed how videos are filed',
+  segment: 'we changed how videos are marked',
+  other: 'we changed what we read',
+}
+
+/** The change to name: the latest search change, else the latest other. */
+function namedChange(changes: readonly OurChange[]): OurChange | null {
+  const latest = (xs: readonly OurChange[]) =>
+    [...xs].sort((a, b) => Date.parse(b.changedAt) - Date.parse(a.changedAt) || a.id.localeCompare(b.id))[0] ?? null
+  return latest(changes.filter((c) => isSearchSurface(c.surface))) ?? latest(changes)
+}
+
+/**
+ * The refusal chip beside the size headline: why this month is not read
+ * against the one before it, in one short line. Null where the pair is
+ * compared (comparable, or flagged and printed with its note elsewhere), or
+ * where there is no pair at all.
+ *
+ * WHERE THE CALENDAR REFUSED IT, OUR CHANGE IN THAT MONTH IS NAMED FIRST. A
+ * month so far, or not yet read to its end, is refused before any change is
+ * weighed (`comparabilityOf` rules 1 and 2). The calendar's reason passes and
+ * ours does not, so where a change of ours fell in the month being read the
+ * chip names it: "not read as a change: we changed our searches in September"
+ * (plan §2.2, the deploy 1 headline). Otherwise it says the calendar's reason:
+ * "October is not compared until it has ended", or, for Össur's September,
+ * "September is not compared: it was not read to its end".
+ *
+ * WHERE THE MEASURE REFUSED IT, THE REFUSING CHANGE IS NAMED: the latest
+ * search change among the pair's refusing reasons, else the latest other one
+ * (an unmeasured pair lists every change in its span). Last, "not compared
+ * yet": a pair nobody has measured with no change of ours in it, or one
+ * refused on depth.
+ *
+ * The date-bearing refusal sentences are WP1.3's (`lib/calibration.ts`); this
+ * chip is the size headline's alone and names no update date it cannot keep.
+ */
+export function pairChip(
+  pair: PairComparability | null,
+  changes: readonly OurChange[],
+  view: ComparabilityView = 'market',
+): string | null {
+  if (!pair || pair.mode !== 'refuse') return null
+  const later = longMonth(pair.month)
+  const ours = changes.filter((c) => c.affects.includes(view))
+  const words = (c: OurChange) => `not read as a change: ${CHANGE_WORDS[c.surface]} in ${longMonth(monthStartOf(c.changedAt))}`
+
+  const kinds = new Set(pair.reasons.map((r) => r.kind))
+  if (kinds.has('incomplete') || kinds.has('not_read_to_end')) {
+    const here = namedChange(ours.filter((c) => Number.isFinite(Date.parse(c.changedAt)) && monthStartOf(c.changedAt) === pair.month))
+    if (here) return words(here)
+    return kinds.has('incomplete')
+      ? `${later} is not compared until it has ended`
+      : `${later} is not compared: it was not read to its end`
+  }
+
+  const refusing = pair.reasons.filter(
+    (r) => (r.kind === 'searches' || r.kind === 'code_change') && modeForShare(r.share) === 'refuse',
+  )
+  const byId = refusing
+    .map((r) => (r.changeId ? ours.find((c) => c.id === r.changeId || (c.rowIds ?? []).includes(r.changeId as string)) ?? null : null))
+    .filter((c): c is OurChange => c != null && Number.isFinite(Date.parse(c.changedAt)))
+  const named = namedChange(byId)
+  if (named) return words(named)
+  const earlier = longMonth(pair.prevMonth)
+  if (refusing.some((r) => r.kind === 'searches')) return `not read as a change: our searches differed between ${earlier} and ${later}`
+  if (refusing.length > 0) return `not read as a change: a change of ours touched ${earlier} or ${later}`
+  return 'not compared yet'
 }
 
 /** The gate sentence the monthly interpretation's fallback writes when nothing
@@ -1704,6 +2080,16 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
   const cardAhead = loadCardInputs(supabase, clientId, month)
   cardAhead.catch(() => {})
 
+  // THE LEVEL LIST'S POOL AND THE CHANGE LOG, ON THE SAME TERMS (market-first
+  // WP1.5). The pool is the month's largest category themes by videos, one
+  // small read that needs the month and nothing else; the change log is the
+  // one `loadMonthSeries` above has already read (memoised), so it costs
+  // nothing. Both are taken in wave 3.
+  const levelPoolAhead = loadLevelPool(reading.client, clientId, month)
+  const changesAhead = loadChanges(reading.client, clientId)
+  levelPoolAhead.catch(() => {})
+  changesAhead.catch(() => {})
+
   // ── wave 3: the readings ───────────────────────────────────────────────
   const themedRunId = await themedRunAhead
   const rivalAudiences = rivals.map((r) => rivalKey(r.name))
@@ -1723,7 +2109,8 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
       })
     : []
 
-  const [themeSet, kindRows, statsRows, subjectMonths, subjectRows, moveRows, panel, lastMonthSoFar, flags, subjectsAtLastMonth, dormant] =
+  const levelIds = await levelPoolAhead
+  const [themeSet, kindRows, statsRows, subjectMonths, subjectRows, moveRows, panel, lastMonthSoFar, flags, subjectsAtLastMonth, dormant, levelSet, makerShares] =
     await Promise.all([
       loadMonthSeries(reading.client, clientId, {
         from: readAxis[0],
@@ -1748,6 +2135,26 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
       loadFlags(supabase, clientId, month),
       readSubjectsAtThisPointLastMonth(reading, month, readingAt),
       loadDormantThemes(reading.client, clientId),
+      // OV3's level list (WP1.5): its own series, category only, over this
+      // month and the one before. Kept apart from `themeSet` so the movers,
+      // the quiet flags and OV4 read exactly the pool they read before.
+      levelIds.length > 0
+        ? loadMonthSeries(reading.client, clientId, {
+            from: prevMonth,
+            to: month,
+            audiences: [INDUSTRY_AUDIENCE],
+            objectKind: 'theme',
+            objectIds: levelIds,
+            updatesByMonth,
+            firstRunMonth,
+            changeLogFrom: history.changeLogFrom,
+          })
+        : Promise.resolve(null),
+      // MF1's maker shares, one read for the list and the headline. Null until
+      // MF1 is applied, and always for a tenant without a maker rule (Össur);
+      // every level then reads "not yet marked" and no theme may lead the
+      // headline (`mayLead`).
+      loadMakerShares(reading.client, clientId, month, themedRunId),
     ])
 
   const pair = await judgeAhead
@@ -1888,6 +2295,8 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
     thin: suppress,
     pair,
     asOf: readingAt,
+    levelSeries: levelSet?.series ?? [],
+    makerShares,
   })
 
   // ── OV5 · your moves, the card, and what a move did (Block D · D2) ─────
@@ -1928,34 +2337,50 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
     ...category.growing.map((m) => m.verdict),
     ...category.fading.map((m) => m.verdict),
   ]
-  // The category's month pair: the audience most of the sentence's verdicts
-  // are on, and the one OV3 already words its refusal from.
+  // The category's month pair (WP1.3): the audience most of the sentence's
+  // verdicts are on, and the one OV3 already words its refusal from. It words
+  // the Phase 1 headline the weekly keeps, and the interpretation's refusal.
   const monthPair = pairOnVerdict(pair(prevMonth, month, INDUSTRY_AUDIENCE)).note
-  const head = headline({ verdicts: suppress ? [] : sentenceVerdicts, monthPair })
+  // THE SIZE, AND THE PAIR'S REFUSAL BESIDE IT (market-first WP1.5). The
+  // market is pooled (decision E); the pair is this month against the one
+  // before, judged for the market view by the core rule (`comparabilityOf`)
+  // from the change log and the updates. It passes no measured row (MF1's
+  // `month_pair_comparability`): without one the pair reads as not measured,
+  // and the chip names the change of ours that falls inside the span. On
+  // Aug→Sep at the deploy 1 clocks that is the words WP1.3's judge (`pair`)
+  // gives for the market view; the headline WP1.6 builds takes the judge's.
+  const size = marketSizeOf(history.denominators, rivalAudiences, month, readingAt)
+  const monthRow = history.denominators.find((d) => d.month === month && d.audience === INDUSTRY_AUDIENCE) ?? null
+  const ourChanges = changesFromLog(await changesAhead)
+  const marketPair = comparabilityOf(prevMonth, month, {
+    row: null,
+    changes: ourChanges,
+    view: 'market',
+    later: laterSide({
+      month,
+      now: readingAt,
+      runs: runsRaw,
+      row: monthRow ? { status: monthRow.status, origin: monthRow.origin, videos: size.videos } : null,
+    }),
+  })
+  const head = headline({
+    verdicts: suppress ? [] : sentenceVerdicts,
+    size,
+    makerShares,
+    chip: pairChip(marketPair, ourChanges),
+    monthPair,
+  })
   const [voices, anomaly] = await Promise.all([
-    loadVoices(supabase, clientId, head.lead, top, themedRunId),
+    loadVoices(supabase, clientId, head.lead, themedRunId),
     flags.length > 0 ? buildAnomaly(supabase, flags[0]) : Promise.resolve(null),
   ])
-  const interpretation = refusedPairInterpretation(
-    composeInterpretation(
-      'interpretation_monthly',
-      sentenceVerdicts,
-      proseFigures(head.figures),
-      voices.voices.map((v) => ({ ref: v.quote.ref })),
-    ),
-    sentenceVerdicts,
-    monthPair,
-  )
+  // The weekly keeps the Phase 1 headline until WP3.7 (the parity gate): the
+  // same call, on the same verdicts, that OV1 made before WP1.5, which WP1.3
+  // hands the month pair.
+  const phaseOne = headline({ verdicts: suppress ? [] : sentenceVerdicts, monthPair })
   const sentence: SentenceBlock = {
-    lead: head.lead,
-    body: head.body,
-    figures: head.figures,
-    anomaly,
-    interpretation,
-    ledger: ledger.top,
-    voices: voices.voices,
-    voicesFrom: voices.from,
-    verdicts: sentenceVerdicts,
+    ...sentenceBlockFor({ head, verdicts: sentenceVerdicts, voices, ledger: ledger.top, anomaly, monthPair }),
+    forWeekly: { lead: phaseOne.lead, body: phaseOne.body, figures: phaseOne.figures },
   }
 
   // ── OV6 · how sound is this ────────────────────────────────────────────
@@ -2018,7 +2443,7 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
 }
 
 /**
- * "the report of 1 Oct read 19% · 264 of 1,388", for one object on this page —
+ * "the report of 1 Oct read 17% · 104 of 626", for one object on this page —
  * or null where nothing was sent about it, where the figure has not moved since,
  * or where the month was already closed when the artefact went out.
  *
@@ -2633,6 +3058,57 @@ async function loadMoves(supabase: SupabaseClient, clientId: string): Promise<Mo
 }
 
 /**
+ * The level list's pool (market-first WP1.5): the month's largest category
+ * themes by videos, `LEVEL_POOL` of them, as registry ids. One small read,
+ * ordered in the database so no page of rows comes back; `levelRows` then
+ * breaks ties on the previous month. An empty pool where the month tables
+ * are not there, or the month has no theme row.
+ */
+async function loadLevelPool(client: SupabaseClient, clientId: string, month: string): Promise<string[]> {
+  const res = await client
+    .from(TABLE_THEME_READINGS)
+    .select('theme_id, videos')
+    .eq('client_id', clientId)
+    .eq('month', month)
+    .eq('audience', INDUSTRY_AUDIENCE)
+    .order('videos', { ascending: false })
+    .order('theme_id', { ascending: true })
+    .limit(LEVEL_POOL)
+  if (res.error && isMissingMonthlyReading(res.error)) return []
+  return rows<{ theme_id: string }>(res, 'overview.levelPool').map((r) => String(r.theme_id))
+}
+
+/**
+ * Each category theme's maker share this month, off MF1's
+ * `theme_maker_shares(p_client, p_month, p_run)` (plan §4.2): one read for
+ * the level list and the headline.
+ *
+ * NULL MEANS NOT MEASURED, and the page says so ("not yet marked"): MF1 is not
+ * applied (the state until Wed 30 Sep), no themed run exists to group by, or
+ * the call failed, which is logged. Never an empty map standing in for "no
+ * makers anywhere".
+ *
+ * AND NULL, WITH NO READ, FOR A TENANT WITHOUT A MAKER RULE
+ * (`makerRuleEnabled`). The function computes the segments_v1 rule inline for
+ * any video with no stored row (§4.2), so it would answer for Össur too, off
+ * Sealand's word list, and flip its list to "Makers" and "mostly makers".
+ */
+export async function loadMakerShares(
+  client: SupabaseClient,
+  clientId: string,
+  month: string,
+  runId: string | null,
+): Promise<Map<string, number | null> | null> {
+  if (!runId || !makerRuleEnabled(clientId)) return null
+  const res = await client.rpc('theme_maker_shares', { p_client: clientId, p_month: month, p_run: runId })
+  if (res.error) {
+    if (!isMissingThemeMakerShares(res.error)) console.error(`[pages] overview.makerShares: ${res.error.message}`)
+    return null
+  }
+  return makerSharesOf(Array.isArray(res.data) ? (res.data as ThemeMakerShareRow[]) : [])
+}
+
+/**
  * The register's dormant entries — the gone-quiet flag's source.
  *
  * DORMANCY IS THE REGISTER'S, NOT THIS MONTH'S. The pipeline's own rule marks
@@ -3011,11 +3487,16 @@ async function loadVoices(
   supabase: SupabaseClient,
   clientId: string,
   lead: Verdict | null,
-  top: readonly { objectId: string }[],
   themedRunId: string | null,
 ): Promise<{ voices: Voice[]; from: number }> {
   if (!themedRunId) return { voices: [], from: 0 }
-  const registryId = lead?.objectKind === 'theme' ? lead.objectId : top[0]?.objectId
+  // THE LEAD THEME'S VOICES, OR NONE (market-first WP1.5). Where the lead was
+  // not a theme this fell back to `top[0]`, and `loadTopObjects` ranks per
+  // audience in alphabetical order, so the client's own heaviest theme sorted
+  // first and Sealand's front page printed June Cotopaxi quotes under a
+  // category headline (GR F9, F10). Under a size headline there is no lead,
+  // and so no voices.
+  const registryId = lead?.objectKind === 'theme' ? lead.objectId : null
   if (!registryId) return { voices: [], from: 0 }
   // EVERY READ CARRIES THE TENANT, even where the ids came from the tenant's
   // own run. The session client is RLS-scoped, so this changes nothing for a
@@ -3399,6 +3880,111 @@ interface CategoryInput {
   /** The instant the page reads at (a direction word's newest month must have
    *  ended by it). */
   asOf: string
+  /** The level list's series (WP1.5): the category's largest themes of the
+   *  month, read over the month and the one before. Omitted: no level list. */
+  levelSeries?: readonly MonthSeries[] | null
+  /** Measured maker shares by registry id (`makerSharesOf`), or null where
+   *  nothing was measured. */
+  makerShares?: ReadonlyMap<string, number | null> | null
+}
+
+/**
+ * The level list (market-first WP1.5): the category's biggest themes in the
+ * month, by k.
+ *
+ * LEVELS, NOT CHANGES. Nothing here is compared: the previous month's k rides
+ * beside each row as a level of its own, and the list prints whatever the
+ * comparability of the pair. Ties at the same k go to the larger previous k,
+ * then to the registry id, so the order never depends on how the rows came
+ * back. A theme with no video this month is not on the list, nor is one with
+ * no label, whose id is no name for a reader.
+ */
+export function levelRows(input: {
+  series: readonly MonthSeries[]
+  audience: string
+  month: string
+  prevMonth: string | null
+  makerShares?: ReadonlyMap<string, number | null> | null
+  shown?: number
+}): LevelRow[] {
+  const rows: LevelRow[] = []
+  const seen = new Set<string>()
+  for (const s of input.series) {
+    // A theme with no label is left off rather than printed as its registry id.
+    const label = s.objectLabel?.trim()
+    if (s.audience !== input.audience || !s.objectId || !label || seen.has(s.objectId)) continue
+    const byMonth = pointsByMonth(s)
+    const curr = byMonth.get(input.month)
+    if (!curr || curr.k == null || curr.k <= 0 || curr.videos == null || curr.videos <= 0) continue
+    seen.add(s.objectId)
+    const prev = input.prevMonth ? byMonth.get(input.prevMonth) ?? null : null
+    const share = input.makerShares?.get(s.objectId) ?? null
+    rows.push({
+      registryId: s.objectId,
+      label,
+      k: curr.k,
+      n: curr.videos,
+      prevK: prev?.k ?? null,
+      makerShare: share != null && Number.isFinite(share) ? share : null,
+    })
+  }
+  return rows
+    .sort((a, b) => b.k - a.k || (b.prevK ?? -1) - (a.prevK ?? -1) || a.registryId.localeCompare(b.registryId))
+    .slice(0, input.shown ?? LEVELS_SHOWN)
+}
+
+/** One row of MF1's `theme_maker_shares(p_client, p_month, p_run)` (plan §4.2). */
+export interface ThemeMakerShareRow {
+  registry_id: string
+  videos: number
+  maker: number
+  noise: number
+  labelled: number
+}
+
+/**
+ * Each theme's maker share: its maker videos over its videos in the month.
+ * A row that is not a count (NaN, negative, more makers than videos, no
+ * videos) is not measured, and says null rather than a wrong share.
+ */
+export function makerSharesOf(rows: readonly ThemeMakerShareRow[]): Map<string, number | null> {
+  const out = new Map<string, number | null>()
+  for (const r of rows) {
+    const videos = Number(r.videos)
+    const maker = Number(r.maker)
+    const ok = Number.isFinite(videos) && Number.isFinite(maker) && videos > 0 && maker >= 0 && maker <= videos
+    out.set(String(r.registry_id), ok ? maker / videos : null)
+  }
+  return out
+}
+
+/**
+ * The tenants whose maker rule is on, by client id: plan WP1.4's
+ * `SEGMENT_RULES_ENABLED = { sealand: true }`, with Össur off, because its
+ * non-buyer content is lived experience, not making (§2.13, CQ F105).
+ *
+ * A STAND-IN UNTIL WP1.4 MERGES. `lib/segments/rules.ts` is WP1.4's file and
+ * holds the one list; the integration commit points `makerRuleEnabled` at it
+ * and deletes this constant, so the rule is enabled in one place.
+ */
+export const MAKER_RULE_CLIENTS: readonly string[] = [SEALAND_CLIENT_ID]
+
+/** Does this tenant have a maker rule? Without one no theme is ever marked,
+ *  whatever `theme_maker_shares` would compute for it. */
+export function makerRuleEnabled(clientId: string, enabled: readonly string[] = MAKER_RULE_CLIENTS): boolean {
+  return enabled.includes(clientId)
+}
+
+/** `theme_maker_shares` is not there: MF1 is not applied here yet. Narrow by
+ *  name, the `isMissingKindMoodAttention` shape, so any other failure of the
+ *  call is not mistaken for an absent migration. */
+export function isMissingThemeMakerShares(error: unknown): boolean {
+  if (!error) return false
+  const { code, message } = (typeof error === 'object' ? error : {}) as { code?: string; message?: string }
+  const text = message ?? (error instanceof Error ? error.message : String(error))
+  if (!text.includes('theme_maker_shares')) return false
+  if (code && ['PGRST202', '42883'].includes(code)) return true
+  return /in the schema cache/i.test(text) || /does not exist/i.test(text)
 }
 
 export function buildCategory(input: CategoryInput): CategoryBlock {
@@ -3630,6 +4216,21 @@ export function buildCategory(input: CategoryInput): CategoryBlock {
     attentionNote,
     quiet,
     quietNote,
+    // (f) the level list (WP1.5), where the loader read one
+    ...(input.levelSeries != null
+      ? {
+          levels: levelRows({
+            series: input.levelSeries,
+            audience: input.audience,
+            month: input.month,
+            prevMonth: input.prevMonth,
+            makerShares: input.makerShares,
+          }),
+          levelsPrev: input.prevMonth
+            ? { month: input.prevMonth, n: input.perAudience.get(`${input.prevMonth}|${input.audience}`) ?? null }
+            : null,
+        }
+      : {}),
   }
 }
 

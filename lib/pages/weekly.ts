@@ -14,7 +14,7 @@ import type { ForSalesData } from '../blocks/for-sales'
 import type { MethodLines } from '../reading/method'
 import { countRefused } from '../reading/record'
 import type { Verdict } from '../reading/verdicts'
-import { loadOverview, audienceInLabel, daysInto, isMissingAnomalyFlags, type Mover, type OverviewData, type SubjectsBlock } from './overview'
+import { loadOverview, audienceInLabel, daysInto, isMissingAnomalyFlags, type Mover, type OverviewData, type SubjectsBlock, type WeeklyHeadline } from './overview'
 import { loadContent, isContentEmpty, type ContentInboxRow } from './content'
 import { buildSales, loadSubjectQuotes, loadSubjects, workedLabel } from './week'
 import {
@@ -343,6 +343,18 @@ export function checkStateOf(input: {
   return 'nothing_unusual'
 }
 
+/**
+ * The Overview headline the weekly speaks from: OV1's PHASE 1 headline
+ * (`SentenceBlock.forWeekly`), not the market's size WP1.5 prints on the page.
+ * The weekly preview must stay byte for byte through deploys 1 and 2 (the
+ * parity gate) and is rebuilt in WP3.7. A stored export that predates the
+ * field carries the Phase 1 headline in the block itself.
+ */
+export function weeklyHeadline(data: OverviewData): WeeklyHeadline {
+  const s = data.sentence
+  return s.forWeekly ?? { lead: s.lead, body: s.body, figures: s.figures }
+}
+
 /** The headline the week's sentence is about: the month's largest banded
  *  change where there is one, and otherwise the largest subject the category
  *  carries — a level is still a reading, and a sentence that refused to name
@@ -355,7 +367,7 @@ export function headlineObject(data: OverviewData): {
   n: number
   atLastMonth: { k: number; n: number } | null
 } | null {
-  const lead = data.sentence.lead
+  const lead = weeklyHeadline(data).lead
   if (lead) {
     const row = data.subjects.rows.find((r) => r.id === lead.objectId)
     // ONE DENOMINATOR, OR NO COMPARISON. `SubjectRow.categoryAtLastMonth` is
@@ -487,13 +499,14 @@ export async function loadWeekly(scope: Scope): Promise<WeeklyData | null> {
   const monthsClearing = clearing ?? BASELINE_MONTHS
   const state = checkStateOf({ outcome: check.outcome, recorded: check.recorded, monthsClearing, suppression })
   const head = headlineObject(overview)
+  const phaseOne = weeklyHeadline(overview)
   const section1: Section1 = {
     month,
     daysIn: daysInto(month, readingAt),
     window,
     sentence: head
       ? weekSentence({ month, daysIn: daysInto(month, readingAt), ...head })
-      : { body: overview.sentence.body, figures: overview.sentence.figures },
+      : { body: phaseOne.body, figures: phaseOne.figures },
     check: weekCheck({
       state,
       flags: await toWeekFlags(supabase, check.flags),

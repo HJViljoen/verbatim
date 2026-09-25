@@ -3,8 +3,10 @@ import { horizonWindow } from '@/lib/reading/horizon'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '@/lib/rivals'
 import type { RefusedReason, Verdict } from '@/lib/reading/verdicts'
 import { gapBetween, type Gap, type GapSide } from '@/lib/reading/gap'
-import type { OverviewData, RivalRow, SideReading, SubjectRow } from '@/lib/pages/overview'
-import { MOVES_MASTHEAD, MOVES_EMPTY, MOVES_UNLOCK, RIVALS_CAVEAT, fillingLine, fillingNote, moveLine, readingsCounter, rivalsLead } from '@/lib/pages/overview'
+import type { LevelRow, OverviewData, RivalRow, SideReading, SubjectRow } from '@/lib/pages/overview'
+import { MOVES_MASTHEAD, MOVES_EMPTY, MOVES_UNLOCK, RIVALS_CAVEAT, fillingLine, fillingNote, headline, moveLine, readingsCounter, rivalsLead, sentenceBlockFor } from '@/lib/pages/overview'
+import { kindShares } from '@/lib/reading/kinds'
+import { moodShares } from '@/lib/reading/mood'
 import {
   actedTally,
   buildMoveCandidate,
@@ -28,8 +30,11 @@ const OV_RECORD_INPUTS = () =>
 
 // The Overview's block fixtures (Phase 1 WP11).
 //
-// TWO STATES, BOTH REAL. `overviewFixture()` is a month that read — the shape
-// the mock draws — and `refusedFixture()` is the state PRODUCTION is in today:
+// TWO STATES, BOTH SHAPES REAL, THE VOLUMES NOT. `overviewFixture()` is a month
+// that read — the shape the mock draws, on the mock's INVENTED volume (research
+// F12: 1,388 category videos where Sealand's September has 626, 84 of the
+// client's own where it has 9, a panel of 214 accounts where it has none before
+// the 4 Oct run) — and `refusedFixture()` is the Phase 1 production state:
 // M3–M7 unapplied, so the subjects, kinds, mood, attention, standings, moves
 // and the "at this point last month" tick all come back as sentences saying
 // what is not recorded yet. Every block is rendered in both, in all three
@@ -241,7 +246,7 @@ export function moveReadingFixture(): MoveReading {
  * cannot drift from it.
  *
  * AND IT READS "too few to compare", WHICH IS THE POINT. The mock's headline
- * is "gap 13 points"; on its own numbers your audience carries 84 videos
+ * is "gap 13 points"; on its own (invented, F12) numbers your audience carries 84 videos
  * against a 100-video floor, so the product refuses the difference — the same
  * refusal the mock prints one cell away in its own change column. The two
  * levels, both denominators, the band and the earlier month all still print.
@@ -812,5 +817,119 @@ export function renamedRivalFixture(): OverviewData {
   return {
     ...base,
     subjects: { ...base.subjects, gaps: gapsFor(base.subjects.rows, 'rename') },
+  }
+}
+
+// ---- market-first WP1.5: the size headline and the level list ------------------
+//
+// SEALAND'S SEPTEMBER SO FAR, ON PRODUCTION'S FIGURES (24 Sep; research F1 and
+// the grounding digest), as deploy 1 prints OV1 and OV3. Only `sentence` and
+// `category` are this state's; the other blocks are `overviewFixture()`'s,
+// so the page still renders whole.
+
+/** The market: 626 category videos and 29 filed under a tracked brand; 15,821
+ *  and 412 comments (decision E pools them; the client's 9 are not in it). */
+const SEPTEMBER_MARKET = { month: REAL_MONTH, soFar: true, videos: 655, comments: 16233 }
+
+/** What `pairChip` says of August against September so far, with the 9, 13
+ *  and 17 Sep term changes in the log (lib/pages/overview-size.test.ts). */
+export const SEPTEMBER_CHIP = 'not read as a change: we changed our searches in September'
+
+/** The category's eight biggest September themes (of 626), August beside (of
+ *  351), production labels and counts from the grounding digest. Two themes
+ *  sit at 18; the one with more August videos takes the eighth row. */
+const SEPTEMBER_LEVELS: LevelRow[] = ([
+  ['th-upcycling', 'Admiration for upcycled bag creativity', 71, 42],
+  ['th-ready-to-buy', 'Ready to buy handmade bags', 69, 23],
+  ['th-craftsmanship', 'Respect for handmade craftsmanship', 64, 29],
+  ['th-bag-design', 'Love for stylish bag design', 60, 23],
+  ['th-tutorials', 'Requests for step-by-step tutorials', 30, 15],
+  ['th-airline', 'Confusion over airline bag sizes', 21, 9],
+  ['th-shipping', 'Questions about buying and shipping', 20, 7],
+  ['th-brand-comparisons', 'Backpack brand and model comparisons', 18, 12],
+] as const).map(([registryId, label, k, prevK]) => ({ registryId, label, k, n: 626, prevK, makerShare: null }))
+
+/**
+ * The maker shares MF1 would measure, BY ANALOGY with the staging twins (CQ
+ * F29, maker-proxy members over members resolved), as plan §2.2's print uses
+ * them until WP1.8 measures production: upcycling 112 of 138, buying interest
+ * 50 of 140, craftsmanship 70 of 96, bag design 36 of 106, tutorials 37 of 44,
+ * airline sizes 3 of 17, shipping 0 of 28. "Backpack brand and model
+ * comparisons" has no staging twin, so it stays unmeasured.
+ */
+const SEPTEMBER_MAKER_SHARES: Record<string, number> = {
+  'th-upcycling': 112 / 138,
+  'th-ready-to-buy': 50 / 140,
+  'th-craftsmanship': 70 / 96,
+  'th-bag-design': 36 / 106,
+  'th-tutorials': 37 / 44,
+  'th-airline': 3 / 17,
+  'th-shipping': 0 / 28,
+}
+
+/** Sealand, September so far, with MF1 not yet applied: the size headline,
+ *  its chip, no voices, and a level list that says "makers not yet marked". */
+export function marketSizeFixture(): OverviewData {
+  const base = overviewFixture()
+  const head = headline({ verdicts: [], size: SEPTEMBER_MARKET, makerShares: null, chip: SEPTEMBER_CHIP })
+  return {
+    ...base,
+    // The loader's own composition (`sentenceBlockFor`), so this state is one
+    // the loader produces: under the size, an empty interpretation and no voices.
+    sentence: sentenceBlockFor({ head, verdicts: [], voices: { voices: [], from: 0 }, ledger: null, anomaly: null }),
+    category: {
+      audience: INDUSTRY_AUDIENCE,
+      label: 'The category',
+      denominator: 626,
+      // Production's September kinds over the category's 626 (plan §2.2):
+      // praise 450, ready to buy 372, questions 318, problems 252, wishes 146,
+      // pushing back 108, leaving 32, buying trigger 5. The block prints three.
+      kinds: kindShares([
+        { kind: 'praise', videos: 450 },
+        { kind: 'purchase_intent', videos: 372 },
+        { kind: 'question', videos: 318 },
+        { kind: 'pain_point', videos: 252 },
+        { kind: 'feature_request', videos: 146 },
+        { kind: 'objection', videos: 108 },
+        { kind: 'switching_signal', videos: 32 },
+        { kind: 'buying_trigger', videos: 5 },
+      ], 626).slice(0, 3),
+      // August against September is refused (WP1.3), so no kind is compared.
+      kindVerdicts: {},
+      reddit: null,
+      kindsNote: null,
+      growing: [],
+      fading: [],
+      moversNote: 'Nothing moved clearly this month.',
+      // Production's September mood over 626 judged (plan §2.2).
+      mood: {
+        shares: moodShares({ judged: 626, positive: 484, mixed: 91, neutral: 39, negative: 12 }),
+        judged: 626,
+        verdict: null,
+        framingPct: null,
+      },
+      moodNote: null,
+      // Sealand's first panel freezes on the 4 Oct run.
+      attention: null,
+      attentionNote: 'No panel has been frozen for this workspace yet, so attention is not read.',
+      quiet: [],
+      quietNote: 'Nothing this page has drawn has stopped being said.',
+      levels: SEPTEMBER_LEVELS,
+      levelsPrev: { month: '2026-08-01', n: 351 },
+    },
+  }
+}
+
+/** The same September once MF1 is applied (from Wed 30 Sep): the rows at half
+ *  makers or more read "mostly makers", and the one with no measure reads
+ *  "not yet marked". */
+export function makersMarkedFixture(): OverviewData {
+  const base = marketSizeFixture()
+  return {
+    ...base,
+    category: {
+      ...base.category,
+      levels: (base.category.levels ?? []).map((l) => ({ ...l, makerShare: SEPTEMBER_MAKER_SHARES[l.registryId] ?? null })),
+    },
   }
 }

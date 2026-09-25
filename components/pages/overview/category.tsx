@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { carriesShare } from '@/lib/reading/level'
+import { carriesShare, levelText } from '@/lib/reading/level'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockCalendar } from '@/components/blocks/calendar'
 import { openLink } from '@/components/blocks/open-link'
@@ -13,7 +13,8 @@ import { fmtInt, fmtPct, monthName, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { moodLabel } from '@/lib/reading/mood'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
-import type { AttentionBlock, CategoryBlock, Mover, OverviewData, Voice } from '@/lib/pages/overview'
+import type { AttentionBlock, CategoryBlock, LevelRow, Mover, OverviewData, Voice } from '@/lib/pages/overview'
+import { MOSTLY_MAKERS_SHARE } from '@/lib/pages/overview'
 import { DirectionWord } from './subjects'
 
 // OV3 · What the category is saying (design §3 OV3). Four lines: what kind of
@@ -171,7 +172,8 @@ export function categoryVoices(data: OverviewData): Voice[] {
  *
  * The artboard writes "a fixed panel of 214 creators first seen before 1 Apr ·
  * 50,300 → 41,200 · panel re-frozen 3 Sep" — five facts, and the build printed
- * one of them. Each clause is drawn only where the field behind it exists, so a
+ * one of them. (The artboard's figures are invented volume, research F12:
+ * Sealand has no panel before the 4 Oct run.) Each clause is drawn only where the field behind it exists, so a
  * workspace whose panel has no cutoff recorded loses that clause and keeps the
  * rest.
  *
@@ -235,8 +237,119 @@ export function moversLabel(c: CategoryBlock): string {
   return 'What moved most'
 }
 
+// ---- the level list (market-first WP1.5) ------------------------------------
+
+/** The list's heading. */
+export const LEVELS_LABEL = 'Biggest themes'
+
+/** "Sep" off a month key, for a column head. */
+const shortMonth = (month: string): string => monthName(month).split(' ')[0]
+
+/** "Sep (of 626)": a share column's head carries its base, so every share in
+ *  the column is a level with its "of N" (25 Sep rulings: the base lives in
+ *  the column head, never beside the block's title). */
+export function levelHead(month: string, n: number | null): string {
+  return n != null ? `${shortMonth(month)} (of ${fmtInt(n)})` : shortMonth(month)
+}
+
+/** The makers column's head: "Makers" once MF1 has measured a row, and until
+ *  then the one statement the list makes about makers, "makers not yet
+ *  marked". */
+export function makersHead(levels: readonly LevelRow[]): string {
+  return levels.some((l) => l.makerShare != null) ? 'Makers' : 'makers not yet marked'
+}
+
+/** A row's makers cell: "mostly makers" at half or more, measured; "not yet
+ *  marked" for a row MF1 did not measure while others were; else nothing.
+ *  Never a share of its own: WP1.5 marks only the maker-led rows. */
+export function makersTag(level: LevelRow, anyMeasured: boolean): string | null {
+  if (level.makerShare == null) return anyMeasured ? 'not yet marked' : null
+  return level.makerShare >= MOSTLY_MAKERS_SHARE ? 'mostly makers' : null
+}
+
+/** A share for a level cell, or the dot the artboards print where a month has
+ *  no row. `levelText` decides share or count: under 100 it is a count, and
+ *  the column head already carries the "(of 45)", so the cell prints the
+ *  count alone rather than "4 of 45" beneath "(of 45)". */
+export function levelCell(k: number | null, n: number | null): string {
+  if (k == null || n == null) return '·'
+  const level = levelText(k, n)
+  if (!level) return '·'
+  return level.kind === 'count' ? fmtInt(k) : level.text
+}
+
 /**
- * "1,388 category videos this month · Sep vs Aug" (`main.category.header`).
+ * The market's biggest themes, as levels: the category's top eight by videos
+ * this month, the month's share, the previous month's share beside it and the
+ * makers mark. No comparison is drawn across the two columns (WP1.3 refuses
+ * August against September), so nothing here carries a change or a band.
+ */
+function LevelList({ c, month, mode }: { c: CategoryBlock; month: string; mode: RenderMode }) {
+  const levels = c.levels ?? []
+  if (levels.length === 0) return <BlockEmpty mode={mode}>No theme has been read into this month yet.</BlockEmpty>
+  const n = levels[0].n
+  const prev = c.levelsPrev ?? null
+  const anyMeasured = levels.some((l) => l.makerShare != null)
+  const heads = [
+    'Theme',
+    'Videos',
+    levelHead(month, n),
+    ...(prev ? [levelHead(prev.month, prev.n)] : []),
+    makersHead(levels),
+  ]
+  if (mode === 'email') {
+    const cell = { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '3px 10px 3px 0', borderTop: `1px solid ${EMAIL.hairline}`, verticalAlign: 'top' as const }
+    const head = { fontFamily: FONT.sans, fontSize: 10.5, fontWeight: 600, color: EMAIL.muted, padding: '0 10px 2px 0', textAlign: 'left' as const }
+    return (
+      <table role="presentation" cellPadding={0} cellSpacing={0} style={{ borderCollapse: 'collapse', width: '100%' }}>
+        <thead>
+          <tr>{heads.map((h) => <th key={h} style={head}>{h}</th>)}</tr>
+        </thead>
+        <tbody>
+          {levels.map((l) => (
+            <tr key={l.registryId}>
+              <td style={cell}><span data-copy="subject" data-slot="pass_b_theme">{l.label}</span></td>
+              <td style={cell}><span data-copy="figure">{fmtInt(l.k)}</span></td>
+              <td style={cell}><span data-copy="figure">{levelCell(l.k, l.n)}</span></td>
+              {prev ? <td style={{ ...cell, color: EMAIL.muted }}><span data-copy="figure">{levelCell(l.prevK, prev.n)}</span></td> : null}
+              <td style={{ ...cell, color: EMAIL.muted }}>{makersTag(l, anyMeasured) ?? ''}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    )
+  }
+  return (
+    <div className="-mx-1 overflow-x-auto px-1">
+      <table className="w-full border-collapse text-left">
+        <thead>
+          <tr className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+            {heads.map((h, i) => (
+              <th key={h} scope="col" className={i === heads.length - 1 ? 'py-1 font-semibold' : 'py-1 pr-3 font-semibold'}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="align-top">
+          {levels.map((l) => (
+            <tr key={l.registryId} className="border-t border-border/60 first:border-t-0 text-[12.5px]">
+              <th scope="row" className="py-1.5 pr-3 text-left font-medium">
+                <span data-copy="subject" data-slot="pass_b_theme">{l.label}</span>
+              </th>
+              <td className="py-1.5 pr-3 font-mono tabular-nums"><span data-copy="figure">{fmtInt(l.k)}</span></td>
+              <td className="py-1.5 pr-3 font-mono tabular-nums"><span data-copy="figure">{levelCell(l.k, l.n)}</span></td>
+              {prev ? <td className="py-1.5 pr-3 font-mono tabular-nums text-muted-foreground"><span data-copy="figure">{levelCell(l.prevK, prev.n)}</span></td> : null}
+              <td className="py-1.5 text-[11.5px] text-secondary-foreground">{makersTag(l, anyMeasured) ?? ''}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+/**
+ * "626 category videos this month · Sep vs Aug" (`main.category.header`;
+ * Sealand's September, where the artboard's invented 1,388 stood, F12).
  *
  * THE SECOND HALF IS THE BASIS AND IT WAS NOWHERE IN THE HEADER. Every change
  * on this block is drawn against the month before, and the meta stated the
@@ -262,7 +375,8 @@ export const KIND_NOT_COMPARED = 'not compared'
  * The pads are the artboard's own (`Main.dc.html` §3 draws `viewBox="0 0 300
  * 88"`, plot from x=44, end labels at x=234): 44 on the left for the two y
  * labels, and the gutter on the right wide enough for the whole end label —
- * "The category 41,200" sets about 118 units at 11px, and `CalendarLine` draws
+ * "The category 41,200" (the artboard's invented figure, F12; a five-digit end
+ * label is the widest the line draws) sets about 118 units at 11px, and `CalendarLine` draws
  * it at `width - padR + 10` and clips it with nothing.
  */
 const CHART_W = 352
@@ -575,6 +689,7 @@ export const overviewCategory: Block<OverviewData> = {
       >
         {email ? (
           <div>
+            {c.levels ? <Line label={LEVELS_LABEL} mode={mode}><LevelList c={c} month={data.month} mode={mode} /></Line> : null}
             <Line label="Kind of thing said" mode={mode}>{kinds}</Line>
             <Line label={moversLabel(c)} mode={mode}>{movers}</Line>
             <Line label="Mood" mode={mode}>{mood}</Line>
@@ -583,6 +698,12 @@ export const overviewCategory: Block<OverviewData> = {
           </div>
         ) : (
           <div className="flex min-w-0 flex-col gap-3">
+            {/* THE MARKET'S BIGGEST THEMES, FIRST AND FULL WIDTH (market-first
+                WP1.5). The list is what this block has to say while no month
+                pair is compared, and a five-column table needs the tile's
+                width; the three columns below keep their own arrangement. A
+                stored export that predates the field draws no list. */}
+            {c.levels ? <Line label={LEVELS_LABEL} mode={mode}><LevelList c={c} month={data.month} mode={mode} /></Line> : null}
             {/* THE ARTBOARD'S THREE COLUMNS (mock-gap §Visual fidelity: "the
                 mood-beside-attention arrangement and the kind-rows-beside-more
                 control all collapse into one column"). The kinds and the mood
@@ -691,8 +812,9 @@ export const overviewCategory: Block<OverviewData> = {
     // of which is that (lib/reading/verdicts.ts). `sent-figures.ts` derives the
     // permanent record's `measure` straight off the unit — anything that is not
     // 'comments' is filed as 'videos' — and `sent_figures` has no UPDATE grant,
-    // so the moment this block joins an artefact's set, "214 videos" would be
-    // written down forever. The unit cannot simply be widened either: the
+    // so the moment this block joins an artefact's set, a panel of accounts
+    // ("214", the mock's invented panel, F12) would be written down as videos
+    // forever. The unit cannot simply be widened either: the
     // column carries `check (measure in ('videos','comments'))`
     // (20260918098000_sent_figures.sql), so a fifth unit is a migration, not an
     // edit. The panel's size is RENDERED — it is the denominator the comment
@@ -745,6 +867,7 @@ export const overviewCategory: Block<OverviewData> = {
   emptyState(data) {
     const c = data.category
     const nothing = c.kinds.length === 0 && c.growing.length === 0 && c.fading.length === 0 && !c.mood && !c.attention
+      && (c.levels ?? []).length === 0
     return nothing ? 'Nothing about this category has been read into this month yet.' : null
   },
 }

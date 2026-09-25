@@ -545,7 +545,7 @@ async function loadUpdates(
 /** Every change this tenant has logged, oldest first. An empty list when the
  *  log does not exist yet — the readiness precedent: a reader says "not
  *  recorded", it does not fail. */
-function loadChanges(client: SupabaseClient, clientId: string): Promise<ConfigChange[]> {
+export function loadChanges(client: SupabaseClient, clientId: string): Promise<ConfigChange[]> {
   // MEMOISED, because every series on a page asks for it: a change log is a
   // tenant-wide fact, and one loadOverview read it three times over the same
   // 102 rows. The list is treated as readonly everywhere here.

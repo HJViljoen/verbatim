@@ -16,7 +16,7 @@ import { MARKET_BLOCKS } from '@/components/pages/market-surface'
 import { COMPETITIVE_BLOCKS } from '@/components/pages/competitive-surface'
 import { WEEK_BLOCKS } from '@/components/pages/week'
 
-import { overviewFixture, refusedFixture as overviewRefused } from '@/components/pages/overview/fixture'
+import { makersMarkedFixture, marketSizeFixture, overviewFixture, refusedFixture as overviewRefused } from '@/components/pages/overview/fixture'
 import { subjectsFixture, refusedFixture as subjectsRefused } from '@/components/pages/subjects/fixture'
 import { voiceFixture } from '@/components/pages/voice-surface/fixture'
 import { marketFixture, deepLinkFixture, unrecordedFixture } from '@/components/pages/market-surface/fixture'
@@ -60,7 +60,7 @@ const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
 
 /** A registered page whose renderables take a Phase 1 fixture. */
 const PAGE_STATES: Record<string, unknown[]> = {
-  overview: [overviewFixture(), overviewRefused()],
+  overview: [overviewFixture(), overviewRefused(), marketSizeFixture(), makersMarkedFixture()],
   subjects: [subjectsFixture(), subjectsRefused()],
 }
 
