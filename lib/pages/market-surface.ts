@@ -226,8 +226,9 @@ export interface AdviceBlock {
   /**
    * The lineage of the current recommendation: the top of the newest update's
    * advice by `topRecommendation`'s rule (`currentTopLineage`). The ledger's
-   * first row, tagged "current recommendation". OPTIONAL, so a copy stored
-   * before WP1.9 renders as it was, with no tag.
+   * first row, tagged "current recommendation": `buildAdviceRows` sorts this
+   * lineage first by name, so the tag and the first row cannot part on a tie.
+   * OPTIONAL, so a copy stored before WP1.9 renders as it was, with no tag.
    */
   current?: string | null
   /** The lineage the URL named, when the ledger holds it. The row is drawn
@@ -439,12 +440,19 @@ export function currentTopLineage(copies: readonly RecCopy[]): string | null {
  * The ledger's rows: the current recommendation first, then the newest first
  * (market-first WP1.9, GR F34).
  *
- * NEWEST MEANS LAST RAISED. A row is dated by the update that last carried it
- * (its newest copy), so advice an update repeats is current advice however
- * long ago it was first made. Inside one update the rows keep that update's
- * own ranking, `topRecommendation`'s (priority, then how well grounded), which
- * is what puts the current recommendation at the top: it is the newest
- * update's first. Ties fall to the lineage id, so the order is stable.
+ * THE FIRST ROW IS `currentTopLineage`'S ANSWER, SORTED THERE BY NAME. It is
+ * not left to fall out of the order below: two of the newest update's copies
+ * can tie on priority and on cited insights, and the row that leads and the
+ * row tagged "current recommendation" must be one row whichever way a tie
+ * breaks. So the one decision is taken once and both read it.
+ *
+ * NEWEST MEANS LAST RAISED. After the first row, a row is dated by the update
+ * that last carried it (its newest copy), so advice an update repeats is
+ * current advice however long ago it was first made. Inside one update the
+ * rows keep that update's own ranking, `topRecommendation`'s (priority, then
+ * how well grounded). Its ties fall to the newest copy's id, ascending, which
+ * is the order `topRecommendation` is handed its copies in, then to the
+ * lineage id, so the order is stable.
  *
  * THE LEDGER USED TO RUN OLDEST FIRST, and on Sealand that drew twelve June
  * rows marked "evidence replaced" and left out the advice the headline was
@@ -528,10 +536,13 @@ export function buildAdviceRows(
     })
   }
   const key = (r: AdviceRow) => orderOf.get(r.lineageId) as { raisedAt: string; newest: RecCopy }
+  const current = currentTopLineage(copies)
   return rows
     .sort((a, b) =>
+      (a.lineageId === current ? -1 : b.lineageId === current ? 1 : 0) ||
       key(b).raisedAt.localeCompare(key(a).raisedAt) ||
       recommendationOrder(key(a).newest, key(b).newest) ||
+      key(a).newest.id.localeCompare(key(b).newest.id) ||
       a.lineageId.localeCompare(b.lineageId))
     .map((r, i) => ({ ...r, number: i + 1 }))
 }
@@ -1067,7 +1078,7 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   }
   const advice: AdviceBlock = {
     rows: await attachQuotes(supabase, withAfterwards, heroByLineage, evidenceByInsight, themeSlugById),
-    // The ledger's first row, by construction of `buildAdviceRows`' order.
+    // The ledger's first row: `buildAdviceRows` sorts this same answer first.
     current: currentTopLineage(recRows),
     highlight: requestedRow?.lineageId ?? null,
     requestedLine: !requested ? null : requestedRow ? ADVICE_REQUESTED_LINE : ADVICE_REQUESTED_GONE,

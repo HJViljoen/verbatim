@@ -604,6 +604,25 @@ describe('MK2 · the current recommendation first, then the newest (market-first
     expect(lineageKey(headline!)).toBe(currentTopLineage(SEALAND_COPIES))
   })
 
+  it('leads with the tagged row when two of the newest update’s copies tie on priority and grounding', () => {
+    // The reviewer's case: copy `aaa` carries lineage `zzz`, copy `bbb` its own
+    // lineage, both high priority citing four insights. `topRecommendation` is
+    // handed the copies by id and keeps the first, so the current advice is
+    // `zzz`; the lineage id alone would have put `bbb` first, untagged.
+    const tied = [
+      copy({ ...SEP20, id: 'aaa', lineage_id: 'zzz', priority: 'high', based_on: cited(4) }),
+      copy({ ...SEP20, id: 'bbb', lineage_id: 'bbb', priority: 'high', based_on: cited(4) }),
+    ]
+    expect(currentTopLineage(tied)).toBe('zzz')
+    const rows = buildAdviceRows(tied, [])
+    expect(rows.map((r) => r.lineageId)).toEqual(['zzz', 'bbb'])
+    expect(rows[0].lineageId).toBe(currentTopLineage(tied))
+    expect(rows.map((r) => r.number)).toEqual([1, 2])
+    // The same with the rest of Sealand's ledger behind them.
+    const all = [...SEALAND_COPIES.filter((c) => c.run_id !== SEP20.run_id), ...tied]
+    expect(buildAdviceRows(all, [])[0].lineageId).toBe(currentTopLineage(all))
+  })
+
   it('has no current recommendation when there is no advice', () => {
     expect(currentTopLineage([])).toBeNull()
     expect(buildAdviceRows([], [])).toEqual([])
