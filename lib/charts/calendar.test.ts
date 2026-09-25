@@ -2,7 +2,7 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 import { describe, expect, it } from 'vitest'
 import {
-  axisLabels, CAL_PAD_L, CAL_PAD_R, CAL_PAPER_K,
+  axisLabels, brokenStepLine, CAL_PAD_L, CAL_PAD_R, CAL_PAPER_K,
   calendarGeometry, chartId, collapseRules, columnTitle, hoverTitle, lastReading,
   legendEveryMonth, legendMonths, legendStates, undrawnNote,
   lineSegments, monthColumns, niceMid, spanOf, spreadLabels, stateNote, valueScale,
@@ -132,6 +132,48 @@ describe('lineSegments', () => {
   it('does not close a leading or trailing gap', () => {
     const points = [p('2026-01-01', null, 'hollow'), p('2026-02-01', 2), p('2026-03-01', null, 'hollow')]
     expect(lineSegments(points)).toEqual([[1]])
+  })
+
+  // A REFUSED STEP IS DRAWN BROKEN (market-first decision D, WP1.3). Looks &
+  // style, the category's one moving subject: 38 of August's 351 (10.8%) and
+  // 104 of September's 626 (16.6%), two months not read the same way.
+  it('breaks the path at a refused step, keeping both points', () => {
+    const why = 'Not read as a change: we changed what we search in September.'
+    const points = [
+      p('2026-08-01', 10.8, 'read', { k: 38, n: 351 }),
+      p('2026-09-01', 16.6, 'read', { k: 104, n: 626, brokenBefore: why }),
+    ]
+    expect(lineSegments(points)).toEqual([[0], [1]])
+  })
+
+  it('a break on a point after a gap changes nothing: the gap already broke it', () => {
+    const points = [p('2026-07-01', 1), p('2026-08-01', null, 'hollow'), p('2026-09-01', 3, 'read', { brokenBefore: 'x' }), p('2026-10-01', 4)]
+    expect(lineSegments(points)).toEqual([[0], [2, 3]])
+  })
+})
+
+describe('brokenStepLine', () => {
+  it('names the newest refused step, once, for the whole chart', () => {
+    const series: CalendarSeries[] = [
+      { label: 'The category', color: 'var(--cat)', points: [
+        p('2026-07-01', 5, 'read'),
+        p('2026-08-01', 10.8, 'read', { brokenBefore: 'older' }),
+        p('2026-09-01', 16.6, 'read', { brokenBefore: 'Not read as a change: we changed what we search in September.' }),
+      ] },
+      { label: 'You', color: 'var(--you)', points: [p('2026-09-01', 3, 'read', { brokenBefore: 'Not read as a change: we changed what we search in September.' })] },
+    ]
+    expect(brokenStepLine(series)).toBe('Not read as a change: we changed what we search in September.')
+  })
+
+  it('is null where no step is broken', () => {
+    expect(brokenStepLine([{ label: 'x', color: 'red', points: [p('2026-08-01', 1), p('2026-09-01', 2)] }])).toBeNull()
+  })
+
+  it('the hover on the broken month says why', () => {
+    const point = p('2026-09-01', 16.6, 'read', { k: 104, n: 626, brokenBefore: 'Not read as a change: we changed what we search in September.' })
+    expect(hoverTitle({ label: 'Looks & style' }, point, (v) => `${v}%`)).toBe(
+      'Looks & style 16.6% · Sep 2026 · 104 of 626 videos · Not read as a change: we changed what we search in September.',
+    )
   })
 })
 

@@ -450,3 +450,75 @@ describe('Sparkline with gaps', () => {
     expect((markup.match(/<polyline/g) ?? [])).toHaveLength(1)
   })
 })
+
+// ---- The month-pair rule (market-first decision D, WP1.3) ---------------------------------
+//
+// A refused step is drawn broken: the points stay, the joining segment does
+// not, and the reason is in the figure line. Looks & style, the category's one
+// moving subject, is 38 of August's 351 (10.8%) and 104 of September's 626
+// (16.6%): two months our own September search changes refuse to compare.
+describe('CalendarLine: a refused step is drawn broken', () => {
+  const WHY = 'Not read as a change: we changed what we search in September.'
+
+  it('with too few months for a line, prints the figures and the reason', () => {
+    const looks: CalendarSeries = {
+      label: 'Looks & style', color: 'var(--cat)',
+      points: [
+        p('2026-08-01', 10.8, 'read', { k: 38, n: 351 }),
+        p('2026-09-01', 16.6, 'read', { k: 104, n: 626, brokenBefore: WHY }),
+      ],
+    }
+    const markup = render(CalendarLine({ axis: ['2026-08-01', '2026-09-01'], series: [looks], format: (v) => `${v}%` }))
+    assertCopyContract(markup)
+    const text = markupText(markup)
+    expect(text).toContain('16.6% of 626 in Sep')
+    expect(text).toContain('10.8% of 351 in Aug')
+    expect(text).toContain(WHY)
+  })
+
+  it('on a drawn line, keeps every point and joins no refused step', () => {
+    // The mock's own line (`you`, above) with its August-to-September step
+    // refused: May to August stay joined, September is a point on its own.
+    const broken: CalendarSeries = {
+      ...you,
+      points: you.points.map((pt) => (pt.month === '2026-09-01' ? { ...pt, brokenBefore: WHY } : pt)),
+    }
+    const joined = render(CalendarLine({ axis: AXIS, series: [you], format: (v) => `${v}%` }))
+    const markup = render(CalendarLine({ axis: AXIS, series: [broken], format: (v) => `${v}%` }))
+    assertCopyContract(markup)
+    // The same points either way.
+    expect((markup.match(/<circle/g) ?? []).length).toBe((joined.match(/<circle/g) ?? []).length)
+    // No polyline reaches September's x: the last x of every segment is August's
+    // or earlier. September's x is the rightmost point on the axis.
+    const xs = (m: string) => [...m.matchAll(/<polyline[^>]*points="([^"]+)"/g)].map((x) => x[1].split(' ').map((pt) => Number(pt.split(',')[0])))
+    const maxJoined = Math.max(...xs(joined).flat())
+    const maxBroken = Math.max(...xs(markup).flat())
+    expect(maxBroken).toBeLessThan(maxJoined)
+    expect(markupText(markup)).toContain(WHY)
+    expect(markupText(joined)).not.toContain(WHY)
+  })
+
+  it('draws no segment at all where every step is refused, and still every point', () => {
+    const allBroken: CalendarSeries = { ...you, points: you.points.map((pt, i) => (i === 0 ? pt : { ...pt, brokenBefore: WHY })) }
+    const markup = render(CalendarLine({ axis: AXIS, series: [allBroken], format: (v) => `${v}%` }))
+    expect(markup).not.toContain('<polyline')
+    expect((markup.match(/<circle/g) ?? []).length).toBeGreaterThanOrEqual(5)
+  })
+})
+
+describe('Sparkline: a refused step is drawn broken (WP1.3)', () => {
+  it('breaks the line where `breaks` says, and draws the lone point as a dot', () => {
+    const values = [5, 10.8, 16.6]
+    const joined = render(<Sparkline values={values} animate={false} />)
+    const broken = render(<Sparkline values={values} breaks={[false, false, true]} animate={false} />)
+    expect((joined.match(/<polyline/g) ?? []).length).toBe(1)
+    expect((broken.match(/<polyline/g) ?? []).length).toBe(1)
+    // The polyline stops at the second value; the third is a dot of its own.
+    const pts = broken.match(/<polyline[^>]*points="([^"]+)"/)?.[1].split(' ') ?? []
+    expect(pts).toHaveLength(2)
+  })
+
+  it('without breaks it is the line it always was', () => {
+    expect(render(<Sparkline values={[1, 2, 3]} animate={false} />)).toBe(render(<Sparkline values={[1, 2, 3]} breaks={undefined} animate={false} />))
+  })
+})
