@@ -5,13 +5,15 @@ import type { ReactNode } from 'react'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
+import { PairChip } from '@/components/blocks/pair-chip'
+import { sharedPairNote } from '@/lib/calibration'
 import { TileColumns } from '@/components/shell/page-grid'
 import { TrackThisSubject } from '@/components/subjects/track-this'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, fmtPct, fullDate, monthName } from '@/lib/format'
 import { DIRECTION_RUN_LABEL, type Direction } from '@/lib/reading/bands'
 import { gapBasisLine, gapLine } from '@/lib/reading/gap'
-import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
+import type { FigureTable, Verdict, VerdictPairNote } from '@/lib/reading/verdicts'
 import { sideCaption, sideEyebrow, sideFigures, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
 
 // SU2 · One subject, in full — the hero (design §3 SU2, the mock's (a) header).
@@ -103,7 +105,7 @@ function priorMonth(side: SubjectSide): boolean {
  * A column of figures that starts at three different heights is read as three
  * unrelated readings.
  */
-function Side({ side, brand, mode }: { side: SubjectSide; brand: string; mode: RenderMode }): ReactNode {
+function Side({ side, brand, mode, shared = null }: { side: SubjectSide; brand: string; mode: RenderMode; shared?: VerdictPairNote | null }): ReactNode {
   const email = mode === 'email'
   const eyebrow = sideEyebrow(side, brand)
   const label = (
@@ -145,7 +147,7 @@ function Side({ side, brand, mode }: { side: SubjectSide; brand: string; mode: R
         {fmtInt(side.k ?? 0)} of {fmtInt(side.n ?? 0)} videos
       </span>
       <span className={email ? undefined : 'flex flex-wrap items-center gap-2'}>
-        <BlockMovement verdict={side.verdict} unit="pts" mode={mode} />
+        <BlockMovement verdict={side.verdict} unit="pts" mode={mode} sharedRefusal={shared} />
         <DirectionWord direction={side.direction} mode={mode} />
         {priorMonth(side) ? (
           <span className={email ? undefined : 'whitespace-nowrap font-mono text-[11px] tabular-nums text-muted-foreground/80'} style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}>
@@ -197,6 +199,10 @@ export const subjectsSubject: Block<SubjectsData> = {
       ? gapBasisLine(pane.gap)
       : null
     const lead = pane.gap ? `${pane.name}: ${gapLine(pane.gap)}${basis ? `; ${basis}` : ''}.` : null
+    // ONE REFUSAL, SAID ONCE (deploy 1 review): the hero's cells each printed
+    // the same refusal under their figure. Refused for one pair, each says
+    // "not compared" and the chip under the cells says why.
+    const shared = sharedPairNote(pane.sides.filter((s) => s.observed && s.pct != null).map((s) => s.verdict))
 
     // THE LINK, IN THE RIGHT MARKUP FOR EACH READER. Print draws none — a PDF
     // and a `/r/<token>` page have no session to open a filtered catalogue
@@ -244,7 +250,7 @@ export const subjectsSubject: Block<SubjectsData> = {
         {pane.notRecorded ? <BlockEmpty mode={mode}>{pane.notRecorded}</BlockEmpty> : null}
 
         {email ? (
-          <div>{pane.sides.map((s) => <Side key={s.audience} side={s} brand={data.brand} mode={mode} />)}</div>
+          <div>{pane.sides.map((s) => <Side key={s.audience} side={s} brand={data.brand} mode={mode} shared={shared} />)}</div>
         ) : (
           // THE MOCK'S VERTICAL HAIRLINES, from the primitive that owns them
           // (P0 item 3). Three hand-rolled `grid-cols-3`s is how a product ends
@@ -255,9 +261,10 @@ export const subjectsSubject: Block<SubjectsData> = {
           // grid then said the same five names again. The note is the one
           // place an absent side is named.
           <TileColumns of={3} className="gap-x-4 [&>*]:px-4 [&>*:first-child]:pl-0 [&>*:last-child]:pr-0">
-            {pane.sides.filter((s) => s.observed && s.pct != null).map((s) => <Side key={s.audience} side={s} brand={data.brand} mode={mode} />)}
+            {pane.sides.filter((s) => s.observed && s.pct != null).map((s) => <Side key={s.audience} side={s} brand={data.brand} mode={mode} shared={shared} />)}
           </TileColumns>
         )}
+        <PairChip note={shared} mode={mode} className="mt-3" />
 
         {/* The axis note and the provisional line are no longer printed (Heinrich,
             2026-09-24): each cell already says "too few to compare". */}

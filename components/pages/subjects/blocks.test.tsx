@@ -1126,3 +1126,48 @@ describe('the Subjects page', () => {
     expect(text).not.toContain(data.method!.redditCap)
   })
 })
+
+// ONE REFUSAL, SAID ONCE (deploy 1 review): on 2 Oct the hero's cells and the
+// kinds strip each printed "Not read as a change: we changed our searches in
+// September." The fixture's verdicts are refused as the loader refuses them
+// (WP1.3), counts kept.
+describe('Subjects · a refusal the cells share prints once, as a chip', () => {
+  const pair = { mode: 'refuse' as const, cause: 'searches' as const, changeMonth: '2026-09-01', checkWith: null }
+  const refuse = <V extends { state: string } | null | undefined>(v: V): V =>
+    v ? ({ ...v, state: 'refused', refusedReason: 'tracking_change', changePts: null, bandPts: null, pair } as V) : v
+  const refused = () => {
+    const data = subjectsFixture()
+    const selected = data.selected!
+    return {
+      ...data,
+      selected: {
+        ...selected,
+        sides: selected.sides.map((s) => ({
+          ...s,
+          verdict: refuse(s.verdict),
+          kindVerdicts: Object.fromEntries(Object.entries(s.kindVerdicts).map(([k, v]) => [k, refuse(v)])),
+        })),
+      },
+    }
+  }
+  const CHIP = 'not read as a change: we changed our searches in September'
+
+  it('the hero says "not compared" in each cell and the reason once, in every mode', () => {
+    for (const mode of MODES) {
+      const text = renderText(subjectsSubject.render(refused(), mode, ctx))
+      expect(text.split(CHIP).length - 1).toBe(1)
+      expect(text).not.toContain('Not read as a change')
+      assertCopyContract(render(subjectsSubject.render(refused(), mode, ctx)))
+    }
+  })
+
+  it('the kinds strip, every kind refused, is the chip alone', () => {
+    for (const mode of MODES) {
+      const text = renderText(subjectsKinds.render(refused(), mode, ctx))
+      expect(text.split(CHIP).length - 1).toBe(1)
+      expect(text).not.toContain('Not read as a change')
+      expect(text).not.toMatch(/since [A-Z][a-z]{2}:/)
+      assertCopyContract(render(subjectsKinds.render(refused(), mode, ctx)))
+    }
+  })
+})

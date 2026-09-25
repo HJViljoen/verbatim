@@ -3,6 +3,8 @@ import type { ReactNode } from 'react'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
+import { PairChip } from '@/components/blocks/pair-chip'
+import { sharedPairNote } from '@/lib/calibration'
 import { fmtInt, fullDate, monthName } from '@/lib/format'
 import { carriesShare, levelText } from '@/lib/reading/level'
 import { EMAIL, FONT } from '@/lib/email/theme'
@@ -173,7 +175,13 @@ export const voiceAudience: Block<VoiceSurfaceData> = {
     // a whole-number share at or over it ("51%"), never both and never a
     // decimal (lib/reading/level.ts). Rows in a grid rather than a run-on
     // line, so the numbers sit in one column a reader can scan.
+    // ONE REFUSAL, SAID ONCE (deploy 1 review): ten kinds each printed the
+    // same sentence between their label and their level, which pushed the
+    // figure about 400px from its label. Refused for one pair, each says "not
+    // compared" and the chip under the list says why.
+    const shared = sharedPairNote(a.kinds.map((k) => a.kindVerdicts[k.kind] ?? null))
     const kinds = a.kinds.length > 0 ? (
+      <>
       <div className={email ? undefined : 'grid grid-cols-1 gap-x-8 gap-y-1 sm:grid-cols-2 2xl:grid-cols-3'}>
         {a.kinds.map((k) => {
           const level = levelText(k.videos, k.denominator)
@@ -185,7 +193,7 @@ export const voiceAudience: Block<VoiceSurfaceData> = {
             >
               <span className={email ? undefined : 'min-w-0'}>{k.label}</span>{' '}
               <span className={email ? undefined : 'flex shrink-0 items-baseline gap-2'}>
-                <BlockMovement verdict={a.kindVerdicts[k.kind] ?? null} unit="pts" mode={mode} good="neutral" />{' '}
+                <BlockMovement verdict={a.kindVerdicts[k.kind] ?? null} unit="pts" mode={mode} good="neutral" sharedRefusal={shared} />{' '}
                 <span
                   data-copy={level?.kind === 'count' ? 'level' : 'figure'}
                   className={email ? undefined : 'font-mono text-[12px] tabular-nums text-secondary-foreground'}
@@ -198,6 +206,8 @@ export const voiceAudience: Block<VoiceSurfaceData> = {
           )
         })}
       </div>
+      <PairChip note={shared} mode={mode} className="mt-2" />
+      </>
     ) : (
       <BlockEmpty mode={mode}>{a.kindsNote ?? 'No kind carried a reading this month.'}</BlockEmpty>
     )

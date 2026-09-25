@@ -4,6 +4,8 @@ import { BlockCalendar } from '@/components/blocks/calendar'
 import { CalendarLine } from '@/components/charts/calendar-line'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
+import { PairChip } from '@/components/blocks/pair-chip'
+import { sharedPairNote } from '@/lib/calibration'
 import { chartId, type CalendarRule, type CalendarSeries } from '@/lib/charts/calendar'
 import { fmtInt, fmtPct, monthName } from '@/lib/format'
 
@@ -12,7 +14,7 @@ import { fmtInt, fmtPct, monthName } from '@/lib/format'
 const shortMonth = (month: string): string => monthName(month).replace(/\s+\d{4}$/, '')
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { NOT_OBSERVED, standingText, type StandingRow, type StandingShare } from '@/lib/reading/standings'
-import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
+import type { FigureTable, Verdict, VerdictPairNote } from '@/lib/reading/verdicts'
 import { HORIZON_LABEL } from '@/lib/reading/horizon'
 import { horizonHref } from '@/lib/shell/bar'
 import { changeNote, homonymOf, mixLine, type CompetitiveSurfaceData, type StandingsBlock, type StandingsSeries } from '@/lib/pages/competitive-surface'
@@ -95,13 +97,15 @@ export function metaLine(s: StandingsBlock): string {
 }
 
 /** One change cell: the banded verdict, or the reason there is none. */
-function Change({ verdict, observed, prevMonthLabel, mode }: {
+function Change({ verdict, observed, prevMonthLabel, mode, shared = null }: {
   verdict: Verdict | null
   observed: boolean
   prevMonthLabel: string | null
   mode: RenderMode
+  /** The refusal the table prints once under itself (deploy 1 review). */
+  shared?: VerdictPairNote | null
 }) {
-  if (verdict) return <BlockMovement verdict={verdict} unit="pts" mode={mode} />
+  if (verdict) return <BlockMovement verdict={verdict} unit="pts" mode={mode} sharedRefusal={shared} />
   const text = changeNote(observed, prevMonthLabel)
   return mode === 'email'
     ? <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>{text}</span>
@@ -354,6 +358,11 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
       s.rows.reduce((m, r) => (r.role === 'category' ? m : Math.max(m, pick(r)?.pct ?? 0)), 0)
     const topContent = topOf((r) => r.content)
     const topAttention = topOf((r) => r.attention)
+    // ONE REFUSAL, SAID ONCE (deploy 1 review): the two change columns wrapped
+    // the same sentence to two lines in each of six cells. Refused for one
+    // pair, each cell says "not compared" and the chip under the table says
+    // why.
+    const shared = sharedPairNote(s.rows.flatMap((r) => [r.attentionVerdict, r.contentVerdict]))
 
     // THE APRON'S SENTENCES ARE ABOUT THE TABLE, SO TWO OF THEM WAIT FOR IT.
     // With no month read the tile printed the honest refusal ("No month has
@@ -529,11 +538,12 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
                 <div key={row.audience} style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '4px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
                   <strong>{row.label}</strong><HomonymTag note={homonymOf(data, row.audience)} mode={mode} />
                   <div style={{ marginTop: 2 }}>
-                    comments <Share share={row.attention} role={row.role} top={topAttention} mode={mode} /> <Change verdict={row.attentionVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} />
-                    {' · '}videos <Share share={row.content} role={row.role} top={topContent} mode={mode} /> <Change verdict={row.contentVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} />
+                    comments <Share share={row.attention} role={row.role} top={topAttention} mode={mode} /> <Change verdict={row.attentionVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} shared={shared} />
+                    {' · '}videos <Share share={row.content} role={row.role} top={topContent} mode={mode} /> <Change verdict={row.contentVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} shared={shared} />
                   </div>
                 </div>
               ))}
+              <PairChip note={shared} mode={mode} />
             </div>
           ) : (
             <div className="-mx-1 overflow-x-auto px-1">
@@ -575,13 +585,14 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
                         <td className="py-1.5 pr-3"><Share share={row.attention} role={row.role} top={topAttention} mode={mode} /></td>
                         <td className="py-1.5 pr-3"><Share share={row.content} role={row.role} top={topContent} mode={mode} /></td>
                         <td className="py-1.5 pr-3 font-mono text-[11.5px] tabular-nums text-muted-foreground">{fmtInt(months)} of {fmtInt(s.months.length)}</td>
-                        <td className="py-1.5 pr-3"><Change verdict={row.attentionVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} /></td>
-                        <td className="py-1.5"><Change verdict={row.contentVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} /></td>
+                        <td className="py-1.5 pr-3"><Change verdict={row.attentionVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} shared={shared} /></td>
+                        <td className="py-1.5"><Change verdict={row.contentVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} shared={shared} /></td>
                       </tr>
                     )
                   })}
                 </tbody>
               </table>
+              <PairChip note={shared} mode={mode} className="mt-2" />
             </div>
           )
         ) : null}

@@ -549,12 +549,13 @@ export const PAIR_NOT_COMPARED = 'not compared'
  * OV3's kind labels to nothing, and read as that many separate failures. The
  * approved preview prints it once, as a chip at the foot of each block.
  *
- * The note, where two or more of the verdicts are refused for a month pair and
- * all of those say the same sentence; null otherwise, and the rows keep their
- * own sentences (a block whose rows are refused for different reasons, or with
- * one refusal, says each where it stands). A verdict that was compared, or
- * refused for anything else, does not stop it: those rows print their own
- * answer.
+ * The note, where one or more of the verdicts are refused for a month pair
+ * and all of those say the same sentence; null otherwise, and the rows keep
+ * their own sentences (a block whose rows are refused for different reasons
+ * says each where it stands). One is enough: a lone refusal in a narrow cell
+ * (the face-off's change column) wrapped to four lines, and the preview draws
+ * the chip whatever the count. A verdict that was compared, or refused for
+ * anything else, does not stop it: those rows print their own answer.
  */
 export function sharedPairNote(
   verdicts: readonly ({ state: string; pair?: VerdictPairNote | null } | null | undefined)[],
@@ -562,7 +563,7 @@ export function sharedPairNote(
   const notes = verdicts
     .map((v) => (v && v.state === 'refused' && v.pair?.mode === 'refuse' ? v.pair : null))
     .filter((n): n is VerdictPairNote => n != null)
-  if (notes.length < 2) return null
+  if (notes.length === 0) return null
   const first = pairSentence(notes[0])
   return notes.every((n) => pairSentence(n) === first) ? notes[0] : null
 }

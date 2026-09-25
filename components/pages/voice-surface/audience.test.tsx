@@ -216,3 +216,30 @@ describe('voiceAudience · the selected audience with no row in the month', () =
     expect(text).not.toContain('not observed')
   })
 })
+
+// ONE REFUSAL, SAID ONCE (deploy 1 review): on 2 Oct ten kinds each printed
+// the refusal between their label and their level. The fixture's kinds are
+// refused as the loader refuses them (WP1.3), counts kept.
+describe('voiceAudience · a refusal every kind shares prints once, as a chip', () => {
+  const pair = { mode: 'refuse' as const, cause: 'searches' as const, changeMonth: '2026-09-01', checkWith: null }
+  const refused = () => {
+    const data = voiceFixture()
+    const kindVerdicts = Object.fromEntries(data.audience.kinds.map((k) => [k.kind, {
+      objectKind: 'kind' as const, objectId: k.kind, objectLabel: k.label, audience: data.audience.selected,
+      window: { kind: 'month' as const, from: '2026-09-01', to: '2026-10-01' },
+      value: { k: k.videos, n: k.denominator }, changePts: null, bandPts: null,
+      state: 'refused' as const, refusedReason: 'tracking_change' as const, flags: [], pair,
+    }]))
+    return { ...data, audience: { ...data.audience, kindVerdicts } }
+  }
+
+  it('says "not compared" beside each level and the reason once, in every mode', () => {
+    for (const mode of MODES) {
+      const text = draw(refused(), mode)
+      expect(text.split('not read as a change: we changed our searches in September').length - 1).toBe(1)
+      expect(text).not.toContain('Not read as a change')
+      expect(text).toMatch(/Asking how it works\s*not compared/)
+      expect(copyViolations(render(voiceAudience.render(refused(), mode, ctx)))).toEqual([])
+    }
+  })
+})

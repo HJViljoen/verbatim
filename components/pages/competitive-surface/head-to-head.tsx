@@ -1,11 +1,13 @@
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
+import { PairChip } from '@/components/blocks/pair-chip'
+import { sharedPairNote } from '@/lib/calibration'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, monthName } from '@/lib/format'
 import { prevMonth } from '@/lib/reading/month-key'
 import { NOT_A_SHARE_WHY, type FaceOffMeasure, type FaceOffSide, type HeadToHead } from '@/lib/reading/head-to-head'
-import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
+import type { FigureTable, Verdict, VerdictPairNote } from '@/lib/reading/verdicts'
 import { headToHeadFigures } from '@/lib/pages/playbook'
 import { homonymOf, type CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
 import { HomonymTag } from './homonym'
@@ -112,12 +114,12 @@ function Now({ level, mode }: { level: FaceOffSide | null; mode: RenderMode }) {
  *  column is empty and the row's reason is printed under the table — never a
  *  magnitude beside a refusal (D2), and never a blank with no explanation
  *  anywhere on the page. */
-function Change({ verdict, mode }: { verdict: Verdict | null; mode: RenderMode }) {
+function Change({ verdict, mode, shared = null }: { verdict: Verdict | null; mode: RenderMode; shared?: VerdictPairNote | null }) {
   if (!verdict) return mode === 'email' ? <span /> : <span aria-hidden />
-  return <BlockMovement verdict={verdict} unit="pts" mode={mode} />
+  return <BlockMovement verdict={verdict} unit="pts" mode={mode} sharedRefusal={shared} />
 }
 
-function Row({ measure: m, mode }: { measure: FaceOffMeasure; mode: RenderMode }) {
+function Row({ measure: m, mode, shared = null }: { measure: FaceOffMeasure; mode: RenderMode; shared?: VerdictPairNote | null }) {
   const email = mode === 'email'
   const label = (
     <>
@@ -140,9 +142,9 @@ function Row({ measure: m, mode }: { measure: FaceOffMeasure; mode: RenderMode }
       <div style={{ padding: '5px 0', borderTop: `1px solid ${EMAIL.hairline}`, fontFamily: FONT.sans }}>
         {label}
         <div style={{ marginTop: 3 }}>
-          <Now level={m.you} mode={mode} /> <Then level={m.you} mode={mode} /> <Change verdict={m.verdict} mode={mode} />
+          <Now level={m.you} mode={mode} /> <Then level={m.you} mode={mode} /> <Change verdict={m.verdict} mode={mode} shared={shared} />
           {' · '}
-          <Now level={m.them} mode={mode} /> <Then level={m.them} mode={mode} /> <Change verdict={m.rivalVerdict} mode={mode} />
+          <Now level={m.them} mode={mode} /> <Then level={m.them} mode={mode} /> <Change verdict={m.rivalVerdict} mode={mode} shared={shared} />
         </div>
         {m.why ? <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted, marginTop: 2 }}>{m.why}</div> : null}
       </div>
@@ -154,10 +156,10 @@ function Row({ measure: m, mode }: { measure: FaceOffMeasure; mode: RenderMode }
       <span className="min-w-0 pr-3">{label}</span>
       <Now level={m.you} mode={mode} />
       <Then level={m.you} mode={mode} />
-      <Change verdict={m.verdict} mode={mode} />
+      <Change verdict={m.verdict} mode={mode} shared={shared} />
       <Now level={m.them} mode={mode} />
       <Then level={m.them} mode={mode} />
-      <Change verdict={m.rivalVerdict} mode={mode} />
+      <Change verdict={m.rivalVerdict} mode={mode} shared={shared} />
     </div>
   )
 }
@@ -258,6 +260,7 @@ export const competitiveHeadToHead: Block<CompetitiveSurfaceData> = {
     // there is nothing for it to be a share of. A `level` marker would fail
     // rule (b) on the honest sentence, which is the wrong way round.
     const footer = h && !h.unread ? h.footerLine : undefined
+    const shared = sharedPairNote(h ? h.measures.flatMap((m) => [m.verdict, m.rivalVerdict]) : [])
 
     return (
       <BlockFrame
@@ -285,7 +288,7 @@ export const competitiveHeadToHead: Block<CompetitiveSurfaceData> = {
                   {' · '}
                   <SideHead label={h.rivalLabel} color="var(--comp)" mode={mode} note={homonymOf(data, h.rivalAudience)} />
                 </div>
-                {h.measures.map((m) => <Row key={m.key} measure={m} mode={mode} />)}
+                {h.measures.map((m) => <Row key={m.key} measure={m} mode={mode} shared={shared} />)}
               </div>
             ) : (
               <div className="-mx-1 overflow-x-auto px-1">
@@ -295,10 +298,14 @@ export const competitiveHeadToHead: Block<CompetitiveSurfaceData> = {
                     <SideHead label={data.brand} color="var(--you)" mode={mode} />
                     <SideHead label={h.rivalLabel} color="var(--comp)" mode={mode} note={homonymOf(data, h.rivalAudience)} />
                   </div>
-                  {h.measures.map((m) => <Row key={m.key} measure={m} mode={mode} />)}
+                  {h.measures.map((m) => <Row key={m.key} measure={m} mode={mode} shared={shared} />)}
                 </div>
               </div>
             )}
+            {/* ONE REFUSAL, SAID ONCE (deploy 1 review): the change cell
+                wrapped the whole sentence to four lines in its narrow
+                column. It says "not compared" and the chip says why. */}
+            <PairChip note={shared} mode={mode} className="mt-2" />
             {/* AN EMPTY COLUMN IS NOT A MEASURED ZERO, AND IT SAYS SO FIRST. */}
             {sideReasons(h).map((why) => (
               <p key={why} className={note} style={noteStyle}>{why}</p>

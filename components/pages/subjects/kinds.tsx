@@ -2,6 +2,8 @@ import type { Block, RenderMode } from '@/lib/blocks/types'
 import { openLink } from '@/components/blocks/open-link'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
+import { PairChip } from '@/components/blocks/pair-chip'
+import { refusalInBlock, sharedPairNote } from '@/lib/calibration'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth, monthName } from '@/lib/format'
 import { levelText } from '@/lib/reading/level'
@@ -154,6 +156,14 @@ function KindMovement({ side, brand, mode }: { side: SubjectSide; brand: string;
   const froms = new Set(rows.map((k) => side.kindVerdicts[k.kind]?.basis?.from).filter(Boolean) as string[])
   if (froms.size !== 1) return null
   const prevMonth = [...froms][0]
+  // ONE REFUSAL, SAID ONCE (deploy 1 review). A strip whose every kind is
+  // refused for one month pair has no movement to show: the chip says why,
+  // once, where four sentences stood. Mixed, the refused kinds say "not
+  // compared" and the chip follows.
+  const shared = sharedPairNote(rows.map((k) => side.kindVerdicts[k.kind]))
+  if (shared && rows.every((k) => refusalInBlock(side.kindVerdicts[k.kind], shared))) {
+    return email ? <div style={{ paddingTop: 8 }}><PairChip note={shared} mode={mode} /></div> : <PairChip note={shared} mode={mode} className="mt-1" />
+  }
 
   const body = (
     <>
@@ -162,9 +172,10 @@ function KindMovement({ side, brand, mode }: { side: SubjectSide; brand: string;
       </span>
       {rows.map((k) => (
         <span key={k.kind} className={email ? undefined : 'flex items-center gap-1.5 text-[12px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted, marginRight: 10 } : undefined}>
-          {k.label.toLowerCase()} <BlockMovement verdict={side.kindVerdicts[k.kind]} unit="pts" mode={mode} good="neutral" />
+          {k.label.toLowerCase()} <BlockMovement verdict={side.kindVerdicts[k.kind]} unit="pts" mode={mode} good="neutral" sharedRefusal={shared} />
         </span>
       ))}
+      <PairChip note={shared} mode={mode} />
     </>
   )
   if (email) return <div style={{ paddingTop: 8 }}>{body}</div>

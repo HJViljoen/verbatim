@@ -1058,3 +1058,46 @@ describe('Freitag carries its note beside its rows and counts (market-first WP1.
     expect(email).not.toContain('var(--')
   })
 })
+
+// ONE REFUSAL, SAID ONCE (deploy 1 review): on 2 Oct CO2's two change columns
+// wrapped the refusal to two lines in each of six cells, and the face-off's
+// change cell to four. The fixtures' verdicts are refused as the loader refuses
+// them (WP1.3), counts kept.
+describe('a refusal the cells share prints once, as a chip (deploy 1 review)', () => {
+  const pair = { mode: 'refuse' as const, cause: 'searches' as const, changeMonth: '2026-09-01', checkWith: null }
+  const refuse = <V extends { state: string } | null>(v: V): V =>
+    v ? ({ ...v, state: 'refused', refusedReason: 'tracking_change', changePts: null, bandPts: null, pair } as V) : v
+  const CHIP = 'not read as a change: we changed our searches in September'
+
+  it('CO2: "not compared" in the change cells, the reason once under the table', () => {
+    const data = homonymRivalFixture()
+    const refused = {
+      ...data,
+      standings: {
+        ...data.standings,
+        rows: data.standings.rows.map((r) => ({ ...r, attentionVerdict: refuse(r.attentionVerdict), contentVerdict: refuse(r.contentVerdict) })),
+      },
+    }
+    expect(refused.standings.rows.some((r) => r.contentVerdict != null)).toBe(true)
+    for (const mode of MODES) {
+      const text = renderText(competitiveStandings.render(refused, mode, ctx))
+      expect(text.split(CHIP).length - 1).toBe(1)
+      expect(text).not.toContain('Not read as a change')
+      expect(text).toContain('not compared')
+      assertCopyContract(render(competitiveStandings.render(refused, mode, ctx)))
+    }
+  })
+
+  it('CO3: the face-off’s refused change says "not compared", and the chip says why', () => {
+    const data = competitiveFixture()
+    const h = data.headToHead!
+    const refused = { ...data, headToHead: { ...h, measures: h.measures.map((m) => ({ ...m, verdict: refuse(m.verdict), rivalVerdict: refuse(m.rivalVerdict) })) } }
+    expect(refused.headToHead.measures.some((m) => m.verdict != null || m.rivalVerdict != null)).toBe(true)
+    for (const mode of MODES) {
+      const text = renderText(competitiveHeadToHead.render(refused, mode, ctx))
+      expect(text.split(CHIP).length - 1).toBe(1)
+      expect(text).not.toContain('Not read as a change')
+      assertCopyContract(render(competitiveHeadToHead.render(refused, mode, ctx)))
+    }
+  })
+})
