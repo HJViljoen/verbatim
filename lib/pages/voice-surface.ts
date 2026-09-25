@@ -121,8 +121,6 @@ export type VoiceSurfaceParams = {
   /** The search box in VO3. */
   q?: string
   persona?: string
-  /** `?month=YYYY-MM`: another month with a row (market-first WP1.2). */
-  month?: string
 }
 
 /** One entry in the audience switch. */
@@ -1082,7 +1080,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     denominators: history.denominators,
     rivalAudiences,
     schedule,
-    explicit: params[MONTH_PARAM] ?? null,
+    explicit: scope.params[MONTH_PARAM] ?? null,
   })
   const rm = view.reading
   const window = horizonWindow(horizon, readingAnchor(rm), started.from)

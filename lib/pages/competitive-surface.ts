@@ -8,7 +8,7 @@ import { fetchQuoteCitationsByAudience } from '../quotes'
 import { attentionTotals, type AttentionRow } from '../reading/attention'
 import { horizonDates, horizonWindow, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
 import { freezeStateFor, monthStartOf } from '../reading/monthly'
-import { readingAnchor, type ReadingMonth } from '../reading/reading-month'
+import { MONTH_PARAM, readingAnchor, type ReadingMonth } from '../reading/reading-month'
 import { loadDeliveredRuns, loadReadingSchedule, readingViewFrom, type OtherMonth } from '../reading/reading-view'
 import { loadMonthSeries, type MonthSeriesSet, type ReadingHandle } from '../reading/read'
 import { methodLines, type MethodLines } from '../reading/method'
@@ -60,7 +60,7 @@ import { row } from './read'
 // sentence on it is rival, because that is the word the rest of the product
 // uses and a page title is not a vocabulary change (design §3 CO).
 
-export type CompetitiveSurfaceParams = { vs?: string; horizon?: string; item?: string; /** `?month=YYYY-MM` (market-first WP1.2). */ month?: string }
+export type CompetitiveSurfaceParams = { vs?: string; horizon?: string; item?: string }
 
 /** Question rows drawn in full before the rest are counted. */
 export const QUESTIONS_SHOWN = 12
@@ -574,7 +574,7 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
     denominators: history.denominators,
     rivalAudiences: rivals.rivals.map((r) => rivalKey(r.name)),
     schedule,
-    explicit: params.month ?? null,
+    explicit: scope.params[MONTH_PARAM] ?? null,
   })
   const rm = view.reading
   const window = horizonWindow(horizon, readingAnchor(rm), started.from)

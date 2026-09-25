@@ -17,7 +17,7 @@ import { loadMonthSeries, type ReadingHandle } from '../reading/read'
 import type { Verdict } from '../reading/verdicts'
 import type { Quote } from '../renderables/types'
 import { freezeStateFor, monthStartOf } from '../reading/monthly'
-import { type ReadingMonth } from '../reading/reading-month'
+import { MONTH_PARAM, type ReadingMonth } from '../reading/reading-month'
 import { loadDeliveredRuns, loadReadingSchedule, readingViewFrom, type OtherMonth } from '../reading/reading-view'
 import type { MonthStatus } from '../reading/types'
 import type { Scope } from '../renderables/types'
@@ -67,7 +67,7 @@ import { fetchThemedRunId } from './themed-run'
 /** The URL parameters this surface honours. `?rec=` is the legacy deep link
  *  four sent emails and every digest until WP17 still carry; it selects a
  *  LINEAGE here, resolved from the recommendation id it names. */
-export type MarketSurfaceParams = { rec?: string; item?: string; /** `?month=YYYY-MM` (market-first WP1.2). */ month?: string }
+export type MarketSurfaceParams = { rec?: string; item?: string }
 
 /** How many ledger rows are drawn before the rest are counted. 64 rows of
  *  advice nobody has acted on is a filing cabinet, not a page; the oldest are
@@ -779,7 +779,7 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
     runs,
     denominators: history.denominators,
     schedule,
-    explicit: params.month ?? null,
+    explicit: scope.params[MONTH_PARAM] ?? null,
   })
   const rm = view.reading
   const month = rm.month
