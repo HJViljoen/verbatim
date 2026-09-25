@@ -179,20 +179,23 @@ export interface AgentThreadData {
    * reading surfaces carry.
    */
   bar: { question: string; context: string }
-  /** The "what an answer draws on" lines and where the record drawer opens.
-   *  Exposed whatever `lib/nav.ts:hasRecord` says about Ask today. */
+  /** The "what an answer draws on" lines and where the record drawer opened.
+   *  NOTHING RENDERS IT NOW: the "How sound" band and its drawer left every
+   *  page with the 25 Sep rulings (market-first WP1.2), and `hasRecord` left
+   *  `lib/nav.ts` with them. Kept only until WP3.9 rebuilds Ask, which drops
+   *  it with `askRecordHref`. */
   record: { lines: string[]; href: string } | null
   method: MethodNoteData
 }
 
 /**
- * Where "The record →" opens the how-sound drawer from Ask.
+ * Where "The record →" opened the how-sound drawer from Ask: the current
+ * address with `?detail=record`, so opening it inside a thread kept the answer.
  *
- * OVER THE PAGE THE READER IS ON. The drawer is a detail param, so the address
- * has to be the CURRENT one: pointed at Ask's index, opening the record from
- * inside a thread threw the reader back to the question list and lost the
- * answer they were reading. Whether the bar mounts the drawer at all is
- * `lib/nav.ts:hasRecord`'s answer and not this file's.
+ * NO LONGER MOUNTED. The drawer and the band that opened it left every page
+ * with the 25 Sep rulings (market-first WP1.2), and `lib/nav.ts:hasRecord`,
+ * which decided whether it mounted, went with them. This link opens nothing;
+ * it and `AgentThreadData.record` go with WP3.9.
  */
 export const askRecordHref = (threadId?: string | null): string =>
   detailHref(threadId ? `${surface('ask').href}/${threadId}` : surface('ask').href, {}, 'record')
@@ -294,10 +297,9 @@ export interface AskDrawRow {
  * eight tenant-wide reads, on a page whose own loader already pays three
  * uncached counts per render (`lib/agent/basis.ts:loadIndexFacts` says so in
  * its own docstring, and the 16 September outage is what the docstring is
- * about). So the tile prints what this page ALREADY read, and "The record →"
- * in its footer is where the rest is: the record drawer is the surface those
- * facts belong to, and `lib/nav.ts:hasRecord` admits Ask precisely so it can
- * be opened from here.
+ * about). So the tile prints what this page ALREADY read. The rest is the
+ * record's, in Settings (the drawer that once opened over Ask left every page
+ * with the 25 Sep rulings, market-first WP1.2).
  *
  * `Updates` is the ALL-TIME delivered count, not the mock's four-this-month,
  * and the row says "delivered" rather than "this month" so the two cannot be

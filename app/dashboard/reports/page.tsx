@@ -701,8 +701,8 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
       )}
 
       {/* NO METHOD FOOTNOTE (copy de-clutter C16, ruling B): Reports makes no
-          reading, and soundness lives in the page bar's pill and its record.
-          The privacy line stays. */}
+          reading, and the record is Settings' (the page bar's "How sound" pill
+          left every page with the 25 Sep rulings). The privacy line stays. */}
       {ctx.method && (
         <p className="m-0 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">{ctx.method.privacy}</p>
       )}

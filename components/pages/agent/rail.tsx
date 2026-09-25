@@ -116,11 +116,11 @@ export function EarlierQuestionsTile({ history, col = 12, row = 2 }: { history: 
  * the same on both routes.
  *
  * AND NO "THE RECORD →" EITHER, WHICH IS THE ONE THIS TILE LOST. The footer
- * used to carry it, on the argument that `lib/nav.ts:hasRecord` admits Ask
- * (D-record, wave 1) precisely so the drawer can be opened from here. It can —
- * from the record BAND, which `AskShell` mounts under the page bar on both
- * routes for exactly that reason, and which is the product-wide door to the
- * same drawer. Two doors to one drawer, ~400px apart on a thread at 1440, with
+ * used to carry it, on the argument that `lib/nav.ts:hasRecord` admitted Ask
+ * (D-record, wave 1) precisely so the drawer could be opened from here. It
+ * could — from the record BAND, which `AskShell` then mounted under the page
+ * bar on both routes, and which was the product-wide door to the same drawer
+ * (band, drawer and `hasRecord` all left with the 25 Sep rulings, WP1.2). Two doors to one drawer, ~400px apart on a thread at 1440, with
  * the drawer's three lines being the three rows this tile already prints in
  * the open: the band at y≈97 read "How sound is this: 23 updates delivered.
  * the record →" and this tile at y≈513 read "UPDATES 23 delivered … The record

@@ -433,13 +433,12 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
         // not one Competitive block passed one, so the definition line was
         // split across a meta and two body paragraphs.
         //
-        // AND IT NAMES WHERE IT GOES, BECAUSE THE PAGE BAR'S LINK DOES NOT GO
-        // THERE. `HowSound` (components/shell/how-sound.tsx) prints "the record
-        // →" ~500px above this one and opens the DRAWER over this page
-        // (`/dashboard/competitive?detail=record`); this one leaves for the
-        // record page in Settings. Two near-identical links to two
-        // destinations on one screen is a reader clicking the wrong one, so
-        // this one says which.
+        // AND IT NAMES WHERE IT GOES. It leaves for the record page in
+        // Settings, and says so. (It was worded against the page bar's
+        // `HowSound` pill, whose "the record →" opened a drawer over this page;
+        // that pill and its drawer left every page with the 25 Sep rulings,
+        // market-first WP1.2, so this is now the page's one door to the
+        // record.)
         footer={
           mode === 'app'
             ? <Link href="/dashboard/settings?detail=record" className="hover:underline">Open the full record in Settings →</Link>

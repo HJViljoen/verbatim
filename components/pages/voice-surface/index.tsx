@@ -180,9 +180,11 @@ export function VoiceSurfacePage({
           {data.notes.map((n) => n.text).join(' ')}
         </p>
       ) : null}
-      {/* No method footnote: soundness lives in the page bar's "How sound is
-          this" pill and its record modal (copy de-clutter, ruling B). The
-          privacy line is a legal line, not method, and stays. */}
+      {/* No method footnote (copy de-clutter ruling B; the 25 Sep rulings put
+          no explanatory footnote under a block). The record is Settings'; the
+          "How sound is this" pill that once opened it left every page with the
+          25 Sep rulings. The privacy line is a legal line, not method, and
+          stays. */}
       {data.method ? (
         <p data-copy="figure" className="m-0 pt-1 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
           {data.method.privacy}
