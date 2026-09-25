@@ -438,6 +438,17 @@ describe('settles', () => {
     expect(r.settles?.boundary).toBe(freezeBoundary('2026-09-01'))
     expect(r.settles).toEqual({ boundary: '2026-10-31T00:00:00.000Z', withUpdateOn: '2026-11-01T04:00:00.000Z' })
   })
+
+  it('if the 1 Nov run fails, names the 8 Nov update from a day after, never a date in the past', () => {
+    const updates = SEALAND_UPDATES.filter((u) => !u.startsWith('2026-11-01'))
+    // While the 1 Nov run is running, it is still the one.
+    const running = sealandAt('2026-11-01T07:00:00.000Z', { explicit: '2026-09', updates })
+    expect(running.settles?.withUpdateOn).toBe('2026-11-01T04:00:00.000Z')
+    const r = sealandAt('2026-11-03T12:00:00.000Z', { explicit: '2026-09', updates })
+    expect(r.state).toBe('ended')
+    expect(r.settles).toEqual({ boundary: '2026-10-31T00:00:00.000Z', withUpdateOn: '2026-11-08T04:00:00.000Z' })
+    expect(monthWords(r)).toBe('September · ended · read to the 25 Oct update · still filling until the 8 Nov update')
+  })
 })
 
 // ---- The schedule, the monthly's month, and the parameter ---------------------------------

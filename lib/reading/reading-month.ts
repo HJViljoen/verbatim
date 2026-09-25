@@ -96,8 +96,10 @@ export interface ReadingMonth {
    *  `no_month`         nothing before the current month has a row. */
   reason: 'current_readable' | 'current_early' | 'current_thin' | 'explicit' | 'latest_with_rows' | 'no_month'
   /** When `month` stops moving: its freeze line (`freezeBoundary`) and the
-   *  first scheduled update after it, which is the run that freezes it. Null
-   *  once the month is final or was read at setup. */
+   *  first scheduled update after it, which is the run that freezes it. A slot
+   *  a day overdue did not come (`UPDATE_OVERDUE_AFTER_MS`), so the slot after
+   *  it is named, never a date in the past. Null once the month is final or
+   *  was read at setup. */
   settles: { boundary: string; withUpdateOn: string | null } | null
   /** The current calendar month, whether or not it leads. */
   current: { month: string; updates: number; videos: number | null; daysIn: number }
@@ -340,7 +342,7 @@ export function readingMonthFor(input: ReadingMonthInput): ReadingMonth {
   const boundary = freezeBoundary(month)
   const settles = state === 'final' || state === 'read_at_setup'
     ? null
-    : { boundary, withUpdateOn: after ? after(boundary) : null }
+    : { boundary, withUpdateOn: after ? nextSlot(boundary, nowMs, after) : null }
 
   return {
     month,
