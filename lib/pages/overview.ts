@@ -773,7 +773,10 @@ export function fillingLine(input: FillingLineInput): string {
     // OV6 ("2,359 videos analysed (trailing median 2,240)").
     if (input.expected != null && input.expected > 0) parts.push(`trailing median ${fmtInt(Math.round(input.expected))}`)
   }
-  if (input.status === 'filling') {
+  // Only a month still in progress has a "this point" to compare: an ended
+  // month (every page reads one on 1–15 October, market-first WP1.2) is still
+  // filling but is read whole, and last month "at this point" means nothing.
+  if (input.status === 'filling' && input.daysIn != null) {
     parts.push(
       !input.atLastMonthKnown
         ? 'last month at this point: not recorded yet'
@@ -810,7 +813,7 @@ export function fillingNote(input: FillingLineInput): string | null {
   // the only thing that says why, and it stays here in `fillingLine`'s own
   // words. Where the stat is drawn, this clause would be the same figure
   // twice, and is dropped.
-  if (input.status === 'filling' && (!input.atLastMonthKnown || input.atLastMonth == null)) {
+  if (input.status === 'filling' && input.daysIn != null && (!input.atLastMonthKnown || input.atLastMonth == null)) {
     parts.push(!input.atLastMonthKnown ? 'last month at this point: not recorded yet' : 'no reading of last month at this point')
   }
   if (input.thin) parts.push('thin month: every change below is suppressed')

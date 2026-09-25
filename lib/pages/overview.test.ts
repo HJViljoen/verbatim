@@ -151,8 +151,12 @@ describe('fillingLine', () => {
     expect(frozen).toContain('September, final')
     expect(frozen).not.toContain('last month at this point')
     // Ended and still filling: the month every page reads on 1–15 October.
-    const ended = fillingLine({ ...base, status: 'filling', daysIn: null })
+    const ended = fillingLine({ ...base, status: 'filling', daysIn: null, atLastMonth: null, atLastMonthKnown: true })
     expect(ended).toContain('September, ended')
+    // Read whole, so there is no "this point" to compare with.
+    expect(ended).not.toContain('last month at this point')
+    expect(fillingNote({ ...base, status: 'filling', daysIn: null, atLastMonth: null, atLastMonthKnown: true }) ?? '')
+      .not.toContain('at this point')
     for (const line of [frozen, ended]) expect(line).not.toContain('complete')
   })
 
