@@ -9,10 +9,11 @@ import type { OurChange, PairRow } from '../reading/comparability'
 // research's; ids are labels.
 
 // SEALAND'S CHANGE LOG, the rows GC F2 lists (staging, a production copy to
-// about 20 Sep): the 6 Jul term set, the 9 Sep rival cut, re-tag and term swap,
-// the 13 Sep hand-SQL terms, the 17 Sep script (terms, rivals), and the 20 Sep
-// discovery probe (20 communities before and after, the searched three
-// unchanged). Ids are labels.
+// about 20 Sep): the 6 Jul initial term set (where the record begins, which
+// `changesFromLog` drops), the 17 Aug own handles (reconstructed from the first
+// owned video), the 9 Sep rival cut, re-tag and term swap, the 13 Sep hand-SQL
+// terms, the 17 Sep script (terms, rivals), and the 20 Sep discovery probe (20
+// communities before and after, the searched three unchanged). Ids are labels.
 let seq = 0
 export function row(over: Partial<ConfigChange> & Pick<ConfigChange, 'changed_at' | 'surface'>): ConfigChange {
   seq += 1
@@ -49,6 +50,7 @@ export const PROBE_0920 = row({
 })
 export const SEALAND_LOG: ConfigChange[] = [
   row({ id: 'terms-0706', changed_at: '2026-07-06T04:19:00.000Z', surface: 'terms', after: ['upcycled bag'] }),
+  row({ id: 'handles-0817', changed_at: '2026-08-17T07:05:00.000Z', surface: 'handles', field: 'own_handles' }),
   row({ id: 'rivals-0909', changed_at: '2026-09-09T16:24:15.000Z', surface: 'rivals', field: 'competitor_names' }),
   row({ id: 'retag-0909', changed_at: '2026-09-09T18:10:00.000Z', surface: 'entity_retag', rows_affected: 253 }),
   row({ id: 'terms-0909', changed_at: '2026-09-09T18:17:56.000Z', surface: 'terms', after: ['rareform bag'] }),

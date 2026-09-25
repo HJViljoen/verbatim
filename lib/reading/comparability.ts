@@ -240,6 +240,27 @@ export function movesActiveSet(row: Pick<ConfigChange, 'before' | 'after'>): boo
 }
 
 /**
+ * The reconstructed INITIAL term set, which is where the record begins and not
+ * a change of ours (WP1.3 review fix).
+ *
+ * `scripts/reconstruct-config-log.ts` writes one `terms` row, `before` null,
+ * for "the earliest term set any record can show. It is not when these terms
+ * were configured": `keyword_performance` starts on 1 Jul 2026, after earlier
+ * updates that left no term record (Sealand's: 6 Jul 04:19, GC F2). Read as a
+ * change, it put "we changed what we search in July" on June against July, a
+ * claim no record supports: what June searched is unknown, not different. So
+ * the tenant's EARLIEST `terms` row is dropped when it is reconstructed with
+ * no `before`. A pair reaching back past it has no change of ours to name and
+ * no measurement, so it reads "not compared yet", which is what is known.
+ * Every later reconstructed row (the 9 Sep swap, the 13 Sep hand SQL) is a
+ * change and stays.
+ */
+function initialTermSet(sorted: readonly ConfigChange[]): ConfigChange | null {
+  const first = sorted.find((r) => r.surface === 'terms') ?? null
+  return first && first.source === 'reconstructed' && first.before == null ? first : null
+}
+
+/**
  * The change log as changes of ours (full rows; `loadChanges` selects '*').
  *
  * `cadence`, `schedule` and `subjects` rows are dropped. Rows of ONE change are
@@ -250,7 +271,9 @@ export function movesActiveSet(row: Pick<ConfigChange, 'before' | 'after'>): boo
  * row are one. A `subreddits` group that never moved the active set is
  * dropped. A row whose `changed_at` does not parse cannot be placed in any
  * span and is dropped. An attention-panel freeze (`PANEL_FREEZE_FIELD`) is
- * grouped apart from any other `other` row and moves no view.
+ * grouped apart from any other `other` row and moves no view. The
+ * reconstructed initial term set is where the record begins, not a change, and
+ * is dropped (`initialTermSet`).
  */
 export function changesFromLog(rows: readonly ConfigChange[]): OurChange[] {
   const kept = rows
@@ -258,6 +281,8 @@ export function changesFromLog(rows: readonly ConfigChange[]): OurChange[] {
     .map((row) => ({ row, ms: msOf(row.changed_at) }))
     .filter((x) => !Number.isNaN(x.ms))
     .sort((a, b) => a.ms - b.ms || a.row.id.localeCompare(b.row.id))
+  const initial = initialTermSet(kept.map((x) => x.row))
+  if (initial) kept.splice(kept.findIndex((x) => x.row === initial), 1)
 
   const groups: { startMs: number; rows: ConfigChange[] }[] = []
   const open = new Map<string, { startMs: number; rows: ConfigChange[] }>()
@@ -362,6 +387,23 @@ export function latestPairRow(rows: readonly PairRow[], prevMonth: string, month
     if (best == null || msOf(r.computedAt) > msOf(best.computedAt)) best = r
   }
   return best
+}
+
+/**
+ * The share a stored row measures for one change on one view, or null when the
+ * row does not measure it. A search change with no entry of its own is read
+ * through the row's search-outside count, as the rule reads it; any other
+ * change needs an entry the view divides by (`entryForView`).
+ */
+export function measuredShareOf(row: PairRow | null, change: OurChange, view: ComparabilityView): number | null {
+  if (!row) return null
+  const ids = idsOf(change)
+  const entries = row.codeChanges.filter((e) => ids.includes(e.changeId))
+  if (entries.length === 0) {
+    return isSearchSurface(change.surface) ? pairShare(row.searchOutside.prev, row.searchOutside.curr) : null
+  }
+  const entry = entryForView(entries, view)
+  return entry ? pairShare(entry.prev, entry.curr) : null
 }
 
 // ---- The rule -----------------------------------------------------------------------------
@@ -610,9 +652,10 @@ const monthOfInstant = (iso: string | null | undefined): string | null => safeMo
  * A REFUSAL NAMES ITS REAL CAUSE. When a change of ours refuses the pair (a
  * measured share of 10% or more, or an in-span change nobody has measured,
  * which counts as 10%), the verdict is refused `tracking_change` and the words
- * name that change's month: the latest search change first, because what we
- * search is the change a reader can check against the page, then the latest
- * other change. A search share measured at 10% or more with no logged search
+ * name that change's month: a change dated inside the pair's own two months
+ * before a later one in its span, and among those the latest search change
+ * first, because what we search is the change a reader can check against the
+ * page, then the latest other change. A search share measured at 10% or more with no logged search
  * change to name (a community dropped by our own discovery) names the pair's
  * newer month. Otherwise the pair is not read far enough, or not measured, to
  * be compared: `incomplete` (a so-far month, or one not read past its end),
@@ -629,8 +672,19 @@ export function pairOnVerdict(pair: PairComparability | null | undefined): PairO
   const changeReasons = pair.reasons.filter((r) => r.kind === 'searches' || r.kind === 'code_change')
   const latest = (rs: readonly Reason[]): Reason | null =>
     rs.slice().sort((a, b) => (msOf(a.changedAt ?? '') || 0) - (msOf(b.changedAt ?? '') || 0)).at(-1) ?? null
-  const named = (rs: readonly Reason[]): Reason | null =>
+  // THE CHANGE IN THE PAIR'S OWN TWO MONTHS FIRST (WP1.3 review fix). A pair's
+  // span runs to the later month's freeze line, so July against August holds
+  // September's changes too, and its step read "we changed what we search in
+  // September" under the August point. A change dated inside the two months
+  // is the one a reader looks for there; a later one in span is named only
+  // when the two months hold none.
+  const ownMonths = (r: Reason): boolean => {
+    const m = monthOfInstant(r.changedAt)
+    return m === pair.prevMonth || m === pair.month
+  }
+  const pick = (rs: readonly Reason[]): Reason | null =>
     latest(rs.filter((r) => r.kind === 'searches')) ?? latest(rs.filter((r) => r.kind === 'code_change'))
+  const named = (rs: readonly Reason[]): Reason | null => pick(rs.filter(ownMonths)) ?? pick(rs)
   const noteFor = (r: Reason, mode: 'flag' | 'refuse'): VerdictPairNote => ({
     mode,
     cause: r.kind === 'searches' ? 'searches' : 'ours',

@@ -2,9 +2,11 @@ import { pairSentence } from '../calibration'
 import {
   changeInSpan,
   comparabilityOf,
+  COMPARE_FLAG_SHARE,
   isSearchSurface,
   joins,
   latestPairRow,
+  measuredShareOf,
   pairOnVerdict,
   type ComparabilityView,
   type OurChange,
@@ -157,7 +159,15 @@ export function pairJudge(input: PairJudgeInput): PairJudge {
     // we search in September" on 20 Sep and on 2 Oct (WP1.3). The rule's own
     // first reason stays first; the mode is already refuse. A pair with no
     // change of ours in its span still reads "not compared yet".
+    //
+    // A CHANGE THE ROW MEASURED UNDER 1% IS NOT BLAMED (WP1.3 review fix). A
+    // pair row, where one exists, carries each change's measured share: under
+    // the flag share the change is left out, and between the flag and refusal
+    // shares it is listed with that share, so it cannot be named as the cause
+    // of the refusal (the month's own state is). Only a change the row does not
+    // measure, or measured at 10% or more, can be named.
     const early = pair.reasons[0]?.kind === 'incomplete' || pair.reasons[0]?.kind === 'not_read_to_end'
+    const row = pair.row
     const named: PairComparability = early && pm < m
       ? {
           ...pair,
@@ -166,10 +176,12 @@ export function pairJudge(input: PairJudgeInput): PairJudge {
             ...input.changes
               .filter((c) => c.affects.includes(view) && changeInSpan(c, pm, m))
               .sort((a, b) => msOf(a.changedAt) - msOf(b.changedAt))
-              .map((c) => ({
+              .map((c) => ({ c, share: measuredShareOf(row, c, view) }))
+              .filter(({ share }) => share == null || !(share < COMPARE_FLAG_SHARE))
+              .map(({ c, share }) => ({
                 kind: isSearchSurface(c.surface) ? ('searches' as const) : ('code_change' as const),
                 changeId: c.id,
-                share: null,
+                share,
                 changedAt: c.changedAt,
                 surface: c.surface,
               })),

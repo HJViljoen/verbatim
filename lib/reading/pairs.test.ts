@@ -31,6 +31,7 @@ import {
   refusedSteps,
   viewForAudience,
 } from './pairs'
+import { HYPOTHETICAL_SEARCHES_UNDER_FLAG } from '../test/pair-fixture'
 import { CHANGES, OSSUR_UPDATES, PROBE_0920, row, SEALAND_SCHEDULE, SEALAND_UPDATES, sealandJudge } from '../test/sealand-pairs'
 
 // Comparability v1 on the verdict (market-first decision D, WP1.3): the pair
@@ -306,6 +307,29 @@ describe('pairJudge', () => {
     expect(judge('2026-08-01', '2026-09-01', 'market')).toBe(judge('2026-08-01', '2026-09-01', 'market'))
   })
 
+  // A CHANGE THE ROW MEASURED UNDER 1% IS NOT BLAMED (WP1.3 review fix). On
+  // a so-far September the rule refuses before it reads the row; the words
+  // named every in-span change even when a row measured it as nothing.
+  it('a so-far pair whose row measures the searches under 1% reads "not compared yet", not a search change', () => {
+    const measured = judgeAt('2026-09-20T13:30:00.000Z', [HYPOTHETICAL_SEARCHES_UNDER_FLAG])('2026-08-01', '2026-09-01', 'market')
+    expect(measured.mode).toBe('refuse')
+    expect(measured.reasons.map((r) => r.kind)).toEqual(['incomplete'])
+    expect(pairSentence(pairOnVerdict(measured).note!)).toBe('Not compared yet: checked with the 4 Oct update.')
+    // With no row, the same pair names our September search change.
+    const unmeasured = judgeAt('2026-09-20T13:30:00.000Z')('2026-08-01', '2026-09-01', 'market')
+    expect(pairSentence(pairOnVerdict(unmeasured).note!)).toBe('Not read as a change: we changed what we search in September.')
+  })
+
+  it('a change the row measures from 1% to under 10% is listed with its share and not named as the cause', () => {
+    const flagged = { ...HYPOTHETICAL_SEARCHES_UNDER_FLAG, searchOutside: { prev: { k: 2, n: 351 }, curr: { k: 9, n: 625 } } }
+    const pair = judgeAt('2026-09-20T13:30:00.000Z', [flagged])('2026-08-01', '2026-09-01', 'market')
+    const searches = pair.reasons.filter((r) => r.kind === 'searches')
+    expect(searches.length).toBeGreaterThan(0)
+    for (const r of searches) expect(r.share).toBeCloseTo(9 / 625)
+    expect(pairOnVerdict(pair).refused).toBe('incomplete')
+    expect(pairSentence(pairOnVerdict(pair).note!)).toBe('Not compared yet: checked with the 4 Oct update.')
+  })
+
   it('refuseEveryPair fails closed', () => {
     expect(refuseEveryPair('2026-10-01', '2026-11-01', INDUSTRY_AUDIENCE).mode).toBe('refuse')
     expect(change(refuseEveryPair('2026-08-01', '2026-09-01', INDUSTRY_AUDIENCE)).refusedReason).toBe('unmeasured')
@@ -391,6 +415,20 @@ describe('pairOnVerdict', () => {
     expect(pairOnVerdict(pair)).toEqual({ refused: null, flag: false, note: null })
   })
 
+  // THE PAIR'S OWN TWO MONTHS FIRST (WP1.3 review fix). July against August
+  // spans to August's freeze line, so it holds September's changes too; the
+  // August point said "we changed what we search in September". The change
+  // dated inside July or August is named first: on the category, the 17 Aug
+  // own-handles row. The market view, which re-filing does not move, holds no
+  // change in those two months and names the later search change.
+  it('names a change dated in the pair\'s own two months before a later one in its span', () => {
+    const judge = judgeAt('2026-10-02T06:00:00.000Z')
+    expect(pairSentence(pairOnVerdict(judge('2026-07-01', '2026-08-01', 'themes')).note!))
+      .toBe('Not read as a change: we changed how we check or file videos in August.')
+    expect(pairSentence(pairOnVerdict(judge('2026-07-01', '2026-08-01', 'market')).note!))
+      .toBe('Not read as a change: we changed what we search in September.')
+  })
+
   it('an unmeasured pair with a code change and a search change in span names the search change', () => {
     const pair = judgeAt('2026-10-02T06:00:00.000Z')('2026-08-01', '2026-09-01', 'themes')
     expect(pair.reasons.some((r) => r.kind === 'code_change')).toBe(true)
@@ -405,7 +443,8 @@ describe('refusedSteps', () => {
     const judge = pairOn(judgeAt('2026-10-02T06:00:00.000Z'))
     const steps = refusedSteps(['2026-07-01', '2026-08-01', '2026-09-01', '2026-11-01'], (a, b) => judge(a, b, INDUSTRY_AUDIENCE))
     expect(steps['2026-09-01']).toBe('Not read as a change: we changed what we search in September.')
-    expect(steps['2026-08-01']).toBe('Not read as a change: we changed what we search in September.')
+    // July to August names the change dated in those two months (17 Aug).
+    expect(steps['2026-08-01']).toBe('Not read as a change: we changed how we check or file videos in August.')
     expect(steps['2026-11-01']).toBeUndefined()
     expect(steps['2026-07-01']).toBeUndefined()
   })

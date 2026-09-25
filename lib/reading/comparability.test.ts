@@ -204,12 +204,30 @@ describe('changesFromLog: Sealand’s September', () => {
   it('shows each of the 9, 13 and 17 Sep term changes once, with every row under its change id', () => {
     const terms = CHANGES.filter((c) => c.surface === 'terms')
     expect(terms.map((c) => c.changedAt)).toEqual([
-      '2026-07-06T04:19:00.000Z', '2026-09-09T18:17:56.000Z', '2026-09-13T10:00:58.000Z', '2026-09-17T16:02:56.000Z',
+      '2026-09-09T18:17:56.000Z', '2026-09-13T10:00:58.000Z', '2026-09-17T16:02:56.000Z',
     ])
-    expect(terms[1].rowIds).toHaveLength(14)
-    expect(terms[2].rowIds).toEqual(['terms-0913-competitor', 'terms-0913-industry'])
-    expect(terms[3].rowIds).toHaveLength(3)
-    expect(terms[1].id).toBe(terms[1].rowIds?.[0])
+    expect(terms[0].rowIds).toHaveLength(14)
+    expect(terms[1].rowIds).toEqual(['terms-0913-competitor', 'terms-0913-industry'])
+    expect(terms[2].rowIds).toHaveLength(3)
+    expect(terms[0].id).toBe(terms[0].rowIds?.[0])
+  })
+
+  // THE 6 JUL ROW IS WHERE THE RECORD BEGINS (WP1.3 review fix). The
+  // reconstruction writes the earliest term set keyword_performance can show,
+  // `before` null, and says in its own note that it "is not when these terms
+  // were configured". Read as a change it put "we changed what we search in
+  // July" on June against July; what June searched is unknown, not different.
+  it('drops the reconstructed initial term set, and only that row', () => {
+    expect(CHANGES.some((c) => c.id === 'terms-0706')).toBe(false)
+    // The 13 Sep hand-SQL rows are reconstructed with no `before` too, but they
+    // are not the first term row: they stay a change.
+    expect(CHANGES.some((c) => c.id === 'terms-0913-competitor')).toBe(true)
+    // A first term row the trigger logged, or one that says what came before,
+    // is a change.
+    const logged = row({ id: 'terms-first-trigger', changed_at: '2026-07-06T04:19:00.000Z', surface: 'terms', source: 'trigger' })
+    expect(changesFromLog([logged]).map((c) => c.id)).toEqual(['terms-first-trigger'])
+    const known = row({ id: 'terms-first-known', changed_at: '2026-07-06T04:19:00.000Z', surface: 'terms', before: ['cotopaxi'] })
+    expect(changesFromLog([known]).map((c) => c.id)).toEqual(['terms-first-known'])
   })
 
   it('drops the cadence row and the 20 Sep probe (twenty communities before and after, the searched three unchanged)', () => {
@@ -355,9 +373,9 @@ describe('changesFromLog: other surfaces', () => {
   })
 
   it('drops a row whose date does not parse, and groups within one minute only', () => {
-    expect(changesFromLog([row({ changed_at: 'yesterday', surface: 'terms' })])).toEqual([])
-    const a = row({ changed_at: '2026-10-05T09:00:00.000Z', surface: 'terms' })
-    const b = row({ changed_at: new Date(Date.parse('2026-10-05T09:00:00.000Z') + CHANGE_GROUP_WINDOW_MS + 1).toISOString(), surface: 'terms' })
+    expect(changesFromLog([row({ changed_at: 'yesterday', surface: 'terms', source: 'trigger' })])).toEqual([])
+    const a = row({ changed_at: '2026-10-05T09:00:00.000Z', surface: 'terms', source: 'trigger' })
+    const b = row({ changed_at: new Date(Date.parse('2026-10-05T09:00:00.000Z') + CHANGE_GROUP_WINDOW_MS + 1).toISOString(), surface: 'terms', source: 'trigger' })
     expect(changesFromLog([a, b])).toHaveLength(2)
   })
 })
