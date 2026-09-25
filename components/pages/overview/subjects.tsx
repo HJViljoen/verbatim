@@ -4,13 +4,15 @@ import type { Block, RenderMode } from '@/lib/blocks/types'
 import { openLink } from '@/components/blocks/open-link'
 import { BlockEmpty, BlockFrame, FigureCell, NoValue } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
+import { PairChip } from '@/components/blocks/pair-chip'
+import { sharedPairNote } from '@/lib/calibration'
 import { Sparkline } from '@/components/charts/sparkline'
 import { fmtInt, fmtPct, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { DIRECTION_RUN_LABEL, type Direction } from '@/lib/reading/bands'
 import { concludedBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
 import { TileBlock } from '@/components/shell/tile'
-import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
+import type { FigureTable, Verdict, VerdictPairNote } from '@/lib/reading/verdicts'
 import type { OverviewData, SideReading, SubjectRow } from '@/lib/pages/overview'
 import { candidateLine, monthlyLineLabel, monthlySpanLabel, sentLineFor } from '@/lib/pages/overview'
 import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
@@ -233,7 +235,7 @@ export function sparkDomain(rows: readonly SubjectRow[]): [number, number] | und
   return values.length ? [0, Math.max(...values)] : undefined
 }
 
-function Row({ row, mode, appUrl = '', sentLine = null, domain }: { row: SubjectRow; mode: RenderMode; appUrl?: string; sentLine?: string | null; domain?: [number, number] }) {
+function Row({ row, mode, appUrl = '', sentLine = null, domain, shared = null }: { row: SubjectRow; mode: RenderMode; appUrl?: string; sentLine?: string | null; domain?: [number, number]; shared?: VerdictPairNote | null }) {
   return (
     // THE HAIRLINE BETWEEN ROWS (design review Medium 17). The artboard rules
     // its rows and the port dropped it, while the rows themselves are ragged —
@@ -268,11 +270,11 @@ function Row({ row, mode, appUrl = '', sentLine = null, domain }: { row: Subject
           nothing — a header over six rows of whitespace. The artboard's own
           mark for a cell with no answer is an em dash. */}
       <td className="py-1.5 pr-3 align-top">
-        {row.you.verdict ? <BlockMovement verdict={row.you.verdict} unit="pts" mode={mode} /> : <NoValue mode={mode} label="no change is read for your side" />}
+        {row.you.verdict ? <BlockMovement verdict={row.you.verdict} unit="pts" mode={mode} sharedRefusal={shared} /> : <NoValue mode={mode} label="no change is read for your side" />}
       </td>
       <td className="py-1.5 pr-3 align-top">
         <span className="flex flex-wrap items-center gap-1.5">
-          <BlockMovement verdict={row.category.verdict} unit="pts" mode={mode} />
+          <BlockMovement verdict={row.category.verdict} unit="pts" mode={mode} sharedRefusal={shared} />
           <DirectionWord direction={row.direction} mode={mode} />
         </span>
       </td>
@@ -373,6 +375,11 @@ export const overviewSubjects: Block<OverviewData> = {
 
     const gap = leadGap(s)
     const hasAt = s.rows.some((r) => r.categoryAtLastMonth?.pct != null)
+    // ONE REFUSAL, SAID ONCE (deploy 1 review): seven rows each printed the
+    // same sentence in both change columns. Where every refused change shares
+    // one pair's reason, the cells say "not compared" and the chip under the
+    // table says why.
+    const shared = sharedPairNote(s.rows.flatMap((r) => [r.you.verdict, r.category.verdict]))
     if (email) {
       return frame(
         <div>
@@ -387,10 +394,11 @@ export const overviewSubjects: Block<OverviewData> = {
               <AtLastMonth at={r.categoryAtLastMonth} mode={mode} />
               <SentLine line={sentLineFor(data.sent, INDUSTRY_AUDIENCE, 'subject', r.id, r.category.pct)} mode={mode} />
               <div style={{ marginTop: 2 }}>
-                <BlockMovement verdict={r.category.verdict} unit="pts" mode={mode} /> <DirectionWord direction={r.direction} mode={mode} />
+                <BlockMovement verdict={r.category.verdict} unit="pts" mode={mode} sharedRefusal={shared} /> <DirectionWord direction={r.direction} mode={mode} />
               </div>
             </div>
           ))}
+          <PairChip note={shared} mode={mode} />
         </div>,
       )
     }
@@ -419,10 +427,11 @@ export const overviewSubjects: Block<OverviewData> = {
               </tr>
             </thead>
             <tbody className="align-top">
-              {s.rows.map((r) => <Row key={r.id} row={r} mode={mode} appUrl={ctx.appUrl} sentLine={sentLineFor(data.sent, INDUSTRY_AUDIENCE, 'subject', r.id, r.category.pct)} domain={sparkDomain(s.rows)} />)}
+              {s.rows.map((r) => <Row key={r.id} row={r} mode={mode} appUrl={ctx.appUrl} sentLine={sentLineFor(data.sent, INDUSTRY_AUDIENCE, 'subject', r.id, r.category.pct)} domain={sparkDomain(s.rows)} shared={shared} />)}
             </tbody>
           </table>
         </div>
+        <PairChip note={shared} mode={mode} className="mt-2" />
       </>,
     )
   },

@@ -5,7 +5,7 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { KIND_NOT_COMPARED, categoryMeta, overviewCategory, panelNote, panelRule } from './category'
-import { overviewFixture, refusedFixture } from './fixture'
+import { overviewFixture, refusedFixture, refusedPairFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -317,5 +317,41 @@ describe('OV3, ported to the artboard', () => {
   it('puts "nothing else moved" in the footer note', () => {
     const markup = render(overviewCategory.render(overviewFixture(), 'app', ctx))
     expect(markup).toContain('font-normal text-muted-foreground">Nothing else moved clearly this month.')
+  })
+})
+
+// ONE REFUSAL, SAID ONCE (deploy 1 review). On 2 Oct every kind, the mood and
+// the movers were refused for the same pair, and the sentence on each kind row
+// squeezed its label to 0px at 1440, 1280 and 390 wide.
+describe('OV3 · a refusal the block shares prints once, as a chip', () => {
+  const SENTENCE = 'Not read as a change: we changed our searches in September'
+  const CHIP = 'not read as a change: we changed our searches in September'
+  const count = (text: string, needle: string) => text.split(needle).length - 1
+
+  it('prints the chip once and "not compared" on each row, in every mode', () => {
+    for (const mode of MODES) {
+      const text = renderText(overviewCategory.render(refusedPairFixture(), mode, ctx))
+      expect(count(text, CHIP)).toBe(1)
+      expect(text).not.toContain(SENTENCE)
+      expect(count(text, 'not compared')).toBeGreaterThanOrEqual(5)
+      assertCopyContract(render(overviewCategory.render(refusedPairFixture(), mode, ctx)))
+    }
+  })
+
+  it('keeps each kind label beside its figure, with a width of its own', () => {
+    const markup = render(overviewCategory.render(refusedPairFixture(), 'app', ctx))
+    expect(markup).toMatch(/<span class="min-w-\[7rem\] flex-1 basis-\[7rem\]">Saying it worked<\/span>/)
+    const text = renderText(overviewCategory.render(refusedPairFixture(), 'app', ctx))
+    expect(text).toMatch(/Saying it worked\s*71\.9%\s*450 of 626\s*not compared/)
+  })
+
+  it('keeps each row\'s own sentence, and no chip, where the rows are refused for different reasons', () => {
+    const data = refusedPairFixture()
+    const ours = { mode: 'refuse' as const, cause: 'ours' as const, changeMonth: '2026-09-01', checkWith: null }
+    data.category.kindVerdicts = { ...data.category.kindVerdicts, pain_point: { ...data.category.kindVerdicts.pain_point!, pair: ours } }
+    const text = renderText(overviewCategory.render(data, 'app', ctx))
+    expect(text).not.toContain(CHIP)
+    expect(text).toContain('Not read as a change: we changed how we check or file videos in September.')
+    expect(text).toContain(`${SENTENCE}.`)
   })
 })

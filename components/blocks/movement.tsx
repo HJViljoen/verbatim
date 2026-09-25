@@ -1,10 +1,10 @@
 import type { RenderMode } from '@/lib/blocks/types'
 import { CountBadge, MovementBadge, MOVEMENT_WORDS } from '@/components/delta-badge'
-import { pairSentence } from '@/lib/calibration'
+import { PAIR_NOT_COMPARED, pairSentence, refusalInBlock } from '@/lib/calibration'
 import { favourability, type Good } from '@/components/charts/stat'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { DeltaVerdict } from '@/lib/report-bands'
-import type { Verdict } from '@/lib/reading/verdicts'
+import type { Verdict, VerdictPairNote } from '@/lib/reading/verdicts'
 
 // The one badge, in three modes (Phase 1 WP10). See components/blocks/frame.tsx.
 
@@ -90,7 +90,7 @@ const chip = (tone: 'up' | 'down' | 'neutral' | 'noted') => ({
  * before the axis reached here.
  */
 export function BlockMovement({
-  verdict, unit, mode = 'app', good = 'up',
+  verdict, unit, mode = 'app', good = 'up', sharedRefusal = null,
 }: {
   verdict: Verdict | DeltaVerdict | null | undefined
   unit?: string
@@ -110,6 +110,13 @@ export function BlockMovement({
    * red. The default stays `up`, which is what every existing call site got.
    */
   good?: Good
+  /**
+   * The refusal this row's block prints once, as a chip at its foot
+   * (`sharedPairNote`, deploy 1 review). A verdict refused for that same pair
+   * prints the short "not compared" in every mode, and the sentence rides in
+   * the app's title; the chip says it on paper and in the email.
+   */
+  sharedRefusal?: VerdictPairNote | null
 }) {
   if (!verdict) return null
   // THE MONTH-PAIR RULE (market-first decision D, WP1.3). A refused pair prints
@@ -123,11 +130,12 @@ export function BlockMovement({
     ? <span className="text-xs text-muted-foreground" style={mode === 'email' ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.ink2 } : undefined}> {pairSentence(pair)}</span>
     : null
   // Ruling I: in the app the band is the badge's tooltip; print keeps it inline.
-  if (mode !== 'email') return <span data-copy="verdict"><MovementBadge verdict={verdict} unit={unit} good={good} bandTip={mode === 'app'} />{flagNote}</span>
+  if (mode !== 'email') return <span data-copy="verdict"><MovementBadge verdict={verdict} unit={unit} good={good} bandTip={mode === 'app'} sharedRefusal={sharedRefusal} />{flagNote}</span>
 
   const change = 'changePts' in verdict ? verdict.changePts : verdict.change
   const band = 'bandPts' in verdict ? verdict.bandPts : verdict.band
   if (verdict.state === 'refused' && pair?.mode === 'refuse') {
+    if (refusalInBlock({ state: verdict.state, pair }, sharedRefusal)) return <span data-copy="verdict" style={chip('neutral')}>{PAIR_NOT_COMPARED}</span>
     // A sentence, not a chip word: it wraps.
     return <span data-copy="verdict" style={{ ...chip('neutral'), whiteSpace: 'normal', borderRadius: 6 }}>{pairSentence(pair)}</span>
   }

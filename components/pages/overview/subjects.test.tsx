@@ -288,3 +288,41 @@ describe('the monthly-line column shares one scale', () => {
     expect(markup).toContain('stroke="var(--border)"')
   })
 })
+
+// ONE REFUSAL, SAID ONCE (deploy 1 review): on 2 Oct seven subject rows each
+// printed "Not read as a change: we changed our searches in September." in
+// both change columns. The fixture's rows are refused as the loader refuses
+// them (WP1.3), counts kept.
+describe('OV2 · a refusal every row shares prints once, as a chip', () => {
+  const pair = { mode: 'refuse' as const, cause: 'searches' as const, changeMonth: '2026-09-01', checkWith: null }
+  const refuse = (v: import('@/lib/reading/verdicts').Verdict | null) =>
+    v ? { ...v, state: 'refused' as const, refusedReason: 'tracking_change' as const, changePts: null, bandPts: null, pair } : v
+  const refused = () => {
+    const data = overviewFixture()
+    return {
+      ...data,
+      subjects: {
+        ...data.subjects,
+        rows: data.subjects.rows.map((r) => ({
+          ...r,
+          you: { ...r.you, verdict: refuse(r.you.verdict) },
+          category: { ...r.category, verdict: refuse(r.category.verdict) },
+        })),
+      },
+    }
+  }
+
+  it('says "not compared" in the cells and the reason once, in every mode', () => {
+    for (const mode of MODES) {
+      const text = renderText(overviewSubjects.render(refused(), mode, ctx))
+      expect(text.split('not read as a change: we changed our searches in September').length - 1).toBe(1)
+      expect(text).not.toContain('Not read as a change')
+      expect(text).toContain('not compared')
+      assertCopyContract(render(overviewSubjects.render(refused(), mode, ctx)))
+    }
+  })
+
+  it('prints no chip where nothing is refused', () => {
+    expect(renderText(overviewSubjects.render(overviewFixture(), 'app', ctx))).not.toContain('not read as a change')
+  })
+})

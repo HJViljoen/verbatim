@@ -5,6 +5,8 @@ import { BlockCalendar } from '@/components/blocks/calendar'
 import { openLink } from '@/components/blocks/open-link'
 import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
+import { PairChip } from '@/components/blocks/pair-chip'
+import { PAIR_NOT_COMPARED, pairSentence, sharedPairNote } from '@/lib/calibration'
 import { BlockProportion } from '@/components/blocks/bars'
 import type { CalendarRule, CalendarSeries } from '@/lib/charts/calendar'
 import { TileBlock } from '@/components/shell/tile'
@@ -12,7 +14,7 @@ import { TileColumns } from '@/components/shell/page-grid'
 import { fmtInt, fmtPct, monthName, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { moodLabel } from '@/lib/reading/mood'
-import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
+import type { FigureTable, Verdict, VerdictPairNote } from '@/lib/reading/verdicts'
 import type { AttentionBlock, CategoryBlock, LevelRow, Mover, OverviewData, Voice } from '@/lib/pages/overview'
 import { MOSTLY_MAKERS_SHARE } from '@/lib/pages/overview'
 import { DirectionWord } from './subjects'
@@ -63,7 +65,7 @@ function moversBasis(c: OverviewData['category']): string | null {
   return null
 }
 
-function MoverRow({ mover, mode }: { mover: Mover; mode: RenderMode }) {
+function MoverRow({ mover, mode, shared = null }: { mover: Mover; mode: RenderMode; shared?: VerdictPairNote | null }) {
   const body = (
     <>
       {/* THE THEME'S OWN NAME, so `subject` and not bare markup: PROSE_POLICY
@@ -90,7 +92,7 @@ function MoverRow({ mover, mode }: { mover: Mover; mode: RenderMode }) {
           of={`${fmtInt(mover.k)} of ${fmtInt(mover.n)}`}
         />
       </span>
-      <BlockMovement verdict={mover.verdict} unit="pts" mode={mode} />
+      <BlockMovement verdict={mover.verdict} unit="pts" mode={mode} sharedRefusal={shared} />
       <DirectionWord direction={mover.direction} mode={mode} />
       {mover.isNew ? (
         // "New" is a FLAG on a row, not a direction claim, and it is stated
@@ -401,6 +403,18 @@ export const overviewCategory: Block<OverviewData> = {
     const email = mode === 'email'
     const href = `${ctx.appUrl}/dashboard/voice`
     const series = attentionSeries(c, data.month)
+    // ONE REFUSAL, SAID ONCE (deploy 1 review). Where the block's verdicts
+    // (kinds, mood, attention, movers) are all refused for the same month
+    // pair, each prints "not compared" and the chip at the block's foot says
+    // why, as the approved preview draws it.
+    const shared = sharedPairNote([
+      ...c.kinds.map((k) => c.kindVerdicts[k.kind]),
+      c.mood?.verdict,
+      c.attention?.verdict,
+      ...c.growing.map((m) => m.verdict),
+      ...c.fading.map((m) => m.verdict),
+    ])
+    const chip = <PairChip note={shared} mode={mode} />
 
     // ONE ROW PER KIND, EACH WITH ITS OWN DENOMINATOR (D4/D10). The artboard
     // draws three rows — label, share, change — and the build wrapped them into
@@ -426,7 +440,7 @@ export const overviewCategory: Block<OverviewData> = {
             the artboard's own column, so nothing changes in the app. */}
         <div className={email ? undefined : 'flex max-w-[440px] flex-col gap-1.5'}>
           {c.kinds.map((k) => (
-            <span key={k.kind} className={email ? undefined : 'flex items-center gap-2 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, marginRight: 10 } : undefined}>
+            <span key={k.kind} className={email ? undefined : 'flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, marginRight: 10 } : undefined}>
               {/* AND IT WRAPS RATHER THAN TRUNCATES (Block D wave 3b, `decks`).
                   M23's cap answered the stretch this row had on paper while
                   `TileColumns` was below its `xl` breakpoint; the columns are
@@ -437,7 +451,12 @@ export const overviewCategory: Block<OverviewData> = {
                   "which is the honest answer at a third of the width" — and a
                   kind's label is two words where a theme's is a sentence, so
                   the wrap costs at most one line. */}
-              <span className={email ? undefined : 'min-w-0 flex-1'}>{k.label}</span>
+              {/* AND THE LABEL KEEPS A WIDTH (deploy 1 review, blocking). With
+                  a refusal sentence in the verdict cell, `min-w-0 flex-1` let
+                  the label shrink to 0px and its words stacked one per line
+                  over the figures. It holds 7rem, as `MoverRow`'s label holds
+                  9rem, and the row wraps the verdict onto its own line. */}
+              <span className={email ? undefined : 'min-w-[7rem] flex-1 basis-[7rem]'}>{k.label}</span>
               <span className={email ? undefined : 'w-[104px] shrink-0'}>
                 <FigureCell
                   mode={mode}
@@ -455,7 +474,7 @@ export const overviewCategory: Block<OverviewData> = {
                   a state a comparison reached); it is no comparison at all,
                   and the words say exactly that. */}
               {c.kindVerdicts[k.kind] ? (
-                <BlockMovement verdict={c.kindVerdicts[k.kind]} unit="pts" mode={mode} />
+                <BlockMovement verdict={c.kindVerdicts[k.kind]} unit="pts" mode={mode} sharedRefusal={shared} />
               ) : (
                 <span
                   className={email ? undefined : 'whitespace-nowrap text-[12px] text-muted-foreground'}
@@ -498,7 +517,7 @@ export const overviewCategory: Block<OverviewData> = {
         >
           {label}
         </span>
-        {rows.map((m) => <MoverRow key={m.id} mover={m} mode={mode} />)}
+        {rows.map((m) => <MoverRow key={m.id} mover={m} mode={mode} shared={shared} />)}
       </div>
     )
     const movers = c.growing.length > 0 || c.fading.length > 0 ? (
@@ -507,7 +526,9 @@ export const overviewCategory: Block<OverviewData> = {
         {c.fading.length > 0 ? arm('Smaller share than last month', c.fading) : null}
       </div>
     ) : (
-      <BlockEmpty mode={mode}>{c.moversNote ?? 'Nothing moved clearly this month.'}</BlockEmpty>
+      // The movers' own refusal is the block's: it says "not compared" and the
+      // chip says why, once.
+      <BlockEmpty mode={mode}>{shared && c.moversNote === pairSentence(shared) ? PAIR_NOT_COMPARED : c.moversNote ?? 'Nothing moved clearly this month.'}</BlockEmpty>
     )
 
     const mood = c.mood ? (
@@ -528,7 +549,7 @@ export const overviewCategory: Block<OverviewData> = {
         />
         <p className={email ? undefined : 'm-0 flex flex-wrap items-center gap-2 text-[11.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 4 } : undefined}>
           <span data-copy="figure">of {fmtInt(c.mood.judged)} judged</span>
-          <BlockMovement verdict={c.mood.verdict} unit="pts" mode={mode} />
+          <BlockMovement verdict={c.mood.verdict} unit="pts" mode={mode} sharedRefusal={shared} />
           {c.mood.framingPct != null ? (
             <span>
               <span data-copy="figure">{fmtPct(c.mood.framingPct)}</span> judged on the video’s framing
@@ -653,7 +674,7 @@ export const overviewCategory: Block<OverviewData> = {
           className={email ? undefined : 'm-0 flex flex-wrap items-baseline gap-2 text-[11.5px] text-secondary-foreground'}
           style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 } : undefined}
         >
-          <BlockMovement verdict={c.attention?.verdict ?? null} unit="pts" mode={mode} />
+          <BlockMovement verdict={c.attention?.verdict ?? null} unit="pts" mode={mode} sharedRefusal={shared} />
         </p>
       </>
     ) : (
@@ -695,6 +716,7 @@ export const overviewCategory: Block<OverviewData> = {
             <Line label="Mood" mode={mode}>{mood}</Line>
             <Line label="Attention" mode={mode}>{attention}</Line>
             <Line label="No longer being said" mode={mode}>{quiet}</Line>
+            {chip}
           </div>
         ) : (
           <div className="flex min-w-0 flex-col gap-3">
@@ -782,6 +804,7 @@ export const overviewCategory: Block<OverviewData> = {
               <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">No longer being said</span>
               {quiet}
             </TileBlock>
+            {chip}
           </div>
         )}
       </BlockFrame>

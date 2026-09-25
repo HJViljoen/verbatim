@@ -921,6 +921,43 @@ export function marketSizeFixture(): OverviewData {
   }
 }
 
+/**
+ * The same September on 2 Oct, as the loader builds it (deploy 1 review): every
+ * kind and the mood are refused for August against September because we
+ * changed our searches in September (WP1.3), and the movers say the same.
+ * September's kinds and mood are production's (plan §2.2, of 626); no August
+ * side is drawn, because the pair is refused and the research gives August's
+ * kinds only as shares.
+ */
+export function refusedPairFixture(): OverviewData {
+  const base = marketSizeFixture()
+  const pair = { mode: 'refuse' as const, cause: 'searches' as const, changeMonth: REAL_MONTH, checkWith: null }
+  const refused = (objectKind: Verdict['objectKind'], objectId: string, objectLabel: string, k: number): Verdict => ({
+    objectKind,
+    objectId,
+    objectLabel,
+    audience: INDUSTRY_AUDIENCE,
+    window: { kind: 'month', from: REAL_MONTH, to: '2026-10-01' },
+    basis: { from: '2026-08-01', to: REAL_MONTH },
+    value: { k, n: 626 },
+    changePts: null,
+    bandPts: null,
+    state: 'refused',
+    refusedReason: 'tracking_change',
+    flags: [],
+    pair,
+  })
+  return {
+    ...base,
+    category: {
+      ...base.category,
+      kindVerdicts: Object.fromEntries(base.category.kinds.map((k) => [k.kind, refused('kind', k.kind, k.label, k.videos)])),
+      moversNote: 'Not read as a change: we changed our searches in September.',
+      mood: base.category.mood ? { ...base.category.mood, verdict: refused('mood', 'positive', 'Positive', 484) } : null,
+    },
+  }
+}
+
 /** The same September once MF1 is applied (from Wed 30 Sep): the rows at half
  *  makers or more read "mostly makers", and the one with no measure reads
  *  "not yet marked". */

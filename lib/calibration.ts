@@ -537,6 +537,45 @@ export function pairSentence(note: VerdictPairNote): string {
   return note.cause === 'searches' ? PAIR_REFUSED_SEARCHES(note.changeMonth) : PAIR_REFUSED_OURS(note.changeMonth)
 }
 
+/** A row's short non-answer where its block prints the refusal once, as a
+ *  chip at its foot (`sharedPairNote`). The same words as OV3's kind cell. */
+export const PAIR_NOT_COMPARED = 'not compared'
+
+/**
+ * THE ONE REFUSAL A BLOCK'S ROWS SHARE, SAID ONCE (deploy 1 review). On
+ * Sealand's September every month verdict is refused for the same reason, and
+ * printing "Not read as a change: we changed our searches in September." on
+ * each row put the sentence 14 times on the Overview and 13 on Voice, squeezed
+ * OV3's kind labels to nothing, and read as that many separate failures. The
+ * approved preview prints it once, as a chip at the foot of each block.
+ *
+ * The note, where two or more of the verdicts are refused for a month pair and
+ * all of those say the same sentence; null otherwise, and the rows keep their
+ * own sentences (a block whose rows are refused for different reasons, or with
+ * one refusal, says each where it stands). A verdict that was compared, or
+ * refused for anything else, does not stop it: those rows print their own
+ * answer.
+ */
+export function sharedPairNote(
+  verdicts: readonly ({ state: string; pair?: VerdictPairNote | null } | null | undefined)[],
+): VerdictPairNote | null {
+  const notes = verdicts
+    .map((v) => (v && v.state === 'refused' && v.pair?.mode === 'refuse' ? v.pair : null))
+    .filter((n): n is VerdictPairNote => n != null)
+  if (notes.length < 2) return null
+  const first = pairSentence(notes[0])
+  return notes.every((n) => pairSentence(n) === first) ? notes[0] : null
+}
+
+/** Is this verdict's refusal the one its block prints once? */
+export function refusalInBlock(
+  verdict: { state: string; pair?: VerdictPairNote | null } | null | undefined,
+  shared: VerdictPairNote | null | undefined,
+): boolean {
+  return verdict != null && shared != null && verdict.state === 'refused' && verdict.pair?.mode === 'refuse'
+    && pairSentence(verdict.pair) === pairSentence(shared)
+}
+
 /** The same words as a chip: lower case, no full stop ("not read as a change:
  *  we changed our searches in September"), as the approved preview prints the
  *  refusal beside a figure or at a block's foot. One sentence, two faces, so a

@@ -1,8 +1,8 @@
 import { favourability, type Good } from '@/components/charts/stat'
-import { pairSentence } from '@/lib/calibration'
+import { PAIR_NOT_COMPARED, pairSentence, refusalInBlock } from '@/lib/calibration'
 import type { DeltaVerdict } from '@/lib/report-bands'
 import { REFUSAL_WHY } from '@/lib/reading/record'
-import type { Verdict, VerdictState } from '@/lib/reading/verdicts'
+import type { Verdict, VerdictPairNote, VerdictState } from '@/lib/reading/verdicts'
 
 /**
  * THE badge. One component, one vocabulary, three visual states (Phase 1 WP10,
@@ -159,7 +159,17 @@ function Moved({ change, unit, band: bandPts, title, good = 'up', bandTip = fals
  * magnitude and a sign, and the words "growing" and "fading" are earned over
  * three readings and printed by the surface, not by a badge.
  */
-export function MovementBadge({ verdict, unit, good = 'up', bandTip = false }: { verdict: Verdict | DeltaVerdict | null | undefined; unit?: string; good?: Good; /** On screen: the band rides in the tooltip, not the text (ruling I). */ bandTip?: boolean }) {
+export function MovementBadge({ verdict, unit, good = 'up', bandTip = false, sharedRefusal = null }: {
+  verdict: Verdict | DeltaVerdict | null | undefined
+  unit?: string
+  good?: Good
+  /** On screen: the band rides in the tooltip, not the text (ruling I). */
+  bandTip?: boolean
+  /** The refusal the row's block prints once at its foot (`sharedPairNote`):
+   *  a verdict refused for that same pair prints the short non-answer, with
+   *  the sentence in its title. */
+  sharedRefusal?: VerdictPairNote | null
+}) {
   if (!verdict) return null
   const change = 'changePts' in verdict ? verdict.changePts : verdict.change
   const bandPts = 'bandPts' in verdict ? verdict.bandPts : verdict.band
@@ -175,6 +185,7 @@ export function MovementBadge({ verdict, unit, good = 'up', bandTip = false }: {
     return <Moved change={change} unit={unit} band={bandPts} good={good} bandTip={bandTip} title={pair?.mode === 'flag' ? `${moved}. ${pairSentence(pair)}` : moved} />
   }
   if (verdict.state === 'refused' && pair?.mode === 'refuse') {
+    if (refusalInBlock({ state: verdict.state, pair }, sharedRefusal)) return <NonAnswer word={PAIR_NOT_COMPARED} title={pairSentence(pair)} />
     const reason = 'refusedReason' in verdict && verdict.refusedReason ? REFUSED_WHY[verdict.refusedReason] : pairSentence(pair)
     return <NonAnswer word={pairSentence(pair)} title={reason} />
   }
