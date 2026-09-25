@@ -1,5 +1,6 @@
 import type { RenderMode } from '@/lib/blocks/types'
 import { CountBadge, MovementBadge, MOVEMENT_WORDS } from '@/components/delta-badge'
+import { pairSentence } from '@/lib/calibration'
 import { favourability, type Good } from '@/components/charts/stat'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { DeltaVerdict } from '@/lib/report-bands'
@@ -111,14 +112,30 @@ export function BlockMovement({
   good?: Good
 }) {
   if (!verdict) return null
+  // THE MONTH-PAIR RULE (market-first decision D, WP1.3). A refused pair prints
+  // its sentence ("Not read as a change: we changed what we search in
+  // September."); a pair a change of ours touched under a tenth of carries its
+  // note beside whatever the band said. Both in every mode: the note is a fact
+  // about the comparison, and paper and an inbox are owed it as much as a
+  // screen.
+  const pair = 'pair' in verdict ? verdict.pair ?? null : null
+  const flagNote = pair?.mode === 'flag' && verdict.state !== 'refused'
+    ? <span className="text-xs text-muted-foreground" style={mode === 'email' ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.ink2 } : undefined}> {pairSentence(pair)}</span>
+    : null
   // Ruling I: in the app the band is the badge's tooltip; print keeps it inline.
-  if (mode !== 'email') return <span data-copy="verdict"><MovementBadge verdict={verdict} unit={unit} good={good} bandTip={mode === 'app'} /></span>
+  if (mode !== 'email') return <span data-copy="verdict"><MovementBadge verdict={verdict} unit={unit} good={good} bandTip={mode === 'app'} />{flagNote}</span>
 
   const change = 'changePts' in verdict ? verdict.changePts : verdict.change
   const band = 'bandPts' in verdict ? verdict.bandPts : verdict.band
+  if (verdict.state === 'refused' && pair?.mode === 'refuse') {
+    // A sentence, not a chip word: it wraps.
+    return <span data-copy="verdict" style={{ ...chip('neutral'), whiteSpace: 'normal', borderRadius: 6 }}>{pairSentence(pair)}</span>
+  }
   if (verdict.state !== 'moved' || change == null) {
     const word = verdict.state === 'moved' ? MOVEMENT_WORDS.too_little_data : MOVEMENT_WORDS[verdict.state]
-    return <span data-copy="verdict" style={chip('neutral')}>{word}</span>
+    return flagNote
+      ? <span data-copy="verdict"><span style={chip('neutral')}>{word}</span>{flagNote}</span>
+      : <span data-copy="verdict" style={chip('neutral')}>{word}</span>
   }
   // AND THE BAND IN THE EMAIL TOO. The screen arm put it in a `title`, which an
   // email has no way to show and paper has none either; this arm dropped it
@@ -135,8 +152,8 @@ export function BlockMovement({
   // compare"), so a movement that really did clear its band may not borrow it,
   // or a measured change would read as a refusal. `noted` is the artboards'
   // own attention tint.
-  return (
-    <span data-copy="verdict" style={chip(fav === null ? 'noted' : fav ? 'up' : 'down')}>
+  const moved = (
+    <span data-copy={flagNote ? undefined : 'verdict'} style={chip(fav === null ? 'noted' : fav ? 'up' : 'down')}>
       {change > 0 ? '+' : '−'}{Math.abs(change).toLocaleString('en-US')}{unit ? ` ${unit}` : ''}
       {/* "band ±2.1 pts", the artboard's own wording and the screen arm's
           (SH18): the ± is the whole reason a band is not a threshold, and the
@@ -144,6 +161,7 @@ export function BlockMovement({
       {band != null ? ` · band ±${Math.abs(band).toLocaleString('en-US')}${unit ? ` ${unit}` : ''}` : ''}
     </span>
   )
+  return flagNote ? <span data-copy="verdict">{moved}{flagNote}</span> : moved
 }
 
 /** A count's movement — no band, because a count that changed, changed. */

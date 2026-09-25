@@ -1,4 +1,5 @@
 import { favourability, type Good } from '@/components/charts/stat'
+import { pairSentence } from '@/lib/calibration'
 import type { DeltaVerdict } from '@/lib/report-bands'
 import { REFUSAL_WHY } from '@/lib/reading/record'
 import type { Verdict, VerdictState } from '@/lib/reading/verdicts'
@@ -162,8 +163,20 @@ export function MovementBadge({ verdict, unit, good = 'up', bandTip = false }: {
   if (!verdict) return null
   const change = 'changePts' in verdict ? verdict.changePts : verdict.change
   const bandPts = 'bandPts' in verdict ? verdict.bandPts : verdict.band
+  // THE MONTH-PAIR RULE'S WORDS (WP1.3). A pair refused because the two months
+  // were not read the same way prints its own sentence in place of the word,
+  // "Not read as a change: we changed what we search in September.", because
+  // "comparison refused" tells a reader something is wrong without saying
+  // what, and that sentence is the whole point of the refusal. A pair read
+  // with a note keeps its badge and carries the note in the title.
+  const pair = 'pair' in verdict ? verdict.pair ?? null : null
   if (verdict.state === 'moved' && change != null) {
-    return <Moved change={change} unit={unit} band={bandPts} good={good} bandTip={bandTip} title={bandPts != null ? `moved beyond the ${bandPts} pt margin of this measurement` : 'moved'} />
+    const moved = bandPts != null ? `moved beyond the ${bandPts} pt margin of this measurement` : 'moved'
+    return <Moved change={change} unit={unit} band={bandPts} good={good} bandTip={bandTip} title={pair?.mode === 'flag' ? `${moved}. ${pairSentence(pair)}` : moved} />
+  }
+  if (verdict.state === 'refused' && pair?.mode === 'refuse') {
+    const reason = 'refusedReason' in verdict && verdict.refusedReason ? REFUSED_WHY[verdict.refusedReason] : pairSentence(pair)
+    return <NonAnswer word={pairSentence(pair)} title={reason} />
   }
   const why = 'refusedReason' in verdict && verdict.refusedReason ? REFUSED_WHY[verdict.refusedReason] : null
   const inside = change != null && bandPts != null
