@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import { pairSentence, recStatus, REC_STATUS_LABEL, type RecStatus } from '../calibration'
+import { pairChipWords, pairSentence, recStatus, REC_STATUS_LABEL, type RecStatus } from '../calibration'
 import { SEALAND_CLIENT_ID } from '../config'
 import { currentRecommendation } from '../dashboard-tiles'
 import { fmtInt, longMonth, monthName, platformLabel, shortDate } from '../format'
@@ -47,7 +47,7 @@ import {
   type MoveSeries,
 } from '../reading/moves'
 import { BRANDS_PANEL, pairTools, type PairOn } from '../reading/pairs'
-import { loadChanges, loadMonthSeries, loadPairOn, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
+import { loadMonthSeries, loadPairOn, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
 import { asAtOf, loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, readingViewFrom, type OtherMonth } from '../reading/reading-view'
 import { methodLines, type MethodLines } from '../reading/method'
 import { countRefused, howSoundLine, loadRecordInputs, monthRecordWindow, recordLines, refusals, soundFigures, type RecordInputs, type SoundFigure } from '../reading/record'
@@ -60,18 +60,9 @@ import {
   type Substrate,
 } from '../reading/series'
 import { buildStandings, type StandingRow } from '../reading/standings'
-import {
-  changesFromLog,
-  comparabilityOf,
-  isSearchSurface,
-  modeForShare,
-  pairOnVerdict,
-  type ComparabilityView,
-  type OurChange,
-  type PairComparability,
-} from '../reading/comparability'
+import { pairOnVerdict, type PairComparability } from '../reading/comparability'
 import { pooledDenominators } from '../reading/market'
-import { MONTH_PARAM, monthStateOf, readingAnchor, type MonthState, type ReadingMonth } from '../reading/reading-month'
+import { MONTH_PARAM, readingAnchor, type ReadingMonth } from '../reading/reading-month'
 import { TABLE_THEME_READINGS, type MonthStatus } from '../reading/types'
 import { isAnswer, type FigureTable, type Verdict, type VerdictPairNote } from '../reading/verdicts'
 import { isMissingSubjects, MOVE_PROMISE, RPC_WINDOW_SUBJECT_READINGS, TABLE_MOVES, TABLE_SUBJECT_MEMBERSHIPS, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
@@ -1310,119 +1301,26 @@ export function sentenceBlockFor(input: {
 // ---- the size headline's chip (market-first WP1.5) ---------------------------
 
 /**
- * The later month of a pair, as `comparabilityOf` needs it (WP1.3), from what
- * the Overview loader already holds: the month's stored row, the delivered
- * updates and the clock.
- *
- * `readToEnd` is an update that STARTED once the month had ended, by `now`: a
- * run that starts after the month's end finishes after it too, and the
- * loader's run read carries start times. The latest update is the run
- * the pair row must account for (`later.latestUpdateRunId`).
- */
-export function laterSide(input: {
-  month: string
-  now: string
-  runs: readonly { id: string; started_at: string }[]
-  row: { status: MonthStatus; origin: 'live' | 'back_read'; videos: number | null } | null
-}): { state: MonthState; readToEnd: boolean; latestUpdateRunId: string | null } {
-  const nowMs = Date.parse(input.now)
-  const endMs = Date.parse(monthEndInstant(monthStartOf(input.month)))
-  const done = input.runs
-    .filter((r) => {
-      const t = Date.parse(r.started_at)
-      return Number.isFinite(t) && t <= nowMs
-    })
-    .sort((a, b) => Date.parse(a.started_at) - Date.parse(b.started_at) || a.id.localeCompare(b.id))
-  const readToEnd = done.some((r) => Date.parse(r.started_at) >= endMs)
-  return {
-    state: monthStateOf(input.month, input.now, input.row, readToEnd),
-    readToEnd,
-    latestUpdateRunId: done.at(-1)?.id ?? null,
-  }
-}
-
-/** What a change of ours did, in the chip's words. A search change is named
- *  as one; the others by what they changed (lib/settings/change-log.ts names
- *  the same surfaces for the record). */
-const CHANGE_WORDS: Record<OurChange['surface'], string> = {
-  terms: 'we changed our searches',
-  platforms: 'we changed our searches',
-  subreddits: 'we changed our searches',
-  gate_rule: 'we changed how we check relevance',
-  regate: 'we changed how we check relevance',
-  knobs: 'we changed how deeply we read',
-  prompt_version: 'we changed how we read comments',
-  rivals: 'we changed how videos are filed',
-  handles: 'we changed how videos are filed',
-  rival_rename: 'we changed how videos are filed',
-  entity_retag: 'we changed how videos are filed',
-  attribution: 'we changed how videos are filed',
-  segment: 'we changed how videos are marked',
-  other: 'we changed what we read',
-}
-
-/** The change to name: the latest search change, else the latest other. */
-function namedChange(changes: readonly OurChange[]): OurChange | null {
-  const latest = (xs: readonly OurChange[]) =>
-    [...xs].sort((a, b) => Date.parse(b.changedAt) - Date.parse(a.changedAt) || a.id.localeCompare(b.id))[0] ?? null
-  return latest(changes.filter((c) => isSearchSurface(c.surface))) ?? latest(changes)
-}
-
-/**
  * The refusal chip beside the size headline: why this month is not read
  * against the one before it, in one short line. Null where the pair is
  * compared (comparable, or flagged and printed with its note elsewhere), or
  * where there is no pair at all.
  *
- * WHERE THE CALENDAR REFUSED IT, OUR CHANGE IN THAT MONTH IS NAMED FIRST. A
- * month so far, or not yet read to its end, is refused before any change is
- * weighed (`comparabilityOf` rules 1 and 2). The calendar's reason passes and
- * ours does not, so where a change of ours fell in the month being read the
- * chip names it: "not read as a change: we changed our searches in September"
- * (plan §2.2, the deploy 1 headline). Otherwise it says the calendar's reason:
- * "October is not compared until it has ended", or, for Össur's September,
- * "September is not compared: it was not read to its end".
- *
- * WHERE THE MEASURE REFUSED IT, THE REFUSING CHANGE IS NAMED: the latest
- * search change among the pair's refusing reasons, else the latest other one
- * (an unmeasured pair lists every change in its span). Last, "not compared
- * yet": a pair nobody has measured with no change of ours in it, or one
- * refused on depth.
- *
- * The date-bearing refusal sentences are WP1.3's (`lib/calibration.ts`); this
- * chip is the size headline's alone and names no update date it cannot keep.
+ * FROM WP1.3'S JUDGE, IN WP1.3'S WORDS (deploy 1 review). The chip was WP1.5's
+ * own pair (`comparabilityOf` with no measured row, a later month read off run
+ * start times) with its own word table, so it never read MF1's measured row,
+ * named the latest change in the pair's span rather than one in its own
+ * months, and printed "we changed our searches" beside rows that said "we
+ * changed what we search". It is now the loader's judge for the market view
+ * (`pair(prevMonth, month, 'market')`), read through `pairOnVerdict` (the
+ * change in the pair's own two months first) and worded by `pairChipWords`
+ * (lib/calibration.ts), the same sentence every refused row prints, lower
+ * case with no full stop. Sealand's August against September: "not read as a
+ * change: we changed our searches in September".
  */
-export function pairChip(
-  pair: PairComparability | null,
-  changes: readonly OurChange[],
-  view: ComparabilityView = 'market',
-): string | null {
-  if (!pair || pair.mode !== 'refuse') return null
-  const later = longMonth(pair.month)
-  const ours = changes.filter((c) => c.affects.includes(view))
-  const words = (c: OurChange) => `not read as a change: ${CHANGE_WORDS[c.surface]} in ${longMonth(monthStartOf(c.changedAt))}`
-
-  const kinds = new Set(pair.reasons.map((r) => r.kind))
-  if (kinds.has('incomplete') || kinds.has('not_read_to_end')) {
-    const here = namedChange(ours.filter((c) => Number.isFinite(Date.parse(c.changedAt)) && monthStartOf(c.changedAt) === pair.month))
-    if (here) return words(here)
-    return kinds.has('incomplete')
-      ? `${later} is not compared until it has ended`
-      : `${later} is not compared: it was not read to its end`
-  }
-
-  const refusing = pair.reasons.filter(
-    (r) => (r.kind === 'searches' || r.kind === 'code_change') && modeForShare(r.share) === 'refuse',
-  )
-  const byId = refusing
-    .map((r) => (r.changeId ? ours.find((c) => c.id === r.changeId || (c.rowIds ?? []).includes(r.changeId as string)) ?? null : null))
-    .filter((c): c is OurChange => c != null && Number.isFinite(Date.parse(c.changedAt)))
-  const named = namedChange(byId)
-  if (named) return words(named)
-  const earlier = longMonth(pair.prevMonth)
-  if (refusing.some((r) => r.kind === 'searches')) return `not read as a change: our searches differed between ${earlier} and ${later}`
-  if (refusing.length > 0) return `not read as a change: a change of ours touched ${earlier} or ${later}`
-  return 'not compared yet'
+export function pairChip(pair: PairComparability | null | undefined): string | null {
+  const note = pairOnVerdict(pair).note
+  return note && note.mode === 'refuse' ? pairChipWords(note) : null
 }
 
 /** The gate sentence the monthly interpretation's fallback writes when nothing
@@ -2100,15 +1998,11 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
   const cardAhead = loadCardInputs(supabase, clientId, month)
   cardAhead.catch(() => {})
 
-  // THE LEVEL LIST'S POOL AND THE CHANGE LOG, ON THE SAME TERMS (market-first
-  // WP1.5). The pool is the month's largest category themes by videos, one
-  // small read that needs the month and nothing else; the change log is the
-  // one `loadMonthSeries` above has already read (memoised), so it costs
-  // nothing. Both are taken in wave 3.
+  // THE LEVEL LIST'S POOL (market-first WP1.5): the month's largest category
+  // themes by videos, one small read that needs the month and nothing else,
+  // taken in wave 3.
   const levelPoolAhead = loadLevelPool(reading.client, clientId, month)
-  const changesAhead = loadChanges(reading.client, clientId)
   levelPoolAhead.catch(() => {})
-  changesAhead.catch(() => {})
 
   // ── wave 3: the readings ───────────────────────────────────────────────
   const themedRunId = await themedRunAhead
@@ -2362,32 +2256,15 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
   // the Phase 1 headline the weekly keeps, and the interpretation's refusal.
   const monthPair = pairOnVerdict(pair(prevMonth, month, INDUSTRY_AUDIENCE)).note
   // THE SIZE, AND THE PAIR'S REFUSAL BESIDE IT (market-first WP1.5). The
-  // market is pooled (decision E); the pair is this month against the one
-  // before, judged for the market view by the core rule (`comparabilityOf`)
-  // from the change log and the updates. It passes no measured row (MF1's
-  // `month_pair_comparability`): without one the pair reads as not measured,
-  // and the chip names the change of ours that falls inside the span. On
-  // Aug→Sep at the deploy 1 clocks that is the words WP1.3's judge (`pair`)
-  // gives for the market view; the headline WP1.6 builds takes the judge's.
+  // market is pooled (decision E), so its pair is the judge's MARKET view
+  // (`viewForAudience`'s market key), which reads MF1's measured row once one
+  // exists; the chip is that pair's refusal in the page's own words.
   const size = marketSizeOf(history.denominators, rivalAudiences, month, readingAt)
-  const monthRow = history.denominators.find((d) => d.month === month && d.audience === INDUSTRY_AUDIENCE) ?? null
-  const ourChanges = changesFromLog(await changesAhead)
-  const marketPair = comparabilityOf(prevMonth, month, {
-    row: null,
-    changes: ourChanges,
-    view: 'market',
-    later: laterSide({
-      month,
-      now: readingAt,
-      runs: runsRaw,
-      row: monthRow ? { status: monthRow.status, origin: monthRow.origin, videos: size.videos } : null,
-    }),
-  })
   const head = headline({
     verdicts: suppress ? [] : sentenceVerdicts,
     size,
     makerShares,
-    chip: pairChip(marketPair, ourChanges),
+    chip: pairChip(pair(prevMonth, month, 'market')),
     monthPair,
   })
   const [voices, anomaly] = await Promise.all([

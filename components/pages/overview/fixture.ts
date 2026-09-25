@@ -831,8 +831,9 @@ export function renamedRivalFixture(): OverviewData {
  *  and 412 comments (decision E pools them; the client's 9 are not in it). */
 const SEPTEMBER_MARKET = { month: REAL_MONTH, soFar: true, videos: 655, comments: 16233 }
 
-/** What `pairChip` says of August against September so far, with the 9, 13
- *  and 17 Sep term changes in the log (lib/pages/overview-size.test.ts). */
+/** What `pairChip` says of August against September so far: WP1.3's judge on
+ *  the market view, over Sealand's real change log (the 9, 13 and 17 Sep term
+ *  changes; lib/pages/overview-size.test.ts). */
 export const SEPTEMBER_CHIP = 'not read as a change: we changed our searches in September'
 
 /** The category's eight biggest September themes (of 626), August beside (of

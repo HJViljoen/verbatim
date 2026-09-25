@@ -536,3 +536,12 @@ export function pairSentence(note: VerdictPairNote): string {
   if (note.cause === 'not_yet' || !note.changeMonth) return PAIR_NOT_YET(note.checkWith)
   return note.cause === 'searches' ? PAIR_REFUSED_SEARCHES(note.changeMonth) : PAIR_REFUSED_OURS(note.changeMonth)
 }
+
+/** The same words as a chip: lower case, no full stop ("not read as a change:
+ *  we changed our searches in September"), as the approved preview prints the
+ *  refusal beside a figure or at a block's foot. One sentence, two faces, so a
+ *  chip and a row can never give one pair two reasons. */
+export function pairChipWords(note: VerdictPairNote): string {
+  const sentence = pairSentence(note).replace(/\.$/, '')
+  return sentence.charAt(0).toLowerCase() + sentence.slice(1)
+}

@@ -3,8 +3,10 @@ import { describe, it, expect } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '../config'
-import type { ConfigChange } from '../config-log'
-import { changesFromLog, comparabilityOf, type OurChange, type PairComparability } from '../reading/comparability'
+import { changesFromLog, pairOnVerdict, VIEWS_BY_SURFACE, type OurChange, type PairComparability, type PairRow } from '../reading/comparability'
+import { pairChipWords } from '../calibration'
+import { HYPOTHETICAL_SAME_WAY } from '../test/pair-fixture'
+import { CHANGES as SEALAND_LOG_CHANGES, OSSUR_UPDATES, row as logRow, sealandJudge } from '../test/sealand-pairs'
 import { buildSeries, type DenominatorPoint, type MonthSeries } from '../reading/series'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '../rivals'
 import type { Verdict } from '../reading/verdicts'
@@ -20,7 +22,6 @@ import {
   loadMakerShares,
   makerRuleEnabled,
   makerSharesOf,
-  laterSide,
   marketSizeOf,
   mayLead,
   pairChip,
@@ -34,7 +35,7 @@ import {
 // Sealand's, production, to 24 Sep (research F1 and the grounding digest):
 // 626 category videos and 15,821 comments in September, 29 videos and 412
 // comments filed under a tracked brand, 9 of the client's own; August 351 in
-// the category. The change log is GC F2's (the 9, 13 and 17 Sep term changes).
+// the category. The change log is GC F2's, through lib/test/sealand-pairs.ts.
 
 // ---- fixtures ---------------------------------------------------------------
 
@@ -56,44 +57,6 @@ const DENOMINATORS = [
  *  list prints no direction word, so the clock changes nothing here. */
 const ENDED_SEP = '2026-10-02T06:00:00.000Z'
 const SEPTEMBER_SO_FAR: MarketSize = { month: SEP, soFar: true, videos: 655, comments: 16233 }
-
-let seq = 0
-function change(over: Partial<ConfigChange> & Pick<ConfigChange, 'changed_at' | 'surface'>): ConfigChange {
-  seq += 1
-  return {
-    id: over.id ?? `row-${seq}`,
-    client_id: 'sealand',
-    field: null,
-    before: null,
-    after: null,
-    actor_kind: 'reconstructed',
-    actor_user_id: null,
-    actor_label: null,
-    run_id: null,
-    source: 'reconstructed',
-    rows_affected: null,
-    note: null,
-    affects_audiences: null,
-    affects_months: null,
-    ...over,
-  }
-}
-
-/** Sealand's three September term changes (GC F2): one change each. */
-const SEALAND_CHANGES: OurChange[] = changesFromLog([
-  change({ id: 'terms-0909', changed_at: '2026-09-09T18:17:56.000Z', surface: 'terms', after: ['cotopaxi backpack'] }),
-  change({ id: 'terms-0913', changed_at: '2026-09-13T10:00:58.000Z', surface: 'terms', field: 'industry_keywords', actor_kind: 'sql' }),
-  change({ id: 'terms-0917', changed_at: '2026-09-17T16:02:56.000Z', surface: 'terms', field: 'exclude_terms', source: 'trigger', actor_kind: 'script' }),
-])
-
-/** Sealand's Sunday updates, by start (06:00 SAST = 04:00 UTC). */
-const RUNS = [
-  { id: 'run-0906', started_at: '2026-09-06T04:00:00.000Z' },
-  { id: 'run-0913', started_at: '2026-09-13T04:00:00.000Z' },
-  { id: 'run-0920', started_at: '2026-09-20T04:00:00.000Z' },
-  { id: 'run-0927', started_at: '2026-09-27T04:00:00.000Z' },
-  { id: 'run-1004', started_at: '2026-10-04T04:00:00.000Z' },
-]
 
 const moved = (over: Partial<Verdict> & Pick<Verdict, 'objectKind' | 'objectId' | 'objectLabel'>): Verdict => ({
   audience: INDUSTRY_AUDIENCE,
@@ -119,15 +82,6 @@ const LOOKS_AND_STYLE = moved({
 const READY_TO_BUY = moved({ objectKind: 'theme', objectId: 'ready-to-buy', objectLabel: 'Ready to buy handmade bags' })
 /** Its staging twin's measured maker share (CQ F29): 50 of 140. */
 const READY_TO_BUY_MAKERS = 50 / 140
-
-/** A later month, as `laterSide` reads it off the stored row and the runs. */
-const pairAt = (prevMonth: string, month: string, now: string, row: Parameters<typeof laterSide>[0]['row'] = null): PairComparability =>
-  comparabilityOf(prevMonth, month, {
-    row: null,
-    changes: SEALAND_CHANGES,
-    view: 'market',
-    later: laterSide({ month, now, runs: RUNS, row }),
-  })
 
 // ---- the market's size --------------------------------------------------------
 
@@ -338,143 +292,115 @@ describe('sentenceBlockFor', () => {
   })
 })
 
-// ---- the later month, and the chip ------------------------------------------------
+// ---- the chip ----------------------------------------------------------------------
+//
+// FROM WP1.3'S JUDGE (deploy 1 review): the loader passes
+// `pair(prevMonth, month, 'market')`, Sealand's real change log, updates and
+// schedule (lib/test/sealand-pairs.ts), so the chip and every refused row on
+// the page are one rule in one set of words.
 
-describe('laterSide', () => {
-  it('reads September so far on 24 Sep, with the 20 Sep update the latest', () => {
-    const s = laterSide({ month: SEP, now: '2026-09-24T12:00:00.000Z', runs: RUNS, row: { status: 'filling', origin: 'live', videos: 655 } })
-    expect(s).toEqual({ state: 'so_far', readToEnd: false, latestUpdateRunId: 'run-0920' })
-  })
-
-  it('reads September ended but not read to its end on 2 Oct', () => {
-    const s = laterSide({ month: SEP, now: '2026-10-02T06:00:00.000Z', runs: RUNS, row: { status: 'filling', origin: 'live', videos: 655 } })
-    expect(s).toEqual({ state: 'ended', readToEnd: false, latestUpdateRunId: 'run-0927' })
-  })
-
-  it('reads September read to its end once the 4 Oct update has run', () => {
-    const s = laterSide({ month: SEP, now: '2026-10-05T06:00:00.000Z', runs: RUNS, row: { status: 'filling', origin: 'live', videos: 655 } })
-    expect(s.readToEnd).toBe(true)
-    expect(s.latestUpdateRunId).toBe('run-1004')
-  })
-
-  it('reads Össur’s September, updates paused since 13 Sep, as never read to its end', () => {
-    const ossur = [{ id: 'ossur-0913', started_at: '2026-09-13T04:00:00.000Z' }]
-    const s = laterSide({ month: SEP, now: '2026-11-02T06:00:00.000Z', runs: ossur, row: { status: 'filling', origin: 'live', videos: 430 } })
-    expect(s).toEqual({ state: 'ended', readToEnd: false, latestUpdateRunId: 'ossur-0913' })
-  })
-})
+const SEP_OCT = '2026-10-01'
+const market = (now: string, prevMonth = AUG, month = SEP, rows: readonly PairRow[] = [], changes: readonly OurChange[] = SEALAND_LOG_CHANGES): PairComparability =>
+  sealandJudge(now, rows, changes)(prevMonth, month, 'market')
 
 describe('pairChip', () => {
-  it('names our September searches on September so far (the deploy 1 headline)', () => {
-    const pair = pairAt(AUG, SEP, '2026-09-29T12:00:00.000Z', { status: 'filling', origin: 'live', videos: 655 })
-    expect(pair.mode).toBe('refuse')
-    expect(pairChip(pair, SEALAND_CHANGES)).toBe('not read as a change: we changed our searches in September')
+  it('names our September searches on September so far, on 1 to 3 Oct, and once September is read to its end', () => {
+    for (const now of ['2026-09-29T12:00:00.000Z', '2026-10-02T06:00:00.000Z', '2026-10-05T06:00:00.000Z', '2026-10-11T12:00:00.000Z']) {
+      expect(pairChip(market(now))).toBe('not read as a change: we changed our searches in September')
+    }
   })
 
-  it('names them again on 1 to 3 Oct, before September is read to its end', () => {
-    const pair = pairAt(AUG, SEP, '2026-10-02T06:00:00.000Z', { status: 'filling', origin: 'live', videos: 655 })
-    expect(pair.reasons.map((r) => r.kind)).toEqual(['not_read_to_end'])
-    expect(pairChip(pair, SEALAND_CHANGES)).toBe('not read as a change: we changed our searches in September')
+  it('is the refused rows\' own sentence, lower case with no full stop: one pair, one reason', () => {
+    for (const now of ['2026-09-29T12:00:00.000Z', '2026-10-02T06:00:00.000Z', '2026-10-16T06:00:00.000Z']) {
+      const pair = market(now)
+      const note = pairOnVerdict(pair).note
+      expect(note?.mode).toBe('refuse')
+      expect(pairChip(pair)).toBe(pairChipWords(note!))
+    }
+    expect(pairChipWords({ mode: 'refuse', cause: 'searches', changeMonth: SEP, checkWith: null }))
+      .toBe('not read as a change: we changed our searches in September')
   })
 
-  it('names them once September has been read to its end and the pair is not measured', () => {
-    const pair = pairAt(AUG, SEP, '2026-10-05T06:00:00.000Z', { status: 'filling', origin: 'live', videos: 655 })
-    expect(pair.reasons[0].kind).toBe('unmeasured')
-    expect(pairChip(pair, SEALAND_CHANGES)).toBe('not read as a change: we changed our searches in September')
+  it('names September\'s change for September against October, so far and ended', () => {
+    expect(pairChip(market('2026-10-16T06:00:00.000Z', SEP, SEP_OCT))).toBe('not read as a change: we changed our searches in September')
+    expect(pairChip(market('2026-11-02T06:00:00.000Z', SEP, SEP_OCT))).toBe('not read as a change: we changed our searches in September')
   })
 
-  it('says October is not compared while it is so far, when our change fell in September', () => {
-    const pair = pairAt(SEP, '2026-10-01', '2026-10-16T06:00:00.000Z')
-    expect(pairChip(pair, SEALAND_CHANGES)).toBe('October is not compared until it has ended')
+  it('reads MF1\'s measured row: a measured search refusal names September, not an October activation in span', () => {
+    // August against September measured after the 4 Oct update (206 of 625,
+    // GC F29; 81 of 351, CQ F27; depth 23 against 15, DR F39). HYPOTHETICAL: a
+    // community activated on the 4 Oct run (no such row exists yet).
+    const measured: PairRow = {
+      prevMonth: AUG, month: SEP,
+      searchOutside: { prev: { k: 81, n: 351 }, curr: { k: 206, n: 625 } },
+      codeChanges: [], depth: { prevMedian: 23, currMedian: 15 }, gather: [], lateCapture: null,
+      readThroughRun: 'run-2026-10-04', methodVersion: 'comparability_v1', computedAt: '2026-10-05T09:00:00.000Z',
+    }
+    const october = changesFromLog([logRow({
+      id: 'subreddits-1004', changed_at: '2026-10-04T04:30:00.000Z', surface: 'subreddits', field: 'subreddits',
+      before: [{ name: 'backpacks', status: 'active' }], after: [{ name: 'backpacks', status: 'active' }, { name: 'known_2', status: 'active' }],
+    })])
+    const pair = market('2026-10-05T12:00:00.000Z', AUG, SEP, [measured], [...SEALAND_LOG_CHANGES, ...october])
+    expect(pair.row).toBe(measured)
+    expect(pairChip(pair)).toBe('not read as a change: we changed our searches in September')
   })
 
-  it('names the September change that refuses September against October, once October has ended', () => {
-    const runs = [...RUNS, { id: 'run-1101', started_at: '2026-11-01T04:00:00.000Z' }]
-    const pair = comparabilityOf(SEP, '2026-10-01', {
-      row: null,
-      changes: SEALAND_CHANGES,
-      view: 'market',
-      later: laterSide({ month: '2026-10-01', now: '2026-11-02T06:00:00.000Z', runs, row: { status: 'filling', origin: 'live', videos: null } }),
-    })
-    expect(pairChip(pair, SEALAND_CHANGES)).toBe('not read as a change: we changed our searches in September')
+  it('prints nothing on a measured pair read the same way (the row is read, not assumed absent)', () => {
+    // HYPOTHETICAL_SAME_WAY (lib/test/pair-fixture.ts): October against
+    // November, read through the 6 Dec update, no change of ours in span.
+    expect(pairChip(market('2026-12-07T12:00:00.000Z', SEP_OCT, '2026-11-01', [HYPOTHETICAL_SAME_WAY], []))).toBeNull()
   })
 
-  it('says Össur’s September was not read to its end, where no change of ours fell in it', () => {
-    const pair = comparabilityOf(AUG, SEP, {
-      row: null,
-      changes: [],
-      view: 'market',
-      later: laterSide({ month: SEP, now: '2026-10-02T06:00:00.000Z', runs: [{ id: 'ossur-0913', started_at: '2026-09-13T04:00:00.000Z' }], row: null }),
-    })
-    expect(pairChip(pair, [])).toBe('September is not compared: it was not read to its end')
+  it('Össur: its 13 Sep community activation is named; with none, "not compared yet", and no update is promised (paused)', () => {
+    const ossur = (changes: readonly OurChange[]) => sealandJudge('2026-10-02T06:00:00.000Z', [], changes, OSSUR_UPDATES)(AUG, SEP, 'market')
+    const bionics = changesFromLog([logRow({
+      id: 'subreddits-0913-ossur', changed_at: '2026-09-13T06:00:00.000Z', surface: 'subreddits', field: 'subreddits',
+      before: [{ name: 'prosthetics', status: 'active' }, { name: 'bionics', status: 'candidate' }],
+      after: [{ name: 'prosthetics', status: 'active' }, { name: 'bionics', status: 'active' }],
+    })])
+    expect(pairChip(ossur(bionics))).toBe('not read as a change: we changed our searches in September')
+    expect(pairChip(ossur([]))).toBe('not compared yet')
   })
 
-  it('names the change by what it changed, not only searches', () => {
-    const gate: OurChange = { id: 'gate', surface: 'gate_rule', changedAt: '2026-09-26T10:00:00.000Z', note: null, affects: ['market', 'themes', 'brands', 'lens'] }
-    const pair = pairAt(AUG, SEP, '2026-09-29T12:00:00.000Z')
-    expect(pairChip(pair, [gate])).toBe('not read as a change: we changed how we check relevance in September')
+  it('names a change that is not a search by what it did, in the same words the rows print', () => {
+    const gate: OurChange = { id: 'gate', surface: 'gate_rule', changedAt: '2026-09-26T10:00:00.000Z', note: null, affects: VIEWS_BY_SURFACE.gate_rule }
+    expect(pairChip(market('2026-09-29T12:00:00.000Z', AUG, SEP, [], [gate]))).toBe('not read as a change: we changed how we check or file videos in September')
   })
 
   it('ignores a change that cannot move the market (a re-filing moves themes and brands only)', () => {
-    const retag: OurChange = { id: 'retag', surface: 'entity_retag', changedAt: '2026-09-29T10:00:00.000Z', note: null, affects: ['themes', 'brands'] }
-    const pair = pairAt(AUG, SEP, '2026-09-29T12:00:00.000Z')
-    expect(pairChip({ ...pair }, [retag])).toBe('September is not compared until it has ended')
+    const retag: OurChange = { id: 'retag', surface: 'entity_retag', changedAt: '2026-09-29T10:00:00.000Z', note: null, affects: VIEWS_BY_SURFACE.entity_retag }
+    expect(pairChip(market('2026-09-29T12:00:00.000Z', AUG, SEP, [], [retag]))).toBe('not compared yet: checked with the 4 Oct update')
   })
 
-  it('says "not compared yet" for a pair nobody has measured and nothing of ours touched', () => {
-    const pair = comparabilityOf(AUG, SEP, {
-      row: null,
-      changes: [],
-      view: 'market',
-      later: laterSide({ month: SEP, now: '2026-10-05T06:00:00.000Z', runs: RUNS, row: null }),
-    })
-    expect(pairChip(pair, [])).toBe('not compared yet')
-  })
-
-  it('does not blame a change the measure cleared: a pair refused on depth says "not compared yet"', () => {
-    // The shape of October against November in early December (plan §2.11):
-    // the searches held still, so the search-outside counts are zero (a
-    // hypothetical for August and September, whose real counts refuse on
-    // searches), and the pair is refused on depth alone, at DR F39's measured
-    // medians of 23 and 15 dated comments a video (0.65). The market's n are
-    // August's 377 and September's 655 (F1, E).
-    const later = laterSide({ month: SEP, now: '2026-10-05T06:00:00.000Z', runs: RUNS, row: { status: 'filling', origin: 'live', videos: 655 } })
-    const pair = comparabilityOf(AUG, SEP, {
-      row: {
-        prevMonth: AUG, month: SEP,
-        searchOutside: { prev: { k: 0, n: 377 }, curr: { k: 0, n: 655 } },
-        codeChanges: [],
-        depth: { prevMedian: 23, currMedian: 15 },
-        gather: [],
-        lateCapture: null,
-        readThroughRun: later.latestUpdateRunId,
-        methodVersion: 'test', computedAt: '2026-10-05T06:00:00.000Z',
-      },
-      changes: SEALAND_CHANGES,
-      view: 'market',
-      later,
-    })
-    expect(pair.reasons.map((r) => r.kind)).toEqual(['depth'])
-    expect(pairChip(pair, SEALAND_CHANGES)).toBe('not compared yet')
+  it('the August view: the market pair names September\'s searches, which reached back into August', () => {
+    // Known, recorded for Heinrich: on ?month=2026-08 the category's blocks
+    // judge the themes view, where the 17 Aug own-handles change is inside the
+    // pair's own months ("how we check or file videos in August"); the pooled
+    // market is not moved by a filing change, so its chip names the latest
+    // search change in the span. Both are the judge's, in one set of words.
+    expect(pairChip(market('2026-10-02T06:00:00.000Z', '2026-07-01', AUG))).toBe('not read as a change: we changed our searches in September')
+    expect(pairChipWords(pairOnVerdict(sealandJudge('2026-10-02T06:00:00.000Z')('2026-07-01', AUG, 'themes')).note!))
+      .toBe('not read as a change: we changed how we check or file videos in August')
   })
 
   it('prints nothing where the pair is compared, or where there is no pair', () => {
     const comparable: PairComparability = { prevMonth: AUG, month: SEP, mode: 'comparable', reasons: [], row: null }
     const flagged: PairComparability = { ...comparable, mode: 'flag', reasons: [{ kind: 'gather', changeId: null, share: null }] }
-    expect(pairChip(comparable, SEALAND_CHANGES)).toBeNull()
-    expect(pairChip(flagged, SEALAND_CHANGES)).toBeNull()
-    expect(pairChip(null, SEALAND_CHANGES)).toBeNull()
+    expect(pairChip(comparable)).toBeNull()
+    expect(pairChip(flagged)).toBeNull()
+    expect(pairChip(null)).toBeNull()
   })
 
-  it('carries no digit and no em dash in any of its words', () => {
+  it('carries no em dash, and no digit beyond an update\'s date', () => {
     const chips = [
-      pairChip(pairAt(AUG, SEP, '2026-09-29T12:00:00.000Z'), SEALAND_CHANGES),
-      pairChip(pairAt(SEP, '2026-10-01', '2026-10-16T06:00:00.000Z'), SEALAND_CHANGES),
-      pairChip(pairAt(AUG, SEP, '2026-10-05T06:00:00.000Z'), []),
+      pairChip(market('2026-09-29T12:00:00.000Z')),
+      pairChip(market('2026-10-16T06:00:00.000Z', SEP, SEP_OCT)),
+      pairChip(market('2026-09-29T12:00:00.000Z', AUG, SEP, [], [])),
     ]
     for (const c of chips) {
       expect(c).not.toBeNull()
-      expect(c).not.toMatch(/\d|—/)
+      expect(c).not.toMatch(/—/)
+      expect(c!.replace(/the \d{1,2} [A-Z][a-z]{2} update/, '')).not.toMatch(/\d/)
     }
   })
 })
