@@ -139,16 +139,17 @@ export function readingViewFrom(input: ReadingViewInput): ReadingView {
     nextUpdateAfter: input.schedule ? scheduledUpdateAfter(input.schedule) : undefined,
   }
   const reading = readingMonthFor({ ...base, explicit: input.explicit ?? null })
+  const rule = reading.reason === 'explicit' ? readingMonthFor(base) : reading
 
   let other: OtherMonth | null = null
-  if (reading.reason === 'explicit') {
-    const rule = readingMonthFor(base)
-    if (rule.month !== reading.month) other = { month: rule.month, isDefault: true }
-  } else if (reading.leadsWithCurrent) {
-    const before = [...videosByMonth.keys()].filter((m) => m < reading.month).sort()
+  if (rule.month !== reading.month) {
+    // A `?month=` moved the page off its default: the way back is the default.
+    other = { month: rule.month, isDefault: true }
+  } else if (rule.leadsWithCurrent) {
+    const before = [...videosByMonth.keys()].filter((m) => m < rule.month).sort()
     if (before.length > 0) other = { month: before[before.length - 1], isDefault: false }
-  } else if (videosByMonth.has(reading.current.month)) {
-    other = { month: reading.current.month, isDefault: false }
+  } else if (videosByMonth.has(rule.current.month)) {
+    other = { month: rule.current.month, isDefault: false }
   }
   return { reading, other }
 }

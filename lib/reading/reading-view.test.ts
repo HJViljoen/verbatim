@@ -107,6 +107,15 @@ describe('readingViewFrom: which month, and the one other month the selector off
     expect(v.other).toEqual({ month: '2026-09-01', isDefault: true })
   })
 
+  it('a ?month= naming the default month offers what the default offers', () => {
+    const v = readingViewFrom({
+      now: '2026-10-05T06:00:00.000Z', runs: [...SEALAND_RUNS, ...SUNDAYS.slice(0, 2)],
+      denominators: [...SEALAND_ROWS, OCTOBER_ROW], schedule: SUNDAY, explicit: '2026-09',
+    })
+    expect(v.reading.month).toBe('2026-09-01')
+    expect(v.other).toEqual({ month: '2026-10-01', isDefault: false })
+  })
+
   it('a ?month= with no row is not honoured, and offers nothing extra', () => {
     const v = readingViewFrom({
       now: '2026-10-02T06:00:00.000Z', runs: [...SEALAND_RUNS, SUNDAYS[0]], denominators: SEALAND_ROWS, explicit: '2026-10',
