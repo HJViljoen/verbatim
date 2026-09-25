@@ -146,9 +146,21 @@ describe('pooledSide: Sealand’s subjects on the market', () => {
     expect(pooledSide([], COUNTS, '2026-09-01', RIVALS)).toEqual({ k: null, n: 654 })
   })
 
+  it('a subject read that month and cited on none of its videos has no row either: told it was read, 0 of the month', () => {
+    // monthly_subject_readings writes no row where k is 0, so only the caller
+    // can tell this from "not read".
+    expect(pooledSide([], COUNTS, '2026-09-01', RIVALS, { read: true })).toEqual({ k: 0, n: 654 })
+  })
+
+  it('an audience missing beside one with a row is 0, read or not: no rival cited Price in August (DR F30)', () => {
+    expect(pooledSide(PRICE, COUNTS, '2026-08-01', RIVALS)).toEqual({ k: 5, n: 377 })
+    expect(pooledSide(PRICE, COUNTS, '2026-08-01', RIVALS, { read: true })).toEqual({ k: 5, n: 377 })
+  })
+
   it('a row with no k makes the side null rather than a partial sum', () => {
     const partial = [...LOOKS, { month: '2026-09-01', audience: COT, k: null }]
     expect(pooledSide(partial, COUNTS, '2026-09-01', RIVALS)).toEqual({ k: null, n: 654 })
+    expect(pooledSide(partial, COUNTS, '2026-09-01', RIVALS, { read: true })).toEqual({ k: null, n: 654 })
   })
 
   it('leaves out the client’s own posts and untracked audiences, and reads each audience once', () => {

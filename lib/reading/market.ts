@@ -88,17 +88,26 @@ export function pooledDenominators(
  * One object's pooled side in one month: k summed over the market's audiences,
  * n the market's videos that month (`pooledDenominators`).
  *
- * k IS NULL WHEN IT WAS NOT MEASURED: no market audience has a row for the
- * object that month (a subject named after the back-read has no history, and
- * absence there is "not read", not zero), or a row carries no k (a frozen row
- * read with no panel). A partial sum would print a smaller number as if it were
- * the whole. n is null when the month has no pooled denominator.
+ * THE ROWS' CONTRACT. `monthly_subject_readings` groups by the videos that cite
+ * a subject, so an audience-month where it is cited on no video writes NO row.
+ * A market audience missing from a month where another one has a row is
+ * therefore 0, and pools as 0. A month where NO market audience has a row is
+ * one of two things, and only the caller knows which: the object was read and
+ * cited nowhere (0), or it was not read at all (a subject named after the
+ * back-read has no history). So absence reads as null, "not read", unless the
+ * caller says the object was read that month (`read`: a subject that was
+ * active when the month's rows were written), and then k is 0.
+ *
+ * k IS ALSO NULL when a row carries no k (a frozen row read with no panel): a
+ * partial sum would print a smaller number as if it were the whole. n is null
+ * when the month has no pooled denominator.
  */
 export function pooledSide(
   rows: readonly { month: string; audience: string; k: number | null }[],
   counts: ReadonlyMap<string, MarketCount>,
   month: string,
   rivalAudiences: readonly string[],
+  opts: { read?: boolean } = {},
 ): { k: number | null; n: number | null } {
   const m = monthStartOf(month)
   const audiences = new Set(marketAudiences(rivalAudiences))
@@ -111,5 +120,7 @@ export function pooledSide(
     if (!isCount(r.k)) unknown = true
     else k = (k ?? 0) + r.k
   }
-  return { k: unknown ? null : k, n: counts.get(m)?.videos ?? null }
+  if (unknown) k = null
+  else if (k == null && opts.read) k = 0
+  return { k, n: counts.get(m)?.videos ?? null }
 }
