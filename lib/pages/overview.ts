@@ -287,8 +287,10 @@ export interface AttentionBlock {
    * `AttentionPanel.account_count` has been built since the panel shipped and
    * rendered nowhere (the caption says "a fixed panel, frozen {date}" and stops).
    * It is the denominator of the whole line in the only sense a reader can use:
-   * 41,200 comments is a number about a set, and a set with no size is not a
-   * measurement. Null where no panel is frozen.
+   * a comment count is a number about a set, and a set with no size is not a
+   * measurement. (The mock's "41,200 comments" was invented volume, research
+   * F12: Sealand has no panel before the 4 Oct run.) Null where no panel is
+   * frozen.
    */
   accountCount: number | null
   /**
@@ -795,7 +797,8 @@ export function fillingLine(input: FillingLineInput): string {
     // gathered months are 50, 36 and 407, so "475 of an expected ~50" claims a
     // forecast the number cannot support. The median is stated as what it is —
     // the trailing months' middle — which is also the mock's own wording on
-    // OV6 ("2,359 videos analysed (trailing median 2,240)").
+    // OV6 ("… videos analysed (trailing median …)"; the mock's 2,359 and 2,240
+    // were invented volume, research F12).
     if (input.expected != null && input.expected > 0) parts.push(`trailing median ${fmtInt(Math.round(input.expected))}`)
   }
   if (input.status === 'filling') {
@@ -1033,7 +1036,8 @@ export function sizeSentence(size: MarketSize): { body: string; figures: FigureT
  * sentence cannot carry one hard-coded audience: the day your own side carries
  * the largest change, "Durability came up in 31% of the category's videos this
  * month — 26 of 84 videos" prints YOUR video count as the category's, in the
- * page's headline claim. A `Verdict` has said which audience it is a
+ * page's headline claim. (84 own videos a month is the mock's invented volume,
+ * research F12; Sealand's own side carried 9 in September.) A `Verdict` has said which audience it is a
  * proportion OF since WP3; this reads it.
  */
 export function audienceInSentence(audience: string): string {
@@ -2186,7 +2190,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
 }
 
 /**
- * "the report of 1 Oct read 19% · 264 of 1,388", for one object on this page —
+ * "the report of 1 Oct read 17% · 104 of 626", for one object on this page —
  * or null where nothing was sent about it, where the figure has not moved since,
  * or where the month was already closed when the artefact went out.
  *

@@ -102,6 +102,19 @@ export function lastUpdateMeta(data: OverviewData): string {
   return dates.length > 0 ? `update of ${dates[dates.length - 1]}` : 'no update yet this month'
 }
 
+/**
+ * The month pair's refusal, beside a size sentence (market-first WP1.5): "not
+ * read as a change: we changed our searches in September". It sits where the
+ * verdict's badge sits beside a change, in the badge's own non-answer face,
+ * and is marked `verdict` because it is the answer the comparison gave.
+ */
+function RefusalChip({ chip, mode }: { chip: string; mode: RenderMode }) {
+  if (mode === 'email') {
+    return <div data-copy="verdict" style={{ fontFamily: FONT.sans, fontSize: 11.5, fontWeight: 500, color: EMAIL.muted, marginTop: 4 }}>{chip}</div>
+  }
+  return <span data-copy="verdict" className="text-xs font-medium text-muted-foreground">{chip}</span>
+}
+
 /** One voice: the quote behind its green-tinted rule, the video's own on-screen
  *  text where the OCR pass read any, and the cite tail. */
 function VoiceRow({ voice, mode }: { voice: Voice; mode: RenderMode }) {
@@ -193,7 +206,7 @@ export const overviewSentence: Block<OverviewData> = {
           // the column already holds the line to about that.
           className="m-0 max-w-[68ch] font-serif text-[17px] font-medium leading-[1.35] tracking-[-0.005em] [text-wrap:pretty]"
         />
-        {s.lead ? <BlockMovement verdict={s.lead} unit="pts" mode={mode} /> : null}
+        {s.lead ? <BlockMovement verdict={s.lead} unit="pts" mode={mode} /> : s.chip ? <RefusalChip chip={s.chip} mode={mode} /> : null}
       </div>
     )
 
@@ -383,6 +396,8 @@ export const overviewSentence: Block<OverviewData> = {
   emptyState(data) {
     const s = data.sentence
     if (s.lead || s.anomaly || s.ledger || s.voices.length > 0) return null
+    // A size sentence with its figures is a reading of the month (WP1.5).
+    if (Object.keys(s.figures ?? {}).length > 0) return null
     return 'There is nothing to report on this month yet.'
   },
 }
