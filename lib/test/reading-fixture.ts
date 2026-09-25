@@ -6,11 +6,16 @@ import { readingMonthFor, scheduledUpdateAfter, type ReadingMonth } from '../rea
 // (DR F21: completed runs on 28 Jun, 9 Jul, 17 Aug, 9 and 10 Sep, a partial
 // run on 20 Sep, and the 24 Sep update), each stamped 12:00 UTC because the
 // research gives days, not finish times; from 27 Sep the schedule's Sunday
-// updates, finished at 08:30 UTC. The pooled market (decision E) is
-// production's: 377 videos in August, 655 in September; April to July are the
-// frozen stored rows, category plus Cotopaxi (DR F11). October carries
-// September's count as a stand-in, because a clock after the 4 Oct run needs
-// October to have a row and its size is not knowable today.
+// updates, finished at 08:30 UTC. The pooled market (decision E): September's
+// 655 is production's (626 in the category, 29 filed under a tracked brand);
+// August's 377 is STAGING's (351 in the category, 22 Cotopaxi, 4 Freitag: DR
+// F11; production's August category is 351, its rival-filed count not in the
+// research); April to July are the frozen stored rows, category plus Cotopaxi
+// (DR F11). OCTOBER IS NOT A MEASUREMENT: it carries September's count as a
+// stand-in, because a clock after the 4 Oct run needs October to have a row
+// and its size is not knowable today. Only the October clocks read it, only
+// the 16 Oct clock turns on its size (it must not be thin against the trailing
+// months), and no test prints it.
 
 const SEALAND_UPDATES = [
   '2026-06-28T12:00:00.000Z',
@@ -32,6 +37,7 @@ const SEALAND_MARKET = new Map<string, number>([
   ['2026-07-01', 36],
   ['2026-08-01', 377],
   ['2026-09-01', 655],
+  // A stand-in, not a measurement (see above).
   ['2026-10-01', 655],
 ])
 
