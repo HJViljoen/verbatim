@@ -14,6 +14,7 @@ import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import { onScreenText } from '@/lib/pages/overview'
 import type { AnomalyLine, LedgerRow, OverviewData, Voice } from '@/lib/pages/overview'
 import { TokenProse } from '@/components/blocks/prose'
+import { PairChip } from '@/components/blocks/pair-chip'
 
 // OV1 · In one sentence, anything unusual, and the one thing to do
 // (design §3 OV1; ported to `Main.dc.html` §1 in Block D wave 2).
@@ -103,16 +104,16 @@ export function lastUpdateMeta(data: OverviewData): string {
 }
 
 /**
- * The month pair's refusal, beside a size sentence (market-first WP1.5): "not
- * read as a change: we changed our searches in September". It sits where the
- * verdict's badge sits beside a change, in the badge's own non-answer face,
- * and is marked `verdict` because it is the answer the comparison gave.
+ * The month pair's refusal, under a size sentence (market-first WP1.5): "not
+ * read as a change: we changed our searches in September". The preview's grey
+ * pill with the ⊘ mark, on its own line under the sentence (deploy 1 review:
+ * it was 12px muted text trailing the sentence on the hero, read as an
+ * aside), marked `verdict` because it is the answer the comparison gave.
  */
 function RefusalChip({ chip, mode }: { chip: string; mode: RenderMode }) {
-  if (mode === 'email') {
-    return <div data-copy="verdict" style={{ fontFamily: FONT.sans, fontSize: 11.5, fontWeight: 500, color: EMAIL.muted, marginTop: 4 }}>{chip}</div>
-  }
-  return <span data-copy="verdict" className="text-xs font-medium text-muted-foreground">{chip}</span>
+  if (mode === 'email') return <PairChip words={chip} mode={mode} />
+  // The wrapper takes the row, so the pill keeps its own width under it.
+  return <span className="basis-full"><PairChip words={chip} mode={mode} /></span>
 }
 
 /** One voice: the quote behind its green-tinted rule, the video's own on-screen

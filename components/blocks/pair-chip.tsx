@@ -16,10 +16,12 @@ import type { VerdictPairNote } from '@/lib/reading/verdicts'
 // It wraps rather than overflows: the preview's pill is one line at 1440, and
 // at 390 the sentence is wider than the column.
 
-/** The chip, from a pair note, in every mode; null where there is none. */
-export function PairChip({ note, mode, className }: { note: VerdictPairNote | null | undefined; mode: RenderMode; className?: string }) {
-  if (!note) return null
-  const words = pairChipWords(note)
+/** The chip, from a pair note (or words already built from one, such as the
+ *  size headline's `SentenceBlock.chip`), in every mode; null where there is
+ *  none. */
+export function PairChip({ note, words: given, mode, className }: { note?: VerdictPairNote | null; words?: string | null; mode: RenderMode; className?: string }) {
+  const words = given ?? (note ? pairChipWords(note) : null)
+  if (!words) return null
   if (mode === 'email') {
     return (
       <div
