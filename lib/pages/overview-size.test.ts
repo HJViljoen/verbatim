@@ -2,13 +2,19 @@ import { describe, it, expect } from 'vitest'
 
 import type { ConfigChange } from '../config-log'
 import { changesFromLog, comparabilityOf, type OurChange, type PairComparability } from '../reading/comparability'
+import { buildSeries, type DenominatorPoint, type MonthSeries } from '../reading/series'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '../rivals'
 import type { Verdict } from '../reading/verdicts'
 import { proseFigures } from '../prose/figures'
 import { substituteFigures } from '../reports/cover'
 import {
+  buildCategory,
   HEADLINE_MAX_MAKER_SHARE,
   headline,
+  isMissingThemeMakerShares,
+  levelRows,
+  LEVELS_SHOWN,
+  makerSharesOf,
   laterSide,
   marketSizeOf,
   mayLead,
@@ -359,5 +365,184 @@ describe('pairChip', () => {
       expect(c).not.toBeNull()
       expect(c).not.toMatch(/\d|—/)
     }
+  })
+})
+
+// ---- the level list ------------------------------------------------------------------
+
+/** Sealand's biggest category themes, September (of 626) and August (of 351),
+ *  production labels and counts as the grounding digest lists them (24 Sep):
+ *  every theme at 15 videos or more, and the two at 18 that tie for eighth. */
+const SEALAND_THEMES: [id: string, label: string, sep: number, aug: number][] = [
+  ['th-upcycling', 'Admiration for upcycled bag creativity', 71, 42],
+  ['th-ready-to-buy', 'Ready to buy handmade bags', 69, 23],
+  ['th-craftsmanship', 'Respect for handmade craftsmanship', 64, 29],
+  ['th-bag-design', 'Love for stylish bag design', 60, 23],
+  ['th-tutorials', 'Requests for step-by-step tutorials', 30, 15],
+  ['th-airline', 'Confusion over airline bag sizes', 21, 9],
+  ['th-shipping', 'Questions about buying and shipping', 20, 7],
+  ['th-price-checks', 'Price checks before purchase', 18, 6],
+  ['th-brand-comparisons', 'Backpack brand and model comparisons', 18, 12],
+  ['th-packing', 'Praise for practical packing tips', 15, 8],
+  ['th-measurements', 'Need for exact measurements', 15, 6],
+]
+
+const denominatorRow = (month: string, videos: number, comments: number): DenominatorPoint => ({
+  month,
+  audience: INDUSTRY_AUDIENCE,
+  videos,
+  comments,
+  status: 'filling',
+  origin: 'live',
+  read_at: '2026-09-24T12:00:00.000Z',
+  run_id: 'run-0920',
+  frozen_at: null,
+  clustering_key: 'k1',
+})
+
+const CATEGORY_DENOMINATORS = [denominatorRow(AUG, 351, 10188), denominatorRow(SEP, 626, 15821)]
+
+function levelSeries(themes = SEALAND_THEMES): MonthSeries[] {
+  return themes.map(([id, label, sep, aug]) =>
+    buildSeries({
+      axis: [AUG, SEP],
+      audience: INDUSTRY_AUDIENCE,
+      objectId: id,
+      objectLabel: label,
+      denominators: CATEGORY_DENOMINATORS,
+      readings: [
+        { month: AUG, audience: INDUSTRY_AUDIENCE, videos: aug, comments: 0, run_id: 'run-0920', clustering_key: 'k1' },
+        { month: SEP, audience: INDUSTRY_AUDIENCE, videos: sep, comments: 0, run_id: 'run-0920', clustering_key: 'k1' },
+      ],
+      changeLogFrom: '2026-07-06T00:00:00.000Z',
+    }),
+  )
+}
+
+describe('levelRows', () => {
+  it('lists the eight biggest category themes by September’s k, August beside', () => {
+    const rows = levelRows({ series: levelSeries(), audience: INDUSTRY_AUDIENCE, month: SEP, prevMonth: AUG })
+    expect(rows).toHaveLength(LEVELS_SHOWN)
+    expect(rows.map((r) => [r.label, r.k, r.prevK])).toEqual([
+      ['Admiration for upcycled bag creativity', 71, 42],
+      ['Ready to buy handmade bags', 69, 23],
+      ['Respect for handmade craftsmanship', 64, 29],
+      ['Love for stylish bag design', 60, 23],
+      ['Requests for step-by-step tutorials', 30, 15],
+      ['Confusion over airline bag sizes', 21, 9],
+      ['Questions about buying and shipping', 20, 7],
+      // Two themes at 18: the one with the larger August k takes the row.
+      ['Backpack brand and model comparisons', 18, 12],
+    ])
+    // Every row is over the category's n, never the pooled market's 655.
+    expect(new Set(rows.map((r) => r.n))).toEqual(new Set([626]))
+    // Nothing was measured: no row claims a maker share.
+    expect(rows.every((r) => r.makerShare === null)).toBe(true)
+  })
+
+  it('orders the same way however the series arrive', () => {
+    const forward = levelRows({ series: levelSeries(), audience: INDUSTRY_AUDIENCE, month: SEP, prevMonth: AUG })
+    const reversed = levelRows({ series: [...levelSeries()].reverse(), audience: INDUSTRY_AUDIENCE, month: SEP, prevMonth: AUG })
+    expect(reversed).toEqual(forward)
+  })
+
+  it('carries each theme’s measured maker share, and null where it was not measured', () => {
+    const shares = new Map<string, number | null>([['th-upcycling', 112 / 138], ['th-ready-to-buy', 50 / 140]])
+    const rows = levelRows({ series: levelSeries(), audience: INDUSTRY_AUDIENCE, month: SEP, prevMonth: AUG, makerShares: shares })
+    expect(rows[0].makerShare).toBeCloseTo(0.81, 2)
+    expect(rows[1].makerShare).toBeCloseTo(0.36, 2)
+    expect(rows[2].makerShare).toBeNull()
+  })
+
+  // "Laundry planning for travel": 10 September videos and none in August
+  // (staging, plan §2.4 C2).
+  it('reads a theme absent from a month that has a row as 0, and a month with no row as null', () => {
+    const series = [buildSeries({
+      axis: [AUG, SEP],
+      audience: INDUSTRY_AUDIENCE,
+      objectId: 'th-laundry',
+      objectLabel: 'Laundry planning for travel',
+      denominators: CATEGORY_DENOMINATORS,
+      readings: [{ month: SEP, audience: INDUSTRY_AUDIENCE, videos: 10, comments: 0, run_id: 'run-0920', clustering_key: 'k1' }],
+      changeLogFrom: '2026-07-06T00:00:00.000Z',
+    })]
+    expect(levelRows({ series, audience: INDUSTRY_AUDIENCE, month: SEP, prevMonth: AUG })[0].prevK).toBe(0)
+    expect(levelRows({ series, audience: INDUSTRY_AUDIENCE, month: SEP, prevMonth: '2026-07-01' })[0].prevK).toBeNull()
+  })
+
+  it('leaves off a theme with no video in the month read, and every other audience', () => {
+    // August's list: "Laundry planning for travel" had no August video (0, a
+    // month with a row), so it is not one of August's themes.
+    const laundry = buildSeries({
+      axis: [AUG, SEP],
+      audience: INDUSTRY_AUDIENCE,
+      objectId: 'th-laundry',
+      objectLabel: 'Laundry planning for travel',
+      denominators: CATEGORY_DENOMINATORS,
+      readings: [{ month: SEP, audience: INDUSTRY_AUDIENCE, videos: 10, comments: 0, run_id: 'run-0920', clustering_key: 'k1' }],
+      changeLogFrom: '2026-07-06T00:00:00.000Z',
+    })
+    const rival = levelSeries(SEALAND_THEMES.slice(2, 3)).map((s) => ({ ...s, audience: rivalKey('Cotopaxi') }))
+    const rows = levelRows({ series: [laundry, ...levelSeries(SEALAND_THEMES.slice(0, 2)), ...rival], audience: INDUSTRY_AUDIENCE, month: AUG, prevMonth: null })
+    expect(rows.map((r) => [r.registryId, r.k, r.n, r.prevK])).toEqual([['th-upcycling', 42, 351, null], ['th-ready-to-buy', 23, 351, null]])
+  })
+})
+
+describe('makerSharesOf', () => {
+  it('divides each theme’s maker videos by its videos', () => {
+    const shares = makerSharesOf([
+      { registry_id: 'th-upcycling', videos: 138, maker: 112, noise: 0, labelled: 138 },
+      { registry_id: 'th-shipping', videos: 28, maker: 0, noise: 0, labelled: 28 },
+    ])
+    expect(shares.get('th-upcycling')).toBeCloseTo(0.81, 2)
+    expect(shares.get('th-shipping')).toBe(0)
+  })
+
+  it('says null, never a share, for a row that is not a count', () => {
+    const shares = makerSharesOf([
+      { registry_id: 'a', videos: 0, maker: 0, noise: 0, labelled: 0 },
+      { registry_id: 'b', videos: 10, maker: 11, noise: 0, labelled: 10 },
+      { registry_id: 'c', videos: Number.NaN, maker: 1, noise: 0, labelled: 1 },
+      { registry_id: 'd', videos: 10, maker: -1, noise: 0, labelled: 10 },
+    ])
+    expect([...shares.values()]).toEqual([null, null, null, null])
+  })
+})
+
+describe('isMissingThemeMakerShares', () => {
+  it('knows the function is not there before MF1', () => {
+    expect(isMissingThemeMakerShares({ code: 'PGRST202', message: 'Could not find the function public.theme_maker_shares(p_client, p_month, p_run) in the schema cache' })).toBe(true)
+    expect(isMissingThemeMakerShares({ code: '42883', message: 'function public.theme_maker_shares(uuid, date, uuid) does not exist' })).toBe(true)
+  })
+
+  it('does not mistake another failure for an absent migration', () => {
+    expect(isMissingThemeMakerShares(null)).toBe(false)
+    expect(isMissingThemeMakerShares({ code: '57014', message: 'canceling statement due to statement timeout' })).toBe(false)
+    expect(isMissingThemeMakerShares({ code: 'PGRST202', message: 'Could not find the function public.market_segment_counts' })).toBe(false)
+  })
+})
+
+describe('buildCategory, with the level list', () => {
+  const perAudience = new Map([[`${AUG}|${INDUSTRY_AUDIENCE}`, 351], [`${SEP}|${INDUSTRY_AUDIENCE}`, 626]])
+  const base = {
+    audience: INDUSTRY_AUDIENCE, axis: [AUG, SEP], month: SEP, prevMonth: AUG, series: [], kindRows: null, statsRows: null,
+    panel: null, perAudience, recordFrom: AUG, attentionVerdict: null, dormant: [], thin: false,
+  }
+
+  it('carries the level list and the previous month’s n for its column head', () => {
+    const c = buildCategory({ ...base, levelSeries: levelSeries(), makerShares: null })
+    expect(c.levels?.map((l) => l.k)).toEqual([71, 69, 64, 60, 30, 21, 20, 18])
+    expect(c.levelsPrev).toEqual({ month: AUG, n: 351 })
+  })
+
+  it('prints the list in a thin month too: a level is not a comparison', () => {
+    const c = buildCategory({ ...base, thin: true, levelSeries: levelSeries() })
+    expect(c.levels).toHaveLength(LEVELS_SHOWN)
+  })
+
+  it('adds no field for a caller that read no list', () => {
+    const c = buildCategory(base)
+    expect('levels' in c).toBe(false)
+    expect('levelsPrev' in c).toBe(false)
   })
 })

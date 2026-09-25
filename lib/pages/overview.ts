@@ -336,6 +336,35 @@ export interface CategoryBlock {
   quiet: QuietTheme[]
   /** Said instead of the flags when the register could not be read. */
   quietNote: string | null
+  /**
+   * The market's biggest themes, as levels (market-first WP1.5): the top
+   * `LEVELS_SHOWN` category themes by the reading month's k, largest first,
+   * with the previous month's k beside. OPTIONAL, because a stored export
+   * predates it; a renderer reads it with `?? []`.
+   */
+  levels?: LevelRow[]
+  /** The previous month the level list prints beside, and its category n,
+   *  for the column head "Aug (of 351)". Null where there is no previous
+   *  month on the page. */
+  levelsPrev?: { month: string; n: number | null } | null
+}
+
+/** One row of OV3's level list (plan §4.2, `CategoryBlock.levels`). */
+export interface LevelRow {
+  /** `theme_registry.id`: the theme's identity, never its label. */
+  registryId: string
+  label: string
+  /** The theme's videos in the reading month, in the category. */
+  k: number
+  /** The category's videos in the reading month (never the pooled market's:
+   *  themes are grouped within the category, decision E). */
+  n: number
+  /** The theme's videos in the previous month; null where that month has no
+   *  category row at all, 0 where it has one and the theme is not in it. */
+  prevK: number | null
+  /** MF1's `theme_maker_shares`: the share of the theme's videos that are
+   *  makers'. Null: not measured (MF1 missing, or no rule for the tenant). */
+  makerShare: number | null
 }
 
 export interface RivalRow {
@@ -3438,6 +3467,91 @@ interface CategoryInput {
    *  where the register could not be read. */
   dormant: readonly { id: string; label: string }[] | null
   thin: boolean
+  /** The level list's series (WP1.5): the category's largest themes of the
+   *  month, read over the month and the one before. Omitted: no level list. */
+  levelSeries?: readonly MonthSeries[] | null
+  /** Measured maker shares by registry id (`makerSharesOf`), or null where
+   *  nothing was measured. */
+  makerShares?: ReadonlyMap<string, number | null> | null
+}
+
+/**
+ * The level list (market-first WP1.5): the category's biggest themes in the
+ * month, by k.
+ *
+ * LEVELS, NOT CHANGES. Nothing here is compared: the previous month's k rides
+ * beside each row as a level of its own, and the list prints whatever the
+ * comparability of the pair. Ties at the same k go to the larger previous k,
+ * then to the registry id, so the order never depends on how the rows came
+ * back. A theme with no video this month is not on the list.
+ */
+export function levelRows(input: {
+  series: readonly MonthSeries[]
+  audience: string
+  month: string
+  prevMonth: string | null
+  makerShares?: ReadonlyMap<string, number | null> | null
+  shown?: number
+}): LevelRow[] {
+  const rows: LevelRow[] = []
+  const seen = new Set<string>()
+  for (const s of input.series) {
+    if (s.audience !== input.audience || !s.objectId || seen.has(s.objectId)) continue
+    const byMonth = pointsByMonth(s)
+    const curr = byMonth.get(input.month)
+    if (!curr || curr.k == null || curr.k <= 0 || curr.videos == null || curr.videos <= 0) continue
+    seen.add(s.objectId)
+    const prev = input.prevMonth ? byMonth.get(input.prevMonth) ?? null : null
+    const share = input.makerShares?.get(s.objectId) ?? null
+    rows.push({
+      registryId: s.objectId,
+      label: s.objectLabel ?? s.objectId,
+      k: curr.k,
+      n: curr.videos,
+      prevK: prev?.k ?? null,
+      makerShare: share != null && Number.isFinite(share) ? share : null,
+    })
+  }
+  return rows
+    .sort((a, b) => b.k - a.k || (b.prevK ?? -1) - (a.prevK ?? -1) || a.registryId.localeCompare(b.registryId))
+    .slice(0, input.shown ?? LEVELS_SHOWN)
+}
+
+/** One row of MF1's `theme_maker_shares(p_client, p_month, p_run)` (plan §4.2). */
+export interface ThemeMakerShareRow {
+  registry_id: string
+  videos: number
+  maker: number
+  noise: number
+  labelled: number
+}
+
+/**
+ * Each theme's maker share: its maker videos over its videos in the month.
+ * A row that is not a count (NaN, negative, more makers than videos, no
+ * videos) is not measured, and says null rather than a wrong share.
+ */
+export function makerSharesOf(rows: readonly ThemeMakerShareRow[]): Map<string, number | null> {
+  const out = new Map<string, number | null>()
+  for (const r of rows) {
+    const videos = Number(r.videos)
+    const maker = Number(r.maker)
+    const ok = Number.isFinite(videos) && Number.isFinite(maker) && videos > 0 && maker >= 0 && maker <= videos
+    out.set(String(r.registry_id), ok ? maker / videos : null)
+  }
+  return out
+}
+
+/** `theme_maker_shares` is not there: MF1 is not applied here yet. Narrow by
+ *  name, the `isMissingKindMoodAttention` shape, so any other failure of the
+ *  call is not mistaken for an absent migration. */
+export function isMissingThemeMakerShares(error: unknown): boolean {
+  if (!error) return false
+  const { code, message } = (typeof error === 'object' ? error : {}) as { code?: string; message?: string }
+  const text = message ?? (error instanceof Error ? error.message : String(error))
+  if (!text.includes('theme_maker_shares')) return false
+  if (code && ['PGRST202', '42883'].includes(code)) return true
+  return /in the schema cache/i.test(text) || /does not exist/i.test(text)
 }
 
 export function buildCategory(input: CategoryInput): CategoryBlock {
@@ -3657,6 +3771,21 @@ export function buildCategory(input: CategoryInput): CategoryBlock {
     attentionNote,
     quiet,
     quietNote,
+    // (f) the level list (WP1.5), where the loader read one
+    ...(input.levelSeries != null
+      ? {
+          levels: levelRows({
+            series: input.levelSeries,
+            audience: input.audience,
+            month: input.month,
+            prevMonth: input.prevMonth,
+            makerShares: input.makerShares,
+          }),
+          levelsPrev: input.prevMonth
+            ? { month: input.prevMonth, n: input.perAudience.get(`${input.prevMonth}|${input.audience}`) ?? null }
+            : null,
+        }
+      : {}),
   }
 }
 
