@@ -305,11 +305,19 @@ export function accountSeries(snaps: SnapshotRow[], windowDays = 30): AccountSer
 
 const PRIORITY_RANK: Record<string, number> = { high: 0, medium: 1, low: 2 }
 
+type Ranked = { priority?: string | null; based_on?: { insight_ids?: string[] } | null }
+
+/** The order an update's recommendations rank in: top priority first, then
+ *  best-grounded (most cited insights). 0 on a tie, so a caller's own tie-break
+ *  decides. Market's ledger ranks the rows of one update by it (WP1.9). */
+export function recommendationOrder(a: Ranked, b: Ranked): number {
+  return (
+    (PRIORITY_RANK[a.priority ?? 'low'] ?? 3) - (PRIORITY_RANK[b.priority ?? 'low'] ?? 3) ||
+    (b.based_on?.insight_ids?.length ?? 0) - (a.based_on?.insight_ids?.length ?? 0)
+  )
+}
+
 /** Top priority first, then best-grounded (most cited insights). */
 export function topRecommendation<T extends { priority: string | null; based_on: { insight_ids?: string[] } | null }>(recs: T[]): T | null {
-  return [...recs].sort(
-    (a, b) =>
-      (PRIORITY_RANK[a.priority ?? 'low'] ?? 3) - (PRIORITY_RANK[b.priority ?? 'low'] ?? 3) ||
-      (b.based_on?.insight_ids?.length ?? 0) - (a.based_on?.insight_ids?.length ?? 0),
-  )[0] ?? null
+  return [...recs].sort(recommendationOrder)[0] ?? null
 }

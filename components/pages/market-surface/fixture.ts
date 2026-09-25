@@ -71,7 +71,7 @@ export function marketFixture(over: Partial<MarketSurfaceData> = {}): MarketSurf
       // A production reasoning, scrubbed: the model's argument with its
       // figure-bearing sentence already gone.
       why: 'Repair and warranty questions arrive as questions rather than complaints, and nobody in the category answers them on camera. Leading with the repair path uses the thing your audience already asks about.',
-      quote: { ref: 'e:ev-1', text: 'Wat gebeur as ’n naat gee? Niemand sê nie.', lang: 'af', english: 'What happens when a seam goes? Nobody says.' },
+      quote: null,
     },
     {
       // THE MIDDLE STATE, AND THE ONE PRODUCTION IS ENTIRELY IN TODAY: decided
@@ -110,7 +110,9 @@ export function marketFixture(over: Partial<MarketSurfaceData> = {}): MarketSurf
         audience: LEDGER_AUDIENCE,
       }),
       why: 'Nobody in the category shows the repair path on camera, so the question is asked and never answered where it is asked.',
-      quote: null,
+      // The ledger's first row with an argument is the one drawn open, and
+      // since WP1.9 that is this one, so the advice's own comment rides here.
+      quote: { ref: 'e:ev-1', text: 'Wat gebeur as ’n naat gee? Niemand sê nie.', lang: 'af', english: 'What happens when a seam goes? Nobody says.' },
     },
     {
       lineageId: 'L-twice',
@@ -137,6 +139,11 @@ export function marketFixture(over: Partial<MarketSurfaceData> = {}): MarketSurf
   ]
 
   const acceptable = { lineageId: 'L-twice', recommendationId: 'r-twice', title: adviceRows[2].title }
+  // THE LOADER'S ORDER (market-first WP1.9): the current recommendation first,
+  // then the newest. L-twice was raised again by the newest update and is its
+  // top recommendation; L-recent was last raised in a later month than L-old,
+  // which only June's update carried. `number` is read off this order.
+  const ledger = [adviceRows[2], adviceRows[1], adviceRows[0]].map((r, i) => ({ ...r, number: i + 1 }))
 
   return {
     brand: 'Sealand',
@@ -191,7 +198,8 @@ export function marketFixture(over: Partial<MarketSurfaceData> = {}): MarketSurf
       empty: null,
     },
     advice: {
-      rows: adviceRows,
+      rows: ledger,
+      current: 'L-twice',
       highlight: null,
       requestedLine: null,
       total: 64,
@@ -201,7 +209,7 @@ export function marketFixture(over: Partial<MarketSurfaceData> = {}): MarketSurf
       // on 1 of 64" over a table showing two is an of-N the page disproves.
       acted: 2,
       actedLine: actedLine(2, 64),
-      repeatLine: repeatLine(adviceRows),
+      repeatLine: repeatLine(ledger),
       recorded: true,
       unlock: ADVICE_UNLOCK,
       empty: null,
@@ -349,7 +357,8 @@ export function unrecordedFixture(): MarketSurfaceData {
 }
 
 /** A reader who followed `?rec=<id>` from a sent digest onto a row that is not
- *  one of the twelve oldest. The row is drawn, in its place by age, and marked. */
+ *  one of the twelve drawn. The row is drawn, in its place in the ledger's
+ *  order, and marked. */
 export function deepLinkFixture(): MarketSurfaceData {
   const base = marketFixture()
   const named = base.advice.rows[base.advice.rows.length - 1]

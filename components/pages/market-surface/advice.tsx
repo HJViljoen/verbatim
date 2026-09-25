@@ -28,19 +28,22 @@ import { GROUNDED_BASIS, type Afterwards } from '@/lib/reading/afterwards'
 // the columns ARE a table, the anchors and the deep link are already on rows,
 // and a `colgroup` carries the artboard's own track widths.
 //
-// ONE ROW PER IDENTITY, SORTED BY AGE. The loader's header says why that is a
-// different read from the parked page's.
+// ONE ROW PER IDENTITY, THE CURRENT RECOMMENDATION FIRST AND THEN THE NEWEST
+// (market-first WP1.9, GR F34). It ran oldest first, which on Sealand drew
+// twelve June rows and left out the advice the headline showed. The first row
+// carries the preview's row tag, "current recommendation"; the loader's header
+// says why one row per identity is a different read from the parked page's.
 //
 // EVERY ROW HAS AN ADDRESS. `?rec=<id>` is carried by four sent emails and
 // every digest until WP17; it used to resolve to a lineage that reached only
 // MK5's accept button, so a reader following a digest link landed on a ledger
-// of the twelve oldest that did not contain the row they had clicked. Each row
-// now carries an anchor and a link of its own (`?item=<lineage>`, which is what
+// of twelve rows that did not contain the row they had clicked. Each row now
+// carries an anchor and a link of its own (`?item=<lineage>`, which is what
 // `marketSurfaceHref` writes), the named row is drawn whether or not it is one
-// of the oldest, and it is marked.
+// of the twelve, and it is marked.
 //
-// THE EXPANDED ROW IS THE DEEP LINK'S, and otherwise the oldest row that has an
-// argument to show. The artboard draws one row expanded — "Why we keep raising
+// THE EXPANDED ROW IS THE DEEP LINK'S, and otherwise the first row that has an
+// argument to show, which is the current recommendation when it has one. The artboard draws one row expanded — "Why we keep raising
 // it", the grounding restated, and the advice's own comment. `reasoning` and
 // `hero_quote` are both selected again (D4) and both are already adjudicated:
 // the argument is `stored` under `pass_d_b_recommendation`, and the comment is
@@ -86,6 +89,10 @@ import { GROUNDED_BASIS, type Afterwards } from '@/lib/reading/afterwards'
 // artboard stacks the month over the months standing, and `ageInMonths` counts
 // CALENDAR months — the ledger's own unit, the one the column beside it counts
 // in.
+
+/** The row tag on the ledger's first row, the preview's "1 · current
+ *  recommendation" (market-first WP1.9). A row tag, never header meta. */
+export const CURRENT_TAG = 'current recommendation'
 
 /** The artboard's track widths, in order. The empty one is the title, which
  *  takes what is left. */
@@ -264,8 +271,9 @@ function Expansion({ row, mode }: { row: AdviceRow; mode: RenderMode }) {
   )
 }
 
-/** Which row the artboard draws open: the one a link named, else the oldest
- *  that actually has something to show. Pure, so the choice is testable. */
+/** Which row the artboard draws open: the one a link named, else the first
+ *  in the ledger's order (the current recommendation, since WP1.9) that
+ *  actually has something to show. Pure, so the choice is testable. */
 export function expandedLineage(rows: readonly AdviceRow[], highlight: string | null): string | null {
   const hasBody = (r: AdviceRow) => Boolean(r.why || r.quote)
   const named = highlight ? rows.find((r) => r.lineageId === highlight) ?? null : null
@@ -343,8 +351,10 @@ export const marketAdvice: Block<MarketSurfaceData> = {
         question={marketAdvice.question}
         mode={mode}
         // THE TOTAL ONCE (copy slip 4a): where the footer says "12 of 67
-        // shown", the meta does not say "67 recommendations" as well.
-        meta={a.total > 0 ? (more > 0 ? 'oldest first' : `${fmtInt(a.total)} recommendations · oldest first`) : undefined}
+        // shown", the meta does not say "67 recommendations" as well. And no
+        // order words: the ledger is no longer oldest first (WP1.9), and the
+        // first row says what it is with its own tag.
+        meta={a.total > 0 && more <= 0 ? `${fmtInt(a.total)} recommendations` : undefined}
         // THE WHOLE LEDGER, NEVER A QUARTER (D12). `actedLine`'s own docstring
         // argues it: the denominator is every identity ever recommended and has
         // no quarter at all, so the artboard's "Jul → Sep 2026" note beside it
@@ -368,6 +378,7 @@ export const marketAdvice: Block<MarketSurfaceData> = {
                 <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink }}>
                   <span style={{ fontFamily: FONT.mono, color: EMAIL.muted }}>{fmtInt(row.number)} </span>
                   <span data-copy="stored" data-slot="pass_d_b_recommendation">{row.title}</span>
+                  {row.lineageId === a.current ? <span style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted }}> · {CURRENT_TAG}</span> : null}
                 </div>
                 <div style={{ marginTop: 2 }}>
                   <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>first raised {madeInMonth(row.firstMade)} · </span>
@@ -420,6 +431,9 @@ export const marketAdvice: Block<MarketSurfaceData> = {
                               ? <Link href={hrefFor(row.lineageId)} className="hover:underline">{row.title}</Link>
                               : row.title}
                           </span>
+                          {row.lineageId === a.current
+                            ? <span className="block text-[11px] font-normal text-muted-foreground">{CURRENT_TAG}</span>
+                            : null}
                         </td>
                         <td className="py-1.5 pr-3">
                           <span className="flex min-w-0 flex-col gap-px">
