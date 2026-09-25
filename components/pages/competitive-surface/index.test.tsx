@@ -16,7 +16,8 @@ import { competitiveRivals } from './rivals'
 import { competitiveStandings } from './standings'
 import { competitiveQuestions } from './questions'
 import { buildSaidAbout } from '@/lib/pages/competitive-surface'
-import { claimsReadFixture, competitiveFixture, oneMonthFixture, quietRivalFixture, unreadMonthsFixture, unreadRivalFixture } from './fixture'
+import { claimsReadFixture, competitiveFixture, homonymRivalFixture, oneMonthFixture, quietRivalFixture, unreadMonthsFixture, unreadRivalFixture } from './fixture'
+import { HOMONYM_NOTES } from '@/lib/config'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -925,5 +926,79 @@ describe('layout and absences (sweep 2026-09-24)', () => {
     expect(text).toMatch(/^What they say about themselves posts published in September /)
     expect(text).toContain('Ottobock 5 posts · 3 of 5 drew at least 5 comments')
     expect(markup).not.toContain('—')
+  })
+})
+
+// ---- market-first WP1.9: a rival name that is mostly another word ---------------
+
+describe('Freitag carries its note beside its rows and counts (market-first WP1.9)', () => {
+  const NOTE = HOMONYM_NOTES.Freitag
+  const count = (text: string, needle: string) => text.split(needle).length - 1
+
+  it('CO1 puts the note on Freitag’s pill, after its count, and on no other rival', () => {
+    const text = renderText(competitiveRivals.render(homonymRivalFixture(), 'app', ctx))
+    expect(text).toContain(`Freitag read this window · 34 of their videos read · ${NOTE}`)
+    expect(count(text, NOTE)).toBe(1)
+    expect(text).toContain('Cotopaxi read this window · 216 of their videos read')
+    expect(text).not.toContain(`216 of their videos read · ${NOTE}`)
+  })
+
+  it('CO2 puts the note under Freitag’s row in the standings table, and only there', () => {
+    const data = homonymRivalFixture()
+    // Freitag's September on staging: 6 of the 654 videos our searches found.
+    const freitag = data.standings.rows.find((r) => r.audience === 'competitor:Freitag')!
+    expect({ k: freitag.content?.k, n: freitag.content?.n }).toEqual({ k: 6, n: 654 })
+    const text = renderText(competitiveStandings.render(data, 'app', ctx))
+    expect(text).toContain(`Freitag ${NOTE} 0.2% 40 of 16,204`)
+    expect(count(text, NOTE)).toBe(1)
+  })
+
+  it('prints it in print and in the email as well', () => {
+    const data = homonymRivalFixture()
+    for (const mode of ['print', 'email'] as const) {
+      expect(renderText(competitiveRivals.render(data, mode, ctx))).toContain(NOTE)
+      expect(renderText(competitiveStandings.render(data, mode, ctx))).toContain(NOTE)
+    }
+    // The email arm stays email-safe with the tag in it.
+    const email = render(competitiveStandings.render(data, 'email', ctx))
+    expect(email).not.toContain('class=')
+    expect(email).not.toContain('var(--')
+  })
+
+  it('keeps the copy contract with the note on, in every block and mode', () => {
+    for (const block of COMPETITIVE_BLOCKS) {
+      for (const mode of MODES) assertCopyContract(render(block.render(homonymRivalFixture(), mode, ctx)))
+    }
+  })
+
+  it('reaches the page: the pill row and the standings both carry it', () => {
+    const text = renderText(<CompetitiveSurfacePage data={homonymRivalFixture()} />)
+    expect(count(text, NOTE)).toBe(2)
+  })
+
+  it('a copy stored before the field existed prints no note and still renders', () => {
+    const { homonyms: _homonyms, ...stored } = homonymRivalFixture()
+    for (const block of COMPETITIVE_BLOCKS) {
+      expect(renderText(block.render(stored, 'app', ctx))).not.toContain(NOTE)
+    }
+  })
+
+  it('CO3, CO4, CO5 and CO7 print the note the data maps to the selected rival, beside its name', () => {
+    // A wiring test on the base fixture: the note is a stand-in, attached to
+    // the rival every one of these blocks is about, so each block is seen to
+    // read the map by the right key.
+    const note = 'mostly another word, not the brand'
+    const data = { ...competitiveFixture(), homonyms: { 'competitor:Ottobock': note } }
+    for (const mode of MODES) {
+      expect(renderText(competitiveHeadToHead.render(data, mode, ctx))).toContain(note)
+      expect(renderText(competitivePlaybook.render(data, mode, ctx))).toContain(note)
+      expect(renderText(competitiveOwnClaims.render(data, mode, ctx))).toContain(note)
+      expect(renderText(competitiveQuestions.render(data, mode, ctx))).toContain(`of Ottobock’s videos (${note})`)
+    }
+    // Only beside Ottobock: Rareform's and Patagonia's censuses carry none.
+    expect(count(renderText(competitiveOwnClaims.render(data, 'app', ctx)), note)).toBe(1)
+    for (const block of COMPETITIVE_BLOCKS) {
+      for (const mode of MODES) assertCopyContract(render(block.render(data, mode, ctx)))
+    }
   })
 })

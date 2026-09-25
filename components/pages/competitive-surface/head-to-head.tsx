@@ -7,7 +7,8 @@ import { prevMonth } from '@/lib/reading/month-key'
 import { NOT_A_SHARE_WHY, type FaceOffMeasure, type FaceOffSide, type HeadToHead } from '@/lib/reading/head-to-head'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import { headToHeadFigures } from '@/lib/pages/playbook'
-import type { CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
+import { homonymOf, type CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
+import { HomonymTag } from './homonym'
 
 // CO3 · Head to head, then and now (design §3 CO3; the artboard's 7-column
 // table at `grid-column: span 7`).
@@ -162,14 +163,16 @@ function Row({ measure: m, mode }: { measure: FaceOffMeasure; mode: RenderMode }
 }
 
 /** The measure's colour dot and name, the mock's column-group header. */
-function SideHead({ label, color, mode }: { label: string; color: string; mode: RenderMode }) {
+function SideHead({ label, color, mode, note = null }: { label: string; color: string; mode: RenderMode; note?: string | null }) {
   if (mode === 'email') {
-    return <span style={{ fontFamily: FONT.sans, fontSize: 11, fontWeight: 600, color: EMAIL.ink }}>{label}</span>
+    return <span style={{ fontFamily: FONT.sans, fontSize: 11, fontWeight: 600, color: EMAIL.ink }}>{label}<HomonymTag note={note} mode={mode} /></span>
   }
   return (
     <span className="col-span-3 flex items-center gap-1.5 pb-1.5 text-[11px] font-semibold">
       <span className="size-1.5 shrink-0 rounded-full" style={{ background: color }} aria-hidden />
-      {label}
+      {/* A name that is mostly another word carries its note under it, so the
+          whole column reads with it (market-first WP1.9). */}
+      {note ? <span className="flex min-w-0 flex-col">{label}<HomonymTag note={note} mode={mode} stacked /></span> : label}
     </span>
   )
 }
@@ -280,7 +283,7 @@ export const competitiveHeadToHead: Block<CompetitiveSurfaceData> = {
                 <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted }}>
                   <SideHead label={data.brand} color="var(--you)" mode={mode} />
                   {' · '}
-                  <SideHead label={h.rivalLabel} color="var(--comp)" mode={mode} />
+                  <SideHead label={h.rivalLabel} color="var(--comp)" mode={mode} note={homonymOf(data, h.rivalAudience)} />
                 </div>
                 {h.measures.map((m) => <Row key={m.key} measure={m} mode={mode} />)}
               </div>
@@ -290,7 +293,7 @@ export const competitiveHeadToHead: Block<CompetitiveSurfaceData> = {
                   <div className={`${GRID} border-b border-border/70`}>
                     <span className={`${HEAD} pb-1.5`}>Measure</span>
                     <SideHead label={data.brand} color="var(--you)" mode={mode} />
-                    <SideHead label={h.rivalLabel} color="var(--comp)" mode={mode} />
+                    <SideHead label={h.rivalLabel} color="var(--comp)" mode={mode} note={homonymOf(data, h.rivalAudience)} />
                   </div>
                   {h.measures.map((m) => <Row key={m.key} measure={m} mode={mode} />)}
                 </div>

@@ -4,7 +4,7 @@ import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { fmtInt, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import { RIVAL_STATE_LINE, type CompetitiveSurfaceData, type RivalOption } from '@/lib/pages/competitive-surface'
+import { RIVAL_STATE_LINE, homonymOf, type CompetitiveSurfaceData, type RivalOption } from '@/lib/pages/competitive-surface'
 
 // CO1 · One rival selection (design §3 CO1) — it scopes the whole surface.
 //
@@ -30,7 +30,7 @@ import { RIVAL_STATE_LINE, type CompetitiveSurfaceData, type RivalOption } from 
 const UNRECORDED =
   'Rivals you have stopped tracking are not recorded for this workspace yet, so this list is the ones you track today.'
 
-function Option({ option, mode }: { option: RivalOption; mode: RenderMode }) {
+function Option({ option, mode, note = null }: { option: RivalOption; mode: RenderMode; note?: string | null }) {
   const email = mode === 'email'
   const state = RIVAL_STATE_LINE[option.state]
   const stamp = option.retiredAt ? ` · until ${shortDate(option.retiredAt)}` : ''
@@ -62,6 +62,11 @@ function Option({ option, mode }: { option: RivalOption; mode: RenderMode }) {
           So the pill names its span outright, in the words the page bar
           already uses for it, and "in all" is left to the footer. */}
       {option.analysed != null && option.analysed > 0 ? <> · <span data-copy="figure">{fmtInt(option.analysed)}</span> of their videos read</> : null}
+      {/* A NAME THAT IS MOSTLY ANOTHER WORD SAYS SO BESIDE ITS COUNT
+          (market-first WP1.9): Freitag's videos read are mostly the German
+          word for Friday. Inside the same muted span, so the pill reads as one
+          line of qualifiers after the name. */}
+      {note ? <span data-homonym=""> · {note}</span> : null}
     </span>
   </>
 
@@ -103,7 +108,7 @@ export const competitiveRivals: Block<CompetitiveSurfaceData> = {
         <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1.5">
           <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground">Rival</span>
           {empty ? <span className="text-[12px] text-muted-foreground">{empty}</span> : null}
-          {r.options.map((o) => <Option key={o.audience} option={o} mode={mode} />)}
+          {r.options.map((o) => <Option key={o.audience} option={o} mode={mode} note={homonymOf(data, o.audience)} />)}
           {!r.identityRecorded && r.options.length > 0 ? (
             <span className="min-w-0 text-[11.5px] text-muted-foreground">{UNRECORDED}</span>
           ) : null}
@@ -120,7 +125,7 @@ export const competitiveRivals: Block<CompetitiveSurfaceData> = {
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         <div className={email ? undefined : 'flex flex-wrap items-center gap-1.5'}>
-          {r.options.map((o) => <Option key={o.audience} option={o} mode={mode} />)}
+          {r.options.map((o) => <Option key={o.audience} option={o} mode={mode} note={homonymOf(data, o.audience)} />)}
         </div>
         {!r.identityRecorded && r.options.length > 0 ? (
           <p

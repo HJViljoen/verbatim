@@ -2,8 +2,8 @@ import { horizonWindow } from '@/lib/reading/horizon'
 import {
   CORPUS_DENOMINATOR_LINE, QUESTIONS_GROUPING_NOTE,
   QUESTIONS_SUBJECTS_NOTE, STANDINGS_UNREAD, buildStandingsBlock, competitiveSurfaceHref,
-  buildSaidAbout, questionsEmpty,
-  type CompetitiveSurfaceData,
+  buildSaidAbout, homonymsFor, questionsEmpty,
+  type CompetitiveSurfaceData, type RivalOption,
 } from '@/lib/pages/competitive-surface'
 import { methodRecordFixture, recordBandFixture } from '@/lib/test/method-fixture'
 import { methodLines } from '@/lib/reading/method'
@@ -79,6 +79,10 @@ const ossurMethodRefused = () =>
     { brand: 'Össur' },
   )
 
+// THE PLATFORM SPLIT BELOW IS A FIXED PROPORTION OF THE VIDEOS (half, three
+// tenths, a fifth), not a measured mix: the videos and comments are Össur's own,
+// the split is the fixture's. A test that asserts a platform count asserts this
+// arithmetic, not production.
 const den = (month: string, audience: string, videos: number, comments: number, dual = 0) => ({
   month,
   audience,
@@ -629,5 +633,73 @@ export function claimsReadFixture(): CompetitiveSurfaceData {
             ]
           : [],
     ),
+  }
+}
+
+// ---- a rival name that is mostly another word (market-first WP1.9) -------------
+//
+// SEALAND'S FOUR OBSERVED RIVALS, to 20 Sep on staging (research F2, F4 and
+// data-reality F13; GR F36 for the selector's counts). Freitag is German for
+// Friday: all four of its August videos (93 comments) are the day, not the
+// brand (research F7, BC F10), which is why the page carries its note.
+//
+// ONLY CO1 AND CO2 ARE SEALAND'S. The other fields are the base fixture's
+// (Össur's), because the research does not hold Sealand's per-post or
+// per-question counts and a fixture does not invent them. No test renders
+// those blocks from this fixture.
+
+const sealandDen = (month: string, audience: string, videos: number, comments: number, platformMix: Record<string, number> = {}) => ({
+  month,
+  audience,
+  videos,
+  comments,
+  // The category's mix is measured (data-reality F13); the rivals' is not in
+  // the research, so it is left empty rather than made up.
+  platform_mix: platformMix,
+  dual_mention: 0,
+  status: 'filling' as const,
+  run_id: 'run-a',
+})
+
+const SEALAND = [
+  sealandDen('2026-08-01', 'competitor:Cotopaxi', 22, 389),
+  sealandDen('2026-08-01', 'competitor:Freitag', 4, 93),
+  sealandDen('2026-08-01', 'industry-other', 351, 10_188, { youtube: 166, tiktok: 119, reddit: 61, instagram: 5 }),
+  sealandDen(MONTH, 'competitor:Cotopaxi', 12, 206),
+  sealandDen(MONTH, 'competitor:Freitag', 6, 40),
+  sealandDen(MONTH, 'competitor:Patagonia', 5, 122),
+  sealandDen(MONTH, 'competitor:The North Face', 6, 44),
+  sealandDen(MONTH, 'industry-other', 625, 15_792, { youtube: 277, tiktok: 180, reddit: 115, instagram: 53 }),
+]
+
+/** The analysed videos per rival that the selector printed on 20 Sep (GR F36). */
+const SEALAND_ANALYSED: [string, number][] = [['Cotopaxi', 216], ['Freitag', 34], ['Patagonia', 17], ['The North Face', 24]]
+
+export function homonymRivalFixture(): CompetitiveSurfaceData {
+  const base = competitiveFixture()
+  const names = SEALAND_ANALYSED.map(([name]) => name)
+  const options: RivalOption[] = SEALAND_ANALYSED.map(([name, analysed], i) => ({
+    audience: `competitor:${name}`,
+    name,
+    state: 'observed',
+    analysed,
+    retiredAt: null,
+    href: competitiveSurfaceHref(name, {}),
+    selected: i === 0,
+  }))
+  return {
+    ...base,
+    brand: 'Sealand',
+    rivals: { options, selected: options[0], identityRecorded: false, empty: null },
+    standings: buildStandingsBlock({
+      brand: 'Sealand',
+      rivals: names.map((name) => ({ name, retiredAt: null })),
+      denominators: SEALAND,
+      axis: base.window.months,
+      readAxis: base.window.months,
+      month: MONTH,
+      changes: [],
+    }),
+    homonyms: homonymsFor(names),
   }
 }

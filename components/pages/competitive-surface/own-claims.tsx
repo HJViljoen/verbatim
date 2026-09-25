@@ -8,7 +8,8 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, shortDate } from '@/lib/format'
 import { CENSUS_EMPTY, OWN_POSTS_NO_ACCOUNTS, RIVAL_CLAIMS_WITHHELD, type ClaimEcho, type OwnClaimRow, type OwnPostCensus } from '@/lib/reading/own-posts'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import type { CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
+import { homonymOf, type CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
+import { HomonymTag } from './homonym'
 
 // CO4 · What they say about themselves (design §3 CO4; the artboard's
 // `grid-column: span 5` card beside the head-to-head).
@@ -124,7 +125,7 @@ function Claim({ row, mode }: { row: OwnClaimRow; mode: RenderMode }) {
 const censusSilent = (basis: string): string => `We read their accounts and found no ${basis}.`
 
 /** One rival's census, or the reason there is not one. */
-function Census({ census, mode, basisInMeta = false }: { census: OwnPostCensus; mode: RenderMode; basisInMeta?: boolean }) {
+function Census({ census, mode, basisInMeta = false, note = null }: { census: OwnPostCensus; mode: RenderMode; basisInMeta?: boolean; note?: string | null }) {
   const email = mode === 'email'
   const head = (
     <div className={email ? undefined : 'flex flex-wrap items-center gap-2'} style={email ? { marginBottom: 2 } : undefined}>
@@ -132,6 +133,9 @@ function Census({ census, mode, basisInMeta = false }: { census: OwnPostCensus; 
       <span className={email ? undefined : 'text-[12.5px] font-semibold'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, fontWeight: 600, color: EMAIL.ink } : undefined}>
         {census.audienceLabel}
       </span>
+      {/* A name that is mostly another word says so beside it (market-first
+          WP1.9). */}
+      <HomonymTag note={note} mode={mode} />
       {/* THE BASIS, ON EVERY CENSUS THAT HAS FIGURES. Every figure under this
           heading is dated by the POST and the rest of this page is dated by the
           comment; the two must not be read as one clock (D9). It is dropped on
@@ -261,7 +265,7 @@ export const competitiveOwnClaims: Block<CompetitiveSurfaceData> = {
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         <div className={email ? undefined : 'flex min-w-0 flex-col gap-1.5'}>
-          {censuses.map((c) => <Census key={c.audience} census={c} mode={mode} basisInMeta={basis != null} />)}
+          {censuses.map((c) => <Census key={c.audience} census={c} mode={mode} basisInMeta={basis != null} note={homonymOf(data, c.audience)} />)}
         </div>
         {censuses.some((c) => c.claimsNote === RIVAL_CLAIMS_WITHHELD) ? (
           <p className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}>
