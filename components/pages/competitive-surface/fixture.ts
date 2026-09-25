@@ -645,8 +645,11 @@ export function claimsReadFixture(): CompetitiveSurfaceData {
 //
 // ONLY CO1 AND CO2 ARE SEALAND'S. The other fields are the base fixture's
 // (Össur's), because the research does not hold Sealand's per-post or
-// per-question counts and a fixture does not invent them. No test renders
-// those blocks from this fixture.
+// per-question counts and a fixture does not invent them. Tests do render
+// those blocks from this fixture, and the whole page, but only for the copy
+// contract and the count of notes: CO3 to CO7 then draw Össur's figures (the
+// Ottobock head-to-head) under the brand 'Sealand', a composite no test reads
+// as Sealand's, and no test asserts anything Sealand-specific of them.
 
 const sealandDen = (month: string, audience: string, videos: number, comments: number, platformMix: Record<string, number> = {}) => ({
   month,
