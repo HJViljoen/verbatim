@@ -327,7 +327,7 @@ describe('calibrationRecorded — a re-run of --apply completes only what is mis
 describe('calibrationNote — the tenant-readable change-log line', () => {
   it('is plain words: no "by hand", no threshold', () => {
     const note = calibrationNote('Looks & style', 25)
-    expect(note).toBe('Checked how often the subject Looks & style is matched correctly, on 25 sampled points viewers made.')
+    expect(note).toBe('Matching checked for Looks & style on 25 sampled viewer points.')
     expect(note).not.toMatch(/by hand/i)
     expect(note).not.toMatch(/\d\.\d|\d\/\d|precision|pair/i)
   })
@@ -340,6 +340,6 @@ describe('calibrationNote — the tenant-readable change-log line', () => {
   })
 
   it('counts one sample as one', () => {
-    expect(calibrationNote('Price', 1)).toBe('Checked how often the subject Price is matched correctly, on 1 sampled point a viewer made.')
+    expect(calibrationNote('Price', 1)).toBe('Matching checked for Price on 1 sampled viewer point.')
   })
 })

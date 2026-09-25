@@ -351,7 +351,7 @@ export function lastCalibrationLogged(
  * A RE-RUN OF --apply DUPLICATED TENANT-VISIBLE ROWS. The script stops at the
  * first subject whose change-log row fails and says re-run; the re-run then
  * re-wrote and re-logged every subject that had already succeeded, and
- * Sealand's change log showed two identical "Checked how often…" lines for
+ * Sealand's change log showed two identical "Matching checked for…" lines for
  * each. So a subject is skipped only when BOTH agree with the new figure. The
  * subject alone is not enough: the one whose UPDATE landed and whose log row
  * failed has the new figure stored and no row, and it is exactly the one the
@@ -383,5 +383,5 @@ export function calibrationRecorded(
  * history.
  */
 export function calibrationNote(subject: string, pairs: number): string {
-  return `Checked how often the subject ${subject} is matched correctly, on ${pairs} sampled ${pairs === 1 ? 'point a viewer made' : 'points viewers made'}.`
+  return `Matching checked for ${subject} on ${pairs} sampled ${pairs === 1 ? 'viewer point' : 'viewer points'}.`
 }
