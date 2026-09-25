@@ -130,9 +130,18 @@ describe('why a subject shows no voice', () => {
 })
 
 describe('the next reading', () => {
-  it('is the first of the month after this one, so a decision has a deadline', () => {
-    expect(nextReadingOf('2026-09-01').slice(0, 10)).toBe('2026-10-01')
-    expect(nextReadingOf('2026-12-01').slice(0, 10)).toBe('2027-01-01')
+  it('is the first of the month after the one it is built in, so a decision has a deadline', () => {
+    expect(nextReadingOf('2026-09-01', '2026-09-24T12:00:00.000Z').slice(0, 10)).toBe('2026-10-01')
+    expect(nextReadingOf('2026-12-01', '2026-12-20T12:00:00.000Z').slice(0, 10)).toBe('2027-01-01')
+  })
+
+  // Decision A: the monthly reads the month that has just ended. Counted from
+  // the month read, a September report built on 4 or 12 October named
+  // 1 October, a date already past when it was read.
+  it('is never a date already past: September built in October names 1 November', () => {
+    expect(nextReadingOf('2026-09-01', '2026-10-04T06:00:00.000Z').slice(0, 10)).toBe('2026-11-01')
+    expect(nextReadingOf('2026-09-01', '2026-10-12T06:00:00.000Z').slice(0, 10)).toBe('2026-11-01')
+    expect(nextReadingOf('2026-11-01', '2026-12-02T06:00:00.000Z').slice(0, 10)).toBe('2027-01-01')
   })
 })
 

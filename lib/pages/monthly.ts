@@ -3,7 +3,7 @@ import { longMonth, shortDate } from '../format'
 import { composeInterpretation, type Interpretation } from '../prose/interpret'
 import { proseFigures } from '../prose/figures'
 import type { Scope } from '../renderables/types'
-import { nextMonth, prevMonth as previousMonthOf } from '../reading/month-key'
+import { monthStartOf, nextMonth, prevMonth as previousMonthOf } from '../reading/month-key'
 import { loadMonthSeries, readingHandle, type ReadingHandle } from '../reading/read'
 import { MONTH_PARAM } from '../reading/reading-month'
 import { monthlyMonthFor } from '../reading/reading-view'
@@ -253,10 +253,20 @@ export function leadOf(
   return leadVerdict(printed.filter((v) => isAnswer(v.state)))
 }
 
-/** When the next monthly reading lands: the first of the month after this one.
- *  A decision with no date on it is a note, not a decision. */
-export function nextReadingOf(month: string): string {
-  return `${nextMonth(month)}T00:00:00.000Z`
+/**
+ * When the next monthly reading lands: the first of the month after the one the
+ * report is BUILT in. A decision with no date on it is a note, not a decision.
+ *
+ * FROM THE BUILD, NOT FROM THE MONTH READ (market-first decision A). The monthly
+ * now reads the month that has just ended, so a September report built on
+ * 4 October that counted from September would name 1 October, a date already
+ * past. The later of the two is taken, so a report on the month it is built in
+ * (a named `?month=`) still names the first of the next.
+ */
+export function nextReadingOf(month: string, builtAt: string): string {
+  const read = nextMonth(month)
+  const built = nextMonth(monthStartOf(builtAt))
+  return `${read > built ? read : built}T00:00:00.000Z`
 }
 
 // ---- the loader ---------------------------------------------------------------
@@ -324,7 +334,7 @@ export async function loadMonthly(scope: Scope): Promise<MonthlyData | null> {
     ),
     figures: overview.sentence.figures,
     ledger: overview.sentence.ledger,
-    nextReading: nextReadingOf(month),
+    nextReading: nextReadingOf(month, now),
     href: '/dashboard/market',
   }
 
