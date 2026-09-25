@@ -26,6 +26,7 @@ import type { MethodLines } from '../reading/method'
 import { platformMixLine } from '../reading/record'
 import { mergeSeriesNotes, type MonthLabel, type MonthSeries } from '../reading/series'
 import { loadUpdateSeries, type UpdateSeries } from '../reading/updates'
+import { loadReadingSchedule, updateClock } from '../reading/reading-view'
 import type { MonthStatus, PlatformMix } from '../reading/types'
 import { bandVerdict, type FigureTable, type Verdict } from '../reading/verdicts'
 import { parseRef, quoteRef } from '../renderables/quotes-freeze'
@@ -693,6 +694,13 @@ export interface WeekData {
   /** "312 videos this week" — the page bar's own figure. Null when the
    *  windowed read is not available here. */
   windowVideos: number | null
+  /** The next update the tenant's schedule promises, for the bar's one line
+   *  ("comments written 10 to 20 Sep · next update Sun 27 Sep", 25 Sep
+   *  rulings). Null where none is promised. Optional: a stored snapshot taken
+   *  before market-first WP1.2 has none. */
+  nextUpdate?: string | null
+  /** No update for more than fourteen days: the line says "updates paused". */
+  paused?: boolean
   unusual: UnusualBlock
   subjects: WeekSubjectsBlock
   rising: RisingBlock
@@ -1100,7 +1108,7 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
   const readingAt = new Date().toISOString()
 
   // ── wave 1: who this is, and which update this is a reading of ─────────
-  const [clientRes, runsRes, runningIds, rivals] = await Promise.all([
+  const [clientRes, runsRes, runningIds, rivals, schedule] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     // `select('*')` for the window columns, not a column list: they are applied
     // by hand and a deploy can reach a database that has not had them yet, in
@@ -1114,6 +1122,8 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
       .order('started_at', { ascending: false }).limit(2),
     fetchRunningRunIds(supabase, clientId, 'week'),
     loadRivals(supabase, clientId),
+    // For the bar's "next update" (market-first WP1.2). One small row.
+    loadReadingSchedule(supabase, clientId),
   ])
   const runsRaw = rows<RunRow>(runsRes, 'week.runs')
   const client = row<{ company_name: string | null }>(clientRes, 'week.client')
@@ -1245,6 +1255,14 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
     privacy: PRIVACY_LINE,
   }
 
+  // THE BAR'S CLOCK, off the two runs already read: "as at" is the last
+  // update, never the wall clock, and a paused tenant is promised nothing.
+  const clock = updateClock({
+    now: readingAt,
+    runs: runsRaw.filter((r): r is RunRow & { started_at: string } => r.started_at != null),
+    schedule,
+  })
+
   return {
     brand,
     update,
@@ -1253,6 +1271,8 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
     monthStatus,
     readingAt,
     windowVideos,
+    nextUpdate: clock.nextUpdate,
+    paused: clock.paused,
     unusual,
     subjects: subjectsBlock,
     rising: risingRead.block,

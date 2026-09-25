@@ -23,6 +23,8 @@ import { claimCounts, ledgerRows, type ClaimCounts } from '../market-tiles'
 import type { SayVsHearEntry } from '../pipeline/schemas'
 import { isMissingKindMoodAttention } from '../reading/attention'
 import { freezeStateFor, isMissingMonthTable } from '../reading/monthly'
+import { MONTH_PARAM, readingAnchor, type ReadingMonth } from '../reading/reading-month'
+import { loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, readingViewFrom, type OtherMonth } from '../reading/reading-view'
 import { monthStartOf, nextMonth } from '../reading/month-key'
 import { gapBetween, type Gap, type GapSide } from '../reading/gap'
 import { loadMonthSeries, type ReadingHandle } from '../reading/read'
@@ -383,6 +385,12 @@ export interface SubjectPane {
   index: number
   of: number
   sides: SubjectSide[]
+  /** Whether the kind table is installed here (M5). False: "not recorded
+   *  month by month for this workspace yet" is the true sentence. True, with
+   *  no kind on any side: the month has none read yet, which is a different
+   *  fact (market-first WP1.2, GR F57). Optional: a stored snapshot taken
+   *  before WP1.2 has none. */
+  kindsRecorded?: boolean
   /** The sides' months over the page's READ axis (the horizon, plus the month
    *  before it) — what the hero's sentences are built from. */
   series: MonthSeries[]
@@ -434,6 +442,11 @@ export interface SubjectsData {
   month: string
   monthStatus: MonthStatus
   readingAt: string
+  /** The reading month (market-first decision A) and the bar's other month.
+   *  Always set by the loader; optional because a stored snapshot taken
+   *  before WP1.2 has neither. */
+  reading?: ReadingMonth
+  otherMonth?: OtherMonth | null
   horizon: Horizon
   axis: string[]
   /** The chart's own axis — the trailing twelve months, or from the tenant's
@@ -882,6 +895,9 @@ export function axisNote(
    * got.
    */
   series: readonly MonthSeries[] = [],
+  /** The month the page reads, `YYYY-MM-01`: named where a side read nothing
+   *  in it. */
+  month?: string | null,
 ): string | null {
   const hollow = sides.filter((s) => s.observed && (s.n ?? 0) < floorN)
   // "A, B and C", not "A and B and C": ten sides joined by "and" read as one
@@ -897,14 +913,22 @@ export function axisNote(
       `(${hollow.map((s) => `${fmtInt(s.n ?? 0)}`).join(', ')}).`,
     )
   }
-  // TWO SILENCES, TWO SENTENCES. An audience we never read is "not tracked";
-  // an audience we read that carried nothing on this subject has "no reading
-  // yet", and the second is the one a newly confirmed subject is in on the
-  // client's OWN side.
+  // TWO SILENCES, TWO SENTENCES. An audience with no video read in the month
+  // has no denominator; an audience we read that carried nothing on this
+  // subject has "no reading yet", and the second is the one a newly confirmed
+  // subject is in on the client's OWN side.
+  //
+  // THE FIRST SAYS THE MONTH, NOT "NOT TRACKED" (market-first WP1.2, GR F57).
+  // The audience is tracked; what is missing is a video read in this month.
+  // In the first days of a month that was every side, the category included,
+  // and "The category: not tracked" named a missing capability for what was a
+  // month not read yet.
   const noReading = sides.filter((s) => s.silence === 'no_reading')
   const notTracked = sides.filter((s) => s.silence === 'not_tracked')
   if (noReading.length > 0) parts.push(`${names(noReading)}: no reading yet on this subject.`)
-  if (notTracked.length > 0) parts.push(`${names(notTracked)}: not tracked.`)
+  if (notTracked.length > 0) {
+    parts.push(month ? `${names(notTracked)}: no video read in ${longMonth(month)}.` : `${names(notTracked)}: no video read this month.`)
+  }
 
   // A LINE THAT STARTS LATE SAYS WHEN. The axis's own first month is the
   // yardstick: a series whose first reading is later than everyone else's is
@@ -968,11 +992,6 @@ export function subjectNotes(notes: readonly MonthLabel[] | null | undefined): M
 }
 
 // ---- the rows the loader reads -------------------------------------------------
-
-interface RunRow {
-  id: string
-  started_at: string
-}
 
 /** A stored `month_kind_readings` row, as the side builder takes it. Exported
  *  for the fixture — a block test has to be able to build one. */
@@ -1436,16 +1455,14 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   // Wave 1 holds what the empty-state guard itself needs and what the page
   // cannot be shaped without; anything else starts on the line after the guard,
   // so a tenant that draws nothing pays for nothing.
-  const [clientRes, runsRaw, rivals, subjectRows, moveRows] = await Promise.all([
+  const [clientRes, runsRaw, rivals, subjectRows, moveRows, schedule] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
-    selectAll<RunRow>(() =>
-      supabase.from('pipeline_runs').select('id, started_at')
-        .eq('client_id', clientId).in('status', ['completed', 'partial'])
-        .order('started_at', { ascending: true }),
-    ),
+    // With their finish instants, for the reading month (market-first WP1.2).
+    loadDeliveredRuns(supabase, clientId),
     loadTrackedRivals(supabase, clientId),
     loadSubjectRows(supabase, clientId),
     loadSubjectMoves(supabase, clientId),
+    loadReadingSchedule(supabase, clientId),
   ])
   const brand = (clientRes.data as { company_name?: string | null } | null)?.company_name ?? 'Your brand'
   if (runsRaw.length === 0) return null
@@ -1491,19 +1508,32 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     firstRunMonth,
   })
   const started = sinceStart(history.denominators.map((d) => ({ month: d.month, videos: d.videos })))
-  const window = horizonWindow(horizon, readingAt, started.from)
+  // THE READING MONTH (market-first decision A): the month that has just ended
+  // until the new one is half over with two updates, or `?month=`. The horizon
+  // and the chart are anchored on it, so `month` below is `reading.month`.
+  const view = readingViewFrom({
+    now: readingAt,
+    runs: runsRaw,
+    denominators: history.denominators,
+    rivalAudiences: marketRivalAudiences(rivals),
+    schedule,
+    explicit: params[MONTH_PARAM] ?? null,
+  })
+  const rm = view.reading
+  const window = horizonWindow(horizon, readingAnchor(rm), started.from)
   const axis = window.months
   const month = axis[axis.length - 1]
   // The page reads one month wider than it draws: "this month" is a one-month
   // axis, and the comparison is the calendar's, not the horizon's (OV0's rule).
   const prevMonth = previousMonthOf(month)
   const readAxis = axis[0] <= prevMonth ? axis : [prevMonth, ...axis]
-  const monthStatus = freezeStateFor(month, readingAt)
+  // Frozen once an UPDATE has passed its freeze line, not the clock.
+  const monthStatus = freezeStateFor(month, rm.asAt ?? readingAt)
   // The chart's axis is its own (`chartMonths`). Where it reaches further back
   // than the read axis, the selected subject is read a second time over it —
   // for the chart alone — so the hero, the rail, the gap and the notes read
   // exactly the months they read before the chart was widened.
-  const chartAxis = chartMonths(readingAt, started.from)
+  const chartAxis = chartMonths(readingAnchor(rm), started.from)
   const chartSet = new Set(chartAxis)
   const onChart = (s: MonthSeries): MonthSeries =>
     ({ ...s, points: s.points.filter((p) => chartSet.has(monthStartOf(p.month))) })
@@ -1718,6 +1748,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       index: active.findIndex((s) => s.id === subject.id) + 1,
       of: active.length,
       sides,
+      kindsRecorded: kindRows != null,
       series,
       chartSeries,
       voices: voices.voices,
@@ -1735,7 +1766,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
         seriesFor(subject.id, INDUSTRY_AUDIENCE),
         audienceLabel(INDUSTRY_AUDIENCE),
       ),
-      axisNote: axisNote(sides, FLOOR_N, series),
+      axisNote: axisNote(sides, FLOOR_N, series, month),
       notRecorded: subjectSet?.numeratorSubstrate === 'missing'
         ? 'This subject has no monthly reading recorded for this workspace yet.'
         : null,
@@ -1765,6 +1796,8 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     month,
     monthStatus,
     readingAt,
+    reading: rm,
+    otherMonth: view.other,
     horizon,
     axis,
     chartAxis,

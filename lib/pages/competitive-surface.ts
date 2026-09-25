@@ -6,8 +6,10 @@ import { COMPETITIVE_MIN_VIDEOS } from '../config'
 import { fmtInt, monthName, platformLabel } from '../format'
 import { fetchQuoteCitationsByAudience } from '../quotes'
 import { attentionTotals, type AttentionRow } from '../reading/attention'
-import { horizonWindow, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
+import { horizonDates, horizonWindow, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
 import { freezeStateFor, monthStartOf } from '../reading/monthly'
+import { MONTH_PARAM, readingAnchor, type ReadingMonth } from '../reading/reading-month'
+import { loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, readingViewFrom, type OtherMonth } from '../reading/reading-view'
 import { loadMonthSeries, type MonthSeriesSet, type ReadingHandle } from '../reading/read'
 import { methodLines, type MethodLines } from '../reading/method'
 import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordInputs } from '../reading/record'
@@ -222,6 +224,11 @@ export interface CompetitiveSurfaceData {
   month: string
   monthStatus: MonthStatus
   readingAt: string
+  /** The reading month (market-first decision A) and the bar's other month.
+   *  Always set by the loader; optional because a stored snapshot taken
+   *  before WP1.2 has neither. */
+  reading?: ReadingMonth
+  otherMonth?: OtherMonth | null
   horizon: Horizon
   window: HorizonWindow
   rivals: RivalsBlock
@@ -424,7 +431,11 @@ export function questionsEmpty(input: {
   videos: number
   floor: number
 }): string | null {
-  if (!input.rival) return 'No rival is tracked for this workspace yet.'
+  // NO RIVAL SELECTED IS NOT "NO RIVAL TRACKED" (market-first WP1.2, GR F57).
+  // A rival is offered only where it carried a video in the window, so a
+  // tracked set with nothing read in the month reached here too and was told
+  // nothing was tracked. The page's own line (`rivals.empty`) says which.
+  if (!input.rival) return 'No tracked rival carried a video in this window.'
   if (input.videos === 0) {
     return `Nothing was asked under ${input.rival}’s content in this window. Widen the horizon and this block reads further back.`
   }
@@ -532,12 +543,17 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
   // THE CHANGE LOG, THE ANALYSED COUNTS AND "ARE THERE SUBJECTS" JOIN WAVE 1
   // (WP23). None of the three depends on the axis, and each was awaited alone
   // on the critical path further down.
-  const [clientRes, rivals, subreddits, changes, subjectsNamed] = await Promise.all([
+  //
+  // THE RUNS AND THE SCHEDULE JOIN IT TOO (market-first WP1.2): the reading
+  // month is decided by the updates, and this page read none until now.
+  const [clientRes, rivals, subreddits, changes, subjectsNamed, runs, schedule] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     loadRivals(supabase, clientId),
     loadSubreddits(supabase, clientId),
     loadConfigChanges(reading.client, clientId),
     subjectsExist(supabase, clientId),
+    loadDeliveredRuns(supabase, clientId),
+    loadReadingSchedule(supabase, clientId),
   ])
   const analysedAhead = countAnalysedByRival(supabase, clientId, rivals.rivals)
   analysedAhead.catch(() => {})
@@ -548,10 +564,23 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
   // started" means (decision M) and therefore what every horizon's window is.
   const history = await loadMonthSeries(reading.client, clientId, { from: '2019-01-01', to: readingAt, updatesByMonth: {} })
   const started = sinceStart(history.denominators.map((d) => ({ month: d.month, videos: d.videos })))
-  const window = horizonWindow(horizon, readingAt, started.from)
+  // THE READING MONTH (market-first decision A): on 1–15 October this page
+  // reads September's content, not an October with nothing in it (GR F56
+  // measured an 86% drop here). The horizon is anchored on it, so `month` below
+  // is `reading.month`, and the month is frozen once an UPDATE passed its line.
+  const view = readingViewFrom({
+    now: readingAt,
+    runs,
+    denominators: history.denominators,
+    rivalAudiences: marketRivalAudiences(rivals.rivals),
+    schedule,
+    explicit: scope.params[MONTH_PARAM] ?? null,
+  })
+  const rm = view.reading
+  const window = horizonWindow(horizon, readingAnchor(rm), started.from)
   const axis = window.months
   const month = axis[axis.length - 1]
-  const monthStatus = freezeStateFor(month, readingAt)
+  const monthStatus = freezeStateFor(month, rm.asAt ?? readingAt)
   // THE COMPARISON IS THE CALENDAR'S, NOT THE HORIZON'S — the Overview's own
   // correction: taking the previous month off the axis left the default reading
   // with no month-on-month comparison at all.
@@ -674,17 +703,23 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
     month,
     monthStatus,
     readingAt,
+    reading: rm,
+    otherMonth: view.other,
     horizon,
     window,
     rivals: {
       options,
       selected,
       identityRecorded: rivals.recorded,
+      // THE TWO CAUSES, SAID APART (market-first WP1.2, GR F57): nothing is
+      // tracked, or the tracked rivals carried no video in the months read.
+      // The second names those months, because on the first days of a month
+      // it was every tenant's state and read as the first.
       empty: options.length > 0
         ? null
         : rivals.rivals.length === 0
           ? 'No rival is tracked for this workspace yet. Name one in Settings and this page starts reading them.'
-          : 'None of your tracked rivals carried a video in this window.',
+          : `None of your tracked rivals carried a video in ${horizonDates(window)}.`,
     },
     standings,
     questions,

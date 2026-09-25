@@ -46,6 +46,8 @@ import {
   type MoveSeries,
 } from '../reading/moves'
 import { loadMonthSeries, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
+import { MONTH_PARAM, readingAnchor, type ReadingMonth } from '../reading/reading-month'
+import { asAtOf, loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, readingViewFrom, type OtherMonth } from '../reading/reading-view'
 import { methodLines, type MethodLines } from '../reading/method'
 import { countRefused, howSoundLine, loadRecordInputs, monthRecordWindow, recordLines, refusals, soundFigures, type RecordInputs, type SoundFigure } from '../reading/record'
 import {
@@ -588,10 +590,24 @@ export interface RecordBlock {
 
 export interface OverviewData {
   brand: string
-  /** The month the reading is of — the last month on the axis. */
+  /** The month the reading is of — the last month on the axis. Since
+   *  market-first WP1.2 that is `reading.month` (decision A), except where a
+   *  caller pins the calendar month (the weekly, `pinCalendarMonth`). */
   month: string
   monthStatus: MonthStatus
+  /** The instant the page was built: the clock, never "as at" (that is
+   *  `reading.asAt`, the last update's). */
   readingAt: string
+  /**
+   * The reading month (market-first decision A, plan §4.2): which month every
+   * block reads, how far it has been read, and the bar's one line. The loader
+   * always sets it; a renderer of a STORED snapshot reads it with `?.`, because
+   * a snapshot taken before WP1.2 has none.
+   */
+  reading: ReadingMonth
+  /** The one other month the bar's month selector offers. Optional for the
+   *  same reason as `reading`. */
+  otherMonth?: OtherMonth | null
   horizon: Horizon
   window: HorizonWindow
   axis: string[]
@@ -734,13 +750,21 @@ export interface FillingLineInput {
 export function fillingLine(input: FillingLineInput): string {
   const parts: string[] = []
   const name = longMonth(input.month)
-  if (input.status === 'frozen' || input.daysIn == null) {
-    parts.push(`${name}, complete`)
+  // "ENDED" OR "FINAL", NEVER "COMPLETE" (market-first, plan §2's one month
+  // vocabulary). An ended month is still filling for thirty days, and from
+  // WP1.2 it is the month every page reads for the first half of the next one,
+  // so the word printed here is the one the month selector's tooltip uses.
+  if (input.status === 'frozen') {
+    parts.push(`${name}, final`)
+  } else if (input.daysIn == null) {
+    parts.push(`${name}, ended`)
   } else {
     parts.push(`${name}, ${input.daysIn} ${input.daysIn === 1 ? 'day' : 'days'} in`)
   }
   parts.push(`${fmtInt(input.updates)} ${input.updates === 1 ? 'update' : 'updates'}`)
-  if (input.videos == null) parts.push('nothing read into this month yet')
+  // The line opens with the month's name: "this month" would name the wrong
+  // one on 1 to 15 October, when the month read has ended (WP1.2).
+  if (input.videos == null) parts.push('nothing read into it yet')
   else {
     parts.push(`${fmtInt(input.videos)} ${input.videos === 1 ? 'video' : 'videos'}`)
     // NOT "of an expected ~N". The design writes the median as a projection,
@@ -751,7 +775,10 @@ export function fillingLine(input: FillingLineInput): string {
     // OV6 ("2,359 videos analysed (trailing median 2,240)").
     if (input.expected != null && input.expected > 0) parts.push(`trailing median ${fmtInt(Math.round(input.expected))}`)
   }
-  if (input.status === 'filling') {
+  // Only a month still in progress has a "this point" to compare: an ended
+  // month (every page reads one on 1–15 October, market-first WP1.2) is still
+  // filling but is read whole, and last month "at this point" means nothing.
+  if (input.status === 'filling' && input.daysIn != null) {
     parts.push(
       !input.atLastMonthKnown
         ? 'last month at this point: not recorded yet'
@@ -780,7 +807,7 @@ export function fillingLine(input: FillingLineInput): string {
  */
 export function fillingNote(input: FillingLineInput): string | null {
   const parts: string[] = []
-  if (input.videos == null) parts.push('nothing read into this month yet')
+  if (input.videos == null) parts.push(`nothing read into ${longMonth(input.month)} yet`)
   else if (input.expected != null && input.expected > 0) parts.push(`trailing median ${fmtInt(Math.round(input.expected))}`)
   // THE ABSENT COMPARISON IS STILL NAMED. The tile draws "last month at this
   // point" as a stat only where the comparison EXISTS — an em dash under it
@@ -788,7 +815,7 @@ export function fillingNote(input: FillingLineInput): string | null {
   // the only thing that says why, and it stays here in `fillingLine`'s own
   // words. Where the stat is drawn, this clause would be the same figure
   // twice, and is dropped.
-  if (input.status === 'filling' && (!input.atLastMonthKnown || input.atLastMonth == null)) {
+  if (input.status === 'filling' && input.daysIn != null && (!input.atLastMonthKnown || input.atLastMonth == null)) {
     parts.push(!input.atLastMonthKnown ? 'last month at this point: not recorded yet' : 'no reading of last month at this point')
   }
   if (input.thin) parts.push('thin month: every change below is suppressed')
@@ -829,6 +856,32 @@ export function readingsCounter(readings: number, opts: { quarter?: boolean } = 
   // The quarter gate is said once per surface (ruling E): the Overview band
   // prints the bare counter, so it passes `quarter: false`.
   return n >= QUARTER_UNLOCKS_AT || opts.quarter === false ? counter : `${counter} · the quarter view needs ${QUARTER_UNLOCKS_AT}`
+}
+
+/**
+ * The status OV0 words its month by: "final" or "ended" (market-first WP1.2).
+ *
+ * ONE VOCABULARY FOR ONE MONTH. `monthStatus` is `freezeStateFor`: clock and
+ * freeze-line arithmetic. The month selector's tooltip is `reading.state`,
+ * where the stored row wins. A run that finished past the freeze line without
+ * reaching freeze-months left OV0 saying "September, final" under a tooltip
+ * saying "September · ended". So where OV0 reads the reading month, its word
+ * is the reading's: `final` is frozen, `ended` is still filling; any other
+ * state (read at setup, too few to read, so far) keeps `monthStatus`, as does
+ * the weekly, pinned to the calendar month, and any other month.
+ *
+ * Pure.
+ */
+export function barMonthStatus(
+  month: string,
+  monthStatus: MonthStatus,
+  reading: Pick<ReadingMonth, 'month' | 'state'> | null | undefined,
+  pinned = false,
+): MonthStatus {
+  if (pinned || !reading || reading.month !== month) return monthStatus
+  if (reading.state === 'final') return 'frozen'
+  if (reading.state === 'ended') return 'filling'
+  return monthStatus
 }
 
 /**
@@ -1328,11 +1381,6 @@ export function candidateLine(candidates: readonly SubjectCandidate[]): string {
 
 // ---- the loader ---------------------------------------------------------------
 
-interface RunRow {
-  id: string
-  started_at: string
-}
-
 interface RecRow {
   id: string
   title: string
@@ -1434,13 +1482,26 @@ export type StoredSubjectRow = {
 }
 
 /**
- * The Overview, for one tenant and one horizon.
+ * `pinCalendarMonth` reads the calendar month the clock is in, whatever the
+ * reading month is, and whether or not it has a row yet. Only the weekly asks
+ * for it (plan WP1.2: the weekly is unchanged until WP3.7, and its preview is
+ * the parity gate for deploys 1 and 2). A `?month=` cannot do this: the URL is
+ * honoured only for a month that has a row, and on 1–3 October, or at any
+ * October clock on staging, the calendar month has none.
+ */
+export interface LoadOverviewOptions {
+  pinCalendarMonth?: boolean
+}
+
+/**
+ * The Overview, for one tenant and one horizon, on the reading month
+ * (market-first decision A) or the month `?month=` names.
  *
  * Null is the first-run empty state: a tenant with no delivered update has no
  * reading of anything, and the page says so rather than drawing seven blocks of
  * refusals.
  */
-export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
+export async function loadOverview(scope: Scope, options: LoadOverviewOptions = {}): Promise<OverviewData | null> {
   const supabase = scope.supabase as SupabaseClient
   const { clientId, params } = scope
   const reading: ReadingHandle = scope.reading
@@ -1456,18 +1517,22 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
   // awaited, so it still overlaps wave 2 and costs the page no hop, and costs
   // an empty tenant nothing. That is the same rule the record follows, applied
   // to its neighbours.
-  const [clientRes, runsRaw, rivals] = await Promise.all([
+  //
+  // THE RUNS CARRY THEIR FINISH INSTANT (market-first WP1.2): an update is
+  // dated by when it finished, which is what "as at" names. `loadDeliveredRuns`
+  // is the same filter and order this read always had, memoised so a page that
+  // loads several surfaces reads it once. The schedule is one small row, read
+  // for "next update".
+  const [clientRes, runsRaw, rivals, schedule] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
-    selectAll<RunRow>(() =>
-      supabase.from('pipeline_runs').select('id, started_at')
-        .eq('client_id', clientId).in('status', ['completed', 'partial'])
-        .order('started_at', { ascending: true }),
-    ),
+    loadDeliveredRuns(supabase, clientId),
     loadTrackedRivals(supabase, clientId),
+    loadReadingSchedule(supabase, clientId),
   ])
   const client = row<{ company_name: string | null }>(clientRes, 'overview.client')
   const brand = client?.company_name ?? 'Your brand'
   if (runsRaw.length === 0) return null
+  const pinned = options.pinCalendarMonth === true
 
   // THE THEMED RUN AND THE LEDGER, STARTED HERE AND TAKEN WHERE THEY ARE USED
   // (WP23). Neither depends on the month axis, and both were once awaited on
@@ -1479,12 +1544,13 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
   const themedRunAhead = fetchRunningRunIds(supabase, clientId, 'overview').then((ids) =>
     fetchThemedRunId(supabase, clientId, ids, 'overview'),
   )
-  // `readingAt`, NOT THE READING'S MONTH: both figures the ledger dates — how
-  // long the advice has been on record and the month the grounding is STATED in
-  // — are taken at the instant the page was built, which is what
-  // `GroundingInput.month` documents itself as. The month key is resolved after
-  // the axis, and this read starts before it.
-  const ledgerAhead = loadLedger(supabase, clientId, readingAt)
+  // THE LAST UPDATE, NOT THE CLOCK (market-first WP1.2): both figures the
+  // ledger dates — how long the advice has been on record and the month the
+  // grounding is STATED in — are "as at" the update the page reads through,
+  // which is `ReadingMonth.asAt` and needs nothing but the runs, so this read
+  // still starts before the axis. The weekly, pinned to the calendar month,
+  // keeps the clock it always had.
+  const ledgerAhead = loadLedger(supabase, clientId, pinned ? readingAt : asAtOf(runsRaw, readingAt) ?? readingAt)
   themedRunAhead.catch(() => {})
   ledgerAhead.catch(() => {})
 
@@ -1506,7 +1572,21 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     firstRunMonth,
   })
   const started = sinceStart(history.denominators.map((d) => ({ month: d.month, videos: d.videos })))
-  const window = horizonWindow(horizon, readingAt, started.from)
+  // THE READING MONTH (market-first decision A). Until the new month is half
+  // over and has had two updates, the page reads the month that has just
+  // ended; `?month=` picks another month that has a row. The horizon is
+  // anchored on it, so every horizon's axis ends on the month the page reads
+  // and `month` below IS `reading.month`.
+  const view = readingViewFrom({
+    now: readingAt,
+    runs: runsRaw,
+    denominators: history.denominators,
+    rivalAudiences: marketRivalAudiences(rivals),
+    schedule,
+    explicit: pinned ? null : params[MONTH_PARAM] ?? null,
+  })
+  const rm = view.reading
+  const window = horizonWindow(horizon, pinned ? readingAt : readingAnchor(rm), started.from)
   const axis = window.months
   const month = axis[axis.length - 1]
   // THE COMPARISON IS THE CALENDAR'S, NOT THE HORIZON'S. "This month" is a
@@ -1517,7 +1597,8 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
   // read, so the page reads one month wider than it draws.
   const prevMonth = previousMonthOf(month)
   const readAxis = axis[0] <= prevMonth ? axis : [prevMonth, ...axis]
-  const monthStatus = freezeStateFor(month, readingAt)
+  // Frozen once an UPDATE has passed its freeze line, not the clock.
+  const monthStatus = freezeStateFor(month, rm.asAt ?? readingAt)
 
   // THE RECORD'S READS DEPEND ON THE MONTH AND ON NOTHING ELSE. What the page
   // refused to compare is a pure count over verdicts the page has not made
@@ -1639,9 +1720,10 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
   // change at all"). The line says which it is; a builder only needs to know
   // that it may not draw one.
   const suppress = thin || early
+  const barStatus = barMonthStatus(month, monthStatus, rm, pinned)
   const bar: BarBlock = {
     month,
-    status: monthStatus,
+    status: barStatus,
     daysIn,
     updates: updatesByMonth[month] ?? 0,
     updateDates,
@@ -1652,7 +1734,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     thin,
     line: fillingLine({
       month,
-      status: monthStatus,
+      status: barStatus,
       daysIn,
       updates: updatesByMonth[month] ?? 0,
       videos: monthVideos,
@@ -1666,7 +1748,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     counter: readingsCounter(readingsSoFar),
     note: fillingNote({
       month,
-      status: monthStatus,
+      status: barStatus,
       daysIn,
       updates: updatesByMonth[month] ?? 0,
       videos: monthVideos,
@@ -1833,6 +1915,8 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     month,
     monthStatus,
     readingAt,
+    reading: rm,
+    otherMonth: pinned ? null : view.other,
     horizon,
     window,
     axis,

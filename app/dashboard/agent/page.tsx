@@ -5,7 +5,7 @@ import { canAsk } from '@/lib/agent/access'
 import { askBasisLine, loadAskBasis, nothingSearchable } from '@/lib/agent/basis'
 import { loadNotAnswered } from '@/lib/agent/measure'
 import { loadPlanChecks, type PlanCheckCard } from '@/lib/ask/plan-cards'
-import { askDraws, askPlanChip, askRecordLines, loadAskHistory } from '@/lib/pages/agent-thread'
+import { askDraws, askPlanChip, loadAskHistory } from '@/lib/pages/agent-thread'
 import { AgentComposer } from '@/components/agent-composer'
 import { AskBoxTile } from '@/components/pages/agent/ask-box'
 import { DrawsTile, EarlierQuestionsTile, NotAnsweredTile } from '@/components/pages/agent/rail'
@@ -69,10 +69,9 @@ export default async function AgentPage({
   // spend the turn rather than after.
   const blocked = nothingSearchable(basis)
   const delivered = deliveredRes.error ? null : deliveredRes.count ?? null
-  const recordLines = askRecordLines(basis, delivered)
 
   return (
-    <AskShell context={askBasisLine(basis, { short: true })} record={{ line: recordLines[0], lines: recordLines }} params={sp}>
+    <AskShell context={askBasisLine(basis, { short: true })}>
       {/* THE BOX OVER THE THREE, not beside them — see `AskIndexColumns`. This
           page has no answer on it yet, so the tiles that are a rail on a thread
           are the page itself here; composed as two columns it was a 130px tile

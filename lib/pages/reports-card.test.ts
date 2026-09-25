@@ -186,6 +186,14 @@ describe('the gathered era', () => {
     expect(countReadings(months, '2026-06-01')).toBe(4)
   })
 
+  it('stops at the month the pages read, not at the clock’s month (market-first WP1.2)', () => {
+    // On 5 October the pages read September (decision A) while October already
+    // has a row; the card's count is Overview's, so it stops at September.
+    const months = ['2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01', '2026-10-01'].map((m) => point(m, 'live'))
+    expect(countReadings(months, '2026-06-01', '2026-09-01')).toBe(4)
+    expect(countReadings(months, '2026-06-01')).toBe(5)
+  })
+
   it('never reads the era backwards', () => {
     // A first update inside the month the card is read in is one month, not none.
     expect(eraTo('2026-09-01', '2026-09-18T09:00:00.000Z')).toBe('2026-09-01')

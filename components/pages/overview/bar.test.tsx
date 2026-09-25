@@ -4,8 +4,9 @@ import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
-import { overviewBar } from './bar'
+import { overviewBar, overviewBarTitle } from './bar'
 import { overviewFixture, refusedFixture } from './fixture'
+import { overviewPage } from './page'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -85,5 +86,37 @@ describe('OV0 · the month so far', () => {
     expect(app).not.toContain('2,359')
     expect(app).not.toContain('2,044')
     expect(app).toContain('18 days in')
+  })
+})
+
+// Market-first WP1.2 (decision A): on 1 to 15 October every page reads an
+// ended September, and the PDF, PNG and email draw OV0. "This month so far"
+// above "September, ended" claimed a month the page no longer reads.
+describe('OV0 on an ended month: no "this month"', () => {
+  const ended = () => {
+    const data = overviewFixture()
+    return { ...data, bar: { ...data.bar, daysIn: null, status: 'filling' as const, updates: 0, updateDates: [] } }
+  }
+
+  it('is titled by the month’s state, never "This month"', () => {
+    expect(overviewBarTitle(overviewFixture())).toBe('The month so far')
+    expect(overviewBarTitle(ended())).toBe('The month')
+    for (const mode of MODES) {
+      const text = renderText(overviewBar.render(ended(), mode, ctx))
+      expect(text, mode).not.toMatch(/this month/i)
+      expect(text, mode).not.toContain('so far')
+    }
+    expect(renderText(overviewBar.render(ended(), 'print', ctx))).toContain('September, ended')
+  })
+
+  it('names the month where nothing has been read, rather than "this month"', () => {
+    const data = ended()
+    expect(renderText(overviewBar.render(data, 'print', ctx))).toContain('none yet in September')
+    expect(overviewBar.emptyState({ ...data, bar: { ...data.bar, videos: null } })).toBe('Nothing has been read into September yet.')
+  })
+
+  it('heads the first exported slide with the month’s name', () => {
+    const [first] = overviewPage.slides?.(ended(), 'default') ?? []
+    expect(first.title).toBe('The September reading')
   })
 })

@@ -1064,11 +1064,15 @@ describe('the coverage line and the two sections Phase 1 does not build', () => 
 })
 
 describe('the page', () => {
-  it('draws every block, the two updates and the update’s own size', () => {
+  it('draws every block, and the bar\'s one line: the update and its comment window', () => {
     const text = renderText(<WeekPage data={weekFixture()} />)
     expect(text).toContain('This week')
     expect(text).not.toContain('update of 13 Sep · previous 6 Sep')
-    expect(text).toContain('Össur · 205 videos this update')
+    // 25 Sep rulings, item 2: the slot names the update and the line names
+    // the comment window in place of "as at". The update's size was a second
+    // line at the bar's right-hand end, and the bar is one line now.
+    expect(text).toContain('Össur · The 13 Sep update comments written 6 to 13 Sep')
+    expect(text).not.toContain('Össur · 205 videos this update')
     // Every block's TITLE is on the page — except the footnote's, which the
     // artboard sets bare on the page ground with no eyebrow (design review,
     // nits). Its two lines are there; its heading is not, on screen.

@@ -28,10 +28,11 @@ export type NavGroup = 'Intelligence' | 'Account'
 
 /** What the page bar at the top of the surface carries. */
 export type BarKind =
-  /** Title, question, the month context line, horizon, "how sound is this", Export. */
+  /** Title, the month selector and its one line ("as at the {update} update ·
+   *  next update {date}"), horizon, Export (25 Sep rulings). */
   | 'reading'
-  /** Title, question, `update of {date} · previous {date}`, Export. This week
-   *  is dated by the update, not by the month, so it takes no horizon. */
+  /** Title, the update and its comment window, Export. This week is dated by
+   *  the update, not by the month, so it takes no horizon. */
   | 'week'
   /** Title only. Nothing on Ask, Reports or Settings is a reading of a month. */
   | 'title'
@@ -81,33 +82,11 @@ export const SURFACES: readonly Surface[] = [
  * you"), its moves are all moves and its claims are the latest update's. The
  * bar drew the four-link control anyway, and a client pressing "Last 12 months"
  * got a byte-identical page. A control that changes nothing is worse than an
- * absent one: it teaches a reader that the other four do nothing either. The
- * "how sound is this" band stays, because Market IS a reading — the two
+ * absent one: it teaches a reader that the other four do nothing either. Its
+ * month selector and line stay, because Market IS a reading — the two
  * questions are separate and the flag says so rather than `bar` answering both.
  */
 export const hasHorizon = (s: Surface): boolean => s.bar === 'reading' && s.horizon !== false
-
-/**
- * The "how sound is this" band appears wherever the page IS a reading — the
- * five month surfaces, This week (which reads an update), and Ask.
- *
- * ASK JOINED, AND IT JOINED BECAUSE IT BECAME A READING. Its bar is still
- * `title` — it has no month context line and no horizon — but it is no longer
- * true that it makes no reading: `agent.movement` is the ONE reader whose
- * direction-word flag is true today (`lib/config.ts`), flipped when Ask's
- * movement block stopped reading `theme_observations` and started reading the
- * comment-dated months through `lib/agent/movement.ts`. A surface that may
- * print a direction word and states no basis for it is the worst of both.
- *
- * Reports and Settings still state no basis, for the original reason: they make
- * no reading, and a band on Settings counting updates is furniture, and
- * furniture that looks like a fact.
- *
- * The band still draws only where a caller HANDS the bar a record
- * (components/shell/page-bar.tsx), so this opens a door rather than printing
- * anything.
- */
-export const hasRecord = (s: Surface): boolean => s.bar !== 'title' || s.key === 'ask'
 
 export function surface(key: NavKey): Surface {
   const s = SURFACES.find((x) => x.key === key)

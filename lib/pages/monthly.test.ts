@@ -68,6 +68,9 @@ const sent = (over: Partial<ReadableSent> = {}): ReadableSent => ({
   ...over,
 })
 
+
+const SEP = '2026-09-01'
+
 describe('the months a mover’s line is drawn on', () => {
   it('is this month and the five before it, oldest first', () => {
     // A month is its first day, which is how the reading layer keys one and
@@ -96,35 +99,49 @@ describe('why a subject shows no voice', () => {
   // another subject. A workspace with no confirmed subject is answered one
   // level up, by the section's own note.
   it('tells the silences apart', () => {
-    expect(voiceNote({ citations: 0, readable: 0, inMonth: 0 }))
+    expect(voiceNote({ citations: 0, readable: 0, inMonth: 0, month: SEP }))
       .toBe('nothing has been said about this one yet')
-    expect(voiceNote({ citations: 12, readable: 0, inMonth: 0 }))
+    expect(voiceNote({ citations: 12, readable: 0, inMonth: 0, month: SEP }))
       .toBe('what was said about this one could not be quoted: too short, or nothing but a handle')
-    expect(voiceNote({ citations: 12, readable: 4, inMonth: 0 }))
-      .toBe('nothing quotable was said about this one this month')
+    expect(voiceNote({ citations: 12, readable: 4, inMonth: 0, month: SEP }))
+      .toBe('nothing quotable was said about this one in September')
   })
 
   // Only the arm that IS about the month may name one: the other two are
   // readings of the whole corpus, and the citations behind them carry comment
-  // dates from any month.
-  it('names the month in the one arm the month is about', () => {
-    expect(voiceNote({ citations: 0, readable: 0, inMonth: 0 })).not.toContain('this month')
-    expect(voiceNote({ citations: 12, readable: 0, inMonth: 0 })).not.toContain('this month')
-    expect(voiceNote({ citations: 12, readable: 4, inMonth: 0 })).toContain('this month')
+  // dates from any month. And it names it BY NAME (market-first WP1.2): the
+  // monthly is built in the month after the one it reads, so "this month"
+  // on it would name the wrong one.
+  it('names the month, by name, in the one arm the month is about', () => {
+    expect(voiceNote({ citations: 0, readable: 0, inMonth: 0, month: SEP })).not.toContain('September')
+    expect(voiceNote({ citations: 12, readable: 0, inMonth: 0, month: SEP })).not.toContain('September')
+    expect(voiceNote({ citations: 12, readable: 4, inMonth: 0, month: SEP })).toContain('in September')
+    for (const inMonth of [0, 2]) {
+      expect(voiceNote({ citations: 12, readable: 4, inMonth, month: SEP })).not.toContain('this month')
+    }
   })
 
   // A row with no voice and no note renders an empty paragraph under a
   // subject's name, which reads as a bug rather than as a silence.
   it('always says something, including when the voice went to another subject', () => {
-    expect(voiceNote({ citations: 12, readable: 4, inMonth: 2 }))
-      .toBe('the voices from this month are already quoted above')
+    expect(voiceNote({ citations: 12, readable: 4, inMonth: 2, month: SEP }))
+      .toBe('the voices from September are already quoted above')
   })
 })
 
 describe('the next reading', () => {
-  it('is the first of the month after this one, so a decision has a deadline', () => {
-    expect(nextReadingOf('2026-09-01').slice(0, 10)).toBe('2026-10-01')
-    expect(nextReadingOf('2026-12-01').slice(0, 10)).toBe('2027-01-01')
+  it('is the first of the month after the one it is built in, so a decision has a deadline', () => {
+    expect(nextReadingOf('2026-09-01', '2026-09-24T12:00:00.000Z').slice(0, 10)).toBe('2026-10-01')
+    expect(nextReadingOf('2026-12-01', '2026-12-20T12:00:00.000Z').slice(0, 10)).toBe('2027-01-01')
+  })
+
+  // Decision A: the monthly reads the month that has just ended. Counted from
+  // the month read, a September report built on 4 or 12 October named
+  // 1 October, a date already past when it was read.
+  it('is never a date already past: September built in October names 1 November', () => {
+    expect(nextReadingOf('2026-09-01', '2026-10-04T06:00:00.000Z').slice(0, 10)).toBe('2026-11-01')
+    expect(nextReadingOf('2026-09-01', '2026-10-12T06:00:00.000Z').slice(0, 10)).toBe('2026-11-01')
+    expect(nextReadingOf('2026-11-01', '2026-12-02T06:00:00.000Z').slice(0, 10)).toBe('2027-01-01')
   })
 })
 

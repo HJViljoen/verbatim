@@ -1,10 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { shortDate } from '../format'
+import { longMonth, shortDate } from '../format'
 import { composeInterpretation, type Interpretation } from '../prose/interpret'
 import { proseFigures } from '../prose/figures'
 import type { Scope } from '../renderables/types'
-import { nextMonth, prevMonth as previousMonthOf } from '../reading/month-key'
+import { monthStartOf, nextMonth, prevMonth as previousMonthOf } from '../reading/month-key'
 import { loadMonthSeries, readingHandle, type ReadingHandle } from '../reading/read'
+import { MONTH_PARAM } from '../reading/reading-month'
+import { loadMarketRivalAudiences, monthlyMonthFor } from '../reading/reading-view'
 import { isReadable, mergeNotes, mergeSeriesNotes, pointsByMonth, type MonthLabel, type MonthPoint } from '../reading/series'
 import type { MonthStatus } from '../reading/types'
 import { isAnswer, type FigureTable, type Verdict } from '../reading/verdicts'
@@ -216,11 +218,16 @@ export function spanOf(months: readonly string[]): string {
  * filtered by their comment's date (AGENTS.md: a period is dated by the
  * comment) — so the month is named only in the arm that is about it.
  */
-export function voiceNote(input: { citations: number; readable: number; inMonth: number }): string {
+export function voiceNote(input: { citations: number; readable: number; inMonth: number; month: string }): string {
+  // THE MONTH BY NAME, NOT "THIS MONTH" (market-first WP1.2). A stored
+  // artefact is read after the month it is about, and from decision A the
+  // monthly is built in the month AFTER the one it reads, so "this month" on
+  // it names the wrong one.
+  const name = longMonth(input.month)
   if (input.citations === 0) return 'nothing has been said about this one yet'
   if (input.readable === 0) return 'what was said about this one could not be quoted: too short, or nothing but a handle'
-  if (input.inMonth === 0) return 'nothing quotable was said about this one this month'
-  return 'the voices from this month are already quoted above'
+  if (input.inMonth === 0) return `nothing quotable was said about this one in ${name}`
+  return `the voices from ${name} are already quoted above`
 }
 
 /**
@@ -246,10 +253,20 @@ export function leadOf(
   return leadVerdict(printed.filter((v) => isAnswer(v.state)))
 }
 
-/** When the next monthly reading lands: the first of the month after this one.
- *  A decision with no date on it is a note, not a decision. */
-export function nextReadingOf(month: string): string {
-  return `${nextMonth(month)}T00:00:00.000Z`
+/**
+ * When the next monthly reading lands: the first of the month after the one the
+ * report is BUILT in. A decision with no date on it is a note, not a decision.
+ *
+ * FROM THE BUILD, NOT FROM THE MONTH READ (market-first decision A). The monthly
+ * now reads the month that has just ended, so a September report built on
+ * 4 October that counted from September would name 1 October, a date already
+ * past. The later of the two is taken, so a report on the month it is built in
+ * (a named `?month=`) still names the first of the next.
+ */
+export function nextReadingOf(month: string, builtAt: string): string {
+  const read = nextMonth(month)
+  const built = nextMonth(monthStartOf(builtAt))
+  return `${read > built ? read : built}T00:00:00.000Z`
 }
 
 // ---- the loader ---------------------------------------------------------------
@@ -270,7 +287,21 @@ export function nextReadingOf(month: string): string {
 export async function loadMonthly(scope: Scope): Promise<MonthlyData | null> {
   const supabase = scope.supabase as SupabaseClient
   const reading: ReadingHandle = scope.reading ?? readingHandle(scope.clientId)
-  const monthScope: Scope = { ...scope, reading, params: { ...scope.params, horizon: 'this_month' } }
+  // THE MONTH THAT HAS JUST ENDED (market-first decision A). The monthly used
+  // to read the calendar month it was built in, so one built on 4 October was
+  // four days of October and printed September nowhere. It now reads the month
+  // a caller names, or the latest ended month with a row, and hands it to both
+  // page loaders as `?month=`. One denominator read, the same whole-history ask
+  // Overview makes first (memoised: the same request pays for it once).
+  const now = new Date().toISOString()
+  const [history, rivalAudiences] = await Promise.all([
+    loadMonthSeries(reading.client, scope.clientId, { from: '2019-01-01', to: now, updatesByMonth: {} }),
+    // The one market every page pools (`marketRivalAudiences`), so the month
+    // chosen here is a month the pages would call ended on the same rows.
+    loadMarketRivalAudiences(supabase, scope.clientId),
+  ])
+  const monthParam = monthlyMonthFor(now, history.denominators, scope.params[MONTH_PARAM], rivalAudiences)
+  const monthScope: Scope = { ...scope, reading, params: { ...scope.params, horizon: 'this_month', [MONTH_PARAM]: monthParam } }
 
   const overview = await loadOverview(monthScope)
   if (!overview) return null
@@ -308,7 +339,7 @@ export async function loadMonthly(scope: Scope): Promise<MonthlyData | null> {
     ),
     figures: overview.sentence.figures,
     ledger: overview.sentence.ledger,
-    nextReading: nextReadingOf(month),
+    nextReading: nextReadingOf(month, now),
     href: '/dashboard/market',
   }
 
@@ -530,7 +561,7 @@ async function loadSubjectVoicesPerSubject(
       voice,
       note: voice
         ? null
-        : voiceNote({ citations: ids.length, readable: read.readable, inMonth: read.from }),
+        : voiceNote({ citations: ids.length, readable: read.readable, inMonth: read.from, month }),
       href: `/dashboard/subjects?item=${encodeURIComponent(subject.id)}`,
     }
   })

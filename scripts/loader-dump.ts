@@ -70,7 +70,18 @@ const PAGES: [string, Loader][] = [
   ['market', (s) => loadMarketSurface(s)],
   ['competitive', (s) => loadCompetitiveSurface(s)],
   ['week', (s) => loadWeek(s)],
+  // THE TWO MARKET-FIRST WP1.2 NAMES THAT ARE NOT A PAGE OF THEIR OWN. The
+  // Reports card reads the reading month since WP1.2, and the weekly is pinned
+  // to the calendar month so its preview is unchanged at deploys 1 and 2 (the
+  // parity gate): `--page weekly --at 2026-10-04T06:00:00Z` in both trees, then
+  // `diff`. Both loaders only read. Dumped only when named (or `--page all`),
+  // so a run with no `--page` is the same twelve loads it always was. Imported
+  // when called: their modules construct an OpenAI client on import (never
+  // called here), which would stop the script's own refusal without a key.
+  ['reports-card', async (s) => (await import('../lib/pages/reports-card')).loadQuarterlyCard(s)],
+  ['weekly', async (s) => (await import('../lib/pages/weekly')).loadWeekly(s)],
 ]
+const BY_NAME_ONLY = new Set(['reports-card', 'weekly'])
 
 /** Freeze the wall clock. Every loader takes `readingAt` from `new Date()`, and
  *  two dumps taken a minute apart across a month boundary would differ for that
@@ -109,7 +120,9 @@ function canonical(value: unknown): unknown {
 async function main() {
   const out = flag('out')
   const at = flag('at', '2026-09-16T06:00:00Z')
-  const wantedPage = flag('page').toLowerCase()
+  // One page, several comma-separated (`--page overview,market,reports-card`),
+  // or `all`.
+  const wantedPages = flag('page').toLowerCase().split(',').map((p) => p.trim()).filter(Boolean)
   const wantedClient = flag('client')
   const maxLoads = Number(flag('max-loads', '12')) || 12
   if (!args.includes('--confirm')) {
@@ -121,6 +134,11 @@ async function main() {
   }
   if (!out) {
     console.error('Say where to write: --out scratch/dump-new')
+    process.exit(2)
+  }
+  const unknown = wantedPages.filter((p) => p !== 'all' && !PAGES.some(([page]) => page === p))
+  if (unknown.length > 0) {
+    console.error(`No such page: ${unknown.join(', ')}. The pages are ${PAGES.map(([page]) => page).join(', ')}.`)
     process.exit(2)
   }
 
@@ -141,7 +159,9 @@ async function main() {
   }
 
   const tenants = ((data ?? []) as Tenant[]).filter((t) => !wantedClient || t.id === wantedClient)
-  const pages = PAGES.filter(([page]) => !wantedPage || wantedPage === 'all' || page === wantedPage)
+  const pages = PAGES.filter(([page]) =>
+    wantedPages.includes('all') || wantedPages.includes(page) || (wantedPages.length === 0 && !BY_NAME_ONLY.has(page)),
+  )
   const loads = tenants.length * pages.length
   console.log(`Plan: ${loads} page loads, clock frozen at ${at}, into ${out}/`)
   if (loads > maxLoads) {

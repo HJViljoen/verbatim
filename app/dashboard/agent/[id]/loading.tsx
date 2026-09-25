@@ -10,7 +10,7 @@
 // `h-14 rounded-2xl` bar at the foot, the 56px composer pill this package
 // replaced — and then watched it snap into a two-column board of tiles.
 //
-// It now draws what the route composes: `AskShell`'s bar and record band over
+// It now draws what the route composes: `AskShell`'s bar over
 // `AskColumns` — a left column that grows (the ask box, then the answer) and a
 // 320px rail of three, collapsing to one column at `xl` exactly as
 // `AskColumns` does. Plain bones rather than `SkeletonTile`, so the two Ask
@@ -22,10 +22,9 @@ export default function AgentThreadLoading() {
   return (
     <div className="flex flex-col gap-3">
       <span role="status" className="sr-only">Loading…</span>
-      {/* The page bar, and under it the record band `hasRecord` gives Ask —
-          both mounted by `AskShell` on this route. */}
+      {/* The page bar `AskShell` mounts. No record band under it: the "How
+          sound is this" band left every page with the 25 Sep rulings. */}
       <Bone className="h-8 w-64 rounded-md" />
-      <Bone className="h-[30px] w-[340px] max-w-full rounded-2xl" />
       <div className="flex flex-col items-start gap-4 xl:flex-row">
         <div className="flex w-full min-w-0 flex-1 flex-col gap-4">
           {/* The ask box, then the answer — which runs to any height, so it is

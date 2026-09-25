@@ -6,24 +6,29 @@ import { ExportMenu, ExportScope } from '@/components/export-menu'
 import { HowToRead } from '@/components/how-to-read'
 import { PageFrame, PageGrid } from '@/components/shell/page-grid'
 import { SurfacePageBar } from '@/components/shell/page-bar'
+import { barContext } from '@/lib/shell/bar'
 import { Tile, TileEmpty } from '@/components/shell/tile'
 import { fmtInt, shortDate } from '@/lib/format'
 import type { OverviewData } from '@/lib/pages/overview'
-import { atThisPointLine, readingsCounter } from '@/lib/pages/overview'
 import { overviewBar } from './bar'
 import { overviewSentence } from './sentence'
 import { overviewSubjects } from './subjects'
 import { overviewCategory } from './category'
 import { overviewRivals } from './rivals'
 import { overviewMoves } from './moves'
-import { overviewRecord } from './record'
 
-// Overview — the page (Phase 1 WP11, design §3 OV0–OV6; ported to the artboard
+// Overview — the page (Phase 1 WP11, design §3 OV0–OV5; ported to the artboard
 // in Block D wave 2, `mock-sealand/artboards/Main.dc.html`).
 //
-// SEVEN BLOCKS IN THE MONTHLY REPORT'S ORDER, and that order is the point: the
+// SIX BLOCKS IN THE MONTHLY REPORT'S ORDER, and that order is the point: the
 // page and the artefact are the same reading, so a reader who has seen one has
 // seen the other. Each block links onward to the page that carries it in full.
+//
+// NO OV6 (25 Sep rulings, market-first WP1.2). "How sound is this month"
+// (`overview.record`) left the front page with the "How sound" pill. The
+// block itself stays, because the monthly renders it as `monthly.sound` until
+// WP2.1 rebuilds that artefact, and `OverviewData.record` stays as data
+// because the weekly reads `record.line`.
 
 export const OVERVIEW_BLOCKS: readonly Block<OverviewData>[] = [
   overviewBar,
@@ -32,7 +37,6 @@ export const OVERVIEW_BLOCKS: readonly Block<OverviewData>[] = [
   overviewCategory,
   overviewRivals,
   overviewMoves,
-  overviewRecord,
 ]
 
 /**
@@ -49,12 +53,11 @@ const ROWS: Record<string, number> = {
   'overview.sentence': 3,
   'overview.subjects': 3,
   // Floors, not sizes. Lowered in the layout sweep (2026-09-24): the category
-  // block lost its absence-only column and OV6 is a few labelled figures, so
-  // the old floors left a tile of white under them below xl.
+  // block lost its absence-only column, so the old floors left a tile of white
+  // under it below xl.
   'overview.category': 3,
   'overview.rivals': 3,
   'overview.moves': 3,
-  'overview.record': 1,
 }
 
 /**
@@ -75,17 +78,16 @@ const HERO = 'overview.sentence'
  * M7).
  *
  * `Main.dc.html` draws six sections and none of them is "This month so far".
- * Two of that tile's four facts were already on this screen — the update count
- * in the horizon range note (`horizonRange`), the month's videos in the
- * soundness band — so it spent a 12-column, 156px tile plus its gap at the top
- * of the page restating them, and the page's actual lead, "In one sentence",
- * began under them. The one fact that is NOT elsewhere moves to the band, where
- * a fact about how much has been read belongs (`atThisPointLine`).
+ * Its facts are the bar's and the horizon range's (`horizonRange`), so it spent
+ * a 12-column, 156px tile plus its gap at the top of the page restating them,
+ * and the page's actual lead, "In one sentence", began under them. (It once
+ * moved one fact into the "How sound is this" band; that band left every page
+ * with the 25 Sep rulings.)
  *
  * OV0 IS NOT REMOVED FROM `OVERVIEW_BLOCKS`, and that is why there are two
  * lists. The registry is what the export module, the print slides, the monthly
  * email and the brief section maps resolve `overview.bar` through — and a PDF
- * sheet, a PNG and an email carry no page bar, no horizon pills and no band, so
+ * sheet, a PNG and an email carry no page bar and no horizon pills, so
  * on those surfaces the tile is the only place any of the four facts appears
  * and it keeps its slide (`page.tsx` `overviewSlides`). The duplication this
  * drops is an APP duplication, which is what the finding measured.
@@ -134,23 +136,6 @@ export function horizonRange(data: OverviewData): string | null {
  *  can never come to disagree about which words are in play. */
 export const OVERVIEW_LEGEND = [...THIRTEEN_WORDS, ...READER_FLAGS]
 
-/**
- * The soundness band's sentence: the ramp counter, the record's own line, and
- * the month against the same point in the one before it.
- *
- * COMPOSED HERE BECAUSE THE PAGE IS WHAT HOLDS ALL THREE. The counter is OV0's,
- * the record line is `lib/reading/record.ts`'s, and the comparison is the one
- * fact OV0's tile carried alone (M7) — none of the three owns the other two, and
- * gluing any pair together in the loader is what put one sentence on this page
- * three times (design review High 4, code review I7).
- */
-export function bandLine(data: OverviewData): string {
-  const at = atThisPointLine(data.bar)
-  // The bare counter: the quarter gate is said on Reports and the quarterly,
-  // and the update count is the horizon range's (A9, A11).
-  return [readingsCounter(data.bar.readings, { quarter: false }), data.record.bandLine, at].filter(Boolean).join(' · ')
-}
-
 export function OverviewPage({
   data,
   params = {},
@@ -185,28 +170,10 @@ export function OverviewPage({
           nav="overview"
           params={params}
           range={horizonRange(data)}
-          context={{
-            brand: data.brand,
-            month: data.month,
-            status: data.monthStatus,
-            readingAt: data.readingAt,
-            // "The report of 1 Oct read …" is OV0's line, printed once there (A56).
-          }}
-          // THE RAMP COUNTER LEADS THE BAND (`main.bar.soundness`), and this
-          // is the ONE place on the app surface it is printed. It used to be
-          // glued to `record.line` in the loader, which fed the band and the
-          // record block's header meta both — so the same sentence appeared
-          // three times down one page (design review High 4, code review I7).
-          // Composed here because the page is what holds both halves.
-          // AND THE ONE FACT OV0's TILE CARRIED ALONE (Block D wave 3, M7).
-          // "2,044 at this point last month" is the reading that makes a
-          // weekly figure unnecessary — a growing month shown growing against
-          // its own predecessor — and it is the only one of that tile's four
-          // facts this screen did not already state. Composed here, like the
-          // ramp counter above it, because the page is what holds both halves;
-          // null on a closed month and wherever nothing recorded the point, so
-          // the band never carries a dash.
-          record={{ line: bandLine(data), lines: data.record.lines }}
+          // The brand, the month selector and "as at the {update} update ·
+          // next update {date}" (25 Sep rulings, market-first WP1.2). No "How
+          // sound is this" band: it left every page on 25 Sep.
+          context={barContext(data)}
         >
           {/* THE TWO CONTROLS THE ARTBOARD PUTS AT THE RIGHT-HAND END, and the
               two `/dashboard` has never had (`main.bar.howtoread`,

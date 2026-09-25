@@ -7,7 +7,7 @@ import { SkeletonSurface, SkeletonTile, Bone, BoneLines, BoneBars } from '@/comp
 // floors (`MIN_H`) as the page, so the real tiles land where the bones were.
 export default function SubjectsLoading() {
   return (
-    <SkeletonSurface nav="subjects" pills={2} band>
+    <SkeletonSurface nav="subjects" pills={2}>
       <div className="flex flex-col gap-4">
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[240px_minmax(0,1fr)] lg:items-start">
           <div className="flex flex-col gap-4">

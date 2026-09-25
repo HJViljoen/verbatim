@@ -1,7 +1,7 @@
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { appBaseUrl } from '@/lib/site'
-import { weekdayDate } from '@/lib/format'
+import { shortDate, weekdayDate } from '@/lib/format'
 import { loadOverview, longMonth, type OverviewData } from '@/lib/pages/overview'
 import type { PageModule, PrintVariant, Renderable, Slide } from '@/lib/renderables/types'
 import { OVERVIEW_BLOCKS } from './index'
@@ -17,7 +17,7 @@ import { OVERVIEW_BLOCKS } from './index'
  * names outright. `overview` has been a `PageKey` since WP9 with no module
  * behind it; this is the module, and it is thin on purpose.
  *
- * IT COMPOSES NOTHING. The seven blocks already render three modes and already
+ * IT COMPOSES NOTHING. The six blocks already render three modes and already
  * declare their own figures, verdicts and quotes (`lib/blocks/types.ts`), so a
  * renderable here is the block with a `RenderMode` and a context — not a second
  * rendering of the same reading. That is the whole reason the block spine
@@ -51,15 +51,18 @@ const renderables: Record<string, Renderable<OverviewData>> = Object.fromEntries
  *
  * PAGINATION IS DECIDED HERE, not by the browser (`PageModule.slides`). The
  * split follows the reading rather than the pixel count: what the month says,
- * who else is in it, and what the reading is made of. `full` adds nothing —
- * Overview has no per-item detail pane to append, which is what that variant is
- * for on Competitive and Market.
+ * who else is in it, and what is being done about it. (The third slide also
+ * carried OV6 until the 25 Sep rulings took it off the page.) `full` adds
+ * nothing — Overview has no per-item detail pane to append, which is what that
+ * variant is for on Competitive and Market.
  */
-function overviewSlides(_data: OverviewData, _variant: PrintVariant): Slide[] {
+function overviewSlides(data: OverviewData, _variant: PrintVariant): Slide[] {
   return [
-    { title: 'This month’s reading', keys: ['overview.bar', 'overview.sentence', 'overview.subjects'], layout: 'grid' },
+    // THE MONTH BY NAME, NOT "THIS MONTH" (market-first WP1.2): on 1 to 15
+    // October the sheet is September's, printed in October.
+    { title: `The ${longMonth(data.month)} reading`, keys: ['overview.bar', 'overview.sentence', 'overview.subjects'], layout: 'grid' },
     { title: 'The category and the rivals', keys: ['overview.category', 'overview.rivals'], layout: 'grid' },
-    { title: 'What we are doing, and how sound this is', keys: ['overview.moves', 'overview.record'], layout: 'grid' },
+    { title: 'What we are doing', keys: ['overview.moves'], layout: 'grid' },
   ]
 }
 
@@ -70,5 +73,10 @@ export const overviewPage: PageModule<OverviewData> = {
   slides: overviewSlides,
   renderables,
   snapshotTitle: (d) => `Overview · ${d.brand} · ${longMonth(d.month)}`,
-  printContext: (d) => `${d.brand} · ${longMonth(d.month)} · as at ${weekdayDate(d.readingAt)}`,
+  // "AS AT" IS THE LAST UPDATE, NEVER THE CLOCK (market-first WP1.2). A
+  // snapshot taken before the reading month existed carries no `reading`, and
+  // keeps the words it was built with.
+  printContext: (d) => d.reading?.asAt
+    ? `${d.brand} · ${longMonth(d.month)} · as at the ${shortDate(d.reading.asAt)} update`
+    : `${d.brand} · ${longMonth(d.month)} · as at ${weekdayDate(d.readingAt)}`,
 }

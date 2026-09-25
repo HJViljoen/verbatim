@@ -1,9 +1,8 @@
 import type { ReactNode } from 'react'
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
-import { HowSound } from '@/components/shell/how-sound'
 import { HowToRead } from '@/components/how-to-read'
 import { ExportMenu } from '@/components/export-menu'
-import { hasRecord, surface } from '@/lib/nav'
+import { surface } from '@/lib/nav'
 import { THIRTEEN_WORDS, READER_FLAGS } from '@/lib/calibration'
 
 // Ask's shell (Block D wave 2, E-ask · `ask.shell`, `ask.bar.question`).
@@ -34,10 +33,10 @@ import { THIRTEEN_WORDS, READER_FLAGS } from '@/lib/calibration'
 // basis. A one-line additive `context` prop on `SurfacePageBar` would let this
 // go back to the shared component; that file is `main`'s.
 //
-// THE RECORD BAND IS THE ONE CONTROL ASK GAINED. `hasRecord(s)` admits Ask
-// because Ask is the one reader whose direction-word flag is true, and a
-// surface that may print a direction word and states no basis for it is the
-// worst of both. The bar draws it only where a caller hands it one.
+// NO "HOW SOUND IS THIS" BAND (25 Sep rulings, market-first WP1.2). Ask used
+// to mount its own record band and drawer under the bar; the band left every
+// page, Ask's too. What an answer draws on is still stated, in the open, in
+// the Draws tile and in each answer's footer.
 
 /**
  * The words the legend explains on this surface.
@@ -50,15 +49,10 @@ export const ASK_LEGEND = [...THIRTEEN_WORDS, ...READER_FLAGS]
 
 export function AskShell({
   context,
-  record,
-  params = {},
   children,
 }: {
   /** `AgentThreadData.bar.context` — the ask basis, never a month reading. */
   context: string
-  /** The record band's sentence and the lines behind it. Null draws no band. */
-  record: { line: string; lines: string[] } | null
-  params?: Record<string, string | undefined>
   children: ReactNode
 }) {
   const s = surface('ask')
@@ -69,24 +63,6 @@ export function AskShell({
           <HowToRead items={ASK_LEGEND} basePath={s.href} anchor="ask" />
           <ExportMenu />
         </PageBar>
-        {/* Under the bar, not in it: the basis is a sentence a reader reads,
-            not a control they operate. Gated on `hasRecord` exactly as the
-            shared bar gates it, so the day Ask stops making a reading the band
-            goes with one edit to the table. */}
-        {record && hasRecord(s) && (
-          // `line` is the band AND the drawer's opening <p>; `lines` is the
-          // <ul> under it. Passed whole, the first line printed twice inside
-          // the drawer ("23 updates delivered." as the paragraph and again as
-          // the first bullet). Ask is the only surface passing a record today,
-          // so this sets the convention: the list is what the sentence does not
-          // already say.
-          <HowSound
-            basePath={s.href}
-            params={params}
-            line={record.line}
-            lines={record.lines.filter((l) => l !== record.line)}
-          />
-        )}
       </div>
       {children}
     </PageFrame>

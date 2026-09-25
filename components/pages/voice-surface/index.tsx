@@ -6,6 +6,7 @@ import { shortDate } from '@/lib/format'
 import { READER_FLAGS, THIRTEEN_WORDS } from '@/lib/calibration'
 import { PageFrame, PageGrid } from '@/components/shell/page-grid'
 import { SurfacePageBar } from '@/components/shell/page-bar'
+import { barContext } from '@/lib/shell/bar'
 import { Tile, TileEmpty } from '@/components/shell/tile'
 import type { VoiceSurfaceData } from '@/lib/pages/voice-surface'
 import { voiceAudience } from './audience'
@@ -163,8 +164,7 @@ export function VoiceSurfacePage({
         nav="voice"
         params={params}
         range={voiceHorizonRange(data)}
-        context={{ brand: data.brand, month: data.month, status: data.monthStatus, readingAt: data.readingAt }}
-        record={{ line: data.record.line, lines: data.record.lines }}
+        context={barContext(data)}
       >
         {controls}
       </SurfacePageBar>
@@ -180,9 +180,11 @@ export function VoiceSurfacePage({
           {data.notes.map((n) => n.text).join(' ')}
         </p>
       ) : null}
-      {/* No method footnote: soundness lives in the page bar's "How sound is
-          this" pill and its record modal (copy de-clutter, ruling B). The
-          privacy line is a legal line, not method, and stays. */}
+      {/* No method footnote (copy de-clutter ruling B; the 25 Sep rulings put
+          no explanatory footnote under a block). The record is Settings'; the
+          "How sound is this" pill that once opened it left every page with the
+          25 Sep rulings. The privacy line is a legal line, not method, and
+          stays. */}
       {data.method ? (
         <p data-copy="figure" className="m-0 pt-1 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
           {data.method.privacy}

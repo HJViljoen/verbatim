@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
-import { fmtInt, fullDate } from '@/lib/format'
+import { fmtInt, fullDate, monthName } from '@/lib/format'
 import { carriesShare, levelText } from '@/lib/reading/level'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
@@ -58,12 +58,16 @@ import { audienceFigures, audiencePillLabel } from '@/lib/pages/voice-surface'
 
 /** One pill in the audience switch. The count is on the pill, not in a
  *  tooltip: an audience is chosen by how much of the month it holds. */
-function AudiencePill({ option, mode }: { option: AudienceOption; mode: RenderMode }) {
+function AudiencePill({ option, month, mode }: { option: AudienceOption; month: string; mode: RenderMode }) {
   const label = audiencePillLabel(option.audience, option.label)
   const quiet = !option.observed || option.thin
+  // AN AUDIENCE WITH NO ROW THIS MONTH HAD NO VIDEO READ IN IT, and the pill
+  // says that, with the month (market-first WP1.2, GR F57). "Category not
+  // observed" was what the first days of every month printed for the category
+  // itself: a month not read yet, worded as a measurement of nothing.
   const count = option.observed
     ? <span data-copy="figure" className={mode === 'email' ? undefined : 'font-mono text-[11px] tabular-nums text-muted-foreground'}>{fmtInt(option.videos ?? 0)}</span>
-    : <span className={mode === 'email' ? undefined : 'font-mono text-[10px] text-muted-foreground'}>not observed</span>
+    : <span className={mode === 'email' ? undefined : 'font-mono text-[10px] text-muted-foreground'}>no video read in {monthName(month)}</span>
   // D14: a "since" date on this pill would be a start date, and the product
   // holds no such thing. What it holds is the day the rival left the tracked
   // set, which is what the pill says instead.
@@ -243,7 +247,7 @@ export const voiceAudience: Block<VoiceSurfaceData> = {
                   loader already offers nothing else; the block says it again
                   because a stored snapshot carries the options it was frozen
                   with, and one frozen before this rule still lists them. */}
-              {a.options.filter(offered).map((o) => <AudiencePill key={o.audience} option={o} mode={mode} />)}
+              {a.options.filter(offered).map((o) => <AudiencePill key={o.audience} option={o} month={data.month} mode={mode} />)}
             </div>
           </Row>
 

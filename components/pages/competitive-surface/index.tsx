@@ -5,6 +5,7 @@ import { ExportMenu, ExportScope } from '@/components/export-menu'
 import { HowToRead } from '@/components/how-to-read'
 import { PageFrame, PageGrid } from '@/components/shell/page-grid'
 import { SurfacePageBar } from '@/components/shell/page-bar'
+import { barContext } from '@/lib/shell/bar'
 import { Tile, TileEmpty } from '@/components/shell/tile'
 import type { GlossaryKey } from '@/lib/calibration'
 import { saidAboutUnread, type CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
@@ -31,7 +32,7 @@ import { competitivePlaybook } from './playbook'
 // declarations rather than guessed.
 //
 // CO1 IS NOT A TILE ANY MORE. The artboard puts the rival selection inline
-// under the soundness band — a pill row outside any card — because it is a
+// under the page bar — a pill row outside any card — because it is a
 // CONTROL for the page and not a reading of it. A full-width card with an
 // uppercase eyebrow and a block question, which is what it was, gave a selector
 // the weight of a finding.
@@ -192,8 +193,7 @@ export function CompetitiveSurfacePage({
         <SurfacePageBar
           nav="competitive"
           params={params}
-          context={{ brand: data.brand, month: data.month, status: data.monthStatus, readingAt: data.readingAt }}
-          record={{ line: data.record.line, lines: data.record.lines }}
+          context={barContext(data)}
         >
           <ExportMenu />
           <HowToRead items={LEGEND} basePath="/dashboard/competitive" anchor="competitive" />
@@ -211,9 +211,11 @@ export function CompetitiveSurfacePage({
             </Tile>
           ))}
         </PageGrid>
-        {/* No method footnote: soundness lives in the page bar's "How sound
-            is this" pill and its record modal (copy de-clutter ruling B). The
-            privacy line is legal, not method, and stays. */}
+        {/* No method footnote (copy de-clutter ruling B; the 25 Sep rulings
+            put no explanatory footnote under a block). The record is
+            Settings'; the "How sound is this" pill that once opened it left
+            every page with the 25 Sep rulings. The privacy line is legal, not
+            method, and stays. */}
         {data.method ? (
           <p className="m-0 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">{data.method.privacy}</p>
         ) : null}

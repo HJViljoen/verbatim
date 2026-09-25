@@ -9,6 +9,7 @@ import { ExportMenu, ExportScope } from '@/components/export-menu'
 import { HowToRead } from '@/components/how-to-read'
 import { PageFrame, PageGrid } from '@/components/shell/page-grid'
 import { SurfacePageBar } from '@/components/shell/page-bar'
+import { barContext } from '@/lib/shell/bar'
 import { Tile, TileEmpty } from '@/components/shell/tile'
 import { loadSubjectsPage, type SubjectsData } from '@/lib/pages/subjects'
 import { subjectsList } from './list'
@@ -222,8 +223,7 @@ export function SubjectsPage({
         <SurfacePageBar
           nav="subjects"
           params={params}
-          context={{ brand: data.brand, month: data.month, status: data.monthStatus, readingAt: data.readingAt }}
-          record={{ line: data.record.line, lines: data.record.lines }}
+          context={barContext(data)}
         >
           <HowToRead items={GLOSSARY_ITEMS} basePath="/dashboard/subjects" anchor="subjects" />
           <ExportMenu />

@@ -2,7 +2,7 @@ import { SkeletonSurface, Bone, BoneLines, BoneBars } from '@/components/shell/s
 import { GrowingTile } from '@/components/pages/voice-surface'
 
 // Mirrors app/dashboard/voice/page.tsx (Phase 1 WP13): the surface bar (How
-// to read, the horizon row with its range, the "how sound" band: the bar used
+// to read, its one line, the horizon row with its range: the bar used
 // to be a bare title, which jumped the whole page down by two rows when the
 // real one landed), then the audience and where it was said · what moved · a
 // theme in full · who is talking.
@@ -22,7 +22,7 @@ import { GrowingTile } from '@/components/pages/voice-surface'
 // months of the comment-dated series, and it is always drawn.
 export default function VoiceLoading() {
   return (
-    <SkeletonSurface nav="voice" pills={1} band>
+    <SkeletonSurface nav="voice" pills={1}>
 
       {/* VO1 · the audience switch, then the platform mix */}
       <GrowingTile>

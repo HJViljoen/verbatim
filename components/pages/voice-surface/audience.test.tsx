@@ -196,3 +196,23 @@ describe('voiceAudience', () => {
     expect(markup).toContain('34%')
   })
 })
+
+// GR F57 (market-first WP1.2): on the first days of every month the category
+// had no row yet, and its selected pill read "Category not observed", a
+// measurement of nothing for what was a month not read. It names the month.
+describe('voiceAudience · the selected audience with no row in the month', () => {
+  it('says no video was read in that month, never "not observed"', () => {
+    const base = voiceFixture()
+    const hollow = {
+      ...base,
+      month: '2026-10-01',
+      audience: {
+        ...base.audience,
+        options: base.audience.options.map((o) => (o.selected ? { ...o, observed: false, videos: null, comments: null } : o)),
+      },
+    }
+    const text = draw(hollow)
+    expect(text).toContain('no video read in Oct 2026')
+    expect(text).not.toContain('not observed')
+  })
+})

@@ -11,6 +11,7 @@ import { CADENCE_NOT_STORED, isUnsupportedCadence, normaliseRecipients, splitRec
 import { ARTEFACTS, ARTEFACT_COPY, isArtefact, isBuildable, notBuiltYet } from '@/lib/settings/artefacts'
 import { isMissingArtefact } from '@/lib/settings/reports-load'
 import { createAdminClient } from '@/lib/supabase-admin'
+import { assertTenantMay } from '@/lib/tenant-locks'
 
 // Settings › Reports and recipients — who receives which artefact (design ST6).
 //
@@ -128,6 +129,12 @@ export async function updateArtefactRecipients(
   // The one value the form does not get to decide.
   const buildable = isBuildable(parsed.data.artefact)
   const active = buildable && parsed.data.active
+  // THE TENANT LOCK (market-first decision J, lib/tenant-locks.ts): during the
+  // trial a tenant's own user may keep a list, never switch its sending on.
+  if (active) {
+    const may = assertTenantMay(session, clientId, 'sends')
+    if (!may.ok) return { ok: false, message: may.message }
+  }
   const before = existing
     ? { recipients: existing.recipients as string[], active: existing.active as boolean }
     : null

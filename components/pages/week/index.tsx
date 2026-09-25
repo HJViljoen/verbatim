@@ -1,7 +1,6 @@
 import type { Block, BlockContext } from '@/lib/blocks/types'
 import { blockContext, figureCount } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
-import { fmtInt } from '@/lib/format'
 import { HowToRead } from '@/components/how-to-read'
 import { ExportMenu, ExportScope } from '@/components/export-menu'
 import { PageFrame, PageGrid } from '@/components/shell/page-grid'
@@ -102,27 +101,6 @@ export function weekFigureCount(data: WeekData, blocks: readonly Block<WeekData>
   return figureCount(blocks.map((b) => b.figures?.(data) ?? {}))
 }
 
-/**
- * The right-hand end of the page bar: who this is a reading of, and how big
- * the update was.
- *
- * THE VIDEO COUNT IS NULL UNTIL M3 AND SAYS SO. `windowVideos` comes off
- * `loadWindowReading`, which is installed on neither tenant today, and the
- * mock's "312 videos this week" then has nothing behind it. A line that simply
- * stopped after the brand would read as a smaller update rather than as an
- * absent reading.
- */
-function BarContext({ data }: { data: WeekData }) {
-  return (
-    <span className="flex-none whitespace-nowrap font-mono text-[11px] text-muted-foreground">
-      {data.brand}
-      {data.windowVideos != null
-        ? ` · ${fmtInt(data.windowVideos)} videos this update`
-        : ' · this update’s videos are not counted here yet'}
-    </span>
-  )
-}
-
 export function WeekPage({
   data,
   params = {},
@@ -154,12 +132,19 @@ export function WeekPage({
         <SurfacePageBar
           nav="week"
           params={params}
-          updates={{ update: data.update.date, previous: data.update.previous }}
+          brand={data.brand}
+          // THE ONE LINE, THIS WEEK'S FORM (25 Sep rulings, item 2): the slot
+          // names the update, and the line names the comment window in place of
+          // "as at" — "The 20 Sep update · comments written 10 to 20 Sep · next
+          // update Sun 27 Sep". The brand leads it; the update's own size was a
+          // second line at the bar's right-hand end and is not the ruled bar.
+          updates={{
+            update: data.update.date,
+            window: data.window ? { from: data.window.from, to: data.window.to } : null,
+            nextUpdate: data.nextUpdate ?? null,
+            paused: data.paused ?? false,
+          }}
         >
-          {/* The brand and the update's own size, where the mock puts them — in
-              the bar's own line rather than on a block, because they are what
-              the page is a reading OF and not part of any one answer. */}
-          <BarContext data={data} />
           <HowToRead items={WEEK_LEGEND} basePath="/dashboard/week" anchor="week" />
           <ExportMenu />
         </SurfacePageBar>

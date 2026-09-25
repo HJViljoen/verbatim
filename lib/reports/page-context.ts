@@ -6,7 +6,6 @@ import { freezeStateFor, monthStartOf } from '../reading/monthly'
 import { methodLines, type MethodLines } from '../reading/method'
 import { loadRecordInputs, monthRecordWindow } from '../reading/record'
 import { loadUpdates } from '../settings/record-load'
-import { contextLine } from '../shell/bar'
 import type { UpdateInput } from '../readiness/types'
 import type { MonthStatus } from '../reading/types'
 
@@ -23,7 +22,7 @@ import type { MonthStatus } from '../reading/types'
  * handle and print the real footnote, or print nothing and say why. This is
  * the minimal handle. It reads three things and composes nothing twice:
  *
- *   · the workspace's own name, for the context line and "Prepared for …";
+ *   · the workspace's own name, for "Prepared for …";
  *   · every update on record, through `loadUpdates` — the ONE reader of
  *     `pipeline_runs` Settings › The record and the method page already share
  *     — which answers the archive's delivery meta AND the four preset chips
@@ -40,10 +39,11 @@ import type { MonthStatus } from '../reading/types'
  * not applied. The page's numbers are all elsewhere: the quarterly card reads
  * its own windows, the briefs print the figures their last build froze.
  *
- * `bar` STAYS `'title'`. Nothing here turns the horizon control or the
- * soundness band on — `hasHorizon` and `hasRecord` are untouched, and the page
- * composes `PageBar` itself rather than going through `SurfacePageBar`, so no
- * other surface's bar moves because Reports gained a context line.
+ * `bar` STAYS `'title'`. Nothing here turns the horizon control on, and the
+ * page composes `PageBar` itself rather than going through `SurfacePageBar`.
+ * The context string this used to compose for the bar is gone (market-first
+ * WP1.2): the bar has printed the title alone since 24 Sep, and the 25 Sep
+ * rulings' one line is the reading surfaces'.
  *
  * EVERY PART DEGRADES ALONE. A failed read costs its own line and nothing
  * else: no brand is "Your workspace", no runs is no delivery meta and no
@@ -72,9 +72,6 @@ export interface ReportsPageContext {
   month: string
   monthStatus: MonthStatus
   readingAt: string
-  /** The page bar's mono line — `contextLine`, the same composer the five
-   *  reading surfaces use. */
-  context: string
   /** Every update on record, all-time. Null where the read failed. */
   delivery: DeliveryRecord | null
   /** The mock's four chips: this month, the two before it, and all-time.
@@ -245,7 +242,6 @@ export async function loadReportsPageContext(
     month,
     monthStatus,
     readingAt,
-    context: contextLine({ brand: brandName, month, status: monthStatus, readingAt }),
     delivery: runs ? deliveryRecord({ updates: runs, slotsRecorded: updates?.slotsRecorded ?? false }) : null,
     // A FAILED READ IS NOT ZERO UPDATES. `?? []` here lit the all-time chip and
     // printed "No update on record." into a tile listing the sends — the rule

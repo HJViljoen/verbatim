@@ -4,6 +4,7 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { renderText } from '@/lib/test/render'
 import { contextLine } from '@/lib/shell/bar'
+import { sealandReading } from '@/lib/test/reading-fixture'
 import { objectKey, sentMonthOf, type StoredSentFigure } from '@/lib/reports/sent-figures'
 import { sentLineFor, sentLineForToken, type OverviewData } from '@/lib/pages/overview'
 import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
@@ -144,13 +145,13 @@ describe('OV2 · the subject rows', () => {
 })
 
 describe('the page bar', () => {
-  it('carries the clause where there is one, and reads unchanged where there is not', () => {
-    const base = { brand: 'Sealand', month: '2026-09-01', status: 'filling' as const, readingAt: '2026-09-18T09:00:00.000Z' }
-    // The artboard's wording (Block D wave 2, `main.bar.context`): long month,
-    // short stamp, no second "reading".
-    expect(contextLine(base)).toBe('Sealand · September 2026 · still filling · as at 18 Sep')
-    expect(contextLine({ ...base, sent: 'the report of 1 Sep read 2,044 videos' }))
-      .toBe('Sealand · September 2026 · still filling · as at 18 Sep · the report of 1 Sep read 2,044 videos')
-    expect(contextLine({ ...base, sent: null })).toBe(contextLine(base))
+  it('is its one line, and carries no "what we sent" clause (25 Sep rulings)', () => {
+    // The bar used to append "the report of 1 Sep read 2,044 videos" here. The
+    // 25 Sep rulings make the bar the month selector and ONE line, "as at the
+    // {update} update · next update {date}"; what an artefact read stays on
+    // the row it is about (OV2's sent line, above).
+    const reading = sealandReading('2026-09-18T09:00:00.000Z')
+    expect(contextLine({ brand: 'Sealand', reading })).toBe('as at the 10 Sep update · next update Sun 20 Sep')
+    expect(contextLine({ brand: 'Sealand', reading })).not.toContain('report of')
   })
 })

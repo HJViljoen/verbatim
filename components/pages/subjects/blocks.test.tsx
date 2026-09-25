@@ -436,9 +436,20 @@ describe('SU2 · the kind mix', () => {
     const data = subjectsFixture()
     const bare = {
       ...data,
-      selected: { ...data.selected!, sides: data.selected!.sides.map((s) => ({ ...s, kinds: [], reddit: null })) },
+      selected: { ...data.selected!, kindsRecorded: false, sides: data.selected!.sides.map((s) => ({ ...s, kinds: [], reddit: null })) },
     }
     expect(subjectsKinds.emptyState(bare)).toContain('not recorded month by month')
+  })
+
+  it('says a month with no kind read yet is that month\'s fact, not a missing capability (GR F57)', () => {
+    const data = subjectsFixture()
+    const hollow = {
+      ...data,
+      month: '2026-10-01',
+      selected: { ...data.selected!, kindsRecorded: true, sides: data.selected!.sides.map((s) => ({ ...s, kinds: [], reddit: null })) },
+    }
+    expect(subjectsKinds.emptyState(hollow)).toBe('What kind of thing is being said has no reading for October yet.')
+    expect(subjectsKinds.emptyState(hollow)).not.toContain('not recorded')
   })
 })
 

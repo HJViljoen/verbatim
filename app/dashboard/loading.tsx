@@ -2,10 +2,10 @@ import { PageGrid, TileColumns } from '@/components/shell/page-grid'
 import { SkeletonSurface, SkeletonTile, Bone, BoneLines, BoneBars } from '@/components/shell/skeleton'
 
 // Mirrors components/pages/overview/index.tsx (OverviewPage): the surface bar
-// with How to read and Export, the horizon row and the "how sound" band, then
-// ONE column of full-width tiles in the page's own order and spans (`ROWS`):
-// the sentence (hero, 3) · subjects (3) · the category (3) · rivals (3) ·
-// moves (3) · the record (1). The grid is `xl:auto-rows-auto` there, so it is
+// with How to read and Export, its one line and the horizon row, then ONE
+// column of full-width tiles in the page's own order and spans (`ROWS`): the
+// sentence (hero, 3) · subjects (3) · the category (3) · rivals (3) · moves
+// (3). (No record tile: OV6 left the page with the 25 Sep rulings.) The grid is `xl:auto-rows-auto` there, so it is
 // here: the tiles are as tall as their bones, which are sized to the blocks.
 //
 // This file used to draw the PRE-redesign dashboard (strip · executive brief
@@ -14,7 +14,7 @@ import { SkeletonSurface, SkeletonTile, Bone, BoneLines, BoneBars } from '@/comp
 // loader of its own or a named shared one.
 export default function DashboardLoading() {
   return (
-    <SkeletonSurface nav="overview" pills={2} band>
+    <SkeletonSurface nav="overview" pills={2}>
       <PageGrid className="xl:auto-rows-auto">
         {/* overview.sentence · the reading beside its voices (rail 400) */}
         <SkeletonTile col={12} row={3} variant="hero" meta>
@@ -67,9 +67,6 @@ export default function DashboardLoading() {
             <div className="xl:pl-4"><BoneLines lines={5} /></div>
           </TileColumns>
         </SkeletonTile>
-
-        {/* overview.record */}
-        <SkeletonTile col={12} row={1} lines={2} />
       </PageGrid>
     </SkeletonSurface>
   )
