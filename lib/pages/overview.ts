@@ -1454,13 +1454,6 @@ export type StoredSubjectRow = {
 }
 
 /**
- * The Overview, for one tenant and one horizon.
- *
- * Null is the first-run empty state: a tenant with no delivered update has no
- * reading of anything, and the page says so rather than drawing seven blocks of
- * refusals.
- */
-/**
  * `pinCalendarMonth` reads the calendar month the clock is in, whatever the
  * reading month is, and whether or not it has a row yet. Only the weekly asks
  * for it (plan WP1.2: the weekly is unchanged until WP3.7, and its preview is
@@ -1472,6 +1465,14 @@ export interface LoadOverviewOptions {
   pinCalendarMonth?: boolean
 }
 
+/**
+ * The Overview, for one tenant and one horizon, on the reading month
+ * (market-first decision A) or the month `?month=` names.
+ *
+ * Null is the first-run empty state: a tenant with no delivered update has no
+ * reading of anything, and the page says so rather than drawing seven blocks of
+ * refusals.
+ */
 export async function loadOverview(scope: Scope, options: LoadOverviewOptions = {}): Promise<OverviewData | null> {
   const supabase = scope.supabase as SupabaseClient
   const { clientId, params } = scope
