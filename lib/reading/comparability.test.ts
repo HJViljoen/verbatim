@@ -120,16 +120,17 @@ const ATTRIBUTION: OurChange = { id: 'attribution-v3', surface: 'attribution', c
 //
 // AUGUST AGAINST SEPTEMBER, as WP1.4 would write it after the 4 Oct update,
 // with the research's measured counts (category videos, as measured):
-//   searches outside: August ~115 of 351 found only by the bare-name terms
-//   removed on 9 Sep (CQ F25); September 206 of 625 found only by the 13–17 Sep
-//   terms (GC F29; the measured lower bound, the strict figure is larger);
+//   searches outside: August 81 of 351 surfaced by the rival-name terms
+//   removed by 9 Sep (CQ F27, by last surfacing); September 206 of 625 found
+//   only by the 13–17 Sep terms (GC F29; the measured lower bound, the strict
+//   figure is larger);
 //   depth: median dated comments a video, August 23, September 15 (DR F39);
 //   run health: September's 20 Sep run was partial (DR F21);
 //   late capture: 4,923 of August's 10,188 comments captured after it ended.
 const AUG_SEP: PairRow = {
   prevMonth: '2026-08-01',
   month: '2026-09-01',
-  searchOutside: { prev: { k: 115, n: 351 }, curr: { k: 206, n: 625 } },
+  searchOutside: { prev: { k: 81, n: 351 }, curr: { k: 206, n: 625 } },
   codeChanges: [],
   depth: { prevMedian: 23, currMedian: 15 },
   gather: [
@@ -388,7 +389,7 @@ describe('shares and their thresholds', () => {
   })
 
   it('the pair’s share is the larger side', () => {
-    expect(pairShare({ k: 115, n: 351 }, { k: 206, n: 625 })).toBeCloseTo(206 / 625, 10)
+    expect(pairShare({ k: 81, n: 351 }, { k: 206, n: 625 })).toBeCloseTo(206 / 625, 10)
   })
 })
 
