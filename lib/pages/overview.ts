@@ -1122,9 +1122,9 @@ export function headline(input: HeadlineInput): Headline {
  * the Overview loader already holds: the month's stored row, the delivered
  * updates and the clock.
  *
- * `readToEnd` is an update that STARTED at or after the month's last day and
- * by `now`: a run that starts after the month has ended finishes after it too,
- * and the loader's run read carries start times. The latest update is the run
+ * `readToEnd` is an update that STARTED once the month had ended, by `now`: a
+ * run that starts after the month's end finishes after it too, and the
+ * loader's run read carries start times. The latest update is the run
  * the pair row must account for (`later.latestUpdateRunId`).
  */
 export function laterSide(input: {
@@ -1182,15 +1182,20 @@ function namedChange(changes: readonly OurChange[]): OurChange | null {
  * compared (comparable, or flagged and printed with its note elsewhere), or
  * where there is no pair at all.
  *
- * OUR CHANGE COMES FIRST, WHEN IT FELL IN THE MONTH BEING READ. September so
- * far and September before it is read to its end are both refused for the
- * calendar's reason too, and the calendar's reason passes; ours does not, so
- * the chip names it: "not read as a change: we changed our searches in
- * September" (plan §2.2, the deploy 1 headline). Otherwise, in the pair's own
- * order: a month not over ("October is not compared until it has ended"), a
- * month not read to its end (Össur's September), the change of ours that
- * refused it, and last "not compared yet" for a pair not measured, or refused
- * on depth.
+ * WHERE THE CALENDAR REFUSED IT, OUR CHANGE IN THAT MONTH IS NAMED FIRST. A
+ * month so far, or not yet read to its end, is refused before any change is
+ * weighed (`comparabilityOf` rules 1 and 2). The calendar's reason passes and
+ * ours does not, so where a change of ours fell in the month being read the
+ * chip names it: "not read as a change: we changed our searches in September"
+ * (plan §2.2, the deploy 1 headline). Otherwise it says the calendar's reason:
+ * "October is not compared until it has ended", or, for Össur's September,
+ * "September is not compared: it was not read to its end".
+ *
+ * WHERE THE MEASURE REFUSED IT, THE REFUSING CHANGE IS NAMED: the latest
+ * search change among the pair's refusing reasons, else the latest other one
+ * (an unmeasured pair lists every change in its span). Last, "not compared
+ * yet": a pair nobody has measured with no change of ours in it, or one
+ * refused on depth.
  *
  * The date-bearing refusal sentences are WP1.3's (`lib/calibration.ts`); this
  * chip is the size headline's alone and names no update date it cannot keep.
@@ -1203,17 +1208,16 @@ export function pairChip(
   if (!pair || pair.mode !== 'refuse') return null
   const later = longMonth(pair.month)
   const ours = changes.filter((c) => c.affects.includes(view))
-  const inLater = ours.filter((c) => {
-    const t = Date.parse(c.changedAt)
-    return Number.isFinite(t) && monthStartOf(c.changedAt) === pair.month
-  })
   const words = (c: OurChange) => `not read as a change: ${CHANGE_WORDS[c.surface]} in ${longMonth(monthStartOf(c.changedAt))}`
-  const here = namedChange(inLater)
-  if (here) return words(here)
 
   const kinds = new Set(pair.reasons.map((r) => r.kind))
-  if (kinds.has('incomplete')) return `${later} is not compared until it has ended`
-  if (kinds.has('not_read_to_end')) return `${later} is not compared: it was not read to its end`
+  if (kinds.has('incomplete') || kinds.has('not_read_to_end')) {
+    const here = namedChange(ours.filter((c) => Number.isFinite(Date.parse(c.changedAt)) && monthStartOf(c.changedAt) === pair.month))
+    if (here) return words(here)
+    return kinds.has('incomplete')
+      ? `${later} is not compared until it has ended`
+      : `${later} is not compared: it was not read to its end`
+  }
 
   const refusing = pair.reasons.filter(
     (r) => (r.kind === 'searches' || r.kind === 'code_change') && modeForShare(r.share) === 'refuse',

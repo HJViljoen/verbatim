@@ -347,6 +347,33 @@ describe('pairChip', () => {
     expect(pairChip(pair, [])).toBe('not compared yet')
   })
 
+  it('does not blame a change the measure cleared: a pair refused on depth says "not compared yet"', () => {
+    // The shape of October against November in early December (plan §2.11):
+    // the searches held still, so the search-outside counts are zero (a
+    // hypothetical for August and September, whose real counts refuse on
+    // searches), and the pair is refused on depth alone, at DR F39's measured
+    // medians of 23 and 15 dated comments a video (0.65). The market's n are
+    // August's 377 and September's 655 (F1, E).
+    const later = laterSide({ month: SEP, now: '2026-10-05T06:00:00.000Z', runs: RUNS, row: { status: 'filling', origin: 'live', videos: 655 } })
+    const pair = comparabilityOf(AUG, SEP, {
+      row: {
+        prevMonth: AUG, month: SEP,
+        searchOutside: { prev: { k: 0, n: 377 }, curr: { k: 0, n: 655 } },
+        codeChanges: [],
+        depth: { prevMedian: 23, currMedian: 15 },
+        gather: [],
+        lateCapture: null,
+        readThroughRun: later.latestUpdateRunId,
+        methodVersion: 'test', computedAt: '2026-10-05T06:00:00.000Z',
+      },
+      changes: SEALAND_CHANGES,
+      view: 'market',
+      later,
+    })
+    expect(pair.reasons.map((r) => r.kind)).toEqual(['depth'])
+    expect(pairChip(pair, SEALAND_CHANGES)).toBe('not compared yet')
+  })
+
   it('prints nothing where the pair is compared, or where there is no pair', () => {
     const comparable: PairComparability = { prevMonth: AUG, month: SEP, mode: 'comparable', reasons: [], row: null }
     const flagged: PairComparability = { ...comparable, mode: 'flag', reasons: [{ kind: 'gather', changeId: null, share: null }] }
