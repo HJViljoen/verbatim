@@ -288,6 +288,27 @@ describe('MK1 · what we concluded', () => {
     const text = renderText(marketConclusions.render(marketFixture(), 'app', ctx))
     expect(text).toContain('concluded with the update of 27 Sep')
   })
+
+  it('never says "this month": the title is the preview’s, and the update rides as a row tag (market-first WP1.9)', () => {
+    expect(marketConclusions.title).toBe('What we concluded')
+    for (const mode of ['app', 'print', 'email'] as const) {
+      const markup = render(marketConclusions.render(marketFixture(), mode, ctx))
+      const text = renderText(markup)
+      expect(text).not.toMatch(/this month/i)
+      // At the head of the cards, before the first conclusion, not a footer note.
+      const tag = 'Read over everything to date, concluded with the update of 27 Sep'
+      expect(text).toContain(tag)
+      expect(text.indexOf(tag)).toBeLessThan(text.indexOf('Comfort and personalisation remain the real proof of value'))
+      assertCopyContract(markup)
+    }
+  })
+
+  it('draws no tag where there is nothing concluded', () => {
+    const base = marketFixture()
+    const data = { ...base, conclusions: { ...base.conclusions, rows: [], empty: 'Conclusions land with your next update.' } }
+    expect(renderText(marketConclusions.render(data, 'app', ctx))).not.toContain('concluded with the update')
+  })
+
   it('links each conclusion’s themes into Voice by slug', () => {
     const markup = render(marketConclusions.render(marketFixture(), 'app', ctx))
     expect(markup).toContain('/dashboard/voice?themes=comfort_and_fit')
