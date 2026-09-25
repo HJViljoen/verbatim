@@ -45,7 +45,7 @@ import {
   type MoveReading,
   type MoveSeries,
 } from '../reading/moves'
-import { loadMonthSeries, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
+import { loadChanges, loadMonthSeries, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
 import { methodLines, type MethodLines } from '../reading/method'
 import { countRefused, howSoundLine, loadRecordInputs, monthRecordWindow, recordLines, refusals, soundFigures, type RecordInputs, type SoundFigure } from '../reading/record'
 import {
@@ -57,10 +57,18 @@ import {
   type Substrate,
 } from '../reading/series'
 import { buildStandings, type StandingRow } from '../reading/standings'
-import { isSearchSurface, modeForShare, type ComparabilityView, type OurChange, type PairComparability } from '../reading/comparability'
+import {
+  changesFromLog,
+  comparabilityOf,
+  isSearchSurface,
+  modeForShare,
+  type ComparabilityView,
+  type OurChange,
+  type PairComparability,
+} from '../reading/comparability'
 import { pooledDenominators } from '../reading/market'
 import { monthStateOf, type MonthState } from '../reading/reading-month'
-import type { MonthStatus } from '../reading/types'
+import { TABLE_THEME_READINGS, type MonthStatus } from '../reading/types'
 import { isAnswer, type FigureTable, type Verdict } from '../reading/verdicts'
 import { isMissingSubjects, MOVE_PROMISE, RPC_WINDOW_SUBJECT_READINGS, TABLE_MOVES, TABLE_SUBJECT_MEMBERSHIPS, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
 import { chunk, mapWithLimit, MULTI_ROW_IN_CHUNK, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
@@ -546,6 +554,13 @@ export interface SentenceBlock {
   /** The code sentence, with `[[token]]` figure placeholders. */
   body: string
   figures: FigureTable
+  /**
+   * Beside a size sentence: why this month is not read against the one before
+   * it ("not read as a change: we changed our searches in September";
+   * market-first WP1.5, `pairChip`). OPTIONAL, because a stored export
+   * predates it; null where nothing is refused or a change leads.
+   */
+  chip?: string | null
   anomaly: AnomalyLine | null
   interpretation: Interpretation
   ledger: LedgerRow | null
@@ -1817,6 +1832,16 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
   const cardAhead = loadCardInputs(supabase, clientId, month)
   cardAhead.catch(() => {})
 
+  // THE LEVEL LIST'S POOL AND THE CHANGE LOG, ON THE SAME TERMS (market-first
+  // WP1.5). The pool is the month's largest category themes by videos, one
+  // small read that needs the month and nothing else; the change log is the
+  // one `loadMonthSeries` above has already read (memoised), so it costs
+  // nothing. Both are taken in wave 3.
+  const levelPoolAhead = loadLevelPool(reading.client, clientId, month)
+  const changesAhead = loadChanges(reading.client, clientId)
+  levelPoolAhead.catch(() => {})
+  changesAhead.catch(() => {})
+
   // ── wave 3: the readings ───────────────────────────────────────────────
   const themedRunId = await themedRunAhead
   const rivalAudiences = rivals.map((r) => rivalKey(r.name))
@@ -1836,7 +1861,8 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
       })
     : []
 
-  const [themeSet, kindRows, statsRows, subjectMonths, subjectRows, moveRows, panel, lastMonthSoFar, flags, subjectsAtLastMonth, dormant] =
+  const levelIds = await levelPoolAhead
+  const [themeSet, kindRows, statsRows, subjectMonths, subjectRows, moveRows, panel, lastMonthSoFar, flags, subjectsAtLastMonth, dormant, levelSet, makerShares] =
     await Promise.all([
       loadMonthSeries(reading.client, clientId, {
         from: readAxis[0],
@@ -1861,6 +1887,25 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
       loadFlags(supabase, clientId, month),
       readSubjectsAtThisPointLastMonth(reading, month, readingAt),
       loadDormantThemes(reading.client, clientId),
+      // OV3's level list (WP1.5): its own series, category only, over this
+      // month and the one before. Kept apart from `themeSet` so the movers,
+      // the quiet flags and OV4 read exactly the pool they read before.
+      levelIds.length > 0
+        ? loadMonthSeries(reading.client, clientId, {
+            from: prevMonth,
+            to: month,
+            audiences: [INDUSTRY_AUDIENCE],
+            objectKind: 'theme',
+            objectIds: levelIds,
+            updatesByMonth,
+            firstRunMonth,
+            changeLogFrom: history.changeLogFrom,
+          })
+        : Promise.resolve(null),
+      // MF1's maker shares, one read for the list and the headline. Null until
+      // MF1 is applied; every level then reads "not yet marked" and no theme
+      // may lead the headline (`mayLead`).
+      loadMakerShares(reading.client, clientId, month, themedRunId),
     ])
 
   // ── OV0 · the page bar and the still-filling line ──────────────────────
@@ -1993,6 +2038,8 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     attentionVerdict: categoryAttentionVerdict(rivalsBlock.rows),
     dormant,
     thin: suppress,
+    levelSeries: levelSet?.series ?? [],
+    makerShares,
   })
 
   // ── OV5 · your moves, the card, and what a move did (Block D · D2) ─────
@@ -2032,9 +2079,34 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     ...category.growing.map((m) => m.verdict),
     ...category.fading.map((m) => m.verdict),
   ]
-  const head = headline({ verdicts: suppress ? [] : sentenceVerdicts })
+  // THE SIZE, AND THE PAIR'S REFUSAL BESIDE IT (market-first WP1.5). The
+  // market is pooled (decision E); the pair is this month against the one
+  // before, judged for the market view by the core rule (`comparabilityOf`).
+  // Its measured row is MF1's `month_pair_comparability`, which WP1.3's reader
+  // brings: without it the pair reads as not measured, and the chip names the
+  // change of ours that falls inside the span.
+  const size = marketSizeOf(history.denominators, rivalAudiences, month, readingAt)
+  const monthRow = history.denominators.find((d) => d.month === month && d.audience === INDUSTRY_AUDIENCE) ?? null
+  const ourChanges = changesFromLog(await changesAhead)
+  const pair = comparabilityOf(prevMonth, month, {
+    row: null,
+    changes: ourChanges,
+    view: 'market',
+    later: laterSide({
+      month,
+      now: readingAt,
+      runs: runsRaw,
+      row: monthRow ? { status: monthRow.status, origin: monthRow.origin, videos: size.videos } : null,
+    }),
+  })
+  const head = headline({
+    verdicts: suppress ? [] : sentenceVerdicts,
+    size,
+    makerShares,
+    chip: pairChip(pair, ourChanges),
+  })
   const [voices, anomaly] = await Promise.all([
-    loadVoices(supabase, clientId, head.lead, top, themedRunId),
+    loadVoices(supabase, clientId, head.lead, themedRunId),
     flags.length > 0 ? buildAnomaly(supabase, flags[0]) : Promise.resolve(null),
   ])
   const interpretation = composeInterpretation(
@@ -2047,6 +2119,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     lead: head.lead,
     body: head.body,
     figures: head.figures,
+    chip: head.chip,
     anomaly,
     interpretation,
     ledger: ledger.top,
@@ -2721,6 +2794,56 @@ async function loadMoves(supabase: SupabaseClient, clientId: string): Promise<Mo
 }
 
 /**
+ * The level list's pool (market-first WP1.5): the month's largest category
+ * themes by videos, `LEVEL_POOL` of them, as registry ids. One small read,
+ * ordered in the database so no page of rows comes back; `levelRows` then
+ * breaks ties on the previous month. An empty pool where the month tables
+ * are not there, or the month has no theme row.
+ */
+async function loadLevelPool(client: SupabaseClient, clientId: string, month: string): Promise<string[]> {
+  const res = await client
+    .from(TABLE_THEME_READINGS)
+    .select('theme_id, videos')
+    .eq('client_id', clientId)
+    .eq('month', month)
+    .eq('audience', INDUSTRY_AUDIENCE)
+    .order('videos', { ascending: false })
+    .order('theme_id', { ascending: true })
+    .limit(LEVEL_POOL)
+  if (res.error && isMissingMonthlyReading(res.error)) return []
+  return rows<{ theme_id: string }>(res, 'overview.levelPool').map((r) => String(r.theme_id))
+}
+
+/**
+ * Each category theme's maker share this month, off MF1's
+ * `theme_maker_shares(p_client, p_month, p_run)` (plan §4.2): one read for
+ * the level list and the headline.
+ *
+ * NULL MEANS NOT MEASURED, and the page says so ("not yet marked"): MF1 is not
+ * applied (the state until Wed 30 Sep), no themed run exists to group by, or
+ * the call failed, which is logged. Never an empty map standing in for "no
+ * makers anywhere".
+ *
+ * TENANT RULE: the plan enables the maker rule per tenant (WP1.4's
+ * `SEGMENT_RULES_ENABLED`, Össur off). That list lands with WP1.4, and until
+ * then this reads whatever MF1's function returns for the tenant.
+ */
+async function loadMakerShares(
+  client: SupabaseClient,
+  clientId: string,
+  month: string,
+  runId: string | null,
+): Promise<Map<string, number | null> | null> {
+  if (!runId) return null
+  const res = await client.rpc('theme_maker_shares', { p_client: clientId, p_month: month, p_run: runId })
+  if (res.error) {
+    if (!isMissingThemeMakerShares(res.error)) console.error(`[pages] overview.makerShares: ${res.error.message}`)
+    return null
+  }
+  return makerSharesOf(Array.isArray(res.data) ? (res.data as ThemeMakerShareRow[]) : [])
+}
+
+/**
  * The register's dormant entries — the gone-quiet flag's source.
  *
  * DORMANCY IS THE REGISTER'S, NOT THIS MONTH'S. The pipeline's own rule marks
@@ -3099,11 +3222,16 @@ async function loadVoices(
   supabase: SupabaseClient,
   clientId: string,
   lead: Verdict | null,
-  top: readonly { objectId: string }[],
   themedRunId: string | null,
 ): Promise<{ voices: Voice[]; from: number }> {
   if (!themedRunId) return { voices: [], from: 0 }
-  const registryId = lead?.objectKind === 'theme' ? lead.objectId : top[0]?.objectId
+  // THE LEAD THEME'S VOICES, OR NONE (market-first WP1.5). Where the lead was
+  // not a theme this fell back to `top[0]`, and `loadTopObjects` ranks per
+  // audience in alphabetical order, so the client's own heaviest theme sorted
+  // first and Sealand's front page printed June Cotopaxi quotes under a
+  // category headline (GR F9, F10). Under a size headline there is no lead,
+  // and so no voices.
+  const registryId = lead?.objectKind === 'theme' ? lead.objectId : null
   if (!registryId) return { voices: [], from: 0 }
   // EVERY READ CARRIES THE TENANT, even where the ids came from the tenant's
   // own run. The session client is RLS-scoped, so this changes nothing for a
