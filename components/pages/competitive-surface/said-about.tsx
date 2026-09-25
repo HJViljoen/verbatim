@@ -45,8 +45,11 @@ import { SAID_ABOUT_WITHHELD, SAID_ABOUT_WITHHELD_ALL, type CompetitiveSurfaceDa
 // neither is making the reader guess which — which is what this block did
 // until the loader stopped defaulting its reader to an empty list.
 
+/** The fallback where the page's own line is absent (a stored snapshot).
+ *  NOT "no rival is tracked" (market-first WP1.2, GR F57): this block is empty
+ *  whenever no tracked rival carried a video in the window. */
 export const SAID_ABOUT_NONE =
-  'No rival is tracked for this workspace yet, so there is nobody for the category to talk about. Name one in Settings and this starts reading.'
+  'No tracked rival carried a video in this window, so there is nothing said about one to read.'
 
 function Group({ group, mode }: { group: SaidAbout; mode: RenderMode }) {
   const email = mode === 'email'
@@ -201,6 +204,7 @@ export const competitiveSaidAbout: Block<CompetitiveSurfaceData> = {
   },
 
   emptyState(data) {
-    return data.saidAbout.length === 0 ? SAID_ABOUT_NONE : null
+    // The page's own line names the cause (`rivals.empty`).
+    return data.saidAbout.length === 0 ? data.rivals.empty ?? SAID_ABOUT_NONE : null
   },
 }

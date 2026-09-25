@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { shortDate } from '../format'
+import { longMonth, shortDate } from '../format'
 import { composeInterpretation, type Interpretation } from '../prose/interpret'
 import { proseFigures } from '../prose/figures'
 import type { Scope } from '../renderables/types'
@@ -218,11 +218,16 @@ export function spanOf(months: readonly string[]): string {
  * filtered by their comment's date (AGENTS.md: a period is dated by the
  * comment) — so the month is named only in the arm that is about it.
  */
-export function voiceNote(input: { citations: number; readable: number; inMonth: number }): string {
+export function voiceNote(input: { citations: number; readable: number; inMonth: number; month: string }): string {
+  // THE MONTH BY NAME, NOT "THIS MONTH" (market-first WP1.2). A stored
+  // artefact is read after the month it is about, and from decision A the
+  // monthly is built in the month AFTER the one it reads, so "this month" on
+  // it names the wrong one.
+  const name = longMonth(input.month)
   if (input.citations === 0) return 'nothing has been said about this one yet'
   if (input.readable === 0) return 'what was said about this one could not be quoted: too short, or nothing but a handle'
-  if (input.inMonth === 0) return 'nothing quotable was said about this one this month'
-  return 'the voices from this month are already quoted above'
+  if (input.inMonth === 0) return `nothing quotable was said about this one in ${name}`
+  return `the voices from ${name} are already quoted above`
 }
 
 /**
@@ -541,7 +546,7 @@ async function loadSubjectVoicesPerSubject(
       voice,
       note: voice
         ? null
-        : voiceNote({ citations: ids.length, readable: read.readable, inMonth: read.from }),
+        : voiceNote({ citations: ids.length, readable: read.readable, inMonth: read.from, month }),
       href: `/dashboard/subjects?item=${encodeURIComponent(subject.id)}`,
     }
   })

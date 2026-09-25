@@ -3,7 +3,7 @@ import { openLink } from '@/components/blocks/open-link'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fmtInt, monthName } from '@/lib/format'
+import { fmtInt, longMonth, monthName } from '@/lib/format'
 import { levelText } from '@/lib/reading/level'
 import { KIND_ORDER } from '@/lib/reading/kinds'
 import { sideEyebrow, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
@@ -261,7 +261,13 @@ export const subjectsKinds: Block<SubjectsData> = {
         : 'Name a subject and this is what the audiences are saying around it.'
     }
     if (pane.sides.every((s) => s.kinds.length === 0)) {
-      return 'What kind of thing is being said is not recorded month by month for this workspace yet.'
+      // TWO CAUSES, TWO SENTENCES (market-first WP1.2, GR F57). Only a missing
+      // kind table is "not recorded month by month"; a month with no kind
+      // read yet is the month's own fact, and the first days of every month
+      // used to print the capability sentence for it.
+      return pane.kindsRecorded === false
+        ? 'What kind of thing is being said is not recorded month by month for this workspace yet.'
+        : `What kind of thing is being said has no reading for ${longMonth(data.month)} yet.`
     }
     return null
   },

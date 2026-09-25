@@ -305,9 +305,16 @@ describe('axisNote', () => {
     expect(note).toContain('You and Freitag carried too few videos')
   })
 
-  it('says "— not tracked" for an audience with no row, never a zero', () => {
-    const note = axisNote([side({ label: 'Poler', kind: 'rival', observed: false, silence: 'not_tracked', n: null, k: null, pct: null })], 100)!
-    expect(note).toContain('Poler: not tracked.')
+  it('says an audience with no row had no video read in the month, never a zero and never "not tracked"', () => {
+    // GR F57: in the first days of a month every side has no row, the category
+    // included, and "The category: not tracked" named a missing capability
+    // for a month not read yet (market-first WP1.2).
+    const note = axisNote([side({ label: 'The category', kind: 'category', audience: INDUSTRY_AUDIENCE, observed: false, silence: 'not_tracked', n: null, k: null, pct: null })], 100, [], '2026-10-01')!
+    expect(note).toContain('The category: no video read in October.')
+    expect(note).not.toContain('not tracked')
+    // Without a month to name, it still says what is missing.
+    expect(axisNote([side({ label: 'Poler', kind: 'rival', observed: false, silence: 'not_tracked', n: null, k: null, pct: null })], 100))
+      .toContain('Poler: no video read this month.')
   })
 
   it('tells "no reading yet" apart from "not tracked" — the audience was read, this subject was not in it', () => {
@@ -318,9 +325,9 @@ describe('axisNote', () => {
     const note = axisNote([
       side({ observed: false, silence: 'no_reading', n: 84, k: null, pct: null }),
       side({ label: 'Poler', kind: 'rival', observed: false, silence: 'not_tracked', n: null, k: null, pct: null }),
-    ], 100)!
+    ], 100, [], '2026-09-01')!
     expect(note).toContain('You: no reading yet on this subject.')
-    expect(note).toContain('Poler: not tracked.')
+    expect(note).toContain('Poler: no video read in September.')
   })
 
   it('is silent when every line carries its n', () => {

@@ -370,6 +370,12 @@ describe('CO5 · the floor, said in words', () => {
     expect(questionsEmpty({ rival: 'Ottobock', videos: 33, floor: 10 })).toBeNull()
   })
 
+  it('with no rival offered, says none carried a video, never that none is tracked (GR F57)', () => {
+    const line = questionsEmpty({ rival: null, videos: 0, floor: 10 })
+    expect(line).toBe('No tracked rival carried a video in this window.')
+    expect(line).not.toContain('No rival is tracked')
+  })
+
   it('says why the questions are not grouped into themes', () => {
     expect(QUESTIONS_GROUPING_NOTE).toContain('listed as they were asked')
   })

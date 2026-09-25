@@ -51,8 +51,12 @@ import type { CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
  *  different owners for one job is worse than either answer. */
 export const OWN_CLAIMS_OWNER = 'Your digital director'
 
+/** The fallback where the page's own line is absent (a stored snapshot).
+ *  NOT "no rival is tracked" (market-first WP1.2, GR F57): this block is empty
+ *  whenever no tracked rival carried a video in the window, which on the first
+ *  days of a month was every tenant, tracked rivals and all. */
 export const OWN_CLAIMS_NONE =
-  'No rival is tracked for this workspace yet, so there are no accounts to read. Name one in Settings and this starts counting.'
+  'No tracked rival carried a video in this window, so there are no accounts to read.'
 
 /** The mock's echo legend, honestly: a state, its count with its own "of N",
  *  and — where there is no count — the reason there is none, never a zero. */
@@ -288,6 +292,8 @@ export const competitiveOwnClaims: Block<CompetitiveSurfaceData> = {
   },
 
   emptyState(data) {
-    return data.ownClaims.length === 0 ? OWN_CLAIMS_NONE : null
+    // The page's own line names the cause: nothing tracked, or nothing read
+    // in the months on the page (`rivals.empty`).
+    return data.ownClaims.length === 0 ? data.rivals.empty ?? OWN_CLAIMS_NONE : null
   },
 }

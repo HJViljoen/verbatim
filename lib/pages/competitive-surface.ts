@@ -6,7 +6,7 @@ import { COMPETITIVE_MIN_VIDEOS } from '../config'
 import { fmtInt, monthName, platformLabel } from '../format'
 import { fetchQuoteCitationsByAudience } from '../quotes'
 import { attentionTotals, type AttentionRow } from '../reading/attention'
-import { horizonWindow, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
+import { horizonDates, horizonWindow, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
 import { freezeStateFor, monthStartOf } from '../reading/monthly'
 import { readingAnchor, type ReadingMonth } from '../reading/reading-month'
 import { loadDeliveredRuns, loadReadingSchedule, readingViewFrom, type OtherMonth } from '../reading/reading-view'
@@ -431,7 +431,11 @@ export function questionsEmpty(input: {
   videos: number
   floor: number
 }): string | null {
-  if (!input.rival) return 'No rival is tracked for this workspace yet.'
+  // NO RIVAL SELECTED IS NOT "NO RIVAL TRACKED" (market-first WP1.2, GR F57).
+  // A rival is offered only where it carried a video in the window, so a
+  // tracked set with nothing read in the month reached here too and was told
+  // nothing was tracked. The page's own line (`rivals.empty`) says which.
+  if (!input.rival) return 'No tracked rival carried a video in this window.'
   if (input.videos === 0) {
     return `Nothing was asked under ${input.rival}’s content in this window. Widen the horizon and this block reads further back.`
   }
@@ -707,11 +711,15 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
       options,
       selected,
       identityRecorded: rivals.recorded,
+      // THE TWO CAUSES, SAID APART (market-first WP1.2, GR F57): nothing is
+      // tracked, or the tracked rivals carried no video in the months read.
+      // The second names those months, because on the first days of a month
+      // it was every tenant's state and read as the first.
       empty: options.length > 0
         ? null
         : rivals.rivals.length === 0
           ? 'No rival is tracked for this workspace yet. Name one in Settings and this page starts reading them.'
-          : 'None of your tracked rivals carried a video in this window.',
+          : `None of your tracked rivals carried a video in ${horizonDates(window)}.`,
     },
     standings,
     questions,

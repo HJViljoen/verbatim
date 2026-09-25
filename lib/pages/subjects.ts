@@ -385,6 +385,12 @@ export interface SubjectPane {
   index: number
   of: number
   sides: SubjectSide[]
+  /** Whether the kind table is installed here (M5). False: "not recorded
+   *  month by month for this workspace yet" is the true sentence. True, with
+   *  no kind on any side: the month has none read yet, which is a different
+   *  fact (market-first WP1.2, GR F57). Optional: a stored snapshot taken
+   *  before WP1.2 has none. */
+  kindsRecorded?: boolean
   /** The sides' months over the page's READ axis (the horizon, plus the month
    *  before it) — what the hero's sentences are built from. */
   series: MonthSeries[]
@@ -889,6 +895,9 @@ export function axisNote(
    * got.
    */
   series: readonly MonthSeries[] = [],
+  /** The month the page reads, `YYYY-MM-01`: named where a side read nothing
+   *  in it. */
+  month?: string | null,
 ): string | null {
   const hollow = sides.filter((s) => s.observed && (s.n ?? 0) < floorN)
   // "A, B and C", not "A and B and C": ten sides joined by "and" read as one
@@ -904,14 +913,22 @@ export function axisNote(
       `(${hollow.map((s) => `${fmtInt(s.n ?? 0)}`).join(', ')}).`,
     )
   }
-  // TWO SILENCES, TWO SENTENCES. An audience we never read is "not tracked";
-  // an audience we read that carried nothing on this subject has "no reading
-  // yet", and the second is the one a newly confirmed subject is in on the
-  // client's OWN side.
+  // TWO SILENCES, TWO SENTENCES. An audience with no video read in the month
+  // has no denominator; an audience we read that carried nothing on this
+  // subject has "no reading yet", and the second is the one a newly confirmed
+  // subject is in on the client's OWN side.
+  //
+  // THE FIRST SAYS THE MONTH, NOT "NOT TRACKED" (market-first WP1.2, GR F57).
+  // The audience is tracked; what is missing is a video read in this month.
+  // In the first days of a month that was every side, the category included,
+  // and "The category: not tracked" named a missing capability for what was a
+  // month not read yet.
   const noReading = sides.filter((s) => s.silence === 'no_reading')
   const notTracked = sides.filter((s) => s.silence === 'not_tracked')
   if (noReading.length > 0) parts.push(`${names(noReading)}: no reading yet on this subject.`)
-  if (notTracked.length > 0) parts.push(`${names(notTracked)}: not tracked.`)
+  if (notTracked.length > 0) {
+    parts.push(month ? `${names(notTracked)}: no video read in ${longMonth(month)}.` : `${names(notTracked)}: no video read this month.`)
+  }
 
   // A LINE THAT STARTS LATE SAYS WHEN. The axis's own first month is the
   // yardstick: a series whose first reading is later than everyone else's is
@@ -1731,6 +1748,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       index: active.findIndex((s) => s.id === subject.id) + 1,
       of: active.length,
       sides,
+      kindsRecorded: kindRows != null,
       series,
       chartSeries,
       voices: voices.voices,
@@ -1748,7 +1766,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
         seriesFor(subject.id, INDUSTRY_AUDIENCE),
         audienceLabel(INDUSTRY_AUDIENCE),
       ),
-      axisNote: axisNote(sides, FLOOR_N, series),
+      axisNote: axisNote(sides, FLOOR_N, series, month),
       notRecorded: subjectSet?.numeratorSubstrate === 'missing'
         ? 'This subject has no monthly reading recorded for this workspace yet.'
         : null,

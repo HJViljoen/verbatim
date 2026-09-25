@@ -927,3 +927,32 @@ describe('layout and absences (sweep 2026-09-24)', () => {
     expect(markup).not.toContain('—')
   })
 })
+
+// GR F57 (market-first WP1.2): "No rival is tracked for this workspace yet"
+// printed three times on the first days of every month, on tenants tracking
+// seven rivals, because a rival is offered only where it carried a video in
+// the month and the month had not been read yet. The cause is said apart.
+describe('Competitive · a tracked set with nothing read in the month is not "no rival tracked"', () => {
+  const hollow = () => {
+    const base = competitiveFixture()
+    return {
+      ...base,
+      rivals: { ...base.rivals, options: [], selected: null, empty: 'None of your tracked rivals carried a video in Oct 2026.' },
+      ownClaims: [],
+      saidAbout: [],
+    }
+  }
+
+  it('own claims and said-about carry the page’s own line, which names the months', () => {
+    expect(competitiveOwnClaims.emptyState(hollow())).toBe('None of your tracked rivals carried a video in Oct 2026.')
+    expect(competitiveSaidAbout.emptyState(hollow())).toBe('None of your tracked rivals carried a video in Oct 2026.')
+  })
+
+  it('the fallbacks, for a snapshot with no line, never claim nothing is tracked', () => {
+    const stored = { ...hollow(), rivals: { ...hollow().rivals, empty: null } }
+    for (const empty of [competitiveOwnClaims.emptyState(stored), competitiveSaidAbout.emptyState(stored)]) {
+      expect(empty).toContain('No tracked rival carried a video in this window')
+      expect(empty).not.toContain('No rival is tracked')
+    }
+  })
+})
