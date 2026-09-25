@@ -2,7 +2,7 @@ import { PageGrid, TileColumns } from '@/components/shell/page-grid'
 import { SkeletonSurface, SkeletonTile, Bone, BoneLines, BoneBars } from '@/components/shell/skeleton'
 
 // Mirrors components/pages/week/index.tsx (WeekPage): the week bar (no
-// horizon, no band: it is dated by the update) with its context, How to read
+// horizon: it is dated by the update) with its one line, How to read
 // and Export, then the blocks in `WEEK_BLOCKS` order at their `COLS` widths:
 // unusual · worth a reply · subjects · what came in · rival posts · what
 // worked (5) beside sales (7) · rising, and the coverage footnote bare under

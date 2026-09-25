@@ -46,7 +46,6 @@ export default async function AgentThreadPage({
   // already loads (the landing page's own predicate, same sentence).
   const blocked = nothingSearchable(data.basis)
   const disabledNote = blocked && canSend ? 'Nothing is searchable yet, so there is nothing to answer from' : undefined
-  const record = data.record ? { line: data.record.lines[0], lines: data.record.lines } : null
 
   // The index is the TURN's index, not the answered-turns' — `agent.answer:<i>`
   // renders turn i, so filtering before mapping would point at the wrong one.
@@ -99,7 +98,7 @@ export default async function AgentThreadPage({
     const doc = data.document
     return (
       <ExportScope page="agent" params={{ thread: id }} tiles={[]}>
-        <AskShell context={data.bar.context} record={record} params={sp}>
+        <AskShell context={data.bar.context}>
           {back}
           {/* `ASK_TILE_ROW`, like every other tile on this surface. `row` is a
               `MIN_H[n]` floor at every width below `xl` and an inert span at
@@ -142,7 +141,7 @@ export default async function AgentThreadPage({
   if (data.kind === 'document') {
     return (
       <ExportScope page="agent" params={{ thread: id }} tiles={[]}>
-        <AskShell context={data.bar.context} record={record} params={sp}>
+        <AskShell context={data.bar.context}>
           <AskColumns rail={rail}>
             <Tile col={12} row={ASK_TILE_ROW} eyebrow="The plan check" meta="nothing saved">
               <TileEmpty>
@@ -159,7 +158,7 @@ export default async function AgentThreadPage({
 
   return (
     <ExportScope page="agent" params={{ thread: id }} tiles={exportTiles}>
-      <AskShell context={data.bar.context} record={record} params={sp}>
+      <AskShell context={data.bar.context}>
         <AskColumns rail={rail}>
           {/* THE ASK BOX STAYS ABOVE THE ANSWER, as the artboard draws it: a
               reader with an answer in front of them is one keystroke from the

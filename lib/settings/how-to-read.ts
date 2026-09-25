@@ -168,12 +168,10 @@ export interface Definition {
   body: string
 }
 
+// NO "HOW SOUND IS THIS" CARD (25 Sep rulings, market-first WP1.2). It
+// explained the page bar's pill, and the pill left every page. The record it
+// pointed at is Settings › The record.
 export const DEFINITIONS: readonly Definition[] = [
-  {
-    id: 'soundness',
-    title: 'How sound is this',
-    body: 'The line in every page bar: how many updates and videos stand behind the page, and whether anything we track changed. Click it for the record behind it: how deeply each video was read, what was set aside, and which comparisons were refused.',
-  },
   {
     id: 'all-time',
     title: 'Counted over everything we have read for you',

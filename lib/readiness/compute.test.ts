@@ -564,6 +564,9 @@ describe('the baseline behind an unusual week', () => {
 describe('how much was read', () => {
   it('excludes Reddit from the denominator and dates the set-aside record', () => {
     const row = find(computeReadiness(ossur()), 'read-depth')
+    // Filed under the record, not the "How sound" pill that left every page
+    // with the 25 Sep rulings (market-first WP1.2).
+    expect(row.block).toBe('The record')
     expect(row.status).toBe('partial')
     expect(row.detail).toBe('Speech read on 798 of 1,596 videos (50.0%), translated 208 (13.0%), on-screen text 269 (16.9%) · Reddit excluded.')
     expect(row.notes[0]).toBe('38.2% of what was looked at was set aside, recorded only from 23 Aug 2026, so no month before that can show it.')

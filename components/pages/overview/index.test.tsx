@@ -49,11 +49,12 @@ function fullHouse(): OverviewData {
 }
 
 describe('the Overview’s blocks', () => {
-  it('are the seven the design names, keyed stably', () => {
+  it('are the six the design names, keyed stably, and OV6 is not among them (25 Sep rulings)', () => {
     expect(OVERVIEW_BLOCKS.map((b) => b.key)).toEqual([
       'overview.bar', 'overview.sentence', 'overview.subjects',
-      'overview.category', 'overview.rivals', 'overview.moves', 'overview.record',
+      'overview.category', 'overview.rivals', 'overview.moves',
     ])
+    expect(OVERVIEW_BLOCKS.map((b) => b.key)).not.toContain('overview.record')
   })
 
   it('every one renders in all three modes, in both states, and keeps the copy contract', () => {
@@ -82,7 +83,7 @@ describe('the Overview’s blocks', () => {
 
   it('links onward from every block that carries a shortcut', () => {
     const data = overviewFixture()
-    const shortcuts = ['overview.sentence', 'overview.subjects', 'overview.category', 'overview.rivals', 'overview.moves', 'overview.record']
+    const shortcuts = ['overview.sentence', 'overview.subjects', 'overview.category', 'overview.rivals', 'overview.moves']
     for (const block of OVERVIEW_BLOCKS.filter((b) => shortcuts.includes(b.key))) {
       expect(render(block.render(data, 'app', ctx))).toContain('href=')
     }
@@ -128,7 +129,7 @@ describe('the 30-number budget', () => {
       .toBe(RIVAL_FIGURES_MAX)
   })
 
-  it('holds when five of the seven blocks are refusing', () => {
+  it('holds when five of the six blocks are refusing', () => {
     expect(figureCount(tablesOf(refusedFixture()))).toBeLessThanOrEqual(NUMBER_BUDGET)
   })
 
@@ -148,18 +149,15 @@ describe('the 30-number budget', () => {
 })
 
 describe('the Overview page', () => {
-  // SIX, NOT SEVEN — the artboard's own count (Block D wave 3, M7).
-  // `Main.dc.html` draws six sections and none of them is "This month so far":
-  // OV0's update count is already in the horizon range note and its video count
-  // already in the soundness band, so the tile spent 156px plus its gap
-  // restating two facts and pushed the page's lead below them. The block keeps
-  // its place in `OVERVIEW_BLOCKS` for the print slide, the email and the brief
-  // section maps, which carry no bar and no band.
-  it('draws the page bar, the artboard\u2019s six tiles and nothing else', () => {
+  // FIVE TILES. OV0 is not a tile (Block D wave 3, M7: `Main.dc.html` draws no
+  // "This month so far", and its facts are the bar's and the horizon range's);
+  // it keeps its place in `OVERVIEW_BLOCKS` for the print slide, the email and
+  // the brief section maps, which carry no bar. OV6, "How sound is this
+  // month", left the page with the 25 Sep rulings.
+  it('draws the page bar, the five tiles and nothing else', () => {
     const markup = render(<OverviewPage data={overviewFixture()} />)
     expect(markup).toContain('Overview')
-    expect(markup).toContain('still filling')
-    expect((markup.match(/data-tile=""/g) ?? []).length).toBe(6)
+    expect((markup.match(/data-tile=""/g) ?? []).length).toBe(5)
     expect(markup).not.toContain('This month so far')
     // The band that carried that tile's one fact left the page with the 25 Sep
     // rulings; the bar carries the month and "as at" instead.
@@ -228,7 +226,7 @@ describe('the page bar, ported', () => {
     const text = renderText(<OverviewPage data={overviewFixture()} />)
     expect(text).toContain('Sealand · September 2026 as at the 10 Sep update · next update Sun 20 Sep')
     expect(markup).toContain('href="/dashboard?month=2026-08"')
-    expect(text.toLowerCase()).not.toContain('how sound is this:')
+    expect(text.toLowerCase()).not.toContain('how sound')
     expect(text).not.toContain('your 3rd monthly reading')
   })
 
@@ -287,5 +285,22 @@ describe('the exported slide header (market-first WP1.2)', () => {
   it('a snapshot stored before the reading month keeps the words it was built with', () => {
     const { reading: _reading, ...stored } = overviewFixture()
     expect(overviewPage.printContext?.(stored as OverviewData)).toBe('Sealand · September · as at Fri 18 Sep')
+  })
+})
+
+describe('no "how sound" on the interim front page (25 Sep rulings, §5.12)', () => {
+  it('in any block, any mode, any case, or in a slide title', () => {
+    for (const data of [overviewFixture(), refusedFixture()]) {
+      expect(renderText(<OverviewPage data={data} />).toLowerCase()).not.toContain('how sound')
+      for (const block of OVERVIEW_BLOCKS) {
+        for (const mode of MODES) {
+          expect(renderText(block.render(data, mode, ctx)).toLowerCase(), `${block.key}/${mode}`).not.toContain('how sound')
+        }
+      }
+    }
+    for (const slide of overviewPage.slides?.(overviewFixture(), 'default') ?? []) {
+      expect(slide.title.toLowerCase()).not.toContain('how sound')
+      expect(slide.keys).not.toContain('overview.record')
+    }
   })
 })

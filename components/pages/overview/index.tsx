@@ -16,14 +16,19 @@ import { overviewSubjects } from './subjects'
 import { overviewCategory } from './category'
 import { overviewRivals } from './rivals'
 import { overviewMoves } from './moves'
-import { overviewRecord } from './record'
 
-// Overview — the page (Phase 1 WP11, design §3 OV0–OV6; ported to the artboard
+// Overview — the page (Phase 1 WP11, design §3 OV0–OV5; ported to the artboard
 // in Block D wave 2, `mock-sealand/artboards/Main.dc.html`).
 //
-// SEVEN BLOCKS IN THE MONTHLY REPORT'S ORDER, and that order is the point: the
+// SIX BLOCKS IN THE MONTHLY REPORT'S ORDER, and that order is the point: the
 // page and the artefact are the same reading, so a reader who has seen one has
 // seen the other. Each block links onward to the page that carries it in full.
+//
+// NO OV6 (25 Sep rulings, market-first WP1.2). "How sound is this month"
+// (`overview.record`) left the front page with the "How sound" pill. The
+// block itself stays, because the monthly renders it as `monthly.sound` until
+// WP2.1 rebuilds that artefact, and `OverviewData.record` stays as data
+// because the weekly reads `record.line`.
 
 export const OVERVIEW_BLOCKS: readonly Block<OverviewData>[] = [
   overviewBar,
@@ -32,7 +37,6 @@ export const OVERVIEW_BLOCKS: readonly Block<OverviewData>[] = [
   overviewCategory,
   overviewRivals,
   overviewMoves,
-  overviewRecord,
 ]
 
 /**
@@ -49,12 +53,11 @@ const ROWS: Record<string, number> = {
   'overview.sentence': 3,
   'overview.subjects': 3,
   // Floors, not sizes. Lowered in the layout sweep (2026-09-24): the category
-  // block lost its absence-only column and OV6 is a few labelled figures, so
-  // the old floors left a tile of white under them below xl.
+  // block lost its absence-only column, so the old floors left a tile of white
+  // under it below xl.
   'overview.category': 3,
   'overview.rivals': 3,
   'overview.moves': 3,
-  'overview.record': 1,
 }
 
 /**

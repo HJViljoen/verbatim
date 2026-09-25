@@ -396,8 +396,11 @@ function howMuchWasRead(i: ReadinessInputs): ReadinessRow {
   }
   if (r.unflagged > 0) notes.push(`${fmtInt(r.unflagged)} videos were read before the product recorded which of the three it managed`)
 
+  // THE BLOCK IS THE RECORD (market-first WP1.2). It was "How sound is this",
+  // the page bar's pill, which left every page with the 25 Sep rulings; what
+  // each update read and set aside is written down in Settings › The record.
   return row(
-    'read-depth', 'How sound is this', 'what each update managed to read of a video, and what it set aside',
+    'read-depth', 'The record', 'what each update managed to read of a video, and what it set aside',
     status, detail, 'engineering',
     'Nothing to configure: the shares rise as transcripts, translation and on-screen text reach more videos, and the set-aside record only covers months after it began.',
     notes,

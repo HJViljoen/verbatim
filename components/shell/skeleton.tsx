@@ -141,14 +141,14 @@ export function SkeletonPage({ title, pills, children }: { title: string; pills?
 }
 
 /** The bar every Phase 1 surface wears (components/shell/page-bar.tsx), in its
- *  loading state: the title and the question are read from the same
- *  `lib/nav.ts` row the real bar reads, so the words on screen do not change
- *  when the page lands. The horizon row appears only where the surface has
- *  one (`hasHorizon`), and the "how sound is this" band only where the page
- *  passes a record (`band`), because a bone the page will not draw is a jump
- *  the moment it arrives. `pills` is the right-hand controls (How to read,
- *  Export) the page mounts. */
-export function SkeletonSurfaceBar({ nav, pills = 0, band = false }: { nav: NavKey; pills?: number; band?: boolean }) {
+ *  loading state: the title is read from the same `lib/nav.ts` row the real
+ *  bar reads, so the words on screen do not change when the page lands. The
+ *  line bone appears where the surface has a line, and the horizon row only
+ *  where it has one (`hasHorizon`), because a bone the page will not draw is a
+ *  jump the moment it arrives. No band bone: the "How sound is this" band left
+ *  every page with the 25 Sep rulings. `pills` is the right-hand controls (How
+ *  to read, Export) the page mounts. */
+export function SkeletonSurfaceBar({ nav, pills = 0 }: { nav: NavKey; pills?: number }) {
   const s = surface(nav)
   return (
     <div className="flex shrink-0 flex-col gap-1.5">
@@ -166,7 +166,6 @@ export function SkeletonSurfaceBar({ nav, pills = 0, band = false }: { nav: NavK
           <Bone className="h-3 w-40" />
         </div>
       )}
-      {band && <Bone className="h-[30px] w-full max-w-[520px] rounded-2xl" />}
     </div>
   )
 }
@@ -175,11 +174,11 @@ export function SkeletonSurfaceBar({ nav, pills = 0, band = false }: { nav: NavK
  *  Unlike `SkeletonPage` it draws no grid of its own, because the surfaces
  *  do not share one: Overview is a single column, Subjects a rail and a main
  *  column, Market two grids, Competitive a pill row above its grid. */
-export function SkeletonSurface({ nav, pills, band, children }: { nav: NavKey; pills?: number; band?: boolean; children: ReactNode }) {
+export function SkeletonSurface({ nav, pills, children }: { nav: NavKey; pills?: number; children: ReactNode }) {
   return (
     <PageFrame>
       <span role="status" className="sr-only">Loading {surface(nav).label}…</span>
-      <SkeletonSurfaceBar nav={nav} pills={pills} band={band} />
+      <SkeletonSurfaceBar nav={nav} pills={pills} />
       {children}
     </PageFrame>
   )

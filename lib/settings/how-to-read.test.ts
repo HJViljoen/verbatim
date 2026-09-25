@@ -70,6 +70,12 @@ describe('how to read', () => {
     for (const d of DEFINITIONS) expect(`${d.title} ${d.body}`).not.toContain('—')
   })
 
+  it('carries no "How sound is this" card, and no card says "how sound" (25 Sep rulings)', () => {
+    expect(DEFINITIONS.map((d) => d.id)).not.toContain('soundness')
+    for (const d of DEFINITIONS) expect(`${d.title} ${d.body}`.toLowerCase()).not.toContain('how sound')
+    for (const c of READING_CARDS) expect(JSON.stringify(c).toLowerCase()).not.toContain('how sound')
+  })
+
   it('carries exactly one definition of New, and the glossary agrees with it', () => {
     const nw = DEFINITIONS.filter((d) => d.id === 'new')
     expect(nw).toHaveLength(1)

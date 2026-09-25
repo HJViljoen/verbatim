@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  OLD_PAGES, PARKED_INITIATIVES, RETIRED_ADDRESSES, SURFACES, hasHorizon, hasRecord, oldPageBanner,
+  OLD_PAGES, PARKED_INITIATIVES, RETIRED_ADDRESSES, SURFACES, hasHorizon, oldPageBanner,
   retireDate, surface, surfaceForPath, surfacesIn,
 } from './nav'
 import { OLD_PAGES_RETIRE_ON } from './config'
@@ -36,17 +36,15 @@ describe('the nine surfaces', () => {
     // the latest update's, its ledger is all-time by design. The control used
     // to be drawn there and a press of it returned a byte-identical page.
     expect(SURFACES.filter(hasHorizon).map((s) => s.key)).toEqual(['overview', 'subjects', 'voice', 'competitive'])
-    expect(SURFACES.filter(hasRecord).map((s) => s.key)).toContain('market')
+    expect(SURFACES.find((s) => s.key === 'market')?.bar).toBe('reading')
   })
 
-  it('states a basis on every reading and on nothing else', () => {
-    // Ask is the seventh, and it is here because it became a reading: it is
-    // the one reader whose direction-word flag is true (`agent.movement`), and
-    // a surface that may print a direction word and states no basis for it is
-    // the worst of both. Reports and Settings make no reading and are still out.
-    expect(SURFACES.filter(hasRecord).map((s) => s.key)).toEqual(['overview', 'subjects', 'voice', 'market', 'competitive', 'week', 'ask'])
-    expect(SURFACES.filter(hasRecord).map((s) => s.key)).not.toContain('reports')
-    expect(SURFACES.filter(hasRecord).map((s) => s.key)).not.toContain('settings')
+  it('gives the bar\'s one line to every reading and to This week, and to nothing else (25 Sep rulings)', () => {
+    // The "How sound is this" band that `hasRecord` gated left every page; what
+    // is left is which bar a surface wears.
+    expect(SURFACES.filter((s) => s.bar === 'reading').map((s) => s.key)).toEqual(['overview', 'subjects', 'voice', 'market', 'competitive'])
+    expect(SURFACES.filter((s) => s.bar === 'week').map((s) => s.key)).toEqual(['week'])
+    expect(SURFACES.filter((s) => s.bar === 'title').map((s) => s.key)).toEqual(['ask', 'reports', 'settings'])
   })
 
   it('splits into the two groups the artboards draw', () => {
