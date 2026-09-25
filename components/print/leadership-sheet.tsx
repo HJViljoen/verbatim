@@ -249,9 +249,11 @@ function Chip({ tone = 'plain', children }: { tone?: 'plain' | 'good'; children:
  * (AGENTS.md, mock-gap §6 D3) and a printed page has no hover to check a line
  * against.
  */
-function MonthLine({ spark, months, width = 200, height = 44, color = 'var(--cat)' }: {
+function MonthLine({ spark, months, breaks, width = 200, height = 44, color = 'var(--cat)' }: {
   spark: (number | null)[]
   months: string[]
+  /** The refused steps (decision D, WP1.3): drawn broken. */
+  breaks?: boolean[]
   width?: number
   height?: number
   color?: string
@@ -273,7 +275,7 @@ function MonthLine({ spark, months, width = 200, height = 44, color = 'var(--cat
   const end = (p: { month: string; pct: number }) => `${axisMonth(p.month)} ${fmtPct(p.pct, 0)}`
   return (
     <span className="flex flex-col gap-0.5">
-      <Sparkline values={spark} color={color} width={width} height={height} animate={false} endDot />
+      <Sparkline values={spark} breaks={breaks} color={color} width={width} height={height} animate={false} endDot />
       <span className="flex justify-between font-mono text-[9px] text-muted-foreground" style={{ width }}>
         <span>{end(read[0])}</span>
         <span>{end(read[read.length - 1])}</span>
@@ -327,7 +329,8 @@ function trailOf(spark: readonly (number | null)[], months: readonly string[]): 
  * A REFUSED GAP IS STILL THE ANSWER. `gapBetween` answers in four words
  * (`apart` · `level` · `too few to compare` · `comparison refused`) and three
  * of them carry no number — on Sealand's own September, where the client side
- * is 84 videos against a 100-video floor, "too few to compare" is what the card
+ * is about 9 videos against a 100-video floor (research F12; the mock's 84 was
+ * invented), "too few to compare" is what the card
  * prints and what the honest sheet says. Picking only from the `apart` ones
  * would have the card disappear on the tenant it was designed for.
  */
@@ -409,7 +412,7 @@ function GapCard({ gap, row, categoryLabel }: { gap: Gap | null; row: SubjectRow
         </div>
         {row ? (
           <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <MonthLine spark={row.spark} months={row.sparkMonths} />
+            <MonthLine spark={row.spark} months={row.sparkMonths} breaks={row.sparkBreaks} />
             {/* THE LINE SAYS WHOSE IT IS, IN THE CARD'S OWN VOICE AND NOT IN A
                 9px LEGEND. `SubjectRow.spark` is the CATEGORY's share of this
                 subject — the only per-month series a subject row carries — and

@@ -122,6 +122,7 @@ describe('the fixture, rendered', () => {
       <BlockMovement
         mode={mode}
         verdict={monthChange({
+          comparability: null, // no month pair applies: a fixture pins rendering (lib/test/pair-fixture.ts)
           object: { kind: 'theme', id: 'registry-durability', label: 'Durability' },
           audience: 'competitor:Freitag Bags',
           curr: { month: '2026-09-01', videos: 142, k: 62, audience: 'competitor:Freitag Bags', clusteringKey: 'c2' },

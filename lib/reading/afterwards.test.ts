@@ -1,3 +1,5 @@
+import { pairOn } from './pairs'
+import { sealandJudge } from '../test/sealand-pairs'
 import { describe, it, expect } from 'vitest'
 
 import { directionRe } from '../test/copy-contract'
@@ -123,6 +125,7 @@ const SERIES = [
 describe('afterwardsFor', () => {
   it('reads two months either side of the decision, banded', () => {
     const a = afterwardsFor({
+      pair: null,
       decidedAt: '2026-07-04',
       targetIds: ['reg-1'],
       objectLabel: 'Repair & warranty',
@@ -143,7 +146,7 @@ describe('afterwardsFor', () => {
   })
 
   it('never sums months — the denominator is one month, not the pool', () => {
-    const a = afterwardsFor({ decidedAt: '2026-07-04', targetIds: ['reg-1'], series: SERIES, audience: 'client' })
+    const a = afterwardsFor({ pair: null, decidedAt: '2026-07-04', targetIds: ['reg-1'], series: SERIES, audience: 'client' })
     // Aug + Sep pooled would be n = 254; either month alone is what is read.
     expect(a.verdict?.value.n).toBe(130)
     expect(a.verdict?.baseline?.n).toBe(110)
@@ -151,6 +154,7 @@ describe('afterwardsFor', () => {
 
   it('leaves the decision’s own month out of both sides and says so', () => {
     const a = afterwardsFor({
+      pair: null,
       decidedAt: '2026-08-14',
       targetIds: ['reg-1'],
       series: SERIES,
@@ -168,7 +172,7 @@ describe('afterwardsFor', () => {
     // itself is in neither side — you decided partway through it": "2. Sep
     // 2026" is a date in most of the world, and the sentence break disappears
     // inside it.
-    const a = afterwardsFor({ decidedAt: '2026-08-14', targetIds: ['reg-1'], series: SERIES, audience: 'client' })
+    const a = afterwardsFor({ pair: null, decidedAt: '2026-08-14', targetIds: ['reg-1'], series: SERIES, audience: 'client' })
     expect(a.line).not.toMatch(/\d\.\s+[A-Z][a-z]{2}/)
     expect(a.line).toContain('1 of 2 months read')
   })
@@ -180,6 +184,7 @@ describe('afterwardsFor', () => {
   // claim; the word was the whole violation.
   it('uses no movement word for a decision dated the first of a month', () => {
     const a = afterwardsFor({
+      pair: null,
       decidedAt: '2026-08-01',
       targetIds: ['reg-1'],
       series: SERIES,
@@ -191,6 +196,7 @@ describe('afterwardsFor', () => {
 
   it('is too_soon with one reading and names how many it has', () => {
     const a = afterwardsFor({
+      pair: null,
       decidedAt: '2026-08-14',
       targetIds: ['reg-1'],
       series: SERIES,
@@ -202,7 +208,7 @@ describe('afterwardsFor', () => {
   })
 
   it('is too_soon, not blank, when nothing has been decided', () => {
-    const a = afterwardsFor({ decidedAt: null, targetIds: ['reg-1'], series: SERIES, audience: 'client' })
+    const a = afterwardsFor({ pair: null, decidedAt: null, targetIds: ['reg-1'], series: SERIES, audience: 'client' })
     expect(a.state).toBe('too_soon')
     expect(a.line).toBe('Not decided yet.')
     expect(a.line).not.toBe('—')
@@ -210,6 +216,7 @@ describe('afterwardsFor', () => {
 
   it('is too_soon when there is nothing before the decision to compare against', () => {
     const a = afterwardsFor({
+      pair: null,
       decidedAt: '2026-05-20',
       targetIds: ['reg-1'],
       series: SERIES,
@@ -220,7 +227,7 @@ describe('afterwardsFor', () => {
   })
 
   it('is no_target when the advice names nothing we follow', () => {
-    const a = afterwardsFor({ decidedAt: '2026-07-04', targetIds: [], series: SERIES, audience: 'client' })
+    const a = afterwardsFor({ pair: null, decidedAt: '2026-07-04', targetIds: [], series: SERIES, audience: 'client' })
     expect(a.state).toBe('no_target')
     expect(a.verdict).toBeNull()
     expect(a.line).toContain('does not name a subject or a theme')
@@ -230,6 +237,7 @@ describe('afterwardsFor', () => {
     const seen = new Set<string>()
     for (const reason of ['unlogged_era', 'tracking_change', 'clustering_changed', 'rename'] as const) {
       const a = afterwardsFor({
+        pair: null,
         decidedAt: '2026-07-04',
         targetIds: ['reg-1'],
         series: SERIES,
@@ -246,6 +254,7 @@ describe('afterwardsFor', () => {
 
   it('skips months with no denominator rather than reading them as zero', () => {
     const a = afterwardsFor({
+      pair: null,
       decidedAt: '2026-06-20',
       targetIds: ['reg-1'],
       series: [
@@ -263,7 +272,7 @@ describe('afterwardsFor', () => {
   })
 
   it('prints the band beside the change and no direction word of its own', () => {
-    const a = afterwardsFor({ decidedAt: '2026-07-04', targetIds: ['reg-1'], series: SERIES, audience: 'client' })
+    const a = afterwardsFor({ pair: null, decidedAt: '2026-07-04', targetIds: ['reg-1'], series: SERIES, audience: 'client' })
     expect(a.line).toMatch(/band \d+\.\d points/)
     expect(a.line).not.toMatch(/\b(grew|grow|growing|fell|falling|fading|rose|rising|up|down|narrowed|improved)\b/i)
     // The word for the state belongs to the badge vocabulary (D11), changed in
@@ -274,7 +283,7 @@ describe('afterwardsFor', () => {
 
   it('accepts an unsorted series', () => {
     const shuffled = [SERIES[3], SERIES[0], SERIES[2], SERIES[1]]
-    const a = afterwardsFor({ decidedAt: '2026-07-04', targetIds: ['reg-1'], series: shuffled, audience: 'client' })
+    const a = afterwardsFor({ pair: null, decidedAt: '2026-07-04', targetIds: ['reg-1'], series: shuffled, audience: 'client' })
     expect(a.verdict?.value).toEqual({ k: 18, n: 130 })
     expect(a.verdict?.baseline).toEqual({ k: 8, n: 110 })
   })
@@ -282,7 +291,7 @@ describe('afterwardsFor', () => {
 
 describe('afterwardsFor — the comparison carries its caveats', () => {
   it('flags a pair nobody recorded a grouping for, which is today’s whole corpus', () => {
-    const a = afterwardsFor({ decidedAt: '2026-07-04', targetIds: ['reg-1'], series: SERIES, audience: 'client' })
+    const a = afterwardsFor({ pair: null, decidedAt: '2026-07-04', targetIds: ['reg-1'], series: SERIES, audience: 'client' })
     // Every month frozen before the clustering fingerprint shipped carries no
     // key, and two unknowns are deliberately not one regime — so `flags: []`
     // here would be a positive claim that there is nothing to caveat.
@@ -291,6 +300,7 @@ describe('afterwardsFor — the comparison carries its caveats', () => {
 
   it('flags two months grouped differently as a re-grouping, not as unknown', () => {
     const a = afterwardsFor({
+      pair: null,
       decidedAt: '2026-07-04',
       targetIds: ['reg-1'],
       series: SERIES.map((p, i) => ({ ...p, clusteringKey: i < 2 ? 'k-old' : 'k-new' })),
@@ -302,6 +312,7 @@ describe('afterwardsFor — the comparison carries its caveats', () => {
 
   it('draws no comparison at all across a rename, and says which silence it is', () => {
     const a = afterwardsFor({
+      pair: null,
       decidedAt: '2026-07-04',
       targetIds: ['reg-1'],
       series: SERIES.map((p, i) => ({ ...p, clusteringKey: 'k1', audience: i < 2 ? 'competitor:Old' : 'competitor:New' })),
@@ -315,6 +326,7 @@ describe('afterwardsFor — the comparison carries its caveats', () => {
 
   it('says nothing about a grouping where every month is in one', () => {
     const a = afterwardsFor({
+      pair: null,
       decidedAt: '2026-07-04',
       targetIds: ['reg-1'],
       series: SERIES.map((p) => ({ ...p, clusteringKey: 'k1', audience: 'client' })),
@@ -330,33 +342,47 @@ describe('afterwardsFor — which silence a cell prints', () => {
     // Production today: a June recommendation whose cited insights have been
     // pruned resolves to no target AND has never been decided on. The cell a
     // reader is owed names the thing that resolves on the calendar.
-    const a = afterwardsFor({ decidedAt: null, targetIds: [], series: [], audience: 'client' })
+    const a = afterwardsFor({ pair: null, decidedAt: null, targetIds: [], series: [], audience: 'client' })
     expect(a.state).toBe('too_soon')
     expect(a.line).toBe('Not decided yet.')
     expect(a.line).not.toContain('does not name a subject')
   })
 
   it('still says no_target for a row that HAS been decided on', () => {
-    const a = afterwardsFor({ decidedAt: '2026-07-04', targetIds: [], series: SERIES, audience: 'client' })
+    const a = afterwardsFor({ pair: null, decidedAt: '2026-07-04', targetIds: [], series: SERIES, audience: 'client' })
     expect(a.state).toBe('no_target')
   })
 })
 
 describe('afterwardsFor — the small true things', () => {
   it('says neither "partway through" nor "at the start of it": the status is the count alone', () => {
-    const first = afterwardsFor({ decidedAt: '2026-08-01T09:00:00.000Z', targetIds: ['reg-1'], series: SERIES, audience: 'client' })
+    const first = afterwardsFor({ pair: null, decidedAt: '2026-08-01T09:00:00.000Z', targetIds: ['reg-1'], series: SERIES, audience: 'client' })
     expect(first.state).toBe('too_soon')
     expect(first.line).not.toContain('partway through')
-    const mid = afterwardsFor({ decidedAt: '2026-08-14', targetIds: ['reg-1'], series: SERIES, audience: 'client' })
+    const mid = afterwardsFor({ pair: null, decidedAt: '2026-08-14', targetIds: ['reg-1'], series: SERIES, audience: 'client' })
     expect(mid.line).toBe(first.line)
   })
 
   it('keys the verdict on the kind of identity it was given', () => {
-    const theme = afterwardsFor({ decidedAt: '2026-07-04', targetIds: ['reg-1'], series: SERIES, audience: 'client' })
+    const theme = afterwardsFor({ pair: null, decidedAt: '2026-07-04', targetIds: ['reg-1'], series: SERIES, audience: 'client' })
     expect(theme.verdict?.objectKind).toBe('theme')
     const subject = afterwardsFor({
+      pair: null,
       decidedAt: '2026-07-04', targetIds: ['sub-1'], series: SERIES, audience: 'client', objectKind: 'subject',
     })
     expect(subject.verdict?.objectKind).toBe('subject')
+  })
+})
+
+describe('afterwardsFor under the month-pair rule (decision D, WP1.3)', () => {
+  it('a refused pair is the cell\'s answer, in the pair\'s own words', () => {
+    const judge = pairOn(sealandJudge('2026-10-02T06:00:00.000Z'))
+    const a = afterwardsFor({
+      pair: (prev, month) => judge(prev, month, 'client'),
+      decidedAt: '2026-07-04', targetIds: ['reg-1'], objectLabel: 'Repair & warranty', series: SERIES, audience: 'client',
+    })
+    expect(a.state).toBe('refused')
+    expect(a.verdict).toBeNull()
+    expect(a.line).toBe('Not read as a change: we changed what we search in September.')
   })
 })

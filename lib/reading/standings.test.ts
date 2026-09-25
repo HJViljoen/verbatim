@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import { attentionSplit } from './attention'
 import { NOT_OBSERVED, buildStandings, standingText } from './standings'
+import { BRANDS_PANEL, pairOn } from './pairs'
+import { sealandJudge } from '../test/sealand-pairs'
 
 // Össur's panel at a 1 June 2026 cutoff, measured read-only 2026-09-15:
 //   Aug  client 13 videos / 6 comments · Ottobock 10 / 92 · category 122 / 2,047
@@ -27,6 +29,8 @@ const base = {
   categoryLabel: 'The wider category',
   panelId: 'panel-1',
   prevPanelId: 'panel-1',
+  // No month pair applies: these pin the panel's own rule and the bands.
+  comparability: null,
 }
 
 describe('buildStandings', () => {
@@ -185,5 +189,29 @@ describe('standingText', () => {
     expect(standingText(null)).toBe(NOT_OBSERVED)
     expect(standingText({ k: 0, n: 0, pct: null })).toBe(NOT_OBSERVED)
     expect(standingText({ k: 0, n: 77, pct: 0 })).toBe('0%')
+  })
+})
+
+describe('buildStandings under the month-pair rule (decision D, WP1.3)', () => {
+  it('refuses both verdicts on every row where the brands view refuses the pair, keeping the shares', () => {
+    // Össur's panel counts, judged by Sealand's own log on 2 Oct (our
+    // September search changes are in August-to-September's span).
+    const pair = pairOn(sealandJudge('2026-10-02T06:00:00.000Z'))('2026-08-01', '2026-09-01', BRANDS_PANEL)
+    const rows = buildStandings({ ...base, comparability: pair })
+    for (const r of rows.filter((x) => x.observed)) {
+      expect(r.contentVerdict?.state).toBe('refused')
+      expect(r.attentionVerdict?.state).toBe('refused')
+      expect(r.contentVerdict?.pair?.cause).toBe('searches')
+      expect(r.content).not.toBeNull()
+    }
+  })
+
+  it('a re-frozen panel still refuses first, as the panel\'s own rule', () => {
+    const pair = pairOn(sealandJudge('2026-10-02T06:00:00.000Z'))('2026-08-01', '2026-09-01', BRANDS_PANEL)
+    const rows = buildStandings({ ...base, prevPanelId: 'panel-0', comparability: pair })
+    const otto = rows.find((r) => r.role === 'rival')!
+    expect(otto.contentVerdict?.refusedReason).toBe('tracking_change')
+    expect(otto.contentVerdict?.pair).toBeUndefined()
+    expect(otto.attentionVerdict?.pair).toBeUndefined()
   })
 })

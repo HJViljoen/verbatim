@@ -18,8 +18,9 @@ import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
 // OV2 · Your subjects — the hero (design §3 OV2).
 //
 // THE CATEGORY COLUMN IS PROMOTED, and that is the block's whole argument: on
-// the paying tenant your own audience carries 84 videos in a month and the
-// category carries 1,388, so the only side of the three that can carry a
+// the paying tenant your own audience carries about 9 videos in a month and the
+// category 625 (September, research F12; the mock's 84 and 1,388 were
+// invented volume), so the only side of the three that can carry a
 // monthly change is the category — and a hero that printed only your own side
 // would print "too few to compare" every month for ever. Your side is still
 // shown, as a LEVEL with its count, because the level is real; what it may not
@@ -128,8 +129,8 @@ function AtLastMonth({ at, mode = 'app' }: { at: SubjectRow['categoryAtLastMonth
  * themselves. The product never says which way it went off two readings.
  *
  * AND ON THIS TENANT IT READS "too few to compare", which is the point rather
- * than a disappointment: your own audience carries 84 videos against a
- * 100-video floor, so the difference is refused — the same refusal the mock
+ * than a disappointment: your own audience carries about 9 videos against a
+ * 100-video floor (research F12), so the difference is refused — the same refusal the mock
  * prints one cell away in its own change column. Both levels and both
  * denominators still print.
  *
@@ -159,7 +160,7 @@ export function leadGap(s: OverviewData['subjects']): Gap | null {
  * times about one side of one subject — this headline, the earlier gap beside
  * it, the table's own YOUR CHANGE column, the block's footer note and the
  * deck's gap card. None of them was wrong. They are one fact — your own
- * audience carried 84 videos, under the floor, so nothing about your side can
+ * audience carried about 9 videos (research F12), under the floor, so nothing about your side can
  * be compared this month — said five times in five registers, which reads to a
  * client as five separate failures.
  *
@@ -291,7 +292,7 @@ function Row({ row, mode, appUrl = '', sentLine = null, domain }: { row: Subject
           // the one shape on this page a reader cannot date. The artboard
           // captions every line it draws.
           <span className="flex flex-col gap-0.5">
-            <Sparkline values={row.spark} color="var(--cat)" width={72} height={20} animate={false} domain={domain} zeroBase rule />
+            <Sparkline values={row.spark} breaks={row.sparkBreaks} color="var(--cat)" width={72} height={20} animate={false} domain={domain} zeroBase rule />
             <span className="font-mono text-[10.5px] text-muted-foreground">{monthlySpanLabel(row.spark, row.sparkMonths)}</span>
           </span>
         )}

@@ -52,6 +52,9 @@ import type { Verdict } from '../reading/verdicts'
 import { proseFigures } from '../prose/figures'
 import { FIGURE_KEY_RE } from '../prose/scrub'
 import { substituteFigures } from '../reports/cover'
+import { FIXTURE_ENDED } from '../test/pair-fixture'
+import { sealandJudge } from '../test/sealand-pairs'
+import { pairOn } from '../reading/pairs'
 
 // The Overview's pure half (Phase 1 WP11). Everything here is shape and words:
 // the loader's I/O is exercised against production read-only and the blocks are
@@ -452,6 +455,7 @@ describe('buildSubjects', () => {
 
   it('says the reading is not recorded when M4 is not applied', () => {
     const b = buildSubjects({
+      pair: null, asOf: FIXTURE_ENDED,
       subjects: null, months: null, denominators: new Map(), perAudience,
       axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01', leadRival: 'Freitag', atLastMonth: null, thin: false,
     })
@@ -461,6 +465,7 @@ describe('buildSubjects', () => {
 
   it('reads an absent row as a zero only where the month was read at all', () => {
     const b = buildSubjects({
+      pair: null, asOf: FIXTURE_ENDED,
       subjects: [subject('s1', 'Durability'), subject('s2', 'Price')],
       // September was read (s1 has a row); August was not read for anybody.
       months: [{ month: '2026-09-01', audience: INDUSTRY_AUDIENCE, subject_id: 's1', videos: 305, comments: 900 }],
@@ -478,6 +483,7 @@ describe('buildSubjects', () => {
 
   it('carries "at this point last month" on the category side only', () => {
     const b = buildSubjects({
+      pair: null, asOf: FIXTURE_ENDED,
       subjects: [subject('s1', 'Durability')],
       months: [{ month: '2026-09-01', audience: INDUSTRY_AUDIENCE, subject_id: 's1', videos: 305, comments: 900 }],
       denominators: new Map(), perAudience,
@@ -493,6 +499,7 @@ describe('buildSubjects', () => {
 
   it('says nothing about last month when the window could not be read', () => {
     const b = buildSubjects({
+      pair: null, asOf: FIXTURE_ENDED,
       subjects: [subject('s1', 'Durability')], months: [], denominators: new Map(), perAudience,
       axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01', leadRival: 'Freitag', atLastMonth: null, thin: false,
     })
@@ -501,6 +508,7 @@ describe('buildSubjects', () => {
 
   it('offers the proposer’s candidates rather than a blank form', () => {
     const b = buildSubjects({
+      pair: null, asOf: FIXTURE_ENDED,
       subjects: [subject('s1', 'Durability', 'proposed')], months: [], denominators: new Map(), perAudience,
       axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01', leadRival: null, atLastMonth: null, thin: false,
     })
@@ -519,6 +527,7 @@ describe('buildSubjects', () => {
     const withRival = new Map(perAudience)
     withRival.set(`2026-09-01|${rivalKey('Freitag')}`, 142)
     const b = buildSubjects({
+      pair: null, asOf: FIXTURE_ENDED,
       subjects: [subject('s1', 'Durability')], months, denominators: new Map(), perAudience: withRival,
       axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01', leadRival: 'Freitag', atLastMonth: null, thin: false,
     })
@@ -533,6 +542,7 @@ describe('buildSubjects', () => {
 
   it('draws no comparison at all in a thin month', () => {
     const b = buildSubjects({
+      pair: null, asOf: FIXTURE_ENDED,
       subjects: [subject('s1', 'Durability')],
       months: [{ month: '2026-09-01', audience: INDUSTRY_AUDIENCE, subject_id: 's1', videos: 305, comments: 0 }],
       denominators: new Map(), perAudience,
@@ -558,6 +568,7 @@ describe('buildSubjects', () => {
   }
   const withGap = (over: Partial<Parameters<typeof buildSubjects>[0]> = {}) =>
     buildSubjects({
+      pair: null, asOf: FIXTURE_ENDED,
       subjects: [subject('s1', 'Durability')], months: gapMonths, denominators: new Map(),
       perAudience: gapAudiences(), axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
       leadRival: 'Freitag', atLastMonth: null, thin: false, ...over,
@@ -597,6 +608,7 @@ describe('buildSubjects', () => {
 
   it('carries no gaps at all where the reading is not recorded', () => {
     const b = buildSubjects({
+      pair: null, asOf: FIXTURE_ENDED,
       subjects: null, months: null, denominators: new Map(), perAudience,
       axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01', leadRival: 'Freitag', atLastMonth: null, thin: false,
     })
@@ -641,6 +653,7 @@ describe('buildCategory', () => {
 
   it('says what is not recorded rather than printing zeros, when M5 is absent', () => {
     const c = buildCategory({
+      pair: null, asOf: FIXTURE_ENDED,
       audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
       series, recordFrom: AXIS[0], kindRows: null, statsRows: null, panel: null, perAudience, attentionVerdict: null, dormant: [], thin: false,
     })
@@ -654,6 +667,7 @@ describe('buildCategory', () => {
 
   it('reads the movers off the month series and earns a direction word', () => {
     const c = buildCategory({
+      pair: null, asOf: FIXTURE_ENDED,
       audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
       series, recordFrom: AXIS[0], kindRows: null, statsRows: null, panel: null, perAudience, attentionVerdict: null, dormant: [], thin: false,
     })
@@ -669,6 +683,7 @@ describe('buildCategory', () => {
       { month: '2026-09-01', audience: INDUSTRY_AUDIENCE, kind: 'objection', videos: 120, comments: 0, platform_mix: { reddit: 20 }, run_id: 'r1' },
     ]
     const c = buildCategory({
+      pair: null, asOf: FIXTURE_ENDED,
       audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
       series, recordFrom: AXIS[0], kindRows, statsRows: null, panel: null, perAudience, attentionVerdict: null, dormant: [], thin: false,
     })
@@ -680,6 +695,7 @@ describe('buildCategory', () => {
 
   it('suppresses every comparison in a thin month and says so', () => {
     const c = buildCategory({
+      pair: null, asOf: FIXTURE_ENDED,
       audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
       series, recordFrom: AXIS[0], kindRows: null, statsRows: null, panel: null, perAudience, attentionVerdict: null, dormant: [], thin: true,
     })
@@ -703,6 +719,7 @@ describe('buildCategory', () => {
       panel_id: 'p1',
     })
     const c = buildCategory({
+      pair: null, asOf: FIXTURE_ENDED,
       audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
       series, recordFrom: AXIS[0],
       kindRows: null,
@@ -719,6 +736,7 @@ describe('buildCategory', () => {
       { month: '2026-09-01', audience: INDUSTRY_AUDIENCE, judged: 1112, positive: 678, negative: 200, neutral: 214, mixed: 20, judged_framing: 120, panel_videos: null, attention_comments: null, panel_platform_mix: null, panel_id: null },
     ]
     const c = buildCategory({
+      pair: null, asOf: FIXTURE_ENDED,
       audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
       series, recordFrom: AXIS[0], kindRows: null, statsRows, panel: null, perAudience, attentionVerdict: null, dormant: [], thin: false,
     })
@@ -743,6 +761,7 @@ describe('buildCategory', () => {
       state: 'refused', refusedReason: 'tracking_change', flags: [],
     }
     const c = buildCategory({
+      pair: null, asOf: FIXTURE_ENDED,
       audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
       series, recordFrom: AXIS[0], kindRows: null, statsRows, panel, perAudience, attentionVerdict: refusal, dormant: [], thin: false,
     })
@@ -754,6 +773,7 @@ describe('buildCategory', () => {
 
   it('flags only the dormant themes this page’s own axis ever drew', () => {
     const c = buildCategory({
+      pair: null, asOf: FIXTURE_ENDED,
       audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
       series, recordFrom: AXIS[0], kindRows: null, statsRows: null, panel: null, perAudience,
       attentionVerdict: null,
@@ -769,6 +789,7 @@ describe('buildCategory', () => {
 
   it('tells an unreadable register from a register with nothing dormant in it', () => {
     const unreadable = buildCategory({
+      pair: null, asOf: FIXTURE_ENDED,
       audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
       series, recordFrom: AXIS[0], kindRows: null, statsRows: null, panel: null, perAudience,
       attentionVerdict: null, dormant: null, thin: false,
@@ -777,6 +798,7 @@ describe('buildCategory', () => {
     expect(unreadable.quietNote).toContain('not recorded for this workspace yet')
 
     const nothing = buildCategory({
+      pair: null, asOf: FIXTURE_ENDED,
       audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
       series, recordFrom: AXIS[0], kindRows: null, statsRows: null, panel: null, perAudience,
       attentionVerdict: null, dormant: [], thin: false,
@@ -802,6 +824,7 @@ describe('buildRivals', () => {
 
   it('prints what was raised under a rival’s content when the panel is not recorded', () => {
     const b = buildRivals({
+      pair: null,
       rivals: [{ name: 'Freitag', retiredAt: null }],
       statsRows: null, month: '2026-09-01', prevMonth: '2026-08-01', brand: 'Sealand', series, dualMention: 41,
     })
@@ -820,6 +843,7 @@ describe('buildRivals', () => {
   // category's appeared the first time the migration was applied.
   it('draws your own row and the category’s while the panel is not recorded', () => {
     const b = buildRivals({
+      pair: null,
       rivals: [{ name: 'Freitag', retiredAt: null }],
       statsRows: null, month: '2026-09-01', prevMonth: '2026-08-01', brand: 'Sealand', series, dualMention: 41,
     })
@@ -836,6 +860,7 @@ describe('buildRivals', () => {
       { month: '2026-09-01', audience: INDUSTRY_AUDIENCE, judged: 0, positive: 0, negative: 0, neutral: 0, mixed: 0, judged_framing: 0, panel_videos: 850, attention_comments: 35000, panel_platform_mix: {}, panel_id: 'p1' },
     ]
     const b = buildRivals({
+      pair: null,
       rivals: [{ name: 'Freitag', retiredAt: null }],
       statsRows, month: '2026-09-01', prevMonth: '2026-08-01', brand: 'Sealand', series, dualMention: null,
     })
@@ -848,6 +873,7 @@ describe('buildRivals', () => {
 
   it('lists no stopped rival: Settings › Tracking is where the whole list lives', () => {
     const b = buildRivals({
+      pair: null,
       rivals: [{ name: 'Poler', retiredAt: '2026-09-09' }, { name: 'Freitag', retiredAt: null }],
       statsRows: null, month: '2026-09-01', prevMonth: null, brand: 'Sealand', series, dualMention: null,
     })
@@ -857,6 +883,7 @@ describe('buildRivals', () => {
 
   it('leads with nothing while the panel is not recorded, because nobody was compared', () => {
     const b = buildRivals({
+      pair: null,
       rivals: [{ name: 'Freitag', retiredAt: null }],
       statsRows: null, month: '2026-09-01', prevMonth: '2026-08-01', brand: 'Sealand', series, dualMention: null,
     })
@@ -1199,5 +1226,47 @@ describe('fillingNote', () => {
 
   it('says nothing was read, where nothing was', () => {
     expect(fillingNote({ ...base, videos: null })).toContain('nothing read into this month yet')
+  })
+})
+
+// ---- The month-pair rule on OV2 (market-first decision D, WP1.3) -----------------------------
+
+describe('buildSubjects under the month-pair rule', () => {
+  // Looks & style, the category's one moving subject (research §1, prod): 38 of
+  // August's 351 category videos and 104 of September's 626.
+  const perAudience = new Map<string, number>([
+    ['2026-08-01|industry-other', 351],
+    ['2026-09-01|industry-other', 626],
+  ])
+  const input = {
+    subjects: [subject('looks', 'Looks & style')],
+    months: [
+      { month: '2026-08-01', audience: INDUSTRY_AUDIENCE, subject_id: 'looks', videos: 38, comments: 0 },
+      { month: '2026-09-01', audience: INDUSTRY_AUDIENCE, subject_id: 'looks', videos: 104, comments: 0 },
+    ],
+    denominators: new Map<string, number>(),
+    perAudience,
+    axis: ['2026-08-01', '2026-09-01'],
+    month: '2026-09-01',
+    prevMonth: '2026-08-01',
+    leadRival: null,
+    atLastMonth: null,
+    thin: false,
+  }
+
+  it('reads "moved" with no judge, which is the rule\'s reason for being', () => {
+    const b = buildSubjects({ ...input, pair: null, asOf: FIXTURE_ENDED })
+    expect(b.rows[0].category.verdict?.state).toBe('moved')
+  })
+
+  it('never reads August against September as moved, and breaks the sparkline step', () => {
+    for (const now of ['2026-09-20T12:00:00.000Z', '2026-10-02T06:00:00.000Z']) {
+      const b = buildSubjects({ ...input, pair: pairOn(sealandJudge(now)), asOf: now })
+      const v = b.rows[0].category.verdict
+      expect(v?.state).toBe('refused')
+      expect(v?.refusedReason).toBe('tracking_change')
+      expect(b.rows[0].direction).toBeNull()
+      expect(b.rows[0].sparkBreaks).toEqual([false, true])
+    }
   })
 })

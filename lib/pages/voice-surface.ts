@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import { prevalenceTier, type PrevalenceTier } from '../calibration'
+import { pairSentence, prevalenceTier, type PrevalenceTier } from '../calibration'
 import { fmtInt, platformLabel, shortDate, weekdayDate } from '../format'
 import { cleanQuote, fetchInsightsByIds, readTranslations, readingOf } from '../quotes'
 import { quoteRef } from '../renderables/quotes-freeze'
@@ -23,7 +23,9 @@ import { freezeStateFor, isMissingMonthTable } from '../reading/monthly'
 import { monthStartOf, nextMonth } from '../reading/month-key'
 import { isMissingKindMoodAttention } from '../reading/attention'
 import { moodChange, moodShares, type MoodShare } from '../reading/mood'
-import { loadMonthSeries, loadTopObjects, type ReadingHandle } from '../reading/read'
+import { loadMonthSeries, loadPairJudge, loadTopObjects, type ReadingHandle } from '../reading/read'
+import { pairOnVerdict } from '../reading/comparability'
+import { comparableOn, pairOn, refusedSteps, type PairOn } from '../reading/pairs'
 import { methodLines, type MethodLines } from '../reading/method'
 import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordInputs } from '../reading/record'
 import { pointsByMonth, type DenominatorPoint, type MonthLabel, type MonthPoint, type MonthSeries, type Substrate } from '../reading/series'
@@ -330,6 +332,10 @@ export interface ThemeBlock {
   monthsDrawn: number
   axis: string[]
   points: MonthPoint[]
+  /** The steps the theme's line draws broken (decision D, WP1.3): each later
+   *  month whose step from the month before is refused, with the sentence.
+   *  Optional: a stored block from before the rule draws as sent. */
+  refusedSteps?: Readonly<Record<string, string>>
   /** The tone line: the four-way distribution of the audience's judged videos,
    *  with the negative share banded (decision T). Null with M5 unapplied. */
   tone: { shares: MoodShare[]; judged: number; verdict: Verdict | null } | null
@@ -722,9 +728,14 @@ export function moversNote(input: {
   any: boolean
   /** `?themes=` left nothing in a month that did carry themes. */
   narrowed?: boolean
+  /** The month pair's refusal, in its own words, where the two months were
+   *  not read the same way (decision D, WP1.3): nothing was compared, and "no
+   *  theme carried enough" would blame the month for our own change. */
+  refused?: string | null
 }): string | null {
   if (input.narrowed) return DEEP_LINK_EMPTY
   if (input.thin) return 'Too little conversation this month to say what moved.'
+  if (!input.read && input.refused) return input.refused
   if (!input.read) return 'No theme carried enough of this month to be compared.'
   return input.any ? null : 'Nothing moved clearly this month.'
 }
@@ -1108,6 +1119,10 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   // arithmetic over verdicts and are added below.
   const recordAhead = loadRecordInputs(reading.client, clientId, recordWindow(month, readingAt), { now: readingAt })
   recordAhead.catch(() => {})
+  // THE MONTH-PAIR JUDGE (decision D, WP1.3): every verdict, direction word
+  // and chart step on the page is judged by it.
+  const judgeAhead = loadPairJudge(reading, readingAt)
+  judgeAhead.catch(() => {})
 
   // ── wave 3: the themes worth drawing, and the registry behind them ──────
   const themedRunId = await themedRunAhead
@@ -1197,6 +1212,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
       .map((d) => d.videos),
     { updates: updatesByMonth[month] ?? 0, firstRunMonth },
   ) || audienceThin(selectedDenom?.videos ?? null)
+  const pair = pairOn(await judgeAhead)
   if (kindRows == null) {
     kindsNote = 'What kind of thing is being said is not recorded month by month for this workspace yet.'
   } else {
@@ -1220,6 +1236,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
             kind: k.kind, audience: selected,
             curr: { month, k: k.videos, videos: selectedDenom.videos },
             prev: { month: prevMonth, k: prev.videos, videos: prevN },
+            comparability: pair(prevMonth, month, selected),
           })
     }
   }
@@ -1263,7 +1280,13 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     // theme's first month and is what keeps it out of growing and fading
     // while leaving its LEVEL on the page as a newcomer.
     const before: SeriesPoint = prev ?? { month: prevMonth, videos: null, k: null, audience: s.audience }
-    const verdict = monthChange({ object: { kind: 'theme', id: s.objectId, label }, audience: s.audience, curr, prev: before })
+    const verdict = monthChange({
+      object: { kind: 'theme', id: s.objectId, label },
+      audience: s.audience,
+      curr,
+      prev: before,
+      comparability: pair(prevMonth, month, s.audience),
+    })
     const readable = s.points.filter((p) => p.k != null && p.k > 0)
     pool.push({
       id: s.objectId,
@@ -1272,7 +1295,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
       n: curr.videos,
       pct: curr.pct,
       verdict,
-      direction: thin ? null : directionWord(s.points as readonly SeriesPoint[]),
+      direction: thin ? null : directionWord(s.points as readonly SeriesPoint[], { asOf: readingAt, comparable: comparableOn(pair, s.audience) }),
       isNew: firstHeardThisMonth({
         axisFrom: axis[0] ?? month,
         recordFrom: started.from,
@@ -1302,6 +1325,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     .sort((a, b) => (b.lastHeard ?? '').localeCompare(a.lastHeard ?? ''))
     .slice(0, shown)
 
+  const monthPair = pairOnVerdict(pair(prevMonth, month, selected)).note
   const moversBlock: MoversBlock = {
     growing, fading, flat, newcomers, goneQuiet,
     shown,
@@ -1317,6 +1341,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
       thin: thin,
       any: growing.length + fading.length + flat.length + newcomers.length > 0,
       narrowed,
+      refused: monthPair?.mode === 'refuse' ? pairSentence(monthPair) : null,
     }),
     // `theme_observations.reread_share` lands with M2. Until then the page
     // cannot tell a theme whose members were re-read this month from one whose
@@ -1378,6 +1403,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     thin: thin,
     denominator: selectedDenom?.videos ?? null,
     reading,
+    pair,
   })
   themeBlockAhead.catch(() => {})
 
@@ -1527,6 +1553,8 @@ interface ThemeInput {
   thin: boolean
   denominator: number | null
   reading: ReadingHandle
+  /** The page's month-pair judge (decision D, WP1.3). */
+  pair: PairOn
 }
 
 /** VO3 — a theme in full. Everything a reader needs to check the number above
@@ -1626,6 +1654,7 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
           ? null
           : moodChange({
               audience,
+              comparability: input.pair(input.prevMonth, month, audience),
               curr: { month, ...counts },
               prev: {
                 month: input.prevMonth, judged: prev.judged, positive: prev.positive,
@@ -1862,6 +1891,8 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
     monthsDrawn: axis.length,
     axis,
     points,
+    // A REFUSED STEP IS DRAWN BROKEN (decision D, WP1.3).
+    refusedSteps: refusedSteps(points.map((p) => p.month), (a, b) => input.pair(a, b, audience)),
     tone,
     toneNote,
     onCamera,

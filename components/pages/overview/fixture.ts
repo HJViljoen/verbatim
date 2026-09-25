@@ -200,6 +200,7 @@ export function moveReadingFixture(): MoveReading {
     })),
   })
   return readMove({
+    pair: null, // no month pair applies: a fixture pins rendering (lib/test/pair-fixture.ts)
     move: {
       id: 'mv-1',
       title: 'Push repairability',

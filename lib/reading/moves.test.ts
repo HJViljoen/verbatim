@@ -1,3 +1,5 @@
+import { pairOn } from './pairs'
+import { sealandJudge } from '../test/sealand-pairs'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -306,6 +308,9 @@ const series = (over: Partial<MoveSeries> = {}): MoveSeries => ({
 
 function reading(over: Partial<MoveReadingInput> = {}) {
   const base: MoveReadingInput = {
+    // No month pair applies unless a test hands one: these pin the move's
+    // reading, not the pair rule.
+    pair: null,
     move: {
       id: 'mv1',
       title: 'Push repairability',
@@ -480,6 +485,7 @@ describe('readMove — the one movement claim a move earns', () => {
     expect(reading().verdict?.flags).toEqual([])
 
     const themed = readMove({
+      pair: null,
       move: { id: 'mv6', title: 'Answer the wet-commute question', kind: 'theme', declared_at: '2026-08-12', subject_id: null, registry_ids: ['t1'], lineage_id: null },
       targetLabel: 'Wet commute',
       series: [
@@ -497,6 +503,7 @@ describe('readMove — the one movement claim a move earns', () => {
     expect(themed.verdict?.state).not.toBe('refused')
 
     const unrecorded = readMove({
+      pair: null,
       move: { id: 'mv7', title: 'Answer the wet-commute question', kind: 'theme', declared_at: '2026-08-12', subject_id: null, registry_ids: ['t1'], lineage_id: null },
       series: [series({ noClustering: false })],
       window: { kind: 'since', from: '2026-07-01', to: '2026-10-01' },
@@ -559,5 +566,19 @@ describe('moveChartNote — two readings are not a line', () => {
       ],
     })
     expect(moveChartNote(hollow)).toBe('Aug → Sep only')
+  })
+})
+
+describe('readMove under the month-pair rule (decision D, WP1.3)', () => {
+  it('refuses a comparison across our own search changes, and breaks the chart\'s steps', () => {
+    const judge = pairOn(sealandJudge('2026-10-02T06:00:00.000Z'))
+    const r = reading({ pair: judge })
+    expect(r.verdict?.state).toBe('refused')
+    expect(r.verdict?.refusedReason).toBe('tracking_change')
+    expect(r.series[0].refusedSteps?.['2026-09-01']).toBe('Not read as a change: we changed what we search in September.')
+  })
+
+  it('no judge reads as before', () => {
+    expect(reading().series[0].refusedSteps).toBeUndefined()
   })
 })

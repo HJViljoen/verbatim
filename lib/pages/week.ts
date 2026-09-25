@@ -21,13 +21,17 @@ import {
 } from '../reading/anomaly'
 import { freezeStateFor, isMissingMonthlyReading, isMissingMonthTable } from '../reading/monthly'
 import { monthStartOf, nextMonth } from '../reading/month-key'
-import { loadMonthSeries, loadWindowReading, type ReadingHandle } from '../reading/read'
+import { loadMonthSeries, loadPairJudge, loadWindowReading, type ReadingHandle } from '../reading/read'
+import { pairedVerdict } from '../reading/bands'
+import { pairOnVerdict } from '../reading/comparability'
+import { pairOn, type PairOn } from '../reading/pairs'
+import { pairSentence } from '../calibration'
 import type { MethodLines } from '../reading/method'
 import { platformMixLine } from '../reading/record'
 import { mergeSeriesNotes, type MonthLabel, type MonthSeries } from '../reading/series'
 import { loadUpdateSeries, type UpdateSeries } from '../reading/updates'
 import type { MonthStatus, PlatformMix } from '../reading/types'
-import { bandVerdict, type FigureTable, type Verdict } from '../reading/verdicts'
+import type { FigureTable, Verdict } from '../reading/verdicts'
 import { parseRef, quoteRef } from '../renderables/quotes-freeze'
 import type { Quote, Scope } from '../renderables/types'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, isMissingCompetitors, loadCompetitors, rivalKey, rivalNameOf } from '../rivals'
@@ -1140,7 +1144,7 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
   const audiences = [CLIENT_AUDIENCE, ...rivals.map((r) => rivalKey(r.name)), INDUSTRY_AUDIENCE]
 
   // ── wave 2: the readings ───────────────────────────────────────────────
-  const [check, flags, monthSet, windowRead, monthWindowRead, videos, themedRunId, subjects, series] =
+  const [check, flags, monthSet, windowRead, monthWindowRead, videos, themedRunId, subjects, series, judge] =
     await Promise.all([
       loadCheck(supabase, clientId, anchor.id),
       loadFlags(supabase, clientId, anchor.id),
@@ -1166,6 +1170,9 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
         console.error(`[pages] week.series: ${(error as { message?: string })?.message ?? String(error)}`)
         return null
       }),
+      // THE MONTH-PAIR JUDGE (decision D, WP1.3): §3 compares this month with
+      // the months behind it only where they were read the same way.
+      loadPairJudge(reading, readingAt),
     ])
 
   const denominators = monthSet.denominators
@@ -1204,6 +1211,7 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
       supabase, reading, clientId, month, window, themedRunId,
       monthOf: sumAudienceMonth(denominators, month, INDUSTRY_AUDIENCE),
       denominators,
+      pair: pairOn(judge),
     }),
     // ── §4 · what came in ────────────────────────────────────────────────
     buildCameIn({
@@ -1642,6 +1650,8 @@ async function buildRising(input: {
   themedRunId: string | null
   monthOf: number
   denominators: readonly { month: string; audience: string; videos: number }[]
+  /** The page's month-pair judge (decision D, WP1.3). */
+  pair: PairOn
 }): Promise<{ block: RisingBlock; series: MonthSeries[] }> {
   const { reading, clientId, month, monthOf } = input
   const base: RisingBlock = { rows: [], audience: INDUSTRY_AUDIENCE, month, monthOf, moved: 0, pooled: 0, pooledBaseline: true, unread: null }
@@ -1654,6 +1664,15 @@ async function buildRising(input: {
   if (monthOf <= 0) return nothing(RISING_NO_DENOMINATOR)
 
   const baselineMonths = trailingMonths(month, BASELINE_MONTHS)
+  // THE MONTH-PAIR RULE (decision D, WP1.3). This block compares the month so
+  // far with the months behind it, which is a pair the rule never compares
+  // (a so-far month), and one that spans our own search changes. Where the
+  // pair is refused nothing is banded, and the block says why in the rule's
+  // own words rather than "nothing moved clearly", which would claim a
+  // comparison that was not drawn.
+  const monthPair = input.pair(baselineMonths[0] ?? month, month, INDUSTRY_AUDIENCE)
+  const pairNote = pairOnVerdict(monthPair).note
+  if (pairNote?.mode === 'refuse') return nothing(pairSentence(pairNote))
   const summedBaselineOf = baselineMonths.reduce((t, m) => t + sumAudienceMonth(input.denominators, m, INDUSTRY_AUDIENCE), 0)
 
   // THE BASELINE IS READ OVER ITS WINDOW WHERE THE WINDOW CAN BE READ.
@@ -1767,7 +1786,7 @@ async function buildRising(input: {
       if (beforeN === 0) { beforeK = r.before; beforeN = baselineOf }
     }
     const label = series?.objectLabel ?? 'An unnamed theme'
-    const verdict = bandVerdict({
+    const verdict = pairedVerdict({
       objectKind: 'theme',
       objectId: r.id,
       objectLabel: label,
@@ -1776,7 +1795,7 @@ async function buildRising(input: {
       basis: { from: baselineMonths[0] ?? month, to: month },
       value: { k: nowK, n: nowN },
       baseline: { k: beforeK, n: beforeN },
-    })
+    }, monthPair)
     // A RISER IS A COMPARISON THAT WAS DRAWN AND CAME BACK LARGER. `moved` is
     // the only state that says so; `no_clear_change` is an answer and not a
     // rise, and the other three are the product declining to give one. The

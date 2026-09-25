@@ -34,6 +34,7 @@ const OSSUR = [
 
 const build = (rows = OSSUR, rivals: { name: string; retiredAt: string | null }[] = [{ name: 'Ottobock', retiredAt: null }]) =>
   buildStandingsBlock({
+    pair: null,
     brand: 'Össur',
     rivals,
     denominators: rows,
@@ -161,6 +162,7 @@ describe('CO2 · the standings', () => {
   it('names the month every change cell is a change against', () => {
     expect(build().prevMonthLabel).toBe('Aug 2026')
     const oneMonth = buildStandingsBlock({
+      pair: null,
       brand: 'Össur', rivals: [{ name: 'Ottobock', retiredAt: null }],
       denominators: OSSUR.filter((d) => d.month === '2026-09-01'),
       axis: ['2026-09-01'], readAxis: ['2026-08-01', '2026-09-01'], month: '2026-09-01', changes: [],
@@ -193,6 +195,7 @@ describe('CO2 · the standings', () => {
     // delivered run the newest stored month is last month's. The block used to
     // print September's 449 videos and 11,330 comments under "Oct 2026".
     const block = buildStandingsBlock({
+      pair: null,
       brand: 'Össur',
       rivals: [{ name: 'Ottobock', retiredAt: null }],
       denominators: OSSUR,
@@ -215,6 +218,7 @@ describe('CO2 · the standings', () => {
 
   it('refuses rather than borrowing another month when the horizon holds no read month', () => {
     const block = buildStandingsBlock({
+      pair: null,
       brand: 'Össur',
       rivals: [{ name: 'Ottobock', retiredAt: null }],
       denominators: OSSUR,
@@ -239,10 +243,12 @@ describe('CO2 · the standings', () => {
     const cases = [
       build(),
       buildStandingsBlock({
+        pair: null,
         brand: 'Össur', rivals: [{ name: 'Ottobock', retiredAt: null }], denominators: OSSUR,
         axis: ['2026-10-01'], readAxis: ['2026-09-01', '2026-10-01'], month: '2026-10-01', changes: [],
       }),
       buildStandingsBlock({
+        pair: null,
         brand: 'Össur', rivals: [], denominators: null,
         axis: ['2026-09-01'], readAxis: ['2026-09-01'], month: '2026-09-01', changes: [],
       }),
@@ -250,6 +256,7 @@ describe('CO2 · the standings', () => {
       // drawn (hiding it would stop the shares adding up), so the table is not
       // empty and says nothing about observation at all.
       buildStandingsBlock({
+        pair: null,
         brand: 'Sealand', rivals: [{ name: 'Cotopaxi', retiredAt: null }],
         denominators: [den({ month: '2026-09-01', audience: 'competitor:Patagonia', videos: 4, comments: 9, dual_mention: 0 })],
         axis: ['2026-09-01'], readAxis: ['2026-08-01', '2026-09-01'], month: '2026-09-01', changes: [],
@@ -267,6 +274,7 @@ describe('CO2 · the standings', () => {
 
   it('has nothing to draw when no month has been read', () => {
     const block = buildStandingsBlock({
+      pair: null,
       brand: 'Sealand', rivals: [], denominators: null,
       axis: ['2026-09-01'], readAxis: ['2026-09-01'], month: '2026-09-01', changes: [],
     })

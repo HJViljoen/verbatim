@@ -151,8 +151,10 @@ function Paragraphs({ text, figures, className, face }: { text: string; figures:
  * fixed templates calls this today. It is the seam D-brief (P13–P17) binds
  * when the quarterly's and the leadership one-pager's charts land.
  */
-export function DeckSpark({ values, months, color = 'var(--primary)', width = 104, height = 22, className, unit, zeroBase = false, rule = false }: {
+export function DeckSpark({ values, months, color = 'var(--primary)', width = 104, height = 22, className, unit, zeroBase = false, rule = false, breaks }: {
   values: (number | null)[]
+  /** The month-pair rule's refused steps (decision D, WP1.3), drawn broken. */
+  breaks?: readonly boolean[]
   /** The months these points are, in order — the printed page's only axis. */
   months: string[]
   color?: string
@@ -204,7 +206,7 @@ export function DeckSpark({ values, months, color = 'var(--primary)', width = 10
   }
   return (
     <span className={`flex flex-col gap-1 ${className ?? ''}`}>
-      <Sparkline values={values} color={color} width={width} height={height} animate={false} endDot className={className} zeroBase={zeroBase} rule={rule} />
+      <Sparkline values={values} breaks={breaks} color={color} width={width} height={height} animate={false} endDot className={className} zeroBase={zeroBase} rule={rule} />
       {/* BOTH ENDS, WITH THEIR VALUE WHERE THERE IS ONE. A printed line has no
           hover and a shape with two month names under it and no magnitude
           anywhere is decoration — the artboard labels both endpoints
@@ -1997,7 +1999,7 @@ function SectionPane({ section, data, why }: {
                 {/* THE ONE CHART THAT IS THE ELEMENT, so it takes SH22's
                     floor and its rule (wired at the wave-3 merge; SH22 named
                     this caller and shipped with none). */}
-                <DeckSpark values={serie.points} months={line!.months.map(monthLabel)} width={300} height={120} className="w-full" unit={serie.unit} zeroBase rule />
+                <DeckSpark values={serie.points} breaks={serie.breaks} months={line!.months.map(monthLabel)} width={300} height={120} className="w-full" unit={serie.unit} zeroBase rule />
                 <p className="text-[12px] leading-[1.35] text-muted-foreground">{serie.label}</p>
               </div>
             ))}

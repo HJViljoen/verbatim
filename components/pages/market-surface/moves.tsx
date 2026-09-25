@@ -76,6 +76,8 @@ function toCalendar(series: MoveSeries): CalendarSeries {
       state: p.k != null && p.n != null && p.n > 0 ? ('read' as const) : ('hollow' as const),
       k: p.k,
       n: p.n,
+      // A refused step is drawn broken (decision D, WP1.3).
+      ...(series.refusedSteps?.[p.month] ? { brokenBefore: series.refusedSteps[p.month] } : {}),
     })),
   }
 }

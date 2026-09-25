@@ -1,6 +1,8 @@
+import { pairSentence } from '../calibration'
 import { fmtInt, monthName } from '../format'
 import { distinctVideos } from '../market-tiles'
 import { monthChange } from './bands'
+import type { PairComparability } from './comparability'
 import { monthStartOf } from './monthly'
 import type { Counted, ObjectKind, RefusedReason, Verdict } from './verdicts'
 
@@ -267,6 +269,11 @@ export interface AfterwardsInput {
    *  clustering breaks; this function only knows months. Added beside the
    *  pinned fields so the `refused` state has a producer. */
   refused?: RefusedReason
+  /** Were the two months read the same way (decision D, WP1.3)? REQUIRED: the
+   *  loader's judge, asked for the two months this reading compares, which are
+   *  rarely neighbours. Null where the caller holds no judge, stated at the
+   *  call site. */
+  pair: ((prevMonth: string, month: string) => PairComparability | null) | null
 }
 
 /** How many readable months after the decision before a comparison is drawn. */
@@ -394,12 +401,15 @@ export function afterwardsFor(input: AfterwardsInput): Afterwards {
     audience: input.audience,
     curr: now.point,
     prev: then.point,
+    comparability: input.pair ? input.pair(then.month, now.month) : null,
   })
 
   // A REFUSAL IS AN ANSWER, AND IT IS THE CELL'S. `monthChange` refuses a
-  // rename; the comparison it would have drawn is not printed beside it.
+  // rename, and a pair the month-pair rule refuses (WP1.3), whose own sentence
+  // names the cause; the comparison it would have drawn is not printed beside it.
   if (verdict.refusedReason) {
-    return { state: 'refused', verdict: null, months, line: REFUSED_LINE[verdict.refusedReason] }
+    const line = verdict.pair ? pairSentence(verdict.pair) : REFUSED_LINE[verdict.refusedReason]
+    return { state: 'refused', verdict: null, months, line }
   }
 
   // THE NUMBERS AND THE BAND, AND NOT A WORD FOR THEM. See the file header's

@@ -1,5 +1,6 @@
 import { SENTIMENT_BAND, type BandOptions } from '../report-bands'
 import { monthChange, type SeriesPoint } from './bands'
+import type { PairComparability } from './comparability'
 import { monthStartOf, nextMonth } from './monthly'
 import type { Verdict, VerdictFlag } from './verdicts'
 
@@ -179,6 +180,9 @@ export interface MoodChangeInput {
   mood?: Mood
   floor?: BandOptions
   flags?: VerdictFlag[]
+  /** Were the two months read the same way (decision D, WP1.3)? REQUIRED and
+   *  forwarded to `monthChange`; null where no month pair applies. */
+  comparability: PairComparability | null
 }
 
 /**
@@ -239,6 +243,7 @@ export function moodChange(input: MoodChangeInput): Verdict {
     prev: point(input.prev, input.prevAudience ?? input.audience),
     floor: input.floor ?? SENTIMENT_BAND,
     flags,
+    comparability: input.comparability,
   })
   const regime = new Set<VerdictFlag>(['clustering_changed', 'clustering_unknown'])
   return { ...verdict, flags: verdict.flags.filter((f) => !regime.has(f)) }

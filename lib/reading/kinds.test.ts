@@ -118,6 +118,9 @@ describe('kindChange', () => {
   const augSep = {
     kind: 'objection',
     audience: 'industry-other',
+    // No month pair applies: these tests pin the band (the pair rule is
+    // lib/reading/bands.test.ts's).
+    comparability: null,
     curr: { month: '2026-09-01', videos: 388, k: 42 },
     prev: { month: '2026-08-01', videos: 628, k: 33 },
   }
@@ -141,6 +144,7 @@ describe('kindChange', () => {
 
   it('refuses a comparison the floors do not carry', () => {
     const v = kindChange({
+      comparability: null,
       kind: 'praise',
       audience: 'client',
       curr: { month: '2026-09-01', videos: 19, k: 2 },
@@ -155,6 +159,7 @@ describe('kindChange', () => {
     // whether the share moved or the string did, and neither can the theme
     // series — so it answers the same way.
     const v = kindChange({
+      comparability: null,
       kind: 'question',
       audience: 'competitor:Rareform Bags',
       prevAudience: 'competitor:Rareform',
@@ -171,6 +176,7 @@ describe('kindChange', () => {
 
   it('is one name, and one comparison, when nothing was renamed', () => {
     const v = kindChange({
+      comparability: null,
       kind: 'question',
       audience: 'competitor:Rareform',
       curr: { month: '2026-09-01', videos: 400, k: 40 },

@@ -1,9 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { pairSentence } from '../calibration'
 import { AGENT_MOVEMENT_MONTHS, AGENT_MOVEMENT_TOPICS } from '../config'
 import { monthName } from '../format'
 import { audienceLabel } from '../readiness/types'
 import { directionWord, monthChange, type Direction, type SeriesPoint } from '../reading/bands'
-import { loadMonthSeries } from '../reading/read'
+import { comparableOn, pairOn, type PairOn } from '../reading/pairs'
+import { loadMonthSeries, loadPairJudge, readingHandle } from '../reading/read'
 import { isReadable, pointsByMonth, type MonthLabel, type MonthPoint } from '../reading/series'
 import { monthStartOf, prevMonth } from '../reading/month-key'
 import { isAnswer, type Verdict, type VerdictFlag } from '../reading/verdicts'
@@ -64,12 +66,17 @@ import { isAnswer, type Verdict, type VerdictFlag } from '../reading/verdicts'
  * both n stated survives a thin month, and says so beside itself through the
  * `thin` flag's own sentence. What a thin month cannot support is a word about
  * three months' travel.
+ *
+ * AND THE MONTH-PAIR RULE (decision D, WP1.3): the newest of the three months
+ * must have ended by `asOf`, and every step between them must be a pair read
+ * the same way (`comparable`).
  */
 export function movementDirection(
   curr: { labels: readonly MonthLabel[] },
   points: readonly SeriesPoint[],
+  rule: { asOf: string; comparable: (prevMonth: string, month: string) => boolean },
 ): Direction | null {
-  return isThin(curr) ? null : directionWord(points)
+  return isThin(curr) ? null : directionWord(points, rule)
 }
 
 /** Did the reading layer mark this month thin? The label is `thinMonth`'s own
@@ -181,6 +188,10 @@ export function movementLine(r: MovementReading): string {
     const note = FLAG_NOTE[f]
     if (note && !notes.includes(note)) notes.push(note)
   }
+  // The month-pair rule's own sentence (decision D, WP1.3): why a comparison
+  // was refused, or the note a change of ours left on it. The same words every
+  // badge prints, so Ask and the page cannot say two things about one pair.
+  if (v.pair) notes.push(pairSentence(v.pair))
   if (v.refusedReason === 'unlogged_era') notes.push('the record does not reach back that far')
   const direction = r.direction
     ? `direction over the last three months: ${r.direction}`
@@ -249,6 +260,9 @@ export interface MovementArgs {
   now?: Date
   months?: number
   topics?: number
+  /** The month-pair judge (decision D, WP1.3), injectable for a test; read
+   *  from the tenant's change log, pair rows and updates when omitted. */
+  pair?: PairOn
 }
 
 /**
@@ -287,6 +301,11 @@ export async function loadMovement(
   // "the topic was never mentioned" — the block says the first thing, never the
   // second.
   if (set.substrate !== 'seeded' || set.numeratorSubstrate !== 'seeded') return []
+  // EVERY LINE IS JUDGED BY THE MONTH-PAIR RULE (decision D, WP1.3): a so-far
+  // month is never compared, and a pair spanning our own search change is
+  // refused, so Ask cannot say "moved" where every page refuses to.
+  const asOf = now.toISOString()
+  const pair = args.pair ?? pairOn(await loadPairJudge(readingHandle(args.clientId, admin), asOf))
 
   // THE MONTH TO READ IS THE CURRENT CALENDAR MONTH, filling or not, against
   // the month before it — the lib/pages/voice-surface.ts precedent. A filling
@@ -322,6 +341,7 @@ export async function loadMovement(
       // answers `too_little_data`, which is the honest verdict for a theme's
       // first month (the voice-surface precedent).
       prev: prev ?? { month: prevKey, videos: null, k: null, audience: s.audience },
+      comparability: pair(prevKey, to, s.audience),
     })
     readings.push({
       label,
@@ -329,7 +349,7 @@ export async function loadMovement(
       curr: { month: curr.month, k: curr.k, n: curr.videos },
       prev: { month: prevKey, k: prev?.k ?? null, n: prev?.videos ?? null },
       verdict,
-      direction: movementDirection(curr, s.points),
+      direction: movementDirection(curr, s.points, { asOf, comparable: comparableOn(pair, s.audience) }),
       readableMonths: s.points.filter(isReadable).length,
       filling: curr.state === 'filling',
     })

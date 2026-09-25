@@ -1,7 +1,8 @@
 import { sameRegime } from '../pipeline/clustering'
 import { SHARE_BAND, type BandOptions } from '../report-bands'
-import { nextMonth, monthStartOf } from './monthly'
-import { bandVerdict, type ObjectKind, type Verdict, type VerdictFlag, type VerdictWindow } from './verdicts'
+import { pairOnVerdict, type PairComparability } from './comparability'
+import { monthEndInstant, nextMonth, monthStartOf } from './monthly'
+import { bandVerdict, type BandVerdictInput, type ObjectKind, type Verdict, type VerdictFlag, type VerdictWindow } from './verdicts'
 
 // The rules that turn a month series into a claim (design item 5, decisions
 // L and M).
@@ -113,6 +114,16 @@ export interface MonthChangeInput {
   prev: SeriesPoint
   floor?: BandOptions
   flags?: VerdictFlag[]
+  /**
+   * Were the two months read the same way (market-first decision D, WP1.3;
+   * lib/reading/comparability.ts)? REQUIRED, so tsc lists every caller: a pair
+   * spanning a change of ours that touched 10% or more of either month, or one
+   * nobody has measured yet, a so-far month, a month not read to its end or a
+   * newer month under four fifths of the older's depth is REFUSED; a change of
+   * ours at 1% to under 10% adds the `tracking_change` flag. `null` means "no
+   * month pair applies here", and the call site says why in a comment.
+   */
+  comparability: PairComparability | null
 }
 
 /**
@@ -134,9 +145,17 @@ export interface MonthChangeInput {
  * A hollow or below-floor month needs no special case: it arrives with a zero
  * or thin denominator and `proportionDelta` answers `too_little_data`, which is
  * the same sentence a reader would want anyway.
+ *
+ * AND OUR OWN CHANGES REFUSE IT (decision D, WP1.3). A pair the month-pair rule
+ * refuses (`comparability`) is `refused` with that rule's reason, its counts
+ * kept so the levels still print and no change drawn. A rename still refuses
+ * first: two names is the more specific break. A pair a change of ours
+ * touched a little of carries `tracking_change` and is banded as usual.
  */
 export function monthChange(input: MonthChangeInput): Verdict {
   const flags = [...(input.flags ?? [])]
+  const pair = pairOnVerdict(input.comparability)
+  if (pair.flag && !flags.includes('tracking_change')) flags.push('tracking_change')
   const renamed =
     input.curr.audience != null && input.prev.audience != null && input.curr.audience !== input.prev.audience
   // Two facts, not one. Both keys known and different is a re-grouping; either
@@ -150,7 +169,8 @@ export function monthChange(input: MonthChangeInput): Verdict {
   if (regimeChanged && !flags.includes(regimeFlag)) flags.push(regimeFlag)
   if (renamed && !flags.includes('renamed')) flags.push('renamed')
 
-  return bandVerdict({
+  const refused = renamed ? ('rename' as const) : pair.refused
+  const verdict = bandVerdict({
     objectKind: input.object.kind,
     objectId: input.object.id,
     objectLabel: input.object.label,
@@ -161,8 +181,29 @@ export function monthChange(input: MonthChangeInput): Verdict {
     baseline: counted(input.prev),
     flags,
     floor: input.floor,
-    ...(renamed ? { refused: 'rename' as const } : {}),
+    ...(refused ? { refused } : {}),
   })
+  // The pair's words ride on the verdict only where the pair is what it says:
+  // not on a rename, which is its own refusal.
+  return pair.note && !renamed ? { ...verdict, pair: pair.note } : verdict
+}
+
+/**
+ * A direct `bandVerdict` under the month-pair rule (decision D, WP1.3), for the
+ * producers that band two month-dated sides without `monthChange`: This week's
+ * month-to-date riser against its trailing months, and the standings (the
+ * brands view). The pair is the span the two sides cover (the earlier side's
+ * first month against the later side's month). Refused: the verdict is
+ * `refused` with the rule's reason and its words, the counts kept. Flagged: the
+ * `tracking_change` flag and its note. A refusal the caller already holds wins.
+ */
+export function pairedVerdict(input: BandVerdictInput, pair: PairComparability | null): Verdict {
+  const judged = pairOnVerdict(pair)
+  const flags = [...(input.flags ?? [])]
+  if (judged.flag && !flags.includes('tracking_change')) flags.push('tracking_change')
+  const refused = input.refused ?? judged.refused ?? undefined
+  const verdict = bandVerdict({ ...input, flags, ...(refused ? { refused } : {}) })
+  return judged.note && !input.refused ? { ...verdict, pair: judged.note } : verdict
 }
 
 /** Readings a window-against-window comparison needs behind it before it may be
@@ -334,6 +375,12 @@ export type Direction = 'growing' | 'fading' | 'flat'
 export interface DirectionInput {
   floor?: BandOptions
   run?: number
+  /** REQUIRED (decision D, WP1.3): the newest point's month must have ended by
+   *  this instant. A so-far month is never one of the three. */
+  asOf: string
+  /** REQUIRED (decision D, WP1.3): every step of the run must be a pair read
+   *  the same way (`joins(judge(prev, month, view))`, lib/reading/comparability.ts). */
+  comparable: (prevMonth: string, month: string) => boolean
 }
 
 const pct = (point: SeriesPoint): number => {
@@ -367,6 +414,10 @@ const pct = (point: SeriesPoint): number => {
  *     drawn as one line with the break marked; a word spoken across the break
  *     would be a claim about the conversation that is really a claim about a
  *     string.
+ *   * the newest of them has ENDED by `asOf`, and every step between them is a
+ *     pair read the same way (`comparable`, decision D): a word earned across
+ *     our own search change, or on a month still being read, is a word about
+ *     us. A date that does not parse earns nothing.
  *
  * Then the word: the two steps must agree in RAW SIGN — not each clear its own
  * band, which at these n would fire approximately never — and the first-to-last
@@ -376,7 +427,7 @@ const pct = (point: SeriesPoint): number => {
  */
 export function directionWord(
   points: readonly SeriesPoint[],
-  input: DirectionInput = {},
+  input: DirectionInput,
 ): Direction | null {
   const floor = input.floor ?? SHARE_BAND
   const run = input.run ?? DIRECTION_RUN
@@ -385,6 +436,11 @@ export function directionWord(
 
   for (let i = 1; i < tail.length; i++) {
     if (monthStartOf(tail[i].month) !== nextMonth(tail[i - 1].month)) return null
+  }
+  const asOfMs = Date.parse(input.asOf)
+  if (!(Date.parse(monthEndInstant(tail[tail.length - 1].month)) <= asOfMs)) return null
+  for (let i = 1; i < tail.length; i++) {
+    if (!input.comparable(monthStartOf(tail[i - 1].month), monthStartOf(tail[i].month))) return null
   }
   if (!tail.every((p) => clearsFloor(p, floor))) return null
   if (tail.some((p) => p.k == null)) return null

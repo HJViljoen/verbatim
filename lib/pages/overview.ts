@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import { recStatus, REC_STATUS_LABEL, type RecStatus } from '../calibration'
+import { pairSentence, recStatus, REC_STATUS_LABEL, type RecStatus } from '../calibration'
 import { topRecommendation } from '../dashboard-tiles'
 import { fmtInt, longMonth, monthName, platformLabel, shortDate } from '../format'
 import { inheritedStatus, REC_DECISIONS_TABLE, type RecDecision } from '../rec-decisions'
@@ -45,7 +45,9 @@ import {
   type MoveReading,
   type MoveSeries,
 } from '../reading/moves'
-import { loadMonthSeries, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
+import { pairOnVerdict } from '../reading/comparability'
+import { BRANDS_PANEL, pairOn, pairTools, type PairOn } from '../reading/pairs'
+import { loadMonthSeries, loadPairJudge, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
 import { methodLines, type MethodLines } from '../reading/method'
 import { countRefused, howSoundLine, loadRecordInputs, monthRecordWindow, recordLines, refusals, soundFigures, type RecordInputs, type SoundFigure } from '../reading/record'
 import {
@@ -154,6 +156,10 @@ export interface SubjectRow {
   /** The months `spark` is indexed by, same length — a chart that cannot be
    *  drawn says which months it had. */
   sparkMonths: string[]
+  /** Same length as `spark`: true where the step INTO that month is refused by
+   *  the month-pair rule (decision D, WP1.3), so the sparkline draws it
+   *  broken. Optional: a stored row from before the rule draws as sent. */
+  sparkBreaks?: boolean[]
   /** The category side at the same point LAST month, while this one is still
    *  filling (design §3 OV2, Time). The category side only: it is the only one
    *  of the three with the n to make the comparison mean anything, and the
@@ -234,6 +240,8 @@ export interface Mover {
   spark?: (number | null)[]
   /** The months `spark` is indexed by, same length. */
   sparkMonths?: string[]
+  /** Same length as `spark`: the refused steps (decision D, WP1.3). */
+  sparkBreaks?: boolean[]
   /**
    * The oldest month on THIS AXIS that carried a reading for this object —
    * earliest evidence, never a start date (D14). Null where the axis does not
@@ -1485,8 +1493,13 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
   // `GroundingInput.month` documents itself as. The month key is resolved after
   // the axis, and this read starts before it.
   const ledgerAhead = loadLedger(supabase, clientId, readingAt)
+  // THE MONTH-PAIR JUDGE (decision D, WP1.3): the change log, the pair rows
+  // and the updates, read once; every verdict, direction word and sparkline
+  // step below is judged by it. It depends on the tenant and the clock only.
+  const judgeAhead = loadPairJudge(reading, readingAt)
   themedRunAhead.catch(() => {})
   ledgerAhead.catch(() => {})
+  judgeAhead.catch(() => {})
 
   const updatesByMonth: Record<string, number> = {}
   for (const r of runsRaw) {
@@ -1601,6 +1614,8 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
       loadDormantThemes(reading.client, clientId),
     ])
 
+  const pair = pairOn(await judgeAhead)
+
   // ── OV0 · the page bar and the still-filling line ──────────────────────
   const denominatorByMonth = new Map<string, number>()
   for (const d of history.denominators) {
@@ -1694,6 +1709,8 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
         ? { bySubject: subjectsAtLastMonth, perAudience: lastMonthSoFar.perAudience }
         : null,
     thin: suppress,
+    pair,
+    asOf: readingAt,
   })
 
   // ── OV4 · rivals ───────────────────────────────────────────────────────
@@ -1714,6 +1731,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     brand,
     series: themeSet.series,
     dualMention: (dual as { dual_mention?: number } | null)?.dual_mention ?? null,
+    pair,
   })
 
   // ── OV3 · what the category is saying ─────────────────────────────────
@@ -1731,6 +1749,8 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     attentionVerdict: categoryAttentionVerdict(rivalsBlock.rows),
     dormant,
     thin: suppress,
+    pair,
+    asOf: readingAt,
   })
 
   // ── OV5 · your moves, the card, and what a move did (Block D · D2) ─────
@@ -1758,6 +1778,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
         const row = subjects.rows.find((r) => r.id === subjectId) ?? null
         return { yours: row?.you.verdict ?? null, category: row?.category.verdict ?? null }
       },
+      pair,
     }),
     ledgerAhead,
   ])
@@ -2225,7 +2246,7 @@ async function loadMoveReadings(
   reading: ReadingHandle,
   supabase: SupabaseClient,
   moves: readonly Move[],
-  input: { month: string; audiences?: readonly string[]; subjectNames: Map<string, string>; themeLabels: Map<string, string> },
+  input: { month: string; audiences?: readonly string[]; subjectNames: Map<string, string>; themeLabels: Map<string, string>; pair: PairOn },
 ): Promise<MoveReading[]> {
   const active = moves.filter((m) => m.status === 'active')
   if (active.length === 0) return []
@@ -2305,6 +2326,7 @@ async function loadMoveReadings(
       targetLabel: label,
       series: target && move.kind !== 'advice' ? seriesFor(target, move.kind) : [],
       window: { kind: 'since', from, to: nextMonth(to) },
+      pair: input.pair,
     })
   })
 }
@@ -2347,6 +2369,9 @@ export async function loadMovesExtras(input: {
   /** The card's inputs, where the caller has already started them. */
   cardInputs?: Promise<CardInputs>
   movementFor?: (subjectId: string) => { yours: Verdict | null; category: Verdict | null }
+  /** The page's month-pair judge (decision D, WP1.3): every move reading and
+   *  the matched subject's own two months are judged by it. */
+  pair: PairOn
 }): Promise<MovesExtras> {
   const [posts, readings] = await Promise.all([
     input.cardInputs ?? loadCardInputs(input.supabase, input.clientId, input.month),
@@ -2356,6 +2381,7 @@ export async function loadMovesExtras(input: {
           audiences: input.audiences,
           subjectNames: input.subjectNames,
           themeLabels: input.themeLabels,
+          pair: input.pair,
         })
       : Promise.resolve([] as MoveReading[]),
   ])
@@ -2375,7 +2401,7 @@ export async function loadMovesExtras(input: {
   const movement = top
     ? input.movementFor
       ? input.movementFor(top.subjectId)
-      : await bandMatchedSubject(input.reading, top, input.month)
+      : await bandMatchedSubject(input.reading, top, input.month, input.pair)
     : { yours: null, category: null }
 
   return {
@@ -2410,6 +2436,7 @@ async function bandMatchedSubject(
   reading: ReadingHandle,
   subject: { subjectId: string; label: string },
   month: string,
+  pair: PairOn,
 ): Promise<{ yours: Verdict | null; category: Verdict | null }> {
   const prev = previousMonthOf(monthStartOf(month))
   try {
@@ -2432,6 +2459,7 @@ async function bandMatchedSubject(
         // comparable across a re-grouping — see lib/reading/read.ts.
         curr: { month: curr.month, videos: curr.videos, k: curr.k, audience, regime: 'n/a' },
         prev: { month: before.month, videos: before.videos, k: before.k, audience, regime: 'n/a' },
+        comparability: pair(before.month, curr.month, audience),
       })
     }
     return { yours: sideOf(CLIENT_AUDIENCE), category: sideOf(INDUSTRY_AUDIENCE) }
@@ -2995,6 +3023,13 @@ interface SubjectsInput {
    *  audiences' own denominators there. Null where the window cannot be read. */
   atLastMonth: { bySubject: Map<string, number>; perAudience: Map<string, number> } | null
   thin: boolean
+  /** The page's month-pair judge (decision D, WP1.3): every verdict, every
+   *  direction word and every sparkline step on the block is judged by it.
+   *  Null only where no pair applies (a fixture), stated at the call site. */
+  pair: PairOn | null
+  /** The instant the page reads at: a direction word's newest month must have
+   *  ended by it. */
+  asOf: string
 }
 
 /** The category side of one subject at the same point last month, or null. */
@@ -3044,6 +3079,9 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
   const byKey = new Map<string, StoredSubjectRow>()
   for (const r of input.months) byKey.set(`${monthStartOf(r.month)}|${r.audience}|${r.subject_id}`, r)
   const rivalAudience = input.leadRival ? rivalKey(input.leadRival) : null
+  // THE MONTH-PAIR RULE (decision D, WP1.3). No judge (a fixture) is "no pair
+  // applies here": nothing refused, every step joined.
+  const { pairFor, comparableFor, stepBreaks } = pairTools(input.pair)
   // AN ABSENT ROW IS A ZERO ONLY WHERE THE MONTH WAS READ AT ALL.
   // `monthly_subject_readings` writes no zero rows, so a subject missing from
   // an audience-month that OTHER subjects have rows in really did come up in
@@ -3138,6 +3176,7 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
         audience,
         curr: point(audience, input.month),
         prev: point(audience, input.prevMonth),
+        comparability: pairFor(input.prevMonth, input.month, audience),
       })
     }
     you.verdict = compare(CLIENT_AUDIENCE, you)
@@ -3145,15 +3184,17 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
     category.verdict = compare(INDUSTRY_AUDIENCE, category)
 
     const axisPoints = input.axis.map((m) => point(INDUSTRY_AUDIENCE, m))
+    const sparkMonths = axisPoints.slice(-SPARK_MONTHS).map((p) => p.month)
     return {
       id: s.id,
       label: s.name,
       you,
       rival,
       category,
-      direction: input.thin ? null : directionWord(axisPoints),
+      direction: input.thin ? null : directionWord(axisPoints, { asOf: input.asOf, comparable: comparableFor(INDUSTRY_AUDIENCE) }),
       spark: axisPoints.slice(-SPARK_MONTHS).map((p) => pctOf(p.k, p.videos)),
-      sparkMonths: axisPoints.slice(-SPARK_MONTHS).map((p) => p.month),
+      sparkMonths,
+      sparkBreaks: stepBreaks(sparkMonths, INDUSTRY_AUDIENCE),
       categoryAtLastMonth: atLastMonthFor(input, s.id),
       href: `/dashboard/subjects?item=${encodeURIComponent(s.id)}`,
     }
@@ -3205,11 +3246,18 @@ interface CategoryInput {
    *  where the register could not be read. */
   dormant: readonly { id: string; label: string }[] | null
   thin: boolean
+  /** The page's month-pair judge (decision D, WP1.3); null only where no pair
+   *  applies (a fixture). */
+  pair: PairOn | null
+  /** The instant the page reads at (a direction word's newest month must have
+   *  ended by it). */
+  asOf: string
 }
 
 export function buildCategory(input: CategoryInput): CategoryBlock {
   const label = audienceLabel(input.audience)
   const denominator = input.perAudience.get(`${input.month}|${input.audience}`) ?? null
+  const { pairFor, comparableFor, stepBreaks } = pairTools(input.pair)
 
   // (a) the kinds
   let kinds: KindShare[] = []
@@ -3241,6 +3289,7 @@ export function buildCategory(input: CategoryInput): CategoryBlock {
               audience: input.audience,
               curr: { month: input.month, k: k.videos, videos: denominator },
               prev: { month: input.prevMonth as string, k: prev.videos, videos: prevN },
+              comparability: pairFor(input.prevMonth as string, input.month, input.audience),
             })
     }
   }
@@ -3262,6 +3311,7 @@ export function buildCategory(input: CategoryInput): CategoryBlock {
       audience: s.audience,
       curr,
       prev,
+      comparability: pairFor(prev.month, curr.month, s.audience),
     })
     const readable = s.points.filter((p) => p.k != null && p.k > 0)
     // THE PAGE'S OWN AXIS, not the series' own order: a month with no row is a
@@ -3274,13 +3324,14 @@ export function buildCategory(input: CategoryInput): CategoryBlock {
       n: curr.videos,
       pct: curr.pct,
       verdict,
-      direction: input.thin ? null : directionWord(s.points),
+      direction: input.thin ? null : directionWord(s.points, { asOf: input.asOf, comparable: comparableFor(s.audience) }),
       // THE LAST MONTHS OF THIS OBJECT'S OWN SERIES, on the page's own axis —
       // the same slice `SubjectRow.spark` takes, so the two lines on one
       // artefact cannot be drawn over two different windows. Read by the
       // quarterly review's mover rows; nothing else reads it yet.
       spark: onAxis.slice(-SPARK_MONTHS).map((p) => (p ? pctOf(p.k, p.videos) : null)),
       sparkMonths: input.axis.slice(-SPARK_MONTHS),
+      sparkBreaks: stepBreaks(input.axis.slice(-SPARK_MONTHS), s.audience),
       // EARLIEST EVIDENCE ON THIS AXIS, NEVER A START DATE. The axis may not
       // reach back to the first month this was ever said in, so the word the
       // surface prints is "first read in", not "first heard".
@@ -3294,10 +3345,17 @@ export function buildCategory(input: CategoryInput): CategoryBlock {
     })
   }
   const { growing, fading } = input.thin ? { growing: [], fading: [] } : splitMovers(movers)
+  // A REFUSED PAIR IS NOT "NOTHING MOVED" (decision D, WP1.3). When the two
+  // months were not read the same way nothing was compared, and the note says
+  // why in the pair's own words rather than implying a comparison came back
+  // empty.
+  const monthPair = input.prevMonth ? pairOnVerdict(pairFor(input.prevMonth, input.month, input.audience)).note : null
   if (!moversNote && growing.length === 0 && fading.length === 0) {
     moversNote = input.thin
       ? 'Too little conversation this month to say what moved.'
-      : 'Nothing moved clearly this month.'
+      : monthPair?.mode === 'refuse'
+        ? pairSentence(monthPair)
+        : 'Nothing moved clearly this month.'
   }
 
   // (c) mood and (d) attention
@@ -3332,6 +3390,7 @@ export function buildCategory(input: CategoryInput): CategoryBlock {
             ? null
             : moodChange({
                 audience: input.audience,
+                comparability: pairFor(input.prevMonth, input.month, input.audience),
                 curr: { month: input.month, ...counts },
                 prev: {
                   month: input.prevMonth,
@@ -3439,6 +3498,10 @@ interface RivalsInput {
   brand: string
   series: readonly MonthSeries[]
   dualMention: number | null
+  /** The page's month-pair judge (decision D, WP1.3): the standings compare
+   *  the month with the one before it on the brands view. Null only where no
+   *  pair applies (a fixture). */
+  pair: PairOn | null
 }
 
 export function buildRivals(input: RivalsInput): RivalsBlock {
@@ -3480,6 +3543,8 @@ export function buildRivals(input: RivalsInput): RivalsBlock {
         clientLabel: input.brand,
         categoryLabel: audienceLabel(INDUSTRY_AUDIENCE),
         dualMention: input.dualMention,
+        // No previous month is read on an empty panel: no pair applies.
+        comparability: null,
       }).map((s) => ({
         audience: s.audience,
         label: s.label,
@@ -3530,6 +3595,8 @@ export function buildRivals(input: RivalsInput): RivalsBlock {
     dualMention: input.dualMention,
     panelId: panelIdOf(input.month),
     prevPanelId: input.prevMonth ? panelIdOf(input.prevMonth) : null,
+    // The standings are shares of the panel by brand: the brands view.
+    comparability: input.prevMonth && input.pair ? input.pair(input.prevMonth, input.month, BRANDS_PANEL) : null,
   })
 
   const rows: RivalRow[] = standings.map((s) => ({

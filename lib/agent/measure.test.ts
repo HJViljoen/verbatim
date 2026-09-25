@@ -20,6 +20,9 @@ import {
   scrubAnswer,
   scrubThreadAnswer,
 } from './measure'
+import { FIXTURE_ENDED } from '../test/pair-fixture'
+import { sealandJudge } from '../test/sealand-pairs'
+import { pairOn } from '../reading/pairs'
 
 const MONTH = '2026-09-01'
 
@@ -84,7 +87,7 @@ const findings = [{ findingId: 'G1', registryIds: ['reg-1'] }]
 
 describe('measureAnswer', () => {
   it('earns a direction over three clean readings when agent.movement is on', () => {
-    const m = measureAnswer({ findings, series: [climbing()], month: MONTH, directionWords: true })
+    const m = measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings, series: [climbing()], month: MONTH, directionWords: true })
     expect(m.findings).toHaveLength(1)
     const f = m.findings[0]
     expect(f.direction).toBe('growing')
@@ -98,7 +101,7 @@ describe('measureAnswer', () => {
   })
 
   it('earns none from the same series with the flag off, and keeps the verdict', () => {
-    const m = measureAnswer({ findings, series: [climbing()], month: MONTH, directionWords: false })
+    const m = measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings, series: [climbing()], month: MONTH, directionWords: false })
     const f = m.findings[0]
     expect(f.direction).toBeNull()
     expect(f.verdict?.direction).toBeNull()
@@ -111,13 +114,14 @@ describe('measureAnswer', () => {
   it('withholds the word where the current month is thin, and says so on the verdict', () => {
     const thin = climbing()
     thin.points[2] = point(MONTH, 320, 1388, { labels: [{ kind: 'thin', text: 'thin' } as never] })
-    const m = measureAnswer({ findings, series: [thin], month: MONTH, directionWords: true })
+    const m = measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings, series: [thin], month: MONTH, directionWords: true })
     expect(m.findings[0].direction).toBeNull()
     expect(m.findings[0].verdict?.flags).toContain('thin')
   })
 
   it('draws the side with the n and makes the client’s own side the caveat', () => {
     const m = measureAnswer({
+      pair: null, asOf: FIXTURE_ENDED,
       findings,
       series: [climbing(), ownSide()],
       month: MONTH,
@@ -133,7 +137,7 @@ describe('measureAnswer', () => {
   })
 
   it('publishes every figure by token, with its unit, and nothing else', () => {
-    const m = measureAnswer({ findings, series: [climbing()], month: MONTH, directionWords: true })
+    const m = measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings, series: [climbing()], month: MONTH, directionWords: true })
     expect(Object.keys(m.figures).sort()).toEqual([
       'f1_band', 'f1_change', 'f1_k', 'f1_n', 'f1_pct', 'f1_prev_k', 'f1_prev_n', 'f1_prev_pct',
     ])
@@ -152,13 +156,13 @@ describe('measureAnswer', () => {
         point(MONTH, 320, 1388),
       ],
     })
-    const f = measureAnswer({ findings, series: [gapped], month: MONTH, directionWords: true }).findings[0]
+    const f = measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings, series: [gapped], month: MONTH, directionWords: true }).findings[0]
     expect(f.series.map((p) => p.month)).toEqual(['2026-07-01', '2026-08-01', MONTH])
     expect(f.series[1]).toEqual({ month: '2026-08-01', k: null, n: null, pct: null })
     // And a month after the one measured is not on this chart at all.
     const ahead = climbing({ points: [...climbing().points, point('2026-10-01', 400, 1500)] })
     expect(
-      measureAnswer({ findings, series: [ahead], month: MONTH, directionWords: true }).findings[0].series.at(-1)!.month,
+      measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings, series: [ahead], month: MONTH, directionWords: true }).findings[0].series.at(-1)!.month,
     ).toBe(MONTH)
   })
 
@@ -172,10 +176,10 @@ describe('measureAnswer', () => {
         point(MONTH, 320, 1388),
       ],
     })
-    expect(measureAnswer({ findings, series: [withAugust], month: MONTH, directionWords: true }).findings[0].direction)
+    expect(measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings, series: [withAugust], month: MONTH, directionWords: true }).findings[0].direction)
       .toBe('growing')
     // Measured AT August, the run is June–August and it does not climb.
-    const atAugust = measureAnswer({ findings, series: [withAugust], month: '2026-08-01', directionWords: true })
+    const atAugust = measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings, series: [withAugust], month: '2026-08-01', directionWords: true })
     expect(atAugust.findings[0].value).toEqual({ k: 276, n: 1455 })
     expect(atAugust.findings[0].direction).not.toBe('growing')
   })
@@ -191,33 +195,33 @@ describe('measureAnswer', () => {
     })
     const both = [{ findingId: 'G1', registryIds: ['reg-1', 'reg-2'] }]
     // The bigger numerator wins: the month says more about it.
-    const bigger = measureAnswer({ findings: both, series: [climbing(), other(400)], month: MONTH, directionWords: true })
+    const bigger = measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings: both, series: [climbing(), other(400)], month: MONTH, directionWords: true })
     expect(bigger.findings[0].label).toBe('The zip')
     // Reversed read order, same answer.
-    const reversed = measureAnswer({ findings: both, series: [other(400), climbing()], month: MONTH, directionWords: true })
+    const reversed = measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings: both, series: [other(400), climbing()], month: MONTH, directionWords: true })
     expect(reversed.findings[0].label).toBe('The zip')
     // Numerators equal too: the order the ANSWER cited them in decides, and
     // reversing the citation order reverses the choice.
     const tied = [{ findingId: 'G1', registryIds: ['reg-2', 'reg-1'] }]
     expect(
-      measureAnswer({ findings: tied, series: [climbing(), other(320)], month: MONTH, directionWords: true })
+      measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings: tied, series: [climbing(), other(320)], month: MONTH, directionWords: true })
         .findings[0].label,
     ).toBe('The zip')
     expect(
-      measureAnswer({ findings: both, series: [climbing(), other(320)], month: MONTH, directionWords: true })
+      measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings: both, series: [climbing(), other(320)], month: MONTH, directionWords: true })
         .findings[0].label,
     ).toBe('Will it survive a wet commute')
   })
 
   it('names the month every figure on it is a figure of', () => {
-    expect(measureAnswer({ findings, series: [climbing()], month: MONTH, directionWords: true }).month).toBe(MONTH)
-    expect(measureAnswer({ findings, series: [climbing()], month: '2026-08-14', directionWords: true }).month)
+    expect(measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings, series: [climbing()], month: MONTH, directionWords: true }).month).toBe(MONTH)
+    expect(measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings, series: [climbing()], month: '2026-08-14', directionWords: true }).month)
       .toBe('2026-08-01')
   })
 
   it('measures nothing when the month carries no row for the topic', () => {
     const empty = climbing({ points: [point('2026-07-01', 210, 1400)] })
-    const m = measureAnswer({ findings, series: [empty], month: MONTH, directionWords: true })
+    const m = measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings, series: [empty], month: MONTH, directionWords: true })
     expect(m.findings).toEqual([])
     expect(m.verdicts).toEqual([])
     expect(m.figures).toEqual({})
@@ -226,6 +230,7 @@ describe('measureAnswer', () => {
 
 describe('scrubAnswer', () => {
   const measure = measureAnswer({
+    pair: null, asOf: FIXTURE_ENDED,
     findings,
     series: [climbing()],
     month: MONTH,
@@ -260,7 +265,7 @@ describe('scrubAnswer', () => {
   })
 
   it('licenses nothing when the flag is off', () => {
-    const off = measureAnswer({ findings, series: [climbing()], month: MONTH, directionWords: false })
+    const off = measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings, series: [climbing()], month: MONTH, directionWords: false })
     const out = scrubAnswer('Will it survive a wet commute is growing.', off)
     expect(out.text).toBe('')
     expect(out.droppedDirection).toBe(1)
@@ -274,7 +279,7 @@ describe('scrubAnswer', () => {
 })
 
 describe('scrubThreadAnswer', () => {
-  const measure = measureAnswer({ findings, series: [climbing()], month: MONTH, directionWords: true })
+  const measure = measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings, series: [climbing()], month: MONTH, directionWords: true })
 
   it('scrubs the prose nodes and leaves a quote’s own node whole, digits and all', () => {
     const answer = {
@@ -314,7 +319,7 @@ describe('scrubThreadAnswer', () => {
   })
 
   it('says the sentence went where there is no reading to put in its place', () => {
-    const nothing = measureAnswer({ findings: [], series: [], month: MONTH, directionWords: true })
+    const nothing = measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings: [], series: [], month: MONTH, directionWords: true })
     const out = scrubThreadAnswer(
       { answer: 'x', grounded: [{ text: 'It came up in 305 of 1,388 videos.' }] },
       nothing,
@@ -356,7 +361,7 @@ describe('scrubThreadAnswer', () => {
 
 describe('answerFallback', () => {
   it('writes the reading itself, and says that it did', () => {
-    const m = measureAnswer({ findings, series: [climbing()], month: MONTH, directionWords: true })
+    const m = measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings, series: [climbing()], month: MONTH, directionWords: true })
     const text = answerFallback(m) as string
     expect(text.startsWith(FALLBACK_NOTE)).toBe(true)
     expect(text).toContain('320 of 1,388 videos in the category')
@@ -465,6 +470,7 @@ describe('FindingMeasure.chart and .own — the two fields wave 2 draws', () => 
     // the answer was measured against, which is the same rule the direction
     // word is trimmed by.
     const m = measureAnswer({
+      pair: null, asOf: FIXTURE_ENDED,
       findings,
       series: [climbing()],
       month: '2026-08-01',
@@ -482,7 +488,7 @@ describe('FindingMeasure.chart and .own — the two fields wave 2 draws', () => 
         point(MONTH, 320, 1388),
       ],
     })
-    const m = measureAnswer({ findings, series: [holed], month: MONTH, directionWords: true })
+    const m = measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings, series: [holed], month: MONTH, directionWords: true })
     const chart = m.findings[0].chart
     // The month keeps its x. Dropping it would join July straight to September
     // and misdate everything after the gap (`monthAxis`' own warning).
@@ -492,6 +498,7 @@ describe('FindingMeasure.chart and .own — the two fields wave 2 draws', () => 
 
   it('reports the client’s own side as a counted pair and says it is thin', () => {
     const m = measureAnswer({
+      pair: null, asOf: FIXTURE_ENDED,
       findings,
       series: [climbing(), ownSide()],
       month: MONTH,
@@ -507,6 +514,7 @@ describe('FindingMeasure.chart and .own — the two fields wave 2 draws', () => 
 
   it('leaves the own side absent where the client has no reading, not zero', () => {
     const m = measureAnswer({
+      pair: null, asOf: FIXTURE_ENDED,
       findings,
       series: [climbing()],
       month: MONTH,
@@ -514,5 +522,42 @@ describe('FindingMeasure.chart and .own — the two fields wave 2 draws', () => 
       ownAudience: CLIENT_AUDIENCE,
     })
     expect(m.findings[0].own).toBeUndefined()
+  })
+})
+
+// ---- The month-pair rule (market-first decision D, WP1.3) ---------------------------------
+
+describe('measureAnswer under the month-pair rule', () => {
+  // Looks & style, the category's one moving subject: 38 of August's 351 and
+  // 104 of September's 626 (research §1, prod). Banded alone it reads "moved".
+  const looks = (): MonthSeries => ({
+    audience: INDUSTRY_AUDIENCE,
+    names: [INDUSTRY_AUDIENCE],
+    objectId: 'reg-1',
+    objectLabel: 'Looks & style',
+    points: [point('2026-08-01', 38, 351), point(MONTH, 104, 626)],
+    notes: [],
+    firstReadable: '2026-08-01',
+    substrate: 'seeded',
+  })
+
+  it('bands "moved" with no pair applied, which is what the rule is for', () => {
+    const m = measureAnswer({ findings, series: [looks()], month: MONTH, directionWords: true, pair: null, asOf: FIXTURE_ENDED })
+    expect(m.findings[0].verdict?.state).toBe('moved')
+  })
+
+  it('never measures August against September as "moved": our September search changes refuse it', () => {
+    for (const now of ['2026-09-25T12:00:00.000Z', '2026-10-02T06:00:00.000Z', '2026-10-12T12:00:00.000Z']) {
+      const m = measureAnswer({
+        findings, series: [looks()], month: MONTH, directionWords: true,
+        pair: pairOn(sealandJudge(now)), asOf: now,
+      })
+      const f = m.findings[0]
+      expect(f.verdict?.state).toBe('refused')
+      expect(f.verdict?.refusedReason).toBe('tracking_change')
+      expect(f.direction).toBeNull()
+      // The chart beside the answer breaks the refused step.
+      expect(f.chart.line.points.find((p) => p.month === MONTH)?.brokenBefore).toBe('Not read as a change: we changed what we search in September.')
+    }
   })
 })

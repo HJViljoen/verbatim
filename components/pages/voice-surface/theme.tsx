@@ -247,6 +247,8 @@ function themeSeries(t: ThemeBlock): CalendarSeries | null {
       state: p.pct == null ? ('hollow' as const) : p.status === 'filling' ? ('filling' as const) : ('read' as const),
       k: p.k,
       n: p.videos,
+      // A refused step is drawn broken (decision D, WP1.3).
+      ...(t.refusedSteps?.[p.month] ? { brokenBefore: t.refusedSteps[p.month] } : {}),
     })),
   }
 }

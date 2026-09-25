@@ -230,7 +230,7 @@ describe('ledgerRowsShown — the row a deep link named', () => {
     number: n + 1,
     basedOn: [],
     grounded: null,
-    afterwards: afterwardsFor({ decidedAt: null, targetIds: [], series: [], audience: 'client' }),
+    afterwards: afterwardsFor({ pair: null, decidedAt: null, targetIds: [], series: [], audience: 'client' }),
     why: null,
     quote: null,
   })
@@ -414,6 +414,7 @@ describe('orderedTargets — one ledger row, one identity', () => {
     const points = new Map([['reg-a', aOnly], ['reg-b', bOnly]])
     const [target] = orderedTargets(['ai-1', 'ai-2', 'ai-4'], reg)
     const out = afterwardsFor({
+      pair: null,
       decidedAt: '2026-06-02T00:00:00.000Z',
       targetIds: [target],
       series: points.get(target) ?? [],

@@ -331,6 +331,7 @@ export const PLAYBOOK_VIDEOS: PlaybookVideo[] = [
 export function competitiveFixture(over: Partial<CompetitiveSurfaceData> = {}): CompetitiveSurfaceData {
   const window = horizonWindow('last_3', NOW, '2026-06-01')
   const standings = buildStandingsBlock({
+    pair: null, // no month pair applies: a fixture pins rendering (lib/test/pair-fixture.ts)
     brand: 'Össur',
     rivals: [{ name: 'Ottobock', retiredAt: null }],
     denominators: OSSUR,
@@ -509,6 +510,7 @@ export function oneMonthFixture(): CompetitiveSurfaceData {
     horizon: 'this_month',
     window,
     standings: buildStandingsBlock({
+      pair: null, // no month pair applies: a fixture pins rendering (lib/test/pair-fixture.ts)
       brand: 'Össur',
       rivals: [{ name: 'Ottobock', retiredAt: null }],
       denominators: OSSUR,

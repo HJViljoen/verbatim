@@ -170,6 +170,7 @@ export function ledgerWithDismissal(): MarketSurfaceData {
         month: MONTH,
       }),
       afterwards: afterwardsFor({
+        pair: null, // no month pair applies: a fixture pins rendering (lib/test/pair-fixture.ts)
         decidedAt: '2026-07-20T09:00:00.000Z',
         targetIds: ['reg-repair'],
         objectLabel: 'Repair & warranty',
@@ -205,6 +206,7 @@ export function ledgerWithDismissal(): MarketSurfaceData {
         month: MONTH,
       }),
       afterwards: afterwardsFor({
+        pair: null, // no month pair applies: a fixture pins rendering (lib/test/pair-fixture.ts)
         decidedAt: '2026-09-01T08:00:00.000Z',
         targetIds: ['reg-fit'],
         objectLabel: 'Fit & sizing',
@@ -241,6 +243,7 @@ export function ledgerWithDismissal(): MarketSurfaceData {
       month: MONTH,
     }),
     afterwards: afterwardsFor({
+      pair: null, // no month pair applies: a fixture pins rendering (lib/test/pair-fixture.ts)
       decidedAt: '2026-07-28T10:00:00.000Z',
       targetIds: ['reg-price'],
       objectLabel: 'Price and value',

@@ -26,6 +26,7 @@ import { claimEcho, ownCensusWithClaims, type OwnPostInput } from '@/lib/reading
 import { claimCounts } from '@/lib/market-tiles'
 import type { Subject } from '@/lib/subjects/types'
 import { methodFixture, methodRecordFixture, methodRefusedFixture, recordBandFixture } from '@/lib/test/method-fixture'
+import { FIXTURE_ENDED } from '@/lib/test/pair-fixture'
 
 // The Subjects page's block fixtures (Phase 1 WP12).
 //
@@ -142,6 +143,8 @@ function sidesAndSeries(retiredAt: string | null = null) {
   )
 
   const sides = buildSides({
+    // No month pair applies: a fixture pins rendering, read after its months ended (lib/test/pair-fixture.ts).
+    pair: null, asOf: FIXTURE_ENDED,
     subject: subject(),
     rivals: [{ name: 'Freitag', retiredAt }],
     leadRival: { name: 'Freitag', retiredAt },
@@ -275,6 +278,7 @@ function refusedOwnPostsInput(): OwnPostInput {
 function railVerdict(id: string, label: string, k: number) {
   const point = (month: string, at: number) => ({ month, videos: 84, k: at, audience: CLIENT_AUDIENCE, regime: 'n/a' as const })
   return monthChange({
+    comparability: null, // no month pair applies: a fixture pins rendering (lib/test/pair-fixture.ts)
     object: { kind: 'subject' as const, id, label },
     audience: CLIENT_AUDIENCE,
     curr: point(MONTH, k),

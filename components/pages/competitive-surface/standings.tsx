@@ -315,14 +315,21 @@ function SharedLegend({ series, axis }: { series: readonly StandingsSeries[]; ax
 
 /** One chart's worth of series, in the axis's order. A month a brand was not
  *  observed in is a `hollow` point and never a zero. */
-function seriesFor(series: readonly StandingsSeries[], axis: readonly string[], side: 'content' | 'attention'): CalendarSeries[] {
+function seriesFor(
+  series: readonly StandingsSeries[],
+  axis: readonly string[],
+  side: 'content' | 'attention',
+  steps?: Readonly<Record<string, string>>,
+): CalendarSeries[] {
   return series.map((s) => ({
     label: s.label,
     color: COLOR[s.role],
     points: axis.map((month) => {
       const p = s.points.find((x) => x.month === month)
       const value = p ? p[side] : null
-      return { month, value, state: value == null ? ('hollow' as const) : ('read' as const) }
+      // A refused step is drawn broken (decision D, WP1.3).
+      const broken = steps?.[month]
+      return { month, value, state: value == null ? ('hollow' as const) : ('read' as const), ...(broken ? { brokenBefore: broken } : {}) }
     }),
   }))
 }
@@ -461,7 +468,7 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
               <BlockCalendar
                 blockKey={`${competitiveStandings.key}.attention`}
                 axis={s.months}
-                series={seriesFor(chartSeries(s.series), s.months, 'attention')}
+                series={seriesFor(chartSeries(s.series), s.months, 'attention', s.refusedSteps)}
                 rules={rules}
                 mode={mode}
                 ctx={ctx}
@@ -471,7 +478,7 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
               <BlockCalendar
                 blockKey={`${competitiveStandings.key}.content`}
                 axis={s.months}
-                series={seriesFor(chartSeries(s.series), s.months, 'content')}
+                series={seriesFor(chartSeries(s.series), s.months, 'content', s.refusedSteps)}
                 rules={rules}
                 mode={mode}
                 ctx={ctx}
@@ -486,7 +493,7 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
                   label="Attention share"
                   meta="share of the month’s comments"
                   axis={s.months}
-                  series={seriesFor(chartSeries(s.series), s.months, 'attention')}
+                  series={seriesFor(chartSeries(s.series), s.months, 'attention', s.refusedSteps)}
                   rules={rules}
                   chartKey={`${competitiveStandings.key}.attention`}
                 />
@@ -494,7 +501,7 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
                   label="Content share"
                   meta="share of the month’s videos"
                   axis={s.months}
-                  series={seriesFor(chartSeries(s.series), s.months, 'content')}
+                  series={seriesFor(chartSeries(s.series), s.months, 'content', s.refusedSteps)}
                   rules={rules}
                   chartKey={`${competitiveStandings.key}.content`}
                 />

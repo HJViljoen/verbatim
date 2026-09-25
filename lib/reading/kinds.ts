@@ -2,6 +2,7 @@ import { INSIGHT_CATEGORIES } from '../pipeline/schemas'
 import { SHARE_BAND, type BandOptions } from '../report-bands'
 import type { DenominatorMonth, PreRegisteredObject } from './anomaly'
 import { monthChange, type SeriesPoint } from './bands'
+import type { PairComparability } from './comparability'
 import type { PlatformMix } from './types'
 import type { Verdict, VerdictFlag } from './verdicts'
 
@@ -182,6 +183,9 @@ export interface KindChangeInput {
   prev: { month: string; videos: number | null; k: number | null }
   floor?: BandOptions
   flags?: VerdictFlag[]
+  /** Were the two months read the same way (decision D, WP1.3)? REQUIRED and
+   *  forwarded to `monthChange`; null where no month pair applies. */
+  comparability: PairComparability | null
 }
 
 /**
@@ -214,6 +218,7 @@ export function kindChange(input: KindChangeInput): Verdict {
     prev: point(input.prev, input.prevAudience ?? input.audience),
     floor: input.floor ?? SHARE_BAND,
     flags: input.flags,
+    comparability: input.comparability,
   })
   // BELT AND BRACES ON THE CAVEAT. `regime: 'n/a'` above already stops
   // `monthChange` adding `clustering_unknown` — "nobody recorded the grouping
