@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { thinUpdate } from '../reading/anomaly'
-import { checkStateOf, headlineObject, humanTheme, risingMovers, RISING_NOW, WORTH_A_REPLY } from './weekly'
+import { checkStateOf, headlineObject, humanTheme, risingMovers, RISING_NOW, weeklyHeadline, WORTH_A_REPLY } from './weekly'
 import type { Mover } from './overview'
 import type { OverviewData, SideReading, SubjectRow } from './overview'
 
@@ -178,6 +178,56 @@ describe('headlineObject', () => {
       subjects: { state: 'not_recorded', rows: [], candidates: [], rivalLabel: null, categoryLabel: 'Category', note: null },
     } as unknown as Partial<OverviewData>)
     expect(headlineObject(data)).toBeNull()
+  })
+})
+
+// THE PARITY GATE (plan §4.0, §7.4): the weekly preview stays byte for byte
+// through deploys 1 and 2, and WP1.5 changed OV1's lead and body to the
+// market's size. The weekly reads the Phase 1 headline the loader keeps for it.
+describe('weeklyHeadline', () => {
+  /** Looks & style, 38 of 351 to 104 of 626 (DR F39): the subject the Phase 1
+   *  rule led with on September, and which the size headline never leads with. */
+  const looks = {
+    objectKind: 'subject',
+    objectId: 'looks-and-style',
+    objectLabel: 'Looks & style',
+    audience: 'industry-other',
+    window: { kind: 'month', from: '2026-09-01', to: '2026-10-01' },
+    value: { k: 104, n: 626 },
+    changePts: 5.8,
+    bandPts: 3.9,
+    state: 'moved',
+    flags: [],
+  }
+  const sized = (forWeekly: unknown) =>
+    overview({
+      sentence: {
+        lead: null,
+        body: 'Your market in September so far: [[market_videos]] videos and [[market_comments]] comments.',
+        figures: { market_videos: { value: 655, unit: 'videos', label: 'videos in your market in September' } },
+        forWeekly,
+      },
+      subjects: { state: 'not_recorded', rows: [], candidates: [], rivalLabel: null, categoryLabel: 'Category', note: null },
+    } as unknown as Partial<OverviewData>)
+
+  it('falls back to the Phase 1 gate sentence, never the size, where nothing is named', () => {
+    const data = sized({ lead: null, body: 'Nothing moved clearly this month. Here is where you stand.', figures: {} })
+    expect(headlineObject(data)).toBeNull()
+    expect(weeklyHeadline(data).body).toBe('Nothing moved clearly this month. Here is where you stand.')
+    expect(weeklyHeadline(data).figures).toEqual({})
+  })
+
+  it('takes the Phase 1 lead, which the size headline no longer carries', () => {
+    const data = sized({ lead: looks, body: 'Looks & style came up in [[looks-and-style_share]] of the category this month.', figures: {} })
+    const head = headlineObject(data)
+    expect(head?.label).toBe('Looks & style')
+    expect(head?.k).toBe(104)
+    expect(head?.n).toBe(626)
+  })
+
+  it('reads the block itself on a stored export that predates the field', () => {
+    const data = overview()
+    expect(weeklyHeadline(data)).toEqual({ lead: null, body: 'Nothing moved clearly this month. Here is where you stand.', figures: {} })
   })
 })
 

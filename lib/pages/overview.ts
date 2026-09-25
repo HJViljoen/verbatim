@@ -575,6 +575,24 @@ export interface SentenceBlock {
   voicesFrom: number
   /** Every comparison this block may speak from. */
   verdicts: Verdict[]
+  /**
+   * The Phase 1 headline, for the weekly alone (market-first WP1.5): the
+   * largest banded change of any subject or theme, else "Nothing moved clearly
+   * this month. Here is where you stand.". The weekly's preview must stay byte
+   * for byte through deploys 1 and 2 (plan §4.0, §7.4, the parity gate), and it
+   * built its §1 from this block's lead and body, which WP1.5 changed; so it
+   * reads this instead until WP3.7 rebuilds it. Not rendered on the Overview.
+   * OPTIONAL, because a stored export predates it: there `lead`, `body` and
+   * `figures` above are the Phase 1 ones already.
+   */
+  forWeekly?: WeeklyHeadline | null
+}
+
+/** OV1's Phase 1 headline, as the weekly reads it (`SentenceBlock.forWeekly`). */
+export interface WeeklyHeadline {
+  lead: Verdict | null
+  body: string
+  figures: FigureTable
 }
 
 export interface BarBlock {
@@ -2183,7 +2201,13 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     loadVoices(supabase, clientId, head.lead, themedRunId),
     flags.length > 0 ? buildAnomaly(supabase, flags[0]) : Promise.resolve(null),
   ])
-  const sentence = sentenceBlockFor({ head, verdicts: sentenceVerdicts, voices, ledger: ledger.top, anomaly })
+  // The weekly keeps the Phase 1 headline until WP3.7 (the parity gate): the
+  // same call, on the same verdicts, that OV1 made before WP1.5.
+  const phaseOne = headline({ verdicts: suppress ? [] : sentenceVerdicts })
+  const sentence: SentenceBlock = {
+    ...sentenceBlockFor({ head, verdicts: sentenceVerdicts, voices, ledger: ledger.top, anomaly }),
+    forWeekly: { lead: phaseOne.lead, body: phaseOne.body, figures: phaseOne.figures },
+  }
 
   // ── OV6 · how sound is this ────────────────────────────────────────────
   const pageVerdicts = [
