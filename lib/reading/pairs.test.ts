@@ -32,7 +32,7 @@ import {
   viewForAudience,
 } from './pairs'
 import { HYPOTHETICAL_RISING_RUN, HYPOTHETICAL_SAME_WAY, HYPOTHETICAL_SEARCHES_UNDER_FLAG } from '../test/pair-fixture'
-import { CHANGES, OSSUR_UPDATES, PROBE_0920, row, SEALAND_SCHEDULE, SEALAND_UPDATES, sealandJudge } from '../test/sealand-pairs'
+import { CHANGES, OSSUR_UPDATES, PROBE_0920, row, SEALAND_LOG, SEALAND_SCHEDULE, SEALAND_UPDATES, sealandJudge } from '../test/sealand-pairs'
 
 // Comparability v1 on the verdict (market-first decision D, WP1.3): the pair
 // rule, carried onto `monthChange`, `directionWord`, a direct `bandVerdict`
@@ -188,6 +188,47 @@ describe('monthChange: August against September never reads "moved"', () => {
     })
     expect(v.refusedReason).toBe('rename')
     expect(v.pair).toBeUndefined()
+  })
+})
+
+// A SEARCH CHANGE AFTER THE PAIR'S MONTHS IS NOT ITS CAUSE (deploy 1 review).
+// August against September's span runs to 1 Nov, and discovery keeps changing
+// the searched communities until deploy 4 (it activated r/travelgear on 9 Sep).
+// HYPOTHETICAL: a community activated on the 4 Oct run; the date is the run's,
+// the community is a label, and no such row exists yet.
+describe('an October search change inside August against September\'s span', () => {
+  const OCT_ACTIVATION = row({
+    id: 'subreddits-1004', changed_at: '2026-10-04T04:30:00.000Z', surface: 'subreddits', field: 'subreddits',
+    source: 'trigger', actor_kind: 'pipeline',
+    before: ['backpacks', 'travelgear', 'onebag'].map((name) => ({ name, status: 'active' })),
+    after: ['backpacks', 'travelgear', 'onebag', 'known_2'].map((name) => ({ name, status: 'active' })),
+  })
+  const withOct = changesFromLog([...SEALAND_LOG, OCT_ACTIVATION])
+
+  it('is a change of every view, in the pair\'s span', () => {
+    expect(withOct.some((c) => c.id === 'subreddits-1004' && c.surface === 'subreddits')).toBe(true)
+  })
+
+  it('measured (a row read through the 4 Oct run): the searches are named by September\'s change, not October\'s', () => {
+    const pair = judgeAt('2026-10-05T12:00:00.000Z', [AUG_SEP], withOct)('2026-08-01', '2026-09-01', 'market')
+    const searches = pair.reasons.find((r) => r.kind === 'searches')
+    expect(searches?.changedAt?.slice(0, 10)).toBe('2026-09-17')
+    const v = change(pair)
+    expect(v.pair).toEqual({ mode: 'refuse', cause: 'searches', changeMonth: '2026-09-01', checkWith: null })
+    expect(pairSentence(v.pair!)).toBe(PAIR_REFUSED_SEARCHES('2026-09-01'))
+  })
+
+  it('unmeasured (no row): September\'s change is named, on every view', () => {
+    for (const view of ['market', 'themes', 'brands'] as const) {
+      const note = pairOnVerdict(judgeAt('2026-10-05T12:00:00.000Z', [], withOct)('2026-08-01', '2026-09-01', view)).note
+      expect(note?.changeMonth).toBe('2026-09-01')
+    }
+  })
+
+  it('names October only where no search change falls in or before September', () => {
+    const onlyOct = changesFromLog([OCT_ACTIVATION])
+    const pair = judgeAt('2026-10-05T12:00:00.000Z', [AUG_SEP], onlyOct)('2026-08-01', '2026-09-01', 'market')
+    expect(pair.reasons.find((r) => r.kind === 'searches')?.changeId).toBe('subreddits-1004')
   })
 })
 

@@ -481,7 +481,7 @@ export function comparabilityOf(prevMonth: string, month: string, input: {
 
   // 4a. What we search.
   const searchShare = pairShare(row.searchOutside.prev, row.searchOutside.curr)
-  const latestSearch = inSpan.filter((c) => isSearchSurface(c.surface)).at(-1) ?? null
+  const latestSearch = namedSearchChange(inSpan.filter((c) => isSearchSurface(c.surface)), pm, m)
   if (searchShare == null || !(searchShare < COMPARE_FLAG_SHARE)) {
     reasons.push({
       kind: 'searches',
@@ -537,6 +537,30 @@ export function comparabilityOf(prevMonth: string, month: string, input: {
   if (sick) reasons.push(bare('gather'))
 
   return answer(reasons)
+}
+
+/**
+ * The search change a measured search share is named by (rule 4a), from the
+ * in-span search changes sorted oldest first: the latest dated inside the
+ * pair's own two months, else the latest dated before the later month ends,
+ * else the latest in span.
+ *
+ * A PAIR'S SPAN RUNS TO THE LATER MONTH'S FREEZE LINE (deploy 1 review): for
+ * August against September that is 1 Nov, and discovery can still activate a
+ * community on the 4 or 11 Oct run. Naming the latest in span then printed "we
+ * changed what we search in October" under August against September, while
+ * the change that refused it was September's. `pairOnVerdict` prefers the
+ * pair's own months for the same reason; this is that rule where a measured
+ * row names one change for the whole share.
+ */
+function namedSearchChange(searches: readonly OurChange[], prevMonth: string, month: string): OurChange | null {
+  const own = searches.filter((c) => {
+    const cm = safeMonth(c.changedAt)
+    return cm === prevMonth || cm === month
+  })
+  const endMs = msOf(monthEndInstant(month))
+  const before = searches.filter((c) => msOf(c.changedAt) < endMs)
+  return own.at(-1) ?? before.at(-1) ?? searches.at(-1) ?? null
 }
 
 /** Does this reason refuse the pair (rather than flag it)? */
