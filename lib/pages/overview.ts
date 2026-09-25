@@ -859,6 +859,32 @@ export function readingsCounter(readings: number, opts: { quarter?: boolean } = 
 }
 
 /**
+ * The status OV0 words its month by: "final" or "ended" (market-first WP1.2).
+ *
+ * ONE VOCABULARY FOR ONE MONTH. `monthStatus` is `freezeStateFor`: clock and
+ * freeze-line arithmetic. The month selector's tooltip is `reading.state`,
+ * where the stored row wins. A run that finished past the freeze line without
+ * reaching freeze-months left OV0 saying "September, final" under a tooltip
+ * saying "September · ended". So where OV0 reads the reading month, its word
+ * is the reading's: `final` is frozen, `ended` is still filling; any other
+ * state (read at setup, too few to read, so far) keeps `monthStatus`, as does
+ * the weekly, pinned to the calendar month, and any other month.
+ *
+ * Pure.
+ */
+export function barMonthStatus(
+  month: string,
+  monthStatus: MonthStatus,
+  reading: Pick<ReadingMonth, 'month' | 'state'> | null | undefined,
+  pinned = false,
+): MonthStatus {
+  if (pinned || !reading || reading.month !== month) return monthStatus
+  if (reading.state === 'final') return 'frozen'
+  if (reading.state === 'ended') return 'filling'
+  return monthStatus
+}
+
+/**
  * "2,044 at this point last month" — the one fact OV0's tile carried that is
  * nowhere else on the app surface (Block D wave 3, M7).
  *
@@ -1694,9 +1720,10 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
   // change at all"). The line says which it is; a builder only needs to know
   // that it may not draw one.
   const suppress = thin || early
+  const barStatus = barMonthStatus(month, monthStatus, rm, pinned)
   const bar: BarBlock = {
     month,
-    status: monthStatus,
+    status: barStatus,
     daysIn,
     updates: updatesByMonth[month] ?? 0,
     updateDates,
@@ -1707,7 +1734,7 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
     thin,
     line: fillingLine({
       month,
-      status: monthStatus,
+      status: barStatus,
       daysIn,
       updates: updatesByMonth[month] ?? 0,
       videos: monthVideos,
@@ -1721,7 +1748,7 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
     counter: readingsCounter(readingsSoFar),
     note: fillingNote({
       month,
-      status: monthStatus,
+      status: barStatus,
       daysIn,
       updates: updatesByMonth[month] ?? 0,
       videos: monthVideos,

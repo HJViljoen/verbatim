@@ -8,6 +8,7 @@ import { gapLine, type Gap } from '../reading/gap'
 import { cardFixture, moveReadingFixture } from '../../components/pages/overview/fixture'
 import { buildAdviceRows } from './market-surface'
 import {
+  barMonthStatus,
   buildCategory,
   buildRivals,
   buildSubjects,
@@ -1207,5 +1208,28 @@ describe('fillingNote', () => {
 
   it('says nothing was read, where nothing was', () => {
     expect(fillingNote({ ...base, videos: null })).toContain('nothing read into September yet')
+  })
+})
+
+// Market-first WP1.2 review: OV0's "final" or "ended" and the selector's
+// tooltip are one vocabulary. `monthStatus` is clock arithmetic; the reading's
+// state is the stored row's.
+describe('barMonthStatus: OV0 words the reading month as the selector does', () => {
+  const SEP = '2026-09-01'
+
+  it('a run past the freeze line that did not freeze the month: "ended", not "final"', () => {
+    expect(barMonthStatus(SEP, 'frozen', { month: SEP, state: 'ended' })).toBe('filling')
+  })
+
+  it('a frozen row: "final", whatever the clock says', () => {
+    expect(barMonthStatus(SEP, 'filling', { month: SEP, state: 'final' })).toBe('frozen')
+  })
+
+  it('keeps the clock’s status for any other month, the weekly, a stored snapshot and the other states', () => {
+    expect(barMonthStatus(SEP, 'frozen', { month: '2026-10-01', state: 'so_far' })).toBe('frozen')
+    expect(barMonthStatus(SEP, 'frozen', { month: SEP, state: 'ended' }, true)).toBe('frozen')
+    expect(barMonthStatus(SEP, 'frozen', null)).toBe('frozen')
+    expect(barMonthStatus('2026-06-01', 'frozen', { month: '2026-06-01', state: 'read_at_setup' })).toBe('frozen')
+    expect(barMonthStatus(SEP, 'filling', { month: SEP, state: 'so_far' })).toBe('filling')
   })
 })
