@@ -23,6 +23,8 @@ import {
   onScreenText,
   ON_SCREEN_MAX,
   headline,
+  INTERPRETATION_NOTHING_MOVED,
+  refusedPairInterpretation,
   medianOf,
   atThisPointWindow,
   earlyInMonth,
@@ -56,6 +58,8 @@ import { FIXTURE_ENDED } from '../test/pair-fixture'
 import { sealandJudge } from '../test/sealand-pairs'
 import { pairOn } from '../reading/pairs'
 import { pairOnVerdict } from '../reading/comparability'
+import { monthChange } from '../reading/bands'
+import { composeInterpretation } from '../prose/interpret'
 
 // The Overview's pure half (Phase 1 WP11). Everything here is shape and words:
 // the loader's I/O is exercised against production read-only and the blocks are
@@ -302,6 +306,50 @@ describe('headline', () => {
   it('leads with a banded change even beside a refused pair note', () => {
     const h = headline({ verdicts: [moved('t1', 'Price', 2.0)], monthPair: { mode: 'refuse', cause: 'not_yet', changeMonth: null, checkWith: null } })
     expect(h.lead?.objectId).toBe('t1')
+  })
+})
+
+// THE INTERPRETATION TOO (decision D, WP1.3 review fix): its fallback read
+// opened with "Nothing moved clearly" under a headline that says the months
+// were not compared. Looks & style on the category, August's 38 of 351
+// against September's 104 of 626 (research §1), judged on Sealand's real
+// change log on 2 Oct.
+describe('refusedPairInterpretation', () => {
+  const looks = (comparability: Parameters<typeof monthChange>[0]['comparability']): Verdict => monthChange({
+    object: { kind: 'subject', id: 'looks-and-style', label: 'Looks & style' },
+    audience: INDUSTRY_AUDIENCE,
+    curr: { month: '2026-09-01', videos: 626, k: 104, audience: INDUSTRY_AUDIENCE, regime: 'n/a' },
+    prev: { month: '2026-08-01', videos: 351, k: 38, audience: INDUSTRY_AUDIENCE, regime: 'n/a' },
+    comparability,
+  })
+  const refused = () => looks(pairOn(sealandJudge('2026-10-02T06:00:00.000Z'))('2026-08-01', '2026-09-01', INDUSTRY_AUDIENCE))
+  const compose = (verdicts: Verdict[], draft?: string) => composeInterpretation('interpretation_monthly', verdicts, {}, [], draft ? { draft } : {})
+
+  it('pins the gate sentence to the one the fallback writes', () => {
+    expect(compose([]).sentences[0]).toBe(INTERPRETATION_NOTHING_MOVED)
+  })
+
+  it('says why nothing was compared when every comparison was refused for the months', () => {
+    const verdicts = [refused()]
+    expect(verdicts[0].state).toBe('refused')
+    const out = refusedPairInterpretation(compose(verdicts), verdicts)
+    expect(out.sentences[0]).toBe('Not read as a change: we changed what we search in September.')
+    expect(out.sentences.join(' ')).not.toContain('Nothing moved')
+    expect(out.fallback).toBe(true)
+  })
+
+  it('with no verdict at all, the page\'s month pair decides, as the headline\'s does', () => {
+    const note = pairOnVerdict(pairOn(sealandJudge('2026-10-02T06:00:00.000Z'))('2026-09-01', '2026-10-01', INDUSTRY_AUDIENCE)).note
+    expect(refusedPairInterpretation(compose([]), [], note).sentences[0]).toBe('Not read as a change: we changed what we search in September.')
+    expect(refusedPairInterpretation(compose([]), [], null).sentences[0]).toBe(INTERPRETATION_NOTHING_MOVED)
+  })
+
+  it('leaves the read alone where something was compared, or the model wrote it', () => {
+    const held: Verdict = { ...refused(), objectId: 'fit', objectLabel: 'Fit', state: 'no_clear_change', refusedReason: undefined, pair: undefined }
+    const mixed = [refused(), held]
+    expect(refusedPairInterpretation(compose(mixed), mixed).sentences[0]).toBe(INTERPRETATION_NOTHING_MOVED)
+    const drafted = compose([refused()], 'Looks and style is where the category talks most.')
+    expect(refusedPairInterpretation(drafted, [refused()])).toBe(drafted)
   })
 })
 

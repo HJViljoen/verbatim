@@ -19,7 +19,7 @@ import {
 import { confirmingLine } from '../reports/monthly'
 import { MARKETING_BRIEF } from '../reports/briefs'
 import { loadSentFigures, newestByObject, sentReadingOf, type StoredSentFigure } from '../reports/sent-figures'
-import { loadOverview, type LedgerRow, type Mover, type OverviewData } from './overview'
+import { loadOverview, refusedPairInterpretation, type LedgerRow, type Mover, type OverviewData } from './overview'
 import { loadVoiceSurface, type GoneQuiet, type VoiceSurfaceData } from './voice-surface'
 import {
   loadMemberInsightIdsBySubject,
@@ -300,11 +300,16 @@ export async function loadMonthly(scope: Scope): Promise<MonthlyData | null> {
   const verdicts = overview.sentence.verdicts
   const figures = proseFigures(overview.sentence.figures)
   const decide: DecideSection = {
-    interpretation: composeInterpretation(
-      'interpretation_monthly',
+    // A refused month pair is said as such, not as "nothing moved"
+    // (decision D, WP1.3; `refusedPairInterpretation`).
+    interpretation: refusedPairInterpretation(
+      composeInterpretation(
+        'interpretation_monthly',
+        verdicts,
+        figures,
+        overview.sentence.voices.map((v) => ({ ref: v.quote.ref })),
+      ),
       verdicts,
-      figures,
-      overview.sentence.voices.map((v) => ({ ref: v.quote.ref })),
     ),
     figures: overview.sentence.figures,
     ledger: overview.sentence.ledger,

@@ -976,6 +976,40 @@ export function headline(input: HeadlineInput): Headline {
   return { lead, body, figures }
 }
 
+/** The gate sentence the monthly interpretation's fallback writes when nothing
+ *  moved (`fallbackFor`, lib/prose/interpret.ts; pinned equal by the test). */
+export const INTERPRETATION_NOTHING_MOVED = 'Nothing moved clearly this month. Here is where you stand.'
+
+/**
+ * A REFUSED PAIR IS NOT "NOTHING MOVED", IN THE INTERPRETATION EITHER
+ * (market-first decision D, WP1.3 review fix). The product's own fallback read
+ * for the month opens with the design's gate sentence whenever no verdict
+ * moved, and on Sealand at deploy 1 every verdict is refused: nothing was
+ * compared, so "Nothing moved clearly" would say a comparison came back inside
+ * its band. Where no verdict was compared at all (none moved or held inside its
+ * band) and one was refused because the two months were not read the same
+ * way, the pair's own words stand in its place, as in the headline. With no
+ * verdict at all (a month with nothing read into it yet), the page's own month
+ * pair (`monthPair`, the headline's) decides the same way.
+ *
+ * Here, over the composed interpretation, rather than in lib/prose/interpret.ts,
+ * because that file is inside the pipeline's import closure, where only
+ * additive changes may land before deploy 4 (plan §7.7). Both callers of the
+ * monthly slot use it: OV1 and the monthly report's section 7.
+ */
+export function refusedPairInterpretation(
+  interp: Interpretation,
+  verdicts: readonly Verdict[],
+  monthPair: VerdictPairNote | null = null,
+): Interpretation {
+  if (!interp.fallback || interp.slot !== 'interpretation_monthly' || interp.sentences[0] !== INTERPRETATION_NOTHING_MOVED) return interp
+  if (verdicts.some((v) => isAnswer(v.state))) return interp
+  const note = verdicts.find((v) => v.state === 'refused' && v.pair?.mode === 'refuse')?.pair
+    ?? (monthPair?.mode === 'refuse' ? monthPair : null)
+  if (!note) return interp
+  return { ...interp, sentences: [pairSentence(note), ...interp.sentences.slice(1)] }
+}
+
 /** Rank the movers of one audience: the largest banded changes, up and down. */
 export function splitMovers(movers: readonly Mover[], shown: number = MOVERS_SHOWN): { growing: Mover[]; fading: Mover[] } {
   const answered = movers.filter((m) => m.verdict.state === 'moved' && m.verdict.changePts != null)
@@ -1810,21 +1844,23 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     ...category.growing.map((m) => m.verdict),
     ...category.fading.map((m) => m.verdict),
   ]
-  const head = headline({
-    verdicts: suppress ? [] : sentenceVerdicts,
-    // The category's month pair: the audience most of the sentence's verdicts
-    // are on, and the one OV3 already words its refusal from.
-    monthPair: pairOnVerdict(pair(prevMonth, month, INDUSTRY_AUDIENCE)).note,
-  })
+  // The category's month pair: the audience most of the sentence's verdicts
+  // are on, and the one OV3 already words its refusal from.
+  const monthPair = pairOnVerdict(pair(prevMonth, month, INDUSTRY_AUDIENCE)).note
+  const head = headline({ verdicts: suppress ? [] : sentenceVerdicts, monthPair })
   const [voices, anomaly] = await Promise.all([
     loadVoices(supabase, clientId, head.lead, top, themedRunId),
     flags.length > 0 ? buildAnomaly(supabase, flags[0]) : Promise.resolve(null),
   ])
-  const interpretation = composeInterpretation(
-    'interpretation_monthly',
+  const interpretation = refusedPairInterpretation(
+    composeInterpretation(
+      'interpretation_monthly',
+      sentenceVerdicts,
+      proseFigures(head.figures),
+      voices.voices.map((v) => ({ ref: v.quote.ref })),
+    ),
     sentenceVerdicts,
-    proseFigures(head.figures),
-    voices.voices.map((v) => ({ ref: v.quote.ref })),
+    monthPair,
   )
   const sentence: SentenceBlock = {
     lead: head.lead,
