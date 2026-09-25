@@ -46,8 +46,8 @@ import {
   type MoveSeries,
 } from '../reading/moves'
 import { pairOnVerdict } from '../reading/comparability'
-import { BRANDS_PANEL, pairOn, pairTools, type PairOn } from '../reading/pairs'
-import { loadMonthSeries, loadPairJudge, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
+import { BRANDS_PANEL, pairTools, type PairOn } from '../reading/pairs'
+import { loadMonthSeries, loadPairOn, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
 import { methodLines, type MethodLines } from '../reading/method'
 import { countRefused, howSoundLine, loadRecordInputs, monthRecordWindow, recordLines, refusals, soundFigures, type RecordInputs, type SoundFigure } from '../reading/record'
 import {
@@ -1512,10 +1512,9 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
   // THE MONTH-PAIR JUDGE (decision D, WP1.3): the change log, the pair rows
   // and the updates, read once; every verdict, direction word and sparkline
   // step below is judged by it. It depends on the tenant and the clock only.
-  const judgeAhead = loadPairJudge(reading, readingAt)
+  const judgeAhead = loadPairOn(reading, readingAt)
   themedRunAhead.catch(() => {})
   ledgerAhead.catch(() => {})
-  judgeAhead.catch(() => {})
 
   const updatesByMonth: Record<string, number> = {}
   for (const r of runsRaw) {
@@ -1630,7 +1629,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
       loadDormantThemes(reading.client, clientId),
     ])
 
-  const pair = pairOn(await judgeAhead)
+  const pair = await judgeAhead
 
   // ── OV0 · the page bar and the still-filling line ──────────────────────
   const denominatorByMonth = new Map<string, number>()

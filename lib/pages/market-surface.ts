@@ -13,8 +13,8 @@ import { scrubProse } from '../prose/scrub'
 import { afterwardsFor, groundingFor, type Afterwards, type Grounding } from '../reading/afterwards'
 import { recurrenceOf, type Recurrence } from '../reading/head-to-head'
 import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordInputs } from '../reading/record'
-import { loadMonthSeries, loadPairJudge, type ReadingHandle } from '../reading/read'
-import { pairOn, type PairOn } from '../reading/pairs'
+import { loadMonthSeries, loadPairOn, type ReadingHandle } from '../reading/read'
+import type { PairOn } from '../reading/pairs'
 import type { Verdict } from '../reading/verdicts'
 import type { Quote } from '../renderables/types'
 import { freezeStateFor, monthStartOf } from '../reading/monthly'
@@ -769,8 +769,7 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   const recordAhead = loadRecordInputs(reading.client, clientId, recordWindow(month, readingAt), { now: readingAt })
   // THE MONTH-PAIR JUDGE (decision D, WP1.3): "Afterwards" and every move
   // reading compare two months only when both were read the same way.
-  const judgeAhead = loadPairJudge(reading, readingAt)
-  judgeAhead.catch(() => {})
+  const judgeAhead = loadPairOn(reading, readingAt)
   recordAhead.catch(() => {})
 
   const runId = latestRun.id
@@ -965,7 +964,7 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
     ...groundedRows.filter((r) => r.decidedAt && r.targetIds.length > 0).map((r) => r.targetIds[0]),
     ...shownConclusions.map((c) => conclusionTarget.get(c.id)).filter((t): t is string => Boolean(t)),
   ])
-  const pair = pairOn(await judgeAhead)
+  const pair = await judgeAhead
   const withAfterwards = readAfterwards(groundedRows, monthPoints, themeLabels, pair)
 
   const conclusions: ConclusionsBlock = {

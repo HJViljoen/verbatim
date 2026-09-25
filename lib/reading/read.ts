@@ -36,7 +36,7 @@ import {
   type OurChangeSurface,
   type PairRow,
 } from './comparability'
-import { pairJudge, type PairJudge, type UpdateRun } from './pairs'
+import { pairJudge, pairOn, refuseEveryPair, type PairJudge, type PairOn, type UpdateRun } from './pairs'
 import { scheduledUpdateAfter } from './reading-month'
 import type { Counted, ObjectKind } from './verdicts'
 
@@ -1050,4 +1050,22 @@ export async function loadPairJudge(handle: ReadingHandle, now: string): Promise
     loadScheduleAfter(client, clientId),
   ])
   return pairJudge({ now, changes, rows, updates, nextUpdateAfter })
+}
+
+/**
+ * The page's month-pair judge on audiences (`pairOn`), FAILING CLOSED: when
+ * any of its inputs cannot be read (the change log, the pair rows, the updates,
+ * the schedule), every pair is refused as unmeasured (`refuseEveryPair`) and
+ * the page still renders. A missing pair table is already an empty list
+ * (`loadPairRows`); this is every other read error, which would otherwise take
+ * the whole page or the Ask answer down with it. It never rejects.
+ */
+export function loadPairOn(handle: ReadingHandle, now: string): Promise<PairOn> {
+  return loadPairJudge(handle, now).then(
+    (judge) => pairOn(judge),
+    (error: unknown): PairOn => {
+      console.error(`[reading] month-pair judge: ${(error as { message?: string })?.message ?? String(error)}; every pair refused`)
+      return refuseEveryPair
+    },
+  )
 }

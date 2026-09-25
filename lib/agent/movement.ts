@@ -4,8 +4,8 @@ import { AGENT_MOVEMENT_MONTHS, AGENT_MOVEMENT_TOPICS } from '../config'
 import { monthName } from '../format'
 import { audienceLabel } from '../readiness/types'
 import { directionWord, monthChange, type Direction, type SeriesPoint } from '../reading/bands'
-import { comparableOn, pairOn, type PairOn } from '../reading/pairs'
-import { loadMonthSeries, loadPairJudge, readingHandle } from '../reading/read'
+import { comparableOn, type PairOn } from '../reading/pairs'
+import { loadMonthSeries, loadPairOn, readingHandle } from '../reading/read'
 import { isReadable, pointsByMonth, type MonthLabel, type MonthPoint } from '../reading/series'
 import { monthStartOf, prevMonth } from '../reading/month-key'
 import { isAnswer, type Verdict, type VerdictFlag } from '../reading/verdicts'
@@ -305,7 +305,8 @@ export async function loadMovement(
   // month is never compared, and a pair spanning our own search change is
   // refused, so Ask cannot say "moved" where every page refuses to.
   const asOf = now.toISOString()
-  const pair = args.pair ?? pairOn(await loadPairJudge(readingHandle(args.clientId, admin), asOf))
+  // It fails closed: a read error refuses every pair and Ask still answers.
+  const pair = args.pair ?? (await loadPairOn(readingHandle(args.clientId, admin), asOf))
 
   // THE MONTH TO READ IS THE CURRENT CALENDAR MONTH, filling or not, against
   // the month before it — the lib/pages/voice-surface.ts precedent. A filling

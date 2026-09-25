@@ -8,8 +8,8 @@ import { fetchQuoteCitationsByAudience } from '../quotes'
 import { attentionTotals, type AttentionRow } from '../reading/attention'
 import { horizonWindow, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
 import { freezeStateFor, monthStartOf } from '../reading/monthly'
-import { loadMonthSeries, loadPairJudge, type MonthSeriesSet, type ReadingHandle } from '../reading/read'
-import { BRANDS_PANEL, pairOn, refusedSteps, type PairOn } from '../reading/pairs'
+import { loadMonthSeries, loadPairOn, type MonthSeriesSet, type ReadingHandle } from '../reading/read'
+import { BRANDS_PANEL, refusedSteps, type PairOn } from '../reading/pairs'
 import { methodLines, type MethodLines } from '../reading/method'
 import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordInputs } from '../reading/record'
 import { buildStandings, type StandingRow } from '../reading/standings'
@@ -546,6 +546,10 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
   ])
   const analysedAhead = countAnalysedByRival(supabase, clientId, rivals.rivals)
   analysedAhead.catch(() => {})
+  // THE MONTH-PAIR JUDGE (decision D, WP1.3) depends on the tenant and the
+  // clock only, so it starts with the other early reads. It fails closed:
+  // a read error refuses every pair and the page still renders.
+  const pairAhead = loadPairOn(reading, readingAt)
   const brand = row<{ company_name: string | null }>(clientRes, 'competitive-surface.client')?.company_name ?? 'Your brand'
 
   // ── the axis ───────────────────────────────────────────────────────────
@@ -590,7 +594,7 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
   // THE MONTH-PAIR JUDGE (decision D, WP1.3): the standings compare a month
   // with the one before it on the brands view only where both were read the
   // same way, and the standings lines join only such months.
-  const pair = pairOn(await loadPairJudge(reading, readingAt))
+  const pair = await pairAhead
   const standings = buildStandingsBlock({
     brand,
     rivals: listed,

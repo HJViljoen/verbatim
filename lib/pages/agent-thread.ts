@@ -21,8 +21,8 @@ import {
   type AnswerMeasure,
   type NotAnswered,
 } from '../agent/measure'
-import { loadMonthSeries, loadPairJudge } from '../reading/read'
-import { pairOn, refuseEveryPair, type PairOn } from '../reading/pairs'
+import { loadMonthSeries, loadPairOn } from '../reading/read'
+import { refuseEveryPair } from '../reading/pairs'
 import { monthStartOf, prevMonth } from '../reading/month-key'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../rivals'
 import { detailHref } from '../shell/bar'
@@ -658,7 +658,7 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
   // with the month before it only when the two were read the same way. A read
   // that fails refuses every pair, never passes one.
   const judgeP = storedRegistryIds.length
-    ? loadPairJudge(scope.reading, measuredAt).then((judge) => pairOn(judge)).catch((): PairOn => refuseEveryPair)
+    ? loadPairOn(scope.reading, measuredAt)
     : Promise.resolve(refuseEveryPair)
 
   // A document thread wraps a plan_check; its quotes resolve from stored

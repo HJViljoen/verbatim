@@ -25,8 +25,8 @@ import { isMissingKindMoodAttention } from '../reading/attention'
 import { freezeStateFor, isMissingMonthTable } from '../reading/monthly'
 import { monthStartOf, nextMonth } from '../reading/month-key'
 import { gapBetween, type Gap, type GapSide } from '../reading/gap'
-import { loadMonthSeries, loadPairJudge, type ReadingHandle } from '../reading/read'
-import { pairOn, pairTools, refusedSteps, type PairOn } from '../reading/pairs'
+import { loadMonthSeries, loadPairOn, type ReadingHandle } from '../reading/read'
+import { pairTools, refusedSteps, type PairOn } from '../reading/pairs'
 import { methodLines, type MethodLines } from '../reading/method'
 import { countRefused, howSoundLine, loadRecordInputs, monthRecordWindow, recordLines, refusals, type RecordInputs } from '../reading/record'
 import { pointsByMonth, type MonthLabel, type MonthSeries, type Substrate } from '../reading/series'
@@ -1515,8 +1515,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   recordAhead.catch(() => {})
   // THE MONTH-PAIR JUDGE (decision D, WP1.3): every verdict, direction word
   // and chart step on the page is judged by it.
-  const judgeAhead = loadPairJudge(reading, readingAt)
-  judgeAhead.catch(() => {})
+  const judgeAhead = loadPairOn(reading, readingAt)
 
   const perAudience = new Map<string, number>()
   const denominatorByMonth = new Map<string, number>()
@@ -1584,7 +1583,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       : Promise.resolve(null),
   ])
 
-  const pair = pairOn(await judgeAhead)
+  const pair = await judgeAhead
   const seriesFor = (subjectId: string, audience: string): MonthSeries | null =>
     subjectSet?.series.find((s) => s.objectId === subjectId && s.audience === audience) ?? null
   const chartSeriesFor = (subjectId: string, audience: string): MonthSeries | null =>

@@ -21,10 +21,10 @@ import {
 } from '../reading/anomaly'
 import { freezeStateFor, isMissingMonthlyReading, isMissingMonthTable } from '../reading/monthly'
 import { monthStartOf, nextMonth } from '../reading/month-key'
-import { loadMonthSeries, loadPairJudge, loadWindowReading, type ReadingHandle } from '../reading/read'
+import { loadMonthSeries, loadPairOn, loadWindowReading, type ReadingHandle } from '../reading/read'
 import { pairedVerdict } from '../reading/bands'
 import { pairOnVerdict } from '../reading/comparability'
-import { pairOn, type PairOn } from '../reading/pairs'
+import type { PairOn } from '../reading/pairs'
 import { pairSentence } from '../calibration'
 import type { MethodLines } from '../reading/method'
 import { platformMixLine } from '../reading/record'
@@ -1171,8 +1171,10 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
         return null
       }),
       // THE MONTH-PAIR JUDGE (decision D, WP1.3): §3 compares this month with
-      // the months behind it only where they were read the same way.
-      loadPairJudge(reading, readingAt),
+      // the months behind it only where they were read the same way. It fails
+      // closed (every pair refused) and never rejects, so a read error here
+      // cannot take the page down.
+      loadPairOn(reading, readingAt),
     ])
 
   const denominators = monthSet.denominators
@@ -1211,7 +1213,7 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
       supabase, reading, clientId, month, window, themedRunId,
       monthOf: sumAudienceMonth(denominators, month, INDUSTRY_AUDIENCE),
       denominators,
-      pair: pairOn(judge),
+      pair: judge,
     }),
     // ── §4 · what came in ────────────────────────────────────────────────
     buildCameIn({

@@ -23,9 +23,9 @@ import { freezeStateFor, isMissingMonthTable } from '../reading/monthly'
 import { monthStartOf, nextMonth } from '../reading/month-key'
 import { isMissingKindMoodAttention } from '../reading/attention'
 import { moodChange, moodShares, type MoodShare } from '../reading/mood'
-import { loadMonthSeries, loadPairJudge, loadTopObjects, type ReadingHandle } from '../reading/read'
+import { loadMonthSeries, loadPairOn, loadTopObjects, type ReadingHandle } from '../reading/read'
 import { pairOnVerdict } from '../reading/comparability'
-import { comparableOn, pairOn, refusedSteps, type PairOn } from '../reading/pairs'
+import { comparableOn, refusedSteps, type PairOn } from '../reading/pairs'
 import { methodLines, type MethodLines } from '../reading/method'
 import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordInputs } from '../reading/record'
 import { pointsByMonth, type DenominatorPoint, type MonthLabel, type MonthPoint, type MonthSeries, type Substrate } from '../reading/series'
@@ -1121,8 +1121,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   recordAhead.catch(() => {})
   // THE MONTH-PAIR JUDGE (decision D, WP1.3): every verdict, direction word
   // and chart step on the page is judged by it.
-  const judgeAhead = loadPairJudge(reading, readingAt)
-  judgeAhead.catch(() => {})
+  const judgeAhead = loadPairOn(reading, readingAt)
 
   // ── wave 3: the themes worth drawing, and the registry behind them ──────
   const themedRunId = await themedRunAhead
@@ -1212,7 +1211,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
       .map((d) => d.videos),
     { updates: updatesByMonth[month] ?? 0, firstRunMonth },
   ) || audienceThin(selectedDenom?.videos ?? null)
-  const pair = pairOn(await judgeAhead)
+  const pair = await judgeAhead
   if (kindRows == null) {
     kindsNote = 'What kind of thing is being said is not recorded month by month for this workspace yet.'
   } else {
