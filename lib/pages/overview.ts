@@ -4,7 +4,7 @@ import { recStatus, REC_STATUS_LABEL, type RecStatus } from '../calibration'
 import { topRecommendation } from '../dashboard-tiles'
 import { fmtInt, longMonth, monthName, platformLabel, shortDate } from '../format'
 import { inheritedStatus, REC_DECISIONS_TABLE, type RecDecision } from '../rec-decisions'
-import { composeInterpretation, type Interpretation } from '../prose/interpret'
+import { composeInterpretation, INTERPRETATION_LABEL, type Interpretation } from '../prose/interpret'
 import { loadSentFigures, objectKey, sentMonthOf, type SentMonth } from '../reports/sent-figures'
 import { monthlySoundFigures, sentReadingLine, type MonthlySoundFigures } from '../reports/monthly'
 import { proseFigures } from '../prose/figures'
@@ -1066,6 +1066,13 @@ export interface Headline {
   figures: FigureTable
   /** The pair's refusal chip, beside a size sentence only. */
   chip: string | null
+  /**
+   * WP1.5's rule chose this sentence and nothing may lead: the market's size
+   * stands where a change would. Under it OV1 composes no interpretation and
+   * shows no voices (`sentenceBlockFor`). False for a change that leads, and
+   * for a caller that passed no size (the Phase 1 rule).
+   */
+  sized: boolean
 }
 
 /**
@@ -1096,8 +1103,8 @@ export function headline(input: HeadlineInput): Headline {
   )[0] ?? null
 
   if (!lead) {
-    if (input.size) return { lead: null, ...sizeSentence(input.size), chip: input.chip ?? null }
-    return { lead: null, body: 'Nothing moved clearly this month. Here is where you stand.', figures: {}, chip: null }
+    if (input.size) return { lead: null, ...sizeSentence(input.size), chip: input.chip ?? null, sized: true }
+    return { lead: null, body: 'Nothing moved clearly this month. Here is where you stand.', figures: {}, chip: null, sized }
   }
 
   const audience = audienceInSentence(lead.audience)
@@ -1112,7 +1119,64 @@ export function headline(input: HeadlineInput): Headline {
   const body =
     `${lead.objectLabel} came up in [[${share}]] of ${audience} this month, ` +
     `[[${videos}]] of [[${denominator}]] videos.`
-  return { lead, body, figures, chip: null }
+  return { lead, body, figures, chip: null, sized: false }
+}
+
+/**
+ * OV1's block, from its headline and the reads around it (market-first WP1.5).
+ * One function for the loader and the fixture, so the fixture state the render
+ * tests check is the loader's own output.
+ *
+ * UNDER A SIZE HEADLINE THE INTERPRETATION SAYS NOTHING, AND THERE ARE NO
+ * VOICES. The monthly composer's fallback is the Phase 1 gate sentence
+ * ("Nothing moved clearly this month. Here is where you stand."), which is the
+ * old headline WP1.5 replaces (plan §3.2), or "<label> moved clearly this
+ * month" wherever any verdict moved, a subject or a theme `mayLead` refused
+ * among them. Beside "not read as a change" the first claims a comparison was
+ * read, and the second names as the month's movement exactly what the
+ * headline refused to lead with (§7.11). So the slot and its label stay and
+ * its sentences and quotes are empty. The composer is shared with the monthly,
+ * the quarterly and the leadership sheet, so its fallback is left as it is and
+ * the size headline simply does not ask it.
+ */
+export function sentenceBlockFor(input: {
+  head: Headline
+  /** Every comparison the block may speak from (`SentenceBlock.verdicts`). */
+  verdicts: readonly Verdict[]
+  voices: { voices: Voice[]; from: number }
+  ledger: LedgerRow | null
+  anomaly: AnomalyLine | null
+}): SentenceBlock {
+  const { head } = input
+  const voices = head.sized ? [] : input.voices.voices
+  const interpretation: Interpretation = head.sized
+    ? {
+        slot: 'interpretation_monthly',
+        label: INTERPRETATION_LABEL,
+        sentences: [],
+        quotes: [],
+        fallback: true,
+        reason: 'nothing_moved',
+        scrub: { text: '', dropped: 0, droppedDigits: 0, droppedDirection: 0, flaggedDirection: 0, leaked: false },
+      }
+    : composeInterpretation(
+        'interpretation_monthly',
+        input.verdicts,
+        proseFigures(head.figures),
+        voices.map((v) => ({ ref: v.quote.ref })),
+      )
+  return {
+    lead: head.lead,
+    body: head.body,
+    figures: head.figures,
+    chip: head.chip,
+    anomaly: input.anomaly,
+    interpretation,
+    ledger: input.ledger,
+    voices,
+    voicesFrom: head.sized ? 0 : input.voices.from,
+    verdicts: [...input.verdicts],
+  }
 }
 
 // ---- the size headline's chip (market-first WP1.5) ---------------------------
@@ -2117,24 +2181,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     loadVoices(supabase, clientId, head.lead, themedRunId),
     flags.length > 0 ? buildAnomaly(supabase, flags[0]) : Promise.resolve(null),
   ])
-  const interpretation = composeInterpretation(
-    'interpretation_monthly',
-    sentenceVerdicts,
-    proseFigures(head.figures),
-    voices.voices.map((v) => ({ ref: v.quote.ref })),
-  )
-  const sentence: SentenceBlock = {
-    lead: head.lead,
-    body: head.body,
-    figures: head.figures,
-    chip: head.chip,
-    anomaly,
-    interpretation,
-    ledger: ledger.top,
-    voices: voices.voices,
-    voicesFrom: voices.from,
-    verdicts: sentenceVerdicts,
-  }
+  const sentence = sentenceBlockFor({ head, verdicts: sentenceVerdicts, voices, ledger: ledger.top, anomaly })
 
   // ── OV6 · how sound is this ────────────────────────────────────────────
   const pageVerdicts = [

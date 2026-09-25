@@ -19,8 +19,10 @@ import {
   marketSizeOf,
   mayLead,
   pairChip,
+  sentenceBlockFor,
   sizeSentence,
   type MarketSize,
+  type Voice,
 } from './overview'
 
 // The size headline (market-first WP1.5): the pure half. The numbers are
@@ -251,6 +253,80 @@ describe('headline, with the market’s size', () => {
     const h = headline({ verdicts: [LOOKS_AND_STYLE] })
     expect(h.lead?.objectId).toBe('looks-and-style')
     expect(h.chip).toBeNull()
+  })
+})
+
+// ---- OV1's block under the size ---------------------------------------------------
+
+describe('sentenceBlockFor', () => {
+  const chip = 'not read as a change: we changed our searches in September'
+  /** A voice the loader could hand in: the block must drop it under a size. */
+  const VOICE: Voice = {
+    quote: { ref: 'e:1', text: 'Where can I buy one?', lang: 'en', english: null },
+    cite: 'TikTok · 14 Sep · under a category video',
+    onScreen: null,
+    href: null,
+  }
+  const REFUSED_LOOKS: Verdict = { ...LOOKS_AND_STYLE, state: 'refused', changePts: null, refusedReason: 'tracking_change' }
+  /** "Admiration for upcycled bag creativity" moved on its own terms, and is
+   *  81% makers by analogy (CQ F29: 112 of 138), so `mayLead` refuses it. */
+  const UPCYCLING = moved({ objectKind: 'theme', objectId: 'upcycling', objectLabel: 'Admiration for upcycled bag creativity', value: { k: 71, n: 626 }, baseline: { k: 42, n: 351 }, changePts: -0.6 })
+  const SHARES = new Map<string, number | null>([['upcycling', 112 / 138], ['looks-and-style', 0]])
+
+  const blockUnder = (verdicts: Verdict[]) =>
+    sentenceBlockFor({
+      head: headline({ verdicts, size: SEPTEMBER_SO_FAR, makerShares: SHARES, chip }),
+      verdicts,
+      voices: { voices: [VOICE], from: 12 },
+      ledger: null,
+      anomaly: null,
+    })
+
+  // The composer's own fallback would write the Phase 1 gate sentence here, or
+  // "Looks & style moved clearly this month." beside "not read as a change".
+  it('composes no interpretation and shows no voices under the size, whatever the verdicts', () => {
+    for (const verdicts of [[], [REFUSED_LOOKS], [LOOKS_AND_STYLE, UPCYCLING]]) {
+      const s = blockUnder(verdicts)
+      expect(s.lead).toBeNull()
+      expect(s.chip).toBe(chip)
+      expect(s.interpretation.sentences).toEqual([])
+      expect(s.interpretation.quotes).toEqual([])
+      expect(s.voices).toEqual([])
+      expect(s.voicesFrom).toBe(0)
+      const said = [s.body, s.chip, ...s.interpretation.sentences].join(' ')
+      expect(said).not.toContain('Looks & style')
+      expect(said).not.toContain('Admiration for upcycled bag creativity')
+      expect(said).not.toMatch(/moved clearly|where you stand/)
+    }
+  })
+
+  it('keeps the verdicts it may speak from as data, and the slot and its label', () => {
+    const s = blockUnder([LOOKS_AND_STYLE, UPCYCLING])
+    expect(s.verdicts.map((v) => v.objectId)).toEqual(['looks-and-style', 'upcycling'])
+    expect(s.interpretation.slot).toBe('interpretation_monthly')
+    expect(s.interpretation.label).toBe('Interpretation')
+  })
+
+  it('composes as before where a change leads, with the lead theme’s voices', () => {
+    const airline = moved({
+      objectKind: 'theme', objectId: 'airline-sizes', objectLabel: 'Confusion over airline bag sizes',
+      value: { k: 21, n: 626 }, baseline: { k: 9, n: 351 }, changePts: 0.8, bandPts: 2,
+    })
+    const head = headline({ verdicts: [airline], size: SEPTEMBER_SO_FAR, makerShares: new Map([['airline-sizes', 3 / 17]]), chip })
+    expect(head.sized).toBe(false)
+    const s = sentenceBlockFor({ head, verdicts: [airline], voices: { voices: [VOICE], from: 12 }, ledger: null, anomaly: null })
+    expect(s.lead?.objectId).toBe('airline-sizes')
+    expect(s.voices).toEqual([VOICE])
+    expect(s.voicesFrom).toBe(12)
+    expect(s.interpretation.sentences[0]).toBe('Confusion over airline bag sizes moved clearly this month.')
+    expect(s.interpretation.quotes).toEqual([{ ref: 'e:1' }])
+  })
+
+  it('leaves the Phase 1 path alone: no size, the composer’s gate sentence', () => {
+    const head = headline({ verdicts: [] })
+    expect(head.sized).toBe(false)
+    const s = sentenceBlockFor({ head, verdicts: [], voices: { voices: [], from: 0 }, ledger: null, anomaly: null })
+    expect(s.interpretation.sentences[0]).toBe('Nothing moved clearly this month. Here is where you stand.')
   })
 })
 

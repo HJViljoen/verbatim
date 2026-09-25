@@ -4,6 +4,7 @@ import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, copyNodes } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
+import { headline, sentenceBlockFor } from '@/lib/pages/overview'
 import { overviewSentence } from './sentence'
 import { LEVELS_LABEL, levelHead, makersHead, makersTag, overviewCategory } from './category'
 import { makersMarkedFixture, marketSizeFixture, overviewFixture, SEPTEMBER_CHIP } from './fixture'
@@ -45,6 +46,33 @@ describe('OV1 · the size headline', () => {
     const data = marketSizeFixture()
     const text = renderText(overviewSentence.render(data, 'app', ctx))
     expect(text).not.toMatch(/voices?/i)
+    expect(blockAnswers(overviewSentence, data).quotes).toEqual([])
+  })
+
+  // THE LOADER'S OWN COMPOSITION, with what it would hand in on Sealand's
+  // September: a subject that moved, a theme that moved and is mostly makers,
+  // and a voice. None of it may reach the block under the size: no
+  // "Interpretation" line with the Phase 1 gate sentence or "moved clearly",
+  // no label the headline refused to lead with, and no voices.
+  it('prints no interpretation, no refused label and no voices, whatever the loader hands in', () => {
+    const base = marketSizeFixture()
+    const looks = { ...overviewFixture().sentence.lead!, objectKind: 'subject' as const, objectId: 'looks-and-style', objectLabel: 'Looks & style' }
+    const upcycling = { ...looks, objectKind: 'theme' as const, objectId: 'upcycling', objectLabel: 'Admiration for upcycled bag creativity' }
+    const verdicts = [looks, upcycling]
+    const head = headline({ verdicts, size: { month: '2026-09-01', soFar: true, videos: 655, comments: 16233 }, makerShares: new Map([['upcycling', 112 / 138]]), chip: SEPTEMBER_CHIP })
+    const data = {
+      ...base,
+      sentence: sentenceBlockFor({ head, verdicts, voices: { voices: overviewFixture().sentence.voices, from: 37 }, ledger: null, anomaly: null }),
+    }
+    for (const mode of MODES) {
+      const markup = render(overviewSentence.render(data, mode, ctx))
+      assertCopyContract(markup)
+      const text = renderText(overviewSentence.render(data, mode, ctx))
+      expect(text).toContain('Your market in September so far: 655 videos and 16,233 comments.')
+      expect(text).not.toMatch(/Interpretation|moved clearly|where you stand|voices?/i)
+      expect(text).not.toContain('Looks & style')
+      expect(text).not.toContain('Admiration for upcycled bag creativity')
+    }
     expect(blockAnswers(overviewSentence, data).quotes).toEqual([])
   })
 

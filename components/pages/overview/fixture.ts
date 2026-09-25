@@ -4,7 +4,7 @@ import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '@/lib/rivals'
 import type { RefusedReason, Verdict } from '@/lib/reading/verdicts'
 import { gapBetween, type Gap, type GapSide } from '@/lib/reading/gap'
 import type { LevelRow, OverviewData, RivalRow, SideReading, SubjectRow } from '@/lib/pages/overview'
-import { MOVES_MASTHEAD, MOVES_EMPTY, MOVES_UNLOCK, RIVALS_CAVEAT, fillingLine, fillingNote, headline, moveLine, readingsCounter, rivalsLead } from '@/lib/pages/overview'
+import { MOVES_MASTHEAD, MOVES_EMPTY, MOVES_UNLOCK, RIVALS_CAVEAT, fillingLine, fillingNote, headline, moveLine, readingsCounter, rivalsLead, sentenceBlockFor } from '@/lib/pages/overview'
 import { kindShares } from '@/lib/reading/kinds'
 import { moodShares } from '@/lib/reading/mood'
 import {
@@ -861,19 +861,9 @@ export function marketSizeFixture(): OverviewData {
   const head = headline({ verdicts: [], size: SEPTEMBER_MARKET, makerShares: null, chip: SEPTEMBER_CHIP })
   return {
     ...base,
-    sentence: {
-      lead: head.lead,
-      body: head.body,
-      figures: head.figures,
-      chip: head.chip,
-      anomaly: null,
-      // No model read: the interpretation composes nothing without a lead.
-      interpretation: { ...base.sentence.interpretation, sentences: [], quotes: [] },
-      ledger: null,
-      voices: [],
-      voicesFrom: 0,
-      verdicts: [],
-    },
+    // The loader's own composition (`sentenceBlockFor`), so this state is one
+    // the loader produces: under the size, an empty interpretation and no voices.
+    sentence: sentenceBlockFor({ head, verdicts: [], voices: { voices: [], from: 0 }, ledger: null, anomaly: null }),
     category: {
       audience: INDUSTRY_AUDIENCE,
       label: 'The category',
