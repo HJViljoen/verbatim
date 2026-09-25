@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import { attentionSplit } from './attention'
 import { NOT_OBSERVED, buildStandings, standingText } from './standings'
-import { BRANDS_PANEL, pairOn } from './pairs'
-import { sealandJudge } from '../test/sealand-pairs'
+import { BRANDS_PANEL, pairJudge, pairOn } from './pairs'
+import { OSSUR_UPDATES } from '../test/sealand-pairs'
 
 // Össur's panel at a 1 June 2026 cutoff, measured read-only 2026-09-15:
 //   Aug  client 13 videos / 6 comments · Ottobock 10 / 92 · category 122 / 2,047
@@ -193,21 +193,28 @@ describe('standingText', () => {
 })
 
 describe('buildStandings under the month-pair rule (decision D, WP1.3)', () => {
+  // ONE TENANT (WP1.3 review fix): Össur's panel counts, judged on Össur's
+  // own updates (first run 6 Apr, last 13 Sep, paused since). On 2 Oct its
+  // September was never read past its end, so the brands view refuses August
+  // against September before any change of ours is consulted; no change log
+  // is passed, and none is needed for that answer.
+  const ossurPair = () =>
+    pairOn(pairJudge({ now: '2026-10-02T06:00:00.000Z', changes: [], rows: [], updates: OSSUR_UPDATES }))('2026-08-01', '2026-09-01', BRANDS_PANEL)
+
   it('refuses both verdicts on every row where the brands view refuses the pair, keeping the shares', () => {
-    // Össur's panel counts, judged by Sealand's own log on 2 Oct (our
-    // September search changes are in August-to-September's span).
-    const pair = pairOn(sealandJudge('2026-10-02T06:00:00.000Z'))('2026-08-01', '2026-09-01', BRANDS_PANEL)
+    const pair = ossurPair()
     const rows = buildStandings({ ...base, comparability: pair })
     for (const r of rows.filter((x) => x.observed)) {
       expect(r.contentVerdict?.state).toBe('refused')
       expect(r.attentionVerdict?.state).toBe('refused')
-      expect(r.contentVerdict?.pair?.cause).toBe('searches')
+      expect(r.contentVerdict?.refusedReason).toBe('incomplete')
+      expect(r.contentVerdict?.pair?.cause).toBe('not_yet')
       expect(r.content).not.toBeNull()
     }
   })
 
   it('a re-frozen panel still refuses first, as the panel\'s own rule', () => {
-    const pair = pairOn(sealandJudge('2026-10-02T06:00:00.000Z'))('2026-08-01', '2026-09-01', BRANDS_PANEL)
+    const pair = ossurPair()
     const rows = buildStandings({ ...base, prevPanelId: 'panel-0', comparability: pair })
     const otto = rows.find((r) => r.role === 'rival')!
     expect(otto.contentVerdict?.refusedReason).toBe('tracking_change')

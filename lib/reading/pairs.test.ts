@@ -31,7 +31,7 @@ import {
   refusedSteps,
   viewForAudience,
 } from './pairs'
-import { HYPOTHETICAL_SEARCHES_UNDER_FLAG } from '../test/pair-fixture'
+import { HYPOTHETICAL_RISING_RUN, HYPOTHETICAL_SAME_WAY, HYPOTHETICAL_SEARCHES_UNDER_FLAG } from '../test/pair-fixture'
 import { CHANGES, OSSUR_UPDATES, PROBE_0920, row, SEALAND_SCHEDULE, SEALAND_UPDATES, sealandJudge } from '../test/sealand-pairs'
 
 // Comparability v1 on the verdict (market-first decision D, WP1.3): the pair
@@ -68,31 +68,18 @@ const AUG_SEP: PairRow = {
 }
 
 // A PAIR READ THE SAME WAY. None exists yet (October against November is the
-// first, §2.11), so its numbers are August's real reading on both sides (377
-// market videos, median 23), with nothing outside the searches held since
-// 20 Sep (an expectation, not a measurement): comparability.test.ts's
-// SAME_WAY, re-dated to the run that would read November last on 13 Dec.
-const SAME_WAY: PairRow = {
-  prevMonth: '2026-10-01',
-  month: '2026-11-01',
-  searchOutside: { prev: { k: 0, n: 377 }, curr: { k: 0, n: 377 } },
-  codeChanges: [],
-  depth: { prevMedian: 23, currMedian: 23 },
-  gather: [],
-  lateCapture: null,
-  readThroughRun: 'run-2026-12-06',
-  methodVersion: 'comparability_v1',
-  computedAt: '2026-12-07T09:00:00.000Z',
-}
+// first, §2.11), so its row is HYPOTHETICAL_SAME_WAY (lib/test/pair-fixture.ts,
+// where every hypothetical value is labelled). The Looks & style counts on both
+// sides are August's real 38 of 351, re-dated: a flat pair.
 const OCT = { ...aug, month: '2026-10-01' }
-const NOV = { ...aug, month: '2026-11-01', k: 50 }
+const NOV = { ...aug, month: '2026-11-01' }
 
 // THE GATE FIX'S REACH (§2.11): 63 of September's 655 market videos (9.6%, a
 // flag) and of the category's 626 (10.1%, a refusal for themes). Dated inside
 // October's span here so the pair above carries it.
 const GATE: OurChange = { id: 'gate-fix', surface: 'gate_rule', changedAt: '2026-10-05T12:00:00.000Z', note: null, affects: VIEWS_BY_SURFACE.gate_rule }
 const GATED: PairRow = {
-  ...SAME_WAY,
+  ...HYPOTHETICAL_SAME_WAY,
   codeChanges: [
     { changeId: 'gate-fix', surface: 'gate_rule', prev: { k: 0, n: 655 }, curr: { k: 63, n: 655 }, population: 'market' },
     { changeId: 'gate-fix', surface: 'gate_rule', prev: { k: 0, n: 626 }, curr: { k: 63, n: 626 }, population: 'category' },
@@ -154,8 +141,8 @@ describe('monthChange: August against September never reads "moved"', () => {
   })
 
   it('n = 0 and NaN never read as comparable', () => {
-    const zero = { ...SAME_WAY, searchOutside: { prev: { k: 0, n: 0 }, curr: { k: 0, n: 377 } } }
-    const nan = { ...SAME_WAY, depth: { prevMedian: Number.NaN, currMedian: 23 } }
+    const zero = { ...HYPOTHETICAL_SAME_WAY, searchOutside: { prev: { k: 0, n: 0 }, curr: { k: 0, n: 377 } } }
+    const nan = { ...HYPOTHETICAL_SAME_WAY, depth: { prevMedian: Number.NaN, currMedian: 23 } }
     for (const r of [zero, nan]) {
       const v = monthChange({ object: LOOKS, audience: INDUSTRY_AUDIENCE, curr: NOV, prev: OCT, comparability: judgeAt('2026-12-07T12:00:00.000Z', [r], [])('2026-10-01', '2026-11-01', 'market') })
       expect(v.state).toBe('refused')
@@ -163,7 +150,7 @@ describe('monthChange: August against September never reads "moved"', () => {
   })
 
   it('depth: September\'s median 15 against August\'s 23 (0.65) refuses, worded "not compared yet", never "still filling"', () => {
-    const shallow = { ...SAME_WAY, depth: { prevMedian: 23, currMedian: 15 } }
+    const shallow = { ...HYPOTHETICAL_SAME_WAY, depth: { prevMedian: 23, currMedian: 15 } }
     const v = monthChange({ object: LOOKS, audience: INDUSTRY_AUDIENCE, curr: NOV, prev: OCT, comparability: judgeAt('2026-12-07T12:00:00.000Z', [shallow], [])('2026-10-01', '2026-11-01', 'market') })
     expect(v.refusedReason).toBe('depth')
     expect(pairSentence(v.pair!)).toBe('Not compared yet: checked with the 13 Dec update.')
@@ -171,7 +158,7 @@ describe('monthChange: August against September never reads "moved"', () => {
   })
 
   it('a fresh row, no change in span and matched depth bands normally', () => {
-    const pair = judgeAt('2026-12-07T12:00:00.000Z', [SAME_WAY], [])('2026-10-01', '2026-11-01', 'market')
+    const pair = judgeAt('2026-12-07T12:00:00.000Z', [HYPOTHETICAL_SAME_WAY], [])('2026-10-01', '2026-11-01', 'market')
     expect(pair.mode).toBe('comparable')
     const v = monthChange({ object: LOOKS, audience: INDUSTRY_AUDIENCE, curr: NOV, prev: OCT, comparability: pair })
     expect(v.state).not.toBe('refused')
@@ -210,7 +197,7 @@ describe('the views (decision E)', () => {
 
   it('an attribution or entity_retag change refuses the themes and brands views but not the market view', () => {
     for (const c of [inOct('attribution'), inOct('entity_retag')]) {
-      const judge = judgeAt(at, [SAME_WAY], [c])
+      const judge = judgeAt(at, [HYPOTHETICAL_SAME_WAY], [c])
       expect(judge('2026-10-01', '2026-11-01', 'market').mode).toBe('comparable')
       expect(judge('2026-10-01', '2026-11-01', 'themes').mode).toBe('refuse')
       expect(judge('2026-10-01', '2026-11-01', 'brands').mode).toBe('refuse')
@@ -218,16 +205,16 @@ describe('the views (decision E)', () => {
   })
 
   it('a segment change refuses nothing', () => {
-    const judge = judgeAt(at, [SAME_WAY], [inOct('segment')])
+    const judge = judgeAt(at, [HYPOTHETICAL_SAME_WAY], [inOct('segment')])
     for (const view of ['market', 'themes', 'brands', 'lens'] as const) expect(judge('2026-10-01', '2026-11-01', view).mode).toBe('comparable')
   })
 
   it('a strike-only or probe-only subreddits row is ignored (the 20 Sep probe, 20 → 20); a knobs row refuses', () => {
     const probe = changesFromLog([{ ...PROBE_0920, changed_at: '2026-10-18T04:04:00.000Z' }])
     expect(probe).toEqual([])
-    expect(judgeAt(at, [SAME_WAY], probe)('2026-10-01', '2026-11-01', 'market').mode).toBe('comparable')
+    expect(judgeAt(at, [HYPOTHETICAL_SAME_WAY], probe)('2026-10-01', '2026-11-01', 'market').mode).toBe('comparable')
     const knobs = changesFromLog([row({ id: 'knobs-1020', changed_at: '2026-10-20T09:00:00.000Z', surface: 'knobs', field: 'max_videos' })])
-    const v = monthChange({ object: LOOKS, audience: 'market', curr: NOV, prev: OCT, comparability: judgeAt(at, [SAME_WAY], knobs)('2026-10-01', '2026-11-01', 'market') })
+    const v = monthChange({ object: LOOKS, audience: 'market', curr: NOV, prev: OCT, comparability: judgeAt(at, [HYPOTHETICAL_SAME_WAY], knobs)('2026-10-01', '2026-11-01', 'market') })
     expect(v.refusedReason).toBe('tracking_change')
     expect(pairSentence(v.pair!)).toBe(PAIR_REFUSED_OURS('2026-10-01'))
   })
@@ -340,13 +327,8 @@ describe('pairJudge', () => {
 
 describe('directionWord under the rule', () => {
   // October, November and December read the same way, rising (the shape the
-  // plan's first words need, late January 2027). Counts are August's real 377
-  // on each side with a rising k, the SAME_WAY convention above.
-  const run: SeriesPoint[] = [
-    { month: '2026-10-01', videos: 377, k: 38, audience: INDUSTRY_AUDIENCE, regime: 'n/a' },
-    { month: '2026-11-01', videos: 377, k: 60, audience: INDUSTRY_AUDIENCE, regime: 'n/a' },
-    { month: '2026-12-01', videos: 377, k: 90, audience: INDUSTRY_AUDIENCE, regime: 'n/a' },
-  ]
+  // plan's first words need, late January 2027): HYPOTHETICAL_RISING_RUN.
+  const run = HYPOTHETICAL_RISING_RUN
   const all = () => true
 
   it('earns a word when the newest month has ended and every step is comparable', () => {
@@ -402,12 +384,12 @@ describe('pairOnVerdict', () => {
   it('a comparable pair, or none, leaves the verdict alone', () => {
     expect(pairOnVerdict(null)).toEqual({ refused: null, flag: false, note: null })
     expect(pairOnVerdict(comparabilityOf('2026-10-01', '2026-11-01', {
-      row: SAME_WAY, changes: [], view: 'market', later: { state: 'ended', readToEnd: true, latestUpdateRunId: 'run-2026-12-06' },
+      row: HYPOTHETICAL_SAME_WAY, changes: [], view: 'market', later: { state: 'ended', readToEnd: true, latestUpdateRunId: 'run-2026-12-06' },
     }))).toEqual({ refused: null, flag: false, note: null })
   })
 
   it('a pair flagged only for run health adds no verdict flag: a partial run is not a change of ours', () => {
-    const partial = { ...SAME_WAY, gather: [{ month: '2026-11-01', runs: 5, partial: 1, searchesShort: 0 }] }
+    const partial = { ...HYPOTHETICAL_SAME_WAY, gather: [{ month: '2026-11-01', runs: 5, partial: 1, searchesShort: 0 }] }
     const pair = comparabilityOf('2026-10-01', '2026-11-01', {
       row: partial, changes: [], view: 'market', later: { state: 'ended', readToEnd: true, latestUpdateRunId: 'run-2026-12-06' },
     })
@@ -450,7 +432,7 @@ describe('refusedSteps', () => {
   })
 
   it('a comparable step is not broken', () => {
-    const judge = pairOn(judgeAt('2026-12-07T12:00:00.000Z', [SAME_WAY], []))
+    const judge = pairOn(judgeAt('2026-12-07T12:00:00.000Z', [HYPOTHETICAL_SAME_WAY], []))
     expect(refusedSteps(['2026-10-01', '2026-11-01'], (a, b) => judge(a, b, 'market'))).toEqual({})
   })
 })
