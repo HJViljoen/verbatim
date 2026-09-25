@@ -450,6 +450,17 @@ describe('pairTools', () => {
     expect(t.stepBreaks(['2026-08-01', '2026-09-01'], INDUSTRY_AUDIENCE)).toEqual([false, true])
     expect(joins(t.pairFor('2026-08-01', '2026-09-01', INDUSTRY_AUDIENCE))).toBe(false)
   })
+
+  it('and the sentence for each refused step, where a chart prints why (the quarterly\'s subject line)', () => {
+    const t = pairTools(pairOn(judgeAt('2026-10-02T06:00:00.000Z')))
+    expect(t.stepReasons(['2026-08-01', '2026-09-01', '2026-11-01'], INDUSTRY_AUDIENCE)).toEqual([
+      null,
+      'Not read as a change: we changed what we search in September.',
+      // Not neighbours on the calendar: not a step, not judged.
+      null,
+    ])
+    expect(pairTools(null).stepReasons(['2026-08-01', '2026-09-01'], INDUSTRY_AUDIENCE)).toBeUndefined()
+  })
 })
 
 // ---- The words ------------------------------------------------------------------------------

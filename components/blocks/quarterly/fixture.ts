@@ -278,6 +278,37 @@ export function quarterlyFixture(over: Partial<QuarterlyData> = {}): QuarterlyDa
 }
 
 /**
+ * The same quarter, where the Overview's subject rows carry a refused step
+ * into September with its sentence (market-first decision D, WP1.3): what the
+ * loader forwards into the quarterly's subject line, drawn broken.
+ */
+export function brokenStepFixture(why: string): QuarterlyData {
+  const overview = withSixSubjects(overviewFixture())
+  const rows = overview.subjects.rows.map((r) => ({
+    ...r,
+    sparkBreaks: r.sparkMonths.map((m) => m === '2026-09-01'),
+    sparkBreakWhy: r.sparkMonths.map((m) => (m === '2026-09-01' ? why : null)),
+  }))
+  return composeQuarterly({
+    overview: { ...overview, subjects: { ...overview.subjects, rows }, bar: { ...overview.bar, readings: 8 } },
+    market: marketFixture(),
+    competitive: competitiveFixture(),
+    quarter: QUARTER,
+    prior: PRIOR,
+    readingAt: NOW,
+    thisQuarter: windowRead(4147, 33000),
+    lastQuarter: windowRead(3810, 29000),
+    subjectsNow: subjectWindow(4147, 0.22),
+    subjectsBefore: subjectWindow(3810, 0.18),
+    checks: checksRan,
+    record: record(13),
+    quiet: QUIET,
+    searchPlan: SEARCH_PLAN,
+    changeLog: CHANGE_LOG,
+  })
+}
+
+/**
  * The same quarter, where no video of YOURS mentioned `s6` on either side —
  * so the subject window carries no own-audience row for it at all, which is
  * what the RPC answers for a count of zero (Sealand's Q1 2026: six of seven

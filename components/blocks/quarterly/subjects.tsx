@@ -85,10 +85,13 @@ function lineSeries(line: MonthLine, filling: string | null): CalendarSeries[] {
     color: i === 0 ? 'var(--cat)' : 'var(--you)',
     points: line.months.map((month, n) => {
       const value = s.points[n] ?? null
+      // A refused step is drawn broken, with its sentence (decision D, WP1.3).
+      const why = s.breaks?.[n] ? s.breakWhy?.[n] ?? null : null
       return {
         month,
         value,
         state: value == null ? ('hollow' as const) : month === filling ? ('filling' as const) : ('read' as const),
+        ...(why ? { brokenBefore: why } : {}),
       }
     }),
   }))

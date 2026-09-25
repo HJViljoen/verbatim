@@ -239,6 +239,7 @@ export function pairTools(pair: PairOn | null): {
   pairFor: (prevMonth: string, month: string, audience: string) => PairComparability | null
   comparableFor: (audience: string) => (prevMonth: string, month: string) => boolean
   stepBreaks: (months: readonly string[], audience: string) => boolean[] | undefined
+  stepReasons: (months: readonly string[], audience: string) => (string | null)[] | undefined
 } {
   return {
     pairFor: (prevMonth, month, audience) => (pair ? pair(prevMonth, month, audience) : null),
@@ -249,6 +250,18 @@ export function pairTools(pair: PairOn | null): {
         if (i === 0) return false
         const prev = monthStartOf(months[i - 1])
         return monthStartOf(m) === nextMonth(prev) && !joins(pair(prev, m, audience))
+      })
+    },
+    // The same steps with the refusal's sentence (null where the step joins),
+    // for a chart that prints why in its figure line (`brokenBefore`).
+    stepReasons: (months, audience) => {
+      if (!pair) return undefined
+      return months.map((m, i) => {
+        if (i === 0) return null
+        const prev = monthStartOf(months[i - 1])
+        if (monthStartOf(m) !== nextMonth(prev)) return null
+        const note = pairOnVerdict(pair(prev, m, audience)).note
+        return note && note.mode === 'refuse' ? pairSentence(note) : null
       })
     },
   }

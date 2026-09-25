@@ -160,6 +160,10 @@ export interface SubjectRow {
    *  the month-pair rule (decision D, WP1.3), so the sparkline draws it
    *  broken. Optional: a stored row from before the rule draws as sent. */
   sparkBreaks?: boolean[]
+  /** Same length as `spark`: the refusal's sentence where `sparkBreaks` is
+   *  true, null elsewhere (WP1.3 review fix), for a chart that says why in its
+   *  figure line (the quarterly's subject line). Optional, as `sparkBreaks`. */
+  sparkBreakWhy?: (string | null)[]
   /** The category side at the same point LAST month, while this one is still
    *  filling (design §3 OV2, Time). The category side only: it is the only one
    *  of the three with the n to make the comparison mean anything, and the
@@ -3101,7 +3105,7 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
   const rivalAudience = input.leadRival ? rivalKey(input.leadRival) : null
   // THE MONTH-PAIR RULE (decision D, WP1.3). No judge (a fixture) is "no pair
   // applies here": nothing refused, every step joined.
-  const { pairFor, comparableFor, stepBreaks } = pairTools(input.pair)
+  const { pairFor, comparableFor, stepBreaks, stepReasons } = pairTools(input.pair)
   // AN ABSENT ROW IS A ZERO ONLY WHERE THE MONTH WAS READ AT ALL.
   // `monthly_subject_readings` writes no zero rows, so a subject missing from
   // an audience-month that OTHER subjects have rows in really did come up in
@@ -3215,6 +3219,7 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
       spark: axisPoints.slice(-SPARK_MONTHS).map((p) => pctOf(p.k, p.videos)),
       sparkMonths,
       sparkBreaks: stepBreaks(sparkMonths, INDUSTRY_AUDIENCE),
+      sparkBreakWhy: stepReasons(sparkMonths, INDUSTRY_AUDIENCE),
       categoryAtLastMonth: atLastMonthFor(input, s.id),
       href: `/dashboard/subjects?item=${encodeURIComponent(s.id)}`,
     }
