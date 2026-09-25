@@ -219,7 +219,9 @@ export interface ReadPage {
   /** Everything the interpretation may argue from. */
   verdicts: Verdict[]
   quotes: { quote: Quote; cite: string }[]
-  /** The advice that is standing, oldest first. */
+  /** The advice that is standing, oldest first: the five first made longest
+   *  ago among the ledger rows Market drew (`standingAdvice`), under the
+   *  eyebrow "Standing advice, by age". */
   advice: StandingAdvice[]
   adviceNote: string | null
   /** A calibrated word and the sentence under it. */
@@ -1717,8 +1719,7 @@ function buildRead(a: {
     quotes.map((q) => ({ ref: q.quote.ref, context: q.cite })),
     { draft: a.draft },
   )
-  const ledger = a.market?.advice.rows ?? []
-  const advice: StandingAdvice[] = ledger.slice(0, 5).map((row) => ({
+  const advice: StandingAdvice[] = standingAdvice(a.market?.advice.rows ?? []).map((row) => ({
     id: row.lineageId,
     title: row.title,
     age:
@@ -1751,6 +1752,23 @@ function buildRead(a: {
     // heading that names the month, and this heading does not.
     counted: countedLines(a.quarterVerdicts),
   }
+}
+
+/**
+ * The rows page 2 prints as "Standing advice, by age": oldest first by the
+ * date each was first made, ties to the lineage id, five of them.
+ *
+ * SORTED HERE, NOT TAKEN IN THE LEDGER'S ORDER. Market's ledger runs the
+ * current recommendation first and then by the update that last raised each
+ * row (market-first WP1.9), so its first five are not the oldest and their
+ * "first raised {month}" dates would run out of order under an eyebrow that
+ * says "by age". The rows are the ones Market drew (its first twelve, and a
+ * row a link named), so this is the oldest of the advice still being raised.
+ */
+export function standingAdvice(rows: readonly AdviceRow[], shown = 5): AdviceRow[] {
+  return [...rows]
+    .sort((a, b) => a.firstMade.localeCompare(b.firstMade) || a.lineageId.localeCompare(b.lineageId))
+    .slice(0, shown)
 }
 
 /** "Three counted things sit under that" — the mock's own device, built from
@@ -2113,7 +2131,7 @@ function buildMoves(a: { overview: OverviewData; market: MarketSurfaceData | nul
     advice,
     // NEITHER SIDE OF THIS WAS QUARTER-SCOPED, AND THE DENOMINATOR WAS A
     // DISPLAY CAP. "You acted on N of 12 this quarter" divided decisions dated
-    // inside the quarter by `market.advice.rows.length` — the twelve OLDEST
+    // inside the quarter by `market.advice.rows.length` — the twelve DRAWN
     // rows of a ledger that runs to 56 and 64 (`ledgerRowsShown`). The Market
     // page next door already answers this over the real total, and its own
     // docblock explains why the quarter is a lie on it: a decision carries a

@@ -10,8 +10,9 @@ import { RPC_WINDOW_DENOMINATORS, RPC_WINDOW_THEME_READINGS } from '../reading/t
 import { quarterFor } from '../reports/quarterly'
 import {
   confidenceOf, countedLines, coverBody, flagOutcome, methodNumbers, ordinal, quarterWindowFor,
-  quietRows, readingCounter, unsettledItems, withFlags,
+  quietRows, readingCounter, standingAdvice, unsettledItems, withFlags,
 } from './quarterly'
+import { buildAdviceRows, type RecCopy } from './market-surface'
 import type { Mover } from './overview'
 import { READER_FLAGS } from '../calibration'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../rivals'
@@ -564,3 +565,32 @@ describe('what the quarterly pages now carry (package D7)', () => {
   })
 })
 
+describe('page 2 · "Standing advice, by age" (market-first WP1.9 review)', () => {
+  // Sealand's own ids, dates, priorities and cited counts on staging (to
+  // 20 Sep); the ledger runs a89fcdee first because the 20 Sep update ranks it
+  // top, then newest raised first.
+  const copy = (id: string, lineage: string, created_at: string, run_id: string, priority: string, cited: number): RecCopy => ({
+    id, lineage_id: lineage, title: id, type: 'product', status: 'new', created_at, run_id, priority,
+    based_on: { insight_ids: Array.from({ length: cited }, (_, i) => `mi-${i}`) },
+  })
+  const ledger = buildAdviceRows([
+    copy('8196074b', 'a89fcdee', '2026-09-20T08:31:54.388Z', 'b67b56de', 'high', 4),
+    copy('750ffbc0', '750ffbc0', '2026-09-20T08:31:54.388Z', 'b67b56de', 'medium', 4),
+    copy('b3c74ac5', 'b3c74ac5', '2026-09-20T08:31:54.388Z', 'b67b56de', 'medium', 2),
+    copy('2f3d08ce', '2f3d08ce', '2026-09-13T13:05:46.504Z', '5a2ebc43', 'medium', 3),
+    copy('a89fcdee', 'a89fcdee', '2026-09-10T07:15:04.938Z', 'cb0d97b2', 'high', 6),
+    copy('bff7bb66', 'bff7bb66', '2026-07-18T10:18:18.889Z', '2039968a', 'high', 6),
+    copy('061f442e', '061f442e', '2026-06-28T21:49:51.080Z', '2d17ac90', 'high', 2),
+  ], [])
+
+  it('is not the ledger’s first five, which run current-first', () => {
+    expect(ledger.slice(0, 5).map((r) => r.lineageId)).toEqual(['a89fcdee', '750ffbc0', 'b3c74ac5', '2f3d08ce', 'bff7bb66'])
+  })
+
+  it('runs oldest first by the date each was first made, five of them', () => {
+    const shown = standingAdvice(ledger)
+    expect(shown.map((r) => r.lineageId)).toEqual(['061f442e', 'bff7bb66', 'a89fcdee', '2f3d08ce', '750ffbc0'])
+    const dates = shown.map((r) => r.firstMade)
+    expect([...dates].sort()).toEqual(dates)
+  })
+})

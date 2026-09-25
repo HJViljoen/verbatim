@@ -80,17 +80,20 @@ import { madeInMonth } from '@/lib/pages/market-surface'
 export const MAKE_SHOWN = 3
 
 /**
- * The ledger rows a brief calls "things to make": STILL ON THE TABLE, oldest
- * first, which is the ledger's own order and the honest answer to "what has
- * been sitting here".
+ * The ledger rows a brief calls "things to make": STILL ON THE TABLE, in the
+ * ledger's own order, which since market-first WP1.9 is the current
+ * recommendation first and then the advice raised most recently. It used to
+ * be oldest first; a brief a reader acts on now leads with the advice the
+ * newest update stands behind.
  *
  * TWO STATUSES ARE OUT, AND ONE OF THEM USED TO BE IN (design review 2, code
  * review 2). `dismissed` is the stop card. `acted_on` reads **"Done"**
- * (lib/calibration.ts REC_STATUS_LABEL) and the ledger is sorted oldest-first,
- * so the three oldest rows won regardless of status: on production's own shape
+ * (lib/calibration.ts REC_STATUS_LABEL), and when the ledger ran oldest-first
+ * the three oldest rows won regardless of status: on production's own shape
  * — two `acted_on`, one `new` — cards 01 and 02 were both chipped Done and the
  * only open item sat third. A client opening a page titled after things to make
- * read two items they had already made as their top two instructions.
+ * read two items they had already made as their top two instructions. The
+ * filter holds whatever order the ledger runs in.
  */
 export function toMake(rows: readonly AdviceRow[], shown = MAKE_SHOWN): AdviceRow[] {
   return rows.filter((r) => r.status !== 'dismissed' && r.status !== 'acted_on').slice(0, shown)

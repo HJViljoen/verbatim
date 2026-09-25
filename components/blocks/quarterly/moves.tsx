@@ -50,7 +50,8 @@ import { Card, ChartEndings, Chip, Column, Columns, Eyebrow, Line, Note, Stored 
 // that the months are named and nothing is drawn.
 //
 // `qr.p6.ledger` · the artboard's `#` column is `AdviceRow.number`, which is
-// the identity's place in the ledger's own oldest-first order and not a rank;
+// the identity's place in the ledger's own order (the current recommendation
+// first, then the newest raised, since market-first WP1.9) and not a rank;
 // "Grounded in N videos. Afterwards: …" is `AdviceRow.grounded` /
 // `.afterwards`, both carried since wave 1 and both dropped here. `Afterwards`
 // is never blank and never a dash — its four states each carry a sentence, and
