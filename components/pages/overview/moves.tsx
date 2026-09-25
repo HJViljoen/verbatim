@@ -9,7 +9,7 @@ import { PairChip } from '@/components/blocks/pair-chip'
 import { sharedPairNote } from '@/lib/calibration'
 import { TileBlock } from '@/components/shell/tile'
 import { TileColumns } from '@/components/shell/page-grid'
-import { fmtInt, shortDate } from '@/lib/format'
+import { fmtInt, longMonth, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { CardCount, MoveCandidate, MoveReading } from '@/lib/reading/moves'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
@@ -108,7 +108,9 @@ function Card({ card, mode }: { card: MoveCandidate; mode: RenderMode }) {
         className={email ? undefined : 'text-[10px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground'}
         style={email ? { fontFamily: FONT.sans, fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: EMAIL.muted } : undefined}
       >
-        This month’s card · pre-filled from your own posts
+        {/* The card's own month by name (deploy 1 review): on 1–15 Oct the
+            page reads September, and "this month" would mean October. */}
+        {longMonth(card.month)}’s card · pre-filled from your own posts
       </span>
 
       <span className={email ? undefined : 'flex flex-wrap items-start gap-x-6 gap-y-2'}>

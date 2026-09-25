@@ -910,7 +910,9 @@ export function axisNote(
   const parts: string[] = []
   if (hollow.length > 0) {
     parts.push(
-      `${names(hollow)} carried too few videos this month to compare ` +
+      // The month by name where the page names one (deploy 1 review): on 1–15
+      // Oct it reads an ended September.
+      `${names(hollow)} carried too few videos ${month ? `in ${longMonth(month)}` : 'this month'} to compare ` +
       `(${hollow.map((s) => `${fmtInt(s.n ?? 0)}`).join(', ')}).`,
     )
   }

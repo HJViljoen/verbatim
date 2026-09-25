@@ -11,7 +11,7 @@ import { BlockProportion } from '@/components/blocks/bars'
 import type { CalendarRule, CalendarSeries } from '@/lib/charts/calendar'
 import { TileBlock } from '@/components/shell/tile'
 import { TileColumns } from '@/components/shell/page-grid'
-import { fmtInt, fmtPct, monthName, shortDate } from '@/lib/format'
+import { fmtInt, fmtPct, longMonth, monthName, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { moodLabel } from '@/lib/reading/mood'
 import type { FigureTable, Verdict, VerdictPairNote } from '@/lib/reading/verdicts'
@@ -288,7 +288,7 @@ export function levelCell(k: number | null, n: number | null): string {
  */
 function LevelList({ c, month, mode }: { c: CategoryBlock; month: string; mode: RenderMode }) {
   const levels = c.levels ?? []
-  if (levels.length === 0) return <BlockEmpty mode={mode}>No theme has been read into this month yet.</BlockEmpty>
+  if (levels.length === 0) return <BlockEmpty mode={mode}>No theme has been read into {longMonth(month)} yet.</BlockEmpty>
   const n = levels[0].n
   const prev = c.levelsPrev ?? null
   const anyMeasured = levels.some((l) => l.makerShare != null)
@@ -386,10 +386,12 @@ const CHART_H = 110
 const CHART_PAD_L = 44
 const CHART_PAD_R = 132
 
-export function categoryMeta(c: CategoryBlock): string | undefined {
+export function categoryMeta(c: CategoryBlock, month: string): string | undefined {
   if (c.denominator == null) return undefined
   const basis = moversBasis(c)
-  const videos = `${fmtInt(c.denominator)} category videos this month`
+  // THE READING MONTH BY NAME (deploy 1 review): on 1–15 Oct the page reads
+  // an ended September, and "this month" would name October's.
+  const videos = `${fmtInt(c.denominator)} category videos in ${longMonth(month)}`
   return basis ? `${videos} · ${basis}` : videos
 }
 
@@ -694,7 +696,7 @@ export const overviewCategory: Block<OverviewData> = {
         // is its contract with the reader and what the nav and the legend read;
         // what stops is drawing it a second time inside the block.
         mode={mode}
-        meta={categoryMeta(c)}
+        meta={categoryMeta(c, data.month)}
         footer={openLink(mode, href, 'Open Voice →')}
         // "Nothing else moved clearly this month." into the footer note
         // (`main.category.footer`). It is a statement about what the block

@@ -43,10 +43,10 @@ export const READING_CARDS: readonly ReadingCard[] = [
     // seven readers, so Overview prints a level and a banded change ("5.1 pts
     // down", "no clear change") and no direction word at all. Subjects is the
     // one Block B surface that earns one, and its card lists `direction`.
-    tells: 'Where you stand this month: how much conversation there was, how your subjects read against the category and against each named rival, what moved most and by how much against its band, what you said you would do, and what the reading rests on.',
+    tells: 'Where you stand in the month the page reads: how much conversation there was, how your subjects read against the category and against each named rival, what moved most and by how much against its band, what you said you would do, and what the reading rests on.',
     read: ['month', 'video', 'audience', 'level', 'change'],
     cannot: [
-      'It is a reading of a calendar month, and the page bar says which month and whether it is still filling.',
+      'It is a reading of a calendar month. The page bar names the month; its tooltip says whether it is still filling.',
       'A video that names both you and a rival is counted in your audience only. How many did is in the record.',
       'It cannot tell you why anything moved. A number and a reason are different claims, and only one of them is counted.',
     ],

@@ -71,7 +71,9 @@ import { selectAll } from '../supabase-admin'
 import { row, rows } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
-import { refsOf } from './week'
+import { monthPhrase, refsOf } from './week'
+
+export { monthPhrase }
 
 // Overview — the front page, and the first surface built on the comment-dated
 // monthly reading (Phase 1 WP11, design §3 OV0–OV6).
@@ -1718,15 +1720,16 @@ export function monthlySpanLabel(spark: readonly (number | null)[], months: read
  *  quotation, in all three.
  *
  *  Pure. */
-export function subjectsNote(rows: readonly SubjectRow[]): string | null {
+export function subjectsNote(rows: readonly SubjectRow[], when = 'this month'): string | null {
   if (rows.length === 0) return null
   const yourN = rows[0].you.n
   const thin = rows.every((r) => r.you.verdict == null || !isAnswer(r.you.verdict.state))
   if (!thin) return null
   return yourN == null
-    ? 'Your own side carries no reading this month; the category column carries the month.'
-    : `Your side carried ${fmtInt(yourN)} ${yourN === 1 ? 'video' : 'videos'} this month, too few for its column to answer; the category column carries the month.`
+    ? `Your own side carries no reading ${when}; the category column carries the month.`
+    : `Your side carried ${fmtInt(yourN)} ${yourN === 1 ? 'video' : 'videos'} ${when}, too few for its column to answer; the category column carries the month.`
 }
+
 
 /** The "not a blank form" line (design §3 OV2, empty state). */
 export function candidateLine(candidates: readonly SubjectCandidate[]): string {
@@ -3737,7 +3740,7 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
     candidates: [],
     rivalLabel,
     categoryLabel,
-    note: subjectsNote(rows),
+    note: subjectsNote(rows, monthPhrase(input.month, input.asOf)),
     // THE EARLIEST OF THE ACTIVE ROWS. One date for the block, because the meta
     // is about the block: "six named 19 Aug" says the set has been measured
     // since then, and the earliest is the only date that is true of all six.

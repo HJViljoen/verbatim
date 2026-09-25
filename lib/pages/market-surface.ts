@@ -701,12 +701,16 @@ export const MOVES_UNRECORDED =
  * row's LINEAGE rather than against a recommendation id, because the id is
  * deleted and reinserted every update.
  */
-export function waysOfMoving(acceptable: WaysBlock['acceptable'], plansChecked = 0): WayRow[] {
+export function waysOfMoving(acceptable: WaysBlock['acceptable'], plansChecked = 0, month: string | null = null): WayRow[] {
+  // THE CARD'S MONTH BY NAME (deploy 1 review): on 1–15 Oct the page reads
+  // September, and "Confirm this month's card", dated to the first of the
+  // month, reads as October's.
+  const which = month ? `${longMonth(month)}’s` : 'the month’s'
   return [
     {
       key: 'card',
-      title: 'Confirm this month’s card',
-      how: 'Everything you published this month, with the claims you made in it, confirmed in one press as a move dated to the first of the month.',
+      title: `Confirm ${which} card`,
+      how: `Everything you published ${month ? `in ${longMonth(month)}` : 'in the month'}, with the claims you made in it, confirmed in one press as a move dated to the first of the month.`,
       href: null,
       live: false,
       // THE CARD IS BUILT AND THE PRESS IS NOT, so the unlock names the press.
@@ -1137,6 +1141,7 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
     ways: waysOfMoving(
       acceptable ? { lineageId: acceptable.lineageId, recommendationId: acceptable.recommendationId, title: acceptable.title } : null,
       plans.length,
+      month,
     ),
     claims,
     claimsLine: claims.length === 0

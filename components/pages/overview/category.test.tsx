@@ -272,8 +272,8 @@ describe('OV3, ported to the artboard', () => {
 
   it('states the basis in the header as well as the denominator', () => {
     const c = overviewFixture().category
-    expect(categoryMeta(c)).toBe('1,388 category videos this month · Sep 2026 against Aug 2026')
-    expect(categoryMeta({ ...c, denominator: null })).toBeUndefined()
+    expect(categoryMeta(c, '2026-09-01')).toBe('1,388 category videos in September · Sep 2026 against Aug 2026')
+    expect(categoryMeta({ ...c, denominator: null }, '2026-09-01')).toBeUndefined()
   })
 
   it('drops a panel clause that has no field behind it rather than inventing one', () => {

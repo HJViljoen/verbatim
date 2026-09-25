@@ -223,8 +223,10 @@ export const NOT_A_SHARE_WHY: ReadonlySet<string> = new Set([RATE_NOT_A_SHARE, M
 const floorWhy = (floor: number): string =>
   `Under ${fmtInt(floor)} videos on a side, so no comparison is drawn.`
 
-const noPreviousWhy = (previousMonth: string): string =>
-  `${monthName(previousMonth)} has not been read on this measure, so this month has nothing to be compared with.`
+// The month by name (deploy 1 review): from 1 to 15 Oct the page reads an
+// ended September, and "this month" would mean October.
+const noPreviousWhy = (previousMonth: string, month: string): string =>
+  `${monthName(previousMonth)} has not been read on this measure, so ${monthName(month)} has nothing to be compared with.`
 
 /**
  * WHY A BANDED ROW DREW NO BAND, AND IT IS NOT ALWAYS THE FLOOR.
@@ -239,9 +241,9 @@ const noPreviousWhy = (previousMonth: string): string =>
  * Null where the side itself is absent: `why` already says that, and a row that
  * says two things about one absence says neither.
  */
-function whyNoVerdict(level: FaceOffSide | null, floor: number, previousMonth: string): string | null {
+function whyNoVerdict(level: FaceOffSide | null, floor: number, previousMonth: string, month: string): string | null {
   if (level === null) return null
-  if (!level.prev) return noPreviousWhy(previousMonth)
+  if (!level.prev) return noPreviousWhy(previousMonth, month)
   return floorWhy(floor)
 }
 
@@ -357,7 +359,7 @@ function videosMeasure(input: HeadToHeadInput, month: string, floor: number, bas
     them,
     verdict,
     rivalVerdict,
-    verdictWhy: verdict === null ? whyNoVerdict(you, floor, input.previousMonth) : null,
+    verdictWhy: verdict === null ? whyNoVerdict(you, floor, input.previousMonth, month) : null,
     why: sideWhy(input, you, them),
   }
 }
@@ -515,7 +517,7 @@ function sentimentMeasure(input: HeadToHeadInput, month: string, floor: number, 
     them,
     verdict,
     rivalVerdict,
-    verdictWhy: verdict === null ? whyNoVerdict(you, floor, input.previousMonth) : null,
+    verdictWhy: verdict === null ? whyNoVerdict(you, floor, input.previousMonth, month) : null,
     why: sideWhy(input, you, them),
   }
 }

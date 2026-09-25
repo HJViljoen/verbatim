@@ -112,14 +112,14 @@ describe('CO2 · the standings', () => {
 
   it('names what the shares are shares of, with the month’s platform mix', () => {
     const text = renderText(competitiveStandings.render(competitiveFixture(), 'app', ctx))
-    expect(text).toContain('of what our search plan found and we read this month')
+    expect(text).toContain('of what our search plan found and we read in the month')
     expect(text).toContain('449 videos (TikTok')
   })
 
   it('carries the dual-mention count under the table, and leaves the rule to How to read (B85)', () => {
     const text = renderText(competitiveStandings.render(competitiveFixture(), 'app', ctx))
     expect(text).not.toContain('counts in your audience only')
-    expect(text).toContain('6 of your videos also named a rival this month')
+    expect(text).toContain('6 of your videos also named a rival in Sep 2026')
   })
 
   it('says one month only, on the horizon that gives it one', () => {

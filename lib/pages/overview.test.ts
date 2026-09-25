@@ -45,6 +45,7 @@ import {
   atThisPointLine,
   splitMovers,
   subjectsNote,
+  monthPhrase,
   type Mover,
   type RivalRow,
   type StoredKindRow,
@@ -511,6 +512,18 @@ describe('subjectsNote', () => {
 
   it('says nothing at all with no rows', () => {
     expect(subjectsNote([])).toBeNull()
+  })
+
+  // DEPLOY 1 REVIEW: from 1 to 15 Oct the page reads an ended September, and
+  // "this month" would name October's. The weekly, pinned to the calendar
+  // month, keeps "this month" (the parity gate).
+  it('names an ended month, and keeps "this month" while the month is the clock\'s', () => {
+    expect(monthPhrase('2026-09-01', '2026-10-02T06:00:00.000Z')).toBe('in September')
+    expect(monthPhrase('2026-09-01', '2026-09-20T12:00:00.000Z')).toBe('this month')
+    expect(monthPhrase('2026-10-01', '2026-10-04T06:00:00.000Z')).toBe('this month')
+    expect(subjectsNote([row(null, null)], monthPhrase('2026-09-01', '2026-10-02T06:00:00.000Z'))).toBe(
+      'Your own side carries no reading in September; the category column carries the month.',
+    )
   })
 })
 

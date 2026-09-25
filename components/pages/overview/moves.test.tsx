@@ -163,7 +163,7 @@ describe('OV5, ported to the artboard', () => {
     const markup = render(overviewMoves.render(overviewFixture(), 'app', ctx))
     const text = renderText(overviewMoves.render(overviewFixture(), 'app', ctx))
     expect(markup).toContain('xl:grid-cols-2')
-    expect(text).toContain('This month’s card · pre-filled from your own posts')
+    expect(text).toContain('September’s card · pre-filled from your own posts')
   })
 
   it('names the clock every own-post figure is on — ONCE for the rows that share it', () => {

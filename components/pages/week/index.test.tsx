@@ -1250,3 +1250,31 @@ describe('What came in · a regime-opening update re-groups, it hears nothing fi
     expect(text).toContain('592 themes were heard for the first time')
   })
 })
+
+// AN ENDED MONTH IS NOT "SO FAR" OR "THIS MONTH" (deploy 1 review): on 2 Oct
+// This week's latest update is still September's, and September has ended.
+describe('This week on a clock past the update’s month', () => {
+  const ended = (): WeekData => ({ ...weekFixture(), readingAt: '2026-10-02T06:00:00.000Z' })
+
+  it('dates the subjects block to the update, and names the month on each figure', () => {
+    const text = renderText(weekSubjects.render(ended(), 'app', ctx))
+    expect(text).toContain('September to the')
+    expect(text).not.toContain('so far')
+    expect(text).not.toContain('this month')
+    expect(text).toContain('in September')
+  })
+
+  it('keeps "so far" and "this month" while the month is the clock’s', () => {
+    const text = renderText(weekSubjects.render(weekFixture(), 'app', ctx))
+    expect(text).toContain('September so far')
+    expect(text).toContain('this month')
+  })
+
+  it('says the first-heard floor against the month by name', () => {
+    for (const mode of MODES) {
+      const text = renderText(weekCameIn.render(ended(), mode, ctx))
+      expect(text).not.toMatch(/videos( or more)? this month/)
+      assertCopyContract(render(weekCameIn.render(ended(), mode, ctx)))
+    }
+  })
+})

@@ -3,8 +3,8 @@ import type { Block } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockRanked } from '@/components/blocks/bars'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fmtInt, fmtPct, longMonth } from '@/lib/format'
-import { type SubjectWeekRow, type WeekData } from '@/lib/pages/week'
+import { fmtInt, fmtPct, longMonth, shortDate } from '@/lib/format'
+import { monthPhrase, type SubjectWeekRow, type WeekData } from '@/lib/pages/week'
 import type { FigureTable } from '@/lib/reading/verdicts'
 
 // WK §2 · This week in your subjects (the mock's §3; OV2 at update length).
@@ -62,6 +62,9 @@ export const weekSubjects: Block<WeekData> = {
     // denominator is the strip's own tallest bar, computed once here over both
     // series, and the comment below is now true of the row as well as of the
     // column.
+    // "this month" while the update's month is the clock's; its name once it
+    // has ended (deploy 1 review).
+    const when = monthPhrase(s.month, data.readingAt)
     const barTop = Math.max(1, ...s.rows.flatMap((r) => [r.addedVideos ?? 0, r.typical ?? 0]))
 
     return (
@@ -69,7 +72,12 @@ export const weekSubjects: Block<WeekData> = {
         title={weekSubjects.title}
         question={weekSubjects.question}
         mode={mode}
-        meta={`${longMonth(s.month)} so far${data.monthStatus === 'filling' ? ' · still filling' : ''}`}
+        // AN ENDED MONTH IS NOT "SO FAR" (deploy 1 review): on 2 Oct the
+        // latest update is 27 Sep's, and its September has ended; it is read
+        // to that update.
+        meta={when === 'this month'
+          ? `${longMonth(s.month)} so far${data.monthStatus === 'filling' ? ' · still filling' : ''}`
+          : `${longMonth(s.month)} to the ${shortDate(data.update.date)} update`}
         footer={email
           ? <a href={href} style={{ color: EMAIL.ink }}>Open Subjects →</a>
           : <Link href={href} className="hover:underline">Open Subjects →</Link>}
@@ -113,7 +121,7 @@ export const weekSubjects: Block<WeekData> = {
             : (
               <>
                 <div className={`grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3 ${STRIP_COLUMNS[Math.min(s.rows.length, 6)] ?? 'xl:grid-cols-6'}`}>
-                  {s.rows.map((r) => <Column key={r.id} row={r} top={barTop} />)}
+                  {s.rows.map((r) => <Column key={r.id} row={r} top={barTop} when={when} />)}
                 </div>
                 <Legend rows={s.rows} />
               </>
@@ -155,7 +163,7 @@ const STRIP_COLUMNS: Record<number, string> = {
 
 /** One of the mock's six columns. `top` is the STRIP's tallest bar, not this
  *  column's — see `barTop`. */
-function Column({ row, top }: { row: SubjectWeekRow; top: number }) {
+function Column({ row, top, when = 'this month' }: { row: SubjectWeekRow; top: number; when?: string }) {
   // BOTH BARS ARE THE SAME UNIT ON THE SAME SCALE — videos this update added,
   // measured and expected — AND SO IS EVERY OTHER COLUMN'S PAIR. The mock's
   // pair is this week against a typical week, which needs a history nothing
@@ -174,7 +182,7 @@ function Column({ row, top }: { row: SubjectWeekRow; top: number }) {
         <span data-copy="figure" className="font-mono text-[18px] font-semibold leading-none tracking-[-0.03em] tabular-nums">
           {fmtInt(row.monthVideos)}
         </span>
-        <span className="text-[12px] font-medium text-muted-foreground">this month</span>
+        <span className="text-[12px] font-medium text-muted-foreground">{when}</span>
       </span>
       <Level row={row} className="block font-mono text-[11px] tabular-nums text-muted-foreground" />
       {added != null ? (

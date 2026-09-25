@@ -645,7 +645,7 @@ describe('MK5 · how a move is made', () => {
   it('lists five ways and says how many work today', () => {
     const text = renderText(marketWays.render(marketFixture(), 'app', ctx))
     expect(text).toContain('five ways in · 3 of 5 work today')
-    expect(text).toContain('Confirm this month\u2019s card')
+    expect(text).toContain('Confirm September\u2019s card')
     expect(text).toContain('Track this')
     expect(text).toContain('Register a claim you make')
     expect(text).toContain('Upload a plan')

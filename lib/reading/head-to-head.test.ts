@@ -204,7 +204,7 @@ describe('headToHead · the five measures', () => {
       const m = r.measures.find((x) => x.key === key)!
       expect(m.you!.prev).toBeUndefined()
       expect(m.verdict).toBeNull()
-      expect(m.verdictWhy).toBe('Aug 2026 has not been read on this measure, so this month has nothing to be compared with.')
+      expect(m.verdictWhy).toBe('Aug 2026 has not been read on this measure, so Sep 2026 has nothing to be compared with.')
       expect(m.verdictWhy).not.toContain(String(FACE_OFF_FLOOR))
     }
   })

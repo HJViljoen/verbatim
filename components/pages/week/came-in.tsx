@@ -13,6 +13,7 @@ import {
   crossedIntoLine,
   crossingLine,
   NEW_THEME_FLOOR,
+  monthPhrase,
   newThemesLine,
   windowDays,
   type CameInBlock,
@@ -105,7 +106,8 @@ export const weekCameIn: Block<WeekData> = {
     )
     const right = (
       <div className={email ? undefined : 'flex min-w-0 flex-col gap-3'}>
-        <Themes block={c} mode={mode} />
+        {/* "this month" once it has ended names it (deploy 1 review). */}
+        <Themes block={c} mode={mode} when={monthPhrase(data.month, data.readingAt)} />
         <Quotes block={c} mode={mode} ctx={ctx} />
       </div>
     )
@@ -392,13 +394,13 @@ function Cell({ label, children }: { label: string; children: React.ReactNode })
  * so no chip is drawn and the sentence counts them instead ("Re-grouped with
  * the 20 Sep update: 468 themes.").
  */
-function Themes({ block, mode }: { block: CameInBlock; mode: 'app' | 'print' | 'email' }) {
+function Themes({ block, mode, when = 'this month' }: { block: CameInBlock; mode: 'app' | 'print' | 'email'; when?: string }) {
   const email = mode === 'email'
   if (email) {
     return (
       <div style={{ marginTop: 10 }}>
         <Heading mode={mode}>Heard for the first time</Heading>
-        <Note mode={mode}>{newThemesLine(block.newThemesSeen, block.newThemes.length, NEW_THEME_FLOOR, block.regrouped ?? null)}</Note>
+        <Note mode={mode}>{newThemesLine(block.newThemesSeen, block.newThemes.length, NEW_THEME_FLOOR, block.regrouped ?? null, when)}</Note>
         {block.newThemes.map((t) => (
           <p key={t.id} style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink, padding: '2px 0' }}>
             {/* MARKED IN THIS ARM TOO (code review C10). The app arm marks the
@@ -406,7 +408,7 @@ function Themes({ block, mode }: { block: CameInBlock; mode: 'app' | 'print' | '
                 label carrying a direction word would have passed on screen and
                 failed the contract in the inbox — a confusing way to find out
                 which arm is stricter. */}
-            <span data-copy="stored" data-slot="pass_b_theme">{t.label}</span> · <span data-copy="figure">{fmtInt(t.videos)}</span> videos this month
+            <span data-copy="stored" data-slot="pass_b_theme">{t.label}</span> · <span data-copy="figure">{fmtInt(t.videos)}</span> videos {when}
           </p>
         ))}
       </div>
@@ -427,7 +429,7 @@ function Themes({ block, mode }: { block: CameInBlock; mode: 'app' | 'print' | '
           </span>
         ))}
       </div>
-      <Note mode={mode}>{newThemesLine(block.newThemesSeen, block.newThemes.length, NEW_THEME_FLOOR, block.regrouped ?? null)}</Note>
+      <Note mode={mode}>{newThemesLine(block.newThemesSeen, block.newThemes.length, NEW_THEME_FLOOR, block.regrouped ?? null, when)}</Note>
     </div>
   )
 }

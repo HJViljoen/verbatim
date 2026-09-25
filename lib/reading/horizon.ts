@@ -50,9 +50,12 @@ const SPAN: Record<Exclude<Horizon, 'since_start'>, number> = {
   last_12: 12,
 }
 
-/** The control's own words. Client-facing: no window, no range, no basis. */
+/** The control's own words. Client-facing: no window, no range, no basis.
+ *  "The month", not "This month" (deploy 1 review): the pill selects the
+ *  reading month, which on 1–15 Oct is an ended September, as OV0's title
+ *  became "The month" (WP1.2). */
 export const HORIZON_LABEL: Record<Horizon, string> = {
-  this_month: 'This month',
+  this_month: 'The month',
   last_3: 'Last 3 months',
   last_12: 'Last 12 months',
   since_start: 'Since we started',

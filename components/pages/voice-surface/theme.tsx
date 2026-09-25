@@ -12,7 +12,7 @@ import { TileColumns } from '@/components/shell/page-grid'
 import { DirectionWord } from '@/components/pages/overview/subjects'
 import { STATE_LABEL, type CalendarSeries } from '@/lib/charts/calendar'
 import { PREVALENCE_LABEL } from '@/lib/calibration'
-import { fmtInt, fmtPct, monthName } from '@/lib/format'
+import { fmtInt, fmtPct, longMonth, monthName } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { QuoteRef } from '@/lib/blocks/types'
 import { moodLabel } from '@/lib/reading/mood'
@@ -367,7 +367,9 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
           // half-column at 1280, so it clipped to "… · Aug 6.8% of 1,20" —
           // a denominator cut mid-number, which takes the figure with it.
           baseWrap
-          base={<>{fmtInt(t.k ?? 0)} of {fmtInt(t.n ?? 0)} this month{prevLine ? ` · ${prevLine}` : ''}</>}
+          // THE READING MONTH BY NAME (deploy 1 review): on 1–15 Oct the page
+          // reads an ended September, where "this month" would mean October.
+          base={<>{fmtInt(t.k ?? 0)} of {fmtInt(t.n ?? 0)} in {longMonth(data.month)}{prevLine ? ` · ${prevLine}` : ''}</>}
         />
         {onCameraStat ? (
           <BlockStat

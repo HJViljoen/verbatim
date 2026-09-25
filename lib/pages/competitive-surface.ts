@@ -300,7 +300,9 @@ export interface CompetitiveSurfaceData {
 /** What the corpus shares are shares of. The design's own label, said in full
  *  rather than abbreviated to a percent sign. */
 export const CORPUS_DENOMINATOR_LINE =
-  'Both shares are of what our search plan found and we read this month.'
+  // "in the month", not "this month" (deploy 1 review): from 1 to 15 Oct the
+  // page reads an ended September.
+  'Both shares are of what our search plan found and we read in the month.'
 
 export const PANEL_DENOMINATOR_LINE =
   'Both shares are of a frozen panel of accounts.'

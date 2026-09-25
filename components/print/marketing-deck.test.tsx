@@ -111,7 +111,7 @@ describe('the sheets', () => {
       expect(sheet).not.toContain('<h1')
     }
     // A sheet whose block says something else keeps its own header.
-    expect(carrying('1,388 category videos this month')).toContain('<h1')
+    expect(carrying('1,388 category videos in September')).toContain('<h1')
   })
 
   // `mkt.p1.title`: the artboard opens on content with a page title and one

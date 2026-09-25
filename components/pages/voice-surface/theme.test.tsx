@@ -49,7 +49,7 @@ describe('voiceTheme', () => {
   it('prints the share with the count it rests on, never a bare percentage', () => {
     const text = draw()
     expect(text).toContain('9.4%')
-    expect(text).toContain('130 of 1,388 this month')
+    expect(text).toContain('130 of 1,388 in September')
   })
 
   it('prints the calibrated level only with its denominator, and the word the ladder assigns', () => {
@@ -202,7 +202,7 @@ describe('voiceTheme', () => {
 
   it('lets both bases wrap rather than clipping a denominator mid-number', () => {
     // D15, and `BlockStat({ baseWrap })` exists for it. Measured at 1280 in
-    // the two-column grid: "130 of 1,388 this month · Aug 6.8% of 1,200" is
+    // the two-column grid: "130 of 1,388 in September · Aug 6.8% of 1,200" is
     // 231px in a 226px half-column, so the default truncation cut the
     // baseline's own n off the end of it.
     const markup = render(voiceTheme.render(voiceFixture(), 'app', ctx))
@@ -211,7 +211,7 @@ describe('voiceTheme', () => {
 
   it('prints the month the share moved from, and rules the bar there against a NAMED axis', () => {
     const text = draw()
-    expect(text).toContain('130 of 1,388 this month · Aug 6.8% of 1,200')
+    expect(text).toContain('130 of 1,388 in September · Aug 6.8% of 1,200')
     // No rule label: the stat line above already prints both months (B31).
     expect(text).not.toContain('rule at Aug')
     // The artboard draws 9.4% at 62.7% of the bar and never says against what.

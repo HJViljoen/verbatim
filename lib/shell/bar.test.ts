@@ -114,7 +114,7 @@ describe('horizonHref', () => {
 describe('horizonOptions', () => {
   it('is the four, in order, with exactly one active', () => {
     const o = horizonOptions('/dashboard', {}, 'last_3')
-    expect(o.map((x) => x.label)).toEqual(['This month', 'Last 3 months', 'Last 12 months', 'Since we started'])
+    expect(o.map((x) => x.label)).toEqual(['The month', 'Last 3 months', 'Last 12 months', 'Since we started'])
     expect(o.filter((x) => x.active).map((x) => x.horizon)).toEqual(['last_3'])
     expect(o[0].href).toBe('/dashboard')
     expect(o[3].href).toBe('/dashboard?horizon=since_start')

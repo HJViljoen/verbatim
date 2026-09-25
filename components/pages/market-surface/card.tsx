@@ -139,7 +139,9 @@ function Movement({ verdict, mode }: { verdict: Verdict; mode: RenderMode }) {
 
 export const marketCard: Block<MarketSurfaceData> = {
   key: 'market.card',
-  title: 'This month’s card',
+  // "The month's", as OV0's title (deploy 1 review); a drawn card names its
+  // own month (below).
+  title: 'The month’s card',
   question: 'What did we publish, and what did we claim in it?',
 
   render(data, mode = 'app') {
@@ -172,7 +174,7 @@ export const marketCard: Block<MarketSurfaceData> = {
 
     return (
       <BlockFrame
-        title={marketCard.title}
+        title={`${longMonth(card.month)}’s card`}
         question={marketCard.question}
         mode={mode}
         meta="pre-filled from your posts"

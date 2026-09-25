@@ -403,8 +403,8 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
               rule is written once in Settings › How to read; the page keeps
               the figure. Null: the month holds no client row to count. */}
           {s.dualMention == null ? null : s.dualMention > 0
-            ? <><span data-copy="figure">{fmtInt(s.dualMention)}</span> of your videos also named a rival this month.</>
-            : <>None of your videos also named a rival this month.</>}
+            ? <><span data-copy="figure">{fmtInt(s.dualMention)}</span> of your videos also named a rival in {s.monthLabel}.</>
+            : <>None of your videos also named a rival in {s.monthLabel}.</>}
         </p>
         ) : null}
         {s.caveat ? (

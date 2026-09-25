@@ -869,6 +869,18 @@ export function baselineStartsWith(baseline: BaselineState, month: string): stri
 }
 
 /**
+ * "this month" while `month` is the month `asOf` falls in, and "in September"
+ * once it has ended (deploy 1 review). From 1 to 15 Oct every reading page
+ * reads an ended September, so "this month" would name October's. The weekly,
+ * pinned to the calendar month until WP3.7, keeps "this month" by this rule,
+ * so its preview stays byte for byte (the parity gate).
+ */
+export function monthPhrase(month: string, asOf: string): string {
+  const m = monthStartOf(month)
+  return monthStartOf(asOf) === m ? 'this month' : `in ${longMonth(m)}`
+}
+
+/**
  * What §4 says about themes first heard this update.
  *
  * Two sentences, and which one is printed is the whole point. Above the floor
@@ -881,13 +893,14 @@ export function newThemesLine(
   shown: number,
   floor: number = NEW_THEME_FLOOR,
   regrouped: Regrouped | null = null,
+  when = 'this month',
 ): string {
   if (regrouped) return regroupedLine(regrouped)
   if (seen === 0) return 'Nothing was heard for the first time in this update.'
   if (shown > 0) {
-    return `${fmtInt(shown)} of the ${fmtInt(seen)} themes first heard in this update carried ${fmtInt(floor)} videos or more this month.`
+    return `${fmtInt(shown)} of the ${fmtInt(seen)} themes first heard in this update carried ${fmtInt(floor)} videos or more ${when}.`
   }
-  return `${fmtInt(seen)} themes were heard for the first time in this update and none carried ${fmtInt(floor)} videos this month.`
+  return `${fmtInt(seen)} themes were heard for the first time in this update and none carried ${fmtInt(floor)} videos ${when}.`
 }
 
 /**

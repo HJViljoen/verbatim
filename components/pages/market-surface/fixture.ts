@@ -252,7 +252,7 @@ export function marketFixture(over: Partial<MarketSurfaceData> = {}): MarketSurf
       readings: [moveReadingFixture()],
     },
     ways: {
-      ways: waysOfMoving(acceptable, 1),
+      ways: waysOfMoving(acceptable, 1, '2026-09-01'),
       claims: [
         { id: 'c0', youSay: 'Our bags are made from rescued sailcloth.', theySay: 'People ask what happens when a seam goes.', gap: 'durability', audience: 'contradicts', verdictLabel: 'Pushed back' },
         { id: 'c1', youSay: 'Every bag is one of a kind.', theySay: 'Commenters repeat it back in their own words.', gap: '', audience: 'echoes', verdictLabel: 'Echoed' },
