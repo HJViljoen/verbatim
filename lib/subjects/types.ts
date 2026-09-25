@@ -454,6 +454,41 @@ export function subjectCalibration(
   return 'ready'
 }
 
+/** The two-sided 95% normal quantile `wilsonUpper` defaults to. */
+export const WILSON_Z_95 = 1.959964
+
+/**
+ * The upper end of the Wilson score interval for a proportion `p` measured on
+ * `n` labels (market-first decision C, plan §4.2; used by WP1.1's three
+ * calibration states).
+ *
+ * WHY THE UPPER END. A subject is hidden as "being re-described" only when its
+ * check CLEARLY failed: when even the top of its likely range is under the
+ * floor. Repair & warranty measured 0.333 on 33 hand labels, and the top of its
+ * range is about 0.50, so it failed. A subject at 0.80 on 25 labels reaches
+ * about 0.91, so it may yet clear 0.85 and is provisional, not failed.
+ *
+ * WHY WILSON. The normal ("Wald") interval collapses to a point at p = 0 and
+ * p = 1 and runs past [0, 1] on small samples, which is every calibration this
+ * product has (20–33 labels). Wilson stays inside [0, 1] and is honest at the
+ * edges: 0 of 33 still reaches about 0.10.
+ *
+ * NO LABELS MEANS NO BOUND: n ≤ 0 answers 1, the top of the range, so nothing
+ * is ever called failed on a sample that does not exist. A p outside [0, 1],
+ * or anything not finite, answers NaN, which fails every comparison it meets.
+ */
+export function wilsonUpper(p: number, n: number, z: number = WILSON_Z_95): number {
+  if (!Number.isFinite(p) || !Number.isFinite(n) || !Number.isFinite(z) || p < 0 || p > 1 || z < 0) return Number.NaN
+  // At p = 1 the bound is exactly 1 (centre and margin sum to 1); said
+  // outright so floating point does not print it as 0.9999999999999999.
+  if (n <= 0 || p === 1) return 1
+  const z2 = z * z
+  const denom = 1 + z2 / n
+  const centre = (p + z2 / (2 * n)) / denom
+  const margin = (z * Math.sqrt((p * (1 - p)) / n + z2 / (4 * n * n))) / denom
+  return Math.min(1, centre + margin)
+}
+
 // ---- The database names, in one place ---------------------------------------
 
 export const TABLE_SUBJECTS = 'subjects'
