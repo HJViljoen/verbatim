@@ -417,6 +417,21 @@ describe('what the subject table adds up to', () => {
     expect(lead?.body).not.toContain('moved')
   })
 
+  // DEPLOY 1 REVIEW: a thin row is not a comparison either, and a month pair
+  // we refused says why in its own words.
+  it('counts only the subjects compared, never a thin one', () => {
+    const lead = subjectsLead([row('Durability', 'no_clear_change'), row('Price', 'too_little_data'), row('Zips', 'refused')])
+    expect(lead?.level).toBe('0 of 1')
+    expect(lead?.body).toBe(' subject moved beyond their band this month: every change is inside the margin of the measurement.')
+  })
+
+  it('says the refusal where every compared-looking row was refused for one month pair', () => {
+    const pair = { mode: 'refuse' as const, cause: 'searches' as const, changeMonth: '2026-09-01', checkWith: null }
+    const refusedRow = (label: string) => ({ label, category: { verdict: { state: 'refused', pair } } })
+    const lead = subjectsLead([refusedRow('Waterproofing'), row('Price', 'too_little_data'), refusedRow('Looks & style')])
+    expect(lead).toEqual({ level: null, body: 'Not read as a change: we changed our searches in September.' })
+  })
+
   it('says nothing at all where there are no rows', () => {
     expect(subjectsLead([])).toBeNull()
   })

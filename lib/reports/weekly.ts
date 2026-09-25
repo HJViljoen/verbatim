@@ -4,7 +4,8 @@ import { longMonth } from '../format'
 import { PRIVACY_LINE, platformShareLine } from '../reading/method'
 import { prevMonth } from '../reading/month-key'
 import { mergeFigures } from '../blocks/types'
-import type { FigureTable } from '../reading/verdicts'
+import type { FigureTable, VerdictPairNote } from '../reading/verdicts'
+import { pairSentence, sharedPairNote } from '../calibration'
 import type { Quote } from '../renderables/types'
 
 /**
@@ -571,14 +572,26 @@ export interface SubjectsLead {
 }
 
 export function subjectsLead(
-  rows: readonly { label: string; category: { verdict: { state: string } | null } }[],
+  rows: readonly { label: string; category: { verdict: { state: string; pair?: VerdictPairNote | null } | null } }[],
 ): SubjectsLead | null {
   if (rows.length === 0) return null
-  const comparable = (state: string | undefined) => state != null && state !== 'baseline_forming' && state !== 'refused'
+  // ONLY AN ANSWER IS A COMPARISON (deploy 1 review). `too_little_data` is a
+  // side under the band's floor, as much a non-answer as `refused`; counted as
+  // compared, a month of refusals and thin rows read "0 of 7 subjects moved
+  // beyond their band: every change is inside the margin", which claims seven
+  // comparisons came back inside their bands when none was drawn. The count is
+  // of the subjects that were compared.
+  const comparable = (state: string | undefined) => state === 'moved' || state === 'no_clear_change'
   const compared = rows.filter((r) => comparable(r.category.verdict?.state))
   const moved = rows.filter((r) => r.category.verdict?.state === 'moved')
-  const noun = rows.length === 1 ? 'subject' : 'subjects'
+  const noun = compared.length === 1 ? 'subject' : 'subjects'
   if (compared.length === 0) {
+    // AND A MONTH PAIR WE REFUSED SAYS WHY, in its own words (decision D):
+    // "the months to read them against are not" is false when August is there
+    // and was refused because we changed our searches. Only where the rows'
+    // refusals share one reason; otherwise the general line stands.
+    const refusal = sharedPairNote(rows.map((r) => r.category.verdict))
+    if (refusal) return { level: null, body: pairSentence(refusal) }
     return {
       level: null,
       body: `No ${rows.length === 1 ? 'subject' : 'subject'} carried a comparison this month: the readings are here, the months to read them against are not.`,
@@ -586,12 +599,12 @@ export function subjectsLead(
   }
   if (moved.length === 0) {
     return {
-      level: `0 of ${fmtInt(rows.length)}`,
+      level: `0 of ${fmtInt(compared.length)}`,
       body: ` ${noun} moved beyond their band this month: every change is inside the margin of the measurement.`,
     }
   }
   return {
-    level: `${fmtInt(moved.length)} of ${fmtInt(rows.length)}`,
+    level: `${fmtInt(moved.length)} of ${fmtInt(compared.length)}`,
     body: ` ${noun} moved beyond their band this month: ${nameList(moved.map((r) => r.label.toLowerCase()))}.`,
   }
 }
