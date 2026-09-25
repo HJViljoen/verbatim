@@ -3,6 +3,7 @@ import { movementLine, movementDirection, renderMovement, rankMovement, NO_MOVEM
 import type { SeriesPoint } from '../reading/bands'
 import type { MonthLabel } from '../reading/series'
 import type { Verdict, VerdictFlag, VerdictState } from '../reading/verdicts'
+import { DIRECTION_OPEN } from '../test/pair-fixture'
 // The one table these words come from. `lib/agent/movement.ts` repeats them
 // rather than importing them — a lib module may not depend on `components`,
 // the reason `lib/reading/gap.ts:GAP_WORDS` already gives for the same two
@@ -219,19 +220,19 @@ describe('movementDirection', () => {
   const thinLabel: MonthLabel = { kind: 'thin', text: 'Thin month — far fewer videos than usual.' }
 
   it('takes the word the series earned when the month is not thin', () => {
-    expect(movementDirection({ labels: [] }, growing)).toBe('growing')
+    expect(movementDirection({ labels: [] }, growing, DIRECTION_OPEN)).toBe('growing')
   })
 
   it('withholds it where the reading layer marked the month thin', () => {
     // 3 October, one update landed: the arithmetic still says growing and every
     // other reader in the product prints nothing. Ask used to print the word
     // and license the model to repeat it.
-    expect(movementDirection({ labels: [thinLabel] }, growing)).toBeNull()
-    expect(movementDirection({ labels: [{ kind: 'still_filling', text: 'Still filling.' }, thinLabel] }, growing)).toBeNull()
+    expect(movementDirection({ labels: [thinLabel] }, growing, DIRECTION_OPEN)).toBeNull()
+    expect(movementDirection({ labels: [{ kind: 'still_filling', text: 'Still filling.' }, thinLabel] }, growing, DIRECTION_OPEN)).toBeNull()
   })
 
   it('is not confused by another month’s caveat', () => {
-    expect(movementDirection({ labels: [{ kind: 'read_back_at_setup', text: 'Read back at setup.' }] }, growing)).toBe('growing')
+    expect(movementDirection({ labels: [{ kind: 'read_back_at_setup', text: 'Read back at setup.' }] }, growing, DIRECTION_OPEN)).toBe('growing')
   })
 
   it('leaves the banded verdict to monthChange — a thin month still compares', () => {
@@ -241,5 +242,30 @@ describe('movementDirection', () => {
     expect(line).toContain('moved (+7.5 pts, band 6.6 pts)')
     expect(line).toContain('thin against this audience’s own year')
     expect(line).toContain('no direction word has been earned here')
+  })
+})
+
+// ---- The month-pair rule (market-first decision D, WP1.3) ---------------------------------
+
+describe('Ask\'s movement reader under the month-pair rule', () => {
+  it('prints a refused pair\'s own sentence beside the verdict, the words every badge prints', () => {
+    const refused = verdict({
+      state: 'refused', changePts: null, bandPts: null, refusedReason: 'tracking_change',
+      pair: { mode: 'refuse', cause: 'searches', changeMonth: '2026-09-01', checkWith: null },
+    })
+    const line = movementLine(reading({ verdict: refused }))
+    expect(line).toContain('comparison refused')
+    expect(line).toContain('Not read as a change: we changed what we search in September.')
+    expect(line).not.toMatch(/\bmoved\b/)
+  })
+
+  it('never earns a word over a step that is not comparable, or on a month not yet ended', () => {
+    const growing: SeriesPoint[] = [
+      { month: '2026-07-01', videos: 600, k: 24, audience: 'industry-other', clusteringKey: 'ck-1' },
+      { month: '2026-08-01', videos: 628, k: 60, audience: 'industry-other', clusteringKey: 'ck-1' },
+      { month: '2026-09-01', videos: 120, k: 30, audience: 'industry-other', clusteringKey: 'ck-1' },
+    ]
+    expect(movementDirection({ labels: [] }, growing, { ...DIRECTION_OPEN, comparable: (_p, m) => m !== '2026-09-01' })).toBeNull()
+    expect(movementDirection({ labels: [] }, growing, { ...DIRECTION_OPEN, asOf: '2026-09-25T12:00:00.000Z' })).toBeNull()
   })
 })

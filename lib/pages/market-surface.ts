@@ -13,7 +13,8 @@ import { scrubProse } from '../prose/scrub'
 import { afterwardsFor, groundingFor, type Afterwards, type Grounding } from '../reading/afterwards'
 import { recurrenceOf, type Recurrence } from '../reading/head-to-head'
 import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordInputs } from '../reading/record'
-import { loadMonthSeries, type ReadingHandle } from '../reading/read'
+import { loadMonthSeries, loadPairOn, type ReadingHandle } from '../reading/read'
+import type { PairOn } from '../reading/pairs'
 import type { Verdict } from '../reading/verdicts'
 import type { Quote } from '../renderables/types'
 import { freezeStateFor, monthStartOf } from '../reading/monthly'
@@ -457,7 +458,8 @@ export function buildAdviceRows(
       // The honest default for a row nothing has been read for. The loader
       // replaces it on the rows the ledger draws; a row it does not draw keeps
       // a state and a sentence rather than an undefined.
-      afterwards: afterwardsFor({ decidedAt, targetIds: [], series: [], audience: 'client' }),
+      // No months are read for it, so no month pair applies (`pair: null`).
+      afterwards: afterwardsFor({ decidedAt, targetIds: [], series: [], audience: 'client', pair: null }),
       why: why || null,
       quote: null,
     })
@@ -796,6 +798,9 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   // service-role client (lib/reading/read.ts) into existence to do it. Overview
   // makes the same call in the same place, for the same reason.
   const recordAhead = loadRecordInputs(reading.client, clientId, recordWindow(month, readingAt), { now: readingAt })
+  // THE MONTH-PAIR JUDGE (decision D, WP1.3): "Afterwards" and every move
+  // reading compare two months only when both were read the same way.
+  const judgeAhead = loadPairOn(reading, readingAt)
   recordAhead.catch(() => {})
 
   const runId = latestRun.id
@@ -991,7 +996,8 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
     ...groundedRows.filter((r) => r.decidedAt && r.targetIds.length > 0).map((r) => r.targetIds[0]),
     ...shownConclusions.map((c) => conclusionTarget.get(c.id)).filter((t): t is string => Boolean(t)),
   ])
-  const withAfterwards = readAfterwards(groundedRows, monthPoints, themeLabels)
+  const pair = await judgeAhead
+  const withAfterwards = readAfterwards(groundedRows, monthPoints, themeLabels, pair)
 
   const conclusions: ConclusionsBlock = {
     rows: shownConclusions.map((c) => ({
@@ -1050,6 +1056,7 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
     moves,
     subjectNames: new Map((subjects ?? []).filter((x) => x.status === 'active').map((x) => [x.id, x.name])),
     themeLabels,
+    pair,
   })
   const movesBlock: MovesBlock = {
     rows: moveRows,
@@ -1391,6 +1398,7 @@ function readAfterwards(
   rows: readonly RowWithTargets[],
   points: Map<string, TargetPoint[]>,
   themeLabels: Map<string, string>,
+  pair: PairOn,
 ): AdviceRow[] {
   return rows.map(({ targetIds, ...r }) => {
     // THE SERIES IS ONE OBJECT'S, and it is the object the verdict is labelled
@@ -1405,6 +1413,7 @@ function readAfterwards(
         objectLabel: target ? themeLabels.get(target) ?? target : undefined,
         series: target ? points.get(targetKey(LEDGER_AUDIENCE, target)) ?? [] : [],
         audience: LEDGER_AUDIENCE,
+        pair: (prevMonth, month) => pair(prevMonth, month, LEDGER_AUDIENCE),
       }),
     }
   })

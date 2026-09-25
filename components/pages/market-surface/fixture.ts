@@ -58,6 +58,7 @@ export function marketFixture(over: Partial<MarketSurfaceData> = {}): MarketSurf
       // Decided in June, so July and September are both strictly after it and
       // the comparison is drawn. Two month readings, never a pool of them.
       afterwards: afterwardsFor({
+        pair: null, // no month pair applies: a fixture pins rendering (lib/test/pair-fixture.ts)
         decidedAt: '2026-06-02T10:00:00.000Z',
         targetIds: ['reg-repair'],
         objectLabel: 'Repair & warranty',
@@ -99,6 +100,7 @@ export function marketFixture(over: Partial<MarketSurfaceData> = {}): MarketSurf
         month: '2026-09-01',
       }),
       afterwards: afterwardsFor({
+        pair: null, // no month pair applies: a fixture pins rendering (lib/test/pair-fixture.ts)
         decidedAt: '2026-09-02T10:00:00.000Z',
         targetIds: ['reg-repair'],
         objectLabel: 'Repair & warranty',
@@ -130,7 +132,7 @@ export function marketFixture(over: Partial<MarketSurfaceData> = {}): MarketSurf
       // behind it, nothing decided, no quote the evidence can vouch for — and
       // every cell still says something rather than printing a dash.
       grounded: null,
-      afterwards: afterwardsFor({ decidedAt: null, targetIds: [], series: [], audience: LEDGER_AUDIENCE }),
+      afterwards: afterwardsFor({ pair: null, /* no month pair applies: a fixture */ decidedAt: null, targetIds: [], series: [], audience: LEDGER_AUDIENCE }),
       why: null,
       quote: null,
     },
@@ -341,7 +343,7 @@ export function unrecordedFixture(): MarketSurfaceData {
         grounded: r.basedOn.length > 0
           ? groundingFor({ basedOn: ['pruned-1'], videoByInsight: new Map(), themeIds: [], audience: LEDGER_AUDIENCE, month: '2026-09-01' })
           : null,
-        afterwards: afterwardsFor({ decidedAt: r.decidedAt, targetIds: [], series: [], audience: LEDGER_AUDIENCE }),
+        afterwards: afterwardsFor({ pair: null, /* no month pair applies: a fixture */ decidedAt: r.decidedAt, targetIds: [], series: [], audience: LEDGER_AUDIENCE }),
         quote: null,
       })),
     },

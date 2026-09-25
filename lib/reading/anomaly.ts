@@ -633,6 +633,9 @@ export function weekVsBaseline(input: {
       prevN: base.baselineTotal,
       prevK: base.baselineVideos,
     }
+    // NOT UNDER THE MONTH-PAIR RULE YET (market-first decision D): the unusual-
+    // week check moves to comparable months with WP3.4, which is also when the
+    // pipeline's steps may change (plan §7.7). WP1.3 leaves this file alone.
     const verdict = proportionDelta(sides, floor)
     if (verdict.state === 'too_little_data') {
       return { ...base, verdict, p: null, holmThreshold: null, state: 'too_little_data' }

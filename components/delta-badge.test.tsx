@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CountBadge, MovementBadge, MOVEMENT_WORDS } from './delta-badge'
 import { Delta, favourability } from './charts/stat'
-import { render, renderText } from '@/lib/test/render'
+import { markupText, render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import type { Verdict, VerdictState } from '@/lib/reading/verdicts'
 
@@ -168,5 +168,28 @@ describe('favourability without its epsilon', () => {
     const markup = render(<Delta value={0.06} unit="pt" good="up" />)
     expect(markup).toContain('+0.1')
     expect(markup).toContain('text-positive')
+  })
+})
+
+describe('MovementBadge: the month-pair rule (WP1.3)', () => {
+  it('prints a refused pair\'s sentence as the word, with the record\'s clause as its title', () => {
+    const markup = render(<MovementBadge verdict={verdict('refused', {
+      value: { k: 104, n: 626 }, baseline: { k: 38, n: 351 }, refusedReason: 'tracking_change',
+      pair: { mode: 'refuse', cause: 'searches', changeMonth: '2026-09-01', checkWith: null },
+    })} />)
+    assertCopyContract(markup)
+    expect(markupText(markup)).toBe('Not read as a change: we changed what we search in September.')
+    expect(markup).toContain('title="what we track changed inside this window"')
+  })
+
+  it('a refused verdict with no pair still reads "comparison refused"', () => {
+    expect(renderText(<MovementBadge verdict={verdict('refused', { refusedReason: 'rename' })} />)).toBe(MOVEMENT_WORDS.refused)
+  })
+
+  it('the three new reasons each have the record\'s words', () => {
+    for (const reason of ['incomplete', 'depth', 'unmeasured'] as const) {
+      const markup = render(<MovementBadge verdict={verdict('refused', { refusedReason: reason })} />)
+      expect(markup).toMatch(/title="[a-z]/)
+    }
   })
 })

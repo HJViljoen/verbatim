@@ -258,6 +258,12 @@ export const REFUSAL_WHY: Record<RefusedReason, string> = {
   tracking_change: 'what we track changed inside this window',
   clustering_changed: 'the two sides were grouped differently',
   rename: 'the two sides are two names for one rival',
+  // The month-pair rule's three (market-first decision D, WP1.3). The badge
+  // prints the pair's own sentence where the verdict carries one
+  // (`pairSentence`, lib/calibration.ts); these are the record's clauses.
+  incomplete: 'the newer month is not over, or has not been read to its end',
+  depth: 'the newer month has not been read to the same depth as the older one',
+  unmeasured: 'we have not yet checked that both months were read the same way',
 }
 
 /** The other ways a comparison goes undrawn. Not refusals of the record —

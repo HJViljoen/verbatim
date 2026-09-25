@@ -27,7 +27,8 @@ import { MONTH_PARAM, readingAnchor, type ReadingMonth } from '../reading/readin
 import { loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, readingViewFrom, type OtherMonth } from '../reading/reading-view'
 import { monthStartOf, nextMonth } from '../reading/month-key'
 import { gapBetween, type Gap, type GapSide } from '../reading/gap'
-import { loadMonthSeries, type ReadingHandle } from '../reading/read'
+import { loadMonthSeries, loadPairOn, type ReadingHandle } from '../reading/read'
+import { pairTools, refusedSteps, type PairOn } from '../reading/pairs'
 import { methodLines, type MethodLines } from '../reading/method'
 import { countRefused, howSoundLine, loadRecordInputs, monthRecordWindow, recordLines, refusals, type RecordInputs } from '../reading/record'
 import { pointsByMonth, type MonthLabel, type MonthSeries, type Substrate } from '../reading/series'
@@ -1542,6 +1543,9 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   // over verdicts the page has not made yet and are added below.
   const recordAhead = loadRecordInputs(reading.client, clientId, monthRecordWindow(month, readingAt), { now: readingAt })
   recordAhead.catch(() => {})
+  // THE MONTH-PAIR JUDGE (decision D, WP1.3): every verdict, direction word
+  // and chart step on the page is judged by it.
+  const judgeAhead = loadPairOn(reading, readingAt)
 
   const perAudience = new Map<string, number>()
   const denominatorByMonth = new Map<string, number>()
@@ -1609,6 +1613,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       : Promise.resolve(null),
   ])
 
+  const pair = await judgeAhead
   const seriesFor = (subjectId: string, audience: string): MonthSeries | null =>
     subjectSet?.series.find((s) => s.objectId === subjectId && s.audience === audience) ?? null
   const chartSeriesFor = (subjectId: string, audience: string): MonthSeries | null =>
@@ -1654,6 +1659,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
             audience: CLIENT_AUDIENCE,
             curr: railPoint(month, point),
             prev: railPoint(prevMonth, before),
+            comparability: pair(prevMonth, month, CLIENT_AUDIENCE),
           }),
       selected: s.id === selectedId,
       href: s.status === 'active' ? `/dashboard/subjects?item=${encodeURIComponent(s.id)}` : '',
@@ -1685,12 +1691,21 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       kindRows,
       seriesFor,
       thin,
+      pair,
+      asOf: readingAt,
     })
-    const series = sides.map((side) => seriesFor(subject.id, side.audience)).filter((s): s is MonthSeries => s != null)
+    // A REFUSED STEP IS DRAWN BROKEN (decision D, WP1.3): each line carries the
+    // steps its audience's month pairs refuse, with the refusal's sentence.
+    const judged = (line: MonthSeries): MonthSeries => ({
+      ...line,
+      refusedSteps: refusedSteps(line.points.map((p) => p.month), (a, b) => pair(a, b, line.audience)),
+    })
+    const series = sides.map((side) => seriesFor(subject.id, side.audience)).filter((s): s is MonthSeries => s != null).map(judged)
     const chartSeries = sides
       .map((side) => chartSeriesFor(subject.id, side.audience))
       .filter((s): s is MonthSeries => s != null)
       .map(onChart)
+      .map(judged)
 
     const memberIds = await loadMemberInsightIds(supabase, clientId, subject.id)
     const themedRunId = themedRunAhead ? await themedRunAhead : null
@@ -1910,14 +1925,21 @@ interface SidesInput {
   kindRows: StoredKindRow[] | null
   seriesFor: (subjectId: string, audience: string) => MonthSeries | null
   thin: boolean
+  /** The page's month-pair judge (decision D, WP1.3); null only where no pair
+   *  applies (a fixture). */
+  pair: PairOn | null
+  /** The instant the page reads at (a direction word's newest month must have
+   *  ended by it). */
+  asOf: string
 }
 
 /**
  * You, each rival and the category, as the three sides of one subject.
  *
  * WHAT A SIDE MAY CARRY IS DECIDED BY ITS OWN n, NOT BY THE PAGE'S. On the
- * paying tenant your own audience carries 84 videos in a month and the category
- * 1,388, so the category is the only side of the three that can carry a monthly
+ * paying tenant your own audience carries about 9 videos in a month and the
+ * category 625 (September, research F12; the mock's 84 and 1,388 were invented
+ * volume), so the category is the only side of the three that can carry a monthly
  * change — and a page that printed the same verdict shape on all three would
  * print "too few to compare" on two of them for ever without saying why. The level
  * is real on every side and is always shown; the CHANGE is drawn where the band
@@ -1925,6 +1947,7 @@ interface SidesInput {
  */
 export function buildSides(input: SidesInput): SubjectSide[] {
   const { subject, month, prevMonth, axis, perAudience, thin } = input
+  const { pairFor, comparableFor } = pairTools(input.pair)
   const sides: { audience: string; label: string; kind: SubjectSide['kind']; color: string }[] = [
     { audience: CLIENT_AUDIENCE, label: 'You', kind: 'you', color: 'var(--you)' },
     // A SECOND RIVAL IS NOT THE FIRST ONE'S COLOUR. Every rival used to be
@@ -1987,6 +2010,7 @@ export function buildSides(input: SidesInput): SubjectSide[] {
               audience,
               curr: { month, k: k.videos, videos: n },
               prev: { month: prevMonth, k: prev.videos, videos: prevN },
+              comparability: pairFor(prevMonth, month, audience),
             })
     }
     return out
@@ -2021,6 +2045,7 @@ export function buildSides(input: SidesInput): SubjectSide[] {
           audience: s.audience,
           curr: point(month),
           prev: point(prevMonth),
+          comparability: pairFor(prevMonth, month, s.audience),
         })
     const { kinds, reddit } = kindsFor(s.audience)
     return {
@@ -2034,7 +2059,7 @@ export function buildSides(input: SidesInput): SubjectSide[] {
       observed,
       silence,
       verdict,
-      direction: thin ? null : directionWord(axis.map(point)),
+      direction: thin ? null : directionWord(axis.map(point), { asOf: input.asOf, comparable: comparableFor(s.audience) }),
       previous: before ? { month: prevMonth, pct: pctOf(before.k, before.videos) } : null,
       kinds,
       kindVerdicts: verdictsFor(s.audience, kinds),

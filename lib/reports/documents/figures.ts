@@ -131,6 +131,10 @@ export function switchingFigure(input: SwitchingInput): SwitchingFigure | null {
   const clearsN = pool >= floor.minN
   const clearsK = floor.minK == null || toward.k >= floor.minK
   const clears = clearsN && clearsK
+  // NO MONTH PAIR APPLIES (market-first decision D, WP1.3): this verdict has
+  // no baseline, so it is a LEVEL (`too_little_data`, null change) and can
+  // never read "moved". The brief's month-change tiles come from the Overview
+  // and Subjects loaders' verdicts, which the rule already judges.
   const verdict = clears
     ? bandVerdict({
         objectKind: 'audience',
@@ -357,6 +361,14 @@ export interface MonthLineSeries {
    * exactly as before.
    */
   unit?: 'pct'
+  /** Same length as `points`: true where the step INTO that month is refused
+   *  by the month-pair rule (market-first decision D, WP1.3), so the drawn line
+   *  breaks there. Optional: a reading from before the rule draws as sent. */
+  breaks?: boolean[]
+  /** Same length as `points`: the refusal's sentence where `breaks` is true,
+   *  null elsewhere (WP1.3 review fix), which a calendar chart prints in its
+   *  figure line. Optional, as `breaks`. */
+  breakWhy?: (string | null)[]
 }
 
 export interface MonthLine {
@@ -391,7 +403,7 @@ export const LINE_MIN_READINGS = 3
  */
 export function monthLine(input: {
   months: readonly string[]
-  series: readonly { label: string; points: (number | null)[]; unit?: 'pct' }[]
+  series: readonly { label: string; points: (number | null)[]; unit?: 'pct'; breaks?: boolean[]; breakWhy?: (string | null)[] }[]
   /** `monthlyLineLabel` from lib/pages/overview.ts, passed in so this stays
    *  pure of the page loader it would otherwise import. */
   labelFor: (points: readonly (number | null)[], months: readonly string[]) => string | null
@@ -403,6 +415,8 @@ export function monthLine(input: {
     points: [...s.points],
     readings: s.points.filter((p) => p != null).length,
     ...(s.unit ? { unit: s.unit } : {}),
+    ...(s.breaks ? { breaks: [...s.breaks] } : {}),
+    ...(s.breakWhy ? { breakWhy: [...s.breakWhy] } : {}),
   }))
   const drawn = sides.filter((s) => s.readings >= min)
   // THE LABEL IS THE THICKEST SIDE'S, because it describes the axis the chart

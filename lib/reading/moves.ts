@@ -1,6 +1,7 @@
 import { PASS_A_MIN_COMMENTS_DEFAULT } from '../config'
 import { fmtInt, longMonth, monthName } from '../format'
 import { monthChange } from './bands'
+import { refusedSteps, type PairOn } from './pairs'
 import { monthStartOf, nextMonth } from './month-key'
 import type { Counted, FigureTable, Verdict, VerdictWindow } from './verdicts'
 import type { DeclareMoveInput } from '../subjects/moves'
@@ -388,6 +389,10 @@ export interface MoveSeries {
   regimeByMonth?: Readonly<Record<string, string | null>>
   /** True where this series has no clustering to compare — a subject. */
   noClustering?: boolean
+  /** The steps a chart draws broken (decision D, WP1.3): each later month whose
+   *  step from the month before it is refused, with the refusal's sentence.
+   *  Set by `readMove` from its pair judge. */
+  refusedSteps?: Readonly<Record<string, string>>
 }
 
 export interface MoveReading {
@@ -448,6 +453,10 @@ export interface MoveReadingInput {
    *  without it, which is true and thin, and "on the subject Durability" with
    *  it, which is what the artboard's chip prints. */
   targetLabel?: string | null
+  /** Were the two months either side of the move read the same way (decision
+   *  D, WP1.3)? REQUIRED: the loader's judge on each side's audience. Null
+   *  where the caller holds no judge (a fixture), stated at the call site. */
+  pair: PairOn | null
 }
 
 /** What a move is on, in the reader's words — the shape `moveTargetLabel`
@@ -490,10 +499,14 @@ function sideVerdict(
   series: MoveSeries,
   declaredMonth: string,
   object: { kind: 'subject' | 'theme' | 'advice'; id: string; label: string },
+  pair: PairOn | null,
 ): Verdict | null {
   const { before, after } = sides(series, declaredMonth)
   if (!before || !after) return null
   return monthChange({
+    // The two months either side of the declaration, which need not be
+    // neighbours: the pair rule reads any span (lib/reading/comparability.ts).
+    comparability: pair ? pair(before.month, after.month, series.audience) : null,
     // A move on advice is measured on the subject or themes the advice was
     // about; there is no `advice` object kind and there must not be one — a
     // Verdict's objectKind names what was COUNTED, and nothing counts a
@@ -577,11 +590,16 @@ export function readMove(input: MoveReadingInput): MoveReading {
   const objectLabel = input.targetLabel?.trim() || input.move.title
   const object = { kind: input.move.kind, id: objectId, label: objectLabel }
 
-  const touched = input.series.find((s) => s.touched) ?? null
-  const verdict = touched ? sideVerdict(touched, declaredMonth, object) : null
-  const control = input.series
+  // Every line on the move's chart breaks where its audience's step is refused.
+  const pair = input.pair
+  const series: MoveSeries[] = pair
+    ? input.series.map((s) => ({ ...s, refusedSteps: refusedSteps(s.points.map((p) => p.month), (a, b) => pair(a, b, s.audience)) }))
+    : [...input.series]
+  const touched = series.find((s) => s.touched) ?? null
+  const verdict = touched ? sideVerdict(touched, declaredMonth, object, input.pair) : null
+  const control = series
     .filter((s) => !s.touched)
-    .map((s) => sideVerdict(s, declaredMonth, object))
+    .map((s) => sideVerdict(s, declaredMonth, object, input.pair))
     .filter((v): v is Verdict => v != null)
 
   const months = [...new Set(input.series.flatMap((s) => s.points.map((p) => p.month)))].sort()
@@ -634,7 +652,7 @@ export function readMove(input: MoveReadingInput): MoveReading {
     kind: input.move.kind,
     on: targetPhrase(input),
     declaredAt: input.move.declared_at,
-    series: [...input.series],
+    series,
     verdict,
     control,
     figures,

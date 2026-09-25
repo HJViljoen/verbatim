@@ -106,7 +106,7 @@ describe('the four-way distribution', () => {
 
 describe('moodChange', () => {
   it('fires on the one tenant-month pair in production that has the evidence', () => {
-    const v = moodChange({ audience: 'industry-other', curr: OSSUR_SEP, prev: OSSUR_AUG })
+    const v = moodChange({ comparability: null, audience: 'industry-other', curr: OSSUR_SEP, prev: OSSUR_AUG })
     expect(v.objectKind).toBe('mood')
     expect(v.objectId).toBe('negative')
     expect(v.value).toEqual({ k: 19, n: 338 })
@@ -123,7 +123,7 @@ describe('moodChange', () => {
   it('marks the break on every pair whose span reaches across it, and on no other', () => {
     const counts = (month: string) => ({ month, judged: 200, positive: 150, negative: 20, neutral: 20, mixed: 10 })
     const spans = (prev: string, curr: string) =>
-      moodChange({ audience: 'industry-other', curr: counts(curr), prev: counts(prev) })
+      moodChange({ comparability: null, audience: 'industry-other', curr: counts(curr), prev: counts(prev) })
         .flags.includes('measurement_changed')
     // August straddles the break, so the pair BEFORE it crosses it too.
     expect(spans('2026-07-01', '2026-08-01')).toBe(true)
@@ -133,19 +133,20 @@ describe('moodChange', () => {
   })
 
   it('does not fire on Sealand, where the change is inside the band', () => {
-    const v = moodChange({ audience: 'industry-other', curr: SEALAND_SEP, prev: SEALAND_AUG })
+    const v = moodChange({ comparability: null, audience: 'industry-other', curr: SEALAND_SEP, prev: SEALAND_AUG })
     expect(v.state).toBe('no_clear_change')
     expect(Math.abs(v.changePts!)).toBeLessThan(v.bandPts!)
   })
 
   it('uses the JUDGED count as n, never the month video count', () => {
-    const v = moodChange({ audience: 'industry-other', curr: OSSUR_SEP, prev: OSSUR_AUG })
+    const v = moodChange({ comparability: null, audience: 'industry-other', curr: OSSUR_SEP, prev: OSSUR_AUG })
     expect(v.value.n).toBe(338)
     expect(v.value.n).not.toBe(388) // the month's videos
   })
 
   it('refuses every rival and own-brand audience at today\'s volumes', () => {
     const v = moodChange({
+      comparability: null,
       audience: 'competitor:Ottobock',
       curr: { month: '2026-09-01', judged: 24, positive: 22, negative: 0, neutral: 1, mixed: 1 },
       prev: { month: '2026-08-01', judged: 48, positive: 42, negative: 1, neutral: 4, mixed: 1 },
@@ -154,13 +155,14 @@ describe('moodChange', () => {
   })
 
   it('can be asked about another share', () => {
-    const v = moodChange({ audience: 'industry-other', curr: OSSUR_SEP, prev: OSSUR_AUG, mood: 'positive' })
+    const v = moodChange({ comparability: null, audience: 'industry-other', curr: OSSUR_SEP, prev: OSSUR_AUG, mood: 'positive' })
     expect(v.objectId).toBe('positive')
     expect(v.value).toEqual({ k: 245, n: 338 })
   })
 
   it('refuses a rename, so a mood never prints a band the theme series would not', () => {
     const v = moodChange({
+      comparability: null,
       audience: 'competitor:Rareform Bags',
       prevAudience: 'competitor:Rareform',
       curr: { ...OSSUR_SEP },
@@ -173,7 +175,7 @@ describe('moodChange', () => {
   })
 
   it('earns no clustering caveat — a re-grouping cannot move how a video was received', () => {
-    const v = moodChange({ audience: 'industry-other', curr: OSSUR_SEP, prev: OSSUR_AUG })
+    const v = moodChange({ comparability: null, audience: 'industry-other', curr: OSSUR_SEP, prev: OSSUR_AUG })
     expect(v.flags).not.toContain('clustering_unknown')
     expect(v.flags).not.toContain('clustering_changed')
   })

@@ -171,6 +171,13 @@ export interface MonthSeries {
    *  a comparison could start from. Null when none does. */
   firstReadable: string | null
   substrate: Substrate
+  /** The month-pair rule's refused steps (market-first decision D, WP1.3): each
+   *  later month whose step from the month before it is refused, with the
+   *  refusal's sentence (`refusedSteps`, lib/reading/pairs.ts). Set by the
+   *  loader that judged the pairs; a chart draws those steps broken
+   *  (lib/charts/from-series.ts). Absent on a series nobody judged, or one
+   *  stored before the rule, which draws as it was sent. */
+  refusedSteps?: Readonly<Record<string, string>>
 }
 
 /**

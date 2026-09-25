@@ -9,6 +9,7 @@ import {
   type SeriesPoint,
 } from './bands'
 import { SENTIMENT_BAND, SHARE_BAND, proportionDelta } from '../report-bands'
+import { DIRECTION_OPEN } from '../test/pair-fixture'
 
 const THEME: ObjectIdentity = { kind: 'theme', id: 't1', label: 'Questions about prosthetic function' }
 const KEY = 'a=v4;i=none;c=0.58;f=2;m=gpt-5.4;mp=v1;k=video_v1'
@@ -52,7 +53,7 @@ describe('monthChange', () => {
   const prev = p('2026-07-01', 9, 118)
 
   it('bands the two months with each month\'s video count as n', () => {
-    const v = monthChange({ object: THEME, audience: 'industry-other', curr, prev })
+    const v = monthChange({ comparability: null, object: THEME, audience: 'industry-other', curr, prev })
     expect(v.value).toEqual({ k: 102, n: 628 })
     expect(v.baseline).toEqual({ k: 9, n: 118 })
     expect(v.window).toEqual({ kind: 'month', from: '2026-08-01', to: '2026-09-01' })
@@ -60,7 +61,7 @@ describe('monthChange', () => {
   })
 
   it('is the product\'s band and not a second one', () => {
-    const v = monthChange({ object: THEME, audience: 'industry-other', curr, prev })
+    const v = monthChange({ comparability: null, object: THEME, audience: 'industry-other', curr, prev })
     const direct = proportionDelta(
       { nowPct: (102 / 628) * 100, prevPct: (9 / 118) * 100, nowN: 628, prevN: 118, nowK: 102, prevK: 9 },
       SHARE_BAND,
@@ -69,13 +70,14 @@ describe('monthChange', () => {
   })
 
   it('a hollow previous month is too_little_data, not a rise from zero', () => {
-    const v = monthChange({ object: THEME, audience: 'industry-other', curr, prev: p('2026-07-01', null, null) })
+    const v = monthChange({ comparability: null, object: THEME, audience: 'industry-other', curr, prev: p('2026-07-01', null, null) })
     expect(v.state).toBe('too_little_data')
     expect(v.baseline).toEqual({ k: 0, n: 0 })
   })
 
   it('a below-floor month is too_little_data through the band, with no special case', () => {
     const v = monthChange({
+      comparability: null,
       object: THEME,
       audience: 'client',
       curr: p('2026-08-01', 6, 20, { audience: 'client' }),
@@ -86,6 +88,7 @@ describe('monthChange', () => {
 
   it('marks a clustering change and still prints the band (decision L)', () => {
     const v = monthChange({
+      comparability: null,
       object: THEME,
       audience: 'industry-other',
       curr: p('2026-08-01', 251, 1000, { clusteringKey: 'a=v5' }),
@@ -98,6 +101,7 @@ describe('monthChange', () => {
 
   it('treats two unrecorded groupings as a change, never as agreement', () => {
     const v = monthChange({
+      comparability: null,
       object: THEME,
       audience: 'industry-other',
       curr: p('2026-08-01', 251, 1000, { clusteringKey: null }),
@@ -111,6 +115,7 @@ describe('monthChange', () => {
 
   it('says unknown, not changed, when only ONE side carries a key', () => {
     const v = monthChange({
+      comparability: null,
       object: THEME,
       audience: 'industry-other',
       curr: p('2026-08-01', 251, 1000, { clusteringKey: 'a=v5' }),
@@ -121,12 +126,13 @@ describe('monthChange', () => {
   })
 
   it('does not mark a clustering change when the keys agree', () => {
-    const v = monthChange({ object: THEME, audience: 'industry-other', curr, prev })
+    const v = monthChange({ comparability: null, object: THEME, audience: 'industry-other', curr, prev })
     expect(v.flags).not.toContain('clustering_changed')
   })
 
   it('REFUSES across a rename — a hard break, because the string may be what moved', () => {
     const v = monthChange({
+      comparability: null,
       object: { kind: 'rival', id: 'competitor:Topo Designs', label: 'Topo Designs' },
       audience: 'competitor:Topo Designs',
       curr: p('2026-08-01', 251, 1000, { audience: 'competitor:Topo Designs' }),
@@ -142,6 +148,7 @@ describe('monthChange', () => {
 
   it('carries flags the caller adds without dropping the ones it finds', () => {
     const v = monthChange({
+      comparability: null,
       object: THEME,
       audience: 'industry-other',
       curr: p('2026-08-01', 251, 1000, { clusteringKey: 'a=v5' }),
@@ -248,17 +255,17 @@ describe('directionWord', () => {
   const rising = [p('2026-06-01', 100, 1000), p('2026-07-01', 160, 1000), p('2026-08-01', 230, 1000)]
 
   it('needs three readings — two is a change, not a direction', () => {
-    expect(directionWord(rising.slice(1))).toBeNull()
-    expect(directionWord(rising)).toBe('growing')
+    expect(directionWord(rising.slice(1), DIRECTION_OPEN)).toBeNull()
+    expect(directionWord(rising, DIRECTION_OPEN)).toBe('growing')
   })
 
   it('reads fading the same way', () => {
     const falling = [p('2026-06-01', 230, 1000), p('2026-07-01', 160, 1000), p('2026-08-01', 100, 1000)]
-    expect(directionWord(falling)).toBe('fading')
+    expect(directionWord(falling, DIRECTION_OPEN)).toBe('fading')
   })
 
   it('takes the LAST three of a longer series', () => {
-    expect(directionWord([p('2026-04-01', 900, 1000), p('2026-05-01', 20, 1000), ...rising])).toBe('growing')
+    expect(directionWord([p('2026-04-01', 900, 1000), p('2026-05-01', 20, 1000), ...rising], DIRECTION_OPEN)).toBe('growing')
   })
 
   it('gives a series with NO clustering its word — absence is not disagreement', () => {
@@ -267,8 +274,8 @@ describe('directionWord', () => {
     // unknown — so every kind was refused a direction word in every month, for
     // ever, and the caller was told "we never had three readings".
     const noKey = rising.map((point) => ({ ...point, clusteringKey: null }))
-    expect(directionWord(noKey)).toBeNull()
-    expect(directionWord(noKey.map((point) => ({ ...point, regime: 'n/a' as const })))).toBe('growing')
+    expect(directionWord(noKey, DIRECTION_OPEN)).toBeNull()
+    expect(directionWord(noKey.map((point) => ({ ...point, regime: 'n/a' as const })), DIRECTION_OPEN)).toBe('growing')
   })
 
   it('still refuses a run that mixes a declared absence with a real key', () => {
@@ -277,83 +284,83 @@ describe('directionWord', () => {
       { ...rising[1], clusteringKey: 'a1b2' },
       { ...rising[2], clusteringKey: 'a1b2' },
     ]
-    expect(directionWord(mixed)).toBeNull()
+    expect(directionWord(mixed, DIRECTION_OPEN)).toBeNull()
   })
 
   it('still refuses a run whose keys are simply absent', () => {
-    expect(directionWord(rising)).toBe('growing')
+    expect(directionWord(rising, DIRECTION_OPEN)).toBe('growing')
     const unknown = [
       { ...rising[0], clusteringKey: null },
       { ...rising[1], clusteringKey: null },
       { ...rising[2], clusteringKey: null },
     ]
-    expect(directionWord(unknown)).toBeNull()
+    expect(directionWord(unknown, DIRECTION_OPEN)).toBeNull()
   })
 
   it('returns null — not flat — when a month in the run is hollow', () => {
     const gapped = [p('2026-06-01', 100, 1000), p('2026-07-01', null, null), p('2026-08-01', 230, 1000)]
-    expect(directionWord(gapped)).toBeNull()
+    expect(directionWord(gapped, DIRECTION_OPEN)).toBeNull()
   })
 
   it('returns null when a month in the run is below the floor', () => {
     const thin = [p('2026-06-01', 100, 1000), p('2026-07-01', 16, 99), p('2026-08-01', 230, 1000)]
-    expect(directionWord(thin)).toBeNull()
+    expect(directionWord(thin, DIRECTION_OPEN)).toBeNull()
   })
 
   it('returns null when a month in the run is under the numerator floor', () => {
     const thin = [p('2026-06-01', 100, 1000), p('2026-07-01', 9, 1000), p('2026-08-01', 230, 1000)]
-    expect(directionWord(thin)).toBeNull()
+    expect(directionWord(thin, DIRECTION_OPEN)).toBeNull()
   })
 
   it('breaks on a calendar gap rather than skipping over it', () => {
     const skipped = [p('2026-05-01', 100, 1000), p('2026-07-01', 160, 1000), p('2026-08-01', 230, 1000)]
-    expect(directionWord(skipped)).toBeNull()
+    expect(directionWord(skipped, DIRECTION_OPEN)).toBeNull()
   })
 
   it('never speaks across a clustering boundary', () => {
     const crossed = [rising[0], rising[1], p('2026-08-01', 230, 1000, { clusteringKey: 'a=v5' })]
-    expect(directionWord(crossed)).toBeNull()
+    expect(directionWord(crossed, DIRECTION_OPEN)).toBeNull()
   })
 
   it('never speaks over a stretch with no recorded grouping — two unknowns are not one regime', () => {
     const unknown = rising.map((r) => ({ ...r, clusteringKey: null }))
-    expect(directionWord(unknown)).toBeNull()
+    expect(directionWord(unknown, DIRECTION_OPEN)).toBeNull()
   })
 
   it('never speaks across a rename', () => {
     const renamed = [rising[0], rising[1], { ...rising[2], audience: 'competitor:Topo Designs' }]
-    expect(directionWord(renamed)).toBeNull()
+    expect(directionWord(renamed, DIRECTION_OPEN)).toBeNull()
   })
 
   it('is flat when the two steps disagree in sign', () => {
     const zigzag = [p('2026-06-01', 100, 1000), p('2026-07-01', 230, 1000), p('2026-08-01', 140, 1000)]
-    expect(directionWord(zigzag)).toBe('flat')
+    expect(directionWord(zigzag, DIRECTION_OPEN)).toBe('flat')
   })
 
   it('is flat when the steps agree but the whole move stays inside the band', () => {
     const creep = [p('2026-06-01', 600, 1000), p('2026-07-01', 602, 1000), p('2026-08-01', 605, 1000)]
-    expect(directionWord(creep)).toBe('flat')
+    expect(directionWord(creep, DIRECTION_OPEN)).toBe('flat')
   })
 
   it('is flat when nothing moves at all', () => {
     const still = [p('2026-06-01', 200, 1000), p('2026-07-01', 200, 1000), p('2026-08-01', 200, 1000)]
-    expect(directionWord(still)).toBe('flat')
+    expect(directionWord(still, DIRECTION_OPEN)).toBe('flat')
   })
 
   it('allows one step to stand still as long as the other agrees and the span clears the band', () => {
     const paused = [p('2026-06-01', 100, 1000), p('2026-07-01', 100, 1000), p('2026-08-01', 230, 1000)]
-    expect(directionWord(paused)).toBe('growing')
+    expect(directionWord(paused, DIRECTION_OPEN)).toBe('growing')
   })
 
   it('null and flat are different answers — no run at all is not a reading of no movement', () => {
-    expect(directionWord([])).toBeNull()
-    expect(directionWord([p('2026-08-01', 200, 1000)])).toBeNull()
+    expect(directionWord([], DIRECTION_OPEN)).toBeNull()
+    expect(directionWord([p('2026-08-01', 200, 1000)], DIRECTION_OPEN)).toBeNull()
   })
 
   it('a longer run can be asked for, and it holds the same rules', () => {
     const four = [p('2026-05-01', 80, 1000), ...rising]
-    expect(directionWord(four, { run: 4 })).toBe('growing')
-    expect(directionWord(rising, { run: 4 })).toBeNull()
+    expect(directionWord(four, { ...DIRECTION_OPEN, run: 4 })).toBe('growing')
+    expect(directionWord(rising, { ...DIRECTION_OPEN, run: 4 })).toBeNull()
   })
 })
 
@@ -370,7 +377,7 @@ describe('directionWord — a series with no numerator earns no word', () => {
       month('2026-06-01', 400, null),
       month('2026-07-01', 420, null),
       month('2026-08-01', 440, null),
-    ])).toBeNull()
+    ], DIRECTION_OPEN)).toBeNull()
   })
 
   it('answers null when only ONE month of the run has no k', () => {
@@ -378,7 +385,7 @@ describe('directionWord — a series with no numerator earns no word', () => {
       month('2026-06-01', 400, 40),
       month('2026-07-01', 420, null),
       month('2026-08-01', 440, 80),
-    ])).toBeNull()
+    ], DIRECTION_OPEN)).toBeNull()
   })
 
   it('still answers flat when three real readings disagree', () => {
@@ -386,6 +393,6 @@ describe('directionWord — a series with no numerator earns no word', () => {
       month('2026-06-01', 400, 40),
       month('2026-07-01', 400, 60),
       month('2026-08-01', 400, 40),
-    ])).toBe('flat')
+    ], DIRECTION_OPEN)).toBe('flat')
   })
 })

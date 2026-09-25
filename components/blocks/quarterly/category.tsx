@@ -128,7 +128,7 @@ function MoverRow({ mover, mode }: { mover: QuarterMover; mode: RenderMode }) {
           value={mover.pct == null ? '—' : fmtPct(mover.pct)}
           of={`${fmtInt(mover.k)} of ${fmtInt(mover.n)}`}
         />
-        {!email && drawn ? <Sparkline values={mover.spark as (number | null)[]} color="var(--cat)" animate={false} width={72} height={22} /> : null}
+        {!email && drawn ? <Sparkline values={mover.spark as (number | null)[]} breaks={mover.sparkBreaks} color="var(--cat)" animate={false} width={72} height={22} /> : null}
       </div>
       <div className={email ? undefined : 'flex flex-wrap items-center gap-1.5'}>
         <BlockMovement verdict={mover.verdict} unit="pts" mode={mode} />

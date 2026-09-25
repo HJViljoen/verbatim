@@ -57,10 +57,29 @@ export type ObjectKind = 'subject' | 'theme' | 'kind' | 'rival' | 'audience' | '
 /** Why a comparison that could be drawn is not being drawn. Each one is a break
  *  in the record rather than a property of the conversation:
  *  `unlogged_era`       the window reaches back before the change log begins
- *  `tracking_change`    terms, rivals, handles or platforms moved inside it
+ *  `tracking_change`    terms, rivals, handles or platforms moved inside it; on
+ *                       a month pair (WP1.3), a change of ours touched 10% or
+ *                       more of either month, or is in the pair's span and not
+ *                       measured yet
  *  `clustering_changed` the two sides were grouped by different clusterings
- *  `rename`             the two sides are two names for one rival */
-export type RefusedReason = 'unlogged_era' | 'tracking_change' | 'clustering_changed' | 'rename'
+ *  `rename`             the two sides are two names for one rival
+ *
+ *  Three more come from the month-pair rule (market-first decision D,
+ *  lib/reading/comparability.ts), each a fact about how the two months were
+ *  READ rather than about the conversation:
+ *  `incomplete`         the newer month is so far, or was not read past its end
+ *  `depth`              the newer month's threads have not filled to four
+ *                       fifths of the older month's
+ *  `unmeasured`         nobody has measured whether the two months were read
+ *                       the same way (no pair row, or a stale one) */
+export type RefusedReason =
+  | 'unlogged_era'
+  | 'tracking_change'
+  | 'clustering_changed'
+  | 'rename'
+  | 'incomplete'
+  | 'depth'
+  | 'unmeasured'
 
 /** What a reader has to be told about a reading beside its verdict. `thin`,
  *  `new` and `gone_quiet` are about the object; `re_read`,
@@ -85,7 +104,11 @@ export type RefusedReason = 'unlogged_era' | 'tracking_change' | 'clustering_cha
  *  Pass A on 2026-08-16 the reorder ALONE read as "sentiment up 6.2 pts" in a
  *  subject line that was sent. Like the other flags it does not refuse the
  *  comparison — the counts are real on both sides — it tells the reader what
- *  else changed between them. */
+ *  else changed between them.
+ *
+ *  `tracking_change` is the month-pair rule's note (market-first decision D,
+ *  WP1.3): a change of ours touched from 1% up to under 10% of either month.
+ *  At 10% the pair is refused instead (`RefusedReason` 'tracking_change'). */
 export type VerdictFlag =
   | 'new'
   | 'gone_quiet'
@@ -95,6 +118,31 @@ export type VerdictFlag =
   | 'renamed'
   | 'thin'
   | 'measurement_changed'
+  | 'tracking_change'
+
+/**
+ * What a month-pair judgement (lib/reading/comparability.ts) left on a verdict,
+ * as TOKENS: the words are lib/calibration.ts's (`pairSentence`), because the
+ * same refusal reads on a badge, under a chart and in an email.
+ *
+ *   `searches`  a change to what we search refused or flagged the pair.
+ *   `ours`      another change of ours (how we check, file or read videos).
+ *   `not_yet`   the pair has not been read far enough, or measured, to be
+ *               compared: the newer month is so far or was not read to its end,
+ *               its threads are still shallow, or no measurement exists.
+ *
+ * `changeMonth` is the month the named change was made in ('YYYY-MM-01'), or
+ * the pair's newer month when the share was measured with no logged change to
+ * name. `checkWith` is the update the pair is next read with, when one is
+ * scheduled. Optional on `Verdict`, so a verdict stored before it existed
+ * renders as it was sent.
+ */
+export interface VerdictPairNote {
+  mode: 'flag' | 'refuse'
+  cause: 'searches' | 'ours' | 'not_yet'
+  changeMonth: string | null
+  checkWith: string | null
+}
 
 /** The period a verdict is about. `since` is the tenant's whole readable
  *  history (lib/reading/horizon.ts `sinceStart`). Both bounds are half-open
@@ -173,6 +221,9 @@ export interface Verdict {
   direction?: 'growing' | 'fading' | 'flat' | null
   flags: VerdictFlag[]
   refusedReason?: RefusedReason
+  /** The month-pair judgement behind a refusal or a `tracking_change` flag
+   *  (WP1.3). Absent where no pair rule refused or flagged it. */
+  pair?: VerdictPairNote
 }
 
 /**

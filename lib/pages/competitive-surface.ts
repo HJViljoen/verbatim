@@ -10,7 +10,8 @@ import { horizonDates, horizonWindow, parseHorizon, sinceStart, type Horizon, ty
 import { freezeStateFor, monthStartOf } from '../reading/monthly'
 import { MONTH_PARAM, readingAnchor, type ReadingMonth } from '../reading/reading-month'
 import { loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, readingViewFrom, type OtherMonth } from '../reading/reading-view'
-import { loadMonthSeries, type MonthSeriesSet, type ReadingHandle } from '../reading/read'
+import { loadMonthSeries, loadPairOn, type MonthSeriesSet, type ReadingHandle } from '../reading/read'
+import { BRANDS_PANEL, refusedSteps, type PairOn } from '../reading/pairs'
 import { methodLines, type MethodLines } from '../reading/method'
 import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordInputs } from '../reading/record'
 import { buildStandings, type StandingRow } from '../reading/standings'
@@ -159,6 +160,10 @@ export interface StandingsBlock {
   denominators: StandingsMonthRow[]
   /** A rule at every month a tracking change landed in. */
   rules: { month: string; label: string; text: string }[]
+  /** The steps the standings lines draw broken (decision D, WP1.3): each later
+   *  month whose step from the month before is refused on the brands view,
+   *  with the sentence. Optional: a stored block from before the rule. */
+  refusedSteps?: Readonly<Record<string, string>>
   /** Videos of the client's own that also named a tracked rival, this month. */
   dualMention: number | null
   /** What these shares are shares OF, in the reader's words. */
@@ -557,6 +562,10 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
   ])
   const analysedAhead = countAnalysedByRival(supabase, clientId, rivals.rivals)
   analysedAhead.catch(() => {})
+  // THE MONTH-PAIR JUDGE (decision D, WP1.3) depends on the tenant and the
+  // clock only, so it starts with the other early reads. It fails closed:
+  // a read error refuses every pair and the page still renders.
+  const pairAhead = loadPairOn(reading, readingAt)
   const brand = row<{ company_name: string | null }>(clientRes, 'competitive-surface.client')?.company_name ?? 'Your brand'
 
   // ── the axis ───────────────────────────────────────────────────────────
@@ -611,6 +620,10 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
   const recordAhead = loadRecordInputs(reading.client, clientId, recordWindow(month, readingAt), { now: readingAt })
   recordAhead.catch(() => {})
 
+  // THE MONTH-PAIR JUDGE (decision D, WP1.3): the standings compare a month
+  // with the one before it on the brands view only where both were read the
+  // same way, and the standings lines join only such months.
+  const pair = await pairAhead
   const standings = buildStandingsBlock({
     brand,
     rivals: listed,
@@ -619,6 +632,7 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
     readAxis,
     month,
     changes,
+    pair,
   })
 
   // ── CO1 · the rival selection ──────────────────────────────────────────
@@ -687,6 +701,9 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
           rival: selected.name,
           videos: playbookVideos,
           denominators: denominators ?? [],
+          // Each side's month-on-month verdict is judged on its own audience
+          // (the brands view), as the standings are (decision D, WP1.3).
+          pair,
         })
       : null
 
@@ -1125,6 +1142,9 @@ interface StandingsInputs {
    *  rows, and the month before it likewise — neither is a caller's to choose. */
   month: string
   changes: readonly ChangeMark[]
+  /** The page's month-pair judge (decision D, WP1.3). Null only where no pair
+   *  applies (a fixture). */
+  pair: PairOn | null
 }
 
 export function buildStandingsBlock(input: StandingsInputs): StandingsBlock {
@@ -1199,6 +1219,7 @@ export function buildStandingsBlock(input: StandingsInputs): StandingsBlock {
     dualMention: (byMonth.get(month) ?? []).find((d) => d.audience === CLIENT_AUDIENCE)?.dual_mention ?? null,
     panelId: runIdOf(month),
     prevPanelId: byMonth.has(prevMonth) ? runIdOf(prevMonth) : null,
+    comparability: byMonth.has(prevMonth) && input.pair ? input.pair(prevMonth, month, BRANDS_PANEL) : null,
   })
 
   const series: StandingsSeries[] = rows.map((r) => ({
@@ -1249,6 +1270,9 @@ export function buildStandingsBlock(input: StandingsInputs): StandingsBlock {
     series,
     denominators,
     rules: trackingRules(input.changes, input.axis),
+    // A REFUSED STEP IS DRAWN BROKEN (decision D, WP1.3): every standings line
+    // is the brands view, so one set of steps serves them all.
+    ...(input.pair ? { refusedSteps: refusedSteps(input.axis, (a, b) => (input.pair as PairOn)(a, b, BRANDS_PANEL)) } : {}),
     dualMention: (byMonth.get(month) ?? []).find((d) => d.audience === CLIENT_AUDIENCE)?.dual_mention ?? null,
     caveat: [comparabilityCaveat(denominators), splitKeysCaveat(denominators)].filter(Boolean).join(' ') || null,
     // NO "EVERY ROW UNOBSERVED" SENTENCE. There was one, and it read

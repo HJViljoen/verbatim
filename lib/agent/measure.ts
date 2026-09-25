@@ -8,6 +8,7 @@ import { MAGNITUDE_RE, allowTokens, replaceOutsideQuotes, scrubProse, type Prose
 import { rows as readRows } from '../pages/read'
 import { audienceLabel } from '../readiness/types'
 import { clearsFloor, monthChange, type Direction } from '../reading/bands'
+import { pairTools, refusedSteps, type PairOn } from '../reading/pairs'
 import { isReadable, pointsByMonth, type MonthPoint, type MonthSeries } from '../reading/series'
 import { prevMonth, monthStartOf } from '../reading/month-key'
 import type { Counted, FigureTable, Verdict, VerdictFlag } from '../reading/verdicts'
@@ -180,6 +181,13 @@ export interface MeasureAnswerInput {
   /** Does this answer carry a judgement register? The interpretation caveat is
    *  owed only where the model actually argued. */
   hasJudgement?: boolean
+  /** The month-pair judge (decision D, WP1.3): the measured month against the
+   *  month before it is compared only when the two were read the same way.
+   *  REQUIRED; null only where no pair applies (a test that says so). */
+  pair: PairOn | null
+  /** The instant the measurement is taken at: a direction word's newest month
+   *  must have ended by it. */
+  asOf: string
 }
 
 /** The sentence the product owes on a judgement register. Fixed, like the
@@ -327,6 +335,7 @@ function findingFigures(
  */
 export function measureAnswer(input: MeasureAnswerInput): AnswerMeasure {
   const month = monthStartOf(input.month)
+  const { pairFor, comparableFor } = pairTools(input.pair)
   const prevKey = prevMonth(month)
   const findings: FindingMeasure[] = []
   const caveats: string[] = []
@@ -362,6 +371,7 @@ export function measureAnswer(input: MeasureAnswerInput): AnswerMeasure {
       // answers `too_little_data`, which is the honest verdict for a theme's
       // first month (the voice-surface precedent, and `loadMovement`'s).
       prev: prev ?? { month: prevKey, videos: null, k: null, audience: series.audience },
+      comparability: pairFor(prevKey, month, series.audience),
     })
     // THE DIRECTION IS WRITTEN ONTO THE VERDICT, not only onto the finding.
     // `dropUnverdictedDirection` licenses a sentence by `Verdict.direction`
@@ -377,7 +387,9 @@ export function measureAnswer(input: MeasureAnswerInput): AnswerMeasure {
     // it asks for; that is the loader's habit, not a guarantee this function
     // may rely on.
     const upTo = series.points.filter((p) => monthStartOf(p.month) <= month)
-    const direction = input.directionWords ? movementDirection(curr, upTo) : null
+    const direction = input.directionWords
+      ? movementDirection(curr, upTo, { asOf: input.asOf, comparable: comparableFor(series.audience) })
+      : null
     verdict.direction = direction
 
     const value: Counted = { k: curr.k ?? 0, n: curr.videos ?? 0 }
@@ -412,7 +424,12 @@ export function measureAnswer(input: MeasureAnswerInput): AnswerMeasure {
     // THE LINE, THROUGH THE ONE ADAPTER. Trimmed to the month being measured
     // first, for the reason the direction word is: a chart beside an answer is
     // a chart of the months the answer was measured against.
-    const upToSeries: MonthSeries = { ...series, points: upTo }
+    // A refused step is drawn broken (decision D, WP1.3).
+    const upToSeries: MonthSeries = {
+      ...series,
+      points: upTo,
+      ...(input.pair ? { refusedSteps: refusedSteps(upTo.map((p) => p.month), (a, b) => pairFor(a, b, series.audience)) } : {}),
+    }
     const line = seriesToCalendar(upToSeries, {
       color: series.audience === input.ownAudience ? 'var(--you)' : 'var(--cat)',
       label: audienceLabel(series.audience),

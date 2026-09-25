@@ -207,8 +207,9 @@ function updatesReading(month: string, done: readonly Update[]): { reading: Upda
 
 /** The next scheduled update after `base` that is not already overdue at
  *  `nowMs`. Bounded: a schedule that never reaches the present answers null
- *  rather than looping. */
-function nextSlot(base: string, nowMs: number, after: (instant: string) => string | null): string | null {
+ *  rather than looping. Exported for the month-pair rule's "checked with the
+ *  {date} update" (lib/reading/comparability.ts `pairJudge`). */
+export function nextSlot(base: string, nowMs: number, after: (instant: string) => string | null): string | null {
   let next = after(base)
   for (let guard = 0; next != null && guard < 400; guard++) {
     const at = msOf(next)

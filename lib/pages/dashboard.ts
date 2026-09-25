@@ -331,6 +331,8 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
   // ── where you stand ────────────────────────────────────────────────────
   const sent = sentimentSplit(summary?.audience_sentiment)
   const sentPrev = sentimentSplit(prev?.audience_sentiment)
+  // NOT UNDER THE MONTH-PAIR RULE (market-first decision D, WP1.3): the
+  // dashboard is a parked legacy page, compared update to update.
   const sentimentVerdict = sent && sentPrev
     ? proportionDelta({ nowPct: sent.positivePct, nowN: sent.judged, prevPct: sentPrev.positivePct, prevN: sentPrev.judged }, SENTIMENT_BAND)
     : null

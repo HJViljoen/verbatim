@@ -17,8 +17,10 @@ import type { Counted, FigureTable, ObjectKind, RefusedReason, VerdictFlag, Verd
 //
 // WHY IT IS NOT A VERDICT. A `Verdict` is a claim that something MOVED. A gap
 // is a claim that two things DIFFER, and the two are not the same statement
-// even though the arithmetic underneath them is: 31% of your 84 videos against
-// 44% of Freitag's 142 is a difference of two independent proportions on two
+// even though the arithmetic underneath them is: a share of your own videos
+// against a share of Freitag's (Sealand's September: about 9 of yours and 6 of
+// Freitag's, research F12; the mock's 84 and 142 were invented volume) is a
+// difference of two independent proportions on two
 // different denominators, taken at one instant. Nothing about it is a
 // direction, so it can never earn a direction word from one reading, and
 // folding it into `Verdict` would have let every reader of that type treat it
@@ -35,8 +37,9 @@ import type { Counted, FigureTable, ObjectKind, RefusedReason, VerdictFlag, Verd
 // levels beside it say is impossible by construction.
 //
 // AND WHAT THAT FLOOR MEANS ON TODAY'S CORPUS, stated here because it is the
-// answer the product will actually give: Sealand's own audience carries 84
-// videos in September, under the 100-video floor, so the you-vs-rival gap the
+// answer the product will actually give: Sealand's own audience carries about 9
+// videos in September (research F12; the mock's 84 was invented), far under
+// the 100-video floor, so the you-vs-rival gap the
 // mock prints as "13 points" reads `too few to compare` on a month and clears
 // only over a quarter. That is the same refusal the mock's own change column
 // prints one cell away — the product is consistent, and the headline is not
@@ -226,6 +229,14 @@ function readingBetween(
   if (refused) return { ...base, gapPts: null, bandPts: null, state: 'refused' }
   if (!readable(a) || !readable(b)) return { ...base, gapPts: null, bandPts: null, state: 'too_little_data' }
 
+  // NOT UNDER THE MONTH-PAIR RULE (market-first decision D, WP1.3), and why:
+  // a gap is two sides in ONE window, so it compares no month pair; its words
+  // are `apart` and `level`, never "moved". The one cross-month element is
+  // `basis`, the same gap in an earlier window, printed as a level beside this
+  // one. Every caller puts YOUR side as `a`, and your own side is under
+  // SHARE_BAND's 100 videos a month on both tenants (Sealand about 9, Össur
+  // about 20; research F1, F3), so the floor below answers `too_little_data`
+  // on both readings today. Retired in Stage 3 (deploy 5).
   const delta = proportionDelta(
     {
       nowPct: sidePct(a) as number,

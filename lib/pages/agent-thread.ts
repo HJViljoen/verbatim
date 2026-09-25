@@ -21,7 +21,8 @@ import {
   type AnswerMeasure,
   type NotAnswered,
 } from '../agent/measure'
-import { loadMonthSeries } from '../reading/read'
+import { loadMonthSeries, loadPairOn } from '../reading/read'
+import { refuseEveryPair } from '../reading/pairs'
 import { monthStartOf, prevMonth } from '../reading/month-key'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../rivals'
 import { detailHref } from '../shell/bar'
@@ -642,7 +643,8 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
   // June's conversation says. Capped at the current month, because a clock that
   // ran ahead is not a month anyone can read.
   const answeredAt = [...messages].reverse().find((m) => m.role === 'agent' && m.result)?.created_at ?? null
-  const thisMonth = monthStartOf(new Date().toISOString())
+  const measuredAt = new Date().toISOString()
+  const thisMonth = monthStartOf(measuredAt)
   const answeredMonth = answeredAt ? monthStartOf(answeredAt) : thisMonth
   const readMonth = answeredMonth > thisMonth ? thisMonth : answeredMonth
   const seriesP = storedRegistryIds.length
@@ -654,6 +656,12 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
         to: readMonth,
       }).catch(() => null)
     : Promise.resolve(null)
+  // THE MONTH-PAIR JUDGE (decision D, WP1.3): the measured month is compared
+  // with the month before it only when the two were read the same way. A read
+  // that fails refuses every pair, never passes one.
+  const judgeP = storedRegistryIds.length
+    ? loadPairOn(scope.reading, measuredAt)
+    : Promise.resolve(refuseEveryPair)
 
   // A document thread wraps a plan_check; its quotes resolve from stored
   // insight ids — no quote text is kept in either table.
@@ -795,6 +803,8 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
     findings: answerFindings(turns),
     series: seeded ? (set as NonNullable<typeof set>).series : [],
     month: readMonth,
+    pair: await judgeP,
+    asOf: measuredAt,
     directionWords: directionWordsFor('agent.movement'),
     ownAudience: CLIENT_AUDIENCE,
     hasJudgement: turns.some((t) => (t.answer?.judgement.length ?? 0) > 0),

@@ -55,6 +55,15 @@ export interface CalendarPoint {
   /** An extra clause on the hover, in the caller's words (a `MonthLabel.text`,
    *  usually). Never invented here. */
   note?: string
+  /**
+   * The step INTO this month from the axis month before it is refused
+   * (market-first decision D, WP1.3): the two months were not read the same
+   * way, so no segment joins them. The points stay; the segment does not. The
+   * value is the refusal's sentence (`pairSentence`, lib/calibration.ts), which
+   * the chart prints in its figure line. Absent on a stored series from before
+   * the rule, which draws as it was sent.
+   */
+  brokenBefore?: string
 }
 
 export interface CalendarSeries {
@@ -275,6 +284,10 @@ export function niceMid(lo: number, hi: number): number {
  * the only code in the repo that already knows this, and it is private to a
  * tile. One run per unbroken stretch; a lone point gets a run of one and is
  * drawn as a dot, because a one-point polyline is invisible.
+ *
+ * AND A REFUSED STEP IS A GAP TOO (WP1.3). A point whose step from the month
+ * before it is refused (`brokenBefore`) starts a new run: both points are
+ * drawn, the segment between them is not.
  */
 export function lineSegments(points: readonly CalendarPoint[]): number[][] {
   const runs: number[][] = []
@@ -284,6 +297,10 @@ export function lineSegments(points: readonly CalendarPoint[]): number[][] {
       if (held.length) runs.push(held)
       held = []
       return
+    }
+    if (p.brokenBefore && held.length) {
+      runs.push(held)
+      held = []
     }
     held.push(i)
   })
@@ -457,6 +474,7 @@ export function hoverLine(
   const state = stateNote(point.state)
   if (state) parts.push(state)
   if (point.note) parts.push(point.note)
+  if (point.brokenBefore) parts.push(point.brokenBefore)
   return parts.join(' · ')
 }
 
@@ -605,8 +623,9 @@ export function legendEveryMonth(
  * A series that never reaches the plot, and what the key says instead.
  *
  * WHY THE KEY HAS TO SAY IT. The gutter tokens are spec-correct one month at a
- * time; at 100% coverage the COMPOSITION is not. Sealand carries 84 videos
- * against `SHARE_BAND.minN` 100, so every month of the client's own audience is
+ * time; at 100% coverage the COMPOSITION is not. Sealand carries about 9
+ * videos a month (research F12; the mock's 84 was invented) against
+ * `SHARE_BAND.minN` 100, so every month of the client's own audience is
  * `below_floor` and the green series renders as evenly spaced hollow rings
  * tangent to the 0% baseline — which reads as a flat series plotted at zero —
  * while the key above still promises "● Sealand — you" as a line. The key is
@@ -710,6 +729,24 @@ export function figureLines(
     out.push({ label: s.label, ...(s.labelSlot ? { labelSlot: s.labelSlot } : {}), text })
   }
   return out
+}
+
+/**
+ * The figure line for refused steps (WP1.3): why the newest step a series
+ * breaks at is not joined, said once for the chart. The newest, because that
+ * is the pair the page is reading; an older break's reason is on its month's
+ * hover. Null where no step is broken.
+ */
+export function brokenStepLine(series: readonly CalendarSeries[]): string | null {
+  let newest: { month: string; why: string } | null = null
+  for (const s of series) {
+    for (const p of s.points) {
+      if (!p.brokenBefore) continue
+      const month = monthStartOf(p.month)
+      if (!newest || month > newest.month) newest = { month, why: p.brokenBefore }
+    }
+  }
+  return newest?.why ?? null
 }
 
 /** The sentence under the figures, while the chart is waiting for its months. */

@@ -12,7 +12,9 @@ import { gapBasisLine, gapLine } from '@/lib/reading/gap'
 import { marketFixture } from '@/components/pages/market-surface/fixture'
 import { competitiveFixture } from '@/components/pages/competitive-surface/fixture'
 import { QUARTERLY_BLOCKS, quarterlyBlocksFor } from './index'
-import { afterQuarterFixture, closedFixture, formingFixture, quarterlyFixture, subjectLeadFixture, thinMonthFixture, thinQuarterFixture, unmentionedFixture } from './fixture'
+import { afterQuarterFixture, brokenStepFixture, closedFixture, formingFixture, quarterlyFixture, subjectLeadFixture, thinMonthFixture, thinQuarterFixture, unmentionedFixture } from './fixture'
+import { quarterlySubjects } from './subjects'
+import { quarterlyMoves } from './moves'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -1090,5 +1092,44 @@ describe('the artboard port (Block D wave 2)', () => {
 
   it('qr.p8.footer · the privacy sentence is on the last page', () => {
     expect(text('quarterly.unsettled')).toContain('Commenters are never identified')
+  })
+})
+
+// THE MONTH-PAIR RULE ON THE QUARTERLY'S LINES (market-first decision D, WP1.3
+// review fix). The subject line and a move's chart joined refused steps: the
+// break data existed on the Overview's row and on the move reading, and the
+// quarterly dropped it. The sentence is Sealand's (our September search
+// changes); the fixture's months are the mock's.
+describe('quarterly lines under the month-pair rule', () => {
+  const WHY = 'Not read as a change: we changed what we search in September.'
+
+  it('qr.subjects · carries the Overview row\'s refused steps into the line and says why', () => {
+    const broken = brokenStepFixture(WHY)
+    const series = broken.subjects.line!.series[0]
+    expect(series.breaks?.at(-1)).toBe(true)
+    expect(series.breakWhy?.at(-1)).toBe(WHY)
+    for (const mode of ['app', 'print'] as const) {
+      const markup = render(quarterlySubjects.render(broken, mode, ctx))
+      const plain = render(quarterlySubjects.render(quarterlyFixture(), mode, ctx))
+      assertCopyContract(markup)
+      expect(renderText(quarterlySubjects.render(broken, mode, ctx))).toContain(WHY)
+      expect(renderText(quarterlySubjects.render(quarterlyFixture(), mode, ctx))).not.toContain(WHY)
+      // September stands alone: no segment reaches its x, the rightmost.
+      const xs = (m: string): number[] => [...m.matchAll(/<polyline[^>]*points="([^"]+)"/g)].flatMap((x) => x[1].split(' ').map((pt) => Number(pt.split(',')[0])))
+      expect(xs(markup).length).toBeGreaterThan(0)
+      expect(Math.max(...xs(markup))).toBeLessThan(Math.max(...xs(plain)))
+    }
+  })
+
+  it('qr.moves · a move\'s chart breaks at a refused step and says why', () => {
+    const q = quarterlyFixture()
+    const reading = q.moves.readings[0]
+    const refused = { ...reading, series: reading.series.map((s) => ({ ...s, refusedSteps: { '2026-09-01': WHY } })) }
+    const broken = { ...q, moves: { ...q.moves, readings: [refused] } }
+    for (const mode of ['app', 'print'] as const) {
+      const text = renderText(quarterlyMoves.render(broken, mode, ctx))
+      expect(text).toContain(WHY)
+      expect(renderText(quarterlyMoves.render(q, mode, ctx))).not.toContain(WHY)
+    }
   })
 })

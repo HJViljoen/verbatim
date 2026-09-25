@@ -275,6 +275,10 @@ export interface SubjectQuarterRow {
   spark: (number | null)[]
   /** The months `spark` is indexed by, same length. */
   sparkMonths: string[]
+  /** The Overview row's refused steps and their sentences (decision D, WP1.3),
+   *  same length. Optional: a quarterly stored before the rule has none. */
+  sparkBreaks?: boolean[]
+  sparkBreakWhy?: (string | null)[]
   /** The quarter columns. `baseline_forming` below six readings. */
   youQuarter: Verdict | null
   categoryQuarter: Verdict | null
@@ -1374,6 +1378,10 @@ function buildQuarterVerdicts(a: {
     // none: dropped, rather than printed to a client as a raw id.
     const label = themeLabel(t.theme_id, a.overview)
     if (!was || !n || !priorN || !label) continue
+    // NOT UNDER THE MONTH-PAIR RULE YET (market-first decision D): a quarter
+    // against a quarter is WP3.11's (deploy 5). The plan's first quarter
+    // comparison is Q1 2027 against Q4 2026, in April (§2.11); Q4 against Q3
+    // is refused by comparability.
     out.push(
       quarterChange({
         object: { kind: 'theme', id: t.theme_id, label },
@@ -1856,6 +1864,8 @@ function buildSubjects(a: {
     // readings stand behind it.
     spark: row.spark,
     sparkMonths: row.sparkMonths,
+    ...(row.sparkBreaks ? { sparkBreaks: row.sparkBreaks } : {}),
+    ...(row.sparkBreakWhy ? { sparkBreakWhy: row.sparkBreakWhy } : {}),
     youQuarter: byObject.get(`subject:${row.id}:${CLIENT_AUDIENCE}`) ?? null,
     categoryQuarter: byObject.get(`subject:${row.id}:${a.overview.category.audience}`) ?? null,
     gap: quarterGap(
@@ -1877,7 +1887,14 @@ function buildSubjects(a: {
       ? monthLine({
           months: lead.sparkMonths,
           labelFor: monthlyLineLabel,
-          series: [{ label: `${lead.label} · ${block.categoryLabel}`, points: lead.spark }],
+          // The month-pair rule's refused steps (decision D, WP1.3), drawn
+          // broken with the sentence, as on the Overview's own line.
+          series: [{
+            label: `${lead.label} · ${block.categoryLabel}`,
+            points: lead.spark,
+            ...(lead.sparkBreaks ? { breaks: lead.sparkBreaks } : {}),
+            ...(lead.sparkBreakWhy ? { breakWhy: lead.sparkBreakWhy } : {}),
+          }],
         })
       : null,
     quotes: a.quotes,

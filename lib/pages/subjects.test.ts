@@ -33,6 +33,7 @@ import { buildSeries, type DenominatorPoint, type MonthPoint, type MonthSeries, 
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '../rivals'
 import { gapLine, type GapSide } from '../reading/gap'
 import type { Subject } from '../subjects/types'
+import { FIXTURE_ENDED } from '../test/pair-fixture'
 
 // The pure half of the Subjects page (Phase 1 WP12).
 
@@ -432,6 +433,7 @@ function fixtureSides(over: { thin?: boolean; rivalRows?: boolean; kindRows?: St
   }
 
   return buildSides({
+    pair: null, asOf: FIXTURE_ENDED,
     subject: subject(),
     rivals: over.rivalRows === false ? [] : [{ name: 'Freitag', retiredAt: null }],
     leadRival: over.rivalRows === false ? null : { name: 'Freitag', retiredAt: null },

@@ -13,6 +13,7 @@ import { NOT_ANSWERED_HREF, DECLINED_WHY } from '@/lib/agent/measure'
 import { surface } from '@/lib/nav'
 import type { MonthPoint, MonthSeries } from '@/lib/reading/series'
 import type { Verdict } from '@/lib/reading/verdicts'
+import { FIXTURE_ENDED } from '@/lib/test/pair-fixture'
 
 // Ask's fixtures (Phase 1 Block D, package D8).
 //
@@ -147,6 +148,8 @@ const OWN_2 = series(
 export function askMeasure(over: Partial<AnswerMeasure> = {}): AnswerMeasure {
   return {
     ...measureAnswer({
+      // No month pair applies: a fixture pins rendering, read after its months ended (lib/test/pair-fixture.ts).
+      pair: null, asOf: FIXTURE_ENDED,
       findings: [
         { findingId: '0:G1', registryIds: [REGISTRY_ID] },
         { findingId: '0:G2', registryIds: [REGISTRY_ID_2] },
@@ -414,6 +417,8 @@ export function followUpFixture(over: Partial<AgentThreadData> = {}): AgentThrea
     ],
     measure: askMeasure({
       ...measureAnswer({
+        // No month pair applies: a fixture pins rendering, read after its months ended (lib/test/pair-fixture.ts).
+        pair: null, asOf: FIXTURE_ENDED,
         findings: [
           { findingId: '0:G1', registryIds: [REGISTRY_ID] },
           { findingId: '0:G2', registryIds: [REGISTRY_ID_2] },

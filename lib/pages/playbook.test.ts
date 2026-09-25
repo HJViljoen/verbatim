@@ -205,7 +205,7 @@ describe('buildHeadToHead · CO3', () => {
     { month: '2026-09-01', audience: 'industry-other', videos: 388, comments: 10534 },
   ]
   const h2h = (videos: readonly PlaybookVideo[] = VIDEOS) =>
-    buildHeadToHead({ month: '2026-09-01', brand: 'Össur', rival: 'Ottobock', videos, denominators: DEN })
+    buildHeadToHead({ month: '2026-09-01', brand: 'Össur', rival: 'Ottobock', videos, denominators: DEN, pair: null })
 
   it('takes the share measures off the denominators and the rest off the videos', () => {
     const r = h2h()
@@ -265,7 +265,7 @@ describe('buildHeadToHead · CO3', () => {
     const den = [{ month: '2026-09-01', audience: 'client', videos: 6, comments: 60 }]
     const both = (excludePlatforms: readonly string[]) => {
       const h = buildHeadToHead({
-        month: '2026-09-01', brand: 'Össur', rival: 'Ottobock', videos, denominators: den, excludePlatforms,
+        month: '2026-09-01', brand: 'Össur', rival: 'Ottobock', videos, denominators: den, excludePlatforms, pair: null,
       })
       const p = buildPlaybook({ month: '2026-09-01', brand: 'Össur', rival: null, videos, excludePlatforms })
       return [
@@ -344,7 +344,7 @@ describe('the figure tables a document may name', () => {
       { month: '2026-09-01', audience: 'competitor:Ottobock', videos: 42, comments: 645 },
     ]
     const f = headToHeadFigures(
-      buildHeadToHead({ month: '2026-09-01', brand: 'Össur', rival: 'Ottobock', videos: VIDEOS, denominators: DEN }),
+      buildHeadToHead({ month: '2026-09-01', brand: 'Össur', rival: 'Ottobock', videos: VIDEOS, denominators: DEN, pair: null }),
     )
     // 151 and 645 are COMMENTS. Published as `videos` they rendered a comment
     // count as a video count on any document that named the token.
@@ -375,7 +375,7 @@ describe('the figure tables a document may name', () => {
       { month: '2026-09-01', audience: 'client', videos: 19, comments: 151 },
       { month: '2026-09-01', audience: 'competitor:Ottobock', videos: 42, comments: 645 },
     ]
-    const h = buildHeadToHead({ month: '2026-09-01', brand: 'Össur', rival: 'Ottobock', videos: VIDEOS, denominators: DEN })
+    const h = buildHeadToHead({ month: '2026-09-01', brand: 'Össur', rival: 'Ottobock', videos: VIDEOS, denominators: DEN, pair: null })
     const engagement = h.measures.find((m) => m.key === 'engagement')!
     expect(engagement.you!.text).toBe('2.4% median')
     const f = headToHeadFigures(h)
@@ -397,7 +397,7 @@ describe('the figure tables a document may name', () => {
       { month: '2026-09-01', audience: 'competitor:Ottobock', videos: 42, comments: 645 },
     ]
     const f = headToHeadFigures(
-      buildHeadToHead({ month: '2026-09-01', brand: 'Össur', rival: 'Ottobock', videos: VIDEOS, denominators: DEN }),
+      buildHeadToHead({ month: '2026-09-01', brand: 'Össur', rival: 'Ottobock', videos: VIDEOS, denominators: DEN, pair: null }),
     )
     expect(f['h2h_you_videos'].unit).toBe('pct')
     // Own posts is a count with no denominator: the count is published and no
@@ -441,7 +441,7 @@ describe('the invariant the narrowed previous-month read rests on', () => {
     { month: '2026-09-01', audience: 'competitor:Ottobock', videos: 30, comments: 520 },
     { month: '2026-09-01', audience: 'industry-other', videos: 40, comments: 900 },
   ]
-  const args = { month: '2026-09-01', brand: 'Össur', rival: 'Ottobock', denominators }
+  const args = { month: '2026-09-01', brand: 'Össur', rival: 'Ottobock', denominators, pair: null }
 
   it('reads the same head to head with and without the previous month’s category rows', () => {
     const narrow = buildHeadToHead({ ...args, videos: base })

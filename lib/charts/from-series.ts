@@ -81,7 +81,13 @@ export function seriesToCalendar(series: MonthSeries, opts: ToCalendarOptions): 
   const floor = opts.floor === null ? null : (opts.floor ?? SHARE_BAND)
   const minK = measure === 'share' ? floor?.minK ?? null : null
 
+  const steps = series.refusedSteps ?? {}
   const points: CalendarPoint[] = series.points.map((p) => {
+    const broken = steps[p.month]
+    return broken ? { ...pointOf(p), brokenBefore: broken } : pointOf(p)
+  })
+
+  function pointOf(p: MonthPoint): CalendarPoint {
     const value = measureOf(p, measure)
     const hover = p.labels.filter((l) => HOVER_LABELS.has(l.kind)).map((l) => l.text)
     const note = hover.length ? hover.join(' ') : undefined
@@ -107,7 +113,7 @@ export function seriesToCalendar(series: MonthSeries, opts: ToCalendarOptions): 
       ...(state === 'filling' && opts.atLastMonth != null ? { atLastMonth: opts.atLastMonth } : {}),
       ...(note ? { note } : {}),
     }
-  })
+  }
 
   // THE END LABEL'S DENOMINATOR IS THE END LABEL'S MONTH, not the last month on
   // the axis. The chart draws its label at the last PLOTTED point, so taking

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { shortDate, monthName } from '@/lib/format'
 import {
-  axisLabels, calendarGeometry, chartId, chartReady, CHART_WAITING, collapseRules, columnTitle, drawsLine,
+  axisLabels, brokenStepLine, calendarGeometry, chartId, chartReady, CHART_WAITING, collapseRules, columnTitle, drawsLine,
   figureLines, lastReading, legendEveryMonth, legendMonths, legendStates, lineSegments, MIN_CHART_MONTHS,
   monthColumns, spanOf, spreadLabels, STATE_LABEL, undrawnLine, valueScale,
   type CalendarBand, type CalendarPoint, type CalendarRule, type CalendarSeries,
@@ -221,6 +221,9 @@ export function CalendarLine({
   // printed over each other. They are named once, in `undrawnLine`.
   const series = given.filter(drawsLine)
   const missing = undrawnLine(given)
+  // WHY A STEP IS NOT JOINED (WP1.3): the newest refused step's sentence, in
+  // the figure line under the plot.
+  const broken = brokenStepLine(series)
 
   const g = calendarGeometry({ axis: months, width, height, padL, padR })
   // THE GUTTER TRACK, AND WHY IT IS NOT FIVE UNITS LOWER (SH14, amended at the
@@ -513,6 +516,7 @@ export function CalendarLine({
         ))}
       </svg>
 
+      {broken ? <p className="m-0 text-[11px] leading-[1.4] text-muted-foreground">{broken}</p> : null}
       {caption ? <p className="m-0 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">{caption}</p> : null}
     </div>
   )
@@ -688,6 +692,7 @@ function CalendarFigures({
 }) {
   const rows = figureLines(series, format)
   const missing = undrawnLine(series)
+  const broken = brokenStepLine(series)
   return (
     <div className={cn('vb-cal-figures flex min-w-0 flex-col gap-1.5', className)}>
       {rows.map((r) => (
@@ -699,6 +704,7 @@ function CalendarFigures({
         </p>
       ))}
       {missing ? <p className="m-0 text-[11px] text-muted-foreground">{missing}</p> : null}
+      {broken ? <p className="m-0 text-[11px] text-muted-foreground">{broken}</p> : null}
       <p className="m-0 text-[11px] text-muted-foreground">{CHART_WAITING}</p>
       {caption ? <p className="m-0 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">{caption}</p> : null}
     </div>

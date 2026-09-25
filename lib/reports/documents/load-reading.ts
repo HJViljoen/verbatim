@@ -335,6 +335,8 @@ export interface ChartLead {
   months: readonly string[]
   label: string
   points: (number | null)[]
+  /** The refused steps (decision D, WP1.3), where the row carried them. */
+  breaks?: boolean[]
 }
 
 /**
@@ -357,12 +359,18 @@ export interface ChartLead {
  * the shape says so rather than drawing a second line off the same numbers.
  */
 export function chartLead(
-  rows: readonly { label: string; spark: (number | null)[]; sparkMonths: string[] }[],
+  rows: readonly { label: string; spark: (number | null)[]; sparkMonths: string[]; sparkBreaks?: boolean[] }[],
   categoryLabel: string,
 ): ChartLead | null {
   const lead = rows.find((r) => r.spark.some((p) => p != null)) ?? null
   if (!lead) return null
-  return { months: lead.sparkMonths, label: `${lead.label} · ${categoryLabel}`, points: lead.spark }
+  return {
+    months: lead.sparkMonths,
+    label: `${lead.label} · ${categoryLabel}`,
+    points: lead.spark,
+    // The month-pair rule's refused steps (decision D, WP1.3), drawn broken.
+    ...(lead.sparkBreaks ? { breaks: lead.sparkBreaks } : {}),
+  }
 }
 
 export async function briefSlideFigures(
@@ -436,7 +444,7 @@ export async function briefSlideFigures(
   // answer to D3, applied to a document.
   const lead = chartLead(a.overview.subjects.rows, a.overview.category.label)
   const line = lead
-    ? monthLine({ months: lead.months, labelFor: monthlyLineLabel, series: [{ label: lead.label, points: lead.points, unit: 'pct' }] })
+    ? monthLine({ months: lead.months, labelFor: monthlyLineLabel, series: [{ label: lead.label, points: lead.points, unit: 'pct', ...(lead.breaks ? { breaks: lead.breaks } : {}) }] })
     : null
 
   return {

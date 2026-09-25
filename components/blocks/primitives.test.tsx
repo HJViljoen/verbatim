@@ -311,6 +311,45 @@ describe('FigureCell', () => {
   })
 })
 
+describe('BlockMovement: the month-pair rule (market-first decision D, WP1.3)', () => {
+  // Looks & style, August against September: 38 of 351 and 104 of 626, a pair
+  // our own September search changes refuse.
+  const looks: Verdict = {
+    objectKind: 'subject', objectId: 'looks', objectLabel: 'Looks & style', audience: 'industry-other',
+    window: { kind: 'month', from: '2026-09-01', to: '2026-10-01' },
+    basis: { from: '2026-08-01', to: '2026-09-01' },
+    value: { k: 104, n: 626 }, baseline: { k: 38, n: 351 },
+    changePts: null, bandPts: null, state: 'refused', refusedReason: 'tracking_change', flags: [],
+    pair: { mode: 'refuse', cause: 'searches', changeMonth: '2026-09-01', checkWith: null },
+  }
+  const SENTENCE = 'Not read as a change: we changed what we search in September.'
+
+  it('prints the refusal\'s own sentence in every mode, never "moved" and never a change', () => {
+    for (const mode of MODES) {
+      const markup = render(<BlockMovement mode={mode} verdict={looks} unit="pts" />)
+      assertCopyContract(markup)
+      expect(markupText(markup)).toBe(SENTENCE)
+      expect(markup).not.toContain('▲')
+      if (mode === 'email') assertEmailSafe(markup)
+    }
+  })
+
+  it('a pair not compared yet names the update it is read with next', () => {
+    const notYet: Verdict = { ...looks, refusedReason: 'depth', pair: { mode: 'refuse', cause: 'not_yet', changeMonth: null, checkWith: '2026-12-13T04:00:00.000Z' } }
+    expect(markupText(render(<BlockMovement mode="app" verdict={notYet} />))).toBe('Not compared yet: checked with the 13 Dec update.')
+  })
+
+  it('a pair a change of ours touched a little of keeps its band and carries the note', () => {
+    const flagged: Verdict = { ...moved, flags: ['tracking_change'], pair: { mode: 'flag', cause: 'ours', changeMonth: '2026-10-01', checkWith: null } }
+    for (const mode of MODES) {
+      const markup = render(<BlockMovement mode={mode} verdict={flagged} unit="pts" />)
+      assertCopyContract(markup)
+      expect(markupText(markup)).toContain('Read with a note: a change of ours in October touched under a tenth of the videos.')
+      expect(markupText(markup)).toContain('6.9')
+    }
+  })
+})
+
 describe('BlockMovement', () => {
   it('marks itself as the verdict node, in all three modes', () => {
     for (const mode of MODES) {

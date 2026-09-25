@@ -3,7 +3,9 @@ import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, isRivalAudience, rivalKey, rivalNam
 import { attentionSplit, attentionTotals, type AttentionRow } from './attention'
 import { monthStartOf, nextMonth } from './monthly'
 import type { PlatformMix } from './types'
-import { bandVerdict, type Verdict, type VerdictFlag } from './verdicts'
+import { pairedVerdict } from './bands'
+import { pairOnVerdict, type PairComparability } from './comparability'
+import type { Verdict, VerdictFlag } from './verdicts'
 
 // Banded standings, on two denominators (design item 11, CO2).
 //
@@ -142,6 +144,12 @@ export interface StandingsInput {
   prevPanelId?: string | null
   floor?: BandOptions
   flags?: VerdictFlag[]
+  /** Were the two months read the same way (market-first decision D, WP1.3)?
+   *  REQUIRED: the brands view of `prevMonth` against `month`. A refused pair
+   *  refuses both verdicts on every row, with the rule's words; a pair a change
+   *  of ours touched a little of flags them. Null where no pair applies (no
+   *  previous month is read, or a caller with no judge says why). */
+  comparability: PairComparability | null
 }
 
 /**
@@ -204,6 +212,9 @@ export function buildStandings(input: StandingsInput): StandingRow[] {
     : undefined
   const samePanel = input.panelId != null && input.prevPanelId != null && input.panelId === input.prevPanelId
   const panelRefused = input.prevRows != null && input.panelId != null && input.prevPanelId != null && !samePanel
+  // THE MONTH-PAIR RULE (decision D, WP1.3), under the panel's own rule: a
+  // re-frozen panel refuses first, as it always has.
+  const pair = pairOnVerdict(input.comparability)
 
   return wanted.map(({ audience, label, role }) => {
     const row = byAudience.get(audience)
@@ -217,7 +228,7 @@ export function buildStandings(input: StandingsInput): StandingRow[] {
     const flags = input.flags ?? []
 
     const contentVerdict = canCompare
-      ? bandVerdict({
+      ? pairedVerdict({
           objectKind: role === 'rival' ? 'rival' : 'audience',
           objectId: audience,
           objectLabel: label,
@@ -235,7 +246,7 @@ export function buildStandings(input: StandingsInput): StandingRow[] {
           floor,
           flags,
           ...(panelRefused ? { refused: 'tracking_change' as const } : {}),
-        })
+        }, input.comparability)
       : null
 
     // The attention verdict is built by hand rather than through `bandVerdict`,
@@ -259,10 +270,13 @@ export function buildStandings(input: StandingsInput): StandingRow[] {
         changePts: null,
         bandPts: null,
         state: 'too_little_data',
-        flags,
+        flags: pair.flag && !flags.includes('tracking_change') ? [...flags, 'tracking_change'] : flags,
+        ...(pair.note && !panelRefused ? { pair: pair.note } : {}),
       }
       if (panelRefused) {
         attentionVerdict = { ...base, state: 'refused', refusedReason: 'tracking_change' }
+      } else if (pair.refused) {
+        attentionVerdict = { ...base, state: 'refused', refusedReason: pair.refused }
       } else {
         const delta = proportionDelta(
           {

@@ -245,6 +245,15 @@ export async function computeRunDelta(
         prev: sides.prev.positive as number,
         nowJudged: sides.now.judged,
         prevJudged: sides.prev.judged,
+        // NOT UNDER THE MONTH-PAIR RULE (market-first decision D, WP1.3), and
+        // NOT a parked page: this is one update against the previous one, not
+        // a month pair, and it still feeds the brief writer's "What moved
+        // since the previous update" on every non-monthly document
+        // (lib/reports/documents/signals.ts into write.ts `deltaInWords`) and
+        // a built report's cover and digest (lib/reports/build.ts). An
+        // update-to-update delta can span our own search changes (13 and
+        // 17 Sep). OPEN, flagged to WP1.7 (the brief): that writer must not be
+        // handed a move across a change of ours.
         verdict: proportionDelta(
           {
             nowPct: sides.now.positive as number, nowN: sides.now.judged,

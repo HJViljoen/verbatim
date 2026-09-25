@@ -83,6 +83,8 @@ function moveSeries(reading: MoveReading): CalendarSeries[] {
           state: point?.pct == null ? ('hollow' as const) : ('read' as const),
           k: point?.k ?? null,
           n: point?.n ?? null,
+          // A refused step is drawn broken (decision D, WP1.3), as on Your moves.
+          ...(s.refusedSteps?.[month] ? { brokenBefore: s.refusedSteps[month] } : {}),
         }
       }),
     }))
