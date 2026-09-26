@@ -22,7 +22,7 @@ export interface FakeAdmin {
 
 export function fakeAdmin(init: {
   tables: Record<string, object[]>
-  rpc?: Record<string, (params: Row) => Row[] | { error: { code?: string; message: string } }>
+  rpc?: Record<string, (params: Row) => object[] | { error: { code?: string; message: string } }>
   /** Table name → an error every insert or upsert into it returns (a guard's refusal). */
   refuse?: Record<string, (rows: Row[]) => { code?: string; message: string } | null>
 }): FakeAdmin {
@@ -82,14 +82,17 @@ export function fakeAdmin(init: {
       const refused = init.refuse?.[table]?.(rows) ?? null
       if (refused) return { data: null, error: refused }
       const keys = opts?.onConflict?.split(',').map((k) => k.trim()) ?? null
+      // What the statement returns: every row it wrote, and not a duplicate
+      // an ON CONFLICT DO NOTHING (ignoreDuplicates) skipped.
+      const returned: Row[] = []
       for (const r of rows) {
         const at = keys ? tables[table].findIndex((h) => keys.every((k) => String(h[k]) === String(r[k]))) : -1
         if (at >= 0) {
-          if (op === 'upsert' && !opts?.ignoreDuplicates) tables[table][at] = { ...tables[table][at], ...r }
-        } else tables[table].push(r)
+          if (op === 'upsert' && !opts?.ignoreDuplicates) { tables[table][at] = { ...tables[table][at], ...r }; returned.push(r) }
+        } else { tables[table].push(r); returned.push(r) }
       }
       writes.push({ table, op, rows })
-      return { data: rows, error: null }
+      return { data: returned, error: null }
     }
     const done = Promise.resolve().then(run)
     return { select: () => done, then: (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => done.then(res, rej) }
@@ -108,7 +111,7 @@ export function fakeAdmin(init: {
       const all = (): { data: Row[] | null; error: unknown } => {
         if (!h) return { data: null, error: { code: 'PGRST202', message: `Could not find the function public.${fn} in the schema cache` } }
         const out = h(params)
-        return Array.isArray(out) ? { data: out, error: null } : { data: null, error: out.error }
+        return Array.isArray(out) ? { data: out as Row[], error: null } : { data: null, error: out.error }
       }
       let from = 0
       let to = Number.POSITIVE_INFINITY

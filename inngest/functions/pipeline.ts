@@ -25,7 +25,7 @@ import { discoverSubreddits } from '@/lib/gather/subreddit-discovery'
 import { activeSubreddits } from '@/lib/gather/subreddits'
 import { runStep2c } from '@/lib/pipeline/owned-events'
 import { runAnomalyCheck } from '@/lib/pipeline/anomaly-check'
-import { comparabilitySummary, planComparability, runComparabilityTask, taskLabel } from '@/lib/pipeline/comparability-step'
+import { comparabilitySummary, keepWeeksInRun, planComparability, runComparabilityTask, taskLabel } from '@/lib/pipeline/comparability-step'
 import { planSegmentVideos, runSegmentBatch, segmentSummary } from '@/lib/pipeline/segment-videos'
 import { lensSummary, planLensReadings, runLensMonth } from '@/lib/pipeline/lens-readings'
 import { brandSummary, planBrandReadings, runBrandMonth } from '@/lib/pipeline/brand-readings'
@@ -1621,7 +1621,8 @@ export const runPipeline = inngest.createFunction(
     // The comparability step (WP3.4): month_pair_comparability and
     // config_change_reach for every pair with a filling side, read through THIS
     // run; comparability_checks for a pair whose later month has ended; and the
-    // weekly keep (WP3.13, no id of its own). One task a step, so none nears the
+    // weekly keep (WP3.13, no id of its own: each week this run brings to its
+    // age, through mf/s3-weekline's one keep store, so the Monday capture stops). One task a step, so none nears the
     // 300 s limit. The plan's clock is memoised with it, so every task of this
     // run measures at one instant, the same on a replay.
     const comparabilityPlan = await step
@@ -1646,7 +1647,7 @@ export const runPipeline = inngest.createFunction(
       await step
         .run(`comparability:${i + 1}-of-${comparabilityTasks.length}`, async () => {
           const r = await runComparabilityTask(createAdminClient(), {
-            clientId, runId, now: comparabilityPlan!.now, task, keepWeeks: null,
+            clientId, runId, now: comparabilityPlan!.now, task, keepWeeks: keepWeeksInRun,
           })
           console.log(`[comparability] ${comparabilitySummary(r)}`)
           return r

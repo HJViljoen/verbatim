@@ -11,6 +11,11 @@ import {
 import type { LensRow, PopulationVideo } from '../reading/recheck'
 import { monthEndInstant, monthsToRefresh, monthStartOf } from '../reading/monthly'
 import { selectAll } from '../supabase-admin'
+import { PASS_A_MIN_COMMENTS_BY_PLATFORM, PASS_A_MIN_COMMENTS_DEFAULT } from '../config'
+import {
+  captureWeekPoints, insertKeptWeeks, keepReportLines, supabaseCaptureReader, supabaseKeepStore, TABLE_WEEK_LINE_READS, WeekTablesMissing,
+} from '../reading/week-keep'
+import { weekLineConfigFor } from '../week-line-config'
 
 // The `comparability` step (market-first decision D kept every week, without
 // Heinrich's pastes; plan WP3.4, deploy 4). It sits immediately before
@@ -241,3 +246,47 @@ export function stepChecksIO(admin: SupabaseClient, clientId: string): ChecksIO 
 
 export const comparabilitySummary = (o: ComparabilityOutcome): string =>
   `${o.task}: ${o.status}${o.pairRows + o.reachRows + o.checkRows > 0 ? ` (${o.pairRows} pair, ${o.reachRows} reach, ${o.checkRows} check rows)` : ''} · ${o.note}`
+
+// ---- The weekly keep (WP3.13, inside the comparability step; no id of its own) ----
+
+/** The lane rule as the code holds it at capture: the comment floors that put
+ *  a market video on the full lane. The same string scripts/week-points.ts
+ *  keeps under (its LANE_RULE; pinned equal by the step's test), so a week the
+ *  run keeps and one the Monday paste kept read as the same reader. */
+export const WEEK_LANE_RULE = `min_comments:default=${PASS_A_MIN_COMMENTS_DEFAULT},${Object.entries(PASS_A_MIN_COMMENTS_BY_PLATFORM)
+  .map(([p, n]) => `${p}=${n}`).join(',')}`
+
+/**
+ * Keep each week this run brings to its age (decision M, part 2; from deploy
+ * 4 the run keeps the points itself and the Monday capture stops): the one
+ * keep store (lib/reading/week-keep.ts, mf/s3-weekline), the capture at the
+ * cut with this run as the update now running, then the insert-if-absent. A
+ * week already held is skipped without a read, and a second keep inserts
+ * nothing. No row for a tenant with no WEEK_LINE entry (Össur).
+ */
+export const keepWeeksInRun: WeekKeeper = async (admin, { clientId, runId, now }) => {
+  const cfg = weekLineConfigFor(clientId)
+  if (!cfg) return { inserted: 0, held: 0, note: 'no same-age line for this tenant (no WEEK_LINE entry)' }
+  let heldRows: { week: string; age_days: number; method_version: string }[]
+  try {
+    heldRows = await selectAll<{ week: string; age_days: number; method_version: string }>(() => admin.from(TABLE_WEEK_LINE_READS)
+      .select('week, age_days, method_version').eq('client_id', clientId).eq('method_version', cfg.methodVersion).order('week').order('age_days'))
+  } catch (e) {
+    if (isMissingObject(e, TABLE_WEEK_LINE_READS)) return { inserted: 0, held: 0, note: `${TABLE_WEEK_LINE_READS} is not there (MF4 not applied)` }
+    throw e
+  }
+  const held = new Set(heldRows.map((r) => `${String(r.week).slice(0, 10)}|${Number(r.age_days)}`))
+  const { data: run } = await admin.from('pipeline_runs').select('started_at').eq('id', runId).maybeSingle()
+  try {
+    const capture = await captureWeekPoints(supabaseCaptureReader(admin, clientId), {
+      now, firstWeek: cfg.firstWeek, methodVersion: cfg.methodVersion, laneRule: WEEK_LANE_RULE, held,
+      update: { id: runId, startedAt: (run as { started_at?: string | null } | null)?.started_at ?? null },
+    })
+    if (capture.reads.length === 0) return { inserted: 0, held: held.size, note: capture.note ?? 'no week reached its age on this run' }
+    const report = await insertKeptWeeks(supabaseKeepStore(admin), { clientId, reads: capture.reads, rows: capture.rows })
+    return { inserted: report.inserted.length, held: report.completed.length + report.held.length, note: keepReportLines(report).join(' · ') }
+  } catch (e) {
+    if (e instanceof WeekTablesMissing) return { inserted: 0, held: 0, note: `${e.message} (MF4 not applied)` }
+    throw e
+  }
+}
