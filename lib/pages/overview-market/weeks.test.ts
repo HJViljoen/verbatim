@@ -1,10 +1,16 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { describe, expect, it } from 'vitest'
 
 import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '../../config'
 import { changesFromLog } from '../../reading/comparability'
-import { SEALAND_NEXT_UPDATE, STAGING_CHANGES, STAGING_RIVALS, STAGING_UPDATES, STAGING_WEEK_VOLUMES } from '../../test/week-fixture'
+import { pointRowOf, readRowOf } from '../../reading/week-keep'
+import { keepWeekPoints, weekAgeCutoff, weeksToKeep, type WeekLineBlock } from '../../reading/week-line'
+import {
+  readFromStaging, SEALAND_NEXT_UPDATE, STAGING_AUG31_READINGS, STAGING_CHANGES, STAGING_LOOKS_ID, STAGING_RIVALS, STAGING_RUNS,
+  STAGING_UPDATES, STAGING_WEEK_VOLUMES, standInSundayRuns,
+} from '../../test/week-fixture'
 import { WEEK_LINE, weekLineConfigFor } from '../../week-line-config'
-import { WEEKS_EMPTY, weekVolumesBlock, weekVolumesEmpty } from './weeks'
+import { loadKeptWeekLine, WEEKS_EMPTY, weekVolumesBlock, weekVolumesEmpty } from './weeks'
 
 // Week by week's builder (WP2.9), on staging's real weeks. On the 11 Oct
 // clock the weeks after 20 Sep hold nothing on staging (it holds no data after
@@ -48,5 +54,129 @@ describe('weekVolumesBlock', () => {
     expect(weekVolumesEmpty(b)).toBe(true)
     expect(weekVolumesEmpty(null)).toBe(true)
     expect(WEEKS_EMPTY).toBe('No week has comments yet.')
+  })
+})
+
+// ---- The kept line's read (WP3.13 part B) ------------------------------------------------------
+//
+// HYPOTHETICAL rows: production's weeks from 28 Sep are not knowable yet, so
+// the kept reads are staging's weeks of 7 and 14 Sep re-dated to 28 Sep and
+// 5 Oct (their real depth, read through stand-in Sunday updates), and each
+// week's points are staging's week of 31 Aug per audience, as MF4 returned
+// them, re-dated (lib/test/week-fixture.ts).
+
+const PROD_RUNS = standInSundayRuns(['2026-09-27', '2026-10-04', '2026-10-11', '2026-10-18', '2026-10-25', '2026-11-01'])
+const [, AUG31] = weeksToKeep({ runs: STAGING_RUNS, now: '2026-09-21T06:00:00.000Z', firstWeek: '2026-08-03' })
+const AUG31_ROWS = keepWeekPoints({
+  candidate: AUG31, runs: STAGING_RUNS, volumes: STAGING_WEEK_VOLUMES.filter((r) => r.week === '2026-08-31'),
+  readings: STAGING_AUG31_READINGS, promptVersion: 'pass_a_v4.1', laneRule: 'min_comments:default=5,reddit=3',
+  methodVersion: 'week_line_v1', computedAt: '2026-09-21T06:00:00.000Z',
+}).rows
+const keptRead = (stagingWeek: string, week: string, run: number) => readFromStaging(stagingWeek, {
+  week, capturedBefore: weekAgeCutoff(week, 14), readThroughRun: '00000000-0000-4000-8000-00000000000' + run,
+  readThroughAt: PROD_RUNS[run].finishedAt, unchecked: 0, computedAt: `${weekAgeCutoff(week, 14).slice(0, 10)}T09:00:00.000Z`,
+})
+const STORED_READS = [keptRead('2026-09-07', '2026-09-28', 3), keptRead('2026-09-14', '2026-10-05', 4)]
+  .map((r) => JSON.parse(JSON.stringify(readRowOf(SEALAND_CLIENT_ID, r))))
+const STORED_POINTS = ['2026-09-28', '2026-10-05']
+  .flatMap((week) => AUG31_ROWS.map((p) => JSON.parse(JSON.stringify(pointRowOf(SEALAND_CLIENT_ID, { ...p, week })))))
+const STAGING_SUBJECTS = [
+  { id: STAGING_LOOKS_ID, name: 'Looks & style', status: 'active', calibrated_at: null, calibration_precision: null, calibration_n: null, calibration_judge_version: null },
+]
+
+/** A client that answers each table from fixed rows and records every read. */
+function fakeClient(opts: { failReads?: boolean } = {}) {
+  const calls: { table: string; filters: string[] }[] = []
+  const answer = (table: string): { data: unknown[] | null; error: { message: string } | null } => {
+    if (table === 'week_line_reads') return opts.failReads ? { data: null, error: { message: 'relation "public.week_line_reads" does not exist' } } : { data: STORED_READS, error: null }
+    if (table === 'week_line_points') return { data: STORED_POINTS, error: null }
+    if (table === 'subjects') return { data: STAGING_SUBJECTS, error: null }
+    return { data: [], error: null }
+  }
+  const client = {
+    from(table: string) {
+      const call = { table, filters: [] as string[] }
+      calls.push(call)
+      const chain = {
+        select: () => chain,
+        eq: (c: string, v: unknown) => { call.filters.push(`${c}=${String(v)}`); return chain },
+        in: (c: string, v: unknown[]) => { call.filters.push(`${c} in ${v.join(',')}`); return chain },
+        order: () => chain,
+        range: async (from: number) => {
+          const a = answer(table)
+          return from > 0 ? { data: [], error: null } : a
+        },
+        then: (resolve: (v: unknown) => unknown) => Promise.resolve(answer(table)).then(resolve),
+      }
+      return chain
+    },
+  } as unknown as SupabaseClient
+  const tables = () => [...new Set(calls.map((c) => c.table))]
+  return { client, calls, tables }
+}
+
+describe('loadKeptWeekLine', () => {
+  const sealand = WEEK_LINE[SEALAND_CLIENT_ID]
+
+  it('reads nothing for Össur, which gets no same-age row at all', async () => {
+    const { client, calls } = fakeClient()
+    expect(await loadKeptWeekLine(client, { clientId: OSSUR_CLIENT_ID, cfg: weekLineConfigFor(OSSUR_CLIENT_ID), rivalAudiences: [] })).toBeNull()
+    expect(calls).toEqual([])
+  })
+
+  it('while print is false, reads the kept weeks only, never a point, and the line stays pending with its due dates', async () => {
+    expect(sealand.print).toBe(false)
+    const { client, tables, calls } = fakeClient()
+    const kept = await loadKeptWeekLine(client, { clientId: SEALAND_CLIENT_ID, cfg: sealand, rivalAudiences: STAGING_RIVALS })
+    expect(kept).toEqual({ weeks: ['2026-09-28', '2026-10-05'], line: null })
+    expect(tables()).toEqual(['week_line_reads'])
+    expect(calls[0].filters).toEqual([`client_id=${SEALAND_CLIENT_ID}`, 'method_version=week_line_v1', 'age_days=14'])
+    const b = weekVolumesBlock({ ...base, reading: { month: '2026-10-01' }, now: '2026-10-27T12:00:00.000Z', cfg: sealand, line: kept!.line })
+    expect(b.line).toMatchObject({ state: 'pending', firstWeek: '2026-09-28', ageDays: 14 })
+    expect(b.line && 'due' in b.line ? b.line.due.map((d) => d.date) : []).toEqual(['2026-10-18', '2026-10-25', '2026-11-01', '2026-11-08', '2026-11-15'])
+  })
+
+  it('once print is true, builds the WeekLineBlock from week_line_points, naming subjects from the subjects table', async () => {
+    const printed = { ...sealand, print: true }
+    const { client, tables, calls } = fakeClient()
+    const kept = await loadKeptWeekLine(client, { clientId: SEALAND_CLIENT_ID, cfg: printed, rivalAudiences: STAGING_RIVALS })
+    expect(tables()).toEqual(['week_line_reads', 'week_line_points', 'subjects'])
+    expect(calls[1].filters).toContain('week in 2026-09-28,2026-10-05')
+    expect(kept?.line?.reads.map((r) => [r.week, r.videos, r.medianDated, r.computedAt])).toEqual([
+      ['2026-09-28', 404, 10, '2026-10-19T09:00:00.000Z'],
+      ['2026-10-05', 318, 9.5, '2026-10-26T09:00:00.000Z'],
+    ])
+    const b = weekVolumesBlock({ ...base, reading: { month: '2026-10-01' }, now: '2026-10-27T12:00:00.000Z', cfg: printed, line: kept!.line })
+    const line = b.line as WeekLineBlock
+    expect('state' in line).toBe(false)
+    // The six kinds, then Looks & style (22 of 229 each week, over 10 in both);
+    // the other subjects' points have no name in the subjects read and are not drawn.
+    expect(line.rows.map((r) => r.label)).toEqual([
+      'Praising it', 'Asking how it works', 'Ready to buy', 'Hitting a problem', 'Asking for something', 'Pushing back', 'Looks & style',
+    ])
+    // Praise, pooled over the market: 27 + 51 + 53 of 91 + 80 + 58, each week.
+    expect(line.rows[0].points.map((p) => [p.week, p.k, p.n])).toEqual([['2026-09-28', 131, 229], ['2026-10-05', 131, 229]])
+    expect(line.rows[0].pairs[0]).toMatchObject({ mode: 'comparable', verdict: { state: 'no_clear_change' } })
+    expect(line.rows[6]).toMatchObject({ calibration: 'provisional', pairs: [{ verdict: null }] })
+    expect(line.reads?.map((r) => [r.week, r.readWith])).toEqual([['2026-09-28', '2026-10-18'], ['2026-10-05', '2026-10-25']])
+  })
+
+  it('with the names in hand reads no subjects, and a provisional subject that clears 10 gets points and no verdict', async () => {
+    const printed = { ...sealand, print: true }
+    const { client, tables } = fakeClient()
+    const kept = await loadKeptWeekLine(client, {
+      clientId: SEALAND_CLIENT_ID, cfg: printed, rivalAudiences: STAGING_RIVALS,
+      objects: [{ objectKind: 'subject', objectId: STAGING_LOOKS_ID, label: 'Looks & style', calibration: 'provisional' }],
+    })
+    expect(tables()).toEqual(['week_line_reads', 'week_line_points'])
+    const b = weekVolumesBlock({ ...base, reading: { month: '2026-10-01' }, now: '2026-10-27T12:00:00.000Z', cfg: printed, line: kept!.line })
+    const looks = (b.line as WeekLineBlock).rows.find((r) => r.objectId === STAGING_LOOKS_ID)
+    expect(looks?.points.map((p) => p.k)).toEqual([22, 22])
+    expect(looks?.pairs[0].verdict).toBeNull()
+  })
+
+  it('says nothing of kept weeks it cannot read (MF4 not applied)', async () => {
+    const { client } = fakeClient({ failReads: true })
+    expect(await loadKeptWeekLine(client, { clientId: SEALAND_CLIENT_ID, cfg: sealand, rivalAudiences: STAGING_RIVALS })).toBeNull()
   })
 })
