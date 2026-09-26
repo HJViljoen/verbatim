@@ -140,6 +140,13 @@ async function main() {
     console.log(`  hand-check sheet (20 flagged, 20 unflagged September category videos, md5 order): ${args.values['hand-check']}`)
   }
 
+  // The change row, printed in the dry run too, so its note can be approved
+  // before the apply (as log-tracking-eras prints its own).
+  const logged = changes.some((c) => (c.surface as string) === 'segment' && c.field === SEGMENT_RULE_VERSION)
+  console.log(logged
+    ? `  change row: segment ${SEGMENT_RULE_VERSION} is held; none written`
+    : `  new row: segment ${SEGMENT_RULE_VERSION}, written with the labels · "${SEGMENT_NOTE}"`)
+
   if (!args.apply) {
     console.log(`read-only: nothing written · reads: ${pages.n} pages`)
     return
@@ -164,7 +171,6 @@ async function main() {
     })))
     if (error) throw new Error(`${NAME}: labels not written after ${i} rows: ${error.message}`)
   }
-  const logged = changes.some((c) => (c.surface as string) === 'segment' && c.field === SEGMENT_RULE_VERSION)
   if (!logged && fresh.length > 0) {
     const ok = await recordConfigChange(admin, asChangeInput({
       clientId: args.clientId, surface: 'segment', field: SEGMENT_RULE_VERSION, actor: scriptActor(actorLabel),
