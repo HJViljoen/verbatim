@@ -292,10 +292,11 @@ function SearchAsideBox({ aside }: { aside: SearchAside }) {
       {aside.figure || aside.since ? (
         <div className={cn('flex flex-col gap-2', aside.stops ? 'border-t border-border pt-4' : '')}>
           {aside.figure ? (
-            <span className="text-[13px] leading-[1.5] text-secondary-foreground [text-wrap:pretty]">
-              <span data-copy="level" className="whitespace-nowrap font-mono tabular-nums"><span className="font-semibold text-foreground">{fmtInt(aside.figure.k)}</span> of {fmtInt(aside.figure.n)}</span>
-              {' '}{aside.figure.words}{aside.figure.readWith ? `, read with the ${shortDate(aside.figure.readWith)} update` : ''}.
-            </span>
+            // THE ARTBOARD'S SENTENCE (the 26 Sep ruling: Settings prints
+            // "About half of September came from searches we added in
+            // September: 356 of 654, measured on 26 Sep."), its figures as
+            // tokens from the one builder the front page's sentence shares.
+            <TokenProse body={aside.figure.body} figures={aside.figure.figures} mode="app" figureFace="mono" figureClassName="font-semibold text-foreground" className="m-0 text-[13px] leading-[1.5] text-secondary-foreground [text-wrap:pretty]" />
           ) : null}
           {aside.since ? <span className="text-[13px] leading-[1.5] text-secondary-foreground">Since {shortDate(aside.since)} nothing we search has changed.</span> : null}
         </div>
@@ -334,7 +335,7 @@ export function TheRecord({ view }: { view: RecordView }) {
                   {group.lines.map((r) => (
                     <div key={r.line.changeId} role="row" className={cn(row, 'last:border-b-0', LEFT[n])}>
                       <LineHead line={r.line} />
-                      {r.cells.map((c) => <MonthCell key={c.month} cell={c} readWith={cellReadWith(c, group, view.aside, group.key)} />)}
+                      {r.cells.map((c) => <MonthCell key={c.month} cell={c} readWith={cellReadWith(c, group)} />)}
                     </div>
                   ))}
                 </div>
@@ -348,7 +349,7 @@ export function TheRecord({ view }: { view: RecordView }) {
               group.lines.map((r) => (
                 <div key={r.line.changeId} role="row" className={cn(row, 'last:border-b-0', LEFT[n], WIDE[n])}>
                   <LineHead line={r.line} />
-                  {r.cells.map((c) => <MonthCell key={c.month} cell={c} readWith={cellReadWith(c, group, view.aside, group.key)} />)}
+                  {r.cells.map((c) => <MonthCell key={c.month} cell={c} readWith={cellReadWith(c, group)} />)}
                   {r.stops ? (
                     <span role="cell" className="flex flex-col gap-1 @min-[560px]/rec:col-span-full @min-[560px]/rec:col-start-2 @min-[760px]/rec:col-span-1 @min-[760px]/rec:col-start-auto @min-[760px]/rec:pl-4">
                       <span className="text-[13px] text-muted-foreground @min-[760px]/rec:hidden">Comparisons it stops</span>

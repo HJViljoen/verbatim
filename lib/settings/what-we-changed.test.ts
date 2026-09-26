@@ -273,11 +273,10 @@ describe('the record, grouped as the preview groups it', () => {
       { month: '2026-08-01', state: 'none', readWith: '2026-09-20T12:00:00.000Z' },
       { month: '2026-09-01', state: 'measured', touched: 182, of: 654, readWith: '2026-09-20T12:00:00.000Z' },
     ])
-    // No figure in the aside here (no change block), so the one update is
-    // said beside the group's heading, and not in the cells.
+    // The one update is said beside the group's heading, and not in the cells.
     expect(view.groups[0].readWith).toBe('2026-09-20T12:00:00.000Z')
-    expect(cellReadWith(t13.cells[1], view.groups[0], view.aside, 'search')).toBeNull()
-    expect(cellReadWith({ ...t13.cells[1], readWith: '2026-09-27T08:30:00.000Z' } as never, view.groups[0], view.aside, 'search')).toBe('2026-09-27T08:30:00.000Z')
+    expect(cellReadWith(t13.cells[1], view.groups[0])).toBeNull()
+    expect(cellReadWith({ ...t13.cells[1], readWith: '2026-09-27T08:30:00.000Z' } as never, view.groups[0])).toBe('2026-09-27T08:30:00.000Z')
     expect(view.aside?.since).toBe('2026-09-17T16:02:56.000Z')
     expect(view.aside?.stops).toEqual([
       'July against August, until measured',

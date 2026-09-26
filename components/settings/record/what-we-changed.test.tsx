@@ -88,13 +88,19 @@ describe('The record: the dated list, grouped as the preview groups it (R-a)', (
     expect(t).not.toContain('in: handmade bag')
   })
 
-  it('says "read with …" once: in the search aside’s figure sentence, and beside the other group’s heading, never in every cell', () => {
+  it('says "read with …" once beside each group’s heading, never in every cell', () => {
     const t = read(list)
     expect(t.match(/read with the 27 Sep update/g) ?? []).toHaveLength(2)
-    expect(t).toContain('356 of 654 September videos came from searches we added in September, read with the 27 Sep update.')
-    expect(t).not.toContain('376 of 625')
+    expect(t).toContain('What we search read with the 27 Sep update')
     expect(t).toContain('How we check, mark and file videos read with the 27 Sep update')
+    expect(t).not.toContain('376 of 625')
     expect(t).toContain('182 of 654')
+  })
+
+  it('prints the month’s one figure in the aside in the SettingsRecord artboard’s words (the 26 Sep ruling)', () => {
+    const t = read(list)
+    expect(t).toContain('About half of September came from searches we added in September: 356 of 654, measured on 30 Sep.')
+    expect(t).not.toContain('September videos came from searches we added in September, read with')
   })
 
   it('prints a measured zero as "none", an unmeasured month as "not measured yet", and nothing for the capped update, which moves no video', () => {

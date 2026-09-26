@@ -4,7 +4,8 @@ import { subredditLabel } from '../gather/subreddits'
 import { activeCommunities, changeInSpan, isSearchSurface, modeForShare, type OurChange } from '../reading/comparability'
 import { monthStartOf, nextMonth, prevMonth as monthBefore } from '../reading/month-key'
 import { BRANDS_PANEL, CATEGORY_AUDIENCE, type PairOn } from '../reading/pairs'
-import { whyCells, type ChangeBlock, type LedgerLine } from '../pages/overview-market/change'
+import { addedOnlyRecordSentence, type ChangeBlock, type LedgerLine } from '../pages/overview-market/change'
+import type { FigureTable } from '../reading/verdicts'
 import { SURFACE_WORDS } from './change-log'
 
 // Settings › What we changed: the dated list of our own changes (market-first
@@ -365,9 +366,9 @@ export function otherRows(rows: readonly ConfigChange[], changes: readonly OurCh
 //
 // "READ WITH …" ONCE, where the preview states it once: a group whose measured
 // cells were all read with one update says so beside its heading (the
-// preview's "How we check, mark and file videos · due, not made yet" slot), or
-// in the aside's figure sentence for the search group; a cell read with
-// another update still says which.
+// preview's "How we check, mark and file videos · due, not made yet" slot); a
+// cell read with another update still says which. The search group's aside
+// dates its figure by when it was measured, as the artboard does.
 //
 // WHAT A CHANGE STOPS IS THE JUDGE'S, never recomputed: for each pair of
 // months the page can show (the months in the list's columns against the month
@@ -531,9 +532,12 @@ export interface RecordGroup {
 export interface SearchAside {
   /** "Together, these stop": each pair once, in words. Null without a judge. */
   stops: string[] | null
-  /** The month's one figure (the front page's sentence, `whyCells`), with the
-   *  update it was read with: where the preview states it once. */
-  figure: { k: number; n: number; words: string; readWith: string | null } | null
+  /** The month's one figure in the `SettingsRecord` artboard's words, as the
+   *  26 Sep ruling has Settings print it (`addedOnlyRecordSentence`): "About
+   *  half of September came from searches we added in September: 356 of 654,
+   *  measured on 26 Sep." Its figures are tokens. Null where the front page
+   *  prints no figure either. */
+  figure: { body: string; figures: FigureTable } | null
   /** The day of the latest change in the group: "Since 17 Sep nothing we
    *  search has changed." */
   since: string | null
@@ -614,10 +618,10 @@ export function recordView(input: {
   for (const l of input.lines) grouped[recordGroupOf(l.surface)].push(lineOf(l))
 
   // The search group's aside: what its changes stop together, the month's one
-  // figure with its update, and since when nothing we search has changed.
+  // figure in the artboard's words (the 26 Sep ruling), and since when nothing
+  // we search has changed.
   const searchLines = grouped.search
-  const why = input.block ? whyCells(input.block).find((c) => c.key === 'searches') ?? null : null
-  const figure = why ? { k: why.figure, n: why.base.value, words: why.caption, readWith: why.readWith } : null
+  const figure = input.block ? addedOnlyRecordSentence(input.block) : null
   const latest = searchLines.map((r) => r.line.date).filter((d) => !Number.isNaN(Date.parse(d))).sort().at(-1) ?? null
   const aside: SearchAside | null = searchLines.length > 0
     ? {
@@ -635,10 +639,10 @@ export function recordView(input: {
   }
   const groups: RecordGroup[] = []
   if (searchLines.length > 0) {
-    const once = oneUpdate(searchLines)
-    // Said in the aside's figure sentence where it is the same update.
-    const inAside = once != null && figure?.readWith != null && figure.readWith.slice(0, 10) === once.slice(0, 10)
-    groups.push({ key: 'search', title: RECORD_GROUP_TITLE.search, lines: searchLines, readWith: inAside ? null : once })
+    // The aside's sentence is dated by when the figure was measured (the
+    // artboard's "measured on"), so the cells' update is said beside the
+    // group's heading, as for the other group.
+    groups.push({ key: 'search', title: RECORD_GROUP_TITLE.search, lines: searchLines, readWith: oneUpdate(searchLines) })
   }
   if (grouped.check.length > 0) {
     groups.push({ key: 'check', title: RECORD_GROUP_TITLE.check, lines: grouped.check, readWith: oneUpdate(grouped.check) })
@@ -647,9 +651,9 @@ export function recordView(input: {
 }
 
 /** The update a cell was read with, where its group does not say it once:
- *  null where the group (or the aside) already says the same update. */
-export function cellReadWith(cell: RecordCell, group: Pick<RecordGroup, 'readWith'>, aside: Pick<SearchAside, 'figure'> | null, key: RecordGroupKey): string | null {
+ *  null where the group already says the same update. */
+export function cellReadWith(cell: RecordCell, group: Pick<RecordGroup, 'readWith'>): string | null {
   if (!('readWith' in cell) || !cell.readWith) return null
-  const said = group.readWith ?? (key === 'search' ? aside?.figure?.readWith ?? null : null)
+  const said = group.readWith
   return said && said.slice(0, 10) === cell.readWith.slice(0, 10) ? null : cell.readWith
 }
