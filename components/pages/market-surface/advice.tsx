@@ -3,12 +3,14 @@ import type { Block, BlockContext, QuoteRef, RenderMode } from '@/lib/blocks/typ
 import { BlockEmpty, BlockFrame, NoValue } from '@/components/blocks/frame'
 import { BlockQuote } from '@/components/blocks/quote'
 import { MovementBadge } from '@/components/delta-badge'
+import { PairChip } from '@/components/blocks/pair-chip'
+import { PAIR_NOT_COMPARED, refusalInBlock, sharedPairNote } from '@/lib/calibration'
 import { RecStatusMenu, RecStatusWord } from '@/components/rec-status'
 import { TileBlock } from '@/components/shell/tile'
 import { FLAG_NOTE } from '@/lib/agent/movement'
 import { fmtInt, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
+import type { FigureTable, Verdict, VerdictPairNote } from '@/lib/reading/verdicts'
 import {
   ADVICE_AFTERWARDS_UNRECORDED, ADVICE_UNRECORDED, LEDGER_FIRST_TIME_LINE,
   adviceAnchor, ageInMonths, madeInMonth, marketSurfaceHref, repeatCell,
@@ -219,7 +221,13 @@ export function foldedAfterwards(rows: readonly AdviceRow[]): string | null {
   return only === '\u0000reading' ? null : only
 }
 
-function AfterwardsCell({ row, mode, folded = false }: { row: AdviceRow; mode: RenderMode; folded?: boolean }) {
+/** The month-pair refusals the Afterwards column carries, as verdict-shaped
+ *  pairs for `sharedPairNote`. */
+function afterwardsRefusals(rows: readonly AdviceRow[]): { state: string; pair: VerdictPairNote }[] {
+  return rows.flatMap((r) => (r.afterwards?.state === 'refused' && r.afterwards.pair ? [{ state: 'refused', pair: r.afterwards.pair }] : []))
+}
+
+function AfterwardsCell({ row, mode, folded = false, shared = null }: { row: AdviceRow; mode: RenderMode; folded?: boolean; shared?: VerdictPairNote | null }) {
   // A FROZEN ROW MAY NOT HAVE THE FIELD AT ALL, and this cell used to reach
   // straight through it. `afterwards` is required and wave 1 added it, so a
   // `report_snapshots` row whose `surfaces.market` froze before Block D
@@ -233,7 +241,10 @@ function AfterwardsCell({ row, mode, folded = false }: { row: AdviceRow; mode: R
     // The column says one thing about every row: it says it once, under the
     // table, and the cell carries the artboard's mark for an empty one.
     if (folded) return <NoValue mode={mode} label="nothing to report yet" />
-    const line = a?.line ?? ADVICE_AFTERWARDS_UNRECORDED
+    // A REFUSAL FOR THE MONTH PAIR IS THE BLOCK'S CHIP, NOT THE CELL'S (deploy
+    // 1 review, the lead's R3): the cell says "not compared".
+    const refusedForPair = a?.state === 'refused' && a.pair != null && refusalInBlock({ state: 'refused', pair: a.pair }, shared)
+    const line = refusedForPair ? PAIR_NOT_COMPARED : a?.line ?? ADVICE_AFTERWARDS_UNRECORDED
     return email
       ? <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>{line}</span>
       : <span className="text-[11.5px] leading-[1.35] text-muted-foreground">{line}</span>
@@ -312,7 +323,12 @@ export const marketAdvice: Block<MarketSurfaceData> = {
     // state sentences — nothing is being written down, nothing has been read
     // in the Afterwards column yet — are facts about this workspace, not
     // method. What goes behind the disclosure is how the columns count.
-    const afterwardsOnce = foldedAfterwards(a.rows)
+    // ONE REFUSAL, SAID ONCE (deploy 1 review, the lead's R3): the chip under
+    // the table, and "not compared" in each refused cell. A column that is
+    // one refusal on every row is the chip alone, not a folded footnote too.
+    const sharedRefusal = sharedPairNote(afterwardsRefusals(a.rows))
+    const folding = foldedAfterwards(a.rows)
+    const afterwardsOnce = sharedRefusal && folding != null && afterwardsRefusals(a.rows).length === a.rows.length ? null : folding
     const state = [
       !a.recorded ? ADVICE_UNRECORDED : null,
       afterwardsOnce ? `Afterwards, on every row: ${afterwardsOnce}` : null,
@@ -395,9 +411,10 @@ export const marketAdvice: Block<MarketSurfaceData> = {
                   <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}> · grounded in </span>
                   <GroundedCell row={row} mode={mode} />
                 </div>
-                <div style={{ marginTop: 2 }}><AfterwardsCell row={row} mode={mode} folded={afterwardsOnce != null} /></div>
+                <div style={{ marginTop: 2 }}><AfterwardsCell row={row} mode={mode} folded={afterwardsOnce != null} shared={sharedRefusal} /></div>
               </div>
             ))}
+            <PairChip note={sharedRefusal} mode={mode} />
             {notes}
           </div>
         ) : (
@@ -451,7 +468,7 @@ export const marketAdvice: Block<MarketSurfaceData> = {
                         <td className="py-1.5 pr-3"><RepeatCell row={row} isNew={row.firstMade.slice(0, 7) === readingMonth} mode={mode} /></td>
                         <td className="py-1.5 pr-3"><StatusCell row={row} mode={mode} /></td>
                         <td className="py-1.5 pr-3"><GroundedCell row={row} mode={mode} /></td>
-                        <td className="py-1.5"><AfterwardsCell row={row} mode={mode} folded={afterwardsOnce != null} /></td>
+                        <td className="py-1.5"><AfterwardsCell row={row} mode={mode} folded={afterwardsOnce != null} shared={sharedRefusal} /></td>
                       </tr>
                     )
                     // The artboard's expansion, in its own track directly under
@@ -468,6 +485,7 @@ export const marketAdvice: Block<MarketSurfaceData> = {
                 </tbody>
               </table>
             </div>
+            <PairChip note={sharedRefusal} mode={mode} />
             {notes}
           </>
         )}

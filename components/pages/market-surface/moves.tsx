@@ -3,12 +3,14 @@ import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { CalendarLine, type CalendarSeries } from '@/components/charts/calendar-line'
 import { MovementBadge } from '@/components/delta-badge'
+import { PairChip } from '@/components/blocks/pair-chip'
+import { sharedPairNote } from '@/lib/calibration'
 import { TileBlock } from '@/components/shell/tile'
 import { fmtInt, fmtPct, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { audiencePhrase } from '@/lib/reading/afterwards'
 import type { MoveReading, MoveSeries } from '@/lib/reading/moves'
-import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
+import type { FigureTable, Verdict, VerdictPairNote } from '@/lib/reading/verdicts'
 import type { MarketSurfaceData } from '@/lib/pages/market-surface'
 
 // MK4 · Your moves (design §3 MK4; ported to the artboard, Block D wave 2).
@@ -115,7 +117,7 @@ function Legend({ series, mode }: { series: readonly MoveSeries[]; mode: RenderM
 
 /** A move's one comparison, or a control's — both sides with their counts, the
  *  band beside the word or neither. */
-function Side({ verdict, mode, control = false }: { verdict: Verdict; mode: RenderMode; control?: boolean }) {
+function Side({ verdict, mode, control = false, shared = null }: { verdict: Verdict; mode: RenderMode; control?: boolean; shared?: VerdictPairNote | null }) {
   const v = verdict
   const email = mode === 'email'
   const pct = (k: number, n: number) => (n > 0 ? fmtPct((k / n) * 100, 0) : '—')
@@ -146,7 +148,7 @@ function Side({ verdict, mode, control = false }: { verdict: Verdict; mode: Rend
   return (
     <span data-copy="verdict" className="flex items-baseline justify-between gap-3">
       <span className="min-w-0 text-[12px] text-secondary-foreground">{body}</span>
-      <MovementBadge verdict={v} unit="pts" good="neutral" bandTip={mode === 'app'} />
+      <MovementBadge verdict={v} unit="pts" good="neutral" bandTip={mode === 'app'} sharedRefusal={shared} priorShown={v.baseline != null} />
     </span>
   )
 }
@@ -156,6 +158,10 @@ function Move({ reading, index, mode }: { reading: MoveReading; index: number; m
   const r = reading
   const meta = `declared ${shortDate(r.declaredAt)} · ${r.on}`
   const heading = `Move ${fmtInt(index)}: ${r.title}`
+  // ONE REFUSAL, SAID ONCE (deploy 1 review, the lead's R3): the move's side
+  // and its controls, refused for one pair, show their figures and nothing
+  // else; the chip under them says why.
+  const shared = sharedPairNote(r.verdict ? [r.verdict, ...r.control] : [])
 
   const body = (
     <>
@@ -209,13 +215,15 @@ function Move({ reading, index, mode }: { reading: MoveReading; index: number; m
       {r.verdict ? (
         email ? (
           <div style={{ marginTop: 4 }}>
-            <Side verdict={r.verdict} mode={mode} />
-            {r.control.map((c) => <Side key={c.audience} verdict={c} mode={mode} control />)}
+            <Side verdict={r.verdict} mode={mode} shared={shared} />
+            {r.control.map((c) => <Side key={c.audience} verdict={c} mode={mode} control shared={shared} />)}
+            <PairChip note={shared} mode={mode} />
           </div>
         ) : (
           <TileBlock className="flex min-w-0 flex-col gap-1">
-            <Side verdict={r.verdict} mode={mode} />
-            {r.control.map((c) => <Side key={c.audience} verdict={c} mode={mode} control />)}
+            <Side verdict={r.verdict} mode={mode} shared={shared} />
+            {r.control.map((c) => <Side key={c.audience} verdict={c} mode={mode} control shared={shared} />)}
+            <PairChip note={shared} mode={mode} />
           </TileBlock>
         )
       ) : (

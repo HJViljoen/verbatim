@@ -373,6 +373,28 @@ describe('MK2 · the ledger', () => {
     expect(text).not.toContain('Afterwards, on every row:')
   })
 
+  // ONE REFUSAL, SAID ONCE (deploy 1 review, the lead's R3): a reading
+  // refused for its month pair says "not compared" in its cell, and the chip
+  // under the table says why, once, in every mode.
+  it('prints a month-pair refusal once, as the chip, and "not compared" in each refused cell', () => {
+    const data = marketFixture()
+    const pair = { mode: 'refuse' as const, cause: 'searches' as const, changeMonth: '2026-09-01', checkWith: null }
+    const sentence = 'Not read as a change: we changed our searches in September.'
+    const rows = data.advice.rows.map((r, i) => ({
+      ...r,
+      afterwards: i === 0
+        ? { state: 'too_soon' as const, line: 'Not decided yet.', verdict: null, months: [] }
+        : { state: 'refused' as const, line: sentence, verdict: null, months: ['2026-09-01'], pair },
+    }))
+    expect(rows.length).toBeGreaterThan(2)
+    for (const mode of MODES) {
+      const text = renderText(marketAdvice.render({ ...data, advice: { ...data.advice, rows } }, mode, ctx))
+      expect(text.split('not read as a change: we changed our searches in September').length - 1, mode).toBe(1)
+      expect(text, mode).not.toContain(sentence)
+      expect(text.split('not compared').length - 1, mode).toBe(rows.length - 1)
+    }
+  })
+
   it('draws the artboard’s seven columns, with the identity, the grounding and the afterwards', () => {
     // CHANGED BY THE ARTBOARD PORT (wave 2). Four columns became seven: the #
     // a person can say out loud, the evidence behind each row and what the

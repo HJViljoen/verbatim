@@ -2,12 +2,14 @@ import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BrandClaim } from '@/components/blocks/brand-claim'
 import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
 import { MovementBadge } from '@/components/delta-badge'
+import { PairChip } from '@/components/blocks/pair-chip'
+import { sharedPairNote } from '@/lib/calibration'
 import { TileBlock } from '@/components/shell/tile'
 import { fmtInt, longMonth } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { audiencePhrase } from '@/lib/reading/afterwards'
 import type { CardCount, MoveCandidate } from '@/lib/reading/moves'
-import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
+import type { FigureTable, Verdict, VerdictPairNote } from '@/lib/reading/verdicts'
 import type { MarketSurfaceData } from '@/lib/pages/market-surface'
 // The claim row's cut and its no-wording sentence are Overview's, imported
 // rather than re-declared: the card is ONE `MoveCandidate` composed in
@@ -96,7 +98,7 @@ function Count({ count, mode, hero = false }: { count: CardCount; mode: RenderMo
 
 /** One of the card's two movement rows — a banded comparison, with the band
  *  beside the word or neither. */
-function Movement({ verdict, mode }: { verdict: Verdict; mode: RenderMode }) {
+function Movement({ verdict, mode, shared = null }: { verdict: Verdict; mode: RenderMode; shared?: VerdictPairNote | null }) {
   const v = verdict
   const where = audiencePhrase(v.audience)
   // The numerators alone: the "of N" is the cell's own second line in the app
@@ -122,7 +124,7 @@ function Movement({ verdict, mode }: { verdict: Verdict; mode: RenderMode }) {
     <span data-copy="verdict" className="flex min-w-0 flex-col gap-1">
       <span className="flex items-baseline justify-between gap-3">
         <span className="min-w-0 text-[12px] text-secondary-foreground">{v.objectLabel} in {where}</span>
-        <MovementBadge verdict={v} unit="pts" good="neutral" bandTip={mode === 'app'} />
+        <MovementBadge verdict={v} unit="pts" good="neutral" bandTip={mode === 'app'} sharedRefusal={shared} priorShown={v.baseline != null} />
       </span>
       <span className="flex flex-wrap items-end gap-x-3 gap-y-1">
         <FigureCell value={now} of={<>of {fmtInt(v.value.n)} videos</>} />
@@ -171,6 +173,10 @@ export const marketCard: Block<MarketSurfaceData> = {
     const moreClaims = card.claimRows.length - claims.length
     const posts = card.posts.value.n
     const movements = [card.movement.yours, card.movement.category].filter((v): v is Verdict => v != null)
+    // ONE REFUSAL, SAID ONCE (deploy 1 review, the lead's R3): a movement
+    // refused for its month pair shows its two sides and nothing else, and the
+    // chip under them says why.
+    const shared = sharedPairNote(movements)
 
     return (
       <BlockFrame
@@ -338,7 +344,8 @@ export const marketCard: Block<MarketSurfaceData> = {
 
           {movements.length > 0 ? (
             <div className={email ? undefined : 'flex min-w-0 flex-col gap-1 border-t border-border/70 pt-2'}>
-              {movements.map((v) => <Movement key={`${v.objectKind}:${v.objectId}:${v.audience}`} verdict={v} mode={mode} />)}
+              {movements.map((v) => <Movement key={`${v.objectKind}:${v.objectId}:${v.audience}`} verdict={v} mode={mode} shared={shared} />)}
+              <PairChip note={shared} mode={mode} />
             </div>
           ) : null}
         </div>

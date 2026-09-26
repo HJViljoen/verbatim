@@ -90,7 +90,7 @@ const chip = (tone: 'up' | 'down' | 'neutral' | 'noted') => ({
  * before the axis reached here.
  */
 export function BlockMovement({
-  verdict, unit, mode = 'app', good = 'up', sharedRefusal = null,
+  verdict, unit, mode = 'app', good = 'up', sharedRefusal = null, priorShown = false,
 }: {
   verdict: Verdict | DeltaVerdict | null | undefined
   unit?: string
@@ -112,13 +112,22 @@ export function BlockMovement({
   good?: Good
   /**
    * The refusal this row's block prints once, as a chip at its foot
-   * (`sharedPairNote`, deploy 1 review). A verdict refused for that same pair
-   * prints the short "not compared" in every mode, and the sentence rides in
-   * the app's title; the chip says it on paper and in the email.
+   * (`sharedPairNote`, deploy 1 review; the lead's R3). A verdict refused for
+   * a month pair prints the short "not compared" in every mode, and its own
+   * sentence rides in the app's title; the chip says it on paper and in the
+   * email. A row never carries the sentence where its block has a chip.
    */
   sharedRefusal?: VerdictPairNote | null
+  /**
+   * The row already prints the earlier month's figure in grey beside this
+   * badge ("Aug 9.4% of 351"). A verdict refused for the block's pair then
+   * prints nothing at all (the lead's R3): the grey figure and the block's
+   * chip say it, and "not compared" beside it is a third telling.
+   */
+  priorShown?: boolean
 }) {
   if (!verdict) return null
+  if (priorShown && 'pair' in verdict && refusalInBlock({ state: verdict.state, pair: verdict.pair ?? null }, sharedRefusal)) return null
   // THE MONTH-PAIR RULE (market-first decision D, WP1.3). A refused pair prints
   // its sentence ("Not read as a change: we changed our searches in
   // September."); a pair a change of ours touched under a tenth of carries its

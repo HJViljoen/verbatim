@@ -4,7 +4,7 @@ import { distinctVideos } from '../market-tiles'
 import { monthChange } from './bands'
 import type { PairComparability } from './comparability'
 import { monthStartOf } from './monthly'
-import type { Counted, ObjectKind, RefusedReason, Verdict } from './verdicts'
+import type { Counted, ObjectKind, RefusedReason, Verdict, VerdictPairNote } from './verdicts'
 
 // The two columns the advice ledger has never had: what a piece of advice was
 // GROUNDED IN, and what the conversation did AFTERWARDS (Phase 1 Block D, D4).
@@ -228,6 +228,11 @@ export interface Afterwards {
   months: string[]
   /** The reader's sentence for the cell — never blank, never a dash. */
   line: string
+  /** A refusal for the month pair, as its tokens (`VerdictPairNote`), so a
+   *  block can print it once as a chip and the cell "not compared" (deploy 1
+   *  review, the lead's R3). Only on a `refused` state; optional, so a stored
+   *  row from before it renders as it was sent. */
+  pair?: VerdictPairNote | null
 }
 
 export interface AfterwardsInput {
@@ -409,7 +414,7 @@ export function afterwardsFor(input: AfterwardsInput): Afterwards {
   // names the cause; the comparison it would have drawn is not printed beside it.
   if (verdict.refusedReason) {
     const line = verdict.pair ? pairSentence(verdict.pair) : REFUSED_LINE[verdict.refusedReason]
-    return { state: 'refused', verdict: null, months, line }
+    return { state: 'refused', verdict: null, months, line, pair: verdict.pair?.mode === 'refuse' ? verdict.pair : null }
   }
 
   // THE NUMBERS AND THE BAND, AND NOT A WORD FOR THEM. See the file header's

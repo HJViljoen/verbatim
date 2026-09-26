@@ -147,7 +147,7 @@ function Side({ side, brand, mode, shared = null }: { side: SubjectSide; brand: 
         {fmtInt(side.k ?? 0)} of {fmtInt(side.n ?? 0)} videos
       </span>
       <span className={email ? undefined : 'flex flex-wrap items-center gap-2'}>
-        <BlockMovement verdict={side.verdict} unit="pts" mode={mode} sharedRefusal={shared} />
+        <BlockMovement verdict={side.verdict} unit="pts" mode={mode} sharedRefusal={shared} priorShown={priorMonth(side)} />
         <DirectionWord direction={side.direction} mode={mode} />
         {priorMonth(side) ? (
           <span className={email ? undefined : 'whitespace-nowrap font-mono text-[11px] tabular-nums text-muted-foreground/80'} style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}>

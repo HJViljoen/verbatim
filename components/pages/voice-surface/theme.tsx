@@ -4,6 +4,8 @@ import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockCalendar } from '@/components/blocks/calendar'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
+import { PairChip } from '@/components/blocks/pair-chip'
+import { sharedPairNote } from '@/lib/calibration'
 import { BlockProportion, BlockReach } from '@/components/blocks/bars'
 import { BlockQuotes } from '@/components/blocks/quote'
 import { BlockStat } from '@/components/blocks/stat'
@@ -16,7 +18,7 @@ import { fmtInt, fmtPct, longMonth, monthName } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { QuoteRef } from '@/lib/blocks/types'
 import { moodLabel } from '@/lib/reading/mood'
-import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
+import type { FigureTable, Verdict, VerdictPairNote } from '@/lib/reading/verdicts'
 import type { OnScreenLine, SpokenLine, ThemeBlock, VoiceSurfaceData } from '@/lib/pages/voice-surface'
 import { VOICES_WORD, earnedDirection, heardLine, reachAxisMax } from '@/lib/pages/voice-surface'
 
@@ -347,6 +349,12 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
     const onCameraStat = t.onCameraSaid != null && t.onCameraOf != null
     const notes = onCameraStat ? t.notes.filter((n) => n !== t.onCamera) : t.notes
 
+    // ONE REFUSAL, SAID ONCE (deploy 1 review, the lead's R3): the theme's
+    // badge, its tone and its chart each printed the pair's sentence. The
+    // block prints one chip; the badge and the tone print nothing, because
+    // each already shows the earlier month in grey beside it.
+    const shared = sharedPairNote([t.verdict, t.tone?.verdict ?? null])
+
     const level = t.prevalence && t.k != null && t.n != null
       ? `${PREVALENCE_LABEL[t.prevalence]} · ${fmtInt(t.k)} of ${fmtInt(t.n)} videos`
       : null
@@ -441,7 +449,7 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
                 <DirectionWord direction={earnedDirection(t.direction)} mode={mode} />
               </span>
             ) : null}
-            <BlockMovement verdict={t.verdict} unit="pts" mode={mode} />
+            <BlockMovement verdict={t.verdict} unit="pts" mode={mode} sharedRefusal={shared} priorShown={prevLine != null} />
             <span className={email ? undefined : 'font-mono text-[11px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}>
               {/* THE MONTHS, AND ONLY THE MONTHS. The on-camera count is the
                   update's, over every month it read, and printed here it sat
@@ -493,7 +501,7 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
                     axisLabel={`share of ${t.audienceLabel.toLowerCase()} videos`}
                   />
                 ) : null}
-                <Tone t={t} mode={mode} />
+                <Tone t={t} mode={mode} shared={shared} />
               </div>
               {/* THE DRAWING FILLS ITS COLUMN AT EVERY WIDTH. It was capped at
                   `max-w-[560px]` below `xl:` on the argument that the chart
@@ -542,7 +550,9 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
             </TileColumns>
           )}
 
-          {email ? <Tone t={t} mode={mode} /> : null}
+          {email ? <Tone t={t} mode={mode} shared={shared} /> : null}
+
+          <PairChip note={shared} mode={mode} />
 
           {/* "0 OF THE VOICES" IS NOT ENGLISH AND NAMES NO DENOMINATOR. The
               label read `${n} of the voices` — rendered on production as
@@ -718,7 +728,7 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
 }
 
 /** The audience's tone for the month, in the artboard's tinted inner block. */
-function Tone({ t, mode }: { t: ThemeBlock; mode: RenderMode }) {
+function Tone({ t, mode, shared = null }: { t: ThemeBlock; mode: RenderMode; shared?: VerdictPairNote | null }) {
   const email = mode === 'email'
   const prev = baselinePct(t.tone?.verdict ?? null)
   const prevMonth = baselineMonth(t.tone?.verdict ?? null)
@@ -739,7 +749,13 @@ function Tone({ t, mode }: { t: ThemeBlock; mode: RenderMode }) {
         {prev != null && prevMonth && t.tone.verdict?.baseline?.n != null ? (
           <span data-copy="figure">negative {monthName(prevMonth)} {fmtPct(prev)} of {fmtInt(t.tone.verdict.baseline.n)}</span>
         ) : null}
-        <BlockMovement verdict={t.tone.verdict} unit="pts" mode={mode} />
+        <BlockMovement
+          verdict={t.tone.verdict}
+          unit="pts"
+          mode={mode}
+          sharedRefusal={shared}
+          priorShown={prev != null && prevMonth != null && t.tone.verdict?.baseline?.n != null}
+        />
       </p>
     </>
   ) : (

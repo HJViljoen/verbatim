@@ -8,10 +8,11 @@ import type { VerdictPairNote } from '@/lib/reading/verdicts'
 // The approved preview prints a refused month pair once per block, as a grey
 // pill with the ⊘ mark at the block's foot ("not read as a change: we changed
 // our searches in September"), and the 25 Sep rulings keep these chips while
-// they take every other footnote away. A block whose rows share one refusal
-// (`sharedPairNote`, lib/calibration.ts) prints it here, and its rows print
-// the short "not compared". The words are `pairChipWords`: the rows' own
-// sentence, lower case, no full stop.
+// they take every other footnote away. A block with a refused row prints its
+// one chip here (`sharedPairNote`, lib/calibration.ts: the reason most of its
+// rows share), and its rows print the short "not compared", or nothing where
+// they already show the earlier month in grey (the lead's R3). The words are
+// `pairChipWords`, the one source of every refusal's words (R4).
 //
 // It wraps rather than overflows: the preview's pill is one line at 1440, and
 // at 390 the sentence is wider than the column.

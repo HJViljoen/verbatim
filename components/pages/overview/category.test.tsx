@@ -345,13 +345,18 @@ describe('OV3 · a refusal the block shares prints once, as a chip', () => {
     expect(text).toMatch(/Saying it worked\s*71\.9%\s*450 of 626\s*not compared/)
   })
 
-  it('keeps each row\'s own sentence, and no chip, where the rows are refused for different reasons', () => {
+  // THE LEAD'S R3: a row never carries the sentence, and a block at most one
+  // chip. Rows refused for different reasons all say "not compared"; the chip
+  // names the reason most of them share, and each row's own reason rides in
+  // its app title.
+  it('prints one chip, the reason most rows share, where the rows are refused for different reasons', () => {
     const data = refusedPairFixture()
     const ours = { mode: 'refuse' as const, cause: 'ours' as const, changeMonth: '2026-09-01', checkWith: null }
     data.category.kindVerdicts = { ...data.category.kindVerdicts, pain_point: { ...data.category.kindVerdicts.pain_point!, pair: ours } }
     const text = renderText(overviewCategory.render(data, 'app', ctx))
-    expect(text).not.toContain(CHIP)
-    expect(text).toContain('Not read as a change: we changed how we check or file videos in September.')
-    expect(text).toContain(`${SENTENCE}.`)
+    expect(text.split(CHIP).length - 1).toBe(1)
+    expect(text).not.toContain('Not read as a change: we changed how we check or file videos in September.')
+    expect(text).not.toContain(`${SENTENCE}.`)
+    expect(text).toMatch(/Hitting a problem\s*40\.3%\s*252 of 626\s*not compared/)
   })
 })

@@ -3,6 +3,8 @@ import type { Block, RenderMode } from '@/lib/blocks/types'
 import { openLink } from '@/components/blocks/open-link'
 import { BlockEmpty, BlockFrame, FigureCell, NoValue } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
+import { PairChip } from '@/components/blocks/pair-chip'
+import { sharedPairNote } from '@/lib/calibration'
 import { fmtInt, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { NOT_OBSERVED, NOT_RECORDED, standingText, type StandingShare } from '@/lib/reading/standings'
@@ -199,6 +201,10 @@ export const overviewRivals: Block<OverviewData> = {
       change: r.rows.some((x) => x.attentionVerdict != null),
       own: !folded,
     }
+    // ONE REFUSAL, SAID ONCE (deploy 1 review, the lead's R3): a refused
+    // attention change says "not compared" and the chip under the table says
+    // why, once.
+    const shared = sharedPairNote(r.rows.map((x) => x.attentionVerdict))
     const absentWord = r.recorded ? NOT_OBSERVED : NOT_RECORDED
     const shares = [!cols.attention ? 'attention' : null, !cols.content ? 'content' : null].filter(Boolean)
     const absences = [
@@ -251,7 +257,7 @@ export const overviewRivals: Block<OverviewData> = {
               <div key={row.audience} style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '4px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
                 <strong>{brandLabel(row)}</strong>{row.retiredAt ? <span style={{ color: EMAIL.muted }}> · tracked until {shortDate(row.retiredAt)}</span> : null}
                 <div style={{ marginTop: 2 }}>
-                  attention <Share share={row.attention} recorded={r.recorded} mode={mode} /> · content <Share share={row.content} recorded={r.recorded} mode={mode} /> <BlockMovement verdict={row.attentionVerdict} unit="pts" mode={mode} />
+                  attention <Share share={row.attention} recorded={r.recorded} mode={mode} /> · content <Share share={row.content} recorded={r.recorded} mode={mode} /> <BlockMovement verdict={row.attentionVerdict} unit="pts" mode={mode} sharedRefusal={shared} />
                 </div>
                 <div style={{ marginTop: 2 }}>raised most under their content: <Raised row={row} mode={mode} /></div>
               </div>
@@ -305,7 +311,7 @@ export const overviewRivals: Block<OverviewData> = {
                           header stood over a column of whitespace. */}
                       {cols.change ? (
                         <td className="py-1.5 pr-3">
-                          {row.attentionVerdict ? <BlockMovement verdict={row.attentionVerdict} unit="pts" mode={mode} /> : <NoValue mode={mode} label="no change is read for this brand" />}
+                          {row.attentionVerdict ? <BlockMovement verdict={row.attentionVerdict} unit="pts" mode={mode} sharedRefusal={shared} /> : <NoValue mode={mode} label="no change is read for this brand" />}
                         </td>
                       ) : null}
                       {cols.own ? <td className="py-1.5 pr-3"><OwnPosts row={row} mode={mode} folded={folded} /></td> : null}
@@ -317,6 +323,7 @@ export const overviewRivals: Block<OverviewData> = {
             </div>
           </>
         )}
+        <PairChip note={shared} mode={mode} />
       </BlockFrame>
     )
   },

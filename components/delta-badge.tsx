@@ -159,7 +159,7 @@ function Moved({ change, unit, band: bandPts, title, good = 'up', bandTip = fals
  * magnitude and a sign, and the words "growing" and "fading" are earned over
  * three readings and printed by the surface, not by a badge.
  */
-export function MovementBadge({ verdict, unit, good = 'up', bandTip = false, sharedRefusal = null }: {
+export function MovementBadge({ verdict, unit, good = 'up', bandTip = false, sharedRefusal = null, priorShown = false }: {
   verdict: Verdict | DeltaVerdict | null | undefined
   unit?: string
   good?: Good
@@ -169,8 +169,12 @@ export function MovementBadge({ verdict, unit, good = 'up', bandTip = false, sha
    *  a verdict refused for that same pair prints the short non-answer, with
    *  the sentence in its title. */
   sharedRefusal?: VerdictPairNote | null
+  /** The row already shows the earlier month's figure beside the badge: a
+   *  verdict refused for the block's pair then prints nothing (the lead's R3). */
+  priorShown?: boolean
 }) {
   if (!verdict) return null
+  if (priorShown && 'pair' in verdict && refusalInBlock({ state: verdict.state, pair: verdict.pair ?? null }, sharedRefusal)) return null
   const change = 'changePts' in verdict ? verdict.changePts : verdict.change
   const bandPts = 'bandPts' in verdict ? verdict.bandPts : verdict.band
   // THE MONTH-PAIR RULE'S WORDS (WP1.3). A pair refused because the two months

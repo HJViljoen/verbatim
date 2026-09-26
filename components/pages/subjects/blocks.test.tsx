@@ -1161,6 +1161,17 @@ describe('Subjects · a refusal the cells share prints once, as a chip', () => {
     }
   })
 
+  // THE LEAD'S R3: a cell that already shows the earlier month in grey says
+  // nothing more; a cell without one says "not compared".
+  it('prints nothing beside a cell that already shows the earlier month, "not compared" beside one that does not', () => {
+    const data = refused()
+    const sides = data.selected.sides.filter((s) => s.observed && s.pct != null && s.verdict?.state === 'refused')
+    const withPrior = sides.filter((s) => s.previous?.pct != null).length
+    expect(withPrior).toBeGreaterThan(0)
+    const text = renderText(subjectsSubject.render(data, 'app', ctx))
+    expect(text.split('not compared').length - 1).toBe(sides.length - withPrior)
+  })
+
   it('the kinds strip, every kind refused, is the chip alone', () => {
     for (const mode of MODES) {
       const text = renderText(subjectsKinds.render(refused(), mode, ctx))

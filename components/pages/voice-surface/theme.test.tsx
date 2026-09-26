@@ -405,3 +405,30 @@ describe('voiceTheme', () => {
     expect(render(voiceTheme.render(base, 'app', ctx))).toContain('growing, 3rd month')
   })
 })
+
+// ONE REFUSAL, SAID ONCE (deploy 1 review, the lead's R3): on 2 Oct the
+// theme's badge, its tone and its month-by-month figures each printed "Not read
+// as a change: we changed our searches in September." The block prints one
+// chip; the badge and the tone, which already show the earlier month in grey,
+// print nothing. The fixture's volumes are its own (mock); the refusal is the
+// loader's for Sealand's Aug→Sep.
+describe('voiceTheme · a refused month pair prints once, as a chip', () => {
+  const pair = { mode: 'refuse' as const, cause: 'searches' as const, changeMonth: '2026-09-01', checkWith: null }
+  const refused = () => {
+    const data = voiceFixture()
+    const t = data.theme
+    if (t.state !== 'ready') throw new Error('fixture theme is not ready')
+    const refuse = <V extends { state: string }>(v: V): V => ({ ...v, state: 'refused', refusedReason: 'tracking_change', changePts: null, bandPts: null, pair })
+    return { ...data, theme: { ...t, verdict: t.verdict ? refuse(t.verdict) : t.verdict, tone: t.tone ? { ...t.tone, verdict: t.tone.verdict ? refuse(t.tone.verdict) : t.tone.verdict } : t.tone } }
+  }
+
+  it('prints the chip once and no sentence, in every mode', () => {
+    for (const mode of MODES) {
+      const text = draw(refused(), mode)
+      expect(text.split('not read as a change: we changed our searches in September').length - 1, mode).toBe(1)
+      expect(text, mode).not.toContain('Not read as a change')
+      expect(text, mode).not.toContain('not compared')
+      expect(copyViolations(voiceTheme.render(refused(), mode, ctx)), mode).toEqual([])
+    }
+  })
+})

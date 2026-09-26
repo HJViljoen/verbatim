@@ -228,4 +228,21 @@ describe('the month-pair words: one wording, stated once', () => {
     expect(pairSentence(note('running', '2026-10-01'))).toBe('October is not compared until it has ended.')
     expect(pairSentence(note('not_yet', null))).toBe('Not compared yet.')
   })
+
+  it('names one chip for a block, the reason most of its refused rows share', () => {
+    const searches = { state: 'refused', pair: note('searches', '2026-09-01') }
+    const ours = { state: 'refused', pair: note('ours', '2026-08-01') }
+    const answered = { state: 'no_clear_change' }
+    expect(sharedPairNote([searches, ours, searches, answered])).toEqual(searches.pair)
+    expect(sharedPairNote([answered, null, undefined])).toBeNull()
+    // A tie goes to the newer change's month.
+    expect(sharedPairNote([ours, searches])).toEqual(searches.pair)
+  })
+
+  it('says "not compared" on every refused row of a block with a chip, whatever its reason', () => {
+    const shared = note('searches', '2026-09-01')
+    expect(refusalInBlock({ state: 'refused', pair: note('ours', '2026-08-01') }, shared)).toBe(true)
+    expect(refusalInBlock({ state: 'refused', pair: shared }, null)).toBe(false)
+    expect(refusalInBlock({ state: 'too_little_data' }, shared)).toBe(false)
+  })
 })

@@ -578,20 +578,21 @@ export function pairSentence(note: VerdictPairNote): string {
 export const PAIR_NOT_COMPARED = 'not compared'
 
 /**
- * THE ONE REFUSAL A BLOCK'S ROWS SHARE, SAID ONCE (deploy 1 review). On
- * Sealand's September every month verdict is refused for the same reason, and
- * printing "Not read as a change: we changed our searches in September." on
- * each row put the sentence 14 times on the Overview and 13 on Voice, squeezed
- * OV3's kind labels to nothing, and read as that many separate failures. The
- * approved preview prints it once, as a chip at the foot of each block.
+ * THE ONE REFUSAL A BLOCK PRINTS, SAID ONCE (deploy 1 review; the lead's R3).
+ * On Sealand's September every month verdict is refused for the same reason,
+ * and printing "Not read as a change: we changed our searches in September."
+ * on each row put the sentence 14 times on the Overview and 13 on Voice,
+ * squeezed OV3's kind labels to nothing, and read as that many separate
+ * failures. The approved preview and the 25 Sep rulings print it once, as a
+ * chip at the foot of each block: a row or cell never carries the sentence.
  *
- * The note, where one or more of the verdicts are refused for a month pair
- * and all of those say the same sentence; null otherwise, and the rows keep
- * their own sentences (a block whose rows are refused for different reasons
- * says each where it stands). One is enough: a lone refusal in a narrow cell
- * (the face-off's change column) wrapped to four lines, and the preview draws
- * the chip whatever the count. A verdict that was compared, or refused for
- * anything else, does not stop it: those rows print their own answer.
+ * The note the block's chip prints, where one or more of its verdicts are
+ * refused for a month pair; null where none is. A block carries at most one
+ * chip, so where its rows are refused for different reasons the chip names
+ * the reason most of them share (a tie goes to the newer change's month), and
+ * every refused row prints "not compared" with its own sentence in the app's
+ * title. A verdict that was compared, or refused for anything else, does not
+ * stop it: those rows print their own answer.
  */
 export function sharedPairNote(
   verdicts: readonly ({ state: string; pair?: VerdictPairNote | null } | null | undefined)[],
@@ -600,16 +601,25 @@ export function sharedPairNote(
     .map((v) => (v && v.state === 'refused' && v.pair?.mode === 'refuse' ? v.pair : null))
     .filter((n): n is VerdictPairNote => n != null)
   if (notes.length === 0) return null
-  const first = pairSentence(notes[0])
-  return notes.every((n) => pairSentence(n) === first) ? notes[0] : null
+  const byWords = new Map<string, { note: VerdictPairNote; count: number }>()
+  for (const n of notes) {
+    const words = pairChipWords(n)
+    const held = byWords.get(words)
+    if (held) held.count += 1
+    else byWords.set(words, { note: n, count: 1 })
+  }
+  const ranked = [...byWords.values()].sort((x, y) =>
+    y.count - x.count || (y.note.changeMonth ?? '').localeCompare(x.note.changeMonth ?? ''))
+  return ranked[0].note
 }
 
-/** Is this verdict's refusal the one its block prints once? */
+/** Does this verdict print "not compared" because its block prints the
+ *  refusal once, as a chip? Every verdict refused for a month pair does,
+ *  whatever its reason, wherever the block has a chip. */
 export function refusalInBlock(
   verdict: { state: string; pair?: VerdictPairNote | null } | null | undefined,
   shared: VerdictPairNote | null | undefined,
 ): boolean {
   return verdict != null && shared != null && verdict.state === 'refused' && verdict.pair?.mode === 'refuse'
-    && pairSentence(verdict.pair) === pairSentence(shared)
 }
 
