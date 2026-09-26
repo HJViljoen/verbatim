@@ -61,7 +61,9 @@ function PersonaRow({ p, max, mode }: { p: CastPersona; max: number; mode: Rende
         {p.oneLiner ? <p data-copy="subject" data-slot="pass_e_persona" className="m-0 text-[15px] leading-[1.5] text-secondary-foreground [text-wrap:pretty]">{p.oneLiner}</p> : null}
         {mix ? <span data-copy="figure" className="font-mono text-[12px] text-muted-foreground">{mix}</span> : null}
       </div>
-      <div className="flex h-6 items-center gap-4">
+      {/* Stacked (under xl) the bar keeps the preview's column width rather
+          than running the tile's. */}
+      <div className="flex h-6 max-w-[320px] items-center gap-4 xl:max-w-none">
         <span aria-hidden className="relative block h-1.5 flex-1">
           <span className="absolute inset-y-0 left-0 rounded-[2px] bg-foreground" style={{ width: `${(p.videos / max) * 100}%` }} />
         </span>

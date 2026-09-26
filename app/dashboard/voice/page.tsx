@@ -4,13 +4,13 @@ import { readingHandle } from '@/lib/reading/read'
 import { loadVoiceSurface, type VoiceSurfaceParams } from '@/lib/pages/voice-surface'
 import { VOICE_LEGEND, VoiceSurfacePage } from '@/components/pages/voice-surface'
 
-// Voice — "who is saying what in this category?" (Phase 1 WP13, design §3
-// VO1–VO4).
+// Conversation — "everything your market talked about, in full" (market-first
+// WP2.4, plan §2.4; the page was Voice, Phase 1 WP13).
 //
-// The address is unchanged and `?themes=` still lands: thirty-two stored links
-// reach here and fourteen of them carry that key, so the new loader reads it
-// as the same deep link the old page did — it narrows which themes are drawn,
-// never which month is read.
+// The address is unchanged and stored links still land: `?themes=` (fourteen
+// of the thirty-two stored links carry it) opens the biggest theme it names in
+// the pane, and `?horizon=` and `?audience=` are read as nothing, since the
+// page reads the reading month and the category's themes.
 //
 // The legacy Voice of Customer module stays registered under the page key
 // `voice` (components/pages/registry.ts) for the export route, the share page
