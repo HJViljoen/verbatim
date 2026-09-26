@@ -49,6 +49,7 @@ import { loadOwnPublishedVideos, ownSides, type PlaybookVideo } from './playbook
 import type { FormatMatrix } from '../reading/formats'
 import type { SideReading } from './overview'
 import { marketSubjectSide } from './overview-market/subjects'
+import { noiseComments, noiseVideos, skipNoise } from './noise'
 
 // This week — "what needs attention this week?" (Phase 1 WP15, decision P,
 // the mock's ThisWeek.dc.html).
@@ -1666,6 +1667,10 @@ async function buildReplies(input: {
       competitor_keywords: string[] | null
       industry_keywords: string[] | null
     }>(configRes, 'week.replyConfig')
+    // NO QUOTE FROM UNDER A VIDEO MARKED NOISE (market-first WP2.7): the
+    // queue is picked from the rest, so a skipped row is replaced, not a gap.
+    const noise = await noiseComments(supabase, clientId, candidates.map((c) => c.comment.id))
+    const pool = skipNoise(candidates, (c) => c.comment.id, noise)
     const vocab = engageVocab([config?.brand_keywords, config?.competitor_keywords, config?.industry_keywords])
     const ownHandles = new Set(
       Object.values(config?.own_handles ?? {})
@@ -1692,11 +1697,11 @@ async function buildReplies(input: {
     // upper bound a comment written after `window_end` and gathered by this
     // very run would be cited here carrying a date the footer does not cover.
     const worthReplying = rankEngageCandidates(
-      candidates.filter((c) => c.category !== 'misinformation'),
+      pool.filter((c) => c.category !== 'misinformation'),
       { windowStart: window.from, windowEnd: window.to, vocab },
     )
     const awareness = rankEngageCandidates(
-      candidates.filter((c) => c.category === 'misinformation'),
+      pool.filter((c) => c.category === 'misinformation'),
       { windowStart: window.from, windowEnd: window.to, perCategoryCap: FLAGGED_SHOWN, totalCap: FLAGGED_SHOWN, vocab },
     )
     // `now` is the window's END, not the clock: `shapeInbox` computes an age
@@ -2419,7 +2424,11 @@ export async function loadSubjectQuotes(
         .order('id', { ascending: true }),
   )
   const fresh = new Set(dated.map((c) => c.id))
-  const kept = pool.filter((p) => p.citation.commentId && fresh.has(p.citation.commentId))
+  const dayOk = pool.filter((p) => p.citation.commentId && fresh.has(p.citation.commentId))
+  // NO QUOTE FROM UNDER A VIDEO MARKED NOISE (market-first WP2.7), and the
+  // count beside the list is of the quotes it could have shown.
+  const noise = await noiseComments(supabase, clientId, dayOk.map((p) => p.citation.commentId as string))
+  const kept = skipNoise(dayOk, (p) => p.citation.commentId, noise)
   const shown = kept.slice(0, NEW_QUOTES_SHOWN)
   const cited = await citeQuotes(supabase, clientId, shown.map((s) => s.citation))
   return {
@@ -2475,10 +2484,15 @@ export async function buildSales(input: {
   const cited = await loadSalesCitations(supabase, clientId, window)
   if (cited == null) return base
 
-  const objections = groupCitations(cited.filter((c) => c.category === 'objection'))
+  // NO QUOTE FROM UNDER A VIDEO MARKED NOISE (market-first WP2.7). Only the
+  // quotes skip: every count below is still of what was read.
+  const noise = await noiseVideos(supabase, clientId, cited.map((c) => c.videoUuid))
+  const quotable = (c: SalesCitation): boolean => !noise.has(c.videoUuid)
+  const objections = groupCitations(cited.filter((c) => c.category === 'objection'), undefined, quotable)
   const rivalComplaints = groupCitations(
     cited.filter((c) => c.category === 'objection' && c.audience.startsWith('competitor:')),
     (c) => ({ id: c.audience, label: rivalNameOf(c.audience) ?? c.audience }),
+    quotable,
   )
   // COUNTED BEFORE IT IS CAPPED. Slicing first and counting the slice is how
   // "2 comments · someone said they were moving between brands" came to be
@@ -2497,8 +2511,8 @@ export async function buildSales(input: {
     objections: objections.slice(0, SALES_GROUPS_SHOWN),
     // COUNTED BEFORE IT IS CAPPED, so "N more objections" can name a real N.
     objectionsTotal: objections.length,
-    praise: cited.filter((c) => c.category === 'praise').slice(0, SALES_PRAISE_SHOWN).map(toSalesQuote),
-    switching: switching.slice(0, SALES_SWITCHING_SHOWN).map(toSalesQuote),
+    praise: cited.filter((c) => c.category === 'praise' && quotable(c)).slice(0, SALES_PRAISE_SHOWN).map(toSalesQuote),
+    switching: switching.filter(quotable).slice(0, SALES_SWITCHING_SHOWN).map(toSalesQuote),
     switchingTotal: switchingComments,
     rivalComplaints: rivalComplaints.slice(0, SALES_GROUPS_SHOWN),
   }
@@ -2546,13 +2560,15 @@ function underWhose(audience: string): string {
 function groupCitations(
   cited: readonly SalesCitation[],
   keyOf: (c: SalesCitation) => { id: string; label: string } = (c) => ({ id: c.themeId, label: c.themeLabel }),
+  /** Whether a citation may be QUOTED (never whether it is counted). */
+  quotable: (c: SalesCitation) => boolean = () => true,
 ): SalesGroup[] {
   const held = new Map<string, { label: string; videos: Set<string>; quotes: SalesQuote[] }>()
   for (const c of cited) {
     const { id, label } = keyOf(c)
     const group = held.get(id) ?? { label, videos: new Set<string>(), quotes: [] }
     group.videos.add(c.videoUuid)
-    if (group.quotes.length < SALES_QUOTES_PER_GROUP) group.quotes.push(toSalesQuote(c))
+    if (group.quotes.length < SALES_QUOTES_PER_GROUP && quotable(c)) group.quotes.push(toSalesQuote(c))
     held.set(id, group)
   }
   return [...held.entries()]
