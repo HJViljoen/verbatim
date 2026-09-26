@@ -65,7 +65,7 @@ const EXEMPT: Readonly<Record<string, string>> = {
   'app/onboarding/actions.ts#createWorkspace':
     'creates a new workspace: its client id is minted in this action, so it is never a locked tenant',
   'app/invite/[token]/actions.ts#addToReportRecipients':
-    'adds the joining member to the default schedule’s list and never sets `active`; a default it has to create is born switched off for a locked tenant (lib/schedules/default.ts)',
+    'adds the joining member to the default schedule’s list and never sets `active`; a default it has to create is born switched off for a locked tenant, and a list that is on for a locked tenant is left alone (lib/schedules/default.ts)',
 }
 
 /** The writers the lock is known to guard. The sweep must FIND them, so a scan
@@ -397,5 +397,25 @@ describe('POST /api/schedules/[id]/send under the lock', () => {
     const r = await post({ mode: 'now' })
     expect(r.status).toBe(200)
     expect(h.sent).toEqual(['run:send'])
+  })
+})
+
+// ---- An invite does not grow a list that is sending (deploy 1 review) -----------
+
+describe('joinDefaultSchedule under the lock', () => {
+  const defaultRow = (active: boolean) => ({ id: 's-1', client_id: SEALAND, name: 'Weekly digest', recipients: ['daniela@sealand.example'], active, is_default: true })
+
+  it('adds no one to a locked tenant’s list while it is on', async () => {
+    const { joinDefaultSchedule } = await import('./schedules/default')
+    const fake = fakeClient({ report_schedules: defaultRow(true) })
+    expect(await joinDefaultSchedule(fake.client as never, SEALAND, 'new@sealand.example')).toBe(false)
+    expect(fake.writes).toEqual([])
+  })
+
+  it('still adds the member to a list that is off, which sends nothing', async () => {
+    const { joinDefaultSchedule } = await import('./schedules/default')
+    const fake = fakeClient({ report_schedules: defaultRow(false) })
+    expect(await joinDefaultSchedule(fake.client as never, SEALAND, 'new@sealand.example')).toBe(true)
+    expect(fake.writes.some((w) => w.table === 'report_schedules' && w.op === 'update')).toBe(true)
   })
 })

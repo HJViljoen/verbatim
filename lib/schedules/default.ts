@@ -72,6 +72,13 @@ export async function ensureDefaultSchedule(admin: SupabaseClient, clientId: str
  *  duplicates, the 25 cap respected). Returns whether anything changed. */
 export async function joinDefaultSchedule(admin: SupabaseClient, clientId: string, email: string, actor?: ConfigActor): Promise<boolean> {
   const s = await ensureDefaultSchedule(admin, clientId, [], null, actor)
+  // NOT ONTO A LIST THAT IS SENDING FOR A LOCKED TENANT (deploy 1 review;
+  // market-first decision J). Settings refuses any edit to a list that is on
+  // while the tenant's sending is locked; an accepted invite added the new
+  // member here all the same, so a list the operator switched on to send one
+  // report could grow by invitation. The member joins nothing; the operator
+  // adds them if the report should reach them.
+  if (s.active && tenantLocked(clientId, 'sends')) return false
   const next = normaliseRecipients([...s.recipients, email])
   if (next.length === s.recipients.length || next.length > SCHEDULE_RECIPIENTS_MAX) return false
   const { error } = await admin.from('report_schedules').update({ recipients: next, updated_at: new Date().toISOString() }).eq('id', s.id)
