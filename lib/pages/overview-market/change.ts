@@ -1,8 +1,10 @@
 import { pairSentence } from '../../calibration'
 import { fmtInt, longMonth, shortDate } from '../../format'
 import {
+  COMPARE_FLAG_SHARE,
   COMPARE_REFUSE_SHARE,
   DEPTH_RATIO_MIN,
+  VIEWS_BY_SURFACE,
   modeForShare,
   nextComparablePair,
   pairOnVerdict,
@@ -169,10 +171,22 @@ export function measuredSearchSentence(block: ChangeBlock): { body: string; figu
  *  to name, where it is the pair the block already reads, or where updates are
  *  paused (no update is promised). */
 export function nextPairLine(block: ChangeBlock): string | null {
+  const parts = nextPairParts(block)
+  return parts ? `${parts.lead}${parts.pair}${parts.tail}` : null
+}
+
+/** The same sentence in three parts, so Settings › What we changed can set
+ *  the pair itself in weight, as the approved preview does ("…is **October
+ *  against November, from the 6 Dec update**…"). One sentence, one source. */
+export function nextPairParts(block: ChangeBlock): { lead: string; pair: string; tail: string } | null {
   const next = block.next
   if (!next || block.paused) return null
   if (block.pair?.mode === 'comparable' && next.month === block.month) return null
-  return `The first comparison read the same way: ${longMonth(next.prevMonth)} against ${longMonth(next.month)}, from the ${shortDate(next.sameAgeFrom)} update, if nothing we search changes.`
+  return {
+    lead: 'The first comparison read the same way: ',
+    pair: `${longMonth(next.prevMonth)} against ${longMonth(next.month)}, from the ${shortDate(next.sameAgeFrom)} update`,
+    tail: ', if nothing we search changes.',
+  }
 }
 
 // ---- When two months are compared (decision D) -----------------------------------------
@@ -185,6 +199,10 @@ export interface CompareRule {
   state: 'held' | 'not_held' | 'unmeasured'
   /** The answer in words, with its figure where there is one. */
   answer: string
+  /** The answer's figures, where it is a count ("206 of 625") or a pair of
+   *  medians ("15 against 23"), so the page can set them as figures. The
+   *  words are `answer`'s. Additive. */
+  counts?: { figure: number; word: 'of' | 'against'; base: number }
 }
 
 export const COMPARE_RULES: readonly string[] = [
@@ -195,6 +213,18 @@ export const COMPARE_RULES: readonly string[] = [
 ]
 
 const pctText = (share: number): string => `${Math.round(share * 100)}%`
+
+type CodeEntry = PairRow['codeChanges'][number]
+
+/** The side a change's judged share came from: the entry (market or
+ *  category) whose pair share is the reason's, then its larger side, as
+ *  rule 2 prints the larger of the two months. */
+function judgedSide(entries: readonly CodeEntry[], share: number | null): CodeEntry['curr'] | null {
+  if (share == null) return null
+  const e = entries.find((x) => pairShare(x.prev, x.curr) === share)
+  if (!e) return null
+  return (shareOf(e.curr) ?? 0) >= (shareOf(e.prev) ?? 0) ? e.curr : e.prev
+}
 
 /**
  * The four rules, and how one pair stands on each (the preview's "August
@@ -222,7 +252,7 @@ export function compareRules(pair: PairComparability | null): CompareRule[] {
     if (share != null) {
       const side = (shareOf(curr) ?? 0) >= (shareOf(prev) ?? 0) ? curr : prev
       const held = share < COMPARE_REFUSE_SHARE
-      r2 = { n: 2, rule: COMPARE_RULES[1], state: held ? 'held' : 'not_held', answer: `${fmtInt(side.k)} of ${fmtInt(side.n)}` }
+      r2 = { n: 2, rule: COMPARE_RULES[1], state: held ? 'held' : 'not_held', answer: `${fmtInt(side.k)} of ${fmtInt(side.n)}`, counts: { figure: side.k, word: 'of', base: side.n } }
     }
   }
 
@@ -235,7 +265,16 @@ export function compareRules(pair: PairComparability | null): CompareRule[] {
   } else if (codes.length > 0) {
     const worst = codes.reduce((a, b) => ((b.share ?? 0) > (a.share ?? 0) ? b : a))
     const held = (worst.share ?? 0) < COMPARE_REFUSE_SHARE
-    r3 = { n: 3, rule: COMPARE_RULES[2], state: held ? 'held' : 'not_held', answer: pctText(worst.share ?? 0) }
+    // THE COUNT, NOT A ROUNDED SHARE (the approved preview's "63 of 626"): the
+    // gate fix's 63 of 655 is 9.6%, which rounds to "10%" beside a rule that
+    // says "10% or more" and a mark that says it held.
+    // A change's entries may be keyed on any of its grouped rows, so where
+    // none carries the reason's id the share alone finds the entry.
+    const own = row.codeChanges.filter((e) => e.changeId === worst.changeId)
+    const side = judgedSide(own.length > 0 ? own : row.codeChanges, worst.share)
+    r3 = side
+      ? { n: 3, rule: COMPARE_RULES[2], state: held ? 'held' : 'not_held', answer: `${fmtInt(side.k)} of ${fmtInt(side.n)}`, counts: { figure: side.k, word: 'of', base: side.n } }
+      : { n: 3, rule: COMPARE_RULES[2], state: held ? 'held' : 'not_held', answer: pctText(worst.share ?? 0) }
   } else {
     r3 = { n: 3, rule: COMPARE_RULES[2], state: 'held', answer: 'none touched a tenth' }
   }
@@ -244,20 +283,124 @@ export function compareRules(pair: PairComparability | null): CompareRule[] {
   const depth = row?.depth
   if (depth && depth.prevMedian != null && depth.currMedian != null && Number.isFinite(depth.prevMedian) && Number.isFinite(depth.currMedian) && depth.prevMedian > 0) {
     const held = depth.currMedian / depth.prevMedian >= DEPTH_RATIO_MIN
-    r4 = { n: 4, rule: COMPARE_RULES[3], state: held ? 'held' : 'not_held', answer: `${fmtInt(depth.currMedian)} against ${fmtInt(depth.prevMedian)}` }
+    r4 = { n: 4, rule: COMPARE_RULES[3], state: held ? 'held' : 'not_held', answer: `${fmtInt(depth.currMedian)} against ${fmtInt(depth.prevMedian)}`, counts: { figure: depth.currMedian, word: 'against', base: depth.prevMedian } }
   }
   return [r1, r2, r3, r4]
 }
 
-/** "Why September is not compared": the change block's own sentence, and the
- *  pair's chip words where no measured sentence applies. Null where the pair
- *  is read the same way. */
-export function whyNotCompared(block: ChangeBlock): { title: string; body: string; figures: FigureTable } | null {
+// ---- Why September is not compared (the preview's three stat cells) ---------------------
+
+/**
+ * One of the section's stat cells: a measured figure, its base ("of 654" for
+ * a count of the month's videos, "against 21" for the older month's median),
+ * what it counts, and the update it was read with.
+ */
+export interface WhyCell {
+  key: 'searches' | 'code_change' | 'depth'
+  figure: number
+  base: { word: 'of' | 'against'; value: number }
+  caption: string
+  /** The date of the update the measure was read with; null where unknown. */
+  readWith: string | null
+}
+
+/** What a change of ours to how we check or file videos did to the month's
+ *  videos, per surface, after "{n} {Month} videos". The gate fix's words are
+ *  the approved preview's and its approved note's ("let in without that
+ *  check"); any other surface says what rule 3 says. */
+const CODE_CHANGE_CAPTION: Partial<Record<OurChangeSurface, string>> = {
+  gate_rule: 'had been let in without our relevance check',
+  regate: 'were checked again for relevance',
+}
+
+/**
+ * The measured figures behind the refusal, read off the pair's row (never
+ * recomputed): what came from searches added in the month (rule 2), the
+ * largest change of ours to how we check or file videos that the page's view
+ * divides by (rule 3), and the depth of the month's threads against the month
+ * before (rule 4). A cell prints only where its measure does not hold, at the
+ * judge's own lines (a share of 1% or more flags; depth under four fifths
+ * refuses), and only where it was measured: nothing is printed as a zero.
+ *
+ * FROM THE ROW, NOT FROM THE REASONS. A month still running (or not yet read
+ * past its end) is refused before the shares are judged, and its row still
+ * says why the next read will refuse too: the preview's cells on 24 Sep. The
+ * update each figure was read with prints beside it.
+ */
+export function whyCells(block: ChangeBlock): WhyCell[] {
+  const pair = block.pair
+  const row = pair?.row ?? null
+  if (!pair || !row || pair.mode === 'comparable') return []
+  const month = longMonth(pair.month)
+  const readWith = block.readWith ?? null
+  const cells: WhyCell[] = []
+
+  const searchShare = pairShare(row.searchOutside.prev, row.searchOutside.curr)
+  const curr = row.searchOutside.curr
+  if (searchShare != null && searchShare >= COMPARE_FLAG_SHARE && shareOf(curr) != null) {
+    cells.push({
+      key: 'searches',
+      figure: curr.k,
+      base: { word: 'of', value: curr.n },
+      // The front page's sentence, with the count set apart ("206 of
+      // September’s 625 videos came from searches we added in September",
+      // `measuredSearchSentence`), as the preview's cells read.
+      caption: `${month} videos came from searches we added in ${month}`,
+      readWith,
+    })
+  }
+
+  // The market view's entries: a change re-filing videos does not move the
+  // market (decision E), so its measure is not this pair's.
+  const byChange = new Map<string, CodeEntry[]>()
+  for (const e of row.codeChanges) {
+    if (!(VIEWS_BY_SURFACE[e.surface] ?? []).includes('market')) continue
+    byChange.set(e.changeId, [...(byChange.get(e.changeId) ?? []), e])
+  }
+  let worst: { entry: CodeEntry; share: number } | null = null
+  for (const entries of byChange.values()) {
+    const entry = entries.find((e) => (e.population ?? 'market') === 'market') ?? entries[0]
+    const share = pairShare(entry.prev, entry.curr)
+    if (share == null || share < COMPARE_FLAG_SHARE || shareOf(entry.curr) == null) continue
+    if (!worst || share > worst.share) worst = { entry, share }
+  }
+  if (worst) {
+    const what = CODE_CHANGE_CAPTION[worst.entry.surface] ?? 'were touched by a change of ours to how we check or file videos'
+    cells.push({
+      key: 'code_change',
+      figure: worst.entry.curr.k,
+      base: { word: 'of', value: worst.entry.curr.n },
+      caption: `${month} videos ${what}`,
+      readWith,
+    })
+  }
+
+  const { prevMedian, currMedian } = row.depth
+  if (prevMedian != null && currMedian != null && Number.isFinite(prevMedian) && Number.isFinite(currMedian) && prevMedian > 0 && currMedian >= 0
+    && currMedian / prevMedian < DEPTH_RATIO_MIN) {
+    const soFar = pair.reasons.some((r) => r.kind === 'incomplete') ? ' so far' : ''
+    cells.push({
+      key: 'depth',
+      figure: currMedian,
+      base: { word: 'against', value: prevMedian },
+      caption: `Dated comments a video: ${month}’s median${soFar}, against ${longMonth(pair.prevMonth)}’s`,
+      readWith,
+    })
+  }
+  return cells
+}
+
+/** "Why September is not compared": the measured cells behind the refusal
+ *  (`whyCells`), and, where none was measured, the change block's own
+ *  sentence or the pair's chip words. Null where the pair is read the same
+ *  way. */
+export function whyNotCompared(block: ChangeBlock): { title: string; body: string; figures: FigureTable; cells: WhyCell[] } | null {
   const pair = block.pair
   if (!pair || pair.mode === 'comparable') return null
   const lead = measuredSearchSentence(block)
   const note = pairOnVerdict(pair).note
   const body = lead?.body ?? (note ? pairSentence(note) : null)
-  if (!body) return null
-  return { title: `Why ${longMonth(pair.month)} is not compared`, body, figures: lead?.figures ?? {} }
+  const cells = whyCells(block)
+  if (!body && cells.length === 0) return null
+  return { title: `Why ${longMonth(pair.month)} is not compared`, body: body ?? '', figures: lead?.figures ?? {}, cells }
 }

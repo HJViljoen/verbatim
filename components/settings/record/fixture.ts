@@ -345,8 +345,13 @@ export function unrecordedSaveStateFixture(): SaveState {
 // count is staging's measured 206 of 625 (GC F29, the subset WP1.4's strict
 // count must reproduce), August's CQ F25's "about 115 of 351", depth DR F39's
 // medians 23 and 15. The 13 Sep reach is CQ F27's 187 (by last surfacing).
-// None of these is the production figure WP1.8 measures; the section prints
-// whatever the rows hold.
+// The gate fix's reach is WP1.4's read-only staging dry run of 26 Sep
+// (`exec/logs/wp1-4-confirm-dry-measure-comparability-staging.txt`): 65 of
+// September's 654 market videos and 64 of its 625 category videos were let in
+// without the relevance check, none of August's; it is a measure with no
+// change row here (its `config_changes` row is WP1.4's to write), so the pair
+// judges it by its surface. None of these is the production figure WP1.8
+// measures; the section prints whatever the rows hold.
 
 const WWC_ROWS: ConfigChange[] = [
   wwcChange({ id: 'wwc-0913', at: '2026-09-13T10:00:58.000Z', surface: 'terms', before: ['upcycled bag'], after: ['upcycled bag', 'handmade bag', 'sustainable fashion', 'travel gear'] }),
@@ -368,7 +373,11 @@ export function whatWeChangedFixture(opts: { measured?: boolean } = {}) {
     ? {
         prevMonth: '2026-08-01', month: '2026-09-01',
         searchOutside: { prev: { k: 115, n: 351 }, curr: { k: 206, n: 625 } },
-        codeChanges: [], depth: { prevMedian: 23, currMedian: 15 }, gather: [], lateCapture: null,
+        codeChanges: [
+          { changeId: 'wwc-gate-fix', surface: 'gate_rule', prev: { k: 0, n: 377 }, curr: { k: 65, n: 654 }, population: 'market' },
+          { changeId: 'wwc-gate-fix', surface: 'gate_rule', prev: { k: 0, n: 351 }, curr: { k: 64, n: 625 }, population: 'category' },
+        ],
+        depth: { prevMedian: 23, currMedian: 15 }, gather: [], lateCapture: null,
         readThroughRun: 'run-27sep', methodVersion: 'mf1', computedAt: '2026-09-30T10:00:00.000Z',
       }
     : null

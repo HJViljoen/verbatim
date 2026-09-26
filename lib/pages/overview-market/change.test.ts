@@ -9,6 +9,8 @@ import {
   changeLead,
   compareRules,
   nextPairLine,
+  nextPairParts,
+  whyCells,
   whyNotCompared,
   type ChangeBlock,
 } from './change'
@@ -128,5 +130,62 @@ describe('Settings › What we changed: the rules and why September is not compa
     const why = whyNotCompared(block())
     expect(why?.title).toBe('Why September is not compared')
     expect(why?.body).toBe(changeLead(block())?.body)
+  })
+})
+
+/**
+ * The gate fix's reach as WP1.4's read-only staging dry run measured it (26
+ * Sep, `exec/logs/wp1-4-confirm-dry-measure-comparability-staging.txt`): 65 of
+ * September's 654 market videos and 64 of its 625 category videos were let in
+ * without the relevance check; none of August's. Its depth line there reads
+ * August 21 and September 14.
+ */
+const GATE_FIX: PairRow['codeChanges'] = [
+  { changeId: 'gate-fix', surface: 'gate_rule', prev: { k: 0, n: 377 }, curr: { k: 65, n: 654 }, population: 'market' },
+  { changeId: 'gate-fix', surface: 'gate_rule', prev: { k: 0, n: 351 }, curr: { k: 64, n: 625 }, population: 'category' },
+]
+const withGate: PairRow = { ...ROW, codeChanges: GATE_FIX }
+
+describe('Settings › What we changed: the three cells behind the refusal (the approved preview)', () => {
+  it('prints what came from the new searches and how shallow the threads are, each with its base and its update', () => {
+    expect(whyCells(block()).map((c) => [c.key, c.figure, c.base.word, c.base.value, c.caption, c.readWith])).toEqual([
+      ['searches', 206, 'of', 625, 'September videos came from searches we added in September', '2026-09-27T08:30:00.000Z'],
+      ['depth', 15, 'against', 23, 'Dated comments a video: September’s median, against August’s', '2026-09-27T08:30:00.000Z'],
+    ])
+  })
+
+  it('adds the gate fix in the market’s own count, in the preview’s words', () => {
+    const cells = whyCells(block({ pair: pair('ended', withGate) }))
+    expect(cells.map((c) => c.key)).toEqual(['searches', 'code_change', 'depth'])
+    expect(cells[1]).toMatchObject({ figure: 65, base: { word: 'of', value: 654 }, caption: 'September videos had been let in without our relevance check' })
+  })
+
+  it('prints no cell for a measure that holds, or for a change that does not move the market', () => {
+    const shallowNot: PairRow = { ...ROW, depth: { prevMedian: 23, currMedian: 20 } }
+    expect(whyCells(block({ pair: pair('ended', shallowNot) })).map((c) => c.key)).toEqual(['searches'])
+    const refiled: PairRow = { ...ROW, codeChanges: [{ changeId: 'attr', surface: 'attribution', prev: { k: 20, n: 377 }, curr: { k: 90, n: 654 }, population: 'market' }] }
+    expect(whyCells(block({ pair: pair('ended', refiled) })).map((c) => c.key)).toEqual(['searches', 'depth'])
+  })
+
+  it('on a month still running, still says why from its row, and calls the median so far', () => {
+    const cells = whyCells(block({ pair: pair('so_far') }))
+    expect(cells.map((c) => c.key)).toEqual(['searches', 'depth'])
+    expect(cells[1].caption).toBe('Dated comments a video: September’s median so far, against August’s')
+  })
+
+  it('without a measured row prints no cell and keeps the refusal’s own sentence, never a zero', () => {
+    const why = whyNotCompared(block({ pair: pair('ended', null) }))
+    expect(why?.cells).toEqual([])
+    expect(why?.body).toBe('Not read as a change: we changed our searches in September.')
+  })
+
+  it('reads rule 3 as the count the preview prints, never a share rounded up to the line', () => {
+    expect(compareRules(pair('ended', withGate))[2]).toMatchObject({ state: 'held', answer: '65 of 654' })
+  })
+
+  it('sets the next pair apart in the same sentence', () => {
+    const parts = nextPairParts(block())
+    expect(parts?.pair).toBe('October against November, from the 6 Dec update')
+    expect(`${parts?.lead}${parts?.pair}${parts?.tail}`).toBe(nextPairLine(block()))
   })
 })

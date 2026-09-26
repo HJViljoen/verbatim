@@ -157,7 +157,9 @@ export default async function SettingsRecordPage() {
       counts={counts}
       railFooter={<SaveStrip state={save} note={inputs.changes.rows[0]?.note ?? null} />}
     >
-      <div className="flex flex-col">
+      {/* THE PREVIEW'S RHYTHM: each section a tile, 24px apart (market-first
+          WP1.6, Heinrich's default of 26 Sep). */}
+      <div className="flex flex-col gap-6">
         <RecordHeader meta={headerMeta}>
           What was delivered, what changed, what was thrown away, and how much was read.
         </RecordHeader>

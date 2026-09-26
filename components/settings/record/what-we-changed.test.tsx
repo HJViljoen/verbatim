@@ -23,13 +23,23 @@ describe('What we changed', () => {
     expect(render(lead)).toContain(`id="${WHAT_WE_CHANGED_ID}"`)
   })
 
-  it('says the pair in one sentence, names the first pair read the same way, and why September is not compared, in the front page’s sentence', () => {
+  it('says the pair in one sentence and names the first pair read the same way, the pair set in weight', () => {
     const t = read(lead)
     expect(t).toContain('August and September sit side by side, not read as a change: we changed our searches in September.')
     expect(t).toContain('The first comparison read the same way: October against November, from the 6 Dec update, if nothing we search changes.')
-    expect(t).toContain('Why September is not compared')
-    expect(t).toContain('Not a change we can stand behind yet: 206 of September’s 625 videos came from searches we added in September (read with the 27 Sep update).')
+    expect(render(lead)).toContain('<span class="font-semibold text-foreground">October against November, from the 6 Dec update</span>')
     assertCopyContract(render(lead))
+  })
+
+  it('says why September is not compared in the preview’s three cells: each figure with its base, what it counts and its update', () => {
+    const t = read(lead)
+    expect(t).toContain('Why September is not compared')
+    expect(t).toContain('206 of 625 September videos came from searches we added in September read with the 27 Sep update')
+    expect(t).toContain('65 of 654 September videos had been let in without our relevance check read with the 27 Sep update')
+    expect(t).toContain('15 against 23 Dated comments a video: September’s median, against August’s read with the 27 Sep update')
+    // Three cells, not the one sentence the front page prints.
+    expect(t).not.toContain('Not a change we can stand behind yet')
+    expect((render(lead).match(/data-copy="level"/g) ?? []).length).toBe(2)
   })
 
   it('without a measured row (MF1 not applied) says the refusal in its own words, never a zero', () => {
@@ -68,8 +78,16 @@ describe('When two months are compared', () => {
     expect(t).toContain('August against September, as at 27 Sep')
     expect(t).toContain('September has ended and was read past it')
     expect(t).toContain('206 of 625')
+    expect(t).toContain('65 of 654')
     expect(t).toContain('15 against 23')
     assertCopyContract(render(rules))
+  })
+
+  it('opens How to read from its footer, a link and nothing else', () => {
+    const footer = render(rules).match(/<footer[^>]*>([\s\S]*?)<\/footer>/)?.[1] ?? ''
+    expect(footer).toContain('href="/dashboard/settings/how-to-read"')
+    expect(footer.replace(/<[^>]+>/g, '').trim()).toBe('How to read →')
+    expect(footer.replace(/<a [^>]*>[\s\S]*?<\/a>/g, '').replace(/<[^>]+>/g, '').trim()).toBe('')
   })
 })
 
