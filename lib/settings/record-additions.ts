@@ -1,4 +1,3 @@
-import type { ConfigChange } from '../config-log'
 import { segmentRulesEnabled } from '../segments/rules'
 
 // Settings › What we changed gains three sections with deploy 5 (market-first
@@ -65,7 +64,7 @@ const METHOD_SURFACES: Readonly<Record<CheckMethod['key'], readonly string[]>> =
   filing: ['attribution', 'entity_retag'],
 }
 
-export function checkMethods(clientId: string, rows: readonly Pick<ConfigChange, 'surface' | 'changed_at'>[]): CheckMethod[] {
+export function checkMethods(clientId: string, rows: readonly { surface: string; changed_at: string }[]): CheckMethod[] {
   const last = (key: CheckMethod['key']): string | null => {
     const dates = rows.filter((r) => METHOD_SURFACES[key].includes(r.surface)).map((r) => r.changed_at).sort()
     return dates.length ? dates[dates.length - 1] : null
