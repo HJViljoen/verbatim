@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { fmtInt, shortDate } from '../format'
-import { SHARE_BAND } from '../report-bands'
 import { isRivalAudience } from '../rivals'
+import { floorClearingMonths } from '../reports/quarterly'
 import { isMissingColumnError, selectAll } from '../supabase-admin'
 
 // What an answer was answered AGAINST (design AS3, Phase 1 WP21).
@@ -173,13 +173,9 @@ export interface MonthRow {
 /**
  * Distinct months a claim about change can stand on.
  *
- * TWO REDUCTIONS, AND BOTH ARE ABOUT AGREEING WITH THE BLOCK UNDERNEATH. A
- * month under the reading layer's video floor is not a reading anybody may
- * compare on, and a RIVAL's month is not history behind an answer about this
- * client's customers — retrieval drops every rival's voice before an answer is
- * written, so the movement block reads `client` and `industry-other` and never
- * `competitor:<name>`. Counting them told a tenant whose tracked rivals carry
- * the volume that six months stood behind a claim for which none did.
+ * ONE RULE, THE MARKET'S (WP3.11, H19): a month whose market clears the
+ * reading layer's video floor. A month under it is not a reading anybody may
+ * compare on; the client's own posts are never the market (decision E).
  *
  * Pure, and exported, so the scoping rule is argued in a test rather than in a
  * loader.
@@ -199,14 +195,16 @@ export function readableMonthCount(rows: readonly MonthRow[]): number {
  * they cannot disagree, whatever a later filter does to either.
  */
 export function readableMonths(rows: readonly MonthRow[]): string[] {
-  return [
-    ...new Set(
-      rows
-        .filter((m) => !isRivalAudience(m.audience))
-        .filter((m) => (m.videos ?? 0) >= SHARE_BAND.minN)
-        .map((m) => m.month),
-    ),
-  ].sort()
+  // THE MARKET'S MONTHS OVER THE FLOOR (WP3.11, H19; decision E). One rule for
+  // Ask, the quarterly review and its Reports card: the category pooled with
+  // the videos filed under a tracked brand, the client's own posts left out,
+  // at SHARE_BAND.minN or more. Before market-first this counted the client's
+  // and the category's months separately and dropped every rival's, because
+  // retrieval dropped every rival's voice; since WP3.9 an answer reads the
+  // market, and a rival the question names, so the months behind it are the
+  // market's.
+  const rivals = [...new Set(rows.map((r) => r.audience).filter((a) => isRivalAudience(a)))]
+  return floorClearingMonths(rows, rivals)
 }
 
 /**

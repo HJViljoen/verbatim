@@ -7,7 +7,9 @@ import type { RecordInputs } from '@/lib/reading/record'
 import type { SubjectWindowReading } from '@/lib/subjects/types'
 import { searchPlanView, type DeckChangeLog, type SearchPlan } from '@/lib/settings/deck-record'
 import { QUARTERLY_SNAPSHOT_VERSION, type QuarterlySnapshotData } from '@/lib/reports/quarterly-build'
-import { QUARTERLY_BLOCK_KEYS, previousQuarter, quarterFor, quarterlySubject, quarterlyTitle } from '@/lib/reports/quarterly'
+import { QUARTERLY_BLOCK_KEYS, previousQuarter, quarterFor, quarterPairOf, quarterlySubject, quarterlyTitle } from '@/lib/reports/quarterly'
+import { pairOn } from '@/lib/reading/pairs'
+import { sealandJudge } from '@/lib/test/sealand-pairs'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '@/lib/rivals'
 import { overviewFixture, refusedFixture, verdict } from '@/components/pages/overview/fixture'
 import { marketFixture, unrecordedFixture } from '@/components/pages/market-surface/fixture'
@@ -491,6 +493,40 @@ export function afterQuarterFixture(): QuarterlyData {
     quiet: QUIET,
     searchPlan: SEARCH_PLAN,
     changeLog: CHANGE_LOG,
+  })
+}
+
+/**
+ * THE NORMAL SEND, AS THE LOADER NOW READS IT (WP3.11). Built at a 2026-10-02
+ * clock, the Q3 review's page loaders read September, the quarter's own last
+ * month (`quarterPageMonth`), so nothing on it is October's; the gate counts
+ * the months whose market clears the floor, which on Sealand is two (August
+ * 377, September 655; H19); and the Q3/Q2 pair is judged on Sealand's real
+ * change log, which refuses it on our September search change. The window
+ * volumes are still the mock's (F12, see the header).
+ */
+export function builtInOctoberFixture(): QuarterlyData {
+  const overview = withSixSubjects(overviewFixture())
+  const ON = '2026-10-02T06:00:00.000Z'
+  const judge = pairOn(sealandJudge(ON))
+  return composeQuarterly({
+    overview,
+    market: marketFixture(),
+    competitive: competitiveFixture(),
+    quarter: QUARTER,
+    prior: PRIOR,
+    readingAt: ON,
+    thisQuarter: windowRead(4147, 33000),
+    lastQuarter: windowRead(3810, 29000),
+    subjectsNow: subjectWindow(4147, 0.22),
+    subjectsBefore: subjectWindow(3810, 0.18),
+    checks: checksRan,
+    record: record(13, ON),
+    quiet: QUIET,
+    searchPlan: SEARCH_PLAN,
+    changeLog: CHANGE_LOG,
+    readings: 2,
+    pair: quarterPairOf(PRIOR, QUARTER, (a, b) => judge(a, b, 'market')),
   })
 }
 

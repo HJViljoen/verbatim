@@ -44,6 +44,14 @@ describe('staleQuarterlySnapshot', () => {
     expect(stale).toContain('older version of Verbatim')
   })
 
+  it('is 3, and a stored v2 still renders as it was sent (WP3.11)', () => {
+    expect(QUARTERLY_SNAPSHOT_VERSION).toBe(3)
+    // Version 3 adds only optional fields, so a v2 row still carries every
+    // field a renderer dereferences: it is drawn, never the stale line.
+    expect(staleQuarterlySnapshot(snapshot(2))).toBeNull()
+    expect(staleQuarterlySnapshot(snapshot(1))).toContain('older version of Verbatim')
+  })
+
   it('says it in the reader’s words', () => {
     const stale = staleQuarterlySnapshot(snapshot(1)) as string
     for (const jargon of ['build', 'block', 'snapshot', 'version:', 'render']) {

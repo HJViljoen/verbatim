@@ -5,7 +5,7 @@ import { READER_FLAGS } from '../calibration'
 import { fmtInt, fmtPct, fullDate, longMonth, monthName, shortDate } from '../format'
 import type { Quote, Scope } from '../renderables/types'
 import { selectAll } from '../supabase-admin'
-import { quarterChange, QUARTER_UNLOCKS_AT } from '../reading/bands'
+import { QUARTER_UNLOCKS_AT } from '../reading/bands'
 import {
   halfOpenInstants,
   howSoundLine,
@@ -31,16 +31,27 @@ import type { MonthStatus } from '../reading/types'
 import { composeInterpretation, type Interpretation } from '../prose/interpret'
 import {
   firstQuarterVerdictMonth,
+  floorClearingMonths,
   previousQuarter,
   QUARTERLY_CLAIMS_CAVEAT,
   quarterFilling,
   quarterGateSentence,
   quarterLabel,
+  quarterPageMonth,
+  quarterPairOf,
+  quarterPairSentence,
   quarterToReview,
   quarterUnlocked,
+  quarterVerdict,
   quarterlyPeriod,
   type Quarter,
+  type QuarterPair,
 } from '../reports/quarterly'
+import { loadAppPairOn } from '../reading/gather-flags'
+import { MONTH_PARAM } from '../reading/reading-month'
+import { loadReadingInputs } from '../reading/reading-view'
+import { isRivalAudience } from '../rivals'
+import type { PairOn } from '../reading/pairs'
 import { monthLine, type MonthLine } from '../reports/documents/figures'
 import { rows } from './read'
 import {
@@ -59,7 +70,7 @@ import { fetchThemedRunId } from './themed-run'
 import { readSubjectWindow } from '../subjects/read'
 import { isMissingSubjects, type SubjectWindowReading } from '../subjects/types'
 import { earnsVerdict, printsClient, type SubjectCalibration } from '../subjects/calibration-state'
-import { CLIENT_AUDIENCE } from '../rivals'
+import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../rivals'
 import type { PlanCheckCard } from '../ask/plan-cards'
 import type { HeadToHead } from '../reading/head-to-head'
 import { loadCompetitiveSurface, type CompetitiveSurfaceData, type QuestionRow, type StandingsBlock } from './competitive-surface'
@@ -667,11 +678,24 @@ export interface QuarterlyData {
   /** The month the month-level pages are of. */
   month: string
   monthStatus: MonthStatus
-  /** The monthly readings behind the tenant's own side. */
+  /** The monthly readings the gate counts. Since v3 (WP3.11, H19) the months
+   *  whose market clears the floor; a stored v2 carries Overview's count. */
   readings: number
   unlocked: boolean
   /** The gate sentence, always composed, printed where it bites. */
   gate: string
+  /**
+   * The quarter pair under the month-pair rule (v3, WP3.11): whether this
+   * quarter and the one before it were read the same way, and, where not, the
+   * refusal in its own words ("Q3 2026 against Q2 2026 is not read as a
+   * change: we changed our searches in September."). Absent on a stored v2,
+   * which renders as it was sent.
+   */
+  pair?: { mode: 'comparable' | 'flag' | 'refuse'; sentence: string | null } | null
+  /** The market's videos over the quarter (v3): the category pooled with the
+   *  videos filed under a tracked brand, one window, never three months added
+   *  up. Absent on a stored v2 and where the window read was not taken. */
+  marketVideos?: number | null
   /** Always null: a quarter belongs to no single update (see composeQuarterly).
    *  Kept on the shape so the snapshot writer reads one field, not two. */
   runId: string | null
@@ -744,43 +768,55 @@ export function confidenceOf(verdicts: readonly Verdict[], unlocked: boolean): {
  * *Interpretation* for exactly that reason. A cover is read by people who never
  * reach page 2 — often people the workspace forwarded it to — so it states what
  * was counted and nothing else.
+ *
+ * AT QUARTER GRAIN (WP3.11). The cover led with the month's biggest banded
+ * change ("The biggest banded change in October is …"), which is a MONTH
+ * statement on a quarter's front sheet, and on a review built in October it
+ * named a month outside the quarter. It now says three quarter-grain things:
+ * how many videos the market was read across over the quarter (one window,
+ * never three months added up); whether the quarter was read the same way as
+ * the one before it, in the pair rule's own words where it was not; and,
+ * where the gate is open and the pair comparable, the quarter's own biggest
+ * banded change.
  */
 export function coverBody(input: {
-  lead: Verdict | null
-  monthLabel: string
   quarterLabel: string
   unlocked: boolean
   readings: number
-  /** Whether the month the lead belongs to falls outside the quarter under
-   *  review — the normal case on a scheduled send. */
-  monthOutside?: boolean
+  /** Whether the market's windowed count is on the cover (`[[quarter_videos]]`). */
+  counted: boolean
+  /** The quarter pair's refusal, in its own words, or null. */
+  pairSentence?: string | null
+  /** The quarter's biggest step that cleared its band, or null. */
+  moved?: Verdict | null
 }): string {
   const parts: string[] = []
-  // ONE SENTENCE, ONE PERIOD. `overview.sentence.lead` is a MONTH verdict —
-  // the largest banded change in the month the product is in — and the first
-  // cut called it "the biggest banded change THIS QUARTER … in September".
-  // A cover is the sheet most likely to be read on its own and forwarded, so
-  // it names the month the figure belongs to and says nothing about the
-  // quarter it does not have.
-  if (input.lead && isAnswer(input.lead.state)) {
-    parts.push(
-      `The biggest banded change in ${input.monthLabel} is ${input.lead.objectLabel}, at [[lead_share]] of [[lead_of]] videos${
-        input.monthOutside ? `, the month in hand rather than a month of ${input.quarterLabel}` : ''
-      }.`,
-    )
-  } else {
-    parts.push(`Nothing on either side cleared its band in ${input.monthLabel} by more than the reading can carry.`)
+  parts.push(
+    input.counted
+      ? `Your market was read across [[quarter_videos]] videos in ${input.quarterLabel}.`
+      : `Your market in ${input.quarterLabel} is not counted as one window for this workspace yet.`,
+  )
+  if (input.pairSentence) parts.push(input.pairSentence)
+  else if (input.unlocked && input.moved && input.moved.state === 'moved') {
+    parts.push(`The biggest banded change over the quarter is ${input.moved.objectLabel}, at [[moved_share]] of [[moved_of]] videos.`)
+  } else if (input.unlocked) {
+    parts.push('Nothing on either side cleared its band over the quarter by more than the reading can carry.')
   }
-  // THE CATEGORY'S OWN DENOMINATOR. This figure summed the window read across
-  // EVERY audience — your own, each rival's and the category's — and then
-  // called the total "the category": on Össur's real Q3 rows, ~1,306 against a
-  // category of 1,134. Each audience counts the same corpus from a different
-  // side, so a sum of them is not a count of anything.
-  parts.push(`The category was read across [[quarter_videos]] videos in ${input.quarterLabel}.`)
   // THE GATE IS ON THE STAT CARD BESIDE THIS PARAGRAPH (copy de-clutter
   // 2026-09-24): the locked arm said it a third time on one sheet.
-  if (input.unlocked) parts.push('Your own side is compared with the quarter before it on every page that has both sides.')
+  if (input.unlocked && !input.pairSentence) parts.push('Your own side is compared with the quarter before it on every page that has both sides.')
   return parts.join(' ')
+}
+
+/** The market's videos over one window: the category's and every tracked
+ *  rival's audience, which are disjoint (a video sits in one audience), the
+ *  client's own left out (decision E). Null where the window was not read. */
+export function marketWindowVideos(reading: WindowReading): number | null {
+  const rows = reading.denominators
+  if (!rows) return null
+  const market = rows.filter((d) => d.audience === INDUSTRY_AUDIENCE || isRivalAudience(d.audience))
+  if (market.length === 0) return null
+  return market.reduce((n, d) => n + (Number.isFinite(d.videos) ? d.videos : 0), 0)
 }
 
 /**
@@ -917,6 +953,13 @@ export interface QuarterlyOptions {
   draft?: string | null
 }
 
+/** The scope the three page loaders read a quarter's review under: the
+ *  `last_3` horizon (the quarter's three months) and the quarter's own month
+ *  (`quarterPageMonth`, WP3.11). Pure. */
+export function quarterPageScope(scope: Scope, quarter: Quarter, readingAt: string): Scope {
+  return { ...scope, params: { ...scope.params, horizon: 'last_3', [MONTH_PARAM]: quarterPageMonth(quarter, readingAt) } }
+}
+
 export async function loadQuarterly(scope: Scope, options: QuarterlyOptions = {}): Promise<QuarterlyData | null> {
   const supabase = scope.supabase as SupabaseClient
   const readingAt = options.now ?? new Date().toISOString()
@@ -929,7 +972,10 @@ export async function loadQuarterly(scope: Scope, options: QuarterlyOptions = {}
   // THE THREE PAGE LOADERS, unchanged, on the horizon whose axis is this
   // quarter's three months. `last_3` is the product's own three-month window
   // and is what a reader gets when they open the page beside this artefact.
-  const pageScope = { ...scope, params: { ...scope.params, horizon: 'last_3' } }
+  // AND ON THE QUARTER'S OWN MONTH (WP3.11): a review of Q3 reads September,
+  // never the October the clock is in, so no month-level figure on it is a
+  // month outside the quarter (`quarterPageMonth`).
+  const pageScope = quarterPageScope(scope, quarter, readingAt)
   const clientId = scope.clientId
   const [overview, market, competitive, runningIds] = await Promise.all([
     loadOverview(pageScope),
@@ -992,8 +1038,24 @@ export async function loadQuarterly(scope: Scope, options: QuarterlyOptions = {}
     }),
     loadQuiet(supabase, clientId, overview),
   ])
+  // THE GATE'S OWN COUNT (H19) AND THE QUARTER PAIR (WP3.11). The pages' own
+  // memoised reads; either failing falls back to the rule before it (the
+  // Overview count, no pair), which is never a looser one: no pair means the
+  // gate alone decides, and below six floor-clearing months that is "not
+  // enough months yet" on every row.
+  const [gate, judge] = await Promise.all([
+    loadReadingInputs(supabase, scope.reading ?? { clientId, client: reading }, readingAt)
+      .then((inputs) => floorClearingMonths(inputs.denominators, inputs.rivalAudiences ?? [...new Set(inputs.denominators.map((d) => d.audience).filter(isRivalAudience))], quarter.to).length)
+      .catch((error: unknown) => {
+        console.error(`[pages] quarterly.gate: ${(error as { message?: string })?.message ?? String(error)}`)
+        return null
+      }),
+    scope.reading ? loadAppPairOn(scope.reading, readingAt) : Promise.resolve(null),
+  ])
 
   return composeQuarterly({
+    readings: gate,
+    pair: judge ? quarterPairOf(prior, quarter, (a, b) => (judge as PairOn)(a, b, 'market')) : null,
     overview,
     market,
     competitive,
@@ -1207,6 +1269,12 @@ export interface ComposeQuarterlyInput {
    *  could not look" are two different sentences. */
   quiet?: QuarterQuiet[] | null
   draft?: string | null
+  /** The floor-clearing months the gate counts (H19, WP3.11). Absent or null:
+   *  Overview's own count, the rule before it. */
+  readings?: number | null
+  /** The quarter pair under the month-pair rule (WP3.11). Absent or null: no
+   *  pair was judged, and the gate alone decides. */
+  pair?: QuarterPair | null
 }
 
 /**
@@ -1219,7 +1287,8 @@ export interface ComposeQuarterlyInput {
  */
 export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
   const { overview, quarter, prior, readingAt } = a
-  const readings = overview.bar.readings
+  const readings = a.readings ?? overview.bar.readings
+  const pair = a.pair ?? null
   const unlocked = quarterUnlocked(readings)
   const gate = quarterGateSentence(readings)
   const monthLabel = longMonth(overview.month)
@@ -1233,6 +1302,7 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
     subjectsBefore: a.subjectsBefore,
     readings,
     overview,
+    pair,
   })
   const windowApplied = a.thisQuarter.denominators != null
   // The theme half is its own read and its own silence: a window pair can
@@ -1289,6 +1359,7 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
     // `platformShareLine` over the same record, so the cover and the method
     // page cannot name two different corpora.
     platforms: a.record?.coverage ? platformShareLine(totalPlatformMix(a.record.coverage)) : '',
+    pair,
   })
   const rivals = buildRivals({ overview, competitive: a.competitive, monthLabel, monthNote })
   const moves = buildMoves({ overview, market: a.market, quarter })
@@ -1316,6 +1387,8 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
     readings,
     unlocked,
     gate,
+    pair: pair ? { mode: pair.mode, sentence: quarterPairSentence(pair) } : null,
+    marketVideos: marketWindowVideos(a.thisQuarter),
     // A QUARTER IS NOT AN UPDATE'S ARTEFACT. The weekly report names the run
     // it was built over because it IS that update; a quarterly review is dated
     // by the comment across three months and belongs to no single run, so the
@@ -1359,6 +1432,9 @@ function buildQuarterVerdicts(a: {
   subjectsBefore: SubjectWindowReading[] | null
   readings: number
   overview: OverviewData
+  /** The quarter pair (WP3.11): a refused pair refuses every verdict below,
+   *  whatever the gate says. */
+  pair?: QuarterPair | null
 }): Verdict[] {
   const now = a.thisQuarter.denominators
   const before = a.lastQuarter.denominators
@@ -1390,12 +1466,12 @@ function buildQuarterVerdicts(a: {
     // none: dropped, rather than printed to a client as a raw id.
     const label = themeLabel(t.theme_id, a.overview)
     if (!was || !n || !priorN || !label) continue
-    // NOT UNDER THE MONTH-PAIR RULE YET (market-first decision D): a quarter
-    // against a quarter is WP3.11's (deploy 5). The plan's first quarter
-    // comparison is Q1 2027 against Q4 2026, in April (§2.11); Q4 against Q3
-    // is refused by comparability.
+    // UNDER THE MONTH-PAIR RULE (WP3.11, decision D): a quarter pair is read
+    // the same way only where every step across its six months is. Q4 against
+    // Q3 is refused (our September search change is inside Q3), and the first
+    // quarter comparison is Q1 2027 against Q4 2026, in April (§2.11).
     out.push(
-      quarterChange({
+      quarterVerdict({
         object: { kind: 'theme', id: t.theme_id, label },
         audience: t.audience,
         window: { kind: 'quarter', from: a.quarter.from, to: a.quarter.to },
@@ -1403,7 +1479,7 @@ function buildQuarterVerdicts(a: {
         value: { k: t.videos, n },
         baseline: { k: was.videos, n: priorN },
         readings: a.readings,
-      }),
+      }, a.pair ?? null),
     )
   }
 
@@ -1437,7 +1513,7 @@ function buildQuarterVerdicts(a: {
       if (!earnsVerdict(row.calibration)) continue
       if (audience === CLIENT_AUDIENCE && !printsClient(row.calibration)) continue
       out.push(
-        quarterChange({
+        quarterVerdict({
           object: { kind: 'subject', id: row.id, label: row.label },
           audience,
           window: { kind: 'quarter', from: a.quarter.from, to: a.quarter.to },
@@ -1445,7 +1521,7 @@ function buildQuarterVerdicts(a: {
           value: { k: subjectsNow.get(`${audience}:${row.id}`)?.videos ?? 0, n },
           baseline: { k: subjectsBefore.get(`${audience}:${row.id}`)?.videos ?? 0, n: priorN },
           readings: a.readings,
-        }),
+        }, a.pair ?? null),
       )
     }
   }
@@ -1479,18 +1555,13 @@ function themeLabel(id: string, overview: OverviewData): string | null {
  * from months: where the window read could not be taken there is no quarter
  * count to print, and the line says the month instead of guessing one.
  */
-function corpusCounts(overview: OverviewData, quarter: Quarter, quarterVideos: number | null): string {
-  const parts: string[] = []
-  if (quarterVideos != null) parts.push(`${fmtInt(quarterVideos)} category videos read in ${quarterLabel(quarter, false)}`)
-  else if (overview.bar.videos != null) parts.push(`${fmtInt(overview.bar.videos)} videos in ${longMonth(overview.month)}`)
-  if (overview.bar.updates > 0) parts.push(`${fmtInt(overview.bar.updates)} ${overview.bar.updates === 1 ? 'update' : 'updates'} in ${longMonth(overview.month)}`)
-  // AND NOT THE ARTBOARD'S PER-MONTH SPLIT ("Jul 2,295 · Aug 2,405 · Sep
-  // 2,359"). The figure beside it is the WINDOWED count of distinct videos
-  // over three months, and three month counts printed next to it invite
-  // exactly the addition D8 exists to refuse — the three do not add to it,
-  // because a video read in two months is one video here. This composer holds
-  // no per-month split either; it holds one window read and one month.
-  return parts.length ? parts.join(' · ') : 'Nothing has been read for this workspace yet.'
+function corpusCounts(quarter: Quarter, quarterVideos: number | null): string {
+  // AT QUARTER GRAIN (WP3.11): the market's windowed count and nothing about
+  // one month. Where the window could not be read there is no quarter count to
+  // print, and the line says so rather than naming a month.
+  return quarterVideos != null
+    ? `${fmtInt(quarterVideos)} videos read in your market in ${quarterLabel(quarter, false)}`
+    : `Your market in ${quarterLabel(quarter, false)} is not counted as one window for this workspace yet.`
 }
 
 /** An audience key in the reader's words — "in your own videos", "in the
@@ -1551,21 +1622,19 @@ function buildCover(a: {
   /** The platform mix the corpus was read on, for the footer line. Page 7's
    *  own `Sources` row composes the same string from the same record. */
   platforms: string
+  /** The quarter pair under the month-pair rule (WP3.11), or null. */
+  pair?: QuarterPair | null
 }): CoverPage {
   const { overview } = a
-  const lead = overview.sentence.lead
-  // THE CATEGORY'S OWN WINDOWED COUNT, not a sum across audiences. See
-  // `windowVideos` and `coverBody`.
-  const quarterVideos = windowVideos(a.thisQuarter, overview.category.audience)
-  const monthOutside = monthBasisClause(overview.month, a.quarter) != null
+  // THE MARKET'S OWN WINDOWED COUNT (WP3.11, decision E): the category and
+  // the brands tracked, one window over the quarter, the client's own left
+  // out. Never a sum of months, and never the client counted in.
+  const quarterVideos = marketWindowVideos(a.thisQuarter)
+  const q = quarterLabel(a.quarter, false)
 
   const figures: ReadingFigures = { ...overview.sentence.figures }
-  if (lead && isAnswer(lead.state) && lead.value.n > 0) {
-    figures.lead_share = { value: Math.round((lead.value.k / lead.value.n) * 1000) / 10, unit: 'pct', label: `${lead.objectLabel}, this month` }
-    figures.lead_of = { value: lead.value.n, unit: 'videos', label: 'videos it is a share of' }
-  }
   if (quarterVideos != null) {
-    figures.quarter_videos = { value: quarterVideos, unit: 'videos', label: `${overview.category.label} videos read in ${quarterLabel(a.quarter, false)}` }
+    figures.quarter_videos = { value: quarterVideos, unit: 'videos', label: `videos read in your market in ${q}` }
   }
 
   // THE MOCK'S THREE CARDS, IN THE MOCK'S ORDER, AND NONE OF THE MOCK'S THREE
@@ -1626,6 +1695,10 @@ function buildCover(a: {
   const moved = [...a.quarterVerdicts]
     .filter((v) => v.state === 'moved' && v.changePts != null)
     .sort((v, w) => Math.abs(w.changePts as number) - Math.abs(v.changePts as number))[0] ?? null
+  if (moved && moved.value.n > 0) {
+    figures.moved_share = { value: Math.round((moved.value.k / moved.value.n) * 1000) / 10, unit: 'pct', label: `${moved.objectLabel}, ${q}` }
+    figures.moved_of = { value: moved.value.n, unit: 'videos', label: 'videos it is a share of' }
+  }
   if (moved) {
     stats.push({
       token: `quarter_${moved.objectKind}_${moved.objectId}`,
@@ -1638,23 +1711,38 @@ function buildCover(a: {
       verdict: moved,
     })
   }
-  if (lead && isAnswer(lead.state) && lead.value.n > 0) {
+  // THE FALLBACK IS THE QUARTER'S OWN SIZE FIRST (WP3.11). Only where the
+  // quarter could not be read as one window do the month's lead and the
+  // month's videos stand in, and the month is the quarter's own last month
+  // (`quarterPageMonth`), never one outside it.
+  if (quarterVideos != null) {
     stats.push({
-      token: 'lead_share',
+      token: 'quarter_videos',
       kind: 'figure',
-      value: pct1((lead.value.k / lead.value.n) * 100),
-      label: `${lead.objectLabel} in ${longMonth(overview.month)}`,
-      caption: `${fmtInt(lead.value.k)} of ${fmtInt(lead.value.n)} videos${lead.bandPts != null ? ` · band ±${Math.round(lead.bandPts * 10) / 10}` : ''}`,
+      value: fmtInt(quarterVideos),
+      label: `videos in your market in ${q}`,
+      caption: 'the category and the brands you track, one window over the quarter',
     })
-  }
-  if (overview.bar.videos != null) {
-    stats.push({
-      token: 'month_videos',
-      kind: 'figure',
-      value: fmtInt(overview.bar.videos),
-      label: `videos in ${longMonth(overview.month)}`,
-      caption: overview.bar.line,
-    })
+  } else {
+    const lead = overview.sentence.lead
+    if (lead && isAnswer(lead.state) && lead.value.n > 0) {
+      stats.push({
+        token: 'lead_share',
+        kind: 'figure',
+        value: pct1((lead.value.k / lead.value.n) * 100),
+        label: `${lead.objectLabel} in ${longMonth(overview.month)}`,
+        caption: `${fmtInt(lead.value.k)} of ${fmtInt(lead.value.n)} videos${lead.bandPts != null ? ` · band ±${Math.round(lead.bandPts * 10) / 10}` : ''}`,
+      })
+    }
+    if (overview.bar.videos != null) {
+      stats.push({
+        token: 'month_videos',
+        kind: 'figure',
+        value: fmtInt(overview.bar.videos),
+        label: `videos in ${longMonth(overview.month)}`,
+        caption: overview.bar.line,
+      })
+    }
   }
   // NOT "behind your own side", WHICH THIS NUMBER IS NOT ABOUT. `bar.readings`
   // counts the months of the gathered era that carry a DENOMINATOR ROW, summed
@@ -1679,12 +1767,12 @@ function buildCover(a: {
 
   return {
     body: coverBody({
-      lead,
-      monthLabel: longMonth(overview.month),
-      quarterLabel: quarterLabel(a.quarter, false),
+      quarterLabel: q,
       unlocked: quarterUnlocked(a.readings),
       readings: a.readings,
-      monthOutside,
+      counted: quarterVideos != null,
+      pairSentence: a.pair ? quarterPairSentence(a.pair) : null,
+      moved,
     }),
     figures,
     stats: stats.slice(0, 3),
@@ -1709,7 +1797,7 @@ function buildCover(a: {
     // cover with nothing to say about the mix prints no footer rather than a
     // sentence about our own bookkeeping.
     corpus: a.platforms,
-    counts: corpusCounts(overview, a.quarter, quarterVideos),
+    counts: corpusCounts(a.quarter, quarterVideos),
   }
 }
 
