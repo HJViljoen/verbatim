@@ -141,6 +141,9 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
     expect(bracket).toBeGreaterThan(words)
     // The key is read; the drawing, which the sentences say in words, is not.
     expect(markup).toMatch(/<p class="[^"]*font-mono[^"]*"><svg[^>]*aria-hidden="true"[^>]*>.*?<\/svg>our search changes/)
+    // The date under the bracket never breaks inside "6 Dec update" (at 390
+    // the words once wrapped to leave "update" alone on a second line).
+    expect(markup).toMatch(/whitespace-nowrap[^"]*">from the <span class="whitespace-nowrap">6 Dec update<\/span>/)
   })
 
   it('what changed: a stored block without the strip’s fields draws the months and no mark', () => {

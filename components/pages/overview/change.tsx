@@ -101,8 +101,16 @@ function MonthStrip({ block }: { block: ChangeBlock }) {
           <div className="flex gap-3">{cell(block.prevMonth, 'read')}{cell(block.month, 'read')}</div>
           <div className="flex gap-3">{cell(next.prevMonth, 'next')}{cell(next.month, 'next')}</div>
         </div>
+        {/* One line from 360px, centred on the bracket as a flex item so it
+            may spill a few pixels either side of the pair: at 390 the pair is
+            about as wide as the words, and a wrap left "update" alone under
+            "from the 6 Dec". Narrower, it breaks once, before the date. */}
         <div className="mt-2.5 grid grid-cols-2 gap-x-3">
-          <span className="col-start-2 text-center font-mono text-[12px] font-medium leading-4 text-foreground">from the {shortDate(next.sameAgeFrom)} update</span>
+          <span className="col-start-2 flex justify-center">
+            <span className="text-center font-mono text-[12px] font-medium leading-4 text-foreground [text-wrap:balance] min-[360px]:whitespace-nowrap">
+              from the <span className="whitespace-nowrap">{shortDate(next.sameAgeFrom)} update</span>
+            </span>
+          </span>
         </div>
       </div>
       {key ? (
