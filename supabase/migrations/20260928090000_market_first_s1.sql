@@ -11,7 +11,9 @@
 --              rule, generated from lib/segments/rules.ts) and
 --              segments_for_videos (the reader precedence, once)
 --   CHECK      config_changes_surface_check gains 'segment', 'gate_rule' and
---              'attribution' (lib/config-log.ts CONFIG_SURFACES mirrors it)
+--              'attribution' (lib/config-surfaces-mf1.ts mirrors the three
+--              until lib/config-log.ts CONFIG_SURFACES takes them after the
+--              4 Oct run)
 --
 -- NOT HERE: R12 of the deploy-1 review (the tenant's column UPDATE on
 -- tracking_configs). Its revoke is its own file,
@@ -412,8 +414,9 @@ grant execute on function public.market_segment_counts(uuid, date) to service_ro
 -- 4. Three more surfaces on the change log ----------------------------------------
 -- 'segment' (a segment rule version or label run), 'gate_rule' (the relevance
 -- gate fix), 'attribution' (attribution v3). The list is the 20260918090000
--- list plus these three; lib/config-log.test.ts pins CONFIG_SURFACES to the
--- newest migration that writes it. PANEL_STALING_SURFACES
+-- list plus these three; lib/config-log.test.ts pins CONFIG_SURFACES plus
+-- lib/config-surfaces-mf1.ts's three to the newest migration that writes it.
+-- PANEL_STALING_SURFACES
 -- (lib/reading/attention.ts) is NOT changed before the 4 Oct run.
 alter table public.config_changes drop constraint if exists config_changes_surface_check;
 alter table public.config_changes add constraint config_changes_surface_check

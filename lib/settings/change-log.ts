@@ -1,6 +1,7 @@
 import { fullDate, monthName, shortDate } from '../format'
 import { audienceLabel } from '../readiness/types'
-import type { ActorKind, ConfigChange, ConfigSurface } from '../config-log'
+import type { ActorKind, ConfigChange } from '../config-log'
+import type { LoggedSurface } from '../config-surfaces-mf1'
 
 /**
  * The change log, read by the person whose configuration it is (Phase 1 WP16,
@@ -97,7 +98,7 @@ export function actorWords(
  *  `platforms` are operator levers a client cannot edit, and they still appear
  *  — a log that hid the changes we made to a workspace would be worse than no
  *  log. */
-export const SURFACE_WORDS: Record<ConfigSurface, string> = {
+export const SURFACE_WORDS: Record<LoggedSurface, string> = {
   terms: 'Search terms',
   rivals: 'Rivals',
   handles: 'Accounts we read',
@@ -115,6 +116,7 @@ export const SURFACE_WORDS: Record<ConfigSurface, string> = {
   // Three changes of ours that no setting records (MF1, WP1.4): the relevance
   // check's rule, how posts are filed under a brand, and how makers and
   // off-topic videos are marked. A mark never takes a video out of a count.
+  // (lib/config-surfaces-mf1.ts holds the three until the 4 Oct run.)
   gate_rule: 'How we check relevance',
   attribution: 'How posts are filed by brand',
   segment: 'How makers and off-topic videos are marked',
@@ -184,7 +186,7 @@ export interface ClientChange {
    *  (lib/format.ts's own reason for `fullDate`). The record page's table is
    *  one workspace's own recent history in a column 100px wide. */
   dateShort: string
-  surface: ConfigSurface
+  surface: LoggedSurface
   what: string
   /** The plain sentence from `note`, or a composed one when the row has none
    *  (trigger rows carry before/after and no note). */
@@ -204,7 +206,7 @@ export interface ClientChange {
 /** A list is a list of strings, a scalar is a scalar, and anything else is
  *  named rather than dumped. The alternative — `JSON.stringify` — puts a jsonb
  *  blob of handles or subreddit probe objects on a client's screen. */
-export function renderSide(surface: ConfigSurface, value: unknown): string | null {
+export function renderSide(surface: LoggedSurface, value: unknown): string | null {
   if (value === null || value === undefined) return null
   if (Array.isArray(value)) {
     const items = value.map((v) => (typeof v === 'string' ? v : (v as { name?: string })?.name)).filter(Boolean) as string[]
@@ -302,7 +304,7 @@ export function groupChangeRows(rows: readonly ConfigChange[]): ConfigChange[][]
 /** One side of a group: the row's own rendering for a single row; for several,
  *  each row's rendered side, joined, so the 9 Sep swap reads its seven removed
  *  terms before and its seven added terms after. */
-function groupSide(surface: ConfigSurface, rows: readonly ConfigChange[], side: 'before' | 'after'): string | null {
+function groupSide(surface: LoggedSurface, rows: readonly ConfigChange[], side: 'before' | 'after'): string | null {
   const parts = rows.map((r) => renderSide(surface, r[side])).filter((x): x is string => x != null)
   if (parts.length === 0) return null
   return rows.length === 1 ? parts[0] : parts.join('; ')

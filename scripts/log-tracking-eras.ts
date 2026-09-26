@@ -1,5 +1,6 @@
 import { SEALAND_CLIENT_ID } from '../lib/config'
-import { recordConfigChanges, scriptActor, type ConfigChange, type ConfigChangeInput } from '../lib/config-log'
+import { recordConfigChanges, scriptActor, type ConfigChange } from '../lib/config-log'
+import { asChangeInput, type LoggedChangeInput } from '../lib/config-surfaces-mf1'
 import { assertProject, modeLine, parseScriptArgs } from '../lib/ops/market-first-args'
 import {
   evidenceMap, isMissingObject, monthVideosFromExport, readConfigChanges, readExportFile, readKeywordRows, readMonthVideos,
@@ -139,8 +140,8 @@ async function main() {
 
   // 2. The rows none exists for.
   const actor = scriptActor(`scripts/${NAME}.ts --apply`)
-  const planned: ConfigChangeInput[] = []
-  const has = (surface: string, field?: string) => changes.some((c) => c.surface === surface && (field == null || c.field === field))
+  const planned: LoggedChangeInput[] = []
+  const has = (surface: string, field?: string) => changes.some((c) => (c.surface as string) === surface && (field == null || c.field === field))
   const defaultMonths = new Set<string>()
   const defaultIds = new Set(verdicts.filter((v) => v.kept && v.source === 'default').map((v) => `${v.platform}\u0000${v.video_id}`))
   for (const v of videos) if (defaultIds.has(`${v.platform}\u0000${v.video_id}`)) for (const [m, set] of monthSets) if (set.some((x) => x.id === v.id)) defaultMonths.add(m)
@@ -181,7 +182,7 @@ async function main() {
     if (isMissingObject(e, 'config_change_reach')) throw new Error(`${NAME}: config_change_reach does not exist on ${args.project}. Apply MF1 first. Nothing written.`)
     throw e
   }
-  const wrote = await recordConfigChanges(admin, planned)
+  const wrote = await recordConfigChanges(admin, planned.map(asChangeInput))
   if (wrote !== planned.length) throw new Error(`${NAME}: ${planned.length - wrote} change rows were not written (see the log above). Reach not written.`)
   const newest = new Map<string, (typeof held)[number]>()
   for (const h of held) newest.set(`${h.change_id}|${h.month.slice(0, 10)}|${h.population}`, h)

@@ -24,6 +24,7 @@ import {
   type ConfigActor,
   type ConfigChangeInput,
 } from './config-log'
+import { MF1_SURFACES } from './config-surfaces-mf1'
 
 // The configuration change log's pure half. The other half is a database
 // trigger, which no test here can reach — so everything these tests pin has a
@@ -658,7 +659,9 @@ describe('the mirror in the migration — the two have to keep saying the same t
     // Market-first MF1 (20260928090000_market_first_s1.sql) moved it again,
     // adding 'segment', 'gate_rule' and 'attribution'. The newest migration
     // that re-adds the constraint is found by name, not hard-coded, so the next
-    // one is read without editing this test.
+    // one is read without editing this test. Until the 4 Oct run those three
+    // are held in lib/config-surfaces-mf1.ts, not CONFIG_SURFACES (this file is
+    // on the freeze-months path), so the two lists together are MF1's.
     const dir = new URL('../supabase/migrations/', import.meta.url)
     const newest = readdirSync(dir)
       .filter((f) => f.endsWith('.sql'))
@@ -671,7 +674,7 @@ describe('the mirror in the migration — the two have to keep saying the same t
     const kinds = sql.match(/check\s*\(actor_kind in\s*\(([\s\S]*?)\)\)/i)?.[1]
     expect(surfaces).toBeTruthy()
     expect(kinds).toBeTruthy()
-    expect(quoted(surfaces!).sort()).toEqual([...CONFIG_SURFACES].sort())
+    expect(quoted(surfaces!).sort()).toEqual([...CONFIG_SURFACES, ...MF1_SURFACES].sort())
     expect(quoted(kinds!).sort()).toEqual([...ACTOR_KINDS].sort())
     // And the original file's own CHECK is still a subset of it — a migration
     // that re-adds the constraint must never drop a surface already stored.

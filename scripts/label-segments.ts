@@ -4,6 +4,7 @@ import { dirname } from 'node:path'
 
 import { SEALAND_CLIENT_ID } from '../lib/config'
 import { recordConfigChange, scriptActor } from '../lib/config-log'
+import { asChangeInput } from '../lib/config-surfaces-mf1'
 import { assertProject, modeLine, parseScriptArgs } from '../lib/ops/market-first-args'
 import {
   isMissingObject, monthVideosFromExport, readConfigChanges, readExportFile, readMonthVideos, readProvenanceFile,
@@ -163,12 +164,12 @@ async function main() {
     })))
     if (error) throw new Error(`${NAME}: labels not written after ${i} rows: ${error.message}`)
   }
-  const logged = changes.some((c) => c.surface === 'segment' && c.field === SEGMENT_RULE_VERSION)
+  const logged = changes.some((c) => (c.surface as string) === 'segment' && c.field === SEGMENT_RULE_VERSION)
   if (!logged && fresh.length > 0) {
-    const ok = await recordConfigChange(admin, {
+    const ok = await recordConfigChange(admin, asChangeInput({
       clientId: args.clientId, surface: 'segment', field: SEGMENT_RULE_VERSION, actor: scriptActor(actorLabel),
       rowsAffected: fresh.length, note: SEGMENT_NOTE,
-    })
+    }))
     if (!ok) throw new Error(`${NAME}: the labels are written, but the change row is not (see the log above)`)
   }
   console.log(`APPLIED: ${fresh.length} labels written (${heldIds.size} already held), change row ${logged || fresh.length === 0 ? 'already held or not needed' : 'written'} · reads: ${pages.n} pages`)

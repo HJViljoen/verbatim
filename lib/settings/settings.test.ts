@@ -12,6 +12,7 @@ import {
   RECORD_GROUP_WINDOW_MS, SURFACE_WORDS,
 } from './change-log'
 import { CONFIG_SURFACES } from '../config-log'
+import { MF1_SURFACES, type LoggedSurface } from '../config-surfaces-mf1'
 import { CHANGE_GROUP_WINDOW_MS, changesFromLog } from '../reading/comparability'
 import { deliveryRecord, updatesInMonth } from './delivery'
 import {
@@ -357,9 +358,9 @@ describe('the record shows each change once', () => {
     const script = { source: 'reconstructed' as const, actor_kind: 'script' as const, actor_user_id: null, before: null, after: null }
     const late: ConfigChange[] = [
       ...rows,
-      change({ id: 'gate', changed_at: '2026-09-28T14:05:00.000Z', surface: 'gate_rule' as ConfigChange['surface'], field: 'relevance_gate',
+      change({ id: 'gate', changed_at: '2026-09-28T14:05:00.000Z', surface: 'gate_rule' satisfies LoggedSurface as ConfigChange['surface'], field: 'relevance_gate',
         note: 'We corrected how we check that a video belongs to your market.', affects_months: '[2026-09-01,2026-10-01)', ...script }),
-      change({ id: 'attr', changed_at: '2026-09-28T14:05:00.000Z', surface: 'attribution' as ConfigChange['surface'], field: 'attribution_v3',
+      change({ id: 'attr', changed_at: '2026-09-28T14:05:00.000Z', surface: 'attribution' satisfies LoggedSurface as ConfigChange['surface'], field: 'attribution_v3',
         note: 'We improved how we tell which brand a post is about, so fewer posts are filed under the wrong brand.', ...script }),
     ]
     const view = readChangeLog({ rows: late })
@@ -379,7 +380,7 @@ describe('the record shows each change once', () => {
   })
 
   it('names the three new surfaces in client words', () => {
-    for (const s of CONFIG_SURFACES) expect(SURFACE_WORDS[s], s).toBeTruthy()
+    for (const s of [...CONFIG_SURFACES, ...MF1_SURFACES]) expect(SURFACE_WORDS[s], s).toBeTruthy()
     for (const s of ['gate_rule', 'attribution', 'segment'] as const) {
       expect(SURFACE_WORDS[s]).not.toMatch(/\d|—|gate|segment|attribution/i)
     }
