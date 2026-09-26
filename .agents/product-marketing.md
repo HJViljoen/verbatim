@@ -131,7 +131,7 @@ them on-page as testimonials — they are not quotes about Verbatim.
 - NOT claimable: comprehensiveness ("every comment"), the 84% dark-social
   figure, scene/vision analysis, any testimonial, any client logo.
 
-## Capability map (what scope copy may claim, as of 2026-09-06)
+## Capability map (what scope copy may claim, as of 2026-09-06; market-first additions dated below)
 
 Scope copy must cover THREE audiences, not two: your brand, your competitors,
 and the wider industry/category conversation, and it must lead with the
@@ -161,6 +161,19 @@ category conversation where the brand is not named. It may claim:
   content what to make next), scheduled sends with a recipient list and PDF
   attached, login-free share links with expiry and revoke, the client's name
   on the cover ("written for" free text).
+- **Market-first (deploy 5, WP3.10; verified in code 2026-09-27 on the
+  settings branch).** Claimable, in these words and no stronger:
+  - **Settings shows where the market came from:** the market's videos in the
+    month, each search's share of them and how many of those are makers'
+    (from the record of how each video was first found, which starts with the
+    Stage 1 reconstruction; a video with no record is counted as such), the
+    market's platform mix, and the searches each update uses against the
+    ceiling of 120. Any part whose record is not there says "not measured".
+  - **The search set is held still until January:** a change a client saves
+    to its terms, rivals or accounts is queued and lands on the 1st of a
+    month, the first no earlier than 1 January 2027, applied by the update
+    that runs that day. Communities, a rival rename and the report day are
+    not queued: they are held, and the client is told to ask.
 - **Units:** say "comments" for the raw count (18,440), "conversations" for
   everything analysed. Never "voices".
 - **In development (label it exactly that, never present tense):** nothing
