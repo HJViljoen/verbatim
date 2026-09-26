@@ -84,47 +84,49 @@ export function WeekBarsHover({
     <div className={cn('grid min-w-0', labelWidth === 'wide' ? 'grid-cols-[88px_minmax(0,1fr)] xl:grid-cols-[116px_minmax(0,1fr)]' : 'grid-cols-[88px_minmax(0,1fr)]')}>
       <div className="relative" style={{ height }}>{labels}</div>
       {/* UNDER THE PLOT'S NARROWEST WIDTH THE STRIP SCROLLS SIDEWAYS, AND IT
-          OPENS AT THE LATEST WEEK: a reversed flex row starts scrolled to its
-          end, with no script. */}
-      <div className="min-w-0 overflow-x-auto overflow-y-hidden">
-        <div className="flex flex-row-reverse">
-          {/* A CONTAINER, so the chart's smallest words step down a size where
-              its slots are narrow (`@max-[640px]:` on the SVG text). */}
-          <div className="relative flex-1 @container" style={{ minWidth, height }} onMouseLeave={interactive ? () => setHover(null) : undefined}>
-            {shown != null ? (
-              <span
-                aria-hidden
-                className={cn('pointer-events-none absolute rounded-[4px]', surface === 'inner' ? 'bg-tile' : 'bg-inner')}
-                style={{ left: pct(shown / n), width: pct(1 / n), top: 0, bottom: 0 }}
+          OPENS AT THE LATEST WEEK, with no script: the SCROLL BOX ITSELF is the
+          reversed flex row, so it starts at its end (the latest week) and the
+          earlier weeks overflow to the start side, where it scrolls back to
+          them. (A reversed row INSIDE the scroll box overflowed to the left of
+          the box's origin, where no browser scrolls: the deploy-3 review
+          measured 338 px of the plot unreachable at 390.) */}
+      <div className="flex min-w-0 flex-row-reverse overflow-x-auto overflow-y-hidden">
+        {/* A CONTAINER, so the chart's smallest words step down a size where
+            its slots are narrow (`@max-[640px]:` on the SVG text). */}
+        <div className="relative flex-1 shrink-0 @container" style={{ minWidth, height }} onMouseLeave={interactive ? () => setHover(null) : undefined}>
+          {shown != null ? (
+            <span
+              aria-hidden
+              className={cn('pointer-events-none absolute rounded-[4px]', surface === 'inner' ? 'bg-tile' : 'bg-inner')}
+              style={{ left: pct(shown / n), width: pct(1 / n), top: 0, bottom: 0 }}
+            />
+          ) : null}
+          {plot}
+          {interactive
+            ? details.map((d, i) => (
+              <button
+                key={d.week}
+                type="button"
+                aria-label={[d.title, ...d.lines.map((l) => `${l.value} ${l.words}`.trim())].join(', ')}
+                className="absolute top-0 bottom-0 cursor-default bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                style={{ left: pct(i / n), width: pct(1 / n) }}
+                onMouseEnter={() => setHover(i)}
+                onFocus={() => setHover(i)}
+                onBlur={() => setHover(null)}
               />
-            ) : null}
-            {plot}
-            {interactive
-              ? details.map((d, i) => (
-                <button
-                  key={d.week}
-                  type="button"
-                  aria-label={[d.title, ...d.lines.map((l) => `${l.value} ${l.words}`.trim())].join(', ')}
-                  className="absolute top-0 bottom-0 cursor-default bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  style={{ left: pct(i / n), width: pct(1 / n) }}
-                  onMouseEnter={() => setHover(i)}
-                  onFocus={() => setHover(i)}
-                  onBlur={() => setHover(null)}
-                />
-              ))
-              : null}
-            {detail === 'card' && hover != null ? (
-              <div
-                role="tooltip"
-                className="pointer-events-none absolute z-10 w-[244px] rounded-[6px] bg-tile p-4 text-[13px] leading-[18px] text-secondary-foreground shadow-[0_0_0_1px_rgba(38,41,44,.05),0_2px_6px_rgba(38,41,44,.07),0_0_24px_rgba(38,41,44,.13)]"
-                style={hover + 1 < n / 2 || hover < n - 3
-                  ? { left: `calc(${pct((hover + 1) / n)} + 8px)`, top: 36 }
-                  : { right: `calc(${pct((n - hover) / n)} + 8px)`, top: 36 }}
-              >
-                <WeekDetailRows detail={details[hover]} variant="card" />
-              </div>
-            ) : null}
-          </div>
+            ))
+            : null}
+          {detail === 'card' && hover != null ? (
+            <div
+              role="tooltip"
+              className="pointer-events-none absolute z-10 w-[244px] rounded-[6px] bg-tile p-4 text-[13px] leading-[18px] text-secondary-foreground shadow-[0_0_0_1px_rgba(38,41,44,.05),0_2px_6px_rgba(38,41,44,.07),0_0_24px_rgba(38,41,44,.13)]"
+              style={hover + 1 < n / 2 || hover < n - 3
+                ? { left: `calc(${pct((hover + 1) / n)} + 8px)`, top: 36 }
+                : { right: `calc(${pct((n - hover) / n)} + 8px)`, top: 36 }}
+            >
+              <WeekDetailRows detail={details[hover]} variant="card" />
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

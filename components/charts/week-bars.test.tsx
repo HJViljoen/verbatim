@@ -98,10 +98,15 @@ describe('the weekly volume bars', () => {
 
   it('scroll sideways under the plot’s narrowest width, and open at the latest week', () => {
     const markup = render(<WeekBars block={OCT11} mode="app" variant="front" surface="inner" />)
-    expect(markup).toContain('overflow-x-auto')
-    expect(markup).toContain('flex-row-reverse')
+    // THE SCROLL BOX IS THE REVERSED ROW, with the plot its direct child: a
+    // reversed row nested INSIDE the scroll box overflowed to the left of its
+    // origin, where no browser scrolls (the deploy-3 review, 390 and 768 px).
+    const box = markup.match(/<div class="([^"]*overflow-x-auto[^"]*)"><div class="([^"]*)" style="([^"]*)"/)
+    expect(box, 'the scroll box, then its first child').not.toBeNull()
+    expect(box![1].split(' ')).toEqual(expect.arrayContaining(['flex', 'flex-row-reverse', 'min-w-0', 'overflow-x-auto']))
+    expect(box![2].split(' ')).toContain('@container')
     // 11 weeks at 48px a slot at the least (weekPlotMin).
-    expect(markup).toContain('min-width:528px')
+    expect(box![3]).toContain('min-width:528px')
   })
 
   it('show This week’s panel on the latest week that is no longer so far (the preview’s)', () => {
