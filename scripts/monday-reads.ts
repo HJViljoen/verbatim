@@ -406,12 +406,12 @@ async function main(): Promise<void> {
       say(`clustering_key by run day: ${(out.c as { keysByDay: ReturnType<typeof runsOnDays> }).keysByDay.map((d) => `${d.day.slice(5)} ${d.runs.length === 0 ? 'no run' : d.runs.map((r) => `${short(r.id)} ${r.status} ${r.clustering_key ?? 'null'}`).join(', ')}`).join(' · ')}`)
 
       if (parts.has('c')) {
-        const since = new Date(Date.now() - 3 * 86_400_000).toISOString()
-        const inflight = await step('c', 'runs in flight', () => reader.rows<{ id: string; client_id: string; status: string | null; started_at: string | null }>('pipeline_runs (every tenant, not ended, last 3 days)', () =>
+        // Any age: a run stranded weeks ago is still not ended (the 13 Jun 'analyzing' row was).
+        const inflight = await step('c', 'runs in flight', () => reader.rows<{ id: string; client_id: string; status: string | null; started_at: string | null }>('pipeline_runs (every tenant, not ended, any age)', () =>
           admin.from('pipeline_runs').select('id, client_id, status, started_at')
-            .not('status', 'in', '(completed,partial,failed,cancelled)').gte('started_at', since).order('started_at').order('id')))
+            .not('status', 'in', '(completed,partial,failed,cancelled)').order('started_at').order('id')))
         ;(out.c as Record<string, unknown>).inFlight = inflight
-        say(`runs not ended (any tenant, 3 days): ${inflight == null ? 'not read' : inflight.length === 0 ? 'none' : inflight.map((r) => `${short(r.id)} client ${short(r.client_id)} ${r.status} since ${r.started_at?.slice(0, 16)}Z`).join(', ')}`)
+        say(`runs not ended (any tenant, any age): ${inflight == null ? 'not read' : inflight.length === 0 ? 'none' : inflight.map((r) => `${short(r.id)} client ${short(r.client_id)} ${r.status} since ${r.started_at?.slice(0, 16)}Z`).join(', ')}`)
 
         const schedules = await step('c', 'report_schedules', () => reader.rows<{ id: string; name: string | null; cadence: string | null; active: boolean | null; is_default: boolean | null; artefact: string | null; last_sent_at: string | null; updated_at: string | null }>('report_schedules (Sealand)', () =>
           admin.from('report_schedules').select('id, name, cadence, active, is_default, artefact, last_sent_at, updated_at').eq('client_id', clientId).order('created_at').order('id')))
