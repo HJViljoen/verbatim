@@ -2,7 +2,8 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { assertTenantMay, TENANT_LOCK_REFUSAL, TENANT_LOCKS, tenantLocked } from './tenant-locks'
+import { assertTenantMay, CADENCE_HELD, TENANT_LOCK_REFUSAL, TENANT_LOCKS, tenantLocked } from './tenant-locks'
+import { queuedMessage } from './settings/queue'
 
 // The tenant lock (market-first decisions I and J, plan WP1.2): Sealand cannot
 // switch sending on or change what we track; the platform operator can.
@@ -24,9 +25,12 @@ describe('assertTenantMay', () => {
   it('refuses a tenant’s own user in the plan’s words', () => {
     expect(assertTenantMay({ operator: null }, SEALAND, 'sends'))
       .toEqual({ ok: false, message: 'Sending is switched on by Verbatim during your trial.' })
+    // From deploy 5 a tracking "not now" also says the edit may be queued
+    // (WP3.10); the message stays the refusal for what the queue does not take.
     expect(assertTenantMay({ operator: null }, SEALAND, 'tracking')).toEqual({
       ok: false,
       message: 'Searches are held still until January so October and November can be compared; tell us and we will note it for then.',
+      queue: true,
     })
   })
 
@@ -38,7 +42,7 @@ describe('assertTenantMay', () => {
   })
 
   it('refusals are calibrated copy: no em dash, no digit', () => {
-    for (const m of Object.values(TENANT_LOCK_REFUSAL)) {
+    for (const m of [...Object.values(TENANT_LOCK_REFUSAL), CADENCE_HELD]) {
       expect(m).not.toContain('—')
       expect(m).not.toMatch(/\d/)
     }
@@ -327,19 +331,40 @@ describe('the Studio’s sendings', () => {
 
 describe('Settings › Tracking: terms, communities and rivals', () => {
   const terms = () => form({ brand_keywords: 'sealand gear', competitor_keywords: 'cotopaxi', industry_keywords: 'upcycled bag', exclude_terms: [] })
+  const month = '2027-01-01'
+  const queued = { ok: true, message: queuedMessage(month), queued: month }
+  const queueWrites = () => admin.writes.filter((w) => w.table === 'tracking_config_queue')
 
-  it('refuses a tenant edit of terms, communities, rivals and a rival rename, and writes nothing', async () => {
+  // WP3.10: the queue replaces the deploy-1 refusal for terms and rivals.
+  it('queues a tenant edit of terms and rivals for 1 Jan 2027, on the admin client, and writes no tracking_configs row', async () => {
+    const actions = await import('../app/dashboard/settings/actions')
+    h.session = tenantAdmin(SEALAND, session.client)
+    expect(await actions.updateSearchTerms({ ok: false, message: '' }, terms())).toEqual(queued)
+    expect(await actions.updateTrackingConfig({ ok: false, message: '' }, form({ competitor_names: ['Cotopaxi', 'Topo Designs'], report_period: 'weekly', report_day: 'monday' }))).toEqual(queued)
+    expect(queueWrites().map((w) => w.op)).toEqual(['insert', 'insert'])
+    expect([...admin.writes, ...session.writes].filter((w) => w.table === 'tracking_configs')).toEqual([])
+    expect(session.writes).toEqual([])
+  })
+
+  it('still refuses a community edit, a rival rename and a cadence change, and writes nothing', async () => {
     const actions = await import('../app/dashboard/settings/actions')
     const { renameTrackedRival } = await import('../app/dashboard/settings/rivals-actions')
     h.session = tenantAdmin(SEALAND, session.client)
     const refused = { ok: false, message: TENANT_LOCK_REFUSAL.tracking }
-    expect(await actions.updateSearchTerms({ ok: false, message: '' }, terms())).toEqual(refused)
     expect(await actions.updateCommunity({ ok: false, message: '' }, form({ op: 'add', name: 'onebag' }))).toEqual(refused)
-    expect(await actions.updateTrackingConfig({ ok: false, message: '' }, form({ competitor_names: ['Cotopaxi', 'Topo Designs'], report_period: 'weekly', report_day: 'sunday' }))).toEqual(refused)
-    expect(await actions.saveTracking({ ok: false, message: '' }, terms())).toEqual(refused)
     expect(await renameTrackedRival({ ok: false, message: '' }, form({ id: '5d3b4c1e-2f60-4a8b-9c7d-0e1f2a3b4c5d', name: 'Topo' }))).toEqual(refused)
+    // A cadence-only change, in its own words (the copy debt WP1.2 left).
+    expect(await actions.updateTrackingConfig({ ok: false, message: '' }, form({ competitor_names: [], report_period: 'weekly', report_day: 'sunday' })))
+      .toEqual({ ok: false, message: CADENCE_HELD })
     expect(admin.writes).toEqual([])
     expect(session.writes).toEqual([])
+  })
+
+  it('says what the one save did: the terms queued, and the month', async () => {
+    const actions = await import('../app/dashboard/settings/actions')
+    h.session = tenantAdmin(SEALAND, session.client)
+    const save = form({ brand_keywords: 'sealand gear', competitor_keywords: 'cotopaxi', industry_keywords: 'upcycled bag', exclude_terms: [], report_period: 'weekly', report_day: 'monday' })
+    expect(await actions.saveTracking({ ok: false, message: '' }, save)).toEqual(queued)
   })
 
   it('accepts the operator', async () => {
@@ -348,12 +373,14 @@ describe('Settings › Tracking: terms, communities and rivals', () => {
     expect((await actions.updateSearchTerms({ ok: false, message: '' }, terms())).ok).toBe(true)
     expect((await actions.updateCommunity({ ok: false, message: '' }, form({ op: 'add', name: 'onebag' }))).ok).toBe(true)
     expect([...admin.writes, ...session.writes].some((w) => w.table === 'tracking_configs')).toBe(true)
+    expect(queueWrites()).toEqual([])
   })
 
   it('leaves a tenant that is not locked alone', async () => {
     const actions = await import('../app/dashboard/settings/actions')
     h.session = tenantAdmin(OSSUR, session.client)
     expect((await actions.updateSearchTerms({ ok: false, message: '' }, terms())).ok).toBe(true)
+    expect(queueWrites()).toEqual([])
   })
 })
 
@@ -390,14 +417,15 @@ describe('R12: the three tracking writes use the admin client, after the checks'
     })
   }
 
-  it('refuses a locked tenant before either client is written', async () => {
+  it('never writes tracking_configs for a locked tenant: the cadence and a community refused, the terms queued', async () => {
     const actions = await import('../app/dashboard/settings/actions')
     h.session = tenantAdmin(SEALAND, session.client)
-    const refused = { ok: false, message: TENANT_LOCK_REFUSAL.tracking }
-    expect(await actions.updateTrackingConfig({ ok: false, message: '' }, cadence())).toEqual(refused)
-    expect(await actions.updateSearchTerms({ ok: false, message: '' }, terms())).toEqual(refused)
-    expect(await actions.updateCommunity({ ok: false, message: '' }, form({ op: 'stop', name: 'onebag' }))).toEqual(refused)
-    expect([...admin.writes, ...session.writes]).toEqual([])
+    expect(await actions.updateTrackingConfig({ ok: false, message: '' }, cadence())).toEqual({ ok: false, message: CADENCE_HELD })
+    expect((await actions.updateSearchTerms({ ok: false, message: '' }, terms())).queued).toBe('2027-01-01')
+    expect(await actions.updateCommunity({ ok: false, message: '' }, form({ op: 'stop', name: 'onebag' }))).toEqual({ ok: false, message: TENANT_LOCK_REFUSAL.tracking })
+    expect(trackingWrites([...admin.writes, ...session.writes])).toEqual([])
+    expect(admin.writes).toEqual([{ table: 'tracking_config_queue', op: 'insert' }])
+    expect(session.writes).toEqual([])
   })
 
   it('refuses a tenant member without a manager role before either client is written', async () => {

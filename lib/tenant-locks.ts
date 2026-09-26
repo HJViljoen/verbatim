@@ -35,6 +35,18 @@
 // PATCH. Until the R12 file is applied, watch `config_changes` for tenant-actor
 // rows on those surfaces.
 
+// FROM DEPLOY 5 THE LOCK QUEUES A SEARCH EDIT RATHER THAN REFUSING IT (plan
+// §2.10 D5, WP3.10, decision I). A term, rival or handle edit from a locked
+// tenant's owner or admin waits in `tracking_config_queue` for the 1st of a
+// month, the first no earlier than 1 Jan 2027 (lib/settings/queue.ts), and the
+// run applies it then. `assertTenantMay` still answers "not now" for tracking,
+// and says the edit may be queued (`queue: true`); each action decides whether
+// its edit is one the queue takes. Three are not, and keep a refusal: a
+// community (decision I holds them and §2.10 queues terms, rivals and handles),
+// a rival rename (one logged RPC, not a column, and MF3's CHECK holds columns),
+// and the cadence (sending, not searching: its own words, CADENCE_HELD). Before
+// MF3 there is no queue, and the deploy-1 refusal stands for all of them.
+
 export type TenantLockKind = 'sends' | 'tracking'
 
 /** Sealand: `ac16988e-c4f3-4baf-b388-73895852a554` (research DR, the fixture
@@ -49,6 +61,11 @@ export const TENANT_LOCK_REFUSAL: Readonly<Record<TenantLockKind, string>> = {
   tracking: 'Searches are held still until January so October and November can be compared; tell us and we will note it for then.',
 }
 
+/** A cadence-only change from a locked tenant, in its own words (the copy debt
+ *  WP1.2 left: it was refused with the searches' sentence). The report day and
+ *  period are Verbatim's during the trial (decision J), as sending is. */
+export const CADENCE_HELD = 'Your report day and cadence are set by Verbatim during your trial; tell us what you would like.'
+
 /** Whether this tenant is locked for this kind of change. */
 export function tenantLocked(clientId: string, kind: TenantLockKind): boolean {
   return TENANT_LOCKS[clientId]?.[kind] === true
@@ -59,7 +76,10 @@ export interface LockSession {
   operator?: unknown | null
 }
 
-export type TenantMay = { ok: true } | { ok: false; message: string }
+/** `queue`: the change is a tracking one, so an action whose edit the queue
+ *  takes queues it instead of refusing (lib/settings/queue.ts); `message` is
+ *  the refusal for everything else, and before MF3. */
+export type TenantMay = { ok: true } | { ok: false; message: string; queue?: true }
 
 /**
  * May this session make this kind of change for this tenant? A tenant's own
@@ -69,5 +89,7 @@ export type TenantMay = { ok: true } | { ok: false; message: string }
 export function assertTenantMay(ctx: LockSession, clientId: string, kind: TenantLockKind): TenantMay {
   if (ctx.operator != null) return { ok: true }
   if (!tenantLocked(clientId, kind)) return { ok: true }
-  return { ok: false, message: TENANT_LOCK_REFUSAL[kind] }
+  return kind === 'tracking'
+    ? { ok: false, message: TENANT_LOCK_REFUSAL[kind], queue: true }
+    : { ok: false, message: TENANT_LOCK_REFUSAL[kind] }
 }

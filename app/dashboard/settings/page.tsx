@@ -1,6 +1,7 @@
 import { SettingsFrame } from '@/components/settings-frame'
 import { LastSaveStrip } from '@/components/settings/save-state-strip'
 import { CommunitiesSection } from '@/components/settings/tracking/communities'
+import { HeldStillSection } from '@/components/settings/tracking/held-still'
 import { PlatformsSection } from '@/components/settings/tracking/platforms'
 import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { shortDate } from '@/lib/format'
@@ -10,11 +11,13 @@ import { communityRows, tableRows, unconfiguredShare } from '@/lib/settings/comm
 import { platformRows, platformShareBasis } from '@/lib/settings/connections'
 import { deliveryRecord, updatesInMonth } from '@/lib/settings/delivery'
 import { rivalRows } from '@/lib/settings/rivals-view'
+import { heldStillLine, loadQueue, queueLines, queueSummary, type QueueColumn } from '@/lib/settings/queue'
 import { saveState } from '@/lib/settings/save-state'
 import { termDateShort } from '@/lib/settings/terms'
 import { loadTrackingPage } from '@/lib/settings/tracking-load'
 import { canSeeStudio } from '@/lib/studio-visibility'
 import { createAdminClient } from '@/lib/supabase-admin'
+import { tenantLocked } from '@/lib/tenant-locks'
 import { TermPerformance } from './term-performance'
 import { TrackingForm } from './tracking-form'
 import type { SearchTermsConfig, TrackingConfig } from './config-shapes'
@@ -55,6 +58,18 @@ export default async function SettingsTrackingPage() {
   // caption. Owners and admins get it through the service role, in this server
   // component; everyone else gets the table without the column and is told so.
   const inputs = await loadTrackingPage(supabase, clientId, canEdit ? createAdminClient() : null, readingHandle(clientId))
+  // HELD STILL UNTIL JANUARY (decision I, WP3.10): a locked tenant's term,
+  // rival and handle edits wait in the queue, and the page says what waits and
+  // when it lands. Before MF3 there is no queue; a read that fails otherwise
+  // prints the section without a list rather than a queue with nothing in it.
+  const locked = tenantLocked(clientId, 'tracking')
+  const queue = locked
+    ? await loadQueue(supabase, clientId).catch((error: unknown) => {
+      console.error(`[settings] tracking queue not read for ${clientId}: ${(error as { message?: string }).message ?? String(error)}`)
+      return null
+    })
+    : null
+  const queued = queue?.state === 'available' ? queueLines(queue.rows, inputs.config as Partial<Record<QueueColumn, unknown>> | null) : []
 
   const c = inputs.config as TrackingConfig | null
   const terms = inputs.config as SearchTermsConfig | null
@@ -125,6 +140,14 @@ export default async function SettingsTrackingPage() {
       ) : !c || !terms ? (
         <p className="text-[12.5px] text-muted-foreground">No tracking config for this workspace. Nothing is tracked until this is set up with you.</p>
       ) : (
+        <>
+        {locked ? (
+          <HeldStillSection
+            line={heldStillLine(queue?.state === 'available' ? 'available' : 'unavailable')}
+            summary={queue?.state === 'available' ? queueSummary(queued, new Date().toISOString()) : null}
+            lines={queued}
+          />
+        ) : null}
         <TrackingForm
           canEdit={canEdit}
           terms={{
@@ -176,6 +199,7 @@ export default async function SettingsTrackingPage() {
             />
           }
         />
+        </>
       )}
     </SettingsFrame>
   )
