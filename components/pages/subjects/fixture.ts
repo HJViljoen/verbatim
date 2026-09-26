@@ -788,6 +788,13 @@ export function marketSubjectsFixture(over: Partial<SubjectsData> = {}): Subject
       index: 1,
       of: 7,
     },
+    // Staging's question videos over July to September, by subject (Repair &
+    // warranty's 11 is left out: it is being re-described).
+    askedMost: [
+      { id: 's-water', name: 'Waterproofing', videos: 16 },
+      { id: 's-price', name: 'Price', videos: 12 },
+      { id: 's-comfort', name: 'Comfort', videos: 7 },
+    ],
     ...over,
   }
 }

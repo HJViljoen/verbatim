@@ -1,4 +1,6 @@
 
+import Link from 'next/link'
+
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { openLink } from '@/components/blocks/open-link'
 import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
@@ -279,10 +281,41 @@ function QuestionsOnIt({ data, mode, appUrl }: { data: SubjectsData; mode: Rende
       </div>
     )
   ) : null
+  // THE SUBJECTS ASKED ABOUT MOST OVER THE LAST 3 MONTHS (the preview), where
+  // this subject's own list does not open: where the questions are.
+  const most = !listed ? (data.askedMost ?? []) : []
+  const askedMost = most.length > 0 ? (
+    email ? (
+      <div style={{ marginTop: 12 }}>
+        <div style={{ fontFamily: FONT.sans, fontSize: 13, fontWeight: 600, color: EMAIL.ink }}>Asked most, last 3 months</div>
+        {most.map((a) => (
+          <div key={a.id} style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '4px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
+            {a.name} · <span data-copy="figure">{fmtInt(a.videos)}</span>
+          </div>
+        ))}
+      </div>
+    ) : (
+      <div className="flex min-w-0 flex-col">
+        <div className={`flex items-baseline justify-between gap-4 ${RULE.head}`}>
+          <span className="text-[15px] font-semibold">Asked most, last 3 months</span>
+          <span className={SCALE.head}>videos</span>
+        </div>
+        {most.map((a) => (
+          <div key={a.id} className={`flex min-h-11 items-center justify-between gap-4 ${RULE.row} last:border-b-0`}>
+            {mode === 'app'
+              ? <Link href={`${appUrl}/dashboard/subjects?item=${encodeURIComponent(a.id)}&horizon=last_3`} className={`min-w-0 ${SCALE.row} underline decoration-border underline-offset-[5px] hover:decoration-foreground`}>{a.name}</Link>
+              : <span className={`min-w-0 ${SCALE.row}`}>{a.name}</span>}
+            <span className={`${SCALE.num} font-semibold`}><span data-copy="figure">{fmtInt(a.videos)}</span></span>
+          </div>
+        ))}
+      </div>
+    )
+  ) : null
   return (
     <BlockFrame title={QUESTIONS_TITLE} question={subjectsUnanswered.question} mode={mode} footer={footer} roomy>
       {countBlock}
       {list}
+      {askedMost}
     </BlockFrame>
   )
 }

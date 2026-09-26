@@ -607,6 +607,14 @@ export interface SubjectsData {
    * ledger says so once, in the block's empty state.
    */
   sayHearClaims: SayHearClaim[]
+  /**
+   * THE SUBJECTS ASKED ABOUT MOST OVER THE LAST 3 MONTHS (the preview's
+   * "Asked most, last 3 months" under the questions count): each subject's
+   * question videos, as S4 counts them, the top three, none being
+   * re-described. One read for every subject (`loadQuestionsBySubject`).
+   * Optional: a page stored before it has none.
+   */
+  askedMost?: { id: string; name: string; videos: number }[] | null
   /** The record's lines, which fed the retired "How sound" pill. No block
    *  on the page prints them (25 Sep rulings), so since WP2.2 the loader reads
    *  none (about fourteen reads, a quarter of the page's); a snapshot stored
@@ -1948,6 +1956,15 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   // The next pair read the same way, for the Month by month cards: the judge's
   // own pair rows (memoised, so no second read).
   const pairRowsAhead = opensOne ? loadPairRows(reading.client, clientId, null).catch(() => null) : Promise.resolve(null)
+  // Every subject's question videos over the last 3 months (the questions
+  // tile's "Asked most"), one read beside the month reads.
+  const last3 = horizonWindow('last_3', readingAnchor(rm), started.from)
+  const askedMostAhead = opensOne
+    ? loadQuestionsBySubject(supabase, clientId, selectable.map((s) => s.id), { from: last3.from, to: last3.to }).catch((error: unknown) => {
+        console.error(`[subjects] asked most: ${(error as { message?: string })?.message ?? String(error)}`)
+        return null
+      })
+    : Promise.resolve(null)
 
   const [subjectSet, kindRows, chartRead] = await Promise.all([
     opensOne
@@ -2339,12 +2356,23 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   // two of three were echoed.
   const ownPosts: OwnPostCensus = census
 
+  const asked = await askedMostAhead
+  const askedMost = asked
+    ? asked
+        .filter((a) => a.questionVideos > 0)
+        .map((a) => ({ id: a.subjectId, name: selectable.find((x) => x.id === a.subjectId)?.name ?? '', videos: a.questionVideos }))
+        .filter((a) => a.name)
+        .sort((a, b) => b.videos - a.videos || a.name.localeCompare(b.name))
+        .slice(0, UNANSWERED_SHOWN)
+    : null
+
   return {
     brand,
     month,
     monthStatus,
     readingAt,
     reading: rm,
+    askedMost,
     otherMonths: view.others,
     horizon,
     axis,
