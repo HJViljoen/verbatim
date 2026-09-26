@@ -102,7 +102,7 @@ export function RejectLogBlock({
               key={`${r.runId}-${r.platform}-${r.videoId}`}
               className={`grid grid-cols-1 items-center gap-x-3 gap-y-2 border-b border-border/60 py-3 last:border-b-0 xl:min-h-[60px] xl:py-2 ${TRACKS}`}
             >
-              <span className="min-w-0 text-[13px] leading-[1.5]">
+              <span className="min-w-0 text-[13px] leading-[1.5] [overflow-wrap:anywhere]">
                 {/* The stranger's own words, and rule (c) may not police them
                     (lib/test/copy-contract.ts): a caption can say "growing" and
                     the product has made no direction claim by quoting it. */}
@@ -131,6 +131,10 @@ export function RejectLogBlock({
           {/* THE TAB'S TABLE VOICE (13px sentence-case heads over the rule, as
               The record's above), not the settings forms' mono capitals; the
               rates' base rides in the "Looked at" head. */}
+          {/* In a narrow pane (768: the sidebar and the settings rail leave
+              about 250px) the table scrolls inside its own box, never the
+              page (deploy 2 review). */}
+          <div className="-mx-1 overflow-x-auto px-1">
           <table className="w-full border-collapse text-[13px] leading-[1.45]">
             <thead>
               <tr className="border-b border-border">
@@ -150,6 +154,7 @@ export function RejectLogBlock({
               ))}
             </tbody>
           </table>
+          </div>
           {byPlatform.length > 0 ? (
             <p className="m-0 text-[13px] text-secondary-foreground">
               By platform: {byPlatform.map((p) => `${p.label} ${p.keptPct.toFixed(1)}%`).join(' · ')}.

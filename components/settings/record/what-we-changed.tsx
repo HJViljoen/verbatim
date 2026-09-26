@@ -94,10 +94,15 @@ export function WhatWeChangedLead({ block }: { block: ChangeBlock }) {
         ) : null}
       </div>
       {why ? (
-        <div className="flex max-w-[720px] flex-col gap-4 border-t border-border/60 pt-6">
+        <div className="flex max-w-[720px] flex-col gap-4 border-t border-border/60 pt-6 @container">
           <h3 className="m-0 text-[15px] font-semibold">{why.title}</h3>
           {why.cells.length > 0 ? (
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 sm:gap-x-8">
+            // THREE ACROSS ONLY WHERE THREE FIT (deploy 2 review): keyed to
+            // the window's `sm`, at 768 the pane beside the sidebar and the
+            // settings rail gave each cell about 60px, "376 of 625" printed
+            // over "65 of 654" and the page scrolled sideways. The section's
+            // own width decides (a container query): stacked below 560px.
+            <div className="grid grid-cols-1 gap-6 @min-[560px]:grid-cols-3 @min-[560px]:gap-x-8">
               {why.cells.map((c) => <WhyStat key={c.key} cell={c} />)}
             </div>
           ) : !block.pair?.row ? (
