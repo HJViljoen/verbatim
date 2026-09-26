@@ -85,7 +85,7 @@ case "$SET" in
   mf1)
     EXPECTED_FILES=(20260928090000_market_first_s1.sql)
     LABELS=(MF1)
-    PREREQ_VERSION="20260924093000"; PREREQ_NAME="Phase 1's last migration (M16)"
+    PREREQ_VERSION="20260924093000"; PREREQ_NAME="Phase 1's last migration M16"
     ;;
   r12)
     EXPECTED_FILES=(20260928091000_market_first_r12_grants.sql)
@@ -309,20 +309,34 @@ SQL
   echo
   echo "  == MF1 READING (human read): the market's videos this month against the stored denominator =="
   read -r -d '' sql <<SQL
-with m as (select date_trunc('month', now() at time zone 'UTC')::date as m0)
-select coalesce(f.audience, d.audience) as audience, f.videos as fn_videos, d.videos as stored_videos
-from (select audience, count(*) as videos from m, public.market_month_videos('$SEALAND', m.m0) group by 1) f
-full join (select audience, videos from public.month_denominators, m
-            where client_id = '$SEALAND' and month = m.m0 and audience <> 'client') d using (audience)
-order by 1;
+with m as (select date_trunc('month', now() at time zone 'UTC')::date as m0),
+f as (select audience, count(*) as videos from m, public.market_month_videos('$SEALAND', m.m0) group by 1),
+d as (select audience, videos from public.month_denominators, m
+       where client_id = '$SEALAND' and month = m.m0 and audience <> 'client')
+select audience, fn_videos, stored_videos from (
+  select 0 as k, coalesce(f.audience, d.audience) as audience, f.videos as fn_videos, d.videos as stored_videos
+    from f full join d using (audience)
+  union all
+  select 1, '(all audiences)', (select sum(videos) from f), (select sum(videos) from d)
+) x
+order by k, audience;
 SQL
   show "$sql"
+  local totals_match=1
+  if awk -F"$FS" '$1 == "(all audiences)" && $2 != $3 {bad=1} END {exit !bad}' <<<"$OUT"; then totals_match=0; fi
   if awk -F"$FS" '$2 != $3 {bad=1} END {exit !bad}' <<<"$OUT"; then
     echo "  !! market_month_videos differs from the stored denominator on at least one audience."
-    echo "     Expected only if an update ran after the denominator was last written. Read it before going on."
+    if (( totals_match )); then
+      echo "     The pooled totals (all audiences) MATCH: videos moved between audiences. Expected if a re-tag"
+      echo "     moved videos between the rival and category audiences after the denominator was written"
+      echo "     (decision H), or an update ran after it. Read it before going on."
+    else
+      echo "     The pooled totals differ too. Expected only if an update ran after the denominator was last"
+      echo "     written (a re-tag alone moves videos between audiences and leaves the totals equal). Read it before going on."
+    fi
     pause_human "MF1 reading differs from the stored denominator. Continue?"
   else
-    echo "  ok    market_month_videos equals month_denominators on every audience of the current month"
+    echo "  ok    market_month_videos equals month_denominators on every audience of the current month, and in total"
   fi
 }
 
