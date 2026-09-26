@@ -7,7 +7,8 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 import { longMonth, shortDate } from '@/lib/format'
 import { monthStartOf, nextMonth } from '@/lib/reading/month-key'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import { changeLead, nextPairLine, placeInMonth, recheckLines, searchChangesLine, type ChangeBlock, type RecheckLine } from '@/lib/pages/overview-market'
+import { changeLead, nextPairLine, placeInMonth, RECHECK_PENDING_KEY, recheckLines, searchChangesLine, type ChangeBlock, type RecheckLine } from '@/lib/pages/overview-market'
+import { RECHECK_TITLE_PENDING, RECHECK_TITLE_READ } from '@/lib/calibration'
 import type { OverviewData } from '@/lib/pages/overview'
 import { cn } from '@/lib/utils'
 import { isMarketPage, shortMonthName } from './market'
@@ -219,6 +220,10 @@ function LeadSentence({ body, figures, mode }: { body: string; figures: FigureTa
  */
 export function RecheckBox({ lines, mode }: { lines: readonly RecheckLine[]; mode: 'app' | 'print' | 'email' }) {
   if (lines.length === 0) return null
+  // STILL PENDING, IT IS "Re-check", with no "provisional" tag over a line
+  // that says nothing was read yet (the deploy-3 review).
+  const pending = lines.some((l) => l.key === RECHECK_PENDING_KEY)
+  const title = pending ? RECHECK_TITLE_PENDING : RECHECK_TITLE_READ
   if (mode === 'email') {
     return (
       <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} style={{ borderCollapse: 'collapse', marginTop: 24 }}>
@@ -226,7 +231,7 @@ export function RecheckBox({ lines, mode }: { lines: readonly RecheckLine[]; mod
           <tr>
             <td style={{ padding: 24, borderRadius: 6, background: EMAIL.inner }}>
               <div style={{ fontFamily: FONT.sans, fontSize: 15, lineHeight: '22px', fontWeight: 600, color: EMAIL.ink }}>
-                Re-checked&nbsp;&nbsp;<span style={{ fontFamily: FONT.mono, fontSize: 12, fontWeight: 400, color: EMAIL.muted }}>provisional</span>
+                {title}{pending ? null : <>&nbsp;&nbsp;<span style={{ fontFamily: FONT.mono, fontSize: 12, fontWeight: 400, color: EMAIL.muted }}>provisional</span></>}
               </div>
               {lines.map((l) => (
                 <div key={l.key} style={{ marginTop: 8 }}>
@@ -243,7 +248,7 @@ export function RecheckBox({ lines, mode }: { lines: readonly RecheckLine[]; mod
   return (
     <div className="flex max-w-[76ch] flex-col gap-3 rounded-md bg-inner p-6">
       <p className="m-0 text-[15px] font-semibold leading-[1.4] text-foreground">
-        Re-checked <span className="ml-1.5 font-mono text-[12px] font-normal text-muted-foreground">provisional</span>
+        {title}{pending ? null : <> <span className="ml-1.5 font-mono text-[12px] font-normal text-muted-foreground">provisional</span></>}
       </p>
       {lines.map((l) => (
         <div key={l.key} className="flex flex-col gap-1">

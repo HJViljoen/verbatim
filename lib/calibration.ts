@@ -678,6 +678,14 @@ export const RECHECK_FOLLOWS_DEPTH = (month: string): string =>
  *  videos: [the outcome]"). */
 export const RECHECK_SAME_SEARCHES = 'On the searches both months ran, without makers and off-topic videos'
 export const RECHECK_PENDING = (population: string): string => `${population}: checks pending.`
+/** The pending line as the page and the monthly print it (the deploy-3 review:
+ *  one colon, not two), under the title "Re-check" with no "provisional" tag,
+ *  its update in the line's tag. */
+export const RECHECK_CHECKS_PENDING = 'Checks pending on the searches both months ran, without makers and off-topic videos.'
+/** The re-check's inner title: "Re-checked", tagged provisional, over lines
+ *  that were read; "Re-check", untagged, over a check still pending. */
+export const RECHECK_TITLE_READ = 'Re-checked'
+export const RECHECK_TITLE_PENDING = 'Re-check'
 /** The buyers-only line (plan WP2.3's done-when; heinrich-fidelity must-fix
  *  3): the market's videos read as neither makers' nor off-topic
  *  (segments_v1), printed where a month holds under 100 of them. */

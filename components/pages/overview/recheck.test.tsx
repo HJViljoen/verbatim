@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest'
 import { blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
+import { shortDate } from '@/lib/format'
 import { render, renderText } from '@/lib/test/render'
 import { buildCheckLines } from '@/lib/pages/overview-market'
 import type { OverviewData } from '@/lib/pages/overview'
@@ -33,6 +34,8 @@ function withRecheck(state: 'read' | 'pending'): OverviewData {
   }
 }
 
+const data = (): OverviewData => withRecheck('pending')
+
 describe('the re-check in "What changed, and what is ours" (WP2.3)', () => {
   it('prints "Re-checked", its provisional tag and its lines, each with its tag, in every mode', () => {
     for (const mode of MODES) {
@@ -48,11 +51,16 @@ describe('the re-check in "What changed, and what is ours" (WP2.3)', () => {
     }
   })
 
-  it('reads "checks pending" where no row was read', () => {
+  it('reads "checks pending" where no row was read, under "Re-check" with no provisional tag, and names its update', () => {
     for (const mode of MODES) {
       const t = read(block.render(withRecheck('pending'), mode, ctx))
-      expect(t, mode).toContain('On the searches both months ran, without makers and off-topic videos: checks pending.')
+      expect(t, mode).toContain('Re-check Checks pending on the searches both months ran, without makers and off-topic videos.')
+      expect(t, mode).not.toContain('Re-checked')
+      expect(t, mode).not.toContain('provisional')
       expect(t, mode).not.toContain('Too few videos')
+      const asAt = data().change?.asAt
+      expect(asAt).toBeTruthy()
+      expect(t, mode).toContain(`read with the ${shortDate(asAt!)} update`)
     }
   })
 

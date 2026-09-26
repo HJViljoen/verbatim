@@ -546,8 +546,9 @@ describe('where the re-check prints, and the buyers-only line (WP2.3)', () => {
     const b = buildChangeBlock({ ...base, pair: pair('ended'), paused: false, recheck: { rows: null, buyers: { prev: RECHECK_BUYERS.august, curr: RECHECK_BUYERS.september } } })
     expect(b.recheck).toBe('pending')
     // Staging's buyers, 146 and 381, are 100 or more a side: no buyers line.
+    // One colon, and the update it was read with (the page's latest, 11 Oct).
     expect(recheckLines(b)).toEqual([
-      { key: 'pending', sentence: 'On the searches both months ran, without makers and off-topic videos: checks pending.', tag: null },
+      { key: 'pending', sentence: 'Checks pending on the searches both months ran, without makers and off-topic videos.', tag: 'read with the 11 Oct update' },
     ])
   })
 
