@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 
 import { fmtInt } from '@/lib/format'
-import type { KeptRate, RejectRow } from '@/lib/settings/reject-log'
+import { REJECT_ROWS, type KeptRate, type RejectRow } from '@/lib/settings/reject-log'
 
 import { RecordSection } from './frame'
 import { ShowAll } from './show-all'
@@ -112,10 +112,12 @@ export function RejectLogBlock({
             <span>The rule that fired</span>
             <span />
           </div>
-          {/* THE LATEST FIVE, THEN "Show all 20" (Heinrich's default, 26
-              Sep, R-b): the rest in a native disclosure, keyboard reachable,
-              with no client script, and every row printed (show-all.tsx). */}
-          <ShowAll items={rows} count={rows.length} render={(r) => (
+          {/* THE LATEST FIVE, THEN THE REST (Heinrich's default, 26 Sep,
+              R-b): in a native disclosure, keyboard reachable, with no client
+              script, and every row printed (show-all.tsx). The page reads
+              only the REJECT_ROWS most recent posts, so a full read says
+              "Show the 20 most recent", never "all" (deploy 2 review). */}
+          <ShowAll items={rows} count={rows.length} capped={rows.length >= REJECT_ROWS} render={(r) => (
             <div
               key={`${r.runId}-${r.platform}-${r.videoId}`}
               className={`grid grid-cols-1 items-center gap-x-3 gap-y-2 border-b border-border/60 py-3 last:border-b-0 xl:min-h-[60px] xl:py-2 ${TRACKS}`}

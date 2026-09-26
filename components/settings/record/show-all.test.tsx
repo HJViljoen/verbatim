@@ -70,12 +70,22 @@ describe('the reject log, the latest five', () => {
     />
   )
 
-  it('shows the latest five and offers all twenty', () => {
+  it('shows the latest five and offers the twenty most recent, never "all" of a log it read in part', () => {
     const { before, inside } = split(render(node))
     for (let i = 1; i <= 5; i++) expect(before).toContain(`Set-aside post ${i}”`)
     for (let i = 6; i <= 20; i++) expect(inside).toContain(`Set-aside post ${i}”`)
-    expect(renderText(node)).toContain('Show all 20')
+    expect(renderText(node)).toContain('Show the 20 most recent')
+    expect(renderText(node)).not.toContain('Show all')
     assertCopyContract(node)
+  })
+
+  it('says "all" where fewer than the page reads were set aside', () => {
+    const few = rows.slice(0, 8)
+    const text = renderText(
+      <RejectLogBlock rows={few} summary={gateSummaryFixture()} unjudged={null} byTerm={[]} byPlatform={[]} />,
+    )
+    expect(text).toContain('Show all 8')
+    expect(text).not.toContain('most recent')
   })
 })
 
