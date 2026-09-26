@@ -7,7 +7,7 @@ import { fmtInt, longMonth } from '@/lib/format'
 import { surface } from '@/lib/nav'
 import { carriesShare } from '@/lib/reading/level'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import { MAKERS_NOT_MEASURED, makerCell, themeFigures, type MarketTheme, type ThemeBoard } from '@/lib/pages/overview-market'
+import { MAKERS_NOT_MEASURED, groupFigures, makerCell, themeFigures, type MarketTheme, type ThemeBoard } from '@/lib/pages/overview-market'
 import type { OverviewData } from '@/lib/pages/overview'
 import { BarLegend, BaseHead, InnerLine, LevelBar, MakerMark, RULE, SCALE, barAxis, isMarketPage } from './market'
 
@@ -162,7 +162,7 @@ export const overviewThemes: Block<OverviewData> = {
   },
 
   figures(data): FigureTable {
-    return data.themes ? themeFigures(data.themes) : {}
+    return data.themes ? { ...themeFigures(data.themes), ...groupFigures(data.themes) } : {}
   },
 
   emptyState(data) {

@@ -7,7 +7,7 @@ import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { BlockFrame } from '@/components/blocks/frame'
 import { NUMBER_BUDGET, type OverviewData } from '@/lib/pages/overview'
-import { LEAD_MAX_MAKER_SHARE, segmentOf, themeFigures } from '@/lib/pages/overview-market'
+import { LEAD_MAX_MAKER_SHARE, segmentOf, themeFigures, themeToken } from '@/lib/pages/overview-market'
 import { septemberThemes } from '@/lib/test/market-fixture'
 import { FRONT_PAGE_BLOCKS, MARKET_TITLES, OverviewPage } from './index'
 import { overviewSentence } from './sentence'
@@ -70,6 +70,14 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
       expect(board).toContain('Backpack brand and model comparisons')
       expect(board.split('not measured').length - 1).toBe(3)
     }
+  })
+
+  it('declares every video count the makers line prints, on the board’s own theme tokens', () => {
+    const data = marketFrontFixture()
+    const figures = overviewThemes.figures?.(data) ?? {}
+    const leads = data.themes?.makers?.lead ?? []
+    expect(leads.map((t) => t.k)).toEqual([71, 64])
+    for (const t of leads) expect(figures[themeToken(t.registryId, 'k')]).toMatchObject({ value: t.k, unit: 'videos' })
   })
 
   it('the kinds and the mood as levels, "Praising it" for praise, one chip', () => {

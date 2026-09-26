@@ -241,6 +241,29 @@ export function themeFigures(board: ThemeBoard, rows: readonly MarketTheme[] = b
   return out
 }
 
+/**
+ * The makers and set-aside lines' figures: the videos of each theme a line
+ * names ("led by … (71) and … (64)"), on the board's own theme tokens, so the
+ * page's figure table holds every video count the block prints (WP1.6
+ * review).
+ *
+ * NOT THE LINES' THEME COUNTS ("7 themes at 10+"). A figure's unit is videos,
+ * comments, points or a percentage (`FigureTable`, and `sent_figures.unit`'s
+ * CHECK); a count of themes is none of them, and a unit for it is a
+ * `lib/reading/verdicts.ts` and migration change (WP2.1's MF2), not a page's.
+ */
+export function groupFigures(board: ThemeBoard): FigureTable {
+  const month = longMonth(board.month)
+  const out: FigureTable = {}
+  for (const group of [board.makers, board.setAside]) {
+    if (!group || group.count === 0) continue
+    for (const t of group.lead) {
+      out[themeToken(t.registryId, 'k')] = { value: t.k, unit: 'videos', label: `videos on ${t.label} in ${month}` }
+    }
+  }
+  return out
+}
+
 /** The hero's own table: the board's figures for its three rows, and the
  *  lead's new-search count where it prints. */
 export function heroFigures(hero: HeroLead, board: ThemeBoard | null, month: string): FigureTable {
