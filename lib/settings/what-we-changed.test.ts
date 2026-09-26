@@ -71,13 +71,31 @@ describe('the dated list of our changes (Settings › What we changed)', () => {
     expect(otherRows(ROWS, changes).map((r) => r.id)).toEqual(['terms-0706', 'cadence'])
   })
 
-  it('prefers the change’s own note, in client words, where the log carries one', () => {
-    const noted = ROWS.map((r) => (r.id === '0913-industry' ? { ...r, note: 'Four search terms added: handmade bag, sustainable fashion, travel gear and frtg.' } : r))
+  it('never prints a reconstruction’s operator note: it composes the words from what the rows moved (GC F9)', () => {
+    // Staging's real note on the 13 Sep row is operator prose ("three terms
+    // appended by a hand-typed UPDATE in the SQL editor …").
+    const noted = ROWS.map((r) => (r.id === '0913-industry' ? { ...r, note: 'three terms appended by a hand-typed UPDATE in the SQL editor' } : r))
     const c = changesFromLog(noted).find((x) => x.id === '0913-industry')!
-    expect(changeWords(c, noted)).toBe('Four search terms added: handmade bag, sustainable fashion, travel gear and frtg.')
+    expect(changeWords(c, noted)).toBe('4 search terms added')
+  })
+
+  it('uses the note of a row market-first’s own scripts wrote in client words (the gate fix, WP1.4)', () => {
+    const gate = row({ id: 'gate-fix', changed_at: '2026-09-26T08:00:00.000Z', surface: 'gate_rule' as never, note: 'We fixed how we check that a video is about bags.' })
+    const c = changesFromLog([gate])[0]
+    expect(changeWords(c, [gate])).toBe('We fixed how we check that a video is about bags.')
+  })
+
+  it('counts the exclusions list apart from the search terms (the 17 Sep script touched both)', () => {
+    const script = [
+      row({ id: '0917-industry', changed_at: '2026-09-17T16:02:56.000Z', surface: 'terms', field: 'industry_keywords', before: [], after: ['made from waste', 'locally made south africa'] }),
+      row({ id: '0917-exclude', changed_at: '2026-09-17T16:02:56.000Z', surface: 'terms', field: 'exclude_terms', before: [], after: ['volcano', 'hip hop', 'schengen'] }),
+    ]
+    const c = changesFromLog([ROWS[0], ...script]).find((x) => x.id.startsWith('0917'))!
+    expect(changeWords(c, script)).toBe('2 search terms added; 3 exclusions added')
+    expect(termsMoved(script)).toEqual({ added: ['locally made south africa', 'made from waste'], removed: [] })
   })
 
   it('reads a swap written as one before and one after list', () => {
-    expect(termsMoved([{ surface: 'terms', before: ['a', 'b'], after: ['b', 'c'] }])).toEqual({ added: ['c'], removed: ['a'] })
+    expect(termsMoved([{ surface: 'terms', field: null, before: ['a', 'b'], after: ['b', 'c'] }])).toEqual({ added: ['c'], removed: ['a'] })
   })
 })

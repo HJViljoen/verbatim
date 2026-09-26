@@ -33,23 +33,40 @@ export interface ReachRow {
   computedAt: string
 }
 
-/** The words for the surfaces the log names (`SURFACE_WORDS`), and for the
- *  three MF1 adds (WP1.4), in the preview's words. */
-const EXTRA_WORDS: Record<string, string> = {
+/** The words for a change no count describes, per surface, in client words.
+ *  The three MF1 surfaces (WP1.4) use the preview's headings. */
+const SURFACE_SENTENCE: Record<string, string> = {
   gate_rule: 'How we decide what is relevant',
   attribution: 'How we file a video to a brand',
   segment: 'How we mark makers’ videos',
+  entity_retag: 'Stored videos filed again under the brand they are about',
+  regate: 'Stored videos checked again for relevance',
+  prompt_version: 'How we read comments changed',
+  platforms: 'The platforms we read changed',
+  knobs: 'How deeply we read changed',
+  handles: 'The accounts we read changed',
+  rival_rename: 'A rival was renamed',
+  other: 'A change to how we read',
 }
+
+/** Surfaces whose stored note is client words: the rows market-first's own
+ *  scripts write (WP1.4), whose notes Heinrich approves before the apply.
+ *  Every older row's note is the reconstruction's operator prose (GC F9) and
+ *  is never printed here. */
+const CLIENT_NOTE_SURFACES: ReadonlySet<string> = new Set(['gate_rule', 'attribution', 'segment'])
 
 const listOf = (side: unknown): string[] =>
   Array.isArray(side) ? side.filter((v): v is string => typeof v === 'string') : []
 
-/** The search terms a group of `terms` rows added and removed, each once. */
-export function termsMoved(rows: readonly Pick<ConfigChange, 'surface' | 'before' | 'after'>[]): { added: string[]; removed: string[] } {
+/** Is this `terms` row the exclusions list (words a video must not carry),
+ *  not a search term? */
+const isExclusions = (r: Pick<ConfigChange, 'field'>): boolean => r.field === 'exclude_terms'
+
+/** What a group of rows added and removed from one list, each once. */
+function moved(rows: readonly Pick<ConfigChange, 'before' | 'after'>[]): { added: string[]; removed: string[] } {
   const added = new Set<string>()
   const removed = new Set<string>()
   for (const r of rows) {
-    if (r.surface !== 'terms') continue
     const before = new Set(listOf(r.before))
     const after = new Set(listOf(r.after))
     for (const t of after) if (!before.has(t)) added.add(t)
@@ -57,6 +74,12 @@ export function termsMoved(rows: readonly Pick<ConfigChange, 'surface' | 'before
   }
   for (const t of [...added]) if (removed.has(t)) { added.delete(t); removed.delete(t) }
   return { added: [...added].sort(), removed: [...removed].sort() }
+}
+
+/** The search terms a group of `terms` rows added and removed, each once; the
+ *  exclusions list is not a search term and is left out. */
+export function termsMoved(rows: readonly Pick<ConfigChange, 'surface' | 'field' | 'before' | 'after'>[]): { added: string[]; removed: string[] } {
+  return moved(rows.filter((r) => r.surface === 'terms' && !isExclusions(r)))
 }
 
 /** The communities a group of `subreddits` rows switched on and off. */
@@ -75,27 +98,43 @@ function communitiesMoved(rows: readonly Pick<ConfigChange, 'surface' | 'before'
 
 const plural = (n: number, one: string, many: string): string => `${fmtInt(n)} ${n === 1 ? one : many}`
 
+/** "7 search terms out and 7 in", "5 search terms added", from the counts. */
+function outAndIn(added: number, removed: number, one: string, many: string, gone = 'taken out'): string | null {
+  if (added > 0 && removed > 0) return `${plural(removed, one, many)} out and ${fmtInt(added)} in`
+  if (added > 0) return `${plural(added, one, many)} added`
+  if (removed > 0) return `${plural(removed, one, many)} ${gone}`
+  return null
+}
+
 /**
- * A change in client words: its note where the log carries one (the notes
- * Heinrich approves with WP1.4's pastes are written for the client), else a
- * sentence composed from what the rows moved, else the surface's own words.
+ * A change in client words, composed from what its rows moved: search terms
+ * and exclusions counted apart, communities switched on or off, rivals in and
+ * out; else the surface's own sentence. A stored note is used only where it
+ * was written in client words (`CLIENT_NOTE_SURFACES`).
  */
 export function changeWords(change: OurChange, rows: readonly ConfigChange[]): string {
-  if (change.note?.trim()) return change.note.trim()
+  if (CLIENT_NOTE_SURFACES.has(change.surface) && change.note?.trim()) return change.note.trim()
   const ids = new Set(change.rowIds ?? [change.id])
   const mine = rows.filter((r) => ids.has(r.id))
   if (change.surface === 'terms') {
-    const { added, removed } = termsMoved(mine)
-    if (added.length > 0 && removed.length > 0) return `${plural(removed.length, 'search term', 'search terms')} out and ${fmtInt(added.length)} in`
-    if (added.length > 0) return `${plural(added.length, 'search term', 'search terms')} added`
-    if (removed.length > 0) return `${plural(removed.length, 'search term', 'search terms')} taken out`
+    const terms = termsMoved(mine)
+    const excl = moved(mine.filter(isExclusions))
+    const parts = [
+      outAndIn(terms.added.length, terms.removed.length, 'search term', 'search terms'),
+      outAndIn(excl.added.length, excl.removed.length, 'exclusion', 'exclusions', 'lifted'),
+    ].filter((p): p is string => p != null)
+    if (parts.length > 0) return parts.join('; ')
   }
   if (change.surface === 'subreddits') {
     const { on, off } = communitiesMoved(mine)
-    if (on.length > 0 && off.length === 0) return `${plural(on.length, 'community', 'communities')} added`
-    if (off.length > 0 && on.length === 0) return `${plural(off.length, 'community', 'communities')} dropped`
+    const words = outAndIn(on.length, off.length, 'community', 'communities', 'dropped')
+    if (words) return words
   }
-  return EXTRA_WORDS[change.surface] ?? (SURFACE_WORDS as Record<string, string>)[change.surface] ?? 'Configuration'
+  if (change.surface === 'rivals') {
+    const words = outAndIn(moved(mine).added.length, moved(mine).removed.length, 'rival', 'rivals')
+    if (words) return words
+  }
+  return SURFACE_SENTENCE[change.surface] ?? (SURFACE_WORDS as Record<string, string>)[change.surface] ?? 'A change to how we read'
 }
 
 /**
