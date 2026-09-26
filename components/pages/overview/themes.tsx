@@ -9,7 +9,7 @@ import { carriesShare } from '@/lib/reading/level'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { MAKERS_NOT_MEASURED, groupFigures, makerCell, themeFigures, type MarketTheme, type ThemeBoard } from '@/lib/pages/overview-market'
 import type { OverviewData } from '@/lib/pages/overview'
-import { BarLegend, BaseHead, InnerLine, LevelBar, MakerMark, PHONE_COLS, PHONE_HIDDEN, PHONE_OWN_LINE, RULE, SCALE, barAxis, isMarketPage } from './market'
+import { BarLegend, BaseHead, InnerLine, LevelBar, MakerMark, RULE, SCALE, barAxis, isMarketPage } from './market'
 
 // "What your market talked about" (market-first WP1.6, plan §2.2 block 2):
 // the ten biggest themes not led by makers, the previous month beside each as
@@ -19,6 +19,17 @@ import { BarLegend, BaseHead, InnerLine, LevelBar, MakerMark, PHONE_COLS, PHONE_
 // THE HEADER IS THE TITLE ALONE, THE FOOTER A LINK ALONE (25 Sep rulings): the
 // base lives in the column heads ("Sep of 626"), the refusal in the one chip
 // at the block's foot, and nothing explains itself under the table.
+
+/**
+ * THE BOARD'S BREAKPOINT IS ITS OWN WIDTH (deploy 2 review): the desktop grid
+ * from 820px of board, the phone layout below it, as a container query on the
+ * board (`@container`). Written out in full for Tailwind's scanner. On paper
+ * the board is laid out at the app's 1440 width (`.vb-print`), so it keeps the
+ * desktop grid there.
+ */
+const BOARD_COLS = 'grid-cols-[minmax(0,1fr)_44px_48px_48px] gap-x-3 @min-[820px]:gap-x-4'
+const BOARD_HIDDEN = '@max-[820px]:hidden'
+const BOARD_OWN_LINE = '@max-[820px]:order-last @max-[820px]:col-span-full'
 
 /** A row's level cell: its share at 100 videos or more, its count under. */
 function levelCell(k: number | null, n: number | null): string {
@@ -97,46 +108,57 @@ function Board({ board, mode, chip }: { board: ThemeBoard; mode: 'app' | 'print'
   // ON A PHONE (below `sm`; WP1.6 review) the table fits the tile with no
   // sideways scroll, so the first screen carries the board's figures: the
   // rank and the bar go, the theme wraps instead of truncating, and the
-  // makers tag takes a line of its own under its row (`PHONE_COLS`).
+  // makers tag takes a line of its own under its row (`BOARD_COLS`).
   //
   // THE THEME WRAPS AT EVERY WIDTH, NEVER TRUNCATES (fresh design check, 26
   // Sep): at 1024 its track is about 210px and seven of Sealand's ten labels
   // ended in "…", the one cell a reader came for. At 1440 they fit on a line.
+  //
+  // THE BOARD'S OWN WIDTH DECIDES, NOT THE WINDOW'S (deploy 2 review). Its
+  // columns need about 760px and its makers tag about 60 more, and the tile
+  // sits beside the 224px sidebar: keyed to `sm`, the desktop grid ran from
+  // 640 to about 1180 in a tile too narrow for it, the legend printed over
+  // "Videos" ("AugVideos"), and the makers tag was clipped or cut ("about a
+  // thi"). A container query (`@min-[820px]`) keeps the phone layout (no rank,
+  // no bar, the makers tag on a line of its own) until the board has room.
+  // The makers track holds "about a third makers" whole from 172px (its width
+  // at 1440, where the preview is drawn); at 140 it read "about a third
+  // make…" at every width under about 1400.
   const cols = makersColumn
-    ? `${PHONE_COLS} sm:grid-cols-[28px_minmax(200px,1.5fr)_minmax(96px,1fr)_64px_64px_64px_minmax(140px,0.7fr)]`
-    : `${PHONE_COLS} sm:grid-cols-[28px_minmax(200px,1.2fr)_minmax(96px,1fr)_64px_64px_64px]`
+    ? `${BOARD_COLS} @min-[820px]:grid-cols-[28px_minmax(200px,1.5fr)_minmax(96px,1fr)_64px_64px_64px_minmax(172px,0.7fr)]`
+    : `${BOARD_COLS} @min-[820px]:grid-cols-[28px_minmax(200px,1.2fr)_minmax(96px,1fr)_64px_64px_64px]`
   return (
-    <div className="flex min-w-0 flex-col gap-6">
+    <div className="flex min-w-0 flex-col gap-6 @container">
       <div className="-mx-1 overflow-x-auto px-1">
-        <div className="sm:min-w-[680px]" role="table">
+        <div className="@min-[820px]:min-w-[680px]" role="table">
           <div role="row" className={`grid ${cols} items-end ${RULE.head}`}>
-            <span role="columnheader" className={PHONE_HIDDEN} />
+            <span role="columnheader" className={BOARD_HIDDEN} />
             <span role="columnheader" className={SCALE.head}>Theme</span>
-            <span role="columnheader" className={PHONE_HIDDEN}><BarLegend month={board.month} prevMonth={prev?.month ?? null} /></span>
+            <span role="columnheader" className={BOARD_HIDDEN}><BarLegend month={board.month} prevMonth={prev?.month ?? null} /></span>
             <span role="columnheader" className={`text-right ${SCALE.head}`}>Videos</span>
             <span role="columnheader"><BaseHead month={board.month} n={board.n} mode={mode} /></span>
             <span role="columnheader">{prev ? <BaseHead month={prev.month} n={prev.n} mode={mode} /> : null}</span>
-            {makersColumn ? <span role="columnheader" className={`${PHONE_HIDDEN} ${SCALE.head}`}>Makers</span> : null}
+            {makersColumn ? <span role="columnheader" className={`${BOARD_HIDDEN} ${SCALE.head}`}>Makers</span> : null}
           </div>
           {board.rows.map((t, i) => {
             const words = makerCell(t.makerShare)
             const unmeasured = words === MAKERS_NOT_MEASURED
             return (
               <div key={t.registryId} role="row" className={`grid ${cols} min-h-11 items-center py-1.5 ${RULE.row}`}>
-                <span className={`${PHONE_HIDDEN} font-mono text-[13px] tabular-nums text-muted-foreground`}>{i + 1}</span>
+                <span className={`${BOARD_HIDDEN} font-mono text-[13px] tabular-nums text-muted-foreground`}>{i + 1}</span>
                 <span role="rowheader" className={`min-w-0 [text-wrap:pretty] ${SCALE.row}`} title={t.label}>
                   <span data-copy="subject" data-slot="pass_b_theme">{t.label}</span>
                 </span>
-                <span className={`block ${PHONE_HIDDEN}`}>
+                <span className={`block ${BOARD_HIDDEN}`}>
                   <LevelBar share={t.k / t.n} prevShare={prev && t.prev ? t.prev.k / (prev.n as number) : null} axis={axis} />
                 </span>
                 <span className={`${SCALE.num} font-semibold`}><span data-copy="figure">{fmtInt(t.k)}</span></span>
                 <span className={SCALE.num}><span data-copy="figure">{levelCell(t.k, t.n)}</span></span>
                 <span className={SCALE.prev}>{prev ? <span data-copy="figure">{levelCell(t.prev?.k ?? 0, prev.n)}</span> : null}</span>
                 {makersColumn ? (
-                  <span className={`inline-flex min-w-0 items-center gap-2 text-[13px] text-secondary-foreground ${PHONE_OWN_LINE}`}>
-                    {/* On a phone the column head is gone, so the tag names makers itself. */}
-                    {unmeasured ? <span className={SCALE.tag}><span className="sm:hidden">makers </span>{words}</span> : words ? <><MakerMark /><span className="truncate">{words}</span></> : null}
+                  <span className={`inline-flex min-w-0 items-center gap-2 text-[13px] text-secondary-foreground ${BOARD_OWN_LINE}`}>
+                    {/* In the narrow layout the column head is gone, so the tag names makers itself. */}
+                    {unmeasured ? <span className={SCALE.tag}><span className="@min-[820px]:hidden">makers </span>{words}</span> : words ? <><MakerMark /><span className="truncate">{words}</span></> : null}
                   </span>
                 ) : null}
               </div>
