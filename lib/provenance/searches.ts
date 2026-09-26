@@ -225,3 +225,53 @@ export function gatherHealth(gathers: readonly GatherRun[], month: string): { mo
     unplanned,
   }
 }
+
+/** One `config_change_reach` row as a script plans it (before the client id
+ *  and the method are added). */
+export interface ReachRowPlan {
+  change_id: string
+  /** `YYYY-MM-01`. */
+  month: string
+  population: 'market' | 'category'
+  videos_touched: number
+  videos_in_month: number
+  read_through_run: string | null
+}
+
+/**
+ * One reach row per (change, month, population), the key a batch must not
+ * repeat. Two adjacent pairs share a month: (Jul, Aug) and (Aug, Sep) both
+ * measure August. A change dated late in September (the gate fix and
+ * attribution v3, dated at the fix deploy) falls inside BOTH spans, because a
+ * span runs to its later month's freeze line and August's is 1 Oct. So the
+ * pair loop plans August's reach for that change twice. Inserted in one
+ * statement, the two copies share `computed_at` (one now() per statement), the
+ * primary key's last column, and the insert fails on the key.
+ *
+ * The copies read the same month set, so they are identical when read through
+ * the same update. Where they are not, the copy read through the LATER update
+ * wins (`finishedAt` names each update's finish; an unknown one sorts first).
+ * Otherwise the first copy is kept, in the order planned.
+ */
+export function oneReachRowEach<T extends ReachRowPlan>(
+  rows: readonly T[],
+  finishedAt: (runId: string | null) => string | null,
+): T[] {
+  const at = (r: T): number => {
+    const t = ms(finishedAt(r.read_through_run) ?? '')
+    return Number.isNaN(t) ? -Infinity : t
+  }
+  const index = new Map<string, number>()
+  const out: T[] = []
+  for (const r of rows) {
+    const key = `${r.change_id}|${r.month.slice(0, 10)}|${r.population}`
+    const i = index.get(key)
+    if (i === undefined) {
+      index.set(key, out.length)
+      out.push(r)
+    } else if (at(r) > at(out[i])) {
+      out[i] = r
+    }
+  }
+  return out
+}

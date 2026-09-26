@@ -6,7 +6,8 @@ import {
 } from '../lib/provenance/load'
 import type { ProvenanceSnapshot } from '../lib/provenance/reconstruct'
 import {
-  firstSearched, gatherHealth, gathersOf, isOutside, median, populations, unchangedSearches, type MonthVideo,
+  firstSearched, gatherHealth, gathersOf, isOutside, median, oneReachRowEach, populations, unchangedSearches, type MonthVideo,
+  type ReachRowPlan,
 } from '../lib/provenance/searches'
 import { changeInSpan, changesFromLog, isSearchSurface, type OurChange } from '../lib/reading/comparability'
 import { laterMonthOf } from '../lib/reading/pairs'
@@ -37,8 +38,10 @@ import { createAdminClient, selectAll } from '../lib/supabase-admin'
 //     searches not run (each run's config_snapshot);
 //   - late capture: the earlier month's category comments first captured after
 //     it ended (GC F30: August 4,923 of 10,188 on staging);
-// and one `config_change_reach` row per measured change, month and population.
-// A row identical to the newest one held is not written again.
+// and one `config_change_reach` row per measured change, month and population,
+// once even where two pairs share the month (lib/provenance/searches.ts
+// oneReachRowEach). A row identical to the newest one held is not written
+// again.
 //
 // READ THROUGH the later month's latest update, found exactly as the judge
 // finds it (lib/reading/pairs.ts laterMonthOf: completed or partial runs by
@@ -81,11 +84,13 @@ async function main() {
   })
   assertProject(args, process.env.NEXT_PUBLIC_SUPABASE_URL, NAME)
   console.log(modeLine(args, NAME))
-  const pairs = (args.values.pairs ?? '2026-07:2026-08,2026-08:2026-09').split(',').map((p) => {
+  // Each pair once, for the same reason as the reach rows: one insert cannot
+  // hold a primary key twice.
+  const pairs = [...new Map((args.values.pairs ?? '2026-07:2026-08,2026-08:2026-09').split(',').map((p) => {
     const [a, b] = p.split(':').map((m) => monthStart(m.trim()))
     if (!(a < b)) throw new Error(`${NAME}: --pairs ${p} is not an earlier:later month pair`)
-    return [a, b] as const
-  })
+    return [`${a}|${b}`, [a, b] as const] as const
+  })).values()]
   const admin = createAdminClient()
   const pages: Pages = { n: 0 }
 
@@ -140,7 +145,7 @@ async function main() {
 
   const now = new Date().toISOString()
   const pairRows: Record<string, unknown>[] = []
-  const reachRows: { change_id: string; month: string; population: Population; videos_touched: number; videos_in_month: number; read_through_run: string }[] = []
+  const planned: ReachRowPlan[] = []
   for (const [prev, month] of pairs) {
     // The later month's latest update, exactly as the judge finds it
     // (laterMonthOf): the row is read only while this is still that update.
@@ -201,8 +206,8 @@ async function main() {
           curr: { k: sets.curr[pop].filter(touchedBy).length, n: sets.curr[pop].length },
         }
         codeChanges.push(e)
-        reachRows.push({ change_id: c.id, month: prev, population: pop, videos_touched: e.prev.k, videos_in_month: e.prev.n, read_through_run: update.id })
-        reachRows.push({ change_id: c.id, month, population: pop, videos_touched: e.curr.k, videos_in_month: e.curr.n, read_through_run: update.id })
+        planned.push({ change_id: c.id, month: prev, population: pop, videos_touched: e.prev.k, videos_in_month: e.prev.n, read_through_run: update.id })
+        planned.push({ change_id: c.id, month, population: pop, videos_touched: e.curr.k, videos_in_month: e.curr.n, read_through_run: update.id })
       }
       const [mk, cat] = codeChanges.slice(-2)
       console.log(`  change ${c.id} · ${c.changedAt.slice(0, 16)} · ${c.surface}: ${month.slice(0, 7)} ${mk.curr.k} of ${mk.curr.n} market, ${cat.curr.k} of ${cat.curr.n} category · ${prev.slice(0, 7)} ${mk.prev.k} of ${mk.prev.n} market, ${cat.prev.k} of ${cat.prev.n} category`)
@@ -234,8 +239,17 @@ async function main() {
     })
   }
 
+  // Adjacent pairs share a month, so a change inside both spans (the gate fix
+  // and attribution v3, dated late in September, fall inside (Jul, Aug) and
+  // (Aug, Sep)) is planned for August twice: one row per change, month and
+  // population, or the insert fails on the primary key (oneReachRowEach).
+  const finishedAt = (id: string | null) => updates.find((u) => u.id === id)?.finishedAt ?? null
+  const reachRows = oneReachRowEach(planned, finishedAt)
+  const folded = planned.length - reachRows.length
+  const foldedNote = folded > 0 ? ` (${folded} repeats of a month two pairs share, folded)` : ''
+
   if (!args.apply) {
-    console.log(`\nread-only: nothing written (${pairRows.length} pair rows and ${reachRows.length} reach rows planned) · reads: ${pages.n} pages · at ${now}`)
+    console.log(`\nread-only: nothing written (${pairRows.length} pair rows and ${reachRows.length} reach rows planned${foldedNote}) · reads: ${pages.n} pages · at ${now}`)
     return
   }
 
@@ -280,7 +294,7 @@ async function main() {
     })))
     if (error) throw new Error(`${NAME}: reach rows not written (the pair rows were): ${error.message}`)
   }
-  console.log(`\nAPPLIED: ${freshPairs.length} pair rows, ${freshReach.length} reach rows (${pairRows.length - freshPairs.length} and ${reachRows.length - freshReach.length} already held as they are) · reads: ${pages.n} pages`)
+  console.log(`\nAPPLIED: ${freshPairs.length} pair rows, ${freshReach.length} reach rows (${pairRows.length - freshPairs.length} and ${reachRows.length - freshReach.length} already held as they are${foldedNote}) · reads: ${pages.n} pages`)
 }
 
 if (process.argv[1]?.endsWith('measure-comparability.ts')) {

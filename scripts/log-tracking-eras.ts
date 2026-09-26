@@ -76,7 +76,9 @@ async function main() {
   console.log(modeLine(args, NAME))
   const gateFixAt = isoOrThrow('gate-fix-at', args.values['gate-fix-at'])
   const attributionAt = isoOrThrow('attribution-at', args.values['attribution-at'])
-  const months = (args.values.months ?? '2026-07,2026-08,2026-09').split(',').map((m) => `${m.trim().slice(0, 7)}-01`)
+  // Each month once: a repeated month would plan a reach row twice, and one
+  // insert statement cannot hold the same key twice.
+  const months = [...new Set((args.values.months ?? '2026-07,2026-08,2026-09').split(',').map((m) => `${m.trim().slice(0, 7)}-01`))].sort()
   const admin = createAdminClient()
   const pages: Pages = { n: 0 }
 

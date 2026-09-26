@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  evidenceTerms, firstSearched, gatherHealth, gathersOf, isOutside, median, plannedSearches, populations,
-  reachOf, searchKey, termDelta, unchangedSearches, type KeywordRow, type MonthVideo,
+  evidenceTerms, firstSearched, gatherHealth, gathersOf, isOutside, median, oneReachRowEach, plannedSearches, populations,
+  reachOf, searchKey, termDelta, unchangedSearches, type KeywordRow, type MonthVideo, type ReachRowPlan,
 } from './searches'
 
 // Sealand's search eras, exact at the gather (GC F28; the WP0.1 staging
@@ -153,5 +153,45 @@ describe('the rest of a pair row', () => {
     // September: two gathers; the 13 Sep one ran every planned search; the 9 Sep one has no snapshot.
     expect(gatherHealth(GATHERS, '2026-09-01')).toEqual({ month: '2026-09-01', runs: 2, partial: 1, searches_short: 0, unplanned: 1 })
     expect(gatherHealth(GATHERS, '2026-08-15')).toEqual({ month: '2026-08-01', runs: 1, partial: 0, searches_short: 0, unplanned: 1 })
+  })
+})
+
+// The staging dry run of measure-comparability (26 Sep, read through the
+// 20 Sep update b67b56de) with the gate fix stood in at 26 Sep 12:00: it falls
+// inside both (Jul, Aug) and (Aug, Sep), so August's reach was planned twice
+// (16 rows, 4 of them repeated keys) and the --apply insert failed on
+// config_change_reach's primary key. The change id is a stand-in: the real row
+// is written by log-tracking-eras on 30 Sep.
+describe('one reach row per change, month and population', () => {
+  const GATE = '(stand-in: the gate_rule change id)'
+  const UPDATE_20_SEP = 'b67b56de-17b6-429d-b5f7-e53a3c37f7d4'
+  const finished: Record<string, string> = { [UPDATE_20_SEP]: '2026-09-20T08:33:47.358+00:00', '5a2ebc43': '2026-09-13T10:12:30Z' }
+  const at = (id: string | null) => (id ? finished[id] ?? null : null)
+  const row = (month: string, population: 'market' | 'category', k: number, n: number, run = UPDATE_20_SEP): ReachRowPlan =>
+    ({ change_id: GATE, month, population, videos_touched: k, videos_in_month: n, read_through_run: run })
+  // As the pair loop plans them: (Jul, Aug) prev then curr, then (Aug, Sep).
+  const julAug = [row('2026-07-01', 'market', 0, 27), row('2026-08-01', 'market', 0, 377), row('2026-07-01', 'category', 0, 26), row('2026-08-01', 'category', 0, 351)]
+  const augSep = [row('2026-08-01', 'market', 0, 377), row('2026-09-01', 'market', 65, 654), row('2026-08-01', 'category', 0, 351), row('2026-09-01', 'category', 64, 625)]
+
+  it('two adjacent pairs that share a change write August once', () => {
+    const out = oneReachRowEach([...julAug, ...augSep], at)
+    expect(out).toHaveLength(6)
+    expect(out.map((r) => `${r.month.slice(0, 7)} ${r.population} ${r.videos_touched}/${r.videos_in_month}`)).toEqual([
+      '2026-07 market 0/27', '2026-08 market 0/377', '2026-07 category 0/26', '2026-08 category 0/351',
+      '2026-09 market 65/654', '2026-09 category 64/625',
+    ])
+    expect(new Set(out.map((r) => `${r.change_id}|${r.month}|${r.population}`)).size).toBe(out.length)
+  })
+
+  it('keeps the copy read through the later update where two differ', () => {
+    const earlier = row('2026-08-01', 'market', 0, 377, '5a2ebc43')
+    expect(oneReachRowEach([earlier, row('2026-08-01', 'market', 0, 377)], at)[0].read_through_run).toBe(UPDATE_20_SEP)
+    expect(oneReachRowEach([row('2026-08-01', 'market', 0, 377), earlier], at)[0].read_through_run).toBe(UPDATE_20_SEP)
+    expect(oneReachRowEach([row('2026-08-01', 'market', 0, 377, 'unknown'), earlier], at)[0].read_through_run).toBe('5a2ebc43')
+  })
+
+  it('leaves distinct changes and populations alone', () => {
+    const other = { ...row('2026-08-01', 'market', 0, 377), change_id: '(stand-in: the attribution change id)' }
+    expect(oneReachRowEach([...augSep, other], at)).toHaveLength(5)
   })
 })
