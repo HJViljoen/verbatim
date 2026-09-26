@@ -933,11 +933,11 @@ describe('the weekly subjects block under the three calibration states (decision
     expect(data.subjects.rows.find((r) => r.id === 'repair')?.href).toBe('')
   })
 
-  it('a subject the month was not read for prints its name and when it will be, and no figure (WP1.1 review, finding 1)', () => {
+  it('a subject the month was not read for prints its name and "no reading yet", and no figure (WP1.1 review, finding 1; default M-a)', () => {
     for (const mode of MODES) {
       const text = renderText(weeklySubjectsBlock.render(data, mode, ctx))
       const row = text.slice(text.indexOf('Community & purpose'), text.indexOf('Waterproofing'))
-      expect(row).toContain('first reading with the 4 Oct update')
+      expect(row).toContain('no reading yet')
       expect(row).not.toMatch(/\d+ of \d+/)
       expect(row).not.toContain('not tracked')
     }

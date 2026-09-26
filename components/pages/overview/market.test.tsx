@@ -109,6 +109,24 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
     expect(text).toContain('Buying & delivery no reading yet')
   })
 
+  // Default M-a: one wording for a subject the month was not read for on every
+  // surface, which is the row's `unread` (`unreadWords`): "no reading yet"
+  // while an update will still read the month, and "not read in August" once
+  // none will (a month picked in the selector after it froze).
+  it('a subject the month was not read for prints the row\'s own unread words, the ones every surface prints', () => {
+    const base = marketFrontFixture()
+    const rows = base.subjects.rows.map((r) => (r.id === 's-buying' ? { ...r, unread: 'not read in August' } : r))
+    const frozen = { ...base, subjects: { ...base.subjects, rows } }
+    const block = FRONT_PAGE_BLOCKS.find((b) => b.key === 'overview.subjects')!
+    for (const mode of MODES) {
+      const printed = read(block.render(frozen, mode, ctx))
+      expect(printed).toContain('Buying & delivery')
+      expect(printed).toContain('not read in August')
+      expect(printed).not.toContain('Buying & delivery no reading yet')
+      expect(printed).not.toContain('Buying & delivery · no reading yet')
+    }
+  })
+
   it('a measured month before under 10 prints as its count, never the "no reading" dot (§2.2: "Price … 23 (4%)  5")', () => {
     expect(text).toContain('Price provisional 23 4% 5')
     expect(text).not.toContain('Price provisional 23 4% ·')

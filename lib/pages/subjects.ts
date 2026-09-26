@@ -55,6 +55,7 @@ import {
   subjectBackRead,
   subjectCountedFrom,
   subjectReadIn,
+  NO_READING_YET,
   unreadWords,
   withoutUnreadMonths,
   type CountedSubject,
@@ -415,6 +416,11 @@ export interface SubjectPane {
   origin: Subject['origin']
   /** As the rail row's: a stored `'calibrating'` reads as provisional. */
   calibration: StoredCalibration
+  /** Set only on a subject the month was NOT READ for: the words its rail
+   *  row prints (`unreadWords`, "no reading yet"), which the pane prints in
+   *  place of its calibration word (default M-a). Optional: a stored pane
+   *  has none and renders as it was sent. */
+  unread?: string | null
   index: number
   of: number
   sides: SubjectSide[]
@@ -582,12 +588,13 @@ export function railNote(
   // Failed first: a subject being re-described prints nothing else, read or not.
   if (state === 'failed') return CALIBRATION_WORDS.failed
   // A SUBJECT THE MONTH WAS NOT READ FOR (named after its last update) says
-  // when it will be, in place of a figure and of its word: the preview's
-  // "first reading with the 27 Sep update" (`unreadWords`).
+  // so in place of a figure and of its word: "no reading yet" (`unreadWords`,
+  // the one wording on every surface, default M-a), never "provisional",
+  // which is the calibration word alone.
   if (unread) return unread
   // A67: the pane says it in full; the rail says the one word.
   if (state === 'provisional') return CALIBRATION_WORDS.provisional
-  if (!read) return 'no reading yet'
+  if (!read) return NO_READING_YET
   return null
 }
 
@@ -1948,6 +1955,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       namedAt: subject.named_at,
       origin: subject.origin,
       calibration,
+      unread: readIn(subject.id, month) === 'unread' ? unreadNote : null,
       index: active.findIndex((s) => s.id === subject.id) + 1,
       of: active.length,
       sides,

@@ -237,9 +237,9 @@ export interface SubjectRow {
    * 1): one counted after the month's last update wrote its rows, which has no
    * row in any audience. Its sides are withheld, since the 0 a month series
    * fills there is no reading, and the row prints its name and these words in
-   * place of its figures: "first reading with the 27 Sep update"
-   * (`unreadWords`). Absent on every row that was read, so a stored row
-   * renders as it was sent.
+   * place of its figures: "no reading yet" (`unreadWords`, the one wording on
+   * every surface, default M-a). Absent on every row that was read, so a
+   * stored row renders as it was sent.
    */
   unread?: string
 }

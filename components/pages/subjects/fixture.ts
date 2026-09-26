@@ -574,16 +574,16 @@ export function retiredRivalFixture(): SubjectsData {
  * COMMUNITY & PURPOSE WAS NEVER READ (WP1.1 review, finding 1). It was named
  * 24 Sep and created at 12:41, after the update wrote September at 12:15, and
  * it has no row in `month_subject_readings` in any month. It is provisional
- * (never checked), and its row prints no figure: "first reading with the 27
- * Sep update" (`unreadWords`), the preview's row for a subject named after
- * the month's last update. Its pane is the base fixture's layout (the mock's
- * invented volumes, F12) read as that subject: no "you" side (provisional),
+ * (never checked), and its row prints no figure: "no reading yet"
+ * (`unreadWords`, default M-a), never its calibration word. Its pane is the
+ * base fixture's layout (the mock's invented volumes, F12) read as that
+ * subject: no "you" side (provisional),
  * and every other side "no reading yet", never 0.
  */
 export function calibrationFixture(over: Partial<SubjectsData> = {}): SubjectsData {
   const base = subjectsFixture()
   const N = 654
-  const firstReading = unreadWords({ month: '2026-09-01', filling: true, nextUpdate: '2026-09-27T04:00:00.000Z' })
+  const unreadNote = unreadWords({ month: '2026-09-01', filling: true, nextUpdate: '2026-09-27T04:00:00.000Z' })
   const row = (id: string, name: string, calibration: 'ready' | 'provisional' | 'failed', k: number | null, selected = false) => ({
     id,
     name,
@@ -594,7 +594,7 @@ export function calibrationFixture(over: Partial<SubjectsData> = {}): SubjectsDa
     calibration,
     level: null,
     market: calibration === 'failed' || k == null ? null : { k, n: N, pct: Math.round((k / N) * 1000) / 10 },
-    note: railNote(calibration, k != null, 'active', k == null ? firstReading : null),
+    note: railNote(calibration, k != null, 'active', k == null ? unreadNote : null),
     verdict: null,
     selected,
     href: calibration === 'failed' ? '' : `/dashboard/subjects?item=${id}`,
@@ -621,6 +621,7 @@ export function calibrationFixture(over: Partial<SubjectsData> = {}): SubjectsDa
           name: 'Community & purpose',
           namedAt: '2026-09-24',
           calibration: 'provisional',
+          unread: unreadNote,
           index: 7,
           of: 7,
           sides: calibratedSides(base.selected.sides, 'provisional').map((side) => ({

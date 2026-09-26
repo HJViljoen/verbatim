@@ -37,6 +37,7 @@ import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '../rivals'
 import { pooledDenominators } from '../reading/market'
 import { gapLine, type GapSide } from '../reading/gap'
 import type { Subject } from '../subjects/types'
+import { unreadWords } from '../subjects/read-in'
 import { FIXTURE_ENDED } from '../test/pair-fixture'
 
 // The pure half of the Subjects page (Phase 1 WP12).
@@ -100,8 +101,9 @@ describe('railNote, under the three calibration states (decision C, WP1.1)', () 
 })
 
 describe('railNote, for a subject the month was not read for (WP1.1 review, finding 1)', () => {
-  const words = 'first reading with the 27 Sep update'
-  it('says when it will be read, in place of its word', () => {
+  const words = unreadWords({ month: '2026-09-01', filling: true, nextUpdate: '2026-09-27T04:00:00.000Z' })
+  it('says "no reading yet" in place of its word, never "provisional" (default M-a)', () => {
+    expect(words).toBe('no reading yet')
     expect(railNote('provisional', false, 'active', words)).toBe(words)
     expect(railNote('ready', false, 'active', words)).toBe(words)
   })

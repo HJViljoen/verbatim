@@ -199,9 +199,11 @@ export const subjectsSubject: Block<SubjectsData> = {
     // floated 30px from each, a caption belonging to neither. The email arm
     // has no heading row (its title is the eyebrow), so there it stays at the
     // top of the body.
-    const word = calibrationWord(pane.calibration)
+    // A SUBJECT THE MONTH WAS NOT READ FOR says "no reading yet" in the
+    // word's place (default M-a), as its rail row does, never "provisional".
+    const word = pane.unread || calibrationWord(pane.calibration)
     const meta = word && !email
-      ? <><CalibrationTag calibration={pane.calibration} mode={mode} /> · {named}</>
+      ? <><CalibrationTag calibration={pane.calibration} unread={pane.unread} mode={mode} /> · {named}</>
       : named
     // THE EARLIER GAP PRINTS ONLY WHERE ONE OF THE TWO IS AN ANSWER. Where
     // both refuse, "too few to compare. Too few to compare in August." is the
@@ -270,7 +272,7 @@ export const subjectsSubject: Block<SubjectsData> = {
         {pane.notRecorded ? <BlockEmpty mode={mode}>{pane.notRecorded}</BlockEmpty> : null}
         {/* The row tag, over the cells: "provisional" (decision C). Email
             only: the app and print arms carry it in the heading line. */}
-        {email ? <CalibrationTag calibration={pane.calibration} mode={mode} block /> : null}
+        {email ? <CalibrationTag calibration={pane.calibration} unread={pane.unread} mode={mode} block /> : null}
 
         {email ? (
           <div>{sides.map((s) => <Side key={s.audience} side={s} brand={data.brand} mode={mode} shared={shared} />)}</div>

@@ -318,7 +318,7 @@ describe('the Subjects page under the three calibration states (staging, Sealand
       for (const k of [103, 43, 39, 29, 25]) expect(text).toContain(`${k} of 654`)
       // WP1.1 review, finding 1: named after the 24 Sep update wrote
       // September, it has no row anywhere, and "0 of 654" was invented.
-      expect(text).toContain('first reading with the 27 Sep update')
+      expect(text).toContain('no reading yet')
       expect(text).not.toContain('0 of 654')
       expect(text).not.toContain('provisional')
       expect(text.match(/being re-described/g)?.length).toBe(1)
@@ -381,10 +381,30 @@ describe('the Subjects page under the three calibration states (staging, Sealand
     expect(markup.slice(at, markup.indexOf('</span>', markup.indexOf('provisional', at)))).not.toContain('in your market')
   })
 
+  // The fixture's pane is Community & purpose, which the month was not read
+  // for; read, it is a provisional subject's pane.
+  const readPane = (): SubjectsData => {
+    const data = calibrationFixture()
+    return { ...data, selected: data.selected ? { ...data.selected, unread: null } : null }
+  }
+
   it('the pane carries its word in the heading line, beside the name', () => {
-    const markup = render(subjectsSubject.render(calibrationFixture(), 'app', ctx))
+    const markup = render(subjectsSubject.render(readPane(), 'app', ctx))
     const heading = markup.slice(markup.indexOf('<header'), markup.indexOf('</header>'))
     expect(heading).toContain('provisional')
+  })
+
+  // Default M-a: the pane says what its rail row says, "no reading yet", in
+  // the word's place, never "provisional", which is the calibration word.
+  it('the pane of a subject the month was not read for says "no reading yet" in the word\'s place, in every mode', () => {
+    const data = calibrationFixture()
+    const heading = render(subjectsSubject.render(data, 'app', ctx))
+    expect(heading.slice(heading.indexOf('<header'), heading.indexOf('</header>'))).toContain('no reading yet')
+    for (const mode of MODES) {
+      const text = renderText(subjectsSubject.render(data, mode, ctx))
+      expect(text).toContain('no reading yet')
+      expect(text).not.toContain('provisional')
+    }
   })
 
   it('the rail links no failed subject: there is no pane to open', () => {
@@ -438,7 +458,7 @@ describe('the Subjects page under the three calibration states (staging, Sealand
   })
 
   it('the pane of a provisional subject: marked, no "you" side, no gap line, no verdict', () => {
-    const data = calibrationFixture()
+    const data = readPane()
     for (const mode of MODES) {
       const text = renderText(subjectsSubject.render(data, mode, ctx))
       expect(text).toContain('provisional')
