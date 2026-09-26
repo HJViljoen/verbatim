@@ -359,17 +359,53 @@ describe('OV2 under the three calibration states (staging, Sealand, read on 2 Oc
     expect(byId('repair').category).toEqual({ k: null, n: null, pct: null, verdict: null, observed: false })
   })
 
+  // Waterproofing read as never checked (production's state before Friday's
+  // check), on the same staging rows: a provisional subject with figures.
+  const unchecked = calibrationOverviewFixture({ unchecked: ['water'] })
+
   it('a provisional subject prints its market levels, marked, and no "you" side or change', () => {
     for (const mode of MODES) {
-      const text = renderText(overviewSubjects.render(data, mode, ctx))
+      const text = renderText(overviewSubjects.render(unchecked, mode, ctx))
       expect(text.match(/provisional/g)?.length).toBe(1)
-      expect(text).toContain('0 of 625')
+      expect(text).toContain('28 of 625')
     }
-    const row = byId('community')
+    const row = unchecked.subjects.rows.find((r) => r.id === 'water')!
+    expect(row.calibration).toBe('provisional')
     expect(row.you.observed).toBe(false)
     expect(row.category.verdict).toBeNull()
     expect(row.direction).toBeNull()
+    expect(unchecked.subjects.gaps.water).toBeNull()
+  })
+
+  // WP1.1 review, finding 1: Community & purpose was named 24 Sep, after the
+  // 24 Sep update wrote September, and has no row in any month. The 0 a month
+  // series fills there is no reading: "0 of 625" was invented.
+  it('a subject named after the month was written prints when it will be read, and no figure, never 0', () => {
+    for (const mode of MODES) {
+      const text = renderText(overviewSubjects.render(data, mode, ctx))
+      expect(text).toContain('first reading with the 4 Oct update')
+      expect(text).not.toContain('0 of 625')
+      // Said once: the row's words are the whole row.
+      expect(text.match(/first reading with the 4 Oct update/g)?.length).toBe(1)
+    }
+    const row = byId('community')
+    expect(row.unread).toBe('first reading with the 4 Oct update')
+    expect(row.category).toEqual({ k: null, n: null, pct: null, verdict: null, observed: false })
+    expect(row.spark.every((v) => v == null)).toBe(true)
+    expect(row.categoryAtLastMonth).toBeNull()
     expect(data.subjects.gaps.community).toBeNull()
+    const answers = blockAnswers(overviewSubjects, data)
+    expect(Object.keys(answers.figures).some((k) => k.includes('community'))).toBe(false)
+    // A subject that was read keeps its zeros where it came up on no video.
+    expect(byId('water').rival?.k).toBe(0)
+  })
+
+  it('an unread row is its linked name and its words, one cell across', () => {
+    const row = rowOf(render(overviewSubjects.render(data, 'app', ctx)), 'Community &amp; purpose')
+    expect(row).toContain('first reading with the 4 Oct update')
+    expect(row).toContain('item=community')
+    expect(row).toMatch(/colspan="6"/i)
+    expect(row).not.toContain('provisional')
   })
 
   it('never says "not tracked" of a side it only withholds', () => {
@@ -396,8 +432,10 @@ describe('OV2 under the three calibration states (staging, Sealand, read on 2 Oc
   it('the monthly email prints the same states', () => {
     const text = renderText(monthlySubjectsEmail(data, ctx))
     expect(text).toContain('being re-described')
-    expect(text).toContain('provisional')
+    expect(text).toContain('first reading with the 4 Oct update')
     expect(text).not.toContain('33 of 625')
+    expect(text).not.toContain('0 of 625')
+    expect(renderText(monthlySubjectsEmail(unchecked, ctx))).toContain('provisional')
   })
 
   it('a row stored before WP1.1 carries no state and renders as sent, with no word', () => {
@@ -425,7 +463,7 @@ describe('OV2 under the three calibration states (staging, Sealand, read on 2 Oc
   })
 
   it('a provisional row carries the withheld mark in its change cell as in its "you" cells', () => {
-    const row = rowOf(render(overviewSubjects.render(data, 'app', ctx)), 'Community &amp; purpose')
+    const row = rowOf(render(overviewSubjects.render(unchecked, 'app', ctx)), 'Waterproofing')
     expect(row.match(/not shown until this subject is checked/g)?.length).toBe(3)
   })
 })

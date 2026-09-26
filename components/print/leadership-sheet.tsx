@@ -694,13 +694,17 @@ function SubjectsTable({ data }: { data: OverviewData }) {
                     own, as on every other subjects table. */}
                 <th role="rowheader" scope="row" className={`min-w-0 font-normal${isFailed(r.calibration) ? ' text-muted-foreground' : ''}`}>
                   <span className="block truncate">{r.label}</span>
-                  <CalibrationTag calibration={r.calibration} mode="print" block />
+                  <CalibrationTag calibration={r.calibration} unread={r.unread} mode="print" block />
                 </th>
                 {isFailed(r.calibration) ? (
                   // A failed row is its name and its word: one cell across
                   // the four, with the words for a screen reader, not a dash
                   // in each.
                   <td role="cell" className="col-span-4"><span className="sr-only">not shown until this subject is checked</span></td>
+                ) : r.unread ? (
+                  // So is a subject the month was not read for (WP1.1 review,
+                  // finding 1): its words, under its name, say when it will be.
+                  <td role="cell" className="col-span-4" />
                 ) : (
                   <>
                     <td role="cell"><Cell side={r.you} withheld={!printsClient(r.calibration)} /></td>

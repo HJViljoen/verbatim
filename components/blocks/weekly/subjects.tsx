@@ -125,7 +125,7 @@ function Row({ row, contribution, rivalLabel, share, mode, appUrl }: {
   const name = mode === 'email'
     ? <span style={{ fontFamily: FONT.sans, fontSize: 13.5, color: EMAIL.ink }}>{row.label}</span>
     : <Link href={`${appUrl}${row.href}`} className="text-[13.5px] underline-offset-2 hover:underline">{row.label}</Link>
-  const label = <>{name}<CalibrationTag calibration={row.calibration} mode={mode} block /></>
+  const label = <>{name}<CalibrationTag calibration={row.calibration} unread={row.unread} mode={mode} block /></>
   const figure = (
     <FigureCell
       mode={mode}
@@ -155,7 +155,9 @@ function Row({ row, contribution, rivalLabel, share, mode, appUrl }: {
           {you}{rivalLabel ?? 'rival'} <Side side={row.rival} mode={mode} />
         </>
       )
-  if (failed) {
+  // A FAILED ROW, AND ONE THE MONTH WAS NOT READ FOR (WP1.1 review, finding
+  // 1), is its name and its words: no bar, no figure, no sides.
+  if (failed || row.unread) {
     return mode === 'email'
       ? (
         <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} border={0} style={{ borderCollapse: 'collapse', borderSpacing: 0, marginTop: 14 }}>

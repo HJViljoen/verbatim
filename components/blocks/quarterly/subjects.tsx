@@ -162,7 +162,7 @@ export const quarterlySubjects: Block<QuarterlyData> = {
               // name, no "you" figure on a provisional subject, and no
               // quarter change on either side: its cells carry the withheld
               // mark, not the refusal word "not compared".
-              <span key="name">{row.label}<CalibrationTag calibration={row.calibration} mode={mode} block /></span>,
+              <span key="name">{row.label}<CalibrationTag calibration={row.calibration} unread={row.unread} mode={mode} block /></span>,
               printsClient(row.calibration) ? <Side key="you" side={row.you} mode={mode} /> : <NoValue key="you" mode={mode} label={WITHHELD} />,
               <Side key="cat" side={row.category} mode={mode} />,
               !earnsVerdict(row.calibration)

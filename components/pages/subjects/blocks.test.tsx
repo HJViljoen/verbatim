@@ -19,7 +19,7 @@ import { calendarRulesFor } from '@/lib/charts/from-series'
 import { freezeQuotes } from '@/lib/renderables/quotes-freeze'
 import { gapBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
 import { SUBJECTS_NONE_NAMED } from '@/lib/reading/own-posts'
-import { axisNote, voiceCite } from '@/lib/pages/subjects'
+import { axisNote, railNote, voiceCite, type SubjectsData } from '@/lib/pages/subjects'
 import { calibrationFixture, candidatesFixture, refusedFixture, retiredRivalFixture, subjectsFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
@@ -307,7 +307,7 @@ describe('the Subjects page under the three calibration states (staging, Sealand
     }
   })
 
-  it('the rail: Repair & warranty "being re-described", five ready rows with figures and no word, Community & purpose marked provisional', () => {
+  it('the rail: Repair & warranty "being re-described", five ready rows with figures and no word, Community & purpose with no figure until its first reading', () => {
     const data = calibrationFixture()
     for (const mode of MODES) {
       const text = renderText(subjectsList.render(data, mode, ctx))
@@ -316,8 +316,11 @@ describe('the Subjects page under the three calibration states (staging, Sealand
       // A failed subject prints no figure: its 36 of 654 never reaches the rail.
       expect(text).not.toContain('36 of 654')
       for (const k of [103, 43, 39, 29, 25]) expect(text).toContain(`${k} of 654`)
-      expect(text).toContain('0 of 654')
-      expect(text.match(/provisional/g)?.length).toBe(1)
+      // WP1.1 review, finding 1: named after the 24 Sep update wrote
+      // September, it has no row anywhere, and "0 of 654" was invented.
+      expect(text).toContain('first reading with the 27 Sep update')
+      expect(text).not.toContain('0 of 654')
+      expect(text).not.toContain('provisional')
       expect(text.match(/being re-described/g)?.length).toBe(1)
       // The market's base is said on the row, never read as your own videos.
       expect(text).toContain('in your market')
@@ -325,9 +328,23 @@ describe('the Subjects page under the three calibration states (staging, Sealand
     }
   })
 
+  // Waterproofing read as never checked (production's state before Friday's
+  // check) on the same staging row: a provisional subject with its figure.
+  const uncheckedRail = (): SubjectsData => {
+    const data = calibrationFixture()
+    return {
+      ...data,
+      list: {
+        ...data.list,
+        rows: data.list.rows.map((r) =>
+          r.id === 's-water' ? { ...r, calibration: 'provisional' as const, note: railNote('provisional', true, 'active') } : r),
+      },
+    }
+  }
+
   it('the rail sets a provisional word on its own line, never after a dangling separator', () => {
-    const markup = render(subjectsList.render(calibrationFixture(), 'app', ctx))
-    const at = markup.indexOf('0 of 654 in your market')
+    const markup = render(subjectsList.render(uncheckedRail(), 'app', ctx))
+    const at = markup.indexOf('29 of 654 in your market')
     const word = markup.indexOf('provisional', at)
     expect(word).toBeGreaterThan(at)
     // The level's span closes and the word opens a span of its own: no separator between them.
@@ -341,9 +358,9 @@ describe('the Subjects page under the three calibration states (staging, Sealand
   })
 
   it('on paper every rail row is one grid, with the word under the name', () => {
-    const markup = render(subjectsList.render(calibrationFixture(), 'print', ctx))
+    const markup = render(subjectsList.render(uncheckedRail(), 'print', ctx))
     expect(markup.match(/grid grid-cols-\[minmax\(0,1fr\)_auto_auto\]/g)?.length).toBe(7)
-    const at = markup.indexOf('Community &amp; purpose')
+    const at = markup.indexOf('Waterproofing')
     expect(markup.slice(at, markup.indexOf('</span>', markup.indexOf('provisional', at)))).not.toContain('in your market')
   })
 

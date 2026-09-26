@@ -187,7 +187,7 @@ function SubjectBlock({ row, sentLine }: { row: SubjectRow; sentLine: string | n
                 <tr>
                   <td style={{ fontFamily: FONT.sans, fontSize: 15, fontWeight: 600, color: EMAIL.ink }}>
                     {row.label}
-                    <CalibrationTag calibration={row.calibration} mode="email" block />
+                    <CalibrationTag calibration={row.calibration} unread={row.unread} mode="email" block />
                   </td>
                   {/* BOTH SIDES' CHANGE, and each one says whose it is. The
                       artboard prints one badge and leaves the reader to assume
@@ -257,7 +257,9 @@ function SubjectBlock({ row, sentLine }: { row: SubjectRow; sentLine: string | n
             </table>
           </td>
         </tr>
-        {failed ? null : (
+        {/* A failed row, and one the month was not read for (WP1.1 review,
+            finding 1), is its name and its words. */}
+        {failed || row.unread ? null : (
         <tr>
           <td style={{ paddingBottom: 12 }}>
             <table width="100%" {...presentation} style={{ ...T, tableLayout: 'fixed' }}>

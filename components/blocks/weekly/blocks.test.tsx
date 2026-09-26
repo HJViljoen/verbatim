@@ -907,13 +907,25 @@ describe('the weekly subjects block under the three calibration states (decision
   })
 
   it('a failed subject prints its name and word and nothing else; a provisional one has no "you" clause', () => {
+    // Waterproofing read as never checked, on the same staging row.
+    const unchecked = { ...weeklyFixture(), subjects: calibrationOverviewFixture({ unchecked: ['water'] }).subjects }
     for (const mode of MODES) {
       const text = renderText(weeklySubjectsBlock.render(data, mode, ctx))
       expect(text.match(/being re-described/g)?.length).toBe(1)
-      expect(text.match(/provisional/g)?.length).toBe(1)
       expect(text).not.toContain('33 of 625')
-      const provisional = text.slice(text.indexOf('Community & purpose'), text.indexOf('Waterproofing'))
-      expect(provisional).not.toMatch(/\byou\b/)
+      const provisional = renderText(weeklySubjectsBlock.render(unchecked, mode, ctx))
+      expect(provisional.match(/provisional/g)?.length).toBe(1)
+      expect(provisional.slice(provisional.indexOf('Waterproofing'))).not.toMatch(/\byou\b/)
+    }
+  })
+
+  it('a subject the month was not read for prints its name and when it will be, and no figure (WP1.1 review, finding 1)', () => {
+    for (const mode of MODES) {
+      const text = renderText(weeklySubjectsBlock.render(data, mode, ctx))
+      const row = text.slice(text.indexOf('Community & purpose'), text.indexOf('Waterproofing'))
+      expect(row).toContain('first reading with the 4 Oct update')
+      expect(row).not.toMatch(/\d+ of \d+/)
+      expect(row).not.toContain('not tracked')
     }
   })
 })

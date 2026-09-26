@@ -47,7 +47,7 @@ import {
   type MoveSeries,
 } from '../reading/moves'
 import { BRANDS_PANEL, pairTools, type PairOn } from '../reading/pairs'
-import { loadMonthSeries, loadPairOn, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
+import { loadChanges, loadMonthSeries, loadPairOn, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
 import { asAtOf, loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, readingViewFrom, type OtherMonth } from '../reading/reading-view'
 import { methodLines, type MethodLines } from '../reading/method'
 import { countRefused, howSoundLine, loadRecordInputs, monthRecordWindow, recordLines, refusals, soundFigures, type RecordInputs, type SoundFigure } from '../reading/record'
@@ -61,12 +61,13 @@ import {
 } from '../reading/series'
 import { buildStandings, type StandingRow } from '../reading/standings'
 import { pairOnVerdict, type PairComparability } from '../reading/comparability'
-import { pooledDenominators } from '../reading/market'
+import { marketAudiences, pooledDenominators } from '../reading/market'
 import { MONTH_PARAM, readingAnchor, type ReadingMonth } from '../reading/reading-month'
 import { TABLE_THEME_READINGS, type MonthStatus } from '../reading/types'
 import { isAnswer, type FigureTable, type Verdict, type VerdictPairNote } from '../reading/verdicts'
 import { isMissingSubjects, MOVE_PROMISE, RPC_WINDOW_SUBJECT_READINGS, TABLE_MOVES, TABLE_SUBJECT_MEMBERSHIPS, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
 import { earnsVerdict, printsClient, subjectCalibration, type SubjectCalibration } from '../subjects/calibration-state'
+import { monthsWrittenAt, subjectCountedFrom, subjectReadIn, unreadWords, type CountedSubject } from '../subjects/read-in'
 import { chunk, mapWithLimit, MULTI_ROW_IN_CHUNK, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import { selectAll } from '../supabase-admin'
 import { row, rows } from './read'
@@ -189,6 +190,16 @@ export interface SubjectRow {
    *  when the month is complete, or when M4/M3 cannot answer the window. */
   categoryAtLastMonth: { k: number; n: number; pct: number | null } | null
   href: string
+  /**
+   * Set only on a subject the month was NOT READ for (WP1.1 review, finding
+   * 1): one counted after the month's last update wrote its rows, which has no
+   * row in any audience. Its sides are withheld, since the 0 a month series
+   * fills there is no reading, and the row prints its name and these words in
+   * place of its figures: "first reading with the 27 Sep update"
+   * (`unreadWords`). Absent on every row that was read, so a stored row
+   * renders as it was sent.
+   */
+  unread?: string
 }
 
 export interface SubjectCandidate {
@@ -2253,6 +2264,7 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
 
   // ── OV2 · your subjects ────────────────────────────────────────────────
   const leadRival = rivals.find((r) => !r.retiredAt) ?? rivals[0] ?? null
+  const subjectChanges = await loadChanges(reading.client, clientId)
   const subjects = buildSubjects({
     subjects: subjectRows,
     months: subjectMonths,
@@ -2269,6 +2281,13 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
     thin: suppress,
     pair,
     asOf: readingAt,
+    // WHICH MONTHS EACH SUBJECT WAS READ IN (WP1.1 review, finding 1), from
+    // rows already read: the change log is `loadMonthSeries`' own (memoised).
+    read: {
+      writtenAt: monthsWrittenAt(history.denominators, new Set(marketAudiences(marketRivals))),
+      countedFrom: new Map((subjectRows ?? []).map((x) => [x.id, subjectCountedFrom(x as CountedSubject, subjectChanges)])),
+      unreadWords: unreadWords({ month, filling: monthStatus === 'filling', nextUpdate: rm.nextUpdate }),
+    },
   })
 
   // ── OV4 · rivals ───────────────────────────────────────────────────────
@@ -2571,7 +2590,7 @@ async function loadSubjects(supabase: SupabaseClient, clientId: string): Promise
     return await selectAll<Subject>(() =>
       supabase
         .from(TABLE_SUBJECTS)
-        .select('id, client_id, name, description, origin, source_ref, named_at, status, superseded_by, embedded_at, embed_input_version, calibrated_at, calibration_precision, calibration_n, calibration_judge_version')
+        .select('id, client_id, name, description, origin, source_ref, named_at, status, superseded_by, embedded_at, embed_input_version, calibrated_at, calibration_precision, calibration_n, calibration_judge_version, created_at')
         .eq('client_id', clientId)
         .in('status', ['active', 'proposed'])
         .order('named_at', { ascending: true })
@@ -3680,6 +3699,19 @@ interface SubjectsInput {
   /** The instant the page reads at: a direction word's newest month must have
    *  ended by it. */
   asOf: string
+  /**
+   * WHICH MONTHS EACH SUBJECT WAS READ IN (WP1.1 review, finding 1): when
+   * each month's rows were last written (`monthsWrittenAt`) and when each
+   * subject started being counted (`subjectCountedFrom`), with the words an
+   * unread row prints. A subject with no row in a month that was written
+   * before it was counted was not read in it, and its 0 there is no reading.
+   * Optional: without it every written month reads as read, as before.
+   */
+  read?: {
+    writtenAt: ReadonlyMap<string, number>
+    countedFrom: ReadonlyMap<string, number | null>
+    unreadWords: string
+  }
 }
 
 /** The category side of one subject at the same point last month, or null. */
@@ -3741,9 +3773,23 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
   // disagreed about which was which: the table said 0 wherever a denominator
   // existed and the sparkline said "no reading" for the same cell.
   const readMonths = new Set(input.months.map((r) => `${monthStartOf(r.month)}|${r.audience}`))
+  // AND ONLY FOR A SUBJECT THE MONTH WAS READ FOR (WP1.1 review, finding 1).
+  // Other subjects' rows say the audience-month was computed; they say
+  // nothing about a subject named after it was, which has no row anywhere
+  // and whose "0 of 625" was invented (`lib/subjects/read-in.ts`).
+  const citedIn = new Set(input.months.map((r) => `${monthStartOf(r.month)}|${r.subject_id}`))
+  const readIn = (subjectId: string, month: string) =>
+    input.read
+      ? subjectReadIn({
+          countedFrom: input.read.countedFrom.get(subjectId) ?? null,
+          writtenAt: input.read.writtenAt.get(month),
+          cited: citedIn.has(`${month}|${subjectId}`),
+        })
+      : 'read'
   const kOf = (subjectId: string, audience: string, month: string): number | null => {
     const row = byKey.get(`${month}|${audience}|${subjectId}`)
     if (row) return row.videos
+    if (readIn(subjectId, month) === 'unread') return null
     return readMonths.has(`${month}|${audience}`) ? 0 : null
   }
 
@@ -3835,7 +3881,8 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
 
     const axisPoints = input.axis.map((m) => point(INDUSTRY_AUDIENCE, m))
     const sparkMonths = axisPoints.slice(-SPARK_MONTHS).map((p) => p.month)
-    return calibratedRow({
+    const unread = input.read && readIn(s.id, input.month) === 'unread' ? input.read.unreadWords : null
+    return unreadRow(calibratedRow({
       id: s.id,
       label: s.name,
       calibration: subjectCalibration(s),
@@ -3849,14 +3896,14 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
       sparkBreakWhy: stepReasons(sparkMonths, INDUSTRY_AUDIENCE),
       categoryAtLastMonth: atLastMonthFor(input, s.id),
       href: `/dashboard/subjects?item=${encodeURIComponent(s.id)}`,
-    })
+    }), unread)
   })
 
   // A GAP IS YOU AGAINST A RIVAL, so only a subject whose own side prints and
   // earns a comparison carries one (decision C).
   const gaps: Record<string, Gap | null> = {}
   for (const row of rows) {
-    gaps[row.id] = printsClient(row.calibration) && earnsVerdict(row.calibration)
+    gaps[row.id] = printsClient(row.calibration) && earnsVerdict(row.calibration) && !row.unread
       ? gapFor(row.id, row.label, row.you, row.rival)
       : null
   }
@@ -3914,6 +3961,25 @@ export function calibratedRow(row: SubjectRow): SubjectRow {
     }
   }
   return row
+}
+
+/**
+ * A subject row the month was not read for (WP1.1 review, finding 1): its
+ * sides, its change and the same point last month are withheld, and the row
+ * carries the words it prints instead. A failed row keeps its own treatment
+ * ("being re-described" wins), and a row that was read is returned as is.
+ */
+export function unreadRow(row: SubjectRow, words: string | null): SubjectRow {
+  if (!words || row.calibration === 'failed') return row
+  return {
+    ...row,
+    you: WITHHELD_SIDE,
+    rival: row.rival ? WITHHELD_SIDE : null,
+    category: WITHHELD_SIDE,
+    direction: null,
+    categoryAtLastMonth: null,
+    unread: words,
+  }
 }
 
 /** The earliest `named_at` among the subjects the block is reading, or null

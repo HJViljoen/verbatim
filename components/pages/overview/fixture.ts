@@ -6,6 +6,7 @@ import { gapBetween, type Gap, type GapSide } from '@/lib/reading/gap'
 import type { LevelRow, OverviewData, RivalRow, SideReading, SubjectRow } from '@/lib/pages/overview'
 import { MOVES_MASTHEAD, MOVES_EMPTY, MOVES_UNLOCK, RIVALS_CAVEAT, buildSubjects, fillingLine, fillingNote, headline, moveLine, readingsCounter, rivalsLead, sentenceBlockFor } from '@/lib/pages/overview'
 import { JUDGE_VERSION, type Subject } from '@/lib/subjects/types'
+import { subjectCountedFrom, unreadWords } from '@/lib/subjects/read-in'
 import { pairOn } from '@/lib/reading/pairs'
 import { sealandJudge } from '@/lib/test/sealand-pairs'
 import { kindShares } from '@/lib/reading/kinds'
@@ -981,33 +982,53 @@ export function makersMarkedFixture(): OverviewData {
 /**
  * OV2 under the three calibration states (decision C, WP1.1), built by the
  * loader's own `buildSubjects` from staging's real rows: Sealand, August and
- * September to the 20 Sep data, the category (351 and 625 videos), Cotopaxi
- * (22 and 12) and Freitag (4 and 6); no own-audience month row in either
- * month, so the "you" side is not tracked on every row. The calibrations are
- * staging's, written 24 Sep under this judge on 33 labels: Looks & style 0.857
- * and Waterproofing 1.0 (ready), Repair & warranty 0.333 (failed), and
- * Community & purpose never checked (provisional, cited on no video in either
- * month). Read on 2 Oct, when August against September is refused.
+ * September as the 24 Sep update wrote them (read_at 12:15 UTC), the category
+ * (351 and 625 videos), Cotopaxi (22 and 12) and Freitag (4 and 6); no
+ * own-audience month row in either month, so the "you" side is not tracked on
+ * every row. The calibrations are staging's, written 24 Sep under this judge on
+ * 33 labels: Looks & style 0.857 and Waterproofing 1.0 (ready), Repair &
+ * warranty 0.333 (failed). The three were named 23 Sep and confirmed in the
+ * change log at 11:46 on 24 Sep. Community & purpose was named 24 Sep and
+ * confirmed at 12:41, after the update wrote both months, and has no row in
+ * any month: it was never read, so its row prints "first reading with the 4
+ * Oct update" and no figure (WP1.1 review, finding 1), never "0 of 625". Read
+ * on 2 Oct, when August against September is refused.
+ *
+ * `unchecked` reads the named subjects as never checked (no calibration row),
+ * which is production's state before Friday's check (decision C: all eight
+ * unchecked), on the same staging rows: a provisional subject WITH figures.
  */
-export function calibrationOverviewFixture(): OverviewData {
+export function calibrationOverviewFixture(opts: { unchecked?: readonly string[] } = {}): OverviewData {
   const now = '2026-10-02T06:00:00.000Z'
   const cotopaxi = rivalKey('Cotopaxi')
   const freitag = rivalKey('Freitag')
   const at = '2026-09-24T11:53:16.678Z'
-  const subject = (id: string, name: string, precision: number | null): Subject => ({
+  const written = Date.parse('2026-09-24T12:15:41.468Z')
+  const subject = (id: string, name: string, measured: number | null, namedAt = '2026-09-23'): Subject => {
+    const precision = opts.unchecked?.includes(id) ? null : measured
+    return {
     id, client_id: 'sealand', name, description: null, origin: 'client', source_ref: null,
-    named_at: '2026-08-19', status: 'active', superseded_by: null, embedded_at: null, embed_input_version: null,
+    named_at: namedAt, status: 'active', superseded_by: null, embedded_at: null, embed_input_version: null,
     calibrated_at: precision == null ? null : at,
     calibration_precision: precision,
     calibration_n: precision == null ? null : 33,
     calibration_judge_version: precision == null ? null : JUDGE_VERSION,
-  })
+    }
+  }
+  // Staging's `config_changes` confirmations (surface 'subjects').
+  const confirmed = (id: string, changedAt: string) => ({ changed_at: changedAt, surface: 'subjects', after: { id, status: 'active' } })
+  const changes = [
+    confirmed('looks', '2026-09-24T11:46:16.982Z'),
+    confirmed('repair', '2026-09-24T11:46:16.982Z'),
+    confirmed('water', '2026-09-24T11:46:16.982Z'),
+    confirmed('community', '2026-09-24T12:41:06.517Z'),
+  ]
   const row = (month: string, audience: string, subject_id: string, videos: number) => ({ month, audience, subject_id, videos, comments: 0 })
   const subjects = buildSubjects({
     subjects: [
       subject('looks', 'Looks & style', 0.8571428571428571),
       subject('repair', 'Repair & warranty', 0.3333333333333333),
-      subject('community', 'Community & purpose', null),
+      subject('community', 'Community & purpose', null, '2026-09-24'),
       subject('water', 'Waterproofing', 1),
     ],
     months: [
@@ -1032,6 +1053,11 @@ export function calibrationOverviewFixture(): OverviewData {
     thin: false,
     pair: pairOn(sealandJudge(now)),
     asOf: now,
+    read: {
+      writtenAt: new Map([['2026-08-01', written], ['2026-09-01', written]]),
+      countedFrom: new Map(['looks', 'repair', 'water', 'community'].map((id) => [id, subjectCountedFrom({ id, named_at: '2026-09-23' }, changes)])),
+      unreadWords: unreadWords({ month: '2026-09-01', filling: true, nextUpdate: '2026-10-04T04:00:00.000Z' }),
+    },
   })
   return { ...overviewFixture(), subjects }
 }

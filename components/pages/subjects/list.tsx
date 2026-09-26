@@ -116,6 +116,12 @@ export const subjectsList: Block<SubjectsData> = {
               const word = calibrationWord(r.calibration)
               const failed = isFailed(r.calibration)
               const note = r.note && r.note !== word ? r.note : null
+              // A ROW WITH NO FIGURE AND ITS OWN SENTENCE (a subject the
+              // month was not read for, "first reading with the 27 Sep
+              // update", or one not confirmed yet) says that sentence and no
+              // word under its name, as the app's rail does: one line saying
+              // why there is no figure, not two.
+              const tagged = failed || r.market != null || r.level != null || note == null
               const level = r.level && r.level.pct != null ? (
                 <>
                   <span data-copy="level" className={email ? undefined : 'font-mono tabular-nums text-muted-foreground'} style={email ? { fontFamily: FONT.mono, color: EMAIL.muted } : undefined}>
@@ -149,7 +155,7 @@ export const subjectsList: Block<SubjectsData> = {
               return email ? (
                 <div key={r.id} style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '4px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
                   <strong style={failed ? { color: EMAIL.muted } : undefined}>{r.name}</strong>{' '}
-                  {word ? <><CalibrationTag calibration={r.calibration} mode={mode} />{' '}</> : null}
+                  {word && tagged ? <><CalibrationTag calibration={r.calibration} mode={mode} />{' '}</> : null}
                   {level}{level ? ' ' : null}
                   {named}
                 </div>
@@ -159,7 +165,7 @@ export const subjectsList: Block<SubjectsData> = {
                 <div key={r.id} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-baseline gap-x-6 border-t border-border/70 py-1.5 text-[12.5px]">
                   <span className="min-w-0">
                     <strong className={failed ? 'text-muted-foreground' : undefined}>{r.name}</strong>
-                    <CalibrationTag calibration={r.calibration} mode={mode} block />
+                    {tagged ? <CalibrationTag calibration={r.calibration} mode={mode} block /> : null}
                   </span>
                   <span className="text-right">{level}</span>
                   {named}

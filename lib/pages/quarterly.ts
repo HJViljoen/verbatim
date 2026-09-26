@@ -264,6 +264,10 @@ export interface SubjectQuarterRow {
    *  its name and "being re-described" only. Optional: a quarterly stored
    *  before WP1.1 has none and renders as it was sent. */
   calibration?: SubjectCalibration
+  /** The Overview row's words for a subject the month was not read for
+   *  (WP1.1 review, finding 1): its month cells print "not read", and these
+   *  words sit under its name. Absent on every row that was read. */
+  unread?: string
   /** The month columns — the tenant's own audience and the category's. */
   you: { k: number; n: number; pct: number | null } | null
   category: { k: number; n: number; pct: number | null } | null
@@ -1865,6 +1869,7 @@ function buildSubjects(a: {
     id: row.id,
     label: row.label,
     ...(row.calibration ? { calibration: row.calibration } : {}),
+    ...(row.unread ? { unread: row.unread } : {}),
     // A SIDE WITH NO DENOMINATOR IS NOT A SIDE. Overview's subject row carries
     // nulls where the audience was not read at all; a cell that printed "0 of
     // 0" would be a measurement of a thing nobody measured.

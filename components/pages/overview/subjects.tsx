@@ -270,6 +270,21 @@ function Row({ row, mode, appUrl = '', sentLine = null, domain, shared = null }:
       </tr>
     )
   }
+  // A SUBJECT THE MONTH WAS NOT READ FOR (WP1.1 review, finding 1) is laid
+  // out as a failed row is: its name, and under it the words it prints in
+  // place of figures ("first reading with the 27 Sep update", the preview's
+  // row). Its name stays a link: the Subjects page opens its pane.
+  if (row.unread) {
+    return (
+      <tr className="border-t border-border/60 first:border-t-0">
+        <th scope="row" className="py-1.5 pr-3 text-left align-top text-[12.5px] font-medium">
+          <Link href={`${appUrl}${row.href}`} className="underline-offset-2 hover:underline">{row.label}</Link>
+          <CalibrationTag calibration={row.calibration} unread={row.unread} mode={mode} block />
+        </th>
+        <td colSpan={6} className="py-1.5 align-top" />
+      </tr>
+    )
+  }
   return (
     // THE HAIRLINE BETWEEN ROWS (design review Medium 17). The artboard rules
     // its rows and the port dropped it, while the rows themselves are ragged —
@@ -427,10 +442,11 @@ export const overviewSubjects: Block<OverviewData> = {
           {hasAt ? <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted }}>{AT_LAST_MONTH_LEGEND}</div> : null}
           {s.rows.map((r) => (
             <div key={r.id} style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '4px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
-              <strong>{r.label}</strong>{r.calibration && r.calibration !== 'ready' ? ' ' : null}<CalibrationTag calibration={r.calibration} mode={mode} />
-              {/* A failed subject prints its name and its word and nothing else;
-                  a provisional one has no "you" clause (decision C). */}
-              {isFailed(r.calibration) ? null : (
+              <strong>{r.label}</strong>{r.unread || (r.calibration && r.calibration !== 'ready') ? ' ' : null}<CalibrationTag calibration={r.calibration} unread={r.unread} mode={mode} />
+              {/* A failed subject prints its name and its word and nothing else,
+                  and so does one the month was not read for; a provisional one
+                  has no "you" clause (decision C). */}
+              {isFailed(r.calibration) || r.unread ? null : (
                 <div style={{ marginTop: 2 }}>
                   {printsClient(r.calibration) ? <>you <Side side={r.you} mode={mode} /> · </> : null}{s.rivalLabel ?? 'rival'} <Side side={r.rival} mode={mode} /> · {s.categoryLabel.toLowerCase()} <Side side={r.category} mode={mode} />
                 </div>

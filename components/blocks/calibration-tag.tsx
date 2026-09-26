@@ -10,21 +10,30 @@ import { calibrationWord } from '@/lib/subjects/calibration-state'
 // NO `data-copy`. The two words hold no digit and no direction word, so the
 // copy contract checks them as plain markup and they pass; an exemption that
 // names nothing is a hole (AGENTS.md).
+//
+// A SUBJECT THE MONTH WAS NOT READ FOR carries its words in the same place and
+// face (WP1.1 review, finding 1): "first reading with the 27 Sep update", the
+// preview's row for a subject named after the month's last update. Its digits
+// are a date, which rule (a) does not police outside a prose node.
 
 export function CalibrationTag({
   calibration,
+  unread = null,
   mode = 'app',
   block = false,
   className,
 }: {
   /** The row's state, or a stored value (`'calibrating'` reads as provisional). */
   calibration: string | null | undefined
+  /** The words a row the month was not read for prints (`SubjectRow.unread`),
+   *  in place of the calibration word. */
+  unread?: string | null
   mode?: RenderMode
   /** On a line of its own rather than inline. */
   block?: boolean
   className?: string
 }) {
-  const word = calibrationWord(calibration)
+  const word = unread || calibrationWord(calibration)
   if (!word) return null
   if (mode === 'email') {
     return (

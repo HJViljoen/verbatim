@@ -13,6 +13,7 @@ import {
   paneGap,
   paneSides,
   periodPhrase,
+  railMarketSide,
   railNote,
   selectSubject,
   setLine,
@@ -33,6 +34,7 @@ import {
 } from './subjects'
 import { buildSeries, type DenominatorPoint, type MonthPoint, type MonthSeries, type NumeratorPoint } from '../reading/series'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '../rivals'
+import { pooledDenominators } from '../reading/market'
 import { gapLine, type GapSide } from '../reading/gap'
 import type { Subject } from '../subjects/types'
 import { FIXTURE_ENDED } from '../test/pair-fixture'
@@ -94,6 +96,53 @@ describe('railNote, under the three calibration states (decision C, WP1.1)', () 
 
   it('a proposed subject is not counted yet, whatever its state', () => {
     expect(railNote('failed', false, 'proposed')).toContain('not counted yet')
+  })
+})
+
+describe('railNote, for a subject the month was not read for (WP1.1 review, finding 1)', () => {
+  const words = 'first reading with the 27 Sep update'
+  it('says when it will be read, in place of its word', () => {
+    expect(railNote('provisional', false, 'active', words)).toBe(words)
+    expect(railNote('ready', false, 'active', words)).toBe(words)
+  })
+
+  it('a failed or a proposed subject keeps its own sentence', () => {
+    expect(railNote('failed', false, 'active', words)).toBe('being re-described')
+    expect(railNote('provisional', false, 'proposed', words)).toContain('not counted yet')
+  })
+})
+
+describe('railMarketSide (the rail\'s market figure, decision E)', () => {
+  // Staging, Sealand, September as the 24 Sep update wrote it: the pooled
+  // market of 654 (625 category, 12 Cotopaxi, 6 Freitag, 5 Patagonia and 6
+  // The North Face).
+  const rivals = ['Cotopaxi', 'Freitag', 'Patagonia', 'The North Face'].map(rivalKey)
+  const counts = pooledDenominators([
+    { month: '2026-09-01', audience: INDUSTRY_AUDIENCE, videos: 625, comments: 0 },
+    { month: '2026-09-01', audience: rivalKey('Cotopaxi'), videos: 12, comments: 0 },
+    { month: '2026-09-01', audience: rivalKey('Freitag'), videos: 6, comments: 0 },
+    { month: '2026-09-01', audience: rivalKey('Patagonia'), videos: 5, comments: 0 },
+    { month: '2026-09-01', audience: rivalKey('The North Face'), videos: 6, comments: 0 },
+  ], rivals)
+  const rowsOf = (ks: (number | null)[]) => [INDUSTRY_AUDIENCE, ...rivals].map((audience, i) => ({ audience, k: ks[i] }))
+  const side = (read: 'read' | 'unread' | 'no_month', ks: (number | null)[]) =>
+    railMarketSide({ read, month: '2026-09-01', rows: rowsOf(ks), counts, rivalAudiences: rivals })
+
+  it('pools a read subject over the market: Looks & style, 102 in the category and 1 under Freitag, is 103 of 654', () => {
+    expect(side('read', [102, 0, 1, 0, 0])).toEqual({ k: 103, n: 654 })
+  })
+
+  it('a subject read and cited on no video is a real 0 of 654', () => {
+    expect(side('read', [0, 0, 0, 0, 0])).toEqual({ k: 0, n: 654 })
+  })
+
+  it('Community & purpose, never read, has no figure at all: its filled zeros are not a reading', () => {
+    expect(side('unread', [0, 0, 0, 0, 0])).toBeNull()
+    expect(side('no_month', [0, 0, 0, 0, 0])).toBeNull()
+  })
+
+  it('a line the page did not read makes the whole side unknown, never a partial sum', () => {
+    expect(side('read', [102, null, 1, 0, 0])).toBeNull()
   })
 })
 

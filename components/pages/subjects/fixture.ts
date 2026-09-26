@@ -26,6 +26,7 @@ import type { RefusedReason } from '@/lib/reading/verdicts'
 import { claimEcho, ownCensusWithClaims, type OwnPostInput } from '@/lib/reading/own-posts'
 import { claimCounts } from '@/lib/market-tiles'
 import type { Subject } from '@/lib/subjects/types'
+import { unreadWords } from '@/lib/subjects/read-in'
 import { methodFixture, methodRecordFixture, methodRefusedFixture, recordBandFixture } from '@/lib/test/method-fixture'
 import { FIXTURE_ENDED } from '@/lib/test/pair-fixture'
 
@@ -561,33 +562,39 @@ export function retiredRivalFixture(): SubjectsData {
 
 /**
  * The rail and pane under the three calibration states (decision C, WP1.1),
- * on staging's real figures: Sealand, September to the 20 Sep update, the
- * pooled market of 654 videos (625 in the category, and 12 Cotopaxi, 6 Freitag,
- * 5 Patagonia and 6 The North Face filed under a tracked brand), and each
- * subject's September rows summed over those audiences. The calibrations are
- * staging's, written 24 Sep: five ready (Looks & style 0.857, Comfort 0.917,
- * Durability, Price and Waterproofing 1.0, all on 33 labels), Repair &
- * warranty failed (0.333 on 33), Community & purpose never checked
- * (provisional), cited on no September video in any market audience.
+ * on staging's real figures: Sealand, September as the 24 Sep update wrote it
+ * (read_at 12:15 UTC; next update Sun 27 Sep), the pooled market of 654 videos
+ * (625 in the category, and 12 Cotopaxi, 6 Freitag, 5 Patagonia and 6 The
+ * North Face filed under a tracked brand), and each subject's September rows
+ * summed over those audiences. The calibrations are staging's, written 24 Sep:
+ * five ready (Looks & style 0.857, Comfort 0.917, Durability, Price and
+ * Waterproofing 1.0, all on 33 labels), Repair & warranty failed (0.333 on
+ * 33). The six were named 23 Sep.
  *
- * The pane is the base fixture's (Durability, on the mock's invented volumes,
- * F12) read as a PROVISIONAL subject: `calibratedSides` takes its "you" side
- * and every verdict off, as the loader does.
+ * COMMUNITY & PURPOSE WAS NEVER READ (WP1.1 review, finding 1). It was named
+ * 24 Sep and created at 12:41, after the update wrote September at 12:15, and
+ * it has no row in `month_subject_readings` in any month. It is provisional
+ * (never checked), and its row prints no figure: "first reading with the 27
+ * Sep update" (`unreadWords`), the preview's row for a subject named after
+ * the month's last update. Its pane is the base fixture's layout (the mock's
+ * invented volumes, F12) read as that subject: no "you" side (provisional),
+ * and every other side "no reading yet", never 0.
  */
 export function calibrationFixture(over: Partial<SubjectsData> = {}): SubjectsData {
   const base = subjectsFixture()
   const N = 654
+  const firstReading = unreadWords({ month: '2026-09-01', filling: true, nextUpdate: '2026-09-27T04:00:00.000Z' })
   const row = (id: string, name: string, calibration: 'ready' | 'provisional' | 'failed', k: number | null, selected = false) => ({
     id,
     name,
     description: null,
     origin: 'category_theme' as const,
-    namedAt: '2026-08-19',
+    namedAt: k == null ? '2026-09-24' : '2026-09-23',
     status: 'active' as const,
     calibration,
     level: null,
     market: calibration === 'failed' || k == null ? null : { k, n: N, pct: Math.round((k / N) * 1000) / 10 },
-    note: railNote(calibration, k != null, 'active'),
+    note: railNote(calibration, k != null, 'active', k == null ? firstReading : null),
     verdict: null,
     selected,
     href: calibration === 'failed' ? '' : `/dashboard/subjects?item=${id}`,
@@ -599,19 +606,29 @@ export function calibrationFixture(over: Partial<SubjectsData> = {}): SubjectsDa
     row('s-repair', 'Repair & warranty', 'failed', 36),
     row('s-water', 'Waterproofing', 'ready', 29),
     row('s-price', 'Price', 'ready', 25),
-    row('s-community', 'Community & purpose', 'provisional', 0, true),
+    row('s-community', 'Community & purpose', 'provisional', null, true),
   ]
+  // Not read: every point of every line loses its k (null, never 0).
+  const unreadLine = <L extends { points: { k: number | null; kComments: number | null; pct: number | null }[] }>(line: L): L =>
+    ({ ...line, points: line.points.map((p) => ({ ...p, k: null, kComments: null, pct: null })) })
   return {
     ...base,
     list: { ...base.list, rows, setLine: setLine(rows.length, 0) },
     selected: base.selected
       ? {
           ...base.selected,
+          id: 's-community',
+          name: 'Community & purpose',
+          namedAt: '2026-09-24',
           calibration: 'provisional',
-          sides: calibratedSides(base.selected.sides, 'provisional'),
+          index: 7,
+          of: 7,
+          sides: calibratedSides(base.selected.sides, 'provisional').map((side) => ({
+            ...side, k: null, pct: null, observed: false, silence: 'no_reading' as const, previous: null,
+          })),
           // The loader builds the lines from the sides, so no line of your own.
-          series: base.selected.series.filter((x) => x.audience !== CLIENT_AUDIENCE),
-          ...(base.selected.chartSeries ? { chartSeries: base.selected.chartSeries.filter((x) => x.audience !== CLIENT_AUDIENCE) } : {}),
+          series: base.selected.series.filter((x) => x.audience !== CLIENT_AUDIENCE).map(unreadLine),
+          ...(base.selected.chartSeries ? { chartSeries: base.selected.chartSeries.filter((x) => x.audience !== CLIENT_AUDIENCE).map(unreadLine) } : {}),
           gap: null,
           behind: null,
         }
