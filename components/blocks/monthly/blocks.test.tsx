@@ -307,6 +307,15 @@ describe('2 · 4 · 5 · 6 · the front page’s other blocks', () => {
     expect(t).toContain('Open Subjects')
     expect(text('monthly.subjects', ossurMonthlyFixture())).toContain('No subjects named yet')
   })
+
+  it('a subject a fifth or more makers carries the front page\'s maker tag (the MonthlyReport artboard: "provisional · over a third makers")', () => {
+    // Staging at the 11 Oct clock: Looks & style 35 of 103 market videos makers'.
+    const base = monthlyFixture()
+    const rows = base.overview.subjects.rows.map((r) => (r.id === 's-looks' ? { ...r, makerShare: 35 / 103 } : r))
+    const data = { ...base, overview: { ...base.overview, subjects: { ...base.overview.subjects, rows } } }
+    expect(text('monthly.subjects', data)).toMatch(/Looks & style\s*provisional · about a third makers\s*104/)
+    expect(text('monthly.subjects')).not.toContain('makers')
+  })
 })
 
 describe('10 · what to decide', () => {

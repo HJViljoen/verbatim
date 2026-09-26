@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { overviewSubjects } from '@/components/pages/overview/subjects'
-import { MARKET_SUBJECTS_TITLE, marketSubjectsLine, prevCell, printsFigures, rowTag } from '@/components/pages/overview/market-subjects'
+import { MARKET_SUBJECTS_TITLE, marketSubjectsLine, prevCell, printsFigures, rowMakers, rowTag } from '@/components/pages/overview/market-subjects'
 import { barAxis, shortMonthName } from '@/components/pages/overview/market'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt } from '@/lib/format'
@@ -54,7 +54,7 @@ function subjectsEmail(data: MonthlyData): ReactNode {
         const under = figures && k != null && marketLevel(k, n)?.kind === 'count'
         const tag = rowTag(r)
         return [
-          <RowLabel key="l" tag={[tag, under ? 'under 10, a count only' : null].filter(Boolean).join(' · ') || null}>{r.label}</RowLabel>,
+          <RowLabel key="l" tag={[tag, rowMakers(r), under ? 'under 10, a count only' : null].filter(Boolean).join(' · ') || null}>{r.label}</RowLabel>,
           <div key="b" style={{ paddingTop: 8 }}>{figures && !under ? <Bar share={n ? (k as number) / n : null} axis={axis} /> : null}</div>,
           figures ? <Num key="k">{fmtInt(k as number)}</Num> : null,
           figures ? <Num key="s" weight={400}>{shareCell(k, n)}</Num> : null,
