@@ -1,0 +1,167 @@
+import type { ReactNode } from 'react'
+import type { RenderMode } from '@/lib/blocks/types'
+import { TokenProse } from '@/components/blocks/prose'
+import { EMAIL, FONT } from '@/lib/email/theme'
+import { fmtInt, longMonth } from '@/lib/format'
+import { surface } from '@/lib/nav'
+import type { MonthlyForYou, MonthlyPublished, MonthlyYou } from '@/lib/reports/monthly-slots'
+import type { FigureTable } from '@/lib/reading/verdicts'
+import { T, presentation } from './email-table'
+import { Num, SubHead, Table } from './email'
+import { slotSection } from './slot'
+
+/**
+ * 7 · What it means for you, and what you published (market-first WP2.1; the
+ * front page's blocks 7 and 8 in one section, WP2.5's slot, below the
+ * expected cut line). Absent until WP2.5 fills the slot.
+ *
+ * THE FOR-YOU LINES ARE WP2.5's SENTENCES. §4.2's `ForYouBlock` carries each
+ * line's `sentenceKey` and its figures, never its words: every sentence is
+ * code-written in WP2.5's table (`FOR_YOU_SENTENCES`, `[[token]]` bodies), and
+ * a line whose key the table does not hold prints nothing. The table is empty
+ * until WP2.5 fills it. Each printed line lists the words it matched on, so a
+ * "none" can be checked (plan WP2.5).
+ *
+ * WHAT YOU PUBLISHED IS A FIRST CUT from §2.2 row 8's print: the posts
+ * census, the followers' own themes and the moves count. WP2.5 settles the
+ * shape (`MonthlyPublished`) and the words beside its front-page block.
+ */
+
+/** WP2.5's sentences, by `sentenceKey`, with `[[token]]` figures. Empty in
+ *  the skeleton. */
+export const FOR_YOU_SENTENCES: Readonly<Record<string, string>> = {}
+
+function ForYou({ f, mode }: { f: MonthlyForYou; mode: RenderMode }) {
+  const lines = f.lines.filter((l) => FOR_YOU_SENTENCES[l.sentenceKey])
+  if (lines.length === 0) return null
+  return (
+    <>
+      {lines.map((l, i) => {
+        const words = [...new Set(l.matchedPosts.flatMap((p) => p.words))]
+        return (
+          <div key={`${l.kind}-${i}`} style={mode === 'email' ? { marginTop: i === 0 ? 0 : 16 } : undefined} className={mode === 'email' ? undefined : 'flex flex-col gap-1'}>
+            <TokenProse body={FOR_YOU_SENTENCES[l.sentenceKey]} figures={l.figures} mode={mode} size={mode === 'email' ? 15 : 'body'} />
+            {words.length > 0 ? (
+              <div style={mode === 'email' ? { fontFamily: FONT.sans, fontSize: 13, color: EMAIL.muted, marginTop: 4 } : undefined} className={mode === 'email' ? undefined : 'text-[13px] text-muted-foreground'}>
+                Checked: {words.join(' · ')}
+              </div>
+            ) : null}
+          </div>
+        )
+      })}
+    </>
+  )
+}
+
+/** One of the census's three cells: a figure and the words under it. */
+function Cell({ figure, words, under, mode }: { figure: number; words: string; under: ReactNode; mode: RenderMode }) {
+  if (mode === 'email') {
+    return (
+      <td className="vb-m-col" style={{ width: '33%', verticalAlign: 'top', paddingRight: 12 }}>
+        <div style={{ fontFamily: FONT.sans, fontSize: 15, lineHeight: '28px', color: EMAIL.ink2 }}>
+          <Num size={24}>{fmtInt(figure)}</Num> {words}
+        </div>
+        <div style={{ fontFamily: FONT.sans, fontSize: 13, lineHeight: '18px', color: EMAIL.muted, marginTop: 4 }}>{under}</div>
+      </td>
+    )
+  }
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-[15px] text-secondary-foreground"><span data-copy="figure" className="font-mono text-[24px] font-semibold tabular-nums text-foreground">{fmtInt(figure)}</span> {words}</span>
+      <span className="text-[13px] text-muted-foreground">{under}</span>
+    </div>
+  )
+}
+
+function Published({ p, mode }: { p: MonthlyPublished; mode: RenderMode }) {
+  const month = longMonth(p.month)
+  const cells = [
+    <Cell key="posts" mode={mode} figure={p.posts} words="posts" under={<>in {month}{p.prevPosts != null ? <> · <span data-copy="figure">{fmtInt(p.prevPosts)}</span> the month before</> : null}</>} />,
+    <Cell key="five" mode={mode} figure={p.drewFive} words="drew 5+" under="comments each" />,
+    <Cell key="reading" mode={mode} figure={p.withReading} words="carry a reading" under={<><span data-copy="figure">{fmtInt(p.readingComments)}</span> comments</>} />,
+  ]
+  const moves = p.movesDated === 0 ? 'none dated yet' : <><span data-copy="figure">{fmtInt(p.movesDated)}</span> dated</>
+  if (mode === 'email') {
+    return (
+      <>
+        <table width="100%" {...presentation} style={T}><tbody><tr>{cells}</tr></tbody></table>
+        {p.followers.length > 0 ? (
+          <>
+            <SubHead marginTop={24}>Your followers talked most about</SubHead>
+            <Table
+              marginTop={8}
+              columns={[{ head: '' }, { head: 'videos', align: 'right', width: 64 }]}
+              rows={p.followers.map((f) => [<span key="l" data-copy="subject" data-slot="pass_b_theme">{f.label}</span>, <Num key="k">{fmtInt(f.k)}</Num>])}
+            />
+          </>
+        ) : null}
+        <div style={{ fontFamily: FONT.sans, fontSize: 15, lineHeight: '24px', color: EMAIL.ink2, marginTop: 16 }}>
+          <span style={{ fontWeight: 600, color: EMAIL.ink }}>Moves:</span> {moves}
+        </div>
+      </>
+    )
+  }
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-3" data-print-cols="3">{cells}</div>
+      {p.followers.length > 0 ? (
+        <div className="flex flex-col">
+          <p className="m-0 border-b border-border pb-2.5 text-[15px] font-semibold">Your followers talked most about</p>
+          {p.followers.map((f) => (
+            <div key={f.label} className="flex min-h-11 items-center justify-between gap-4 border-b border-border/60 text-[15px] last:border-b-0">
+              <span data-copy="subject" data-slot="pass_b_theme">{f.label}</span>
+              <span data-copy="figure" className="font-mono font-semibold tabular-nums">{fmtInt(f.k)}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <p className="m-0 text-[15px] text-secondary-foreground"><span className="font-semibold text-foreground">Moves:</span> {moves}</p>
+    </div>
+  )
+}
+
+function body(v: MonthlyYou, mode: RenderMode): ReactNode {
+  const forYou = v.foryou ? <ForYou f={v.foryou} mode={mode} /> : null
+  const published = v.published ? <Published p={v.published} mode={mode} /> : null
+  if (mode === 'email') {
+    return (
+      <>
+        {forYou}
+        {published ? <><SubHead marginTop={forYou ? 32 : 0}>What you published</SubHead><div style={{ marginTop: 12 }}>{published}</div></> : null}
+      </>
+    )
+  }
+  return (
+    <div className="flex flex-col gap-8">
+      {forYou}
+      {published ? <div className="flex flex-col gap-4"><p className="m-0 text-[15px] font-semibold">What you published</p>{published}</div> : null}
+    </div>
+  )
+}
+
+function figures(v: MonthlyYou): FigureTable {
+  const out: FigureTable = {}
+  for (const l of v.foryou?.lines ?? []) Object.assign(out, l.figures)
+  const p = v.published
+  if (p) {
+    const month = longMonth(p.month)
+    out.you_posts = { value: p.posts, unit: 'videos', label: `your posts in ${month}` }
+    out.you_drew_five = { value: p.drewFive, unit: 'videos', label: `your posts in ${month} that drew 5 or more comments` }
+    out.you_with_reading = { value: p.withReading, unit: 'videos', label: `your posts in ${month} that carry a reading` }
+    out.you_reading_comments = { value: p.readingComments, unit: 'comments', label: `comments on your posts in ${month} that carry a reading` }
+  }
+  return out
+}
+
+export const monthlyYou = slotSection({
+  key: 'monthly.you',
+  title: 'What it means for you',
+  slot: 'you',
+  link: () => {
+    const page = surface('market')
+    return { href: page.href, label: `Open ${page.label} →` }
+  },
+  stub: 'What your market means for you, and what you published, is read here once it is counted.',
+  body: (value, _data, mode) => body(value, mode),
+  figures: (value) => figures(value),
+})

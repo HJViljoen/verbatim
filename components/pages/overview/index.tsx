@@ -31,10 +31,9 @@ import { isMarketPage } from './market'
 // seen the other. Each block links onward to the page that carries it in full.
 //
 // NO OV6 (25 Sep rulings, market-first WP1.2). "How sound is this month"
-// (`overview.record`) left the front page with the "How sound" pill. The
-// block itself stays, because the monthly renders it as `monthly.sound` until
-// WP2.1 rebuilds that artefact, and `OverviewData.record` stays as data
-// because the weekly reads `record.line`.
+// (`overview.record`) left the front page with the "How sound" pill, and the
+// block itself went when WP2.1 retired the monthly's `monthly.sound`.
+// `OverviewData.record` stays as data because the weekly reads `record.line`.
 
 export const OVERVIEW_BLOCKS: readonly Block<OverviewData>[] = [
   overviewBar,
@@ -69,8 +68,8 @@ export const FRONT_PAGE_BLOCKS: readonly Block<OverviewData>[] = [
 
 /**
  * What each block is called on the front page. The four reworked blocks keep
- * their Phase 1 registry titles, which a stored copy and the monthly (until
- * WP2.1) still render under; on the page and in its exports they carry these.
+ * their Phase 1 registry titles, which a stored copy still renders under; on
+ * the page, in its exports and in the monthly (WP2.1) they carry these.
  */
 export const MARKET_TITLES: Readonly<Record<string, string>> = {
   'overview.sentence': MARKET_SENTENCE_TITLE,

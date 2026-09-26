@@ -13,7 +13,7 @@ import { weeklyFixture } from '@/components/blocks/weekly/fixture'
 import { WEEKLY_BLOCK_KEYS, weeklySubject } from '@/lib/reports/weekly'
 import { WEEKLY_SNAPSHOT_VERSION, type WeeklySnapshotData } from '@/lib/reports/weekly-build'
 import { monthlyFixture } from '@/components/blocks/monthly/fixture'
-import { MONTHLY_BLOCK_KEYS, monthlyPeriod } from '@/lib/reports/monthly'
+import { MONTHLY_BLOCK_KEYS, monthlyStamp, monthlyTitle } from '@/lib/reports/monthly'
 import { MONTHLY_SNAPSHOT_VERSION, type MonthlySnapshotData } from '@/lib/reports/monthly-build'
 import { QuarterlyShareShell } from '@/components/share/quarterly-share-shell'
 import { closedFixture, formingFixture, quarterlySnapshotFixture } from './fixture'
@@ -33,8 +33,8 @@ const weeklySnapshot = {
 } as WeeklySnapshotData
 const monthlyReading = monthlyFixture()
 const monthlySnapshot = {
-  version: MONTHLY_SNAPSHOT_VERSION, kind: 'monthly', company: 'Sealand', title: 'Sealand · the month',
-  period: monthlyPeriod(monthlyReading.month, monthlyReading.monthStatus, monthlyReading.readingAt),
+  version: MONTHLY_SNAPSHOT_VERSION, kind: 'monthly', company: 'Sealand', title: monthlyTitle(monthlyReading.month),
+  period: monthlyStamp(monthlyReading.month, monthlyReading.readTo),
   readingAt: monthlyReading.readingAt, month: monthlyReading.month, monthStatus: monthlyReading.monthStatus,
   keys: [...MONTHLY_BLOCK_KEYS], reading: monthlyReading, figures: {}, subject: monthlyReading.subject,
 } as MonthlySnapshotData

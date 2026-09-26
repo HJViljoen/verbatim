@@ -2000,9 +2000,10 @@ export interface LoadOverviewOptions {
    * their own reads (about 8 to 11 PostgREST pages).
    *
    * ONLY WHERE THE FRONT PAGE IS DRAWN: the route, its export and snapshots
-   * (`overviewPage.load`), and the loader scripts that measure the page. The
-   * monthly (until WP2.1), the quarterly and the briefs (until WP3.11) print
-   * the Phase 1 blocks and never pass it, so they pay for none of those
+   * (`overviewPage.load`), the loader scripts that measure the page, and the
+   * monthly (WP2.1: "September in your market" prints the front page's blocks
+   * on the month that has ended). The quarterly and the briefs (until WP3.11)
+   * print the Phase 1 blocks and never pass it, so they pay for none of those
    * reads. Ignored when `pinCalendarMonth` is set (the weekly).
    */
   marketFront?: boolean

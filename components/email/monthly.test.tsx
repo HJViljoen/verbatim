@@ -8,30 +8,27 @@ import {
   MONTHLY_CANVAS_GUTTER,
   MONTHLY_CARD_WIDTH,
   MONTHLY_EMAIL_WIDTH,
-  MONTHLY_RULE,
-  MONTHLY_RULE_FROZEN,
-  monthlyContext,
-  monthlyEyebrow,
-  monthRange,
-  monthlyPeriod,
+  monthlyStamp,
+  monthlyTitle,
 } from '@/lib/reports/monthly'
-import type { MonthlySnapshotData } from '@/lib/reports/monthly-build'
-import { formingMonthlyFixture, monthlyFixture, refusedMonthlyFixture } from '@/components/blocks/monthly/fixture'
-import type { MonthLabel } from '@/lib/reading/series'
+import { MONTHLY_SNAPSHOT_VERSION, type MonthlySnapshotData } from '@/lib/reports/monthly-build'
+import { filledSlotsFixture, monthlyFixture, ossurMonthlyFixture, unmeasuredMonthlyFixture } from '@/components/blocks/monthly/fixture'
 import { MonthlyDeck } from '@/components/print/monthly-deck'
 import { MonthlyShareShell } from '@/components/share/monthly-share-shell'
+import { renderMonthlyEmail } from '@/lib/email/monthly'
 import { MonthlyEmail } from './monthly'
 import { STALE_ARTEFACT_LINE } from '@/lib/reports/stale'
 
-const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
+const APP = 'https://app.verbatimintel.com'
+const ctx = blockContext(APP, EMAIL)
 
 function snapshot(reading = monthlyFixture(), over: Partial<MonthlySnapshotData> = {}): MonthlySnapshotData {
   return {
-    version: 1,
+    version: MONTHLY_SNAPSHOT_VERSION,
     kind: 'monthly',
-    company: 'Sealand',
-    title: 'Sealand · the month',
-    period: monthlyPeriod(reading.month, reading.monthStatus, reading.readingAt),
+    company: reading.brand,
+    title: monthlyTitle(reading.month),
+    period: monthlyStamp(reading.month, reading.readTo),
     readingAt: reading.readingAt,
     month: reading.month,
     monthStatus: reading.monthStatus,
@@ -43,238 +40,147 @@ function snapshot(reading = monthlyFixture(), over: Partial<MonthlySnapshotData>
   }
 }
 
-const body = (data: MonthlySnapshotData) =>
-  render(<MonthlyEmail data={data} shareUrl="https://app.verbatimintel.com/r/tok" appUrl="https://app.verbatimintel.com" attached ctx={ctx} preheader={data.subject} />)
+const body = (data: MonthlySnapshotData, shareUrl: string | null = `${APP}/r/tok`) =>
+  render(<MonthlyEmail data={data} shareUrl={shareUrl} appUrl={APP} attached ctx={ctx} preheader={data.subject} />)
 
 const words = (data: MonthlySnapshotData) => markupText(body(data))
 
-const STATES = [monthlyFixture(), refusedMonthlyFixture(), formingMonthlyFixture()]
+const STATES = [monthlyFixture(), unmeasuredMonthlyFixture(), ossurMonthlyFixture(), filledSlotsFixture()]
 
-const CAVEAT = 'We did not record how themes were grouped for Sep 2026, so it is not strictly comparable with the months around it.'
+/** Where each section's title first appears in the email's words. */
+const order = (text: string, titles: readonly string[]): number[] => titles.map((t) => text.indexOf(t))
 
-/** The reading both live tenants have today: one unrecorded-clustering note. */
-const withNote = () => {
-  const reading = monthlyFixture()
-  const note: MonthLabel = { kind: 'clustering_changed', text: CAVEAT }
-  return { ...reading, notes: [note] }
-}
-
-describe('the monthly email', () => {
-  // THE FRAME IS 640 AND THE CARD IS 600 (E-monthly). The artboard's outer
-  // element is 640 with 20px of canvas padding, so the white card is 600 —
-  // which the design system states in so many words (§4, "600px card"). The
-  // card carried 640 and every line of copy ran ~40px long.
-  // AND THE 640 IS ARITHMETIC, NOT A DEAD DECLARATION (the fix pass, review
-  // finding [Minor]). The frame's width was also written as a `max-width` on
-  // the centring `<td>`, where it has no effect — max-width is not honoured on
-  // a table cell in CSS 2.1 and Outlook lays out with Word — and this test
-  // asserted that string, so it read as pinning a frame that nothing pinned.
-  // The card's 600 is the only width that binds; the gutter makes it 640.
-  // THE EYEBROW WRAPS AS A HANGING INDENT (the wave-3 review, finding
-  // [Minor]). The green rule is 30px + 10px of margin at the head of the line
-  // box, so the wrapped remainder — "31 OCT 2026", the freeze date the
-  // artboard does not print — started at x = 0 directly under the rule instead
-  // of under the words it continues. Measured at 640: the second line moves
-  // from x = 51 to x = 91, the first line's own text edge.
-  it('hangs the masthead eyebrow’s second line under its first', () => {
-    expect(body(snapshot())).toContain('padding-left:40px;text-indent:-40px')
-  })
-
-  it('is a 600 card inside the mock’s 640 frame', () => {
-    expect(MONTHLY_EMAIL_WIDTH).toBe(640)
-    expect(MONTHLY_CARD_WIDTH).toBe(600)
+describe('the monthly email: "September in your market"', () => {
+  it('is a 600 column inside the artboard’s 640 canvas', () => {
     expect(MONTHLY_CARD_WIDTH + 2 * MONTHLY_CANVAS_GUTTER).toBe(MONTHLY_EMAIL_WIDTH)
-    expect(body(snapshot())).toContain('max-width:600px')
-    expect(body(snapshot())).toContain(`padding:${MONTHLY_CANVAS_GUTTER}px ${MONTHLY_CANVAS_GUTTER}px 24px`)
-    expect(body(snapshot())).not.toContain('max-width:640px')
+    expect(body(snapshot())).toContain(`max-width:${MONTHLY_CARD_WIDTH}px`)
   })
 
-  it('heads the masthead with the product and the reading, not the tenant', () => {
-    const data = snapshot()
-    const text = words(data)
-    expect(text).toContain(monthlyEyebrow(data.period))
-    expect(text).not.toContain('consumer intelligence')
-    // The green rule beside it — the artboard's 30 x 3 mark, and the only green
-    // on the artefact above the button.
-    expect(body(data)).toContain(`background:${EMAIL.green}`)
-  })
-
-  it('prints the update dates, which have been loaded since WP11 and drawn nowhere', () => {
-    const data = snapshot()
-    const bar = data.reading.overview.bar
-    const text = words(data)
-    expect(text).toContain(monthlyContext(bar))
-    for (const d of bar.updateDates) expect(text).toContain(d)
-    // THE RANGE IS THE MONTH'S OWN DAYS, never the run window: a period is
-    // dated by the comment.
-    expect(text).toContain('1–18 Sep 2026')
-  })
-
-  // AND THE RANGE SURVIVES A MONTH KEY OF ANOTHER SHAPE (the fix pass, review
-  // finding [Minor]). The day was spliced in at `slice(0, 8)`, which is right
-  // only for `YYYY-MM-DD`; `BarBlock.month` is that today, so this was never a
-  // live defect — but a `YYYY-MM` built an Invalid Date and printed "NaN
-  // undefined" into the masthead, and an unparseable one did the same.
-  it('prints a month range from any month key, and never “NaN”', () => {
-    const bar = { month: '2026-09-01', status: 'filling' as const, daysIn: 18, updates: 3, updateDates: [] }
-    expect(monthlyContext(bar)).toContain('1–18 Sep 2026')
-    expect(monthlyContext({ ...bar, month: '2026-09' })).toContain('1–18 Sep 2026')
-    expect(monthRange('2026-02', 'frozen', null)).toBe('1–28 Feb 2026')
-    expect(monthRange('2024-02', 'frozen', null)).toBe('1–29 Feb 2024')
-    // Not a date at all: the caller gets its own string back, as `longMonth`
-    // hands back its own — a gap a reader cannot see is the one nobody can
-    // debug.
-    expect(monthRange('not-a-month', 'filling', 4)).toBe('not-a-month')
-  })
-
-  it('names the month on the button, so twelve of these are not twelve of one', () => {
-    expect(words(snapshot())).toContain('Open the September reading')
-  })
-
-  // The artboard separates its eight sections with a full-bleed #DCDFE3 rule.
-  // They shared one padded cell with 22px of margin, which reads as one column
-  // rather than as a document with parts.
-  it('rules one section off from the next', () => {
-    const markup = body(snapshot())
-    const rules = markup.split(`background:${EMAIL.border};font-size:1px`).length - 1
-    expect(rules).toBeGreaterThanOrEqual(MONTHLY_BLOCK_KEYS.length)
-  })
-
-  it('prints all eight sections, in the stored order, on every state', () => {
-    for (const reading of STATES) {
-      const text = words(snapshot(reading))
-      for (const title of [
-        'The month',
-        'Your subjects',
-        'What moved this month',
-        'Rivals',
-        'Your moves',
-        'One voice per subject',
-        'What to decide before the next reading',
-        'How sound is this month',
-      ]) {
-        expect(text).toContain(title)
-      }
-    }
-  })
-
-  it('stamps the masthead with the month, the reading date and the day it closes', () => {
-    expect(words(snapshot())).toContain('still filling until')
-    expect(words(snapshot())).toContain('reading as at')
-  })
-
-  // THE FREEZE IS SAID ONCE, IN THE EYEBROW (copy de-clutter, ruling F). The
-  // masthead rule restated it under the eyebrow, and §8 said it twice more.
-  it('says the month is still filling once, in the eyebrow, and prints no masthead rule', () => {
+  it('heads the masthead with the product, the tenant, the heading and the update the month was read to', () => {
     const text = words(snapshot())
-    expect(text).not.toContain(MONTHLY_RULE)
-    expect(text.split('still filling').length - 1).toBe(1)
-    const closed = monthlyFixture({ monthStatus: 'frozen' })
-    expect(words(snapshot(closed, { monthStatus: 'frozen' }))).not.toContain(MONTHLY_RULE_FROZEN)
+    expect(text).toContain('Verbatim')
+    expect(text).toContain('Sealand')
+    expect(text).toContain('September in your market')
+    expect(text).toContain('September 2026')
+    expect(text).toContain('read to the 11 Oct update')
+    expect(text).not.toContain('still filling')
+    expect(text).not.toContain('reading as at')
   })
 
-  it('leads with the subject line frozen with the reading', () => {
+  it('leads the inbox with the market, never a change (the subject line)', () => {
     const data = snapshot()
-    expect(words(data)).toContain(data.subject)
+    expect(data.subject).toBe('Sealand · September in your market: 655 videos')
+    expect(renderMonthlyEmail({ data, shareUrl: null, appUrl: APP, attached: false }).subject).toBe(data.subject)
+    expect(body(data)).toContain(data.subject)
   })
 
-  it('keeps the copy contract on every state', () => {
-    for (const reading of STATES) assertCopyContract(body(snapshot(reading)))
+  it('prints the sections present, in the front page’s order, and leaves out the slots no package has filled', () => {
+    const text = words(snapshot())
+    const titles = ['The month', 'What your market talked about', 'What people did in the comments', 'What your market asked, complained about and wished for', 'The market by subject', 'What changed, and what is ours', 'What to decide']
+    const at = order(text, titles)
+    expect(at.every((i) => i >= 0)).toBe(true)
+    expect([...at].sort((a, b) => a - b)).toEqual(at)
+    for (const absent of ['With this update', 'What it means for you', 'Brands in your market']) expect(text).not.toContain(absent)
   })
 
-  it('carries no unsubstituted token, no class, no CSS variable, no flex, no grid', () => {
+  it('prints every section once the four slots are filled', () => {
+    const text = words(snapshot(filledSlotsFixture()))
+    const titles = ['The month', 'What your market talked about', 'With this update', 'What people did in the comments', 'What your market asked, complained about and wished for', 'The market by subject', 'What it means for you', 'Brands in your market', 'What changed, and what is ours', 'What to decide']
+    const at = order(text, titles)
+    expect(at.every((i) => i >= 0)).toBe(true)
+    expect([...at].sort((a, b) => a - b)).toEqual(at)
+  })
+
+  it('draws one card a section, the masthead sharing the first', () => {
+    const cards = (html: string) => (html.match(/class="vb-m-card"/g) ?? []).length
+    // Seven sections present, the first inside the masthead's card, and the buttons' card.
+    expect(cards(body(snapshot()))).toBe(7 + 1)
+    expect(cards(body(snapshot(filledSlotsFixture())))).toBe(10 + 1)
+  })
+
+  it('names the month on the button and opens the app on it, and offers the share page only with a link', () => {
+    const html = body(snapshot())
+    expect(markupText(html)).toContain('Open September in Verbatim')
+    expect(html).toContain(`href="${APP}/dashboard?month=2026-09"`)
+    expect(markupText(html)).toContain('Open the share page')
+    expect(markupText(body(snapshot(), null))).not.toContain('Open the share page')
+    expect(markupText(html)).toContain('The PDF of this report is attached.')
+  })
+
+  it('closes with whose report it is and why the reader has it', () => {
+    const text = words(snapshot())
+    expect(text).toContain('Sealand · September in your market · sent with Verbatim')
+    expect(text).toContain('an owner or admin changes it in the Studio.')
+  })
+
+  it('keeps the copy contract, and prints no token, CSS variable, flex, grid or “how sound”', () => {
     for (const reading of STATES) {
-      const markup = body(snapshot(reading))
-      expect(markup).not.toContain('[[')
-      expect(markup).not.toContain('class=')
-      expect(markup).not.toContain('var(--')
-      expect(markup).not.toMatch(/display:\s*(flex|grid)/)
+      const html = body(snapshot(reading))
+      assertCopyContract(html)
+      expect(html).not.toContain('[[')
+      expect(html).not.toContain('var(--')
+      expect(html).not.toMatch(/display:\s*(flex|grid)/)
+      expect(html.toLowerCase()).not.toContain('how sound')
+      expect(html).not.toContain('—')
     }
   })
 
   it('links absolutely, everywhere', () => {
-    for (const href of body(snapshot()).match(/href="([^"]+)"/g) ?? []) {
-      expect(href).toMatch(/href="https?:\/\//)
+    for (const reading of STATES) {
+      for (const href of body(snapshot(reading)).match(/href="([^"]+)"/g) ?? []) {
+        expect(href.startsWith('href="https://')).toBe(true)
+      }
     }
   })
 
-  it('says it is prepared FOR the client, and that commenters are never identified', () => {
-    const text = words(snapshot())
-    expect(text).toContain('Prepared for Sealand')
-    expect(text).toContain('Commenters are never identified')
+  it('prints a version 1 row as the stale line, and asks no section to draw it', () => {
+    const v1 = { ...snapshot(), version: 1, keys: ['monthly.month', 'monthly.movers', 'monthly.sound'] } as MonthlySnapshotData
+    const text = words(v1)
+    expect(text).toContain(STALE_ARTEFACT_LINE)
+    expect(text).not.toContain('What your market talked about')
   })
 
-  it('renders a section it no longer knows as nothing, and keeps the rest', () => {
-    const text = words(snapshot(monthlyFixture(), { keys: ['monthly.month', 'monthly.gone'] as never }))
-    expect(text).toContain('The month')
-    expect(text).not.toContain('One voice per subject')
-  })
-
-  // Both live tenants carry clustering_changed today, and the sentence appeared
-  // zero times in either rendered email while MR3 drew an Apr → Sep line per
-  // row across exactly those months. An artefact is read with nobody beside
-  // the reader to add what the reading cannot support.
-  it('prints the reading’s caveat, which the page prints and the artefact did not', () => {
-    expect(words(snapshot(withNote()))).toContain(CAVEAT)
-  })
-
-  it('prints no empty line where the reading has nothing to caveat', () => {
-    expect(words(snapshot())).not.toContain(CAVEAT)
+  it('carries the one media query a phone reads, and no other stylesheet', () => {
+    const html = body(snapshot())
+    expect(html).toContain('@media only screen and (max-width: 480px)')
+    expect((html.match(/<style/g) ?? []).length).toBe(1)
   })
 })
 
-describe('the monthly report on paper', () => {
-  it('paginates one section per sheet, never all eight on one', () => {
-    const markup = render(<MonthlyDeck data={snapshot()} date="16 Sep 2026" />)
-    expect(markup.match(/8\s*\/\s*8|8<\/[^>]+>\s*<\/[^>]+>/)).toBeTruthy()
-    // Eight sheets: the count is what the weekly deck's first cut got wrong,
-    // losing four of six sections inside one overflow:hidden slide.
-    expect((markup.match(/data-slide|class="[^"]*slide/g) ?? []).length).toBeGreaterThanOrEqual(1)
-    expect(markup).toContain('The month')
-    expect(markup).toContain('How sound is this month')
+describe('"September in your market" on paper', () => {
+  it('paginates one present section per sheet, and gives an absent slot no sheet', () => {
+    const markup = render(<MonthlyDeck data={snapshot()} date="12 Oct 2026" />)
+    expect((markup.match(/vb-slide/g) ?? []).length).toBeGreaterThanOrEqual(7)
+    expect(markup).not.toContain('With this update')
+    expect(markupText(markup)).toContain('September 2026 · read to the 11 Oct update')
   })
 
-  // ONCE, NOT ON EVERY SHEET (copy de-clutter, E89/E91): the rule and the
-  // reading's caveat were in the footer of all eight sheets.
-  it('prints the rule once, not in every sheet footer', () => {
-    const markup = render(<MonthlyDeck data={snapshot()} date="16 Sep 2026" />)
-    const hits = markup.split(MONTHLY_RULE).length - 1
-    expect(hits).toBe(1)
-  })
-
-  it('carries the reading’s caveat once, not on every sheet', () => {
-    const markup = render(<MonthlyDeck data={snapshot(withNote())} date="16 Sep 2026" />)
-    expect(markup.split(CAVEAT).length - 1).toBe(1)
+  it('prints the stale line on its own sheet for a version 1 row', () => {
+    const v1 = { ...snapshot(), version: 1 } as MonthlySnapshotData
+    expect(markupText(render(<MonthlyDeck data={v1} date="12 Oct 2026" />))).toContain(STALE_ARTEFACT_LINE)
   })
 
   it('says so on its own sheet when it knows none of the stored keys', () => {
-    const markup = render(<MonthlyDeck data={snapshot(monthlyFixture(), { keys: [] })} date="16 Sep 2026" />)
-    // In the client's words, not the developer's: "build" and "block" are on
-    // the jargon list and this sheet is a client's PDF (reports-6).
-    expect(markupText(markup)).toContain(STALE_ARTEFACT_LINE)
-    expect(markupText(markup)).not.toContain('this build')
+    const none = snapshot(monthlyFixture(), { keys: ['monthly.movers'] as never })
+    expect(markupText(render(<MonthlyDeck data={none} date="12 Oct 2026" />))).toContain(STALE_ARTEFACT_LINE)
   })
 })
 
-describe('the shared monthly report', () => {
-  it('says prepared BY the client, because a share link is theirs to forward', () => {
-    const markup = render(<MonthlyShareShell data={snapshot()} appUrl="https://app.verbatimintel.com" />)
-    expect(markupText(markup)).toContain('Prepared by Sealand')
+describe('the shared "September in your market"', () => {
+  it('heads the page as the email heads it, and draws the present sections', () => {
+    const text = markupText(render(<MonthlyShareShell data={snapshot()} appUrl={APP} />))
+    expect(text).toContain('September in your market')
+    expect(text).toContain('read to the 11 Oct update')
+    expect(text).toContain('What your market talked about')
+    expect(text).toContain('What to decide')
+    expect(text).not.toContain('Brands in your market')
+    expect(text.toLowerCase()).not.toContain('how sound')
   })
 
-  it('says the figures are frozen and the voices are read live', () => {
-    const markup = render(<MonthlyShareShell data={snapshot()} appUrl="https://app.verbatimintel.com" />)
-    expect(markupText(markup)).toContain('figures frozen when this was sent')
-  })
-
-  it('carries the reading’s caveat, for a reader with nobody beside them', () => {
-    const markup = render(<MonthlyShareShell data={snapshot(withNote())} appUrl="https://app.verbatimintel.com" />)
-    expect(markupText(markup)).toContain(CAVEAT)
-  })
-
-  it('draws every section the link names', () => {
-    const text = markupText(render(<MonthlyShareShell data={snapshot()} appUrl="https://app.verbatimintel.com" />))
-    expect(text).toContain('One voice per subject')
-    expect(text).toContain('What to decide before the next reading')
+  it('prints the stale line for a version 1 row', () => {
+    const v1 = { ...snapshot(), version: 1 } as MonthlySnapshotData
+    const text = markupText(render(<MonthlyShareShell data={v1} appUrl={APP} />))
+    expect(text).toContain(STALE_ARTEFACT_LINE)
+    expect(text).not.toContain('What your market talked about')
   })
 })

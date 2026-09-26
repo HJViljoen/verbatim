@@ -8,7 +8,6 @@ import { gapBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
 import { DirectionWord, leadGap, overviewSubjects, sparkDomain, subjectsMeta } from './subjects'
 import { monthlyLineLabel } from '@/lib/pages/overview'
 import { calibrationOverviewFixture, overviewFixture, refusedFixture, renamedRivalFixture } from './fixture'
-import { monthlySubjectsEmail } from '@/components/blocks/monthly/subjects'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -345,7 +344,6 @@ describe('OV2 under the three calibration states (staging, Sealand, read on 2 Oc
 
   it('renders in all three modes and keeps the copy contract', () => {
     for (const mode of MODES) assertCopyContract(render(overviewSubjects.render(data, mode, ctx)))
-    assertCopyContract(render(monthlySubjectsEmail(data, ctx)))
   })
 
   it('a failed subject prints its name and "being re-described", and none of its figures', () => {
@@ -433,15 +431,6 @@ describe('OV2 under the three calibration states (staging, Sealand, read on 2 Oc
     const answers = blockAnswers(overviewSubjects, data)
     for (const v of answers.verdicts) expect(['looks', 'water']).toContain(v.objectId)
     expect(Object.keys(answers.figures).some((k) => k.includes('repair'))).toBe(false)
-  })
-
-  it('the monthly email prints the same states', () => {
-    const text = renderText(monthlySubjectsEmail(data, ctx))
-    expect(text).toContain('being re-described')
-    expect(text).toContain('first reading with the 4 Oct update')
-    expect(text).not.toContain('33 of 625')
-    expect(text).not.toContain('0 of 625')
-    expect(renderText(monthlySubjectsEmail(unchecked, ctx))).toContain('provisional')
   })
 
   it('a row stored before WP1.1 carries no state and renders as sent, with no word', () => {

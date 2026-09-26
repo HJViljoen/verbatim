@@ -1,201 +1,143 @@
-import Link from 'next/link'
-import type { Block, QuoteRef } from '@/lib/blocks/types'
-import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
-import { BlockMovement } from '@/components/blocks/movement'
-import { BlockQuotes } from '@/components/blocks/quote'
-import { TokenProse } from '@/components/blocks/prose'
+import type { ReactNode } from 'react'
+import { BlockQuote } from '@/components/blocks/quote'
+import { overviewSentence, MARKET_SENTENCE_TITLE } from '@/components/pages/overview/sentence'
+import { Parts, shortMonthName } from '@/components/pages/overview/market'
+import { substituteFigures } from '@/lib/reports/cover'
+import { proseFigures } from '@/lib/prose/figures'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fmtInt, shortDate } from '@/lib/format'
+import { surface } from '@/lib/nav'
 import { hasQuote } from '@/lib/renderables/quotes-freeze'
-import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
-import type { AnomalyLine } from '@/lib/pages/overview'
+import { THEME_PREV_N, figureText, heroView, themeToken, voicesHeading, type HeroPart } from '@/lib/pages/overview-market'
+import type { OverviewData } from '@/lib/pages/overview'
 import type { MonthlyData } from '@/lib/pages/monthly'
+import type { FigureTable } from '@/lib/reading/verdicts'
+import { fromFrontPage } from './adapt'
+import { Body, ChipLine, Inner, Num, RowLabel, Table } from './email'
 
 /**
- * MR1 · The month (Phase 1 WP18; design §3 MR, the mock's section 1).
+ * 1 · The month (market-first WP2.1; the front page's block 1, plan §2.2).
  *
- * OV0's LINE AND OV1's SENTENCE, AND NEITHER OF THE TWO THINGS THAT BELONG AT
- * THE END. Overview's OV1 block carries four things: the code sentence, the
- * unusual-week line, the labelled interpretation and the standing advice.
- * Heinrich's revision 6 moves the decision to the end of the monthly report —
- * "what to decide before the next reading" is the mock's seventh section — so
- * the interpretation and the advice travel there, and printing them here as
- * well would put one paragraph on one artefact twice, under two headings, six
- * sections apart. That is the deviation from the WP's "the month (OV0/OV1)",
- * and it is the smallest one that lets both sections exist.
- *
- * WHAT STAYS: the sentence, which is CODE's and carries its figures as tokens;
- * the week that was unusual, because a month's report is still the place a
- * reader meets that; and the two voices, because the sentence is about a number
- * and the voices are what the number is made of.
+ * THE FRONT PAGE'S "THE MONTH", ON THE MONTH THAT HAS ENDED: the market's size,
+ * its three biggest conversations not led by makers, the month before as
+ * levels, the one chip, and the lead theme's voices. In the app and on paper
+ * it is the page's block; in an inbox it is drawn as the email artboard draws
+ * it, the three conversations as a table under the clause that names them.
  */
-export const monthlyMonth: Block<MonthlyData> = {
+
+/**
+ * The themes clause, cut where the email draws its table: the words up to
+ * "…category videos:", and whatever follows the list (the makers sentence).
+ * The words are the front page's own parts (`heroThemeParts`), cut and never
+ * rewritten; a clause that is not a list (the subject lead) comes back whole.
+ */
+export function splitClause(parts: readonly HeroPart[]): { intro: HeroPart[]; after: HeroPart[] } | null {
+  const i = parts.findIndex((p) => p.t === 'text' && p.s.includes(': '))
+  if (i < 0) return null
+  const head = parts[i] as Extract<HeroPart, { t: 'text' }>
+  const intro: HeroPart[] = [...parts.slice(0, i), { t: 'text', s: head.s.slice(0, head.s.indexOf(': ') + 1) }]
+  const j = parts.findIndex((p, k) => k > i && p.t === 'text' && p.s.startsWith('.'))
+  if (j < 0) return { intro, after: [] }
+  const close = parts[j] as Extract<HeroPart, { t: 'text' }>
+  const rest = close.s.slice(1).trimStart()
+  const after: HeroPart[] = [...(rest ? [{ t: 'text' as const, s: rest }] : []), ...parts.slice(j + 1)]
+  if (after[0]?.t === 'text') after[0] = { t: 'text', s: after[0].s.trimStart() }
+  return { intro, after }
+}
+
+/** The size sentence at the artboard's 28px, its figures in mono. The clause
+ *  before its colon takes a line of its own, as the page sets it. */
+function SizeSentence({ body, figures }: { body: string; figures: FigureTable }) {
+  const colon = body.indexOf(': ')
+  const split = colon > 0 && !body.slice(0, colon).includes('[[')
+  const line = (text: string) =>
+    substituteFigures(text, proseFigures(figures)).map((p, i) =>
+      'text' in p
+        ? <span key={i}>{p.text}</span>
+        : <span key={i} data-copy="figure" style={{ fontFamily: FONT.mono, fontWeight: 600, letterSpacing: '-.04em' }}>{p.figure}</span>,
+    )
+  return (
+    <div style={{ fontFamily: FONT.sans, fontSize: 28, lineHeight: '36px', fontWeight: 500, letterSpacing: '-.02em', color: EMAIL.ink }}>
+      {split ? <>{body.slice(0, colon + 1)}<br />{line(body.slice(colon + 2))}</> : line(body)}
+    </div>
+  )
+}
+
+function monthEmail(data: MonthlyData): ReactNode {
+  const o = data.overview
+  const s = o.sentence
+  const view = heroView(o.hero, o.themes, o.month)
+  const hero = o.hero?.kind === 'themes' ? o.hero : null
+  const prev = o.themes?.prev && o.themes.prev.n != null ? o.themes.prev : null
+  const cut = hero && hero.top.length > 0 ? splitClause(view.parts) : null
+  const voices = (o.heroVoices ?? []).filter(hasQuote)
+  const lead = hero?.lead ?? null
+  const cell = (key: string, isPrev = false) => {
+    const text = figureText(view.figures[key])
+    return text ? <Num prev={isPrev}>{text}</Num> : null
+  }
+  return (
+    <>
+      <SizeSentence body={s.body} figures={s.figures} />
+      {cut && hero ? (
+        <>
+          <Body marginTop={16}><Parts parts={cut.intro} figures={view.figures} mode="email" /></Body>
+          <Table
+            marginTop={12}
+            columns={[
+              { head: '' },
+              { head: 'Videos', align: 'right', width: 64 },
+              ...(prev ? [{ head: <span data-copy="level">{shortMonthName(prev.month)}<br />of {figureText(view.figures[THEME_PREV_N])}</span>, align: 'right' as const, width: 64 }] : []),
+            ]}
+            rows={hero.top.map((t) => [
+              <RowLabel key="l"><span data-copy="subject" data-slot="pass_b_theme">{t.label}</span></RowLabel>,
+              cell(themeToken(t.registryId, 'k')),
+              ...(prev ? [cell(themeToken(t.registryId, 'prev'), true)] : []),
+            ])}
+          />
+          {cut.after.length > 0 ? (
+            <Body marginTop={12} size={14}><span style={{ color: EMAIL.muted }}><Parts parts={cut.after} figures={view.figures} mode="email" /></span></Body>
+          ) : null}
+        </>
+      ) : view.parts.length > 0 ? (
+        <Body marginTop={16}><Parts parts={view.parts} figures={view.figures} mode="email" /></Body>
+      ) : null}
+      <ChipLine words={s.chip} />
+      {lead && voices.length > 0 ? (
+        <Inner>
+          <div style={{ fontFamily: FONT.sans, fontSize: 15, lineHeight: '22px', fontWeight: 600, color: EMAIL.ink }}>
+            {voicesHeading(voices.length)} on “<span data-copy="subject" data-slot="pass_b_theme">{lead.label}</span>”
+          </div>
+          <div style={{ fontFamily: FONT.sans, fontSize: 13, lineHeight: '18px', color: EMAIL.muted, marginTop: 2 }}>from that theme’s own comments</div>
+          {voices.map((v) => (
+            <div key={v.quote.ref} style={{ marginTop: 16 }}><BlockQuote quote={v.quote} cite={v.cite} mode="email" /></div>
+          ))}
+          {view.newSearch ? (
+            <div style={{ borderTop: `1px solid ${EMAIL.border}`, marginTop: 16, paddingTop: 12, fontFamily: FONT.sans, fontSize: 13, lineHeight: '20px', color: EMAIL.muted }}>
+              <Parts parts={view.newSearch} figures={view.figures} mode="email" />
+            </div>
+          ) : null}
+        </Inner>
+      ) : null}
+    </>
+  )
+}
+
+/** A withdrawn comment leaves its wrapper behind (`resolveQuotes` nulls a
+ *  field): the voices the section prints are the ones that still resolve. */
+function withResolvedVoices(o: OverviewData): OverviewData {
+  if (!o.heroVoices) return o
+  const kept = o.heroVoices.filter(hasQuote)
+  return kept.length === o.heroVoices.length ? o : { ...o, heroVoices: kept }
+}
+
+export const monthlyMonth = fromFrontPage({
   key: 'monthly.month',
-  title: 'The month',
-  question: 'Where do we stand, and what moved to get us here?',
-
-  render(data, mode = 'app', ctx) {
-    const s = data.overview.sentence
-    const b = data.overview.bar
-    const email = mode === 'email'
-    const href = `${ctx.appUrl}/dashboard`
-
-    // ONE LINE. The reading counter ("your 3rd monthly reading · the quarter
-    // view needs 6") is said once in this artefact, in "How sound is this
-    // month" (ruling E); the month's stamp keeps the filling line alone.
-    const stamp = email ? (
-      <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>{b.line}</div>
-    ) : (
-      <p className="m-0 text-[12px] text-muted-foreground">{b.line}</p>
-    )
-
-    // THE MONTH'S SENTENCE IS THE ARTEFACT'S HERO (Block D wave 2, E-monthly).
-    // The artboard sets it in serif at 23px — it is the one sentence the whole
-    // report is about, and at 13.5px sans it read as the first of eight
-    // paragraphs. The badge goes UNDER it rather than beside it: a chip on the
-    // baseline of a 23px serif line sits in the middle of the sentence when the
-    // line wraps, which it does at 600px.
-    const head = (
-      <div className={email ? undefined : 'flex flex-col items-start gap-1.5'}>
-        <TokenProse body={s.body} figures={s.figures} mode={mode} size="hero" />
-        {s.lead ? (
-          <div style={email ? { marginTop: 8 } : undefined}><BlockMovement verdict={s.lead} unit="pts" mode={mode} /></div>
-        ) : null}
-      </div>
-    )
-
-    const unusual = s.anomaly ? (
-      email ? (
-        <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink2, marginTop: 8 }}>
-          <strong style={{ color: EMAIL.ink }}>One unusual week:</strong> {anomalySentence(s.anomaly)}
-        </div>
-      ) : (
-        <p className="m-0 rounded-md bg-inner px-2.5 py-1.5 text-[12.5px] text-secondary-foreground">
-          <span className="font-medium text-foreground">One unusual week:</span> {anomalySentence(s.anomaly)}
-          {/* NOT ON PAPER (package E-marketing, fix pass). The brief borrows
-              this block onto a landscape sheet, where "This week →" is an
-              instruction to press a control the reader of a PDF has not got —
-              the rule `MONTHLY_MOVES_EMPTY` was written under. The sentence
-              carries itself; only the link goes. */}
-          {mode === 'print' ? null : (
-            <> <Link href={`${ctx.appUrl}/dashboard/week`} className="underline underline-offset-2">This week →</Link></>
-          )}
-        </p>
-      )
-    ) : null
-
-    // LAST MONTH, CONFIRMED. The other half of item 13's loop, and it belongs
-    // here rather than in the masthead: a reader meets the month's own numbers
-    // first and is then told what the month before them settled at.
-    // A snapshot built before the copy de-clutter stored the line with its
-    // explanatory tail (D45); the figure pair is the finding, so the tail is
-    // not reprinted.
-    const confirmingText = data.confirming?.replace('; the rest of the month has since been counted.', '.') ?? null
-    const confirming = confirmingText ? (
-      email ? (
-        <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 8 }}>{confirmingText}</div>
-      ) : (
-        <p className="m-0 text-[11.5px] text-muted-foreground">{confirmingText}</p>
-      )
-    ) : null
-
-    // A WITHDRAWN COMMENT LEAVES ITS WRAPPER BEHIND. The quote is a FIELD of
-    // `{ quote, cite, href }`, so `resolveQuotes` nulls it where it stands
-    // rather than dropping it from the list; the count and the renderer both
-    // have to read the survivors, not the wrappers.
-    const said = s.voices.filter(hasQuote)
-    const voices = said.length > 0 ? (
-      <div className={email ? undefined : 'flex flex-col gap-2'}>
-        <span
-          className={email ? undefined : 'text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground'}
-          style={email ? { fontFamily: FONT.sans, fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: EMAIL.muted } : undefined}
-        >
-          {said.length} of {fmtInt(Math.max(s.voicesFrom, said.length))} voices
-        </span>
-        <BlockQuotes
-          mode={mode}
-          quotes={said.map((v) => ({
-            quote: v.quote,
-            cite: v.href
-              ? <a href={v.href} rel="noreferrer" target="_blank" style={email ? { color: EMAIL.muted } : undefined}>{v.cite}</a>
-              : v.cite,
-          }))}
-        />
-      </div>
-    ) : null
-
-    const empty = monthlyMonth.emptyState(data)
-    return (
-      <BlockFrame
-        title={monthlyMonth.title}
-        question={monthlyMonth.question}
-        mode={mode}
-        // THE ARTBOARDS' RULED EYEBROW (E-monthly): a 2 x 16 green mark and the
-        // title in mono 11 uppercase, which is how all seventeen head a
-        // section. Off by default on the primitive; on for every section of
-        // this artefact, so the eight read as one document.
-        accent
-        footer={email
-          ? <a href={href} style={{ color: EMAIL.ink }}>Open the month →</a>
-          : <Link href={href} className="hover:underline">Open the month →</Link>}
-      >
-        {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
-        <div className={email ? undefined : 'flex flex-col gap-3'}>
-          {stamp}
-          {head}
-          {unusual}
-          {confirming}
-          {voices}
-        </div>
-      </BlockFrame>
-    )
+  title: MARKET_SENTENCE_TITLE,
+  block: overviewSentence,
+  link: () => {
+    const page = surface('overview')
+    return { href: page.href, label: `Open ${page.label} →` }
   },
-
-  figures(data): FigureTable {
-    const s = data.overview.sentence
-    const b = data.overview.bar
-    const out: FigureTable = { ...s.figures }
-    // The month's own size, which is the figure "the report of {date} read X"
-    // is most often about — AND ONLY WHERE IT WAS READ. `?? 0` wrote "0 videos
-    // read into this month" into a frozen snapshot and into a record that can
-    // never be rewritten; n = 0 is not a reading of zero, it is a month nobody
-    // counted, which is the distinction verdictsWorthRecording refuses two
-    // files away. A missing figure is a silence and prints as one.
-    if (b.videos != null) {
-      out.month_videos = { value: b.videos, unit: 'videos', label: 'videos read into this month' }
-    }
-    if (b.atLastMonthKnown && b.atLastMonth != null) {
-      out.month_at_last_month = { value: b.atLastMonth, unit: 'videos', label: 'videos at this point last month' }
-    }
-    return out
-  },
-
-  verdicts(data): Verdict[] {
-    return data.overview.sentence.lead ? [data.overview.sentence.lead] : []
-  },
-
-  quotes(data): QuoteRef[] {
-    const s = data.overview.sentence
-    const refs = s.voices.filter(hasQuote).map((v) => v.quote.ref)
-    return hasQuote(s.anomaly) ? [...refs, s.anomaly.quote.ref] : refs
-  },
-
-  emptyState(data) {
-    const s = data.overview.sentence
-    if (s.lead || s.anomaly || s.voices.length > 0 || data.overview.bar.videos != null) return null
-    return 'There is nothing to report on this month yet.'
-  },
-}
-
-/** The unusual week, in the reader's words. The same sentence OV1 composes —
- *  one week, its band, its n and where it sat.
- *
- *  HEADED "ONE UNUSUAL WEEK", not "Unusual this month". The line names a week
- *  ("in the week of 13 Sep") and is read on an artefact whose every other
- *  number is a whole calendar month; "Unusual this month" over it reads as a
- *  claim about the month rather than about one week inside it. OV1 says "this
- *  week" for the same sentence on a weekly surface, where the period is
- *  unambiguous. */
-function anomalySentence(a: AnomalyLine): string {
-  return `${a.label}: ${fmtInt(a.k)} of ${fmtInt(a.n)} ${a.denominator} in the week of ${shortDate(a.weekStart)}, against the three months behind it (band ±${Math.abs(a.bandPts)} points).`
-}
+  email: monthEmail,
+  project: withResolvedVoices,
+})

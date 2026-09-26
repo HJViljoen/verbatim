@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MONTHLY_SNAPSHOT_VERSION, isMonthlyData, staleMonthlySnapshot, withBriefShareLink, type MonthlySnapshotData } from './monthly-build'
+import { MONTHLY_SNAPSHOT_VERSION, isMonthlyData, staleMonthlySnapshot, type MonthlySnapshotData } from './monthly-build'
 import { isWeeklyData } from './weekly-build'
 import { isDocumentData } from './documents/types'
 import { isMissingReadingColumns } from './reading-stamp'
@@ -76,54 +76,6 @@ describe('M9 not applied here', () => {
   })
 })
 
-// A LIVE /r/ TOKEN MUST NOT REACH report_snapshots.data. The row is readable by
-// every tenant member; share_links.token is deliberately not ("The token and
-// the password hash never reach a session client"). loadBriefLink froze the app
-// href and the snapshot id; the send resolves the link here, over a copy, and
-// the stored reading is untouched.
-describe('the brief’s share link, resolved on the send', () => {
-  const brief = {
-    title: 'Marketing brief',
-    snapshotId: 'snap-1',
-    href: '/dashboard/reports?view=snap-1',
-    public: false,
-    locked: false,
-    builtAt: '2026-09-12T08:25:00.000Z',
-    stale: false,
-  }
-  const data = (over: Record<string, unknown> = {}) =>
-    ({ kind: 'monthly', readingAt: '2026-10-01T06:00:00.000Z', reading: { brief, ...over } }) as unknown as MonthlySnapshotData
-
-  const admin = (rows: { token: string; expires_at: string | null; password_hash: string | null }[]) => {
-    const chain: Record<string, unknown> = {}
-    for (const fn of ['select', 'eq', 'is', 'order']) chain[fn] = () => chain
-    chain.limit = async () => ({ data: rows })
-    return { from: () => chain } as never
-  }
-
-  it('swaps in a live public link for the email and leaves the input alone', async () => {
-    const frozen = data()
-    const out = await withBriefShareLink(admin([{ token: 'tok', expires_at: null, password_hash: null }]), 'c1', frozen)
-    expect(out.reading.brief?.href).toBe('/r/tok')
-    expect(out.reading.brief?.public).toBe(true)
-    expect(frozen.reading.brief?.href).toBe('/dashboard/reports?view=snap-1')
-    expect(frozen.reading.brief?.public).toBe(false)
-  })
-
-  it('says a locked link is locked rather than public', async () => {
-    const out = await withBriefShareLink(admin([{ token: 'tok', expires_at: null, password_hash: 'x' }]), 'c1', data())
-    expect(out.reading.brief?.locked).toBe(true)
-    expect(out.reading.brief?.public).toBe(false)
-  })
-
-  it('keeps the app href where every link has expired, and where there is no brief', async () => {
-    const expired = await withBriefShareLink(admin([{ token: 'tok', expires_at: '2026-09-01T00:00:00.000Z', password_hash: null }]), 'c1', data())
-    expect(expired.reading.brief?.href).toBe('/dashboard/reports?view=snap-1')
-    const none = await withBriefShareLink(admin([]), 'c1', data({ brief: null }))
-    expect(none.reading.brief).toBeNull()
-  })
-})
-
 describe('staleMonthlySnapshot', () => {
   const snapshot = (version: number) => ({ version } as Parameters<typeof staleMonthlySnapshot>[0])
 
@@ -140,8 +92,11 @@ describe('staleMonthlySnapshot', () => {
 
   // And a bump is the only thing that may make an existing row stale, so the
   // constant is pinned: it changes in a diff that says why, never by accident.
-  it('writes version 1 today', () => {
-    expect(MONTHLY_SNAPSHOT_VERSION).toBe(1)
+  // 2 since market-first WP2.1: the front page's reading on an ended month,
+  // ten keys and four slots, where version 1 held Phase 1's eight sections.
+  it('writes version 2 today, so a Phase 1 row prints the stale line', () => {
+    expect(MONTHLY_SNAPSHOT_VERSION).toBe(2)
+    expect(staleMonthlySnapshot(snapshot(1))).toContain('older version of Verbatim')
   })
 
   // `isMonthlyData` still matches on `kind` alone, deliberately: telling a
