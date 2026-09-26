@@ -25,6 +25,7 @@ import {
   unansweredLeadText,
   unansweredMeta,
   voiceFrom,
+  voicePools,
   voicesAcross,
   voicesMeta,
   UNANSWERED_BASIS,
@@ -275,6 +276,38 @@ describe('the transcript cite reads the fact, not the sentence (m10)', () => {
 
   it('builds the suffix from the ownPost boolean the loader already has', () => {
     expect(source).toMatch(/creator video, transcript\$\{ownPost && audienceOf\(c\) === CLIENT_AUDIENCE/)
+  })
+})
+
+describe('voicePools — the market\'s voices only, on the market (§2.3 S5, decision E)', () => {
+  // Structural stand-ins: a citation is its audience and a rank. On staging's
+  // 11 Oct Subjects, Community & purpose drew two of its six voices under
+  // Sealand's own posts; the client pool here is non-empty on purpose.
+  const cotopaxi = rivalKey('Cotopaxi')
+  const items = [
+    { a: CLIENT_AUDIENCE, n: 1 }, { a: INDUSTRY_AUDIENCE, n: 2 }, { a: CLIENT_AUDIENCE, n: 3 },
+    { a: cotopaxi, n: 4 }, { a: INDUSTRY_AUDIENCE, n: 5 }, { a: CLIENT_AUDIENCE, n: 6 }, { a: INDUSTRY_AUDIENCE, n: 7 },
+  ]
+  const of = (c: { a: string }) => c.a
+
+  it('draws from the category, then each brand, and never from your own audience', () => {
+    const pools = voicePools(items, of, true)
+    expect(pools.map((p) => p.audience)).toEqual([INDUSTRY_AUDIENCE, cotopaxi])
+    const shown = voicesAcross(pools)
+    expect(shown.map((c) => c.n)).toEqual([2, 4, 5, 7])
+    expect(shown.some((c) => c.a === CLIENT_AUDIENCE)).toBe(false)
+    // The loader lifts the per-audience cap on the market, so the category
+    // can fill the six once the brands are drawn, still one side at a time.
+    const many = [...Array.from({ length: 8 }, (_, i) => ({ a: INDUSTRY_AUDIENCE, n: 10 + i })), { a: cotopaxi, n: 4 }, { a: CLIENT_AUDIENCE, n: 1 }]
+    expect(voicesAcross(voicePools(many, of, true), VOICES_SHOWN, VOICES_SHOWN).map((c) => c.n)).toEqual([10, 4, 11, 12, 13, 14])
+  })
+
+  it('draws nothing where only your own audience was heard', () => {
+    expect(voicePools(items.filter((c) => c.a === CLIENT_AUDIENCE), of, true)).toEqual([])
+  })
+
+  it('keeps the older order (yours first, the category last) off the market', () => {
+    expect(voicePools(items, of, false).map((p) => p.audience)).toEqual([CLIENT_AUDIENCE, cotopaxi, INDUSTRY_AUDIENCE])
   })
 })
 

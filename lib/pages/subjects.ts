@@ -2666,9 +2666,9 @@ export interface VoiceReadOptions {
    *  first day). A monthly artefact asks for one; so does the Subjects page
    *  since WP2.2 (§2.3 S5: voices dated in the reading month). */
   month?: string
-  /** The market first (WP2.2, §2.3 S5): the category's voices, then the
-   *  tracked brands', and the client's audience last (decision E: its own
-   *  posts are not the market). Off by default, so the monthly's order is
+  /** The market only (WP2.2, §2.3 S5): the category's voices, then the
+   *  tracked brands', and none from the client's audience (decision E: it is
+   *  not the market; `voicePools`). Off by default, so the monthly's order is
    *  unchanged. */
   marketFirst?: boolean
   /** The reading month's maker videos (`loadMarketMakers`), so a voice under
@@ -2818,19 +2818,18 @@ async function loadVoicesMany(
     }
 
     // Grouped by the audience the quote was HEARD in, then drawn round-robin so
-    // one loud side cannot fill the list.
-    const byAudience = new Map<string, QuoteCitation[]>()
-    for (const c of considered) {
-      const audience = audienceOf(c)
-      byAudience.set(audience, [...(byAudience.get(audience) ?? []), c])
+    // one loud side cannot fill the list. On the market (S5) your own audience
+    // is not drawn at all (`voicePools`).
+    const pools = voicePools(considered, audienceOf, opts?.marketFirst === true)
+    const heard = pools.reduce((n, x) => n + x.items.length, 0)
+    if (heard === 0) {
+      out.set(p.key, { voices: [], from: 0, sampled: p.sampled, readable: p.considered.length })
+      continue
     }
-    const rivalsHeard = [...byAudience.keys()].filter((a) => a !== CLIENT_AUDIENCE && a !== INDUSTRY_AUDIENCE).sort()
-    const order = opts?.marketFirst
-      ? [INDUSTRY_AUDIENCE, ...rivalsHeard, CLIENT_AUDIENCE]
-      : [CLIENT_AUDIENCE, ...rivalsHeard, INDUSTRY_AUDIENCE]
-    const shown = voicesAcross(
-      order.filter((a) => byAudience.has(a)).map((a) => ({ audience: a, items: byAudience.get(a) ?? [] })),
-    )
+    // Six on the market (§2.3 S5): still one audience at a time, but with the
+    // client's audience out a side may give more than VOICES_PER_AUDIENCE, so
+    // a subject heard in the category and one brand still prints six.
+    const shown = voicesAcross(pools, VOICES_SHOWN, opts?.marketFirst ? VOICES_SHOWN : VOICES_PER_AUDIENCE)
 
     // ON-SCREEN TEXT, BY VIDEO. `video_text` evidence is words printed on the
     // cover frame; where one of the six is a creator SPEAKING and that same
@@ -2901,9 +2900,36 @@ async function loadVoicesMany(
         ...(makerSet && key && idByKey.has(key) ? { maker: makerSet.has(idByKey.get(key)!) } : {}),
       }
     })
-    out.set(p.key, { voices, from: considered.length, sampled: p.sampled, readable: p.considered.length })
+    out.set(p.key, { voices, from: heard, sampled: p.sampled, readable: p.considered.length })
   }
   return out
+}
+
+/**
+ * The audiences a subject's voices are drawn from, in order, each with its
+ * citations (the caller's relevance order kept).
+ *
+ * ON THE MARKET (`marketFirst`, §2.3 S5, lens M): the category's, then each
+ * tracked brand's, and NEVER the client's audience. Decision E's market is
+ * everything read except the client's audience (MF1 `market_month_videos`
+ * leaves `is_client` videos out), so a comment under your own post, or under
+ * a stranger's video filed as naming you, is not the market's voice (the
+ * deploy-3 review: staging's Community & purpose drew two of its six there).
+ * Otherwise (the monthly's older order), your audience first and the category
+ * last, as before.
+ */
+export function voicePools<T>(items: readonly T[], audienceOf: (c: T) => string, marketFirst: boolean): { audience: string; items: T[] }[] {
+  const byAudience = new Map<string, T[]>()
+  for (const c of items) {
+    const audience = audienceOf(c)
+    if (marketFirst && audience === CLIENT_AUDIENCE) continue
+    byAudience.set(audience, [...(byAudience.get(audience) ?? []), c])
+  }
+  const rivalsHeard = [...byAudience.keys()].filter((a) => a !== CLIENT_AUDIENCE && a !== INDUSTRY_AUDIENCE).sort()
+  const order = marketFirst
+    ? [INDUSTRY_AUDIENCE, ...rivalsHeard]
+    : [CLIENT_AUDIENCE, ...rivalsHeard, INDUSTRY_AUDIENCE]
+  return order.filter((a) => byAudience.has(a)).map((a) => ({ audience: a, items: byAudience.get(a) ?? [] }))
 }
 
 /**
