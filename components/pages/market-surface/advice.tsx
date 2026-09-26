@@ -11,8 +11,9 @@ import { FLAG_NOTE } from '@/lib/agent/movement'
 import { fmtInt, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable, Verdict, VerdictPairNote } from '@/lib/reading/verdicts'
+import { openLink } from '@/components/blocks/open-link'
 import {
-  ADVICE_AFTERWARDS_UNRECORDED, ADVICE_UNRECORDED, LEDGER_FIRST_TIME_LINE,
+  ADVICE_AFTERWARDS_UNRECORDED, ADVICE_UNRECORDED, LEDGER_ALL_PARAM, LEDGER_ALL_VALUE, LEDGER_FIRST_TIME_LINE,
   adviceAnchor, ageInMonths, madeInMonth, marketSurfaceHref, repeatCell,
   type AdviceRow, type MarketSurfaceData,
 } from '@/lib/pages/market-surface'
@@ -307,6 +308,63 @@ export function expandedLineage(rows: readonly AdviceRow[], highlight: string | 
   return rows.find(hasBody)?.lineageId ?? null
 }
 
+/**
+ * THE CURRENT RECOMMENDATION LEADS, AS ITS OWN CARD (WP3.6 Y2; the preview's
+ * "1 · current recommendation"). Its number, its words, how many updates have
+ * raised it and the videos behind it, and on the right what you decided and
+ * when. The ledger's table below it starts at row 2. The rest of the row's
+ * reading (the afterwards sentence) rides under it, so nothing the table
+ * printed for this row is lost by leading with it.
+ */
+/** The lead card's row (the current recommendation, when it is the first
+ *  row) and the table's rows under it. One split, read by the render and by
+ *  `quotes()`, so the block declares the quote it draws. */
+export function splitLead(a: Pick<MarketSurfaceData['advice'], 'rows' | 'current'>): { lead: AdviceRow | null; tableRows: AdviceRow[] } {
+  const lead = a.current && a.rows[0]?.lineageId === a.current ? a.rows[0] : null
+  return { lead, tableRows: lead ? a.rows.slice(1) : [...a.rows] }
+}
+
+function LeadCard({ row, mode, hrefFor, shared, folded }: { row: AdviceRow; mode: RenderMode; hrefFor: (lineageId: string) => string; shared: VerdictPairNote | null; folded: boolean }) {
+  const email = mode === 'email'
+  const repeated = row.timesMade > 1 ? `repeated across ${fmtInt(row.timesMade)} updates` : 'raised by one update'
+  const grounded = row.grounded && !row.grounded.pruned ? row.grounded.videos : null
+  if (email) {
+    return (
+      <div id={adviceAnchor(row.lineageId)} style={{ background: EMAIL.inner, borderRadius: 6, padding: '10px 12px', marginBottom: 8 }}>
+        <div style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted }}>{fmtInt(row.number)} · {CURRENT_TAG}</div>
+        <div data-copy="stored" data-slot="pass_d_b_recommendation" style={{ fontFamily: FONT.sans, fontSize: 14, fontWeight: 600, color: EMAIL.ink, marginTop: 4 }}>{row.title}</div>
+        <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink2, marginTop: 4 }}>
+          {repeated}{grounded != null ? <> · <span data-copy="figure">{fmtInt(grounded)}</span> {grounded === 1 ? 'video' : 'videos'} behind it</> : null}
+          {' · '}<StatusCell row={row} mode={mode} />
+        </div>
+        {folded ? null : <div style={{ marginTop: 4 }}><AfterwardsCell row={row} mode={mode} shared={shared} /></div>}
+      </div>
+    )
+  }
+  return (
+    <div id={adviceAnchor(row.lineageId)} className="grid min-w-0 grid-cols-1 gap-4 rounded-md bg-inner px-6 py-5 md:grid-cols-[minmax(0,1fr)_auto] md:gap-8">
+      <div className="flex min-w-0 flex-col gap-2">
+        <span className="font-mono text-[12px] text-muted-foreground">{fmtInt(row.number)} · {CURRENT_TAG}</span>
+        <span data-copy="stored" data-slot="pass_d_b_recommendation" className="max-w-[60ch] text-[18px] font-semibold leading-[1.35] text-foreground [text-wrap:pretty]">
+          {mode === 'app' ? <Link href={hrefFor(row.lineageId)} className="hover:underline">{row.title}</Link> : row.title}
+        </span>
+        <span className="text-[14px] text-secondary-foreground">
+          {row.timesMade > 1
+            ? <>repeated across <span data-copy="figure" className="font-semibold text-foreground">{fmtInt(row.timesMade)}</span> updates</>
+            : repeated}
+          {grounded != null
+            ? <>{' · '}<span data-copy="figure" className="font-semibold text-foreground">{fmtInt(grounded)}</span> {grounded === 1 ? 'video' : 'videos'} behind it</>
+            : <>{' · '}<GroundedCell row={row} mode={mode} /></>}
+        </span>
+        {folded ? null : <span className="text-[12px] text-muted-foreground"><AfterwardsCell row={row} mode={mode} shared={shared} /></span>}
+      </div>
+      <div className="flex min-w-0 flex-col items-start gap-1.5 md:border-l md:border-border md:pl-8">
+        <StatusCell row={row} mode={mode} />
+      </div>
+    </div>
+  )
+}
+
 export const marketAdvice: Block<MarketSurfaceData> = {
   key: 'market.advice',
   title: 'The advice, and what you decided',
@@ -318,8 +376,13 @@ export const marketAdvice: Block<MarketSurfaceData> = {
     const empty = marketAdvice.emptyState(data)
     const more = a.total - a.rows.length
     const hrefFor = (lineageId: string) => `${ctx?.appUrl ?? ''}${marketSurfaceHref(lineageId, ctx?.params ?? {})}`
-    const expanded = expandedLineage(a.rows, a.highlight)
-    const repeat = repeatColumn(a.rows)
+    const showAll = openLink(mode, `${ctx?.appUrl ?? ''}${marketSurfaceHref(null, { ...(ctx?.params ?? {}), [LEDGER_ALL_PARAM]: LEDGER_ALL_VALUE })}`, `Show all ${fmtInt(a.total)} →`)
+    // THE LEAD CARD IS THE CURRENT RECOMMENDATION WHERE IT IS THE FIRST ROW
+    // (it always is on a live page, WP1.9); a stored copy with no `current`
+    // draws its table as it was sent.
+    const { lead, tableRows } = splitLead(a)
+    const expanded = expandedLineage(tableRows, a.highlight)
+    const repeat = repeatColumn(splitLead(a).tableRows)
     const tracks = repeat.shown ? TRACKS : TRACKS.filter((_, i) => i !== REPEAT_TRACK)
     // THE COLUMN'S UNLOCK IS GONE WHERE THE COLUMN ANSWERS. `ADVICE_UNLOCK`
     // named the absence of an Afterwards column; the column exists now, so the
@@ -345,6 +408,16 @@ export const marketAdvice: Block<MarketSurfaceData> = {
     ].filter((x): x is string => Boolean(x)).join(' ')
     const notes = (
       <div className={email ? undefined : 'flex min-w-0 flex-col gap-1'}>
+        {a.total > 0 ? (
+          // THE WHOLE LEDGER, NEVER A QUARTER (D12): the one-line answer this
+          // block gives, in the body now the footer holds links only.
+          <p
+            className={email ? undefined : 'm-0 text-[12px] text-secondary-foreground'}
+            style={email ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink2, marginTop: 6 } : undefined}
+          >
+            {a.actedLine}
+          </p>
+        ) : null}
         {a.requestedLine ? (
           <p
             className={email ? undefined : 'm-0 text-[11px] text-secondary-foreground'}
@@ -386,26 +459,17 @@ export const marketAdvice: Block<MarketSurfaceData> = {
         // shown", the meta does not say "67 recommendations" as well. And no
         // order words: the ledger is no longer oldest first (WP1.9), and the
         // first row says what it is with its own tag.
-        meta={a.total > 0 && more <= 0 ? `${fmtInt(a.total)} recommendations` : undefined}
-        // THE WHOLE LEDGER, NEVER A QUARTER (D12). `actedLine`'s own docstring
-        // argues it: the denominator is every identity ever recommended and has
-        // no quarter at all, so the artboard's "Jul → Sep 2026" note beside it
-        // is replaced by what the right-hand note can honestly say — how much
-        // of the ledger this table is showing.
-        footer={a.total > 0 ? a.actedLine : undefined}
-        // THE NOTE COUNTS THE ROWS IT DREW, NEVER `LEDGER_SHOWN`. The constant
-        // is the cap the loader asks for and is not what is on the page: the
-        // fixture draws 3 of 64 and printed "12 oldest shown · 61 behind them",
-        // where 12 + 61 is 73 and no reader can make that add. The deep-link
-        // arm is the same defect the other way — `ledgerRowsShown` APPENDS the
-        // named row, so 13 are drawn under a note claiming 12. Both halves are
-        // now read off the same array.
-        footerNote={more > 0 ? `${fmtInt(a.rows.length)} of ${fmtInt(a.rows.length + more)} shown` : undefined}
+        // THE HEADER IS THE TITLE ALONE AND THE FOOTER A LINK ALONE (25 Sep
+        // rulings; rebuilt with WP3.6). Where the table draws fewer than the
+        // ledger holds, the footer is the preview's "Show all 67 →", and the
+        // count it names is the whole ledger (never `LEDGER_SHOWN`, the cap).
+        footer={more > 0 ? showAll : undefined}
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
+        {lead ? <LeadCard row={lead} mode={mode} hrefFor={hrefFor} shared={sharedRefusal} folded={afterwardsOnce != null} /> : null}
         {email ? (
           <div>
-            {a.rows.map((row) => (
+            {tableRows.map((row) => (
               <div key={row.lineageId} id={adviceAnchor(row.lineageId)} style={{ padding: '5px 0', borderTop: `1px solid ${EMAIL.hairline}`, background: row.lineageId === a.highlight ? EMAIL.inner : undefined }}>
                 <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink }}>
                   <span style={{ fontFamily: FONT.mono, color: EMAIL.muted }}>{fmtInt(row.number)} </span>
@@ -457,7 +521,7 @@ export const marketAdvice: Block<MarketSurfaceData> = {
                     a stepped column. The artboard top-aligns its seven-track
                     rows for the same reason. */}
                 <tbody className="align-top">
-                  {a.rows.flatMap((row) => {
+                  {tableRows.flatMap((row) => {
                     const age = ageInMonths(row.firstMade, data.readingAt)
                     const cells = (
                       <tr key={row.lineageId} id={adviceAnchor(row.lineageId)} className={`border-t border-border/70 ${row.lineageId === a.highlight ? 'bg-inner' : ''}`}>
@@ -532,8 +596,9 @@ export const marketAdvice: Block<MarketSurfaceData> = {
   // `expandedLineage` decides which row opens, and only that row's quote is
   // drawn. Declaring every row's would freeze refs the page never prints.
   quotes(data): QuoteRef[] {
-    const open = expandedLineage(data.advice.rows, data.advice.highlight)
-    const row = data.advice.rows.find((r) => r.lineageId === open)
+    const { tableRows } = splitLead(data.advice)
+    const open = expandedLineage(tableRows, data.advice.highlight)
+    const row = tableRows.find((r) => r.lineageId === open)
     return row?.quote ? [row.quote.ref] : []
   },
 

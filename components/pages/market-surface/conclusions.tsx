@@ -1,4 +1,6 @@
 import Link from 'next/link'
+import { surface } from '@/lib/nav'
+import { openLink } from '@/components/blocks/open-link'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { TileBlock } from '@/components/shell/tile'
@@ -190,17 +192,40 @@ export const marketConclusions: Block<MarketSurfaceData> = {
     // the head of the cards since WP1.9, not the footer's right-hand note: a
     // footer holds links only (the 25 Sep rulings).
     const concluded = c.concludedOn && !empty ? concludedTag(c.concludedOn) : null
+    const voice = surface('voice')
+    const voiceLink = empty ? undefined : openLink(mode, `${ctx.appUrl}${voice.href}`, `Open ${voice.label} →`)
 
     return (
       <BlockFrame
         title={marketConclusions.title}
         question={marketConclusions.question}
         mode={mode}
-        meta={meta}
-        footer={below.length === 0
-          ? undefined
-          : app
-            ? (
+        // THE HEADER IS THE TITLE ALONE AND THE FOOTER A LINK ALONE (25 Sep
+        // rulings, rebuilt with WP3.6): the tier counts ride with the row tag
+        // (plan §2.6 Y5), and the rows below the bar are a section of the
+        // body, as the preview draws them.
+        footer={voiceLink}
+      >
+        {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
+        {concluded ? (
+          <p
+            className={email ? undefined : 'm-0 font-mono text-[12px] leading-[1.4] text-muted-foreground'}
+            style={email ? { fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.muted, margin: '0 0 4px' } : undefined}
+          >
+            {meta ? `${meta} · ${concluded}` : concluded}
+          </p>
+        ) : null}
+        <div className={email ? undefined : 'grid min-w-0 grid-cols-1 gap-2.5 xl:grid-cols-2'}>
+          {above.map(row)}
+          {/* PAPER AND EMAIL HAVE NOTHING TO PRESS, so the rows below the bar
+              are drawn with the rest, labelled by their own chip. The block's
+              rule is that they are labelled and not hidden, and a disclosure
+              nobody can open would hide them. */}
+          {!app ? below.map(row) : null}
+        </div>
+        {below.length === 0 || !app
+          ? null
+          : (
               // IT TAKES THE WHOLE FOOTER LINE (polish pass, 2026-09-24).
               // `BlockFrame`'s footer is two nodes on one wrapping line, and
               // the left one is `min-w-0` so a long note on the right can push
@@ -225,26 +250,7 @@ export const marketConclusions: Block<MarketSurfaceData> = {
                   ? <p className="m-0 mt-1.5 text-[11px] font-normal text-muted-foreground">{belowBarShown(below.length, c.belowBar)}</p>
                   : null}
               </details>
-            )
-            : belowBarWord(c.belowBar)}
-      >
-        {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
-        {concluded ? (
-          <p
-            className={email ? undefined : 'm-0 font-mono text-[10.5px] leading-[1.35] text-muted-foreground'}
-            style={email ? { fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.muted, margin: '0 0 4px' } : undefined}
-          >
-            {concluded}
-          </p>
-        ) : null}
-        <div className={email ? undefined : 'grid min-w-0 grid-cols-1 gap-2.5 xl:grid-cols-2'}>
-          {above.map(row)}
-          {/* PAPER AND EMAIL HAVE NOTHING TO PRESS, so the rows below the bar
-              are drawn with the rest, labelled by their own chip. The block's
-              rule is that they are labelled and not hidden, and a disclosure
-              nobody can open would hide them. */}
-          {!app ? below.map(row) : null}
-        </div>
+            )}
         {/* No basis or "New means" line and no "How these are ordered"
             disclosure under the rows (copy de-clutter B45, B46, B48): the
             all-time basis is said once on this page, on the advice table's

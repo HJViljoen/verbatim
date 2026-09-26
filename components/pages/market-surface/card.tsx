@@ -183,14 +183,10 @@ export const marketCard: Block<MarketSurfaceData> = {
         title={`${longMonth(card.month)}’s card`}
         question={marketCard.question}
         mode={mode}
-        meta="pre-filled from your posts"
-        // THE PRESS, NAMED. See the header: the card is complete and the one
-        // press that would turn it into a move is not built, so the slot the
-        // artboard fills with a green button carries the sentence instead.
-        // The scoring rule (MOVES_UNLOCK) is not repeated here: it is written
-        // once in Settings › How to read (copy de-clutter B65).
-        footer={card.proposal ? undefined : card.unread}
-        footerNote={longMonth(card.month)}
+        // THE HEADER IS THE TITLE ALONE AND THE FOOTER HOLDS LINKS ONLY (25
+        // Sep rulings; Your moves is rebuilt with WP3.6): the title already
+        // names the month, and the press that is not built is said in the
+        // body, where the artboard's green button would sit.
       >
         <div className={email ? undefined : 'flex min-h-0 flex-1 flex-col justify-between gap-2.5'}>
           <div className={email ? undefined : 'flex min-w-0 flex-col gap-1'}>
@@ -348,6 +344,7 @@ export const marketCard: Block<MarketSurfaceData> = {
               <PairChip note={shared} mode={mode} />
             </div>
           ) : null}
+          {!card.proposal && card.unread ? <BlockEmpty mode={mode}>{card.unread}</BlockEmpty> : null}
         </div>
       </BlockFrame>
     )

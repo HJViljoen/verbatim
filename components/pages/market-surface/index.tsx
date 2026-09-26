@@ -15,6 +15,7 @@ import { marketMoves } from './moves'
 import { marketSayHear } from './sayhear'
 import { marketPlans } from './plans'
 import { marketWays } from './ways'
+import { marketQuestions } from './questions'
 
 // Market — the page (Phase 1 WP14, design §3 MK1–MK7; ported to the artboard,
 // Block D wave 2).
@@ -78,31 +79,40 @@ import { marketWays } from './ways'
 // record drawer at the top of the page where it is computed, and a second
 // rendering of it down here would be a number with no shown derivation.
 
+// WP3.6 (market-first, plan §2.6): THE PAGE IS REBUILT IN THE PREVIEW'S ORDER.
+// Questions to answer first (Y1, new), then the advice with the current
+// recommendation leading (Y2), what you say and what your market says back
+// (Y3), your moves beside the month's card (Y4), what we concluded (Y5), the
+// plans (Y6) and, last and unchanged, how a move is made. Every header is its
+// title alone and every footer a link alone (25 Sep rulings), which
+// `index.test.tsx` sweeps on this page's own blocks.
 export const MARKET_BLOCKS: readonly Block<MarketSurfaceData>[] = [
-  marketConclusions,
+  marketQuestions,
   marketAdvice,
-  marketCard,
-  marketMoves,
   marketSayHear,
+  marketMoves,
+  marketCard,
+  marketConclusions,
   marketPlans,
   marketWays,
 ]
 
-/** The two full-width readings, at the top of the page. */
-const READINGS: readonly Block<MarketSurfaceData>[] = [marketConclusions, marketAdvice]
-/** The artboard's moves grid, in its rendered order. */
-const MOVES: readonly Block<MarketSurfaceData>[] = [
-  marketCard, marketMoves, marketSayHear, marketPlans, marketWays,
-]
+/** The full-width readings at the top of the page. */
+const READINGS: readonly Block<MarketSurfaceData>[] = [marketQuestions, marketAdvice, marketSayHear]
+/** The pair under them: your moves beside the month's card. */
+const MOVES: readonly Block<MarketSurfaceData>[] = [marketMoves, marketCard]
+/** The full-width tail. */
+const TAIL: readonly Block<MarketSurfaceData>[] = [marketConclusions, marketPlans, marketWays]
 
-/** Each block's span on the 12-column grid — the artboard's own widths. */
+/** Each block's span on the 12-column grid — the preview's widths. */
 const COLS: Record<string, number> = {
-  'market.conclusions': 12,
+  'market.questions': 12,
   'market.advice': 12,
-  'market.card': 5,
-  'market.moves': 7,
-  'market.sayhear': 4,
-  'market.plans': 4,
+  'market.sayhear': 12,
+  'market.moves': 6,
+  'market.card': 6,
+  'market.conclusions': 12,
+  'market.plans': 12,
   'market.ways': 12,
 }
 
@@ -128,35 +138,25 @@ const COLS: Record<string, number> = {
 // 190px of ink). The start stays explicit so a line whose spans do not fill
 // twelve columns can never have a later tile flowed up into it.
 
-/** The readings grid as its lines of tile keys: the two full-width readings,
- *  one row each. The moves grid is `MOVES_STACKS` below, then the button
- *  strip across the full width. */
+/** The grids as their lines of tile keys: the three full-width readings, one
+ *  row each, then the tail's three. The moves pair is `MOVES_STACKS`. */
 const GRIDS: readonly (readonly (readonly string[])[])[] = [
-  [['market.conclusions'], ['market.advice']],
+  [['market.questions'], ['market.advice'], ['market.sayhear']],
+  [['market.conclusions'], ['market.plans'], ['market.ways']],
 ]
 
 /**
- * THE MOVES GRID IS TWO STACKS, NOT TWO ROWS (layout sweep, 2026-09-24).
- *
- * As rows, each line was as tall as its tallest tile: the card (5) stood
- * ~300px beside a ~110px "Your moves" (7), and say-vs-hear (4) and plans (4)
- * left four columns empty beside them once "Not on this page yet" left the
- * page. On Sealand at 1440 that was two blocks of white each taller than a
- * short card, which the layout rule forbids. Stacked, the left column is the
- * card over say-vs-hear and the right is your moves over plans, and the two
- * columns end within a few lines of each other. Below xl the stacks dissolve
- * (`contents`) and `order` keeps the reading order card, moves, say-vs-hear,
- * plans.
+ * THE MOVES PAIR IS TWO STACKS, NOT ONE ROW (layout sweep, 2026-09-24): your
+ * moves and the month's card side by side from xl, each as tall as it draws
+ * (`xl:items-start`), stacked in reading order below xl.
  */
 export const MOVES_STACKS: readonly { col: number; keys: readonly string[] }[] = [
-  { col: 5, keys: ['market.card', 'market.sayhear'] },
-  { col: 7, keys: ['market.moves', 'market.plans'] },
+  { col: 6, keys: ['market.moves'] },
+  { col: 6, keys: ['market.card'] },
 ]
 /** Where each stacked tile sits in the single-column reading order below xl. */
-const MOBILE_ORDER: Record<string, string> = {
-  'market.card': 'order-1', 'market.moves': 'order-2', 'market.sayhear': 'order-3', 'market.plans': 'order-4',
-}
-const STACK_SPAN: Record<number, string> = { 5: 'xl:col-span-5', 7: 'xl:col-span-7' }
+const MOBILE_ORDER: Record<string, string> = { 'market.moves': 'order-1', 'market.card': 'order-2' }
+const STACK_SPAN: Record<number, string> = { 5: 'xl:col-span-5', 6: 'xl:col-span-6', 7: 'xl:col-span-7' }
 
 /**
  * AN ABSENCE IS A LINE, NEVER A CARD (layout sweep 3). With no plan uploaded,
@@ -259,7 +259,10 @@ export function MarketSurfacePage({
         key={block.key}
         col={place.col}
         row={place.row}
-        className={startClasses(place)}
+        // EVERY LINE IS ONE FULL-WIDTH TILE since WP3.6, so nothing is
+        // pinned: a pinned row start over a line that is not drawn (no plan,
+        // no claim) would open an empty 116px row.
+        className={place.col < 12 ? startClasses(place) : undefined}
         distribute="between"
       >
         {block.render(data, 'app', ctx)}
@@ -281,7 +284,7 @@ export function MarketSurfacePage({
           forwarded document, in its method sheet, and in Settings › How to
           read; it is cut from the in-app pages (copy de-clutter L6). */}
 
-      <PageGrid>{READINGS.map(tile)}</PageGrid>
+      <PageGrid>{READINGS.filter((b) => drawnOnMarket(b.key, data)).map(tile)}</PageGrid>
 
       <PageGrid className="xl:items-start">
         {MOVES_STACKS.map((stack) => (
@@ -297,12 +300,9 @@ export function MarketSurfacePage({
             })}
           </div>
         ))}
-        {MOVES.filter((b) => !MOVES_STACKS.some((st) => st.keys.includes(b.key))).map((block) => (
-          <Tile key={block.key} col={COLS[block.key] ?? 12} row={1} className="order-5 xl:order-none" distribute="between">
-            {block.render(data, 'app', ctx)}
-          </Tile>
-        ))}
       </PageGrid>
+
+      <PageGrid>{TAIL.filter((b) => drawnOnMarket(b.key, data)).map(tile)}</PageGrid>
 
       {/* No method footnote (copy de-clutter ruling B; the 25 Sep rulings put
           no explanatory footnote under a block). The record is Settings'; the

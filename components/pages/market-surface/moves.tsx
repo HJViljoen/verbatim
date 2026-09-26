@@ -1,4 +1,3 @@
-import Link from 'next/link'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { CalendarLine, type CalendarSeries } from '@/components/charts/calendar-line'
@@ -6,12 +5,14 @@ import { MovementBadge } from '@/components/delta-badge'
 import { PairChip } from '@/components/blocks/pair-chip'
 import { sharedPairNote } from '@/lib/calibration'
 import { TileBlock } from '@/components/shell/tile'
-import { fmtInt, fmtPct, shortDate } from '@/lib/format'
+import { fmtInt, fmtPct, longMonth, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { audiencePhrase } from '@/lib/reading/afterwards'
 import type { MoveReading, MoveSeries } from '@/lib/reading/moves'
 import type { FigureTable, Verdict, VerdictPairNote } from '@/lib/reading/verdicts'
-import type { MarketSurfaceData } from '@/lib/pages/market-surface'
+import { MOVES_MARKET_HOW, moveMonthLevel, type MarketSurfaceData, type MoveMarketMonth, type MoveMarketRead } from '@/lib/pages/market-surface'
+import { openLink } from '@/components/blocks/open-link'
+import { surface } from '@/lib/nav'
 
 // MK4 · Your moves (design §3 MK4; ported to the artboard, Block D wave 2).
 //
@@ -259,16 +260,113 @@ function Move({ reading, index, mode }: { reading: MoveReading; index: number; m
   )
 }
 
+/** The preview's three cells under a move: the move's month, the month after
+ *  and the month after that, each the market's level on the move's object. */
+const ROLE_WORDS: Record<MoveMarketMonth['role'], string> = { move: 'Move month', after: 'Month after', after_that: 'Month after that' }
+
+/** One move read in the market (WP3.6 Y4): what it is on, when it was dated,
+ *  and the market's level in each of the three months, as levels only. */
+function MarketMove({ read, mode }: { read: MoveMarketRead; mode: RenderMode }) {
+  const email = mode === 'email'
+  const on = read.label
+    ? `${read.label} in your market${read.calibration === 'provisional' ? ' (provisional)' : ''}`
+    : null
+  const cellWords = (m: MoveMarketMonth) => `${longMonth(m.month)}: ${moveMonthLevel(m)}`
+  if (email) {
+    return (
+      <div style={{ padding: '6px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
+        <div style={{ fontFamily: FONT.sans, fontSize: 12.5, fontWeight: 600, color: EMAIL.ink }}>{read.title}</div>
+        <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>{read.on} · dated {shortDate(read.declaredAt)}</div>
+        {read.calibration === 'failed'
+          ? <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink2, marginTop: 2 }}>{MOVE_FAILED}</div>
+          : on
+            ? read.months.map((m) => <div key={m.role} data-copy={m.state === 'read' ? 'level' : undefined} style={{ fontFamily: FONT.mono, fontSize: 11.5, color: EMAIL.ink2 }}>{ROLE_WORDS[m.role]} · {cellWords(m)}</div>)
+            : <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink2, marginTop: 2 }}>{MOVE_NO_OBJECT}</div>}
+      </div>
+    )
+  }
+  return (
+    <TileBlock className="flex min-w-0 flex-col gap-2.5">
+      <span className="flex flex-col gap-0.5">
+        <span className="text-[14px] font-semibold text-foreground">{read.title}</span>
+        <span className="text-[12px] text-muted-foreground">{read.on} · dated {shortDate(read.declaredAt)}</span>
+      </span>
+      {read.calibration === 'failed' ? (
+        <span className="text-[13px] text-secondary-foreground">{MOVE_FAILED}</span>
+      ) : on ? (
+        <>
+          <span className="text-[13px] font-medium text-foreground">{on}, as a level</span>
+          <span className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            {read.months.map((m) => (
+              <span key={m.role} className={`flex min-w-0 flex-col gap-0.5 rounded-md px-3 py-2 ${m.role === 'move' ? 'bg-inner' : 'border border-dashed border-border'}`}>
+                <span className="text-[12px] font-medium text-secondary-foreground">{ROLE_WORDS[m.role]} · {longMonth(m.month)}</span>
+                <span data-copy={m.state === 'read' ? 'level' : undefined} className={m.state === 'read' ? 'font-mono text-[13px] tabular-nums text-foreground' : 'text-[12px] text-muted-foreground'}>{moveMonthLevel(m)}</span>
+              </span>
+            ))}
+          </span>
+        </>
+      ) : (
+        <span className="text-[13px] text-secondary-foreground">{MOVE_NO_OBJECT}</span>
+      )}
+    </TileBlock>
+  )
+}
+
+/** A move on a subject being re-described is not read (decision C). */
+const MOVE_FAILED = 'Its subject is being re-described, so the market is not read on it.'
+/** A move naming nothing the market is read on month by month. */
+const MOVE_NO_OBJECT = 'This move names nothing your market is read on month by month, so there is no level to show.'
+
+/** The preview's empty state: the three cells a dated move will fill, drawn
+ *  empty, under the one-line answer. */
+function EmptyMoves({ mode }: { mode: RenderMode }) {
+  if (mode === 'email') {
+    return <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink2, marginTop: 4 }}>{MOVES_MARKET_HOW}</div>
+  }
+  return (
+    <div className="flex min-w-0 flex-col gap-4">
+      <p className="m-0 max-w-[62ch] text-[14px] leading-[1.55] text-secondary-foreground">{MOVES_MARKET_HOW}</p>
+      <div aria-hidden className="flex flex-col gap-1.5">
+        <span className="pl-[33%] text-center text-[12px] font-semibold text-foreground">what your market said after, as a level</span>
+        <span className="grid grid-cols-3 gap-2">
+          <span className="rounded-md bg-inner px-3 py-2 text-[12px] font-semibold text-foreground">Move month</span>
+          <span className="rounded-md border border-dashed border-border px-3 py-2 text-[12px] text-muted-foreground">Month after</span>
+          <span className="rounded-md border border-dashed border-border px-3 py-2 text-[12px] text-muted-foreground">Month after that</span>
+        </span>
+      </div>
+    </div>
+  )
+}
+
 export const marketMoves: Block<MarketSurfaceData> = {
   key: 'market.moves',
   title: 'Your moves',
-  question: 'What have we said we are doing, and is it working?',
+  question: 'What have we said we are doing, and what did the market say after?',
 
   render(data, mode = 'app', ctx) {
     const m = data.moves
     const email = mode === 'email'
     const empty = marketMoves.emptyState(data)
-    const href = `${ctx.appUrl}/dashboard/subjects`
+    const subjects = surface('subjects')
+    const footer = openLink(mode, `${ctx.appUrl}${subjects.href}`, 'Track a subject →')
+
+    // WP3.6 Y4: A PAGE BUILT BY THE MARKET-FIRST LOADER CARRIES `market`, and
+    // reads each move in the market as levels. A stored copy without it keeps
+    // its Phase 1 reading (`readings`), as it was sent.
+    if (m.market) {
+      return (
+        <BlockFrame title={marketMoves.title} question={marketMoves.question} mode={mode} footer={footer}>
+          {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
+          {m.recorded && m.market.length === 0 ? <EmptyMoves mode={mode} /> : null}
+          {m.market.length > 0 ? (
+            <div className={email ? undefined : 'flex min-w-0 flex-col gap-2.5'}>
+              {m.market.map((r) => <MarketMove key={r.moveId} read={r} mode={mode} />)}
+            </div>
+          ) : null}
+        </BlockFrame>
+      )
+    }
+
     // A READING PER MOVE WHERE THERE IS ONE, and the dated line for a move the
     // reading layer holds nothing for yet — two states of one move, and the
     // block prints whichever it has rather than one sentence for both.
@@ -279,16 +377,7 @@ export const marketMoves: Block<MarketSurfaceData> = {
     const unscored = m.rows.filter((row) => !scored.has(row.id))
 
     return (
-      <BlockFrame
-        title={marketMoves.title}
-        question={marketMoves.question}
-        mode={mode}
-        meta={m.rows.length > 0 ? `${fmtInt(m.rows.length)} declared · ${m.card ? '1 card waiting' : 'no card'}` : undefined}
-        footer={email
-          ? <a href={href} style={{ color: EMAIL.ink }}>Open Subjects →</a>
-          : <Link href={href} className="hover:underline">Open Subjects →</Link>}
-        footerNote={readings.length > 0 ? `${fmtInt(readings.length)} read against a month` : undefined}
-      >
+      <BlockFrame title={marketMoves.title} question={marketMoves.question} mode={mode} footer={footer}>
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         {readings.length > 0 ? (
           <div className={email ? undefined : 'flex min-w-0 flex-col gap-2.5'}>
@@ -304,9 +393,6 @@ export const marketMoves: Block<MarketSurfaceData> = {
             )}
           </div>
         ) : null}
-        {/* No MOVES_UNLOCK footer: each unscored row already says which
-            reading its first comparison lands with, and the rule is written
-            once in Settings › How to read (copy de-clutter B66). */}
       </BlockFrame>
     )
   },
@@ -323,6 +409,9 @@ export const marketMoves: Block<MarketSurfaceData> = {
   // an audience the move did not touch, and a brief folding this block has to
   // know it was stated beside the move and never subtracted from it.
   verdicts(data): Verdict[] {
+    // Y4 prints levels, never a comparison: a page read in the market declares
+    // no verdict here.
+    if (data.moves.market) return []
     return (data.moves.readings ?? []).flatMap((r) => [...(r.verdict ? [r.verdict] : []), ...r.control])
   },
 

@@ -1,115 +1,186 @@
-import Link from 'next/link'
-import { BrandClaim } from '@/components/blocks/brand-claim'
 import type { Block, RenderMode } from '@/lib/blocks/types'
+import { BrandClaim } from '@/components/blocks/brand-claim'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
-import { fmtInt } from '@/lib/format'
+import { openLink } from '@/components/blocks/open-link'
+import { fmtInt, longMonth } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
+import { surface } from '@/lib/nav'
+import { JUDGE_NOT_CHECKED, type ClaimEcho } from '@/lib/reading/own-posts'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import type { ClaimRow, MarketSurfaceData } from '@/lib/pages/market-surface'
+import type { ClaimRow, ClaimSubjects, MarketSurfaceData } from '@/lib/pages/market-surface'
+import { RULE, SCALE } from '@/components/pages/overview/market'
 
-// MK5b · Say vs hear — its own card in the artboard's moves row (Block D wave
-// 2).
+// Y3 · What you say, and what your market says back (market-first WP3.6, plan
+// §2.6; was MK5b "Say vs hear").
 //
-// SPLIT OUT OF `market.ways`, WHICH IS WHERE IT WAS LIVING. The claims were a
-// tail on the bottom of the five-ways block, under that block's own heading and
-// meta, so a reader met "how a move is made" and then, with no break, three
-// claims of their own read back at them. The artboard gives them a card, and
-// they are a different question from the one the buttons answer.
+// EACH CLAIM COUNTED IN THE MARKET (IO F48). A claim's echo is `claimEcho` fed
+// with the reading month's MARKET videos, not the client audience's handful:
+// of September's 654 market videos, how many carry the evidence the latest
+// update cited for what the market said back. The count decides the state and
+// Pass D-a's stance only its sign, so a stance nothing carried reads "Not
+// talked about", and a month that could not be read says so rather than
+// printing a zero.
 //
-// THE ARTBOARD'S COUNTS ARE NOT PRINTED, AND THE REASON IS A MISSING FIELD.
-// "echoed 14 videos · pushed back 3" needs a count per claim, and
-// `SayVsHearEntry` (lib/pipeline/schemas.ts) carries `you_say`, `your_quote`,
-// `audience`, `they_say`, `gap` and `supporting_theme_ids` — no count at all.
-// The schema is `lib/pipeline/`, which this package may not touch, so the
-// counts are named in the status note as not done rather than derived here from
-// the supporting themes: a count over the themes behind a claim is a count of
-// the RETRIEVAL, and printing it as "echoed 14 videos" would be the shape of
-// mistake `PLAN_CLAIM_BASIS` and `CONCLUSIONS_CORPUS_LINE` both exist to stop.
-//
-// WHAT IS PRINTED INSTEAD IS THE VERDICT AND ITS HOLD. `CLAIMS_CAVEAT` carries
-// the measurement behind the refusal — 6 of the 8 say-vs-hear claims that have
-// ever recurred have already flipped their verdict — so the card says this is
-// the latest update's reading and does not dress it as a series.
+// YOUR CLAIMS, BY SUBJECT. Over the claims, one line counts your claims read to
+// date by the subject the post-and-claim judge filed each under (MF3
+// `own_post_subjects`). Before the judge has filed them it reads "not checked
+// yet", never "0 waterproofing" (done-when 6).
 //
 // A CLAIM IS NOT A QUOTE. `you_say` is Pass D-a's line for what the client
-// claimed, so it prints as plain text through `BrandClaim` (no quotation marks,
-// no serif: those belong to people in the conversation) and is marked `stored`
-// under `pass_d_a_say_vs_hear`, the slot that wrote it, as is the audience's
-// line under it.
+// claimed, printed through `BrandClaim` and marked `stored` under
+// `pass_d_a_say_vs_hear`, as is the market's line beside it.
+//
+// THE HEADER IS THE TITLE ALONE AND THE FOOTER A LINK ALONE (25 Sep rulings):
+// the verdicts' dating (the latest update's reading) is the column head's, and
+// the month's base rides with each count.
 
-/** The artboard's dot, in the colour the verdict earns. */
-const DOT: Record<string, string> = {
-  echoes: 'var(--you)',
-  contradicts: 'var(--negative)',
+/** The verdict dot, in the colour the state earns. */
+const DOT: Record<ClaimEcho['state'], string> = {
+  echoed: 'var(--you)',
+  pushed_back: 'var(--negative)',
   silent: 'var(--border)',
+  not_tracked: 'var(--border)',
+}
+const EMAIL_DOT: Record<ClaimEcho['state'], string> = {
+  echoed: EMAIL.up,
+  pushed_back: EMAIL.down,
+  silent: EMAIL.border,
+  not_tracked: EMAIL.border,
 }
 
-function Claim({ claim, mode }: { claim: ClaimRow; mode: RenderMode }) {
+/** A stored row with no echo (before WP3.6) keeps its stance word alone. */
+const stateOf = (claim: ClaimRow): ClaimEcho['state'] =>
+  claim.echo?.state ?? (claim.audience === 'echoes' ? 'echoed' : claim.audience === 'contradicts' ? 'pushed_back' : 'silent')
+
+/** "89 of 654 videos in September", or why nothing was counted. */
+function EchoCount({ echo, month, mode }: { echo: ClaimEcho | undefined; month: string; mode: RenderMode }) {
+  if (!echo) return null
   const email = mode === 'email'
+  if (echo.state === 'not_tracked') {
+    return email
+      ? <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted, marginTop: 2 }}>{echo.why}</div>
+      : <span className="mt-1 block text-[12px] leading-[1.4] text-muted-foreground">{echo.why}</span>
+  }
+  const words = `${fmtInt(echo.value.k)} of ${fmtInt(echo.value.n)} videos in ${longMonth(month)}`
+  return email
+    ? <div data-copy="level" style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted, marginTop: 2 }}>{words}</div>
+    : <span data-copy="level" className={`mt-1 block ${SCALE.tag}`}>{words}</span>
+}
+
+/** Your claims read to date, by subject: the judge's filing, or "not checked
+ *  yet" where it has not filed them. */
+function SubjectsLine({ c, mode }: { c: ClaimSubjects; mode: RenderMode }) {
+  const email = mode === 'email'
+  const lead = (
+    <span className={email ? undefined : 'whitespace-nowrap'}>
+      Of your <span data-copy="figure" className={email ? undefined : 'font-mono font-semibold tabular-nums text-foreground'}>{fmtInt(c.claims)}</span> claims read to date
+    </span>
+  )
+  const shown = c.state === 'checked' ? c.subjects : c.subjects.filter((x) => x.k > 0)
+  const parts = c.state === 'unchecked'
+    ? [<span key="un">which subject each is about: {JUDGE_NOT_CHECKED}</span>]
+    : [
+        ...shown.map((x) => (
+          <span key={x.subjectId} className={email ? undefined : 'whitespace-nowrap'}>
+            <span data-copy="figure" className={email ? undefined : 'font-mono font-semibold tabular-nums text-foreground'}>{fmtInt(x.k)}</span> {x.name.toLowerCase()}
+          </span>
+        )),
+        ...(c.state === 'partial' ? [<span key="rest"><span data-copy="figure">{fmtInt(c.unfiled)}</span> {JUDGE_NOT_CHECKED}</span>] : []),
+      ]
   if (email) {
     return (
-      <div style={{ padding: '5px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
-        <div><BrandClaim mode={mode} copy="stored" slot="pass_d_a_say_vs_hear">{claim.youSay}</BrandClaim></div>
-        <div style={{ fontFamily: FONT.sans, fontSize: 11, fontWeight: 600, color: EMAIL.ink2, marginTop: 2 }}>{claim.verdictLabel}</div>
-        {claim.theySay ? <div data-copy="stored" data-slot="pass_d_a_say_vs_hear" style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink2, marginTop: 2 }}>{claim.theySay}</div> : null}
+      <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink2, margin: '2px 0 8px' }}>
+        {lead}{parts.length > 0 ? ': ' : ''}{parts.map((p, i) => <span key={i}>{i > 0 ? ' · ' : ''}{p}</span>)}
       </div>
     )
   }
   return (
-    <div className="flex min-w-0 flex-col gap-1">
-      <BrandClaim mode={mode} copy="stored" slot="pass_d_a_say_vs_hear" className="block">{claim.youSay}</BrandClaim>
-      <span className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
-        <span aria-hidden className="size-1.5 shrink-0 rounded-full" style={{ background: DOT[claim.audience] ?? 'var(--border)' }} />
-        {claim.verdictLabel}
+    <p className="m-0 flex flex-wrap items-baseline gap-x-5 gap-y-1 text-[15px] leading-[1.45] text-secondary-foreground">
+      {lead}
+      {parts.length > 0 ? <span aria-hidden className="h-4 w-px self-center bg-border" /> : null}
+      {parts}
+    </p>
+  )
+}
+
+function Claim({ claim, month, mode }: { claim: ClaimRow; month: string; mode: RenderMode }) {
+  const state = stateOf(claim)
+  const label = claim.echo?.label ?? claim.verdictLabel
+  if (mode === 'email') {
+    return (
+      <div style={{ padding: '6px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
+        <div><BrandClaim mode={mode} copy="stored" slot="pass_d_a_say_vs_hear">{claim.youSay}</BrandClaim></div>
+        <div style={{ fontFamily: FONT.sans, fontSize: 11, fontWeight: 600, color: EMAIL.ink2, marginTop: 2 }}>
+          <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: 9999, background: EMAIL_DOT[state], marginRight: 6 }} />
+          {label}
+        </div>
+        {claim.theySay ? <div data-copy="stored" data-slot="pass_d_a_say_vs_hear" style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink2, marginTop: 2 }}>{claim.theySay}</div> : null}
+        <EchoCount echo={claim.echo} month={month} mode={mode} />
+      </div>
+    )
+  }
+  return (
+    <div role="row" className={`grid min-w-0 grid-cols-1 gap-2 py-4 md:grid-cols-[minmax(0,1.3fr)_150px_minmax(0,1.3fr)] md:gap-6 ${RULE.row}`}>
+      <BrandClaim mode={mode} copy="stored" slot="pass_d_a_say_vs_hear" className="block text-[14px] leading-[1.5]">{claim.youSay}</BrandClaim>
+      <span className="flex items-center gap-2 self-start text-[14px] font-semibold text-foreground">
+        <span aria-hidden className="size-2 shrink-0 rounded-[2px]" style={{ background: DOT[state] }} />
+        {label}
       </span>
-      {claim.theySay ? <p data-copy="stored" data-slot="pass_d_a_say_vs_hear" className="m-0 text-[12px] leading-[1.4] text-secondary-foreground">{claim.theySay}</p> : null}
+      <span className="min-w-0">
+        {claim.theySay ? <p data-copy="stored" data-slot="pass_d_a_say_vs_hear" className="m-0 text-[14px] leading-[1.5] text-secondary-foreground">{claim.theySay}</p> : null}
+        <EchoCount echo={claim.echo} month={month} mode={mode} />
+      </span>
     </div>
   )
 }
 
 export const marketSayHear: Block<MarketSurfaceData> = {
   key: 'market.sayhear',
-  title: 'Say vs hear',
-  question: 'What do we claim, and what does the conversation say back?',
+  title: 'What you say, and what your market says back',
+  question: 'What do we claim, and what does the market say back?',
 
   render(data, mode = 'app', ctx) {
     const w = data.ways
     const email = mode === 'email'
     const empty = marketSayHear.emptyState(data)
-    const href = `${ctx.appUrl}/dashboard/voice`
+    const voice = surface('voice')
+    const footer = w.claims.length > 0 ? openLink(mode, `${ctx.appUrl}${voice.href}`, 'Hear these voices →') : undefined
+    const subjects = w.claimSubjects ?? null
 
     return (
-      <BlockFrame
-        title={marketSayHear.title}
-        question={marketSayHear.question}
-        mode={mode}
-        meta={w.claims.length > 0 ? `${fmtInt(w.claims.length)} ${w.claims.length === 1 ? 'claim' : 'claims'} · your audience` : undefined}
-        footer={w.claims.length > 0
-          ? email
-            ? <a href={href} style={{ color: EMAIL.ink }}>Hear these voices →</a>
-            : <Link href={href} className="hover:underline">Hear these voices →</Link>
-          : undefined}
-        // THE UPDATE, NOT THE MONTH. The artboard's note reads "September",
-        // which would date these verdicts by the comment; they are the latest
-        // UPDATE's reading of a cumulative corpus, and `CLAIMS_CAVEAT` under
-        // them says so at length.
-        footerNote={w.claims.length > 0 ? 'this update’s reading' : undefined}
-      >
+      <BlockFrame title={marketSayHear.title} question={marketSayHear.question} mode={mode} footer={footer} roomy>
+        {subjects && subjects.claims > 0 ? <SubjectsLine c={subjects} mode={mode} /> : null}
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
-        <div className={email ? undefined : 'flex min-h-0 flex-1 flex-col justify-between gap-2.5'}>
-          {w.claims.map((claim) => <Claim key={claim.id} claim={claim} mode={mode} />)}
-        </div>
-        {/* No "What a verdict here is worth" disclosure: the footer note
-            "this update's reading" carries the caveat (copy de-clutter B72). */}
+        {w.claims.length > 0 ? (
+          email ? (
+            <div>{w.claims.map((claim) => <Claim key={claim.id} claim={claim} month={data.month} mode={mode} />)}</div>
+          ) : (
+            <div role="table" className="flex min-w-0 flex-col">
+              <span className="text-[15px] font-semibold text-foreground">
+                {w.claims.length === 1 ? 'One of them' : `${w.claims.length === 2 ? 'Two' : 'Three'} of them`}, with what your market said back
+              </span>
+              <div role="row" className={`mt-3 hidden grid-cols-[minmax(0,1.3fr)_150px_minmax(0,1.3fr)] gap-6 md:grid ${RULE.head}`}>
+                <span role="columnheader" className={SCALE.head}>You say</span>
+                <span role="columnheader" className={SCALE.head}>Your market, this update</span>
+                <span role="columnheader" className={SCALE.head}>What it says back</span>
+              </div>
+              {w.claims.map((claim) => <Claim key={claim.id} claim={claim} month={data.month} mode={mode} />)}
+            </div>
+          )
+        ) : null}
       </BlockFrame>
     )
   },
 
-  // NO FIGURES, and the design says so itself: this reading "holds no numbers
-  // except the per-month verdict on a registered claim", which is the number it
-  // cannot produce.
-  figures(): FigureTable {
-    return {}
+  /** Each claim's market count, where it was counted. */
+  figures(data): FigureTable {
+    const out: FigureTable = {}
+    data.ways.claims.forEach((c, i) => {
+      if (c.echo && c.echo.state !== 'not_tracked') {
+        out[`sayhear_${i + 1}`] = { value: c.echo.value.k, unit: 'videos', label: `market videos carrying what was said back to claim ${i + 1}, of ${c.echo.value.n}` }
+      }
+    })
+    return out
   },
 
   emptyState(data) {
