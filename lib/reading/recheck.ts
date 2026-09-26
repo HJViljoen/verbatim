@@ -41,11 +41,22 @@ import { bandVerdict, type Counted, type ObjectKind, type Verdict } from './verd
 //   too_few                   under the floor (fewer than 100 videos or 10 of
 //                             the object's on a side);
 //   follows_depth             dense20 only: the whole market's share FELL
-//                             ("moved", down) and among well-read videos it did
-//                             not move: the fall follows how deeply the newer
-//                             month's videos have been read, not the market.
+//                             ("moved", down), among well-read videos it did
+//                             not move, AND the well-read change is materially
+//                             smaller than the whole market's (it rose, or it
+//                             fell by at most DEPTH_SHRINK_MAX of the whole
+//                             market's fall): the fall follows how deeply the
+//                             newer month's videos have been read, not the
+//                             market. A well-read fall about as large as the
+//                             whole market's (staging's "Leaving for something
+//                             else": -4.6 pts on the market, -6.1 among
+//                             well-read videos) did not go away, so it reads
+//                             no_clear_change and prints no depth sentence.
 
-export const RECHECK_METHOD_VERSION = 'recheck_v1'
+/** recheck_v2 (the deploy-3 review): follows_depth needs the well-read change
+ *  to be materially smaller than the whole market's. recheck_v1 gave it
+ *  whenever the well-read verdict merely did not move. */
+export const RECHECK_METHOD_VERSION = 'recheck_v2'
 export const RECHECK_POPULATIONS = ['same_searches_clean', 'dense20', 'all_but_noise'] as const
 export type RecheckPopulation = (typeof RECHECK_POPULATIONS)[number]
 /** comparability_checks.outcome */
@@ -56,6 +67,9 @@ export const DENSE_MIN_DATED = 20
 /** A theme is re-checked when the whole market holds it on this many videos in
  *  either month (the board's floor). */
 export const THEME_MIN_K = 10
+/** follows_depth: the largest well-read fall, as a share of the whole
+ *  market's fall, that still counts as the fall going away. */
+export const DEPTH_SHRINK_MAX = 0.5
 /** The client's audience key: its own posts are never the market. */
 const CLIENT_AUDIENCE = 'client'
 const CATEGORY_AUDIENCE = 'industry-other'
@@ -170,11 +184,21 @@ export function themesToCheck(prevAll: readonly LensRow[], currAll: readonly Len
   return [...ids].sort()
 }
 
+/** The whole market's share fell clearly, and among well-read videos the
+ *  change is materially smaller: it rose, held, or fell by at most
+ *  DEPTH_SHRINK_MAX of the whole market's fall. */
+function followsDepth(dense: Verdict, whole: Verdict | null): boolean {
+  const w = whole?.changePts
+  const d = dense.changePts
+  if (whole?.state !== 'moved' || w == null || !(w < 0) || d == null || !Number.isFinite(d)) return false
+  return d >= 0 || -d <= DEPTH_SHRINK_MAX * -w
+}
+
 export function outcomeOf(population: RecheckPopulation, verdict: Verdict, whole: Verdict | null): CheckOutcome {
   const sidesOk = !!verdict.baseline && verdict.value.n >= CHECK_MIN_VIDEOS && verdict.baseline.n >= CHECK_MIN_VIDEOS
   if (!sidesOk || verdict.state === 'too_little_data' || verdict.state === 'baseline_forming' || verdict.state === 'refused') return 'too_few'
   if (verdict.state === 'moved') return 'moved'
-  if (population === 'dense20' && whole?.state === 'moved' && (whole.changePts ?? 0) < 0) return 'follows_depth'
+  if (population === 'dense20' && followsDepth(verdict, whole)) return 'follows_depth'
   return 'no_clear_change'
 }
 

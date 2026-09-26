@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import { RECHECK_METHOD_VERSION } from '../reading/recheck'
 import { selectAll } from '../supabase-admin'
 import type { StoredCheck } from './overview-market/change'
 
@@ -28,8 +29,10 @@ const say = (what: string, error: unknown): void => {
   console.error(`[overview] ${what}: ${(error as { message?: string } | null)?.message ?? String(error)}; read as not read`)
 }
 
-/** The pair's stored rows, every `computed_at` (the block keeps the newest per
- *  object); null where they could not be read. */
+/** The pair's stored rows under the current method (RECHECK_METHOD_VERSION:
+ *  a row an older rule planned is not read, so the block prints "checks
+ *  pending" until the script is applied again), every `computed_at` (the
+ *  block keeps the newest per object); null where they could not be read. */
 export async function loadCheckRows(client: SupabaseClient, clientId: string, prevMonth: string, month: string): Promise<StoredCheck[] | null> {
   try {
     const rows = await selectAll<StoredCheck>(() =>
@@ -39,6 +42,7 @@ export async function loadCheckRows(client: SupabaseClient, clientId: string, pr
         .eq('client_id', clientId)
         .eq('prev_month', prevMonth)
         .eq('month', month)
+        .eq('method_version', RECHECK_METHOD_VERSION)
         .in('population', [...PAGE_POPULATIONS])
         .order('computed_at', { ascending: true })
         .order('population', { ascending: true })

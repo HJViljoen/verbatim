@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  CHECK_MIN_VIDEOS, DENSE_MIN_DATED, mayPrintMoved, outcomeOf, pooledCount, populationSet, populationShares, RECHECK_METHOD_VERSION,
+  CHECK_MIN_VIDEOS, DENSE_MIN_DATED, DEPTH_SHRINK_MAX, mayPrintMoved, outcomeOf, pooledCount, populationSet, populationShares, RECHECK_METHOD_VERSION,
   RECHECK_POPULATIONS, recheckRows, sameCheck, themesToCheck, type LensRow, type PopulationVideo,
 } from './recheck'
 import { bandVerdict } from './verdicts'
@@ -24,6 +24,9 @@ const allAug = lens([
   [C, 'kind', 'question', 216, 351], [R, 'kind', 'question', 15, 26],
   [C, 'kind', 'feature_request', 59, 351], [R, 'kind', 'feature_request', 5, 26],
   [C, 'mood', 'positive', 241, 351], [R, 'mood', 'positive', 21, 26],
+  [C, 'kind', 'praise', 279, 351], [R, 'kind', 'praise', 21, 26],
+  [C, 'kind', 'objection', 93, 351], [R, 'kind', 'objection', 4, 26],
+  [C, 'kind', 'switching_signal', 31, 351], [R, 'kind', 'switching_signal', 5, 26],
   [C, 'theme', 'faaa44da-7c45-4750-bf9a-f1e6e08d5502', 42, 351], [C, 'theme', '3f64f05b-28b2-4564-8f15-dbd747ffb0cb', 10, 351],
 ])
 const allSep = lens([
@@ -31,6 +34,9 @@ const allSep = lens([
   [C, 'kind', 'question', 317, 625], [R, 'kind', 'question', 17, 29],
   [C, 'kind', 'feature_request', 146, 625], [R, 'kind', 'feature_request', 5, 29],
   [C, 'mood', 'positive', 483, 625], [R, 'mood', 'positive', 15, 29],
+  [C, 'kind', 'praise', 449, 625], [R, 'kind', 'praise', 19, 29],
+  [C, 'kind', 'objection', 107, 625], [R, 'kind', 'objection', 8, 29],
+  [C, 'kind', 'switching_signal', 32, 625],
   [C, 'theme', 'faaa44da-7c45-4750-bf9a-f1e6e08d5502', 72, 625], [C, 'theme', '3f64f05b-28b2-4564-8f15-dbd747ffb0cb', 2, 625],
   [C, 'theme', 'ce659d82-892e-4383-ae50-1ecca451833b', 10, 625],
   ['client', 'denominator', 'videos', 8, 8], ['client', 'kind', 'question', 2, 8],
@@ -40,12 +46,18 @@ const denseAug = lens([
   [C, 'kind', 'question', 136, 189], [R, 'kind', 'question', 7, 11],
   [C, 'kind', 'feature_request', 34, 189], [R, 'kind', 'feature_request', 3, 11],
   [C, 'mood', 'positive', 115, 189], [R, 'mood', 'positive', 7, 11],
+  [C, 'kind', 'praise', 167, 189], [R, 'kind', 'praise', 11, 11],
+  [C, 'kind', 'objection', 60, 189], [R, 'kind', 'objection', 3, 11],
+  [C, 'kind', 'switching_signal', 27, 189], [R, 'kind', 'switching_signal', 3, 11],
 ])
 const denseSep = lens([
   [C, 'denominator', 'videos', 263, 263], [R, 'denominator', 'videos', 8, 8],
   [C, 'kind', 'question', 170, 263], [R, 'kind', 'question', 6, 8],
   [C, 'kind', 'feature_request', 90, 263], [R, 'kind', 'feature_request', 3, 8],
   [C, 'mood', 'positive', 200, 263], [R, 'mood', 'positive', 2, 8],
+  [C, 'kind', 'praise', 228, 263], [R, 'kind', 'praise', 5, 8],
+  [C, 'kind', 'objection', 70, 263], [R, 'kind', 'objection', 5, 8],
+  [C, 'kind', 'switching_signal', 24, 263],
 ])
 const cleanAug = lens([[C, 'denominator', 'videos', 78, 78], [C, 'kind', 'feature_request', 13, 78], [C, 'kind', 'question', 50, 78]])
 const cleanSep = lens([[C, 'denominator', 'videos', 103, 103], [C, 'kind', 'feature_request', 24, 103], [C, 'kind', 'question', 52, 103]])
@@ -91,7 +103,11 @@ describe('pooledCount', () => {
 describe('the outcome', () => {
   const rows = recheckRows({
     clientId: 'ac16988e-c4f3-4baf-b388-73895852a554', prevMonth: '2026-08-01', month: '2026-09-01',
-    objects: [{ kind: 'kind', id: 'question', label: 'Asking how it works' }, { kind: 'kind', id: 'feature_request', label: 'Asking for something' }, { kind: 'mood', id: 'positive', label: 'Positive' }],
+    objects: [
+      { kind: 'kind', id: 'question', label: 'Asking how it works' }, { kind: 'kind', id: 'feature_request', label: 'Asking for something' },
+      { kind: 'kind', id: 'praise', label: 'Saying it worked' }, { kind: 'kind', id: 'objection', label: 'Pushing back' },
+      { kind: 'kind', id: 'switching_signal', label: 'Leaving for something else' }, { kind: 'mood', id: 'positive', label: 'Positive' },
+    ],
     whole: { prev: allAug, curr: allSep },
     populations: [
       { sets: { prev: { population: 'same_searches_clean', ids: [], base: 203, makers: 90, noise: 35, ambiguous: 0, minDated: 1 }, curr: { population: 'same_searches_clean', ids: [], base: 249, makers: 131, noise: 15, ambiguous: 0, minDated: 1 } }, lens: { prev: cleanAug, curr: cleanSep } },
@@ -107,11 +123,37 @@ describe('the outcome', () => {
     expect(rows.filter(mayPrintMoved)).toEqual([])
   })
 
-  it('reads a fall the whole market shows but well-read videos do not as following depth (questions: 231 of 377 to 334 of 654; 143 of 200 to 176 of 271)', () => {
-    const whole = bandVerdict({ objectKind: 'kind', objectId: 'question', objectLabel: 'q', audience: 'market', window: { kind: 'month', from: '2026-09-01', to: '2026-10-01' }, value: { k: 334, n: 654 }, baseline: { k: 231, n: 377 } })
-    expect(whole.state).toBe('moved')
-    expect(whole.changePts).toBeLessThan(0)
-    expect(get('dense20', 'question')).toMatchObject({ k_prev: 143, n_prev: 200, k_curr: 176, n_curr: 271, outcome: 'follows_depth' })
+  const wholeOf = (id: string) => bandVerdict({ objectKind: 'kind', objectId: id, objectLabel: id, audience: 'market', window: { kind: 'month', from: '2026-09-01', to: '2026-10-01' }, value: pooledCount(allSep, { kind: 'kind', id }), baseline: pooledCount(allAug, { kind: 'kind', id }) })
+
+  it('reads a fall the whole market shows and well-read videos mostly do not as following depth (praise: 300 of 377 to 468 of 654, -8.0; 178 of 200 to 233 of 271, -3.0; objections: -8.1 and -3.8)', () => {
+    expect(DEPTH_SHRINK_MAX).toBe(0.5)
+    for (const id of ['praise', 'objection']) {
+      expect(wholeOf(id).state).toBe('moved')
+      expect(wholeOf(id).changePts).toBeLessThan(0)
+    }
+    expect(get('dense20', 'praise')).toMatchObject({ k_prev: 178, n_prev: 200, k_curr: 233, n_curr: 271, outcome: 'follows_depth' })
+    expect(get('dense20', 'objection')).toMatchObject({ k_prev: 63, n_prev: 200, k_curr: 75, n_curr: 271, outcome: 'follows_depth' })
+  })
+
+  it('does not read a well-read fall about as large as the whole market\'s as following depth (switching: 36 of 377 to 32 of 654, -4.6; 30 of 200 to 24 of 271, -6.1)', () => {
+    expect(wholeOf('switching_signal')).toMatchObject({ state: 'moved', baseline: { k: 36, n: 377 }, value: { k: 32, n: 654 } })
+    const r = get('dense20', 'switching_signal')
+    expect(r).toMatchObject({ k_prev: 30, n_prev: 200, k_curr: 24, n_curr: 271, outcome: 'no_clear_change' })
+    expect(r.verdict.state).toBe('no_clear_change')
+    expect(Math.abs(r.verdict.changePts ?? 0)).toBeGreaterThan(Math.abs(wholeOf('switching_signal').changePts ?? 0))
+  })
+
+  it('does not read a well-read fall of more than half the whole market\'s as following depth (questions: 231 of 377 to 334 of 654, -10.2; 143 of 200 to 176 of 271, -6.6)', () => {
+    expect(wholeOf('question').state).toBe('moved')
+    expect(get('dense20', 'question')).toMatchObject({ k_prev: 143, n_prev: 200, k_curr: 176, n_curr: 271, outcome: 'no_clear_change' })
+  })
+
+  it('reads a well-read side that rose, against a whole-market fall, as following depth', () => {
+    const whole = wholeOf('praise')
+    const dense = { ...get('dense20', 'praise').verdict, changePts: 1.2 }
+    expect(outcomeOf('dense20', dense, whole)).toBe('follows_depth')
+    expect(outcomeOf('dense20', dense, { ...whole, changePts: 3 })).toBe('no_clear_change')
+    expect(outcomeOf('dense20', dense, null)).toBe('no_clear_change')
   })
 
   it('keeps a well-read "moved" as moved, which never prints alone (wishes: 37 of 200 to 93 of 271)', () => {

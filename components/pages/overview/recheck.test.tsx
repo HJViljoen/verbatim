@@ -41,7 +41,7 @@ describe('the re-check in "What changed, and what is ours" (WP2.3)', () => {
       expect(t, mode).toContain('provisional')
       expect(t, mode).toContain('Too few videos on the searches both months ran to check.')
       expect(t, mode).toContain('about half makers, about a tenth off-topic, left out · read with the 20 Sep update')
-      expect(t, mode).toContain('Asking how it works, Praising it, Pushing back and Leaving for something else: the fall follows how deeply September’s videos have been read, not the market.')
+      expect(t, mode).toContain('Praising it and Pushing back: the fall follows how deeply September’s videos have been read, not the market.')
       // 146 and 381 buyers' videos: 100 or more a side, so no buyers line.
       expect(t, mode).not.toContain('Buyers only')
       assertCopyContract(render(block.render(withRecheck('read'), mode, ctx)))

@@ -461,7 +461,7 @@ describe('the month strip: our search changes and the "as at" mark (the approved
 
 describe('the re-check on the searches both months ran (WP2.3)', () => {
   const TOO_FEW = 'Too few videos on the searches both months ran to check.'
-  const DEPTH = 'Asking how it works, Praising it, Pushing back and Leaving for something else: the fall follows how deeply September’s videos have been read, not the market.'
+  const DEPTH = 'Praising it and Pushing back: the fall follows how deeply September’s videos have been read, not the market.'
   const lines = () => buildCheckLines({ rows: recheckRows(), month: '2026-09-01', runFinish: recheckRunFinish() })
 
   it('on staging’s plan prints the two lines the plan expects: too few on the same searches, and the depth line', () => {
@@ -471,7 +471,7 @@ describe('the re-check on the searches both months ran (WP2.3)', () => {
     // candidate; the depth line names every kind whose fall follows depth.
     expect(got[0]).toMatchObject({ objectKind: 'kind', objectId: 'feature_request', label: 'Asking for something', population: 'same_searches_clean', readWith: RECHECK_READ_WITH })
     expect(got[0].populationShares).toEqual({ makers: 0.4889, noise: 0.1106 })
-    expect(got[1]).toMatchObject({ population: 'dense20', objectId: 'question', covers: ['Asking how it works', 'Praising it', 'Pushing back', 'Leaving for something else'] })
+    expect(got[1]).toMatchObject({ population: 'dense20', objectId: 'praise', covers: ['Praising it', 'Pushing back'] })
   })
 
   it('tags each line with its population’s makers and off-topic videos, in words, and the update it was read with', () => {
@@ -536,7 +536,7 @@ describe('where the re-check prints, and the buyers-only line (WP2.3)', () => {
   it('prints a paused tenant’s read rows, and a "too few" buyers line, but never "checks pending"', () => {
     const b = buildChangeBlock({ ...base, pair: pair('ended'), paused: true, recheck: { rows: recheckRows(), buyers: { prev: RECHECK_BUYERS.august, curr: RECHECK_BUYERS.september } } })
     expect(b.recheck).toBe('read')
-    expect(recheckLines(b).map((l) => l.key)).toEqual(['same_searches_clean:kind:feature_request', 'dense20:kind:question'])
+    expect(recheckLines(b).map((l) => l.key)).toEqual(['same_searches_clean:kind:feature_request', 'dense20:kind:praise'])
     const tooFew = { checks: b.checks, recheck: 'read' as const, paused: true, buyers: { prevMonth: '2026-07-01', month: '2026-08-01', prev: RECHECK_BUYERS.july, curr: RECHECK_BUYERS.august, readWith: null } }
     expect(recheckLines(tooFew).at(-1)?.sentence).toBe('Buyers only, without makers and off-topic videos: too few in July to check.')
     expect(recheckLines({ checks: [], recheck: 'pending', paused: true, buyers: null })).toEqual([])
@@ -556,14 +556,14 @@ describe('where the re-check prints, and the buyers-only line (WP2.3)', () => {
     const b = buildChangeBlock({ ...base, pair: pair('ended'), paused: false, recheck: { rows: [...other, ...recheckRows()], buyers: { prev: RECHECK_BUYERS.august, curr: RECHECK_BUYERS.september } } })
     expect(b.recheck).toBe('read')
     expect(b.checks.length).toBe(2)
-    expect(recheckLines(b).map((l) => l.key)).toEqual(['same_searches_clean:kind:feature_request', 'dense20:kind:question'])
+    expect(recheckLines(b).map((l) => l.key)).toEqual(['same_searches_clean:kind:feature_request', 'dense20:kind:praise'])
   })
 
   it('says "too few" in the month under 100 buyers’ videos (July’s 6 on staging), where there is room', () => {
     const b = { checks: [], recheck: 'pending' as const, buyers: { prevMonth: '2026-07-01', month: '2026-08-01', prev: RECHECK_BUYERS.july, curr: RECHECK_BUYERS.august, readWith: '2026-09-20T08:33:47.358Z' } }
     expect(recheckLines(b)[1]).toEqual({ key: 'buyers', sentence: 'Buyers only, without makers and off-topic videos: too few in July to check.', tag: 'read with the 20 Sep update' })
     const full = buildChangeBlock({ ...base, pair: pair('ended'), paused: false, recheck: { rows: recheckRows(), buyers: { prev: RECHECK_BUYERS.july, curr: RECHECK_BUYERS.august } } })
-    expect(recheckLines(full).map((l) => l.key)).toEqual(['same_searches_clean:kind:feature_request', 'dense20:kind:question', 'buyers'])
+    expect(recheckLines(full).map((l) => l.key)).toEqual(['same_searches_clean:kind:feature_request', 'dense20:kind:praise', 'buyers'])
   })
 
   it('prints nothing beside a month still running, a paused tenant with no row, or a page built without the re-check', () => {
