@@ -438,6 +438,8 @@ export interface ChecksResult {
   equalAge: ReturnType<typeof equalAgeCut>
   rows: StepCheckRow[]
   lines: string[]
+  /** How many objects were checked (kinds, ready subjects, mood, themes). */
+  objects: number
 }
 
 /**
@@ -450,7 +452,7 @@ export interface ChecksResult {
 export async function recheckPair(ctx: MeasureContext, io: ChecksIO, prevMonth: string, month: string, opts: { requireReadToEnd?: boolean } = {}): Promise<ChecksResult> {
   const lines: string[] = []
   const { update, lastGather, later } = pairRead(ctx, month)
-  const base: ChecksResult = { prevMonth, month, state: 'unread', readThroughRun: update?.id ?? null, themeRun: null, sets: [], equalAge: null, rows: [], lines }
+  const base: ChecksResult = { prevMonth, month, state: 'unread', readThroughRun: update?.id ?? null, themeRun: null, sets: [], equalAge: null, rows: [], lines, objects: 0 }
   lines.push(`  ${month.slice(0, 7)}: ${later.state}, ${later.readToEnd ? 'read past its end' : 'NOT read past its end'}, latest update ${update?.id ?? '(none)'}${update ? ` of ${update.finishedAt}` : ''}`)
   if (opts.requireReadToEnd && !later.readToEnd) {
     lines.push(`  ${month.slice(0, 7)} has not been read past its end: no re-check is written for a month still filling at its end (plan WP2.3)`)
@@ -537,8 +539,12 @@ export async function recheckPair(ctx: MeasureContext, io: ChecksIO, prevMonth: 
     })
     rows.push(...aged.map((r) => ({ ...r, population: 'equal_age' as const })))
   }
-  lines.push(`\n  ${rows.length} rows (${objects.length} objects × ${sets.length + (equalAge ? 1 : 0)} populations): ${outcomeCounts(rows)}`)
-  return { prevMonth, month, state: 'measured', readThroughRun: update.id, themeRun, sets, equalAge, rows, lines }
+  return { prevMonth, month, state: 'measured', readThroughRun: update.id, themeRun, sets, equalAge, rows, lines, objects: objects.length }
+}
+
+/** The line the script prints after its report: the rows by population and outcome. */
+export function checksSummaryLine(r: Pick<ChecksResult, 'rows' | 'objects' | 'sets' | 'equalAge'>): string {
+  return `\n  ${r.rows.length} rows (${r.objects} objects × ${r.sets.length + (r.equalAge ? 1 : 0)} populations): ${outcomeCounts(r.rows)}`
 }
 
 function outcomeCounts(rows: readonly StepCheckRow[]): string {

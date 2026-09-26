@@ -9,7 +9,7 @@ import {
   isMissingObject, readExportFile, readKeywordRows, readMonthVideos, readProvenanceTable, readRuns,
   readVerdicts, readVideos, snapshotOf, type Pages,
 } from '../lib/provenance/load'
-import { freshCheckRows, measureContext, recheckPair, type HeldCheck, type StepCheckRow } from '../lib/provenance/measure'
+import { checksSummaryLine, freshCheckRows, measureContext, recheckPair, type HeldCheck, type StepCheckRow } from '../lib/provenance/measure'
 import type { ProvenanceSnapshot } from '../lib/provenance/reconstruct'
 import { KIND_LABELS } from '../lib/reading/kinds'
 import { mayPrintMoved, RECHECK_METHOD_VERSION, type CheckRow, type LensRow, type PopulationVideo } from '../lib/reading/recheck'
@@ -226,6 +226,7 @@ async function main() {
     }
   }
   console.log('    (about a third of buying-interest remarks sit on makers\' videos, and "I want to make this" is filed as buying interest)')
+  console.log(checksSummaryLine(result))
   for (const r of rows.filter((x) => x.population !== 'equal_age' && mayPrintMoved(x as CheckRow))) console.log(`    MOVED on the searches both months ran (provisional): ${r.object_kind} ${r.verdict.objectLabel} ${show(r)}`)
   for (const r of rows.filter((x) => x.outcome === 'follows_depth')) console.log(`    follows depth: ${r.object_kind} ${r.verdict.objectLabel} ${show(r)}`)
 
