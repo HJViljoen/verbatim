@@ -6,6 +6,7 @@ import {
   buildAsks,
   buildConversationBoard,
   buildThemeBoard,
+  groupedMakerWords,
   makerCell,
   makerFraction,
   makerShareSentence,
@@ -17,7 +18,7 @@ import {
   themeProvenance,
   type MarketTheme,
 } from './board'
-import { STAGING_AUGUST_N, STAGING_SEPTEMBER_N, stagingOssurThemes, stagingSealandThemes } from '../../test/conversation-fixture'
+import { STAGING_AUGUST_N, STAGING_HEARD_BEFORE, STAGING_SEPTEMBER_N, stagingOssurThemes, stagingSealandThemes } from '../../test/conversation-fixture'
 import { AUGUST, AUGUST_CATEGORY_N, SEPTEMBER, SEPTEMBER_CATEGORY_N, septemberThemes } from '../../test/market-fixture'
 
 const board = (themes: MarketTheme[] = septemberThemes(), segments: 'measured' | 'unknown' | 'no_rule' = 'measured') =>
@@ -294,7 +295,69 @@ describe('makerShareSentence: the theme pane’s maker words (plan §2.4 C3)', (
   it('says "fewer than a fifth" under the note share, the fraction over it, and nothing where not measured', () => {
     expect(makerShareSentence(3 / 17)).toBe('fewer than a fifth of its videos are makers’ own')
     expect(makerShareSentence(50 / 140)).toBe('about a third of its videos are makers’ own')
-    expect(makerShareSentence(63 / 72)).toBe('most of its videos are makers’ own')
+    expect(makerShareSentence(63 / 72)).toBe('over four in five of its videos are makers’ own')
+    expect(makerShareSentence(11 / 11)).toBe('all of its videos are makers’ own')
     expect(makerShareSentence(null)).toBeNull()
+  })
+})
+
+describe('groupedMakerWords: a maker-led row’s words on Conversation', () => {
+  it('says how far past half, never "mostly"; nothing under half', () => {
+    expect(groupedMakerWords(46 / 65)).toBe('about three quarters makers')
+    expect(groupedMakerWords(63 / 72)).toBe('over four in five makers')
+    expect(groupedMakerWords(12 / 15)).toBe('about four in five makers')
+    expect(groupedMakerWords(24 / 25)).toBe('nearly all makers')
+    expect(groupedMakerWords(11 / 11)).toBe('all makers')
+    expect(groupedMakerWords(0.55)).toBe('over half makers')
+    expect(groupedMakerWords(0.49)).toBeNull()
+    expect(groupedMakerWords(null)).toBeNull()
+  })
+})
+
+// THE FLAG TABLE, ROW BY ROW: staging's September themes at 10+ with the facts
+// read on 26 Sep (August's category k, and whether any earlier month in any
+// audience holds the id), and the flag WP2.4's rule gives each.
+describe('themeFlags on each of staging’s September themes at 10+', () => {
+  const EXPECTED: [label: string, flag: 'new' | 'now_10' | null][] = [
+    ['Buying interest and ordering questions', null],
+    ['Love for creative upcycling', null],
+    ['Admiration for handmade craftsmanship', null],
+    ['Praise for beautiful bag design', null],
+    ['Requests for step-by-step tutorials', null],
+    ['Questions about materials and tools', null],
+    ['More colors and variants wanted', 'now_10'],
+    ['Price and sale questions', 'now_10'],
+    ['Need for exact measurements', 'now_10'],
+    ['Tutorial praised as easy to follow', 'now_10'],
+    ['Interest in shipping and locations', null],
+    ['Confusion about airline size rules', 'now_10'],
+    ['Appreciation for smart packing tips', 'now_10'],
+    ['Shopping interest from featured items', 'now_10'],
+    ['Requests for the sewing pattern', 'now_10'],
+    ['Frustration with bag weight', 'now_10'],
+    ['Praise for laptop carry features', 'now_10'],
+    ['Comfort problems when carrying', 'now_10'],
+    ['Appreciation for thrifting value', 'now_10'],
+    ['Preference for secondhand fashion', 'new'],
+    ['Laundry planning for travel', 'new'],
+    ['Audience identities and amputation types', null],
+    ['Admiration for personal resilience', null],
+    ['Questions about prosthetic function', null],
+    ['Requests for prosthetic help', null],
+    ['Brand boycott over politics', 'new'],
+    ['Praise for prosthetic look', null],
+    ['Price and availability questions', null],
+    ['Cost blocks access', null],
+    ['Excitement about prosthetic innovation', null],
+    ['Prosthetics need more personalization', null],
+    ['Socket fit keeps changing', null],
+    ['Insurance delays and denials', null],
+  ]
+  const all = [...stagingSealandThemes(), ...stagingOssurThemes()]
+  it.each(EXPECTED)('“%s” → %s', (label, flag) => {
+    const t = all.find((x) => x.label === label)!
+    expect(t).toBeDefined()
+    expect(themeFlags({ k: t.k, prevK: t.prev?.k ?? null, heardBefore: STAGING_HEARD_BEFORE.get(t.registryId) ?? true, regrouped: false }))
+      .toEqual(flag ? [flag] : [])
   })
 })

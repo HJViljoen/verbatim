@@ -79,7 +79,8 @@ export const SURFACES: readonly Surface[] = [
   // every theme at 10 videos or more, so the label changes with it. The key,
   // the address and the page key stay `voice`, so no stored link or report
   // breaks.
-  { key: 'voice', href: '/dashboard/voice', label: 'Conversation', question: 'Everything your market talked about, in full', group: 'Intelligence', bar: 'reading', page: 'voice' },
+  // No horizon either: every block reads the reading month, as on Your market.
+  { key: 'voice', href: '/dashboard/voice', label: 'Conversation', question: 'Everything your market talked about, in full', group: 'Intelligence', bar: 'reading', horizon: false, page: 'voice' },
   { key: 'competitive', href: '/dashboard/competitive', label: 'Competitive', question: 'Who else is in this, and how much of it do they hold?', group: 'Intelligence', bar: 'reading', page: 'competitive' },
   { key: 'market', href: '/dashboard/market', label: 'Your moves', question: 'What should we do, and is it working?', group: 'Intelligence', bar: 'reading', horizon: false, page: 'market' },
   { key: 'week', href: '/dashboard/week', label: 'This week', question: 'What needs attention this week?', group: 'Intelligence', bar: 'week', page: 'week' },

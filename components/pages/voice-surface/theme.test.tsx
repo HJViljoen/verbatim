@@ -1,434 +1,111 @@
 import { describe, expect, it } from 'vitest'
 
-import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
+import { blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { voiceTheme } from './theme'
-import { refusedVoiceFixture, voiceFixture } from './fixture'
+import { ossurVoiceFixture, refusedVoiceFixture, voiceFixture } from './fixture'
 
-// VO3 · a theme in full (Phase 1 WP13).
+// C3 · a theme in full (market-first WP2.4, plan §2.4 C3), on staging's own
+// September: the lead "Price and sale questions" (a fifth makers, the front
+// page's lead on staging), and Össur's "Admiration for personal resilience".
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
-const ctx = blockContext('', EMAIL, { audience: 'industry-other' })
+const ctx = blockContext('', EMAIL, {})
 
 const draw = (data = voiceFixture(), mode: RenderMode = 'app') => renderText(voiceTheme.render(data, mode, ctx))
 
-describe('voiceTheme', () => {
-  // "0 OF THE VOICES" WAS BOTH DEFECTS AT ONCE: not English on the zero path,
-  // and a count with a definite article and no denominator on every other.
-  // Rendered on production: Össur "0 of the voices", Sealand "6 of the voices".
-  it('names the voices against the n behind the theme, and says "Voices" when there are none', () => {
-    expect(draw()).toContain('6 of 182 voices')
-    expect(draw()).not.toContain('of the voices')
+describe('voiceTheme (C3)', () => {
+  it('opens the lead with its kind and its maker share (a quarter or less), and its flag', () => {
+    const text = draw()
+    expect(text).toContain('Price and sale questions')
+    expect(text).toContain('Ready to buy')
+    expect(text).toContain('a fifth of its videos are makers’ own')
+    expect(text).toContain('Now 10+')
+    const markup = render(voiceTheme.render(voiceFixture(), 'app', ctx))
+    expect(markup).toContain('too few last month to call it a change')
+  })
 
-    const none = voiceFixture()
-    none.theme.quotes = []
-    none.theme.quoteCites = []
-    none.theme.quoteOnScreen = []
-    expect(draw(none)).toContain('Voices')
-    expect(draw(none)).toContain('No comment behind this theme can be quoted.')
-    expect(draw(none)).not.toContain('0 of 182 voices')
-    expect(draw(none)).not.toContain('voices No comment')
+  it('prints three levels, never a change: the month, the month before, and where its videos came from', () => {
+    const text = draw()
+    // 18 of 625 in September; 7 of 351 in August; 11 of its 18 from September's added searches.
+    expect(text).toMatch(/18\s*videos\s*in September,\s*3%\s*of 625 category videos/)
+    expect(text).toMatch(/2%\s*in August\s*7\s*of 351 category videos/)
+    expect(text).toMatch(/11\s*of the 18\s*came from searches we added in September/)
+    expect(text).not.toMatch(/[▲▼]/)
+  })
 
-    // No theme row for this registry entry: the count stands on its own rather
-    // than inventing a denominator.
-    const unknown = voiceFixture()
-    unknown.theme.quotesOf = null
-    expect(draw(unknown)).toContain('6 voices')
+  it('says "so far" only while the month is so far', () => {
+    const data = voiceFixture()
+    expect(draw({ ...data, reading: { ...data.reading!, state: 'so_far' } })).toMatch(/in September so far,/)
+  })
+
+  it('says what people did in its comments, counted over its own videos in the month', () => {
+    expect(draw()).toMatch(/What people did in its comments, of its 18 videos: Ready to buy 13 · Asking how it works 4 · Asking for something 1/)
+  })
+
+  it('prints its voices dated in the month, never from the video’s own account, with the English beneath', () => {
+    const text = draw()
+    expect(text).toContain('Voices from this theme')
+    expect(text).toContain('dated in September · never the video’s own account')
+    expect(text).toContain('Wow so your bags cost K363 in Zambia?')
+    expect(text).toContain('How much do you sell each leaf for?')
+    expect(text).toContain('TikTok · 18 Sep · under a category video')
+  })
+
+  it('"Ask about this" pre-fills the Ask box: `?ask=`, never `?q=` (plan §2.8)', () => {
+    const markup = render(voiceTheme.render(voiceFixture(), 'app', ctx))
+    expect(markup).toContain('href="/dashboard/agent?ask=What%20is%20behind%20%E2%80%9CPrice%20and%20sale%20questions%E2%80%9D%20in%20September%3F"')
+    expect(markup).not.toContain('agent?q=')
+    expect(renderText(voiceTheme.render(voiceFixture(), 'app', ctx))).toContain('The 18 videos behind this →')
+  })
+
+  it('draws no in-app control on paper', () => {
+    const markup = render(voiceTheme.render(voiceFixture(), 'print', ctx))
+    expect(markup).not.toContain('Ask about this')
+    expect(markup).not.toContain('videos behind this')
+  })
+
+  it('Össur (no maker rule): no maker words, and no provenance beyond the month’s none', () => {
+    const text = draw(ossurVoiceFixture())
+    expect(text).toContain('Admiration for personal resilience')
+    expect(text).toContain('Praising it')
+    expect(text).not.toContain('makers’ own')
+    expect(text).toMatch(/34\s*videos\s*in September,\s*10%\s*of 338 category videos/)
+    expect(text).toMatch(/0\s*of the 34\s*came from searches we added in September/)
+  })
+
+  it('before MF1: no maker words, no provenance, and says when nothing can be quoted', () => {
+    const text = draw(refusedVoiceFixture())
+    expect(text).not.toContain('makers’ own')
+    expect(text).not.toContain('came from searches')
+    expect(text).toContain('No comment from this theme dated in September can be quoted.')
+  })
+
+  it('has a title alone in its header and no footer (the preview; 25 Sep rulings)', () => {
+    const markup = render(voiceTheme.render(voiceFixture(), 'app', ctx))
+    expect(markup).toMatch(/<h2[^>]*>A theme in full<\/h2>/)
+    // No block footer: the frame's footer rail (a quote's own cite is a <footer> too).
+    expect(markup).not.toContain('<footer class="flex min-h-12')
   })
 
   it('renders in all three modes and keeps the copy contract', () => {
-    for (const data of [voiceFixture(), refusedVoiceFixture()]) {
+    for (const data of [voiceFixture(), ossurVoiceFixture(), refusedVoiceFixture()]) {
       for (const mode of MODES) {
         expect(copyViolations(voiceTheme.render(data, mode, ctx)), `${data.brand} · ${mode}`).toEqual([])
       }
     }
   })
 
-  it('prints the share with the count it rests on, never a bare percentage', () => {
-    const text = draw()
-    expect(text).toContain('9.4%')
-    expect(text).toContain('130 of 1,388 in September')
+  it('hands its voices up as refs, and declares the theme’s videos', () => {
+    expect(voiceTheme.quotes?.(voiceFixture())).toEqual(voiceFixture().theme.voices.map((v) => v.quote.ref))
+    expect(voiceTheme.figures?.(voiceFixture()).theme_videos?.value).toBe(18)
   })
 
-  it('prints the calibrated level only with its denominator, and the word the ladder assigns', () => {
-    // 130 of 1,388 is 9.4%, under `PREVALENCE.widespreadShare` — so the rung is
-    // Recurring. The fixture used to say "Widespread" beside those two numbers,
-    // which `prevalenceTier` cannot produce and which the page's own glossary
-    // ("at least 15%") refutes three inches away.
-    expect(draw()).toContain('Recurring · 130 of 1,388 videos')
-    expect(draw()).not.toContain('Widespread')
-  })
-
-  it('says when it was first heard and how many of the drawn months carried it', () => {
-    expect(draw()).toContain('first heard July 2026 · seen in 3 of 3 months drawn')
-  })
-
-  it('answers "first heard" off the record even when that month is not drawn', () => {
-    // The horizon pill moves the axis; it does not move the month a theme was
-    // first said in. Off the drawn months this line read September, July,
-    // March and June 2026 for one Össur theme the record carries from
-    // November 2022.
-    const base = voiceFixture()
-    const text = draw({ ...base, theme: { ...base.theme, firstHeard: '2022-11-01', firstHeardOnAxis: false } })
-    expect(text).toContain('first heard November 2022 · seen in')
-    expect(text).not.toContain('first read here')
-  })
-
-  it('heads the tone line as the AUDIENCE’s, because that is whose it is', () => {
-    expect(draw()).toContain('Tone · the category')
-    expect(draw()).not.toContain('all judged videos')
-  })
-
-  it('draws all four moods, because `moodShares` returns four', () => {
-    // The fixture listed three and left `mixed` out, so the fourth segment and
-    // the two-row legend four segments produce at this width had never been
-    // rendered — although production returns four on every judged month.
-    const text = draw()
-    for (const label of ['Positive', 'Mixed', 'Neutral', 'Negative']) expect(text, label).toContain(label)
-  })
-
-  it('says what is not recorded instead of a tone line when M5 is unapplied', () => {
-    const text = draw(refusedVoiceFixture())
-    expect(text).toContain('not recorded month by month for this workspace yet')
-    expect(text).not.toContain('of 1,112 judged')
-  })
-
-  it('carries the original quote and its translation, labelled', () => {
-    const text = draw()
-    expect(text).toContain('Nach 14 Monaten ist der Reißverschluss hin')
-    expect(text).toContain('After 14 months the zip is done')
-  })
-
-  it('prints the spoken line with its provenance, from a video no quote came out of', () => {
-    const text = draw()
-    expect(text).toContain('Said on camera')
-    expect(text).toContain('It kept a laptop dry through a whole winter of commuting.')
-    expect(text).toContain('YouTube · 9 Sep · a category video')
-    // SAID ONCE, the transcript half (lib/pages/voice-surface.ts). Quote 2 is
-    // cited "a category video, transcript" — an extract of the 11 Sep video's
-    // transcript — so this line may not be the head of that same transcript,
-    // printed ninety pixels away in a second transcription.
-    expect(text).not.toContain('One bag, three years, no regrets.')
-  })
-
-  it('cites a quote by platform, date and where — not by which column it came out of', () => {
-    // PORTED (wave 2): `insight_evidence` holds the words and
-    // `audience_insights.source_video_id` holds the video, so the cite can be
-    // the artboard's. The folded phrase survives for a quote whose video did
-    // not resolve, which is a real state — a superseded insight row.
-    const text = draw()
-    expect(text).toContain('TikTok · 14 Sep · under a category video')
-    expect(text).toContain('TikTok · 11 Sep · a category video, transcript')
-    expect(text).toContain('in the comments')
-  })
-
-  it('marks a cite with its platform glyph and still says the platform in words', () => {
-    // The artboard puts a glyph before the platform's name. It is decoration —
-    // aria-hidden — and the word stays: a glyph is a second rendering of a
-    // fact, never the only one. A quote whose video did not resolve has no
-    // platform to mark and says "in the comments".
-    const markup = render(voiceTheme.render(voiceFixture(), 'app', ctx))
-    expect(markup.match(/<svg viewBox="0 0 24 24"/g)?.length).toBeGreaterThanOrEqual(5)
-    expect(renderText(voiceTheme.render(voiceFixture(), 'app', ctx))).toContain('TikTok · 14 Sep · under a category video')
-  })
-
-  it('nests a video\u2019s on-screen text under the quote taken FROM that video', () => {
-    const text = draw()
-    expect(text).toContain('On-screen text on the same video: 1 bag. 3 years. 0 regrets')
-    // Said ONCE: the loose block-level "On screen" line would read as a second
-    // piece of evidence for the same words.
-    expect(text).not.toContain('On screen “1 bag')
-  })
-
-  it('sets the voices across three columns and fills both rows of them', () => {
-    expect(render(voiceTheme.render(voiceFixture(), 'app', ctx))).toContain('xl:grid-cols-3')
-    // `THEME_QUOTES` is six and the artboard draws two rows of three. With
-    // three in the fixture the second row — its gutter, its baseline against
-    // the cite block, the height the tile comes out at — was in no screenshot.
-    expect(voiceFixture().theme.quotes).toHaveLength(6)
-    const text = draw()
-    expect(text).toContain('Instagram · 5 Sep · under a Cotopaxi post')
-    expect(text).toContain('On-screen text on the same video: Zip test: 400 cycles, no failure')
-  })
-
-  it('draws the on-camera count as a figure carrying its own basis (D15)', () => {
-    const text = draw()
-    expect(text).toContain('17 said it on camera')
-    expect(text).toContain('of 182 voices, whole update')
-    // Once, not twice: the sentence form is for the arm where the numbers are
-    // absent.
-    expect(text.split('said on camera rather than typed')).toHaveLength(1)
-  })
-
-  it('states ONE population with ONE denominator and ONE word for it', () => {
-    // `quotesOf` and `onCameraOf` are both `themes.evidence_count` in the
-    // loader, so no production read can make them differ — the fixture said
-    // 182 and 120, and the block printed two denominators for one population
-    // three inches apart. Worse, it called that population "voices" in the
-    // heading and "quotes" in the basis, on a page whose rule is that a word
-    // has one fixed meaning. The artboard's word is "voices".
-    const t = voiceFixture().theme
-    expect(t.onCameraOf).toBe(t.quotesOf)
-    const text = draw()
-    expect(text).toContain('6 of 182 voices')
-    expect(text).toContain('of 182 voices')
-    expect(text).not.toContain('quotes behind this theme')
-  })
-
-  it('lets the month-by-month drawing fill its column, and measures the label pad', () => {
-    // The chart was capped at `max-w-[560px]` below xl because `padR` was
-    // charged flat at 42% of the width, so the box was mostly empty — and the
-    // cap then left that box LEFT-HUGGING in an 865px tile at 1024 with a
-    // ~300px void beside it. With the pad measured off the label the plot is
-    // two-thirds of the drawing, so it gets the column.
-    const markup = render(voiceTheme.render(voiceFixture(), 'app', ctx))
-    expect(markup).not.toContain('max-w-[560px]')
-    // "Will it survive a wet commute" + "9.4%": 224 units, not the flat 260 —
-    // 36 more units of plot than every label used to be charged.
-    expect(markup).toMatch(/viewBox="0 0 620 200"/)
-    expect(markup).toContain('<line x1="56" y1="170" x2="395"')
-  })
-
-  it('draws the reach bar in a fill separable from its own track', () => {
-    // `var(--cat)` (#9AA1A9) on the bg-inner track (#F6F7F8) is 2.4:1, under
-    // the 3:1 floor for a graphic that carries meaning — on the one bar in
-    // this product whose argument is that a reading can be weighed, and the
-    // only visual encoding of this theme's level.
-    const markup = render(voiceTheme.render(voiceFixture(), 'app', ctx))
-    expect(markup).toContain('background:var(--chart-3)')
-  })
-
-  it('lets both bases wrap rather than clipping a denominator mid-number', () => {
-    // D15, and `BlockStat({ baseWrap })` exists for it. Measured at 1280 in
-    // the two-column grid: "130 of 1,388 in September · Aug 6.8% of 1,200" is
-    // 231px in a 226px half-column, so the default truncation cut the
-    // baseline's own n off the end of it.
-    const markup = render(voiceTheme.render(voiceFixture(), 'app', ctx))
-    expect(markup).not.toContain('truncate')
-  })
-
-  it('prints the month the share moved from, and rules the bar there against a NAMED axis', () => {
-    const text = draw()
-    expect(text).toContain('130 of 1,388 in September · Aug 6.8% of 1,200')
-    // No rule label: the stat line above already prints both months (B31).
-    expect(text).not.toContain('rule at Aug')
-    // The artboard draws 9.4% at 62.7% of the bar and never says against what.
-    expect(text).toContain('share of the category videos, axis to 15%')
-  })
-
-  it('captions the monthly line with each month\u2019s own reading AND its own n', () => {
-    // The bare form — "Aug 6.8%" — is the one deviation 6 of this port refuses
-    // on the mover rows and on the big figure: the three months have three
-    // denominators, which is the whole reason the change between two of them
-    // is banded. The chart's hover `<title>` is not an answer; it is mouse-only
-    // and absent from print and from the PDF.
-    expect(draw()).toContain('share of the category videos · Jul 5.9% of 1,200 · Aug 6.8% of 1,200 · Sep 9.4% of 1,388, still filling')
-  })
-
-  it('prints the theme\u2019s name twice, the way the artboard does — not four times', () => {
-    // Heading, chart legend, chart end label, caption: one string rendered
-    // four times, and the legend prints the SERIES label, which is the one the
-    // pad's width cuts. The refused state showed "Admiration for personal
-    // resil…" twice with the full name two lines above. The legend is off; the
-    // one word it carried besides the name — "still filling" — is in the
-    // caption.
-    const markup = render(voiceTheme.render(refusedVoiceFixture(), 'app', ctx))
-    // Minus the hover `<title>`s, which are a mouse-only tooltip and print
-    // nowhere — the reason I2 moved the denominators into the caption.
-    const visible = markup.replace(/<title[^>]*>[\s\S]*?<\/title>/g, '')
-    // TWICE ON THE SCREEN — the heading and the chart's end label — plus the
-    // svg's `aria-label`, which is the drawing's name for a reader who cannot
-    // see it and is not a third rendering.
-    expect(visible.split('Admiration for personal resilience')).toHaveLength(4)
-    expect(visible.split('aria-label="Admiration for personal resilience')).toHaveLength(2)
-    expect(renderText(voiceTheme.render(refusedVoiceFixture(), 'app', ctx))).toContain('still filling')
-  })
-
-  it('cuts the CHART\u2019s copy of a name to what the pad can hold, and only then', () => {
-    // The cut was a flat thirty characters against a flat 260-unit pad, so
-    // Össur's "Admiration for personal resilience" — 34 characters, 255 units
-    // with its reading, INSIDE the room the pad already reserved — printed as
-    // "Admiration for personal resil…" and was the only identifier on a chart
-    // whose legend is off. The limit is now what fits.
-    const text = draw(refusedVoiceFixture())
-    expect(text).toContain('Admiration for personal resilience')
-    expect(text).not.toContain('Admiration for personal resil…')
-
-    // A name that genuinely does not fit still loses its tail rather than the
-    // tile: the ceiling is the ceiling.
-    const longer = refusedVoiceFixture()
-    longer.theme.label = 'Admiration for personal resilience and for the people around it'
-    expect(draw(longer)).toContain('\u2026')
-  })
-
-  it('says nothing about speech when no video carries any', () => {
-    const text = draw(refusedVoiceFixture())
-    expect(text).not.toContain('Said on camera')
-    expect(text).toContain('No video behind this theme carries readable speech')
-  })
-
-  it('counts the withheld evidence, refuses to quote it, and hides the row at zero', () => {
-    expect(draw()).toContain('Who these commenters are: counted, not quoted')
-    expect(draw()).toContain('4 comments describe who these commenters are.')
-    // At zero the row is hidden rather than printing an empty sentence (B34).
-    const none = voiceFixture()
-    expect(draw({ ...none, theme: { ...none.theme, withheld: 0 } }))
-      .not.toContain('Who these commenters are')
-  })
-
-  it('links to the conclusion rather than rebuilding Market’s list here (decision Q)', () => {
-    const text = draw()
-    expect(text).toContain('What we concluded from this →')
-    // The mock draws four conclusions at the foot of Voice. Two lists of
-    // conclusions is two lists; MK1 owns it.
-    expect(text).not.toContain('What we concluded this month')
-  })
-
-  it('offers Track this as a primary button, Ask about this beside it, and the videos in the footer', () => {
-    const text = draw()
-    const markup = render(voiceTheme.render(voiceFixture(), 'app', ctx))
-    expect(text).toContain('Track this')
-    expect(text).toContain('Ask about this')
-    expect(text).toContain('The 130 videos behind this →')
-    // The artboard's green primary. The green does four jobs in this product
-    // and the page's primary action is one of them.
-    expect(markup).toContain('bg-primary')
-  })
-
-  it('gives the search a visible focus indicator, and room for its own placeholder', () => {
-    // The port restyled the input into a pill and put `outline-none` on it
-    // with nothing back: a `<form>` receives no `:focus`, so a keyboard user
-    // tabbing to the page's one text control saw nothing at all. And at
-    // `max-w-[300px]` the inline label ate half the box — the placeholder
-    // rendered as "search every theme evei" at 1440.
-    const markup = render(voiceTheme.render(voiceFixture(), 'app', ctx))
-    expect(markup).toContain('focus-within:ring-2')
-    expect(markup).not.toContain('xl:max-w-[300px]')
-  })
-
-  it('carries the reader’s whole selection into the search', () => {
-    const markup = renderText(voiceTheme.render(voiceFixture(), 'app', ctx))
-    expect(markup).toContain('Have we seen this before?')
-  })
-
-  it('says the register matched nothing rather than showing an empty list', () => {
-    const base = voiceFixture()
-    const text = draw({ ...base, theme: { ...base.theme, search: { q: 'zzz', rows: [], total: 0 } } })
-    expect(text).toContain('Nothing in the register matches “zzz”')
-  })
-
-  it('dates a register row by the record, never by the run that opened the entry', () => {
-    const base = voiceFixture()
-    const text = draw({
-      ...base,
-      theme: {
-        ...base.theme,
-        search: { q: 'zip', total: 1, rows: [{ id: 'z', label: 'Zips failing after a year', firstHeard: '2022-07-01', updates: 4, active: false, href: '/dashboard/voice?theme=z' }] },
-      },
-    })
-    // `theme_registry.first_seen_at` read 2026-09 for every Sealand theme on
-    // production, including ones the month tables carry from 2022 — a period
-    // dated by the run, printed two lines under a chart that says otherwise.
-    expect(text).toContain('Zips failing after a year first heard Jul 2022 · 4 updates have carried it')
-    expect(text).not.toContain('2022-07')
-  })
-
-  it('says how many the register matched, not how many rows it drew', () => {
-    // "prosthetic" matches 272 Össur register entries; the list shows twelve.
-    const base = voiceFixture()
-    const text = draw({
-      ...base,
-      theme: {
-        ...base.theme,
-        search: { q: 'zip', total: 272, rows: [{ id: 'z', label: 'Zips failing after a year', firstHeard: '2022-07-01', updates: 4, active: false, href: '/dashboard/voice?theme=z' }] },
-      },
-    })
-    expect(text).toContain('Showing 1 of 272 matches')
-  })
-
-  it('says a theme is not read in this audience rather than leaving the date blank', () => {
-    const base = voiceFixture()
-    const text = draw({
-      ...base,
-      theme: {
-        ...base.theme,
-        search: { q: 'zip', total: 1, rows: [{ id: 'z', label: 'Zips failing after a year', firstHeard: null, updates: 4, active: false, href: '/dashboard/voice?theme=z' }] },
-      },
-    })
-    expect(text).toContain('not read in the category · 4 updates have carried it')
-  })
-
-  it('declares its share, its count and the negative share as figures', () => {
-    const table = blockAnswers(voiceTheme, voiceFixture()).figures
-    expect(table.theme_share.value).toBe(9.4)
-    expect(table.theme_videos).toMatchObject({ value: 130, unit: 'videos' })
-    expect(table.theme_tone_negative.value).toBe(18.1)
-  })
-
-  it('hands its quotes up as refs, so a snapshot freezes ids and not words', () => {
-    // EVERY SET OF WORDS THE BLOCK DRAWS. The six comment quotes, and the two
-    // on-screen lines nested under them — a creator's own words off
-    // `videos.ocr_text`, which travel under `t:<videos.id>` and were bare
-    // strings until wave 3, neither frozen nor collected nor erasable.
-    expect(blockAnswers(voiceTheme, voiceFixture()).quotes)
-      .toEqual(['e:1', 'e:2', 'e:3', 'e:4', 'e:5', 'e:6', 't:vid-2', 't:vid-5'])
-  })
-
-  it('says which of the two silences it is when nothing can be opened', () => {
-    const base = voiceFixture()
-    const none = {
-      ...base,
-      theme: { ...base.theme, state: 'none' as const, notes: ['No theme in this audience carried enough of this month to be opened.'] },
-    }
-    expect(voiceTheme.emptyState(none)).toBe('No theme in this audience carried enough of this month to be opened.')
-    // The search still renders, because "have we seen this before?" is a
-    // question about the whole register and not about this month.
-    expect(draw(none)).toContain('Have we seen this before?')
-  })
-
-  it('keeps its key, which is a stored contract', () => {
-    expect(voiceTheme.key).toBe('voice.theme')
-  })
-
-  it('prints no direction pill for \u2018flat\u2019, and leaves no empty pill behind', () => {
-    // VO2's rule at VO3's call site. Both outer pills gate on truthiness and
-    // draw their own chrome, so `main`'s M4 filter inside `DirectionWord`
-    // alone would leave an empty grey pill standing on this title row.
-    const base = voiceFixture()
-    const flat = { ...base, theme: { ...base.theme, direction: 'flat' as const } }
-    const markup = render(voiceTheme.render(flat, 'app', ctx))
-    expect(markup).not.toContain('flat')
-    expect(markup).not.toMatch(/rounded-full bg-inner px-2 py-0\.5 text-\[12px\] font-medium"><\/span>/)
-    // M19: the direction word takes the artboards' tail, "growing, 3rd month".
-    expect(render(voiceTheme.render(base, 'app', ctx))).toContain('growing, 3rd month')
-  })
-})
-
-// ONE REFUSAL, SAID ONCE (deploy 1 review, the lead's R3): on 2 Oct the
-// theme's badge, its tone and its month-by-month figures each printed "Not read
-// as a change: we changed our searches in September." The block prints one
-// chip; the badge and the tone, which already show the earlier month in grey,
-// print nothing. The fixture's volumes are its own (mock); the refusal is the
-// loader's for Sealand's Aug→Sep.
-describe('voiceTheme · a refused month pair prints once, as a chip', () => {
-  const pair = { mode: 'refuse' as const, cause: 'searches' as const, changeMonth: '2026-09-01', checkWith: null }
-  const refused = () => {
+  it('says why nothing is open when the month holds no theme', () => {
     const data = voiceFixture()
-    const t = data.theme
-    if (t.state !== 'ready') throw new Error('fixture theme is not ready')
-    const refuse = <V extends { state: string }>(v: V): V => ({ ...v, state: 'refused', refusedReason: 'tracking_change', changePts: null, bandPts: null, pair })
-    return { ...data, theme: { ...t, verdict: t.verdict ? refuse(t.verdict) : t.verdict, tone: t.tone ? { ...t.tone, verdict: t.tone.verdict ? refuse(t.tone.verdict) : t.tone.verdict } : t.tone } }
-  }
-
-  it('prints the chip once and no sentence, in every mode', () => {
-    for (const mode of MODES) {
-      const text = draw(refused(), mode)
-      expect(text.split('not read as a change: we changed our searches in September').length - 1, mode).toBe(1)
-      expect(text, mode).not.toContain('Not read as a change')
-      expect(text, mode).not.toContain('not compared')
-      expect(copyViolations(voiceTheme.render(refused(), mode, ctx)), mode).toEqual([])
-    }
+    const none = { ...data, theme: { ...data.theme, state: 'none' as const, k: null, n: null, notes: ['No theme carried 3 videos or more in September yet, so there is nothing to open.'] } }
+    expect(draw(none)).toContain('No theme carried 3 videos or more in September yet')
   })
 })

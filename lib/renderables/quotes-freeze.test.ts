@@ -294,16 +294,11 @@ const SURFACES: Record<BriefSurface, {
   subjects: { data: subjectsFixture, unreffed: [] },
   voice: {
     data: voiceFixture,
-    // OPEN, AND HANDED TO `pipeline`. `ThemeBlock.spoken` is the head of a
-    // supporting video's TRANSCRIPT, and `videos.transcript` has no ref kind:
-    // `t:` resolves `ocr_text`, `k:` a `video_claims` row, `v:` a COMMENTER's
-    // excerpt on that video — resolving a transcript under any of them hands
-    // back different words in the speaker's place. A sixth kind closes it and
-    // AGENTS.md reserves that: a new kind joins `citedEvidenceIds`'s arm (c)
-    // or a protected class, never neither, and both live in
-    // `inngest/functions/pipeline.ts`. Block D wave 3 fixed the two OCR fields
-    // beside it (`quoteOnScreen`, `onScreen`) and could not fix this one.
-    unreffed: ['spoken'],
+    // CLOSED BY REMOVAL (market-first WP2.4): the transcript head
+    // (`ThemeBlock.spoken`), which `videos.transcript` has no ref kind for,
+    // left the theme pane with the approved preview. Every voice Conversation
+    // prints is an evidence quote under its `e:` ref.
+    unreffed: [],
   },
   market: { data: marketFixture, unreffed: [] },
   competitive: { data: competitiveFixture, unreffed: [] },

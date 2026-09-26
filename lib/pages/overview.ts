@@ -3913,7 +3913,7 @@ async function loadBoardThemes(
 
 /** The latest themed run's label, kind and match kind for each theme, and
  *  the registry's own label where the run did not observe one. */
-async function loadBoardObservations(
+export async function loadBoardObservations(
   client: SupabaseClient,
   clientId: string,
   themedRunId: string | null,
@@ -3945,7 +3945,7 @@ async function loadBoardObservations(
 
 /** Heinrich's "never lead with this theme" (MF1 `front_page_overrides`): the
  *  newest row per theme wins. Empty until MF1 is applied. */
-async function loadLeadExclusions(client: SupabaseClient, clientId: string): Promise<Set<string>> {
+export async function loadLeadExclusions(client: SupabaseClient, clientId: string): Promise<Set<string>> {
   const res = await client
     .from(TABLE_FRONT_PAGE_OVERRIDES)
     .select('registry_id, action, set_at')
@@ -3961,7 +3961,7 @@ async function loadLeadExclusions(client: SupabaseClient, clientId: string): Pro
 /** Did the latest themed run open a new clustering regime? Read only when a
  *  theme on the page was minted by it (`match_kind` 'new'): two reads through
  *  WP1.9's rule (`opensClusteringRegime`, lib/pages/week.ts). */
-async function loadRegimeOpened(supabase: SupabaseClient, clientId: string, themedRunId: string): Promise<boolean> {
+export async function loadRegimeOpened(supabase: SupabaseClient, clientId: string, themedRunId: string): Promise<boolean> {
   const runRes = await supabase.from('pipeline_runs').select('*').eq('client_id', clientId).eq('id', themedRunId).maybeSingle()
   const run = row<{ started_at: string | null; clustering_key?: string | null }>(runRes, 'overview.themedRegime')
   if (!run) return false
@@ -3970,7 +3970,7 @@ async function loadRegimeOpened(supabase: SupabaseClient, clientId: string, them
 }
 
 /** A quote candidate with what its cite and link need. */
-type CiteCandidate = QuoteCandidate & { platform: string | null; nativeCommentId: string | null; video: VideoCite | null }
+export type CiteCandidate = QuoteCandidate & { platform: string | null; nativeCommentId: string | null; video: VideoCite | null }
 
 /** How many candidates per theme reach the translation and video reads: the
  *  best-ranked of those already dated in the month and of the right kind.
@@ -3989,7 +3989,7 @@ const QUOTE_CANDIDATES_PER_THEME = 8
  * the translation cache and the videos (for the own-account rule and the
  * cite). Four hops, at most eight reads for every theme on the page together.
  */
-async function loadThemeQuotes(
+export async function loadThemeQuotes(
   supabase: SupabaseClient,
   clientId: string,
   themedRunId: string | null,
@@ -4125,7 +4125,7 @@ export const RPC_SEGMENTS_FOR_VIDEOS = 'segments_for_videos'
  * stay unread, and the headline prints no voice from those videos rather than
  * one that may be a maker's (decision F). Never rejects.
  */
-async function markVideoSegments(client: SupabaseClient, clientId: string, candidates: readonly CiteCandidate[]): Promise<void> {
+export async function markVideoSegments(client: SupabaseClient, clientId: string, candidates: readonly CiteCandidate[]): Promise<void> {
   const ids = [...new Set(candidates.map((c) => c.video?.id).filter((id): id is string => Boolean(id)))]
   if (ids.length === 0) return
   const res = await client.rpc(RPC_SEGMENTS_FOR_VIDEOS, { p_client: clientId, p_video_ids: ids })
@@ -4154,7 +4154,7 @@ const QUOTE_INSIGHTS_PER_THEME = 40
 /** The searches first run in the reading month (`keyword_performance`, one
  *  paged read, memoised per page load: both lead candidates share it), or null
  *  where it cannot be read. */
-function addedSearchesRead(client: SupabaseClient, clientId: string, month: string): () => Promise<Set<string> | null> {
+export function addedSearchesRead(client: SupabaseClient, clientId: string, month: string): () => Promise<Set<string> | null> {
   let held: Promise<Set<string> | null> | null = null
   return () => (held ??= selectAll<KeywordRow>(() =>
     client.from(TABLE_KEYWORD_PERFORMANCE).select('run_id, platform, keyword, created_at').eq('client_id', clientId).order('id'),
@@ -4162,6 +4162,68 @@ function addedSearchesRead(client: SupabaseClient, clientId: string, month: stri
     console.error(`[overview] leadProvenance keyword_performance: ${(error as { message?: string })?.message ?? String(error)}; not measured`)
     return null
   }))
+}
+
+/**
+ * How each of these videos was found (the 26 Sep ruling's evidence: MF1
+ * `video_provenance`, the videos' source_keywords and their gate verdicts'
+ * keywords), for `fromNewSearches` / `themeProvenance`: three reads beside each
+ * other, chunked. Null where any is not there (not measured, never a zero).
+ * Shared by the front page's lead and Conversation's board (WP2.4).
+ */
+export async function loadThemeEvidence(
+  client: SupabaseClient,
+  clientId: string,
+  videoIds: readonly string[],
+): Promise<ThemeEvidence | null> {
+  if (videoIds.length === 0) return null
+  type Prov = ThemeEvidence['provenance'][number]
+  type Vid = ThemeEvidence['videos'][number]
+  type Verdict = ThemeEvidence['verdicts'][number]
+  const readProvenance = async (): Promise<Prov[] | null> => {
+    const out: Prov[] = []
+    for (const part of chunk(videoIds, UUID_IN_CHUNK)) {
+      const res = await client
+        .from(TABLE_VIDEO_PROVENANCE)
+        .select('video_id, first_terms, first_subreddits, method')
+        .eq('client_id', clientId)
+        .in('video_id', part)
+      if (res.error) {
+        if (!isMissingRelation(res.error, TABLE_VIDEO_PROVENANCE)) rows(res as never, 'overview.themeEvidence')
+        return null
+      }
+      out.push(...((res.data ?? []) as Prov[]))
+    }
+    return out
+  }
+  const readVideos = async (): Promise<Vid[] | null> => {
+    const out: Vid[] = []
+    for (const part of chunk(videoIds, UUID_IN_CHUNK)) {
+      const res = await client.from('videos').select('id, platform, video_id, source_keywords').eq('client_id', clientId).in('id', part)
+      if (res.error) {
+        rows(res as never, 'overview.themeEvidence videos')
+        return null
+      }
+      out.push(...((res.data ?? []) as Vid[]))
+    }
+    return out
+  }
+  const [provenance, videos] = await Promise.all([readProvenance(), readVideos()])
+  if (!provenance || !videos) return null
+  // Every gate verdict's keyword for these videos (by the platform's own id).
+  const verdicts: Verdict[] = []
+  const platformIds = [...new Set(videos.map((v) => v.video_id))]
+  try {
+    for (const part of chunk(platformIds, UUID_IN_CHUNK)) {
+      verdicts.push(...await selectAll<Verdict>(() =>
+        client.from(TABLE_GATE_VERDICTS).select('platform, video_id, keyword').eq('client_id', clientId).in('video_id', part).order('id'),
+      ))
+    }
+  } catch (error) {
+    console.error(`[overview] themeEvidence gate_verdicts: ${(error as { message?: string })?.message ?? String(error)}; not measured`)
+    return null
+  }
+  return { provenance, videos, verdicts }
 }
 
 /** The lead's reading-month videos (`month_evidence_refs`) and how each was
@@ -4189,58 +4251,14 @@ async function loadLeadProvenance(
   if (refRes.error) return null
   const videoIds = ((refRes.data as { video_ids?: string[] | null } | null)?.video_ids ?? []).map(String)
   if (videoIds.length === 0) return null
-  type Prov = ThemeEvidence['provenance'][number]
-  type Vid = ThemeEvidence['videos'][number]
-  type Verdict = ThemeEvidence['verdicts'][number]
-  const readProvenance = async (): Promise<Prov[] | null> => {
-    const out: Prov[] = []
-    for (const part of chunk(videoIds, UUID_IN_CHUNK)) {
-      const res = await client
-        .from(TABLE_VIDEO_PROVENANCE)
-        .select('video_id, first_terms, first_subreddits, method')
-        .eq('client_id', clientId)
-        .in('video_id', part)
-      if (res.error) {
-        if (!isMissingRelation(res.error, TABLE_VIDEO_PROVENANCE)) rows(res as never, 'overview.leadProvenance')
-        return null
-      }
-      out.push(...((res.data ?? []) as Prov[]))
-    }
-    return out
-  }
-  const readVideos = async (): Promise<Vid[] | null> => {
-    const out: Vid[] = []
-    for (const part of chunk(videoIds, UUID_IN_CHUNK)) {
-      const res = await client.from('videos').select('id, platform, video_id, source_keywords').eq('client_id', clientId).in('id', part)
-      if (res.error) {
-        rows(res as never, 'overview.leadProvenance videos')
-        return null
-      }
-      out.push(...((res.data ?? []) as Vid[]))
-    }
-    return out
-  }
-  const [provenance, videos, added] = await Promise.all([readProvenance(), readVideos(), addedSearches()])
-  if (!provenance || !videos || !added) return null
-  // Every gate verdict's keyword for these videos (by the platform's own id).
-  const verdicts: Verdict[] = []
-  const platformIds = [...new Set(videos.map((v) => v.video_id))]
-  try {
-    for (const part of chunk(platformIds, UUID_IN_CHUNK)) {
-      verdicts.push(...await selectAll<Verdict>(() =>
-        client.from(TABLE_GATE_VERDICTS).select('platform, video_id, keyword').eq('client_id', clientId).in('video_id', part).order('id'),
-      ))
-    }
-  } catch (error) {
-    console.error(`[overview] leadProvenance gate_verdicts: ${(error as { message?: string })?.message ?? String(error)}; not measured`)
-    return null
-  }
-  return fromNewSearches(videoIds, { provenance, videos, verdicts }, added)
+  const [evidence, added] = await Promise.all([loadThemeEvidence(client, clientId, videoIds), addedSearches()])
+  if (!evidence || !added) return null
+  return fromNewSearches(videoIds, evidence, added)
 }
 
 /** A candidate as a printed voice: the quote by its evidence ref, and the
  *  cite and link the Phase 1 voices carried. */
-function voiceOf(c: CiteCandidate): Voice {
+export function voiceOf(c: CiteCandidate): Voice {
   const cite = [
     c.platform ? platformLabel(c.platform) : null,
     c.commentDate ? shortDate(c.commentDate) : null,

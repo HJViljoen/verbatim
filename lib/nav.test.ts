@@ -48,7 +48,9 @@ describe('the nine surfaces', () => {
     // to be drawn there and a press of it returned a byte-identical page.
     // Your market reads the reading month in every block (WP1.6), so it
     // offers no horizon either.
-    expect(SURFACES.filter(hasHorizon).map((s) => s.key)).toEqual(['subjects', 'voice', 'competitive'])
+    // Conversation reads the reading month in every block (WP2.4), so it
+    // offers none from deploy 3.
+    expect(SURFACES.filter(hasHorizon).map((s) => s.key)).toEqual(['subjects', 'competitive'])
     expect(SURFACES.find((s) => s.key === 'market')?.bar).toBe('reading')
   })
 

@@ -181,6 +181,26 @@ export function makerFraction(share: number | null | undefined): string | null {
   return 'almost half'
 }
 
+/**
+ * How much of a MAKER-LED theme is makers' (WP2.4; the preview's makers group
+ * on Conversation: "about three quarters makers", "nearly all makers"). The
+ * front page groups these into one line and never prints their rows; the
+ * Conversation board lists every one of them, so "mostly" would say the same
+ * word seven times. Null under half, where `makerWords` speaks.
+ */
+export function groupedMakerWords(share: number | null | undefined): string | null {
+  const f = groupedMakerFraction(share)
+  return f ? `${f} makers` : null
+}
+
+/** The fraction `groupedMakerWords` names: "over four in five", "all". */
+export function groupedMakerFraction(share: number | null | undefined): string | null {
+  const s = finiteShare(share)
+  if (s == null || s < MAKER_GROUP_SHARE) return null
+  return s >= 1 ? 'all' : s >= 0.9 ? 'nearly all' : s >= 0.825 ? 'over four in five' : s >= 0.775 ? 'about four in five'
+    : s >= 0.7 ? 'about three quarters' : s >= 0.6 ? 'about two thirds' : 'over half'
+}
+
 /** A row's maker tag: "about a third makers", or null (under a fifth, or not
  *  measured). */
 export function makerWords(share: number | null | undefined): string | null {
@@ -420,7 +440,14 @@ export function buildConversationBoard(
   month: string,
   segments: ThemeBoard['segments'],
   prev: ConversationBoard['prev'],
-  opts: { expanded?: boolean; inThemes?: number | null; chip?: string | null } = {},
+  opts: {
+    expanded?: boolean
+    /** The pool's themes at 3 to 9 where the loader read only those at 10+
+     *  (the board not expanded): counted, not listed. */
+    belowCount?: number
+    inThemes?: number | null
+    chip?: string | null
+  } = {},
 ): ConversationBoard {
   const seen = new Set<string>()
   const pool = themes
@@ -441,7 +468,7 @@ export function buildConversationBoard(
     rows: atFloor.filter((t) => !grouped || segmentOf(t) == null),
     makers: grouped ? atFloor.filter((t) => segmentOf(t) === 'makers') : null,
     setAside: grouped ? atFloor.filter((t) => segmentOf(t) === 'noise') : null,
-    below: { count: below.length, rows: opts.expanded ? below : null },
+    below: { count: opts.expanded ? below.length : opts.belowCount ?? below.length, rows: opts.expanded ? below : null },
     atTen: atFloor.length,
     inThemes: opts.inThemes ?? null,
     chip: opts.chip ?? null,
@@ -457,6 +484,6 @@ export function makerShareSentence(share: number | null | undefined): string | n
   const s = finiteShare(share)
   if (s == null) return null
   if (s < MAKER_NOTE_SHARE) return 'fewer than a fifth of its videos are makers’ own'
-  const f = makerFraction(s)
-  return f === 'mostly' ? 'most of its videos are makers’ own' : `${f} of its videos are makers’ own`
+  // Half or more in the board's grouped words, so the pane and its row agree.
+  return `${groupedMakerFraction(s) ?? makerFraction(s)} of its videos are makers’ own`
 }
