@@ -1,9 +1,7 @@
 import type { Block, BlockContext } from '@/lib/blocks/types'
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
-import { THIRTEEN_WORDS, READER_FLAGS } from '@/lib/calibration'
 import { ExportMenu, ExportScope } from '@/components/export-menu'
-import { HowToRead } from '@/components/how-to-read'
 import { PageFrame, PageGrid } from '@/components/shell/page-grid'
 import { SurfacePageBar } from '@/components/shell/page-bar'
 import { barContext } from '@/lib/shell/bar'
@@ -16,6 +14,14 @@ import { overviewSubjects } from './subjects'
 import { overviewCategory } from './category'
 import { overviewRivals } from './rivals'
 import { overviewMoves } from './moves'
+import { overviewThemes } from './themes'
+import { overviewAsks } from './asks'
+import { overviewChange } from './change'
+import { MARKET_SENTENCE_TITLE } from './sentence'
+import { MARKET_KINDS_TITLE } from './market-kinds'
+import { MARKET_SUBJECTS_TITLE, marketSubjectsLine } from './market-subjects'
+import { MARKET_BRANDS_TITLE } from './rivals'
+import { isMarketPage } from './market'
 
 // Overview — the page (Phase 1 WP11, design §3 OV0–OV5; ported to the artboard
 // in Block D wave 2, `mock-sealand/artboards/Main.dc.html`).
@@ -33,11 +39,73 @@ import { overviewMoves } from './moves'
 export const OVERVIEW_BLOCKS: readonly Block<OverviewData>[] = [
   overviewBar,
   overviewSentence,
-  overviewSubjects,
+  overviewThemes,
   overviewCategory,
+  overviewAsks,
+  overviewSubjects,
   overviewRivals,
+  overviewChange,
   overviewMoves,
 ]
+
+/**
+ * YOUR MARKET, IN ITS ORDER (market-first WP1.6, plan §2.2; deploy 2's
+ * column: blocks 0 to 2, 4 to 6, 9 as one line, and 10). The order is the
+ * argument: the market in full, then brands, then what changed and what is
+ * ours. "With this update", "What it means for you" and "What you published"
+ * join with deploy 3 (WP2.7, WP2.5); "How sound is this month" is gone (25 Sep
+ * rulings). `overview.moves` stays in the registry above, because stored
+ * exports and the briefs name it, and is not on the page.
+ */
+export const FRONT_PAGE_BLOCKS: readonly Block<OverviewData>[] = [
+  overviewSentence,
+  overviewThemes,
+  overviewCategory,
+  overviewAsks,
+  overviewSubjects,
+  overviewRivals,
+  overviewChange,
+]
+
+/**
+ * What each block is called on the front page. The four reworked blocks keep
+ * their Phase 1 registry titles, which a stored copy and the monthly (until
+ * WP2.1) still render under; on the page and in its exports they carry these.
+ */
+export const MARKET_TITLES: Readonly<Record<string, string>> = {
+  'overview.sentence': MARKET_SENTENCE_TITLE,
+  'overview.themes': overviewThemes.title,
+  'overview.category': MARKET_KINDS_TITLE,
+  'overview.asks': overviewAsks.title,
+  'overview.subjects': MARKET_SUBJECTS_TITLE,
+  'overview.rivals': MARKET_BRANDS_TITLE,
+  'overview.change': overviewChange.title,
+}
+
+/**
+ * The front page's spans: at deploy 2, every block the width of the page.
+ *
+ * NOT THE PREVIEW'S 8 : 4 FOR SUBJECTS AND BRANDS (design pass). The preview
+ * pairs "The market by subject" with "What it means for you", a column of
+ * line-ups as tall as the subjects; that block arrives with deploy 3. Paired
+ * with the brands' one line instead, the right-hand tile was one sentence over
+ * 300px of white. Full width, the subjects' figure columns also line up with
+ * the board's above them. Deploy 3 restores the 8 : 4 with the block it was
+ * drawn for.
+ */
+const FRONT_COLS: Record<string, 4 | 6 | 8 | 12> = {}
+
+/** Where the subjects are one line too (no subject named yet, Össur), the two
+ *  one-line blocks share a row, half and half, rather than stacking two slim
+ *  tiles. Both take one row, so the pair is one height. */
+const ONE_LINE_COLS: Record<string, 4 | 6 | 8 | 12> = {
+  'overview.subjects': 6,
+  'overview.rivals': 6,
+}
+const ONE_LINE_ROWS: Record<string, number> = {
+  'overview.subjects': 1,
+  'overview.rivals': 1,
+}
 
 /**
  * How tall each block's tile is BELOW `xl`, where the page is one stacked
@@ -56,22 +124,15 @@ const ROWS: Record<string, number> = {
   // block lost its absence-only column, so the old floors left a tile of white
   // under it below xl.
   'overview.category': 3,
-  'overview.rivals': 3,
+  // One line inside a drawn block at deploy 2: a floor of one row, so the
+  // stacked page does not hold 380px of white under it.
+  'overview.rivals': 1,
   'overview.moves': 3,
+  'overview.themes': 4,
+  'overview.asks': 3,
+  'overview.change': 2,
 }
 
-/**
- * The one block the artboard draws as a HERO (Block D wave 2,
- * `main.sentence.hero`).
- *
- * `Tile variant="hero"` is P0's, built in wave 1 and used by nothing: 12px gaps,
- * 16/20 padding, and the serif ramp for the page's one sentence. The artboard
- * gives §1 that treatment and every other section the default tile, so the map
- * is one entry rather than a flag per block — and the block itself prints the
- * serif line, because the monthly report renders it with no Tile around it at
- * all and the sentence must not lose its weight on paper.
- */
-const HERO = 'overview.sentence'
 
 /**
  * The blocks the APP page draws as tiles — every one but OV0 (Block D wave 3,
@@ -93,7 +154,7 @@ const HERO = 'overview.sentence'
  * drops is an APP duplication, which is what the finding measured.
  */
 const NOT_TILED: ReadonlySet<string> = new Set([overviewBar.key])
-export const TILE_BLOCKS = OVERVIEW_BLOCKS.filter((b) => !NOT_TILED.has(b.key))
+export const TILE_BLOCKS = FRONT_PAGE_BLOCKS.filter((b) => !NOT_TILED.has(b.key))
 
 /**
  * The app's context: RELATIVE links.
@@ -130,12 +191,6 @@ export function horizonRange(data: OverviewData): string | null {
   return updates > 0 ? `${fmtInt(updates)} ${updates === 1 ? 'update' : 'updates'} · ${span}` : span
 }
 
-/** The words this page's legend explains. THIRTEEN_WORDS plus the two reader
- *  flags, which is the vocabulary every new reading surface draws from
- *  (lib/calibration.ts) — not a hand-picked subset, so the legend and the page
- *  can never come to disagree about which words are in play. */
-export const OVERVIEW_LEGEND = [...THIRTEEN_WORDS, ...READER_FLAGS]
-
 export function OverviewPage({
   data,
   params = {},
@@ -159,30 +214,30 @@ export function OverviewPage({
   }
 
   const ctx = overviewContext(params)
+  const market = isMarketPage(data)
+  const oneLine = market && marketSubjectsLine(data) != null
+  const cols = oneLine ? ONE_LINE_COLS : FRONT_COLS
   return (
     <ExportScope
       page="overview"
       params={params}
-      tiles={TILE_BLOCKS.map((b) => ({ key: b.key, title: b.title }))}
+      tiles={TILE_BLOCKS.map((b) => ({ key: b.key, title: MARKET_TITLES[b.key] ?? b.title }))}
     >
-      <PageFrame>
+      <PageFrame className={market ? 'gap-6' : undefined}>
         <SurfacePageBar
           nav="overview"
           params={params}
-          range={horizonRange(data)}
           // The brand, the month selector and "as at the {update} update ·
           // next update {date}" (25 Sep rulings, market-first WP1.2). No "How
           // sound is this" band: it left every page on 25 Sep.
           context={barContext(data)}
         >
-          {/* THE TWO CONTROLS THE ARTBOARD PUTS AT THE RIGHT-HAND END, and the
-              two `/dashboard` has never had (`main.bar.howtoread`,
-              `main.bar.export`). Both were wired into the five LEGACY pages and
-              neither into the page that replaced them, because `SurfacePageBar`
-              renders its control slot from `children` and this page passed
-              none. */}
-          <HowToRead items={OVERVIEW_LEGEND} basePath="/dashboard" anchor="overview" />
-          <ExportMenu />
+          {/* EXPORT ALONE AT THE RIGHT-HAND END, as the approved preview
+              draws Your market's bar (Heinrich's default, 26 Sep). The "How to
+              read this page" pill left the bar; How to read stays one click
+              away in Settings, in its rail. Alone, it is the preview's 40px
+              button rather than the bar's pill (WP1.6 design check). */}
+          <ExportMenu variant="button" />
         </SurfacePageBar>
         {/* THE GRID SIZES TO ITS CONTENT ON THIS PAGE, and that is a fix
             rather than a preference. `PageGrid`'s rows WERE a fixed 116px track
@@ -198,13 +253,21 @@ export function OverviewPage({
             Every tile on Overview is `col={12}` and alone in its row, so a
             content-sized track costs the page nothing and the spans below stay
             meaningful under `xl`, where `Tile`'s own `min-h` is the floor. */}
-        <PageGrid className="xl:auto-rows-auto">
+        {/* THE PREVIEW'S RHYTHM (design pass): 24px between tiles, and each
+            block draws its own 32px inset (`flush` here, `roomy` on the
+            block's frame). */}
+        <PageGrid className={market ? 'gap-6 xl:auto-rows-auto' : 'xl:auto-rows-auto'}>
           {TILE_BLOCKS.map((block) => (
             <Tile
               key={block.key}
-              col={12}
-              row={ROWS[block.key] ?? 2}
-              variant={block.key === HERO ? 'hero' : 'default'}
+              col={cols[block.key] ?? 12}
+              row={(oneLine ? ONE_LINE_ROWS[block.key] : undefined) ?? ROWS[block.key] ?? 2}
+              // Only the market page's blocks draw their own insets; a page
+              // built without the market reads keeps the tile's.
+              flush={market}
+              // NOT THE INVERTED HERO (market-first WP1.6): the approved
+              // preview sets "The month" on the same white as every block.
+              variant="default"
               // A tile that exports names itself. The key is `<page>.<tile>`
               // and it is stable — it names stored PNG artefacts — so it is the
               // block's own key and never a position.
@@ -226,7 +289,10 @@ export function OverviewPage({
             </Tile>
           ))}
         </PageGrid>
-        {data.notes.length > 0 ? (
+        {/* NO FOOTNOTE UNDER YOUR MARKET (25 Sep rulings): its blocks print
+            levels and each block's one chip says why nothing is compared, so
+            the reading's caveats print only under a stored Phase 1 copy. */}
+        {data.notes.length > 0 && !market ? (
           <p className="m-0 text-[11px] text-muted-foreground">
             {/* ONE CAVEAT FOR A RUN OF MONTHS, never one per bar: the reading
                 layer merges the series' notes by the union of their months and

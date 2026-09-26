@@ -40,7 +40,7 @@ export function BlockFrame({
   // `question` is accepted and deliberately not destructured — see the note
   // where it used to be drawn, at the foot of the header.
   title, mode = 'app', footer, footerNote, meta, heading = false, header = true, lead, actions,
-  truncateFooter = false, children, className, accent = false,
+  truncateFooter = false, children, className, accent = false, roomy = false,
 }: {
   title: string
   question?: string
@@ -145,6 +145,16 @@ export function BlockFrame({
    * merges this wave, not to the one package that needed it first.
    */
   accent?: boolean
+  /**
+   * The block draws its own insets, in the app only (market-first WP1.6
+   * design pass, ADDITIVE, default off). Your market's tiles are `flush`, and
+   * each block sets the approved preview's frame itself: a 32px inset (16px
+   * on a phone), 24px between the title and the body and between the body's
+   * groups, the title at 13px, and a full-width rule over a 48px footer whose
+   * link reads as one at rest. Print and email ignore it; there a block has
+   * no tile to fill.
+   */
+  roomy?: boolean
 }) {
   if (mode === 'email') {
     return (
@@ -238,6 +248,28 @@ export function BlockFrame({
   // "block heading on paper" the mock's §5 draws; this is the heading INSIDE
   // such a block, and it gets out of its way.
   const big = mode === 'print'
+  if (roomy && mode === 'app') {
+    return (
+      <section className={cn('flex min-w-0 flex-col', className)}>
+        {header ? (
+          <header className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 px-4 pt-6 sm:px-8 sm:pt-8">
+            <h2 className="m-0 text-[13px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{title}</h2>
+            {meta ? <span className="min-w-0 font-mono text-[12px] text-muted-foreground">{meta}</span> : null}
+            {actions ? <span className="flex flex-none items-center gap-2">{actions}</span> : null}
+          </header>
+        ) : null}
+        <div className="flex min-w-0 flex-1 flex-col gap-6 px-4 pb-6 pt-6 sm:px-8 sm:pb-8">{children}</div>
+        {footer || footerNote ? (
+          <footer className="flex min-h-12 flex-wrap items-center justify-between gap-x-6 gap-y-1 border-t border-border/60 px-4 py-2 text-[14px] font-medium text-foreground sm:px-8">
+            {/* THE LINK READS AS A LINK AT REST: a hairline underline that
+                darkens on hover, the preview's footer link. */}
+            <span className={cn('min-w-0 [&_a]:underline [&_a]:decoration-border [&_a]:decoration-1 [&_a]:underline-offset-[5px] [&_a]:transition-colors [&_a:hover]:decoration-foreground', truncateFooter && 'truncate')}>{footer}</span>
+            {footerNote ? <span className="min-w-0 font-mono text-[12px] font-normal text-muted-foreground">{footerNote}</span> : null}
+          </footer>
+        ) : null}
+      </section>
+    )
+  }
   return (
     <section className={cn('flex min-w-0 flex-col gap-2.5', className)}>
       {/* FOUR ADDITIVE FLAGS IN ONE HEADER (merge, Block D wave 2).

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { SurfacePageBar, HorizonControl } from './page-bar'
+import { SkeletonSurfaceBar } from './skeleton'
 import { SURFACES, hasHorizon } from '@/lib/nav'
 import { sealandReading } from '@/lib/test/reading-fixture'
 
@@ -47,6 +48,22 @@ describe('SurfacePageBar', () => {
     expect(markup).not.toContain('month=')
   })
 
+  it('draws the preview\'s selector: a 32px chip, with the chevron only where it changes month', () => {
+    const linked = render(<SurfacePageBar nav="overview" context={CONTEXT} />)
+    expect(linked).toMatch(/<a [^>]*class="[^"]*h-8[^"]*rounded-lg[^"]*bg-inner[^"]*"[^>]*>September 2026<svg[^>]*lucide-chevron-down/)
+    // Nothing to change to (1 to 3 Oct, decision A): the month's name and its
+    // tooltip, and no chevron promising a menu.
+    const alone = render(<SurfacePageBar nav="overview" context={{ ...CONTEXT, other: null }} />)
+    expect(alone).toMatch(/<span title="[^"]*" class="[^"]*h-8[^"]*bg-inner[^"]*">September 2026<\/span>/)
+    expect(alone).not.toContain('lucide-chevron-down')
+  })
+
+  it('breaks the one line at its " · " on a phone, never inside a date', () => {
+    const markup = render(<SurfacePageBar nav="overview" context={CONTEXT} />)
+    expect(markup).toContain('<span class="whitespace-nowrap">as at the 24 Sep update</span> · <span class="whitespace-nowrap">next update Sun 27 Sep</span>')
+    expect(renderText(<SurfacePageBar nav="overview" context={CONTEXT} />)).toContain('as at the 24 Sep update · next update Sun 27 Sep')
+  })
+
   it('dates This week by its update and its comment window, and offers no horizon', () => {
     const text = renderText(<SurfacePageBar nav="week" brand="Sealand" updates={UPDATE} />)
     expect(text).toContain('The 20 Sep update')
@@ -81,6 +98,17 @@ describe('SurfacePageBar', () => {
       expect(markup.toLowerCase(), s.key).not.toContain('how sound')
       expect(markup, s.key).not.toContain('the record →')
     }
+  })
+})
+
+describe('SkeletonSurfaceBar', () => {
+  it('holds Your market\'s bar at the height it lands at: the 40px Export button and the 24px line', () => {
+    const markup = render(<SkeletonSurfaceBar nav="overview" button />)
+    expect(markup).toContain('h-10 w-[98px] rounded-lg')
+    expect(markup).not.toContain('rounded-full')
+    expect(markup).toContain('my-1.5 h-3')
+    // A page whose bar still pairs the pills keeps their bones.
+    expect(render(<SkeletonSurfaceBar nav="subjects" pills={2} />).match(/h-\[26px\] w-20 rounded-full/g)?.length).toBe(2)
   })
 })
 

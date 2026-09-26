@@ -18,6 +18,10 @@ import { groundingFor } from '@/lib/reading/afterwards'
 import { methodFixture, methodRecordFixture, methodRefusedFixture, recordBandFixture } from '@/lib/test/method-fixture'
 import { howSoundLine, soundFigures } from '@/lib/reading/record'
 import { sealandReading } from '@/lib/test/reading-fixture'
+import { AUGUST_CATEGORY_N, SEPTEMBER_CATEGORY_N, septemberThemes } from '@/lib/test/market-fixture'
+import { brandsBlockFor, buildAsks, buildMarketKinds, buildThemeBoard, heroLead, marketKindLabel, searchChangeDays, type MarketTheme, type ThemeBoard } from '@/lib/pages/overview-market'
+import { readingMonthFor, scheduledUpdateAfter } from '@/lib/reading/reading-month'
+import { comparabilityOf } from '@/lib/reading/comparability'
 
 /** The two refusals the page's own verdicts carry, as TOKENS. */
 const OV_RECORD_INPUTS = () =>
@@ -969,5 +973,238 @@ export function makersMarkedFixture(): OverviewData {
       ...base.category,
       levels: (base.category.levels ?? []).map((l) => ({ ...l, makerShare: SEPTEMBER_MAKER_SHARES[l.registryId] ?? null })),
     },
+  }
+}
+
+// ---- Your market (market-first WP1.6) ----------------------------------------------
+//
+// THE FRONT PAGE AS PLAN §2.2 PRINTS IT, on production's figures as at the
+// 24 Sep update (the grounding digest), which is the print the done-when
+// names. Nothing here is invented:
+//
+// - the market's size, 655 videos and 16,233 comments (September so far; 626
+//   in the category and 29 filed under a tracked brand);
+// - the themes: production's labels and Sep / Aug videos over the category's
+//   626 and 351 (`septemberThemes`, lib/test/market-fixture.ts), maker shares
+//   by analogy with their staging twins (CQ F29) until WP1.8 measures them;
+// - the kinds, the mood and the subjects are the CATEGORY's figures over its
+//   626 and 351, standing in for the market's 655 exactly as §2.2's print says
+//   ("category figures shown; the product prints the market's 655, WP1.8").
+//   August's kinds and mood are known only as shares (DR F27), so no August
+//   count is drawn for them;
+// - every subject is provisional: production's `calibrated_at` is null on all
+//   eight (grounding digest); Buying & delivery has no row in any month;
+// - the one voice and the one ask quote are real September comments (DR F35);
+//   their platform and date are not in the research, so the cite says only
+//   "a comment · September", as the preview does;
+// - no `month_pair_comparability` row: MF1 is not applied at the 24 Sep
+//   update, so the change block prints the refusal in its own words.
+
+const MARKET_AT = '2026-09-24T14:00:00.000Z'
+const AUG = '2026-08-01'
+
+/** The one real quote on the airline-sizes theme (DR F35). */
+export const AIRLINE_VOICE = 'About time they do something about the people who have too many or too big ‘carry on’ suitcases…'
+/** The one real quote on the colours theme (DR F35). */
+export const COLOURS_QUOTE = 'If you made it in pink and a bigger size I would buy it immediately 😭'
+
+function marketSubjectRow(id: string, label: string, k: number | null, prevK: number | null, calibration: SubjectRow['calibration'] = 'provisional'): SubjectRow {
+  const side = (kk: number | null, n: number): SideReading => ({ k: kk, n, pct: kk == null ? null : Math.round((kk / n) * 1000) / 10, verdict: null, observed: kk != null })
+  return {
+    id,
+    label,
+    you: { k: null, n: 9, pct: null, verdict: null, observed: false },
+    rival: null,
+    category: side(k, 626),
+    direction: null,
+    spark: [],
+    sparkMonths: [],
+    categoryAtLastMonth: null,
+    href: `/dashboard/subjects?subject=${id}`,
+    market: side(k, 626),
+    marketPrev: k == null ? { k: null, n: 351, pct: null } : { k: prevK, n: 351, pct: prevK == null ? null : Math.round((prevK / 351) * 1000) / 10 },
+    calibration,
+  }
+}
+
+/** Sealand's September front page (plan §2.2), MF1 applied for the maker
+ *  shares (by analogy), no pair row yet. */
+export function marketFrontFixture(opts: { measured?: boolean; subjectsCalibration?: 'production' | 'staging' } = {}): OverviewData {
+  const base = marketSizeFixture()
+  const measured = opts.measured ?? true
+  const themes = septemberThemes({ measured })
+  const segments = measured ? 'measured' as const : 'unknown' as const
+  const board: ThemeBoard = {
+    ...buildThemeBoard(themes, SEPTEMBER_CATEGORY_N, REAL_MONTH, segments, { month: AUG, n: AUGUST_CATEGORY_N }),
+    chip: SEPTEMBER_CHIP,
+  }
+  // Production's eight, in the grounding digest's category figures. The
+  // staging variant carries staging's calibration (0.333 on 33 labels for
+  // Repair & warranty: being re-described; Community & purpose unchecked).
+  const staging = opts.subjectsCalibration === 'staging'
+  const subjects: SubjectRow[] = [
+    marketSubjectRow('s-looks', 'Looks & style', 104, 38, staging ? 'ready' : 'provisional'),
+    marketSubjectRow('s-comfort', 'Comfort', 38, 22, staging ? 'ready' : 'provisional'),
+    marketSubjectRow('s-durability', 'Durability', 34, 16, staging ? 'ready' : 'provisional'),
+    marketSubjectRow('s-repair', 'Repair & warranty', 33, 14, staging ? 'failed' : 'provisional'),
+    marketSubjectRow('s-waterproofing', 'Waterproofing', 33, 14, staging ? 'ready' : 'provisional'),
+    marketSubjectRow('s-price', 'Price', 23, 5, staging ? 'ready' : 'provisional'),
+    marketSubjectRow('s-community', 'Community & purpose', 8, 4),
+    marketSubjectRow('s-buying', 'Buying & delivery', null, null),
+  ]
+  const hero = heroLead(board, subjects.map((s) => ({ id: s.id, name: s.label, k: s.market?.k ?? null, n: s.market?.n ?? null, calibration: s.calibration ?? 'provisional' })), new Set())
+  const lead = hero.kind === 'themes' ? hero.lead : null
+  const reading = sealandReading(MARKET_AT)
+  const changes = [
+    { id: 'terms-0913', surface: 'terms' as const, changedAt: '2026-09-13T10:00:58.000Z', note: null, affects: ['market', 'themes', 'brands', 'lens'] as const },
+    { id: 'terms-0917', surface: 'terms' as const, changedAt: '2026-09-17T16:02:56.000Z', note: null, affects: ['market', 'themes', 'brands', 'lens'] as const },
+  ]
+  const pair = comparabilityOf(AUG, REAL_MONTH, {
+    row: null,
+    changes,
+    view: 'market',
+    later: { state: 'so_far', readToEnd: false, latestUpdateRunId: null },
+  })
+  // What the page's judge adds to a so-far pair: the in-span search changes it
+  // names, unmeasured (`pairJudge`, lib/reading/pairs.ts).
+  const named = { ...pair, reasons: [...pair.reasons, { kind: 'searches' as const, changeId: 'terms-0917', share: null, changedAt: '2026-09-17T16:02:56.000Z', surface: 'terms' as const }] }
+  return {
+    ...base,
+    reading,
+    market: [
+      { month: AUG, videos: 377, comments: 10670, category: 351, rivalFiled: 26 },
+      { month: REAL_MONTH, videos: 655, comments: 16233, category: 626, rivalFiled: 29 },
+    ],
+    themes: board,
+    hero,
+    heroVoices: lead?.registryId === 'th-airline'
+      ? [{ quote: { ref: 'e:ev-airline-sizes', text: AIRLINE_VOICE, lang: 'en', english: null }, cite: 'a comment · September', onScreen: null, href: null }]
+      : [],
+    asks: buildAsks(themes, REAL_MONTH, segments, new Map([['th-colors', { ref: 'e:ev-colours', text: COLOURS_QUOTE, lang: 'en', english: null }]])),
+    change: {
+      prevMonth: AUG,
+      month: REAL_MONTH,
+      pair: named,
+      next: { prevMonth: '2026-10-01', month: '2026-11-01', sameAgeFrom: '2026-12-06T04:00:00.000Z', inFullExpected: '2027-01-03T04:00:00.000Z' },
+      checks: [],
+      readWith: null,
+      paused: false,
+      // The strip's "as at" and its marks: the bar's update, and the days we
+      // changed what we search (the 9 Sep term swap, fourteen rows at
+      // 18:17:56 on staging's log, and the two changes above).
+      asAt: reading.asAt,
+      searchChanges: searchChangeDays([
+        { id: 'terms-0909', surface: 'terms' as const, changedAt: '2026-09-09T18:17:56.893Z', note: null, affects: ['market', 'themes', 'brands', 'lens'] as const },
+        ...changes,
+      ], AUG, REAL_MONTH),
+    },
+    brands: brandsBlockFor(reading.asAt),
+    category: {
+      ...base.category,
+      market: {
+        month: REAL_MONTH,
+        n: 626,
+        prev: { month: AUG, n: 351, judged: 351 },
+        kinds: [
+          ['praise', 450], ['purchase_intent', 372], ['question', 318], ['pain_point', 252], ['feature_request', 146],
+          ['objection', 108], ['demographic_signal', 55], ['switching_signal', 32], ['buying_trigger', 5],
+        ].map(([kind, k]) => ({ kind: kind as string, label: marketKindLabel(kind as string), k: k as number, prevK: null })),
+        judged: 626,
+        mood: [
+          { mood: 'positive' as const, label: 'Positive', k: 484, prevK: null },
+          { mood: 'mixed' as const, label: 'Mixed', k: 91, prevK: null },
+          { mood: 'neutral' as const, label: 'Neutral', k: 39, prevK: null },
+          { mood: 'negative' as const, label: 'Negative', k: 12, prevK: null },
+        ],
+        chip: SEPTEMBER_CHIP,
+      },
+    },
+    subjects: {
+      ...base.subjects,
+      state: 'ready',
+      rows: subjects,
+      market: { month: REAL_MONTH, n: 626, prev: { month: AUG, n: 351 } },
+    },
+  }
+}
+
+/** The same page before MF1 is applied (Wed 30 Sep): nothing grouped, no lead
+ *  and so no voice, and one line saying makers are not marked yet. */
+export function marketBeforeMakersFixture(): OverviewData {
+  return marketFrontFixture({ measured: false })
+}
+
+/**
+ * Össur's front page (§2.13), on staging's September (read to the 13 Sep
+ * update, updates paused): 362 market videos (338 in the category, 24 filed
+ * under Ottobock), its biggest themes with no maker rule, "Brand boycott over
+ * politics" 16 with no August row, no subjects named, and no next pair
+ * promised. Staging's rows, read 26 Sep.
+ */
+export function ossurFrontFixture(): OverviewData {
+  const base = marketFrontFixture()
+  const theme = (registryId: string, label: string, k: number, prevK: number | null, kind: string): MarketTheme => ({
+    registryId, label, labelStripped: false, kind, k, n: 338,
+    prev: { month: AUG, k: prevK ?? 0, n: 537 }, makerShare: null, noiseShare: null,
+    identityNewThisRun: false, flags: [], provenance: null,
+  })
+  const themes = [
+    theme('o-identities', 'Audience identities and amputation types', 44, 102, 'demographic_signal'),
+    theme('o-resilience', 'Admiration for personal resilience', 34, 87, 'praise'),
+    theme('o-function', 'Questions about prosthetic function', 28, 51, 'question'),
+    theme('o-help', 'Requests for prosthetic help', 20, 45, 'feature_request'),
+    theme('o-boycott', 'Brand boycott over politics', 16, null, 'objection'),
+  ]
+  const board: ThemeBoard = { ...buildThemeBoard(themes, 338, REAL_MONTH, 'no_rule', { month: AUG, n: 537 }), chip: SEPTEMBER_CHIP }
+  // Össur's own updates on staging, by finish (six from 9 Aug to 13 Sep), read
+  // on 2 Oct: September, as at the 13 Sep update, updates paused (§2.13).
+  const reading = readingMonthFor({
+    now: '2026-10-02T06:00:00.000Z',
+    updates: ['2026-08-09T14:54:00.907Z', '2026-08-16T07:07:55.837Z', '2026-08-23T05:05:27.554Z', '2026-08-30T09:38:53.882Z', '2026-09-06T12:41:40.114Z', '2026-09-13T06:26:49.308Z'],
+    videosByMonth: new Map([[AUG, 585], [REAL_MONTH, 362]]),
+    firstRunMonth: AUG,
+    nextUpdateAfter: scheduledUpdateAfter({ report_period: 'weekly', report_day: 'sunday' }),
+  })
+  // Staging's kind and mood rows for Össur's category and Ottobock, pooled by
+  // the page's own builder.
+  const K = (month: string, audience: string, rows: [string, number][]) => rows.map(([kind, videos]) => ({ month, audience, kind, videos }))
+  const kindRows = [
+    ...K(REAL_MONTH, 'industry-other', [['praise', 189], ['pain_point', 154], ['question', 141], ['demographic_signal', 81], ['purchase_intent', 52], ['objection', 43], ['feature_request', 42], ['buying_trigger', 13], ['switching_signal', 12]]),
+    ...K(REAL_MONTH, 'competitor:Ottobock', [['praise', 17], ['question', 10], ['demographic_signal', 5], ['pain_point', 5], ['purchase_intent', 5], ['switching_signal', 1]]),
+    ...K(AUG, 'industry-other', [['praise', 363], ['pain_point', 272], ['question', 268], ['demographic_signal', 186], ['purchase_intent', 82], ['feature_request', 53], ['objection', 33], ['switching_signal', 12], ['buying_trigger', 9], ['misinformation', 1]]),
+    ...K(AUG, 'competitor:Ottobock', [['praise', 32], ['question', 20], ['pain_point', 19], ['purchase_intent', 17], ['demographic_signal', 9], ['feature_request', 4], ['buying_trigger', 1], ['objection', 1], ['switching_signal', 1]]),
+  ]
+  const S = (month: string, audience: string, judged: number, positive: number, mixed: number, neutral: number, negative: number) => ({ month, audience, judged, positive, mixed, neutral, negative })
+  const statsRows = [
+    S(REAL_MONTH, 'industry-other', 338, 245, 45, 29, 19), S(REAL_MONTH, 'competitor:Ottobock', 24, 22, 1, 1, 0),
+    S(AUG, 'industry-other', 537, 440, 56, 31, 10), S(AUG, 'competitor:Ottobock', 48, 42, 1, 4, 1),
+  ]
+  const counts = new Map([
+    [AUG, { month: AUG, videos: 585, comments: 24086, category: 537, rivalFiled: 48 }],
+    [REAL_MONTH, { month: REAL_MONTH, videos: 362, comments: 10726, category: 338, rivalFiled: 24 }],
+  ])
+  return {
+    ...base,
+    brand: 'Össur',
+    reading,
+    brands: brandsBlockFor(reading.asAt, { paused: reading.paused }),
+    category: {
+      ...base.category,
+      market: buildMarketKinds({ kindRows, statsRows, counts, month: REAL_MONTH, prevMonth: AUG, rivalAudiences: ['competitor:Ottobock'], chip: SEPTEMBER_CHIP }),
+    },
+    market: [
+      { month: AUG, videos: 585, comments: 24086, category: 537, rivalFiled: 48 },
+      { month: REAL_MONTH, videos: 362, comments: 10726, category: 338, rivalFiled: 24 },
+    ],
+    sentence: sentenceBlockFor({
+      head: headline({ verdicts: [], size: { month: REAL_MONTH, soFar: false, videos: 362, comments: 10726 }, makerShares: null, chip: SEPTEMBER_CHIP }),
+      verdicts: [], voices: { voices: [], from: 0 }, ledger: null, anomaly: null,
+    }),
+    themes: board,
+    hero: heroLead(board, [], new Set()),
+    heroVoices: [],
+    asks: buildAsks(themes, REAL_MONTH, 'no_rule'),
+    change: base.change ? { ...base.change, paused: true } : undefined,
+    subjects: { ...base.subjects, state: 'none', rows: [], candidates: [], market: { month: REAL_MONTH, n: 362, prev: { month: AUG, n: 585 } } },
   }
 }

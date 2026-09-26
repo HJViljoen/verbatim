@@ -39,15 +39,17 @@ export interface ReadingCard {
 export const READING_CARDS: readonly ReadingCard[] = [
   {
     key: 'overview',
-    // NOT "what grew and faded": DIRECTION_WORDS_BY_READER is false for all
-    // seven readers, so Overview prints a level and a banded change ("5.1 pts
-    // down", "no clear change") and no direction word at all. Subjects is the
-    // one Block B surface that earns one, and its card lists `direction`.
-    tells: 'Where you stand in the month the page reads: how much conversation there was, how your subjects read against the category and against each named rival, what moved most and by how much against its band, what you said you would do, and what the reading rests on.',
-    read: ['month', 'video', 'audience', 'level', 'change'],
+    // YOUR MARKET (market-first WP1.6, decision K). The front page reads the
+    // market in full: its size, what it talked about biggest first, what
+    // people did in the comments, what they asked, its subjects, and what
+    // changed and which changes were ours. Levels with the month before beside
+    // them; no direction word (none can be earned before late January).
+    tells: 'Your market in the month the page reads: how big it was, what it talked about biggest first, what people did and asked for in the comments, how it read on each of your subjects, and what changed, including the changes that were ours.',
+    read: ['market', 'month', 'video', 'theme', 'kind', 'level', 'change'],
     cannot: [
       'It is a reading of a calendar month. The page bar names the month; its tooltip says whether it is still filling.',
-      'A video that names both you and a rival is counted in your audience only. How many did is in the record.',
+      'Themes are grouped within the category, so a theme is a share of the category’s videos, never of the whole market. Makers’ videos stay in every count and are marked.',
+      'Two months sit side by side as levels. They are compared only when both were read the same way; until then the page says why not.',
       'It cannot tell you why anything moved. A number and a reason are different claims, and only one of them is counted.',
     ],
   },
@@ -72,6 +74,15 @@ export const READING_CARDS: readonly ReadingCard[] = [
     ],
   },
   {
+    key: 'competitive',
+    tells: 'Who else is in this conversation and how each named rival reads against you, on the same subjects and the same months.',
+    read: ['rival', 'audience', 'level', 'change'],
+    cannot: [
+      'Share here is share of the conversation we read, never market share.',
+      'A video that names both you and a rival is counted in your audience only, so it is in no rival\'s share.',
+    ],
+  },
+  {
     key: 'market',
     tells: 'What to do about it, and whether what you already did worked: the moves you declared, dated by you, read against the audiences you did not touch.',
     read: ['move', 'change', 'level', 'new'],
@@ -80,15 +91,6 @@ export const READING_CARDS: readonly ReadingCard[] = [
       'A move is read from the month after it was dated, so its first comparison lands one reading later, and it is read beside the audiences you did not touch, never against them.',
       'What the conversation did after you acted on advice is compared only once two months have been read in your audience since you decided. The month you decided in is on neither side.',
       'Advice here is grounded in what people said, not in your sales figures.',
-    ],
-  },
-  {
-    key: 'competitive',
-    tells: 'Who else is in this conversation and how each named rival reads against you, on the same subjects and the same months.',
-    read: ['rival', 'audience', 'level', 'change'],
-    cannot: [
-      'Share here is share of the conversation we read, never market share.',
-      'A video that names both you and a rival is counted in your audience only, so it is in no rival\'s share.',
     ],
   },
   {

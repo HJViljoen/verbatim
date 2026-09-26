@@ -5,12 +5,11 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { NUMBER_BUDGET, RIVAL_FIGURES_MAX, type OverviewData, type RivalRow, type SubjectRow } from '@/lib/pages/overview'
-import { OVERVIEW_BLOCKS, OVERVIEW_LEGEND, OverviewPage, TILE_BLOCKS, horizonRange } from './index'
+import { FRONT_PAGE_BLOCKS, MARKET_TITLES, OVERVIEW_BLOCKS, OverviewPage, TILE_BLOCKS, horizonRange } from './index'
 import { overviewPage } from './page'
 import { SidebarTenant } from '@/components/sidebar-tenant-loader'
-import { THIRTEEN_WORDS, READER_FLAGS } from '@/lib/calibration'
 import { PAGES } from '@/components/pages/registry'
-import { overviewFixture, refusedFixture } from './fixture'
+import { marketBeforeMakersFixture, marketFrontFixture, ossurFrontFixture, overviewFixture, refusedFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -49,16 +48,16 @@ function fullHouse(): OverviewData {
 }
 
 describe('the Overview’s blocks', () => {
-  it('are the six the design names, keyed stably, and OV6 is not among them (25 Sep rulings)', () => {
+  it('are the registry’s nine, keyed stably: Phase 1’s six and the front page’s three new ones, and OV6 is not among them (25 Sep rulings)', () => {
     expect(OVERVIEW_BLOCKS.map((b) => b.key)).toEqual([
-      'overview.bar', 'overview.sentence', 'overview.subjects',
-      'overview.category', 'overview.rivals', 'overview.moves',
+      'overview.bar', 'overview.sentence', 'overview.themes', 'overview.category', 'overview.asks',
+      'overview.subjects', 'overview.rivals', 'overview.change', 'overview.moves',
     ])
     expect(OVERVIEW_BLOCKS.map((b) => b.key)).not.toContain('overview.record')
   })
 
-  it('every one renders in all three modes, in both states, and keeps the copy contract', () => {
-    for (const data of [overviewFixture(), refusedFixture()]) {
+  it('every one renders in all three modes, in every state, and keeps the copy contract', () => {
+    for (const data of [overviewFixture(), refusedFixture(), marketFrontFixture(), marketBeforeMakersFixture(), ossurFrontFixture()]) {
       for (const block of OVERVIEW_BLOCKS) {
         for (const mode of MODES) {
           const markup = render(block.render(data, mode, ctx))
@@ -73,7 +72,7 @@ describe('the Overview’s blocks', () => {
   })
 
   it('every one either says something or says why it has nothing', () => {
-    for (const data of [overviewFixture(), refusedFixture()]) {
+    for (const data of [overviewFixture(), refusedFixture(), marketFrontFixture(), ossurFrontFixture()]) {
       for (const block of OVERVIEW_BLOCKS) {
         const empty = block.emptyState(data)
         if (empty != null) expect(empty.length).toBeGreaterThan(20)
@@ -125,7 +124,8 @@ describe('the 30-number budget', () => {
     // Every rival keeps its ROW; only the declaration is capped.
     const markup = render(<OverviewPage data={wider} />)
     expect(markup).toContain('More 19')
-    expect(Object.keys(blockAnswers(OVERVIEW_BLOCKS[4], wider).figures).filter((k) => k.startsWith('rival_')).length)
+    const rivals = OVERVIEW_BLOCKS.find((b) => b.key === 'overview.rivals')!
+    expect(Object.keys(blockAnswers(rivals, wider).figures).filter((k) => k.startsWith('rival_')).length)
       .toBe(RIVAL_FIGURES_MAX)
   })
 
@@ -149,19 +149,22 @@ describe('the 30-number budget', () => {
 })
 
 describe('the Overview page', () => {
-  // FIVE TILES. OV0 is not a tile (Block D wave 3, M7: `Main.dc.html` draws no
-  // "This month so far", and its facts are the bar's and the horizon range's);
-  // it keeps its place in `OVERVIEW_BLOCKS` for the print slide, the email and
-  // the brief section maps, which carry no bar. OV6, "How sound is this
-  // month", left the page with the 25 Sep rulings.
-  it('draws the page bar, the five tiles and nothing else', () => {
-    const markup = render(<OverviewPage data={overviewFixture()} />)
-    expect(markup).toContain('Overview')
-    expect((markup.match(/data-tile=""/g) ?? []).length).toBe(5)
+  // SEVEN TILES, YOUR MARKET'S (market-first WP1.6, deploy 2's column of
+  // §2.2): the month, the themes, the kinds, the asks, the subjects, the
+  // brands' one line and what changed. OV0 is not a tile (Block D wave 3, M7);
+  // it keeps its place in `OVERVIEW_BLOCKS` for the print slide and the email,
+  // which carry no bar. "What you published" (OV5) leaves the page until
+  // deploy 3 brings it back reworked (WP2.5).
+  it('draws the page bar, Your market’s seven tiles and nothing else', () => {
+    const markup = render(<OverviewPage data={marketFrontFixture()} />)
+    expect(markup).toContain('Your market')
+    expect((markup.match(/data-tile=""/g) ?? []).length).toBe(7)
+    expect(TILE_BLOCKS.map((b) => b.key)).toEqual([
+      'overview.sentence', 'overview.themes', 'overview.category', 'overview.asks',
+      'overview.subjects', 'overview.rivals', 'overview.change',
+    ])
     expect(markup).not.toContain('This month so far')
-    // The band that carried that tile's one fact left the page with the 25 Sep
-    // rulings; the bar carries the month and "as at" instead.
-    expect(renderText(<OverviewPage data={overviewFixture()} />)).not.toContain('2,044 at this point last month')
+    expect(renderText(<OverviewPage data={marketFrontFixture()} />)).not.toContain('Your moves →')
     assertCopyContract(markup)
   })
 
@@ -186,9 +189,9 @@ describe('the Overview page', () => {
   })
 
   it('links inside the app relatively, so a page change is not a page load', () => {
-    const markup = render(<OverviewPage data={overviewFixture()} />)
-    expect(markup).toContain('href="/dashboard/market"')
-    expect(markup).not.toContain('href="https://app.verbatimintel.com/dashboard/market"')
+    const markup = render(<OverviewPage data={marketFrontFixture()} />)
+    expect(markup).toContain('href="/dashboard/voice"')
+    expect(markup).not.toContain('href="https://app.verbatimintel.com/dashboard/voice"')
   })
 
   it('says so plainly when the workspace has never been read', () => {
@@ -207,6 +210,12 @@ describe('the Overview page', () => {
 // ---- Block D wave 2 · the shell the artboard draws -------------------------
 
 describe('the page bar, ported', () => {
+  it('offers no horizon on Your market, whose every block reads the reading month (WP1.6)', () => {
+    const text = renderText(<OverviewPage data={marketFrontFixture()} />)
+    expect(text).not.toContain('Last 3 months')
+    expect(text).not.toContain('Since we started')
+  })
+
   it('states what the selected horizon pill actually resolves to', () => {
     // "This month" names no days. The range does, off the run count and the
     // window the page was opened at — and the window is half-open, so the last
@@ -214,11 +223,24 @@ describe('the page bar, ported', () => {
     expect(horizonRange(overviewFixture())).toBe('3 updates · 1 Sep → 30 Sep')
   })
 
-  it('draws the range, the legend pill and Export on the page', () => {
-    const text = renderText(<OverviewPage data={overviewFixture()} />)
-    expect(text).toContain('3 updates · 1 Sep → 30 Sep')
-    expect(text).toContain('How to read this page')
-    expect(text).toContain('Export')
+  it('draws Export alone at the end of the bar, as the preview does: How to read stays in Settings', () => {
+    for (const data of [overviewFixture(), marketFrontFixture()]) {
+      const text = renderText(<OverviewPage data={data} />)
+      expect(text).toContain('Export')
+      expect(text).not.toContain('How to read')
+    }
+  })
+
+  it('draws Export as the preview\'s 40px button, not the bar\'s pill (WP1.6 design check)', () => {
+    const markup = render(<OverviewPage data={marketFrontFixture()} />)
+    const at = markup.indexOf('Export</button>')
+    expect(at).toBeGreaterThan(0)
+    const open = markup.lastIndexOf('<button', at)
+    const tag = markup.slice(open, markup.indexOf('>', open) + 1)
+    expect(tag).toContain('h-10')
+    expect(tag).toContain('rounded-lg')
+    expect(tag).toContain('ring-1 ring-border')
+    expect(markup.slice(open, at)).not.toContain('rounded-full')
   })
 
   it('carries the month selector and the one line, and no "How sound is this" band (25 Sep rulings)', () => {
@@ -228,10 +250,6 @@ describe('the page bar, ported', () => {
     expect(markup).toContain('href="/dashboard?month=2026-08"')
     expect(text.toLowerCase()).not.toContain('how sound')
     expect(text).not.toContain('your 3rd monthly reading')
-  })
-
-  it('draws its legend from the word list, not from a hand-picked subset', () => {
-    expect(OVERVIEW_LEGEND).toEqual([...THIRTEEN_WORDS, ...READER_FLAGS])
   })
 })
 
@@ -254,16 +272,22 @@ describe('Overview as an exportable page', () => {
     expect(PAGES.overview).toBe(overviewPage)
   })
 
-  it('exposes every block as a renderable under its own stable key', () => {
+  it('exposes every block as a renderable under its own stable key, titled as the front page titles it', () => {
     expect(Object.keys(overviewPage.renderables)).toEqual(OVERVIEW_BLOCKS.map((b) => b.key))
     for (const block of OVERVIEW_BLOCKS) {
-      expect(overviewPage.renderables[block.key].title).toBe(block.title)
+      expect(overviewPage.renderables[block.key].title).toBe(MARKET_TITLES[block.key] ?? block.title)
     }
+    expect(overviewPage.renderables['overview.sentence'].title).toBe('The month')
   })
 
-  it('places every renderable on exactly one slide', () => {
+  it('places every front-page block, and OV0, on exactly one slide of Your market', () => {
+    const keys = overviewPage.slides(marketFrontFixture(), 'default').flatMap((s) => s.keys)
+    expect([...keys].sort()).toEqual(['overview.bar', ...FRONT_PAGE_BLOCKS.map((b) => b.key)].sort())
+  })
+
+  it('places a stored Phase 1 copy on the slides it was built with', () => {
     const keys = overviewPage.slides(overviewFixture(), 'default').flatMap((s) => s.keys)
-    expect([...keys].sort()).toEqual(OVERVIEW_BLOCKS.map((b) => b.key).sort())
+    expect([...keys].sort()).toEqual(['overview.bar', 'overview.category', 'overview.moves', 'overview.rivals', 'overview.sentence', 'overview.subjects'])
   })
 
   it('renders a renderable in every mode without a page around it', () => {

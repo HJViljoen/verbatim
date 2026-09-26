@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ReactNode } from 'react'
+import { isValidElement, type ReactNode } from 'react'
 
 import { blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
@@ -16,7 +16,9 @@ import { MARKET_BLOCKS } from '@/components/pages/market-surface'
 import { COMPETITIVE_BLOCKS } from '@/components/pages/competitive-surface'
 import { WEEK_BLOCKS } from '@/components/pages/week'
 
-import { makersMarkedFixture, marketSizeFixture, overviewFixture, refusedFixture as overviewRefused } from '@/components/pages/overview/fixture'
+import { makersMarkedFixture, marketBeforeMakersFixture, marketFrontFixture, marketSizeFixture, ossurFrontFixture, overviewFixture, refusedFixture as overviewRefused } from '@/components/pages/overview/fixture'
+import { FRONT_PAGE_BLOCKS } from '@/components/pages/overview'
+import { BlockFrame } from '@/components/blocks/frame'
 import { subjectsFixture, refusedFixture as subjectsRefused } from '@/components/pages/subjects/fixture'
 import { voiceFixture } from '@/components/pages/voice-surface/fixture'
 import { marketFixture, deepLinkFixture, unrecordedFixture } from '@/components/pages/market-surface/fixture'
@@ -60,7 +62,11 @@ const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
 
 /** A registered page whose renderables take a Phase 1 fixture. */
 const PAGE_STATES: Record<string, unknown[]> = {
-  overview: [overviewFixture(), overviewRefused(), marketSizeFixture(), makersMarkedFixture()],
+  overview: [
+    overviewFixture(), overviewRefused(), marketSizeFixture(), makersMarkedFixture(),
+    // Your market (market-first WP1.6): the front page as deploy 2 builds it.
+    marketFrontFixture(), marketBeforeMakersFixture(), ossurFrontFixture(),
+  ],
   subjects: [subjectsFixture(), subjectsRefused()],
 }
 
@@ -124,5 +130,37 @@ describe('the registry sweep', () => {
     }
     expect(bad).toEqual([])
     expect(renders).toBeGreaterThan(300)
+  })
+})
+
+// THE 25 SEP RULINGS, SWEPT (market-first WP1.6, plan §5.12). On a page a
+// package has rebuilt, a block's header is its title alone and its footer
+// holds links alone: no block passes `BlockFrame` its `meta` (the top-right
+// note) or its `footerNote` (the bottom-right note). Checked on the element a
+// block returns, so a stored artefact's markup (and the weekly's, whose
+// preview must stay byte for byte) is untouched by the check. Your market is
+// rebuilt at deploy 2; Subjects, Conversation and the monthly join it at
+// deploy 3 (§5.12), and are added here by the package that rebuilds each.
+const REBUILT: [string, readonly { key: string; render: (d: never, m: RenderMode, c: typeof ctx) => ReactNode }[], unknown[]][] = [
+  ['your market', FRONT_PAGE_BLOCKS as never, [marketFrontFixture(), marketBeforeMakersFixture(), ossurFrontFixture()]],
+]
+
+describe('the 25 Sep rulings on rebuilt pages', () => {
+  it('no block passes BlockFrame a meta or a footer note, in any mode or state', () => {
+    const bad: string[] = []
+    for (const [page, blocks, states] of REBUILT) {
+      for (const block of blocks) {
+        for (const data of states) {
+          for (const mode of MODES) {
+            const el = block.render(data as never, mode, ctx)
+            if (!isValidElement(el) || el.type !== BlockFrame) { bad.push(`${page} ${block.key} [${mode}] is not drawn in a BlockFrame`); continue }
+            const props = el.props as { meta?: unknown; footerNote?: unknown }
+            if (props.meta != null) bad.push(`${page} ${block.key} [${mode}] passes meta`)
+            if (props.footerNote != null) bad.push(`${page} ${block.key} [${mode}] passes footerNote`)
+          }
+        }
+      }
+    }
+    expect(bad).toEqual([])
   })
 })

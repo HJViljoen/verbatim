@@ -38,9 +38,9 @@ export function DeliveryBlock({
   readings: ReadingsRecord
 }) {
   return (
-    <RecordSection title="Delivery" meta="every update since the first one on record">
+    <RecordSection title="Delivery">
       {stats.length === 0 ? (
-        <p className="m-0 text-[12.5px] text-muted-foreground">{record.line}</p>
+        <p className="m-0 text-[15px] text-muted-foreground">{record.line}</p>
       ) : (
         /* FOUR ABREAST AT `lg`, NOT `md` (Block D wave 3, RC2). `md` is
            exactly where the app's 224px sidebar and SettingsFrame's own 224px
@@ -50,37 +50,34 @@ export function DeliveryBlock({
            neighbours — a crop showed "22 updates" with the next cell's 24px
            "5" printed on top of the "s". Two-up below `lg` gives every cell
            half the pane, which is 120px at the narrowest width this page is
-           drawn at. */
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+           drawn at.
+           AND NOW AT `xl` (fresh design check, 26 Sep): the section became a
+           tile with a 32px inset and the figure became the tab's 28px (What
+           we changed's cells), so at 1024 four cells would get 96px against
+           the ~100px a 28px mono "28 Jun" needs. From 1280 each gets 160px. */
+        <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
           {stats.map((s) => (
             <StatCell key={s.id} figure={s.figure} unit={s.unit} caption={s.caption} />
           ))}
         </div>
       )}
 
-      {/* THE DELIVERY CAVEATS BELONG TO THE DELIVERY FIGURES, and they used to
-          render after the monthly-readings strip, outside the 172px gutter,
-          where they read as footnotes to the readings and the section's
-          argument went stats → month → readings → stats again (design review
-          finding 7). How many of the last few finished, and what the slot
-          bookkeeping cannot tell, are both about the four cells above. */}
-      <div className="flex flex-col gap-1">
-        {record.total > 0 ? (
-          <p className="m-0 text-[11.5px] text-muted-foreground">
-            {fmtInt(record.recentSettled)} of the last {fmtInt(record.recent)} finished.
-            {record.scheduledServed
-              ? ` ${fmtInt(record.scheduledServed.scheduled)} served a scheduled slot, ${fmtInt(record.scheduledServed.byHand)} were run by hand.`
-              : ''}
-          </p>
-        ) : null}
-        {record.caveats.map((c) => (
-          <p key={c} className="m-0 text-[11.5px] text-muted-foreground">{c}</p>
-        ))}
-      </div>
+      {/* HOW MANY OF THE LAST FEW FINISHED belongs to the four cells above:
+          it is data, one line. The caveats that sat under it (what the slot
+          bookkeeping cannot tell) are method, and the 25 Sep rulings take
+          every such line off the tab. */}
+      {record.total > 0 ? (
+        <p className="m-0 text-[15px] leading-[1.5] text-secondary-foreground">
+          {fmtInt(record.recentSettled)} of the last {fmtInt(record.recent)} finished.
+          {record.scheduledServed
+            ? ` ${fmtInt(record.scheduledServed.scheduled)} served a scheduled slot, ${fmtInt(record.scheduledServed.byHand)} were run by hand.`
+            : ''}
+        </p>
+      ) : null}
 
       <LabelRow label={month} sub={`${fmtInt(updates.length)} ${updates.length === 1 ? 'update' : 'updates'}`}>
         {updates.length === 0 ? (
-          <p className="m-0 pt-1.5 text-[12px] text-muted-foreground">No update has run this month yet.</p>
+          <p className="m-0 text-[15px] leading-[1.5] text-muted-foreground">No update has run this month yet.</p>
         ) : (
           <ul className="flex flex-wrap items-center gap-2">
             {[...updates].reverse().map((u) => (
@@ -103,45 +100,30 @@ export function DeliveryBlock({
         sub={readings.recorded ? `${fmtInt(readings.readings)} so far` : 'not recorded'}
       >
         {!readings.recorded ? (
-          <p className="m-0 text-[12.5px] text-muted-foreground">
+          <p className="m-0 text-[15px] leading-[1.5] text-muted-foreground">
             The month-by-month reading has not been recorded for this workspace yet, so there is nothing to count.
           </p>
-        ) : (
-          <div className="flex flex-col gap-1.5">
-            {readings.months.length > 0 ? (
-              <p className="m-0 text-[12.5px]">
-                {readings.months.map((m, i) => (
-                  <span key={m.month}>
-                    {i > 0 ? ' · ' : ''}
-                    {m.label}{' '}
-                    <span data-copy="figure" className="font-mono text-[12px] tabular-nums text-secondary-foreground">
-                      {fmtInt(m.updates)}
-                    </span>{' '}
-                    {m.current ? 'so far' : m.updates === 1 ? 'update' : 'updates'}
-                  </span>
-                ))}
-              </p>
-            ) : null}
-            <p className="m-0 text-[12px] text-muted-foreground">{capitalise(readings.counter)}.</p>
-            {readings.backReadLabel ? (
-              <p className="m-0 text-[12px] text-muted-foreground">
-                {readings.backReadLabel} {readings.backRead.length === 1 ? 'was' : 'were'} read at setup: a reading of
-                today’s corpus, not what we would have said at the time.
-              </p>
-            ) : null}
-            {/* Which months are under the floor is the coverage row's, on this
-                same page (copy de-clutter C103). */}
-          </div>
-        )}
+        ) : readings.months.length > 0 ? (
+          // THE MONTHS AND THEIR UPDATES, AND NOTHING UNDER THEM (25 Sep
+          // rulings): the count is the label's ("4 so far"), and the two
+          // lines that followed (what the quarter view needs; which months
+          // were read at setup) were method. Which months are under the floor
+          // is the coverage row's (copy de-clutter C103).
+          <p className="m-0 text-[15px] leading-[1.5]">
+            {readings.months.map((m, i) => (
+              <span key={m.month}>
+                {i > 0 ? ' · ' : ''}
+                {m.label}{' '}
+                <span data-copy="figure" className="font-mono text-[15px] tabular-nums text-secondary-foreground">
+                  {fmtInt(m.updates)}
+                </span>{' '}
+                {m.current ? 'so far' : m.updates === 1 ? 'update' : 'updates'}
+              </span>
+            ))}
+          </p>
+        ) : null}
       </LabelRow>
 
     </RecordSection>
   )
-}
-
-/** `readingsCounter` is composed as a clause ("your 3rd monthly reading · the
- *  quarter view needs 6") because Overview prints it inside a bar line. Here it
- *  is a sentence of its own. */
-function capitalise(s: string): string {
-  return s.length === 0 ? s : s[0].toUpperCase() + s.slice(1)
 }

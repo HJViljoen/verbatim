@@ -113,9 +113,8 @@ describe('How-to-read legend pills', () => {
     for (const p of pills) expect(anchors.has(p.anchor), `${p.file} → #${p.anchor}`).toBe(true)
   })
 
-  it('puts the same pill on every reading page', () => {
+  it('puts the same pill on every reading page but Your market', () => {
     const pages = {
-      overview: 'components/pages/overview/index.tsx',
       subjects: 'components/pages/subjects/index.tsx',
       // Voice mounts its pill from the route (useSearchParams must sit under
       // the page's Suspense boundary there), so the route file is the one read.
@@ -128,5 +127,12 @@ describe('How-to-read legend pills', () => {
       const text = readFileSync(join(ROOT, file), 'utf8')
       expect(text, file).toMatch(new RegExp(`<HowToRead\\b[^>]*anchor="${key}"`))
     }
+  })
+
+  it('leaves Your market’s bar with Export alone, as the approved preview draws it (Heinrich’s default, 26 Sep)', () => {
+    // How to read stays one click away in Settings.
+    const text = readFileSync(join(ROOT, 'components/pages/overview/index.tsx'), 'utf8')
+    expect(text).not.toMatch(/<HowToRead\b/)
+    expect(text).toMatch(/<ExportMenu\b/)
   })
 })

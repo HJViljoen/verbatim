@@ -28,10 +28,10 @@ import { MonthFlag, RecordSection } from './frame'
  * role would be a claim about state the product does not hold — so the person
  * stays and the deviation is recorded.
  *
- * THE BOUNDARY MOVED INTO THE HEADER. `changeLogBoundary` is the artboard's
- * right-hand note ("a change breaks a series; the old line is kept") in the
- * product's own words, and it belongs beside the count rather than under the
- * table, where it read as a footnote to the last row.
+ * TITLE ALONE (25 Sep rulings, the whole Record tab from WP1.6). The count and
+ * the boundary sentence that sat beside the title are gone: the table is the
+ * count, and the reconstructed rows say what they are under their own heading
+ * and in their "made by" cell ("Reconstructed, not recorded").
  */
 
 // THE TRACKS ARE PROPORTIONAL, AND THE TABLE ONLY GOES WIDE WHERE THERE IS
@@ -50,18 +50,24 @@ import { MonthFlag, RecordSection } from './frame'
 // fractions are the artboard's own widths at 1440: a 1160px pane less the
 // 100px date and three 12px gaps leaves 1024px, and 1.9 : 1 : 0.5 of it is
 // 570 │ 300 │ 150 — the mock's three columns to the pixel.
-const ROW = 'grid grid-cols-1 gap-x-3 gap-y-1 border-t border-border/70 py-3 lg:min-h-[52px] lg:grid-cols-[100px_minmax(0,1.9fr)_minmax(0,1fr)_minmax(0,0.5fr)] lg:items-center lg:py-0'
+// Each row is padded like the tab's other tables (The record's, above), with
+// its cells on the first line's top, so a three-line note does not press its
+// rules against its words.
+// AND THE BREAKPOINT IS NOW `xl` (fresh design check, 26 Sep): as a tile the
+// section lost 64px to its inset, so at 1024 the four tracks got 165 │ 87 │
+// 43px and "Verbatim" broke mid-word. From 1280 they get 330 │ 174 │ 87.
+const ROW = 'grid grid-cols-1 gap-x-3 gap-y-1 border-b border-border/60 py-3 last:border-b-0 xl:grid-cols-[100px_minmax(0,1.9fr)_minmax(0,1fr)_minmax(0,0.5fr)] xl:items-start xl:py-3.5'
 
 export function ChangeLogBlock({
-  log, rows, meta, boundary, showing, now, unavailable,
+  log, rows, showing, now, unavailable, title = 'The change log',
 }: {
+  /** The section's title. Settings › What we changed (market-first WP1.6)
+   *  prints the changes of ours in its own dated list, and this block the
+   *  rest, as "Other settings changes", so no change prints twice. */
+  title?: string
   log: ChangeLogView
   /** How many recorded rows the table draws. */
   rows: number
-  /** "4 changes since 6 Apr · 1 this month". */
-  meta: string
-  /** The product's own sentence about where the record begins. */
-  boundary: string
   showing: string | null
   now: string
   /** The sentence to print instead of a table where `config_changes` is not
@@ -70,42 +76,70 @@ export function ChangeLogBlock({
 }) {
   if (unavailable) {
     return (
-      <RecordSection title="The change log" meta="not recorded yet">
-        <p className="m-0 text-[12.5px] text-muted-foreground">{unavailable}</p>
+      <RecordSection title={title}>
+        <p className="m-0 text-[15px] text-muted-foreground">{unavailable}</p>
       </RecordSection>
     )
   }
   const shown = log.recorded.slice(0, rows)
   return (
-    <RecordSection title="The change log" meta={meta} note={boundary}>
+    <RecordSection title={title}>
       {shown.length === 0 ? (
-        <p className="m-0 text-[12.5px] text-muted-foreground">No change has been recorded yet.</p>
+        <p className="m-0 text-[15px] text-muted-foreground">No change has been recorded yet.</p>
       ) : (
         <div className="flex flex-col">
-          <div className="hidden grid-cols-[100px_minmax(0,1.9fr)_minmax(0,1fr)_minmax(0,0.5fr)] gap-x-3 pb-2 font-mono text-[10px] uppercase tracking-[0.06em] text-muted-foreground lg:grid">
+          {/* The column heads in the tab's one voice (The record's, above):
+              13px, sentence case, over the table's rule. */}
+          <div className="hidden grid-cols-[100px_minmax(0,1.9fr)_minmax(0,1fr)_minmax(0,0.5fr)] gap-x-3 border-b border-border pb-2 text-[13px] font-medium leading-[1.35] text-muted-foreground xl:grid">
             <span>Date</span>
             <span>What changed</span>
             <span>What it breaks</span>
             <span>Made by</span>
           </div>
-          {shown.map((c) => (
-            <ChangeRow key={c.id} change={c} now={now} />
+          {sameRows(shown).map(({ change, count }) => (
+            <ChangeRow key={change.id} change={change} count={count} now={now} />
           ))}
         </div>
       )}
-      {showing ? <p className="m-0 text-[11.5px] text-muted-foreground">{showing}</p> : null}
+      {showing ? <p className="m-0 text-[13px] text-muted-foreground">{showing}</p> : null}
       {log.prehistory.length > 0 ? <Prehistory log={log} rows={rows} now={now} /> : null}
     </RecordSection>
   )
 }
 
-function ChangeRow({ change, now }: { change: ClientChange; now: string }) {
+/**
+ * Consecutive rows that would print exactly the same line, drawn once with
+ * how many there are (fresh design check, 26 Sep). Sealand's 24 Sep holds six
+ * rows reading "precision measured by hand on 33 labelled pairs at 0.6/0.4 ·
+ * 6 settings → 6 settings" and seven "Confirmed on creation: …", one per
+ * subject, and the stored note names none of them: printed one by one they
+ * read as a fault in the table, not as thirteen changes. Nothing is dropped:
+ * every row is counted, and rows that differ in any printed cell stay apart.
+ */
+export function sameRows(changes: readonly ClientChange[]): { change: ClientChange; count: number }[] {
+  const printed = (c: ClientChange): string => [c.on, c.said, c.before ?? '', c.after ?? '', c.breaks, c.who].join('\u0000')
+  const out: { change: ClientChange; count: number }[] = []
+  for (const c of changes) {
+    const last = out[out.length - 1]
+    if (last && printed(last.change) === printed(c)) last.count += 1
+    else out.push({ change: c, count: 1 })
+  }
+  return out
+}
+
+function ChangeRow({ change, count = 1, now }: { change: ClientChange; count?: number; now: string }) {
   return (
     <div className={ROW}>
-      <span className="font-mono text-[11.5px] text-secondary-foreground">{change.dateShort}</span>
-      <span className="min-w-0 text-[12.5px]">
+      <span className="font-mono text-[13px] leading-[1.5] text-secondary-foreground">{change.dateShort}</span>
+      <span className="min-w-0 text-[13px] leading-[1.5]">
         <span className="inline-flex flex-wrap items-center gap-2">
-          <span>{change.said}</span>
+          {/* The count trails the sentence's last line, never a line of its own. */}
+          <span>
+            {change.said}
+            {count > 1 ? (
+              <>{' '}<span data-copy="figure" aria-label={`${count} changes like this one`} className="whitespace-nowrap font-mono text-[12px] tabular-nums text-muted-foreground">×{count}</span></>
+            ) : null}
+          </span>
           {madeThisMonth(change, now) ? <MonthFlag>this month</MonthFlag> : null}
         </span>
         {/* NOT TRUNCATED. On the rows that have it the before→after IS the
@@ -116,12 +150,12 @@ function ChangeRow({ change, now }: { change: ClientChange; now: string }) {
             is "added to, never edited" cannot hide the edit; the line wraps
             instead, and only on the rows that carry one. */}
         {change.before && change.after ? (
-          <span className="mt-0.5 block break-words font-mono text-[11px] leading-[1.45] text-muted-foreground">
+          <span className="mt-0.5 block break-words font-mono text-[12px] leading-[1.45] text-muted-foreground">
             {change.before} → {change.after}
           </span>
         ) : null}
       </span>
-      <span className="min-w-0 break-words text-[12.5px] text-muted-foreground">{change.breaks}</span>
+      <span className="min-w-0 break-words text-[13px] leading-[1.5] text-muted-foreground">{change.breaks}</span>
       {/* BREAKS LIKE ITS SIBLING (Block D wave 3, RC3). `minmax(0, 0.5fr)`
           stops the TRACK demanding width; it does not stop the CONTENT
           escaping it. The prehistory rows' actor is "Reconstructed, not
@@ -132,7 +166,7 @@ function ChangeRow({ change, now }: { change: ClientChange; now: string }) {
           21px over; 1220 → 3px over; 1280 and up clean. In the shell the word
           was clipped with no indication, on the one row whose whole purpose is
           to say the entry was inferred rather than recorded. */}
-      <span className="min-w-0 break-words text-[12.5px] text-secondary-foreground">{change.who}</span>
+      <span className="min-w-0 break-words text-[13px] leading-[1.5] text-secondary-foreground">{change.who}</span>
     </div>
   )
 }
@@ -147,17 +181,17 @@ function Prehistory({ log, rows, now }: { log: ChangeLogView; rows: number; now:
   const showing = showingLine(rows, log.prehistory.length)
   return (
     <div className="flex flex-col gap-2 pt-2">
-      {/* The count is the section's meta; what these entries are is the
-          change-log note's, said once above (copy de-clutter C94). */}
-      <p className="m-0 font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">
+      {/* A sub-heading with its count, as the preview heads a group of rows
+          ("What we search"); each row's "made by" says what the entries are. */}
+      <h3 className="m-0 text-[15px] font-semibold">
         Before the record began · {fmtInt(log.prehistory.length)} {log.prehistory.length === 1 ? 'entry' : 'entries'}
-      </p>
+      </h3>
       <div className="flex flex-col">
-        {log.prehistory.slice(0, rows).map((c) => (
-          <ChangeRow key={c.id} change={c} now={now} />
+        {sameRows(log.prehistory.slice(0, rows)).map(({ change, count }) => (
+          <ChangeRow key={change.id} change={change} count={count} now={now} />
         ))}
       </div>
-      {showing ? <p className="m-0 text-[11.5px] text-muted-foreground">{showing}</p> : null}
+      {showing ? <p className="m-0 text-[13px] text-muted-foreground">{showing}</p> : null}
     </div>
   )
 }

@@ -32,8 +32,16 @@ describe('the thirteen words', () => {
     expect([...THIRTEEN_WORDS]).toEqual([
       'update', 'month', 'week', 'video', 'audience', 'subject', 'theme', 'kind',
       'rival', 'move', 'level', 'change', 'direction',
+      // Market-first WP1.6 (decision K): the reading vocabulary gains the two
+      // words the front page is built on.
+      'market', 'brand',
     ])
     for (const key of THIRTEEN_WORDS) expect(glossaryRule(key).length).toBeGreaterThan(20)
+  })
+
+  it('define the market once, as the pool it is, and no longer claim nothing is pooled (S16)', () => {
+    expect(glossaryRule('market')).toContain('the category, plus the videos filed under a brand you track')
+    expect(glossaryRule('audience')).not.toContain('pooled silently')
   })
 
   it('carry the two flags beside them, and a flag is never a direction', () => {

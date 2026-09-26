@@ -2,7 +2,9 @@ import type { Block } from '@/lib/blocks/types'
 import { BlockFrame } from '@/components/blocks/frame'
 import { BlockStat } from '@/components/blocks/stat'
 import { horizonDates } from '@/lib/reading/horizon'
-import { fmtInt } from '@/lib/format'
+import { fmtInt, monthName } from '@/lib/format'
+import { barLine } from '@/lib/reading/reading-month'
+import { isMarketPage } from './market'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import type { OverviewData } from '@/lib/pages/overview'
@@ -55,6 +57,21 @@ export const overviewBar: Block<OverviewData> = {
 
   render(data, mode = 'app', ctx) {
     void ctx
+    // THE FRONT PAGE'S FORM (market-first WP1.6): paper and an inbox have no
+    // page bar, so OV0 prints the bar's own words there: the month and the one
+    // line, "as at the {update} update · next update {date}" (25 Sep rulings).
+    // The market's size is "The month"'s first sentence, not a second tile.
+    if (isMarketPage(data) && data.reading) {
+      const line = barLine(data.reading)
+      const title = monthName(data.month).replace(/^(\w+)/, () => longMonth(data.month))
+      return (
+        <BlockFrame title={title} mode={mode}>
+          {mode === 'email'
+            ? <div style={{ fontFamily: FONT.mono, fontSize: 12, color: EMAIL.muted }}>{line}</div>
+            : <p className="m-0 font-mono text-[13px] text-muted-foreground">{line}</p>}
+        </BlockFrame>
+      )
+    }
     const b = data.bar
     // ON THE MARKET'S BASE (deploy 1 review, the lead's R7): the same total
     // the size headline states; an older stored copy prints its own.
@@ -121,6 +138,8 @@ export const overviewBar: Block<OverviewData> = {
   },
 
   figures(data): FigureTable {
+    // On the front page OV0 prints the bar's line and no figure of its own.
+    if (isMarketPage(data)) return {}
     const b = data.bar
     const shown = barShown(b)
     // THE MARKET'S TOTAL IS OV1'S TOKEN, SO ONE PAGE HOLDS ONE NUMBER FOR IT

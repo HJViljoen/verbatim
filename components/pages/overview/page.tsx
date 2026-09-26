@@ -4,7 +4,8 @@ import { appBaseUrl } from '@/lib/site'
 import { shortDate, weekdayDate } from '@/lib/format'
 import { loadOverview, longMonth, type OverviewData } from '@/lib/pages/overview'
 import type { PageModule, PrintVariant, Renderable, Slide } from '@/lib/renderables/types'
-import { OVERVIEW_BLOCKS } from './index'
+import { MARKET_TITLES, OVERVIEW_BLOCKS } from './index'
+import { isMarketPage } from './market'
 
 /**
  * Overview as an EXPORTABLE page (Block D wave 2, `main.bar.export`).
@@ -39,7 +40,8 @@ const renderables: Record<string, Renderable<OverviewData>> = Object.fromEntries
     block.key,
     {
       key: block.key,
-      title: block.title,
+      // The front page's name for a reworked block (market-first WP1.6).
+      title: MARKET_TITLES[block.key] ?? block.title,
       render: (data: OverviewData, mode) => block.render(data, mode, ctx()),
       email: (data: OverviewData) => block.render(data, 'email', ctx()),
     } satisfies Renderable<OverviewData>,
@@ -57,6 +59,16 @@ const renderables: Record<string, Renderable<OverviewData>> = Object.fromEntries
  * variant is for on Competitive and Market.
  */
 function overviewSlides(data: OverviewData, _variant: PrintVariant): Slide[] {
+  // YOUR MARKET, IN THE PAGE'S ORDER (market-first WP1.6): the month and what
+  // it talked about; what people did and asked; subjects, brands and what
+  // changed. `overview.moves` is not on the page and not on a sheet.
+  if (isMarketPage(data)) {
+    return [
+      { title: `The ${longMonth(data.month)} reading`, keys: ['overview.bar', 'overview.sentence', 'overview.themes'], layout: 'grid' },
+      { title: 'What your market did and asked', keys: ['overview.category', 'overview.asks'], layout: 'grid' },
+      { title: 'Subjects, brands and what changed', keys: ['overview.subjects', 'overview.rivals', 'overview.change'], layout: 'grid' },
+    ]
+  }
   return [
     // THE MONTH BY NAME, NOT "THIS MONTH" (market-first WP1.2): on 1 to 15
     // October the sheet is September's, printed in October.
@@ -68,11 +80,14 @@ function overviewSlides(data: OverviewData, _variant: PrintVariant): Slide[] {
 
 export const overviewPage: PageModule<OverviewData> = {
   key: 'overview',
-  title: 'Overview',
-  load: loadOverview,
+  // The sidebar's name for the page since deploy 2 (decision K, lib/nav.ts).
+  title: 'Your market',
+  // The export route, a report's page sections and `render-page.ts` draw the
+  // front page, so they build it as "Your market" (WP1.6).
+  load: (scope) => loadOverview(scope, { marketFront: true }),
   slides: overviewSlides,
   renderables,
-  snapshotTitle: (d) => `Overview · ${d.brand} · ${longMonth(d.month)}`,
+  snapshotTitle: (d) => `Your market · ${d.brand} · ${longMonth(d.month)}`,
   // "AS AT" IS THE LAST UPDATE, NEVER THE CLOCK (market-first WP1.2). A
   // snapshot taken before the reading month existed carries no `reading`, and
   // keeps the words it was built with.

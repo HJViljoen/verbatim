@@ -116,11 +116,13 @@ export interface GateTotals {
  */
 export const GATE_SAMPLE = 1000
 
-/** What to say when the rates are over a sample rather than the record. Null
- *  when the sample IS the record, because a basis line nobody needs is noise. */
-export function sampleNote(sampled: number, found: number): string | null {
-  if (sampled <= 0 || found <= sampled) return null
-  return `Rates are over the ${sampled.toLocaleString('en-GB')} most recent judgements, of ${found.toLocaleString('en-GB')} recorded.`
+/** The rates table's "Looked at" column head, carrying the rates' base
+ *  where they are over a sample rather than the record: "Looked at (of the
+ *  last 1,000)". The base sits in the column head, never in a line under the
+ *  table (25 Sep rulings); where the sample IS the record, the head is bare. */
+export function sampleHead(sampled: number, found: number): string {
+  if (sampled <= 0 || found <= sampled) return 'Looked at'
+  return `Looked at (of the last ${sampled.toLocaleString('en-GB')})`
 }
 
 /** The totals from COUNTS rather than from rows — three head counts and one

@@ -84,11 +84,21 @@ export interface TileProps {
    *  `start` is the default only because it is what a tile with one group
    *  wants. Ignored by `strip`, whose cells are the layout. */
   distribute?: 'start' | 'between' | 'center'
+  /**
+   * The block inside draws its own insets (market-first WP1.6 design pass,
+   * ADDITIVE, default off). Your market's blocks set the approved preview's
+   * 32px inset and a full-width footer rule themselves (`BlockFrame`'s
+   * `roomy`), so the tile adds no padding or gap of its own, and the export
+   * control sits inside the block's inset rather than on the tile's edge. A
+   * flush tile takes no `eyebrow`, `meta`, `lead` or `footer`: the block
+   * draws its own header and footer.
+   */
+  flush?: boolean
   children?: ReactNode
 }
 
 export function Tile({
-  col, row, variant = 'default', eyebrow, meta, lead, footer, footerNote, hoverable = false, exportKey, className, bodyClassName, distribute = 'start', children,
+  col, row, variant = 'default', eyebrow, meta, lead, footer, footerNote, hoverable = false, exportKey, className, bodyClassName, distribute = 'start', flush = false, children,
 }: TileProps) {
   const isHero = variant === 'hero'
   const isStrip = variant === 'strip'
@@ -119,7 +129,7 @@ export function Tile({
         ROW[row] ?? 'xl:row-span-1',
         MIN_H[row] ?? 'min-h-[116px]',
         'xl:min-h-0',
-        variant === 'default' && 'gap-2.5 px-4 py-3.5',
+        variant === 'default' && !flush && 'gap-2.5 px-4 py-3.5',
         isHero && 'gap-3 px-5 py-4',
         isStrip && 'flex-col divide-y divide-border/70 p-0 sm:flex-row sm:items-stretch sm:divide-x sm:divide-y-0',
         hoverable && 'motion-safe:transition-[transform,box-shadow] motion-safe:duration-150 hover:-translate-y-0.5 hover:shadow-tile-hover',
@@ -134,7 +144,7 @@ export function Tile({
            `scrollWidth === clientWidth` in both cases, so the
            no-horizontal-scroll check passed over a header with no title in it.
            A slot that will not fit takes its own line instead. */
-        <header className="relative flex flex-wrap items-baseline justify-between gap-2">
+        <header className={flush ? 'absolute right-4 top-6 z-[1] sm:right-8 sm:top-8' : 'relative flex flex-wrap items-baseline justify-between gap-2'}>
           {eyebrow ? (
             <h2 className={cn('truncate text-[10.5px] font-semibold uppercase tracking-[0.06em]', isHero ? 'text-hero-foreground/75' : 'text-secondary-foreground')}>
               {eyebrow}
@@ -154,7 +164,7 @@ export function Tile({
         <p className={cn('line-clamp-3 font-serif text-[17px] font-medium leading-[1.35] tracking-[-0.005em] [text-wrap:pretty]', isHero ? 'text-hero-foreground' : 'text-foreground')}>{lead}</p>
       )}
       {isStrip ? children : (
-        <div className={cn('flex min-h-0 flex-1 flex-col gap-2.5', distribute === 'between' && 'justify-between', distribute === 'center' && 'justify-center', bodyClassName)}>{children}</div>
+        <div className={cn('flex min-h-0 flex-1 flex-col', !flush && 'gap-2.5', distribute === 'between' && 'justify-between', distribute === 'center' && 'justify-center', bodyClassName)}>{children}</div>
       )}
       {!isStrip && (footer || footerNote) && (
         <footer className={cn(

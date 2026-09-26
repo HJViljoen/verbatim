@@ -138,7 +138,7 @@ type Loader = (scope: {
 }) => Promise<unknown>
 
 const PAGES: [string, Loader][] = [
-  ['Overview', (s) => loadOverview(s)],
+  ['Overview', (s) => loadOverview(s, { marketFront: true })],
   ['Subjects', (s) => loadSubjectsPage(s)],
   ['Voice', (s) => loadVoiceSurface(s)],
   ['Market', (s) => loadMarketSurface(s)],

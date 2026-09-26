@@ -82,7 +82,7 @@ export function voiceContext(params: Record<string, string | undefined> = {}): B
 
 /** The words this page's legend explains — THIRTEEN_WORDS plus the two reader
  *  flags, the vocabulary every new reading surface draws from
- *  (lib/calibration.ts), exactly as `OVERVIEW_LEGEND` is. Exported so the
+ *  (lib/calibration.ts). Exported so the
  *  route and the review shots mount the same legend: the list was built inline
  *  in `app/dashboard/voice/page.tsx` and nothing else could reach it, which is
  *  half of why no wave-2 shot of this page had a legend pill at all. */

@@ -1,4 +1,7 @@
 import type { ReactNode } from 'react'
+import { isMarketPage, InnerLine } from './market'
+import { brandsBlockFor, brandsLine } from '@/lib/pages/overview-market'
+import { surface } from '@/lib/nav'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { openLink } from '@/components/blocks/open-link'
 import { BlockEmpty, BlockFrame, FigureCell, NoValue } from '@/components/blocks/frame'
@@ -179,6 +182,10 @@ export const overviewRivals: Block<OverviewData> = {
   question: 'Who else is in this, and what are they promising?',
 
   render(data, mode = 'app', ctx) {
+    // THE FRONT PAGE'S FORM AT DEPLOY 2 (market-first WP1.6, plan §2.2 block
+    // 9): one line, until brands counted in every video they come up in
+    // arrive with deploy 3. A stored copy renders the Phase 1 block.
+    if (isMarketPage(data)) return renderMarketBrands(data, mode, ctx.appUrl)
     const r = data.rivals
     const email = mode === 'email'
     const href = `${ctx.appUrl}/dashboard/competitive`
@@ -329,6 +336,7 @@ export const overviewRivals: Block<OverviewData> = {
   },
 
   figures(data): FigureTable {
+    if (isMarketPage(data)) return {}
     const out: FigureTable = {}
     // THE LARGEST FEW, so the page's budget binds on a tenant and not only on
     // a fixture: nothing caps how many rivals a tenant may track, and every
@@ -352,12 +360,32 @@ export const overviewRivals: Block<OverviewData> = {
   },
 
   verdicts(data): Verdict[] {
+    if (isMarketPage(data)) return []
     return data.rivals.rows.flatMap((r) =>
       [r.attentionVerdict, r.contentVerdict].filter((v): v is Verdict => v != null),
     )
   },
 
   emptyState(data) {
+    if (isMarketPage(data)) return null
     return data.rivals.rows.length === 0 ? 'No rival is tracked for this workspace yet.' : null
   },
+}
+
+/** The front page's brands block title (market-first WP1.6). */
+export const MARKET_BRANDS_TITLE = 'Brands in your market'
+
+/** "Brands in your market, counted in every video they come up in, arrive
+ *  with the 11 Oct update. Until then, Competitive lists …" as one line inside
+ *  a drawn block (decision B 2), and the link to Competitive by its current
+ *  sidebar label. */
+function renderMarketBrands(data: OverviewData, mode: RenderMode, appUrl: string) {
+  const nav = surface('competitive')
+  const footer = openLink(mode, `${appUrl}${nav.href}`, `Open ${nav.label} →`)
+  const b = data.brands ?? brandsBlockFor(data.reading?.asAt ?? null, { paused: data.reading?.paused ?? false })
+  return (
+    <BlockFrame title={MARKET_BRANDS_TITLE} mode={mode} footer={footer} roomy>
+      <InnerLine mode={mode}>{brandsLine(b, nav.label)}</InnerLine>
+    </BlockFrame>
+  )
 }

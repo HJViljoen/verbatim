@@ -447,7 +447,7 @@ export const overviewMoves: Block<OverviewData> = {
         // what stops is drawing it a second time inside the block.
         mode={mode}
         meta={movesMeta(m)}
-        footer={openLink(mode, href, 'Open Market →')}
+        footer={openLink(mode, href, 'Open Your moves →')}
         // THE MASTHEAD INTO THE FOOTER NOTE (`main.moves.footer`). It is the
         // sentence that keeps every line above it from reading as a causal
         // claim, and the artboard sets it in the footer's mono slot where the

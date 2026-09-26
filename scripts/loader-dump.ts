@@ -64,7 +64,7 @@ type Loader = (scope: {
 }) => Promise<unknown>
 
 const PAGES: [string, Loader][] = [
-  ['overview', (s) => loadOverview(s)],
+  ['overview', (s) => loadOverview(s, { marketFront: true })],
   ['subjects', (s) => loadSubjectsPage(s)],
   ['voice', (s) => loadVoiceSurface(s)],
   ['market', (s) => loadMarketSurface(s)],

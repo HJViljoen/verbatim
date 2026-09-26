@@ -19,10 +19,10 @@ import { RecordSection } from './frame'
  * themes-per-video comparison, the platform mix as percentages, and the refused
  * comparisons a page other than this one counts).
  *
- * THE "STILL FILLING · AS AT 28 SEP" META MOVED INTO THE HEADER, where the
- * artboard has it. Both halves were already composed — they were the last two
- * lines of the list body, where they read as two more facts about the corpus
- * rather than as the reading's own stamp.
+ * TITLE ALONE (25 Sep rulings, the whole Record tab from WP1.6). The "still
+ * filling · as at 28 Sep" stamp that sat beside the title is gone: a month's
+ * state lives in the month selector, and "Reading as at …" is the last line of
+ * the scope statement below.
  *
  * ONE GRID, NOT TWO LISTS (design review finding 4). The first port sliced the
  * rows in half and drew two independent flex columns, which is what the
@@ -40,12 +40,10 @@ import { RecordSection } from './frame'
  */
 
 export function CoverageBlock({
-  title, meta, rows,
+  title, rows,
 }: {
   /** "Coverage · September 2026". */
   title: string
-  /** "still filling · as at 28 Sep 2026". */
-  meta: string
   rows: readonly RecordRow[]
   /** The mono one-liner under the grid: the readings counter and
    *  `howSoundLine`, which every reading surface prints in its page bar and
@@ -55,11 +53,11 @@ export function CoverageBlock({
   oneLine?: string
 }) {
   return (
-    <RecordSection title={title} meta={meta}>
-      {/* THREE STATES, AND THE WIDEST IS THE ARTBOARD'S, AT THE ARTBOARD'S
-          WIDTH (Block D wave 3, RC10). Stacked on a phone; label beside value
-          from `lg`; two pairs abreast from 1440, which is where the artboard
-          is drawn and where the arithmetic actually holds.
+    <RecordSection title={title}>
+      {/* THE HISTORY OF THIS GRID (two states now; the note after this one
+          says why the third went). Block D wave 3, RC10: stacked on a phone;
+          label beside value from `lg`; two pairs abreast from 1440, which is
+          where the Phase 1 artboard is drawn.
 
           It used to be `xl`, on a comment that claimed the pane there is about
           1000px and each value column ~278px. Measured `grid-template-columns`
@@ -92,19 +90,15 @@ export function CoverageBlock({
           way so they sort against each other by width. Do not "tidy" the first
           one back to `lg:` without re-measuring `grid-template-columns` at
           1440. */}
-      <div className="grid grid-cols-1 gap-x-4 border-b border-border/70 min-[1024px]:grid-cols-[186px_minmax(0,1fr)] min-[1440px]:grid-cols-[186px_minmax(0,1fr)_186px_minmax(0,1fr)]">
-        {rows.map((row, i) => (
-          <Row key={row.id} row={row} right={i % 2 === 1} />
+      {/* ONE PAIR ABREAST AT EVERY WIDTH FROM 1024 (fresh design check, 26
+          Sep). The two-up step above was measured for a 12.5px value in a
+          hairline column; the section is now a tile with a 32px inset and the
+          value is the tab's 15px, which leaves each two-up value track about
+          200px at 1440, where the bases above ran to five and six lines. */}
+      <div className="grid grid-cols-1 gap-x-4 border-b border-border/70 min-[1024px]:grid-cols-[186px_minmax(0,1fr)]">
+        {rows.map((row) => (
+          <Row key={row.id} row={row} />
         ))}
-        {/* An odd row count leaves the last grid row half empty and the closing
-            rule would stop halfway across. Two empty cells, only where there
-            are two columns to close. */}
-        {rows.length % 2 === 1 ? (
-          <>
-            <span className="hidden min-[1440px]:block" />
-            <span className="hidden min-[1440px]:block" />
-          </>
-        ) : null}
       </div>
     </RecordSection>
   )
@@ -114,20 +108,19 @@ export function CoverageBlock({
  * One row, as two cells of the parent grid — never a box of its own, which is
  * what would put the hairline back inside a column.
  *
- * `right` is which column the pair lands in at 1440, and it buys one thing: the
- * artboard's 40px gutter between the two halves, which is this grid's 16px
- * column gap plus 24px of padding on the second label.
+ * THE TAB'S VOICE (fresh design check, 26 Sep): the label is a row head at
+ * 13px in sentence case, as the tab's column heads are, not the Phase 1
+ * artboard's 10.5px mono capitals; the value is 15px and its base 13px, the
+ * scale What we changed and When two months are compared use above it.
  */
-function Row({ row, right }: { row: RecordRow; right: boolean }) {
+function Row({ row }: { row: RecordRow }) {
   return (
     <>
-      <span
-        className={`border-t border-border/70 pt-3 font-mono text-[10.5px] uppercase leading-[1.5] tracking-[0.06em] text-muted-foreground lg:min-h-[52px] lg:pb-2 lg:pt-[11px] ${right ? 'min-[1440px]:pl-6' : ''}`}
-      >
+      <span className="border-t border-border/70 pt-3 text-[13px] font-medium leading-[22px] text-muted-foreground lg:pb-3">
         {row.label}
       </span>
-      <span className="min-w-0 pb-3 lg:border-t lg:border-border/70 lg:pb-2 lg:pt-2.5">
-        <span className="block text-[12.5px]">
+      <span className="min-w-0 pb-3 lg:border-t lg:border-border/70 lg:pt-3">
+        <span className="block text-[15px] leading-[22px]">
           {row.lead ? `${row.lead} ` : ''}
           {row.figure != null ? (
             <span data-copy="figure" className="font-mono font-semibold tabular-nums">{row.figure}</span>
@@ -135,7 +128,7 @@ function Row({ row, right }: { row: RecordRow; right: boolean }) {
           {row.figure != null && row.rest ? (row.dash ? ' · ' : ' ') : ''}
           {row.rest}
         </span>
-        {row.basis ? <span className="mt-0.5 block text-[11.5px] text-muted-foreground">{row.basis}</span> : null}
+        {row.basis ? <span className="mt-0.5 block text-[13px] leading-[1.45] text-muted-foreground">{row.basis}</span> : null}
       </span>
     </>
   )

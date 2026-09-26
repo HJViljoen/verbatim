@@ -1,21 +1,24 @@
 import { SettingsFrame } from '@/components/settings-frame'
 import { ChangeLogBlock } from '@/components/settings/record/change-log'
+import { TheRecord, WhatWeChangedLead, WhenCompared } from '@/components/settings/record/what-we-changed'
+import { changesFromLog } from '@/lib/reading/comparability'
+import { otherRows } from '@/lib/settings/what-we-changed'
+import { loadWhatWeChanged } from '@/lib/settings/what-we-changed-load'
 import { CoverageBlock } from '@/components/settings/record/coverage'
 import { DeliveryBlock } from '@/components/settings/record/delivery'
-import { RecordFooter, RecordSection } from '@/components/settings/record/frame'
-import { RecordHeader, SaveStrip, ScopeStatement } from '@/components/settings/record/header'
+import { RecordSection } from '@/components/settings/record/frame'
+import { SaveStrip, ScopeStatement } from '@/components/settings/record/header'
 import { RejectLogBlock } from '@/components/settings/record/rejects'
 import { canManageTenant, getSessionContext } from '@/lib/auth'
-import { changeLogBoundary } from '@/lib/config-log'
-import { fmtInt, fullDate, longMonth, monthName, shortDate } from '@/lib/format'
+import { fullDate, longMonth, monthName, shortDate } from '@/lib/format'
 import { recordWindow } from '@/lib/pages/overview'
 import { readingHandle } from '@/lib/reading/read'
 import { recordLines, recordRows } from '@/lib/reading/record'
-import { CHANGE_LOG_ROWS, changeLogMeta, changeNote, readChangeLog, showingLine } from '@/lib/settings/change-log'
-import { deliveryRecord, deliveryStats, gapFigure, updatesInMonth } from '@/lib/settings/delivery'
+import { CHANGE_LOG_ROWS, changeNote, readChangeLog, showingLine } from '@/lib/settings/change-log'
+import { deliveryRecord, deliveryStats, updatesInMonth } from '@/lib/settings/delivery'
 import { loadReadings } from '@/lib/settings/readings'
 import { loadRailCounts, loadRecordPage } from '@/lib/settings/record-load'
-import { gateSummary, keptByPlatform, keptByTerm, sampleNote } from '@/lib/settings/reject-log'
+import { gateSummary, keptByPlatform, keptByTerm, sampleHead } from '@/lib/settings/reject-log'
 import { saveState } from '@/lib/settings/save-state'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { AppealButton } from './appeal-button'
@@ -25,15 +28,17 @@ import { AppealButton } from './appeal-button'
 // workspace, in one place, so that no other page has to carry more than one
 // sentence of method.
 //
-// FIVE SECTIONS IN THE ARTBOARD'S ORDER, plus the scope statement and the
-// footer rule: Delivery (with the monthly-readings strip) · The change log ·
-// The reject log · Coverage · What this covers · the rule.
+// THE SECTIONS, EACH A TILE (market-first WP1.6; the approved preview): What
+// we changed · The record · When two months are compared (WP1.6) · Delivery
+// (with the monthly-readings strip) · Other settings changes · The reject log ·
+// Coverage · What this covers.
 //
-// THE ARTBOARD IS ONE DOCUMENT. The sections are hairline-divided on white with
-// an uppercase eyebrow and a mono meta on one baseline, not five filled cards
-// with explanatory micro-copy — see components/settings/record/frame.tsx for
-// why this sub-page has its own vocabulary and every other one keeps
-// SettingsCard.
+// THE 25 SEP RULINGS HOLD FOR THE WHOLE TAB (Heinrich's default, 26 Sep): a
+// section's header is its title alone, its footer links only, and no
+// explanatory or method line sits under its data. The Phase 1 page header
+// (its delivery meta and "What was delivered, what changed…") and the footer
+// rule ("The record is written as the work happens…") went with them; the tab
+// opens on its first tile, as the preview does.
 //
 // OPEN TO EVERY MEMBER, EXCEPT THE EXCERPT. The delivery record, the change log
 // and the coverage block are the tenant's own facts about their own workspace.
@@ -61,6 +66,12 @@ export default async function SettingsRecordPage() {
   const window = recordWindow(`${month}-01`, nowIso)
   const reading = readingHandle(clientId)
 
+  // WHAT WE CHANGED (market-first WP1.6): the front page's "What we changed,
+  // and when →" opens here. Started beside the record's own reads.
+  const changedAhead = loadWhatWeChanged(supabase, reading, nowIso).catch((error: unknown) => {
+    console.error(`[settings] what we changed: ${(error as { message?: string })?.message ?? String(error)}`)
+    return null
+  })
   const inputs = await loadRecordPage({
     client: supabase,
     admin: canSeeExcerpt ? createAdminClient() : null,
@@ -90,7 +101,12 @@ export default async function SettingsRecordPage() {
 
   const stats = deliveryStats(delivery, inputs.updates)
   const thisMonth = updatesInMonth(inputs.updates, month)
-  const log = readChangeLog({ rows: inputs.changes.rows, viewerUserId: userId, emails: inputs.emails })
+  const changed = await changedAhead
+  // EACH CHANGE ONCE: the changes of ours print in the dated list above, so
+  // the Phase 1 log below keeps every other row (a schedule, a subject, a
+  // discovery strike) under its own title.
+  const logRows = changed ? otherRows(inputs.changes.rows, changesFromLog(changed.changeRows)) : inputs.changes.rows
+  const log = readChangeLog({ rows: logRows, viewerUserId: userId, emails: inputs.emails })
   const save = saveState({
     lastChange: inputs.changes.rows[0] ?? null,
     affectsRecorded: inputs.changes.affectsRecorded,
@@ -115,19 +131,6 @@ export default async function SettingsRecordPage() {
       : null,
   })
 
-  const gap = gapFigure(delivery.longestGapDays)
-  // "ON RECORD", NOT "DELIVERED" (code review finding 1): `delivery.total`
-  // counts every run row, the failed one included. AND IT CARRIES ITS FIRST
-  // DATE, which the brief asked for and the port dropped (design review
-  // finding 8) — "since" here is the same earliest-evidence claim D14 makes of
-  // the page bar, one line up.
-  const headerMeta = [
-    `${fmtInt(delivery.total)} update${delivery.total === 1 ? '' : 's'} on record`,
-    delivery.since ? `since ${shortDate(delivery.since)}` : null,
-    gap ? `longest gap ${gap.figure} ${gap.unit}` : null,
-    delivery.lastOn ? `last on ${shortDate(delivery.lastOn)}` : null,
-  ].filter(Boolean).join(' · ')
-
   return (
     <SettingsFrame
       active="record"
@@ -142,10 +145,16 @@ export default async function SettingsRecordPage() {
       counts={counts}
       railFooter={<SaveStrip state={save} note={inputs.changes.rows[0]?.note ?? null} />}
     >
-      <div className="flex flex-col">
-        <RecordHeader meta={headerMeta}>
-          What was delivered, what changed, what was thrown away, and how much was read.
-        </RecordHeader>
+      {/* THE PREVIEW'S RHYTHM: each section a tile, 24px apart (market-first
+          WP1.6, Heinrich's default of 26 Sep). */}
+      <div className="flex flex-col gap-6">
+        {changed ? (
+          <>
+            <WhatWeChangedLead block={changed.block} />
+            <TheRecord lines={changed.lines} month={changed.reading.month} prevMonth={changed.block.prevMonth} />
+            <WhenCompared rules={changed.rules} block={changed.block} asAt={changed.reading.asAt} />
+          </>
+        ) : null}
 
         <DeliveryBlock
           record={delivery}
@@ -156,10 +165,9 @@ export default async function SettingsRecordPage() {
         />
 
         <ChangeLogBlock
+          title={changed ? 'Other settings changes' : undefined}
           log={log}
           rows={CHANGE_LOG_ROWS}
-          meta={changeLogMeta(log, { now: nowIso })}
-          boundary={changeLogBoundary(log.firstLoggedAt)}
           showing={showingLine(CHANGE_LOG_ROWS, log.recorded.length)}
           now={nowIso}
           unavailable={
@@ -176,7 +184,10 @@ export default async function SettingsRecordPage() {
 
         <RejectLogBlock
           rows={inputs.gate.rows}
-          summary={inputs.gate.available ? gateSummary(totals, delivery.since) : ''}
+          // The count and the day the record begins, and not the clause that
+          // explains what that leaves out (a footnote, 25 Sep rulings): the
+          // first update is not passed.
+          summary={inputs.gate.available ? gateSummary(totals, null) : ''}
           unavailable={
             inputs.gate.available
               ? null
@@ -189,7 +200,7 @@ export default async function SettingsRecordPage() {
           unjudged={null}
           byTerm={keptByTerm(inputs.gate.verdicts).slice(0, 10)}
           byPlatform={keptByPlatform(inputs.gate.verdicts)}
-          basis={sampleNote(inputs.gate.verdicts.length, totals.found)}
+          lookedAt={sampleHead(inputs.gate.verdicts.length, totals.found)}
           withheld={
             canSeeExcerpt
               ? null
@@ -200,20 +211,14 @@ export default async function SettingsRecordPage() {
 
         <CoverageBlock
           title={`Coverage · ${longMonth(`${month}-01`)}`}
-          meta={[
-            inputs.coverage.frozenAt ? `newest month frozen ${shortDate(inputs.coverage.frozenAt)}` : 'still filling',
-            `as at ${shortDate(inputs.coverage.readingAt)}`,
-          ].join(' · ')}
           rows={rows}
         />
 
-        <RecordSection title="What this covers, and what it does not" meta="select it and paste">
+        <RecordSection title="What this covers, and what it does not">
           <ScopeStatement
             text={scopeStatement(tenant, lines, nowIso)}
           />
         </RecordSection>
-
-        <RecordFooter rule="The record is written as the work happens. It is added to, never edited: a correction here is a new line, dated." />
       </div>
     </SettingsFrame>
   )

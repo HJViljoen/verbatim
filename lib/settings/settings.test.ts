@@ -17,7 +17,7 @@ import { CHANGE_GROUP_WINDOW_MS, changesFromLog } from '../reading/comparability
 import { deliveryRecord, updatesInMonth } from './delivery'
 import {
   appealKey, gateSummary, gateTotals, gateTotalsFrom, keptByCommunity, keptByPlatform, keptByTerm,
-  sampleNote, GATE_SAMPLE, REJECT_ROWS,
+  sampleHead, GATE_SAMPLE, REJECT_ROWS,
   type GateVerdict,
 } from './reject-log'
 import { clientReadiness, NOT_BUILT } from './readiness-view'
@@ -443,11 +443,11 @@ describe('the reject log', () => {
   it('totals the same from counts as from rows, and says what a rate is over', () => {
     expect(gateTotalsFrom({ found: 6, kept: 4, unjudged: 1, firstAt: '2026-09-09T00:00:00Z' }))
       .toEqual(gateTotals(rows))
-    expect(sampleNote(GATE_SAMPLE, 2_777))
-      .toBe('Rates are over the 1,000 most recent judgements, of 2,777 recorded.')
-    // The sample IS the record: a basis line nobody needs is noise.
-    expect(sampleNote(6, 6)).toBeNull()
-    expect(sampleNote(0, 0)).toBeNull()
+    // The rates' base is the column head's, never a line under the table.
+    expect(sampleHead(GATE_SAMPLE, 2_777)).toBe('Looked at (of the last 1,000)')
+    // The sample IS the record: the head needs no base.
+    expect(sampleHead(6, 6)).toBe('Looked at')
+    expect(sampleHead(0, 0)).toBe('Looked at')
   })
 
   it('keys an appeal the way the verdict is keyed', () => {

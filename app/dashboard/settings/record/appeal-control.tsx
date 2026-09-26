@@ -31,18 +31,18 @@ export function AppealControl({
   error?: string | null
 }) {
   if (filed) {
-    return <span className="block text-[11.5px] leading-[1.4] text-muted-foreground lg:text-right">{filed}</span>
+    return <span className="block text-[13px] leading-[1.45] text-muted-foreground xl:text-right">{filed}</span>
   }
   return (
-    <span className="flex flex-col items-start gap-1 lg:items-end">
+    <span className="flex flex-col items-start gap-1 xl:items-end">
       <button
         type="submit"
         disabled={pending}
-        className="inline-flex h-[44px] shrink-0 items-center whitespace-nowrap rounded-[4px] bg-tile px-4 text-[12.5px] font-medium text-foreground ring-1 ring-border transition-colors hover:bg-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
+        className="inline-flex h-[44px] shrink-0 items-center whitespace-nowrap rounded-[4px] bg-tile px-4 text-[13px] font-medium text-foreground ring-1 ring-border transition-colors hover:bg-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
       >
         {pending ? APPEAL_FILING : APPEAL_ASK}
       </button>
-      {error ? <span className="text-[11.5px] text-negative lg:text-right">{error}</span> : null}
+      {error ? <span className="text-[13px] text-negative xl:text-right">{error}</span> : null}
     </span>
   )
 }

@@ -12,7 +12,13 @@ import { freezeSentence, REFUSAL_WHY } from '@/lib/reading/record'
 import { gapLine, type Gap } from '@/lib/reading/gap'
 import { OWN_POSTS_UNREADABLE_OUTSIDE } from '@/lib/pages/overview'
 import { MOVERS_UNREAD_NOTE } from '@/lib/pages/monthly'
+import { overviewSubjects } from '@/components/pages/overview/subjects'
+import { overviewRivals } from '@/components/pages/overview/rivals'
+import { overviewMoves } from '@/components/pages/overview/moves'
+import { overviewRecord } from '@/components/pages/overview/record'
+import { marketFrontFixture } from '@/components/pages/overview/fixture'
 import { ALL_MONTHLY_BLOCKS, MONTHLY_BLOCKS, monthlyBlocksFor } from './index'
+import { phaseOneOverview } from './adapt'
 import { formingMonthlyFixture, monthlyFixture, refusedMonthlyFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
@@ -435,6 +441,36 @@ describe('the five sections that are Overview’s', () => {
     // the record joins the report and the page on one key.
     const subjects = blockAnswers(MONTHLY_BLOCKS['monthly.subjects'], data).figures
     expect(Object.keys(subjects).length).toBeGreaterThan(0)
+  })
+
+  // THE RECORD CANNOT DISAGREE WITH THE RENDER (WP1.6 review). A monthly
+  // built after deploy 2 is handed an Overview built as "Your market"; its
+  // borrowed sections print the Phase 1 form (`phaseOneOverview`), so the
+  // figures, verdicts and quotes they declare, and the empty state, are the
+  // Phase 1 block's on that same view, never the front page's.
+  it('declare, on a "Your market" overview, exactly what their Phase 1 sections print', () => {
+    const data = monthlyFixture({ overview: marketFrontFixture() })
+    const phaseOne = phaseOneOverview(data.overview)
+    expect(phaseOne.market).toBeUndefined()
+    const pairs = [
+      ['monthly.subjects', overviewSubjects],
+      ['monthly.rivals', overviewRivals],
+      ['monthly.moves', overviewMoves],
+      ['monthly.sound', overviewRecord],
+    ] as const
+    for (const [key, page] of pairs) {
+      const answers = blockAnswers(MONTHLY_BLOCKS[key], data)
+      expect(answers.figures).toEqual(page.figures?.(phaseOne) ?? {})
+      expect(answers.verdicts).toEqual(page.verdicts?.(phaseOne) ?? [])
+      expect(answers.quotes).toEqual(page.quotes?.(phaseOne) ?? [])
+      if (key !== 'monthly.moves') expect(answers.empty).toBe(page.emptyState(phaseOne))
+    }
+    // The front page's market rows are not declared under the Phase 1 table.
+    const subjects = blockAnswers(MONTHLY_BLOCKS['monthly.subjects'], data)
+    expect(Object.keys(subjects.figures).some((t) => t.startsWith('market_subject_'))).toBe(false)
+    // And every figure the section prints is one it declared.
+    const printed = render(MONTHLY_BLOCKS['monthly.subjects'].render(data, 'app', ctx))
+    expect(printed).not.toContain('The market by subject')
   })
 
   // THREE SENTENCES, AS THE MOCK DREW THEM (copy de-clutter, ruling B). §8
