@@ -32,7 +32,7 @@ import type { MethodLines } from '../reading/method'
 import { platformMixLine } from '../reading/record'
 import { mergeSeriesNotes, type MonthLabel, type MonthSeries } from '../reading/series'
 import { loadUpdateSeries, type UpdateSeries } from '../reading/updates'
-import { loadReadingSchedule, marketRivalAudiences, updateClock } from '../reading/reading-view'
+import { loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, updateClock, updateInstant } from '../reading/reading-view'
 import type { MonthStatus, PlatformMix } from '../reading/types'
 import type { FigureTable, Verdict } from '../reading/verdicts'
 import { parseRef, quoteRef } from '../renderables/quotes-freeze'
@@ -775,6 +775,10 @@ export interface WeekData {
   paused?: boolean
   unusual: UnusualBlock
   subjects: WeekSubjectsBlock
+  /** Week by week (market-first decision M, part 1; WP2.9, `week.weeks`): the
+   *  front page's bars on This week's clock. Absent on a copy stored before it,
+   *  and where MF4 cannot be read. */
+  weeks?: WeekVolumesBlock
   rising: RisingBlock
   cameIn: CameInBlock
   /** The reply inbox and the awareness flag — the mock's §2 and §8, read here
@@ -1517,6 +1521,25 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
     runs: runsRaw.filter((r): r is RunRow & { started_at: string } => r.started_at != null),
     schedule,
   })
+  // WEEK BY WEEK (WP2.9, `week.weeks`): the front page's bars on This week's
+  // clock, the weeks of the update's month and the month before through the
+  // current week. One read of MF4 beside the sections; the runs and the change
+  // log are the memoised reads the page's readers already made.
+  const weeksAhead = Promise.all([loadDeliveredRuns(supabase, clientId), loadChanges(reading.client, clientId)])
+    .then(([delivered, changeRows]) => loadWeekVolumes({
+      client: reading.client,
+      clientId,
+      reading: { month },
+      now: readingAt,
+      updates: delivered.map(updateInstant),
+      rivalAudiences: marketRivalAudiences(rivals),
+      changeRows,
+      schedule,
+    }))
+    .catch((error: unknown) => {
+      console.error(`[pages] week.weeks: ${(error as { message?: string })?.message ?? String(error)}; not drawn`)
+      return null
+    })
   const [unusual, subjectsBlock, risingRead, cameIn, replies, sales] = await Promise.all([
     // ── §1 · unusual this week ───────────────────────────────────────────
     buildUnusual({
@@ -1584,6 +1607,8 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
     privacy: PRIVACY_LINE,
   }
 
+  const weeks = await weeksAhead
+
   return {
     brand,
     update,
@@ -1596,6 +1621,7 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
     paused: clock.paused,
     unusual,
     subjects: subjectsBlock,
+    ...(weeks ? { weeks } : {}),
     rising: risingRead.block,
     cameIn,
     replies,
@@ -1904,7 +1930,9 @@ async function buildSubjects(input: {
   readIn: { writtenAt: number | null; unreadWords: string }
 }): Promise<WeekSubjectsBlock> {
   const { reading, clientId, subjects, month, window } = input
-  const nothing = { rows: [], unread: SUBJECTS_UNREAD, month, lead: null, namedLine: null }
+  // Built on the market even when there is nothing to read (WP2.7): the
+  // market block says so under its own title, never the Phase 1 strip's meta.
+  const nothing = { rows: [], unread: SUBJECTS_UNREAD, month, lead: null, namedLine: null, market: { month, n: null } }
   if (subjects == null) return nothing
   if (subjects.length === 0) return nothing
 

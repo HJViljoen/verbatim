@@ -1,6 +1,11 @@
 import { PRIVACY_LINE, coverageLine, marketSubjectsOf, subjectLead, subjectsNamedLine, typicalContribution, typicalTag, type RepliesBlock, type ReplyRow, type SubjectWeekRow, type WeekData, type WeekWindow } from '@/lib/pages/week'
 import { pooledDenominators } from '@/lib/reading/market'
 import { subjectCalibration } from '@/lib/subjects/calibration-state'
+import { weekVolumesBlock } from '@/lib/pages/overview-market/weeks'
+import { ourChangesWithoutGatherFlags } from '@/lib/reading/gather-flags'
+import { OSSUR_RIVALS, OSSUR_UPDATES, OSSUR_WEEK_VOLUMES, SEALAND_NEXT_UPDATE, STAGING_CHANGES, STAGING_RIVALS, STAGING_UPDATES, STAGING_WEEK_VOLUMES } from '@/lib/test/week-fixture'
+import { WEEK_LINE } from '@/lib/week-line-config'
+import { SEALAND_CLIENT_ID } from '@/lib/config'
 import { intentCounts } from '@/lib/content-tiles'
 import { ownSides, type PlaybookVideo } from '@/lib/pages/playbook'
 import { bandVerdict } from '@/lib/reading/verdicts'
@@ -987,5 +992,45 @@ export function marketWeekFixture(): WeekData {
     window: SEALAND_WEEK_20_SEP,
     readingAt: '2026-09-20T12:00:00.000Z',
     subjects: sealandMarketSubjects(),
+    // Week by week (WP2.9) on staging's weeks at the page's clock: the weeks
+    // of 27 Jul to 14 Sep, the preview's own (7 Sep filling, 14 Sep so far).
+    weeks: weekVolumesBlock({
+      reading: { month: '2026-09-01' },
+      now: '2026-09-20T12:00:00.000Z',
+      updates: STAGING_UPDATES,
+      rows: STAGING_WEEK_VOLUMES,
+      rivalAudiences: STAGING_RIVALS,
+      changes: ourChangesWithoutGatherFlags(STAGING_CHANGES),
+      cfg: WEEK_LINE[SEALAND_CLIENT_ID],
+      nextUpdateAfter: SEALAND_NEXT_UPDATE,
+    }),
+  }
+}
+
+/** Össur on This week as deploy 3 builds it: its weeks at its last update
+ *  (13 Sep, paused), the weeks of 27 Jul to 7 Sep and no same-age line (no
+ *  WEEK_LINE entry), and no subject named. The other blocks are
+ *  `weekFixture`'s, Össur's 13 Sep update. */
+export function ossurWeeksFixture(): WeekData {
+  return {
+    ...weekFixture(),
+    // Össur names no subject on staging (§2.13): the market block's one line.
+    subjects: {
+      rows: [],
+      unread: 'No subjects are recorded for this workspace yet. Name what you care about in Settings and this update’s videos are counted against them from the next reading.',
+      month: '2026-09-01',
+      lead: null,
+      namedLine: null,
+      market: { month: '2026-09-01', n: null },
+    },
+    weeks: weekVolumesBlock({
+      reading: { month: '2026-09-01' },
+      now: '2026-09-16T09:00:00.000Z',
+      updates: OSSUR_UPDATES,
+      rows: OSSUR_WEEK_VOLUMES,
+      rivalAudiences: OSSUR_RIVALS,
+      changes: [],
+      cfg: null,
+    }),
   }
 }
