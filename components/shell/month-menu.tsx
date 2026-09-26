@@ -37,7 +37,9 @@ export function MonthMenu({
               <span className="flex min-w-0 flex-col">
                 <span className="truncate">{o.label}</span>
                 {/* A MONTH TOO FEW TO READ SAYS SO BEFORE THE CLICK (deploy 2
-                    review): its state, muted, under its name. */}
+                    review): its state, muted, under its name; the space keeps
+                    the two apart for a screen reader ("July 2026 36 videos"). */}
+                {o.note ? ' ' : null}
                 {o.note ? <span className="truncate font-mono text-[11.5px] font-normal text-muted-foreground">{o.note}</span> : null}
               </span>
               {o.current ? <Check aria-hidden className="ml-auto size-3.5 shrink-0 text-foreground" /> : null}
