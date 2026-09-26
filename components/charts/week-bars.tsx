@@ -254,9 +254,11 @@ export function WeekPendingRow({ weeks, pending, mode, surface }: { weeks: reado
   // The week of 21 Sep: the old and the fixed relevance check both ran in it.
   const leftOut = slots.filter((s) => WEEK_LINE_EXCLUDED.includes(s.w))
   // The bracket spans the first pair: the first week's slot to the next due
-  // slot, or to the plot's end when that week is not on the axis yet.
+  // slot. Only once BOTH weeks are on the axis (the deploy-3 review: on 2 Oct,
+  // before the week of 5 Oct joined it, a bracket with one leg ran off the
+  // plot); until then the words stand alone at the plot's end.
   const first = dueSlots[0] ?? null
-  const bracket = first ? { from: first.cx - 0.3 / n, to: dueSlots[1] ? dueSlots[1].cx + 0.3 / n : 1 } : null
+  const bracket = first && dueSlots[1] ? { from: first.cx - 0.3 / n, to: dueSlots[1].cx + 0.3 / n } : null
   // 14px of headroom over the preview's rows, for the bracket's words on two
   // lines where the strip scrolls.
   const TOP = 14
@@ -285,7 +287,7 @@ export function WeekPendingRow({ weeks, pending, mode, surface }: { weeks: reado
         <>
           <line x1={pct(bracket.from)} x2={pct(bracket.to)} y1={26} y2={26} style={{ stroke: 'var(--secondary-foreground)', strokeWidth: 1.25 }} />
           <line x1={pct(bracket.from)} x2={pct(bracket.from)} y1={26} y2={34} style={{ stroke: 'var(--secondary-foreground)', strokeWidth: 1.25 }} />
-          {bracket.to < 0.999 ? <line x1={pct(bracket.to)} x2={pct(bracket.to)} y1={26} y2={34} style={{ stroke: 'var(--secondary-foreground)', strokeWidth: 1.25 }} /> : null}
+          <line x1={pct(bracket.to)} x2={pct(bracket.to)} y1={26} y2={34} style={{ stroke: 'var(--secondary-foreground)', strokeWidth: 1.25 }} />
         </>
       ) : null}
       {dueSlots.slice(1).map((s, i) => (

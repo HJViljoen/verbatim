@@ -146,6 +146,11 @@ describe('read at the same age, pending', () => {
     expect(t).toContain('due 18 Oct')
     expect(t).not.toContain('due 25 Oct')
     expect(t).toContain('first comparison, with the 25 Oct update')
+    // No bracket with one leg running off the plot: it waits for both weeks.
+    const bracketLines = (m: string) => (m.match(/<line[^>]*y1="26"/g) ?? []).length
+    expect(bracketLines(render(<WeekPendingRow weeks={OCT02.weeks} pending={OCT02.line as PendingWeekLine} mode="app" surface="inner" />))).toBe(0)
+    // With both weeks on the axis (11 Oct): the span and both legs.
+    expect(bracketLines(render(<WeekPendingRow weeks={OCT11.weeks} pending={OCT11.line as PendingWeekLine} mode="app" surface="inner" />))).toBe(3)
   })
 
   it('says a week was kept once it is, and draws no reading for it', () => {
