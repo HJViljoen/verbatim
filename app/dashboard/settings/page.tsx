@@ -5,6 +5,7 @@ import { PlatformsSection } from '@/components/settings/tracking/platforms'
 import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { shortDate } from '@/lib/format'
 import { audienceLabel } from '@/lib/readiness/types'
+import { readingHandle } from '@/lib/reading/read'
 import { communityRows, tableRows, unconfiguredShare } from '@/lib/settings/communities'
 import { platformRows, platformShareBasis } from '@/lib/settings/connections'
 import { deliveryRecord, updatesInMonth } from '@/lib/settings/delivery'
@@ -53,7 +54,7 @@ export default async function SettingsTrackingPage() {
   // withholds from `authenticated` for the same reason it withholds the
   // caption. Owners and admins get it through the service role, in this server
   // component; everyone else gets the table without the column and is told so.
-  const inputs = await loadTrackingPage(supabase, clientId, canEdit ? createAdminClient() : null)
+  const inputs = await loadTrackingPage(supabase, clientId, canEdit ? createAdminClient() : null, readingHandle(clientId))
 
   const c = inputs.config as TrackingConfig | null
   const terms = inputs.config as SearchTermsConfig | null

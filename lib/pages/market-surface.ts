@@ -14,7 +14,8 @@ import { scrubProse } from '../prose/scrub'
 import { afterwardsFor, groundingFor, type Afterwards, type Grounding } from '../reading/afterwards'
 import { recurrenceOf, type Recurrence } from '../reading/head-to-head'
 import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordInputs } from '../reading/record'
-import { loadMonthSeries, loadPairOn, type ReadingHandle } from '../reading/read'
+import { loadMonthSeries, type ReadingHandle } from '../reading/read'
+import { loadAppPairOn } from '../reading/gather-flags'
 import type { PairOn } from '../reading/pairs'
 import type { Verdict } from '../reading/verdicts'
 import type { Quote } from '../renderables/types'
@@ -331,11 +332,11 @@ export interface MarketSurfaceData {
   month: string
   monthStatus: MonthStatus
   readingAt: string
-  /** The reading month (market-first decision A) and the bar's other month.
-   *  Always set by the loader; optional because a stored snapshot taken
-   *  before WP1.2 has neither. */
+  /** The reading month (market-first decision A) and the bar's other months
+   *  (default M-d), newest first. Always set by the loader; optional because a
+   *  stored snapshot taken before WP1.2 has neither. */
   reading?: ReadingMonth
-  otherMonth?: OtherMonth | null
+  otherMonths?: OtherMonth[]
   masthead: string
   conclusions: ConclusionsBlock
   advice: AdviceBlock
@@ -866,7 +867,7 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   const recordAhead = loadRecordInputs(reading.client, clientId, recordWindow(month, readingAt), { now: readingAt })
   // THE MONTH-PAIR JUDGE (decision D, WP1.3): "Afterwards" and every move
   // reading compare two months only when both were read the same way.
-  const judgeAhead = loadPairOn(reading, readingAt)
+  const judgeAhead = loadAppPairOn(reading, readingAt)
   recordAhead.catch(() => {})
 
   const runId = latestRun.id
@@ -1191,7 +1192,7 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
     monthStatus,
     readingAt,
     reading: rm,
-    otherMonth: view.other,
+    otherMonths: view.others,
     masthead: MOVES_MASTHEAD,
     conclusions,
     advice,

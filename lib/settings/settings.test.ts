@@ -371,7 +371,7 @@ describe('the record shows each change once', () => {
       change({ id: 'gate', changed_at: '2026-09-28T14:05:00.000Z', surface: 'gate_rule' satisfies LoggedSurface as ConfigChange['surface'], field: 'relevance_gate',
         note: 'We corrected how we check that a video belongs to your market.', affects_months: '[2026-09-01,2026-10-01)', ...script }),
       change({ id: 'attr', changed_at: '2026-09-28T14:05:00.000Z', surface: 'attribution' satisfies LoggedSurface as ConfigChange['surface'], field: 'attribution_v3',
-        note: 'We improved how we tell which brand a post is about, so fewer posts are filed under the wrong brand.', ...script }),
+        note: 'We changed how we tell which brand a post is about.', ...script }),
     ]
     const view = readChangeLog({ rows: late })
     expect(view.recorded.map((c) => c.id)).toEqual(['attr', 'gate', 'r-1', 't-1'])

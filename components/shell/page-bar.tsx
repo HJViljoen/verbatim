@@ -1,13 +1,13 @@
 import Link from 'next/link'
-import { ChevronDown } from 'lucide-react'
 import { Fragment, type ReactNode } from 'react'
+import { MonthMenu } from '@/components/shell/month-menu'
 import { BarPill, PageBar } from '@/components/shell/page-grid'
 import { hasHorizon, surface, type NavKey } from '@/lib/nav'
 import {
   contextLine,
   horizonOptions,
-  monthHref,
   monthLabel,
+  monthOptions,
   monthTitle,
   updateLabel,
   updateLine,
@@ -15,7 +15,6 @@ import {
   type UpdateLineInput,
 } from '@/lib/shell/bar'
 import { parseHorizon } from '@/lib/reading/horizon'
-import { cn } from '@/lib/utils'
 
 /**
  * The page bar every Phase 1 surface wears (item 42, the mock's §3.2; the 25
@@ -84,26 +83,19 @@ export function ReadingContext({
 }: { context: ContextLineInput; basePath: string; params: Record<string, string | undefined> }) {
   const label = monthLabel(context.reading.month)
   const title = monthTitle(context.reading)
-  const other = context.other ?? null
+  const options = monthOptions(basePath, params, context.reading, context.others ?? [])
   return (
     <>
       <span>{context.brand}</span>
       <span aria-hidden className="text-muted-foreground">·</span>
       {/* THE PREVIEW'S SELECTOR (WP1.6 design check): a 32px tinted chip, the
-          chevron at 14px, set into the 24px line without growing it. The
-          chevron is drawn only where the chip changes month: with no other
-          month to offer (1 to 3 Oct, before October has a row, decision A)
-          the chip is the month's name and its tooltip, not a control. */}
-      {other ? (
-        <Link
-          href={monthHref(basePath, params, other)}
-          title={title}
-          aria-label={`${label}, ${title}. Change month to ${monthLabel(other.month)}`}
-          className={cn(SELECTOR_CHIP, 'cursor-pointer hover:bg-muted')}
-        >
-          {label}
-          <ChevronDown aria-hidden className="size-3.5 shrink-0 text-secondary-foreground" strokeWidth={2} data-print-hide />
-        </Link>
+          chevron at 14px, set into the 24px line without growing it. It opens
+          a menu of the months the page can read (default M-d), and it always
+          steps back: on 1 to 3 Oct, before October has a row, August and
+          July are in it. Only a market with no other month at all gets the
+          month's name and its tooltip, with no chevron promising a menu. */}
+      {options.length > 0 ? (
+        <MonthMenu label={label} title={title} options={options} className={SELECTOR_CHIP} />
       ) : (
         <span title={title} className={SELECTOR_CHIP}>{label}</span>
       )}

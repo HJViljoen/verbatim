@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { contextLine, detailHref, horizonHref, horizonOptions, monthHref, monthLabel, monthTitle, updateLabel, updateLine } from './bar'
+import { contextLine, detailHref, horizonHref, horizonOptions, monthHref, monthLabel, monthOptions, monthTitle, updateLabel, updateLine } from './bar'
 import { readingMonthFor } from '../reading/reading-month'
 import { sealandReading } from '../test/reading-fixture'
 import { directionHits } from '../calibration'
@@ -62,6 +62,63 @@ describe('the month selector', () => {
     expect(monthHref('/dashboard', { month: '2026-10' }, { month: '2026-09-01', isDefault: true })).toBe('/dashboard')
     expect(monthHref('/dashboard/subjects', { month: '2026-10', item: 's1' }, { month: '2026-09-01', isDefault: false }))
       .toBe('/dashboard/subjects?item=s1&month=2026-09')
+  })
+})
+
+// THE MENU (default M-d, 26 Sep): every month the reading view offers, the one
+// read marked, newest first, each carrying the page's own selection. On 1 to 3
+// Oct it steps back to August and July, where WP1.2's selector offered nothing.
+describe('monthOptions: the selector\'s menu', () => {
+  const EARLIER = ['2026-08-01', '2026-07-01', '2026-06-01', '2026-05-01', '2026-04-01'].map((month) => ({ month, isDefault: false }))
+
+  it('2 Oct: September read and marked, then August, July and the months before, each one click back', () => {
+    const options = monthOptions('/dashboard', { horizon: 'last_3' }, sealandReading('2026-10-02T06:00:00.000Z'), EARLIER)
+    expect(options.map((o) => o.label)).toEqual(['September 2026', 'August 2026', 'July 2026', 'June 2026', 'May 2026', 'April 2026'])
+    expect(options.filter((o) => o.current).map((o) => o.month)).toEqual(['2026-09-01'])
+    // The month read by default links with no `?month=`; the others carry it,
+    // with the page's own params.
+    expect(options[0].href).toBe('/dashboard?horizon=last_3')
+    expect(options[1].href).toBe('/dashboard?horizon=last_3&month=2026-08')
+    expect(options[2].href).toBe('/dashboard?horizon=last_3&month=2026-07')
+  })
+
+  it('under a ?month=, the month read keeps its parameter and the default drops it', () => {
+    const options = monthOptions('/dashboard/subjects', { month: '2026-07', item: 's1' }, sealandReading('2026-10-02T06:00:00.000Z', '2026-07'), [
+      { month: '2026-09-01', isDefault: true }, ...EARLIER.filter((o) => o.month !== '2026-07-01'),
+    ])
+    expect(options.map((o) => o.month)).toEqual(['2026-09-01', '2026-08-01', '2026-07-01', '2026-06-01', '2026-05-01', '2026-04-01'])
+    expect(options.find((o) => o.current)?.href).toBe('/dashboard/subjects?item=s1&month=2026-07')
+    expect(options[0].href).toBe('/dashboard/subjects?item=s1')
+  })
+
+  it('labels months by name only: no "so far" and no "still filling", so none reaches the bar', () => {
+    const options = monthOptions('/dashboard', {}, sealandReading('2026-10-11T12:00:00.000Z'), [{ month: '2026-10-01', isDefault: false }, ...EARLIER])
+    for (const o of options) {
+      expect(o.label).toMatch(/^[A-Z][a-z]+ \d{4}$/)
+      expect(o.label).not.toContain('so far')
+      expect(o.label).not.toContain('still filling')
+    }
+  })
+
+  it('says under a month too few to read that it is, with its count, and nothing under a month that reads', () => {
+    const others = [
+      { month: '2026-08-01', isDefault: false, tooFew: false, videos: 377 },
+      { month: '2026-07-01', isDefault: false, tooFew: true, videos: 36 },
+      { month: '2026-06-01', isDefault: false, tooFew: true, videos: 50 },
+    ]
+    const options = monthOptions('/dashboard', {}, sealandReading('2026-10-02T06:00:00.000Z'), others)
+    expect(options.map((o) => [o.label, o.note])).toEqual([
+      ['September 2026', null],
+      ['August 2026', null],
+      ['July 2026', '36 videos · too few to read'],
+      ['June 2026', '50 videos · too few to read'],
+    ])
+    // The label stays the month's name alone.
+    for (const o of options) expect(o.label).toMatch(/^[A-Z][a-z]+ \d{4}$/)
+  })
+
+  it('is empty where there is no other month, so the chip is not a control', () => {
+    expect(monthOptions('/dashboard', {}, sealandReading('2026-10-02T06:00:00.000Z'), [])).toEqual([])
   })
 })
 

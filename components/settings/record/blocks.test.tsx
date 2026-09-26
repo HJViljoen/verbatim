@@ -44,7 +44,7 @@ const changeLog = (
   <ChangeLogBlock
     log={changeLogFixture()}
     rows={20}
-    showing={null}
+   
     now="2026-09-28T09:00:00.000Z"
   />
 )
@@ -232,7 +232,7 @@ describe('the change log', () => {
       <ChangeLogBlock
         log={changeLogFixture()}
         rows={20}
-        showing={null}
+       
         now="2026-09-28T09:00:00.000Z"
         unavailable="Nothing in the product can record a configuration change yet."
       />,
@@ -258,7 +258,7 @@ describe('the change log', () => {
     const log = changeLogFixture()
     const first = log.recorded[0]
     const twins = { ...log, recorded: [first, { ...first, id: `${first.id}-b` }, { ...first, id: `${first.id}-c` }, ...log.recorded.slice(1)] }
-    const node = <ChangeLogBlock log={twins} rows={20} showing={null} now="2026-09-28T09:00:00.000Z" />
+    const node = <ChangeLogBlock log={twins} rows={20} now="2026-09-28T09:00:00.000Z" />
     const text = renderText(node)
     expect(text.split(first.said).length - 1).toBe(1)
     expect(text).toContain('×3')

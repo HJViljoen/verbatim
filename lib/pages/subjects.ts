@@ -10,7 +10,7 @@ import type { Quote, Scope } from '../renderables/types'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, loadTrackedRivals, rivalKey, type TrackedRival } from '../rivals'
 import { audienceLabel } from '../readiness/types'
 import { SHARE_BAND } from '../report-bands'
-import { carriesShare } from '../reading/level'
+import { carriesShare, levelText } from '../reading/level'
 import { directionWord, monthChange, thinMonth, type Direction, type SeriesPoint } from '../reading/bands'
 import { chartMonths, horizonWindow, HORIZON_LABEL, parseHorizon, sinceStart, type Horizon } from '../reading/horizon'
 import { kindChange, kindShares, redditRead, type KindShare, type RedditRead } from '../reading/kinds'
@@ -28,7 +28,8 @@ import { MONTH_PARAM, readingAnchor, type ReadingMonth } from '../reading/readin
 import { loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, readingViewFrom, type OtherMonth } from '../reading/reading-view'
 import { monthStartOf, nextMonth } from '../reading/month-key'
 import { gapBetween, type Gap, type GapSide } from '../reading/gap'
-import { loadChanges, loadMonthSeries, loadPairOn, type ReadingHandle } from '../reading/read'
+import { loadChanges, loadMonthSeries, type ReadingHandle } from '../reading/read'
+import { loadAppPairOn } from '../reading/gather-flags'
 import { pairTools, refusedSteps, type PairOn } from '../reading/pairs'
 import { methodLines, type MethodLines } from '../reading/method'
 import { countRefused, howSoundLine, loadRecordInputs, monthRecordWindow, recordLines, refusals, type RecordInputs } from '../reading/record'
@@ -55,6 +56,7 @@ import {
   subjectBackRead,
   subjectCountedFrom,
   subjectReadIn,
+  NO_READING_YET,
   unreadWords,
   withoutUnreadMonths,
   type CountedSubject,
@@ -415,6 +417,19 @@ export interface SubjectPane {
   origin: Subject['origin']
   /** As the rail row's: a stored `'calibrating'` reads as provisional. */
   calibration: StoredCalibration
+  /** Set only on a subject the month was NOT READ for: the words its rail
+   *  row prints (`unreadWords`, "no reading yet"), which the pane prints in
+   *  place of its calibration word (default M-a). Optional: a stored pane
+   *  has none and renders as it was sent. */
+  unread?: string | null
+  /**
+   * The subject's market level on the RAIL's base, copied from its rail row
+   * (`SubjectRail.market`: the category and the tracked brands pooled,
+   * decision E), for the pane's headline figure (default M-b): one screen,
+   * one base. Null where the rail row has none (failed, unread, unknown).
+   * Optional: a stored pane has none and leads with its gap line, as sent.
+   */
+  market?: { k: number; n: number; pct: number | null } | null
   index: number
   of: number
   sides: SubjectSide[]
@@ -475,11 +490,11 @@ export interface SubjectsData {
   month: string
   monthStatus: MonthStatus
   readingAt: string
-  /** The reading month (market-first decision A) and the bar's other month.
-   *  Always set by the loader; optional because a stored snapshot taken
-   *  before WP1.2 has neither. */
+  /** The reading month (market-first decision A) and the bar's other months
+   *  (default M-d), newest first. Always set by the loader; optional because a
+   *  stored snapshot taken before WP1.2 has neither. */
   reading?: ReadingMonth
-  otherMonth?: OtherMonth | null
+  otherMonths?: OtherMonth[]
   horizon: Horizon
   axis: string[]
   /** The chart's own axis — the trailing twelve months, or from the tenant's
@@ -582,12 +597,13 @@ export function railNote(
   // Failed first: a subject being re-described prints nothing else, read or not.
   if (state === 'failed') return CALIBRATION_WORDS.failed
   // A SUBJECT THE MONTH WAS NOT READ FOR (named after its last update) says
-  // when it will be, in place of a figure and of its word: the preview's
-  // "first reading with the 27 Sep update" (`unreadWords`).
+  // so in place of a figure and of its word: "no reading yet" (`unreadWords`,
+  // the one wording on every surface, default M-a), never "provisional",
+  // which is the calibration word alone.
   if (unread) return unread
   // A67: the pane says it in full; the rail says the one word.
   if (state === 'provisional') return CALIBRATION_WORDS.provisional
-  if (!read) return 'no reading yet'
+  if (!read) return NO_READING_YET
   return null
 }
 
@@ -1670,7 +1686,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   recordAhead.catch(() => {})
   // THE MONTH-PAIR JUDGE (decision D, WP1.3): every verdict, direction word
   // and chart step on the page is judged by it.
-  const judgeAhead = loadPairOn(reading, readingAt)
+  const judgeAhead = loadAppPairOn(reading, readingAt)
 
   const perAudience = new Map<string, number>()
   const denominatorByMonth = new Map<string, number>()
@@ -1948,6 +1964,10 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       namedAt: subject.named_at,
       origin: subject.origin,
       calibration,
+      unread: readIn(subject.id, month) === 'unread' ? unreadNote : null,
+      // THE RAIL ROW'S OWN FIGURE, never a second read (default M-b), so the
+      // pane's headline and the row the reader clicked share one base.
+      market: rail.find((r) => r.id === subject.id)?.market ?? null,
       index: active.findIndex((s) => s.id === subject.id) + 1,
       of: active.length,
       sides,
@@ -2000,7 +2020,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     monthStatus,
     readingAt,
     reading: rm,
-    otherMonth: view.other,
+    otherMonths: view.others,
     horizon,
     axis,
     chartAxis,
@@ -2809,9 +2829,44 @@ async function nameQuestions(
 // ---- what the blocks declare ----------------------------------------------------
 
 /** The figures the selected subject's hero prints, by token. */
+/**
+ * The pane's headline figure (market page default M-b): the subject's level in
+ * the market, on the rail's own base, so one screen shows one base: "Waterproofing
+ * came up in 29 of 654 September videos in your market (4%)." The preview's
+ * pane sentence ("came up in 104 of 626 September category videos (17%)"),
+ * read on the market the rail prints. The share through `levelText`: a whole
+ * percent at 100 videos or more, and the count alone under it.
+ *
+ * Null where the pane has no market figure (a stored pane, a failed subject,
+ * or one the month was not read for, which says "no reading yet" in its word's
+ * place instead). The Phase 1 brand comparison (the gap line and the sides)
+ * stays below it, unchanged.
+ */
+export function paneMarketLead(
+  pane: Pick<SubjectPane, 'name' | 'calibration' | 'market' | 'unread'>,
+  month: string,
+): string | null {
+  const m = pane.market
+  if (!m || pane.unread || readCalibration(pane.calibration) === 'failed') return null
+  const level = levelText(m.k, m.n)
+  if (!level) return null
+  const when = longMonth(month)
+  return level.kind === 'share'
+    ? `${pane.name} came up in ${fmtInt(m.k)} of ${fmtInt(m.n)} ${when} videos in your market (${level.text}).`
+    : `${pane.name} came up in ${level.text} ${when} videos in your market.`
+}
+
 export function sideFigures(pane: SubjectPane | null): FigureTable {
   const out: FigureTable = {}
   if (!pane) return out
+  // The headline's market figure (default M-b), under the keys it prints.
+  const m = pane.market
+  if (m && !pane.unread && readCalibration(pane.calibration) !== 'failed' && levelText(m.k, m.n)) {
+    out.subject_market_videos = { value: m.k, unit: 'videos', label: `${pane.name}, videos in your market this month` }
+    if (levelText(m.k, m.n)?.kind === 'share') {
+      out.subject_market_share = { value: Math.round((m.k / m.n) * 100), unit: 'pct', label: `${pane.name}, share of your market this month` }
+    }
+  }
   for (const s of paneSides(pane)) {
     if (s.pct == null || s.k == null || s.n == null) continue
     const token = `subject_${s.kind}_${s.audience.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}`

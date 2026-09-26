@@ -5,9 +5,11 @@ import { monthName } from '../format'
 import { audienceLabel } from '../readiness/types'
 import { directionWord, monthChange, type Direction, type SeriesPoint } from '../reading/bands'
 import { comparableOn, type PairOn } from '../reading/pairs'
-import { loadMonthSeries, loadPairOn, readingHandle } from '../reading/read'
+import { loadMonthSeries, readingHandle } from '../reading/read'
+import { loadAppPairOn } from '../reading/gather-flags'
 import { isReadable, pointsByMonth, type MonthLabel, type MonthPoint } from '../reading/series'
 import { monthStartOf, prevMonth } from '../reading/month-key'
+import { loadReadingMonth } from '../reading/reading-view'
 import { isAnswer, type Verdict, type VerdictFlag } from '../reading/verdicts'
 
 // "Has this changed?" — answered from the MONTHLY reading (Phase 1 WP21,
@@ -258,6 +260,9 @@ export interface MovementArgs {
   audiences: string[]
   /** Today, injectable so the axis is testable. */
   now?: Date
+  /** The month to read, injectable for a test; the reading month (decision A)
+   *  when omitted. */
+  month?: string
   months?: number
   topics?: number
   /** The month-pair judge (decision D, WP1.3), injectable for a test; read
@@ -286,7 +291,20 @@ export async function loadMovement(
 
   const now = args.now ?? new Date()
   const months = args.months ?? AGENT_MOVEMENT_MONTHS
-  const to = monthStartOf(now.toISOString())
+  const asOf = now.toISOString()
+  // THE READING MONTH, NOT THE CALENDAR'S (decision A; default M-f, as the
+  // Record tab's Delivery and Coverage since 91af44f5): on 1 to 15 Oct Ask read
+  // October, a day or two of it, where every page reads September. Off the
+  // same memoised reads the pages make; the calendar month only where nothing
+  // has been delivered or the read failed, as before.
+  const handle = readingHandle(args.clientId, admin)
+  const reading = args.month
+    ? null
+    : await loadReadingMonth(admin, handle, asOf).catch((e: unknown) => {
+      console.error(`[agent] movement month: ${(e as { message?: string })?.message ?? String(e)}`)
+      return null
+    })
+  const to = monthStartOf(args.month ?? reading?.month ?? asOf)
   const from = monthsBack(to, months - 1)
 
   const set = await loadMonthSeries(admin, args.clientId, {
@@ -304,19 +322,18 @@ export async function loadMovement(
   // EVERY LINE IS JUDGED BY THE MONTH-PAIR RULE (decision D, WP1.3): a so-far
   // month is never compared, and a pair spanning our own search change is
   // refused, so Ask cannot say "moved" where every page refuses to.
-  const asOf = now.toISOString()
   // It fails closed: a read error refuses every pair and Ask still answers.
-  const pair = args.pair ?? (await loadPairOn(readingHandle(args.clientId, admin), asOf))
+  const pair = args.pair ?? (await loadAppPairOn(handle, asOf))
 
-  // THE MONTH TO READ IS THE CURRENT CALENDAR MONTH, filling or not, against
-  // the month before it — the lib/pages/voice-surface.ts precedent. A filling
-  // month is re-read by every update, so part of its movement is our own
-  // reading schedule rather than the conversation's; it is still the month a
-  // reader asking today wants, so it is PRINTED WITH ITS OWN NOTE — "September
-  // 2026 is still filling and is not yet a settled reading", the first line of
-  // `movementLine`'s notes — rather than held back. Today that means every
-  // Össur line compares a half-finished September (388 videos) against August
-  // (628), and says so beside the verdict.
+  // THE MONTH TO READ IS THE READING MONTH (decision A, above), filling or
+  // not, against the month before it — the lib/pages/voice-surface.ts
+  // precedent. A filling month is re-read by every update, so part of its
+  // movement is our own reading schedule rather than the conversation's; it is
+  // still the month a reader asking today wants, so it is PRINTED WITH ITS OWN
+  // NOTE — "September 2026 is still filling and is not yet a settled reading",
+  // the first line of `movementLine`'s notes — rather than held back. Today
+  // that means every Össur line compares a half-finished September (388
+  // videos) against August (628), and says so beside the verdict.
   //
   // An earlier version of this comment opened by claiming the last COMPLETE
   // month is read wherever the current one is still filling. No such guard

@@ -10,7 +10,8 @@ import { horizonDates, horizonWindow, parseHorizon, sinceStart, type Horizon, ty
 import { freezeStateFor, monthStartOf } from '../reading/monthly'
 import { MONTH_PARAM, readingAnchor, type ReadingMonth } from '../reading/reading-month'
 import { loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, readingViewFrom, type OtherMonth } from '../reading/reading-view'
-import { loadMonthSeries, loadPairOn, type MonthSeriesSet, type ReadingHandle } from '../reading/read'
+import { loadMonthSeries, type MonthSeriesSet, type ReadingHandle } from '../reading/read'
+import { loadAppPairOn } from '../reading/gather-flags'
 import { BRANDS_PANEL, refusedSteps, type PairOn } from '../reading/pairs'
 import { methodLines, type MethodLines } from '../reading/method'
 import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordInputs } from '../reading/record'
@@ -229,11 +230,11 @@ export interface CompetitiveSurfaceData {
   month: string
   monthStatus: MonthStatus
   readingAt: string
-  /** The reading month (market-first decision A) and the bar's other month.
-   *  Always set by the loader; optional because a stored snapshot taken
-   *  before WP1.2 has neither. */
+  /** The reading month (market-first decision A) and the bar's other months
+   *  (default M-d), newest first. Always set by the loader; optional because a
+   *  stored snapshot taken before WP1.2 has neither. */
   reading?: ReadingMonth
-  otherMonth?: OtherMonth | null
+  otherMonths?: OtherMonth[]
   horizon: Horizon
   window: HorizonWindow
   rivals: RivalsBlock
@@ -567,7 +568,7 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
   // THE MONTH-PAIR JUDGE (decision D, WP1.3) depends on the tenant and the
   // clock only, so it starts with the other early reads. It fails closed:
   // a read error refuses every pair and the page still renders.
-  const pairAhead = loadPairOn(reading, readingAt)
+  const pairAhead = loadAppPairOn(reading, readingAt)
   const brand = row<{ company_name: string | null }>(clientRes, 'competitive-surface.client')?.company_name ?? 'Your brand'
 
   // ── the axis ───────────────────────────────────────────────────────────
@@ -723,7 +724,7 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
     monthStatus,
     readingAt,
     reading: rm,
-    otherMonth: view.other,
+    otherMonths: view.others,
     horizon,
     window,
     rivals: {

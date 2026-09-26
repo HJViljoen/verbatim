@@ -7,6 +7,7 @@ import { surface } from '@/lib/nav'
 import { byMarketSize, CALIBRATION_TAG, marketLevel } from '@/lib/pages/overview-market'
 import type { OverviewData, SubjectRow } from '@/lib/pages/overview'
 import type { FigureTable } from '@/lib/reading/verdicts'
+import { NO_READING_YET } from '@/lib/subjects/read-in'
 import { BarLegend, BaseHead, InnerLine, LevelBar, PHONE_COLS, PHONE_HIDDEN, PHONE_OWN_LINE, RULE, SCALE, barAxis } from './market'
 
 // "The market by subject" (market-first WP1.6, plan §2.2 block 6): each
@@ -37,10 +38,16 @@ const prevCell = (k: number | null | undefined, n: number | null | undefined): s
  * membership has been judged, and a subject named after the back-read with no
  * membership is read by no update. So the row says what is true of every such
  * subject, and promises no date.
+ *
+ * THE SAME WORDS AS EVERY OTHER SURFACE (default M-a): a subject the month was
+ * not read for prints `unreadWords` (the row's `unread`), which the Subjects
+ * rail and pane and This week print too; a row with no market figure for any
+ * other reason keeps "no reading yet".
  */
 function rowTag(r: SubjectRow): string | null {
   if (r.calibration === 'failed') return CALIBRATION_TAG.failed
-  if (r.market?.k == null) return 'no reading yet'
+  if (r.unread) return r.unread
+  if (r.market?.k == null) return NO_READING_YET
   return CALIBRATION_TAG[r.calibration ?? 'provisional']
 }
 

@@ -247,7 +247,9 @@ describe('the page bar, ported', () => {
     const markup = render(<OverviewPage data={overviewFixture()} />)
     const text = renderText(<OverviewPage data={overviewFixture()} />)
     expect(text).toContain('Sealand · September 2026 as at the 10 Sep update · next update Sun 20 Sep')
-    expect(markup).toContain('href="/dashboard?month=2026-08"')
+    // The selector is a menu of months (default M-d): its chip, with the
+    // month's state in its tooltip; the months are the menu's.
+    expect(markup).toMatch(/<button [^>]*aria-haspopup="menu"[^>]*title="September so far[^"]*"[^>]*>September 2026<svg/)
     expect(text.toLowerCase()).not.toContain('how sound')
     expect(text).not.toContain('your 3rd monthly reading')
   })

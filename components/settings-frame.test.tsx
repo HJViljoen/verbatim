@@ -68,6 +68,17 @@ describe('the settings rail', () => {
   })
 })
 
+describe('the settings rail gives the pane its room (deploy 2 review)', () => {
+  it('stands beside the pane only from 1100px, and is a row of tabs over it below that', () => {
+    const markup = render(<SettingsFrame active="record" title="Settings">x</SettingsFrame>)
+    expect(markup).toContain('flex min-h-0 flex-col items-start gap-6 min-[1100px]:flex-row')
+    expect(markup).toMatch(/<nav aria-label="Settings" class="[^"]*flex-row flex-wrap[^"]*min-\[1100px\]:w-\[224px\] min-\[1100px\]:flex-col/)
+    // Never beside the pane from `md` again: at 768 that left the pane 240px.
+    expect(markup).not.toContain('md:flex-row')
+    expect(markup).not.toContain('md:w-[224px]')
+  })
+})
+
 describe('the settings vocabulary', () => {
   // CHANGED BY THE ARTBOARD PORT (Block D wave 2, E-settings). This used to
   // assert exactly TWO elevated grounds — the rail's card and the content
