@@ -1,4 +1,4 @@
-import type { BrandsRead } from '../pages/overview-market/brands'
+import { isBrandsRead, type BrandsBlock, type BrandsRead } from '../pages/overview-market/brands'
 import type { ChangeBlock } from '../pages/overview-market/change'
 import type { FigureTable } from '../reading/verdicts'
 
@@ -127,16 +127,34 @@ export function isFilled<T>(slot: MonthlySlot<T> | null | undefined): slot is { 
   return slot?.state === 'filled'
 }
 
+/** What `monthlySlotsFrom` reads off the Overview it is handed. */
+export interface SlotSources {
+  change?: (Pick<ChangeBlock, 'checks'> & Partial<Pick<ChangeBlock, 'recheck' | 'buyers'>>) | null
+  brands?: BrandsBlock | null
+}
+
 /**
  * The slots, from what the Overview built. THE ONE PLACE A PACKAGE WIRES ITS
- * SLOT: today every slot is its stub, because none of the four packages has
- * landed. WP2.3 fills `change` from `ChangeBlock.checks` once its check lines
- * are computed (the field is pinned and empty until then, and an empty list is
- * not the same answer as "not built": a check that cannot run reads "checks
- * pending"); WP2.7 `arrivals` from `OverviewData.arrivals`; WP2.5 `you` from
- * `OverviewData.foryou` and the posts census; WP2.6 `brands` from
- * `OverviewData.brands` in its D3 form.
+ * SLOT, so the monthly prints the page's own reading of the month and the two
+ * print one sentence each:
+ *   · WP2.3 fills `change` from the page's change block: its check lines,
+ *     whether the re-check was read or is pending, and the buyers-only counts.
+ *     A block that prints no re-check still fills the slot, with no lines: an
+ *     empty re-check is an answer, not a package missing;
+ *   · WP2.6 fills `brands` from `OverviewData.brands` in its D3 form, and
+ *     leaves it a stub where the page kept deploy 2's one line (no brand
+ *     rules, or the market not read), so the section is absent, never a
+ *     promise sent to a client;
+ *   · WP2.7 `arrivals` from `OverviewData.arrivals` and WP2.5 `you` from
+ *     `OverviewData.foryou` and the posts census, when they land.
  */
-export function monthlySlotsFrom(_overview: unknown): MonthlySlots {
-  return { ...MONTHLY_SLOT_STUBS }
+export function monthlySlotsFrom(overview: SlotSources | null | undefined): MonthlySlots {
+  const slots: MonthlySlots = { ...MONTHLY_SLOT_STUBS }
+  const change = overview?.change
+  if (change) {
+    slots.change = { state: 'filled', value: { checks: change.checks ?? [], recheck: change.recheck ?? null, buyers: change.buyers ?? null } }
+  }
+  const brands = overview?.brands
+  if (isBrandsRead(brands)) slots.brands = { state: 'filled', value: brands }
+  return slots
 }

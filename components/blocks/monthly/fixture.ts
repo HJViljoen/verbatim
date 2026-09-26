@@ -3,11 +3,13 @@ import { headline, sentenceBlockFor, type LedgerRow, type OverviewData } from '@
 import { monthlySubject, nextMonthlyOf } from '@/lib/reports/monthly'
 import { MONTHLY_SLOT_STUBS, type MonthlySlots } from '@/lib/reports/monthly-slots'
 import { stagingBrandsRead } from '@/lib/test/brands-fixture'
+import { RECHECK_BUYERS, RECHECK_READ_WITH, recheckRows, recheckRunFinish } from '@/lib/test/recheck-fixture'
+import { buildCheckLines } from '@/lib/pages/overview-market'
 import { comparabilityOf, type OurChange, type PairRow } from '@/lib/reading/comparability'
 import { scheduledUpdateAfter } from '@/lib/reading/reading-month'
 import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
 import { sealandReading } from '@/lib/test/reading-fixture'
-import { SEPTEMBER_CHIP, marketBeforeMakersFixture, marketFrontFixture, ossurFrontFixture, verdict } from '@/components/pages/overview/fixture'
+import { SEPTEMBER_CHIP, marketBeforeMakersFixture, marketFrontFixture, ossurFrontFixture } from '@/components/pages/overview/fixture'
 
 // "September in your market"'s fixtures (market-first WP2.1).
 //
@@ -188,13 +190,15 @@ export function ossurMonthlyFixture(over: Partial<MonthlyData> = {}): MonthlyDat
  *   10 drew 5 or more comments, 9 carry a reading over 234 comments; the
  *   followers' three themes, 4, 3 and 2; no move dated. No for-you line: its
  *   sentences are WP2.5's.
- * - `arrivals` and `change`: HYPOTHETICAL, and named so. What the 11 Oct
- *   update brings is not knowable, so the counts are real ones of a different
- *   question, borrowed for their size: 206 (GC F29, September videos first
- *   found by the 13 Sep terms) and 4,923 (WP1.4's staging late capture of
- *   September comments). The check line is the plan's own expected outcome
- *   (WP2.3: "Too few videos on the searches both months ran to check.") on
- *   "Asking for something", 146 of 626 in September (production).
+ * - `arrivals`: HYPOTHETICAL, and named so. What the 11 Oct update brings is
+ *   not knowable, so the counts are real ones of a different question,
+ *   borrowed for their size: 206 (GC F29, September videos first found by the
+ *   13 Sep terms) and 4,923 (WP1.4's staging late capture of September
+ *   comments).
+ * - `change`: staging's re-check plan of 26 Sep (lib/test/recheck-fixture.ts),
+ *   read with the 20 Sep update: too few on the searches both months ran (78
+ *   and 103 videos), the four kinds whose fall follows depth, and the
+ *   buyers-only counts, 146 and 381.
  */
 export function filledSlotsFixture(): MonthlyData {
   const base = monthlyFixture()
@@ -233,16 +237,9 @@ export function filledSlotsFixture(): MonthlyData {
     change: {
       state: 'filled',
       value: {
-        checks: [{
-          objectKind: 'kind',
-          objectId: 'feature_request',
-          label: 'Asking for something',
-          population: 'same_searches_clean',
-          verdict: verdict({ objectKind: 'kind', objectId: 'feature_request', objectLabel: 'Asking for something', audience: INDUSTRY_AUDIENCE, value: { k: 146, n: 626 }, state: 'too_little_data', changePts: null, bandPts: null }),
-          sentence: 'Too few videos on the searches both months ran to check.',
-          populationShares: null,
-          readWith: '2026-10-11T08:30:00.000Z',
-        }],
+        checks: buildCheckLines({ rows: recheckRows(), month: SEP, runFinish: recheckRunFinish() }),
+        recheck: 'read',
+        buyers: { prevMonth: AUG, month: SEP, prev: RECHECK_BUYERS.august, curr: RECHECK_BUYERS.september, readWith: RECHECK_READ_WITH },
       },
     },
   }

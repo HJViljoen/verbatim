@@ -123,7 +123,8 @@ export async function loadMonthly(scope: Scope): Promise<MonthlyData | null> {
     readTo: overview.reading?.readTo ?? null,
     market,
     overview,
-    // STUBS (WP2.1 skeleton): each package fills its slot in `monthlySlotsFrom`.
+    // Each package fills its slot in `monthlySlotsFrom` (WP2.3 the change
+    // section's re-check, WP2.6 the brands); the rest are still stubs.
     slots: monthlySlotsFrom(overview),
     decide: {
       ledger: overview.sentence.ledger,
