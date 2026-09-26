@@ -20,10 +20,11 @@ import { ANALYSIS_MODEL, estimateCost } from '../config'
 //
 // PURE BUT FOR THE CALL, WHICH IS INJECTED. Nothing here imports the OpenAI
 // client: `judgePosts` takes a `call` (the script's, behind its spend flag;
-// a test's mock), so a dry run cannot reach a model by accident. About $0.05
-// once for Sealand (the three months the page reads: 56 posts over July to
-// September on staging) and about $0.01 a month after, at gpt-4.1-mini's price
-// (`estimateCost`, `judgeCostEstimate`).
+// a test's mock), so a dry run cannot reach a model by accident. About $0.06
+// once for Sealand (the default window, June to September on staging, 67
+// posts, and the 8 older posts that carry a claim: 75 posts) and about $0.01
+// a month after, at gpt-4.1-mini's price (`estimateCost`,
+// `judgeCostEstimate`).
 
 export const OWN_POST_JUDGE_VERSION = 'own_post_subjects_v1'
 export const OWN_POST_JUDGE_MODEL = ANALYSIS_MODEL
@@ -279,15 +280,33 @@ export function judgeMode(f: { apply: boolean; spend: boolean; fromFile: string 
     return 'apply_file'
   }
   if (f.spend) return f.apply ? 'judge_apply' : 'judge'
-  if (f.apply) throw new Error('own-post-subjects: --apply needs --spend (judge now, about five cents) or --from-file <rows.json>; nothing was judged, so nothing would be written')
+  if (f.apply) throw new Error('own-post-subjects: --apply needs --spend (judge now, about six cents) or --from-file <rows.json>; nothing was judged, so nothing would be written')
   return 'plan'
 }
 
-/** The posts a run judges by default: the three months the page reads, the
- *  current month and the two before it (UTC). */
+/** The posts a run judges by default: the current month and the three before
+ *  it (UTC). The page reads the reading month and the two before it, and the
+ *  reading month is the month BEFORE the current one for the first half of a
+ *  month (`readingMonthFor`: September until about 15 Oct), so a run on 3 Nov
+ *  must reach back to August for the page's August to October. */
 export function defaultSince(nowIso: string): string {
   const d = new Date(nowIso)
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 2, 1)).toISOString().slice(0, 10)
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 3, 1)).toISOString().slice(0, 10)
+}
+
+/**
+ * The posts outside the window that carry one of your claims. The page counts
+ * your claims READ TO DATE by subject (Y3), so a claim on an older post the
+ * judge never read would read "not checked yet" for good (Sealand, staging:
+ * 65 of 98 distinct claims sit on 8 posts older than July). They are judged
+ * too; a handful of posts, about a cent. Sorted, one id each.
+ */
+export function claimPostsOutside(
+  windowPostIds: readonly string[],
+  claims: readonly { source_video_id: string }[],
+): string[] {
+  const inWindow = new Set(windowPostIds)
+  return [...new Set(claims.map((c) => c.source_video_id).filter((id) => !inWindow.has(id)))].sort()
 }
 
 /** A rows file (`--out`, then `--from-file`), checked before anything is

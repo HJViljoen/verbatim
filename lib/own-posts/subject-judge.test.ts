@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
-  OWN_POST_JUDGE_VERSION, buildJudgeUserPrompt, defaultSince, judgeCostEstimate, judgeMode, judgePosts, judgeRows, postText, postsToJudge,
+  OWN_POST_JUDGE_VERSION, buildJudgeUserPrompt, claimPostsOutside, defaultSince, judgeCostEstimate, judgeMode, judgePosts, judgeRows, postText, postsToJudge,
   readRowsFile, unfiledRows, wordsIn,
   type JudgeCall, type JudgePost, type JudgeSubject,
 } from './subject-judge'
@@ -113,10 +113,11 @@ describe('the prompt and the cost', () => {
     expect(postText(long).length).toBeLessThan(POST.caption!.length + 400 + 1300)
     expect(buildJudgeUserPrompt(POST, SUBJECTS)).toContain('THE POST [P]')
   })
-  it('prices a three-month window of Sealand’s posts at about five cents', () => {
-    // 56 posts over July to September on staging (106 to date since 2021).
-    expect(judgeCostEstimate(56)).toBeGreaterThan(0.04)
-    expect(judgeCostEstimate(56)).toBeLessThan(0.06)
+  it('prices the default window of Sealand’s posts at about six cents', () => {
+    // 67 posts over June to September on staging, and the 8 older posts that
+    // carry a claim (106 to date since 2021).
+    expect(judgeCostEstimate(67 + 8)).toBeGreaterThan(0.05)
+    expect(judgeCostEstimate(67 + 8)).toBeLessThan(0.07)
   })
 })
 
@@ -131,9 +132,17 @@ describe('the script’s rules', () => {
     expect(() => judgeMode({ apply: true, spend: true, fromFile: 'rows.json' })).toThrow(/not both/)
   })
 
-  it('reads the three months the page reads by default', () => {
-    expect(defaultSince('2026-11-21T10:00:00.000Z')).toBe('2026-09-01')
-    expect(defaultSince('2027-01-05T10:00:00.000Z')).toBe('2026-11-01')
+  it('reads the three months the page reads by default, while the reading month lags the calendar too', () => {
+    // On 3 Nov the page reads October (August to October): the window reaches August.
+    expect(defaultSince('2026-11-03T10:00:00.000Z')).toBe('2026-08-01')
+    expect(defaultSince('2026-11-21T10:00:00.000Z')).toBe('2026-08-01')
+    expect(defaultSince('2027-01-05T10:00:00.000Z')).toBe('2026-10-01')
+  })
+
+  it('judges every older post that carries a claim, once each', () => {
+    const claims = [{ source_video_id: 'old-b' }, { source_video_id: 'w1' }, { source_video_id: 'old-a' }, { source_video_id: 'old-b' }]
+    expect(claimPostsOutside(['w1', 'w2'], claims)).toEqual(['old-a', 'old-b'])
+    expect(claimPostsOutside(['w1'], [])).toEqual([])
   })
 
   it('writes a file only of this client’s rows under this judge version', () => {

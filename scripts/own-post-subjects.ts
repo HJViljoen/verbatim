@@ -6,7 +6,7 @@ import { chunk } from '../lib/chunk'
 import { assertProject, modeLine, parseScriptArgs } from '../lib/ops/market-first-args'
 import {
   OWN_POST_JUDGE_MODEL, OWN_POST_JUDGE_PASS, OWN_POST_JUDGE_VERSION, OwnPostJudgeSchema,
-  defaultSince, judgeCostEstimate, judgeMode, judgePosts, postsToJudge, readRowsFile, unfiledRows,
+  claimPostsOutside, defaultSince, judgeCostEstimate, judgeMode, judgePosts, postsToJudge, readRowsFile, unfiledRows,
   type JudgeCall, type JudgePost, type JudgeSubject, type OwnPostSubjectInsert,
 } from '../lib/own-posts/subject-judge'
 import { TABLE_OWN_POST_SUBJECTS, isMissingOwnPostSubjects } from '../lib/reading/own-posts'
@@ -23,7 +23,7 @@ import { createAdminClient, selectAll } from '../lib/supabase-admin'
 // model. Three other modes, by flags alone; it NEVER prompts, so it runs
 // through `!`:
 //
-//   --spend --out <rows.json>          judge now (about $0.05 once, about $0.01
+//   --spend --out <rows.json>          judge now (about $0.06 once, about $0.01
 //                                      a month), write the rows to a local file,
 //                                      insert nothing
 //   --spend --apply --project <ref>    judge now and insert
@@ -74,19 +74,30 @@ async function main() {
     return
   }
 
-  // What the judge reads: your posts in the window, the claims on them, and
-  // your active subjects.
+  // What the judge reads: your posts in the window, every post carrying one
+  // of your claims (the page counts your claims READ TO DATE by subject, so a
+  // claim on an older post must be judged too), those claims, and your active
+  // subjects.
   const since = args.values.since ?? defaultSince(new Date().toISOString())
   if (!/^\d{4}-\d{2}-\d{2}$/.test(since)) throw new Error(`${NAME}: --since takes YYYY-MM-DD, got ${since}`)
-  const posts = await selectAll<{ id: string; caption: string | null; topics: string[] | null; transcript: string | null; transcript_en: string | null }>(() =>
+  type PostRow = { id: string; caption: string | null; topics: string[] | null; transcript: string | null; transcript_en: string | null }
+  const POST_COLUMNS = 'id, caption, topics, transcript, transcript_en'
+  const windowPosts = await selectAll<PostRow>(() =>
     admin.from('videos')
-      .select('id, caption, topics, transcript, transcript_en')
+      .select(POST_COLUMNS)
       .eq('client_id', args.clientId).eq('is_client', true).gte('upload_date', since)
       .order('id'))
-  const claimRows = posts.length === 0 ? [] : (await Promise.all(chunk(posts.map((p) => p.id), 200).map((ids) =>
-    selectAll<{ id: string; source_video_id: string; claim: string; quote: string | null }>(() =>
-      admin.from('video_claims').select('id, source_video_id, claim, quote')
-        .eq('client_id', args.clientId).eq('entity', 'client').in('source_video_id', ids).order('id'))))).flat()
+  const allClaims = await selectAll<{ id: string; source_video_id: string; claim: string; quote: string | null }>(() =>
+    admin.from('video_claims').select('id, source_video_id, claim, quote')
+      .eq('client_id', args.clientId).eq('entity', 'client').order('id'))
+  const olderIds = claimPostsOutside(windowPosts.map((p) => p.id), allClaims)
+  const olderPosts = olderIds.length === 0 ? [] : (await Promise.all(chunk(olderIds, 200).map((ids) =>
+    selectAll<PostRow>(() =>
+      admin.from('videos').select(POST_COLUMNS)
+        .eq('client_id', args.clientId).eq('is_client', true).in('id', ids).order('id'))))).flat()
+  const posts = [...windowPosts, ...olderPosts]
+  const postIds = new Set(posts.map((p) => p.id))
+  const claimRows = allClaims.filter((c) => postIds.has(c.source_video_id))
   const subjects = await selectAll<JudgeSubject & { status: string }>(() =>
     admin.from('subjects').select('id, name, description, status').eq('client_id', args.clientId).eq('status', 'active').order('id'))
 
@@ -106,7 +117,7 @@ async function main() {
   const todo = postsToJudge(judgePostsIn, subjects, existing ?? [])
   const budget = Number(args.values.budget ?? '0.20')
   if (!Number.isFinite(budget) || budget <= 0) throw new Error(`${NAME}: --budget takes dollars, got ${args.values.budget}`)
-  console.log(`  posts since ${since}: ${posts.length} · claims on them: ${seen.size} distinct · active subjects: ${subjects.length}`)
+  console.log(`  posts since ${since}: ${windowPosts.length} · older posts carrying a claim: ${olderPosts.length} · claims on them: ${seen.size} distinct · active subjects: ${subjects.length}`)
   console.log(`  already filed under ${OWN_POST_JUDGE_VERSION}: ${(existing ?? []).filter((e) => e.judge_version === OWN_POST_JUDGE_VERSION).length} rows · posts still to judge: ${todo.length}`)
   console.log(`  price: about $${judgeCostEstimate(todo.length).toFixed(3)} at ${OWN_POST_JUDGE_MODEL} (budget $${budget.toFixed(2)})`)
 
