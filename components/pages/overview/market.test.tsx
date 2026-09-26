@@ -13,8 +13,8 @@ import { septemberThemes } from '@/lib/test/market-fixture'
 import { FRONT_PAGE_BLOCKS, MARKET_TITLES, OverviewPage } from './index'
 import { overviewSentence } from './sentence'
 import { overviewThemes } from './themes'
-import { WHAT_WE_CHANGED_HREF } from './change'
-import { marketBeforeMakersFixture, marketFrontFixture, ossurFrontFixture, overviewFixture } from './fixture'
+import { WHAT_WE_CHANGED_HREF, stripMonths } from './change'
+import { OCTOBER_ENDED_AT, OCTOBER_LEADS_AT, marketBeforeMakersFixture, marketFrontFixture, octoberLeadsFixture, ossurFrontFixture, overviewFixture } from './fixture'
 
 // Your market (market-first WP1.6): the done-when checks that a render can
 // make, on plan §2.2's print (production's figures as at the 24 Sep update).
@@ -35,6 +35,76 @@ const STATES: [string, () => OverviewData][] = [
   ['Sealand, staging calibration', () => marketFrontFixture({ subjectsCalibration: 'staging' })],
   ['Össur', ossurFrontFixture],
 ]
+
+// ONCE OCTOBER LEADS (default M-e, 26 Sep): from the 18 Oct update the pair
+// read is September against October and the first pair read the same way is
+// October against November. The strip drew "Sep, Oct | Oct, Nov", October
+// twice; it draws each month once, the bracket over Oct and Nov, and the "as
+// at" in October (18 Oct) or, from the 1 Nov update, in November.
+describe('the change strip once October leads: each month once', () => {
+  const change = (data: OverviewData) => render(FRONT_PAGE_BLOCKS.find((b) => b.key === 'overview.change')!.render(data, 'app', ctx))
+
+  it('stripMonths: the pairs as one row, oldest first, the bracket over the next pair', () => {
+    expect(stripMonths(['2026-08-01', '2026-09-01'], ['2026-10-01', '2026-11-01'])).toEqual({
+      months: [
+        { month: '2026-08-01', read: true }, { month: '2026-09-01', read: true },
+        { month: '2026-10-01', read: false }, { month: '2026-11-01', read: false },
+      ],
+      from: 2, span: 2,
+    })
+    expect(stripMonths(['2026-09-01', '2026-10-01'], ['2026-10-01', '2026-11-01'])).toEqual({
+      months: [{ month: '2026-09-01', read: true }, { month: '2026-10-01', read: true }, { month: '2026-11-01', read: false }],
+      from: 1, span: 2,
+    })
+    // November leads (from 16 Nov): the pair read IS the next pair.
+    expect(stripMonths(['2026-10-01', '2026-11-01'], ['2026-10-01', '2026-11-01'])).toEqual({
+      months: [{ month: '2026-10-01', read: true }, { month: '2026-11-01', read: true }],
+      from: 0, span: 2,
+    })
+  })
+
+  it('18 Oct: the bar reads October, as at the 18 Oct update', () => {
+    const text = read(<OverviewPage data={octoberLeadsFixture(OCTOBER_LEADS_AT)} />)
+    expect(text).toContain('Sealand · October 2026 as at the 18 Oct update · next update Sun 25 Oct')
+  })
+
+  it('18 Oct: Sep, Oct and Nov once each, October solid, the bracket over Oct and Nov, the "as at" in October', () => {
+    const markup = change(octoberLeadsFixture(OCTOBER_LEADS_AT))
+    for (const [name, ground] of [['Sep', 'bg-inner'], ['Oct', 'bg-inner'], ['Nov', 'bg-tile']]) {
+      expect(markup.match(new RegExp(`>${name}</span>`, 'g'))?.length, name).toBe(1)
+      expect(markup).toContain(`<span class="relative z-[1] -mx-1 px-1 ${ground}">${name}</span>`)
+    }
+    expect(markup).not.toContain('>Aug</span>')
+    expect(markup).toMatch(/class="grid gap-x-3 grid-cols-3 mt-4"/)
+    expect(markup).toMatch(/<div class="col-start-2 col-span-2 flex flex-col">/)
+    expect(markup).toMatch(/<span class="col-start-2 col-span-2 flex justify-center">/)
+    // One "as at", on 18 Oct (17.5 of October's 31 days); the marks stay
+    // under September (8.5, 12.5 and 16.5 of 30).
+    expect(markup.match(/as at 18 Oct/g)?.length).toBe(1)
+    expect(markup.match(/left:56\.45%/g)?.length).toBe(2)
+    for (const x of ['28.33', '41.67', '55.00']) expect(markup).toContain(`left:${x}%`)
+    expect(read(<OverviewPage data={octoberLeadsFixture(OCTOBER_LEADS_AT)} />)).toContain('from the 6 Dec update')
+  })
+
+  it('1 Nov: October, ended, and the "as at" in the dashed November, once', () => {
+    const data = octoberLeadsFixture(OCTOBER_ENDED_AT)
+    expect(read(<OverviewPage data={data} />)).toContain('Sealand · October 2026 as at the 1 Nov update · next update Sun 8 Nov')
+    const markup = change(data)
+    for (const name of ['Sep', 'Oct', 'Nov']) expect(markup.match(new RegExp(`>${name}</span>`, 'g'))?.length, name).toBe(1)
+    expect(markup.match(/as at 1 Nov/g)?.length).toBe(1)
+    expect(markup).toContain('left:1.67%')
+    expect(markup).toMatch(/class="grid gap-x-3 grid-cols-3 mt-4"/)
+  })
+
+  it('prints no "moved", no arrow and no em dash at either clock', () => {
+    for (const at of [OCTOBER_LEADS_AT, OCTOBER_ENDED_AT] as const) {
+      const text = read(<OverviewPage data={octoberLeadsFixture(at)} />)
+      expect(text).not.toMatch(/\bmoved\b/)
+      expect(text).not.toMatch(/[▲▼]/)
+      expect(text).not.toContain('\u2014')
+    }
+  })
+})
 
 describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
   const text = read(<OverviewPage data={marketFrontFixture()} />)
@@ -212,13 +282,19 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
     const oct = at('2026-10-11T08:30:00.000Z')
     expect(oct.match(/as at 11 Oct/g)?.length).toBe(1)
     expect(oct).toContain('left:33.87%')
-    expect(oct).toMatch(/class="grid grid-cols-2 gap-x-3 mt-4"/)
+    expect(oct).toMatch(/class="grid gap-x-3 grid-cols-4 mt-4"/)
     // Every month's name stands on its cell's ground, above the rule.
     for (const [name, ground] of [['Aug', 'bg-inner'], ['Sep', 'bg-inner'], ['Oct', 'bg-tile'], ['Nov', 'bg-tile']]) {
       expect(oct).toContain(`<span class="relative z-[1] -mx-1 px-1 ${ground}">${name}</span>`)
     }
     // The preview's state, an "as at" in the month read, keeps its spacing.
-    expect(render(overviewChangeRender())).toMatch(/class="grid grid-cols-2 gap-x-3 mt-2\.5"/)
+    expect(render(overviewChangeRender())).toMatch(/class="grid gap-x-3 grid-cols-4 mt-2\.5"/)
+  })
+
+  it('what changed: four months while September is read, the bracket over the last two', () => {
+    const markup = render(overviewChangeRender())
+    for (const name of ['Aug', 'Sep', 'Oct', 'Nov']) expect(markup.match(new RegExp(`>${name}</span>`, 'g'))?.length, name).toBe(1)
+    expect(markup).toMatch(/<div class="col-start-3 col-span-2 flex flex-col">/)
   })
 
   it('what changed: a stored block without the strip’s fields draws the months and no mark', () => {

@@ -4,7 +4,7 @@ import { changesFromLog, type PairComparability } from '../reading/comparability
 import { monthStartOf, prevMonth as previousMonthOf } from '../reading/month-key'
 import { loadChanges, loadMonthSeries, loadPairRows, type ReadingHandle } from '../reading/read'
 import { loadAppPairOn, ourChangesWithoutGatherFlags } from '../reading/gather-flags'
-import { loadDeliveredRuns, loadMarketRivalAudiences, loadReadingSchedule, readingViewFrom, updateInstant } from '../reading/reading-view'
+import { loadDeliveredRuns, loadMarketRivalAudiences, loadReadingMonth, loadReadingSchedule, readingViewFrom, updateInstant } from '../reading/reading-view'
 import { scheduledUpdateAfter, type ReadingMonth } from '../reading/reading-month'
 import { pooledDenominators } from '../reading/market'
 import { selectAll } from '../supabase-admin'
@@ -63,16 +63,8 @@ export async function loadChangeReach(client: SupabaseClient, clientId: string):
  * 15 Oct, not the calendar's October (deploy 2 review; WP1.2's open item).
  * Null for a tenant nothing has been delivered to.
  */
-export async function loadRecordReadingMonth(supabase: SupabaseClient, reading: ReadingHandle, now: string): Promise<ReadingMonth | null> {
-  const { client, clientId } = reading
-  const [runs, schedule, history, rivalAudiences] = await Promise.all([
-    loadDeliveredRuns(supabase, clientId),
-    loadReadingSchedule(supabase, clientId),
-    loadMonthSeries(client, clientId, { from: '2019-01-01', to: now, updatesByMonth: {} }),
-    loadMarketRivalAudiences(supabase, clientId),
-  ])
-  if (runs.length === 0) return null
-  return readingViewFrom({ now, runs, denominators: history.denominators, rivalAudiences, schedule }).reading
+export function loadRecordReadingMonth(supabase: SupabaseClient, reading: ReadingHandle, now: string): Promise<ReadingMonth | null> {
+  return loadReadingMonth(supabase, reading, now)
 }
 
 export interface WhatWeChanged {

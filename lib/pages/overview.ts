@@ -795,9 +795,9 @@ export interface OverviewData {
    * a snapshot taken before WP1.2 has none.
    */
   reading: ReadingMonth
-  /** The one other month the bar's month selector offers. Optional for the
-   *  same reason as `reading`. */
-  otherMonth?: OtherMonth | null
+  /** The other months the bar's month selector offers (default M-d), newest
+   *  first. Optional for the same reason as `reading`. */
+  otherMonths?: OtherMonth[]
   horizon: Horizon
   window: HorizonWindow
   axis: string[]
@@ -2590,7 +2590,7 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
     monthStatus,
     readingAt,
     reading: rm,
-    otherMonth: pinned ? null : view.other,
+    otherMonths: pinned ? [] : view.others,
     horizon,
     window,
     axis,

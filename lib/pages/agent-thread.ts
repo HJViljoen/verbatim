@@ -25,6 +25,7 @@ import { loadMonthSeries } from '../reading/read'
 import { loadAppPairOn } from '../reading/gather-flags'
 import { refuseEveryPair } from '../reading/pairs'
 import { monthStartOf, prevMonth } from '../reading/month-key'
+import { loadReadingMonth } from '../reading/reading-view'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../rivals'
 import { detailHref } from '../shell/bar'
 import { surface } from '../nav'
@@ -643,10 +644,26 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
   // was written against a June update and can only be checked against what
   // June's conversation says. Capped at the current month, because a clock that
   // ran ahead is not a month anyone can read.
+  //
+  // BOTH ARE READING MONTHS, NOT CALENDAR MONTHS (decision A; default M-f, as
+  // the Record tab's Delivery and Coverage since 91af44f5). An answer given on
+  // 5 Oct was given while every page read September, and a thread opened on
+  // 2 Oct is measured on the month the pages read then, September, not a day
+  // or two of October. Both off the same memoised reads the pages make; the
+  // calendar month only where nothing has been delivered.
   const answeredAt = [...messages].reverse().find((m) => m.role === 'agent' && m.result)?.created_at ?? null
   const measuredAt = new Date().toISOString()
-  const thisMonth = monthStartOf(measuredAt)
-  const answeredMonth = answeredAt ? monthStartOf(answeredAt) : thisMonth
+  const readingMonthAt = (at: string) =>
+    loadReadingMonth(supabase, scope.reading, measuredAt, { at }).then((r) => r?.month ?? null, (e: unknown) => {
+      console.error(`[pages] agentThread.month: ${(e as { message?: string })?.message ?? String(e)}`)
+      return null
+    })
+  const [nowMonth, thenMonth] = await Promise.all([
+    readingMonthAt(measuredAt),
+    answeredAt ? readingMonthAt(answeredAt) : Promise.resolve(null),
+  ])
+  const thisMonth = monthStartOf(nowMonth ?? measuredAt)
+  const answeredMonth = answeredAt ? monthStartOf(thenMonth ?? answeredAt) : thisMonth
   const readMonth = answeredMonth > thisMonth ? thisMonth : answeredMonth
   const seriesP = storedRegistryIds.length
     ? loadMonthSeries(scope.reading.client, scope.reading.clientId, {
