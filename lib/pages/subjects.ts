@@ -475,11 +475,11 @@ export interface SubjectsData {
   month: string
   monthStatus: MonthStatus
   readingAt: string
-  /** The reading month (market-first decision A) and the bar's other month.
-   *  Always set by the loader; optional because a stored snapshot taken
-   *  before WP1.2 has neither. */
+  /** The reading month (market-first decision A) and the bar's other months
+   *  (default M-d), newest first. Always set by the loader; optional because a
+   *  stored snapshot taken before WP1.2 has neither. */
   reading?: ReadingMonth
-  otherMonth?: OtherMonth | null
+  otherMonths?: OtherMonth[]
   horizon: Horizon
   axis: string[]
   /** The chart's own axis — the trailing twelve months, or from the tenant's
@@ -2000,7 +2000,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     monthStatus,
     readingAt,
     reading: rm,
-    otherMonth: view.other,
+    otherMonths: view.others,
     horizon,
     axis,
     chartAxis,

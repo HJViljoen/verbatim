@@ -48,16 +48,23 @@ export interface ReadingDenominator {
   origin?: MonthOrigin | null
 }
 
-/** The one other month the bar's selector offers. `isDefault`: it is the month
- *  the page reads with no `?month=`, so its link carries no parameter. */
+/** A month the bar's selector offers besides the one read. `isDefault`: it is
+ *  the month the page reads with no `?month=`, so its link carries no
+ *  parameter. */
 export interface OtherMonth {
   month: string
   isDefault: boolean
 }
 
+/** The most months the selector lists, the month read among them: a year.
+ *  Össur's back-read reaches six years, and seventy-two months is not a
+ *  selector; an older month is still one `?month=` away. */
+export const MONTH_MENU_MAX = 12
+
 export interface ReadingView {
   reading: ReadingMonth
-  other: OtherMonth | null
+  /** Every other month the selector offers, newest first. */
+  others: OtherMonth[]
 }
 
 export interface ReadingViewInput {
@@ -97,14 +104,17 @@ export function asAtOf(runs: readonly DeliveredRun[], now: string): string | nul
 }
 
 /**
- * The reading month and the selector's other month, from the rows a loader
+ * The reading month and the selector's other months, from the rows a loader
  * holds.
  *
- * THE OTHER MONTH, one rule for every page:
- *   · a `?month=` the rule honoured → the month the page reads without it;
- *   · the current month leads → the latest month before it with a row;
- *   · an ended month leads → the current month, once it has a row.
- * Null where there is no second month to offer.
+ * THE OTHER MONTHS, one rule for every page (default M-d, 26 Sep): every month
+ * the market has a row for, up to the current one, and the month the page reads
+ * without a `?month=`, newest first, less the month read, a year at most
+ * (`MONTH_MENU_MAX`). So the selector always steps back: on 1 to 3 Oct, before
+ * October has a row, September leads and August, July and the months before
+ * are one click away; from the 4 Oct update October joins them. Which month is
+ * READ is decision A's rule and is not touched here. Empty where the market has
+ * no other month.
  */
 export function readingViewFrom(input: ReadingViewInput): ReadingView {
   const rivals = input.rivalAudiences ?? [...new Set(input.denominators.map((d) => d.audience).filter(isRivalAudience))]
@@ -143,17 +153,17 @@ export function readingViewFrom(input: ReadingViewInput): ReadingView {
   const reading = readingMonthFor({ ...base, explicit: input.explicit ?? null })
   const rule = reading.reason === 'explicit' ? readingMonthFor(base) : reading
 
-  let other: OtherMonth | null = null
-  if (rule.month !== reading.month) {
-    // A `?month=` moved the page off its default: the way back is the default.
-    other = { month: rule.month, isDefault: true }
-  } else if (rule.leadsWithCurrent) {
-    const before = [...videosByMonth.keys()].filter((m) => m < rule.month).sort()
-    if (before.length > 0) other = { month: before[before.length - 1], isDefault: false }
-  } else if (videosByMonth.has(rule.current.month)) {
-    other = { month: rule.current.month, isDefault: false }
-  }
-  return { reading, other }
+  // A `?month=` that moved the page off its default keeps the way back to it
+  // (the default, linked with no parameter), whether or not it has a row.
+  const current = monthStartOf(input.now)
+  const offered = new Set([...videosByMonth.keys()].map(monthStartOf).filter((m) => m <= current))
+  offered.add(rule.month)
+  offered.delete(reading.month)
+  const others = [...offered]
+    .sort((a, b) => (a < b ? 1 : a > b ? -1 : 0))
+    .slice(0, MONTH_MENU_MAX - 1)
+    .map((month) => ({ month, isDefault: month === rule.month }))
+  return { reading, others }
 }
 
 /**

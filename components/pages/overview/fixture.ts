@@ -451,9 +451,13 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
     monthStatus: 'filling',
     readingAt: NOW,
     // Sealand's own calendar at the fixture's clock: September so far, as at
-    // the 10 Sep update, August one click away (lib/test/reading-fixture.ts).
+    // the 10 Sep update, August and the months before it in the selector
+    // (lib/test/reading-fixture.ts; default M-d).
     reading: sealandReading(NOW),
-    otherMonth: { month: '2026-08-01', isDefault: false },
+    otherMonths: [
+      { month: '2026-08-01', isDefault: false }, { month: '2026-07-01', isDefault: false }, { month: '2026-06-01', isDefault: false },
+      { month: '2026-05-01', isDefault: false }, { month: '2026-04-01', isDefault: false },
+    ],
     horizon: 'this_month',
     window,
     axis: window.months,

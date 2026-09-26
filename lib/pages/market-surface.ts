@@ -331,11 +331,11 @@ export interface MarketSurfaceData {
   month: string
   monthStatus: MonthStatus
   readingAt: string
-  /** The reading month (market-first decision A) and the bar's other month.
-   *  Always set by the loader; optional because a stored snapshot taken
-   *  before WP1.2 has neither. */
+  /** The reading month (market-first decision A) and the bar's other months
+   *  (default M-d), newest first. Always set by the loader; optional because a
+   *  stored snapshot taken before WP1.2 has neither. */
   reading?: ReadingMonth
-  otherMonth?: OtherMonth | null
+  otherMonths?: OtherMonth[]
   masthead: string
   conclusions: ConclusionsBlock
   advice: AdviceBlock
@@ -1191,7 +1191,7 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
     monthStatus,
     readingAt,
     reading: rm,
-    otherMonth: view.other,
+    otherMonths: view.others,
     masthead: MOVES_MASTHEAD,
     conclusions,
     advice,
