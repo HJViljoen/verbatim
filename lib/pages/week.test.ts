@@ -19,6 +19,8 @@ import {
   opensClusteringRegime,
   loadNewThemes,
   marketSubjectsOf,
+  clipToMonth,
+  pooledSubjectCounts,
   previousThemedRegime,
   regroupedFor,
   regroupedLine,
@@ -719,5 +721,32 @@ describe('marketSubjectsOf (market-first WP2.7)', () => {
     const looks = b.rows.find((r) => r.id === 'looks')!
     expect(looks.market?.monthSoFar.k).toBe(102)
     expect(looks.market?.thisUpdate).toBe(72)
+  })
+})
+
+describe('the update’s days in a month, pooled on the market (WP2.7, the weekly’s WR2 too)', () => {
+  it('clips a window that reaches back into the month before to the month’s first day', () => {
+    // Sealand's 10 Sep update covered 11 Aug to 10 Sep.
+    expect(clipToMonth({ from: '2026-08-11T07:02:10.201Z', to: '2026-09-10T07:02:10.201Z' }, '2026-09-01'))
+      .toEqual({ from: '2026-09-01', to: '2026-09-10T07:02:10.201Z' })
+    // The 20 Sep update's days are all September's.
+    expect(clipToMonth({ from: '2026-09-10T07:02:10.201Z', to: '2026-09-20T04:02:57.874Z' }, '2026-09-01'))
+      .toEqual({ from: '2026-09-10T07:02:10.201Z', to: '2026-09-20T04:02:57.874Z' })
+    // A window that ends before the month puts nothing into it.
+    expect(clipToMonth({ from: '2026-08-11', to: '2026-09-01' }, '2026-09-01')).toBeNull()
+  })
+
+  it('sums the category and the tracked brands, never the client’s own posts or an untracked rival', () => {
+    // Staging, the 20 Sep update's window: Community & purpose carried 4 of
+    // the client's own videos, 1 filed under The North Face and 3 in the
+    // category.
+    const pooled = pooledSubjectCounts([
+      { subject_id: 'community', audience: 'client', videos: 4 },
+      { subject_id: 'community', audience: 'competitor:The North Face', videos: 1 },
+      { subject_id: 'community', audience: 'industry-other', videos: 3 },
+      { subject_id: 'community', audience: 'competitor:Poler', videos: 2 },
+      { subject_id: 'community', audience: 'industry-other', videos: 3 },
+    ], ['competitor:The North Face'])
+    expect(pooled.get('community')).toBe(4)
   })
 })

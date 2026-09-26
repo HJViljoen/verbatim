@@ -16,7 +16,8 @@ import { countRefused } from '../reading/record'
 import type { Verdict } from '../reading/verdicts'
 import { loadOverview, audienceInLabel, daysInto, isMissingAnomalyFlags, type Mover, type OverviewData, type SubjectsBlock, type WeeklyHeadline } from './overview'
 import { loadContent, isContentEmpty, type ContentInboxRow } from './content'
-import { buildSales, loadSubjectQuotes, loadSubjects, workedLabel } from './week'
+import { buildSales, loadSubjectQuotes, loadSubjects, marketSubjectArrivals, workedLabel } from './week'
+import { loadMarketRivalAudiences } from '../reading/reading-view'
 import { earnsVerdict } from '../subjects/calibration-state'
 import {
   CONTRIBUTIONS_NOT_RECORDED,
@@ -561,7 +562,7 @@ export async function loadWeekly(scope: Scope): Promise<WeeklyData | null> {
   // not applied `loadWindowReading` answers `denominators: null` by its own
   // `isMissingMonthlyReading` guard, the sum is null, and `ForSalesData`
   // carries that as a stated absence — which is what the degraded arm is for.
-  const [incoming, sales] = await Promise.all([
+  const [incoming, sales, arrivals] = await Promise.all([
     loadIncoming(supabase, clientId, run, overview, window),
     Promise.all([
       loadSubjects(supabase, clientId),
@@ -579,6 +580,12 @@ export async function loadWeekly(scope: Scope): Promise<WeeklyData | null> {
         subjects,
       }),
     ),
+    // WR2's ARRIVALS PER SUBJECT (market-first WP2.7, C7): what this update's
+    // days put into each subject in the month, on the market, the same read
+    // This week prints as "+N with this update". Read only where a row can
+    // print it; a tenant with no subject row (Össur) reads nothing and keeps
+    // "not recorded", so its artefact is unchanged byte for byte.
+    subjectArrivals(scope, overview.subjects, window, month),
   ])
 
   // ── section 5 ───────────────────────────────────────────────────────────
@@ -602,12 +609,14 @@ export async function loadWeekly(scope: Scope): Promise<WeeklyData | null> {
     method: overview.method,
     section1,
     subjects: weeklySubjects(overview.subjects),
-    // THE CONTRIBUTION PER SUBJECT NEEDS M4's WINDOW FUNCTION, which is not
-    // applied. Saying "+0 videos since the last update" for every subject would
-    // be a claim about the conversation; saying it is not recorded is a claim
-    // about our own bookkeeping, and only the second one is true.
-    contributions: null,
-    contributionsNote: CONTRIBUTIONS_NOT_RECORDED,
+    // THE CONTRIBUTION PER SUBJECT (market-first WP2.7): `window_subject_
+    // readings` over this update's days in the month, pooled over the market.
+    // Where it cannot be read, saying "+0 videos since the last update" for
+    // every subject would be a claim about the conversation; saying it is not
+    // recorded is a claim about our own bookkeeping, and only the second one
+    // is true.
+    contributions: arrivals,
+    contributionsNote: arrivals ? null : CONTRIBUTIONS_NOT_RECORDED,
     incoming,
     sales,
     content,
@@ -772,6 +781,37 @@ async function baselineMonths(
     if (!isMissingMonthlyReading(error)) {
       console.error(`[pages] weekly.baseline: ${(error as { message?: string })?.message ?? String(error)}`)
     }
+    return null
+  }
+}
+
+/**
+ * WR2's "+N videos since the last update", by subject id (market-first WP2.7):
+ * the market's videos this update's days put into each subject in the month
+ * (`marketSubjectArrivals`, the read This week's subjects print).
+ *
+ * ONLY FOR A ROW THAT PRINTS IT. A subject being re-described, or one the
+ * month was not read for, prints its name and words alone, so its count is not
+ * held either: the data holds nothing the row withholds. Null (and the note
+ * "not recorded") where no row can print one, where the update covered no
+ * window, or where the read cannot answer.
+ */
+async function subjectArrivals(
+  scope: Scope,
+  subjects: SubjectsBlock,
+  window: { from: string; to: string } | null,
+  month: string,
+): Promise<Record<string, number> | null> {
+  const rowsOut = subjects.rows.filter((r) => r.calibration !== 'failed' && !r.unread)
+  if (rowsOut.length === 0 || !window) return null
+  try {
+    const rivals = await loadMarketRivalAudiences(scope.supabase as SupabaseClient, scope.clientId)
+    if (!rivals) return null
+    const pooled = await marketSubjectArrivals(scope.reading, scope.clientId, window, month, rivals)
+    if (!pooled) return null
+    return Object.fromEntries(rowsOut.map((r) => [r.id, pooled.get(r.id) ?? 0]))
+  } catch (error) {
+    console.error(`[pages] weekly.subjectArrivals: ${(error as { message?: string })?.message ?? String(error)}`)
     return null
   }
 }

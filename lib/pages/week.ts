@@ -1072,6 +1072,58 @@ export function typicalContribution(input: {
  * it into "of 6" would count a silence as a comparison that came back "not
  * above".
  */
+/**
+ * Subject videos summed over the market's audiences (the category and the
+ * tracked brands; decision E), by subject id: the client's own posts and any
+ * audience not tracked are left out, and an audience named twice for one
+ * subject is counted once. Audiences are disjoint, so their counts add.
+ */
+export function pooledSubjectCounts(
+  rows: readonly { audience: string; subject_id: string; videos: number }[],
+  rivalAudiences: readonly string[],
+): Map<string, number> {
+  const audiences = new Set(marketAudiences(rivalAudiences))
+  const seen = new Set<string>()
+  const out = new Map<string, number>()
+  for (const r of rows) {
+    const key = `${r.subject_id}\u0000${r.audience}`
+    if (!audiences.has(r.audience) || seen.has(key)) continue
+    seen.add(key)
+    out.set(r.subject_id, (out.get(r.subject_id) ?? 0) + (Number.isFinite(r.videos) && r.videos > 0 ? r.videos : 0))
+  }
+  return out
+}
+
+/**
+ * What an update's own days put into each subject in the month, on the market
+ * (market-first WP2.7, C7): `window_subject_readings` over the window clipped
+ * to the month, pooled (`pooledSubjectCounts`). The weekly's WR2 prints it as
+ * "+N videos since the last update"; This week's rows read the same days
+ * (`clipToMonth`) and pool the same way (`pooledSubjectCounts`). Null where the windowed read cannot answer (M4 not
+ * applied, or no window), never zeros.
+ */
+export async function marketSubjectArrivals(
+  reading: ReadingHandle,
+  clientId: string,
+  window: { from: string; to: string } | null,
+  month: string,
+  rivalAudiences: readonly string[],
+): Promise<Map<string, number> | null> {
+  if (!window) return null
+  const days = clipToMonth(window, month)
+  if (!days) return new Map()
+  const rowsIn = await readSubjectWindow(reading, clientId, days)
+  return rowsIn ? pooledSubjectCounts(rowsIn, rivalAudiences) : null
+}
+
+/** An update's days inside a month, or null when none fall there: the window
+ *  from the month's first day, so a count read over it adds to that month. */
+export function clipToMonth(window: { from: string; to: string }, month: string): { from: string; to: string } | null {
+  const m = monthStartOf(month)
+  if (window.to <= m) return null
+  return { from: window.from < m ? m : window.from, to: window.to }
+}
+
 /** What `marketSubjectsOf` takes: the month's stored subject rows and this
  *  update's windowed rows (every audience; it pools), the market's
  *  denominators, and the loader's answers about each subject. */
@@ -1115,7 +1167,7 @@ export interface MarketSubjectsInput {
  */
 export function marketSubjectsOf(input: MarketSubjectsInput): Pick<WeekSubjectsBlock, 'rows' | 'withheld' | 'market'> {
   const month = monthStartOf(input.month)
-  const audiences = new Set(marketAudiences(input.rivalAudiences))
+  const added = input.added ? pooledSubjectCounts(input.added, input.rivalAudiences) : null
   const stored = input.stored.map((r) => ({ month, audience: r.audience, subject_id: r.subject_id, videos: r.videos }))
   const active = input.subjects.filter((s) => s.status === 'active')
   const withheldOf = (id: string): boolean => input.calibrationOf.get(id) === 'failed' || input.unread.has(id)
@@ -1125,13 +1177,7 @@ export function marketSubjectsOf(input: MarketSubjectsInput): Pick<WeekSubjectsB
       // READ, SO ABSENCE IS ZERO: the loader's read-in test has already put
       // every subject the month was not read for among the withheld.
       const side = marketSubjectSide(stored, input.counts, s.id, month, input.rivalAudiences, { read: true })
-      const seen = new Set<string>()
-      let thisUpdate: number | null = input.added ? 0 : null
-      for (const r of input.added ?? []) {
-        if (r.subject_id !== s.id || !audiences.has(r.audience) || seen.has(r.audience)) continue
-        seen.add(r.audience)
-        thisUpdate = (thisUpdate ?? 0) + (Number.isFinite(r.videos) ? r.videos : 0)
-      }
+      const thisUpdate = added ? added.get(s.id) ?? 0 : null
       const calibration: SubjectCalibration = input.calibrationOf.get(s.id) === 'ready' ? 'ready' : 'provisional'
       return {
         id: s.id,
@@ -1857,7 +1903,7 @@ async function buildSubjects(input: {
   // month, so "+j with this update" is a count that adds to the month the row
   // is of, the same clip the contribution line uses. A window wholly before
   // the month (none today) contributes nothing to it.
-  const clipped = window && window.to > month ? { from: window.from < month ? month : window.from, to: window.to } : null
+  const clipped = window ? clipToMonth(window, month) : null
   const added = clipped ? await readSubjectWindow(reading, clientId, clipped) : window ? [] : null
   // WAS THE SUBJECT READ IN THE MONTH AT ALL? (WP1.1 review, finding 1, on
   // This week: default M-a.) One named after the month's last update has no
