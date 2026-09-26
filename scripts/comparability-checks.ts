@@ -4,7 +4,7 @@ import { dirname } from 'node:path'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { SEALAND_CLIENT_ID } from '../lib/config'
-import { assertProject, modeLine, parseScriptArgs } from '../lib/ops/market-first-args'
+import { assertProject, modeLine, parseScriptArgs, projectRefOf, type ScriptArgs } from '../lib/ops/market-first-args'
 import {
   evidenceMap, isMissingObject, readExportFile, readKeywordRows, readMonthVideos, readProvenanceTable, readRuns,
   readVerdicts, readVideos, snapshotOf, type Pages,
@@ -56,6 +56,15 @@ import { createAdminClient, selectAll } from '../lib/supabase-admin'
 //                        "<population>|<month>" (population 'all' for the whole
 //                        market); without it the dry run measures the
 //                        populations and stops.
+//   --rehearsal-allow-unread-month   STAGING REHEARSAL ONLY, with --apply: lets
+//                        the apply write a pair whose later month has not been
+//                        read past its end, read through its latest update.
+//                        Staging runs no pipeline (its newest update is 20 Sep),
+//                        so without it the first write and the second apply's
+//                        skip cannot be rehearsed before production. REFUSED
+//                        OUTRIGHT, before any read, unless --project and the
+//                        Supabase URL are both staging's; announced on every
+//                        run that takes it.
 //
 // THE READS (production, Sealand, about 36): the probe (1); videos, gate
 // verdicts, keyword rows, runs and provenance (about 22 pages, the same reads
@@ -72,6 +81,35 @@ const NAME = 'comparability-checks'
 const PRODUCTION = 'mkwjlckescdveosvrvaq'
 const STAGING = 'zfmxrrugaihxpubunleu'
 const PROBE_MAX_MS = 3000
+/** The staging-only waiver of WP2.3's read-past-its-end guard. */
+export const REHEARSAL_FLAG = 'rehearsal-allow-unread-month'
+
+/** The flags this script takes (parseScriptArgs). */
+export const ARGS_SPEC = {
+  name: NAME,
+  values: ['pair', 'plan-out', 'max-reads', 'prod-snapshot', 'staging-export', 'lens-file', 'at'],
+  flags: ['confirm', 'check', REHEARSAL_FLAG],
+  defaultClient: SEALAND_CLIENT_ID,
+} as const
+
+/**
+ * Whether this run may write a pair whose later month has not been read past
+ * its end (a staging rehearsal of the first write and the second apply's
+ * skip). False without the flag. With it, REFUSED before any read unless
+ * --project is staging's ref AND the Supabase URL's host is staging's ref (so
+ * neither a production --project nor a production env file gets through,
+ * whatever the other says), and unless the run is an --apply (the guard it
+ * waives is the apply's).
+ */
+export function rehearsalAllowsUnreadMonth(args: Pick<ScriptArgs, 'project' | 'apply' | 'flags'>, supabaseUrl: string | undefined): boolean {
+  if (!args.flags.has(REHEARSAL_FLAG)) return false
+  const host = projectRefOf(supabaseUrl)
+  if (args.project === PRODUCTION || host === PRODUCTION || args.project !== STAGING || host !== STAGING) {
+    throw new Error(`${NAME}: REFUSED: --${REHEARSAL_FLAG} is a staging rehearsal flag and is never taken on production (--project ${args.project}, Supabase URL host ${host ?? 'none'}). Nothing read.`)
+  }
+  if (!args.apply) throw new Error(`${NAME}: --${REHEARSAL_FLAG} goes with --apply (it waives the apply's read-past-its-end guard). Nothing read.`)
+  return true
+}
 const SEGMENT_CHUNK = 500
 const CANDIDATE_KINDS = ['feature_request', 'purchase_intent'] as const
 
@@ -117,13 +155,9 @@ async function lensOf(admin: SupabaseClient, clientId: string, month: string, ru
 }
 
 async function main() {
-  const args = parseScriptArgs(process.argv.slice(2), {
-    name: NAME,
-    values: ['pair', 'plan-out', 'max-reads', 'prod-snapshot', 'staging-export', 'lens-file', 'at'],
-    flags: ['confirm', 'check'],
-    defaultClient: SEALAND_CLIENT_ID,
-  })
+  const args = parseScriptArgs(process.argv.slice(2), ARGS_SPEC)
   assertProject(args, process.env.NEXT_PUBLIC_SUPABASE_URL, NAME)
+  const rehearsal = rehearsalAllowsUnreadMonth(args, process.env.NEXT_PUBLIC_SUPABASE_URL)
   const check = args.flags.has('check')
   if (check && !args.apply) throw new Error(`${NAME}: --check goes with --apply (it runs the apply's guards and writes nothing)`)
   if (args.values['lens-file'] && (args.project !== STAGING || args.apply)) throw new Error(`${NAME}: --lens-file is a staging dry run only (no --apply, --project ${STAGING})`)
@@ -138,6 +172,7 @@ async function main() {
   const ration = new Ration(Number(args.values['max-reads'] ?? 45))
   const now = args.values.at ? new Date(args.values.at).toISOString() : new Date().toISOString()
   console.log(modeLine(args, NAME) + (check ? ' (--check: nothing is written)' : ''))
+  if (rehearsal) console.log(`  REHEARSAL (staging only): --${REHEARSAL_FLAG} waives the read-past-its-end guard; a month still filling is written as read through its latest update`)
   console.log(`  pair (${prevMonth.slice(0, 7)}, ${month.slice(0, 7)}), method ${RECHECK_METHOD_VERSION}, clock ${now}`)
   const admin = createAdminClient()
 
@@ -173,7 +208,8 @@ async function main() {
   const lastGather = update ? gathers.filter((g) => g.at <= update.finishedAt).at(-1) ?? null : null
   console.log(`  ${month.slice(0, 7)}: ${later.state}, ${later.readToEnd ? 'read past its end' : 'NOT read past its end'}, latest update ${update?.id ?? '(none)'}${update ? ` of ${update.finishedAt}` : ''}`)
   if (!later.readToEnd && args.apply && !check) {
-    throw new Error(`${NAME}: ${month.slice(0, 7)} has not been read past its end: no re-check is written for a month still filling at its end (plan WP2.3). Nothing written.`)
+    if (!rehearsal) throw new Error(`${NAME}: ${month.slice(0, 7)} has not been read past its end: no re-check is written for a month still filling at its end (plan WP2.3). Nothing written.`)
+    console.log(`  REHEARSAL (staging only): ${month.slice(0, 7)} has not been read past its end; writing it as read through ${update?.id ?? '(no update)'} (the guard waived by --${REHEARSAL_FLAG})`)
   }
   if (!update || !lastGather) throw new Error(`${NAME}: no update has read ${month.slice(0, 7)} yet. Nothing to check.`)
   const unchanged = unchangedSearches(gathers, iso(prevMonth), lastGather.runId)
