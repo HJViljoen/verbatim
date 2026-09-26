@@ -494,7 +494,9 @@ export function placeTicks(ticks: readonly { x: number; label: string }[], plotP
     for (let row = 0; row < 6; row++) {
       const crowdedRight = px.some((o, j) => j > i && o > x && o - x < widths[i] + TICK_PAD + 6)
       const pastEdge = x + widths[i] + TICK_PAD > plotPx
-      const sides: ('start' | 'end')[] = crowdedRight || pastEdge ? ['end', 'start'] : ['start', 'end']
+      // Past the edge the right side is never taken: a lower row on the left
+      // before a clipped label on the right.
+      const sides: ('start' | 'end')[] = pastEdge ? ['end'] : crowdedRight ? ['end', 'start'] : ['start', 'end']
       for (const side of sides) {
         const from = side === 'start' ? x - 6 : x - widths[i] - TICK_PAD + 4
         const to = side === 'start' ? x + widths[i] + TICK_PAD - 4 : x + 6
@@ -512,7 +514,7 @@ export function placeTicks(ticks: readonly { x: number; label: string }[], plotP
       }
     }
     placed.push({ x, row: 6, from: x - 6, to: x + 6 })
-    return { row: 6, side: 'start' as const }
+    return { row: 6, side: x + widths[i] + TICK_PAD > plotPx ? 'end' as const : 'start' as const }
   })
 }
 

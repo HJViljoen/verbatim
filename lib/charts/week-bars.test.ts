@@ -223,6 +223,14 @@ describe('weekBarsLayout', () => {
     // At the plot's wide end the same label still fits on the right of an
     // earlier mark.
     expect(placeTicks([{ x: 0.5, label: '26 Sep' }], weekPlotMin(9))).toEqual([{ row: 0, side: 'start' }])
+    // Beside the fixture's other marks (9, 13 and 17 Sep; the axis 27 Jul to
+    // 21 Sep): its left clashes on the first rows, so it drops a row rather
+    // than taking the right, where it would be cut off (the review's "△ 2").
+    const at = (week: number, day: number) => (week + (day + 0.5) / 7) / 9
+    const four = placeTicks([
+      { x: at(6, 2), label: '9 Sep' }, { x: at(6, 6), label: '13 Sep' }, { x: at(7, 3), label: '17 Sep' }, { x: at(8, 5), label: '26 Sep' },
+    ], weekPlotMin(9))
+    expect(four[3].side).toBe('end')
   })
 })
 
