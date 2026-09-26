@@ -9,6 +9,7 @@ import {
   firstSearched, gatherHealth, gathersOf, isOutside, median, populations, unchangedSearches, type MonthVideo,
 } from '../lib/provenance/searches'
 import { changeInSpan, changesFromLog, isSearchSurface, type OurChange } from '../lib/reading/comparability'
+import { laterMonthOf } from '../lib/reading/pairs'
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
 
 // Were two months read the same way? The measured inputs of the month-pair
@@ -39,11 +40,16 @@ import { createAdminClient, selectAll } from '../lib/supabase-admin'
 // and one `config_change_reach` row per measured change, month and population.
 // A row identical to the newest one held is not written again.
 //
+// READ THROUGH the later month's latest update, found exactly as the judge
+// finds it (lib/reading/pairs.ts laterMonthOf: completed or partial runs by
+// completed_at), so the row is read while that is still the latest update and
+// reads as unmeasured after the next one. The searches are those of every
+// gather up to that update.
+//
 // A PAIR IS REFUSED when no update has read its later month yet (no gather on
 // or after its first day): so no (Sep, Oct) row can be written on 30 Sep. A
-// later month still in progress IS measured, as read through the latest gather:
-// the judge refuses a so-far month by itself (rule 1), and reads a row only
-// while its read_through_run is the later month's latest update.
+// later month still in progress IS measured: the judge refuses a so-far month
+// by itself (rule 1).
 //
 // READ-ONLY BY DEFAULT and never prompts. A staging dry run takes --export and
 // --provenance where MF1 is not applied, and --gate-fix-at / --attribution-at
@@ -96,8 +102,12 @@ async function main() {
     readRuns(admin, args.clientId, pages),
   ])
   const gathers = gathersOf(kp, runs)
-  const readThrough = gathers.at(-1) ?? null
-  if (!readThrough) throw new Error(`${NAME}: this client has no gather at all. Nothing to measure.`)
+  if (gathers.length === 0) throw new Error(`${NAME}: this client has no gather at all. Nothing to measure.`)
+  // The updates, as the judge reads them (lib/reading/read.ts loadUpdateRuns):
+  // completed or partial runs, by completed_at.
+  const updates = runs
+    .filter((r) => (r.status === 'completed' || r.status === 'partial') && r.completed_at)
+    .map((r) => ({ id: r.id, finishedAt: r.completed_at as string }))
   const provenance = args.values.provenance
     ? readProvenanceFile(args.values.provenance)
     : await readProvenanceTable(admin, args.clientId, pages)
@@ -130,15 +140,21 @@ async function main() {
 
   const now = new Date().toISOString()
   const pairRows: Record<string, unknown>[] = []
-  const reachRows: { change_id: string; month: string; population: Population; videos_touched: number; videos_in_month: number }[] = []
+  const reachRows: { change_id: string; month: string; population: Population; videos_touched: number; videos_in_month: number; read_through_run: string }[] = []
   for (const [prev, month] of pairs) {
-    console.log(`\n(${prev.slice(0, 7)}, ${month.slice(0, 7)}), read through the gather ${readThrough.runId} of ${readThrough.at}`)
-    if (!gathers.some((g) => g.at >= iso(month))) {
+    // The later month's latest update, exactly as the judge finds it
+    // (laterMonthOf): the row is read only while this is still that update.
+    const later = laterMonthOf(month, now, updates)
+    const update = later.latestUpdateRunId ? updates.find((u) => u.id === later.latestUpdateRunId)! : null
+    // The searches that update read: every gather up to its finish.
+    const lastGather = update ? gathers.filter((g) => g.at <= update.finishedAt).at(-1) ?? null : null
+    console.log(`\n(${prev.slice(0, 7)}, ${month.slice(0, 7)}), read through the update ${update?.id ?? '(none)'}${update ? ` of ${update.finishedAt}` : ''}; last gather ${lastGather?.runId ?? '(none)'}`)
+    if (!update || !lastGather || !gathers.some((g) => g.at >= iso(month) && g.at <= update.finishedAt)) {
       console.log(`  REFUSED: no update has read ${month.slice(0, 7)} yet (no gather on or after its first day); no row`)
       continue
     }
     const sets = { prev: populations(await monthSet(prev)), curr: populations(await monthSet(month)) }
-    const unchanged = unchangedSearches(gathers, iso(prev), readThrough.runId)
+    const unchanged = unchangedSearches(gathers, iso(prev), lastGather.runId)
     const outside = (vs: readonly MonthVideo[]) => vs.filter((v) => isOutside(v, evidence.get(v.id), unchanged))
     const side = (which: 'prev' | 'curr', pop: Population) => {
       const vs = sets[which][pop]
@@ -185,8 +201,8 @@ async function main() {
           curr: { k: sets.curr[pop].filter(touchedBy).length, n: sets.curr[pop].length },
         }
         codeChanges.push(e)
-        reachRows.push({ change_id: c.id, month: prev, population: pop, videos_touched: e.prev.k, videos_in_month: e.prev.n })
-        reachRows.push({ change_id: c.id, month, population: pop, videos_touched: e.curr.k, videos_in_month: e.curr.n })
+        reachRows.push({ change_id: c.id, month: prev, population: pop, videos_touched: e.prev.k, videos_in_month: e.prev.n, read_through_run: update.id })
+        reachRows.push({ change_id: c.id, month, population: pop, videos_touched: e.curr.k, videos_in_month: e.curr.n, read_through_run: update.id })
       }
       const [mk, cat] = codeChanges.slice(-2)
       console.log(`  change ${c.id} · ${c.changedAt.slice(0, 16)} · ${c.surface}: ${month.slice(0, 7)} ${mk.curr.k} of ${mk.curr.n} market, ${cat.curr.k} of ${cat.curr.n} category · ${prev.slice(0, 7)} ${mk.prev.k} of ${mk.prev.n} market, ${cat.prev.k} of ${cat.prev.n} category`)
@@ -214,7 +230,7 @@ async function main() {
       depth_prev_median: depth.prev, depth_curr_median: depth.curr,
       gather: health.map(({ month: m, runs: r, partial, searches_short }) => ({ month: m, runs: r, partial, searches_short })),
       late_capture: late,
-      read_through_run: readThrough.runId, method_version: METHOD_VERSION,
+      read_through_run: update.id, method_version: METHOD_VERSION,
     })
   }
 
@@ -252,7 +268,7 @@ async function main() {
   for (const h of heldReach) newestReach.set(`${h.change_id}|${h.month.slice(0, 10)}|${h.population}`, h)
   const freshReach = reachRows.filter((r) => {
     const h = newestReach.get(`${r.change_id}|${r.month}|${r.population}`)
-    return !(h && h.videos_touched === r.videos_touched && h.videos_in_month === r.videos_in_month && h.read_through_run === readThrough.runId)
+    return !(h && h.videos_touched === r.videos_touched && h.videos_in_month === r.videos_in_month && h.read_through_run === r.read_through_run)
   })
   if (freshPairs.length > 0) {
     const { error } = await admin.from('month_pair_comparability').insert(freshPairs)
@@ -260,7 +276,7 @@ async function main() {
   }
   if (freshReach.length > 0) {
     const { error } = await admin.from('config_change_reach').insert(freshReach.map((r) => ({
-      client_id: args.clientId, ...r, method: CODE_REACH_METHOD, read_through_run: readThrough.runId,
+      client_id: args.clientId, ...r, method: CODE_REACH_METHOD,
     })))
     if (error) throw new Error(`${NAME}: reach rows not written (the pair rows were): ${error.message}`)
   }

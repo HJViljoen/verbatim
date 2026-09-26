@@ -93,7 +93,12 @@ async function main() {
     readRuns(admin, args.clientId, pages),
   ])
   const gathers = gathersOf(kp, runs)
-  const readThrough = gathers.at(-1)?.runId ?? null
+  // Read with the latest update (a completed or partial run, by completed_at),
+  // the update the change list names ("read with the {date} update").
+  const readThrough = runs
+    .filter((r) => (r.status === 'completed' || r.status === 'partial') && r.completed_at)
+    .sort((a, b) => (a.completed_at! < b.completed_at! ? -1 : a.completed_at! > b.completed_at! ? 1 : 0))
+    .at(-1)?.id ?? null
   const provenance = args.values.provenance
     ? readProvenanceFile(args.values.provenance)
     : await readProvenanceTable(admin, args.clientId, pages)
@@ -107,7 +112,7 @@ async function main() {
     if (set == null) throw new Error(`${NAME}: market_month_videos is not there (MF1 not applied) and no --export was given. Nothing read further.`)
     monthSets.set(m, set)
   }
-  console.log(`  read through the gather ${readThrough ?? '(none)'} · months ${months.map((m) => `${m.slice(0, 7)} (${monthSets.get(m)!.length} market, ${populations(monthSets.get(m)!).category.length} category)`).join(', ')}`)
+  console.log(`  read with the update ${readThrough ?? '(none)'} · months ${months.map((m) => `${m.slice(0, 7)} (${monthSets.get(m)!.length} market, ${populations(monthSets.get(m)!).category.length} category)`).join(', ')}`)
 
   // 1. The search changes of ours, and their reach.
   const byId = new Map(changes.map((c) => [c.id, c]))
