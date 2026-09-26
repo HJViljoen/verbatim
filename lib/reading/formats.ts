@@ -29,7 +29,7 @@ import type { Counted } from './verdicts'
 // the corpus. A share of a population the measurement never reached is not a
 // share of what it says it is, so every row's `value.n` is the videos that
 // carry a value for THIS key, `of` is that same number, and `published` is
-// kept beside it so the basis line can say both ("read from 569 of 1,388
+// kept beside it so the basis line can say both ("read from {k} of {n}
 // videos published in September").
 //
 // NOTHING SUMS. One video carries a format AND a hook, and the three columns of
