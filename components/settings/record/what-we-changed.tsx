@@ -232,10 +232,10 @@ function Stops({ stops, noneNote, note = null }: { stops: readonly string[]; non
   )
 }
 
-/** One month's cell: the reach with its base, "none" for a measured zero,
- *  "not measured yet" in the month the change was made, a quiet dot under
- *  the head in a month it did not touch (nothing on a phone). */
-function MonthCell({ cell, readWith }: { cell: RecordCell; readWith: string | null }) {
+/** One month's cell: the reach with its base and what it counts, "none" for
+ *  a measured zero, "not measured yet" in the month the change was made, a
+ *  quiet dot under the head in a month it did not touch (nothing on a phone). */
+function MonthCell({ cell, readWith, caption = null }: { cell: RecordCell; readWith: string | null; caption?: string | null }) {
   if (cell.state === 'untouched' || cell.state === 'blank') {
     return <span role="cell" className="hidden text-right text-[13px] leading-[22px] text-muted-foreground @min-[560px]/rec:block">·</span>
   }
@@ -243,6 +243,8 @@ function MonthCell({ cell, readWith }: { cell: RecordCell; readWith: string | nu
     <span role="cell" className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 @min-[560px]/rec:flex-col @min-[560px]/rec:items-end @min-[560px]/rec:text-right">
       <span className="text-[13px] text-muted-foreground @min-[560px]/rec:hidden">{monthHead(cell.month)}</span>
       {cell.state === 'measured' ? <Counted figure={cell.touched} word="of" base={cell.of} size="row" /> : null}
+      {/* WHAT THE COUNT COUNTS, under it (the artboard's per-cell caption). */}
+      {cell.state === 'measured' && caption ? <span className="text-[13px] leading-[1.45] text-muted-foreground [text-wrap:pretty]">{caption}</span> : null}
       {cell.state === 'none' ? <span className="text-[13px] leading-[22px] text-muted-foreground">none</span> : null}
       {cell.state === 'unmeasured' ? <span className="text-[13px] leading-[22px] text-muted-foreground">not measured yet</span> : null}
       {readWith ? <span className="text-[13px] leading-[1.45] text-muted-foreground">read with the {shortDate(readWith)} update</span> : null}
@@ -337,7 +339,7 @@ export function TheRecord({ view }: { view: RecordView }) {
                   {group.lines.map((r) => (
                     <div key={r.line.changeId} role="row" className={cn(row, 'last:border-b-0', LEFT[n])}>
                       <LineHead line={r.line} />
-                      {r.cells.map((c) => <MonthCell key={c.month} cell={c} readWith={cellReadWith(c, group)} />)}
+                      {r.cells.map((c) => <MonthCell key={c.month} cell={c} readWith={cellReadWith(c, group)} caption={r.caption ?? null} />)}
                     </div>
                   ))}
                 </div>
@@ -351,7 +353,7 @@ export function TheRecord({ view }: { view: RecordView }) {
               group.lines.map((r) => (
                 <div key={r.line.changeId} role="row" className={cn(row, 'last:border-b-0', LEFT[n], WIDE[n])}>
                   <LineHead line={r.line} />
-                  {r.cells.map((c) => <MonthCell key={c.month} cell={c} readWith={cellReadWith(c, group)} />)}
+                  {r.cells.map((c) => <MonthCell key={c.month} cell={c} readWith={cellReadWith(c, group)} caption={r.caption ?? null} />)}
                   {r.stops ? (
                     <span role="cell" className="flex flex-col gap-1 @min-[560px]/rec:col-span-full @min-[560px]/rec:col-start-2 @min-[760px]/rec:col-span-1 @min-[760px]/rec:col-start-auto @min-[760px]/rec:pl-4">
                       <span className="text-[13px] text-muted-foreground @min-[760px]/rec:hidden">Comparisons it stops</span>

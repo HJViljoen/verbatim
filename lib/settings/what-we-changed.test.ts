@@ -4,7 +4,7 @@ import type { ConfigChange } from '../config-log'
 import { changesFromLog } from '../reading/comparability'
 import { SURFACE_WORDS } from './change-log'
 import { changeDetail, changeWords, handlesWords, ledgerLines, ledgerMonths, otherRows, reachCell, rivalsMoved, termsMoved, type ReachRow } from './what-we-changed'
-import { cellReadWith, mergeStops, recordGroupOf, recordPairs, recordView, stopLines, stopsOf, type StopEntry } from './what-we-changed'
+import { cellReadWith, mergeStops, reachCaption, recordGroupOf, recordPairs, recordView, stopLines, stopsOf, type StopEntry } from './what-we-changed'
 import { pairOn, type PairOn } from '../reading/pairs'
 import { CHANGES, SEALAND_LOG, sealandJudge } from '../test/sealand-pairs'
 import type { PairRow } from '../reading/comparability'
@@ -176,6 +176,20 @@ describe('the dated list of our changes (Settings › What we changed)', () => {
 
 
 // ---- The record, grouped (R-a) ---------------------------------------------------------
+
+describe('what a record cell counts (reachCaption)', () => {
+  it('names the searches a change moved, the way its reach counts them', () => {
+    expect(reachCaption({ surface: 'terms', items: { added: ['handmade bag'], removed: [] } })).toBe('found only by the searches it added')
+    expect(reachCaption({ surface: 'terms', items: { added: ['sailcloth bag'], removed: ['freitag'] } })).toBe('found only by the searches it added or took out')
+    expect(reachCaption({ surface: 'terms', items: { added: [], removed: ['freitag'] } })).toBe('found only by the searches it took out')
+    expect(reachCaption({ surface: 'subreddits', items: { added: ['r/travelgear'], removed: [] } })).toBe('found only by the communities it added')
+    expect(reachCaption({ surface: 'gate_rule', items: null })).toBe('had been let in unchecked')
+    expect(reachCaption({ surface: 'attribution', items: null })).toBe('filed by the new check')
+    // Nothing measures a rival's or an account's reach here.
+    expect(reachCaption({ surface: 'rivals', items: { added: ['Rareform'], removed: [] } })).toBeNull()
+    expect(reachCaption({ surface: 'handles', items: null })).toBeNull()
+  })
+})
 
 describe('the record, grouped as the preview groups it', () => {
   it('files the searches, communities, rivals and accounts under "What we search", the rest under "How we check, mark and file videos"', () => {

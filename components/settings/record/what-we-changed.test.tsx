@@ -103,6 +103,18 @@ describe('The record: the dated list, grouped as the preview groups it (R-a)', (
     expect(t).not.toContain('September videos came from searches we added in September, read with')
   })
 
+  it('says under each measured count what it counts (the artboard’s per-cell captions)', () => {
+    const t = read(list)
+    expect(t).toContain('182 of 654 found only by the searches it added')
+    expect(t).toContain('65 of 654 had been let in unchecked')
+    const gate = f.view.groups[1].lines.find((l) => l.line.surface === 'gate_rule')!
+    expect(gate.caption).toBe('had been let in unchecked')
+    // "none" and "not measured yet" carry no caption.
+    const attribution = f.view.groups[1].lines.find((l) => l.line.surface === 'attribution')!
+    expect(attribution.caption).toBeNull()
+    assertCopyContract(render(list))
+  })
+
   it('prints a measured zero as "none", an unmeasured month as "not measured yet", and nothing for the capped update, which moves no video', () => {
     const gate = f.view.groups[1].lines.find((l) => l.line.surface === 'gate_rule')!
     expect(gate.cells.map((c) => c.state)).toEqual(['none', 'measured'])

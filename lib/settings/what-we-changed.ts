@@ -517,6 +517,11 @@ export type RecordCell =
 export interface RecordLine {
   line: Line
   cells: RecordCell[]
+  /** What a measured cell counts, under its figure (the `SettingsRecord`
+   *  artboard captions every cell: "had been let in unchecked", "of
+   *  September's videos"; deploy 2 review, which found bare "159 of 654"s).
+   *  Null where the line's measure has no words here. Additive. */
+  caption?: string | null
   /** What it stops, in words (the narrow column's compressed form); null
    *  where no judge was handed in (a stored or fixture render). */
   stops: string[] | null
@@ -573,6 +578,37 @@ const isGatherEvent = (change: OurChange | undefined, rows: readonly ConfigChang
   const ids = new Set(change.rowIds ?? [change.id])
   const mine = rows.filter((r) => ids.has(r.id))
   return mine.length > 0 && mine.every((r) => CLIENT_NOTE_OTHER_FIELDS.has(r.field ?? ''))
+}
+
+/** What a code change's reach counts, per surface, in the words its cell
+ *  prints under the figure. Each is what measure-comparability counts for that
+ *  surface: the relevance fix, the month's videos a gate verdict let in
+ *  unjudged (the artboard's "had been let in unchecked"); attribution v3, the
+ *  month's videos first stored after it, whose filing it decided. A surface
+ *  nothing measures has no caption. */
+const REACH_CAPTION: Partial<Record<string, string>> = {
+  gate_rule: 'had been let in unchecked',
+  attribution: 'filed by the new check',
+}
+
+/**
+ * What one line's measured cells count. A search change's reach is the
+ * month's videos found only by the searches it added or took out and by no
+ * other search (log-tracking-eras, lib/provenance/searches.ts `reachOf`), so
+ * its caption names which: "found only by the searches it added", "… it took
+ * out", "… it added or took out"; communities the same way.
+ */
+export function reachCaption(line: Pick<Line, 'surface' | 'items'>): string | null {
+  if (line.surface === 'terms' || line.surface === 'subreddits') {
+    const noun = line.surface === 'terms' ? 'searches' : 'communities'
+    const added = line.items?.added.length ?? 0
+    const removed = line.items?.removed.length ?? 0
+    if (added > 0 && removed > 0) return `found only by the ${noun} it added or took out`
+    if (added > 0) return `found only by the ${noun} it added`
+    if (removed > 0) return `found only by the ${noun} it took out`
+    return null
+  }
+  return REACH_CAPTION[line.surface] ?? null
 }
 
 /** The category count behind the first measured stop that holds for themes
@@ -637,6 +673,7 @@ export function recordView(input: {
     return {
       line: l,
       cells,
+      caption: cells.some((c) => c.state === 'measured') ? reachCaption(l) : null,
       stops: stops ? stopLines(stops, true) : null,
       noneNote: stops && stops.length === 0 ? (gather ? GATHER_NONE_NOTE : NONE_NOTE[l.surface] ?? null) : null,
       stopNote: stops ? themesStopNote(stops, l.categoryMonths) : null,
