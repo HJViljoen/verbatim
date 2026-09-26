@@ -275,8 +275,6 @@ export function buildStandings(input: StandingsInput): StandingRow[] {
       }
       if (panelRefused) {
         attentionVerdict = { ...base, state: 'refused', refusedReason: 'tracking_change' }
-      } else if (pair.refused) {
-        attentionVerdict = { ...base, state: 'refused', refusedReason: pair.refused }
       } else {
         const delta = proportionDelta(
           {
@@ -289,7 +287,17 @@ export function buildStandings(input: StandingsInput): StandingRow[] {
           },
           floor,
         )
-        attentionVerdict = { ...base, changePts: delta.change, bandPts: delta.band, state: delta.state }
+        // THE FLOOR FIRST (deploy 1 review, the lead's R5): a side under the
+        // band's floors is "too few to compare", as `pairedVerdict` answers;
+        // the pair's refusal applies only where both sides clear it.
+        if (pair.refused && delta.state !== 'too_little_data') {
+          attentionVerdict = { ...base, state: 'refused', refusedReason: pair.refused }
+        } else {
+          const { pair: _pair, ...unpaired } = base
+          attentionVerdict = delta.state === 'too_little_data'
+            ? { ...unpaired, changePts: delta.change, bandPts: delta.band, state: delta.state }
+            : { ...base, changePts: delta.change, bandPts: delta.band, state: delta.state }
+        }
       }
     }
 
