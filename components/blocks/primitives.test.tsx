@@ -4,6 +4,7 @@ import { BlockStat } from './stat'
 import { BlockCount, BlockMovement } from './movement'
 import { BlockProportion, BlockRanked } from './bars'
 import { BlockQuote, BlockQuotes } from './quote'
+import { TokenProse } from './prose'
 import { BlockCalendar } from './calendar'
 import { render, renderText, markupText } from '@/lib/test/render'
 import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
@@ -570,4 +571,51 @@ describe('BlockCalendar', () => {
     expect(BlockCalendar({ blockKey: 'k', axis, series: [] })).toBeNull()
   })
 
+})
+
+describe('BlockFrame, roomy (market-first WP1.6 design pass)', () => {
+  const frame = (mode: RenderMode, roomy: boolean) =>
+    render(<BlockFrame title="What your market talked about" mode={mode} roomy={roomy} footer={<a href="/x">Open Voice →</a>}><p>body</p></BlockFrame>)
+
+  it('draws the preview frame in the app: a 32px inset, a 13px title and a full-width footer rule', () => {
+    const html = frame('app', true)
+    expect(html).toContain('px-4 pt-6 sm:px-8 sm:pt-8')
+    expect(html).toContain('text-[13px] font-semibold uppercase tracking-[0.06em] text-muted-foreground')
+    expect(html).toContain('flex min-h-12 flex-wrap items-center justify-between gap-x-6 gap-y-1 border-t border-border/60 px-4 py-2 text-[14px]')
+  })
+
+  it('changes nothing on paper or in an inbox, and nothing for a caller that does not ask', () => {
+    expect(frame('print', true)).toBe(frame('print', false))
+    expect(frame('email', true)).toBe(frame('email', false))
+    expect(frame('app', false)).toContain('flex min-w-0 flex-col gap-2.5')
+  })
+})
+
+describe('BlockQuote, ground="inner" (market-first WP1.6 design pass)', () => {
+  const quote = { text: 'Me encanta esta pierna', lang: 'es', english: 'I love this leg' }
+
+  it('draws no left rule on an inner block, and the language pill takes the card ground', () => {
+    const html = render(<BlockQuote quote={quote} cite="a comment · September" mode="app" ground="inner" />)
+    expect(html).not.toContain('border-l-2')
+    expect(html).toContain('bg-tile px-2 py-0.5 font-mono text-[12px]')
+  })
+
+  it('keeps the rule for every other caller', () => {
+    expect(render(<BlockQuote quote={quote} mode="app" />)).toContain('border-l-2 border-primary/30 pl-3')
+  })
+})
+
+describe('TokenProse, figureClassName (market-first WP1.6 design pass)', () => {
+  const figures = { market_videos: { value: 654, unit: 'videos' as const, label: 'videos' } }
+
+  it('adds the caller\'s classes to each figure in the app, and to nothing in an inbox', () => {
+    const app = render(<TokenProse body="[[market_videos]] videos." figures={figures} mode="app" figureFace="mono" figureClassName="font-semibold tracking-[-0.04em]" />)
+    expect(app).toContain('class="font-mono tabular-nums font-semibold tracking-[-0.04em]"')
+    const email = render(<TokenProse body="[[market_videos]] videos." figures={figures} mode="email" figureFace="mono" figureClassName="font-semibold" />)
+    expect(email).not.toContain('font-semibold')
+  })
+
+  it('renders what it always did for a caller that passes none', () => {
+    expect(render(<TokenProse body="[[market_videos]] videos." figures={figures} mode="app" figureFace="mono" />)).toContain('class="font-mono tabular-nums"')
+  })
 })

@@ -255,3 +255,17 @@ describe('PageGrid', () => {
     }
   })
 })
+
+describe('Tile, flush (market-first WP1.6 design pass)', () => {
+  it('draws no padding or gap of its own, and keeps the export control inside the block inset', () => {
+    const html = render(<Tile col={12} row={2} flush exportKey="overview.themes"><p>body</p></Tile>)
+    expect(html).not.toContain('px-4 py-3.5')
+    expect(html).not.toContain('gap-2.5')
+    expect(html).toContain('absolute right-4 top-6 z-[1] sm:right-8 sm:top-8')
+  })
+
+  it('leaves a tile that is not flush exactly as it was', () => {
+    const html = render(<Tile col={12} row={2}><p>body</p></Tile>)
+    expect(html).toContain('gap-2.5 px-4 py-3.5')
+  })
+})
