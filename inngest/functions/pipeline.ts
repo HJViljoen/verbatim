@@ -26,6 +26,7 @@ import { activeSubreddits } from '@/lib/gather/subreddits'
 import { runStep2c } from '@/lib/pipeline/owned-events'
 import { runAnomalyCheck } from '@/lib/pipeline/anomaly-check'
 import { comparabilitySummary, planComparability, runComparabilityTask, taskLabel } from '@/lib/pipeline/comparability-step'
+import { planSegmentVideos, runSegmentBatch, segmentSummary } from '@/lib/pipeline/segment-videos'
 import { runPassE } from '@/lib/pipeline/pass-e'
 import { reevaluatePlanChecks } from '@/lib/ask/reevaluate'
 import { summariseRunErrors, partialRunAlert, passADegradation, isolatedBatchDegradation, runCloseStatus, closingErrors, RUN_ERROR_CAP } from '@/lib/pipeline/run-errors'
@@ -1569,6 +1570,35 @@ export const runPipeline = inngest.createFunction(
     //    `plan-x` + `x:${i}-of-${n}`, is non-fatal (logged, never noteError'd:
     //    the freeze-months precedent) and a no-op until its tables exist.
     //
+    // The segment-videos step (WP3.2): a segments_v1 rule row for every video
+    // still missing one (the run's new videos), at $0. The judge (segments_v2)
+    // runs only where SEGMENT_JUDGE_ENABLED is on for the tenant, and it is off
+    // for every tenant until Heinrich's yes. One batch of videos a step.
+    const segmentPlan = await step
+      .run('plan-segment-videos', async () => {
+        const r = await planSegmentVideos(createAdminClient(), clientId)
+        console.log(`[segment-videos] ${r.note}`)
+        return r
+      })
+      .catch((e) => {
+        console.error(`[segment-videos] plan failed, skipping: ${e instanceof Error ? e.message : String(e)}`)
+        return null
+      })
+    const segmentBatches = segmentPlan?.batches ?? []
+    for (let i = 0; i < segmentBatches.length; i++) {
+      const ids = segmentBatches[i]
+      await step
+        .run(`segment-videos:${i + 1}-of-${segmentBatches.length}`, async () => {
+          const r = await runSegmentBatch(createAdminClient(), { clientId, runId, ids, judge: null })
+          console.log(`[segment-videos] ${segmentSummary(r)}`)
+          return r
+        })
+        .catch((e) => {
+          console.error(`[segment-videos] batch ${i + 1} out of retries: ${e instanceof Error ? e.message : String(e)}`)
+          return null
+        })
+    }
+
     // The comparability step (WP3.4): month_pair_comparability and
     // config_change_reach for every pair with a filling side, read through THIS
     // run; comparability_checks for a pair whose later month has ended; and the
