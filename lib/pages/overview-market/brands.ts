@@ -37,10 +37,12 @@ export function brandsBlockFor(asAt: string | null, opts: { paused?: boolean; ar
   return { state: 'arriving', arrivesWith: ahead ? arrives : null }
 }
 
-/** The one line, naming the Competitive page by its current sidebar label. */
+/** The one line, naming the Competitive page by its current sidebar label.
+ *  Paused, no update is coming, so the pointer has no "until then" to lean
+ *  on (deploy 2 review): it says what Competitive lists, plainly. */
 export function brandsLine(b: BrandsBlock, competitiveLabel: string): string {
   const until = `Until then, ${competitiveLabel} lists what was filed under each brand you track.`
-  if (b.state === 'paused') return `Brands in your market, counted in every video they come up in, are not read for this workspace yet. ${until}`
+  if (b.state === 'paused') return `Brands in your market, counted in every video they come up in, are not read for this workspace yet. ${competitiveLabel} lists what was filed under each brand you track.`
   const when = b.arrivesWith ? `the ${shortDate(b.arrivesWith)} update` : 'a coming update'
   return `Brands in your market, counted in every video they come up in, arrive with ${when}. ${until}`
 }

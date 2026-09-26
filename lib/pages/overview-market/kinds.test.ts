@@ -132,6 +132,7 @@ describe('brands in your market, one line at deploy 2', () => {
 
   it('promises no update to a paused tenant (Össur, §2.13)', () => {
     const line = brandsLine(brandsBlockFor('2026-09-13T06:26:49.308Z', { paused: true }), 'Competitive')
-    expect(line).toBe('Brands in your market, counted in every video they come up in, are not read for this workspace yet. Until then, Competitive lists what was filed under each brand you track.')
+    // No "Until then": a paused workspace has no update coming (deploy 2 review).
+    expect(line).toBe('Brands in your market, counted in every video they come up in, are not read for this workspace yet. Competitive lists what was filed under each brand you track.')
   })
 })
