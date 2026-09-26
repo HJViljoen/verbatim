@@ -295,13 +295,18 @@ describe('keeping a week', () => {
     expect(read.meanDated).toBeCloseTo(14.30, 2)
     // The bands add up to the week's videos.
     expect(read.bands.reduce((a, b) => a + b, 0)).toBe(read.videos)
-    expect(rows).toHaveLength(104)
+    // 8 audience-bands × 16 objects: the nine kinds staging's current insights carry and the seven subjects.
+    expect(rows).toHaveLength(128)
 
     const points = pooledWeekPoints(rows, STAGING_RIVALS)
     const praise = points.find((p) => p.objectId === 'praise')!
     expect(praise.bands).toEqual([{ band: '1-4', k: 27, n: 91 }, { band: '5-19', k: 51, n: 80 }, { band: '20+', k: 53, n: 58 }])
     const looks = points.find((p) => p.objectId === STAGING_LOOKS_ID)!
     expect(looks.bands.map((b) => b.k)).toEqual(STAGING_BAND_K['2026-08-31'].looks)
+    // Every kind is kept, as MF4 returns it; the line draws only the six (staging's own week, read as a first week).
+    expect(points.filter((p) => p.objectKind === 'kind')).toHaveLength(9)
+    const line = buildWeekLine([read], points, [], { ...SEALAND, firstWeek: '2026-08-31' })
+    expect(line.rows.map((r) => r.objectId)).toEqual([...WEEK_LINE_KINDS])
     // Without Freitag as a tracked rival its rows leave the pool.
     const noFreitag = pooledWeekPoints(rows, STAGING_RIVALS.filter((a) => a !== 'competitor:Freitag'))
     expect(noFreitag.find((p) => p.objectId === 'praise')!.bands[0]).toEqual({ band: '1-4', k: 27, n: 90 })

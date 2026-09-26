@@ -144,6 +144,7 @@ const AUG31: readonly { audience: string; n: readonly number[]; k: Ks }[] = [
     audience: 'competitor:Cotopaxi', n: [7, 2, 2],
     k: {
       feature_request: [1, 1, 0], objection: [0, 1, 2], pain_point: [0, 2, 1], praise: [1, 2, 2], purchase_intent: [1, 0, 1], question: [4, 0, 1],
+      buying_trigger: [0, 0, 0], demographic_signal: [0, 0, 0], switching_signal: [0, 0, 0],
       community: [0, 0, 0], waterproofing: [0, 0, 0], repair: [0, 1, 0], looks: [0, 0, 0], durability: [1, 1, 1], price: [0, 1, 0], comfort: [0, 1, 1],
     },
   },
@@ -151,6 +152,7 @@ const AUG31: readonly { audience: string; n: readonly number[]; k: Ks }[] = [
     audience: 'competitor:Freitag', n: [1, 2],
     k: {
       feature_request: [0, 0], objection: [0, 0], pain_point: [0, 0], praise: [0, 1], purchase_intent: [0, 1], question: [0, 2],
+      buying_trigger: [0, 0], demographic_signal: [0, 1], switching_signal: [0, 0],
       community: [0, 0], waterproofing: [0, 0], repair: [0, 0], looks: [0, 0], durability: [0, 0], price: [0, 0], comfort: [0, 0],
     },
   },
@@ -158,13 +160,19 @@ const AUG31: readonly { audience: string; n: readonly number[]; k: Ks }[] = [
     audience: 'industry-other', n: [83, 76, 56],
     k: {
       feature_request: [4, 12, 18], objection: [3, 11, 12], pain_point: [10, 19, 27], praise: [26, 48, 51], purchase_intent: [12, 23, 37], question: [17, 33, 35],
+      buying_trigger: [0, 1, 1], demographic_signal: [1, 2, 4], switching_signal: [0, 2, 5],
       community: [0, 1, 2], waterproofing: [0, 4, 4], repair: [1, 4, 7], looks: [5, 10, 7], durability: [1, 4, 7], price: [1, 4, 2], comfort: [1, 2, 3],
     },
   },
 ]
 
 /** `market_week_readings` for the week of 31 Aug at 14 days, as PostgREST would
- *  return it: a row for every audience, object and band with videos, k maybe 0. */
+ *  return it: a row for every audience, object and band with videos, k maybe 0.
+ *  The objects are every kind Sealand's current insights carry on staging (the
+ *  six the line reads, plus buying_trigger, demographic_signal and
+ *  switching_signal) and the seven non-retired subjects: 8 audience-bands × 16
+ *  objects = 128 rows. Re-read on 26 Sep with the committed MF4 body
+ *  (mf/mf2 c6ca81ee) as a read-only SELECT, which lists all nine kinds. */
 export const STAGING_AUG31_READINGS: readonly WeekReadingRow[] = AUG31.flatMap(({ audience, n, k }) =>
   Object.entries(k).flatMap(([obj, ks]) => ks.map((kk, i) => {
     const isSubject = obj in SUBJECT_IDS
