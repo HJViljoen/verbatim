@@ -206,6 +206,23 @@ export function readTheSameWay(pair: Pick<PairComparability, 'mode' | 'reasons'>
   return pair.mode === 'flag' && pair.reasons.length > 0 && pair.reasons.every((r) => r.kind === 'gather')
 }
 
+/**
+ * Does the pair's row measure the pair as it stands? The judge attaches the
+ * latest row even where it no longer measures the pair: after a Sunday update
+ * and before the Monday re-run of measure-comparability, the (Aug, Sep) row
+ * read through the 27 Sep update is still attached on 4 Oct, and the judge
+ * counts the pair `unmeasured` (its changes at 10%, decision D). A figure
+ * printed from that row then sat beside rules that say "not measured yet"
+ * (deploy 2 review). So every figure this file prints from a row needs the
+ * judge to have measured the pair with it: no `unmeasured` reason. A month
+ * still running, or not read past its end, is refused before the row is
+ * checked, and its row still says why the next read will refuse too (the
+ * preview's cells on 24 Sep), dated by the update it was read with.
+ */
+export function rowMeasuresPair(pair: Pick<PairComparability, 'row' | 'reasons'> | null | undefined): boolean {
+  return pair?.row != null && !pair.reasons.some((r) => r.kind === 'unmeasured')
+}
+
 export const CHANGE_NEW = 'change_new_search_videos'
 export const CHANGE_OF = 'change_month_videos'
 
@@ -234,6 +251,7 @@ export function changeLead(block: ChangeBlock): { body: string; figures: FigureT
  *  never printed as "none of September came from…" (the pair then refused on
  *  the searches we removed, which the sentence does not name). */
 export function measuredAddedOnly(block: ChangeBlock): { k: number; n: number; word: string; share: number } | null {
+  if (!rowMeasuresPair(block.pair)) return null
   const added = block.pair?.row?.addedOnly
   const share = added ? shareOf(added) : null
   if (!added || share == null || !(added.k > 0)) return null
@@ -385,7 +403,9 @@ function judgedSide(entries: readonly CodeEntry[], share: number | null): CodeEn
  */
 export function compareRules(pair: PairComparability | null): CompareRule[] {
   const kinds = new Set(pair?.reasons.map((r) => r.kind) ?? [])
-  const row = pair?.row ?? null
+  // A row that no longer measures the pair (`rowMeasuresPair`) answers no
+  // rule: rules 2 to 4 read "not measured yet", as the judge counts them.
+  const row = rowMeasuresPair(pair) ? pair?.row ?? null : null
   const month = pair ? longMonth(pair.month) : ''
 
   const r1: CompareRule = !pair
@@ -481,7 +501,7 @@ const CODE_CHANGE_CAPTION: Partial<Record<OurChangeSurface, string>> = {
 export function whyCells(block: ChangeBlock): WhyCell[] {
   const pair = block.pair
   const row = pair?.row ?? null
-  if (!pair || !row || readTheSameWay(pair)) return []
+  if (!pair || !row || readTheSameWay(pair) || !rowMeasuresPair(pair)) return []
   const month = longMonth(pair.month)
   const readWith = block.readWith ?? null
   const cells: WhyCell[] = []

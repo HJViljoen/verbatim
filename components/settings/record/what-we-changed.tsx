@@ -5,7 +5,7 @@ import { TokenProse } from '@/components/blocks/prose'
 import { pairChipWords } from '@/lib/calibration'
 import { fmtInt, longMonth, shortDate } from '@/lib/format'
 import { pairOnVerdict } from '@/lib/reading/comparability'
-import { nextPairParts, readTheSameWay, whyNotCompared, type ChangeBlock, type CompareRule, type LedgerLine, type WhyCell } from '@/lib/pages/overview-market/change'
+import { nextPairParts, readTheSameWay, rowMeasuresPair, whyNotCompared, type ChangeBlock, type CompareRule, type LedgerLine, type WhyCell } from '@/lib/pages/overview-market/change'
 import { cellReadWith, monthHead, type RecordCell, type RecordGroup, type RecordView, type SearchAside } from '@/lib/settings/what-we-changed'
 import { settingsSubPage } from '@/lib/settings/rail'
 import { cn } from '@/lib/utils'
@@ -121,9 +121,10 @@ export function WhatWeChangedLead({ block }: { block: ChangeBlock }) {
             <div className="grid grid-cols-1 gap-6 @min-[560px]:grid-cols-3 @min-[560px]:gap-x-8">
               {why.cells.map((c) => <WhyStat key={c.key} cell={c} said={said} />)}
             </div>
-          ) : !block.pair?.row ? (
-            // NOTHING MEASURED YET (MF1 not applied, or a month refused before
-            // its row): the rules table's own state, never a zero. Not the
+          ) : !rowMeasuresPair(block.pair) ? (
+            // NOTHING MEASURED YET (MF1 not applied, a month refused before
+            // its row, or a row from an earlier update that no longer
+            // measures the pair): the rules table's own state, never a zero. Not the
             // refusal's sentence again (fresh design check, 26 Sep): the
             // headline above is that sentence, word for word, so printing it
             // here said the same thing twice and answered nothing.

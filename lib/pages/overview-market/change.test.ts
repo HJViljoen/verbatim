@@ -17,6 +17,7 @@ import {
   nextPairParts,
   placeInMonth,
   readTheSameWay,
+  rowMeasuresPair,
   searchChangeDays,
   searchChangesLine,
   whyCells,
@@ -246,6 +247,49 @@ describe('a pair flagged only by a capped update is read the same way (deploy 2 
     expect(readTheSameWay({ mode: 'flag', reasons: [{ kind: 'code_change', changeId: 'x', share: 0.05 }] })).toBe(false)
     expect(readTheSameWay({ mode: 'flag', reasons: [{ kind: 'gather', changeId: null, share: null }, { kind: 'searches', changeId: null, share: 0.02 }] })).toBe(false)
     expect(readTheSameWay({ mode: 'refuse', reasons: [{ kind: 'gather', changeId: null, share: null }, { kind: 'depth', changeId: null, share: 0.5 }] })).toBe(false)
+  })
+})
+
+// BETWEEN A SUNDAY UPDATE AND THE MONDAY RE-RUN (deploy 2 review): on 4 Oct the
+// (Aug, Sep) row read through the 27 Sep update is still attached, and the
+// judge counts the pair unmeasured. Nothing prints a figure from that row: the
+// block prints the refusal with no figure, Settings prints no cell, and rules 2
+// to 4 read "not measured yet", as the judge counts them.
+describe('a row from an earlier update prints no figure (the stale window)', () => {
+  const stale = comparabilityOf('2026-08-01', '2026-09-01', {
+    row: {
+      ...ROW,
+      codeChanges: [
+        { changeId: 'gate-fix', surface: 'gate_rule', prev: { k: 0, n: 377 }, curr: { k: 65, n: 654 }, population: 'market' },
+        { changeId: 'gate-fix', surface: 'gate_rule', prev: { k: 0, n: 351 }, curr: { k: 64, n: 625 }, population: 'category' },
+      ],
+    },
+    changes: CHANGES,
+    view: 'market',
+    later: { state: 'ended', readToEnd: true, latestUpdateRunId: 'run-4oct' },
+  })
+  const b = block({ pair: stale })
+
+  it('is refused as unmeasured with the old row still attached', () => {
+    expect(stale.mode).toBe('refuse')
+    expect(stale.reasons[0].kind).toBe('unmeasured')
+    expect(stale.row).not.toBeNull()
+    expect(rowMeasuresPair(stale)).toBe(false)
+    expect(rowMeasuresPair(pair('ended'))).toBe(true)
+    expect(rowMeasuresPair(pair('so_far'))).toBe(true)
+  })
+
+  it('prints the refusal with no figure, no cell and no measured rule', () => {
+    expect(measuredSearchSentence(b)).toBeNull()
+    expect(changeLead(b)).toEqual({ body: 'Not read as a change: we changed our searches in September.', figures: {} })
+    expect(whyCells(b)).toEqual([])
+    expect(JSON.stringify(whyNotCompared(b))).not.toMatch(/356|654|65 of/)
+    expect(compareRules(stale).map((r) => [r.n, r.state, r.answer])).toEqual([
+      [1, 'held', 'September has ended and was read past it'],
+      [2, 'unmeasured', 'not measured yet'],
+      [3, 'unmeasured', 'not measured yet'],
+      [4, 'unmeasured', 'not measured yet'],
+    ])
   })
 })
 
