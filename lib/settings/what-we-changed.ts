@@ -282,24 +282,27 @@ export function ledgerLines(input: {
   rows: readonly ConfigChange[]
   reach: readonly ReachRow[]
   runFinish: ReadonlyMap<string, string>
-}): (LedgerLine & { items: { added: string[]; removed: string[] } | null })[] {
+}): (LedgerLine & { items: { added: string[]; removed: string[] } | null; categoryMonths: NonNullable<LedgerLine['months']> })[] {
   const out = input.changes.map((c) => {
     const ids = new Set(c.rowIds ?? [c.id])
-    const newest = new Map<string, ReachRow>()
-    for (const r of input.reach) {
-      if (!ids.has(r.changeId) || r.population !== 'market') continue
-      const m = monthStartOf(r.month)
-      const held = newest.get(m)
-      if (!held || Date.parse(r.computedAt) > Date.parse(held.computedAt)) newest.set(m, r)
+    const monthsOn = (population: 'market' | 'category'): NonNullable<LedgerLine['months']> => {
+      const newest = new Map<string, ReachRow>()
+      for (const r of input.reach) {
+        if (!ids.has(r.changeId) || r.population !== population) continue
+        const m = monthStartOf(r.month)
+        const held = newest.get(m)
+        if (!held || Date.parse(r.computedAt) > Date.parse(held.computedAt)) newest.set(m, r)
+      }
+      return [...newest.entries()]
+        .sort(([a], [b]) => (a < b ? -1 : 1))
+        .map(([month, r]) => ({
+          month,
+          touched: r.touched,
+          of: r.inMonth,
+          readWith: (r.readThroughRun ? input.runFinish.get(r.readThroughRun) : null) ?? r.computedAt,
+        }))
     }
-    const months = [...newest.entries()]
-      .sort(([a], [b]) => (a < b ? -1 : 1))
-      .map(([month, r]) => ({
-        month,
-        touched: r.touched,
-        of: r.inMonth,
-        readWith: (r.readThroughRun ? input.runFinish.get(r.readThroughRun) : null) ?? r.computedAt,
-      }))
+    const months = monthsOn('market')
     const own = months.find((m) => m.month === monthStartOf(c.changedAt)) ?? null
     const mine = input.rows.filter((r) => ids.has(r.id))
     // WHAT THE LINE NAMES BESIDE ITS WORDS: the search terms, the rivals or
@@ -320,6 +323,9 @@ export function ledgerLines(input: {
       detail: changeDetail(c),
       reach: own ? { month: own.month, touched: own.touched, of: own.of, readWith: own.readWith as string } : null,
       months,
+      // The category's reach, which a themes comparison divides by: printed
+      // only under a comparison the change stops for themes (`recordView`).
+      categoryMonths: monthsOn('category'),
       items: items && (items.added.length > 0 || items.removed.length > 0) ? items : null,
     }
   })
@@ -517,6 +523,12 @@ export interface RecordLine {
   /** Under "none", what that means, where it needs saying (the preview's
    *  "nothing leaves a count" under the makers' marks). */
   noneNote: string | null
+  /** Under a comparison stopped for themes and not for the market, the count
+   *  that stops it, on the category's base: "64 of 625 September category
+   *  videos" (deploy 2 review: the line's own cell prints the market's 65 of
+   *  654, under a tenth, beside "Stops August against September, for themes",
+   *  the artboard's sub-caption). Null elsewhere. Additive. */
+  stopNote?: string | null
 }
 
 export interface RecordGroup {
@@ -561,6 +573,17 @@ const isGatherEvent = (change: OurChange | undefined, rows: readonly ConfigChang
   const ids = new Set(change.rowIds ?? [change.id])
   const mine = rows.filter((r) => ids.has(r.id))
   return mine.length > 0 && mine.every((r) => CLIENT_NOTE_OTHER_FIELDS.has(r.field ?? ''))
+}
+
+/** The category count behind the first measured stop that holds for themes
+ *  and not for the market: the larger share of the pair's two months, as
+ *  rule 3 reads it. Null where there is none, or no category measure. */
+function themesStopNote(stops: readonly StopEntry[], category: NonNullable<LedgerLine['months']>): string | null {
+  const stop = stops.find((e) => !e.unmeasured && e.views.includes('themes') && !e.views.includes('market'))
+  if (!stop) return null
+  const sides = category.filter((m) => (m.month === stop.pair.prevMonth || m.month === stop.pair.month) && m.of > 0)
+  const side = sides.sort((a, b) => b.touched / b.of - a.touched / a.of)[0]
+  return side && side.touched > 0 ? `${fmtInt(side.touched)} of ${fmtInt(side.of)} ${longMonth(side.month)} category videos` : null
 }
 
 /** "none" needs a word only where a reader would ask why. */
@@ -616,6 +639,7 @@ export function recordView(input: {
       cells,
       stops: stops ? stopLines(stops, true) : null,
       noneNote: stops && stops.length === 0 ? (gather ? GATHER_NONE_NOTE : NONE_NOTE[l.surface] ?? null) : null,
+      stopNote: stops ? themesStopNote(stops, l.categoryMonths) : null,
     }
   }
 

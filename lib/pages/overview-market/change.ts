@@ -372,6 +372,10 @@ export interface CompareRule {
    *  medians ("15 against 23"), so the page can set them as figures. The
    *  words are `answer`'s. Additive. */
   counts?: { figure: number; word: 'of' | 'against'; base: number }
+  /** The view the answer is for, where it is not the market's: rule 3 held
+   *  for the market but not for themes, which are grouped in the category
+   *  (the artboard's "63 of 626, for themes"). Additive. */
+  view?: 'themes'
 }
 
 export const COMPARE_RULES: readonly string[] = [
@@ -448,6 +452,27 @@ export function compareRules(pair: PairComparability | null): CompareRule[] {
       : { n: 3, rule: COMPARE_RULES[2], state: held ? 'held' : 'not_held', answer: pctText(worst.share ?? 0) }
   } else {
     r3 = { n: 3, rule: COMPARE_RULES[2], state: 'held', answer: 'none touched a tenth' }
+  }
+  // HELD FOR THE MARKET IS NOT HELD FOR THEMES (deploy 2 review; the
+  // `SettingsRecord` artboard's rule 3, "63 of 626, for themes"). Themes are
+  // grouped in the category, and a themes comparison divides by the category
+  // (decision E), so the gate fix's 65 of 654 market videos (under a tenth)
+  // is 64 of 625 category videos (over it), and the record beside this table
+  // says it stops August against September for themes. A rule held on the
+  // market's entries is read again on the category's, and where one of them
+  // reaches a tenth the rule does not hold, for themes, with that count.
+  if (row && r3.state === 'held') {
+    let themes: { entry: CodeEntry; share: number } | null = null
+    for (const e of row.codeChanges) {
+      if (e.population !== 'category' || !(VIEWS_BY_SURFACE[e.surface] ?? []).includes('themes')) continue
+      const share = pairShare(e.prev, e.curr)
+      if (share == null || share < COMPARE_REFUSE_SHARE) continue
+      if (!themes || share > themes.share) themes = { entry: e, share }
+    }
+    if (themes) {
+      const side = (shareOf(themes.entry.curr) ?? 0) >= (shareOf(themes.entry.prev) ?? 0) ? themes.entry.curr : themes.entry.prev
+      r3 = { n: 3, rule: COMPARE_RULES[2], state: 'not_held', answer: `${fmtInt(side.k)} of ${fmtInt(side.n)}, for themes`, counts: { figure: side.k, word: 'of', base: side.n }, view: 'themes' }
+    }
   }
 
   let r4: CompareRule = { n: 4, rule: COMPARE_RULES[3], state: 'unmeasured', answer: 'not measured yet' }

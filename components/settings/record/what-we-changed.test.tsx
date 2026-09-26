@@ -117,6 +117,12 @@ describe('The record: the dated list, grouped as the preview groups it (R-a)', (
     expect(t).toContain('Stops August against September')
     expect(t).toContain('Since 20 Sep nothing we search has changed.')
     expect(t).toContain('Stops August against September, for themes')
+    // Its cell prints the market's 65 of 654 (under a tenth); the themes stop
+    // carries the category count that makes it (the artboard's sub-caption).
+    expect(t).toContain('64 of 625 September category videos')
+    const gate = f.view.groups[1].lines.find((l) => l.line.surface === 'gate_rule')!
+    expect(gate.stopNote).toBe('64 of 625 September category videos')
+    expect(f.view.groups.flatMap((g) => g.lines).filter((l) => l.stopNote).length).toBe(1)
     expect(t).toContain('Stops Pairs with August or September, for brands and themes, until measured')
     // The capped update is a gather flag: it stops nothing, and says so.
     expect(t).toContain('An update gathered less than usual because a spending cap was reached.')
@@ -161,7 +167,10 @@ describe('When two months are compared', () => {
     // Rule 2 keeps the strict count in its own words, on the category (the 26 Sep ruling), never the added-only figure.
     expect(t).toContain('does not hold: 376 of 625')
     expect(t).not.toContain('356')
-    expect(t).toContain('65 of 654')
+    // Rule 3: held for the market (65 of 654), not for themes, grouped in the
+    // category (64 of 625), as the record's gate line says (the artboard's
+    // "63 of 626, for themes").
+    expect(t).toContain('does not hold: 64 of 625, for themes')
     expect(t).toContain('15 against 23')
     assertCopyContract(render(rules))
   })

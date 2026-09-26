@@ -207,8 +207,9 @@ function StopMark() {
 }
 
 /** What a change stops, each comparison on its own line with the ⊘; "none"
- *  (and why, where a reader would ask) where it stops none. */
-function Stops({ stops, noneNote }: { stops: readonly string[]; noneNote: string | null }) {
+ *  (and why, where a reader would ask) where it stops none; and under a stop
+ *  for themes alone, the category count that stops it. */
+function Stops({ stops, noneNote, note = null }: { stops: readonly string[]; noneNote: string | null; note?: string | null }) {
   if (stops.length === 0) {
     return (
       <span className="flex flex-col gap-1">
@@ -226,6 +227,7 @@ function Stops({ stops, noneNote }: { stops: readonly string[]; noneNote: string
           <span>{s}</span>
         </span>
       ))}
+      {note ? <span data-copy="level" className="pl-[22px] font-mono text-[13px] leading-[1.45] tabular-nums text-muted-foreground [text-wrap:pretty]">{note}</span> : null}
     </span>
   )
 }
@@ -353,7 +355,7 @@ export function TheRecord({ view }: { view: RecordView }) {
                   {r.stops ? (
                     <span role="cell" className="flex flex-col gap-1 @min-[560px]/rec:col-span-full @min-[560px]/rec:col-start-2 @min-[760px]/rec:col-span-1 @min-[760px]/rec:col-start-auto @min-[760px]/rec:pl-4">
                       <span className="text-[13px] text-muted-foreground @min-[760px]/rec:hidden">Comparisons it stops</span>
-                      <Stops stops={r.stops} noneNote={r.noneNote} />
+                      <Stops stops={r.stops} noneNote={r.noneNote} note={r.stopNote ?? null} />
                     </span>
                   ) : null}
                 </div>
@@ -398,7 +400,12 @@ export function WhenCompared({ rules, block, asAt }: { rules: readonly CompareRu
               <span role="cell" className="col-start-2 flex items-start gap-2 text-[15px] leading-[1.5] lg:col-start-auto">
                 <RuleMark state={r.state} />
                 <span className="sr-only">{STATE_WORDS[r.state]}: </span>
-                {r.counts ? <Counted figure={r.counts.figure} word={r.counts.word} base={r.counts.base} size="row" /> : <span>{r.answer}</span>}
+                {r.counts ? (
+                  <span className="inline-flex flex-wrap items-baseline gap-x-1">
+                    <Counted figure={r.counts.figure} word={r.counts.word} base={r.counts.base} size="row" />
+                    {r.view === 'themes' ? <span className="text-[15px] text-secondary-foreground">, for themes</span> : null}
+                  </span>
+                ) : <span>{r.answer}</span>}
               </span>
             ) : null}
           </div>

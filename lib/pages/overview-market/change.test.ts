@@ -377,7 +377,18 @@ describe('Settings › What we changed: the three cells behind the refusal (the 
   })
 
   it('reads rule 3 as the count the preview prints, never a share rounded up to the line', () => {
-    expect(compareRules(pair('ended', withGate))[2]).toMatchObject({ state: 'held', answer: '65 of 654' })
+    // The market's 65 of 654 (9.9%) holds; with the category under a tenth
+    // too, the rule holds on the market's count.
+    const under: PairRow = { ...ROW, codeChanges: [GATE_FIX[0], { ...GATE_FIX[1], curr: { k: 60, n: 625 } }] }
+    expect(compareRules(pair('ended', under))[2]).toMatchObject({ state: 'held', answer: '65 of 654' })
+  })
+
+  it('reads rule 3 as not held for themes where the category reaches a tenth (the artboard’s "63 of 626, for themes")', () => {
+    // Staging's gate fix: 65 of 654 market videos, 64 of 625 category videos
+    // (10.2%), the count a themes comparison divides by.
+    expect(compareRules(pair('ended', withGate))[2]).toMatchObject({
+      state: 'not_held', answer: '64 of 625, for themes', counts: { figure: 64, word: 'of', base: 625 }, view: 'themes',
+    })
   })
 
   it('sets the next pair apart in the same sentence', () => {

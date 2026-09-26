@@ -441,6 +441,8 @@ export function recordFixture(opts: { measured?: boolean; judged?: boolean } = {
         { changeId: 'wwc-0913', month: '2026-09-01', population: 'market', touched: 182, inMonth: 654, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
         { changeId: 'wwc-gate-fix', month: '2026-08-01', population: 'market', touched: 0, inMonth: 377, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
         { changeId: 'wwc-gate-fix', month: '2026-09-01', population: 'market', touched: 65, inMonth: 654, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
+        { changeId: 'wwc-gate-fix', month: '2026-08-01', population: 'category', touched: 0, inMonth: 351, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
+        { changeId: 'wwc-gate-fix', month: '2026-09-01', population: 'category', touched: 64, inMonth: 625, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
         { changeId: 'wwc-attribution', month: '2026-08-01', population: 'market', touched: 0, inMonth: 377, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
         { changeId: 'wwc-attribution', month: '2026-09-01', population: 'market', touched: 0, inMonth: 654, readThroughRun: 'run-27sep', computedAt: '2026-09-30T10:00:00.000Z' },
       ]
