@@ -15,6 +15,9 @@ import {
   KIND_SET,
   MAX_FLAGS,
   anomalyVerdict,
+  baselineStepOf,
+  comparableBaseline,
+  comparableBaselineLabel,
   preRegisteredSet,
   thinUpdate,
   weekVsBaseline,
@@ -27,6 +30,8 @@ import {
   type UpdateSize,
 } from '../reading/anomaly'
 import { SLICE } from '../reading/coverage'
+import { ourChangesWithoutGatherFlags } from '../reading/gather-flags'
+import { loadChanges, loadPairRows } from '../reading/read'
 import { preRegisteredKind } from '../reading/kinds'
 import { quoteRef } from '../renderables/quotes-freeze'
 import {
@@ -178,6 +183,10 @@ export interface AnomalyCheckResult {
   written: number
   explanation: Interpretation | null
   costUsd: number
+  /** The comparable-only baseline (WP3.4): the trailing months kept, and those
+   *  left out because their pair with the week's month is refused on a change
+   *  of ours. Absent where the check stopped before the baseline. */
+  baseline?: { weekMonth: string; kept: string[]; dropped: string[] }
 }
 
 // ---- Pooling -----------------------------------------------------------------
@@ -1054,7 +1063,22 @@ export async function runAnomalyCheck(args: RunAnomalyCheckArgs): Promise<Anomal
     return { ...empty, status: 'suppressed', suppression, note }
   }
 
-  const months = trailingCompleteMonths(window.from, BASELINE_MONTHS)
+  // THE COMPARABLE-ONLY BASELINE (market-first decision D; WP3.4, deploy 4).
+  // A trailing month stays only when its pair with the week's month is not
+  // refused on a change of ours (lib/reading/anomaly.ts comparableBaseline),
+  // off the stored pair rows the comparability step refreshed earlier in this
+  // run. Fewer than three left reads "forming: {n} of 3 comparable months" and
+  // flags nothing. No pair table (MF1 not applied) leaves every month
+  // unmeasured, so nothing is flagged on months nobody has compared.
+  const trailingMonths = trailingCompleteMonths(window.from, BASELINE_MONTHS)
+  const weekMonth = monthStartOf(window.from)
+  const [changeLog, pairRows] = await Promise.all([
+    loadChanges(admin, args.clientId),
+    loadPairRows(admin, args.clientId, null),
+  ])
+  const comparable = comparableBaseline(trailingMonths, weekMonth, baselineStepOf(pairRows, ourChangesWithoutGatherFlags(changeLog)))
+  const months = comparable.kept
+  const baseline = { weekMonth, ...comparable }
 
   let reading: AnomalyReading
   let registration: PreRegistration
@@ -1074,9 +1098,12 @@ export async function runAnomalyCheck(args: RunAnomalyCheckArgs): Promise<Anomal
   }
 
   if (reading.flags.length === 0) {
-    const note = `nothing unusual — ${reading.tested} of ${reading.setSize} objects tested`
+    const clearing = reading.baselines[0]?.monthsClearing ?? 0
+    const note = clearing < BASELINE_MONTHS
+      ? comparableBaselineLabel(clearing)
+      : `nothing unusual — ${reading.tested} of ${reading.setSize} objects tested`
     await recordCheck({ status: 'nothing_unusual', note, window, reading, suppression })
-    return { ...empty, status: 'nothing_unusual', reading, registration, suppression, note }
+    return { ...empty, status: 'nothing_unusual', reading, registration, suppression, note, baseline }
   }
 
   // ---- The one model call, and only now ----
@@ -1228,6 +1255,7 @@ export async function runAnomalyCheck(args: RunAnomalyCheckArgs): Promise<Anomal
     written,
     explanation,
     costUsd: call.costUsd,
+    baseline,
   }
 }
 

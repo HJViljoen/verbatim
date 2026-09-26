@@ -1768,6 +1768,9 @@ export const runPipeline = inngest.createFunction(
           updateVideos: totalVideos,
         })
         console.log(`[anomaly-check] ${r.status} — ${r.note}`)
+        if (r.baseline?.dropped.length) {
+          console.log(`[anomaly-check] baseline: comparable ${r.baseline.kept.map((m) => m.slice(0, 7)).join(' ') || '(none)'}; left out ${r.baseline.dropped.map((m) => m.slice(0, 7)).join(' ')}, refused against ${r.baseline.weekMonth.slice(0, 7)} on a change of ours`)
+        }
         if (r.registration) {
           console.log(
             `[anomaly-check] set: ${r.registration.counts.kind} kinds · ${r.registration.counts.rival} rivals · ` +
