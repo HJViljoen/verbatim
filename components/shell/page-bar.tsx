@@ -169,7 +169,10 @@ export function HorizonControl({
 }: { basePath: string; params: Record<string, string | undefined>; current: ReturnType<typeof parseHorizon> }) {
   const options = horizonOptions(basePath, params, current)
   return (
-    <nav aria-label="How far back" className="flex shrink-0 items-center gap-1" data-print-hide>
+    // IT WRAPS ON A PHONE (deploy 2 integration): four pills are about 404px
+    // wide, so on a 390px screen a row that could not wrap pushed the page to
+    // 428px. `min-w-0` lets the row take the width it is given.
+    <nav aria-label="How far back" className="flex min-w-0 flex-wrap items-center gap-1" data-print-hide>
       {options.map((o) => (
         <Link key={o.horizon} href={o.href} aria-current={o.active ? 'page' : undefined} className="cursor-pointer">
           <BarPill active={o.active}>{o.label}</BarPill>

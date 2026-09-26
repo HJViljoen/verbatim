@@ -126,4 +126,10 @@ describe('HorizonControl', () => {
   it('never prints itself into an export', () => {
     expect(render(<HorizonControl basePath="/dashboard" params={{}} current="this_month" />)).toContain('data-print-hide')
   })
+
+  it('wraps on a phone rather than widening the page (390px: the four pills are about 404px)', () => {
+    const markup = render(<HorizonControl basePath="/dashboard/subjects" params={{}} current="this_month" />)
+    expect(markup).toMatch(/<nav aria-label="How far back" class="[^"]*\bflex-wrap\b[^"]*"/)
+    expect(markup).not.toMatch(/<nav aria-label="How far back" class="[^"]*\bshrink-0\b/)
+  })
 })

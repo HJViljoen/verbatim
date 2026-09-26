@@ -519,6 +519,22 @@ describe('SU2 · the kind mix', () => {
     expect(text).toContain('of 84 videos')
   })
 
+  // ON A PHONE EACH KIND STACKS (deploy 2 integration): the column heads are
+  // not drawn below `sm`, so every cell names its audience, and a share its
+  // base, for the stylesheet to print beside it. Email is untouched.
+  it('names each cell’s audience, and a share’s base, for the phone layout', () => {
+    const data = subjectsFixture()
+    const markup = render(subjectsKinds.render(data, 'app', ctx))
+    const category = data.selected!.sides.find((s) => s.kind === 'category')!
+    expect(markup).toContain('max-sm:before:content-[attr(data-label)]')
+    expect(markup).toContain('data-label="Category"')
+    expect(markup).toContain(`data-base="of ${fmtInt(category.n!)} videos"`)
+    expect(markup).toContain('<thead class="max-sm:hidden">')
+    const email = render(subjectsKinds.render(data, 'email', ctx))
+    expect(email).not.toContain('data-label=')
+    expect(email).not.toContain('max-sm:')
+  })
+
   it('reads the kinds in the client’s words, never the pipeline’s enum', () => {
     const text = renderText(subjectsKinds.render(subjectsFixture(), 'app', ctx))
     expect(text).toContain('Asking how it works')
