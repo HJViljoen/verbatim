@@ -339,8 +339,11 @@ comment on column public.tracking_configs.market_description is
 -- run's open-run on its effective month's 1st (the first no earlier than
 -- January 2027), which stamps applied_at. The queue is its own history: a
 -- queued edit is never rewritten or removed; a change of mind is a newer
--- queued edit to the same field. The field is one of the search set's columns,
--- so a queued edit can never reach a cost knob or an operator column.
+-- queued edit to the same field. The field is a column the tenant sets and the
+-- audit trigger watches (its list, 20260915091000:265-268, less the three cost
+-- knobs), and the value has that column's JSON shape, so the run applies it as
+-- it stands and the trigger logs it; a queued edit never reaches a cost knob
+-- or an operator column.
 create table if not exists public.tracking_config_queue (
   id              uuid primary key default gen_random_uuid(),
   client_id       uuid not null references public.clients(id) on delete cascade,
@@ -353,8 +356,16 @@ create table if not exists public.tracking_config_queue (
   applied_at      timestamptz,
   constraint tracking_config_queue_field_check check (field in (
     'brand_keywords', 'competitor_keywords', 'industry_keywords', 'exclude_terms',
-    'competitor_names', 'own_handles', 'competitor_handles', 'platforms', 'subreddits')),
-  constraint tracking_config_queue_after_check check (jsonb_typeof(after) in ('array', 'object')),
+    'competitor_names', 'own_handles', 'competitor_handles', 'platforms', 'subreddits',
+    'report_period', 'report_day')),
+  constraint tracking_config_queue_after_check check (
+    case field
+      when 'own_handles'        then jsonb_typeof(after) = 'object'
+      when 'competitor_handles' then jsonb_typeof(after) = 'object'
+      when 'report_period'      then jsonb_typeof(after) = 'string'
+      when 'report_day'         then jsonb_typeof(after) = 'string'
+      else jsonb_typeof(after) = 'array'
+    end),
   constraint tracking_config_queue_month_check check (effective_month = date_trunc('month', effective_month)::date),
   constraint tracking_config_queue_label_check check (queued_label <> '')
 );

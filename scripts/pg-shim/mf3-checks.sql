@@ -386,7 +386,8 @@ begin
     returning id into q;
   insert into public.tracking_config_queue (client_id, field, after, effective_month, queued_label) values
     (c, 'competitor_handles', '{"Cotopaxi": {"tiktok": "cotopaxi"}}', '2027-01-01', 'owner@mf3.example'),
-    (c, 'subreddits', '[]', '2027-02-01', 'owner@mf3.example');
+    (c, 'subreddits', '[]', '2027-02-01', 'owner@mf3.example'),
+    (c, 'report_day', '"sunday"', '2027-01-01', 'owner@mf3.example');
   update public.tracking_config_queue set applied_at = '2027-01-03 04:00Z' where id = q and applied_at is null;
   get diagnostics n = row_count;
   if n <> 1 then raise exception 'queue FAILED: the run could not stamp applied_at'; end if;
@@ -426,7 +427,25 @@ begin
   begin
     insert into public.tracking_config_queue (client_id, field, after, effective_month, queued_label)
       values (c, 'exclude_terms', '"x"', '2027-01-01', 'owner@mf3.example');
-    raise exception 'queue FAILED: a value that is neither a list nor an object';
+    raise exception 'queue FAILED: a term list queued as a string';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.tracking_config_queue (client_id, field, after, effective_month, queued_label)
+      values (c, 'own_handles', '["sealand"]', '2027-01-01', 'owner@mf3.example');
+    raise exception 'queue FAILED: handles queued as a list, not the column''s object';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.tracking_config_queue (client_id, field, after, effective_month, queued_label)
+      values (c, 'report_period', '["weekly"]', '2027-01-01', 'owner@mf3.example');
+    raise exception 'queue FAILED: a cadence queued as a list, not the column''s string';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.tracking_config_queue (client_id, field, after, effective_month, queued_label)
+      values (c, 'last_actor', '{}', '2027-01-01', 'owner@mf3.example');
+    raise exception 'queue FAILED: the actor stamp was queued';
   exception when check_violation then null;
   end;
   begin
@@ -435,7 +454,7 @@ begin
     raise exception 'queue FAILED: an edit that names no one';
   exception when check_violation then null;
   end;
-  raise notice 'ok  tracking_config_queue: the service role queues and stamps applied_at once; no rewrite, no delete; search-set fields only, a first of the month, a list or an object, someone named';
+  raise notice 'ok  tracking_config_queue: the service role queues and stamps applied_at once; no rewrite, no delete; the tenant''s audited columns only (no knob, operator column or stamp), each in its column''s JSON shape, a first of the month, someone named';
 end $$;
 reset role;
 -- The applied-once guard holds for a role that holds more than the column grant.
@@ -579,8 +598,8 @@ begin
     (select count(*) from (select id, client_id, video_id, claim_id, subject_id, touches, matched_words, method, judge_version, decided_at
                              from public.own_post_subjects) o))
     into got;
-  if got <> '2/2/3/3/6' then
-    raise exception 'RLS FAILED: the tenant sees % rows (lens/brand/surfacings/queue/own-post), not its own 2/2/3/3/6', got;
+  if got <> '2/2/3/4/6' then
+    raise exception 'RLS FAILED: the tenant sees % rows (lens/brand/surfacings/queue/own-post), not its own 2/2/3/4/6', got;
   end if;
   if exists (select 1 from public.month_lens_readings where client_id <> c)
      or exists (select 1 from public.tracking_config_queue where client_id <> c) then
