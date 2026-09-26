@@ -9,6 +9,7 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, fmtPct, longMonth, shortDate } from '@/lib/format'
 import { monthPhrase, type Riser, type WeekData } from '@/lib/pages/week'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
+import { surface } from '@/lib/nav'
 
 // WK §3 · Moving now (design §3 WK4 "Rising now"; the mock's §9).
 //
@@ -60,7 +61,8 @@ export const weekRising: Block<WeekData> = {
     const r = data.rising
     const email = mode === 'email'
     const empty = weekRising.emptyState(data)
-    const href = `${ctx.appUrl}/dashboard/voice`
+    const conversation = surface('voice')
+    const href = `${ctx.appUrl}${conversation.href}`
 
     const max = Math.max(1, ...r.rows.map((row) => (row.month.n > 0 ? row.month.k / row.month.n : 0)))
     // AN ENDED MONTH IS NOT "SO FAR" (deploy 1 review, the lead's R6): on 2 Oct
@@ -73,8 +75,8 @@ export const weekRising: Block<WeekData> = {
         mode={mode}
         meta={`${when === 'this month' ? `${longMonth(r.month)} so far` : `${longMonth(r.month)} to the ${shortDate(data.update.date)} update`} · of ${fmtInt(r.monthOf)} category videos`}
         footer={email
-          ? <a href={href} style={{ color: EMAIL.ink }}>Open Voice →</a>
-          : <Link href={href} className="hover:underline">Open Voice →</Link>}
+          ? <a href={href} style={{ color: EMAIL.ink }}>Open {conversation.label} →</a>
+          : <Link href={href} className="hover:underline">Open {conversation.label} →</Link>}
         // THE POOLED-BASELINE CAVEAT IN THE FOOTER'S OWN SLOT. It is a fact
         // about the comparison's arithmetic rather than a finding, and the mono
         // face is where a reader's eye skips it until it wants it. It prints

@@ -114,8 +114,10 @@ export const subjectsVoices: Block<SubjectsData> = {
       return <MarketVoices data={data} mode={mode} appUrl={ctx.appUrl} />
     }
     const empty = subjectsVoices.emptyState(data)
-    const href = `${ctx.appUrl}/dashboard/voice`
-    const footer = openLink(mode, href, 'Hear these voices in Voice →')
+    // The page's CURRENT sidebar label (plan §4.0; Conversation from WP2.4).
+    const conversation = surface('voice')
+    const href = `${ctx.appUrl}${conversation.href}`
+    const footer = openLink(mode, href, `Hear these voices in ${conversation.label} →`)
     // THE SUBJECT IS IN THE TITLE. "Voices on this subject" is a caption on a
     // tile whose subject is named two tiles away and, in an export, on another
     // slide entirely.

@@ -1,293 +1,167 @@
-import Link from 'next/link'
-import type { ReactNode } from 'react'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
-import { BlockMovement } from '@/components/blocks/movement'
-import { PairChip } from '@/components/blocks/pair-chip'
-import { sharedPairNote } from '@/lib/calibration'
-import { fmtInt, fullDate, longMonth, monthName } from '@/lib/format'
-import { carriesShare, levelText } from '@/lib/reading/level'
+import { PlatformIcon } from '@/components/charts/platform-icon'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
-import type { AudienceOption, VoiceSurfaceData } from '@/lib/pages/voice-surface'
-import { audienceFigures, audiencePillLabel } from '@/lib/pages/voice-surface'
+import { fmtInt, longMonth } from '@/lib/format'
+import { carriesShare } from '@/lib/reading/level'
+import type { FigureTable } from '@/lib/reading/verdicts'
+import type { VoiceSurfaceData } from '@/lib/pages/voice-surface'
 
-// VO1 · Audience and kind (design §3 VO1; ported to the artboard, Block D
-// wave 2).
+// C1 · The market in the month (market-first WP2.4, plan §2.4 C1; key
+// `voice.audience`, reworked).
 //
-// THE PAGE'S SCOPE, PRINTED AS ITS OWN BLOCK. Everything under this one obeys
-// the audience, the kind and the platform chosen here, so the choice is a
-// reading rather than a control: each option carries the count it would leave,
-// and an audience too thin to read is shown WITH its count and marked, never
-// hidden. Both tenants' own brands carry that mark today — Össur reads 19
-// videos in September and Sealand 3 — and a switch that hid them would hide
-// the most important fact about them.
+// THE PAGE'S SCOPE, SAID ONCE, AT THE TOP. The market is everything we read
+// except your own posts (decision E): the category plus the videos filed under
+// a brand you track. Themes are grouped within the category, so the page names
+// both numbers here and every theme below is a share of the category's
+// videos, never of the market's.
 //
-// THE AUDIENCE IS A FILTER; THE PLATFORM AND THE KIND ARE NOT. The audience
-// switch is a link because the selection lives in the URL, where it can be
-// shared, opened in a second tab and frozen into an export's params (the
-// horizon control's own rule, WP9). The platform pills were links too, and
-// they narrowed `audience.videos` and nothing else — Sealand ?platform=tiktok
-// printed "146 videos · 9,397 comments" above rows reading "48 of 437" — and
-// the kind pills narrowed the ladder to the row a reader had just clicked. The
-// same rule that makes the audience a link deletes those two: this product
-// does not print controls that do not work. The platform mix is printed as
-// what it is, a reading of the month.
+// THE AUDIENCE SWITCH AND THE KIND LADDER ARE GONE (the approved preview). The
+// switch read one audience at a time, and a rival's audience holds 5 to 12
+// videos a month, too few to group; the kinds are the front page's block 4.
+// The Buyers and Makers views the preview draws beside this block arrive with
+// deploy 5 (decision F); a control that does nothing is not drawn before then.
 //
-// AND THAT RULE IS WHY THERE IS NO "All" PILL. The mock opens the switch with
-// one. There is no such audience: `month_denominators` and
-// `month_theme_readings` are keyed by `client` · `competitor:<name>` ·
-// `industry-other`, and an "All" would have to be a SUM of those rows — which
-// is the one arithmetic AGENTS.md names ("denominators do not add"). Every
-// figure below this bar would then be a share of a population no row holds.
-// The pill would select nothing readable, which is exactly the control this
-// block deleted two paragraphs ago.
-//
-// THE ARTBOARD'S SHAPE, ROW BY ROW. The mock draws this as a filter bar: a
-// 104px eyebrow column on the left, the pills in the middle, and the row's own
-// basis in mono at the right-hand end, with a hairline between rows. That is
-// what `Row` below is, and the right-hand note is the thing the build had
-// nowhere to put — each of these rows is a share of a different denominator,
-// and until now the block stated one of them, once, in the header.
-//
-// THIN IS MARKED BY WEIGHT, NOT BY A SENTENCE (the mock, and the density
-// argument in mock-gap §7). "Cotopaxi 27 · too thin to compare" beside three
-// other pills is a paragraph inside a control. The pill goes quiet instead —
-// the muted ink and lighter hairline the mock gives Poler — and the words stay
-// where a reader needs them: on the pill's own `title`, and in the ROW'S NOTE
-// whenever the thin audience is the one being read, which is the only time the
-// fact changes what the page below may say.
+// WHERE IT WAS SAID is the category's platform mix, as counts: the base the
+// themes below are grouped in.
 
-/** One pill in the audience switch. The count is on the pill, not in a
- *  tooltip: an audience is chosen by how much of the month it holds. */
-function AudiencePill({ option, month, mode }: { option: AudienceOption; month: string; mode: RenderMode }) {
-  const label = audiencePillLabel(option.audience, option.label)
-  const quiet = !option.observed || option.thin
-  // AN AUDIENCE WITH NO ROW THIS MONTH HAD NO VIDEO READ IN IT, and the pill
-  // says that, with the month (market-first WP1.2, GR F57). "Category not
-  // observed" was what the first days of every month printed for the category
-  // itself: a month not read yet, worded as a measurement of nothing.
-  const count = option.observed
-    ? <span data-copy="figure" className={mode === 'email' ? undefined : 'font-mono text-[11px] tabular-nums text-muted-foreground'}>{fmtInt(option.videos ?? 0)}</span>
-    : <span className={mode === 'email' ? undefined : 'font-mono text-[10px] text-muted-foreground'}>no video read in {monthName(month)}</span>
-  // D14: a "since" date on this pill would be a start date, and the product
-  // holds no such thing. What it holds is the day the rival left the tracked
-  // set, which is what the pill says instead.
-  // IN THE PAGE'S OWN DATE FORMAT. This printed `retiredAt.slice(0, 10)` —
-  // "tracked to 2026-09-09" — on a page that says "Sep 2026", "14 Sep" and
-  // "first heard July 2026" everywhere else, and whose own theme block carries
-  // a comment condemning exactly that pattern. The year is kept: a retired
-  // rival's last day can be years before the month being read.
-  const retired = option.retiredAt ? (
-    <span className={mode === 'email' ? undefined : 'font-mono text-[10px] text-muted-foreground'} style={mode === 'email' ? { color: EMAIL.muted } : undefined}>
-      tracked to {fullDate(option.retiredAt)}
-    </span>
-  ) : null
+/** The block's title, with the month by name (the lead's R6): on 1 to 15 Oct
+ *  the page reads an ended September, where "this month" would be October. */
+export const marketTitle = (month: string): string => `The market in ${longMonth(month)}`
 
-  if (mode === 'email') {
-    return (
-      <span style={{ fontFamily: FONT.sans, fontSize: 12, color: option.selected ? EMAIL.ink : EMAIL.muted, marginRight: 10 }}>
-        {option.label} {count}
-        {option.thin && option.observed ? <span style={{ color: EMAIL.muted }}> · too thin to compare</span> : null}
-        {retired ? <> · {retired}</> : null}
-      </span>
-    )
-  }
+const figure = 'font-mono font-semibold tabular-nums text-foreground'
+
+/** A count in the sentence, as its own figure node. */
+function N({ value, mode }: { value: number; mode: RenderMode }) {
   return (
-    <Link
-      href={option.href}
-      aria-current={option.selected ? 'true' : undefined}
-      title={option.thin && option.observed ? 'too thin to compare' : undefined}
-      className={`inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[12px] ring-1 transition-colors ${
-        option.selected
-          ? 'bg-inner font-medium text-foreground ring-border'
-          : quiet
-            ? 'font-normal text-muted-foreground ring-border/50 hover:ring-border'
-            : 'font-medium text-secondary-foreground ring-border hover:bg-inner'
-      }`}
-    >
-      {/* TWO STATES, NOT A RUN-ON. "Poler not observed tracked to 9 Sep 2026"
-          reads as one clause and is two facts: nothing was read for this rival
-          this month, and it left the tracked set on that day. */}
-      {label} {count}
-      {/* THIN, IN WORDS, FOR EVERY READER. The mark is the pill's WEIGHT (the
-          mock's density argument) and the words were on `title` alone, which
-          reaches neither a keyboard nor a touch screen — so for a thin
-          audience nobody has selected, the one fact that decides what the page
-          below may claim was mouse-only. `sr-only` keeps the mock's density
-          and gives the words back. */}
-      {option.thin && option.observed ? <span className="sr-only"> · too thin to compare</span> : null}
-      {retired ? <> · {retired}</> : null}
-    </Link>
+    <span data-copy="figure" className={mode === 'email' ? undefined : figure} style={mode === 'email' ? { fontFamily: FONT.mono, fontWeight: 600, color: EMAIL.ink } : undefined}>
+      {fmtInt(value)}
+    </span>
   )
 }
 
-/** Is this option offered: selected, or carrying videos and still tracked. */
-const offered = (o: AudienceOption): boolean => o.selected || (o.observed && (o.videos ?? 0) > 0 && o.retiredAt == null)
-
-/** One row of the filter bar: its label, its content, and the basis of the
- *  figures in it. The note is `flex-none` at the right-hand end, exactly as the
- *  artboard has it, because it is metadata and the eye should skip it until it
- *  wants it. */
-function Row({ label, note, mode, children }: { label: string; note?: ReactNode; mode: RenderMode; children: ReactNode }) {
-  if (mode === 'email') {
-    return (
-      <div style={{ paddingTop: 6 }}>
-        <div style={{ fontFamily: FONT.sans, fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: EMAIL.muted }}>{label}</div>
-        <div style={{ marginTop: 2 }}>{children}</div>
-        {note ? <div style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted, marginTop: 2 }}>{note}</div> : null}
-      </div>
-    )
+/** "; 7 of them are led by makers and sit on their own at the end of the
+ *  list." What the board groups, where it grouped anything. */
+function groupedClause(data: VoiceSurfaceData, mode: RenderMode) {
+  const b = data.board
+  const makers = b.makers?.length ?? 0
+  const setAside = b.setAside?.length ?? 0
+  if (b.segments !== 'measured' || makers + setAside === 0) return '.'
+  if (setAside === 0) {
+    return <>; <N value={makers} mode={mode} /> of them {makers === 1 ? 'is' : 'are'} led by makers and {makers === 1 ? 'sits' : 'sit'} on {makers === 1 ? 'its' : 'their'} own at the end of the list.</>
   }
-  return (
-    <div className="flex min-w-0 flex-col gap-1.5 border-t border-border/70 pt-2 first:border-0 first:pt-0 xl:flex-row xl:items-center xl:gap-3">
-      {/* A HEADING, NOT A STYLED SPAN — the filter bar's four rows are four
-          sections of the block and were unreachable to heading navigation. */}
-      {/* THE 104px COLUMN IS PART OF THE ROW, so it goes when the row does.
-          `w-[104px] flex-none` was unconditional under a parent that only
-          becomes a row at `xl:`; below 1280 the heading was a 104px box in a
-          stacked column and three of the four labels wrapped mid-phrase
-          ("WHERE IT WAS / SAID"), four wasted lines on the block the page
-          opens with. No overflow, so nothing checking for one caught it. */}
-      <h3 className="m-0 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground xl:w-[104px] xl:flex-none">{label}</h3>
-      <div className="min-w-0 flex-1">{children}</div>
-      {note ? <span className="flex-none whitespace-nowrap font-mono text-[11px] tabular-nums text-muted-foreground">{note}</span> : null}
-    </div>
-  )
+  if (makers === 0) {
+    return <>; <N value={setAside} mode={mode} /> of them {setAside === 1 ? 'is' : 'are'} led by off-topic videos and {setAside === 1 ? 'sits' : 'sit'} on {setAside === 1 ? 'its' : 'their'} own at the end of the list.</>
+  }
+  return <>; <N value={makers} mode={mode} /> of them are led by makers and <N value={setAside} mode={mode} /> by off-topic videos, and they sit on their own at the end of the list.</>
 }
 
 export const voiceAudience: Block<VoiceSurfaceData> = {
   key: 'voice.audience',
-  title: 'Whose audience, and what kind of thing',
-  question: 'Whose conversation is this, and what are they doing in it?',
+  title: 'The market in the month',
+  question: 'How big was your market, and where are its themes grouped?',
 
-  render(data, mode = 'app', ctx) {
-    const a = data.audience
+  render(data, mode = 'app') {
+    const m = data.market
     const email = mode === 'email'
-    const href = `${ctx.appUrl}/dashboard/competitive`
-    // The mock's own words. NOT "1,388 the category videos": the audience's
-    // prose label is a noun phrase with its own article, and inlining it into
-    // a count makes one. "in this audience" says the same thing and says it
-    // the way the artboard does — the audience's NAME is on the selected pill
-    // two inches to the left.
-    // THE SAME SYSTEM AS SUBJECTS' "Kind of thing said" (the calm pass): a
-    // kind is its label and its level, a count under the floor ("2 of 8") and
-    // a whole-number share at or over it ("51%"), never both and never a
-    // decimal (lib/reading/level.ts). Rows in a grid rather than a run-on
-    // line, so the numbers sit in one column a reader can scan.
-    // ONE REFUSAL, SAID ONCE (deploy 1 review): ten kinds each printed the
-    // same sentence between their label and their level, which pushed the
-    // figure about 400px from its label. Refused for one pair, each says "not
-    // compared" and the chip under the list says why.
-    const shared = sharedPairNote(a.kinds.map((k) => a.kindVerdicts[k.kind] ?? null))
-    const kinds = a.kinds.length > 0 ? (
-      <>
-      <div className={email ? undefined : 'grid grid-cols-1 gap-x-8 gap-y-1 sm:grid-cols-2 2xl:grid-cols-3'}>
-        {a.kinds.map((k) => {
-          const level = levelText(k.videos, k.denominator)
-          return (
-            <div
-              key={k.kind}
-              className={email ? undefined : 'flex min-w-0 items-baseline justify-between gap-3 border-t border-border/60 py-1 text-[12.5px] text-foreground'}
-              style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '3px 0', borderTop: `1px solid ${EMAIL.hairline}` } : undefined}
-            >
-              <span className={email ? undefined : 'min-w-0'}>{k.label}</span>{' '}
-              <span className={email ? undefined : 'flex shrink-0 items-baseline gap-2'}>
-                <BlockMovement verdict={a.kindVerdicts[k.kind] ?? null} unit="pts" mode={mode} good="neutral" sharedRefusal={shared} />{' '}
-                <span
-                  data-copy={level?.kind === 'count' ? 'level' : 'figure'}
-                  className={email ? undefined : 'font-mono text-[12px] tabular-nums text-secondary-foreground'}
-                  style={email ? { fontFamily: FONT.mono, fontSize: 12, color: EMAIL.ink2 } : undefined}
-                >
-                  {level?.text ?? '—'}
-                </span>
-              </span>
-            </div>
-          )
-        })}
-      </div>
-      <PairChip note={shared} mode={mode} className="mt-2" />
-      </>
-    ) : (
-      <BlockEmpty mode={mode}>{a.kindsNote ?? `No kind carried a reading in ${longMonth(data.month)}.`}</BlockEmpty>
-    )
-
-    // WHERE IT WAS SAID, AT ITS REAL SIZE. One platform is just its name
-    // ("Instagram 100.0% 8" said one fact three ways); under the floor each
-    // platform is its count; at or over it a whole-number share.
-    const platforms = a.platformMix.length === 1
-      ? <span className={email ? undefined : 'text-[12px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink } : undefined}>{a.platformMix[0].label}</span>
-      : (
-        <div className={email ? undefined : 'flex flex-wrap items-center gap-x-4 gap-y-1'}>
-          {a.platformMix.map((p) => {
-            const level = a.videos != null && carriesShare(a.videos) && p.pct != null ? `${Math.round(p.pct)}%` : fmtInt(p.videos)
-            return (
-              <span key={p.platform} className={email ? undefined : 'text-[12px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink, marginRight: 10 } : undefined}>
-                {p.label}{' '}
-                <span data-copy="figure" className={email ? undefined : 'font-mono tabular-nums text-muted-foreground'}>{level}</span>
-              </span>
-            )
-          })}
-        </div>
+    const title = marketTitle(data.month)
+    const empty = voiceAudience.emptyState(data)
+    if (empty) {
+      return (
+        <BlockFrame title={title} mode={mode} roomy>
+          <BlockEmpty mode={mode}>{empty}</BlockEmpty>
+        </BlockFrame>
       )
+    }
+    const soFar = data.reading?.state === 'so_far'
+    const b = data.board
+    const lead = (
+      <p className={email ? undefined : 'm-0 max-w-[700px] text-[24px] font-medium leading-[1.3] tracking-[-0.02em] text-foreground [text-wrap:balance] sm:text-[28px]'} style={email ? { fontFamily: FONT.sans, fontSize: 20, fontWeight: 500, color: EMAIL.ink, margin: 0 } : undefined}>
+        <N value={m.videos ?? 0} mode={mode} /> videos in your market in {longMonth(data.month)}{soFar ? ' so far' : ''}.
+      </p>
+    )
+    const body = email ? { fontFamily: FONT.sans, fontSize: 14, lineHeight: 1.6, color: EMAIL.ink2, margin: '8px 0 0' } : undefined
+    const bodyClass = email ? undefined : 'm-0 max-w-[600px] text-[17px] leading-[1.6] text-secondary-foreground [text-wrap:pretty]'
+    const category = m.category ?? 0
+    const split = (
+      <p className={bodyClass} style={body}>
+        {(m.rivalFiled ?? 0) > 0
+          ? <><N value={category} mode={mode} /> are in the category, where themes are grouped, and <N value={m.rivalFiled ?? 0} mode={mode} /> are filed under a brand you track. </>
+          : <>All <N value={category} mode={mode} /> are in the category, where themes are grouped. </>}
+        {b.atTen > 0
+          ? <>In the <N value={category} mode={mode} />, <N value={b.atTen} mode={mode} /> {b.atTen === 1 ? 'theme' : 'themes'} reached 10 videos or more{groupedClause(data, mode)}</>
+          : <>In the <N value={category} mode={mode} />, no theme reached 10 videos yet.</>}
+      </p>
+    )
+    // ONE DENOMINATOR, NAMED: "52% of 625", never a share of an unnamed base
+    // (the preview's "of the category's September videos"; the copy contract's
+    // "of N"). Under 100 the count prints with its base instead (levelText).
+    const inThemes = b.inThemes != null && category > 0 ? (
+      <p className={bodyClass} style={body}>
+        {carriesShare(category)
+          ? <><span data-copy="level"><span data-copy="figure" className={email ? undefined : figure} style={email ? { fontFamily: FONT.mono, fontWeight: 600, color: EMAIL.ink } : undefined}>{Math.round((b.inThemes / category) * 100)}%</span> of <N value={category} mode={mode} /></span> sit in a theme of 10 or more.</>
+          : <><span data-copy="level"><N value={b.inThemes} mode={mode} /> of <N value={category} mode={mode} /></span> sit in a theme of 10 or more.</>}
+      </p>
+    ) : null
+
+    const max = Math.max(1, ...m.platformMix.map((p) => p.videos))
+    const where = m.platformMix.length > 0 ? (
+      email ? (
+        <p style={{ fontFamily: FONT.sans, fontSize: 13, color: EMAIL.ink2, margin: '10px 0 0' }}>
+          Where it was said, of the category’s videos: {m.platformMix.map((p, i) => (
+            <span key={p.platform}>{i > 0 ? ' · ' : ''}{p.label} <span data-copy="figure" style={{ fontFamily: FONT.mono }}>{fmtInt(p.videos)}</span></span>
+          ))}
+        </p>
+      ) : (
+        <aside className="flex min-w-0 max-w-[560px] flex-col gap-3 rounded-md bg-inner p-6 xl:max-w-none">
+          <div className="flex flex-col gap-1">
+            <h3 className="m-0 text-[15px] font-semibold text-foreground">Where it was said</h3>
+            <span className="font-mono text-[12px] text-muted-foreground">category videos</span>
+          </div>
+          <div role="table" className="flex flex-col">
+            {m.platformMix.map((p) => (
+              <div key={p.platform} role="row" className="grid min-h-10 grid-cols-[104px_minmax(0,1fr)_40px] items-center gap-x-4 border-b border-border/60">
+                <span role="rowheader" className="flex min-w-0 items-center gap-2.5 text-[15px] text-foreground">
+                  <PlatformIcon platform={p.platform} size={14} className="flex-none text-muted-foreground" />
+                  <span className="truncate">{p.label}</span>
+                </span>
+                <span aria-hidden className="relative block h-1.5">
+                  <span className="absolute inset-y-0 left-0 rounded-[2px] bg-foreground" style={{ width: `${(p.videos / max) * 100}%` }} />
+                </span>
+                <span className="text-right font-mono text-[15px] font-semibold tabular-nums text-foreground"><span data-copy="figure">{fmtInt(p.videos)}</span></span>
+              </div>
+            ))}
+          </div>
+        </aside>
+      )
+    ) : null
 
     return (
-      <BlockFrame
-        title={voiceAudience.title}
-        // NO QUESTION LINE ON THE FILTER BAR (mock-gap §7, and the same call
-        // VO3 makes). The artboard's bar has neither a heading nor a question;
-        // it is the page's scope, drawn as four dense rows. The question is
-        // still the block's contract and is still declared on the object — the
-        // print and email spines and the block catalogue read it — but on the
-        // screen it is a 12.5px line pushing the rows the block exists for
-        // further down a bar the artboard draws in 105px.
-        mode={mode}
-        // No block meta: the Audience row's note one line below prints the same
-        // denominator (copy de-clutter B19).
-        footer={email
-          ? <a href={href} style={{ color: EMAIL.ink }}>Open Competitive →</a>
-          : <Link href={href} className="hover:underline">Compare the audiences on Competitive →</Link>}
-      >
-        <div className={email ? undefined : 'flex flex-col gap-2'}>
-          {/* NO RIGHT-HAND NOTE: the selected pill already carries the count,
-              and the thin mark rides on the pill's weight and its words. */}
-          <Row label="Audience" mode={mode} note={a.thin ? 'too thin to compare' : undefined}>
-            <div className={email ? undefined : 'flex flex-wrap items-center gap-1.5'}>
-              {/* ONLY WHAT CAN BE READ (`listedRivals`, lib/rivals.ts). The
-                  loader already offers nothing else; the block says it again
-                  because a stored snapshot carries the options it was frozen
-                  with, and one frozen before this rule still lists them. */}
-              {a.options.filter(offered).map((o) => <AudiencePill key={o.audience} option={o} month={data.month} mode={mode} />)}
-            </div>
-          </Row>
-
-          {a.platformMix.length > 0 ? <Row label="Where it was said" mode={mode}>{platforms}</Row> : null}
-
-          {/* NO REDDIT CLAUSE AND NO "ARGUED" ROW (the calm pass). "Reddit
-              carried 0 of 2 of the question-and-objection videos" and the
-              tenant-wide reply share ("7.2% of this month's comments were
-              replies") are not about the audience this block is scoped to,
-              and neither changes what a returning reader does next. */}
-          <Row label="Kind of thing said" mode={mode}>
-            {kinds}
-          </Row>
-        </div>
+      <BlockFrame title={title} mode={mode} roomy>
+        {email ? (
+          <div>{lead}{split}{inThemes}{where}</div>
+        ) : (
+          <div className="grid min-w-0 grid-cols-1 gap-8 xl:grid-cols-[minmax(0,1fr)_304px] xl:gap-x-[88px]">
+            <div className="flex min-w-0 flex-col gap-4 pt-1">{lead}{split}{inThemes}</div>
+            {where}
+          </div>
+        )}
       </BlockFrame>
     )
   },
 
   figures(data): FigureTable {
-    return audienceFigures(data.audience)
-  },
-
-  verdicts(data): Verdict[] {
-    return Object.values(data.audience.kindVerdicts).filter((v): v is Verdict => v != null)
+    const m = data.market
+    const out: FigureTable = {}
+    if (m.videos != null) out.market_videos = { value: m.videos, unit: 'videos', label: `videos in your market in ${longMonth(data.month)}` }
+    if (m.category != null) out.category_videos = { value: m.category, unit: 'videos', label: `category videos in ${longMonth(data.month)}` }
+    if (m.rivalFiled != null) out.rival_filed_videos = { value: m.rivalFiled, unit: 'videos', label: `videos filed under a brand you track in ${longMonth(data.month)}` }
+    return out
   },
 
   emptyState(data) {
-    const a = data.audience
-    if (a.videos == null && a.kinds.length === 0 && !a.replies) {
-      return `Nothing has been read into ${longMonth(data.month)} for any audience yet.`
+    if (data.market.videos == null || data.market.videos === 0) {
+      return `Nothing has been read into ${longMonth(data.month)} for your market yet.`
     }
     return null
   },

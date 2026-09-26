@@ -82,7 +82,8 @@ describe('catalogueReaderTitle', () => {
   it('prefers the sidebar’s own label for a page a reader can visit', () => {
     // "Your moves" since deploy 2 (market-first WP1.6, decision K).
     expect(catalogueReaderTitle('market', 'Market Intelligence')).toBe('Your moves')
-    expect(catalogueReaderTitle('voice', 'Voice of Customer')).toBe('Voice')
+    // "Conversation" since deploy 3 (market-first WP2.4).
+    expect(catalogueReaderTitle('voice', 'Voice of Customer')).toBe('Conversation')
     expect(catalogueReaderTitle('competitive', 'Competitive Intelligence')).toBe('Competitive')
   })
 

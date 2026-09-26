@@ -7,7 +7,7 @@ import { render } from '@/lib/test/render'
 
 import { overviewCategory } from '@/components/pages/overview/category'
 import { overviewFixture } from '@/components/pages/overview/fixture'
-import { voiceMovers } from '@/components/pages/voice-surface/movers'
+import { voiceBoard } from '@/components/pages/voice-surface/board'
 import { voiceTheme } from '@/components/pages/voice-surface/theme'
 import { voiceFixture } from '@/components/pages/voice-surface/fixture'
 import { weekRising } from '@/components/pages/week/rising'
@@ -54,12 +54,12 @@ describe('a theme label never fails rule (c)', () => {
     }
   })
 
-  it('VO2 · movers, both arms and the gone-quiet list', () => {
+  it('C2 · Conversation’s board, every group’s rows (WP2.4)', () => {
     const data = voiceFixture()
-    data.movers.growing = data.movers.growing.map((m) => ({ ...m, label: LABEL }))
-    data.movers.goneQuiet = data.movers.goneQuiet.map((g) => ({ ...g, label: LABEL }))
+    const relabel = <T extends { label: string }>(rows: T[]): T[] => rows.map((t) => ({ ...t, label: LABEL }))
+    data.board = { ...data.board, rows: relabel(data.board.rows), makers: data.board.makers ? relabel(data.board.makers) : null }
     for (const mode of MODES) {
-      expect(directionWords(render(voiceMovers.render(data, mode, ctx)))).toEqual([])
+      expect(directionWords(render(voiceBoard.render(data, mode, ctx)))).toEqual([])
     }
   })
 

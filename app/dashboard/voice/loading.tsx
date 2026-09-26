@@ -1,69 +1,40 @@
 import { SkeletonSurface, Bone, BoneLines, BoneBars } from '@/components/shell/skeleton'
 import { GrowingTile } from '@/components/pages/voice-surface'
 
-// Mirrors app/dashboard/voice/page.tsx (Phase 1 WP13): the surface bar (How
-// to read, its one line, the horizon row with its range: the bar used
-// to be a bare title, which jumped the whole page down by two rows when the
-// real one landed), then the audience and where it was said · what moved · a
-// theme in full · who is talking.
-//
-// FOUR GROWING SECTIONS AND NO ROW SPANS, because that is what the page draws.
-// The first cut of this file was four SkeletonTiles at spans 2/4/6/4 under the
-// comment "the skeleton follows the grid the page actually draws" — true when
-// it was written and false by the end of the same commit, because the page
-// abandoned the fixed grid the moment a bounded tile was found CUTTING VO3's
-// evidence, and VO3 alone renders taller than a six-row tile's 696px. A
-// skeleton drawing a grid the page no longer draws is the layout shift it
-// exists to prevent, wearing a comment that says it isn't.
-//
-// It reads NO gate. The old skeleton branched on `directionWordsFor('voice.
-// movers')` because the tile it stood in for was registered behind that
-// constant; VO2 is not — it earns its direction words from three consecutive
-// months of the comment-dated series, and it is always drawn.
+// Mirrors app/dashboard/voice/page.tsx (market-first WP2.4): the surface bar,
+// then the four growing sections the page draws: the market in the month, every
+// theme at 10 or more, a theme in full, who is talking. No row spans, because
+// the page draws none, and no horizon row, because the page offers none.
 export default function VoiceLoading() {
   return (
     <SkeletonSurface nav="voice" pills={1}>
 
-      {/* VO1 · the audience switch, then the platform mix */}
+      {/* C1 · the market in the month, and where it was said */}
       <GrowingTile>
         <Bone className="h-2.5 w-28" />
-        <div className="flex flex-wrap gap-2">
-          {Array.from({ length: 4 }, (_, i) => <Bone key={i} className="h-6 w-32 rounded-full" />)}
-        </div>
-        <div className="flex flex-wrap gap-4">
-          {Array.from({ length: 4 }, (_, i) => <Bone key={i} className="h-4 w-24" />)}
-        </div>
-        <BoneLines lines={2} />
+        <Bone className="h-7 w-3/5" />
+        <BoneLines lines={3} />
       </GrowingTile>
 
-      {/* VO2 · the arms of the one axis */}
+      {/* C2 · every theme at 10 or more */}
       <GrowingTile>
-        <Bone className="h-2.5 w-24" />
-        <BoneBars rows={6} />
+        <Bone className="h-2.5 w-40" />
+        <BoneBars rows={12} />
       </GrowingTile>
 
-      {/* VO3 · the theme, its month line, its voices */}
+      {/* C3 · a theme in full, its voices */}
       <GrowingTile>
         <Bone className="h-2.5 w-24" />
         <Bone className="h-5 w-2/5" />
         <BoneLines lines={2} />
         <Bone className="h-8 w-28" />
-        <Bone className="h-[150px] w-full rounded-[6px]" />
-        <Bone className="h-1.5 w-full rounded-full" />
-        <BoneLines lines={6} />
+        <BoneLines lines={4} />
       </GrowingTile>
 
-      {/* VO4 · the cast */}
+      {/* C4 · who is talking */}
       <GrowingTile>
         <Bone className="h-2.5 w-24" />
-        <div className="flex flex-col gap-3">
-          {Array.from({ length: 3 }, (_, i) => (
-            <div key={i} className="flex gap-3">
-              <Bone className="h-16 w-10 flex-none rounded-[6px]" />
-              <div className="flex flex-1 flex-col gap-1.5"><Bone className="h-4 w-1/3" /><BoneLines lines={3} /></div>
-            </div>
-          ))}
-        </div>
+        <BoneBars rows={5} />
       </GrowingTile>
     </SkeletonSurface>
   )

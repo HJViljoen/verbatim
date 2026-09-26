@@ -1320,13 +1320,14 @@ describe('the Subjects blocks, read from outside the workspace', () => {
   it('draw no in-app affordance on paper', () => {
     const data = subjectsFixture()
     expect(render(subjectsUnanswered.render(data, 'print', ctx))).not.toContain('Open the content brief')
-    expect(render(subjectsVoices.render(data, 'print', ctx))).not.toContain('Hear these voices in Voice')
-    expect(render(subjectsVoices.render(data, 'app', ctx))).toContain('Hear these voices in Voice')
+    expect(render(subjectsVoices.render(data, 'print', ctx))).not.toContain('Hear these voices in Conversation')
+    expect(render(subjectsVoices.render(data, 'app', ctx))).toContain('Hear these voices in Conversation')
     // The chart's and the kind mix's footers were hand-rolled `email ? a :
     // Link` pairs, so PRINT got the app's control. This page exports now, so
     // print is a PDF and a `/r/<token>` page.
     expect(render(subjectsLine.render(data, 'print', ctx))).not.toContain('Compare another subject')
-    expect(render(subjectsKinds.render(data, 'print', ctx))).not.toContain('Open Voice')
+    expect(render(subjectsKinds.render(data, 'print', ctx))).not.toContain('Open Conversation')
+    expect(render(subjectsKinds.render(data, 'app', ctx))).toContain('Open Conversation')
     expect(render(subjectsSubject.render(data, 'print', ctx))).not.toContain('videos behind your figure')
   })
 

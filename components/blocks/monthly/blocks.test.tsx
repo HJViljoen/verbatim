@@ -273,7 +273,9 @@ describe('2 · 4 · 5 · 6 · the front page’s other blocks', () => {
     expect(t).toMatch(/Ready to buy handmade bags\s*about a third makers\s*69\s*11%\s*7%/)
     expect(t).toContain('Makers and DIY, grouped:')
     expect(t).toContain('Not read as a change: we changed our searches in September.')
-    expect(t).toContain('Open Voice')
+    // The page's current sidebar label (plan §4.0): Conversation from WP2.4.
+    expect(t).toContain('Open Conversation')
+    expect(t).not.toContain('Voice')
     expect(MONTHLY_BLOCKS['monthly.themes'].title).toBe(overviewThemes.title)
   })
 

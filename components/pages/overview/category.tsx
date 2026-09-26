@@ -20,6 +20,7 @@ import type { FigureTable, Verdict, VerdictPairNote } from '@/lib/reading/verdic
 import type { AttentionBlock, CategoryBlock, LevelRow, Mover, OverviewData, Voice } from '@/lib/pages/overview'
 import { MOSTLY_MAKERS_SHARE } from '@/lib/pages/overview'
 import { DirectionWord } from './subjects'
+import { surface } from '@/lib/nav'
 
 // OV3 · What the category is saying (design §3 OV3). Four lines: what kind of
 // thing is being said, what grew and what faded, the mood, and the attention
@@ -706,7 +707,7 @@ export const overviewCategory: Block<OverviewData> = {
         // what stops is drawing it a second time inside the block.
         mode={mode}
         meta={categoryMeta(c, data.month)}
-        footer={openLink(mode, href, 'Open Voice →')}
+        footer={openLink(mode, href, `Open ${surface('voice').label} →`)}
         // "Nothing else moved clearly this month." into the footer note
         // (`main.category.footer`). It is a statement about what the block
         // DECLINED to say, which is metadata about the reading and not one of

@@ -1,251 +1,121 @@
-import type { Block, RenderMode } from '@/lib/blocks/types'
-import type { QuoteRef } from '@/lib/blocks/types'
+import type { Block, QuoteRef, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
-import { BlockStat } from '@/components/blocks/stat'
-import { TileColumns } from '@/components/shell/page-grid'
-import { BlockProportion } from '@/components/blocks/bars'
 import { BlockQuote } from '@/components/blocks/quote'
-import { CrowdFigure } from '@/components/crowd-figure'
-import { platformColour } from '@/components/profile-stats'
-import { fmtInt } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
+import { fmtInt, shortDate } from '@/lib/format'
+import { carriesShare } from '@/lib/reading/level'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import type { CastPersona, VoiceSurfaceData } from '@/lib/pages/voice-surface'
-import { castMasthead } from '@/lib/pages/voice-surface'
+import type { CastBlock, CastPersona, VoiceSurfaceData } from '@/lib/pages/voice-surface'
 
-// VO4 · Who is talking, current state only (design §3 VO4, decision W).
+// C4 · Who is talking (market-first WP2.4, plan §2.4 C4; key `voice.cast`,
+// reworked to the approved preview's table).
 //
-// THE CAST MOVES HERE FROM CONSUMER PROFILE, AND THREE THINGS DO NOT.
-//   · the connector lines — the most engineering-expensive element on the old
-//     page and pure ornament (cut #74);
-//   · "how the mix has moved" — it read the oldest twelve profiles,
-//     survivor-only and index-spaced, and there is no sound persona series to
-//     draw (cut #79). No per-persona trend replaces it, here or anywhere;
-//   · the dropped-groups line ("3 groups were just below the floor") — it needs
-//     `consumer_profiles.dropped` populated, which is a Pass E prompt change
-//     this phase does not make (decision W). Omitted rather than stubbed: a
-//     line that says "0 groups" about a column nothing writes is a false
-//     statement about the data.
-// The CROWD FIGURE is kept, at the owner's call (restoration #75), as the
-// page's one piece of decoration.
+// ONE ROW PER GROUP, BIGGEST FIRST: who they are in the model's own words, the
+// platforms their videos came from, how many videos the group was read on, and
+// one of the group's own comments.
 //
-// CURRENT STATE, AND THE BLOCK SAYS SO. Everything here is read off ONE stored
-// profile, dated by the update that wrote it — which is why the masthead names
-// that date and says when a later update has landed since. The rest of this
-// page is dated by the comment; this block is the exception and has to declare
-// it rather than let a reader assume the two agree. The eyebrow says so too,
-// as the artboard's does: "Who is talking · current state".
-//
-// THREE CARDS ABREAST, the artboard's (Block D wave 2). Stacked full-width
-// rows, each with a 64px crowd figure on the left, ran this block down a third
-// of the page to say three short things three times. They are tinted inner
-// blocks — the ONE inner tint, the second and last nesting level the design
-// system allows — laid out with `TileColumns({ rule: false })`: three cards of
-// one list are not three readings of one axis, and a card that carries its own
-// tint must not also wear a hairline against its own edge.
-//
-// WHAT THE ARTBOARD PUTS IN THE CARD'S TOP-RIGHT IS A SHARE ("38%") AND OURS
-// IS A COUNT. The mock's own denominator for it is the audience-month's 1,388,
-// and a stored profile is not a reading of an audience-month: it is written
-// over the run's whole insight population, across every audience and whatever
-// months that run had read, and its groups OVERLAP — Össur's five sum to 674
-// against a September category of 388. So the slot keeps the mock's type scale
-// and prints the one number that is true, the count, with the overlap stated
-// under the cards.
+// DATED BY AN UPDATE, AND THE COLUMN HEAD SAYS SO (§2.4 C4: "grouped at the
+// update of {date}, over everything read to date" as the column head, never
+// header meta). Every other figure on the page is dated by the comment; a
+// stored profile is written over everything the workspace had read at that
+// update. The groups overlap, so the counts are counts and no share of the
+// month is taken from them; How to read says so once, not a note under the
+// block (25 Sep rulings).
 
-/** The floor is a fact about the reading and is printed, not implied. */
-function Persona({ persona, mode, className }: { persona: CastPersona; mode: RenderMode; className?: string }) {
-  const email = mode === 'email'
-  const head = email ? (
-    <>
-      <span style={{ fontFamily: FONT.sans, fontSize: 13, fontWeight: 600, color: EMAIL.ink }}>{persona.name}</span>{' '}
-      <span data-copy="figure" style={{ fontFamily: FONT.mono, fontSize: 12, color: EMAIL.ink }}>{fmtInt(persona.videos)} videos</span>
-    </>
-  ) : (
-    <div className="flex items-center justify-between gap-2">
-      {/* The one piece of decoration on the page, kept at the owner's call
-          (restoration #75) and shrunk into the card's head row. Aria-hidden: it
-          carries no information the words do not — and deliberately ONE figure
-          rather than the artboard's ten-icon array, four of them filled, which
-          is a share drawn as a picture and this block has no share to draw. */}
-      <CrowdFigure personaKey={persona.key} className="h-9 w-auto flex-none" title={persona.name} />
-      <h3 className="m-0 min-w-0 flex-1 truncate text-[13px] font-semibold">{persona.name}</h3>
-      {/* A COUNT, AND NO SHARE — see CastPersona.videos and the file header.
-          `BlockStat` with no level is the right primitive for exactly this: a
-          count that is not a share of anything, at the mock's 18px, stamping
-          its own figure marker. */}
-      <span className="flex-none">
-        <BlockStat mode={mode} size="sm" value={fmtInt(persona.videos)} unit="videos" />
-      </span>
-    </div>
-  )
+/** "YouTube 37% · TikTok 31% · …": a share where the group's platform counts
+ *  can carry one, the counts where they cannot. */
+export function platformLine(p: Pick<CastPersona, 'platformMix'>): string | null {
+  if (p.platformMix.length === 0) return null
+  const total = p.platformMix.reduce((n, x) => n + x.videos, 0)
+  return p.platformMix
+    .map((x) => `${x.label} ${carriesShare(total) && x.pct != null ? `${Math.round(x.pct)}%` : fmtInt(x.videos)}`)
+    .join(' · ')
+}
 
-  const body = (
-    <>
-      {head}
-      {persona.oneLiner ? (
-        // THE MODEL'S OWN WORDS ABOUT THE GROUP, so `subject` and not `prose`.
-        // PROSE_POLICY (lib/prose/scrub.ts) marks `pass_e_persona` 'digits' and
-        // never 'direction', because in this slot a direction word is about the
-        // people rather than about a reading — production says so: Össur's cast
-        // is described as helping people "keep dignity and momentum" and
-        // stopped by "pain, falls, slow progress", and Sealand's by an
-        // "emotional pull [that] fades fast". The digit half of that policy is
-        // enforced at WRITE time, where the scrubber is wired, rather than
-        // here.
-        <p data-copy="subject" data-slot="pass_e_persona" className={email ? undefined : 'm-0 text-[12.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.muted } : undefined}>
-          {persona.oneLiner}
-        </p>
-      ) : null}
-      {persona.wants ? (
-        // THE LABEL IS CODE'S AND SITS OUTSIDE THE EXEMPT NODE. `subject`
-        // takes the direction rule off everything inside it, so a node that
-        // wraps a word code wrote is a place a real direction word could hide.
-        // Only the model's own sentence is marked.
-        <p className={email ? undefined : 'm-0 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}>
-          {/* THE ARTBOARD'S MONO SMALL CAPS, not sentence-case body ink: this
-              is a field name beside the model's own words, and at body weight
-              it read as the start of the sentence. */}
-          <span className={email ? undefined : 'font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground'}>Drives</span>{' '}
-          <span data-copy="subject" data-slot="pass_e_persona">{persona.wants}</span>
-        </p>
-      ) : null}
-      {persona.blockers ? (
-        <p className={email ? undefined : 'm-0 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}>
-          {/* THE ARTBOARD'S MONO SMALL CAPS, not sentence-case body ink: this
-              is a field name beside the model's own words, and at body weight
-              it read as the start of the sentence. */}
-          <span className={email ? undefined : 'font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground'}>Stops</span>{' '}
-          <span data-copy="subject" data-slot="pass_e_persona">{persona.blockers}</span>
-        </p>
-      ) : null}
-      {persona.triggers ? (
-        <p className={email ? undefined : 'm-0 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}>
-          {/* THE ARTBOARD'S MONO SMALL CAPS, not sentence-case body ink: this
-              is a field name beside the model's own words, and at body weight
-              it read as the start of the sentence. */}
-          <span className={email ? undefined : 'font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground'}>What made them look</span>{' '}
-          <span data-copy="subject" data-slot="pass_e_persona">{persona.triggers}</span>
-        </p>
-      ) : null}
-      {persona.platformMix.length > 0 ? (
-        <BlockProportion
-          mode={mode}
-          of="videos"
-          segments={persona.platformMix
-            .filter((p) => p.pct != null)
-            // THE PRODUCT'S ONE PLATFORM PALETTE, which exists and is not
-            // this. `var(--platform-tiktok)` is defined nowhere in the repo,
-            // so every segment and every legend dot painted transparent: the
-            // artboard's four-segment bar rendered as three mono percentages
-            // floating in a card. `platformColour` is the map the profile
-            // page's donuts have used since Stage 2 — fixed per platform, so a
-            // platform keeps its colour when another is absent from the data.
-            .map((p) => ({ label: p.label, count: p.videos, pct: p.pct as number, color: platformColour(p.platform) }))}
-        />
-      ) : null}
-      {persona.quote ? <BlockQuote mode={mode} quote={persona.quote} cite={persona.quoteCite ?? undefined} /> : null}
-    </>
-  )
+/** The Group column's head: when the groups were drawn, and over what. */
+export function castHead(c: Pick<CastBlock, 'profileDate'>): string | null {
+  return c.profileDate ? `grouped at the ${shortDate(c.profileDate)} update, over everything read to date` : null
+}
 
-  if (email) {
+const byVideos = (c: CastBlock): CastPersona[] => [...c.personas].sort((a, b) => b.videos - a.videos || a.name.localeCompare(b.name))
+
+function PersonaRow({ p, max, mode }: { p: CastPersona; max: number; mode: RenderMode }) {
+  const mix = platformLine(p)
+  if (mode === 'email') {
     return (
-      <div style={{ padding: '6px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>{body}</div>
+      <div style={{ padding: '8px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
+        <div style={{ fontFamily: FONT.sans, fontSize: 13, fontWeight: 600, color: EMAIL.ink }}>
+          {p.name} <span data-copy="figure" style={{ fontFamily: FONT.mono, fontWeight: 400, color: EMAIL.ink2 }}>{fmtInt(p.videos)} videos</span>
+        </div>
+        {p.oneLiner ? <div data-copy="subject" data-slot="pass_e_persona" style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink2 }}>{p.oneLiner}</div> : null}
+        {p.quote ? <BlockQuote mode={mode} quote={p.quote} cite={p.quoteCite ?? undefined} /> : null}
+      </div>
     )
   }
   return (
-    <div className={`flex min-w-0 flex-col gap-2 rounded bg-inner px-3.5 py-3 ${className ?? ''}`}>
-      {body}
+    <div role="row" className="grid grid-cols-1 gap-x-12 gap-y-3 border-b border-border/60 py-6 xl:grid-cols-[minmax(0,1fr)_216px_336px]">
+      <div role="rowheader" className="flex min-w-0 flex-col gap-2">
+        <span className="text-[15px] font-semibold text-foreground">{p.name}</span>
+        {/* THE MODEL'S OWN WORDS ABOUT THE GROUP, so `subject` and not `prose`
+            (PROSE_POLICY marks `pass_e_persona` 'digits', enforced at write). */}
+        {p.oneLiner ? <p data-copy="subject" data-slot="pass_e_persona" className="m-0 text-[15px] leading-[1.5] text-secondary-foreground [text-wrap:pretty]">{p.oneLiner}</p> : null}
+        {mix ? <span data-copy="figure" className="font-mono text-[12px] text-muted-foreground">{mix}</span> : null}
+      </div>
+      {/* Stacked (under xl) the bar keeps the preview's column width rather
+          than running the tile's. */}
+      <div className="flex h-6 max-w-[320px] items-center gap-4 xl:max-w-none">
+        <span aria-hidden className="relative block h-1.5 flex-1">
+          <span className="absolute inset-y-0 left-0 rounded-[2px] bg-foreground" style={{ width: `${(p.videos / max) * 100}%` }} />
+        </span>
+        <span className="w-12 flex-none text-right font-mono text-[15px] font-semibold tabular-nums text-foreground"><span data-copy="figure">{fmtInt(p.videos)}</span></span>
+      </div>
+      <div className="min-w-0">
+        {/* The preview's quote face with no rule beside it, as the theme
+            pane's voices draw it (`ground="inner"`). */}
+        {p.quote ? <BlockQuote mode={mode} quote={p.quote} cite={p.quoteCite ?? undefined} ground="inner" /> : null}
+      </div>
     </div>
   )
-}
-
-/**
- * NO EMPTY CELL IN THE LAST ROW (layout sweep, 2026-09-24). Five personas in
- * three columns left a persona-sized hole beside the last two, white a whole
- * card tall. The last card takes the leftover columns instead: two left over,
- * it spans two; one left over, it spans the row. Classes are literal so
- * Tailwind's scanner sees them.
- */
-export function lastRowSpan(i: number, n: number): string {
-  if (i !== n - 1) return ''
-  const left = n % 3
-  return left === 2 ? 'xl:col-span-2' : left === 1 && n > 1 ? 'xl:col-span-3' : ''
 }
 
 export const voiceCast: Block<VoiceSurfaceData> = {
   key: 'voice.cast',
-  // The artboard's eyebrow, and the declaration this block has to make: every
-  // other figure on the page is dated by the comment, and this one is dated by
-  // the update that wrote the profile.
-  title: 'Who is talking · current state',
+  title: 'Who is talking',
   question: 'Who are the people behind these comments?',
 
   render(data, mode = 'app') {
     const c = data.cast
-    const email = mode === 'email'
     const empty = voiceCast.emptyState(data)
-    const masthead = castMasthead(c)
-
-    const frameProps = {
-      title: voiceCast.title,
-      question: voiceCast.question,
-      mode,
-      // NOT "comments". `consumer_profiles.insight_population` counts the
-      // POINTS Pass A extracted and the workspace currently holds — Össur's
-      // 3,129 against 10,534 comments in the September category — and
-      // "comments" has a fixed meaning in this product's copy
-      // (lib/calibration.ts GLOSSARY), so calling these that is a wrong
-      // number wearing a defined word. "Insight" is pipeline vocabulary and
-      // is not one of the thirteen words either, so the line says the plain
-      // thing instead.
-      // No meta: "read over N separate points" was method trivia; each persona
-      // card carries its own video count (copy de-clutter B37).
-      // A SENTENCE, IN EVERY MODE, BECAUSE IT IS ONE. This was
-      // `<Link href={`${ctx.appUrl}/dashboard/voice#cast`}>` — in the app
-      // `appUrl` is `''`, so the floor note was an anchor to the page it is
-      // already on, wearing `hover:underline` and pixel-identical to VO2's
-      // plain-text footer. Across one page the footer slot was then a real link
-      // with an arrow, a plain sentence, two real links, and an explanatory
-      // sentence that silently navigated nowhere and was discoverable by hover
-      // alone. Rule 7 asks the footer slot to mean one thing at a time; a
-      // statement of how the reading was made is not a destination.
-      footer: email
-        ? <span style={{ color: EMAIL.muted }}>{c.floorNote}</span>
-        : <span>{c.floorNote}</span>,
-      // No footer note: the title already says "current state" (B39).
-    }
-
     if (empty) {
       return (
-        <BlockFrame {...frameProps}>
+        <BlockFrame title={voiceCast.title} mode={mode} roomy>
           <BlockEmpty mode={mode}>{empty}</BlockEmpty>
         </BlockFrame>
       )
     }
-
+    const personas = byVideos(c)
+    const max = Math.max(1, ...personas.map((p) => p.videos))
+    const head = castHead(c)
+    if (mode === 'email') {
+      return (
+        <BlockFrame title={voiceCast.title} mode={mode}>
+          {head ? <div style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted }}>{head}</div> : null}
+          {personas.map((p) => <PersonaRow key={p.key} p={p} max={max} mode={mode} />)}
+        </BlockFrame>
+      )
+    }
     return (
-      <BlockFrame {...frameProps}>
-        <div className={email ? undefined : 'flex flex-col gap-3'} id={email ? undefined : 'cast'}>
-          {masthead ? (
-            <p className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}>
-              {masthead}
-            </p>
-          ) : null}
-          {email
-            ? c.personas.map((p) => <Persona key={p.key} persona={p} mode={mode} />)
-            : (
-              <TileColumns of={3} rule={false}>
-                {c.personas.map((p, i) => <Persona key={p.key} persona={p} mode={mode} className={lastRowSpan(i, c.personas.length)} />)}
-              </TileColumns>
-            )}
-          {/* NOT the mock's "No persona 16% of category videos". That figure is
-              the remainder of a partition, and these groups do not partition
-              anything — a video can carry two of them. The overlap is stated
-              instead of a remainder being taken from it. */}
-          <p className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}>
-            {c.overlapNote}
-          </p>
+      <BlockFrame title={voiceCast.title} mode={mode} roomy>
+        <div role="table" id="cast" className="flex min-w-0 flex-col">
+          <div role="row" className="grid grid-cols-1 gap-x-12 border-b border-border pb-2.5 xl:grid-cols-[minmax(0,1fr)_216px_336px]">
+            <span role="columnheader" className="flex flex-col text-[13px] font-medium leading-[1.35] text-muted-foreground">
+              Group
+              {head ? <span className="font-mono text-[12px] font-normal">{head}</span> : null}
+            </span>
+            <span role="columnheader" className="hidden self-end text-right text-[13px] font-medium text-muted-foreground xl:block">Videos</span>
+            <span role="columnheader" className="hidden self-end text-[13px] font-medium text-muted-foreground xl:block">In their words</span>
+          </div>
+          {personas.map((p) => <PersonaRow key={p.key} p={p} max={max} mode={mode} />)}
         </div>
       </BlockFrame>
     )
@@ -253,13 +123,10 @@ export const voiceCast: Block<VoiceSurfaceData> = {
 
   figures(data): FigureTable {
     const out: FigureTable = {}
-    // The largest group only, as a COUNT. The cast is a description, not a
-    // measurement ladder, and declaring every group would spend the page's
-    // number budget on the one block that is explicitly "current state".
-    const lead = [...data.cast.personas].sort((a, b) => b.videos - a.videos)[0]
-    if (lead) {
-      out.cast_lead_videos = { value: lead.videos, unit: 'videos', label: `videos the group "${lead.name}" was read on` }
-    }
+    // The largest group only, as a COUNT: the groups overlap and are dated by
+    // an update, so the cast is a description, not a measurement ladder.
+    const lead = byVideos(data.cast)[0]
+    if (lead) out.cast_lead_videos = { value: lead.videos, unit: 'videos', label: `videos the group "${lead.name}" was read on` }
     return out
   },
 

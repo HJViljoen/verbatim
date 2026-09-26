@@ -1,162 +1,66 @@
 import { describe, expect, it } from 'vitest'
 
-import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
-import { EMAIL, tokenHex } from '@/lib/email/theme'
-import { platformColour } from '@/components/profile-stats'
-import { copyNodes, copyViolations } from '@/lib/test/copy-contract'
+import { blockContext, type RenderMode } from '@/lib/blocks/types'
+import { EMAIL } from '@/lib/email/theme'
+import { copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
-import { voiceCast } from './cast'
-import { refusedVoiceFixture, voiceFixture } from './fixture'
+import { castHead, platformLine, voiceCast } from './cast'
+import { ossurVoiceFixture, refusedVoiceFixture, voiceFixture } from './fixture'
 
-// VO4 · the cast, current state only (Phase 1 WP13, decision W).
+// C4 · who is talking (market-first WP2.4, plan §2.4 C4), on staging's stored
+// profiles (Sealand's of 20 Sep, Össur's of 13 Sep).
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('', EMAIL, {})
 
-const draw = (data = voiceFixture(), mode: RenderMode = 'app') => renderText(voiceCast.render(data, mode, ctx))
+describe('voiceCast (C4)', () => {
+  it('one row per group, biggest first, with its count and one of its own comments', () => {
+    const text = renderText(voiceCast.render(voiceFixture(), 'app', ctx))
+    const order = ['Supporter', 'Bag lover', 'Maker', 'Researcher', 'Traveler'].map((n) => text.indexOf(n))
+    expect(order).toEqual([...order].sort((a, b) => a - b))
+    expect(text).toMatch(/Supporter[\s\S]*?265/)
+    expect(text).toContain('SO PRETTY, I WANT ONE!!')
+    expect(text).toContain('one of this group’s own comments')
+  })
 
-describe('voiceCast', () => {
+  it('names when the groups were drawn in the column head, never as header meta (§2.4 C4)', () => {
+    expect(castHead(voiceFixture().cast)).toBe('grouped at the 20 Sep update, over everything read to date')
+    const markup = render(voiceCast.render(voiceFixture(), 'app', ctx))
+    expect(markup).toContain('grouped at the 20 Sep update, over everything read to date')
+    expect(markup).toMatch(/<h2[^>]*>Who is talking<\/h2>/)
+    // No block footer: the frame's footer rail (a quote's own cite is a <footer> too).
+    expect(markup).not.toContain('<footer class="flex min-h-12')
+  })
+
+  it('prints each group’s platforms as whole shares where its count carries one', () => {
+    const bagLover = voiceFixture().cast.personas.find((p) => p.key === 'bag-lover')!
+    expect(platformLine(bagLover)).toBe('TikTok 48% · Instagram 26% · YouTube 22% · Reddit 4%')
+    expect(platformLine({ platformMix: [{ platform: 'reddit', label: 'Reddit', videos: 4, pct: 57.1 }, { platform: 'tiktok', label: 'TikTok', videos: 3, pct: 42.9 }] })).toBe('Reddit 4 · TikTok 3')
+  })
+
+  it('prints no share of the month, no floor note and no overlap footnote (25 Sep rulings; How to read says it)', () => {
+    const text = renderText(voiceCast.render(voiceFixture(), 'app', ctx))
+    expect(text).not.toContain('3-video floor')
+    expect(text).not.toContain('these counts overlap')
+    expect(text).not.toContain('No persona')
+  })
+
+  it('tells "not switched on" apart, in words', () => {
+    expect(renderText(voiceCast.render(refusedVoiceFixture(), 'app', ctx))).toContain('Reading who is talking is not switched on for this workspace yet.')
+  })
+
   it('renders in all three modes and keeps the copy contract', () => {
-    for (const data of [voiceFixture(), refusedVoiceFixture()]) {
+    for (const data of [voiceFixture(), ossurVoiceFixture(), refusedVoiceFixture()]) {
       for (const mode of MODES) {
         expect(copyViolations(voiceCast.render(data, mode, ctx)), `${data.brand} · ${mode}`).toEqual([])
       }
     }
   })
 
-  it('prints the count and no share — there is no denominator the count is part of', () => {
-    const text = draw()
-    expect(text).toContain('The one-bag commuter 527 videos')
-    expect(text).not.toMatch(/527 of /)
-  })
-
-  it('marks the model’s words as `subject` and leaves code’s labels outside the exemption', () => {
-    // `subject` cuts its whole range out of rule (c), so a node wrapping a
-    // label code wrote is a place a real direction word could hide. Every
-    // subject node here is one stored sentence and nothing else.
-    const markup = render(voiceCast.render(voiceFixture(), 'app', ctx))
-    const subjects = copyNodes(markup).filter((n) => n.kind === 'subject')
-    expect(subjects.length).toBeGreaterThan(0)
-    for (const label of ['Drives', 'Stops', 'What made them look']) {
-      expect(subjects.some((n) => n.text.includes(label)), label).toBe(false)
-    }
-    expect(draw()).toContain('Drives')
-  })
-
-  it('never calls its population "comments", and no longer narrates it (copy de-clutter B37)', () => {
-    const text = draw()
-    expect(text).not.toContain('separate points people made')
-    expect(text).not.toContain("comments' worth")
-  })
-
-  it('paints the platform bar and its dots in a colour that exists', () => {
-    // `var(--platform-tiktok)` is defined nowhere in the repo, so every
-    // segment and every legend dot painted transparent: the artboard's
-    // four-segment bar rendered as three mono percentages floating in a card.
-    // `platformColour` is the product's one platform palette.
-    const markup = render(voiceCast.render(voiceFixture(), 'app', ctx))
-    expect(markup).not.toContain('var(--platform-')
-    expect(markup).toContain(platformColour('tiktok'))
-    expect(markup).toContain(platformColour('youtube'))
-    // And the email arm resolves them to hex rather than painting four dots
-    // the same muted grey.
-    const email = render(voiceCast.render(voiceFixture(), 'email', ctx))
-    expect(email).toContain(tokenHex(platformColour('tiktok')))
-    expect(tokenHex(platformColour('tiktok'))).not.toBe(tokenHex(platformColour('youtube')))
-  })
-
-  it('says the groups overlap instead of taking a remainder from them', () => {
-    expect(draw()).toContain('A video can carry more than one group, so these counts overlap and do not add up to a whole.')
-  })
-
-  it('says the group floor on the block rather than implying it, and what the block is a reading OF', () => {
-    // PORTED (wave 2): the artboard's footer has two ends. The floor is about
-    // which groups are named; the state is about the whole block, and is the
-    // page's one exception to the comment clock. The mock's words for it —
-    // "current state, not a trend" — cannot be printed: "trend" is on the
-    // product's own direction list.
-    expect(draw()).toContain('3-video floor')
-    expect(draw()).not.toContain('never compared with another month')
-  })
-
-  it('sets the groups as three cards abreast, the way the artboard does', () => {
-    expect(render(voiceCast.render(voiceFixture(), 'app', ctx))).toContain('xl:grid-cols-3')
-  })
-
-  it('prints no masthead date while the cast is current (copy de-clutter B40)', () => {
-    expect(draw()).not.toContain('Who is talking, as read on')
-  })
-
-  it('says when a later update has landed since the profile was written', () => {
-    const base = voiceFixture()
-    expect(draw({ ...base, cast: { ...base.cast, stale: true } })).toContain('a later update has landed since')
-  })
-
-  it('never prints the mock\u2019s "No persona 16%" line — it is a remainder of a partition these groups are not', () => {
-    expect(draw()).not.toMatch(/No group was named on/)
-    expect(draw()).not.toMatch(/No persona/)
-  })
-
-  it('keeps the crowd figure — decoration the owner chose, once per group', () => {
-    const markup = render(voiceCast.render(voiceFixture(), 'app', ctx))
-    // ONE per group, and one FIGURE per group: never the artboard's ten-icon
-    // array with four filled, which is a share drawn as a picture.
-    expect(markup.match(/<svg/g)).toHaveLength(voiceFixture().cast.personas.length)
-  })
-
-  it('does not rebuild "how the mix has moved", here or anywhere (cut #79)', () => {
-    const text = draw()
-    expect(text).not.toMatch(/how the mix/i)
-    expect(text).not.toMatch(/over time/i)
-  })
-
-  it('omits the dropped-groups line rather than stubbing it (decision W)', () => {
-    // `consumer_profiles.dropped` is unpopulated; a line saying "0 groups were
-    // just below the floor" would be a false statement about the data.
-    expect(draw()).not.toMatch(/below the floor this month/i)
-  })
-
-  it('tells "not switched on" apart from "too little conversation"', () => {
-    expect(voiceCast.emptyState(refusedVoiceFixture()))
-      .toBe('Reading who is talking is not switched on for this workspace yet.')
-    const base = voiceFixture()
-    const thin = {
-      ...base,
-      cast: { ...base.cast, state: 'no_personas' as const, personas: [], empty: 'Too little conversation in this update to describe who is talking.' },
-    }
-    expect(voiceCast.emptyState(thin)).toBe('Too little conversation in this update to describe who is talking.')
-  })
-
-  it('still prints the floor note when it has nothing to show — the floor is why', () => {
-    expect(draw(refusedVoiceFixture())).toContain('3-video floor')
-  })
-
-  it('declares one figure, and it is a count — the cast is a description, not a ladder', () => {
-    const table = blockAnswers(voiceCast, voiceFixture()).figures
-    expect(Object.keys(table)).toEqual(['cast_lead_videos'])
-    expect(table.cast_lead_videos).toMatchObject({ value: 527, unit: 'videos' })
-  })
-
-  it('declares no verdicts at all: current state carries no comparison', () => {
-    expect(blockAnswers(voiceCast, voiceFixture()).verdicts).toEqual([])
-  })
-
-  it('hands its voices up as refs', () => {
-    expect(blockAnswers(voiceCast, voiceFixture()).quotes).toEqual(['e:9', 'e:10', 'e:11'])
-  })
-
-  it('keeps its key, which is a stored contract', () => {
-    expect(voiceCast.key).toBe('voice.cast')
-  })
-
-  it('does not dress its floor sentence as a control', () => {
-    // It was `<Link href={`${ctx.appUrl}/dashboard/voice#cast`}>` and in the
-    // app `appUrl` is '' — a link to the page it is already on, wearing
-    // `hover:underline`, in a footer slot the same page also fills with two
-    // real links and an arrow. A sentence about how the reading was made is
-    // not a destination.
-    const markup = render(voiceCast.render(voiceFixture(), 'app', ctx))
-    expect(markup).toContain('3-video floor')
-    expect(markup).not.toContain('/dashboard/voice#cast')
+  it('declares one figure, the largest group, as a count; and its voices as refs', () => {
+    const figures = voiceCast.figures?.(voiceFixture()) ?? {}
+    expect(Object.keys(figures)).toEqual(['cast_lead_videos'])
+    expect(figures.cast_lead_videos.value).toBe(265)
+    expect(voiceCast.quotes?.(voiceFixture())).toHaveLength(5)
   })
 })

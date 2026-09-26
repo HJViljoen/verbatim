@@ -1,5 +1,6 @@
 import type { Quote } from '../../renderables/types'
 import { SHARE_BAND } from '../../report-bands'
+import { fromNewSearches, type ThemeEvidence } from './provenance'
 
 // "What your market talked about": the theme board, the makers line, and the
 // asks (market-first WP1.6, plan §2.2 blocks 2 and 5, §4.2 `overview-market`).
@@ -66,7 +67,8 @@ export interface MarketTheme {
    *  new clustering regime (the first run of a regime re-groups; it does not
    *  mint). */
   identityNewThisRun: boolean
-  /** WP2.4; empty until then. */
+  /** WP2.4 (`themeFlags`): at most one; empty on the front page's board,
+   *  which prints no flag (the approved preview). */
   flags: ('new' | 'now_10')[]
   /** Videos found only by searches added in the reading month, of the theme's
    *  reading-month videos. Null where not measured. */
@@ -177,6 +179,26 @@ export function makerFraction(share: number | null | undefined): string | null {
   if (s < 0.365) return 'about a third'
   if (s < 0.45) return 'over a third'
   return 'almost half'
+}
+
+/**
+ * How much of a MAKER-LED theme is makers' (WP2.4; the preview's makers group
+ * on Conversation: "about three quarters makers", "nearly all makers"). The
+ * front page groups these into one line and never prints their rows; the
+ * Conversation board lists every one of them, so "mostly" would say the same
+ * word seven times. Null under half, where `makerWords` speaks.
+ */
+export function groupedMakerWords(share: number | null | undefined): string | null {
+  const f = groupedMakerFraction(share)
+  return f ? `${f} makers` : null
+}
+
+/** The fraction `groupedMakerWords` names: "over four in five", "all". */
+export function groupedMakerFraction(share: number | null | undefined): string | null {
+  const s = finiteShare(share)
+  if (s == null || s < MAKER_GROUP_SHARE) return null
+  return s >= 1 ? 'all' : s >= 0.9 ? 'nearly all' : s >= 0.825 ? 'over four in five' : s >= 0.775 ? 'about four in five'
+    : s >= 0.7 ? 'about three quarters' : s >= 0.6 ? 'about two thirds' : 'over half'
 }
 
 /** A row's maker tag: "about a third makers", or null (under a fifth, or not
@@ -300,4 +322,168 @@ export function buildAsks(
  *  reads quotes for exactly these. */
 export function askIds(themes: readonly MarketTheme[], segments: ThemeBoard['segments']): string[] {
   return buildAsks(themes, '', segments).lists.flatMap((l) => l.rows.map((r) => r.registryId))
+}
+
+// ---- Conversation: every theme at 10+, flagged, with provenance (WP2.4) ------------
+//
+// PLAN §2.4 C2: every category theme at 10 videos or more in the reading month,
+// biggest first, nothing skipped. The same rows the front page's board reads
+// (`MarketTheme`), the same order (`byBoardOrder`) and the same grouping
+// (decision F: maker-led themes on a line of their own, noise-led ones set
+// aside), with no cap, and each row carrying two things the front page's does
+// not: its flags and where its videos came from.
+
+/** A theme's flag (plan §2.4 C2; `MarketTheme.flags`). */
+export type ThemeFlag = MarketTheme['flags'][number]
+
+/** A flag's words, as the preview prints them. */
+export const FLAG_WORDS: Readonly<Record<ThemeFlag, string>> = { new: 'New', now_10: 'Now 10+' }
+
+/** What a flag is not (WP2.4: "both print both counts and 'too few last month
+ *  to call it a change'"). A flag is a level against the floor, never a
+ *  verdict: last month had under 10 videos, so no band could be drawn. */
+export const FLAG_NOT_A_CHANGE = 'too few last month to call it a change'
+
+/** The pool Conversation reads (WP2.4: "a reading-month pool of every category
+ *  theme with k ≥ 3, not the top 40 by comments"): the themes at 3 to 9 are
+ *  counted under the board and listed on request. */
+export const POOL_FLOOR = 3
+
+/**
+ * A theme's flags (WP2.4), at most one:
+ *
+ * - **New**: no row for the registry id in any earlier month (`heardBefore`
+ *   false), UNLESS the identity was minted by an update that opened a new
+ *   clustering regime (`regrouped`, WP1.9's rule, `opensClusteringRegime`):
+ *   that update re-groups the whole corpus, so an identity it minted is the
+ *   same conversation under a new name, and flagging it would mark nearly
+ *   every theme New.
+ * - **Now 10+**: at 10 or more now and under 10 last month (a re-grouped
+ *   identity with no earlier row lands here, with last month's 0).
+ *
+ * Nothing under the floor, and nothing where the page has no previous month
+ * to read against (`prevK` null): a tenant's first month is not "new".
+ */
+export function themeFlags(input: {
+  k: number
+  /** Last month's category k: 0 where that month has rows and the theme is
+   *  not in them; null where the page has no previous month. */
+  prevK: number | null
+  /** A row with videos for this registry id in some month before the reading
+   *  month, in any audience. */
+  heardBefore: boolean
+  /** Minted by an update that opened a new clustering regime (WP1.9). */
+  regrouped: boolean
+}): ThemeFlag[] {
+  if (!(input.k >= THEME_FLOOR) || input.prevK == null || !Number.isFinite(input.prevK)) return []
+  if (!input.heardBefore && !input.regrouped) return ['new']
+  return input.prevK < THEME_FLOOR ? ['now_10'] : []
+}
+
+/**
+ * How many of a theme's reading-month videos came from searches added in that
+ * month (WP2.4 `themeProvenance`; the 26 Sep ruling's definition,
+ * `fromNewSearches`).
+ *
+ * IN A MONTH WHERE NO SEARCH WAS ADDED THE COUNT IS 0 BY DEFINITION, with no
+ * per-video read: `added` empty answers 0 of the theme's videos whatever
+ * `evidence` holds, so the loader skips the evidence reads. Null where it is
+ * not measured: the added searches could not be read (`added` null), or the
+ * evidence could not (`evidence` null, or no provenance rows: MF1 not applied).
+ */
+export function themeProvenance(
+  videoIds: readonly string[],
+  evidence: ThemeEvidence | null,
+  added: ReadonlySet<string> | null,
+): { fromNewSearches: number; of: number } | null {
+  if (added == null) return null
+  const of = new Set(videoIds).size
+  if (of === 0) return null
+  if (added.size === 0) return { fromNewSearches: 0, of }
+  return evidence ? fromNewSearches(videoIds, evidence, added) : null
+}
+
+export interface ConversationBoard {
+  month: string
+  /** The category's videos in the month: every row's n. */
+  n: number
+  /** The previous month and its category n, for the "Aug of 351" column. */
+  prev: { month: string; n: number | null } | null
+  segments: ThemeBoard['segments']
+  /** Every theme at 10+ not led by makers or noise (or not measured), in
+   *  board order, NEVER CAPPED: nothing is skipped (plan §2.4 C2, §5.9). */
+  rows: MarketTheme[]
+  /** The maker-led themes at 10+, in board order. Null where the segments were
+   *  not measured or the tenant has no maker rule (Össur). */
+  makers: MarketTheme[] | null
+  /** The noise-led themes at 10+, set aside the same way. */
+  setAside: MarketTheme[] | null
+  /** The themes at 3 to 9 videos: how many, and the rows only when a reader
+   *  asked for them ("More themes at 3 to 9 videos →"). */
+  below: { count: number; rows: MarketTheme[] | null }
+  /** Every theme at 10+: rows, makers and set aside together. */
+  atTen: number
+  /** How many of the category's videos in the month sit in a theme at 10+
+   *  (the union of their videos), or null where that was not read. */
+  inThemes: number | null
+  /** The themes view's one chip for the month pair (R3), or null. */
+  chip: string | null
+}
+
+/**
+ * Conversation's board: every theme at the floor or over, grouped as the
+ * front page groups them and uncapped; the pool under the floor counted.
+ */
+export function buildConversationBoard(
+  themes: readonly MarketTheme[],
+  n: number,
+  month: string,
+  segments: ThemeBoard['segments'],
+  prev: ConversationBoard['prev'],
+  opts: {
+    expanded?: boolean
+    /** The pool's themes at 3 to 9 where the loader read only those at 10+
+     *  (the board not expanded): counted, not listed. */
+    belowCount?: number
+    inThemes?: number | null
+    chip?: string | null
+  } = {},
+): ConversationBoard {
+  const seen = new Set<string>()
+  const pool = themes
+    .filter((t) => {
+      if (seen.has(t.registryId) || !(t.k >= POOL_FLOOR) || !t.label.trim()) return false
+      seen.add(t.registryId)
+      return true
+    })
+    .sort(byBoardOrder)
+  const atFloor = pool.filter((t) => t.k >= THEME_FLOOR)
+  const below = pool.filter((t) => t.k < THEME_FLOOR)
+  const grouped = segments === 'measured'
+  return {
+    month,
+    n,
+    prev,
+    segments,
+    rows: atFloor.filter((t) => !grouped || segmentOf(t) == null),
+    makers: grouped ? atFloor.filter((t) => segmentOf(t) === 'makers') : null,
+    setAside: grouped ? atFloor.filter((t) => segmentOf(t) === 'noise') : null,
+    below: { count: opts.expanded ? below.length : opts.belowCount ?? below.length, rows: opts.expanded ? below : null },
+    atTen: atFloor.length,
+    inThemes: opts.inThemes ?? null,
+    chip: opts.chip ?? null,
+  }
+}
+
+/**
+ * How much of a theme's videos are makers', as the theme pane says it (plan
+ * §2.4 C3, the preview: "fewer than a fifth of its videos are makers' own").
+ * Null where nobody measured it.
+ */
+export function makerShareSentence(share: number | null | undefined): string | null {
+  const s = finiteShare(share)
+  if (s == null) return null
+  if (s < MAKER_NOTE_SHARE) return 'fewer than a fifth of its videos are makers’ own'
+  // Half or more in the board's grouped words, so the pane and its row agree.
+  return `${groupedMakerFraction(s) ?? makerFraction(s)} of its videos are makers’ own`
 }

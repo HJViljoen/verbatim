@@ -1,441 +1,707 @@
-import { prevalenceTier } from '@/lib/calibration'
-import { quoteRef } from '@/lib/renderables/quotes-freeze'
 import { horizonWindow } from '@/lib/reading/horizon'
-import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '@/lib/rivals'
-import type { Verdict } from '@/lib/reading/verdicts'
-import type { MonthPoint } from '@/lib/reading/series'
-import type { Mover } from '@/lib/pages/overview'
-import type { VoiceSurfaceData } from '@/lib/pages/voice-surface'
-import { PERSONA_VIDEO_FLOOR, onCameraScope, voiceSurfaceHref } from '@/lib/pages/voice-surface'
-import { methodFixture, methodRefusedFixture, methodRefusedRecordFixture, recordBandFixture } from '@/lib/test/method-fixture'
-import { moodShares } from '@/lib/reading/mood'
+import type { ReadingMonth } from '@/lib/reading/reading-month'
+import type { OtherMonth } from '@/lib/reading/reading-view'
+import { buildConversationBoard, makerShareSentence, marketKindLabel, type MarketTheme } from '@/lib/pages/overview-market'
+import type { Voice } from '@/lib/pages/overview'
+import { PERSONA_VIDEO_FLOOR, askAboutTheme, voiceSurfaceHref, type CastPersona, type VoiceSurfaceData } from '@/lib/pages/voice-surface'
 
-// Voice's block fixtures (Phase 1 WP13).
+// Conversation's block fixtures (market-first WP2.4).
 //
-// TWO STATES, BOTH REAL, and the second one is the one a client sees today.
-// `voiceFixture()` is a month that read — the shape the mock's Voice artboard
-// draws. `refusedVoiceFixture()` is the state PRODUCTION is in: M2 and M5
-// unapplied, so the kind ladder, the tone line and the re-read mark all come
-// back as sentences saying what is not recorded, and Pass E has written no
-// profile for the cast. Every block is rendered in both, in all three modes,
-// because a page that only renders when everything is there is a page nobody
-// has checked.
+// REAL NUMBERS, NONE INVENTED: every figure, label, kind, maker share, flag,
+// provenance count, quote and persona here is what `loadVoiceSurface` returned
+// on STAGING (zfmxrrugaihxpubunleu, data to 20 Sep) for Sealand and Össur with
+// the clock at 2026-10-11T06:00Z, read-only through `scripts/loader-dump.ts`
+// on 26 Sep. The registry ids are shortened to their first eight characters;
+// identity is only ever compared inside one fixture. Staging's category read
+// 625 videos in September (production 626) and 351 in August.
+//
+// THREE STATES:
+//   - `voiceFixture()`: Sealand's September, MF1 measured: 21 themes at 10+,
+//     7 of them maker-led, the lead "Price and sale questions" open;
+//   - `ossurVoiceFixture()`: Össur (paused, no maker rule, §2.13): 12 themes,
+//     "Brand boycott over politics" New;
+//   - `refusedVoiceFixture()`: Sealand's same month before MF1 is applied
+//     (segments not measured, no provenance, no union of theme videos) and with
+//     no themed update or profile behind the pane and the cast. Every absence
+//     is a null the loader returns, never a zero.
+
+type Row = [id: string, label: string, k: number, prevK: number | null, kind: string | null, maker: number | null, noise: number | null, flags: MarketTheme['flags'], provenance: [number, number] | null]
+
+const SEALAND_THEMES: Row[] = [
+  ["03cabe7e", "Buying interest and ordering questions", 88, 33, "purchase_intent", 0.3523, 0, [], [57, 88]],
+  ["0b05fdf0", "Praise for beautiful bag design", 60, 23, "praise", 0.35, 0, [], [44, 60]],
+  ["4c312c8b", "More colors and variants wanted", 20, 2, "feature_request", 0.3, 0.05, ["now_10"], [11, 20]],
+  ["22e2445c", "Price and sale questions", 18, 7, "purchase_intent", 0.2222, 0.0556, ["now_10"], [11, 18]],
+  ["2c7238b7", "Interest in shipping and locations", 13, 10, "purchase_intent", 0, 0.0769, [], [8, 13]],
+  ["f329a7dd", "Confusion about airline size rules", 12, 6, "question", 0.0833, 0, ["now_10"], [11, 12]],
+  ["d812ace3", "Shopping interest from featured items", 12, 5, "purchase_intent", 0.3333, 0.0833, ["now_10"], [6, 12]],
+  ["056a478a", "Appreciation for smart packing tips", 12, 3, "praise", 0.1667, 0, ["now_10"], [9, 12]],
+  ["0c0784d8", "Frustration with bag weight", 11, 6, "pain_point", 0, 0.0909, ["now_10"], [9, 11]],
+  ["8285e151", "Praise for laptop carry features", 11, 3, "praise", 0, 0.1818, ["now_10"], [6, 11]],
+  ["daf7426d", "Comfort problems when carrying", 10, 7, "pain_point", 0, 0, ["now_10"], [5, 10]],
+  ["ce659d82", "Appreciation for thrifting value", 10, 2, "praise", 0.1, 0.2, ["now_10"], [8, 10]],
+  ["4f4bc420", "Laundry planning for travel", 10, 0, "question", 0.1, 0, ["new"], [8, 10]],
+  ["aed3a6d0", "Preference for secondhand fashion", 10, 0, "purchase_intent", 0.2, 0, ["new"], [8, 10]],
+  ["faaa44da", "Love for creative upcycling", 72, 42, "praise", 0.875, 0, [], [9, 72]],
+  ["184e2461", "Admiration for handmade craftsmanship", 65, 32, "praise", 0.7077, 0, [], [29, 65]],
+  ["e514443f", "Requests for step-by-step tutorials", 28, 15, "question", 0.8214, 0, [], [13, 28]],
+  ["fb4361bb", "Questions about materials and tools", 25, 15, "question", 0.96, 0, [], [10, 25]],
+  ["c32c2efd", "Need for exact measurements", 15, 6, "question", 0.8, 0, ["now_10"], [4, 15]],
+  ["daf78e91", "Tutorial praised as easy to follow", 14, 7, "praise", 1, 0, ["now_10"], [5, 14]],
+  ["8b33a663", "Requests for the sewing pattern", 11, 6, "question", 1, 0, ["now_10"], [6, 11]],
+]
+const SEALAND_OPEN = "22e2445c"
+const SEALAND_KINDS = [{"kind": "purchase_intent", "label": "Ready to buy", "videos": 13}, {"kind": "question", "label": "Asking how it works", "videos": 4}, {"kind": "feature_request", "label": "Asking for something", "videos": 1}]
+const SEALAND_VOICES: Voice[] = [
+  {
+    "cite": "TikTok · 18 Sep · under a category video",
+    "href": "https://www.tiktok.com/@bataray.ng/video/7686980095516462356",
+    "onScreen": null,
+    "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "e:8746e05e-95d7-46fc-b29f-34c084f9b091",
+      "text": "Wow so your bags cost K363 in Zambia? Definitely adding this to my future purchases"
+    }
+  },
+  {
+    "cite": "TikTok · 9 Sep · under a category video",
+    "href": "https://www.tiktok.com/@nina.na.0209/video/7679766371944746260",
+    "onScreen": null,
+    "quote": {
+      "english": "Very beautiful 🩷🩷 How much do you sell each leaf for?",
+      "lang": "th",
+      "ref": "e:87841c6c-74bc-4dad-8639-8663199d2a27",
+      "text": "สวยมากค่ะ🩷🩷ขายใบเท่าไหร่ค่ะ"
+    }
+  }
+]
+const SEALAND_MARKET = {"category": 625, "comments": 16204, "platformMix": [{"label": "YouTube", "pct": 44.3, "platform": "youtube", "videos": 277}, {"label": "TikTok", "pct": 28.8, "platform": "tiktok", "videos": 180}, {"label": "Reddit", "pct": 18.4, "platform": "reddit", "videos": 115}, {"label": "Instagram", "pct": 8.5, "platform": "instagram", "videos": 53}], "rivalFiled": 29, "videos": 654}
+const SEALAND_BOARD = {"n": 625, "prev": {"month": "2026-08-01", "n": 351}, "segments": "measured", "atTen": 21, "inThemes": 325, "chip": "not read as a change: we changed our searches in September", "belowCount": 83}
+const SEALAND_READING: ReadingMonth = {"asAt": "2026-09-20T08:33:47.358+00:00", "current": {"daysIn": 11, "month": "2026-10-01", "updates": 0, "videos": null}, "leadsWithCurrent": false, "month": "2026-09-01", "nextUpdate": null, "paused": true, "readTo": "2026-09-20T08:33:47.358+00:00", "readToEnd": false, "reason": "current_thin", "settles": {"boundary": "2026-10-31T00:00:00.000Z", "withUpdateOn": "2026-11-01T04:00:00.000Z"}, "state": "ended"}
+const SEALAND_OTHERS: OtherMonth[] = [{"isDefault": false, "month": "2026-08-01", "tooFew": false, "videos": 377}, {"isDefault": false, "month": "2026-07-01", "tooFew": true, "videos": 36}, {"isDefault": false, "month": "2026-06-01", "tooFew": true, "videos": 50}]
+const SEALAND_PERSONAS = [
+  {
+    "key": "bag-lover",
+    "name": "Bag lover",
+    "oneLiner": "This person is drawn in by bags as self-expression and is deciding whether a design feels distinctive enough to own.",
+    "videos": 261,
+    "wants": "They want a bag that reflects their taste while still earning a place in everyday life. Sustainability and function matter when they add character and story, because they want something that feels personal rather than interchangeable.",
+    "blockers": "They lose interest when a bag feels generic, awkward-looking, or boxed into the wrong colors and formats. Price becomes harder to accept when the emotional pull is missing, because they are buying identity as much as utility.",
+    "triggers": "They move when a bag looks original, usable, and expressive at the same time. Creative materials, appealing colorways, and styling that helps them picture the bag on themselves make the choice feel natural.",
+    "platformMix": [
+      {
+        "label": "TikTok",
+        "pct": 47.9,
+        "platform": "tiktok",
+        "videos": 125
+      },
+      {
+        "label": "Instagram",
+        "pct": 26.1,
+        "platform": "instagram",
+        "videos": 68
+      },
+      {
+        "label": "YouTube",
+        "pct": 21.8,
+        "platform": "youtube",
+        "videos": 57
+      },
+      {
+        "label": "Reddit",
+        "pct": 4.2,
+        "platform": "reddit",
+        "videos": 11
+      }
+    ],
+    "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "e:29504a62-bd96-4fa7-97b8-a72c0cc9b04c",
+      "text": "SO PRETTY, I WANT ONE!!"
+    },
+    "quoteCite": "one of this group’s own comments",
+    "selected": true
+  },
+  {
+    "key": "supporter",
+    "name": "Supporter",
+    "oneLiner": "This person sees bags as a way to live their values and is deciding which brands feel authentic enough to back.",
+    "videos": 265,
+    "wants": "They want their purchase or praise to support repair, reuse, and a credible environmental story. Consumption only feels right when it aligns with their ethics, so they are drawn to products that give waste a second life without losing beauty or usefulness.",
+    "blockers": "They pull back when sustainability looks like a surface claim or when reuse feels wasteful, inauthentic, or short-lived. Higher prices create tension when the mission sounds good but the proof feels thin.",
+    "triggers": "They engage when the rescue story is tangible and the craftsmanship makes the product feel built to last. Repair culture, material transparency, and visible transformation work because they show the values are embedded in the product itself.",
+    "platformMix": [
+      {
+        "label": "YouTube",
+        "pct": 37,
+        "platform": "youtube",
+        "videos": 98
+      },
+      {
+        "label": "TikTok",
+        "pct": 30.6,
+        "platform": "tiktok",
+        "videos": 81
+      },
+      {
+        "label": "Instagram",
+        "pct": 23.4,
+        "platform": "instagram",
+        "videos": 62
+      },
+      {
+        "label": "Reddit",
+        "pct": 9.1,
+        "platform": "reddit",
+        "videos": 24
+      }
+    ],
+    "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "e:7a40f329-c74f-4cc9-9ef1-2873a1b2056c",
+      "text": "That bag is so stylish without being cartoonish. I would definitely purchase it."
+    },
+    "quoteCite": "one of this group’s own comments",
+    "selected": false
+  },
+  {
+    "key": "maker",
+    "name": "Maker",
+    "oneLiner": "This person sees the bag as a project and is deciding whether they can realistically make it themselves.",
+    "videos": 140,
+    "wants": "They want the confidence that comes from understanding how the bag is built, not just admiring the finished result. The appeal is both creative and practical: if they can get the pattern, materials, and construction logic right, they can turn inspiration into something personal.",
+    "blockers": "They stall when the process feels hidden, rushed, or too dependent on tools they do not have. Thick materials and tricky assembly make the project feel like an equipment problem instead of a satisfying build.",
+    "triggers": "They respond to instruction that removes guesswork and makes the result feel achievable. Exact measurements, named materials, and slower explanations land because they turn curiosity into a plan.",
+    "platformMix": [
+      {
+        "label": "TikTok",
+        "pct": 46.4,
+        "platform": "tiktok",
+        "videos": 65
+      },
+      {
+        "label": "YouTube",
+        "pct": 37.9,
+        "platform": "youtube",
+        "videos": 53
+      },
+      {
+        "label": "Instagram",
+        "pct": 12.9,
+        "platform": "instagram",
+        "videos": 18
+      },
+      {
+        "label": "Reddit",
+        "pct": 2.9,
+        "platform": "reddit",
+        "videos": 4
+      }
+    ],
+    "quote": {
+      "english": "how do you do it",
+      "lang": "pt",
+      "ref": "e:e041fe0d-9f69-466e-b52d-d0429f203108",
+      "text": "como faz"
+    },
+    "quoteCite": "one of this group’s own comments",
+    "selected": false
+  },
+  {
+    "key": "traveler",
+    "name": "Traveler",
+    "oneLiner": "This person judges bags by how calmly they get them through movement, transit, and changing conditions.",
+    "videos": 106,
+    "wants": "They want a bag that reduces friction on the road and helps them carry only what they need without discomfort. Control matters to them because travel already brings enough uncertainty, so the bag should remove decisions rather than create them.",
+    "blockers": "They are held back by anything that adds strain or trip risk, from awkward carry to unclear airline fit to pockets that fail in real use. They also feel the trade-off between packing enough and staying light, so a bag that solves one problem by creating another does not win them.",
+    "triggers": "They respond to proof that a bag works in motion, under airline rules, and across weather and daily routines. Practical packing advice, compliance reassurance, and layouts that keep essentials accessible land because they promise a smoother trip.",
+    "platformMix": [
+      {
+        "label": "Reddit",
+        "pct": 46.2,
+        "platform": "reddit",
+        "videos": 49
+      },
+      {
+        "label": "YouTube",
+        "pct": 38.7,
+        "platform": "youtube",
+        "videos": 41
+      },
+      {
+        "label": "TikTok",
+        "pct": 14.2,
+        "platform": "tiktok",
+        "videos": 15
+      },
+      {
+        "label": "Instagram",
+        "pct": 0.9,
+        "platform": "instagram",
+        "videos": 1
+      }
+    ],
+    "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "e:db637627-7b1a-43d2-8be7-ca13b9594185",
+      "text": "Ok, on under 20 lbs., for a 3 night is fairly easy when there is plenty of water around and mild temps and you’re old and don’t eat much anyway."
+    },
+    "quoteCite": "one of this group’s own comments",
+    "selected": false
+  },
+  {
+    "key": "researcher",
+    "name": "Researcher",
+    "oneLiner": "This person is in evaluation mode, narrowing options and trying not to make a bad call.",
+    "videos": 131,
+    "wants": "They want enough evidence to feel certain the bag fits their routine, budget, and standards before they commit. They are trying to reduce regret by comparing details, reviews, and brand claims until the choice feels defensible.",
+    "blockers": "They get stuck when key information is missing or when performance and sustainability claims feel vague. Doubt grows when size, layout, and value are hard to judge, because the wrong choice feels expensive and annoying to live with.",
+    "triggers": "They move when information feels concrete, complete, and easy to compare. Real-use detail, clear pricing, and proof that the product is what it claims to be turn browsing into confidence.",
+    "platformMix": [
+      {
+        "label": "TikTok",
+        "pct": 42.7,
+        "platform": "tiktok",
+        "videos": 56
+      },
+      {
+        "label": "YouTube",
+        "pct": 24.4,
+        "platform": "youtube",
+        "videos": 32
+      },
+      {
+        "label": "Reddit",
+        "pct": 17.6,
+        "platform": "reddit",
+        "videos": 23
+      },
+      {
+        "label": "Instagram",
+        "pct": 15.3,
+        "platform": "instagram",
+        "videos": 20
+      }
+    ],
+    "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "e:32039985-dd94-4481-a92e-4f118b71fbbd",
+      "text": "Okay but how much????"
+    },
+    "quoteCite": "one of this group’s own comments",
+    "selected": false
+  }
+]
+const SEALAND_PROFILE = {"profileDate": "2026-09-20", "population": 3719, "selected": "bag-lover"}
+const SEALAND_BRAND = "Sealand"
+
+const OSSUR_THEMES: Row[] = [
+  ["29837c1a", "Audience identities and amputation types", 44, 102, "demographic_signal", null, null, [], [0, 44]],
+  ["2418f4d7", "Admiration for personal resilience", 34, 87, "praise", null, null, [], [0, 34]],
+  ["3c28b5fe", "Questions about prosthetic function", 28, 51, "question", null, null, [], [0, 28]],
+  ["86349219", "Requests for prosthetic help", 20, 45, "purchase_intent", null, null, [], [0, 20]],
+  ["19c24f49", "Brand boycott over politics", 16, 0, "objection", null, null, ["new"], [0, 16]],
+  ["559bbc8c", "Praise for prosthetic look", 15, 28, "praise", null, null, [], [0, 15]],
+  ["140e43a7", "Price and availability questions", 14, 19, "question", null, null, [], [0, 14]],
+  ["b6db00ac", "Cost blocks access", 14, 14, "pain_point", null, null, [], [0, 14]],
+  ["d548dd42", "Excitement about prosthetic innovation", 12, 19, "praise", null, null, [], [0, 12]],
+  ["57d9a5a3", "Prosthetics need more personalization", 11, 16, "pain_point", null, null, [], [0, 11]],
+  ["515ca100", "Socket fit keeps changing", 11, 13, "pain_point", null, null, [], [0, 11]],
+  ["4e506728", "Insurance delays and denials", 10, 10, "pain_point", null, null, [], [0, 10]],
+]
+const OSSUR_OPEN = "2418f4d7"
+const OSSUR_KINDS = [{"kind": "praise", "label": "Praising it", "videos": 34}]
+const OSSUR_VOICES: Voice[] = [
+  {
+    "cite": "Instagram · 10 Sep · under a category video",
+    "href": "https://www.instagram.com/p/DdFRHRHBW4Q/",
+    "onScreen": null,
+    "quote": {
+      "english": "You are an example of strength! 👏👏❤️",
+      "lang": "pt",
+      "ref": "e:28a54e80-9f7a-468e-9763-b936394c60b6",
+      "text": "Você é exemplo de força! 👏👏❤️"
+    }
+  },
+  {
+    "cite": "TikTok · 1 Sep · under a category video",
+    "href": "https://www.tiktok.com/@theoneleggedpsych/video/7680253109402111252",
+    "onScreen": null,
+    "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "e:569fdf04-d253-410f-91a2-9ee5470ad2bc",
+      "text": "Oh I’m so going to hell for laughing. Please keep up the humor with more life hacks. ❤️"
+    }
+  },
+  {
+    "cite": "TikTok · 7 Sep · under a category video",
+    "href": "https://www.tiktok.com/@megsdixon/video/7682654836902366486",
+    "onScreen": null,
+    "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "e:949029a8-c8b1-40c9-aaec-2bdf444fa77c",
+      "text": "You are a strong woman, you got this."
+    }
+  }
+]
+const OSSUR_MARKET = {"category": 338, "comments": 10726, "platformMix": [{"label": "TikTok", "pct": 34.3, "platform": "tiktok", "videos": 116}, {"label": "YouTube", "pct": 26.9, "platform": "youtube", "videos": 91}, {"label": "Reddit", "pct": 19.5, "platform": "reddit", "videos": 66}, {"label": "Instagram", "pct": 19.2, "platform": "instagram", "videos": 65}], "rivalFiled": 24, "videos": 362}
+const OSSUR_BOARD = {"n": 338, "prev": {"month": "2026-08-01", "n": 537}, "segments": "no_rule", "atTen": 12, "inThemes": 146, "chip": "not read as a change: we changed our searches in September", "belowCount": 52}
+const OSSUR_READING: ReadingMonth = {"asAt": "2026-09-13T06:26:49.308+00:00", "current": {"daysIn": 11, "month": "2026-10-01", "updates": 0, "videos": null}, "leadsWithCurrent": false, "month": "2026-09-01", "nextUpdate": null, "paused": true, "readTo": "2026-09-13T06:26:49.308+00:00", "readToEnd": false, "reason": "current_thin", "settles": {"boundary": "2026-10-31T00:00:00.000Z", "withUpdateOn": null}, "state": "ended"}
+const OSSUR_OTHERS: OtherMonth[] = [{"isDefault": false, "month": "2026-08-01", "tooFew": false, "videos": 585}, {"isDefault": false, "month": "2026-07-01", "tooFew": false, "videos": 128}, {"isDefault": false, "month": "2026-06-01", "tooFew": false, "videos": 216}]
+const OSSUR_PERSONAS = [
+  {
+    "key": "first-time-buyer",
+    "name": "First-time buyer",
+    "oneLiner": "First-time buyer is the person trying to move from interest to action and is still working out what prosthetic care even looks like in real life.",
+    "videos": 230,
+    "wants": "They want a path back to independence they can trust, not just a device. Underneath the questions is a need to make a life-changing decision without wasting time, money, or hope on the wrong option.",
+    "blockers": "They are trying to choose in a system that feels opaque, with scattered information, unclear contacts, and affordability questions all landing at once. That uncertainty makes every next step feel riskier than it should.",
+    "triggers": "They move when someone makes the process legible in plain language and shows a believable route from inquiry to everyday use. Clear human guidance lands because it reduces the fear of getting trapped in confusion or making the wrong call.",
+    "platformMix": [
+      {
+        "label": "TikTok",
+        "pct": 55.2,
+        "platform": "tiktok",
+        "videos": 127
+      },
+      {
+        "label": "Instagram",
+        "pct": 25.2,
+        "platform": "instagram",
+        "videos": 58
+      },
+      {
+        "label": "YouTube",
+        "pct": 14.8,
+        "platform": "youtube",
+        "videos": 34
+      },
+      {
+        "label": "Reddit",
+        "pct": 4.8,
+        "platform": "reddit",
+        "videos": 11
+      }
+    ],
+    "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "e:00636b0a-6eb5-43cb-85c8-d6387b1f6e43",
+      "text": "Are they difficult to put on and use??"
+    },
+    "quoteCite": "one of this group’s own comments",
+    "selected": true
+  },
+  {
+    "key": "caretaker",
+    "name": "Caretaker",
+    "oneLiner": "Caretaker is the family member or close supporter trying to help someone through treatment, rehab, or day-to-day adjustment without losing hope.",
+    "videos": 231,
+    "wants": "They want to protect someone they love while helping them keep dignity and momentum. Their deeper aim is to be useful in a hard situation without becoming helpless, intrusive, or shut out of the recovery process.",
+    "blockers": "They carry worry and responsibility while often navigating a world of care decisions they did not choose or fully understand. The tension is between wanting to fix things and learning that support often means patience, advocacy, and emotional steadiness instead.",
+    "triggers": "They respond to guidance and stories that show what supportive presence looks like in practice. Recognition of the family role lands because it makes them feel seen as part of the recovery journey rather than bystanders to it.",
+    "platformMix": [
+      {
+        "label": "TikTok",
+        "pct": 55.4,
+        "platform": "tiktok",
+        "videos": 128
+      },
+      {
+        "label": "Instagram",
+        "pct": 24.2,
+        "platform": "instagram",
+        "videos": 56
+      },
+      {
+        "label": "YouTube",
+        "pct": 13.4,
+        "platform": "youtube",
+        "videos": 31
+      },
+      {
+        "label": "Reddit",
+        "pct": 6.9,
+        "platform": "reddit",
+        "videos": 16
+      }
+    ],
+    "quote": null,
+    "quoteCite": null,
+    "selected": false
+  },
+  {
+    "key": "long-term-user",
+    "name": "Long-term user",
+    "oneLiner": "Long-term user is the person already living with a prosthetic and judging every option by whether it holds up to the realities of daily wear.",
+    "videos": 92,
+    "wants": "They want reliability they do not have to think about, because prosthetic use is already woven into work, movement, and routine. What matters is preserving control over the day instead of constantly managing discomfort, fit, or failure.",
+    "blockers": "What wears them down is the gap between having a prosthetic and being able to depend on it without negotiation. Fit changes, sweat, pain, breakage, and compatibility worries make everyday function feel conditional.",
+    "triggers": "They respond to people who speak from lived wear experience and acknowledge the maintenance reality without sugarcoating it. Practical credibility matters here because they have already learned that inspiration does not solve day-to-day friction.",
+    "platformMix": [
+      {
+        "label": "TikTok",
+        "pct": 50,
+        "platform": "tiktok",
+        "videos": 46
+      },
+      {
+        "label": "Instagram",
+        "pct": 26.1,
+        "platform": "instagram",
+        "videos": 24
+      },
+      {
+        "label": "Reddit",
+        "pct": 13,
+        "platform": "reddit",
+        "videos": 12
+      },
+      {
+        "label": "YouTube",
+        "pct": 10.9,
+        "platform": "youtube",
+        "videos": 10
+      }
+    ],
+    "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "e:88afd077-8e8f-49be-9d92-e33902b6fb6a",
+      "text": "I want to love it. But I hate that it only pumps from the back and shoves my bony limb into my socket."
+    },
+    "quoteCite": "one of this group’s own comments",
+    "selected": false
+  },
+  {
+    "key": "new-amputee",
+    "name": "New amputee",
+    "oneLiner": "New amputee is the person in early recovery, learning how to carry grief, rehab, and a changed body at the same time.",
+    "videos": 71,
+    "wants": "They want to believe life can become manageable again, not just medically possible. They are looking for self-trust, a sense of forward motion, and proof that today’s fear does not define the rest of the story.",
+    "blockers": "Grief collides with pain, falls, slow progress, and the shock of not yet knowing what the body can do. That makes even basic milestones feel emotionally loaded, because each setback can read like a verdict on the future.",
+    "triggers": "They are moved by calm reassurance from people who have already been through the first stretch of adaptation. Honest progress stories work because they make recovery feel possible without pretending it is simple.",
+    "platformMix": [
+      {
+        "label": "TikTok",
+        "pct": 59.2,
+        "platform": "tiktok",
+        "videos": 42
+      },
+      {
+        "label": "Instagram",
+        "pct": 21.1,
+        "platform": "instagram",
+        "videos": 15
+      },
+      {
+        "label": "YouTube",
+        "pct": 18.3,
+        "platform": "youtube",
+        "videos": 13
+      },
+      {
+        "label": "Reddit",
+        "pct": 1.4,
+        "platform": "reddit",
+        "videos": 1
+      }
+    ],
+    "quote": {
+      "english": null,
+      "lang": "en",
+      "ref": "e:e8197e02-ea78-4712-8956-5500c7d743b5",
+      "text": "And then I get overwhelmed and start crying"
+    },
+    "quoteCite": "one of this group’s own comments",
+    "selected": false
+  },
+  {
+    "key": "athlete",
+    "name": "Athlete",
+    "oneLiner": "Athlete is the person who sees prosthetics through performance and wants movement to feel expansive, skilled, and self-defining.",
+    "videos": 50,
+    "wants": "They want capability that lets them pursue challenge, identity, and pride on their own terms. Competition and training matter because they stand for a larger refusal to be reduced to limitation.",
+    "blockers": "What gets in the way is the sense that ambition is always negotiating with comfort, durability, and other people’s assumptions about what is possible. When trust in the body or equipment feels conditional, performance stops feeling free.",
+    "triggers": "They are moved by visible mastery and by engineering that proves itself under pressure. Performance stories land because they collapse inspiration and credibility into the same moment.",
+    "platformMix": [
+      {
+        "label": "TikTok",
+        "pct": 38,
+        "platform": "tiktok",
+        "videos": 19
+      },
+      {
+        "label": "Instagram",
+        "pct": 36,
+        "platform": "instagram",
+        "videos": 18
+      },
+      {
+        "label": "YouTube",
+        "pct": 16,
+        "platform": "youtube",
+        "videos": 8
+      },
+      {
+        "label": "Reddit",
+        "pct": 10,
+        "platform": "reddit",
+        "videos": 5
+      }
+    ],
+    "quote": {
+      "english": "Great, my friend, congratulations, great video, I am a femoral amputee and I have a 3R 80 knee and it works very well and that's exactly it👍👍👍",
+      "lang": "pt",
+      "ref": "e:b0b83d7f-adfa-4267-a584-6b97b9cf8f32",
+      "text": "show de bola meu amigo parabéns ótimo vídeo eu sou amputado femoral e tenho joelho 3R 80 e funciona muito bem e é isso aí mesmo👍👍👍"
+    },
+    "quoteCite": "one of this group’s own comments",
+    "selected": false
+  }
+]
+const OSSUR_PROFILE = {"profileDate": "2026-09-13", "population": 3129, "selected": "first-time-buyer"}
+const OSSUR_BRAND = "Össur"
 
 const MONTH = '2026-09-01'
 const PREV = '2026-08-01'
-const NOW = '2026-09-18T09:00:00.000Z'
+const NOW = '2026-10-11T06:00:00.000Z'
 
-export const verdict = (over: Partial<Verdict> = {}): Verdict => ({
-  objectKind: 'theme',
-  objectId: 't1',
-  objectLabel: 'Will it survive a wet commute',
-  audience: INDUSTRY_AUDIENCE,
-  window: { kind: 'month', from: MONTH, to: '2026-10-01' },
-  basis: { from: PREV, to: MONTH },
-  value: { k: 130, n: 1388 },
-  baseline: { k: 82, n: 1200 },
-  changePts: 2.6,
-  bandPts: 1.8,
-  state: 'moved',
-  flags: [],
-  ...over,
-})
-
-/**
- * One mover row, with a verdict that is a verdict OF THAT ROW.
- *
- * THE OVERRIDE IS MERGED, NEVER SUBSTITUTED, and that is the whole point. A
- * caller passing a whole `verdict({ objectId: 't2', changePts: 1.9 })` replaced
- * the row's verdict with one carrying the DEFAULT label and the DEFAULT counts,
- * so t2 printed "Zips failing after a year · 5.1% · 71 of 1,388" while its own
- * verdict said "Will it survive a wet commute · 9.4% · 130 of 1,388". In
- * production the two come off one reading and agree; in a fixture they diverged
- * silently, and the record written from the verdicts is append-only — the render
- * tier is the only thing between a mismatch and a permanently wrong statement.
- * So the identity and the two sides come from the row and only the rest is
- * overridable.
- */
-export const mover = (
-  over: Omit<Partial<Mover>, 'verdict'> & { id: string; label: string; verdict?: Partial<Verdict> },
-): Mover => {
-  const { verdict: said, ...row } = over
-  const base = { k: 130, n: 1388, pct: 9.4, direction: null, isNew: false, ...row }
-  return {
-    ...base,
-    verdict: verdict({
-      objectId: over.id,
-      objectLabel: over.label,
-      value: { k: base.k, n: base.n },
-      ...said,
-    }),
-  }
+function themesOf(rows: readonly Row[], n: number, prevN: number): MarketTheme[] {
+  return rows.map(([registryId, label, k, prevK, kind, maker, noise, flags, provenance]) => ({
+    registryId,
+    label,
+    labelStripped: false,
+    kind,
+    k,
+    n,
+    prev: prevK == null ? null : { month: PREV, k: prevK, n: prevN },
+    makerShare: maker,
+    noiseShare: noise,
+    identityNewThisRun: false,
+    flags,
+    provenance: provenance ? { fromNewSearches: provenance[0], of: provenance[1] } : null,
+  }))
 }
 
-const point = (month: string, k: number | null, videos: number | null): MonthPoint => ({
-  month,
-  state: k == null ? 'missing' : month === MONTH ? 'filling' : 'frozen',
-  videos,
-  comments: videos == null ? null : videos * 7,
-  k,
-  kComments: k == null ? null : k * 3,
-  pct: k == null || videos == null || videos === 0 ? null : Math.round((k / videos) * 1000) / 10,
-  audience: INDUSTRY_AUDIENCE,
-  status: month === MONTH ? 'filling' : 'frozen',
-  origin: 'live',
-  readAt: NOW,
-  runId: 'run-1',
-  frozenAt: null,
-  clusteringKey: 'k1',
-  labels: [],
-})
-
-export function voiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurfaceData {
-  const window = horizonWindow('last_3', NOW, '2026-06-01')
-  const axis = window.months
-  const params = { audience: INDUSTRY_AUDIENCE }
-  // EVERY ROW CARRIES ITS OWN BASELINE, since wave 2 renders it. The default
-  // in `verdict()` is t1's, and three rows sharing one baseline printed "Aug
-  // 6.8% of 1,200" under four different September readings — a fixture saying
-  // the same thing about four themes. The k's are the artboard's own August
-  // shares over that month's 1,200 category videos.
-  const growing = [
-    mover({ id: 't1', label: 'Will it survive a wet commute', k: 130, pct: 9.4, direction: 'growing' }),
-    mover({ id: 't2', label: 'Zips failing after a year', k: 71, pct: 5.1, verdict: { changePts: 1.9, baseline: { k: 38, n: 1200 } } }),
-  ]
-  const fading = [
-    mover({ id: 't3', label: 'Made from truck tarps', k: 99, pct: 7.1, verdict: { changePts: -2.5, baseline: { k: 115, n: 1200 } } }),
-  ]
-
+function build(input: {
+  brand: string
+  rows: readonly Row[]
+  board: { n: number; prev: { month: string; n: number }; segments: 'measured' | 'unknown' | 'no_rule'; atTen: number; inThemes: number | null; chip: string | null; belowCount: number }
+  open: string
+  kinds: { kind: string; label: string; videos: number }[] | null
+  voices: Voice[]
+  market: VoiceSurfaceData['market']
+  reading: ReadingMonth
+  others: OtherMonth[]
+  personas: Omit<CastPersona, 'href'>[]
+  profile: { profileDate: string; population: number; selected: string }
+}): VoiceSurfaceData {
+  const params = {}
+  const window = horizonWindow('this_month', `${MONTH}T12:00:00.000Z`, '2021-02-01')
+  const themes = themesOf(input.rows, input.board.n, input.board.prev.n)
+  const board = buildConversationBoard(themes, input.board.n, MONTH, input.board.segments, input.board.prev, {
+    belowCount: input.board.belowCount,
+    inThemes: input.board.inThemes,
+    chip: input.board.chip,
+  })
+  const open = themes.find((t) => t.registryId === input.open) as MarketTheme
   return {
-    brand: 'Sealand',
+    brand: input.brand,
     month: MONTH,
     monthStatus: 'filling',
     readingAt: NOW,
-    horizon: 'last_3',
+    reading: input.reading,
+    otherMonths: input.others,
+    horizon: 'this_month',
     window,
-    axis,
+    axis: window.months,
     substrate: 'seeded',
     notes: [],
     params,
-    audience: {
-      options: [
-        { audience: CLIENT_AUDIENCE, label: 'Your own brand', videos: 3, comments: 27, thin: true, observed: true, retiredAt: null, selected: false, href: voiceSurfaceHref(params, { audience: CLIENT_AUDIENCE }) },
-        { audience: rivalKey('Cotopaxi'), label: 'Cotopaxi', videos: 27, comments: 237, thin: true, observed: true, retiredAt: null, selected: false, href: voiceSurfaceHref(params, { audience: rivalKey('Cotopaxi') }) },
-        { audience: rivalKey('Poler'), label: 'Poler', videos: null, comments: null, thin: true, observed: false, retiredAt: '2026-09-09', selected: false, href: voiceSurfaceHref(params, { audience: rivalKey('Poler') }) },
-        { audience: INDUSTRY_AUDIENCE, label: 'The category', videos: 1388, comments: 9397, thin: false, observed: true, retiredAt: null, selected: true, href: voiceSurfaceHref(params, { audience: INDUSTRY_AUDIENCE }) },
-      ],
-      selected: INDUSTRY_AUDIENCE,
-      label: 'The category',
-      videos: 1388,
-      comments: 9397,
-      thin: false,
-      platformMix: [
-        { platform: 'tiktok', label: 'TikTok', videos: 528, pct: 38 },
-        { platform: 'youtube', label: 'YouTube', videos: 403, pct: 29 },
-        { platform: 'instagram', label: 'Instagram', videos: 291, pct: 21 },
-        { platform: 'reddit', label: 'Reddit', videos: 166, pct: 12 },
-      ],
-      kinds: [
-        { kind: 'question', label: 'Asking how it works', videos: 472, denominator: 1388, pct: 34, reddit: 110 },
-        { kind: 'pain_point', label: 'Hitting a problem', videos: 264, denominator: 1388, pct: 19, reddit: 40 },
-        { kind: 'praise', label: 'Saying it worked', videos: 389, denominator: 1388, pct: 28, reddit: 12 },
-      ],
-      kindVerdicts: { question: verdict({ objectKind: 'kind', objectId: 'question', objectLabel: 'Asking how it works', changePts: 1.4 }) },
-      kindsNote: null,
-      reddit: { kinds: ['question', 'objection'], videos: 640, reddit: 133, pct: 20.8, exact: false },
-      replies: { comments: 9397, replies: 1972, pct: 21, reddit: 812 },
-      repliesNote: 'Counted across every audience: a comment carries no audience of its own, and replies are materially a Reddit signal.',
-    },
-    movers: {
-      growing,
-      fading,
-      flat: [mover({ id: 't4', label: 'Airline carry-on fit', k: 42, pct: 3, verdict: { state: 'no_clear_change', changePts: 0.3, baseline: { k: 32, n: 1200 } } })],
-      newcomers: [mover({ id: 't5', label: 'Second-hand resale value', k: 26, pct: 1.9, isNew: true, verdict: { state: 'too_little_data', changePts: null, bandPts: null } })],
-      goneQuiet: [{ id: 't6', label: 'Festival season packs', lastHeard: '2026-06-01' }],
-      shown: 6,
-      expanded: false,
-      expandHref: voiceSurfaceHref(params, { movers: 'all' }),
-      note: null,
-      rereadNote: null,
-    },
+    market: input.market,
+    board,
     theme: {
       state: 'ready',
-      id: 't1',
-      label: 'Will it survive a wet commute',
-      description: 'Buyers ask whether the bag keeps a laptop dry on a daily commute.',
-      audience: INDUSTRY_AUDIENCE,
-      audienceLabel: 'The category',
-      k: 130,
-      n: 1388,
-      pct: 9.4,
-      // THE LADDER'S ANSWER, NOT A WORD TYPED BESIDE THE NUMBERS. Written by
-      // hand as `'widespread'`, the chip in the artboard's most prominent slot
-      // read "Widespread · 130 of 1,388 videos" — 9.4%, beside a glossary that
-      // defines Widespread as "at least 15%". `loadVoiceSurface` calls
-      // `prevalenceTier` and can never produce that pairing, so the title row
-      // had never been seen in its shipping state and this port's fidelity
-      // argument was made against a render production cannot reach. The fixture
-      // calls the function the loader calls, so the word and the counts cannot
-      // drift apart again — including in the refused arm, which spreads this
-      // object and re-cuts k and n (34 of 388 = 8.8%, also `recurring`).
-      prevalence: prevalenceTier(130, 1388),
-      verdict: verdict(),
-      direction: 'growing',
-      firstHeard: '2026-07-01',
-      firstHeardOnAxis: true,
-      monthsSeen: 3,
-      monthsDrawn: axis.length,
-      axis,
-      points: [point('2026-07-01', 71, 1200), point(PREV, 82, 1200), point(MONTH, 130, 1388)],
-      tone: {
-        // ALL FOUR MOODS, FROM THE REAL FUNCTION. The fixture listed three, in
-        // an order `moodShares` does not produce and without `mixed` ("Mixed")
-        // at all — so the fourth segment, and the two-row legend four
-        // segments produce at this width, had never been rendered or reviewed
-        // although production returns them on every judged month. The counts
-        // balance, which is what `moodCountsBalance` says a real row does.
-        shares: moodShares({ judged: 1112, positive: 678, mixed: 111, neutral: 122, negative: 201 }),
-        judged: 1112,
-        // THE MOOD VERDICT'S TWO SIDES ARE JUDGED VIDEOS, not the theme's. It
-        // inherited the theme's 130-of-1,388 and its 82-of-1,200, so the block
-        // printed the negative share's baseline as a count of a different thing.
-        verdict: verdict({
-          objectKind: 'mood', objectId: 'negative', objectLabel: 'Negative', state: 'no_clear_change', changePts: 2,
-          value: { k: 201, n: 1112 }, baseline: { k: 168, n: 1050 },
-        }),
-      },
-      toneNote: null,
-      // ONE POPULATION, ONE NUMBER. `onCameraOf` and `quotesOf` are both
-      // `themes.evidence_count` in the loader (voice-surface.ts, the same
-      // `themeRow.evidence_count` two lines apart), so they are ALWAYS equal;
-      // written as 120 against 182 the block printed two denominators for one
-      // population three inches apart, in a state no production read can
-      // reach. And the sentence comes from `onCameraScope` rather than being
-      // typed, so the fixture cannot say something the loader would not.
-      onCamera: onCameraScope(17, 182),
-      onCameraSaid: 17,
-      onCameraOf: 182,
-      // SIX, WHICH IS WHAT `THEME_QUOTES` ALLOWS AND WHAT THE ARTBOARD DRAWS.
-      // Three filled one row of the three-column grid, so the second row —
-      // its gutter, its baseline against the cite block, and the height the
-      // tile comes out at — was in no screenshot anybody reviewed.
-      quotes: [
-        { ref: 'e:1', text: 'Three winters on the bike and the seams are still perfect. The zip, less so.' },
-        { ref: 'e:2', text: 'I have had this bag through two Cape Town winters and it is the only one that never leaked' },
-        { ref: 'e:3', text: 'Nach 14 Monaten ist der Reißverschluss hin', lang: 'de', english: 'After 14 months the zip is done' },
-        { ref: 'e:4', text: 'The strap padding is the only reason I still carry it two years in' },
-        { ref: 'e:5', text: 'Everyone in the thread says the zip is a known issue on this model' },
-        { ref: 'e:6', text: 'Mine soaked through on one cycle home and theirs did not' },
-      ],
-      // PLATFORM · DATE · WHERE, the artboard's cite, which the page can say
-      // now that a quote is joined to the video it was written under. The
-      // third is the shape a quote whose video did not resolve still takes,
-      // and the last is a quote under a tracked rival's own post.
-      quoteCites: [
-        'TikTok · 14 Sep · under a category video',
-        'TikTok · 11 Sep · a category video, transcript',
-        'in the comments',
-        'YouTube · 12 Sep · under a category video',
-        'Reddit · 8 Sep · under a category video',
-        'Instagram · 5 Sep · under a Cotopaxi post',
-      ],
-      quotePlatforms: ['tiktok', 'tiktok', null, 'youtube', 'reddit', 'instagram'],
-      // THE VIDEO'S OWN WORDS, UNDER THE VIDEO'S OWN REF (`t:<videos.id>`).
-      // Written as bare strings these two sentences survived `freezeQuotes`
-      // untouched and uncollected, so a brief's stored surface carried a
-      // speaker's words and no ref by which the erasure sweep could find them.
-      quoteOnScreen: [
-        null,
-        { ref: quoteRef.onScreen('vid-2'), text: '1 bag. 3 years. 0 regrets' },
-        null,
-        null,
-        { ref: quoteRef.onScreen('vid-5'), text: 'Zip test: 400 cycles, no failure' },
-        null,
-      ],
-      quotesOf: 182,
-      // A DIFFERENT VIDEO FROM ANY THE QUOTES CAME OUT OF. Quote 2 is cited
-      // "TikTok · 11 Sep · a category video, transcript" — an extract of that
-      // video's transcript — and this line stood under it carrying the same
-      // utterance in a second transcription ("One bag, three years, no
-      // regrets." against the nested "1 bag. 3 years. 0 regrets"), which is
-      // the state the loader's said-once rule now refuses on both halves.
-      spoken: { text: 'It kept a laptop dry through a whole winter of commuting.', cite: 'YouTube · 9 Sep · a category video', href: 'https://example.test/v' },
-      // NULL, and that is the ported behaviour: this video's on-screen text is
-      // nested under the quote taken FROM that video (`quoteOnScreen`), and the
-      // loader drops the loose block-level copy so it is not read as a second
-      // piece of evidence.
-      onScreen: null,
-      withheld: 4,
-      conclusionHref: '/dashboard/market?theme=t1',
-      videosHref: '/dashboard/videos?theme=t1',
-      askHref: '/dashboard/agent?q=x',
-      trackRegistryId: 't1',
-      search: { q: '', rows: [], total: 0 },
+      id: open.registryId,
+      label: open.label,
+      kind: open.kind,
+      kindLabel: open.kind ? marketKindLabel(open.kind) : null,
+      makerSentence: input.board.segments === 'measured' ? makerShareSentence(open.makerShare) : null,
+      flags: open.flags,
+      k: open.k,
+      n: open.n,
+      prev: open.prev,
+      provenance: open.provenance,
+      kinds: input.kinds,
+      voices: input.voices,
+      chip: input.board.chip,
+      isLead: true,
+      videosHref: `/dashboard/videos?theme=${open.registryId}`,
+      askHref: askAboutTheme(open.label, MONTH),
       notes: [],
     },
     cast: {
       state: 'ready',
-      personas: [
-        {
-          key: 'commuter', name: 'The one-bag commuter', oneLiner: 'Carries one bag to work and expects it to last.',
-          videos: 527,
-          wants: 'durability, laptop fit, one bag for everything',
-          blockers: 'price, weight',
-          triggers: 'a bag that failed in the rain',
-          platformMix: [
-            { platform: 'tiktok', label: 'TikTok', videos: 242, pct: 46 },
-            { platform: 'youtube', label: 'YouTube', videos: 163, pct: 31 },
-          ],
-          quote: { ref: 'e:9', text: 'If the strap buckle breaks in two months I am not paying that again' },
-          quoteCite: 'one of this group’s own comments',
-          selected: true,
-          href: voiceSurfaceHref(params, { persona: 'commuter' }),
-        },
-        // THREE GROUPS, because the block draws three cards abreast and a
-        // fixture with one of them checks a third of the layout. The counts
-        // deliberately do NOT sum to the month's videos: these groups overlap,
-        // which is the fact `overlapNote` states and the reason no share is
-        // printed on a card.
-        {
-          key: 'hiker', name: 'The weekend hiker', oneLiner: 'Walks two days at a time and packs for weather.',
-          videos: 374,
-          wants: 'waterproofing, strap comfort',
-          blockers: 'capacity, airline fit',
-          triggers: 'a wet weekend on the trail',
-          platformMix: [
-            { platform: 'youtube', label: 'YouTube', videos: 165, pct: 44 },
-            { platform: 'tiktok', label: 'TikTok', videos: 112, pct: 30 },
-            { platform: 'instagram', label: 'Instagram', videos: 67, pct: 18 },
-          ],
-          quote: { ref: 'e:10', text: 'I have had this bag through two Cape Town winters and it is the only one that never leaked' },
-          quoteCite: 'one of this group’s own comments',
-          selected: false,
-          href: voiceSurfaceHref(params, { persona: 'hiker' }),
-        },
-        {
-          key: 'sceptic', name: 'The sustainability sceptic', oneLiner: 'Wants the recycled claim checked before believing it.',
-          videos: 263,
-          wants: 'proof of recycled content, repairability',
-          blockers: 'greenwashing doubt',
-          triggers: 'a recycled-materials claim in an ad',
-          platformMix: [
-            { platform: 'reddit', label: 'Reddit', videos: 108, pct: 41 },
-            { platform: 'youtube', label: 'YouTube', videos: 76, pct: 29 },
-            { platform: 'tiktok', label: 'TikTok', videos: 55, pct: 21 },
-          ],
-          quote: { ref: 'e:11', text: 'I want to believe the recycled sails thing but has anyone actually checked?' },
-          quoteCite: 'one of this group’s own comments',
-          selected: false,
-          href: voiceSurfaceHref(params, { persona: 'sceptic' }),
-        },
-      ],
-      selected: 'commuter',
-      population: 3129,
+      personas: input.personas.map((p) => ({ ...p, href: voiceSurfaceHref(params, { persona: p.key }) })),
+      selected: input.profile.selected,
+      population: input.profile.population,
       overlapNote: 'A video can carry more than one group, so these counts overlap and do not add up to a whole.',
-      profileDate: '2026-09-13',
+      profileDate: input.profile.profileDate,
       stale: false,
       floorNote: `${PERSONA_VIDEO_FLOOR}-video floor`,
       empty: null,
     },
-    // THE BAND AND THE FOOTNOTE COME OFF ONE RECORD. Hand-written, the band
-    // said "27% not in English" and "27% of the comments read were not in
-    // English" — the mock's clause, which `howSoundLine` never produces and
-    // which lib/reading/method.ts names as two errors in one clause (the
-    // period and the subject). With the method footnote mounted at the foot of
-    // this page, that put two contradictory sentences about one measure on one
-    // screenshot, and the screenshots are the evidence for this port's own
-    // D15 claim.
-    record: recordBandFixture(),
-    method: methodFixture(),
+  }
+}
+
+/** Sealand's September on staging, read at the 11 Oct clock. */
+export function voiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurfaceData {
+  return {
+    ...build({
+      brand: SEALAND_BRAND, rows: SEALAND_THEMES, board: SEALAND_BOARD as never, open: SEALAND_OPEN, kinds: SEALAND_KINDS,
+      voices: SEALAND_VOICES, market: SEALAND_MARKET, reading: SEALAND_READING, others: SEALAND_OTHERS,
+      personas: SEALAND_PERSONAS, profile: SEALAND_PROFILE,
+    }),
+    ...over,
+  }
+}
+
+/** Össur's September on staging (paused, read to 13 Sep, no maker rule). */
+export function ossurVoiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurfaceData {
+  return {
+    ...build({
+      brand: OSSUR_BRAND, rows: OSSUR_THEMES, board: OSSUR_BOARD as never, open: OSSUR_OPEN, kinds: OSSUR_KINDS,
+      voices: OSSUR_VOICES, market: OSSUR_MARKET, reading: OSSUR_READING, others: OSSUR_OTHERS,
+      personas: OSSUR_PERSONAS, profile: OSSUR_PROFILE,
+    }),
     ...over,
   }
 }
 
 /**
- * The state production is in today: M2 and M5 unapplied, no profile written.
- *
- * Every refusal here is a sentence the loader composes, not an empty tile —
- * the kind ladder, the tone line and the cast each say what is not recorded
- * rather than showing a hole or, worse, a zero.
+ * Sealand's same month with nothing optional read: MF1 not applied (no maker
+ * shares, no provenance, no union of the themes' videos), no themed update
+ * behind the pane (no kinds, no voices), and no profile for the cast. The
+ * counts that remain are the month tables', which exist without MF1.
  */
 export function refusedVoiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurfaceData {
-  const base = voiceFixture()
+  const rows: Row[] = SEALAND_THEMES.map(([id, label, k, prevK, kind, , , flags]) => [id, label, k, prevK, kind, null, null, flags, null])
+  const base = build({
+    brand: SEALAND_BRAND, rows, board: { ...(SEALAND_BOARD as never as { n: number; prev: { month: string; n: number }; chip: string | null; belowCount: number }), segments: 'unknown', atTen: 21, inThemes: null }, open: SEALAND_OPEN, kinds: null,
+    voices: [], market: SEALAND_MARKET, reading: SEALAND_READING, others: SEALAND_OTHERS,
+    personas: [], profile: SEALAND_PROFILE,
+  })
   return {
     ...base,
-    method: methodRefusedFixture('Össur'),
-    record: recordBandFixture(methodRefusedRecordFixture()),
-    brand: 'Össur',
-    audience: {
-      ...base.audience,
-      // THE SELECTED PILL AND THE ROW IT SELECTS AGREE. The refused state
-      // overrode the audience's own counts and left the OPTIONS as the
-      // category month's, so the pill read "Category 1,388" beside a row
-      // reading "388 videos in this audience" — two numbers for one audience,
-      // an inch apart, in the state a client is actually in.
-      options: base.audience.options.map((o) => (
-        o.audience === INDUSTRY_AUDIENCE ? { ...o, videos: 388, comments: 10534 } : o
-      )),
-      videos: 388,
-      comments: 10534,
-      platformMix: [
-        { platform: 'tiktok', label: 'TikTok', videos: 144, pct: 37.1 },
-        { platform: 'youtube', label: 'YouTube', videos: 106, pct: 27.3 },
-        { platform: 'instagram', label: 'Instagram', videos: 72, pct: 18.6 },
-        { platform: 'reddit', label: 'Reddit', videos: 66, pct: 17 },
-      ],
-      kinds: [],
-      kindVerdicts: {},
-      kindsNote: 'What kind of thing is being said is not recorded month by month for this workspace yet.',
-      reddit: null,
-      replies: { comments: 10534, replies: 1804, pct: 17.1, reddit: 934 },
-    },
-    movers: {
-      ...base.movers,
-      // A NEGATIVE CHANGE BELONGS IN THE ARM THAT SAYS SO. This row sat under
-      // "a larger share than last month" printing "▼ 5.1 pts" — the exact
-      // failure movers.tsx's header says the one-axis rule ended, preserved in
-      // the fixture that is supposed to catch it. Its baseline is its own
-      // audience's August, not t1's category month.
-      growing: [],
-      fading: [mover({ id: 'r1', label: 'Admiration for personal resilience', k: 34, n: 388, pct: 8.8, verdict: { changePts: -5.1, bandPts: 4, baseline: { k: 56, n: 402 } } })],
-      flat: [],
-      newcomers: [],
-      goneQuiet: [],
-      note: null,
-    },
-    theme: {
-      ...base.theme,
-      id: 'r1',
-      label: 'Admiration for personal resilience',
-      description: null,
-      k: 34,
-      n: 388,
-      pct: 8.8,
-      // RE-CUT, NOT INHERITED. This arm replaces k and n and the tier is a
-      // function of both; spread from the month above it would be a word about
-      // a different reading. It happens to land on the same rung today, which
-      // is exactly why it has to be computed rather than assumed.
-      prevalence: prevalenceTier(34, 388),
-      direction: null,
-      // THE OPEN THEME IS THE ONE MOVER THIS MONTH HAS, so it carries that
-      // row's verdict and that row's months. It inherited t1's — a +2.6 on the
-      // page's only theme, two blocks under the same theme's −5.1, over a
-      // baseline of 1,200 videos in an audience of 388.
-      verdict: verdict({
-        objectId: 'r1', objectLabel: 'Admiration for personal resilience',
-        value: { k: 34, n: 388 }, baseline: { k: 56, n: 402 },
-        changePts: -5.1, bandPts: 4,
-      }),
-      points: [point('2026-07-01', 21, 380), point(PREV, 56, 402), point(MONTH, 34, 388)],
-      tone: null,
-      toneNote: 'How this audience’s month was received is not recorded month by month for this workspace yet.',
-      onCamera: null,
-      onCameraSaid: null,
-      onCameraOf: null,
-      spoken: null,
-      onScreen: null,
-      notes: ['No video behind this theme carries readable speech or on-screen text.'],
-    },
+    theme: { ...base.theme, makerSentence: null, provenance: null },
     cast: {
       ...base.cast,
       state: 'not_run',
