@@ -19,9 +19,22 @@ import type { ActorKind, ConfigChange, ConfigSurface } from '../config-log'
  * counts only `source <> 'reconstructed'`, because the boundary sentence
  * `changeLogBoundary` says the record begins at the first LOGGED row and
  * everything before it is inference. The same split is made here: recorded
- * rows are the record, reconstructed rows are a prehistory, and the two are
- * never summed. Readiness and this page must not disagree about how many
- * changes a workspace has.
+ * rows are the record, reconstructed rows dated BEFORE it began are a
+ * prehistory, and the two are never summed. Readiness and this page must not
+ * disagree about where the record begins.
+ *
+ * A reconstructed change dated AFTER the record began is not prehistory.
+ * scripts/log-tracking-eras.ts writes the relevance-gate fix and attribution
+ * v3 (and a capped update, when there is one) as `source 'reconstructed'`
+ * rows, dated at the actual deploy days after the record began: a change of
+ * ours no setting logged, written down afterwards at a known date. Filed
+ * under "Before the record began" it would sit beside July's inferred term
+ * sets, so it joins the record, keeps `reconstructed: true`, and its break
+ * clause, when it has none, says "Not recorded." like any logged row (the
+ * "worked out afterwards" sentence belongs to the prehistory). Readiness
+ * still does not count it (its query filters on the source), which is the
+ * one place the two differ: readiness counts rows, this page one entry per
+ * change, so they never printed the same number anyway.
  *
  * Pure. The caller reads the rows and supplies the viewer.
  */
@@ -236,10 +249,12 @@ export interface ReadChangeLogArgs {
 }
 
 export interface ChangeLogView {
-  /** Rows the product wrote down as they happened. */
+  /** Rows the product wrote down as they happened, and the reconstructed
+   *  changes of ours dated after the record began (`reconstructed: true`). */
   recorded: ClientChange[]
-  /** Rows worked out afterwards from what each update searched — a label, not
-   *  a record, and never summed with the recorded ones. */
+  /** Rows worked out afterwards from what each update searched, dated before
+   *  the record began — a label, not a record, and never summed with the
+   *  recorded ones. */
   prehistory: ClientChange[]
   /** The first recorded change, or null while only prehistory exists. */
   firstLoggedAt: string | null
@@ -294,10 +309,12 @@ function groupSide(surface: ConfigSurface, rows: readonly ConfigChange[], side: 
 }
 
 /** The whole reader: rows in, two lists out, newest first in each, ONE entry
- *  per change (`groupChangeRows`). */
+ *  per change (`groupChangeRows`). A group is prehistory when every row is
+ *  reconstructed AND it is dated before the first recorded group (see the
+ *  module header). */
 export function readChangeLog(args: ReadChangeLogArgs): ChangeLogView {
   const { rows, viewerUserId = null, emails = {} } = args
-  const view = (group: readonly ConfigChange[]): ClientChange => {
+  const view = (group: readonly ConfigChange[], prehistoric: boolean): ClientChange => {
     const change = group[0]
     const withNote = group.find((r) => r.note?.trim())
     const withAffects = group.find((r) => (r.affects_audiences?.length ?? 0) > 0 || r.affects_months) ?? change
@@ -315,7 +332,7 @@ export function readChangeLog(args: ReadChangeLogArgs): ChangeLogView {
         actorEmail: change.actor_user_id ? emails[change.actor_user_id] : null,
         viewerUserId,
       }),
-      breaks: breakClause({ ...withAffects, source: group.every((r) => r.source === 'reconstructed') ? 'reconstructed' : change.source }),
+      breaks: breakClause({ ...withAffects, source: prehistoric ? 'reconstructed' : 'logged' }),
       before: groupSide(change.surface, group, 'before'),
       after: groupSide(change.surface, group, 'after'),
       rowsAffected: counted.length > 0 ? counted.reduce((n, r) => n + (r.rows_affected ?? 0), 0) : null,
@@ -326,12 +343,17 @@ export function readChangeLog(args: ReadChangeLogArgs): ChangeLogView {
   const newestFirst = (a: ConfigChange[], b: ConfigChange[]) =>
     a[0].changed_at < b[0].changed_at ? 1 : a[0].changed_at > b[0].changed_at ? -1 : 0
   const groups = groupChangeRows(rows).sort(newestFirst)
-  const recorded = groups.filter((g) => !g.every((r) => r.source === 'reconstructed'))
-  const prehistory = groups.filter((g) => g.every((r) => r.source === 'reconstructed'))
-  const firstLogged = recorded.length > 0 ? recorded[recorded.length - 1][0].changed_at : null
+  const allReconstructed = (g: readonly ConfigChange[]) => g.every((r) => r.source === 'reconstructed')
+  const logged = groups.filter((g) => !allReconstructed(g))
+  const firstLogged = logged.length > 0 ? logged[logged.length - 1][0].changed_at : null
+  const firstLoggedMs = firstLogged ? Date.parse(firstLogged) : Number.NaN
+  // Before the record began: every row reconstructed, and dated earlier than
+  // the first recorded change (or no recorded change at all yet).
+  const prehistoric = (g: readonly ConfigChange[]) =>
+    allReconstructed(g) && (Number.isNaN(firstLoggedMs) || !(Date.parse(g[0].changed_at) >= firstLoggedMs))
   return {
-    recorded: recorded.map(view),
-    prehistory: prehistory.map(view),
+    recorded: groups.filter((g) => !prehistoric(g)).map((g) => view(g, false)),
+    prehistory: groups.filter(prehistoric).map((g) => view(g, true)),
     firstLoggedAt: firstLogged,
   }
 }
@@ -342,8 +364,10 @@ export function readChangeLog(args: ReadChangeLogArgs): ChangeLogView {
  * "4 changes since 19 Aug · 1 this month" — the mono meta beside the section's
  * eyebrow.
  *
- * RECORDED ROWS ONLY, for the reason the module's header gives: a reconstructed
- * row is inference and is never summed with the record. "This month" is the
+ * THE RECORD ONLY, for the reason the module's header gives: the prehistory is
+ * inference and is never summed with the record. (A reconstructed change of
+ * ours dated after the record began is in the record, and is counted: it is
+ * a row of the table this meta sits over.) "This month" is the
  * WALL CLOCK, which is what a change is dated by (`ClientChange.on` is
  * `changed_at`, and its doc comment says it is a period key for nothing) — so
  * this counts changes made in the current calendar month and not comments

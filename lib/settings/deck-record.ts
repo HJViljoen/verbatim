@@ -73,10 +73,13 @@ export function deckChangeLogView(
   args: { affectsRecorded: boolean; limit?: number; viewerUserId?: string | null },
 ): DeckChangeLog {
   const limit = args.limit ?? DECK_CHANGES_ROWS
-  // RECORDED ROWS ONLY. A reconstructed row is a label worked out afterwards,
-  // not a record of an act, and `changeLogBoundary` insists the two are never
-  // summed. A quarterly artefact that listed inference beside record would be
-  // the worse of the two claims, printed as the better.
+  // THE RECORD ONLY. A reconstructed row dated before the record began is a
+  // label worked out afterwards, not a record of an act, and
+  // `changeLogBoundary` insists the two are never summed. A quarterly artefact
+  // that listed inference beside record would be the worse of the two claims,
+  // printed as the better. (A change of ours written afterwards at a known
+  // date after the record began, the gate fix or attribution v3, is in the
+  // record: `readChangeLog`.)
   const view = readChangeLog({ rows, viewerUserId: args.viewerUserId ?? null })
   return {
     rows: view.recorded.slice(0, limit),

@@ -349,6 +349,35 @@ describe('the record shows each change once', () => {
     expect(readChangeLog({ rows: two }).recorded).toHaveLength(2)
   })
 
+  // log-tracking-eras writes the gate fix and attribution v3 on 30 Sep as
+  // reconstructed rows dated at the fix deploy (here a stand-in, 28 Sep 14:05),
+  // days after the record began. They are changes of ours written afterwards
+  // at a known date, not July's inferred term sets.
+  it('a reconstructed change dated after the record began joins the record, not the prehistory', () => {
+    const script = { source: 'reconstructed' as const, actor_kind: 'script' as const, actor_user_id: null, before: null, after: null }
+    const late: ConfigChange[] = [
+      ...rows,
+      change({ id: 'gate', changed_at: '2026-09-28T14:05:00.000Z', surface: 'gate_rule' as ConfigChange['surface'], field: 'relevance_gate',
+        note: 'We corrected how we check that a video belongs to your market.', affects_months: '[2026-09-01,2026-10-01)', ...script }),
+      change({ id: 'attr', changed_at: '2026-09-28T14:05:00.000Z', surface: 'attribution' as ConfigChange['surface'], field: 'attribution_v3',
+        note: 'We improved how we tell which brand a post is about, so fewer posts are filed under the wrong brand.', ...script }),
+    ]
+    const view = readChangeLog({ rows: late })
+    expect(view.recorded.map((c) => c.id)).toEqual(['attr', 'gate', 'r-1', 't-1'])
+    expect(view.prehistory.map((c) => c.id)).toEqual(['h-1', 's-in-0', 'init'])
+    expect(view.firstLoggedAt).toBe('2026-09-17T16:02:56Z')
+    const [attr, gate] = view.recorded
+    expect([attr.reconstructed, gate.reconstructed]).toEqual([true, true])
+    expect(gate.what).toBe('How we check relevance')
+    expect(gate.breaks).toBe('Sep 2026')
+    expect(attr.breaks).toBe('Not recorded.')
+    expect(attr.who).toBe('Verbatim')
+    // The prehistory keeps its own sentence.
+    expect(view.prehistory[2].breaks).toMatch(/^Not known: this change was worked out afterwards/)
+    // With nothing recorded yet, every reconstructed row is still prehistory.
+    expect(readChangeLog({ rows: late.filter((r) => r.source === 'reconstructed') }).recorded).toEqual([])
+  })
+
   it('names the three new surfaces in client words', () => {
     for (const s of CONFIG_SURFACES) expect(SURFACE_WORDS[s], s).toBeTruthy()
     for (const s of ['gate_rule', 'attribution', 'segment'] as const) {
