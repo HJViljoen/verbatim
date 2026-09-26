@@ -1,4 +1,5 @@
 import { pairSentence } from '../calibration'
+import { readCalibration, type SubjectCalibration } from '../subjects/calibration-state'
 import { fmtInt, monthName } from '../format'
 import { distinctVideos } from '../market-tiles'
 import { monthChange } from './bands'
@@ -279,6 +280,17 @@ export interface AfterwardsInput {
    *  rarely neighbours. Null where the caller holds no judge, stated at the
    *  call site. */
   pair: ((prevMonth: string, month: string) => PairComparability | null) | null
+  /** The target's calibration, where the target is a SUBJECT (decision C,
+   *  WP1.1): only a ready subject earns a verdict, so a provisional or failed
+   *  one is refused with its own sentence. Omitted, nothing is gated (a theme,
+   *  or a caller that applies no gate). */
+  calibration?: SubjectCalibration | null
+}
+
+/** The refusal for a subject whose check has not cleared, or clearly failed. */
+export const AFTERWARDS_SUBJECT_LINE: Record<'provisional' | 'failed', string> = {
+  provisional: 'We cannot read this one afterwards yet: the subject it is about is provisional until its check clears.',
+  failed: 'We cannot read this one afterwards: the subject it is about is being re-described.',
 }
 
 /** How many readable months after the decision before a comparison is drawn. */
@@ -343,6 +355,12 @@ export function afterwardsFor(input: AfterwardsInput): Afterwards {
       months: [],
       line: 'This advice does not name a subject or a theme we follow month by month, so there is nothing to read afterwards.',
     }
+  }
+
+  // A SUBJECT THAT IS NOT READY EARNS NO VERDICT (decision C, WP1.1).
+  const state = (input.objectKind ?? 'theme') === 'subject' ? readCalibration(input.calibration) : null
+  if (state === 'provisional' || state === 'failed') {
+    return { state: 'refused', verdict: null, months: [], line: AFTERWARDS_SUBJECT_LINE[state] }
   }
 
   const decidedMonth = monthStartOf(input.decidedAt.slice(0, 10))

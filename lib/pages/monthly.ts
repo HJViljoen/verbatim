@@ -29,6 +29,7 @@ import {
   loadSubjectVoicesMany,
   type SubjectVoice,
 } from './subjects'
+import { CALIBRATION_WORDS, isFailed, subjectCalibration } from '../subjects/calibration-state'
 
 /**
  * The monthly report's loader (Phase 1 WP18, design item 13).
@@ -547,11 +548,16 @@ async function loadSubjectVoicesPerSubject(
     return { rows: [], note: 'No subject has been confirmed yet, so there is nothing to hear one voice on.', href }
   }
 
-  const members = await loadMemberInsightIdsBySubject(supabase, clientId, active.map((s) => s.id))
+  // A FAILED SUBJECT IS HIDDEN EVERYWHERE (decision C, WP1.1): its members
+  // are mostly not about it (production's three failed at 0.60 and under), so
+  // no voice is read for it and its row says it is being re-described.
+  const failed = new Set(active.filter((s) => isFailed(subjectCalibration(s))).map((s) => s.id))
+  const heard = active.filter((s) => !failed.has(s.id))
+  const members = await loadMemberInsightIdsBySubject(supabase, clientId, heard.map((s) => s.id))
   const reads = await loadSubjectVoicesMany(
     supabase,
     clientId,
-    active.map((s) => ({ key: s.id, insightIds: members?.get(s.id) ?? [] })),
+    heard.map((s) => ({ key: s.id, insightIds: members?.get(s.id) ?? [] })),
     // THE MONTH THE ARTEFACT IS ABOUT, and the block asks "what does this month
     // actually sound like?" — so the pool is dated by the comment rather than
     // taken from the whole corpus and printed under a September heading.
@@ -560,6 +566,9 @@ async function loadSubjectVoicesPerSubject(
 
   const shown = new Set<string>()
   const rows: SubjectVoiceRow[] = active.map((subject) => {
+    if (failed.has(subject.id)) {
+      return { subjectId: subject.id, subject: subject.name, voice: null, note: CALIBRATION_WORDS.failed, href: '/dashboard/subjects' }
+    }
     const ids = members?.get(subject.id) ?? []
     const read = reads.get(subject.id) ?? { voices: [], from: 0, sampled: false, readable: 0 }
     const voice = read.voices.find((v) => !shown.has(v.quote.ref)) ?? null

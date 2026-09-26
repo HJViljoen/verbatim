@@ -262,3 +262,23 @@ describe('firstComparisonLine', () => {
     expect(buildQuarterlyCard(input({ readings: 9, readingMonth: '2026-09-01' }))?.firstComparison).toBeNull()
   })
 })
+
+// DECISION C (WP1.1): a failed subject is hidden everywhere; a provisional
+// one keeps its bar (a market level) and earns no verdict row.
+describe('buildQuarterlyCard under the three calibration states', () => {
+  it('keeps a ready subject, bars a provisional one without a row, and hides a failed one', () => {
+    const card = buildQuarterlyCard(input({
+      subjects: [
+        { id: 's1', name: 'Durability', calibration: 'ready' },
+        { id: 's2', name: 'Community & purpose', calibration: 'provisional' },
+        { id: 's3', name: 'Repair & warranty', calibration: 'failed' },
+      ],
+    }))
+    expect(card?.rows.map((r) => r.label)).toEqual(['Durability'])
+    expect(card?.series.map((r) => r.label)).toEqual(['Durability', 'Community & purpose'])
+  })
+
+  it('a subject with no calibration given is read as before', () => {
+    expect(buildQuarterlyCard(input())?.rows.map((r) => r.label)).toEqual(['Durability'])
+  })
+})
