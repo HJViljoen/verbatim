@@ -143,18 +143,19 @@ function MoodTable({ m, mode }: { m: MarketKinds; mode: RenderMode }) {
     )
   }
   const total = m.mood.reduce((n, r) => n + (r.k ?? 0), 0)
-  const cols = 'grid-cols-[minmax(104px,1fr)_64px_64px_64px]'
+  // Narrower figure columns on a phone, so the four fit without a scroll.
+  const cols = 'grid-cols-[minmax(88px,1fr)_52px_56px_56px] sm:grid-cols-[minmax(104px,1fr)_64px_64px_64px]'
   return (
     <div className="flex min-w-0 flex-col gap-6">
       <div role="table">
-        <div role="row" className={`grid ${cols} items-end gap-x-4 ${RULE.head}`}>
+        <div role="row" className={`grid ${cols} items-end gap-x-3 sm:gap-x-4 ${RULE.head}`}>
           <span role="columnheader" className={SCALE.head}>Mood</span>
           <span role="columnheader" className={`text-right ${SCALE.head}`}>Videos</span>
           <span role="columnheader"><BaseHead month={m.month} n={m.judged} mode={mode} /></span>
           <span role="columnheader">{prev ? <BaseHead month={prev.month} n={prev.judged} mode={mode} /> : null}</span>
         </div>
         {m.mood.map((r) => (
-          <div key={r.mood} role="row" className={`grid ${cols} min-h-11 items-center gap-x-4 py-1.5 ${RULE.row}`}>
+          <div key={r.mood} role="row" className={`grid ${cols} min-h-11 items-center gap-x-3 py-1.5 sm:gap-x-4 ${RULE.row}`}>
             <span role="rowheader" className={`inline-flex items-center gap-2.5 ${SCALE.row}`}><span aria-hidden className={`size-2 flex-none rounded-[2px] ${MOOD_DOT[r.mood] ?? 'bg-cat'}`} />{r.label}</span>
             <span className={`${SCALE.num} font-semibold`}><span data-copy="figure">{r.k == null ? '·' : fmtInt(r.k)}</span></span>
             <span className={SCALE.num}><span data-copy="figure">{cell(r.k, m.judged)}</span></span>

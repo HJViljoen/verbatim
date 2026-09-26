@@ -223,11 +223,11 @@ export function QuoteBlock({ quote, mode = 'app', cite, ground = 'tile' }: Quote
               the artboard's filled chip was not there at all. On paper it
               takes `bg-tile`, the card the quote sits on, which is the one
               ground that reads AGAINST `--inner` in both themes. */}
-          <span className={`inline-block rounded-full px-2 py-0.5 font-mono text-[10.5px] text-muted-foreground ${big || boxed ? 'bg-tile' : 'bg-inner'}`}>{label}</span>
+          <span className={boxed ? 'inline-block rounded-full bg-tile px-2 py-0.5 font-mono text-[12px] text-muted-foreground' : `inline-block rounded-full px-2 py-0.5 font-mono text-[10.5px] text-muted-foreground ${big ? 'bg-tile' : 'bg-inner'}`}>{label}</span>
         </p>
       )}
       {english && (
-        <p data-copy="quote" className={big ? 'mt-2 max-w-[66ch] font-serif text-[13.5px] leading-[1.5] text-muted-foreground' : boxed ? 'mt-2 font-serif text-[14px] leading-[1.5] text-secondary-foreground [text-wrap:pretty]' : 'mt-1.5 font-serif text-[12.5px] leading-[1.375] text-muted-foreground'}>{english}</p>
+        <p data-copy="quote" className={big ? 'mt-2 max-w-[66ch] font-serif text-[13.5px] leading-[1.5] text-muted-foreground' : boxed ? 'mt-2 font-serif text-[15px] leading-[1.55] text-secondary-foreground [text-wrap:pretty]' : 'mt-1.5 font-serif text-[12.5px] leading-[1.375] text-muted-foreground'}>{english}</p>
       )}
       {cite && <footer className={boxed ? 'mt-2 font-mono text-[12px] text-muted-foreground' : 'mt-1 font-mono text-[10.5px] text-muted-foreground'}>{cite}</footer>}
     </blockquote>

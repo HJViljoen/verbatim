@@ -187,7 +187,7 @@ function renderMarketMonth(data: OverviewData, mode: RenderMode, appUrl: string)
   // of one line and "videos" at the start of the next. The words are the
   // sentence's own; the app sets the clause before the colon as its own line,
   // and a sentence with no such clause stays one paragraph.
-  const headClass = 'm-0 text-[28px] font-medium leading-[1.3] tracking-[-0.02em] text-foreground'
+  const headClass = 'm-0 text-[24px] font-medium leading-[1.3] tracking-[-0.02em] text-foreground sm:text-[28px]'
   const headFigure = 'font-semibold tracking-[-0.04em]'
   const colon = s.body.indexOf(': ')
   const split = !email && colon > 0 && !s.body.slice(0, colon).includes('[[')
