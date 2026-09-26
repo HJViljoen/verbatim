@@ -64,13 +64,18 @@ export const READING_CARDS: readonly ReadingCard[] = [
   },
   {
     key: 'voice',
-    tells: 'Who is saying what: the themes the category keeps returning to, the words your customers use for them, and the people behind each one.',
-    read: ['theme', 'kind', 'video', 'gone_quiet'],
+    // CONVERSATION (market-first WP2.4, plan §2.4). Every theme the category
+    // read on 10 videos or more in the month, biggest first and nothing
+    // skipped; the month before beside each as a level; New and Now 10+ as
+    // flags, never as change; one theme in full; who is talking.
+    tells: 'Everything your market talked about in the month the page reads: every theme at 10 videos or more, biggest first, with the month before beside each, which ones were first heard or are newly at 10, how many of each theme’s videos came from searches we added that month, one theme in full with its own voices, and who is talking.',
+    read: ['market', 'theme', 'kind', 'video', 'month', 'level', 'new'],
     cannot: [
-      'The grouping into themes is ours and it can change. When it does, the line says so, and two months either side of a change are not like for like.',
-      'Whether a theme\'s members were re-read in a month is not recorded yet, so a change that is really a re-reading cannot be marked.',
-      'A video can carry more than one kind, and a commenter more than one group, so those counts overlap and do not sum to a whole.',
-      'A theme heard in one video is kept for the record and never headlines.',
+      'Themes are grouped within the category, so a theme is a share of the category’s videos, never of the whole market. Makers’ videos stay in every count; a theme that is half or more makers’ own is listed with the other maker-led ones at the end.',
+      '“New” means no earlier month holds the theme, and “Now 10+” that it had fewer than 10 videos the month before. Neither is a change: the month before had too few to call one.',
+      'The grouping into themes is ours and it can change. When an update re-groups every theme, the names it gives are not marked “New”.',
+      'Where a theme’s videos came from counts only the searches we first ran that month, so a theme found mostly by them may be ours as much as the market’s.',
+      'Who is talking is grouped at an update over everything read to date, not over the month, and a video can carry more than one group, so those counts overlap and do not sum to a whole.',
     ],
   },
   {
