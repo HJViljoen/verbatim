@@ -45,11 +45,18 @@ export interface MarketSide {
 const round1 = (n: number): number => Math.round(n * 10) / 10
 
 /**
- * One subject's market side in one month. `measured` is whether the subject
- * has been read at all (a row in any audience and any month on the page): a
- * subject named after the back-read has no row anywhere and reads null, "not
- * read yet", never 0. A measured subject with no row in a month that has rows
- * reads 0.
+ * One subject's market side in one month. Without `opts.read`, whether the
+ * subject was read is guessed from its rows (a row in any audience and any
+ * month on the page): a subject named after the back-read has no row anywhere
+ * and reads null, "not read yet", never 0, and a subject with rows reads 0 in
+ * a month that has rows but none of its own.
+ *
+ * `opts.read` IS THE ANSWER WHEN THE CALLER HAS ONE (deploy 2 review): the
+ * loader's read-in test (`subjectReadInOf`, the one the Subjects rows use).
+ * A subject that test says was read in the month, and that was cited on no
+ * video, reads 0 there: its rows are absent because none cited it, not
+ * because nothing looked. So Your market and Subjects cannot disagree on
+ * whether a subject was read.
  */
 export function marketSubjectSide(
   rows: readonly { month: string; audience: string; subject_id: string; videos: number }[],
@@ -57,6 +64,7 @@ export function marketSubjectSide(
   subjectId: string,
   month: string,
   rivalAudiences: readonly string[],
+  opts: { read?: boolean } = {},
 ): MarketSide {
   const m = monthStartOf(month)
   const mine = rows.filter((r) => r.subject_id === subjectId)
@@ -66,7 +74,7 @@ export function marketSubjectSide(
     counts,
     m,
     rivalAudiences,
-    { read: mine.length > 0 && monthHasRows },
+    { read: opts.read ?? (mine.length > 0 && monthHasRows) },
   )
   const pct = side.k != null && side.n != null && side.n > 0 ? round1((side.k / side.n) * 100) : null
   return { k: side.k, n: side.n, pct }

@@ -4452,12 +4452,16 @@ export function withMarketSides(block: SubjectsBlock, input: {
     // or print an invented 0. The front page prints "being re-described" or
     // "no reading yet" for them.
     const failed = r.calibration === 'failed'
+    // WHERE THE LOADER KNOWS THE SUBJECT WAS READ IN A MONTH, that is the
+    // answer (a read subject cited on no video is 0 there, never "no reading
+    // yet"); without the read-in input, the rows decide, as before.
+    const known = (month: string): { read?: boolean } => (input.read && readIn(r.id, monthStartOf(month)) === 'read' ? { read: true } : {})
     const side = failed || r.unread || readIn(r.id, monthStartOf(input.month)) === 'unread'
       ? { k: null, n: input.counts.get(input.month)?.videos ?? null, pct: null }
-      : marketSubjectSide(input.months, input.counts, r.id, input.month, input.marketRivals)
+      : marketSubjectSide(input.months, input.counts, r.id, input.month, input.marketRivals, known(input.month))
     const prev = failed || readIn(r.id, monthStartOf(input.prevMonth)) === 'unread'
       ? null
-      : marketSubjectSide(input.months, input.counts, r.id, input.prevMonth, input.marketRivals)
+      : marketSubjectSide(input.months, input.counts, r.id, input.prevMonth, input.marketRivals, known(input.prevMonth))
     r.market = { k: side.k, n: side.n, pct: side.pct, verdict: null, observed: side.k != null }
     r.marketPrev = prev && prev.n != null ? prev : null
   }

@@ -31,7 +31,7 @@ function subject(id: string, name: string, precision: number | null, namedAt = '
 const row = (month: string, audience: string, subject_id: string, videos: number) => ({ month, audience, subject_id, videos, comments: 0 })
 const confirmed = (id: string, changedAt: string) => ({ changed_at: changedAt, surface: 'subjects', after: { id, status: 'active' } })
 
-function build(opts: { augustWritten: string; septemberWritten: string }) {
+function build(opts: { augustWritten: string; septemberWritten: string; communityConfirmed?: string }) {
   const subjects = [
     subject('looks', 'Looks & style', 0.8571428571428571),
     subject('repair', 'Repair & warranty', 0.3333333333333333),
@@ -59,7 +59,7 @@ function build(opts: { augustWritten: string; septemberWritten: string }) {
     confirmed('looks', '2026-09-24T11:46:16.982Z'),
     confirmed('repair', '2026-09-24T11:46:16.982Z'),
     confirmed('water', '2026-09-24T11:46:16.982Z'),
-    confirmed('community', '2026-09-24T12:41:06.517Z'),
+    confirmed('community', opts.communityConfirmed ?? '2026-09-24T12:41:06.517Z'),
   ]
   const read = {
     writtenAt: new Map([['2026-08-01', Date.parse(opts.augustWritten)], ['2026-09-01', Date.parse(opts.septemberWritten)]]),
@@ -124,5 +124,15 @@ describe('withMarketSides under the three calibration states (WP1.1 with WP1.6)'
     expect(late('water').marketPrev).toBeNull()
     // With August written after it was counted, the missing row is a real 0.
     expect(byId('water').marketPrev).toMatchObject({ k: 0, n: 377 })
+  })
+
+  it('a subject read in the month and cited on no video carries a market level of 0, never "no reading" (deploy 2 review)', () => {
+    // Community & purpose confirmed before both months were written, and cited
+    // on no video in either: read, so its zeros are measured zeros. The
+    // market side follows the read-in test, not whether any row exists.
+    const early = build({ augustWritten: '2026-09-24T12:15:41.468Z', septemberWritten: '2026-09-24T12:15:41.468Z', communityConfirmed: '2026-09-24T11:46:16.982Z' })
+    expect(early('community').unread ?? null).toBeNull()
+    expect(early('community').market).toMatchObject({ k: 0, n: 643, observed: true })
+    expect(early('community').marketPrev).toMatchObject({ k: 0, n: 377 })
   })
 })
