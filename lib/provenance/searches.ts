@@ -13,8 +13,13 @@ import type { ConfigChange } from '../config-log'
 //
 // SEARCH-OUTSIDE (plan §4.2 PairRow.searchOutside): a video is OUTSIDE a pair of
 // months when no search that ran unchanged through both months surfaced it. "Ran
-// unchanged" means it ran in every gather from the first day of the earlier
-// month to the pair's read-through gather. "Surfaced" is any evidence we hold:
+// unchanged" means it ran in every COMPLETED gather from the first day of the
+// earlier month to the pair's read-through gather. A gather that ended partial
+// or failed (a spending cap, an outage) may have skipped searches our
+// configuration still held: that is gather health's to report (`gatherHealth`,
+// the pair row's `gather`), not a change of ours, so it does not decide what
+// ran unchanged. A span holding no completed gather falls back to all of its
+// gathers. "Surfaced" is any evidence we hold:
 // its first-found terms (video_provenance), every snapshot of source_keywords,
 // the current source_keywords and every gate verdict's keyword. So a video first
 // found by a removed term that resurfaced under an unchanged one counts as
@@ -90,15 +95,28 @@ export function gathersOf(rows: readonly KeywordRow[], runs: readonly RunRow[]):
     .sort((a, b) => ms(a.at) - ms(b.at))
 }
 
-/** The searches that ran in EVERY gather from `from` (inclusive) through the
- *  gather `throughRunId`. Empty when no gather falls in the span. */
-export function unchangedSearches(gathers: readonly GatherRun[], from: string, throughRunId: string): Set<string> {
+const fellShort = (g: GatherRun): boolean => g.status === 'partial' || g.status === 'failed'
+
+/** The gathers from `from` (inclusive) through the gather `throughRunId` that
+ *  decide what ran unchanged: the completed ones (a run whose row is unknown
+ *  counts as completed), or every gather in the span when none completed.
+ *  `left` names the partial or failed ones left out. */
+export function decidingGathers(gathers: readonly GatherRun[], from: string, throughRunId: string): { deciding: GatherRun[]; left: GatherRun[] } {
   const through = gathers.find((g) => g.runId === throughRunId)
-  if (!through) return new Set()
+  if (!through) return { deciding: [], left: [] }
   const span = gathers.filter((g) => ms(g.at) >= ms(from) && ms(g.at) <= ms(through.at))
-  if (span.length === 0) return new Set()
-  const out = new Set(span[0].searches)
-  for (const g of span.slice(1)) for (const s of [...out]) if (!g.searches.has(s)) out.delete(s)
+  const complete = span.filter((g) => !fellShort(g))
+  return complete.length > 0 ? { deciding: complete, left: span.filter(fellShort) } : { deciding: span, left: [] }
+}
+
+/** The searches that ran in every deciding gather (`decidingGathers`) from
+ *  `from` through the gather `throughRunId`. Empty when no gather falls in the
+ *  span. */
+export function unchangedSearches(gathers: readonly GatherRun[], from: string, throughRunId: string): Set<string> {
+  const { deciding } = decidingGathers(gathers, from, throughRunId)
+  if (deciding.length === 0) return new Set()
+  const out = new Set(deciding[0].searches)
+  for (const g of deciding.slice(1)) for (const s of [...out]) if (!g.searches.has(s)) out.delete(s)
   return out
 }
 

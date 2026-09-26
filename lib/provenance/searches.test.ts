@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  evidenceTerms, firstSearched, gatherHealth, gathersOf, isOutside, median, oneReachRowEach, plannedSearches, populations,
+  decidingGathers, evidenceTerms, firstSearched, gatherHealth, gathersOf, isOutside, median, oneReachRowEach, plannedSearches, populations,
   reachOf, searchKey, termDelta, unchangedSearches, type KeywordRow, type MonthVideo, type ReachRowPlan,
 } from './searches'
 
@@ -49,6 +49,19 @@ describe('the gathers and what ran unchanged', () => {
     expect([...terms].sort()).toEqual([...KEPT, 'r/backpacks'].sort())
     expect(u.has(searchKey('tiktok', 'r/backpacks'))).toBe(false)
     expect(unchangedSearches(GATHERS, '2026-08-01T00:00:00Z', 'no-such-run').size).toBe(0)
+  })
+
+  it('a gather that fell short does not decide what ran unchanged; gather health counts it', () => {
+    // 5a2ebc43 is the fixture's failed gather: left out, the answer above holds.
+    expect(decidingGathers(GATHERS, '2026-08-01T00:00:00Z', '5a2ebc43').left.map((g) => g.runId)).toEqual(['5a2ebc43'])
+    // A capped run (a stand-in, partial) that reached only four of the kept
+    // terms: without the rule, the two it skipped would read as changed and
+    // every video only they found would count as outside.
+    const capped = gathersOf([...KP, ...rows('capped00', '2026-09-20T08:00:00Z', KEPT.slice(0, 4))], [...RUNS, { id: 'capped00', status: 'partial' }])
+    const terms = (u: Set<string>) => [...new Set([...u].map((k) => k.split('\u0000')[1]))].sort()
+    expect(terms(unchangedSearches(capped, '2026-08-01T00:00:00Z', 'capped00'))).toEqual([...KEPT, 'r/backpacks'].sort())
+    // A span of nothing but short gathers falls back to all of them.
+    expect(decidingGathers(capped, '2026-09-13T00:00:00Z', 'capped00')).toEqual({ deciding: capped.slice(-2), left: [] })
   })
 
   it('knows when each term was first searched', () => {

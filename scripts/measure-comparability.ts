@@ -6,7 +6,7 @@ import {
 } from '../lib/provenance/load'
 import type { ProvenanceSnapshot } from '../lib/provenance/reconstruct'
 import {
-  firstSearched, gatherHealth, gathersOf, isOutside, median, oneReachRowEach, populations, unchangedSearches, type MonthVideo,
+  decidingGathers, firstSearched, gatherHealth, gathersOf, isOutside, median, oneReachRowEach, populations, unchangedSearches, type MonthVideo,
   type ReachRowPlan,
 } from '../lib/provenance/searches'
 import { changeInSpan, changesFromLog, isSearchSurface, type OurChange } from '../lib/reading/comparability'
@@ -21,7 +21,9 @@ import { createAdminClient, selectAll } from '../lib/supabase-admin'
 // --project <ref>, one `month_pair_comparability` row, append-only (the newest
 // computed_at wins), holding:
 //   - search-outside, per month: the videos NOT surfaced by any search that ran
-//     unchanged through both months (lib/provenance/searches.ts), over the
+//     unchanged through both months, in every completed gather (a gather that
+//     fell short is named and left to gather health; lib/provenance/searches.ts
+//     decidingGathers), over the
 //     CATEGORY, the population themes are grouped in and the one the research
 //     states its figures over (206 of 625, GC F29); the market's figures are
 //     printed beside them;
@@ -168,6 +170,12 @@ async function main() {
     const searchOutside = { prev: side('prev', 'category'), curr: side('curr', 'category') }
     const marketOutside = { prev: side('prev', 'market'), curr: side('curr', 'market') }
     console.log(`  searches unchanged through both months: ${[...new Set([...unchanged].map((k) => k.split('\u0000')[1]))].sort().join(', ') || '(none)'}`)
+    // A gather that fell short (a cap, an outage) does not decide what ran
+    // unchanged; it is named here so a short run is read beside the figure.
+    const { left } = decidingGathers(gathers, iso(prev), lastGather.runId)
+    if (left.length > 0) {
+      console.log(`  gathers that fell short, left out of that test (gather health counts them): ${left.map((g) => `${g.runId.slice(0, 8)} ${g.at.slice(0, 10)} ${g.status}`).join(', ')}`)
+    }
     console.log(`  outside, category: ${prev.slice(0, 7)} ${searchOutside.prev.k} of ${searchOutside.prev.n} · ${month.slice(0, 7)} ${searchOutside.curr.k} of ${searchOutside.curr.n}`)
     console.log(`  outside, market:   ${prev.slice(0, 7)} ${marketOutside.prev.k} of ${marketOutside.prev.n} · ${month.slice(0, 7)} ${marketOutside.curr.k} of ${marketOutside.curr.n}`)
     // The breakdown the research states its figures in: outside videos found
@@ -246,7 +254,7 @@ async function main() {
   const finishedAt = (id: string | null) => updates.find((u) => u.id === id)?.finishedAt ?? null
   const reachRows = oneReachRowEach(planned, finishedAt)
   const folded = planned.length - reachRows.length
-  const foldedNote = folded > 0 ? ` (${folded} repeats of a month two pairs share, folded)` : ''
+  const foldedNote = folded > 0 ? `, after folding ${folded} repeats of a month two pairs share` : ''
 
   if (!args.apply) {
     console.log(`\nread-only: nothing written (${pairRows.length} pair rows and ${reachRows.length} reach rows planned${foldedNote}) · reads: ${pages.n} pages · at ${now}`)
