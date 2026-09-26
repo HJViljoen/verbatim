@@ -184,8 +184,8 @@ export function TileColumns({ of, rule = true, rail, children, className }: {
   )
 }
 
-/** Page title · right-hand controls, in one slim row at the top of the page,
- *  and under them the bar's ONE context line where the page has one. */
+/** Page title, and under it the bar's ONE context line where the page has
+ *  one; the right-hand controls sit at the end of the pair. */
 export function PageBar({
   title, line, children,
 }: {
@@ -206,22 +206,27 @@ export function PageBar({
   subtitle?: ReactNode
   children?: ReactNode
 }) {
+  // THE APPROVED PREVIEW'S BAR, ON EVERY PAGE (WP1.6 design check, 26 Sep):
+  // the title at MASTER's `text-2xl font-bold` (it had drifted to 17px), the
+  // line 8px under it, and the controls at the right-hand end of the pair,
+  // level with its foot. Every artboard of the preview draws this one bar, so
+  // it is the component's and not Your market's alone. On a phone the
+  // controls stay beside the title and the line takes the whole width under
+  // them, so the line is never squeezed into a column beside a button.
   return (
-    <div className="flex shrink-0 flex-col gap-0.5">
+    <div className={cn('grid shrink-0 items-center gap-y-2', children ? 'grid-cols-[minmax(0,1fr)_auto] gap-x-6' : 'grid-cols-1', children && line ? 'sm:items-end' : null)}>
+      <h1 className="col-start-1 row-start-1 m-0 text-2xl leading-8 font-bold tracking-[-0.015em]">{title}</h1>
+      {children ? (
+        <div className={cn('col-start-2 row-start-1 flex shrink-0 items-center justify-end gap-3', line ? 'sm:row-end-3' : null)}>{children}</div>
+      ) : null}
       {/* THE CONTEXT WRAPS (Block D wave 3, SH17). It was `truncate`, with no
           wrap fallback, and it is the line that says what the page's numbers
           are OF: at 1024 This week read "update of 13 Sep · previous 6 …",
           losing the other half of every comparison the page makes; Reports
           read "…reading as at 2…"; Competitive at 768 read "Össur ·
-          September 20…". The line under the title wraps for the same
-          reason and takes the lines it needs. `min-h-8` rather than `h-8`, so
-          a bar that fits on one line is exactly what it was. */}
-      <div className="flex min-h-8 flex-wrap items-center gap-x-3 gap-y-1">
-        <h1 className="text-[17px] font-semibold tracking-[-0.01em]">{title}</h1>
-        {children && <div className="ml-auto flex shrink-0 items-center gap-2">{children}</div>}
-      </div>
+          September 20…". It wraps and takes the lines it needs. */}
       {line ? (
-        <p className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] leading-6 text-secondary-foreground">{line}</p>
+        <p className={cn('row-start-2 m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-[14px] leading-6 text-secondary-foreground', children ? 'col-span-2 sm:col-span-1' : null)}>{line}</p>
       ) : null}
     </div>
   )

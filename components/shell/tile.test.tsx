@@ -197,13 +197,22 @@ describe('TileColumns', () => {
 
 describe('PageBar', () => {
   it('wraps its context line instead of truncating it (SH17)', () => {
-    const markup = render(<PageBar title="This week" context="update of 13 Sep · previous 6 Sep · Össur · September 2026">x</PageBar>)
+    const markup = render(<PageBar title="This week" line="update of 13 Sep · previous 6 Sep · Össur · September 2026">x</PageBar>)
     // It is the line that says what the page's numbers are OF, and `truncate`
     // with no wrap fallback lost the other half of every comparison at 1024.
     expect(markup).not.toContain('truncate')
-    expect(markup).toContain('flex-wrap')
-    // A bar that fits on one line is exactly what it was.
-    expect(markup).toContain('min-h-8')
+    expect(markup).toMatch(/<p class="[^"]*flex-wrap[^"]*">update of 13 Sep/)
+  })
+
+  it('draws the approved preview\'s bar: the title at MASTER\'s text-2xl bold, the controls at the end of the pair', () => {
+    const markup = render(<PageBar title="Your market" line="Sealand">x</PageBar>)
+    expect(markup).toContain('text-2xl leading-8 font-bold')
+    expect(markup).not.toContain('text-[17px]')
+    // Level with the line's foot from `sm`; beside the title on a phone, with
+    // the line taking the whole width under them.
+    expect(markup).toContain('sm:items-end')
+    expect(markup).toContain('sm:row-end-3')
+    expect(markup).toContain('col-span-2 sm:col-span-1')
   })
 })
 
