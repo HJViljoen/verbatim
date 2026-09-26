@@ -47,7 +47,8 @@ import {
   type MoveSeries,
 } from '../reading/moves'
 import { BRANDS_PANEL, pairTools, type PairOn } from '../reading/pairs'
-import { loadChanges, loadMonthSeries, loadPairOn, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
+import { loadChanges, loadMonthSeries, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
+import { loadAppPairOn, ourChangesWithoutGatherFlags } from '../reading/gather-flags'
 import { asAtOf, loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, readingViewFrom, type OtherMonth } from '../reading/reading-view'
 import { methodLines, type MethodLines } from '../reading/method'
 import { countRefused, howSoundLine, loadRecordInputs, monthRecordWindow, recordLines, refusals, soundFigures, type RecordInputs, type SoundFigure } from '../reading/record'
@@ -75,7 +76,6 @@ import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
 import { monthPhrase, opensClusteringRegime, previousThemedRegime, refsOf } from './week'
 import type { ConfigChange } from '../config-log'
-import { changesFromLog } from '../reading/comparability'
 import { TABLE_EVIDENCE_REFS } from '../reading/evidence-refs'
 import { scheduledUpdateAfter } from '../reading/reading-month'
 import { updateInstant, type DeliveredRun } from '../reading/reading-view'
@@ -2071,7 +2071,7 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
   // step below is judged by it. It depends on the tenant and the clock only:
   // whether a month is still so far is the clock's question, and the pair it
   // is asked about is the reading month's (`month` below is `rm.month`).
-  const judgeAhead = loadPairOn(reading, readingAt)
+  const judgeAhead = loadAppPairOn(reading, readingAt)
   themedRunAhead.catch(() => {})
   ledgerAhead.catch(() => {})
 
@@ -4254,7 +4254,7 @@ async function loadMarketReads(input: {
     loadBoardThemes(client, clientId, month, prevMonth),
     loadLeadExclusions(client, clientId),
     loadChanges(client, clientId),
-    // FAILS CLOSED, AS THE PAGE'S PAIR JUDGE DOES (`loadPairOn`): a read error
+    // FAILS CLOSED, AS THE PAGE'S PAIR JUDGE DOES (`loadAppPairOn`): a read error
     // on the pair rows leaves the change block unmeasured, never the page down
     // (a missing table is already an empty list).
     loadPairRows(client, clientId, null).catch((error: unknown): PairRow[] => {
@@ -4400,7 +4400,10 @@ function marketFrontPage(reads: MarketReads, input: {
     month,
     hasPrev: counts.has(prevMonth),
     pair: input.pair(prevMonth, month, 'market'),
-    changes: changesFromLog(reads.changeRows),
+    // A CAPPED UPDATE IS A GATHER FLAG, NOT A CHANGE OF OURS (decision D,
+    // lib/reading/gather-flags.ts): it never moves the first pair read the
+    // same way.
+    changes: ourChangesWithoutGatherFlags(reads.changeRows),
     pairRows: reads.pairRows,
     nextUpdateAfter: input.schedule ? scheduledUpdateAfter(input.schedule) : null,
     asAt: input.rm.asAt,

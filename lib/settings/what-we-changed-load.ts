@@ -2,7 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { changesFromLog, type PairComparability } from '../reading/comparability'
 import { monthStartOf, prevMonth as previousMonthOf } from '../reading/month-key'
-import { loadChanges, loadMonthSeries, loadPairOn, loadPairRows, type ReadingHandle } from '../reading/read'
+import { loadChanges, loadMonthSeries, loadPairRows, type ReadingHandle } from '../reading/read'
+import { loadAppPairOn, ourChangesWithoutGatherFlags } from '../reading/gather-flags'
 import { loadDeliveredRuns, loadMarketRivalAudiences, loadReadingSchedule, readingViewFrom, updateInstant } from '../reading/reading-view'
 import { scheduledUpdateAfter, type ReadingMonth } from '../reading/reading-month'
 import { pooledDenominators } from '../reading/market'
@@ -99,7 +100,7 @@ export async function loadWhatWeChanged(supabase: SupabaseClient, reading: Readi
     loadChanges(client, clientId),
     loadPairRows(client, clientId, null),
     loadChangeReach(client, clientId),
-    loadPairOn(reading, now),
+    loadAppPairOn(reading, now),
   ])
   if (runs.length === 0) return null
   const view = readingViewFrom({ now, runs, denominators: history.denominators, rivalAudiences, schedule })
@@ -118,7 +119,9 @@ export async function loadWhatWeChanged(supabase: SupabaseClient, reading: Readi
     month,
     hasPrev: counts.has(prev),
     pair,
-    changes,
+    // A capped update is a gather flag, not a change of ours (decision D,
+    // lib/reading/gather-flags.ts): the list below still prints it.
+    changes: ourChangesWithoutGatherFlags(changeRows),
     pairRows,
     nextUpdateAfter: schedule ? scheduledUpdateAfter(schedule) : null,
     asAt: rm.asAt,

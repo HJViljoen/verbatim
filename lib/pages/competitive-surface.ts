@@ -10,7 +10,8 @@ import { horizonDates, horizonWindow, parseHorizon, sinceStart, type Horizon, ty
 import { freezeStateFor, monthStartOf } from '../reading/monthly'
 import { MONTH_PARAM, readingAnchor, type ReadingMonth } from '../reading/reading-month'
 import { loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, readingViewFrom, type OtherMonth } from '../reading/reading-view'
-import { loadMonthSeries, loadPairOn, type MonthSeriesSet, type ReadingHandle } from '../reading/read'
+import { loadMonthSeries, type MonthSeriesSet, type ReadingHandle } from '../reading/read'
+import { loadAppPairOn } from '../reading/gather-flags'
 import { BRANDS_PANEL, refusedSteps, type PairOn } from '../reading/pairs'
 import { methodLines, type MethodLines } from '../reading/method'
 import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordInputs } from '../reading/record'
@@ -567,7 +568,7 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
   // THE MONTH-PAIR JUDGE (decision D, WP1.3) depends on the tenant and the
   // clock only, so it starts with the other early reads. It fails closed:
   // a read error refuses every pair and the page still renders.
-  const pairAhead = loadPairOn(reading, readingAt)
+  const pairAhead = loadAppPairOn(reading, readingAt)
   const brand = row<{ company_name: string | null }>(clientRes, 'competitive-surface.client')?.company_name ?? 'Your brand'
 
   // ── the axis ───────────────────────────────────────────────────────────

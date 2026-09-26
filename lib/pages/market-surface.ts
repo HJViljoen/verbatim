@@ -14,7 +14,8 @@ import { scrubProse } from '../prose/scrub'
 import { afterwardsFor, groundingFor, type Afterwards, type Grounding } from '../reading/afterwards'
 import { recurrenceOf, type Recurrence } from '../reading/head-to-head'
 import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordInputs } from '../reading/record'
-import { loadMonthSeries, loadPairOn, type ReadingHandle } from '../reading/read'
+import { loadMonthSeries, type ReadingHandle } from '../reading/read'
+import { loadAppPairOn } from '../reading/gather-flags'
 import type { PairOn } from '../reading/pairs'
 import type { Verdict } from '../reading/verdicts'
 import type { Quote } from '../renderables/types'
@@ -866,7 +867,7 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   const recordAhead = loadRecordInputs(reading.client, clientId, recordWindow(month, readingAt), { now: readingAt })
   // THE MONTH-PAIR JUDGE (decision D, WP1.3): "Afterwards" and every move
   // reading compare two months only when both were read the same way.
-  const judgeAhead = loadPairOn(reading, readingAt)
+  const judgeAhead = loadAppPairOn(reading, readingAt)
   recordAhead.catch(() => {})
 
   const runId = latestRun.id

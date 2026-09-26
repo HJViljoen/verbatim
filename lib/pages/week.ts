@@ -21,7 +21,8 @@ import {
 } from '../reading/anomaly'
 import { freezeStateFor, isMissingMonthlyReading, isMissingMonthTable } from '../reading/monthly'
 import { monthStartOf, nextMonth } from '../reading/month-key'
-import { loadMonthSeries, loadPairOn, loadWindowReading, type ReadingHandle } from '../reading/read'
+import { loadMonthSeries, loadWindowReading, type ReadingHandle } from '../reading/read'
+import { loadAppPairOn } from '../reading/gather-flags'
 import { pairedVerdict } from '../reading/bands'
 import { pairOnVerdict } from '../reading/comparability'
 import type { PairOn } from '../reading/pairs'
@@ -1309,7 +1310,7 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
       // the months behind it only where they were read the same way. It fails
       // closed (every pair refused) and never rejects, so a read error here
       // cannot take the page down.
-      loadPairOn(reading, readingAt),
+      loadAppPairOn(reading, readingAt),
     ])
 
   const denominators = monthSet.denominators
