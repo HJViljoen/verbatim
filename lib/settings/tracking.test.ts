@@ -183,7 +183,7 @@ describe('rivalRows', () => {
   it('keeps a rival nobody tracks any more, because its months are frozen under its name', () => {
     const patagonia = rows.find((r) => r.name === 'Patagonia')!
     expect(patagonia.retiredAt).toBe('2026-09-09')
-    expect(rivalState(patagonia)).toContain('the line ends here, on 2026-09-09')
+    expect(rivalState(patagonia)).toContain('the line ends here, on 9 Sep')
   })
 
   it('draws a rival with no identity row at all — the table never loses a tracked name', () => {

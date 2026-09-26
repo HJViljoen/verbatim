@@ -93,11 +93,10 @@ export function TermPerformance({ rows, updates, months = [] }: { rows: TermSumm
   // section head does.
   return (
     <div className="flex min-w-0 flex-col gap-2">
+      {/* The head is its title alone (the 25 Sep rulings, WP3.10): the
+          pooled span is the one-line answer under it. */}
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
         <span className="shrink-0 text-[12.5px] font-medium">How they are doing</span>
-        <span className="min-w-0 font-mono text-[10.5px] text-muted-foreground">
-          pooled over {updates} update{updates === 1 ? '' : 's'}
-        </span>
       </div>
       <p className="text-[11.5px] text-muted-foreground">{description}</p>
       {rows.length === 0 ? (

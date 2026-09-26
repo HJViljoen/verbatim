@@ -6,7 +6,6 @@ import { RIVALS_PRESENT } from '@/app/dashboard/settings/constants'
 import { RivalRename } from '@/app/dashboard/settings/rival-rename'
 import { CONTROL, Dot, Figure, FIELD, GridRow, GridTable, ICON_TARGET, MonoNote, Section, SectionHead, SectionNotes } from '@/components/settings/chrome'
 import { monthName, platformLabel, shortDate } from '@/lib/format'
-import { HANDLE_FORMAT_CAVEAT } from '@/lib/provisioning'
 import { isNewRival, rivalRefusalNote, rivalState, RIVAL_REMOVED_PENDING, type RivalRow } from '@/lib/settings/rivals-view'
 import { cn } from '@/lib/utils'
 
@@ -219,7 +218,6 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
           density is not. */}
       <SectionNotes
         notes={[
-          HANDLE_FORMAT_CAVEAT,
           // ST12: the reason, ONCE. `rivalState`'s account-less sentence is
           // the same 52 characters on every rival with no handles — three
           // copies down a `minmax(0,1fr)` column here, five on a workspace
