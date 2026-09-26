@@ -481,7 +481,9 @@ export interface WeekBarsLayout {
  * Place the rule labels so none collides with another label, with another
  * rule's mark on its row, or with a rule's dotted line from a row above:
  * rows from the top, and on each row the label's right side first unless a
- * later rule sits within reach there, then its left.
+ * later rule sits within reach there, or the label would run past the plot's
+ * right edge (the deploy-3 review: a change in the latest week printed "△ 26"
+ * with "Sep" cut off), then its left.
  */
 export function placeTicks(ticks: readonly { x: number; label: string }[], plotPx: number = WEEK_PLOT_MIN): { row: number; side: 'start' | 'end' }[] {
   const px = ticks.map((t) => t.x * plotPx)
@@ -491,7 +493,8 @@ export function placeTicks(ticks: readonly { x: number; label: string }[], plotP
     const x = px[i]
     for (let row = 0; row < 6; row++) {
       const crowdedRight = px.some((o, j) => j > i && o > x && o - x < widths[i] + TICK_PAD + 6)
-      const sides: ('start' | 'end')[] = crowdedRight ? ['end', 'start'] : ['start', 'end']
+      const pastEdge = x + widths[i] + TICK_PAD > plotPx
+      const sides: ('start' | 'end')[] = crowdedRight || pastEdge ? ['end', 'start'] : ['start', 'end']
       for (const side of sides) {
         const from = side === 'start' ? x - 6 : x - widths[i] - TICK_PAD + 4
         const to = side === 'start' ? x + widths[i] + TICK_PAD - 4 : x + 6

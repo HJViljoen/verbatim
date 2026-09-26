@@ -9,7 +9,7 @@ import { SEALAND_NEXT_UPDATE, STAGING_CHANGES, STAGING_RIVALS, STAGING_UPDATES, 
 import { WEEK_LINE } from '../week-line-config'
 import { SEALAND_CLIENT_ID } from '../config'
 import {
-  placeTicks, weekBarsLayout, weekChangeSentence, weekDetail, WEEK_PLOT_MIN,
+  placeTicks, weekBarsLayout, weekChangeSentence, weekDetail, weekPlotMin, WEEK_PLOT_MIN,
   dayList, pendingBlankLabel, pendingRowGeometry, pendingWaitingLine, WEEK_BARS, weekBarsAriaLabel, weekBarsGeometry,
   weekBarsTable, weekHover, weekRuleKey,
 } from './week-bars'
@@ -213,6 +213,16 @@ describe('weekBarsLayout', () => {
     expect(placeTicks([{ x: 0.1, label: '9 Sep' }])).toEqual([{ row: 0, side: 'start' }])
     const two = placeTicks([{ x: 0.5, label: '9 Sep' }, { x: 0.53, label: '13 Sep' }])
     expect(two[0].side).toBe('end')
+  })
+
+  it('places a label to the left of its mark where the right would run past the plot (26 Sep in the latest of 9 weeks)', () => {
+    // The relevance fix on Sat 26 Sep, drawn in the week of 21 Sep, the last
+    // of the 24 Sep clock's nine columns: x = (8 + 5.5 / 7) / 9.
+    const x = (8 + 5.5 / 7) / 9
+    expect(placeTicks([{ x, label: '26 Sep' }], weekPlotMin(9))).toEqual([{ row: 0, side: 'end' }])
+    // At the plot's wide end the same label still fits on the right of an
+    // earlier mark.
+    expect(placeTicks([{ x: 0.5, label: '26 Sep' }], weekPlotMin(9))).toEqual([{ row: 0, side: 'start' }])
   })
 })
 
