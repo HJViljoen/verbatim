@@ -5,7 +5,7 @@ import { TokenProse } from '@/components/blocks/prose'
 import { pairChipWords } from '@/lib/calibration'
 import { fmtInt, longMonth, shortDate } from '@/lib/format'
 import { pairOnVerdict } from '@/lib/reading/comparability'
-import { nextPairParts, whyNotCompared, type ChangeBlock, type CompareRule, type LedgerLine, type WhyCell } from '@/lib/pages/overview-market/change'
+import { nextPairParts, readTheSameWay, whyNotCompared, type ChangeBlock, type CompareRule, type LedgerLine, type WhyCell } from '@/lib/pages/overview-market/change'
 import { cellReadWith, monthHead, type RecordCell, type RecordGroup, type RecordView, type SearchAside } from '@/lib/settings/what-we-changed'
 import { settingsSubPage } from '@/lib/settings/rail'
 import { cn } from '@/lib/utils'
@@ -39,7 +39,7 @@ export const WHAT_WE_CHANGED_ID = 'what-we-changed'
 export function sideBySide(block: ChangeBlock): string | null {
   const pair = block.pair
   if (!pair || !block.prevMonth) return null
-  if (pair.mode === 'comparable') return `${longMonth(pair.prevMonth)} and ${longMonth(pair.month)} were read the same way.`
+  if (readTheSameWay(pair)) return `${longMonth(pair.prevMonth)} and ${longMonth(pair.month)} were read the same way.`
   const note = pairOnVerdict(pair).note
   const words = note ? pairChipWords(note) : 'not compared yet'
   return `${longMonth(pair.prevMonth)} and ${longMonth(pair.month)} sit side by side, ${words}.`

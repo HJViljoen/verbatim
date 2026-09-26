@@ -7,6 +7,7 @@ import {
   DEPTH_RATIO_MIN,
   VIEWS_BY_SURFACE,
   isSearchSurface,
+  joins,
   modeForShare,
   nextComparablePair,
   pairOnVerdict,
@@ -190,6 +191,21 @@ export function placeInMonth(iso: string, month: string): number | null {
   return (d.getUTCDate() - 0.5) / days
 }
 
+/**
+ * Were the two months read the same way? Comparable, or flagged for run health
+ * alone (rule 6's `gather` reason: a partial or spending-capped update), which
+ * is none of decision D's four rules and adds no flag to a verdict
+ * (`pairOnVerdict`). A capped Sunday in October flags October against November
+ * (R-c, lib/reading/gather-flags.ts), and that pair must still read as the
+ * first one read the same way (deploy 2 review): its verdicts print as a
+ * comparable pair's do.
+ */
+export function readTheSameWay(pair: Pick<PairComparability, 'mode' | 'reasons'> | null | undefined): boolean {
+  if (!pair) return false
+  if (pair.mode === 'comparable') return true
+  return pair.mode === 'flag' && pair.reasons.length > 0 && pair.reasons.every((r) => r.kind === 'gather')
+}
+
 export const CHANGE_NEW = 'change_new_search_videos'
 export const CHANGE_OF = 'change_month_videos'
 
@@ -204,7 +220,7 @@ export function changeLead(block: ChangeBlock): { body: string; figures: FigureT
   if (!pair || !block.prevMonth) {
     return { body: `Nothing is compared yet: ${longMonth(block.month)} is the first month we read.`, figures: {} }
   }
-  if (pair.mode === 'comparable') {
+  if (readTheSameWay(pair)) {
     return { body: `${longMonth(pair.prevMonth)} and ${longMonth(pair.month)} were read the same way.`, figures: {} }
   }
   const measured = measuredSearchSentence(block)
@@ -301,8 +317,9 @@ export function addedOnlyRecordSentence(block: ChangeBlock): { body: string; fig
 
 /** "The first comparison read the same way: October against November, from
  *  the 6 Dec update, if nothing we search changes." Null where there is none
- *  to name, where it is the pair the block already reads, or where updates are
- *  paused (no update is promised). */
+ *  to name, where it is the pair the block already reads and that pair is
+ *  joined (comparable, or flagged: a capped update's flag included), or where
+ *  updates are paused (no update is promised). */
 export function nextPairLine(block: ChangeBlock): string | null {
   const parts = nextPairParts(block)
   return parts ? `${parts.lead}${parts.pair}${parts.tail}` : null
@@ -314,7 +331,8 @@ export function nextPairLine(block: ChangeBlock): string | null {
 export function nextPairParts(block: ChangeBlock): { lead: string; pair: string; tail: string } | null {
   const next = block.next
   if (!next || block.paused) return null
-  if (block.pair?.mode === 'comparable' && next.month === block.month) return null
+  const pair = block.pair
+  if (pair && joins(pair) && monthStartOf(next.prevMonth) === monthStartOf(pair.prevMonth) && monthStartOf(next.month) === monthStartOf(pair.month)) return null
   return {
     lead: 'The first comparison read the same way: ',
     pair: `${longMonth(next.prevMonth)} against ${longMonth(next.month)}, from the ${shortDate(next.sameAgeFrom)} update`,
@@ -463,7 +481,7 @@ const CODE_CHANGE_CAPTION: Partial<Record<OurChangeSurface, string>> = {
 export function whyCells(block: ChangeBlock): WhyCell[] {
   const pair = block.pair
   const row = pair?.row ?? null
-  if (!pair || !row || pair.mode === 'comparable') return []
+  if (!pair || !row || readTheSameWay(pair)) return []
   const month = longMonth(pair.month)
   const readWith = block.readWith ?? null
   const cells: WhyCell[] = []
@@ -528,10 +546,10 @@ export function whyCells(block: ChangeBlock): WhyCell[] {
 /** "Why September is not compared": the measured cells behind the refusal
  *  (`whyCells`), and, where none was measured, the one sentence in Settings'
  *  form (`addedOnlyRecordSentence`) or the pair's chip words. Null where the
- *  pair is read the same way. */
+ *  pair is read the same way (`readTheSameWay`). */
 export function whyNotCompared(block: ChangeBlock): { title: string; body: string; figures: FigureTable; cells: WhyCell[] } | null {
   const pair = block.pair
-  if (!pair || pair.mode === 'comparable') return null
+  if (!pair || readTheSameWay(pair)) return null
   const lead = addedOnlyRecordSentence(block)
   const note = pairOnVerdict(pair).note
   const body = lead?.body ?? (note ? pairSentence(note) : null)

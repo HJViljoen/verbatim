@@ -8,6 +8,9 @@ import { render, renderText } from '@/lib/test/render'
 import { BlockFrame } from '@/components/blocks/frame'
 import { NUMBER_BUDGET, type OverviewData } from '@/lib/pages/overview'
 import { comparabilityOf, type PairRow } from '@/lib/reading/comparability'
+import { withGatherFlags } from '@/lib/reading/gather-flags'
+import { pairJudge } from '@/lib/reading/pairs'
+import { WhatWeChangedLead } from '@/components/settings/record/what-we-changed'
 import { LEAD_MAX_MAKER_SHARE, segmentOf, themeFigures, themeToken } from '@/lib/pages/overview-market'
 import { septemberThemes } from '@/lib/test/market-fixture'
 import { FRONT_PAGE_BLOCKS, MARKET_TITLES, OverviewPage } from './index'
@@ -103,6 +106,49 @@ describe('the change strip once October leads: each month once', () => {
       expect(text).not.toMatch(/[▲▼]/)
       expect(text).not.toContain('\u2014')
     }
+  })
+})
+
+// A CAPPED SUNDAY IN OCTOBER (R-c, deploy 2 review): from the 6 Dec update
+// October against November is measured and read the same way on all four
+// rules, and the 11 Oct update was capped. The judge flags the pair for run
+// health only, which is not one of decision D's rules: the block still says the
+// pair was read the same way, and does not offer it again as the first one.
+describe('the change block at the 6 Dec update, with a capped October update', () => {
+  const row: PairRow = {
+    prevMonth: '2026-10-01', month: '2026-11-01',
+    searchOutside: { prev: { k: 0, n: 700 }, curr: { k: 0, n: 720 } }, addedOnly: { k: 0, n: 720 },
+    codeChanges: [], depth: { prevMedian: 20, currMedian: 19 }, gather: [], lateCapture: null,
+    readThroughRun: 'run-6dec', methodVersion: 'mf1', computedAt: '2026-12-07T10:00:00.000Z',
+  }
+  const updates = ['2026-10-04', '2026-10-11', '2026-10-18', '2026-10-25', '2026-11-01', '2026-11-08', '2026-11-15', '2026-11-22', '2026-11-29', '2026-12-06']
+    .map((d) => ({ id: d === '2026-12-06' ? 'run-6dec' : `run-${d}`, finishedAt: `${d}T08:00:00.000Z` }))
+  const judge = withGatherFlags(
+    pairJudge({ now: '2026-12-08T06:00:00.000Z', changes: [], rows: [row], updates, nextUpdateAfter: null }),
+    [{ id: 'capped-1011', at: '2026-10-11T04:18:00.000Z', month: '2026-10-01', runId: 'run-2026-10-11' }],
+  )
+  const pair = judge('2026-10-01', '2026-11-01', 'market')
+  const change: NonNullable<OverviewData['change']> = {
+    prevMonth: '2026-10-01', month: '2026-11-01', pair,
+    next: { prevMonth: '2026-10-01', month: '2026-11-01', sameAgeFrom: '2026-12-06T04:00:00.000Z', inFullExpected: '2027-01-03T04:00:00.000Z' },
+    checks: [], readWith: '2026-12-06T08:00:00.000Z', paused: false, asAt: '2026-12-06T08:00:00.000Z', searchChanges: [],
+  }
+
+  it('prints "October and November were read the same way." and no next pair, in every mode', () => {
+    expect(pair.mode).toBe('flag')
+    for (const mode of MODES) {
+      const text = read(FRONT_PAGE_BLOCKS.find((b) => b.key === 'overview.change')!.render({ ...marketFrontFixture(), change }, mode, ctx))
+      expect(text, mode).toContain('October and November were read the same way.')
+      expect(text, mode).not.toContain('The first comparison read the same way')
+    }
+  })
+
+  it('Settings › What we changed says the same, with nothing under "Why … is not compared"', () => {
+    const text = read(<WhatWeChangedLead block={change} />)
+    expect(text).toContain('October and November were read the same way.')
+    expect(text).not.toContain('sit side by side')
+    expect(text).not.toContain('is not compared')
+    expect(text).not.toContain('The first comparison read the same way')
   })
 })
 

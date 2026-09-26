@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 
 import type { ConfigChange } from '../../config-log'
 import { changesFromLog, comparabilityOf, nextComparablePair, type PairRow } from '../../reading/comparability'
+import { withGatherFlags } from '../../reading/gather-flags'
+import { pairJudge } from '../../reading/pairs'
 import { scheduledUpdateAfter } from '../../reading/reading-month'
 import {
   CHANGE_NEW,
@@ -14,6 +16,7 @@ import {
   nextPairLine,
   nextPairParts,
   placeInMonth,
+  readTheSameWay,
   searchChangeDays,
   searchChangesLine,
   whyCells,
@@ -183,6 +186,66 @@ describe('what changed, and what is ours (plan §2.2 block 10)', () => {
     })
     expect(comparable.mode).toBe('comparable')
     expect(changeLead(block({ prevMonth: '2026-10-01', month: '2026-11-01', pair: comparable }))?.body).toBe('October and November were read the same way.')
+  })
+})
+
+/**
+ * A capped Sunday in October (R-c): October against November measured with the
+ * 6 Dec update and read the same way on all four rules, with one spending-capped
+ * update on 11 Oct. The judge flags the pair for run health only.
+ */
+describe('a pair flagged only by a capped update is read the same way (deploy 2 review)', () => {
+  const OCT_NOV: PairRow = {
+    ...ROW,
+    prevMonth: '2026-10-01',
+    month: '2026-11-01',
+    searchOutside: { prev: { k: 0, n: 700 }, curr: { k: 0, n: 720 } },
+    addedOnly: { k: 0, n: 720 },
+    depth: { prevMedian: 20, currMedian: 19 },
+    readThroughRun: 'run-6dec',
+    computedAt: '2026-12-07T10:00:00.000Z',
+  }
+  const SUNDAYS = ['2026-10-04', '2026-10-11', '2026-10-18', '2026-10-25', '2026-11-01', '2026-11-08', '2026-11-15', '2026-11-22', '2026-11-29', '2026-12-06']
+  const updates = SUNDAYS.map((d) => ({ id: d === '2026-12-06' ? 'run-6dec' : `run-${d}`, finishedAt: `${d}T08:00:00.000Z` }))
+  const base = pairJudge({ now: '2026-12-08T06:00:00.000Z', changes: [], rows: [OCT_NOV], updates, nextUpdateAfter: null })
+  const capped = withGatherFlags(base, [{ id: 'capped-1011', at: '2026-10-11T04:18:00.000Z', month: '2026-10-01', runId: 'run-2026-10-11' }])
+  const at = (pair: ReturnType<typeof base>): ChangeBlock => ({
+    prevMonth: '2026-10-01',
+    month: '2026-11-01',
+    pair,
+    next: { prevMonth: '2026-10-01', month: '2026-11-01', sameAgeFrom: '2026-12-06T04:00:00.000Z', inFullExpected: '2027-01-03T04:00:00.000Z' },
+    checks: [],
+    readWith: '2026-12-06T08:00:00.000Z',
+    paused: false,
+    asAt: '2026-12-06T08:00:00.000Z',
+  })
+
+  it('says the pair was read the same way, and does not name it again as the first such pair', () => {
+    const flagged = capped('2026-10-01', '2026-11-01', 'market')
+    expect(flagged.mode).toBe('flag')
+    expect(flagged.reasons.map((r) => r.kind)).toEqual(['gather'])
+    expect(readTheSameWay(flagged)).toBe(true)
+    for (const pair of [base('2026-10-01', '2026-11-01', 'market'), flagged]) {
+      const b = at(pair)
+      expect(changeLead(b)?.body).toBe('October and November were read the same way.')
+      expect(nextPairLine(b)).toBeNull()
+      expect(whyNotCompared(b)).toBeNull()
+      expect(whyCells(b)).toEqual([])
+    }
+  })
+
+  it('still names the next pair where the pair read is a different one, or is refused', () => {
+    const b = at(capped('2026-10-01', '2026-11-01', 'market'))
+    expect(nextPairLine({ ...b, next: { ...b.next!, prevMonth: '2026-11-01', month: '2026-12-01', sameAgeFrom: '2027-01-03T04:00:00.000Z' } })).toBe(
+      'The first comparison read the same way: November against December, from the 3 Jan update, if nothing we search changes.',
+    )
+    expect(nextPairLine(block())).toContain('October against November')
+  })
+
+  it('a flag for a change of ours is not read the same way', () => {
+    expect(readTheSameWay({ mode: 'flag', reasons: [{ kind: 'code_change', changeId: 'x', share: 0.05 }] })).toBe(false)
+    expect(readTheSameWay({ mode: 'flag', reasons: [{ kind: 'gather', changeId: null, share: null }, { kind: 'searches', changeId: null, share: 0.02 }] })).toBe(false)
+    expect(readTheSameWay({ mode: 'refuse', reasons: [{ kind: 'gather', changeId: null, share: null }, { kind: 'depth', changeId: null, share: 0.5 }] })).toBe(false)
   })
 })
 
