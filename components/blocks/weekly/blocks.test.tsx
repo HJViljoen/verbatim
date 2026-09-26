@@ -919,6 +919,13 @@ describe('the weekly subjects block under the three calibration states (decision
     }
   })
 
+  it('a failed subject\'s name links nowhere: there is no pane to open (WP1.1 review, finding 7)', () => {
+    const markup = render(weeklySubjectsBlock.render(data, 'app', ctx))
+    expect(markup).not.toContain('item=repair')
+    expect(markup).toContain('item=looks')
+    expect(data.subjects.rows.find((r) => r.id === 'repair')?.href).toBe('')
+  })
+
   it('a subject the month was not read for prints its name and when it will be, and no figure (WP1.1 review, finding 1)', () => {
     for (const mode of MODES) {
       const text = renderText(weeklySubjectsBlock.render(data, mode, ctx))

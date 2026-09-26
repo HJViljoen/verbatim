@@ -3934,7 +3934,8 @@ const WITHHELD_SIDE: SideReading = { k: null, n: null, pct: null, verdict: null,
  * category's) keep their levels and lose their verdicts; the "you" side goes;
  * no direction word. The monthly line stays: it is levels, and a refused step
  * is still drawn broken. FAILED: every side goes, and so do the line and the
- * same point last month; the row keeps its name for "being re-described".
+ * same point last month, and its link (there is no pane to open); the row
+ * keeps its name for "being re-described".
  * A row with no calibration (a caller that applies none) is returned as is.
  */
 export function calibratedRow(row: SubjectRow): SubjectRow {
@@ -3949,6 +3950,9 @@ export function calibratedRow(row: SubjectRow): SubjectRow {
       sparkBreaks: row.sparkBreaks?.map(() => false),
       sparkBreakWhy: row.sparkBreakWhy?.map(() => null),
       categoryAtLastMonth: null,
+      // No surface may link it: the Subjects page opens no pane for it
+      // (WP1.1 review, finding 7).
+      href: '',
     }
   }
   if (row.calibration === 'provisional') {

@@ -122,9 +122,15 @@ function Row({ row, contribution, rivalLabel, share, mode, appUrl }: {
   // clause. A row stored before WP1.1 carries no state and renders as sent.
   const failed = isFailed(row.calibration)
   const client = printsClient(row.calibration)
+  // A FAILED ROW'S NAME IS NOT A LINK (WP1.1 review, finding 7): the
+  // Subjects page opens no pane for a subject being re-described and fell
+  // back to the first other subject. Its name is set in the muted ink, as on
+  // Overview.
   const name = mode === 'email'
-    ? <span style={{ fontFamily: FONT.sans, fontSize: 13.5, color: EMAIL.ink }}>{row.label}</span>
-    : <Link href={`${appUrl}${row.href}`} className="text-[13.5px] underline-offset-2 hover:underline">{row.label}</Link>
+    ? <span style={{ fontFamily: FONT.sans, fontSize: 13.5, color: failed ? EMAIL.muted : EMAIL.ink }}>{row.label}</span>
+    : failed || !row.href
+      ? <span className={`text-[13.5px]${failed ? ' text-muted-foreground' : ''}`}>{row.label}</span>
+      : <Link href={`${appUrl}${row.href}`} className="text-[13.5px] underline-offset-2 hover:underline">{row.label}</Link>
   const label = <>{name}<CalibrationTag calibration={row.calibration} unread={row.unread} mode={mode} block /></>
   const figure = (
     <FigureCell
