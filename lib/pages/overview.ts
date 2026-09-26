@@ -94,6 +94,7 @@ import {
   marketSubjectSide,
   mayLead as mayLeadTheme,
   namesABrand,
+  pastOffers,
   pickQuotes,
   searchesAddedIn,
   stripUnevidencedBrand,
@@ -3989,6 +3990,10 @@ async function loadThemeQuotes(
   themedRunId: string | null,
   wanted: ReadonlyMap<string, string | null>,
   month: string,
+  /** The themes whose voices the headline may print (the lead candidates):
+   *  a sale offer or an ad among their best candidates is read but not
+   *  counted (`pastOffers`, default M-c), so the voice after it is read. */
+  leads: ReadonlySet<string> = new Set(),
 ): Promise<Map<string, { candidates: CiteCandidate[]; texts: string[] }>> {
   const out = new Map<string, { candidates: CiteCandidate[]; texts: string[] }>()
   const ids = [...wanted.keys()]
@@ -4058,7 +4063,9 @@ async function loadThemeQuotes(
       }
     }
     list.sort((a, b) => (a.e.relevance_rank ?? 99) - (b.e.relevance_rank ?? 99) || a.e.id.localeCompare(b.e.id))
-    shortlist.set(themeId, list.slice(0, QUOTE_CANDIDATES_PER_THEME))
+    shortlist.set(themeId, leads.has(themeId)
+      ? pastOffers(list, QUOTE_CANDIDATES_PER_THEME, (x) => x.e.quote)
+      : list.slice(0, QUOTE_CANDIDATES_PER_THEME))
     out.set(themeId, { candidates: [], texts })
   }
   const kept = [...shortlist.values()].flat()
@@ -4316,7 +4323,7 @@ async function loadMarketReads(input: {
   for (const id of branded) if (!wanted.has(id)) wanted.set(id, null)
   const firstLead = leadCandidates[0]?.registryId ?? null
   const [quotes, firstProvenance] = await Promise.all([
-    loadThemeQuotes(supabase, clientId, themedRunId, wanted, month),
+    loadThemeQuotes(supabase, clientId, themedRunId, wanted, month, new Set(leadCandidates.map((t) => t.registryId))),
     firstLead ? loadLeadProvenance(client, clientId, month, firstLead, changeRows) : Promise.resolve(null),
   ])
   // DECISION F: MAKERS NEVER SUPPLY THE HEADLINE'S QUOTES. The lead may be up
@@ -4387,7 +4394,8 @@ function marketFrontPage(reads: MarketReads, input: {
   const hero = heroLead(board, subjects, reads.excluded)
   const lead = hero.kind === 'themes' ? hero.lead : null
   const heroVoices = lead
-    ? pickQuotes(reads.quotes.get(lead.registryId)?.candidates ?? [], { month, kind: lead.kind, count: VOICES_SHOWN, marketVideosOnly: reads.segments === 'measured' }).map((c) => voiceOf(c as CiteCandidate))
+    // Never a sale offer or an ad (default M-c): the next eligible voice.
+    ? pickQuotes(reads.quotes.get(lead.registryId)?.candidates ?? [], { month, kind: lead.kind, count: VOICES_SHOWN, marketVideosOnly: reads.segments === 'measured', skipOffers: true }).map((c) => voiceOf(c as CiteCandidate))
     : []
   const askQuotes = new Map<string, Quote | null>()
   for (const id of askIds(themes, reads.segments)) {
