@@ -82,6 +82,10 @@ describe('the noise rule', () => {
     // first found in a community: no bare name found it, whatever resurfaced it since
     expect(noiseTerms([], ['poler'], ['r/onebag'])).toEqual(['r/onebag'])
     expect(segmentReason({ caption: 'daypack', firstTerms: [], firstSubreddits: ['r/onebag'], sourceKeywords: ['poler'] })).toBeNull()
+    // found by reading an account: no search found it, so no bare name did
+    expect(noiseTerms([], ['poler'], [], 'account')).toEqual([])
+    expect(segmentReason({ caption: 'daypack', firstTerms: [], firstSubreddits: [], firstEvidence: 'account', sourceKeywords: ['poler'] })).toBeNull()
+    expect(segmentReason({ caption: 'daypack', firstTerms: [], firstSubreddits: [], firstEvidence: 'gate_verdicts', sourceKeywords: ['poler'] })).toBe('bare_name_only:poler')
   })
 })
 

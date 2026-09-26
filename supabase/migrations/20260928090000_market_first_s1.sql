@@ -231,8 +231,9 @@ $segments_v1$;
 
 -- Each video's segment by the reader precedence (the newest override, else the
 -- newest judge row, else the newest rule row, else segments_v1 computed inline
--- on the video's first-found terms and communities where provenance holds any,
--- else its source_keywords). `labelled` says a
+-- on no terms for a video found by reading an account (provenance evidence
+-- 'account': no search found it), else its first-found terms and communities
+-- where provenance holds any, else its source_keywords). `labelled` says a
 -- stored row decided it. One place, so theme_maker_shares and
 -- market_segment_counts cannot disagree about a video.
 create or replace function public.segments_for_videos(p_client uuid, p_video_ids uuid[])
@@ -258,7 +259,8 @@ as $$
     select v.id as video_id,
            public.segments_v1_reason(
              v.caption, v.hashtags, v.topics,
-             case when cardinality(p.first_terms) + cardinality(p.first_subreddits) > 0
+             case when p.evidence = 'account' then '{}'::text[]
+                  when cardinality(p.first_terms) + cardinality(p.first_subreddits) > 0
                   then p.first_terms || p.first_subreddits else v.source_keywords end) as reason
     from ids
     join public.videos v on v.id = ids.id and v.client_id = p_client

@@ -31,7 +31,10 @@ import { SEALAND_CLIENT_ID } from '../config'
 // Friday news briefing (CQ F19). "First-found" is `video_provenance`'s
 // first_terms and first_subreddits where that row holds any, else the video's
 // stored `source_keywords`. A video found by any other term, or by a
-// community, is not noise.
+// community, is not noise. Nor is a video found by reading an ACCOUNT (the
+// provenance row's evidence 'account', lib/provenance/reconstruct.ts): no
+// search found it, so no bare name did, whatever has resurfaced it since. Its
+// row holds no terms, and without this it would fall back to source_keywords.
 //
 // ENABLED PER TENANT. The word list is Sealand's: its non-buyer content is
 // sewing and craft. Össur's is lived experience, not making (CQ F43), so no
@@ -95,15 +98,22 @@ export function makerWordIn(haystack: string): string | null {
 const fold = (t: string): string => t.replace(/^ +| +$/g, '').toLowerCase()
 const NOISE_SET = new Set(NOISE_TERMS.map(fold))
 
-/** The terms the noise rule reads: the first-found terms and communities when
- *  provenance holds any (a video first found in a community is found by no bare
- *  name), else the stored `source_keywords`. The SQL side
- *  (segments_for_videos) passes `first_terms || first_subreddits` the same way. */
+/** `video_provenance.evidence` for a video found by reading an account. */
+export const ACCOUNT_EVIDENCE = 'account'
+
+/** The terms the noise rule reads: none for a video found by reading an
+ *  account (no search found it); else the first-found terms and communities
+ *  when provenance holds any (a video first found in a community is found by
+ *  no bare name); else the stored `source_keywords`. The SQL side
+ *  (segments_for_videos) passes `'{}'` for evidence 'account', then
+ *  `first_terms || first_subreddits`, the same way. */
 export function noiseTerms(
   firstTerms: readonly string[] | null | undefined,
   sourceKeywords: readonly string[] | null | undefined,
   firstSubreddits: readonly string[] | null | undefined = null,
+  firstEvidence: string | null | undefined = null,
 ): readonly string[] {
+  if (firstEvidence === ACCOUNT_EVIDENCE) return []
   const first = [...(firstTerms ?? []), ...(firstSubreddits ?? [])]
   return first.length > 0 ? first : (sourceKeywords ?? [])
 }
@@ -123,6 +133,8 @@ export interface SegmentInput {
   topics?: readonly string[] | null
   firstTerms?: readonly string[] | null
   firstSubreddits?: readonly string[] | null
+  /** `video_provenance.evidence`: 'account' means no search found it. */
+  firstEvidence?: string | null
   sourceKeywords?: readonly string[] | null
 }
 
@@ -134,7 +146,7 @@ export interface SegmentInput {
 export function segmentReason(v: SegmentInput): string | null {
   const word = makerWordIn(makerHaystack(v))
   if (word) return `maker_regex:${word}`
-  const name = bareNameOnly(noiseTerms(v.firstTerms, v.sourceKeywords, v.firstSubreddits))
+  const name = bareNameOnly(noiseTerms(v.firstTerms, v.sourceKeywords, v.firstSubreddits, v.firstEvidence))
   return name ? `bare_name_only:${name}` : null
 }
 

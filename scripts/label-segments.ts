@@ -83,7 +83,7 @@ async function main() {
     const p = provenance?.get(v.id)
     let reason = segmentReason({
       caption: v.caption, hashtags: v.hashtags, topics: v.topics,
-      firstTerms: p?.first_terms, firstSubreddits: p?.first_subreddits, sourceKeywords: v.source_keywords,
+      firstTerms: p?.first_terms, firstSubreddits: p?.first_subreddits, firstEvidence: p?.evidence, sourceKeywords: v.source_keywords,
     })
     let segment = segmentOfReason(reason)
     if (unjudged.has(`${v.platform}\u0000${v.video_id}`)) {

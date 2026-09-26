@@ -83,7 +83,7 @@ async function main() {
   const rows: Row[] = pop.map((id) => {
     const t = text.get(id)
     const p = prov.get(id)
-    return { id, caption: t?.caption ?? null, hashtags: t?.hashtags ?? null, topics: t?.topics ?? null, terms: [...noiseTerms(p?.first_terms, t?.source_keywords, p?.first_subreddits)] }
+    return { id, caption: t?.caption ?? null, hashtags: t?.hashtags ?? null, topics: t?.topics ?? null, terms: [...noiseTerms(p?.first_terms, t?.source_keywords, p?.first_subreddits, p?.evidence)] }
   })
   const ts = new Map(rows.map((r) => [r.id, segmentReason({ caption: r.caption, hashtags: r.hashtags, topics: r.topics, firstTerms: r.terms, sourceKeywords: [] })]))
   const sql = sqlReasons(rows)
