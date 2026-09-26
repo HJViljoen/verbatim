@@ -45,7 +45,7 @@ function fakeAdmin(state: State): SupabaseClient {
         if (table === 'video_segments') {
           if (state.missingSegments) return Promise.resolve({ error: missingTable })
           clock += 60_000
-          state.segments.push({ ...(row as never), decided_at: new Date(clock).toISOString() })
+          state.segments.push({ ...(row as Record<string, unknown>), decided_at: new Date(clock).toISOString() } as State['segments'][number])
         }
         if (table === 'config_changes') state.changes.push(...(Array.isArray(row) ? row : [row]))
         return Promise.resolve({ error: null })
