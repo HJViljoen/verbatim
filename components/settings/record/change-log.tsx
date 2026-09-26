@@ -96,8 +96,8 @@ export function ChangeLogBlock({
             <span>What it breaks</span>
             <span>Made by</span>
           </div>
-          {shown.map((c) => (
-            <ChangeRow key={c.id} change={c} now={now} />
+          {sameRows(shown).map(({ change, count }) => (
+            <ChangeRow key={change.id} change={change} count={count} now={now} />
           ))}
         </div>
       )}
@@ -107,13 +107,39 @@ export function ChangeLogBlock({
   )
 }
 
-function ChangeRow({ change, now }: { change: ClientChange; now: string }) {
+/**
+ * Consecutive rows that would print exactly the same line, drawn once with
+ * how many there are (fresh design check, 26 Sep). Sealand's 24 Sep holds six
+ * rows reading "precision measured by hand on 33 labelled pairs at 0.6/0.4 ·
+ * 6 settings → 6 settings" and seven "Confirmed on creation: …", one per
+ * subject, and the stored note names none of them: printed one by one they
+ * read as a fault in the table, not as thirteen changes. Nothing is dropped:
+ * every row is counted, and rows that differ in any printed cell stay apart.
+ */
+export function sameRows(changes: readonly ClientChange[]): { change: ClientChange; count: number }[] {
+  const printed = (c: ClientChange): string => [c.on, c.said, c.before ?? '', c.after ?? '', c.breaks, c.who].join('\u0000')
+  const out: { change: ClientChange; count: number }[] = []
+  for (const c of changes) {
+    const last = out[out.length - 1]
+    if (last && printed(last.change) === printed(c)) last.count += 1
+    else out.push({ change: c, count: 1 })
+  }
+  return out
+}
+
+function ChangeRow({ change, count = 1, now }: { change: ClientChange; count?: number; now: string }) {
   return (
     <div className={ROW}>
       <span className="font-mono text-[13px] leading-[1.5] text-secondary-foreground">{change.dateShort}</span>
       <span className="min-w-0 text-[13px] leading-[1.5]">
         <span className="inline-flex flex-wrap items-center gap-2">
-          <span>{change.said}</span>
+          {/* The count trails the sentence's last line, never a line of its own. */}
+          <span>
+            {change.said}
+            {count > 1 ? (
+              <>{' '}<span data-copy="figure" aria-label={`${count} changes like this one`} className="whitespace-nowrap font-mono text-[12px] tabular-nums text-muted-foreground">×{count}</span></>
+            ) : null}
+          </span>
           {madeThisMonth(change, now) ? <MonthFlag>this month</MonthFlag> : null}
         </span>
         {/* NOT TRUNCATED. On the rows that have it the before→after IS the
@@ -161,8 +187,8 @@ function Prehistory({ log, rows, now }: { log: ChangeLogView; rows: number; now:
         Before the record began · {fmtInt(log.prehistory.length)} {log.prehistory.length === 1 ? 'entry' : 'entries'}
       </h3>
       <div className="flex flex-col">
-        {log.prehistory.slice(0, rows).map((c) => (
-          <ChangeRow key={c.id} change={c} now={now} />
+        {sameRows(log.prehistory.slice(0, rows)).map(({ change, count }) => (
+          <ChangeRow key={change.id} change={change} count={count} now={now} />
         ))}
       </div>
       {showing ? <p className="m-0 text-[13px] text-muted-foreground">{showing}</p> : null}

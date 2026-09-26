@@ -6,7 +6,7 @@ import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { deliveryRecord } from '@/lib/settings/delivery'
 
-import { ChangeLogBlock } from './change-log'
+import { ChangeLogBlock, sameRows } from './change-log'
 import { CoverageBlock } from './coverage'
 import { DeliveryBlock } from './delivery'
 import { NO_EXPORT_WHY, SaveStrip, ScopeStatement } from './header'
@@ -250,6 +250,22 @@ describe('the change log', () => {
     expect(render(changeLog).match(/min-w-0 break-words text-\[13px\]/g)).toHaveLength(
       (changeLogFixture().recorded.length + changeLogFixture().prehistory.length) * 2,
     )
+  })
+
+  it('draws consecutive rows that print the same line once, with how many there are', () => {
+    // Sealand's 24 Sep: six rows of "precision measured by hand on 33
+    // labelled pairs at 0.6/0.4", one per subject, whose note names none.
+    const log = changeLogFixture()
+    const first = log.recorded[0]
+    const twins = { ...log, recorded: [first, { ...first, id: `${first.id}-b` }, { ...first, id: `${first.id}-c` }, ...log.recorded.slice(1)] }
+    const node = <ChangeLogBlock log={twins} rows={20} showing={null} now="2026-09-28T09:00:00.000Z" />
+    const text = renderText(node)
+    expect(text.split(first.said).length - 1).toBe(1)
+    expect(text).toContain('×3')
+    expect(render(node)).toContain('aria-label="3 changes like this one"')
+    // Every other row is drawn as it was, uncounted.
+    expect(sameRows(twins.recorded).map((r) => r.count)).toEqual([3, ...log.recorded.slice(1).map(() => 1)])
+    assertCopyContract(node)
   })
 
   it('prints its title alone: no count and no boundary sentence beside it (25 Sep rulings)', () => {
