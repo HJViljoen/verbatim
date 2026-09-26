@@ -170,7 +170,7 @@ export default async function SettingsRecordPage() {
         {changed ? (
           <>
             <WhatWeChangedLead block={changed.block} />
-            <TheRecord lines={changed.lines} month={changed.reading.month} prevMonth={changed.block.prevMonth} />
+            <TheRecord view={changed.record} />
             <WhenCompared rules={changed.rules} block={changed.block} asAt={changed.reading.asAt} />
           </>
         ) : null}
