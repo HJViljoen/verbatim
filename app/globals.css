@@ -42,6 +42,11 @@
   --color-cat: var(--cat);
   --color-mixed: var(--mixed);
   --color-neutral-seg: var(--neutral-seg);
+  /* The market-first inks (decision K, WP3.10): who a mark belongs to */
+  --color-ink-market: var(--ink-market);
+  --color-ink-you: var(--ink-you);
+  --color-ink-rival: var(--ink-rival);
+  --color-ink-earlier: var(--ink-earlier);
   /* Inner block inside a tile (two-level nesting: tile with shadow → flat tinted block) */
   --color-inner: var(--inner);
   /* The hero tile's ground — the ONE inverted surface in the app (SH4) */
@@ -141,6 +146,17 @@
   --mixed: #E6B03C;
   --neutral-seg: #CDD2D7;
 
+  /* The market-first inks (decision K, WP3.10; MASTER §Color Palette). ADDITIVE:
+     each names a job the tokens above already paint, so a chart says whose a
+     mark is by name. The market takes the main ink, you stay green, rivals
+     orange, and grey means the earlier month (the approved preview: September
+     #26292C beside August #9AA1A9). scripts/check-design-drift.sh (d) holds each
+     to the token it shares a value with, in both themes. */
+  --ink-market: #26292C;
+  --ink-you: #0E8A5F;
+  --ink-rival: #F0742B;
+  --ink-earlier: #9AA1A9;
+
   /* Semantic status — positive shares the green ("good for you"); data only */
   --positive: #0E8A5F;
   --warning: #E6B03C;
@@ -205,6 +221,10 @@
   --cat: #7C838B;
   --mixed: #E9BC55;
   --neutral-seg: #3A3F45;
+  --ink-market: #ECEEF0;
+  --ink-you: #2FBF85;
+  --ink-rival: #F58A4A;
+  --ink-earlier: #7C838B;
   --positive: #2FBF85;
   --warning: #E9BC55;
   --negative: #E8604F;
