@@ -8,6 +8,7 @@ import {
   CHECKED_SHOWN,
   FOLLOWERS_MIN_K,
   FOR_YOU_SENTENCES,
+  forYouSentence,
   forYouWords,
 } from './foryou'
 
@@ -102,15 +103,22 @@ describe('buildForYou: the lines, in the preview\'s order', () => {
     // bigger and never quoted, so the lead (34) is second.
     const [second] = buildForYou({ month: SEP, questions: null, lead: { ...lead, rank: 1 }, followers: null }).lines
     expect(second.sentenceKey).toBe('foryou.lead_biggest.second.none')
-    expect(FOR_YOU_SENTENCES[second.sentenceKey]).toBe('The market’s second biggest conversation. None of your [[foryou_posts]] posts from the month shared two or more of its words.')
+    expect(FOR_YOU_SENTENCES[second.sentenceKey]).toBe('The market’s second biggest conversation. None of your [[foryou_posts]] {month} posts shared two or more of its words.')
+  })
+
+  it('names the month, never "the month", in the lead line (plan §2.2: "of your 20 September posts"; §5.1)', () => {
+    expect(forYouSentence('foryou.lead_touch.none', SEP)).toBe('The market’s biggest conversation with few makers. None of your [[foryou_posts]] September posts shared two or more of its words.')
+    expect(forYouSentence('foryou.lead_biggest.second.some', '2026-10-01')).toBe('The market’s second biggest conversation. [[foryou_touched]] of your [[foryou_posts]] October posts shared two or more of its words.')
+    expect(forYouSentence('foryou.nothing', SEP)).toBeNull()
+    for (const k of Object.keys(FOR_YOU_SENTENCES)) expect(forYouSentence(k, SEP)).not.toMatch(/\{month\}|the month\b/)
   })
 
   it('names the lead\'s place and never calls a smaller theme the biggest', () => {
     const lead = { label: 'Price and sale questions', posts: 20, sharing: postsSharing('Price and sale questions', []) }
     const key = (rank: number) => buildForYou({ month: SEP, questions: null, lead: { ...lead, rank }, followers: null }).lines[0].sentenceKey
     expect(key(0)).toBe('foryou.lead_touch.none')
-    expect(FOR_YOU_SENTENCES[key(2)]).toBe('The market’s third biggest conversation with few makers. None of your [[foryou_posts]] posts from the month shared two or more of its words.')
-    expect(FOR_YOU_SENTENCES[key(3)]).toBe('One of the market’s biggest conversations with few makers. None of your [[foryou_posts]] posts from the month shared two or more of its words.')
+    expect(FOR_YOU_SENTENCES[key(2)]).toBe('The market’s third biggest conversation with few makers. None of your [[foryou_posts]] {month} posts shared two or more of its words.')
+    expect(FOR_YOU_SENTENCES[key(3)]).toBe('One of the market’s biggest conversations with few makers. None of your [[foryou_posts]] {month} posts shared two or more of its words.')
     expect(key(9)).toBe(key(3))
     // Every lead sentence: no digit, no em dash.
     for (const k of Object.keys(FOR_YOU_SENTENCES).filter((x) => x.startsWith('foryou.lead_'))) expect(FOR_YOU_SENTENCES[k]).not.toMatch(/\d|—/)

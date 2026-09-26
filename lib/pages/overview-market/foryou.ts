@@ -1,3 +1,4 @@
+import { longMonth } from '../../format'
 import type { FigureTable } from '../../reading/verdicts'
 import type { SubjectCalibrationWord } from './subjects'
 
@@ -60,9 +61,13 @@ const LEAD_PLACES: readonly { key: string; words: string }[] = [
   { key: '.third', words: 'The market’s third biggest conversation' },
   { key: '.among', words: 'One of the market’s biggest conversations' },
 ]
+/** The lead line's posts, by the month's NAME ("your 20 September posts",
+ *  plan §2.2 and the approved preview): a stored artefact says which month,
+ *  never "the month" (plan §5.1; the deploy-3 review). `{month}` is filled
+ *  by `forYouSentence`. */
 const LEAD_TAILS = {
-  none: 'None of your [[foryou_posts]] posts from the month shared two or more of its words.',
-  some: '[[foryou_touched]] of your [[foryou_posts]] posts from the month shared two or more of its words.',
+  none: 'None of your [[foryou_posts]] {month} posts shared two or more of its words.',
+  some: '[[foryou_touched]] of your [[foryou_posts]] {month} posts shared two or more of its words.',
 } as const
 
 function leadSentences(): Record<string, string> {
@@ -92,6 +97,13 @@ export const FOR_YOU_SENTENCES: Readonly<Record<string, string>> = {
   ...leadSentences(),
   'foryou.followers':
     'The subject picked for you that your followers talked about most: [[foryou_touched]] of your [[foryou_posts]] posts with a reading.',
+}
+
+/** A line's sentence for its block's month (`{month}` named), or null where
+ *  its key has none. The page and the monthly print through this. */
+export function forYouSentence(sentenceKey: string, month: string): string | null {
+  const body = FOR_YOU_SENTENCES[sentenceKey]
+  return body ? body.split('{month}').join(longMonth(month)) : null
 }
 
 /** How many of the checked words a line prints before "…". */

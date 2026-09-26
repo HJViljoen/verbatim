@@ -148,7 +148,7 @@ describe('the four slots (WP2.3, WP2.5, WP2.6, WP2.7)', () => {
     expect(t).toMatch(/Your market asked about it on\s*16\s*videos over the last 3 months\. None of your\s*56\s*posts in that time shared two or more of its words\./)
     expect(t).toContain('What you published')
     expect(t).toMatch(/20\s*posts/)
-    expect(t).toContain('30 the month before')
+    expect(t).toContain('30 in August')
     expect(t).toContain('234 comments')
     expect(t).toContain('Respect for Sealand’s mission')
     expect(t).toContain('Moves: none dated yet')

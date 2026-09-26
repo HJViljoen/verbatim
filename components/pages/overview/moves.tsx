@@ -11,6 +11,7 @@ import { sharedPairNote } from '@/lib/calibration'
 import { TileBlock } from '@/components/shell/tile'
 import { TileColumns } from '@/components/shell/page-grid'
 import { fmtInt, longMonth, shortDate } from '@/lib/format'
+import { prevMonth } from '@/lib/reading/month-key'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { CardCount, MoveCandidate, MoveReading } from '@/lib/reading/moves'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
@@ -568,7 +569,7 @@ function publishedCensus(data: OverviewData, mode: RenderMode, appUrl: string) {
   const month = longMonth(p.month)
   const prev = p.prevPosts
   const cells = [
-    <CensusCell key="posts" mode={mode} figure={p.posts} words={p.posts === 1 ? 'post' : 'posts'} under={<>in {month}{prev != null ? <> · <span data-copy="figure">{fmtInt(prev)}</span> the month before</> : null}</>} />,
+    <CensusCell key="posts" mode={mode} figure={p.posts} words={p.posts === 1 ? 'post' : 'posts'} under={<>in {month}{prev != null ? <> · <span data-copy="figure">{fmtInt(prev)}</span> in {longMonth(prevMonth(p.month))}</> : null}</>} />,
     <CensusCell key="five" mode={mode} figure={p.drewFive} words="drew 5+" under="comments each" />,
     p.withReading != null
       ? <CensusCell key="reading" mode={mode} figure={p.withReading} words="carry a reading" under={<><span data-copy="figure">{fmtInt(p.readingComments ?? 0)}</span> comments</>} />

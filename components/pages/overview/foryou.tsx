@@ -5,7 +5,7 @@ import { TokenProse } from '@/components/blocks/prose'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt } from '@/lib/format'
 import { surface } from '@/lib/nav'
-import { FOR_YOU_SENTENCES, forYouWords, type ForYouLine } from '@/lib/pages/overview-market/foryou'
+import { FOR_YOU_SENTENCES, forYouSentence, forYouWords, type ForYouLine } from '@/lib/pages/overview-market/foryou'
 import type { OverviewData } from '@/lib/pages/overview'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { CALIBRATION_TAG } from '@/lib/pages/overview-market/subjects'
@@ -75,8 +75,8 @@ function figureValue(figures: FigureTable, key: string): number {
   return figures[key]?.value ?? 0
 }
 
-function Line({ line, mode }: { line: ForYouLine; mode: RenderMode }) {
-  const body = FOR_YOU_SENTENCES[line.sentenceKey]
+function Line({ line, month, mode }: { line: ForYouLine; month: string; mode: RenderMode }) {
+  const body = forYouSentence(line.sentenceKey, month)
   if (!body) return null
   if (mode === 'email') {
     return (
@@ -133,12 +133,12 @@ export const overviewForYou: Block<OverviewData> = {
     return (
       <BlockFrame title={FOR_YOU_TITLE} question={overviewForYou.question} mode={mode} footer={footer} roomy>
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : mode === 'email' ? (
-          <div>{lines.map((l, i) => <Line key={`${l.kind}-${i}`} line={l} mode={mode} />)}</div>
+          <div>{lines.map((l, i) => <Line key={`${l.kind}-${i}`} line={l} month={data.foryou!.month} mode={mode} />)}</div>
         ) : (
           <div className="flex min-w-0 flex-col">
             {lines.map((l, i) => (
               <div key={`${l.kind}-${i}`} className={i > 0 ? 'mt-6 border-t border-border/60 pt-6' : undefined}>
-                <Line line={l} mode={mode} />
+                <Line line={l} month={data.foryou!.month} mode={mode} />
               </div>
             ))}
           </div>

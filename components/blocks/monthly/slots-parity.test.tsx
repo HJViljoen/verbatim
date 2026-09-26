@@ -131,7 +131,7 @@ describe('the page and the monthly print one sentence each', () => {
       const monthly = read(MONTHLY_BLOCKS['monthly.you'].render(data, mode, ctx))
       expect(monthly, mode).toContain(sentence)
       expect(monthly, mode).toContain('Waterproofing')
-      for (const w of ['20 posts', 'in September', '30 the month before', '10 drew 5+', 'comments each', '9 carry a reading', '234 comments', 'Your followers talked most about', 'Moves: none dated yet']) {
+      for (const w of ['20 posts', 'in September', '30 in August', '10 drew 5+', 'comments each', '9 carry a reading', '234 comments', 'Your followers talked most about', 'Moves: none dated yet']) {
         expect(census, w).toContain(w)
         expect(monthly, `${mode}: ${w}`).toContain(w)
       }
@@ -168,7 +168,7 @@ describe('the page and the monthly print one sentence each', () => {
 
   it('Össur: the lead line with no maker claim, and its census, as its page prints them', () => {
     const data = builtFull(ossurArrivalsFixture())
-    const lead = 'The market’s second biggest conversation. None of your 109 posts from the month shared two or more of its words.'
+    const lead = 'The market’s second biggest conversation. None of your 109 September posts shared two or more of its words.'
     expect(pageText('overview.foryou', data.overview)).toContain(lead)
     for (const mode of MODES) {
       const monthly = read(MONTHLY_BLOCKS['monthly.you'].render(data, mode, ctx))

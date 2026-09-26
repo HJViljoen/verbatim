@@ -68,7 +68,7 @@ describe('What it means for you (overview.foryou)', () => {
   it('puts the lead conversation against the month\'s posts, and says what it checked', () => {
     const t = text(overviewForYou.render(stagingFixture(), 'app', ctx))
     expect(t).toMatch(/“ ?Price and sale questions ?”/)
-    expect(t).toContain('The market’s biggest conversation with few makers. None of your 20 posts from the month shared two or more of its words.')
+    expect(t).toContain('The market’s biggest conversation with few makers. None of your 20 September posts shared two or more of its words.')
     expect(t).toContain('checked: price · sale')
   })
 
@@ -84,7 +84,7 @@ describe('What it means for you (overview.foryou)', () => {
     // Board row 1, "Audience identities and amputation types" (44), is a kind
     // never quoted, so the lead is row 2: never "the market's biggest".
     const t = text(overviewForYou.render(ossurFrontFixture(), 'app', ctx))
-    expect(t).toContain('The market’s second biggest conversation. None of your 109 posts from the month shared two or more of its words.')
+    expect(t).toContain('The market’s second biggest conversation. None of your 109 September posts shared two or more of its words.')
     expect(t).not.toContain('The market’s biggest')
     expect(t).not.toContain('makers')
   })
@@ -108,10 +108,10 @@ describe('What it means for you (overview.foryou)', () => {
 })
 
 describe('What you published (overview.moves on the market page)', () => {
-  it('prints production\'s census (§2.2): 20 posts, 30 the month before, 10 drew 5+, 9 carry a reading, 234 comments', () => {
+  it('prints production\'s census (§2.2): 20 posts, 30 in August, 10 drew 5+, 9 carry a reading, 234 comments', () => {
     const t = text(overviewMoves.render(marketFrontFixture(), 'app', ctx))
     expect(t).toContain(PUBLISHED_TITLE)
-    expect(t).toContain('20 posts in September · 30 the month before')
+    expect(t).toContain('20 posts in September · 30 in August')
     expect(t).toContain('10 drew 5+ comments each')
     expect(t).toContain('9 carry a reading 234 comments')
     expect(t).toContain('Your followers talked most about')

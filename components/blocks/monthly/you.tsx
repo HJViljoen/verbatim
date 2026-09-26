@@ -3,9 +3,10 @@ import type { RenderMode } from '@/lib/blocks/types'
 import { TokenProse } from '@/components/blocks/prose'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, longMonth } from '@/lib/format'
+import { prevMonth } from '@/lib/reading/month-key'
 import { surface } from '@/lib/nav'
 import type { MonthlyForYou, MonthlyPublished, MonthlyYou } from '@/lib/reports/monthly-slots'
-import { FOR_YOU_SENTENCES as SENTENCES, forYouWords } from '@/lib/pages/overview-market/foryou'
+import { FOR_YOU_SENTENCES as SENTENCES, forYouSentence, forYouWords } from '@/lib/pages/overview-market/foryou'
 import { CALIBRATION_TAG } from '@/lib/pages/overview-market/subjects'
 import { FOR_YOU_NONE } from '@/components/pages/overview/foryou'
 import type { FigureTable } from '@/lib/reading/verdicts'
@@ -68,7 +69,7 @@ function ForYou({ f, mode }: { f: MonthlyForYou; mode: RenderMode }) {
                 {word ? <span style={email ? { fontFamily: FONT.mono, fontSize: 12, fontWeight: 400, color: EMAIL.muted } : undefined} className={email ? undefined : 'font-mono text-[12px] font-normal text-muted-foreground'}> · {word}</span> : null}
               </div>
             ) : null}
-            <TokenProse body={FOR_YOU_SENTENCES[l.sentenceKey]} figures={l.figures} mode={mode} size={email ? 15 : 'body'} />
+            <TokenProse body={forYouSentence(l.sentenceKey, f.month) ?? ''} figures={l.figures} mode={mode} size={email ? 15 : 'body'} />
             {w.words.length > 0 ? (
               <div style={email ? { fontFamily: FONT.sans, fontSize: 13, color: EMAIL.muted, marginTop: 4 } : undefined} className={email ? undefined : 'text-[13px] text-muted-foreground'}>
                 {w.matched ? `${fmtInt(l.matchedPosts.length)} ${l.matchedPosts.length === 1 ? 'post' : 'posts'} on` : 'Checked:'} {w.words.join(' · ')}{w.more ? ' · …' : ''}
@@ -123,7 +124,7 @@ function Note({ words, under, mode }: { words: string; under: string; mode: Rend
 function Published({ p, mode }: { p: MonthlyPublished; mode: RenderMode }) {
   const month = longMonth(p.month)
   const cells = [
-    <Cell key="posts" mode={mode} figure={p.posts} words={p.posts === 1 ? 'post' : 'posts'} under={<>in {month}{p.prevPosts != null ? <> · <span data-copy="figure">{fmtInt(p.prevPosts)}</span> the month before</> : null}</>} />,
+    <Cell key="posts" mode={mode} figure={p.posts} words={p.posts === 1 ? 'post' : 'posts'} under={<>in {month}{p.prevPosts != null ? <> · <span data-copy="figure">{fmtInt(p.prevPosts)}</span> in {longMonth(prevMonth(p.month))}</> : null}</>} />,
     <Cell key="five" mode={mode} figure={p.drewFive} words="drew 5+" under="comments each" />,
     p.withReading != null
       ? <Cell key="reading" mode={mode} figure={p.withReading} words="carry a reading" under={<><span data-copy="figure">{fmtInt(p.readingComments ?? 0)}</span> comments</>} />
