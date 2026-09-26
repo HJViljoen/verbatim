@@ -1308,6 +1308,15 @@ describe('WK §2 under the three calibration states', () => {
     expect(Object.keys(figures).some((k) => k.includes('s-repair') || k.includes('s-community'))).toBe(false)
   })
 
+  it("on screen the withheld subjects are the strip's next row, above the bar legend", () => {
+    const markup = render(weekSubjects.render(data, 'app', ctx))
+    const legend = markup.indexOf('what this update added')
+    expect(markup.indexOf('Community &amp; purpose')).toBeGreaterThan(0)
+    expect(markup.indexOf('Community &amp; purpose')).toBeLessThan(legend)
+    // On the strip's own columns, with its gutter drawn transparent.
+    expect(markup).toContain('border-transparent xl:border-l xl:pl-4')
+  })
+
   it('a block with only withheld subjects is not "no subjects recorded"', () => {
     const only: WeekData = { ...data, subjects: { ...data.subjects, rows: [], unread: null, lead: null } }
     const text = renderText(weekSubjects.render(only, 'app', ctx))

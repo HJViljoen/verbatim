@@ -1167,4 +1167,15 @@ describe('page 3 under the three calibration states (decision C, WP1.1)', () => 
       expect(text).toContain('provisional')
     }
   })
+
+  it('never words a subject that is not ready as a refused pair: no "not compared" on either row', () => {
+    for (const mode of MODES) {
+      const text = renderText(quarterlySubjects.render(data, mode, ctx))
+      const failed = text.slice(text.indexOf('Repairs and warranty'), text.indexOf('Where the material'))
+      const provisional = text.slice(text.indexOf('Where the material'), text.indexOf('The first two columns'))
+      expect(failed).not.toContain('not compared')
+      expect(failed).not.toContain('—')
+      expect(provisional).not.toContain('not compared')
+    }
+  })
 })

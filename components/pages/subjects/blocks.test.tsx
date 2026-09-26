@@ -325,6 +325,34 @@ describe('the Subjects page under the three calibration states (staging, Sealand
     }
   })
 
+  it('the rail sets a provisional word on its own line, never after a dangling separator', () => {
+    const markup = render(subjectsList.render(calibrationFixture(), 'app', ctx))
+    const at = markup.indexOf('0 of 654 in your market')
+    const word = markup.indexOf('provisional', at)
+    expect(word).toBeGreaterThan(at)
+    // The level's span closes and the word opens a span of its own: no separator between them.
+    expect(markup.slice(at, word)).not.toContain('·')
+    expect(markup.slice(at, word)).toContain('</span><span')
+  })
+
+  it('the rail sets a failed subject\'s name in the muted ink', () => {
+    const markup = render(subjectsList.render(calibrationFixture(), 'app', ctx))
+    expect(markup).toContain('<span class="text-[12.5px] font-medium text-muted-foreground">Repair &amp; warranty</span>')
+  })
+
+  it('on paper every rail row is one grid, with the word under the name', () => {
+    const markup = render(subjectsList.render(calibrationFixture(), 'print', ctx))
+    expect(markup.match(/grid grid-cols-\[minmax\(0,1fr\)_auto_auto\]/g)?.length).toBe(7)
+    const at = markup.indexOf('Community &amp; purpose')
+    expect(markup.slice(at, markup.indexOf('</span>', markup.indexOf('provisional', at)))).not.toContain('in your market')
+  })
+
+  it('the pane carries its word in the heading line, beside the name', () => {
+    const markup = render(subjectsSubject.render(calibrationFixture(), 'app', ctx))
+    const heading = markup.slice(markup.indexOf('<header'), markup.indexOf('</header>'))
+    expect(heading).toContain('provisional')
+  })
+
   it('the rail links no failed subject: there is no pane to open', () => {
     const markup = render(subjectsList.render(calibrationFixture(), 'app', ctx))
     expect(markup).not.toContain('item=s-repair')

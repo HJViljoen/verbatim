@@ -548,4 +548,21 @@ describe('the leadership sheet under the three calibration states (decision C, W
     expect(['looks', 'water']).toContain(leadSubject(rows)?.id)
     expect(leadSubject(rows.filter((r) => r.calibration !== 'ready'))).toBeNull()
   })
+
+  it('keeps the calibration word out of the truncating name, so it is never the part cut off', () => {
+    const markup = render(sheet(calibrationOverviewFixture()))
+    // The name truncates on its own line; the word is a sibling, not inside it.
+    expect(markup).toContain('<span class="block truncate">Repair &amp; warranty</span>')
+    expect(markup).toContain('<span class="block truncate">Community &amp; purpose</span>')
+    expect(markupText(markup)).toContain('being re-described')
+    expect(markupText(markup)).toContain('provisional')
+  })
+
+  it('a failed row is its name and its word, with no dash in each column', () => {
+    const markup = render(sheet(calibrationOverviewFixture()))
+    const at = markup.indexOf('Repair &amp; warranty</span>')
+    const row = markup.slice(markup.lastIndexOf('<tr', at), markup.indexOf('</tr>', at))
+    expect(row).not.toContain('—')
+    expect(row).toContain('col-span-4')
+  })
 })

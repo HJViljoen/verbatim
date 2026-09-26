@@ -405,4 +405,27 @@ describe('OV2 under the three calibration states (staging, Sealand, read on 2 Oc
     expect(text).not.toContain('provisional')
     expect(text).not.toContain('being re-described')
   })
+
+  // The design pass: what the rows LOOK like, not only what they say.
+  const rowOf = (markup: string, label: string) => {
+    const at = markup.indexOf(label)
+    return markup.slice(markup.lastIndexOf('<tr', at), markup.indexOf('</tr>', at))
+  }
+
+  it('a failed row is its name and its word: no link to a pane that does not exist, no dash in each column', () => {
+    for (const mode of ['app', 'print'] as const) {
+      const row = rowOf(render(overviewSubjects.render(data, mode, ctx)), 'Repair &amp; warranty')
+      expect(row).toContain('being re-described')
+      expect(row).not.toContain('<a ')
+      expect(row).not.toContain('—')
+      // One cell across the six, which still says why to a screen reader.
+      expect(row).toMatch(/colspan="6"/i)
+      expect(row).toContain('not shown until this subject is checked')
+    }
+  })
+
+  it('a provisional row carries the withheld mark in its change cell as in its "you" cells', () => {
+    const row = rowOf(render(overviewSubjects.render(data, 'app', ctx)), 'Community &amp; purpose')
+    expect(row.match(/not shown until this subject is checked/g)?.length).toBe(3)
+  })
 })
