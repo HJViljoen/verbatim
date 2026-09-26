@@ -69,6 +69,7 @@ import { isMissingSubjects, MOVE_PROMISE, RPC_WINDOW_SUBJECT_READINGS, TABLE_MOV
 import { earnsVerdict, printsClient, subjectCalibration, type SubjectCalibration } from '../subjects/calibration-state'
 import { monthsWrittenAt, subjectBackRead, subjectCountedFrom, subjectReadIn, unreadWords, type CountedSubject } from '../subjects/read-in'
 import { chunk, mapWithLimit, MULTI_ROW_IN_CHUNK, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
+import type { KeywordRow } from '../provenance/searches'
 import { selectAll } from '../supabase-admin'
 import { row, rows } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
@@ -97,6 +98,7 @@ import {
   pickQuotes,
   searchesAddedIn,
   stripUnevidencedBrand,
+  type ThemeEvidence,
   THEME_FLOOR,
   type AsksBlock,
   type BrandsBlock,
@@ -3870,6 +3872,8 @@ function quietRows<T>(res: { data: unknown; error: unknown }, label: string, nam
 
 export const TABLE_FRONT_PAGE_OVERRIDES = 'front_page_overrides'
 export const TABLE_VIDEO_PROVENANCE = 'video_provenance'
+const TABLE_KEYWORD_PERFORMANCE = 'keyword_performance'
+const TABLE_GATE_VERDICTS = 'gate_verdicts'
 
 /** The reading month's category themes at the floor, and the previous month's
  *  k for each (0 where that month has rows and the theme is not in them). Two
@@ -4139,15 +4143,31 @@ interface VideoCite {
  *  Phase 1 voices read kept (40), so a large theme cannot make it heavy. */
 const QUOTE_INSIGHTS_PER_THEME = 40
 
-/** The lead's reading-month videos (`month_evidence_refs`) and their
- *  provenance (MF1 `video_provenance`): two reads, only for the lead. Null
- *  where either is not there. */
+/** The searches first run in the reading month (`keyword_performance`, one
+ *  paged read, memoised per page load: both lead candidates share it), or null
+ *  where it cannot be read. */
+function addedSearchesRead(client: SupabaseClient, clientId: string, month: string): () => Promise<Set<string> | null> {
+  let held: Promise<Set<string> | null> | null = null
+  return () => (held ??= selectAll<KeywordRow>(() =>
+    client.from(TABLE_KEYWORD_PERFORMANCE).select('run_id, platform, keyword, created_at').eq('client_id', clientId).order('id'),
+  ).then((kp) => searchesAddedIn(month, kp), (error: unknown) => {
+    console.error(`[overview] leadProvenance keyword_performance: ${(error as { message?: string })?.message ?? String(error)}; not measured`)
+    return null
+  }))
+}
+
+/** The lead's reading-month videos (`month_evidence_refs`) and how each was
+ *  found (the 26 Sep ruling's evidence: MF1 `video_provenance`, the videos'
+ *  source_keywords and their gate verdicts' keywords), against the searches
+ *  first run in the month: the refs read, then three reads beside each other
+ *  (a chunk each at the lead's size), only for the lead. Null where any is not
+ *  there (not measured, never a zero). */
 async function loadLeadProvenance(
   client: SupabaseClient,
   clientId: string,
   month: string,
   registryId: string,
-  changeRows: readonly ConfigChange[],
+  addedSearches: () => Promise<Set<string> | null>,
 ): Promise<{ fromNewSearches: number; of: number } | null> {
   const refRes = await client
     .from(TABLE_EVIDENCE_REFS)
@@ -4161,20 +4181,53 @@ async function loadLeadProvenance(
   if (refRes.error) return null
   const videoIds = ((refRes.data as { video_ids?: string[] | null } | null)?.video_ids ?? []).map(String)
   if (videoIds.length === 0) return null
-  const provenance: { video_id: string; first_terms: string[] | null; first_subreddits: string[] | null }[] = []
-  for (const part of chunk(videoIds, UUID_IN_CHUNK)) {
-    const res = await client
-      .from(TABLE_VIDEO_PROVENANCE)
-      .select('video_id, first_terms, first_subreddits')
-      .eq('client_id', clientId)
-      .in('video_id', part)
-    if (res.error) {
-      if (!isMissingRelation(res.error, TABLE_VIDEO_PROVENANCE)) rows(res as never, 'overview.leadProvenance')
-      return null
+  type Prov = ThemeEvidence['provenance'][number]
+  type Vid = ThemeEvidence['videos'][number]
+  type Verdict = ThemeEvidence['verdicts'][number]
+  const readProvenance = async (): Promise<Prov[] | null> => {
+    const out: Prov[] = []
+    for (const part of chunk(videoIds, UUID_IN_CHUNK)) {
+      const res = await client
+        .from(TABLE_VIDEO_PROVENANCE)
+        .select('video_id, first_terms, first_subreddits, method')
+        .eq('client_id', clientId)
+        .in('video_id', part)
+      if (res.error) {
+        if (!isMissingRelation(res.error, TABLE_VIDEO_PROVENANCE)) rows(res as never, 'overview.leadProvenance')
+        return null
+      }
+      out.push(...((res.data ?? []) as Prov[]))
     }
-    provenance.push(...((res.data ?? []) as typeof provenance))
+    return out
   }
-  return fromNewSearches(videoIds, provenance, searchesAddedIn(month, changeRows))
+  const readVideos = async (): Promise<Vid[] | null> => {
+    const out: Vid[] = []
+    for (const part of chunk(videoIds, UUID_IN_CHUNK)) {
+      const res = await client.from('videos').select('id, platform, video_id, source_keywords').eq('client_id', clientId).in('id', part)
+      if (res.error) {
+        rows(res as never, 'overview.leadProvenance videos')
+        return null
+      }
+      out.push(...((res.data ?? []) as Vid[]))
+    }
+    return out
+  }
+  const [provenance, videos, added] = await Promise.all([readProvenance(), readVideos(), addedSearches()])
+  if (!provenance || !videos || !added) return null
+  // Every gate verdict's keyword for these videos (by the platform's own id).
+  const verdicts: Verdict[] = []
+  const platformIds = [...new Set(videos.map((v) => v.video_id))]
+  try {
+    for (const part of chunk(platformIds, UUID_IN_CHUNK)) {
+      verdicts.push(...await selectAll<Verdict>(() =>
+        client.from(TABLE_GATE_VERDICTS).select('platform, video_id, keyword').eq('client_id', clientId).in('video_id', part).order('id'),
+      ))
+    }
+  } catch (error) {
+    console.error(`[overview] leadProvenance gate_verdicts: ${(error as { message?: string })?.message ?? String(error)}; not measured`)
+    return null
+  }
+  return fromNewSearches(videoIds, { provenance, videos, verdicts }, added)
 }
 
 /** A candidate as a printed voice: the quote by its evidence ref, and the
@@ -4315,9 +4368,10 @@ async function loadMarketReads(input: {
   for (const id of asked) wanted.set(id, themes.find((t) => t.registryId === id)?.kind ?? null)
   for (const id of branded) if (!wanted.has(id)) wanted.set(id, null)
   const firstLead = leadCandidates[0]?.registryId ?? null
+  const addedSearches = addedSearchesRead(client, clientId, month)
   const [quotes, firstProvenance] = await Promise.all([
     loadThemeQuotes(supabase, clientId, themedRunId, wanted, month),
-    firstLead ? loadLeadProvenance(client, clientId, month, firstLead, changeRows) : Promise.resolve(null),
+    firstLead ? loadLeadProvenance(client, clientId, month, firstLead, addedSearches) : Promise.resolve(null),
   ])
   // DECISION F: MAKERS NEVER SUPPLY THE HEADLINE'S QUOTES. The lead may be up
   // to a quarter makers, so the videos behind its candidates are read for
@@ -4337,7 +4391,7 @@ async function loadMarketReads(input: {
   const leadId = final.rows.find((t) => mayLeadTheme(t, segments, excluded))?.registryId ?? null
   const provenance = leadId == null
     ? null
-    : leadId === firstLead ? firstProvenance : await loadLeadProvenance(client, clientId, month, leadId, changeRows)
+    : leadId === firstLead ? firstProvenance : await loadLeadProvenance(client, clientId, month, leadId, addedSearches)
   return {
     themes,
     segments,
