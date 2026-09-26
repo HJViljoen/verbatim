@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  decidingGathers, evidenceTerms, firstSearched, gatherHealth, gathersOf, isOutside, median, oneReachRowEach, plannedSearches, populations,
-  reachOf, sameJson, searchKey, termDelta, unchangedSearches, type KeywordRow, type MonthVideo, type ReachRowPlan,
+  addedOnlyOf, decidingGathers, evidenceTerms, firstSearched, gatherHealth, gathersOf, isAddedOnly, isOutside, median, monthShareWord,
+  oneReachRowEach, plannedSearches, populations, reachOf, sameJson, searchKey, searchesFirstRunIn, termDelta, unchangedSearches,
+  type KeywordRow, type MonthVideo, type ReachRowPlan,
 } from './searches'
 
 // Sealand's search eras, exact at the gather (GC F28; the WP0.1 staging
@@ -234,5 +235,63 @@ describe('sameJson: a pair row read back from jsonb is the row about to be writt
     expect(sameJson({ month: '2026-08-01', comments: 4923 }, written.late_capture)).toBe(false)
     const two = [{ change_id: 'a' }, { change_id: 'b' }]
     expect(sameJson([...two].reverse(), two)).toBe(false)
+  })
+})
+
+describe('added only: the month\u2019s videos found only by searches first run in it (WP1.8\u2019s one figure, the 26 Sep ruling)', () => {
+  const added = searchesFirstRunIn(firstSearched(GATHERS), '2026-09-01')
+
+  it('September\u2019s searches are the 9 and 13 Sep terms and r/onebag; r/backpacks has run since 17 Aug', () => {
+    expect([...added].sort()).toEqual([...ADDED_9, ...ADDED_13, 'r/onebag'].sort())
+    expect(added.has('r/backpacks')).toBe(false)
+    // A month with no first run in it, and a first run on the next month's first day.
+    expect(searchesFirstRunIn(firstSearched(GATHERS), '2026-10-01').size).toBe(0)
+    expect([...searchesFirstRunIn(new Map([['a', '2026-09-30T23:59:59Z'], ['b', '2026-10-01T00:00:00Z']]), '2026-09-15')]).toEqual(['a'])
+  })
+
+  it('counts a video only when every search that surfaced it was first run in the month', () => {
+    expect(isAddedOnly(evidenceTerms([['Handmade Bag'], ['r/onebag']]), added)).toBe(true)
+    expect(isAddedOnly(evidenceTerms([['handmade bag', 'upcycled bag']]), added)).toBe(false) // an unchanged search found it too
+    expect(isAddedOnly(evidenceTerms([['sealand bag'], ['poler']]), added)).toBe(false) // a search removed on 9 Sep found it too
+    expect(isAddedOnly(evidenceTerms([['r/backpacks']]), added)).toBe(false)
+  })
+
+  it('never counts a video with no evidence, or one whose provenance is ambiguous', () => {
+    expect(isAddedOnly(evidenceTerms([]), added)).toBe(false)
+    expect(isAddedOnly(undefined, added)).toBe(false)
+    expect(isAddedOnly(evidenceTerms([['travel gear']]), added, 'ambiguous')).toBe(false)
+    expect(isAddedOnly(evidenceTerms([['travel gear']]), added, 'reconstructed')).toBe(true)
+  })
+
+  it('keeps every video in the base, counted or not', () => {
+    const ev = new Map([
+      ['a', evidenceTerms([['frtg']])],
+      ['b', evidenceTerms([['frtg', 'eco backpack']])],
+      ['c', evidenceTerms([['sailcloth bag']])],
+      ['d', evidenceTerms([])],
+    ])
+    const methods: Record<string, string> = { c: 'ambiguous' }
+    expect(addedOnlyOf([{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }, { id: 'e' }], ev, added, (id) => methods[id])).toEqual({ k: 1, n: 5 })
+  })
+
+  it('says the share as the nearest fraction on a fixed ladder', () => {
+    expect(monthShareWord(356, 654)).toBe('about half') // staging, market, 54.4%
+    expect(monthShareWord(330, 625)).toBe('about half') // staging, category, 52.8%
+    expect(monthShareWord(206, 626)).toBe('about a third') // the 13 to 17 Sep subset, 32.9%
+    expect(monthShareWord(376, 625)).toBe('about three fifths') // the strict count, 60.2%, never printed this way
+    expect(monthShareWord(70, 100)).toBe('about two thirds')
+    expect(monthShareWord(12, 100)).toBe('about a tenth')
+    expect(monthShareWord(3, 100)).toBe('under a tenth')
+    expect(monthShareWord(96, 100)).toBe('almost all')
+    expect(monthShareWord(0, 654)).toBe('none')
+    expect(monthShareWord(654, 654)).toBe('all')
+  })
+
+  it('has no word without a base or for a count that is not one', () => {
+    expect(monthShareWord(1, 0)).toBeNull()
+    expect(monthShareWord(5, 4)).toBeNull()
+    expect(monthShareWord(-1, 4)).toBeNull()
+    expect(monthShareWord(Number.NaN, 654)).toBeNull()
+    expect(monthShareWord(1.5, 654)).toBeNull()
   })
 })
